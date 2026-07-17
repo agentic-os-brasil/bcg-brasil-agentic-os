@@ -1,6 +1,8 @@
-# Founding decisions
+# Founding decisions - archived bootstrap view
 
-These decisions capture the current agreement. They are deliberately concise and may later be superseded by formal ADRs.
+> Canonical decision history now lives in `docs/decisions/decision-log.md`, using permanent four-letter codes. This file preserves the initial bootstrap wording and must not receive new decisions.
+
+These decisions captured the initial agreement before the canonical project decision log existed.
 
 ## Accepted
 

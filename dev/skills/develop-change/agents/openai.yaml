@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop Change"
+  short_description: "Run the repository development loop"
+  default_prompt: "Use $develop-change to implement this change through the repository development harness."

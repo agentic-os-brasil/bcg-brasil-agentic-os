@@ -10,6 +10,8 @@ The roadmap is progressive. Dates and detailed feature scope remain open until t
 - [x] Separate source repository, managed bundle, workspace metadata and local data.
 - [x] Define Claude as primary runtime with semantic portability to Codex.
 - [x] Create initial collaboration and architecture specs.
+- [x] Establish a development-only decision log and unit-test harness.
+- [x] Add canonical development and decision-recording skills.
 - [ ] Add Marcelo as collaborator.
 - [ ] Confirm pilot device and corporate security constraints.
 
@@ -23,6 +25,7 @@ The roadmap is progressive. Dates and detailed feature scope remain open until t
 - [ ] Implement user-space directories for Windows, macOS and Linux.
 - [ ] Add deterministic tests for init idempotency and data preservation.
 - [ ] Add adapter conformance fixtures and capability detection to `doctor`.
+- [x] Run one portable full development gate locally and in CI.
 
 ## Phase 2 - Private distribution
 

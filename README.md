@@ -46,6 +46,9 @@ Implementado agora:
 - roadmap progressivo;
 - specs de fundacao, distribuicao, fronteiras de dados e sucesso do piloto;
 - estrutura reservada para CLI, bundles, adapters, schemas, migrations e installers.
+- harness Go exclusivamente de desenvolvimento para decision log, skills, formatacao, testes e `go vet`;
+- skills de desenvolvimento `develop-change` e `record-decision`;
+- CI com o mesmo gate em Windows, macOS e Linux.
 
 Ainda nao implementado:
 
@@ -55,6 +58,19 @@ Ainda nao implementado:
 - bundle do OS;
 - pipeline de releases;
 - update, rollback e assinatura de artefatos.
+
+## Desenvolvimento da solucao
+
+O harness abaixo existe apenas no source repo. Ele nao faz parte da CLI `bcgos`, dos bundles ou da instalacao dos usuarios.
+
+```text
+go run ./dev/harness validate
+go run ./dev/harness validate --full
+go run ./dev/harness decision check
+go run ./dev/harness decision available ABCD
+```
+
+O fluxo esta definido na [Spec 005](specs/005-development-harness.md). Decisoes duraveis vivem no [project decision log](docs/decisions/decision-log.md) com codigos de quatro letras maiusculas.
 
 ## Estrutura
 
@@ -77,6 +93,7 @@ Leia primeiro:
 - [Contrato de colaboracao](COLLAB.md)
 - [Spec de fundacao](specs/000-foundation.md)
 - [Spec de portabilidade entre runtimes](specs/004-runtime-portability.md)
+- [Spec do harness de desenvolvimento](specs/005-development-harness.md)
 
 ## Confidencialidade
 

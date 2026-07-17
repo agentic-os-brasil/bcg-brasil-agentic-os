@@ -1,0 +1,4 @@
+interface:
+  display_name: "Record Decision"
+  short_description: "Record durable project decisions safely"
+  default_prompt: "Use $record-decision to capture this durable project decision and validate the log."

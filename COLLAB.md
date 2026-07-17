@@ -27,4 +27,4 @@ Este documento define como o BCG Brasil Agentic OS sera construido enquanto a ar
 
 ## Registro de decisoes
 
-Decisoes fundadoras vivem em `docs/FOUNDING-DECISIONS.md`. Conforme o sistema crescer, decisoes estruturais passam a ter ADRs individuais, numerados e imutaveis; mudancas posteriores criam novos ADRs em vez de reescrever o historico.
+Decisoes duraveis vivem em `docs/decisions/decision-log.md`, identificadas por quatro letras maiusculas, globalmente unicas e imutaveis. Mudancas posteriores criam uma nova decisao com `Supersedes`, em vez de reescrever o historico. `docs/FOUNDING-DECISIONS.md` e apenas o snapshot arquivado do bootstrap inicial.

@@ -18,6 +18,7 @@ bcgos-data/
 bin/
 dist/
 coverage/
+cover.out
 *.test
 
 # Editors and operating systems
