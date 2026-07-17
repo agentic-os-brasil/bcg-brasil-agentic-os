@@ -10,3 +10,4 @@ All notable changes will be documented here.
 - CLI-first private distribution decision.
 - Collaboration contract, roadmap and initial specs.
 - Reserved structure for CLI, bundles, adapters, schemas, migrations and installers.
+- Claude-first, Codex-compatible runtime portability contract.

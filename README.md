@@ -30,7 +30,7 @@ O usuario nao precisara clonar o repositorio, entender Git ou manter manualmente
 - **Core separado do trabalho:** runtime gerenciado nunca se mistura com memoria, credenciais ou conteudo de clientes.
 - **Distribuicao por releases:** o piloto recebera artefatos versionados a partir de GitHub Releases privadas, nao `git pull`.
 - **Evolucao progressiva:** primeiro um nucleo pequeno e verificavel; agents, skills, hooks e automacoes entram conforme casos de uso reais.
-- **Runtime modular:** o core deve aceitar adapters finos para Codex, Claude e futuros hosts sem fingir paridade inexistente.
+- **Claude-first, Codex-compatible:** Claude sera o runtime principal, mas nao a fonte canonica da arquitetura. Um core compartilhado e adapters finos devem preservar os mesmos invariantes observaveis em Claude e Codex, com lacunas mecanicas declaradas explicitamente.
 - **Seguranca desde a origem:** nenhum dado real, segredo ou material de cliente pertence ao repositorio ou aos bundles distribuiveis.
 
 ## Publico do piloto
@@ -76,6 +76,7 @@ Leia primeiro:
 - [Roadmap](ROADMAP.md)
 - [Contrato de colaboracao](COLLAB.md)
 - [Spec de fundacao](specs/000-foundation.md)
+- [Spec de portabilidade entre runtimes](specs/004-runtime-portability.md)
 
 ## Confidencialidade
 

@@ -8,6 +8,7 @@ The roadmap is progressive. Dates and detailed feature scope remain open until t
 - [x] Select CLI-first distribution.
 - [x] Select private GitHub Releases as the pilot source.
 - [x] Separate source repository, managed bundle, workspace metadata and local data.
+- [x] Define Claude as primary runtime with semantic portability to Codex.
 - [x] Create initial collaboration and architecture specs.
 - [ ] Add Marcelo as collaborator.
 - [ ] Confirm pilot device and corporate security constraints.
@@ -17,8 +18,11 @@ The roadmap is progressive. Dates and detailed feature scope remain open until t
 - [ ] Implement a small Go CLI.
 - [ ] Commands: `version`, `status`, `doctor`, `init`, `update`.
 - [ ] Define project manifest and lock schemas.
+- [ ] Define the canonical runtime capability manifest and parity states.
+- [ ] Implement Claude and Codex adapter skeletons against the same contracts.
 - [ ] Implement user-space directories for Windows, macOS and Linux.
 - [ ] Add deterministic tests for init idempotency and data preservation.
+- [ ] Add adapter conformance fixtures and capability detection to `doctor`.
 
 ## Phase 2 - Private distribution
 

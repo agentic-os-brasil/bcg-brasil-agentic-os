@@ -11,3 +11,5 @@ Before changing it:
 5. Do not claim planned CLI behavior is implemented until tests prove it.
 
 The architecture is intentionally incomplete. Prefer small, reversible changes and record structural decisions before implementation.
+
+Claude is the primary runtime, but not the architecture source of truth. Codex must consume the same canonical contracts, state schemas and policies through a thin adapter. Runtime-specific mechanics belong only in `adapters/`.

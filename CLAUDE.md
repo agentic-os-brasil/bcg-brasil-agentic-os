@@ -1,3 +1,3 @@
 # Claude runtime orientation
 
-Read `AGENTS.md` and follow the same repository contract. Claude-specific runtime behavior is not canonical yet; this file is a thin adapter until runtime parity decisions are made explicitly.
+Read `AGENTS.md` and follow the same canonical repository contract. Claude is the primary runtime and reference coverage target, but Claude-specific hook names, payloads and paths are adapter concerns rather than canonical architecture.

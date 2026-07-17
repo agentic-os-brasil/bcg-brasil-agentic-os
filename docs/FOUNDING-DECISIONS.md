@@ -40,11 +40,17 @@ Windows is the primary pilot platform. macOS and Linux remain supported build ta
 
 Release artifacts and manifests must be verified before execution. Checksums alone are not the final trust model. Tokens and secrets must use operating-system credential storage.
 
+### FD-010 - Claude-first with semantic portability to Codex
+
+Claude is the primary runtime and reference coverage target, but not the source of truth for architecture. Canonical schemas, agents, skills, policies, semantic lifecycle events, state and injection precedence remain runtime-independent. Thin Claude and Codex adapters translate those contracts into native mechanics.
+
+Compatibility means equivalent observable invariants, not identical hook names or payloads. Each capability is classified as `native`, `emulated`, `degraded` or `unavailable`. Critical governance or security enforcement may never degrade silently; unsupported critical capabilities must fail closed or be reported as unsupported.
+
 ## Open
 
 - Exact authentication mechanism for private GitHub Releases.
 - Corporate signing, SmartScreen and Gatekeeper requirements.
-- Initial runtime adapters and their parity contract.
+- Exact initial capability coverage of the Claude and Codex adapters.
 - Location and governance of shared organizational knowledge.
 - Final name and branding of the user-facing CLI.
 - Distribution channel after the private pilot.
