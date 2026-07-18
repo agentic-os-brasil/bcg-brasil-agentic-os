@@ -70,6 +70,8 @@ All skills live under `dev/`, call deterministic repository commands and are exc
 | Go harness | Cross-platform diagnosis, full validation, secret/client-file checks and exact-tree proof |
 | Repository Git hooks | Block commits on `main`, unvalidated commits and pushes that do not match the validated tree |
 | Claude hooks | Block destructive commands and autonomous merge; guide session start and decision-log validation |
-| CI and GitHub | Re-run the full gate and require human review on the protected branch |
+| CI and GitHub | Re-run the full gate; require human review and protected `main` when the repository plan supports branch protection |
 
 Local hooks are installed per clone with `go run ./dev/harness setup`. They are safety rails, not the remote authority. Every block must state the reason, confirm that no work was discarded and provide one recovery command.
+
+Current pilot limitation: GitHub branch protection is unavailable for this private repository on the account's present plan. Until that changes, CODEOWNERS and PR review express the intended workflow but cannot technically prevent a maintainer from pushing directly to `main`; local hooks and CI remain active backstops.
