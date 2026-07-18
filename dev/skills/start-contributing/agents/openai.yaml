@@ -1,0 +1,4 @@
+interface:
+  display_name: "Start Contributing"
+  short_description: "Set up a first contribution safely"
+  default_prompt: "Use $start-contributing to guide my first contribution to this repository."

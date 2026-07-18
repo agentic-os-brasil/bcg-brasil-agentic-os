@@ -126,3 +126,14 @@ Never include secrets, credentials, personal data, client-identifying context or
 - Consequences: A cross-platform Go harness and runtime-neutral development skills live only under development paths and never enter the CLI, OS bundle or pilot installation.
 - Refs: specs/005-development-harness.md; dev/skills/develop-change/SKILL.md; dev/skills/record-decision/SKILL.md
 - Supersedes: none
+
+## NOVC - Make source contribution novice-safe
+
+- Date: 2026-07-18
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Pilot contributors may have little or no Git and software-development experience, but must still contribute without risking local work, secrets, client content or the main branch.
+- Decision: Provide progressive development skills, plain-language Claude guidance, deterministic doctor and recovery commands, repository-owned Git hooks, CI validation and human-reviewed pull requests as one layered contribution path.
+- Consequences: Contributors receive one safe next action at a time; destructive Git, direct main changes and autonomous merge are blocked; local enforcement remains backed by remote review and CI.
+- Refs: specs/005-development-harness.md; .claude/README.md; dev/skills/start-contributing/SKILL.md
+- Supersedes: none

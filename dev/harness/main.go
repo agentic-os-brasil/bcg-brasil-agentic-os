@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/decisionlog"
+	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/gitguard"
 	devharness "github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/harness"
 )
 
@@ -24,10 +26,50 @@ func main() {
 		validateCommand(root, os.Args[2:])
 	case "decision":
 		decisionCommand(root, os.Args[2:])
+	case "doctor":
+		fatalIf(gitguard.Doctor(root, os.Stdout))
+	case "setup":
+		fatalIf(gitguard.Setup(root, os.Stdout))
+	case "recover":
+		fatalIf(gitguard.Recover(root, os.Stdout))
+	case "guard":
+		guardCommand(root, os.Args[2:])
+	case "claude":
+		claudeCommand(root, os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
 	}
+}
+
+func guardCommand(root string, args []string) {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness guard <pre-commit|pre-push>")
+		os.Exit(2)
+	}
+	var err error
+	switch args[0] {
+	case "pre-commit":
+		err = gitguard.PreCommit(root, os.Stdout)
+	case "pre-push":
+		err = gitguard.PrePush(root, bufio.NewScanner(os.Stdin), os.Stdout)
+	default:
+		fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness guard <pre-commit|pre-push>")
+		os.Exit(2)
+	}
+	fatalIf(err)
+}
+
+func claudeCommand(root string, args []string) {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness claude <session-start|pre-tool|post-tool>")
+		os.Exit(2)
+	}
+	code, err := gitguard.ClaudeHook(root, args[0], os.Stdin, os.Stdout)
+	if err != nil {
+		fatal(err)
+	}
+	os.Exit(code)
 }
 
 func validateCommand(root string, args []string) {
@@ -68,7 +110,13 @@ func decisionCommand(root string, args []string) {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness <validate|decision> [options]")
+	fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness <validate|decision|doctor|setup|recover|guard|claude> [options]")
+}
+
+func fatalIf(err error) {
+	if err != nil {
+		fatal(err)
+	}
 }
 
 func decisionUsage() {
