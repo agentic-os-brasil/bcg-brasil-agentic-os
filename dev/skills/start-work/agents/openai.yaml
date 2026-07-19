@@ -1,0 +1,4 @@
+interface:
+  display_name: "Start Work"
+  short_description: "Begin repository work safely"
+  default_prompt: "Use $start-work to start a safe working session in this repository."

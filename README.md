@@ -47,7 +47,8 @@ Implementado agora:
 - specs de fundacao, distribuicao, fronteiras de dados e sucesso do piloto;
 - estrutura reservada para CLI, bundles, adapters, schemas, migrations e installers.
 - harness Go exclusivamente de desenvolvimento para decision log, skills, formatacao, testes e `go vet`;
-- skills de desenvolvimento `develop-change` e `record-decision`;
+- skills de desenvolvimento para onboarding, inicio de trabalho, implementacao, decisoes, recuperacao e preparacao de PR;
+- `doctor`, hooks locais e guia Claude para contribuidores iniciantes;
 - CI com o mesmo gate em Windows, macOS e Linux.
 
 Ainda nao implementado:
@@ -68,9 +69,13 @@ go run ./dev/harness validate
 go run ./dev/harness validate --full
 go run ./dev/harness decision check
 go run ./dev/harness decision available ABCD
+go run ./dev/harness doctor
+go run ./dev/harness setup
 ```
 
 O fluxo esta definido na [Spec 005](specs/005-development-harness.md). Decisoes duraveis vivem no [project decision log](docs/decisions/decision-log.md) com codigos de quatro letras maiusculas.
+
+Contribuidor novo: comece pelo [guia de contribuicao](CONTRIBUTING.md). No Claude, diga: **"Use start-contributing e me guie passo a passo."**
 
 ## Estrutura
 
@@ -91,6 +96,7 @@ Leia primeiro:
 - [Decisoes fundadoras](docs/FOUNDING-DECISIONS.md)
 - [Roadmap](ROADMAP.md)
 - [Contrato de colaboracao](COLLAB.md)
+- [Guia de contribuicao](CONTRIBUTING.md)
 - [Spec de fundacao](specs/000-foundation.md)
 - [Spec de portabilidade entre runtimes](specs/004-runtime-portability.md)
 - [Spec do harness de desenvolvimento](specs/005-development-harness.md)

@@ -50,10 +50,28 @@ go run ./dev/harness validate
 go run ./dev/harness validate --full
 go run ./dev/harness decision check
 go run ./dev/harness decision available ABCD
+go run ./dev/harness doctor
+go run ./dev/harness setup
+go run ./dev/harness recover
 ```
 
 The harness must remain cross-platform, idempotent and usable without an agent or skill.
 
 ## Skill contract
 
-`develop-change` classifies changes and orchestrates the appropriate development loop. `record-decision` records only durable decisions and validates the log. Both live under `dev/`, call deterministic repository commands and are excluded from product distribution.
+`start-contributing` performs progressive first-time setup. `start-work` creates a safe daily path. `develop-change` classifies and implements changes. `record-decision` records durable choices. `prepare-pr` validates and prepares human review. `recover-work` diagnoses Git state without discarding files.
+
+All skills live under `dev/`, call deterministic repository commands and are excluded from product distribution. `.claude/` and `AGENTS.md` are thin runtime-specific entry points over the same canonical skills.
+
+## Enforcement layers
+
+| Layer | Responsibility |
+|---|---|
+| Go harness | Cross-platform diagnosis, full validation, secret/client-file checks and exact-tree proof |
+| Repository Git hooks | Block commits on `main`, unvalidated commits and pushes that do not match the validated tree |
+| Claude hooks | Block destructive commands and autonomous merge; guide session start and decision-log validation |
+| CI and GitHub | Re-run the full gate; require human review and protected `main` when the repository plan supports branch protection |
+
+Local hooks are installed per clone with `go run ./dev/harness setup`. They are safety rails, not the remote authority. Every block must state the reason, confirm that no work was discarded and provide one recovery command.
+
+Current pilot limitation: GitHub branch protection is unavailable for this private repository on the account's present plan. Until that changes, CODEOWNERS and PR review express the intended workflow but cannot technically prevent a maintainer from pushing directly to `main`; local hooks and CI remain active backstops.

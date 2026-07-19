@@ -1,0 +1,4 @@
+interface:
+  display_name: "Recover Work"
+  short_description: "Recover safely from Git problems"
+  default_prompt: "Use $recover-work to diagnose my Git state and give me one safe next action."

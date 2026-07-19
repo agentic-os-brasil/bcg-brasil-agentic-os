@@ -24,3 +24,12 @@ jobs:
           cache: true
       - name: Run full development harness
         run: go run ./dev/harness validate --full
+      - name: Smoke-test Claude hook from nested directory
+        shell: bash
+        working-directory: specs
+        run: |
+          output=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git reset --hard HEAD"}}' | CLAUDE_PROJECT_DIR="$GITHUB_WORKSPACE" bash "$GITHUB_WORKSPACE/.claude/hooks/run-dev-hook.sh" pre-tool)
+          case "$output" in
+            *'"permissionDecision":"deny"'*) ;;
+            *) echo "Claude hook did not deny destructive Git command"; exit 1 ;;
+          esac

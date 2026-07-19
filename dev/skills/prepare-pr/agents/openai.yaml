@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prepare PR"
+  short_description: "Validate and prepare a reviewable PR"
+  default_prompt: "Use $prepare-pr to validate my work and prepare it for human review."

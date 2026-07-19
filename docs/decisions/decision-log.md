@@ -6,6 +6,18 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## Foundation snapshot - 2026-07-19
+
+This is a frozen milestone for navigation, not a separate decision, live index or status report. The coded entries below remain authoritative; future decisions do not require this table to be rewritten.
+
+| Theme | Current baseline | Canonical decisions |
+|---|---|---|
+| Scope and audience | Professional work only; serve classic consultants, BCG X, data scientists and engineers progressively from observed needs. | `WORK`, `USER` |
+| User experience and distribution | Make `bcgos` CLI-first; distribute versioned private releases rather than Git clones; keep CLI and bundle updates separately validated and reversible. | `CLIF`, `RELS`, `UPDT` |
+| Architecture and trust | Separate managed core from local/client data; prefer a thin Go CLI; validate Windows first while supporting macOS/Linux; verify artifacts and credentials safely. | `DATA`, `GOCL`, `WNDS`, `SECU` |
+| Runtime portability | Keep canonical contracts runtime-neutral, with Claude primary and Codex semantically compatible through thin adapters. | `PORT` |
+| Development model | Keep the development harness outside the product; use specs, four-letter decisions and contract-focused tests; guide novice contributors through safe branches, validation and human-reviewed PRs. | `HARN`, `NOVC` |
+
 ## WORK - Keep the OS professional-only
 
 - Date: 2026-07-17
@@ -125,4 +137,15 @@ Never include secrets, credentials, personal data, client-identifying context or
 - Decision: Use this project decision log and contract-focused unit tests as the development backbone. Behavioral work follows decision or spec, failing test, minimal implementation and deterministic validation.
 - Consequences: A cross-platform Go harness and runtime-neutral development skills live only under development paths and never enter the CLI, OS bundle or pilot installation.
 - Refs: specs/005-development-harness.md; dev/skills/develop-change/SKILL.md; dev/skills/record-decision/SKILL.md
+- Supersedes: none
+
+## NOVC - Make source contribution novice-safe
+
+- Date: 2026-07-18
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Pilot contributors may have little or no Git and software-development experience, but must still contribute without risking local work, secrets, client content or the main branch.
+- Decision: Provide progressive development skills, plain-language Claude guidance, deterministic doctor and recovery commands, repository-owned Git hooks, CI validation and human-reviewed pull requests as one layered contribution path.
+- Consequences: Contributors receive one safe next action at a time; destructive Git, direct main changes and autonomous merge are blocked; local enforcement remains backed by remote review and CI.
+- Refs: specs/005-development-harness.md; .claude/README.md; dev/skills/start-contributing/SKILL.md
 - Supersedes: none
