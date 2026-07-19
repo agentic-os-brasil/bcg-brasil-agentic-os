@@ -1,6 +1,6 @@
 # Guia do Claude para contribuidores
 
-Claude Code e a experiencia principal de desenvolvimento deste repositorio. O arquivo `.claude/skill-routing.json` define, de forma verificavel, qual skill nativa o Claude deve usar para cada tipo de trabalho. O harness bloqueia a integracao de uma skill canonica que nao esteja descoberta e roteada no Claude.
+Claude Code e a experiencia principal de desenvolvimento deste repositorio. O arquivo `.claude/skill-routing.json` define, de forma verificavel, qual skill nativa o Claude deve usar para cada tipo de trabalho. O harness registra a ativacao das skills por sessao e bloqueia mutacoes sem o workflow correto. O onboarding verifica a versao minima do Claude Code necessaria para esses hooks.
 
 Voce nao precisa saber Git para contribuir. Diga ao Claude, em linguagem normal, o que quer fazer.
 

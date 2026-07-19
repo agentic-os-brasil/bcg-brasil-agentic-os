@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/clauderouting"
 	devharness "github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/harness"
 )
 
@@ -43,10 +44,16 @@ var secretPatterns = []*regexp.Regexp{
 }
 
 type hookInput struct {
-	ToolInput struct {
-		Command  string `json:"command"`
-		FilePath string `json:"file_path"`
-		Path     string `json:"path"`
+	SessionID   string `json:"session_id"`
+	ToolName    string `json:"tool_name"`
+	CommandName string `json:"command_name"`
+	ToolInput   struct {
+		Command   string `json:"command"`
+		FilePath  string `json:"file_path"`
+		Name      string `json:"name"`
+		Path      string `json:"path"`
+		Skill     string `json:"skill"`
+		SkillName string `json:"skill_name"`
 	} `json:"tool_input"`
 }
 
@@ -173,7 +180,10 @@ func PreCommit(root string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	markerDir := filepath.Join(root, ".git", "bcg-harness")
+	markerDir, err := gitPath(root, "bcg-harness")
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(markerDir, 0o700); err != nil {
 		return err
 	}
@@ -195,7 +205,11 @@ func PrePush(root string, scanner *bufio.Scanner, out io.Writer) error {
 	if err := scanner.Err(); err != nil {
 		return err
 	}
-	validated, err := os.ReadFile(filepath.Join(root, ".git", "bcg-harness", "validated-tree"))
+	validatedPath, err := gitPath(root, filepath.Join("bcg-harness", "validated-tree"))
+	if err != nil {
+		return err
+	}
+	validated, err := os.ReadFile(validatedPath)
 	if err != nil {
 		return block("este trabalho ainda nao tem uma validacao completa registrada", "go run ./dev/harness validate --full")
 	}
@@ -250,13 +264,36 @@ func ClaudeHook(root, event string, in io.Reader, out io.Writer) (int, error) {
 	case "session-start":
 		var buffer bytes.Buffer
 		_ = Doctor(root, &buffer)
+		manifest, err := clauderouting.Load(root)
+		if err != nil {
+			return 0, err
+		}
 		fmt.Fprintln(&buffer, "Claude Code e o runtime principal de desenvolvimento.")
-		fmt.Fprintln(&buffer, "Use as skills nativas conforme .claude/skill-routing.json; nao ignore o harness.")
+		fmt.Fprintf(&buffer, "Golden path obrigatorio: %s. Fallback: $%s.\n", dollarSkills(manifest.GoldenPath), manifest.Fallback)
+		fmt.Fprintln(&buffer, "O harness registra invocacoes nativas e bloqueia mutacoes sem a skill exigida.")
 		return 0, writeHook(out, "SessionStart", buffer.String())
+	case "skill-used":
+		name := firstNonEmpty(input.ToolInput.SkillName, input.ToolInput.Skill, input.ToolInput.Name, input.ToolInput.Command)
+		if err := activateClaudeSkill(root, input.SessionID, name); err != nil {
+			return 0, writeHook(out, "PostToolUse", "Skill carregada, mas o harness nao conseguiu registrar a ativacao: "+err.Error())
+		}
+		return 0, nil
+	case "prompt-expansion":
+		if err := activateClaudeSkill(root, input.SessionID, input.CommandName); err != nil {
+			return 0, err
+		}
+		return 0, writeHook(out, "UserPromptExpansion", "Skill $"+input.CommandName+" registrada como ativa pelo harness.")
 	case "pre-tool":
 		if reason, recovery, blocked := BlockedCommand(input.ToolInput.Command); blocked {
 			message := fmt.Sprintf("BLOQUEADO: %s. Nada foi apagado. Proximo comando seguro: %s", reason, recovery)
 			return 0, writeDeniedHook(out, message)
+		}
+		if required := requiredSkill(input); required != "" && !claudeSkillActive(root, input.SessionID, required) {
+			message := fmt.Sprintf("BLOQUEADO: use $%s antes desta acao. Nada foi alterado; o harness exige evidencia de skill ativa.", required)
+			return 0, writeDeniedHook(out, message)
+		}
+		if input.ToolName == "Bash" && !anyClaudeSkillActive(root, input.SessionID) {
+			return 0, writeDeniedHook(out, "BLOQUEADO: nenhuma skill de desenvolvimento foi ativada nesta sessao. Comece com $start-work; nada foi alterado.")
 		}
 		return 0, nil
 	case "post-tool":
@@ -271,6 +308,156 @@ func ClaudeHook(root, event string, in io.Reader, out io.Writer) (int, error) {
 	default:
 		return 0, fmt.Errorf("unknown Claude hook event %q", event)
 	}
+}
+
+func requiredSkill(input hookInput) string {
+	path := filepath.ToSlash(firstNonEmpty(input.ToolInput.FilePath, input.ToolInput.Path))
+	if input.ToolName == "Edit" || input.ToolName == "Write" {
+		if strings.HasSuffix(path, "docs/decisions/decision-log.md") {
+			return "record-decision"
+		}
+		return "develop-change"
+	}
+	if input.ToolName != "Bash" {
+		return ""
+	}
+	command := input.ToolInput.Command
+	normalized := filepath.ToSlash(command)
+	if strings.Contains(normalized, "docs/decisions/decision-log.md") {
+		return "record-decision"
+	}
+	if regexp.MustCompile(`(?i)\bgo\s+run\s+\./dev/harness\s+decision\b`).MatchString(command) {
+		return "record-decision"
+	}
+	if regexp.MustCompile(`(?i)\bgo\s+run\s+\./dev/harness\s+recover\b`).MatchString(command) {
+		return "recover-work"
+	}
+	if regexp.MustCompile(`(?i)\b(git\s+(commit|push)|gh\s+pr\s+create)\b`).MatchString(command) {
+		return "prepare-pr"
+	}
+	if regexp.MustCompile(`(?i)\bgit\s+add\b`).MatchString(command) {
+		return "prepare-pr"
+	}
+	if regexp.MustCompile(`(?i)\bgit\s+(switch|checkout)\b`).MatchString(command) {
+		return "start-work"
+	}
+	if regexp.MustCompile(`(?i)^\s*git\s+pull\s+--ff-only(\s|$)`).MatchString(command) {
+		return "start-work"
+	}
+	if strings.Contains(normalized, "dev/bootstrap/") || regexp.MustCompile(`(?i)\bgo\s+run\s+\./dev/harness\s+setup\b`).MatchString(command) || regexp.MustCompile(`(?i)\bgit\s+config\b`).MatchString(command) {
+		return "start-contributing"
+	}
+	if readOnlyBash(command) {
+		return ""
+	}
+	return "develop-change"
+}
+
+func readOnlyBash(command string) bool {
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return true
+	}
+	if strings.ContainsAny(trimmed, ";>|`") || strings.Contains(trimmed, "&&") || strings.Contains(trimmed, "||") || strings.Contains(trimmed, "$(") {
+		return false
+	}
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`^pwd\s*$`),
+		regexp.MustCompile(`^ls(\s+-[A-Za-z]+)*(\s+\.?)?\s*$`),
+		regexp.MustCompile(`^git\s+status(\s+--(short|porcelain|branch))*\s*$`),
+		regexp.MustCompile(`^git\s+diff(\s+--(stat|check|cached|staged|name-only))*\s*$`),
+		regexp.MustCompile(`^git\s+branch\s+--show-current(\s|$)`),
+		regexp.MustCompile(`^git\s+remote\s+get-url\s+origin\s*$`),
+		regexp.MustCompile(`^git\s+rev-parse\s+--show-toplevel\s*$`),
+		regexp.MustCompile(`^go\s+run\s+\./dev/harness\s+(validate|doctor|decision\s+check)(\s|$)`),
+	}
+	for _, pattern := range patterns {
+		if pattern.MatchString(trimmed) {
+			return true
+		}
+	}
+	return false
+}
+
+func activateClaudeSkill(root, sessionID, rawName string) error {
+	manifest, err := clauderouting.Load(root)
+	if err != nil {
+		return err
+	}
+	fields := strings.Fields(strings.TrimSpace(rawName))
+	if len(fields) == 0 {
+		return errors.New("Claude nao informou qual skill foi invocada")
+	}
+	name := strings.TrimPrefix(fields[0], "/")
+	if !manifest.HasSkill(name) {
+		return fmt.Errorf("skill Claude nao roteada: %s", name)
+	}
+	path, err := claudeSessionPath(root, sessionID)
+	if err != nil {
+		return err
+	}
+	active, _ := os.ReadFile(path)
+	if strings.Contains("\n"+string(active), "\n"+name+"\n") {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(active, []byte(name+"\n")...), 0o600)
+}
+
+func claudeSkillActive(root, sessionID, name string) bool {
+	path, err := claudeSessionPath(root, sessionID)
+	if err != nil {
+		return false
+	}
+	active, err := os.ReadFile(path)
+	return err == nil && strings.Contains("\n"+string(active), "\n"+name+"\n")
+}
+
+func anyClaudeSkillActive(root, sessionID string) bool {
+	path, err := claudeSessionPath(root, sessionID)
+	if err != nil {
+		return false
+	}
+	active, err := os.ReadFile(path)
+	return err == nil && strings.TrimSpace(string(active)) != ""
+}
+
+func claudeSessionPath(root, sessionID string) (string, error) {
+	if !regexp.MustCompile(`^[A-Za-z0-9._-]+$`).MatchString(sessionID) {
+		return "", fmt.Errorf("Claude session_id ausente ou invalido; reinicie a sessao antes de modificar arquivos")
+	}
+	return gitPath(root, filepath.Join("bcg-harness", "claude-sessions", sessionID+".skills"))
+}
+
+func gitPath(root, name string) (string, error) {
+	resolved, err := gitOutput(root, "rev-parse", "--git-path", filepath.ToSlash(name))
+	if err != nil {
+		return "", err
+	}
+	resolved = strings.TrimSpace(resolved)
+	if !filepath.IsAbs(resolved) {
+		resolved = filepath.Join(root, filepath.FromSlash(resolved))
+	}
+	return filepath.Clean(resolved), nil
+}
+
+func dollarSkills(names []string) string {
+	withPrefix := make([]string, 0, len(names))
+	for _, name := range names {
+		withPrefix = append(withPrefix, "$"+name)
+	}
+	return strings.Join(withPrefix, " -> ")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func writeHook(out io.Writer, event, context string) error {

@@ -52,6 +52,27 @@ try {
     if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
         Stop-Onboarding "Go nao esta disponivel no PATH." "peca ao Claude para verificar GoLang.Go no winget antes de instalar"
     }
+    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+        if ($NonInteractive) {
+            Write-Host "[AVISO] Claude Code ausente; permitido somente no smoke test nao interativo." -ForegroundColor Yellow
+        }
+        else {
+            Stop-Onboarding "Claude Code nao esta disponivel no PATH." "instale ou atualize o Claude Code pelo canal corporativo antes de continuar"
+        }
+    }
+    else {
+        $claudeVersionText = (& claude --version 2>$null | Out-String).Trim()
+        if ($claudeVersionText -notmatch '(\d+\.\d+\.\d+)') {
+            Stop-Onboarding "nao foi possivel identificar a versao do Claude Code: '$claudeVersionText'." "execute claude doctor e mostre o resultado ao Daniel"
+        }
+        $claudeVersion = [version]$Matches[1]
+        $minimumClaudeVersion = [version]"2.1.177"
+        if ($claudeVersion -lt $minimumClaudeVersion) {
+            Stop-Onboarding "Claude Code $claudeVersion e anterior ao minimo $minimumClaudeVersion." "execute claude update pelo canal corporativo e rode o onboarding novamente"
+        }
+        Write-Host "[OK] Claude Code $claudeVersion compativel com os hooks de skills"
+        $script:CompletedSteps += "Claude Code compativel"
+    }
     if (-not (Test-Path (Join-Path $repositoryRoot ".git"))) {
         Stop-Onboarding "este diretorio nao e um clone Git do projeto." "volte ao prompt de clone e confirme o diretorio escolhido"
     }

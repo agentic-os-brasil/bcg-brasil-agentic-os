@@ -15,8 +15,12 @@ Claude Code is the first-class contributor surface. This is an executable contra
 - every canonical development skill under `dev/skills/` must have a native thin projection under `.claude/skills/`;
 - `.claude/skill-routing.json` must route every canonical development skill to at least one contributor intent;
 - `CLAUDE.md` must identify Claude as primary, load the routing contract and name every native `$skill`;
-- Claude SessionStart, PreToolUse and PostToolUse hooks must remain configured;
+- Claude SessionStart must inject the effective golden path, while PostToolUse for Skill and UserPromptExpansion record successful automatic loading and direct `/skill-name` expansion respectively;
+- PreToolUse must block Bash, Edit and Write when the required skill has not been recorded for that Claude session;
+- Claude SessionStart, UserPromptExpansion, PreToolUse and PostToolUse hooks must remain structurally configured with their exact commands and matchers;
 - the development harness and CI must reject drift in those requirements.
+
+The project settings declare, and the interactive bootstrap detects, the minimum Claude Code version needed by this hook contract. If Go is missing, the clone is an unsupported state: hooks fail closed and direct the contributor back to external onboarding instead of promising an in-repository skill can repair the harness.
 
 Codex compatibility remains required through the shared canonical contracts. It must not weaken or replace Claude's native discovery, routing or hook path.
 
