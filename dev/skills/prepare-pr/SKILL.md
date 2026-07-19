@@ -10,9 +10,9 @@ Turn a finished change into a reviewable handoff without hiding risk from a novi
 ## Workflow
 
 1. Run `go run ./dev/harness doctor`; stop if the current branch is `main` or the state is unclear.
-2. Review `git diff` and `git status --short`. Explain in plain language what changed and identify anything unrelated.
+2. Review `git diff` and `git status --short`. Explain in plain language what changed. If unrelated modified or untracked files exist, stop and use `$recover-work`; the exact-tree gate requires a clean workspace before staging.
 3. Run `go run ./dev/harness validate --full`.
-4. Stage only explicit intended paths. Never use `git add .` when unrelated files exist.
+4. Stage only explicit intended paths. Never use `git add .` as a shortcut.
 5. Show the proposed commit message and staged file list. Ask for confirmation before creating the commit.
 6. Commit. The local hook re-runs the full gate against the exact staged snapshot and blocks secrets, likely client files and main-branch commits.
 7. Show the target remote and branch. Ask for confirmation before `git push -u origin HEAD`.

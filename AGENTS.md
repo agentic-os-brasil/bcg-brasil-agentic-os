@@ -16,7 +16,7 @@ Before changing it:
 
 The architecture is intentionally incomplete. Prefer small, reversible changes and record structural decisions before implementation.
 
-Claude is the primary runtime, but not the architecture source of truth. Codex must consume the same canonical contracts, state schemas and policies through a thin adapter. Runtime-specific mechanics belong only in `adapters/`.
+Claude is the primary runtime, but not the architecture source of truth. Codex must consume the same canonical contracts, state schemas and policies through a thin adapter. Product runtime mechanics belong in `adapters/`; development-tool projections may live in `.claude/` while canonical policy remains under `dev/` and `internal/dev/`.
 
 The development-only gate is `go run ./dev/harness validate --full`. Nothing under `dev/` or `internal/dev/` belongs in the distributed CLI or OS bundle.
 

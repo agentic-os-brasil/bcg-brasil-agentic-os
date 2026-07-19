@@ -154,14 +154,14 @@ func PreCommit(root string, out io.Writer) error {
 		return err
 	}
 	if unstaged != "" {
-		return block("ha mudancas fora do commit; o gate precisa validar exatamente o que sera salvo", "git status")
+		return block("ha mudancas fora do commit; o gate precisa validar exatamente o que sera salvo", "go run ./dev/harness recover")
 	}
 	untracked, err := gitOutput(root, "ls-files", "--others", "--exclude-standard")
 	if err != nil {
 		return err
 	}
 	if untracked != "" {
-		return block("ha arquivos novos fora do commit; o gate precisa validar exatamente o que sera salvo", "git status")
+		return block("ha arquivos novos fora do commit; o gate precisa validar exatamente o que sera salvo", "go run ./dev/harness recover")
 	}
 	if err := scanStaged(root); err != nil {
 		return err
@@ -211,11 +211,14 @@ func PrePush(root string, scanner *bufio.Scanner, out io.Writer) error {
 }
 
 func scanStaged(root string) error {
-	names, err := gitOutput(root, "diff", "--cached", "--name-only", "--diff-filter=ACMR")
+	names, err := gitOutputRaw(root, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR")
 	if err != nil {
 		return err
 	}
-	for _, name := range strings.Fields(names) {
+	for _, name := range strings.Split(names, "\x00") {
+		if name == "" {
+			continue
+		}
 		lower := strings.ToLower(name)
 		ext := strings.ToLower(filepath.Ext(name))
 		if sensitiveExtensions[ext] && !strings.Contains(filepath.ToSlash(lower), "testdata/") {
@@ -224,9 +227,9 @@ func scanStaged(root string) error {
 		if strings.Contains(lower, ".env") || ext == ".pem" || ext == ".key" || ext == ".p12" || ext == ".pfx" {
 			return block("arquivo de credencial nao pode entrar no repositorio: "+name, "git status")
 		}
-		content, err := gitOutput(root, "show", ":"+name)
+		content, err := gitOutputRaw(root, "show", ":"+name)
 		if err != nil {
-			continue
+			return block("nao foi possivel verificar o conteudo staged de "+name, "git status")
 		}
 		for _, pattern := range secretPatterns {
 			if pattern.MatchString(content) {
@@ -293,11 +296,16 @@ func git(root string, args ...string) error {
 }
 
 func gitOutput(root string, args ...string) (string, error) {
+	output, err := gitOutputRaw(root, args...)
+	return strings.TrimSpace(output), err
+}
+
+func gitOutputRaw(root string, args ...string) (string, error) {
 	command := exec.Command("git", args...)
 	command.Dir = root
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
 	}
-	return strings.TrimSpace(string(output)), nil
+	return string(output), nil
 }

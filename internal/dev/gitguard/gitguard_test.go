@@ -3,6 +3,9 @@ package gitguard
 import (
 	"bufio"
 	"bytes"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -21,6 +24,30 @@ func TestBlockedCommandRejectsDangerousGitOperations(t *testing.T) {
 		if _, recovery, blocked := BlockedCommand(command); !blocked || recovery == "" {
 			t.Errorf("BlockedCommand(%q) = blocked %v, recovery %q", command, blocked, recovery)
 		}
+	}
+}
+
+func TestScanStagedFindsSecretInFilenameWithSpaces(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	path := filepath.Join(root, "client notes.txt")
+	fakeSecret := "ghp_" + strings.Repeat("1", 25)
+	if err := os.WriteFile(path, []byte("token="+fakeSecret+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "client notes.txt")
+	err := scanStaged(root)
+	if err == nil || !strings.Contains(err.Error(), "possivel segredo") {
+		t.Fatalf("scanStaged() error = %v, want secret block", err)
+	}
+}
+
+func runGit(t *testing.T, root string, args ...string) {
+	t.Helper()
+	command := exec.Command("git", args...)
+	command.Dir = root
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, output)
 	}
 }
 
