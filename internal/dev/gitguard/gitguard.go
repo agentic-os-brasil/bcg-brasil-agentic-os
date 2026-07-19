@@ -250,6 +250,8 @@ func ClaudeHook(root, event string, in io.Reader, out io.Writer) (int, error) {
 	case "session-start":
 		var buffer bytes.Buffer
 		_ = Doctor(root, &buffer)
+		fmt.Fprintln(&buffer, "Claude Code e o runtime principal de desenvolvimento.")
+		fmt.Fprintln(&buffer, "Use as skills nativas conforme .claude/skill-routing.json; nao ignore o harness.")
 		return 0, writeHook(out, "SessionStart", buffer.String())
 	case "pre-tool":
 		if reason, recovery, blocked := BlockedCommand(input.ToolInput.Command); blocked {

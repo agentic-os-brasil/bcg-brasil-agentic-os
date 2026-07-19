@@ -8,6 +8,18 @@ Run the same BCG Brasil Agentic OS semantics on Claude and Codex while acknowled
 
 Claude is the primary runtime and reference coverage target. The canonical architecture remains independent from both runtimes.
 
+## Primary development runtime contract
+
+Claude Code is the first-class contributor surface. This is an executable contract, not only a documentation preference:
+
+- every canonical development skill under `dev/skills/` must have a native thin projection under `.claude/skills/`;
+- `.claude/skill-routing.json` must route every canonical development skill to at least one contributor intent;
+- `CLAUDE.md` must identify Claude as primary, load the routing contract and name every native `$skill`;
+- Claude SessionStart, PreToolUse and PostToolUse hooks must remain configured;
+- the development harness and CI must reject drift in those requirements.
+
+Codex compatibility remains required through the shared canonical contracts. It must not weaken or replace Claude's native discovery, routing or hook path.
+
 ## Canonical core
 
 The shared core owns:

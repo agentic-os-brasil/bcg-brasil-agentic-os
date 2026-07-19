@@ -49,6 +49,9 @@ func Validate(root string, full bool, out io.Writer) error {
 				filepath.Join(root, ".claude", "skills"),
 			)
 		}},
+		{"Claude primary skill routing", func() error {
+			return skillmeta.ValidateClaudeRouting(root)
+		}},
 		{"development boundary", func() error { return boundary.Validate(root) }},
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}

@@ -1,0 +1,20 @@
+{
+  "primary_runtime": "claude",
+  "canonical_root": "dev/skills",
+  "projection_root": ".claude/skills",
+  "routes": {
+    "first_contribution": "start-contributing",
+    "start_or_resume_work": "start-work",
+    "implement_change": "develop-change",
+    "record_durable_decision": "record-decision",
+    "prepare_human_review": "prepare-pr",
+    "recover_unclear_git_state": "recover-work"
+  },
+  "golden_path": [
+    "start-contributing",
+    "start-work",
+    "develop-change",
+    "prepare-pr"
+  ],
+  "fallback": "recover-work"
+}

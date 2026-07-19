@@ -79,3 +79,16 @@ func TestClaudePreToolBlockExplainsRecovery(t *testing.T) {
 		t.Fatalf("code = %d, output = %s", code, output.String())
 	}
 }
+
+func TestClaudeSessionStartInjectsPrimarySkillRouting(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	var output bytes.Buffer
+	code, err := ClaudeHook(root, "session-start", strings.NewReader(`{}`), &output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 || !strings.Contains(output.String(), "runtime principal") || !strings.Contains(output.String(), ".claude/skill-routing.json") {
+		t.Fatalf("code = %d, output = %s", code, output.String())
+	}
+}

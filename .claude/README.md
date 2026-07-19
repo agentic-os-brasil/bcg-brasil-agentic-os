@@ -1,5 +1,7 @@
 # Guia do Claude para contribuidores
 
+Claude Code e a experiencia principal de desenvolvimento deste repositorio. O arquivo `.claude/skill-routing.json` define, de forma verificavel, qual skill nativa o Claude deve usar para cada tipo de trabalho. O harness bloqueia a integracao de uma skill canonica que nao esteja descoberta e roteada no Claude.
+
 Voce nao precisa saber Git para contribuir. Diga ao Claude, em linguagem normal, o que quer fazer.
 
 ## Primeira vez
@@ -27,4 +29,4 @@ Em termos simples: uma **branch** separa seu trabalho; um **commit** salva um ch
 - Segredos, credenciais e possiveis arquivos de cliente nao entram no repositorio.
 - Se um hook bloquear algo, ele deve explicar o motivo, confirmar que nada foi perdido e indicar um unico comando seguro.
 
-As politicas canonicas ficam em `AGENTS.md`, `specs/005-development-harness.md` e `dev/skills/`. Esta pasta e apenas a adaptacao do Claude.
+As politicas canonicas ficam em `AGENTS.md`, `specs/005-development-harness.md` e `dev/skills/`. Esta pasta e a adaptacao nativa e principal do Claude; ela nao duplica a politica canonica.
