@@ -4,7 +4,9 @@ Este guia e para contribuidores do codigo-fonte. Usuarios do piloto instalarao o
 
 ## Se voce nao conhece Git
 
-Abra o repositorio no Claude e diga:
+Se o repositorio ainda nao foi clonado no Windows, comece com `docs/onboarding/windows-contributor-prompt.md`. Envie esse prompt ao Claude para verificar ferramentas, autenticar pelo browser, clonar e executar o bootstrap oficial.
+
+Depois do clone, abra uma nova sessao do Claude dentro do repositorio e diga:
 
 > Use start-contributing e me guie passo a passo.
 

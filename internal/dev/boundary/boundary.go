@@ -13,7 +13,10 @@ var distributionRoots = []string{"bundles", "adapters", "installers", filepath.J
 var forbiddenReferences = []string{
 	"dev/harness",
 	"dev/skills",
+	"dev/bootstrap",
 	"internal/dev",
+	".claude/skills",
+	"docs/onboarding",
 	"docs/decisions/decision-log.md",
 	"specs/005-development-harness.md",
 }

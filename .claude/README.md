@@ -8,6 +8,8 @@ Escreva: **"Use start-contributing e me guie passo a passo."**
 
 O Claude vai verificar a instalacao, explicar qualquer problema e instalar os mecanismos de protecao deste clone. Ele deve dar uma unica proxima acao por vez.
 
+Se o repositorio ainda nao foi clonado em um computador Windows, use primeiro o prompt compartilhavel em `docs/onboarding/windows-contributor-prompt.md`. As skills descobertas nativamente pelo Claude em `.claude/skills/` sao projecoes finas; os contratos canonicos continuam em `dev/skills/`.
+
 ## Fluxo normal
 
 1. **Comecar:** "Use start-work. Quero alterar ..."

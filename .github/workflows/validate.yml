@@ -33,3 +33,20 @@ jobs:
             *'"permissionDecision":"deny"'*) ;;
             *) echo "Claude hook did not deny destructive Git command"; exit 1 ;;
           esac
+      - name: Smoke-test Windows contributor bootstrap
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          git switch -C main
+          ./dev/bootstrap/windows.ps1 -GitName "BCG OS CI" -GitEmail "ci@example.invalid" -NonInteractive
+
+          $mainOutput = (& git commit --allow-empty -m "test: main hook must block" 2>&1 | Out-String)
+          if ($LASTEXITCODE -eq 0 -or $mainOutput -notmatch "commits na branch principal") {
+            throw "pre-commit hook did not block a commit on main"
+          }
+
+          git switch -c ci/hook-smoke
+          git commit --allow-empty -m "test: safe branch hook executes"
+          if ($LASTEXITCODE -ne 0) {
+            throw "pre-commit hook did not allow a validated branch commit"
+          }

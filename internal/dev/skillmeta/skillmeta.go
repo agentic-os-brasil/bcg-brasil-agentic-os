@@ -34,6 +34,65 @@ func ValidateDir(root string) error {
 	return errors.Join(problems...)
 }
 
+// ValidateClaudeProjections ensures Claude discovers one thin projection for every canonical development skill.
+func ValidateClaudeProjections(canonicalRoot, projectionRoot string) error {
+	canonical, err := skillNames(canonicalRoot)
+	if err != nil {
+		return fmt.Errorf("read canonical skills: %w", err)
+	}
+	projections, err := skillNames(projectionRoot)
+	if err != nil {
+		return fmt.Errorf("read Claude skill projections: %w", err)
+	}
+	var problems []error
+	for name := range canonical {
+		if !projections[name] {
+			problems = append(problems, fmt.Errorf("Claude projection missing for development skill %s", name))
+			continue
+		}
+		path := filepath.Join(projectionRoot, name, "SKILL.md")
+		content, err := os.ReadFile(path)
+		if err != nil {
+			problems = append(problems, fmt.Errorf("read Claude projection %s: %w", name, err))
+			continue
+		}
+		text := string(content)
+		if !strings.Contains(text, "name: "+name) {
+			problems = append(problems, fmt.Errorf("Claude projection %s has incorrect name", name))
+		}
+		expectedPointer := "../../../dev/skills/" + name + "/SKILL.md"
+		if !strings.Contains(text, expectedPointer) {
+			problems = append(problems, fmt.Errorf("Claude projection %s must point to %s", name, expectedPointer))
+		}
+		if len(content) > 1200 {
+			problems = append(problems, fmt.Errorf("Claude projection %s is not thin (%d bytes)", name, len(content)))
+		}
+	}
+	for name := range projections {
+		if !canonical[name] {
+			problems = append(problems, fmt.Errorf("Claude projection %s has no canonical development skill", name))
+		}
+	}
+	return errors.Join(problems...)
+}
+
+func skillNames(root string) (map[string]bool, error) {
+	children, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]bool)
+	for _, child := range children {
+		if !child.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(root, child.Name(), "SKILL.md")); err == nil {
+			names[child.Name()] = true
+		}
+	}
+	return names, nil
+}
+
 func validateSkill(skillDir, expectedName string) error {
 	file, err := os.Open(filepath.Join(skillDir, "SKILL.md"))
 	if err != nil {

@@ -77,6 +77,8 @@ O fluxo esta definido na [Spec 005](specs/005-development-harness.md). Decisoes 
 
 Contribuidor novo: comece pelo [guia de contribuicao](CONTRIBUTING.md). No Claude, diga: **"Use start-contributing e me guie passo a passo."**
 
+Para um primeiro clone no Windows, Daniel pode enviar o [prompt de onboarding para o Claude](docs/onboarding/windows-contributor-prompt.md). Questoes ainda nao decididas ficam em [Open Questions](docs/OPEN-QUESTIONS.md), separadas do decision log.
+
 ## Estrutura
 
 ```text

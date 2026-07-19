@@ -1,54 +1,110 @@
 # Roadmap
 
-The roadmap is progressive. Dates and detailed feature scope remain open until the pilot environment is validated.
+The roadmap separates things to build from things to decide. Detailed dates remain open until the corporate Windows and macOS environments are validated. Unresolved choices live in `docs/OPEN-QUESTIONS.md`; accepted choices move to the four-letter decision log.
 
-## Phase 0 - Foundation
+## Current foundation
 
-- [x] Define professional-only scope and target audiences.
-- [x] Select CLI-first distribution.
-- [x] Select private GitHub Releases as the pilot source.
-- [x] Separate source repository, managed bundle, workspace metadata and local data.
-- [x] Define Claude as primary runtime with semantic portability to Codex.
-- [x] Create initial collaboration and architecture specs.
-- [x] Establish a development-only decision log and unit-test harness.
-- [x] Add canonical development and decision-recording skills.
-- [ ] Add Marcelo as collaborator.
-- [ ] Confirm one Windows and one macOS pilot device and their corporate security constraints.
+- [x] Define the professional-only scope and broad target audience.
+- [x] Select CLI-first private-release distribution.
+- [x] Separate source, managed core, workspace metadata and local data.
+- [x] Define Claude-primary, Codex-compatible runtime portability.
+- [x] Establish specs, four-letter decisions, unit tests and a cross-platform development harness.
+- [x] Add novice-safe Git guards, recovery, CI and human-reviewed PR flow.
+- [x] Require equal pilot acceptance on Windows and macOS.
 
-## Phase 1 - CLI skeleton
+## Track A - Contributor onboarding
 
-- [ ] Implement a small Go CLI.
-- [ ] Commands: `version`, `status`, `doctor`, `init`, `update`.
-- [ ] Define project manifest and lock schemas.
-- [ ] Define the canonical runtime capability manifest and parity states.
-- [ ] Implement Claude and Codex adapter skeletons against the same contracts.
-- [ ] Implement user-space directories for Windows, macOS and Linux.
-- [ ] Add deterministic tests for init idempotency and data preservation.
-- [ ] Add adapter conformance fixtures and capability detection to `doctor`.
-- [x] Run one portable full development gate locally and in CI.
+### Build
 
-## Phase 2 - Private distribution
+- [x] Create a single Windows prompt covering prerequisites, browser authentication and clone.
+- [x] Create the deterministic repo-local Windows bootstrap.
+- [x] Add native Claude skill projections backed by canonical `dev/skills`.
+- [ ] Add Marcelo as a collaborator after confirming his GitHub username.
+- [ ] Run the complete onboarding on Marcelo's corporate Windows device.
+- [ ] Complete one small real PR through `start-work` and `prepare-pr`.
+- [ ] Capture time, friction and failure evidence without credentials or client content.
+- [ ] Create and validate the equivalent macOS contributor bootstrap.
 
-- [ ] Build cross-platform artifacts in CI.
-- [ ] Publish a private GitHub Release manifest and bundle.
-- [ ] Implement browser-based authentication for pilot users.
-- [ ] Verify signatures before installation.
-- [ ] Implement staged update and rollback.
-- [ ] Validate the same install, init, doctor, update and rollback contracts on at least one BCG Windows device and one BCG macOS device.
+### Discuss before closing the track
 
-## Phase 3 - Pilot
+- Approved Windows software-installation channel and corporate restrictions.
+- Exact Claude distribution Marcelo will use.
+- First contribution and who reviews it.
+- Whether contributor bootstrap should later become a signed standalone tool.
 
-- [ ] Onboard approximately ten users.
-- [ ] Measure time-to-first-success and support demand.
-- [ ] Capture failure modes without collecting client content.
-- [ ] Prioritize the first shared skills from observed work.
-- [ ] Decide whether the next distribution channel remains GitHub or moves to BCG infrastructure.
+## Track B - Product CLI skeleton
+
+### Build
+
+- [ ] Implement `bcgos version`, `status` and product-facing `doctor`.
+- [ ] Implement canonical manifest, lock and runtime-capability schemas.
+- [ ] Implement user-space directories on Windows and macOS.
+- [ ] Add Claude and Codex adapter skeletons against the same contracts.
+- [ ] Add conformance fixtures for platform and runtime parity.
+- [ ] Implement idempotent `bcgos init` with data-preservation tests.
+
+### Discuss before closing the track
+
+- Final product/command name.
+- Approved Windows and macOS application directories.
+- Minimum Claude/Codex capability set for v0.
+- What `doctor` may inspect and report on corporate devices.
+
+## Track C - Private distribution and updates
+
+### Build
+
+- [ ] Produce versioned Windows and macOS artifacts in CI.
+- [ ] Define signed release manifest and compatibility rules.
+- [ ] Implement browser-based private-release authentication.
+- [ ] Implement verified download, staging, activation and rollback.
+- [ ] Ensure updates never overwrite local configuration or work data.
+- [ ] Run install/update/rollback tests on clean corporate devices for both platforms.
+
+### Discuss before closing the track
+
+- GitHub Releases versus BCG-managed distribution.
+- Code-signing, SmartScreen, Gatekeeper and provenance requirements.
+- Update cadence, forced security updates and support ownership.
+
+## Track D - First Agent OS bundle
+
+### Build
+
+- [ ] Select one high-value work use case from observed consultant needs.
+- [ ] Define the minimal bundle manifest, version and compatibility range.
+- [ ] Implement runtime-neutral contracts and thin Claude/Codex adapters.
+- [ ] Add safe context injection, workspace boundaries and capability detection.
+- [ ] Package only allowlisted product content; exclude all development harness paths.
+- [ ] Validate install, init, update and rollback without client content.
+
+### Discuss before closing the track
+
+- First use case and target persona.
+- Shared versus local knowledge governance.
+- Which hooks block, warn or observe.
+- Ownership and retirement model for agents and skills.
+
+## Track E - Ten-person pilot
+
+### Build
+
+- [ ] Select a balanced Windows/macOS and classic/technical cohort.
+- [ ] Onboard users without requiring Git, Go, Python, Node or Docker.
+- [ ] Measure time-to-first-success, update reliability and support demand.
+- [ ] Capture sanitized failure modes and prioritize the next shared capabilities.
+- [ ] Run a pilot retrospective and decide the next distribution model.
+
+### Discuss before launch
+
+- Pilot cohort, support channel and incident owner.
+- Privacy-safe telemetry and evidence of value.
+- Exit criteria for expansion, redesign or stop.
 
 ## Later, only with evidence
 
 - Additional agents and skills.
-- More runtime adapters.
-- Corporate distribution channel.
+- Organization-level shared knowledge.
 - Extension SDK or marketplace.
-- Optional UI.
-- Organization-level shared knowledge layer.
+- Optional graphical interface.
+- Additional runtime adapters and Linux pilot support.

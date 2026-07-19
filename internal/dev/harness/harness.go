@@ -43,6 +43,12 @@ func Validate(root string, full bool, out io.Writer) error {
 		{"development skills", func() error {
 			return skillmeta.ValidateDir(filepath.Join(root, "dev", "skills"))
 		}},
+		{"Claude skill projections", func() error {
+			return skillmeta.ValidateClaudeProjections(
+				filepath.Join(root, "dev", "skills"),
+				filepath.Join(root, ".claude", "skills"),
+			)
+		}},
 		{"development boundary", func() error { return boundary.Validate(root) }},
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}
