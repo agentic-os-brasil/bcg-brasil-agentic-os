@@ -160,3 +160,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Release artifacts and acceptance tests must pass on both platforms before a capability is pilot-ready. Platform-specific mechanics may differ. Linux remains a supported build and development target but is not an initial pilot parity requirement.
 - Refs: README.md; ROADMAP.md; specs/003-pilot-success.md
 - Supersedes: WNDS
+
+## BOOT - Start contribution through one guided bootstrap
+
+- Date: 2026-07-19
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A contributor with little Git or development experience needs to obtain access, clone the private repository and reach a safe first session without translating an engineering checklist alone.
+- Decision: Begin contributor onboarding with one shareable agent prompt for prerequisite, authentication and clone guidance, then transfer control to deterministic repo-owned platform bootstrap and canonical development skills.
+- Consequences: Credentials never enter chat or repository files; software installation and authentication require human confirmation; bootstrap stops before feature work. Windows is implemented first for Marcelo, with a macOS counterpart tracked separately.
+- Refs: docs/onboarding/windows-contributor-prompt.md; dev/bootstrap/windows.ps1; specs/005-development-harness.md
+- Supersedes: none

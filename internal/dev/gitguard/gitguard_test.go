@@ -3,6 +3,7 @@ package gitguard
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,6 +47,12 @@ func runGit(t *testing.T, root string, args ...string) {
 	t.Helper()
 	command := exec.Command("git", args...)
 	command.Dir = root
+	for _, variable := range os.Environ() {
+		if strings.HasPrefix(variable, "GIT_INDEX_FILE=") || strings.HasPrefix(variable, "GIT_DIR=") || strings.HasPrefix(variable, "GIT_WORK_TREE=") {
+			continue
+		}
+		command.Env = append(command.Env, variable)
+	}
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, output)
 	}
@@ -77,5 +84,240 @@ func TestClaudePreToolBlockExplainsRecovery(t *testing.T) {
 	}
 	if code != 0 || !strings.Contains(output.String(), `"permissionDecision":"deny"`) || !strings.Contains(output.String(), "Nada foi apagado") || !strings.Contains(output.String(), "recover") {
 		t.Fatalf("code = %d, output = %s", code, output.String())
+	}
+}
+
+func TestClaudeSessionStartInjectsPrimarySkillRouting(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	writeClaudeManifest(t, root)
+	var output bytes.Buffer
+	code, err := ClaudeHook(root, "session-start", strings.NewReader(`{"session_id":"session-1"}`), &output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 || !strings.Contains(output.String(), "runtime principal") || !strings.Contains(output.String(), "$start-work") || !strings.Contains(output.String(), "$recover-work") {
+		t.Fatalf("code = %d, output = %s", code, output.String())
+	}
+}
+
+func TestClaudeMutationRequiresAndRecordsNativeSkill(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	writeClaudeManifest(t, root)
+
+	edit := `{"session_id":"session-1","tool_name":"Edit","tool_input":{"file_path":"README.md"}}`
+	var blocked bytes.Buffer
+	if _, err := ClaudeHook(root, "pre-tool", strings.NewReader(edit), &blocked); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(blocked.String(), `"permissionDecision":"deny"`) || !strings.Contains(blocked.String(), "$develop-change") {
+		t.Fatalf("unrouted edit output = %s", blocked.String())
+	}
+
+	skill := `{"session_id":"session-1","tool_name":"Skill","tool_input":{"skill":"develop-change"}}`
+	if _, err := ClaudeHook(root, "skill-used", strings.NewReader(skill), &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	var allowed bytes.Buffer
+	if _, err := ClaudeHook(root, "pre-tool", strings.NewReader(edit), &allowed); err != nil {
+		t.Fatal(err)
+	}
+	if allowed.Len() != 0 {
+		t.Fatalf("active skill should allow edit, output = %s", allowed.String())
+	}
+}
+
+func TestClaudeDecisionEditRequiresRecordDecision(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	writeClaudeManifest(t, root)
+	skill := `{"session_id":"session-1","tool_name":"Skill","tool_input":{"skill":"develop-change"}}`
+	if _, err := ClaudeHook(root, "skill-used", strings.NewReader(skill), &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	edit := `{"session_id":"session-1","tool_name":"Edit","tool_input":{"file_path":"docs/decisions/decision-log.md"}}`
+	var output bytes.Buffer
+	if _, err := ClaudeHook(root, "pre-tool", strings.NewReader(edit), &output); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "$record-decision") {
+		t.Fatalf("decision edit output = %s", output.String())
+	}
+}
+
+func TestClaudeDirectSkillExpansionRecordsActivation(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	writeClaudeManifest(t, root)
+	input := `{"session_id":"session-1","command_name":"develop-change"}`
+	var output bytes.Buffer
+	if _, err := ClaudeHook(root, "prompt-expansion", strings.NewReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+	if !claudeSkillActive(root, "session-1", "develop-change") || !strings.Contains(output.String(), "registrada como ativa") {
+		t.Fatalf("direct skill expansion was not recorded: %s", output.String())
+	}
+}
+
+func TestClaudeBashMutationCannotBypassDevelopChange(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	writeClaudeManifest(t, root)
+	start := `{"session_id":"session-1","tool_name":"Skill","tool_input":{"skill":"start-work"}}`
+	if _, err := ClaudeHook(root, "skill-used", strings.NewReader(start), &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	mutation := `{"session_id":"session-1","tool_name":"Bash","tool_input":{"command":"printf x >> README.md"}}`
+	var output bytes.Buffer
+	if _, err := ClaudeHook(root, "pre-tool", strings.NewReader(mutation), &output); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "$develop-change") {
+		t.Fatalf("Bash mutation bypassed develop-change: %s", output.String())
+	}
+}
+
+func TestClaudeBashDecisionMutationRequiresRecordDecision(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	writeClaudeManifest(t, root)
+	develop := `{"session_id":"session-1","tool_name":"Skill","tool_input":{"skill":"develop-change"}}`
+	if _, err := ClaudeHook(root, "skill-used", strings.NewReader(develop), &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	mutation := `{"session_id":"session-1","tool_name":"Bash","tool_input":{"command":"python update.py docs/decisions/decision-log.md"}}`
+	var output bytes.Buffer
+	if _, err := ClaudeHook(root, "pre-tool", strings.NewReader(mutation), &output); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "$record-decision") {
+		t.Fatalf("Bash decision mutation bypassed record-decision: %s", output.String())
+	}
+}
+
+func TestClaudeSkillStateWorksInGitWorktree(t *testing.T) {
+	base := t.TempDir()
+	main := filepath.Join(base, "main")
+	if err := os.MkdirAll(main, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, main, "init")
+	runGit(t, main, "config", "user.name", "Test User")
+	runGit(t, main, "config", "user.email", "test@example.com")
+	writeClaudeManifest(t, main)
+	if err := os.WriteFile(filepath.Join(main, "README.md"), []byte("test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, main, "add", ".")
+	runGit(t, main, "commit", "-m", "initial")
+	worktree := filepath.Join(base, "worktree")
+	runGit(t, main, "worktree", "add", "-b", "feature/test", worktree)
+
+	skill := `{"session_id":"session-1","tool_name":"Skill","tool_input":{"skill":"develop-change"}}`
+	if _, err := ClaudeHook(worktree, "skill-used", strings.NewReader(skill), &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if !claudeSkillActive(worktree, "session-1", "develop-change") {
+		t.Fatal("skill state was not resolved through the worktree git path")
+	}
+}
+
+func TestNoGoWrapperFailsClosedWithoutRecommendingRepositorySkill(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(filepath.Join(root, ".claude", "hooks", "run-dev-hook.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	if !strings.Contains(text, "ESTADO NAO SUPORTADO") || strings.Contains(text, "Go ainda nao esta instalado: use $start-contributing") {
+		t.Fatalf("no-Go recovery must fail closed and point outside the repository")
+	}
+}
+
+func TestCanonicalSkillCommandsRequireAndAcceptOwningSkill(t *testing.T) {
+	cases := []struct {
+		skill   string
+		command string
+	}{
+		{"start-contributing", "go run ./dev/harness setup"},
+		{"start-work", "git pull --ff-only origin main"},
+		{"develop-change", "go test ./..."},
+		{"record-decision", "go run ./dev/harness decision available ABCD"},
+		{"prepare-pr", "git add README.md"},
+		{"recover-work", "go run ./dev/harness recover"},
+	}
+	for index, test := range cases {
+		t.Run(test.skill, func(t *testing.T) {
+			root := t.TempDir()
+			runGit(t, root, "init")
+			writeClaudeManifest(t, root)
+			sessionID := fmt.Sprintf("session-%d", index)
+			input := fmt.Sprintf(`{"session_id":%q,"tool_name":"Bash","tool_input":{"command":%q}}`, sessionID, test.command)
+
+			var blocked bytes.Buffer
+			if _, err := ClaudeHook(root, "pre-tool", strings.NewReader(input), &blocked); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(blocked.String(), "$"+test.skill) {
+				t.Fatalf("command %q should require $%s: %s", test.command, test.skill, blocked.String())
+			}
+
+			skillInput := fmt.Sprintf(`{"session_id":%q,"tool_name":"Skill","tool_input":{"skill_name":%q}}`, sessionID, test.skill)
+			if _, err := ClaudeHook(root, "skill-used", strings.NewReader(skillInput), &bytes.Buffer{}); err != nil {
+				t.Fatal(err)
+			}
+			var allowed bytes.Buffer
+			if _, err := ClaudeHook(root, "pre-tool", strings.NewReader(input), &allowed); err != nil {
+				t.Fatal(err)
+			}
+			if allowed.Len() != 0 {
+				t.Fatalf("command %q should be allowed after $%s: %s", test.command, test.skill, allowed.String())
+			}
+		})
+	}
+}
+
+func TestCanonicalDiagnosticCommandsRemainAvailableInOwningWorkflow(t *testing.T) {
+	cases := []struct {
+		skill   string
+		command string
+	}{
+		{"start-work", "git status --short --branch"},
+		{"recover-work", "git diff --stat"},
+	}
+	for index, test := range cases {
+		t.Run(test.command, func(t *testing.T) {
+			root := t.TempDir()
+			runGit(t, root, "init")
+			writeClaudeManifest(t, root)
+			sessionID := fmt.Sprintf("diagnostic-%d", index)
+			skillInput := fmt.Sprintf(`{"session_id":%q,"tool_name":"Skill","tool_input":{"skill_name":%q}}`, sessionID, test.skill)
+			if _, err := ClaudeHook(root, "skill-used", strings.NewReader(skillInput), &bytes.Buffer{}); err != nil {
+				t.Fatal(err)
+			}
+			input := fmt.Sprintf(`{"session_id":%q,"tool_name":"Bash","tool_input":{"command":%q}}`, sessionID, test.command)
+			var output bytes.Buffer
+			if _, err := ClaudeHook(root, "pre-tool", strings.NewReader(input), &output); err != nil {
+				t.Fatal(err)
+			}
+			if output.Len() != 0 {
+				t.Fatalf("diagnostic %q blocked in $%s: %s", test.command, test.skill, output.String())
+			}
+		})
+	}
+}
+
+func writeClaudeManifest(t *testing.T, root string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(root, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"primary_runtime":"claude","canonical_root":"dev/skills","projection_root":".claude/skills","routes":{"onboard":"start-contributing","start":"start-work","develop":"develop-change","decision":"record-decision","deliver":"prepare-pr","recover":"recover-work"},"golden_path":["start-contributing","start-work","develop-change","prepare-pr"],"fallback":"recover-work"}`
+	if err := os.WriteFile(filepath.Join(root, ".claude", "skill-routing.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

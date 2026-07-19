@@ -75,3 +75,12 @@ All skills live under `dev/`, call deterministic repository commands and are exc
 Local hooks are installed per clone with `go run ./dev/harness setup`. They are safety rails, not the remote authority. Every block must state the reason, confirm that no work was discarded and provide one recovery command.
 
 Current pilot limitation: GitHub branch protection is unavailable for this private repository on the account's present plan. Until that changes, CODEOWNERS and PR review express the intended workflow but cannot technically prevent a maintainer from pushing directly to `main`; local hooks and CI remain active backstops.
+
+## Contributor bootstrap contract
+
+- Before clone, a shareable prompt guides prerequisite checks, browser-based authentication and repository access without accepting credentials in chat.
+- Software installation requires the contributor's confirmation and must use an inspectable approved package channel; the workflow never pipes remote scripts into a shell or bypasses corporate policy.
+- After clone, repo-owned platform scripts perform deterministic local setup. They do not install software, request administrator access, modify remote history or discard files.
+- Bootstrap ends with a clean clone, repository-local Git identity, installed hooks and a green fast validation. It does not begin feature work.
+- Canonical skills remain under `dev/skills`; runtime directories contain only thin discovery projections validated by the harness.
+- Windows is the first implemented contributor bootstrap because Marcelo uses Windows. A macOS counterpart remains required by the contributor roadmap; product pilot parity continues to be governed separately by `DUAL`.

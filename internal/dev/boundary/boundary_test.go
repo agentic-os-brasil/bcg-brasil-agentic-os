@@ -24,6 +24,15 @@ func TestValidateRejectsDevelopmentLeak(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsContributorBootstrapLeak(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "bundles/base/README.md", "Run dev/bootstrap/windows.ps1\n")
+	err := Validate(root)
+	if err == nil || !strings.Contains(err.Error(), "references development-only path dev/bootstrap") {
+		t.Fatalf("Validate() error = %v, want bootstrap leak", err)
+	}
+}
+
 func writeFile(t *testing.T, root, relative, content string) {
 	t.Helper()
 	path := filepath.Join(root, relative)
