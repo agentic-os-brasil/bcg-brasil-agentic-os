@@ -13,7 +13,7 @@ The roadmap is progressive. Dates and detailed feature scope remain open until t
 - [x] Establish a development-only decision log and unit-test harness.
 - [x] Add canonical development and decision-recording skills.
 - [ ] Add Marcelo as collaborator.
-- [ ] Confirm pilot device and corporate security constraints.
+- [ ] Confirm one Windows and one macOS pilot device and their corporate security constraints.
 
 ## Phase 1 - CLI skeleton
 
@@ -34,7 +34,7 @@ The roadmap is progressive. Dates and detailed feature scope remain open until t
 - [ ] Implement browser-based authentication for pilot users.
 - [ ] Verify signatures before installation.
 - [ ] Implement staged update and rollback.
-- [ ] Validate on at least one BCG Windows device and one BCG X device.
+- [ ] Validate the same install, init, doctor, update and rollback contracts on at least one BCG Windows device and one BCG macOS device.
 
 ## Phase 3 - Pilot
 

@@ -149,3 +149,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Contributors receive one safe next action at a time; destructive Git, direct main changes and autonomous merge are blocked; local enforcement remains backed by remote review and CI.
 - Refs: specs/005-development-harness.md; .claude/README.md; dev/skills/start-contributing/SKILL.md
 - Supersedes: none
+
+## DUAL - Support Windows and macOS equally
+
+- Date: 2026-07-19
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The pilot must support both classic and technical BCG users, whose corporate devices include Windows and macOS.
+- Decision: Treat Windows and macOS as equal first-class pilot platforms with equivalent observable contracts for installation, initialization, diagnosis, update, rollback and data preservation.
+- Consequences: Release artifacts and acceptance tests must pass on both platforms before a capability is pilot-ready. Platform-specific mechanics may differ. Linux remains a supported build and development target but is not an initial pilot parity requirement.
+- Refs: README.md; ROADMAP.md; specs/003-pilot-success.md
+- Supersedes: WNDS

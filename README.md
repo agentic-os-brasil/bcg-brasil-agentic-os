@@ -35,7 +35,7 @@ O usuario nao precisara clonar o repositorio, entender Git ou manter manualmente
 
 ## Publico do piloto
 
-O primeiro piloto sera de aproximadamente dez pessoas e devera incluir perfis com diferentes niveis de familiaridade tecnica. Windows sera tratado como plataforma primaria; macOS e Linux permanecem alvos suportados.
+O primeiro piloto sera de aproximadamente dez pessoas e devera incluir perfis com diferentes niveis de familiaridade tecnica. Windows e macOS serao plataformas de primeira classe, com a mesma experiencia e os mesmos criterios de aceitacao. Linux permanece um alvo suportado de build e desenvolvimento, mas nao e requisito de paridade do piloto inicial.
 
 ## Estado atual
 
