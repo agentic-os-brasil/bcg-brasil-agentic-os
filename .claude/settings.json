@@ -8,6 +8,7 @@
       "Bash(git reset --hard*)",
       "Bash(git clean -f*)",
       "Bash(git branch -D*)",
+      "Bash(git push * --delete*)",
       "Bash(gh pr merge*)"
     ]
   },

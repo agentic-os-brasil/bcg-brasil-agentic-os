@@ -48,7 +48,7 @@ func TestClaudePreToolBlockExplainsRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code != 2 || !strings.Contains(output.String(), "Nada foi apagado") || !strings.Contains(output.String(), "recover") {
+	if code != 0 || !strings.Contains(output.String(), `"permissionDecision":"deny"`) || !strings.Contains(output.String(), "Nada foi apagado") || !strings.Contains(output.String(), "recover") {
 		t.Fatalf("code = %d, output = %s", code, output.String())
 	}
 }

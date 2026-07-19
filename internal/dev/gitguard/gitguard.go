@@ -52,8 +52,10 @@ type hookInput struct {
 
 type hookOutput struct {
 	HookSpecificOutput struct {
-		HookEventName     string `json:"hookEventName"`
-		AdditionalContext string `json:"additionalContext"`
+		HookEventName            string `json:"hookEventName"`
+		AdditionalContext        string `json:"additionalContext,omitempty"`
+		PermissionDecision       string `json:"permissionDecision,omitempty"`
+		PermissionDecisionReason string `json:"permissionDecisionReason,omitempty"`
 	} `json:"hookSpecificOutput"`
 }
 
@@ -249,7 +251,7 @@ func ClaudeHook(root, event string, in io.Reader, out io.Writer) (int, error) {
 	case "pre-tool":
 		if reason, recovery, blocked := BlockedCommand(input.ToolInput.Command); blocked {
 			message := fmt.Sprintf("BLOQUEADO: %s. Nada foi apagado. Proximo comando seguro: %s", reason, recovery)
-			return 2, writeHook(out, "PreToolUse", message)
+			return 0, writeDeniedHook(out, message)
 		}
 		return 0, nil
 	case "post-tool":
@@ -270,6 +272,14 @@ func writeHook(out io.Writer, event, context string) error {
 	var output hookOutput
 	output.HookSpecificOutput.HookEventName = event
 	output.HookSpecificOutput.AdditionalContext = strings.TrimSpace(context)
+	return json.NewEncoder(out).Encode(output)
+}
+
+func writeDeniedHook(out io.Writer, reason string) error {
+	var output hookOutput
+	output.HookSpecificOutput.HookEventName = "PreToolUse"
+	output.HookSpecificOutput.PermissionDecision = "deny"
+	output.HookSpecificOutput.PermissionDecisionReason = strings.TrimSpace(reason)
 	return json.NewEncoder(out).Encode(output)
 }
 
