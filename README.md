@@ -50,15 +50,19 @@ Implementado agora:
 - skills de desenvolvimento para onboarding, inicio de trabalho, implementacao, decisoes, recuperacao e preparacao de PR;
 - `doctor`, hooks locais e guia Claude para contribuidores iniciantes;
 - CI com o mesmo gate em Windows, macOS e Linux.
+- contrato inicial de memoria com dreaming diario leve, deep dreaming semanal, L1/L2/L3 e lifetime versionado;
+- politica de memoria distribuivel, schemas, engine Go testado e skills operacional/de desenvolvimento.
+- entrypoint `bcgos` com `version` e bridge inicial de memoria para capture, status e contexto; dreaming falha explicitamente como indisponivel ate existir adapter aprovado.
 
 Ainda nao implementado:
 
-- binario `bcgos`;
+- instalacao e distribuicao do binario `bcgos`;
 - instalador;
 - autenticacao com GitHub;
 - bundle do OS;
 - pipeline de releases;
 - update, rollback e assinatura de artefatos.
+- adapters de sintese e elegibilidade, agendamento, recovery de locks e dreaming executavel no `bcgos memory`.
 
 ## Desenvolvimento da solucao
 
@@ -92,6 +96,8 @@ installers/      instaladores por plataforma
 specs/           contratos antes da implementacao
 docs/            decisoes e explicacoes para humanos
 ```
+
+O contrato de memoria esta em [Spec 006](specs/006-memory-persistence.md). A politica sanitizada vive em `bundles/base/memory/policy.json`, o engine em `internal/memory` e a skill operacional em `bundles/base/skills/dream-memory/`. Dados e rollups reais permanecerao fora do repositorio, em armazenamento local do usuario.
 
 Leia primeiro:
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evolve Memory"
+  short_description: "Develop memory and dreaming contracts safely"
+  default_prompt: "Use $evolve-memory to implement or change memory persistence, rollups, dreaming, or context injection."

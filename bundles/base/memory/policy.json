@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "storage": {
+    "scope": "user_local",
+    "workspace_isolation": true,
+    "managed_core_contains_user_data": false
+  },
+  "layers": [
+    {
+      "id": "L1",
+      "role": "daily",
+      "input": "sanitized_signals",
+      "source_mode": "append_only",
+      "context_budget": "required_runtime_configuration",
+      "drill_down": true
+    },
+    {
+      "id": "L2",
+      "role": "weekly",
+      "input": "L1",
+      "source_mode": "immutable",
+      "context_budget": "required_runtime_configuration",
+      "drill_down": true
+    },
+    {
+      "id": "L3",
+      "role": "medium_term_thematic",
+      "input": "L2",
+      "source_mode": "immutable",
+      "context_budget": "required_runtime_configuration",
+      "drill_down": true
+    }
+  ],
+  "lifetime": {
+    "input": "L3",
+    "promotion": "weekly_deep_dream",
+    "automatic": true,
+    "eligibility": "required_policy",
+    "versioned_updates": true,
+    "direct_overwrite": false,
+    "context_budget": "required_runtime_configuration",
+    "drill_down": true
+  },
+  "cycles": {
+    "daily": {
+      "depth": "light",
+      "outputs": ["L1"],
+      "lifetime_write": false
+    },
+    "weekly": {
+      "depth": "deep",
+      "outputs": ["L2", "L3", "lifetime"],
+      "lifetime_write": true
+    }
+  },
+  "dreaming": {
+    "source_selection": "deterministic",
+    "idempotency": "source_fingerprint",
+    "stage_before_activation": true,
+    "validate_before_activation": true,
+    "atomic_activation": true,
+    "preserve_last_known_good": true,
+    "mutate_sources": false,
+    "provenance_required": true
+  },
+  "context_injection": {
+    "order": ["lifetime", "L3", "L2", "L1"],
+    "per_layer_budget_required": true,
+    "missing_layer": "skip_with_diagnostic",
+    "raw_unbounded_fallback": false
+  }
+}

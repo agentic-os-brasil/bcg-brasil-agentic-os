@@ -11,6 +11,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Establish specs, four-letter decisions, unit tests and a cross-platform development harness.
 - [x] Add novice-safe Git guards, recovery, CI and human-reviewed PR flow.
 - [x] Require equal pilot acceptance on Windows and macOS.
+- [x] Establish the L1/L2/L3, lifetime and dreaming memory contract.
+- [x] Add a sanitized default memory policy, contract validator and development skill.
 
 ## Track A - Contributor onboarding
 
@@ -67,7 +69,41 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Code-signing, SmartScreen, Gatekeeper and provenance requirements.
 - Update cadence, forced security updates and support ownership.
 
-## Track D - First Agent OS bundle
+## Track D - Memory persistence and dreaming
+
+### Build
+
+- [x] Define L1 daily memory, L2 weekly rollups, L3 rolling thematic memory and curated lifetime memory.
+- [x] Define deterministic-first dreaming with source fingerprints, staging, validation, atomic activation and last-known-good preservation.
+- [x] Ship a sanitized runtime-neutral policy and validate it in the development harness.
+- [x] Add `evolve-memory` as the canonical development workflow for memory changes.
+- [x] Separate light daily dreaming from weekly deep dreaming and assign lifetime consolidation to the weekly cycle.
+- [x] Define the versioned local memory layout and provenance envelope.
+- [x] Define and validate the atomic memory commit-manifest schema.
+- [ ] Define the durable run-state schema for scheduling, catch-up and diagnostics.
+- [x] Implement append-only L1 capture and bounded daily digests in the runtime-neutral engine.
+- [x] Implement idempotent L2 and L3 rollups with immutable versions and crash-interruption tests.
+- [x] Implement governed weekly lifetime eligibility and version history in the core engine.
+- [x] Implement bounded context assembly with drill-down pointers and diagnostics.
+- [x] Add the runtime-neutral `dream-memory` product skill.
+- [x] Connect sanitized capture, status and bounded context assembly to `bcgos memory`, with dreaming explicitly unavailable without an adapter.
+- [ ] Implement lifetime correction and deletion flows.
+- [ ] Implement stale-lock diagnosis and human-confirmed recovery in `bcgos doctor`.
+- [ ] Implement synthesis and eligibility adapters without embedding provider policy in the core.
+- [ ] Add executable dreaming plus `explain`, `export` and `delete` contracts before enabling persistence for pilot users.
+- [ ] Add equivalent Windows and macOS scheduling or presence-based catch-up adapters.
+- [ ] Add Claude and Codex conformance fixtures for injection and failure reporting.
+
+### Discuss before executing rollups
+
+- Which signals may enter L1 and what sanitization happens before persistence.
+- Synthesis provider, model policy, offline behavior and corporate data constraints.
+- Retention windows, context budgets and lifetime promotion eligibility.
+- User controls for inspect, correct, export and delete.
+- Recovery policy for locks left by interrupted or crashed dreaming runs.
+- Whether shared organizational knowledge is a separate governed store rather than a memory layer.
+
+## Track E - First Agent OS bundle
 
 ### Build
 
@@ -85,7 +121,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Which hooks block, warn or observe.
 - Ownership and retirement model for agents and skills.
 
-## Track E - Ten-person pilot
+## Track F - Ten-person pilot
 
 ### Build
 

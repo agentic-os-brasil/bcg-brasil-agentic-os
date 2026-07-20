@@ -146,6 +146,24 @@ func TestClaudeDecisionEditRequiresRecordDecision(t *testing.T) {
 	}
 }
 
+func TestClaudeMemoryEditRequiresEvolveMemory(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	writeClaudeManifest(t, root)
+	develop := `{"session_id":"session-1","tool_name":"Skill","tool_input":{"skill":"develop-change"}}`
+	if _, err := ClaudeHook(root, "skill-used", strings.NewReader(develop), &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	edit := `{"session_id":"session-1","tool_name":"Edit","tool_input":{"file_path":"internal/memory/policy.go"}}`
+	var output bytes.Buffer
+	if _, err := ClaudeHook(root, "pre-tool", strings.NewReader(edit), &output); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "$evolve-memory") {
+		t.Fatalf("memory edit output = %s", output.String())
+	}
+}
+
 func TestClaudeDirectSkillExpansionRecordsActivation(t *testing.T) {
 	root := t.TempDir()
 	runGit(t, root, "init")
@@ -246,6 +264,7 @@ func TestCanonicalSkillCommandsRequireAndAcceptOwningSkill(t *testing.T) {
 		{"start-contributing", "go run ./dev/harness setup"},
 		{"start-work", "git pull --ff-only origin main"},
 		{"develop-change", "go test ./..."},
+		{"evolve-memory", "go test ./internal/memory"},
 		{"record-decision", "go run ./dev/harness decision available ABCD"},
 		{"prepare-pr", "git add README.md"},
 		{"recover-work", "go run ./dev/harness recover"},
@@ -316,7 +335,7 @@ func writeClaudeManifest(t *testing.T, root string) {
 	if err := os.MkdirAll(filepath.Join(root, ".claude"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	manifest := `{"primary_runtime":"claude","canonical_root":"dev/skills","projection_root":".claude/skills","routes":{"onboard":"start-contributing","start":"start-work","develop":"develop-change","decision":"record-decision","deliver":"prepare-pr","recover":"recover-work"},"golden_path":["start-contributing","start-work","develop-change","prepare-pr"],"fallback":"recover-work"}`
+	manifest := `{"primary_runtime":"claude","canonical_root":"dev/skills","projection_root":".claude/skills","routes":{"onboard":"start-contributing","start":"start-work","develop":"develop-change","memory":"evolve-memory","decision":"record-decision","deliver":"prepare-pr","recover":"recover-work"},"golden_path":["start-contributing","start-work","develop-change","prepare-pr"],"fallback":"recover-work"}`
 	if err := os.WriteFile(filepath.Join(root, ".claude", "skill-routing.json"), []byte(manifest), 0o644); err != nil {
 		t.Fatal(err)
 	}

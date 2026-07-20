@@ -11,7 +11,7 @@ Route contribution work through the native skills declared in `.claude/skill-rou
 3. read and follow its canonical `dev/skills/<name>/SKILL.md` completely;
 4. do not reconstruct or bypass the workflow manually while the skill is available.
 
-Use `$start-contributing` for a first contribution, `$start-work` to start or resume work, `$develop-change` for implementation, `$record-decision` for a durable choice, `$prepare-pr` for delivery and `$recover-work` whenever Git state or the safe next action is unclear.
+Use `$start-contributing` for a first contribution, `$start-work` to start or resume work, `$develop-change` for general implementation, `$evolve-memory` for memory persistence and dreaming, `$record-decision` for a durable choice, `$prepare-pr` for delivery and `$recover-work` whenever Git state or the safe next action is unclear.
 
 If a required skill, projection or hook is missing or broken, stop the affected workflow, explain the gap and repair or escalate it. Do not silently continue without the harness.
 

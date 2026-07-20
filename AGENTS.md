@@ -13,6 +13,7 @@ Before changing it:
 7. For durable project decisions, follow `dev/skills/record-decision/SKILL.md`.
 8. For first-time contributor setup, follow `dev/skills/start-contributing/SKILL.md`.
 9. Start daily work with `dev/skills/start-work/SKILL.md`, prepare review with `dev/skills/prepare-pr/SKILL.md`, and diagnose Git problems with `dev/skills/recover-work/SKILL.md`.
+10. For memory persistence, dreaming, rollups or context injection, follow `dev/skills/evolve-memory/SKILL.md` in addition to the general change workflow.
 
 The architecture is intentionally incomplete. Prefer small, reversible changes and record structural decisions before implementation.
 

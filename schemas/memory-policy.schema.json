@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:memory-policy:v1",
+  "title": "BCG Brasil Agentic OS memory policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "storage", "layers", "lifetime", "cycles", "dreaming", "context_injection"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "workspace_isolation", "managed_core_contains_user_data"],
+      "properties": {
+        "scope": {"const": "user_local"},
+        "workspace_isolation": {"const": true},
+        "managed_core_contains_user_data": {"const": false}
+      }
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {"$ref": "#/$defs/l1"},
+        {"$ref": "#/$defs/l2"},
+        {"$ref": "#/$defs/l3"}
+      ]
+    },
+    "lifetime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "promotion", "automatic", "eligibility", "versioned_updates", "direct_overwrite", "context_budget", "drill_down"],
+      "properties": {
+        "input": {"const": "L3"},
+        "promotion": {"const": "weekly_deep_dream"},
+        "automatic": {"const": true},
+        "eligibility": {"const": "required_policy"},
+        "versioned_updates": {"const": true},
+        "direct_overwrite": {"const": false},
+        "context_budget": {"const": "required_runtime_configuration"},
+        "drill_down": {"const": true}
+      }
+    },
+    "cycles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["daily", "weekly"],
+      "properties": {
+        "daily": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["depth", "outputs", "lifetime_write"],
+          "properties": {
+            "depth": {"const": "light"},
+            "outputs": {"const": ["L1"]},
+            "lifetime_write": {"const": false}
+          }
+        },
+        "weekly": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["depth", "outputs", "lifetime_write"],
+          "properties": {
+            "depth": {"const": "deep"},
+            "outputs": {"const": ["L2", "L3", "lifetime"]},
+            "lifetime_write": {"const": true}
+          }
+        }
+      }
+    },
+    "dreaming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_selection", "idempotency", "stage_before_activation", "validate_before_activation", "atomic_activation", "preserve_last_known_good", "mutate_sources", "provenance_required"],
+      "properties": {
+        "source_selection": {"const": "deterministic"},
+        "idempotency": {"const": "source_fingerprint"},
+        "stage_before_activation": {"const": true},
+        "validate_before_activation": {"const": true},
+        "atomic_activation": {"const": true},
+        "preserve_last_known_good": {"const": true},
+        "mutate_sources": {"const": false},
+        "provenance_required": {"const": true}
+      }
+    },
+    "context_injection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order", "per_layer_budget_required", "missing_layer", "raw_unbounded_fallback"],
+      "properties": {
+        "order": {"const": ["lifetime", "L3", "L2", "L1"]},
+        "per_layer_budget_required": {"const": true},
+        "missing_layer": {"const": "skip_with_diagnostic"},
+        "raw_unbounded_fallback": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "input", "source_mode", "context_budget", "drill_down"],
+      "properties": {
+        "id": {"type": "string"},
+        "role": {"type": "string"},
+        "input": {"type": "string"},
+        "source_mode": {"type": "string"},
+        "context_budget": {"const": "required_runtime_configuration"},
+        "drill_down": {"const": true}
+      }
+    },
+    "l1": {
+      "allOf": [
+        {"$ref": "#/$defs/layer"},
+        {"properties": {"id": {"const": "L1"}, "role": {"const": "daily"}, "input": {"const": "sanitized_signals"}, "source_mode": {"const": "append_only"}}}
+      ]
+    },
+    "l2": {
+      "allOf": [
+        {"$ref": "#/$defs/layer"},
+        {"properties": {"id": {"const": "L2"}, "role": {"const": "weekly"}, "input": {"const": "L1"}, "source_mode": {"const": "immutable"}}}
+      ]
+    },
+    "l3": {
+      "allOf": [
+        {"$ref": "#/$defs/layer"},
+        {"properties": {"id": {"const": "L3"}, "role": {"const": "medium_term_thematic"}, "input": {"const": "L2"}, "source_mode": {"const": "immutable"}}}
+      ]
+    }
+  }
+}
