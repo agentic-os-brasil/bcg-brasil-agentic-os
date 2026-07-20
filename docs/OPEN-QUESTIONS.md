@@ -33,3 +33,13 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-018 - Telemetry and privacy:** What may be measured without collecting prompts, client content or personal data?
 - **Q-019 - Incident path:** Who owns broken installs, credential failures, unsafe outputs and rollback decisions?
 - **Q-020 - Distribution after pilot:** Continue with private GitHub Releases or move to BCG-managed infrastructure?
+
+## Before executing memory dreaming
+
+- **Q-021 - L1 inputs:** Which session, filesystem, task and user-confirmed signals may be persisted, and which are prohibited before sanitization?
+- **Q-022 - Synthesis provider:** Which model/provider may process professional memory, and must the pipeline support offline or local-only operation?
+- **Q-023 - Retention and budgets:** What are the default retention windows, rollup windows and per-layer context budgets for the pilot?
+- **Q-024 - Lifetime eligibility:** Which repeated evidence may the weekly deep dream promote automatically, and how can a user inspect, correct or remove a lifetime memory?
+- **Q-025 - Scheduling:** Should Windows and macOS use periodic scheduling, presence-based catch-up, session lifecycle triggers or a layered combination?
+- **Q-026 - User rights:** Which inspect, explain, correct, export and delete guarantees must exist before memory persistence is enabled?
+- **Q-027 - Interrupted runs:** When may `bcgos doctor` clear a leftover dreaming lock, and what evidence or confirmation is required before recovery?

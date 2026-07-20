@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:memory-artifact:v1",
+  "title": "BCG Brasil Agentic OS memory artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "workspace_id", "layer", "period", "generated_at", "source_fingerprint", "sources", "synthesizer_id", "content"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "workspace_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"},
+    "layer": {"enum": ["L1", "L2", "L3", "lifetime"]},
+    "period": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "source_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "sha256"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "synthesizer_id": {"type": "string", "minLength": 1},
+    "content": {"type": "string", "minLength": 1},
+    "promotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eligibility_policy", "eligible", "reason", "evaluated_at"],
+      "properties": {
+        "eligibility_policy": {"type": "string", "minLength": 1},
+        "eligible": {"type": "boolean"},
+        "reason": {"type": "string", "minLength": 1},
+        "evaluated_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"layer": {"const": "lifetime"}}},
+      "then": {
+        "required": ["promotion"],
+        "properties": {"promotion": {"properties": {"eligible": {"const": true}}}}
+      }
+    }
+  ]
+}

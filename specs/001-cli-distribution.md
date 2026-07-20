@@ -1,6 +1,6 @@
 # Spec 001 - CLI distribution contract
 
-Status: direction accepted; implementation pending.
+Status: direction accepted; CLI entrypoint and initial memory bridge implemented; install, init, doctor, update and release distribution pending.
 
 ## User journey
 
@@ -15,6 +15,17 @@ bcgos status
 bcgos update
 bcgos version
 ```
+
+The current source build also exposes an incremental memory bridge:
+
+```text
+bcgos memory capture
+bcgos memory status
+bcgos memory context
+bcgos memory dream <daily|weekly>
+```
+
+`capture`, `status` and `context` call the runtime-neutral memory core. Capture content enters through bounded standard input rather than process arguments and still requires an adapter sanitization attestation. Until an approved synthesis and eligibility adapter is installed, `dream` returns the machine-readable capability state `unavailable` and performs no emulation. The local data directory and context budgets remain explicit arguments until `bcgos init` owns approved per-platform configuration.
 
 ## Distribution source
 
