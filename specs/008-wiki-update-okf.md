@@ -181,6 +181,8 @@ Last-known-good preservation never bypasses a denial barrier. If rebuilding fail
 - **Weekly reconciliation:** compare active source watermarks, outbox receipts and atlas manifests; regenerate missing or stale views and run full lint.
 - **Session Start:** read-only. It may report staleness and enqueue presence-based catch-up after startup, but never blocks startup on compilation or invokes a model to update the wiki.
 
+Spec 009 owns cadence recovery. A successful weekly memory commit emits the durable source event consumed here; a scheduler receipt neither activates memory nor publishes an atlas. `wiki-reconcile` may be woken by a native schedule or later presence and always compares authoritative watermarks before declaring success.
+
 ## Incremental update semantics
 
 For an unchanged ordered source set, policy and generator version, compilation is a no-op. Event IDs and source watermarks make retries idempotent. Multiple non-security events for one scope may be coalesced to the newest watermark.

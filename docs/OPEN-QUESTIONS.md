@@ -40,7 +40,7 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-022 - Synthesis provider:** Which model/provider may process professional memory, and must the pipeline support offline or local-only operation?
 - **Q-023 - Retention and budgets:** What are the default retention windows, rollup windows and per-layer context budgets for the pilot?
 - **Q-024 - Lifetime eligibility:** Which repeated evidence may the weekly deep dream promote automatically, and how can a user inspect, correct or remove a lifetime memory?
-- **Q-025 - Scheduling:** Should Windows and macOS use periodic scheduling, presence-based catch-up, session lifecycle triggers or a layered combination?
+- **Q-025 - Scheduling policy:** Which local daily/weekly windows, timezone-change behavior, catch-up limits, retry/backoff and unattended-model permissions should the pilot use within the layered native-schedule plus presence-recovery architecture?
 - **Q-026 - User rights:** Which inspect, explain, correct, export and delete guarantees must exist before memory persistence is enabled?
 - **Q-027 - Interrupted runs:** When may `bcgos doctor` clear a leftover dreaming lock, and what evidence or confirmation is required before recovery?
 

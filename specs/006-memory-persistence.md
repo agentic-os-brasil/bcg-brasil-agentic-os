@@ -55,7 +55,7 @@ The repository does not define the final Windows or macOS data path yet; that re
 
 The policy, layer identifiers, provenance envelope, rollup state and injection order are runtime-neutral. Claude and Codex adapters may use different native lifecycle events or schedulers, but they must preserve the same observable invariants and capability reporting from Spec 004.
 
-Scheduling is not part of the memory truth model. Manual invocation, session-stop observation, periodic execution and presence-based catch-up are interchangeable triggers for the same idempotent dreaming operation.
+Scheduling is not part of the memory truth model. Manual invocation, session-stop observation, periodic execution and presence-based catch-up are interchangeable triggers for the same idempotent dreaming operation. Spec 009 owns the runtime-neutral scheduler contract: native schedulers accelerate execution, while durable occurrence state and presence recovery detect missed work. A scheduler receipt reports execution metadata but never substitutes for the atomic memory commit that proves a dream succeeded.
 
 ## Context injection
 
@@ -138,7 +138,7 @@ The canonical product skill is `bundles/base/skills/dream-memory/SKILL.md`. It r
 - synthesis provider and whether local-only operation is required;
 - exact retention and rollup windows;
 - default context budgets;
-- scheduling and catch-up mechanics per operating system;
+- default scheduling windows, unattended model permission and catch-up limits;
 - lifetime promotion eligibility and correction flow;
 - shared organizational knowledge governance.
 - private wiki indexing policy, retention and context budgets per memory layer.
