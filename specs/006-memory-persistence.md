@@ -71,7 +71,9 @@ The base policy requires a budget for every layer but deliberately leaves each v
 
 ## Wiki navigation
 
-The private content atlas defined by Spec 007 may navigate L1, L2, L3 and lifetime through scoped pointers, but it does not become a new memory layer. Only artifacts reachable from the newest fully valid memory commit may appear as active navigation targets. L1 remains bounded and may be exposed only as local day or session pointers when policy permits; the wiki must not copy raw or unbounded captures into generated pages.
+The private content atlas defined by Spec 007 is the navigation layer over memory rollups. Dreaming remains the only producer of L2, L3 and governed lifetime artifacts; the wiki consumes their active metadata and summaries to organize topic, entity and time routes, then preserves drill-down pointers back to the rollup and its provenance. It never edits a rollup or becomes a new memory layer.
+
+Only artifacts reachable from the newest fully valid memory commit may appear as active navigation targets. L1 remains bounded and may be exposed only as local day or session pointers when policy permits; the wiki must not copy raw or unbounded captures into generated pages. The intended retrieval path is `wiki route -> rollup -> source evidence`, with every deeper read preserving the same owner, workspace and purpose authorization.
 
 Memory correction, deletion, eligibility reversal or commit invalidation must propagate to derived wiki pages, indexes, backlinks and caches. Managed or shared atlases may never include owner or workspace memory. Private memory navigation remains unavailable until storage, enrollment, privacy and deletion propagation are implemented and tested.
 

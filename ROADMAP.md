@@ -110,6 +110,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 - [x] Define the managed and private atlas boundaries and the role of wiki versus canonical sources.
 - [x] Define how the private atlas navigates L1/L2/L3/lifetime without becoming another memory store.
+- [x] Define the wiki as downstream navigation over rollups produced by dreaming.
 - [ ] Define page and machine-readable index schemas.
 - [ ] Implement the deterministic managed product-atlas generator.
 - [ ] Generate index, backlinks, orphan/broken-link diagnostics and a generation log.
@@ -122,6 +123,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Exact managed content allowlist and initial page taxonomy.
 - Owner/workspace enrollment and access-policy contract.
 - Which memory layers may produce summaries versus pointers only.
+- Which temporal, topic and entity facets may be derived from each rollup layer.
 - Private compilation provider, offline behavior and corporate data constraints.
 - Organizational knowledge approval, synchronization and retirement.
 - User command vocabulary: `bcgos wiki`, `bcgos knowledge` or another surface.

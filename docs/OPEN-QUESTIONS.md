@@ -52,3 +52,4 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-031 - Private compilation:** Which approved provider may compile owner/workspace content, and must local-only or offline operation be supported?
 - **Q-032 - Invalidation SLA:** How quickly must correction, deletion or source-access revocation disappear from pages, backlinks, indexes and caches?
 - **Q-033 - Knowledge commands:** Should the user-facing surface be `bcgos wiki`, `bcgos knowledge` or an agent-only capability in v0?
+- **Q-034 - Rollup facets:** Which temporal, topic, entity and active-thread facets may the private wiki derive from L2, L3 and lifetime for the pilot?

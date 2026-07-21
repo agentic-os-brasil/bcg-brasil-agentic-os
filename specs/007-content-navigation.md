@@ -56,7 +56,7 @@ The private atlas navigates content authorized for one enrolled owner and, when 
 
 ## Memory navigation
 
-The private atlas may navigate memory without becoming another memory store:
+The private atlas is the navigation layer over memory rollups without becoming another memory store:
 
 - **Lifetime:** topic and principle pages may point to eligible durable entries and their provenance.
 - **L3:** thematic pages may expose current medium-term threads and deeper evidence pointers.
@@ -68,6 +68,34 @@ Only artifacts reachable from the newest fully valid memory commit may be indexe
 A wiki entry derived from memory must carry the owner ID, workspace ID when applicable, memory layer, opaque artifact version, provenance pointer, sensitivity class, freshness state and generation policy version. These fields are routing and invalidation metadata, not permission to reveal their content.
 
 Memory correction, deletion, eligibility reversal or commit invalidation must remove or invalidate every affected wiki page, index record, backlink and cache entry. A stale derived page may not preserve information that the owning memory surface has removed.
+
+### Rollup navigation contract
+
+Dreaming owns synthesis and publication of L2, L3 and governed lifetime. The wiki compiler is a downstream reader of the newest valid memory commit and may not create, rewrite, promote or repair a rollup.
+
+For each eligible rollup, the private atlas creates or refreshes a compact navigation record containing authorized facets such as:
+
+- period and memory layer;
+- topics, entities and active threads already supported by the rollup;
+- lifecycle and freshness state;
+- opaque rollup version and source fingerprint;
+- pointer to the rollup and its provenance chain;
+- sensitivity and owner/workspace scope.
+
+These records help an agent move through memory in two complementary ways:
+
+- **temporal navigation:** day or session pointers -> L2 weekly rollup -> relevant period;
+- **semantic navigation:** topic or entity -> L3 thematic rollup -> eligible lifetime memory -> source evidence.
+
+The normal access path is:
+
+```text
+wiki route -> rollup summary -> rollup detail -> source evidence
+```
+
+Each step is optional and budgeted. A query may stop at the navigation record or rollup summary when that is sufficient. Deeper reads must preserve the same actor, owner, workspace, purpose and policy scope used to select the wiki record.
+
+When a new memory commit replaces, removes or invalidates a rollup, the previous navigation record becomes inactive before the new private atlas view is published. The compiler preserves the last known-good complete atlas when rebuilding fails, but it may not keep a pointer whose source authorization was revoked or whose owning memory was deleted.
 
 ## Minimal page and index contract
 
@@ -135,6 +163,7 @@ The private owner/workspace atlas, including memory navigation, is part of the a
 - stable source provenance and drill-down pointers;
 - complete invalidation after source correction or deletion;
 - no indexing of memory outside the newest valid commit;
+- rollup navigation records cannot mutate or outlive their source rollup;
 - owner and workspace isolation for every private query;
 - bounded context projection and equivalent Claude/Codex failure reporting;
 - last-known-good preservation after invalid generation.

@@ -102,7 +102,7 @@ docs/            decisoes e explicacoes para humanos
 
 O contrato de memoria esta em [Spec 006](specs/006-memory-persistence.md). A politica sanitizada vive em `bundles/base/memory/policy.json`, o engine em `internal/memory` e a skill operacional em `bundles/base/skills/dream-memory/`. Dados e rollups reais permanecerao fora do repositorio, em armazenamento local do usuario.
 
-O contrato de navegacao esta na [Spec 007](specs/007-content-navigation.md). A wiki e um atlas compilado e regeneravel: navega conteudo gerenciado e, futuramente, memoria privada escopada, mas nunca substitui a fonte canonica nem promove conteudo privado para o bundle compartilhado.
+O contrato de navegacao esta na [Spec 007](specs/007-content-navigation.md). A wiki e um atlas compilado e regeneravel: navega conteudo gerenciado e, futuramente, os rollups da memoria privada escopada. Dreaming produz L2/L3/lifetime; a wiki organiza rotas temporais e semanticas sobre esses rollups sem substitui-los nem promover conteudo privado para o bundle compartilhado.
 
 Leia primeiro:
 
