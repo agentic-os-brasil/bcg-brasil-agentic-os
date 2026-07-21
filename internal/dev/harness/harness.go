@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/boundary"
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/decisionlog"
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/skillmeta"
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 )
 
 // FindRoot walks upward until it finds go.mod.

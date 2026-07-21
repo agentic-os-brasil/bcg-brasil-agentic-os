@@ -78,8 +78,8 @@ try {
     }
 
     $expectedOrigins = @(
-        "https://github.com/DScardini91/bcg-brasil-agentic-os",
-        "https://github.com/DScardini91/bcg-brasil-agentic-os.git"
+        "https://github.com/agentic-os-brasil/bcg-brasil-agentic-os",
+        "https://github.com/agentic-os-brasil/bcg-brasil-agentic-os.git"
     )
     $origin = (& git remote get-url origin 2>$null | Out-String).Trim()
     if ($expectedOrigins -notcontains $origin) {

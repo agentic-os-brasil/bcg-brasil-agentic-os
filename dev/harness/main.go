@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/decisionlog"
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/gitguard"
-	devharness "github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/harness"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/gitguard"
+	devharness "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/harness"
 )
 
 func main() {

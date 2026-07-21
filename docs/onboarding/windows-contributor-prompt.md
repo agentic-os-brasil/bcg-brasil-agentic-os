@@ -4,7 +4,7 @@ Este texto e enviado ao contribuidor antes do clone. Ele deve colar somente o bl
 
 ```text
 Voce vai me ajudar a entrar como contribuidor no repositorio privado
-DScardini91/bcg-brasil-agentic-os. Eu sou iniciante em Git, GitHub e
+agentic-os-brasil/bcg-brasil-agentic-os. Eu sou iniciante em Git, GitHub e
 desenvolvimento. Execute o onboarding comigo, nao apenas me entregue uma lista
 de instrucoes.
 
@@ -46,16 +46,16 @@ C. Se Git, GitHub CLI ou Go estiver ausente, use winget search/show para
 D. Rode gh auth status. Se nao houver autenticacao, explique e, com minha
    confirmacao, use gh auth login --hostname github.com --web --git-protocol
    https. Nunca use token digitado no chat nem aceite outro host.
-E. Confirme acesso com gh repo view DScardini91/bcg-brasil-agentic-os. Se houver
+E. Confirme acesso com gh repo view agentic-os-brasil/bcg-brasil-agentic-os. Se houver
    404 ou acesso negado, pare e diga que Daniel precisa adicionar meu usuario
    GitHub ao repositorio privado.
 F. Se a pasta alvo nao existir, clone com:
-   gh repo clone DScardini91/bcg-brasil-agentic-os "$env:USERPROFILE\Developer\bcg-brasil-agentic-os"
+   gh repo clone agentic-os-brasil/bcg-brasil-agentic-os "$env:USERPROFILE\Developer\bcg-brasil-agentic-os"
    Nao aceite URL, owner, repo ou host alternativo.
 G. Se o destino ja existir, nao sobrescreva, mova ou apague. Reutilize somente
    se for um clone Git limpo do repositorio esperado. Entre no clone e confirme
    que a branch e main, que origin e exatamente o HTTPS de github.com para
-   DScardini91/bcg-brasil-agentic-os e que git status nao mostra trabalho
+   agentic-os-brasil/bcg-brasil-agentic-os e que git status nao mostra trabalho
    pendente. Qualquer origin diferente, arquivo local, branch divergente ou
    historico inesperado e hard stop para recover-work ou Daniel.
 H. Leia CLAUDE.md, .claude\README.md e

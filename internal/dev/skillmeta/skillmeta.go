@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/clauderouting"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/clauderouting"
 )
 
 var allowedKeys = map[string]bool{"name": true, "description": true}

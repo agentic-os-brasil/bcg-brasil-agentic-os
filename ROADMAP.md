@@ -13,6 +13,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Require equal pilot acceptance on Windows and macOS.
 - [x] Establish the L1/L2/L3, lifetime and dreaming memory contract.
 - [x] Add a sanitized default memory policy, contract validator and development skill.
+- [x] Adopt a Karpathy-inspired compiled wiki for governed content and memory navigation.
 
 ## Track A - Contributor onboarding
 
@@ -103,7 +104,36 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Recovery policy for locks left by interrupted or crashed dreaming runs.
 - Whether shared organizational knowledge is a separate governed store rather than a memory layer.
 
-## Track E - First Agent OS bundle
+## Track E - Content navigation and knowledge wiki
+
+### Build
+
+- [x] Define the managed and private atlas boundaries and the role of wiki versus canonical sources.
+- [x] Define how the private atlas navigates L1/L2/L3/lifetime without becoming another memory store.
+- [x] Define the wiki as downstream navigation over rollups produced by dreaming.
+- [x] Adopt OKF v0.1 plus a governed BCGOS Atlas Profile for wiki bundles.
+- [x] Define event-driven incremental updates, weekly reconciliation and synchronous revocation barriers.
+- [ ] Define page and machine-readable index schemas.
+- [ ] Implement the BCGOS Atlas Profile v1 schema and OKF validator.
+- [ ] Implement the transactional outbox, source watermarks and atomic atlas manifest.
+- [ ] Implement the deterministic managed product-atlas generator.
+- [ ] Generate index, backlinks, orphan/broken-link diagnostics and a generation log.
+- [ ] Add allowlist, provenance, determinism and boundary tests to CI.
+- [ ] Expose bounded product-content pointers for Claude and Codex adapters.
+- [ ] Implement owner/workspace private atlas only after enrollment, privacy and deletion contracts are ready.
+
+### Discuss before enabling private navigation
+
+- Exact managed content allowlist and initial page taxonomy.
+- Owner/workspace enrollment and access-policy contract.
+- Which memory layers may produce summaries versus pointers only.
+- Which temporal, topic and entity facets may be derived from each rollup layer.
+- Private compilation provider, offline behavior and corporate data constraints.
+- Organizational knowledge approval, synchronization and retirement.
+- User command vocabulary: `bcgos wiki`, `bcgos knowledge` or another surface.
+- Freshness targets, retry/backoff limits and private crypto-erasure policy.
+
+## Track F - First Agent OS bundle
 
 ### Build
 
@@ -121,7 +151,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Which hooks block, warn or observe.
 - Ownership and retirement model for agents and skills.
 
-## Track F - Ten-person pilot
+## Track G - Ten-person pilot
 
 ### Build
 
