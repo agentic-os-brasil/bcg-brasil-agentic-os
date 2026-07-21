@@ -53,3 +53,5 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-032 - Invalidation SLA:** How quickly must correction, deletion or source-access revocation disappear from pages, backlinks, indexes and caches?
 - **Q-033 - Knowledge commands:** Should the user-facing surface be `bcgos wiki`, `bcgos knowledge` or an agent-only capability in v0?
 - **Q-034 - Rollup facets:** Which temporal, topic, entity and active-thread facets may the private wiki derive from L2, L3 and lifetime for the pilot?
+- **Q-035 - Update freshness:** What freshness target and retry/backoff policy applies to managed changes, memory commits and correction events?
+- **Q-036 - Private erasure:** Which private versions, logs and receipts must be deleted or crypto-erased after user correction, deletion or access revocation?

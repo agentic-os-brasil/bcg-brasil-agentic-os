@@ -111,7 +111,11 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Define the managed and private atlas boundaries and the role of wiki versus canonical sources.
 - [x] Define how the private atlas navigates L1/L2/L3/lifetime without becoming another memory store.
 - [x] Define the wiki as downstream navigation over rollups produced by dreaming.
+- [x] Adopt OKF v0.1 plus a governed BCGOS Atlas Profile for wiki bundles.
+- [x] Define event-driven incremental updates, weekly reconciliation and synchronous revocation barriers.
 - [ ] Define page and machine-readable index schemas.
+- [ ] Implement the BCGOS Atlas Profile v1 schema and OKF validator.
+- [ ] Implement the transactional outbox, source watermarks and atomic atlas manifest.
 - [ ] Implement the deterministic managed product-atlas generator.
 - [ ] Generate index, backlinks, orphan/broken-link diagnostics and a generation log.
 - [ ] Add allowlist, provenance, determinism and boundary tests to CI.
@@ -127,6 +131,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Private compilation provider, offline behavior and corporate data constraints.
 - Organizational knowledge approval, synchronization and retirement.
 - User command vocabulary: `bcgos wiki`, `bcgos knowledge` or another surface.
+- Freshness targets, retry/backoff limits and private crypto-erasure policy.
 
 ## Track F - First Agent OS bundle
 

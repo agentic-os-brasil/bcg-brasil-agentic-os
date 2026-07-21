@@ -77,6 +77,8 @@ Only artifacts reachable from the newest fully valid memory commit may appear as
 
 Memory correction, deletion, eligibility reversal or commit invalidation must propagate to derived wiki pages, indexes, backlinks and caches. Managed or shared atlases may never include owner or workspace memory. Private memory navigation remains unavailable until storage, enrollment, privacy and deletion propagation are implemented and tested.
 
+Every activated memory commit must be discoverable by the wiki updater through a durable, idempotent outbox contract defined by Spec 008. Correction, deletion or authorization revocation writes a synchronous denial barrier before asynchronous wiki recompilation; an old atlas manifest or last-known-good view can never bypass that barrier.
+
 ## Initial executable contract
 
 `bundles/base/memory/policy.json` is the sanitized default policy shipped with the managed bundle. `internal/memory` validates its structural invariants. The current contract requires:

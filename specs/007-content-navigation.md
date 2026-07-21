@@ -114,6 +114,8 @@ Every generated page or index record requires:
 
 Human-readable Markdown is the primary navigation format. A deterministic machine-readable index may support routing, validation and adapters. The index is generated and must never become a separately maintained source of truth.
 
+Every atlas is published as an OKF v0.1 Knowledge Bundle using the BCGOS Atlas Profile defined by Spec 008. OKF provides the portable Markdown, frontmatter, path identity, standard links, `index.md` and `log.md`; the BCGOS profile provides scope, authority, privacy, freshness, invalidation and atomic lifecycle guarantees.
+
 ## Query and context behavior
 
 Navigation follows least-context disclosure:
@@ -130,7 +132,7 @@ Claude and Codex adapters consume the same scoped index and return equivalent pr
 
 ## Generation, invalidation and health
 
-The atlas generator must be idempotent for the same ordered source set, schema and policy. Generation occurs in staging and publishes a complete view only after validation. The last known-good atlas remains active when generation fails.
+The atlas generator must be idempotent for the same ordered source set, schema and policy. Generation occurs in staging and publishes a complete view only after validation. The last known-good atlas remains active when generation fails, except for concepts blocked by a synchronous deletion or access-revocation barrier. The update lifecycle is defined by Spec 008.
 
 Required health outputs are:
 

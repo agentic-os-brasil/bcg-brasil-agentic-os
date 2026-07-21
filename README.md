@@ -30,7 +30,7 @@ O usuario nao precisara clonar o repositorio, entender Git ou manter manualmente
 - **Core separado do trabalho:** runtime gerenciado nunca se mistura com memoria, credenciais ou conteudo de clientes.
 - **Distribuicao por releases:** o piloto recebera artefatos versionados a partir de GitHub Releases privadas, nao `git pull`.
 - **Evolucao progressiva:** primeiro um nucleo pequeno e verificavel; agents, skills, hooks e automacoes entram conforme casos de uso reais.
-- **Wiki compilada para navegacao:** conteudo reutilizavel, incluindo memoria autorizada, e navegado por um atlas derivado no padrao Karpathy; fontes canonicas continuam sendo a verdade e escopos privados permanecem separados.
+- **Wiki compilada para navegacao:** conteudo reutilizavel, incluindo memoria autorizada, e navegado por um atlas derivado no padrao Karpathy e publicado como bundles OKF governados; fontes canonicas continuam sendo a verdade e escopos privados permanecem separados.
 - **Claude-first, Codex-compatible:** Claude sera o runtime principal, mas nao a fonte canonica da arquitetura. Um core compartilhado e adapters finos devem preservar os mesmos invariantes observaveis em Claude e Codex, com lacunas mecanicas declaradas explicitamente.
 - **Seguranca desde a origem:** nenhum dado real, segredo ou material de cliente pertence ao repositorio ou aos bundles distribuiveis.
 
@@ -115,6 +115,7 @@ Leia primeiro:
 - [Spec do harness de desenvolvimento](specs/005-development-harness.md)
 - [Spec de memoria e dreaming](specs/006-memory-persistence.md)
 - [Spec de navegacao por wiki compilada](specs/007-content-navigation.md)
+- [Spec do ciclo de update e perfil OKF](specs/008-wiki-update-okf.md)
 
 ## Confidencialidade
 
