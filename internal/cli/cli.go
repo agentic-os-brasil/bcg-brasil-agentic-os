@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	basememory "github.com/DScardini91/bcg-brasil-agentic-os/bundles/base/memory"
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/memory"
+	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 )
 
 const (
