@@ -69,6 +69,12 @@ Each injected layer has an independent budget and an explicit pointer to deeper 
 
 The base policy requires a budget for every layer but deliberately leaves each value as required runtime configuration. Exact pilot values remain pending evidence from real sessions and must never be hard-coded in an adapter.
 
+## Wiki navigation
+
+The private content atlas defined by Spec 007 may navigate L1, L2, L3 and lifetime through scoped pointers, but it does not become a new memory layer. Only artifacts reachable from the newest fully valid memory commit may appear as active navigation targets. L1 remains bounded and may be exposed only as local day or session pointers when policy permits; the wiki must not copy raw or unbounded captures into generated pages.
+
+Memory correction, deletion, eligibility reversal or commit invalidation must propagate to derived wiki pages, indexes, backlinks and caches. Managed or shared atlases may never include owner or workspace memory. Private memory navigation remains unavailable until storage, enrollment, privacy and deletion propagation are implemented and tested.
+
 ## Initial executable contract
 
 `bundles/base/memory/policy.json` is the sanitized default policy shipped with the managed bundle. `internal/memory` validates its structural invariants. The current contract requires:
@@ -131,3 +137,4 @@ The canonical product skill is `bundles/base/skills/dream-memory/SKILL.md`. It r
 - scheduling and catch-up mechanics per operating system;
 - lifetime promotion eligibility and correction flow;
 - shared organizational knowledge governance.
+- private wiki indexing policy, retention and context budgets per memory layer.

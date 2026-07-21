@@ -43,3 +43,12 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-025 - Scheduling:** Should Windows and macOS use periodic scheduling, presence-based catch-up, session lifecycle triggers or a layered combination?
 - **Q-026 - User rights:** Which inspect, explain, correct, export and delete guarantees must exist before memory persistence is enabled?
 - **Q-027 - Interrupted runs:** When may `bcgos doctor` clear a leftover dreaming lock, and what evidence or confirmation is required before recovery?
+
+## Before enabling wiki navigation
+
+- **Q-028 - Managed allowlist:** Which product decisions, specs, skills, agents, playbooks and documentation enter the first managed atlas?
+- **Q-029 - Page taxonomy:** Which initial topics, entities and relationships justify first-class wiki pages rather than index records?
+- **Q-030 - Memory exposure:** Which memory layers may produce private summaries, and which are pointer-only for the pilot?
+- **Q-031 - Private compilation:** Which approved provider may compile owner/workspace content, and must local-only or offline operation be supported?
+- **Q-032 - Invalidation SLA:** How quickly must correction, deletion or source-access revocation disappear from pages, backlinks, indexes and caches?
+- **Q-033 - Knowledge commands:** Should the user-facing surface be `bcgos wiki`, `bcgos knowledge` or an agent-only capability in v0?
