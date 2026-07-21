@@ -55,6 +55,7 @@ Implementado agora:
 - politica de memoria distribuivel, schemas, engine Go testado e skills operacional/de desenvolvimento.
 - entrypoint `bcgos` com `version` e bridge inicial de memoria para capture, status e contexto; dreaming falha explicitamente como indisponivel ate existir adapter aprovado.
 - contrato de wiki compilada com atlas gerenciado separado do atlas privado e navegacao governada de L1/L2/L3/lifetime.
+- nucleo runtime-neutral de scheduler com enrollment, receipts, deteccao de execucoes perdidas e catch-up limitado; adapters nativos ainda pendentes.
 
 Ainda nao implementado:
 
@@ -64,7 +65,7 @@ Ainda nao implementado:
 - bundle do OS;
 - pipeline de releases;
 - update, rollback e assinatura de artefatos.
-- adapters de sintese e elegibilidade, agendamento, recovery de locks e dreaming executavel no `bcgos memory`.
+- adapters de sintese e elegibilidade, instalacao do agendamento nativo, recovery de locks e dreaming executavel no `bcgos memory`.
 - gerador da wiki, schemas de pagina/indice, comandos de navegacao e atlas privado de owner/workspace.
 
 ## Desenvolvimento da solucao
@@ -116,6 +117,7 @@ Leia primeiro:
 - [Spec de memoria e dreaming](specs/006-memory-persistence.md)
 - [Spec de navegacao por wiki compilada](specs/007-content-navigation.md)
 - [Spec do ciclo de update e perfil OKF](specs/008-wiki-update-okf.md)
+- [Spec de scheduler e catch-up por presenca](specs/009-scheduler-catch-up.md)
 
 ## Confidencialidade
 

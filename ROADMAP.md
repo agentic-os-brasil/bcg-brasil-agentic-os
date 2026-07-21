@@ -81,7 +81,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Separate light daily dreaming from weekly deep dreaming and assign lifetime consolidation to the weekly cycle.
 - [x] Define the versioned local memory layout and provenance envelope.
 - [x] Define and validate the atomic memory commit-manifest schema.
-- [ ] Define the durable run-state schema for scheduling, catch-up and diagnostics.
+- [x] Define the durable run-state schema and runtime-neutral core for scheduling, bounded catch-up and diagnostics.
 - [x] Implement append-only L1 capture and bounded daily digests in the runtime-neutral engine.
 - [x] Implement idempotent L2 and L3 rollups with immutable versions and crash-interruption tests.
 - [x] Implement governed weekly lifetime eligibility and version history in the core engine.
@@ -102,6 +102,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Retention windows, context budgets and lifetime promotion eligibility.
 - User controls for inspect, correct, export and delete.
 - Recovery policy for locks left by interrupted or crashed dreaming runs.
+- Daily/weekly windows, unattended-model permission, catch-up limits and retry/backoff policy.
 - Whether shared organizational knowledge is a separate governed store rather than a memory layer.
 
 ## Track E - Content navigation and knowledge wiki
