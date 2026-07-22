@@ -25,6 +25,7 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-013 - Workspace boundary:** What metadata may be placed inside a case/code workspace without creating client-data risk?
 - **Q-014 - Runtime parity:** Which Claude/Codex capabilities are required, emulated, degraded or explicitly unavailable in v0?
 - **Q-015 - Hooks policy:** Which events may block, warn or only observe in a corporate workspace?
+- **Q-037 - Ingestion runtime pack:** What are the maximum install size and first-use time, approved model set, prefetch/offline policy, corporate-network behavior and update/rollback rules for the Docling runtime pack?
 
 ## Before the ten-person pilot
 

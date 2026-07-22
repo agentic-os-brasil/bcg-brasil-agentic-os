@@ -56,6 +56,7 @@ Implementado agora:
 - entrypoint `bcgos` com `version` e bridge inicial de memoria para capture, status e contexto; dreaming falha explicitamente como indisponivel ate existir adapter aprovado.
 - contrato de wiki compilada com atlas gerenciado separado do atlas privado e navegacao governada de L1/L2/L3/lifetime.
 - nucleo runtime-neutral de scheduler com enrollment, receipts, deteccao de execucoes perdidas e catch-up limitado; adapters nativos ainda pendentes.
+- contrato local-first de ingestao: Docling como extrator padrao por meio de runtime pack gerenciado, sem chave de API para o usuario padrao.
 
 Ainda nao implementado:
 
@@ -118,6 +119,7 @@ Leia primeiro:
 - [Spec de navegacao por wiki compilada](specs/007-content-navigation.md)
 - [Spec do ciclo de update e perfil OKF](specs/008-wiki-update-okf.md)
 - [Spec de scheduler e catch-up por presenca](specs/009-scheduler-catch-up.md)
+- [Spec de runtime local de ingestao](specs/010-local-ingestion-runtime.md)
 
 ## Confidencialidade
 

@@ -14,6 +14,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Establish the L1/L2/L3, lifetime and dreaming memory contract.
 - [x] Add a sanitized default memory policy, contract validator and development skill.
 - [x] Adopt a Karpathy-inspired compiled wiki for governed content and memory navigation.
+- [x] Define Docling as the local-first ingestion substrate and progressive user profiles.
 
 ## Track A - Contributor onboarding
 
@@ -139,6 +140,10 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 ### Build
 
 - [ ] Select one high-value work use case from observed consultant needs.
+- [x] Define the local-first ingestion contract, managed runtime-pack boundary and standard/advanced/power progressive-disclosure model.
+- [ ] Run a Windows/macOS Docling runtime-pack distribution spike with sanitized fixtures, measuring size, first-use time, offline behavior and extraction quality.
+- [ ] Implement verified installation, capability detection and removal of the ingestion runtime pack.
+- [ ] Implement `bcgos ingest` and the Docling-first, deterministic-fallback execution contract.
 - [ ] Define the minimal bundle manifest, version and compatibility range.
 - [ ] Implement runtime-neutral contracts and thin Claude/Codex adapters.
 - [ ] Add safe context injection, workspace boundaries and capability detection.
@@ -151,6 +156,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Shared versus local knowledge governance.
 - Which hooks block, warn or observe.
 - Ownership and retirement model for agents and skills.
+- Runtime-pack size, model-prefetch, corporate proxy and offline acceptance thresholds.
 
 ## Track G - Ten-person pilot
 
