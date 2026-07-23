@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strings"
 )
@@ -71,15 +72,15 @@ func DefaultDataRoot(platform, home, localAppData, xdgStateHome string) (string,
 		if strings.TrimSpace(home) == "" {
 			return "", errors.New("home directory is required on macOS")
 		}
-		return filepath.Join(home, "Library", "Application Support", "BCGOS"), nil
+		return pathpkg.Join(home, "Library", "Application Support", "BCGOS"), nil
 	case "linux":
 		if strings.TrimSpace(xdgStateHome) != "" {
-			return filepath.Join(xdgStateHome, "bcgos"), nil
+			return pathpkg.Join(xdgStateHome, "bcgos"), nil
 		}
 		if strings.TrimSpace(home) == "" {
 			return "", errors.New("home directory is required on Linux")
 		}
-		return filepath.Join(home, ".local", "share", "bcgos"), nil
+		return pathpkg.Join(home, ".local", "share", "bcgos"), nil
 	default:
 		return "", fmt.Errorf("unsupported platform %q", platform)
 	}
