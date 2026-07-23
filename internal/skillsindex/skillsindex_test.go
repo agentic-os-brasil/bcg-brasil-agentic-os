@@ -1,6 +1,7 @@
 package skillsindex_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +47,32 @@ func TestValidateRejectsStaleGeneratedCatalog(t *testing.T) {
 	}
 	if err := skillsindex.Validate(root); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("Validate() error = %v, want stale generated artifact", err)
+	}
+}
+
+func TestValidateAcceptsWindowsCRLFCheckoutOfGeneratedArtifacts(t *testing.T) {
+	root := t.TempDir()
+	writeSkill(t, root, "alpha", "Alpha", "Use for the first operation.", "Use $alpha for a first operation.")
+	catalog, err := skillsindex.Build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonBody, err := skillsindex.RenderJSON(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	markdownBody, err := skillsindex.RenderMarkdown(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "catalog.json"), bytes.ReplaceAll(jsonBody, []byte("\n"), []byte("\r\n")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "INDEX.md"), bytes.ReplaceAll(markdownBody, []byte("\n"), []byte("\r\n")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := skillsindex.Validate(root); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 

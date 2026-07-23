@@ -149,11 +149,17 @@ func Validate(root string) error {
 		if err != nil {
 			return err
 		}
-		if !bytes.Equal(actual, artifact.expected) {
+		if !bytes.Equal(normalizeLineEndings(actual), artifact.expected) {
 			return fmt.Errorf("skills index %s is stale; regenerate it from canonical skills", artifact.name)
 		}
 	}
 	return nil
+}
+
+// normalizeLineEndings keeps generated-artifact validation portable across
+// Git checkouts that convert managed text files to CRLF on Windows.
+func normalizeLineEndings(value []byte) []byte {
+	return bytes.ReplaceAll(value, []byte("\r\n"), []byte("\n"))
 }
 
 func Write(root string) error {
