@@ -14,7 +14,11 @@ import (
 	"time"
 
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
+	baseprofile "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/profile"
+	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -33,12 +37,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|memory>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -49,6 +53,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "version":
 		fmt.Fprintf(out, "bcgos %s\n", Version)
 		return ExitOK
+	case "profile":
+		return runProfile(args[1:], out, errOut, defaultDataRoot)
 	case "memory":
 		return runMemory(args[1:], in, out, errOut)
 	default:
@@ -60,11 +66,12 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	flags := newFlagSet("init", errOut)
 	allowSynchronized := flags.Bool("allow-synced-workspace", false, "confirm initialization inside a synchronized folder")
+	requestedProfile := flags.String("profile", "", "interaction profile: standard, advanced or power")
 	if err := flags.Parse(args); err != nil {
 		return ExitUsage
 	}
 	if flags.NArg() > 1 {
-		fmt.Fprintln(errOut, "usage: bcgos init [--allow-synced-workspace] [path]")
+		fmt.Fprintln(errOut, "usage: bcgos init [--allow-synced-workspace] [--profile standard|advanced|power] [path]")
 		return ExitUsage
 	}
 	path := "."
@@ -83,7 +90,14 @@ func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	return writeJSON(out, result, errOut)
+	state, err := initializeProfile(root, *requestedProfile)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, struct {
+		workspace.Result
+		Profile profile.State `json:"profile"`
+	}{Result: result, Profile: state}, errOut)
 }
 
 func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
@@ -99,17 +113,24 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	state, err := resolveProfile(root, "", false)
+	if err != nil {
+		return reportError(errOut, err)
+	}
 	return writeJSON(out, struct {
 		Version      string               `json:"version"`
 		Workspace    workspace.Inspection `json:"workspace"`
 		Capabilities map[string]string    `json:"capabilities"`
+		Profile      profile.State        `json:"profile"`
 	}{
 		Version:   Version,
 		Workspace: inspection,
+		Profile:   state,
 		Capabilities: map[string]string{
-			"bundles":         "unavailable",
-			"memory_dreaming": "unavailable",
-			"updates":         "unavailable",
+			"bundles":             "unavailable",
+			"interaction_profile": "supported",
+			"memory_dreaming":     "unavailable",
+			"updates":             "unavailable",
 		},
 	}, errOut)
 }
@@ -133,6 +154,22 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	profileState, err := resolveProfile(root, "", false)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	manifest, err := baseruntime.Manifest()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	runtimeReports := make([]runtimecap.Report, 0, 2)
+	for _, runtimeID := range []string{"claude", "codex"} {
+		report, err := manifest.Report(runtimeID, available(runtimeID))
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		runtimeReports = append(runtimeReports, report)
+	}
 	state := "ready"
 	nextActions := []string{}
 	workspaceCheck := doctorCheck{ID: "workspace", State: "pass", Message: "workspace metadata and readable brain are ready"}
@@ -153,6 +190,7 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 	checks := []doctorCheck{
 		workspaceCheck,
 		{ID: "local_data", State: "pass", Message: "private BCGOS data is separated from the workspace"},
+		interactionProfileCheck(profileState),
 		runtimeCheck("claude_code", "claude", available),
 		runtimeCheck("codex", "codex", available),
 		{ID: "bundles", State: "unavailable", Message: "bundle installation is not implemented in this build"},
@@ -168,11 +206,73 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 		nextActions = append(nextActions, "Open Claude Code or Codex in this workspace to begin guided onboarding.")
 	}
 	return writeJSON(out, struct {
-		State       string               `json:"state"`
-		Workspace   workspace.Inspection `json:"workspace"`
-		Checks      []doctorCheck        `json:"checks"`
-		NextActions []string             `json:"next_actions"`
-	}{State: state, Workspace: inspection, Checks: checks, NextActions: nextActions}, errOut)
+		State               string               `json:"state"`
+		Workspace           workspace.Inspection `json:"workspace"`
+		Checks              []doctorCheck        `json:"checks"`
+		RuntimeCapabilities []runtimecap.Report  `json:"runtime_capabilities"`
+		Profile             profile.State        `json:"profile"`
+		NextActions         []string             `json:"next_actions"`
+	}{State: state, Workspace: inspection, Checks: checks, RuntimeCapabilities: runtimeReports, Profile: profileState, NextActions: nextActions}, errOut)
+}
+
+func runProfile(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+		fmt.Fprintln(out, "usage: bcgos profile <show|set standard|advanced|power>")
+		return ExitOK
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "show":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos profile show")
+			return ExitUsage
+		}
+		state, err := resolveProfile(root, "", false)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, state, errOut)
+	case "set":
+		if len(args) != 2 {
+			fmt.Fprintln(errOut, "usage: bcgos profile set <standard|advanced|power>")
+			return ExitUsage
+		}
+		state, err := resolveProfile(root, args[1], true)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, state, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos profile <show|set standard|advanced|power>")
+		return ExitUsage
+	}
+}
+
+func resolveProfile(dataRoot, requested string, explicit bool) (profile.State, error) {
+	policy, err := baseprofile.Policy()
+	if err != nil {
+		return profile.State{}, err
+	}
+	store := profile.Store{Root: dataRoot, Policy: policy}
+	if explicit {
+		return store.Set(requested)
+	}
+	return store.Get()
+}
+
+func initializeProfile(dataRoot, requested string) (profile.State, error) {
+	policy, err := baseprofile.Policy()
+	if err != nil {
+		return profile.State{}, err
+	}
+	store := profile.Store{Root: dataRoot, Policy: policy}
+	if requested != "" {
+		return store.Set(requested)
+	}
+	return store.Ensure()
 }
 
 func oneOptionalPath(command string, args []string, errOut io.Writer) (string, int) {
@@ -191,6 +291,13 @@ func runtimeCheck(id, executable string, available func(string) bool) doctorChec
 		return doctorCheck{ID: id, State: "available", Message: executable + " was found"}
 	}
 	return doctorCheck{ID: id, State: "unavailable", Message: executable + " was not found; this is not a BCGOS installation failure"}
+}
+
+func interactionProfileCheck(state profile.State) doctorCheck {
+	if state.Source == "fallback" {
+		return doctorCheck{ID: "interaction_profile", State: "warning", Message: state.Warning}
+	}
+	return doctorCheck{ID: "interaction_profile", State: "pass", Message: "active profile is " + state.Profile}
 }
 
 func commandAvailable(name string) bool {

@@ -55,6 +55,10 @@ Você pode abrir, ler e organizar arquivos Markdown aqui diretamente. O BCGOS
 usa memória operacional privada separada para continuidade entre sessões; ela
 não substitui suas fontes, decisões ou documentos neste workspace.
 
+Sua preferência de interação fica fora deste brain e da memória. Use bcgos
+profile show para consultá-la ou bcgos profile set standard|advanced|power
+para ajustar a profundidade técnica das sugestões.
+
 Estruture projetos, clientes e conhecimento reutilizável conforme seu trabalho
 e os bundles instalados. Este arquivo não é atualizado automaticamente.
 `

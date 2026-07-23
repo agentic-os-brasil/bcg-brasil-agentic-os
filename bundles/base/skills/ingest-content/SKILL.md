@@ -22,17 +22,12 @@ provider as a fallback.
 6. Return the extraction route, fidelity classification, provenance pointer,
    retained-artifact policy and any capability limitation.
 
-## User profiles
+## Interaction profile
 
-- `standard`: preserve the local, no-key default and show only the concise
-  result.
-- `advanced`: offer approved diagnostics, OCR choice, batches, templates and
-  intermediate exports when useful.
-- `power`: propose explicit provider or model alternatives only after policy,
-  consent and credential preflight.
-
-Profiles control suggestions, not permissions. They never authorize a remote
-provider, weaken data boundaries or bypass release verification.
+Resolve the canonical user-local profile through `interaction-profile` before
+choosing explanation depth or optional suggestions. The profile changes
+progressive disclosure only; it never authorizes a remote provider, weakens
+data boundaries or bypasses release verification.
 
 ## Invariants
 

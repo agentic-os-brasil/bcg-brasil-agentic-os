@@ -15,6 +15,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Add a sanitized default memory policy, contract validator and development skill.
 - [x] Adopt a Karpathy-inspired compiled wiki for governed content and memory navigation.
 - [x] Define Docling as the local-first ingestion substrate and progressive user profiles.
+- [x] Define and implement a canonical user-local interaction profile across product skills.
 
 ## Track A - Contributor onboarding
 
@@ -41,11 +42,14 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 ### Build
 
 - [x] Implement `bcgos version`, `status` and product-facing `doctor`.
-- [ ] Implement canonical manifest, lock and runtime-capability schemas.
+- [x] Implement versioned runtime-capability manifest, schema and `bcgos doctor` report.
+- [ ] Implement canonical lock and runtime configuration schemas.
 - [x] Implement user-space directories on Windows and macOS.
-- [ ] Add Claude and Codex adapter skeletons against the same contracts.
-- [ ] Add conformance fixtures for platform and runtime parity.
+- [x] Add Claude and Codex adapter skeletons against the same canonical contract.
+- [x] Add initial conformance fixtures for equivalent capability identity, semantic events and criticality.
+- [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
+- [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
 
 ### Discuss before closing the track
 
