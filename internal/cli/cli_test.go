@@ -148,6 +148,50 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
+func TestProfileCommandsSwitchTheCanonicalUserPreference(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runProfile([]string{"show"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "standard"`) {
+		t.Fatalf("profile show exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runProfile([]string{"set", "advanced"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "advanced"`) || !strings.Contains(output.String(), `"source": "configured"`) {
+		t.Fatalf("profile set exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runProfile([]string{"show"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "advanced"`) {
+		t.Fatalf("profile persisted exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestInitPersistsTheSelectedInteractionProfile(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runInit([]string{"--profile", "power", filepath.Join(root, "workspace")}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "power"`) {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runProfile([]string{"show"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "power"`) || !strings.Contains(output.String(), `"source": "configured"`) {
+		t.Fatalf("profile after init exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestInitPersistsStandardWhenNoProfileIsSelected(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runInit([]string{filepath.Join(root, "workspace")}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runProfile([]string{"show"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "standard"`) || !strings.Contains(output.String(), `"source": "configured"`) {
+		t.Fatalf("profile after default init exit = %d, output = %s", code, output.String())
+	}
+}
+
 func TestProductStatusAndDoctorDescribeReadyWorkspace(t *testing.T) {
 	root := t.TempDir()
 	workspacePath := filepath.Join(root, "Developer", "case-a")
@@ -158,13 +202,13 @@ func TestProductStatusAndDoctorDescribeReadyWorkspace(t *testing.T) {
 	}
 
 	output.Reset()
-	if code := runProductStatus([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) || !strings.Contains(output.String(), `"brain_readable": true`) {
+	if code := runProductStatus([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) || !strings.Contains(output.String(), `"brain_readable": true`) || !strings.Contains(output.String(), `"profile": "standard"`) {
 		t.Fatalf("status exit = %d, output = %s", code, output.String())
 	}
 
 	output.Reset()
 	available := func(name string) bool { return name == "claude" }
-	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, available); code != ExitOK || !strings.Contains(output.String(), `"claude_code"`) || !strings.Contains(output.String(), `"available"`) || !strings.Contains(output.String(), `"codex"`) || !strings.Contains(output.String(), `"unavailable"`) {
+	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, available); code != ExitOK || !strings.Contains(output.String(), `"claude_code"`) || !strings.Contains(output.String(), `"runtime_capabilities"`) || !strings.Contains(output.String(), `"context_inject"`) || !strings.Contains(output.String(), `"interaction_profile"`) || !strings.Contains(output.String(), `"codex"`) || !strings.Contains(output.String(), `"unavailable"`) {
 		t.Fatalf("doctor exit = %d, output = %s", code, output.String())
 	}
 }

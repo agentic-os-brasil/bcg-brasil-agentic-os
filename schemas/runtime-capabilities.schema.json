@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil/schemas/runtime-capabilities.schema.json",
+  "title": "BCGOS Runtime Capabilities",
+  "type": "object",
+  "required": ["schema_version", "capabilities"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "criticality", "semantic_event", "fallback", "runtimes"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "criticality": {"enum": ["required", "optional"]},
+          "semantic_event": {"enum": ["", "session_start", "pre_action_guard", "post_action_observe", "stop_finalize", "context_inject"]},
+          "fallback": {"enum": ["native", "emulated", "degraded", "unavailable"]},
+          "runtimes": {
+            "type": "object",
+            "required": ["claude", "codex"],
+            "additionalProperties": false,
+            "properties": {
+              "claude": {"$ref": "#/$defs/runtime_contract"},
+              "codex": {"$ref": "#/$defs/runtime_contract"}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "runtime_contract": {
+      "type": "object",
+      "required": ["state", "mechanism", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "state": {"enum": ["native", "emulated", "degraded", "unavailable"]},
+        "mechanism": {"type": "string", "minLength": 1},
+        "reason": {"type": "string"}
+      }
+    }
+  }
+}

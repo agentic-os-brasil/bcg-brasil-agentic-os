@@ -1,6 +1,6 @@
 # Spec 004 - Runtime portability
 
-Status: direction accepted; capability inventory and implementation pending.
+Status: direction accepted; canonical capability manifest and diagnostic report implemented; lifecycle wiring and native adapters pending.
 
 ## Objective
 
@@ -79,6 +79,19 @@ Critical security or governance capabilities cannot degrade silently. When they 
 A versioned manifest is the single source for capability ID, semantic contract, criticality, required mechanisms, compatibility range and fallback behavior. `bcgos init`, `bcgos doctor` and startup derive their reports from this manifest.
 
 Every canonical capability requires conformance fixtures against both adapters. Documentation may render the matrix, but must not become a separately maintained source of truth.
+
+## Initial implementation
+
+`bundles/base/runtime/capabilities.json` is the versioned source of truth for
+the current capability inventory. `schemas/runtime-capabilities.schema.json`
+defines its portable shape, and `internal/runtimecap` validates and reports the
+same capability IDs, semantic events and criticality for Claude and Codex.
+`bcgos doctor` reports the detected runtime plus its derived capability view.
+
+The initial adapter directories deliberately contain no lifecycle wiring. Their
+only implemented capability is local executable discovery. Every product event
+remains `unavailable` until a thin adapter and equivalent conformance fixture
+exist; development hooks are never evidence of product hook support.
 
 ## Update guarantees
 

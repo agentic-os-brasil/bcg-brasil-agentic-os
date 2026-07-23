@@ -45,7 +45,7 @@ func Validate(root string, full bool, out io.Writer) error {
 			return skillmeta.ValidateDir(filepath.Join(root, "dev", "skills"))
 		}},
 		{"product skills", func() error {
-			return skillmeta.ValidateDir(filepath.Join(root, "bundles", "base", "skills"))
+			return skillmeta.ValidateProductDir(filepath.Join(root, "bundles", "base", "skills"))
 		}},
 		{"Claude skill projections", func() error {
 			return skillmeta.ValidateClaudeProjections(
