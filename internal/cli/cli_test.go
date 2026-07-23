@@ -147,3 +147,33 @@ func TestVersionCommand(t *testing.T) {
 		t.Fatalf("version exit = %d, output = %s", code, output.String())
 	}
 }
+
+func TestProductStatusAndDoctorDescribeReadyWorkspace(t *testing.T) {
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "Developer", "case-a")
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runProductStatus([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) || !strings.Contains(output.String(), `"brain_readable": true`) {
+		t.Fatalf("status exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	available := func(name string) bool { return name == "claude" }
+	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, available); code != ExitOK || !strings.Contains(output.String(), `"claude_code"`) || !strings.Contains(output.String(), `"available"`) || !strings.Contains(output.String(), `"codex"`) || !strings.Contains(output.String(), `"unavailable"`) {
+		t.Fatalf("doctor exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestDoctorExplainsUninitializedWorkspace(t *testing.T) {
+	root := t.TempDir()
+	var output bytes.Buffer
+	code := runDoctor([]string{filepath.Join(root, "not-initialized")}, &output, &output, func() (string, error) { return filepath.Join(root, "local", "BCGOS"), nil }, func(string) bool { return false })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "action_required"`) || !strings.Contains(output.String(), "bcgos init") {
+		t.Fatalf("doctor exit = %d, output = %s", code, output.String())
+	}
+}

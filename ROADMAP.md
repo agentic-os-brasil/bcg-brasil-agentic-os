@@ -40,12 +40,12 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 ### Build
 
-- [ ] Implement `bcgos version`, `status` and product-facing `doctor`.
+- [x] Implement `bcgos version`, `status` and product-facing `doctor`.
 - [ ] Implement canonical manifest, lock and runtime-capability schemas.
-- [ ] Implement user-space directories on Windows and macOS.
+- [x] Implement user-space directories on Windows and macOS.
 - [ ] Add Claude and Codex adapter skeletons against the same contracts.
 - [ ] Add conformance fixtures for platform and runtime parity.
-- [ ] Implement idempotent `bcgos init` with data-preservation tests.
+- [x] Implement idempotent `bcgos init` with data-preservation tests.
 
 ### Discuss before closing the track
 

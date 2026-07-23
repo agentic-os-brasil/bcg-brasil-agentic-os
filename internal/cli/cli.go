@@ -6,12 +6,16 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 const (
@@ -29,13 +33,19 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <version|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <version|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|memory>")
 		return ExitOK
+	case "init":
+		return runInit(args[1:], out, errOut, defaultDataRoot)
+	case "doctor":
+		return runDoctor(args[1:], out, errOut, defaultDataRoot, commandAvailable)
+	case "status":
+		return runProductStatus(args[1:], out, errOut, defaultDataRoot)
 	case "version":
 		fmt.Fprintf(out, "bcgos %s\n", Version)
 		return ExitOK
@@ -45,6 +55,155 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		fmt.Fprintf(errOut, "unknown command %q\n", args[0])
 		return ExitUsage
 	}
+}
+
+func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	flags := newFlagSet("init", errOut)
+	allowSynchronized := flags.Bool("allow-synced-workspace", false, "confirm initialization inside a synchronized folder")
+	if err := flags.Parse(args); err != nil {
+		return ExitUsage
+	}
+	if flags.NArg() > 1 {
+		fmt.Fprintln(errOut, "usage: bcgos init [--allow-synced-workspace] [path]")
+		return ExitUsage
+	}
+	path := "."
+	if flags.NArg() == 1 {
+		path = flags.Arg(0)
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	result, err := workspace.Initialize(workspace.Options{WorkspacePath: path, DataRoot: root, AllowSynchronizedRoot: *allowSynchronized})
+	if errors.Is(err, workspace.ErrSynchronizedWorkspace) {
+		fmt.Fprintln(errOut, "workspace appears to be inside OneDrive or another synchronized root; choose a local folder such as ~/Developer, or rerun with --allow-synced-workspace after explicit confirmation")
+		return ExitUsage
+	}
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, result, errOut)
+}
+
+func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	path, code := oneOptionalPath("status", args, errOut)
+	if code != ExitOK {
+		return code
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, struct {
+		Version      string               `json:"version"`
+		Workspace    workspace.Inspection `json:"workspace"`
+		Capabilities map[string]string    `json:"capabilities"`
+	}{
+		Version:   Version,
+		Workspace: inspection,
+		Capabilities: map[string]string{
+			"bundles":         "unavailable",
+			"memory_dreaming": "unavailable",
+			"updates":         "unavailable",
+		},
+	}, errOut)
+}
+
+type doctorCheck struct {
+	ID      string `json:"id"`
+	State   string `json:"state"`
+	Message string `json:"message"`
+}
+
+func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, error), available func(string) bool) int {
+	path, code := oneOptionalPath("doctor", args, errOut)
+	if code != ExitOK {
+		return code
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	state := "ready"
+	nextActions := []string{}
+	workspaceCheck := doctorCheck{ID: "workspace", State: "pass", Message: "workspace metadata and readable brain are ready"}
+	switch inspection.State {
+	case "uninitialized":
+		state = "action_required"
+		workspaceCheck = doctorCheck{ID: "workspace", State: "action_required", Message: "workspace is not initialized"}
+		nextActions = append(nextActions, "Run bcgos init <local-workspace-path>.")
+	case "invalid", "incomplete":
+		state = "action_required"
+		workspaceCheck = doctorCheck{ID: "workspace", State: "action_required", Message: "workspace metadata or brain surface needs repair"}
+		nextActions = append(nextActions, "Review the workspace path and rerun bcgos init only after confirming it is safe.")
+	case "warning":
+		state = "warning"
+		workspaceCheck = doctorCheck{ID: "workspace", State: "warning", Message: "workspace appears to be synchronized; OneDrive-style sync can cause I/O timeouts"}
+		nextActions = append(nextActions, "Move future work to a local folder outside synchronized storage when practical.")
+	}
+	checks := []doctorCheck{
+		workspaceCheck,
+		{ID: "local_data", State: "pass", Message: "private BCGOS data is separated from the workspace"},
+		runtimeCheck("claude_code", "claude", available),
+		runtimeCheck("codex", "codex", available),
+		{ID: "bundles", State: "unavailable", Message: "bundle installation is not implemented in this build"},
+		{ID: "updates", State: "unavailable", Message: "update and rollback are not implemented in this build"},
+	}
+	if !available("claude") && !available("codex") {
+		if state == "ready" {
+			state = "action_required"
+		}
+		nextActions = append(nextActions, "Install or open Claude Code or Codex before starting an assisted session.")
+	}
+	if len(nextActions) == 0 {
+		nextActions = append(nextActions, "Open Claude Code or Codex in this workspace to begin guided onboarding.")
+	}
+	return writeJSON(out, struct {
+		State       string               `json:"state"`
+		Workspace   workspace.Inspection `json:"workspace"`
+		Checks      []doctorCheck        `json:"checks"`
+		NextActions []string             `json:"next_actions"`
+	}{State: state, Workspace: inspection, Checks: checks, NextActions: nextActions}, errOut)
+}
+
+func oneOptionalPath(command string, args []string, errOut io.Writer) (string, int) {
+	if len(args) > 1 {
+		fmt.Fprintf(errOut, "usage: bcgos %s [path]\n", command)
+		return "", ExitUsage
+	}
+	if len(args) == 1 {
+		return args[0], ExitOK
+	}
+	return ".", ExitOK
+}
+
+func runtimeCheck(id, executable string, available func(string) bool) doctorCheck {
+	if available(executable) {
+		return doctorCheck{ID: id, State: "available", Message: executable + " was found"}
+	}
+	return doctorCheck{ID: id, State: "unavailable", Message: executable + " was not found; this is not a BCGOS installation failure"}
+}
+
+func commandAvailable(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+func defaultDataRoot() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return workspace.DefaultDataRoot(runtime.GOOS, home, os.Getenv("LOCALAPPDATA"), os.Getenv("XDG_STATE_HOME"))
 }
 
 func runMemory(args []string, in io.Reader, out, errOut io.Writer) int {
