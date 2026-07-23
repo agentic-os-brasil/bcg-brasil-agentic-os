@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ingest Content"
+  short_description: "Extract professional documents locally and safely"
+  default_prompt: "Use $ingest-content to process this professional source through the approved local ingestion route."
