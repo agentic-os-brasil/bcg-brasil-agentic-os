@@ -60,6 +60,7 @@ Implementado agora:
 - nucleo runtime-neutral de scheduler com enrollment, receipts, deteccao de execucoes perdidas e catch-up limitado; adapters nativos ainda pendentes.
 - contrato local-first de ingestao: Docling como extrator padrao por meio de runtime pack gerenciado, sem chave de API para o usuario padrao.
 - perfil de interacao global (`standard`, `advanced` ou `power`) que regula linguagem e sugestoes tecnicas sem alterar permissoes ou dados.
+- indice de skills gerado, humano-legivel e machine-readable para descoberta sem injetar todos os procedimentos na sessao.
 
 Ainda nao implementado:
 

@@ -16,6 +16,7 @@ import (
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
 	baseprofile "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/profile"
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
+	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
@@ -37,12 +38,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|skills|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|skills|memory>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -55,6 +56,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return ExitOK
 	case "profile":
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
+	case "skills":
+		return runSkills(args[1:], out, errOut)
 	case "memory":
 		return runMemory(args[1:], in, out, errOut)
 	default:
@@ -249,6 +252,18 @@ func runProfile(args []string, out, errOut io.Writer, dataRoot func() (string, e
 		fmt.Fprintln(errOut, "usage: bcgos profile <show|set standard|advanced|power>")
 		return ExitUsage
 	}
+}
+
+func runSkills(args []string, out, errOut io.Writer) int {
+	if len(args) != 1 || args[0] != "index" {
+		fmt.Fprintln(errOut, "usage: bcgos skills index")
+		return ExitUsage
+	}
+	catalog, err := baseskills.Catalog()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, catalog, errOut)
 }
 
 func resolveProfile(dataRoot, requested string, explicit bool) (profile.State, error) {

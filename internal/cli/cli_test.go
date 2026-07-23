@@ -148,6 +148,13 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
+func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
+	var output bytes.Buffer
+	if code := Run([]string{"skills", "index"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"schema_version": 1`) || !strings.Contains(output.String(), `"dream-memory"`) || strings.Contains(output.String(), "Daily dreaming cannot") {
+		t.Fatalf("skills index exit = %d, output = %s", code, output.String())
+	}
+}
+
 func TestProfileCommandsSwitchTheCanonicalUserPreference(t *testing.T) {
 	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
 	var output bytes.Buffer
