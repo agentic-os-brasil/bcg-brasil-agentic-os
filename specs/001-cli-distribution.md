@@ -1,6 +1,6 @@
 # Spec 001 - CLI distribution contract
 
-Status: direction accepted; CLI entrypoint and initial memory bridge implemented; install, init, doctor, update and release distribution pending.
+Status: direction accepted; CLI entrypoint, initial memory bridge, workspace init, status and doctor implemented; install, update and release distribution pending.
 
 ## User journey
 
@@ -26,6 +26,20 @@ bcgos memory dream <daily|weekly>
 ```
 
 `capture`, `status` and `context` call the runtime-neutral memory core. Capture content enters through bounded standard input rather than process arguments and still requires an adapter sanitization attestation. Until an approved synthesis and eligibility adapter is installed, `dream` returns the machine-readable capability state `unavailable` and performs no emulation. The local data directory and context budgets remain explicit arguments until `bcgos init` owns approved per-platform configuration.
+
+## Current bootstrap behavior
+
+`bcgos init [path]` is idempotent and creates only a minimal user-visible
+surface: `.bcgos/workspace.json` and `brain/README.md`. It preserves an
+existing brain README and never creates a client, project or people taxonomy
+before that taxonomy is accepted. Private configuration, memory, scheduler
+state and logs are created under the local data root, not under the workspace.
+
+`bcgos status [path]` returns machine-readable workspace state, version and
+declared capability availability. `bcgos doctor [path]` returns actionable
+checks for workspace integrity, local-data separation and Claude Code/Codex
+presence. A missing runtime is reported, not silently installed; unavailable
+bundles and updates are declared rather than emulated.
 
 ## Distribution source
 

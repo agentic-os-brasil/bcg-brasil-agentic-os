@@ -2,7 +2,7 @@
 
 Second brain profissional e camada operacional de agentes para o BCG Brasil.
 
-> Status: fundacao inicial. O repositorio ainda nao contem uma CLI funcional nem um Agent OS pronto para uso.
+> Status: fundacao inicial. A CLI ja inicializa e diagnostica um workspace local, mas distribuicao, bundles e atualizacoes ainda nao estao prontos para usuarios piloto.
 
 ## Visao
 
@@ -54,13 +54,14 @@ Implementado agora:
 - contrato inicial de memoria com dreaming diario leve, deep dreaming semanal, L1/L2/L3 e lifetime versionado;
 - politica de memoria distribuivel, schemas, engine Go testado e skills operacional/de desenvolvimento.
 - entrypoint `bcgos` com `version` e bridge inicial de memoria para capture, status e contexto; dreaming falha explicitamente como indisponivel ate existir adapter aprovado.
+- `bcgos init`, `bcgos doctor` e `bcgos status` para criar e inspecionar um workspace local sem misturar o brain humano ao estado privado do runtime.
 - contrato de wiki compilada com atlas gerenciado separado do atlas privado e navegacao governada de L1/L2/L3/lifetime.
 - nucleo runtime-neutral de scheduler com enrollment, receipts, deteccao de execucoes perdidas e catch-up limitado; adapters nativos ainda pendentes.
 - contrato local-first de ingestao: Docling como extrator padrao por meio de runtime pack gerenciado, sem chave de API para o usuario padrao.
 
 Ainda nao implementado:
 
-- instalacao e distribuicao do binario `bcgos`;
+- instalacao e distribuicao do binario `bcgos` para usuarios piloto;
 - instalador;
 - autenticacao com GitHub;
 - bundle do OS;
@@ -103,6 +104,8 @@ docs/            decisoes e explicacoes para humanos
 ```
 
 O contrato de memoria esta em [Spec 006](specs/006-memory-persistence.md). A politica sanitizada vive em `bundles/base/memory/policy.json`, o engine em `internal/memory` e a skill operacional em `bundles/base/skills/dream-memory/`. Dados e rollups reais permanecerao fora do repositorio, em armazenamento local do usuario.
+
+O primeiro `bcgos init` cria apenas `.bcgos/workspace.json` e `brain/README.md` no workspace escolhido. O `brain/` e uma superficie Markdown navegavel para a pessoa; memoria operacional, configuracao e logs ficam no diretorio local gerenciado. A taxonomia de clientes, projetos, pessoas e conhecimento ainda sera definida antes de o produto criar pastas de conteudo automaticamente.
 
 O contrato de navegacao esta na [Spec 007](specs/007-content-navigation.md). A wiki e um atlas compilado e regeneravel: navega conteudo gerenciado e, futuramente, os rollups da memoria privada escopada. Dreaming produz L2/L3/lifetime; a wiki organiza rotas temporais e semanticas sobre esses rollups sem substitui-los nem promover conteudo privado para o bundle compartilhado.
 
