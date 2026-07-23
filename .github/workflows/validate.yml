@@ -24,6 +24,10 @@ jobs:
           cache: true
       - name: Run full development harness
         run: go run ./dev/harness validate --full
+      - name: Smoke-test local trial installation
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./dev/trial-install-smoke.sh
       - name: Smoke-test Claude hook from nested directory
         shell: bash
         working-directory: specs
@@ -50,3 +54,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "pre-commit hook did not allow a validated branch commit"
           }
+      - name: Smoke-test Windows local trial installation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./dev/trial-install-smoke.ps1
