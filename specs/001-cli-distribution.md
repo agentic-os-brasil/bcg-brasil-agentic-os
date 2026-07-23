@@ -41,6 +41,17 @@ checks for workspace integrity, local-data separation and Claude Code/Codex
 presence. A missing runtime is reported, not silently installed; unavailable
 bundles and updates are declared rather than emulated.
 
+## Local installation trial
+
+Before signed private releases exist, a trial may install a locally supplied
+binary through `installers/trial/install.sh` (macOS/Linux) or
+`installers/trial/install.ps1` (Windows). Both require an artifact, a SHA-256
+checksum file, an explicit `allow unsigned trial` acknowledgement and a clean
+target directory. They stage and self-check the binary before activation, do
+not replace an existing trial install, alter PATH, download anything or claim
+signature trust. CI runs the same flow in an isolated temporary environment on
+Windows, macOS and Linux.
+
 ## Distribution source
 
 The pilot release provider is the GitHub API for private releases in this repository. The implementation must hide that provider behind an interface so a future BCG artifact source can replace it.
