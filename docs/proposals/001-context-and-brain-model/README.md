@@ -95,7 +95,7 @@ what connects to it, and who maintains it (per 3.2, Maestro's current implementa
 
 A worked reference implementation of every segment below (mother files + templates, adapted
 from Maestro's real, in-use files) lives alongside this document in
-[`atlas-example/`](001-context-and-brain-model/atlas-example/) — read the two together.
+[`atlas-example/`](atlas-example/) — read the two together.
 
 ### `atlas/profile/`
 - **Answers:** "Who is this person, and how do they like to work?" — role, seniority, working
