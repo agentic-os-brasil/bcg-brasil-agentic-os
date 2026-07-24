@@ -173,6 +173,53 @@ func TestProfileCommandsSwitchTheCanonicalUserPreference(t *testing.T) {
 	}
 }
 
+func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runOwner([]string{"init"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"voice"`) || !strings.Contains(output.String(), `"psychological-profile"`) {
+		t.Fatalf("owner init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwner([]string{"interview"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"cold_start"`) || strings.Contains(output.String(), `"psychological-profile"`) {
+		t.Fatalf("owner interview exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestOwnerRefineAppliesEligibleFacetFromStdinAndRequiresConfirmationToRevert(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runOwner([]string{"init"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("owner init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	code := runOwnerWithInput([]string{"refine", "submit", "--facet", "voice", "--evidence", "owner approved three drafts", "--stdin"}, strings.NewReader("# Voice\n\nClear and decisive.\n"), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "proposed"`) || strings.Contains(output.String(), `"audit_id"`) {
+		t.Fatalf("refine submit exit = %d, output = %s", code, output.String())
+	}
+	var proposal struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &proposal); err != nil || proposal.ID == "" {
+		t.Fatalf("proposal receipt = %s, err = %v", output.String(), err)
+	}
+	output.Reset()
+	code = runOwner([]string{"refine", "apply", "--confirm", proposal.ID}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "applied"`) || !strings.Contains(output.String(), `"audit_id"`) {
+		t.Fatalf("confirmed apply exit = %d, output = %s", code, output.String())
+	}
+	var receipt struct {
+		AuditID string `json:"audit_id"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &receipt); err != nil || receipt.AuditID == "" {
+		t.Fatalf("refine receipt = %s, err = %v", output.String(), err)
+	}
+	output.Reset()
+	code = runOwner([]string{"refine", "revert", receipt.AuditID}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code == ExitOK || !strings.Contains(output.String(), "--confirm") {
+		t.Fatalf("unconfirmed revert exit = %d, output = %s", code, output.String())
+	}
+}
+
 func TestInitPersistsTheSelectedInteractionProfile(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

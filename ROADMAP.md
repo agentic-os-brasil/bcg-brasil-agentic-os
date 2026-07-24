@@ -17,6 +17,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Define Docling as the local-first ingestion substrate and progressive user profiles.
 - [x] Define and implement a canonical user-local interaction profile across product skills.
 - [x] Define and compile a managed skills index for bounded session navigation.
+- [x] Define and implement a local, professional owner-self registry with facet policies and a cold-start interview contract.
 
 ## Track A - Contributor onboarding
 
@@ -51,6 +52,10 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
+- [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.
+- [x] Implement local refinement submission, policy enforcement, audit snapshots and explicit reversal for owner facets.
+- [ ] Implement approved local assessment ingestion with explicit consent, provenance and confirmation before synthesis.
+- [ ] Implement lifecycle observation capture and approved synthesis adapters that submit refinements to the local core.
 
 ### Discuss before closing the track
 

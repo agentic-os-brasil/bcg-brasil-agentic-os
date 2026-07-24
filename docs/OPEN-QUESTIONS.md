@@ -17,6 +17,8 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-008 - Private release authentication:** GitHub CLI token reuse, browser device flow or a BCG-managed distribution identity?
 - **Q-009 - Release trust:** Which signing, SmartScreen, Gatekeeper, checksum and provenance requirements apply?
 - **Q-010 - Update policy:** Automatic checks, user-triggered updates, forced security updates and rollback retention.
+- **Q-038 - Owner assessment handling:** Which professional assessment formats, local extraction rules, retention and consent record are approved before the OS ingests reports such as Big Five, MBTI or Hogan?
+- **Q-039 - Owner refinement:** Which approved signals may propose or automatically refine voice, communication style and preferences; where do provenance, diff history and rollback records live?
 
 ## Before building the first OS bundle
 
