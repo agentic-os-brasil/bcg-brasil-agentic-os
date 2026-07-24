@@ -18,6 +18,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Define and implement a canonical user-local interaction profile across product skills.
 - [x] Define and compile a managed skills index for bounded session navigation.
 - [x] Define and implement a local, professional owner-self registry with facet policies and a cold-start interview contract.
+- [x] Decide that the future human atlas is scoped across managed, owner-private and workspace-private roots, alongside canonical derived memory.
+- [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
 
 ## Track A - Contributor onboarding
 
@@ -134,6 +136,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Add allowlist, provenance, determinism and boundary tests to CI.
 - [ ] Expose bounded product-content pointers for Claude and Codex adapters.
 - [ ] Implement owner/workspace private atlas only after enrollment, privacy and deletion contracts are ready.
+- [ ] Extend the initial private-atlas taxonomy only through scoped templates, ownership rules and privacy tests.
 
 ### Discuss before enabling private navigation
 

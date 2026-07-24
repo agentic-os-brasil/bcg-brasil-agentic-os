@@ -220,6 +220,23 @@ func TestOwnerRefineAppliesEligibleFacetFromStdinAndRequiresConfirmationToRevert
 	}
 }
 
+func TestAtlasCommandsBootstrapOnlyPrivateOwnerAndWorkspaceRoots(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "Developer", "case-a")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("workspace init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runAtlas([]string{"init", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"managed": {`) || !strings.Contains(output.String(), `"state": "unavailable"`) || !strings.Contains(output.String(), `"workspace": {`) {
+		t.Fatalf("atlas init exit = %d, output = %s", code, output.String())
+	}
+	if _, err := os.Stat(filepath.Join(workspacePath, "brain", "tasks")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected task taxonomy: %v", err)
+	}
+}
+
 func TestInitPersistsTheSelectedInteractionProfile(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

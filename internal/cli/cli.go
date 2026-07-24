@@ -17,6 +17,7 @@ import (
 	baseprofile "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/profile"
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
@@ -41,12 +42,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|skills|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|atlas|skills|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|skills|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|atlas|skills|memory>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -61,6 +62,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
 	case "owner":
 		return runOwnerWithInput(args[1:], in, out, errOut, defaultDataRoot)
+	case "atlas":
+		return runAtlas(args[1:], out, errOut, defaultDataRoot)
 	case "skills":
 		return runSkills(args[1:], out, errOut)
 	case "memory":
@@ -135,10 +138,11 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 		Workspace: inspection,
 		Profile:   state,
 		Capabilities: map[string]string{
-			"bundles":             "unavailable",
-			"interaction_profile": "supported",
-			"memory_dreaming":     "unavailable",
-			"updates":             "unavailable",
+			"bundles":               "unavailable",
+			"human_atlas_bootstrap": "supported",
+			"interaction_profile":   "supported",
+			"memory_dreaming":       "unavailable",
+			"updates":               "unavailable",
 		},
 	}, errOut)
 }
@@ -386,6 +390,38 @@ func runOwnerRefine(args []string, in io.Reader, out, errOut io.Writer, root str
 		fmt.Fprintln(errOut, "usage: bcgos owner refine <submit|apply|revert>")
 		return ExitUsage
 	}
+}
+
+func runAtlas(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 || (args[0] != "init" && args[0] != "status") {
+		fmt.Fprintln(errOut, "usage: bcgos atlas <init|status> [workspace-path]")
+		return ExitUsage
+	}
+	path, code := oneOptionalPath("atlas "+args[0], args[1:], errOut)
+	if code != ExitOK {
+		return code
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if inspection.State == "uninitialized" || inspection.State == "invalid" || inspection.State == "incomplete" {
+		fmt.Fprintln(errOut, "workspace must be initialized and readable before atlas bootstrap; run bcgos init <workspace-path>")
+		return ExitUsage
+	}
+	options := atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}
+	if args[0] == "init" {
+		status, err := atlas.Initialize(options)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status, errOut)
+	}
+	return writeJSON(out, atlas.Inspect(options), errOut)
 }
 
 func resolveProfile(dataRoot, requested string, explicit bool) (profile.State, error) {

@@ -61,6 +61,7 @@ Implementado agora:
 - contrato local-first de ingestao: Docling como extrator padrao por meio de runtime pack gerenciado, sem chave de API para o usuario padrao.
 - perfil de interacao global (`standard`, `advanced` ou `power`) que regula linguagem e sugestoes tecnicas sem alterar permissoes ou dados.
 - indice de skills gerado, humano-legivel e machine-readable para descoberta sem injetar todos os procedimentos na sessao.
+- bootstrap de atlas humano privado para owner e workspace, sem misturar escopos, criar tasks ou alegar wiki compilada.
 
 Ainda nao implementado:
 
@@ -128,6 +129,7 @@ Leia primeiro:
 - [Spec do ciclo de update e perfil OKF](specs/008-wiki-update-okf.md)
 - [Spec de scheduler e catch-up por presenca](specs/009-scheduler-catch-up.md)
 - [Spec de runtime local de ingestao](specs/010-local-ingestion-runtime.md)
+- [Spec de bootstrap do atlas humano](specs/014-human-atlas-bootstrap.md)
 
 ## Confidencialidade
 
