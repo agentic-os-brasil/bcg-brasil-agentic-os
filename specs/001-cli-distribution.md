@@ -12,6 +12,7 @@ The pilot user installs `bcgos`, initializes any approved work folder, validates
 bcgos init [path]
 bcgos doctor
 bcgos status
+bcgos skills index
 bcgos update
 bcgos version
 ```
@@ -40,6 +41,10 @@ declared capability availability. `bcgos doctor [path]` returns actionable
 checks for workspace integrity, local-data separation and Claude Code/Codex
 presence. A missing runtime is reported, not silently installed; unavailable
 bundles and updates are declared rather than emulated.
+
+`bcgos skills index` returns the compact managed skills catalog used for
+capability discovery. It contains navigation pointers only; an agent reads a
+canonical skill on demand rather than loading all procedures into a session.
 
 ## Local installation trial
 

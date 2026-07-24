@@ -16,6 +16,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Adopt a Karpathy-inspired compiled wiki for governed content and memory navigation.
 - [x] Define Docling as the local-first ingestion substrate and progressive user profiles.
 - [x] Define and implement a canonical user-local interaction profile across product skills.
+- [x] Define and compile a managed skills index for bounded session navigation.
 
 ## Track A - Contributor onboarding
 
@@ -151,6 +152,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Implement `bcgos ingest` and the Docling-first, deterministic-fallback execution contract.
 - [ ] Define the minimal bundle manifest, version and compatibility range.
 - [ ] Implement runtime-neutral contracts and thin Claude/Codex adapters.
+- [x] Implement a deterministic managed skills index and `bcgos skills index` inspection surface.
 - [ ] Add safe context injection, workspace boundaries and capability detection.
 - [ ] Package only allowlisted product content; exclude all development harness paths.
 - [ ] Validate install, init, update and rollback without client content.

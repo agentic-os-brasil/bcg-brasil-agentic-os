@@ -14,6 +14,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
 // FindRoot walks upward until it finds go.mod.
@@ -46,6 +47,9 @@ func Validate(root string, full bool, out io.Writer) error {
 		}},
 		{"product skills", func() error {
 			return skillmeta.ValidateProductDir(filepath.Join(root, "bundles", "base", "skills"))
+		}},
+		{"skills index", func() error {
+			return skillsindex.Validate(filepath.Join(root, "bundles", "base", "skills"))
 		}},
 		{"Claude skill projections", func() error {
 			return skillmeta.ValidateClaudeProjections(

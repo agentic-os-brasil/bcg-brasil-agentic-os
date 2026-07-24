@@ -10,6 +10,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/gitguard"
 	devharness "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/harness"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
 func main() {
@@ -36,10 +37,21 @@ func main() {
 		guardCommand(root, os.Args[2:])
 	case "claude":
 		claudeCommand(root, os.Args[2:])
+	case "skills-index":
+		skillsIndexCommand(root, os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
 	}
+}
+
+func skillsIndexCommand(root string, args []string) {
+	if len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness skills-index")
+		os.Exit(2)
+	}
+	fatalIf(skillsindex.Write(filepath.Join(root, "bundles", "base", "skills")))
+	fmt.Println("skills index regenerated")
 }
 
 func guardCommand(root string, args []string) {
@@ -110,7 +122,7 @@ func decisionCommand(root string, args []string) {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness <validate|decision|doctor|setup|recover|guard|claude> [options]")
+	fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness <validate|decision|doctor|setup|recover|guard|claude|skills-index> [options]")
 }
 
 func fatalIf(err error) {
