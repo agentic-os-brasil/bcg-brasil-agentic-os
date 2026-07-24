@@ -12,7 +12,7 @@ The canonical memory pipeline has three generated operating layers plus a curate
 
 | Layer | Purpose | Input | Default shape |
 |---|---|---|---|
-| L1 | Recent daily continuity | Sanitized session and work signals | Append-only daily journal plus dense daily digest |
+| L1 | Recent daily continuity | Sanitized Claude/Codex conversation signals plus selected sanitized human daily-log signals | Append-only daily journal plus dense daily digest |
 | L2 | Cross-day continuity | Recent L1 digests | Weekly rollup that collapses repeated threads |
 | L3 | Medium-term continuity | Recent L2 rollups | Rolling thematic synthesis of open, changing or structurally important threads |
 | Lifetime | Stable recall and routing | Repeated, durable evidence promoted from L3 | Compact index with drill-down pointers to owned memory files |
@@ -25,6 +25,22 @@ Dreaming has two depths over the same deterministic engine:
 
 - **Daily light dreaming:** captures and compacts recent allowed signals into L1. It cannot write L2, L3 or lifetime memory.
 - **Weekly deep dreaming:** consumes the week's L1 evidence, refreshes L2 and L3, and consolidates eligible durable evidence into lifetime memory in one staged transaction.
+
+### L1 source composition
+
+The target L1 model combines two complementary local evidence streams for the
+same authorized workspace: (1) session signals captured by the Claude or Codex
+adapter, and (2) selected signals from the human daily log. Neither raw
+conversation transcript nor an entire daily Markdown page is a valid capture
+by itself. Before the deterministic memory engine may accept a daily-log
+signal, the capture contract must be extended to preserve a source kind,
+provenance and a verifiable sanitization attestation from the source adapter.
+
+That extension is not implemented yet. The current capture core has only its
+existing `Kind` and `Sanitized` fields, and it must not treat a self-declared
+CLI flag as the required evidence. Until the extended contract and its adapter
+tests exist, daily logs remain human-readable sources only and cannot enter
+L1. L1 remains a bounded continuity product, never a copy of either source.
 
 Manual invocation, a lifecycle hook, a scheduler and presence-based catch-up may all trigger these cycles. The trigger does not own memory semantics. A missed weekly run remains pending until the same idempotent deep cycle succeeds.
 

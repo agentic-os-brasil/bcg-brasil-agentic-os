@@ -325,3 +325,25 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Direct CLI submission is reviewable but cannot auto-apply merely by naming an automatic facet. Future adapters receive narrowly scoped capabilities through an approved private credential surface. Interrupted metadata writes remain diagnosable and every successful change has a prior audit journal. Reverting an older change requires an explicit new resolution if the facet has evolved.
 - Refs: specs/013-owner-context.md; internal/ownerctx/refinement.go; internal/ownerctx/ownerctx_test.go
 - Supersedes: REFI
+
+## ATLS - Adopt a scoped human atlas alongside canonical memory
+
+- Date: 2026-07-24
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The Agentic OS needs professional knowledge that people can navigate and correct directly, while its canonical memory must remain compact, derived and safe for budgeted continuity. A contributor proposal supplied a useful entity-oriented taxonomy, but a single atlas or workspace would violate the existing boundaries among managed content, owner-private context and client/workspace data.
+- Decision: Adopt a human-readable, Markdown-first atlas as the authoritative navigation and correction surface, physically separated into managed, owner-private and workspace-private roots. Canonical memory L1/L2/L3/lifetime remains derived from approved sanitized signals and points back to authoritative atlas sources; it never becomes the record of a client, project or person. Map owner profile material to `owner/self/`; keep tasks as governed pointers until a task-source contract exists; let daily human logs enter memory only through approved sanitization; and treat human folder indexes as orientation pages while the wiki/OKF layer remains the derived machine navigation authority.
+- Consequences: The implementation can reuse entity-oriented segments such as clients, projects, concepts, learnings, daily, people and development without collapsing privacy scopes or duplicating sources of truth. The Owner Context, memory, wiki and future Session Packet have one compatible routing model. Taxonomy templates, lifecycle writers and the private-atlas bootstrap remain implementation follow-up work; no client, person or assessment data belongs in the managed bundle or repository.
+- Refs: specs/006-memory-persistence.md; specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/013-owner-context.md; ROADMAP.md
+- Supersedes: none
+
+## SIGN - Define the future composition of L1 from conversation and daily-log signals
+
+- Date: 2026-07-24
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A human daily log preserves deliberate operational context that a conversation transcript may miss, while Claude/Codex session logs capture decisions and collaboration signals that might never be written into a daily page. Treating either source alone as L1 would create a partial continuity layer; copying either raw source would violate the memory boundary.
+- Decision: The future L1 model will combine two workspace-scoped inputs: selected sanitized signals from human daily logs and selected sanitized signals from Claude/Codex conversation adapters. Before a daily-log signal may enter the memory engine, the capture contract must be extended with source kind, provenance and verifiable sanitization attestation; a self-declared CLI `--sanitized` flag is insufficient. L1 remains bounded, append-only and derived; it is not a mirror of a daily page or a session transcript.
+- Consequences: The human atlas and runtime adapters can contribute to continuity without becoming memory themselves only after that contract extension and its adapter tests exist. Until then, daily logs remain human-readable sources and cannot be ingested into L1. The existing core remains provider-neutral; capture-contract extension, adapter implementation and exact selection/retention policy remain follow-up work.
+- Refs: specs/006-memory-persistence.md; specs/014-human-atlas-bootstrap.md; internal/memory; bundles/base/skills/dream-memory/SKILL.md
+- Supersedes: none
