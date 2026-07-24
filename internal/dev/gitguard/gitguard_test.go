@@ -45,6 +45,7 @@ func TestScanStagedFindsSecretInFilenameWithSpaces(t *testing.T) {
 
 func runGit(t *testing.T, root string, args ...string) {
 	t.Helper()
+	clearGitHookEnvironment(t)
 	command := exec.Command("git", args...)
 	command.Dir = root
 	for _, variable := range os.Environ() {
@@ -55,6 +56,23 @@ func runGit(t *testing.T, root string, args ...string) {
 	}
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, output)
+	}
+}
+
+func clearGitHookEnvironment(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE"} {
+		value, exists := os.LookupEnv(name)
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if exists {
+				_ = os.Setenv(name, value)
+				return
+			}
+			_ = os.Unsetenv(name)
+		})
 	}
 }
 
