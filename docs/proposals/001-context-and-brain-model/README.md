@@ -1,6 +1,6 @@
 # Proposal 001 — Context and Brain Model
 
-**Status:** accepted as an architectural direction; implementation is incremental.
+**Status:** the central idea is embedded in the Agentic OS architecture; implementation is incremental.
 
 **Original contribution:** Marcelo Petrof Sanches.
 
@@ -11,29 +11,29 @@
 The Agentic OS needs two complementary information surfaces, with different jobs and different cost profiles:
 
 ```text
-Canonical memory (for the agent)
-L1 / L2 / L3 / lifetime
-compact · versioned · provenance-aware · injected under a context budget
+Compact continuity for the agent
+small, traceable summaries of recent and durable work
+selected at session start, within a limited context budget
 
 Human-readable work corpus (for people)
 Markdown pages · timelines · project maps · decisions · links
 rich · navigable · potentially extensive · never injected in full
 ```
 
-This distinction is the contribution accepted from the proposal: a useful Second Brain cannot be only an opaque runtime memory, and a rich human knowledge base should not be treated as an unlimited prompt. The corpus is a source surface. The scoped Atlas/Wiki is a separate, derived navigation view over eligible sources; it is not another editable authority.
+This distinction embeds the core contribution from the proposal: a useful Second Brain cannot be only an opaque runtime memory, and a rich human knowledge base should not be treated as an unlimited prompt. The corpus is a source surface. The scoped Atlas/Wiki is a separate, derived navigation view over eligible sources; it is not another editable authority.
 
 ## What each layer does
 
-### Canonical memory
+### Compact continuity for the agent
 
-Canonical memory is a runtime artifact. Dreaming consolidates selected evidence through L1, L2, L3 and lifetime rollups. It is compact, traceable to provenance, and selected at session start according to the task and a context budget.
+The agent needs a small amount of reliable continuity when a new session begins. It therefore keeps compact, traceable summaries of what happened recently and of what remains important over time. A periodic consolidation routine reduces many selected signals into successively more durable summaries, so the agent does not need to read every file or every conversation again.
 
-L1 is **not** a copy of a day or a transcript. Its intended source composition is selected, sanitized signals from both:
+The first of these summaries is **not** a copy of a day or a transcript. It is made from selected, sanitized signals from both:
 
 - the human daily log; and
 - Claude/Codex conversation records.
 
-Each retained signal needs source type and provenance. Raw sensitive content stays at its original source unless the owner deliberately promotes it.
+Each retained signal records where it came from. Raw sensitive content stays at its original source unless the owner deliberately promotes it.
 
 ### Human-readable work corpus
 
@@ -71,13 +71,13 @@ brain/
 └── development/
 ```
 
-Each section has a human index (a mother file / map of content) and simple templates. These indexes optimize orientation for people. The scoped Atlas/Wiki and its OKF index remain derived navigation layers; they are not competing sources of truth.
+Each section has a human index (a mother file / map of content) and simple templates. These indexes optimize orientation for people. The scoped Atlas/Wiki and its derived index remain navigation layers; they are not competing sources of truth.
 
 Tasks are intentionally absent from this taxonomy. The task system remains authoritative, while the Atlas may contain explicit pointers from a client or project page to its relevant task view.
 
 Neither the corpus nor the derived Atlas/Wiki replaces an authoritative task system, a project or decision record, or the canonical-memory contract.
 
-Managed navigation can be implemented under the accepted navigation specifications. Owner-private and workspace-private corpus and Atlas/Wiki surfaces remain an architectural direction until enrollment, approved local storage, authorization and deletion-propagation contracts are implemented and tested.
+Managed navigation can be implemented under the current navigation specifications. Owner-private and workspace-private corpus and Atlas/Wiki surfaces remain an architectural direction until enrollment, approved local storage, authorization and deletion-propagation contracts are implemented and tested.
 
 ## Working principles
 
@@ -100,4 +100,4 @@ Those decisions are made through the normal Agentic OS development harness as th
 
 ## Giveback to the original proposal
 
-The proposal's most important idea is preserved: people need a human-readable work corpus they can read and trust, in parallel with the memory system that makes an agent useful. The reconciliation adds the boundaries necessary for a BCG-wide product: scope, privacy, provenance, controlled L1 composition, owner self-context, and a clear separation between source corpus and derived Atlas/Wiki navigation.
+The proposal's most important idea is now embedded in the architecture: people need a human-readable work corpus they can read and trust, in parallel with the compact continuity that makes an agent useful. The reconciliation adds the boundaries necessary for a BCG-wide product: scope, privacy, traceability of source, owner self-context, and a clear separation between source corpus and derived Atlas/Wiki navigation.
