@@ -281,3 +281,47 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: `bcgos skills index` may expose the same catalog for inspection. Development validation rejects stale generated artifacts, and a dedicated generator refreshes them when product skills change. Future Session Start consumes a bounded pointer to this catalog before reading any individual skill.
 - Refs: specs/012-skills-index.md; bundles/base/skills/catalog.json; bundles/base/skills/INDEX.md; internal/skillsindex
 - Supersedes: none
+
+## OWNR - Keep owner context local, human-readable and pointer-based
+
+- Date: 2026-07-24
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Session Start needs a durable SELF and operating state, but treating either as memory would make explicit self-definition hard to inspect and correct.
+- Decision: Store owner context in user-local Markdown surfaces with a small machine-readable registry of pointers. SELF and operating state are human-authored, never distributed, and runtime consumers receive pointers and availability diagnostics before reading content under an explicit budget.
+- Consequences: `bcgos owner init|status` owns the minimal local surface. Owner context remains separate from workspace content, client data, profile preference, skills index and memory rollups. Tasks are a future governed pointer rather than a local task taxonomy invented by initialization.
+- Refs: specs/013-owner-context.md; internal/ownerctx
+- Supersedes: none
+
+## SELF - Make the professional self facet-based, consent-aware and auditable
+
+- Date: 2026-07-24
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A monolithic SELF cannot distinguish collaboration preferences from external voice, durable work rules or sensitive psychological material. The Agentic OS needs a useful cold start and continuous refinement without opaque inference or broad injection of private data.
+- Decision: Represent owner context as local professional facets with declared sensitivity, permitted readers and refinement policy. Cold start asks only non-sensitive facets and always shows answers before a write. Psychological-profile is optional, local and restricted to explicitly authorized professional purposes such as Walter calibration. Voice, communication style and preferences may later refine automatically only with evidence, a visible change record and reversal; decision rules require a proposal and sensitive facets require confirmation. Importing assessment reports remains a separate consented local-adapter capability.
+- Consequences: Session composition can request narrowly scoped owner pointers rather than a full SELF. The current CLI can initialize, inspect and expose the interview contract without pretending to ingest reports or run automated refinement. Future adapters must honor declared reader and refinement policies, record provenance and fail closed when unavailable.
+- Refs: specs/013-owner-context.md; internal/ownerctx; internal/cli/cli.go; docs/OPEN-QUESTIONS.md
+- Supersedes: none
+
+## REFI - Enforce self refinement through a local proposal and audit core
+
+- Date: 2026-07-24
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Declaring a self-refinement policy is insufficient if a future hook or model can write directly to owner files. The system needs automatic learning for eligible facets without opaque edits, and guarded facets must remain owner-controlled.
+- Decision: Route every automated or adapter-produced refinement through a local proposal core containing facet, evidence summary and proposed body. The core applies only `automatic_with_audit` facets automatically, writes a protected before-version and audit receipt, and requires explicit confirmation for all other policies. Every applied change is explicitly reversible. Observation capture and model synthesis are separate unprivileged producers; they cannot edit self files directly.
+- Consequences: Voice, communication style and preferences can learn automatically as soon as an approved producer exists. Decision rules, boundaries and psychological profile stay protected even after hooks arrive. CLI users and runtime adapters share one observable contract, while sensitive proposal bodies remain in local protected storage and receipts omit them.
+- Refs: specs/013-owner-context.md; internal/ownerctx/refinement.go; internal/ownerctx/ownerctx_test.go; internal/cli/cli.go
+- Supersedes: none
+
+## AUTC - Require an authorized producer and conflict-safe reversal for automatic self changes
+
+- Date: 2026-07-24
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A policy label alone cannot prove that a proposal came from an approved runtime adapter, and a simple restoration can erase an intervening self update. Both failures would make automatic learning opaque despite an audit file.
+- Decision: An automatic refinement requires an owner-authorized producer ID plus a local capability whose hash is stored in the owner registry. A proposal without that capability remains proposed until the owner confirms it. Before applying a change, persist a protected before-version and a prepared audit journal; only then write the facet. Reversal must compare the current facet hash to the original after-hash, journal a reversion event before writing, and fail on conflict rather than overwrite newer content.
+- Consequences: Direct CLI submission is reviewable but cannot auto-apply merely by naming an automatic facet. Future adapters receive narrowly scoped capabilities through an approved private credential surface. Interrupted metadata writes remain diagnosable and every successful change has a prior audit journal. Reverting an older change requires an explicit new resolution if the facet has evolved.
+- Refs: specs/013-owner-context.md; internal/ownerctx/refinement.go; internal/ownerctx/ownerctx_test.go
+- Supersedes: REFI

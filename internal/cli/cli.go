@@ -18,6 +18,7 @@ import (
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -32,18 +33,20 @@ const (
 
 var Version = "0.0.0-dev"
 
+const maximumOwnerFacetBytes = 1 << 20
+
 func Run(args []string, out, errOut io.Writer) int {
 	return RunWithInput(args, strings.NewReader(""), out, errOut)
 }
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|skills|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|skills|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|skills|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|skills|memory>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -56,6 +59,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return ExitOK
 	case "profile":
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
+	case "owner":
+		return runOwnerWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "skills":
 		return runSkills(args[1:], out, errOut)
 	case "memory":
@@ -264,6 +269,123 @@ func runSkills(args []string, out, errOut io.Writer) int {
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, catalog, errOut)
+}
+
+func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	return runOwnerWithInput(args, strings.NewReader(""), out, errOut, dataRoot)
+}
+
+func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine>")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "init":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner init")
+			return ExitUsage
+		}
+		status, err := ownerctx.Initialize(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status, errOut)
+	case "interview":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner interview")
+			return ExitUsage
+		}
+		return writeJSON(out, ownerctx.ColdStartInterview(), errOut)
+	case "status":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner status")
+			return ExitUsage
+		}
+		status, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status, errOut)
+	case "refine":
+		return runOwnerRefine(args[1:], in, out, errOut, root)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine>")
+		return ExitUsage
+	}
+}
+
+func runOwnerRefine(args []string, in io.Reader, out, errOut io.Writer, root string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos owner refine <submit|apply|revert>")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "submit":
+		flags := newFlagSet("owner refine submit", errOut)
+		facet := flags.String("facet", "", "owner facet to refine")
+		evidence := flags.String("evidence", "", "short provenance summary")
+		stdin := flags.Bool("stdin", false, "read proposed facet body from standard input")
+		if err := flags.Parse(args[1:]); err != nil {
+			return ExitUsage
+		}
+		if flags.NArg() != 0 || !*stdin || *facet == "" || *evidence == "" {
+			fmt.Fprintln(errOut, "usage: bcgos owner refine submit --facet <facet> --evidence <summary> --stdin")
+			return ExitUsage
+		}
+		body, err := io.ReadAll(io.LimitReader(in, maximumOwnerFacetBytes+1))
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if len(body) > maximumOwnerFacetBytes {
+			fmt.Fprintln(errOut, "proposed owner facet body exceeds 1 MiB")
+			return ExitUsage
+		}
+		receipt, err := ownerctx.SubmitRefinement(root, ownerctx.RefinementInput{Facet: *facet, Evidence: *evidence, ProposedBody: string(body)})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	case "apply":
+		flags := newFlagSet("owner refine apply", errOut)
+		confirm := flags.Bool("confirm", false, "confirm applying a guarded refinement")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner refine apply <proposal-id> --confirm")
+			return ExitUsage
+		}
+		receipt, err := ownerctx.ApplyRefinement(root, flags.Arg(0), *confirm)
+		if errors.Is(err, ownerctx.ErrConfirmationRequired) {
+			fmt.Fprintln(errOut, "this owner facet requires explicit confirmation; rerun with --confirm")
+			return ExitUsage
+		}
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	case "revert":
+		flags := newFlagSet("owner refine revert", errOut)
+		confirm := flags.Bool("confirm", false, "confirm reverting an owner refinement")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner refine revert <audit-id> --confirm")
+			return ExitUsage
+		}
+		receipt, err := ownerctx.RevertRefinement(root, flags.Arg(0), *confirm)
+		if errors.Is(err, ownerctx.ErrConfirmationRequired) {
+			fmt.Fprintln(errOut, "reverting an owner refinement requires --confirm")
+			return ExitUsage
+		}
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos owner refine <submit|apply|revert>")
+		return ExitUsage
+	}
 }
 
 func resolveProfile(dataRoot, requested string, explicit bool) (profile.State, error) {
