@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/cli"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/cli"
 )
 
 func main() {

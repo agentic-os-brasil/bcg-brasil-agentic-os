@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/clauderouting"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/clauderouting"
 )
 
 var allowedKeys = map[string]bool{"name": true, "description": true}
@@ -32,6 +32,17 @@ type claudeHookHandler struct {
 
 // ValidateDir checks every development skill package under root.
 func ValidateDir(root string) error {
+	return validateDir(root, false)
+}
+
+// ValidateProductDir checks product skills and requires each operational skill
+// to resolve the canonical interaction profile rather than defining a local
+// persona model.
+func ValidateProductDir(root string) error {
+	return validateDir(root, true)
+}
+
+func validateDir(root string, requireInteractionProfile bool) error {
 	children, err := os.ReadDir(root)
 	if err != nil {
 		return fmt.Errorf("read development skills directory: %w", err)
@@ -43,7 +54,7 @@ func ValidateDir(root string) error {
 			continue
 		}
 		count++
-		if err := validateSkill(filepath.Join(root, child.Name()), child.Name()); err != nil {
+		if err := validateSkill(filepath.Join(root, child.Name()), child.Name(), requireInteractionProfile); err != nil {
 			problems = append(problems, err)
 		}
 	}
@@ -263,7 +274,7 @@ func skillNames(root string) (map[string]bool, error) {
 	return names, nil
 }
 
-func validateSkill(skillDir, expectedName string) error {
+func validateSkill(skillDir, expectedName string, requireInteractionProfile bool) error {
 	file, err := os.Open(filepath.Join(skillDir, "SKILL.md"))
 	if err != nil {
 		return fmt.Errorf("skill %s: open SKILL.md: %w", expectedName, err)
@@ -307,6 +318,15 @@ func validateSkill(skillDir, expectedName string) error {
 	}
 	if _, err := os.Stat(filepath.Join(skillDir, "agents", "openai.yaml")); err != nil {
 		return fmt.Errorf("skill %s: missing agents/openai.yaml", expectedName)
+	}
+	if requireInteractionProfile && expectedName != "interaction-profile" {
+		content, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
+		if err != nil {
+			return fmt.Errorf("skill %s: reread SKILL.md: %w", expectedName, err)
+		}
+		if !strings.Contains(string(content), "interaction-profile") {
+			return fmt.Errorf("skill %s must reference the canonical interaction-profile skill", expectedName)
+		}
 	}
 	return nil
 }

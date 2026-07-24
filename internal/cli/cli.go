@@ -6,12 +6,22 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
-	basememory "github.com/DScardini91/bcg-brasil-agentic-os/bundles/base/memory"
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/memory"
+	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
+	baseprofile "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/profile"
+	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
+	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 const (
@@ -23,28 +33,421 @@ const (
 
 var Version = "0.0.0-dev"
 
+const maximumOwnerFacetBytes = 1 << 20
+
 func Run(args []string, out, errOut io.Writer) int {
 	return RunWithInput(args, strings.NewReader(""), out, errOut)
 }
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <version|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|skills|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <version|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|skills|memory>")
 		return ExitOK
+	case "init":
+		return runInit(args[1:], out, errOut, defaultDataRoot)
+	case "doctor":
+		return runDoctor(args[1:], out, errOut, defaultDataRoot, commandAvailable)
+	case "status":
+		return runProductStatus(args[1:], out, errOut, defaultDataRoot)
 	case "version":
 		fmt.Fprintf(out, "bcgos %s\n", Version)
 		return ExitOK
+	case "profile":
+		return runProfile(args[1:], out, errOut, defaultDataRoot)
+	case "owner":
+		return runOwnerWithInput(args[1:], in, out, errOut, defaultDataRoot)
+	case "skills":
+		return runSkills(args[1:], out, errOut)
 	case "memory":
 		return runMemory(args[1:], in, out, errOut)
 	default:
 		fmt.Fprintf(errOut, "unknown command %q\n", args[0])
 		return ExitUsage
 	}
+}
+
+func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	flags := newFlagSet("init", errOut)
+	allowSynchronized := flags.Bool("allow-synced-workspace", false, "confirm initialization inside a synchronized folder")
+	requestedProfile := flags.String("profile", "", "interaction profile: standard, advanced or power")
+	if err := flags.Parse(args); err != nil {
+		return ExitUsage
+	}
+	if flags.NArg() > 1 {
+		fmt.Fprintln(errOut, "usage: bcgos init [--allow-synced-workspace] [--profile standard|advanced|power] [path]")
+		return ExitUsage
+	}
+	path := "."
+	if flags.NArg() == 1 {
+		path = flags.Arg(0)
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	result, err := workspace.Initialize(workspace.Options{WorkspacePath: path, DataRoot: root, AllowSynchronizedRoot: *allowSynchronized})
+	if errors.Is(err, workspace.ErrSynchronizedWorkspace) {
+		fmt.Fprintln(errOut, "workspace appears to be inside OneDrive or another synchronized root; choose a local folder such as ~/Developer, or rerun with --allow-synced-workspace after explicit confirmation")
+		return ExitUsage
+	}
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	state, err := initializeProfile(root, *requestedProfile)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, struct {
+		workspace.Result
+		Profile profile.State `json:"profile"`
+	}{Result: result, Profile: state}, errOut)
+}
+
+func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	path, code := oneOptionalPath("status", args, errOut)
+	if code != ExitOK {
+		return code
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	state, err := resolveProfile(root, "", false)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, struct {
+		Version      string               `json:"version"`
+		Workspace    workspace.Inspection `json:"workspace"`
+		Capabilities map[string]string    `json:"capabilities"`
+		Profile      profile.State        `json:"profile"`
+	}{
+		Version:   Version,
+		Workspace: inspection,
+		Profile:   state,
+		Capabilities: map[string]string{
+			"bundles":             "unavailable",
+			"interaction_profile": "supported",
+			"memory_dreaming":     "unavailable",
+			"updates":             "unavailable",
+		},
+	}, errOut)
+}
+
+type doctorCheck struct {
+	ID      string `json:"id"`
+	State   string `json:"state"`
+	Message string `json:"message"`
+}
+
+func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, error), available func(string) bool) int {
+	path, code := oneOptionalPath("doctor", args, errOut)
+	if code != ExitOK {
+		return code
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	profileState, err := resolveProfile(root, "", false)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	manifest, err := baseruntime.Manifest()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	runtimeReports := make([]runtimecap.Report, 0, 2)
+	for _, runtimeID := range []string{"claude", "codex"} {
+		report, err := manifest.Report(runtimeID, available(runtimeID))
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		runtimeReports = append(runtimeReports, report)
+	}
+	state := "ready"
+	nextActions := []string{}
+	workspaceCheck := doctorCheck{ID: "workspace", State: "pass", Message: "workspace metadata and readable brain are ready"}
+	switch inspection.State {
+	case "uninitialized":
+		state = "action_required"
+		workspaceCheck = doctorCheck{ID: "workspace", State: "action_required", Message: "workspace is not initialized"}
+		nextActions = append(nextActions, "Run bcgos init <local-workspace-path>.")
+	case "invalid", "incomplete":
+		state = "action_required"
+		workspaceCheck = doctorCheck{ID: "workspace", State: "action_required", Message: "workspace metadata or brain surface needs repair"}
+		nextActions = append(nextActions, "Review the workspace path and rerun bcgos init only after confirming it is safe.")
+	case "warning":
+		state = "warning"
+		workspaceCheck = doctorCheck{ID: "workspace", State: "warning", Message: "workspace appears to be synchronized; OneDrive-style sync can cause I/O timeouts"}
+		nextActions = append(nextActions, "Move future work to a local folder outside synchronized storage when practical.")
+	}
+	checks := []doctorCheck{
+		workspaceCheck,
+		{ID: "local_data", State: "pass", Message: "private BCGOS data is separated from the workspace"},
+		interactionProfileCheck(profileState),
+		runtimeCheck("claude_code", "claude", available),
+		runtimeCheck("codex", "codex", available),
+		{ID: "bundles", State: "unavailable", Message: "bundle installation is not implemented in this build"},
+		{ID: "updates", State: "unavailable", Message: "update and rollback are not implemented in this build"},
+	}
+	if !available("claude") && !available("codex") {
+		if state == "ready" {
+			state = "action_required"
+		}
+		nextActions = append(nextActions, "Install or open Claude Code or Codex before starting an assisted session.")
+	}
+	if len(nextActions) == 0 {
+		nextActions = append(nextActions, "Open Claude Code or Codex in this workspace to begin guided onboarding.")
+	}
+	return writeJSON(out, struct {
+		State               string               `json:"state"`
+		Workspace           workspace.Inspection `json:"workspace"`
+		Checks              []doctorCheck        `json:"checks"`
+		RuntimeCapabilities []runtimecap.Report  `json:"runtime_capabilities"`
+		Profile             profile.State        `json:"profile"`
+		NextActions         []string             `json:"next_actions"`
+	}{State: state, Workspace: inspection, Checks: checks, RuntimeCapabilities: runtimeReports, Profile: profileState, NextActions: nextActions}, errOut)
+}
+
+func runProfile(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+		fmt.Fprintln(out, "usage: bcgos profile <show|set standard|advanced|power>")
+		return ExitOK
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "show":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos profile show")
+			return ExitUsage
+		}
+		state, err := resolveProfile(root, "", false)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, state, errOut)
+	case "set":
+		if len(args) != 2 {
+			fmt.Fprintln(errOut, "usage: bcgos profile set <standard|advanced|power>")
+			return ExitUsage
+		}
+		state, err := resolveProfile(root, args[1], true)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, state, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos profile <show|set standard|advanced|power>")
+		return ExitUsage
+	}
+}
+
+func runSkills(args []string, out, errOut io.Writer) int {
+	if len(args) != 1 || args[0] != "index" {
+		fmt.Fprintln(errOut, "usage: bcgos skills index")
+		return ExitUsage
+	}
+	catalog, err := baseskills.Catalog()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, catalog, errOut)
+}
+
+func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	return runOwnerWithInput(args, strings.NewReader(""), out, errOut, dataRoot)
+}
+
+func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine>")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "init":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner init")
+			return ExitUsage
+		}
+		status, err := ownerctx.Initialize(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status, errOut)
+	case "interview":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner interview")
+			return ExitUsage
+		}
+		return writeJSON(out, ownerctx.ColdStartInterview(), errOut)
+	case "status":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner status")
+			return ExitUsage
+		}
+		status, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status, errOut)
+	case "refine":
+		return runOwnerRefine(args[1:], in, out, errOut, root)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine>")
+		return ExitUsage
+	}
+}
+
+func runOwnerRefine(args []string, in io.Reader, out, errOut io.Writer, root string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos owner refine <submit|apply|revert>")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "submit":
+		flags := newFlagSet("owner refine submit", errOut)
+		facet := flags.String("facet", "", "owner facet to refine")
+		evidence := flags.String("evidence", "", "short provenance summary")
+		stdin := flags.Bool("stdin", false, "read proposed facet body from standard input")
+		if err := flags.Parse(args[1:]); err != nil {
+			return ExitUsage
+		}
+		if flags.NArg() != 0 || !*stdin || *facet == "" || *evidence == "" {
+			fmt.Fprintln(errOut, "usage: bcgos owner refine submit --facet <facet> --evidence <summary> --stdin")
+			return ExitUsage
+		}
+		body, err := io.ReadAll(io.LimitReader(in, maximumOwnerFacetBytes+1))
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if len(body) > maximumOwnerFacetBytes {
+			fmt.Fprintln(errOut, "proposed owner facet body exceeds 1 MiB")
+			return ExitUsage
+		}
+		receipt, err := ownerctx.SubmitRefinement(root, ownerctx.RefinementInput{Facet: *facet, Evidence: *evidence, ProposedBody: string(body)})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	case "apply":
+		flags := newFlagSet("owner refine apply", errOut)
+		confirm := flags.Bool("confirm", false, "confirm applying a guarded refinement")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner refine apply <proposal-id> --confirm")
+			return ExitUsage
+		}
+		receipt, err := ownerctx.ApplyRefinement(root, flags.Arg(0), *confirm)
+		if errors.Is(err, ownerctx.ErrConfirmationRequired) {
+			fmt.Fprintln(errOut, "this owner facet requires explicit confirmation; rerun with --confirm")
+			return ExitUsage
+		}
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	case "revert":
+		flags := newFlagSet("owner refine revert", errOut)
+		confirm := flags.Bool("confirm", false, "confirm reverting an owner refinement")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner refine revert <audit-id> --confirm")
+			return ExitUsage
+		}
+		receipt, err := ownerctx.RevertRefinement(root, flags.Arg(0), *confirm)
+		if errors.Is(err, ownerctx.ErrConfirmationRequired) {
+			fmt.Fprintln(errOut, "reverting an owner refinement requires --confirm")
+			return ExitUsage
+		}
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos owner refine <submit|apply|revert>")
+		return ExitUsage
+	}
+}
+
+func resolveProfile(dataRoot, requested string, explicit bool) (profile.State, error) {
+	policy, err := baseprofile.Policy()
+	if err != nil {
+		return profile.State{}, err
+	}
+	store := profile.Store{Root: dataRoot, Policy: policy}
+	if explicit {
+		return store.Set(requested)
+	}
+	return store.Get()
+}
+
+func initializeProfile(dataRoot, requested string) (profile.State, error) {
+	policy, err := baseprofile.Policy()
+	if err != nil {
+		return profile.State{}, err
+	}
+	store := profile.Store{Root: dataRoot, Policy: policy}
+	if requested != "" {
+		return store.Set(requested)
+	}
+	return store.Ensure()
+}
+
+func oneOptionalPath(command string, args []string, errOut io.Writer) (string, int) {
+	if len(args) > 1 {
+		fmt.Fprintf(errOut, "usage: bcgos %s [path]\n", command)
+		return "", ExitUsage
+	}
+	if len(args) == 1 {
+		return args[0], ExitOK
+	}
+	return ".", ExitOK
+}
+
+func runtimeCheck(id, executable string, available func(string) bool) doctorCheck {
+	if available(executable) {
+		return doctorCheck{ID: id, State: "available", Message: executable + " was found"}
+	}
+	return doctorCheck{ID: id, State: "unavailable", Message: executable + " was not found; this is not a BCGOS installation failure"}
+}
+
+func interactionProfileCheck(state profile.State) doctorCheck {
+	if state.Source == "fallback" {
+		return doctorCheck{ID: "interaction_profile", State: "warning", Message: state.Warning}
+	}
+	return doctorCheck{ID: "interaction_profile", State: "pass", Message: "active profile is " + state.Profile}
+}
+
+func commandAvailable(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+func defaultDataRoot() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return workspace.DefaultDataRoot(runtime.GOOS, home, os.Getenv("LOCALAPPDATA"), os.Getenv("XDG_STATE_HOME"))
 }
 
 func runMemory(args []string, in io.Reader, out, errOut io.Writer) int {

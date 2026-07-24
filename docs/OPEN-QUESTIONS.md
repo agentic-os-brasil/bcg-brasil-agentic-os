@@ -17,6 +17,8 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-008 - Private release authentication:** GitHub CLI token reuse, browser device flow or a BCG-managed distribution identity?
 - **Q-009 - Release trust:** Which signing, SmartScreen, Gatekeeper, checksum and provenance requirements apply?
 - **Q-010 - Update policy:** Automatic checks, user-triggered updates, forced security updates and rollback retention.
+- **Q-038 - Owner assessment handling:** Which professional assessment formats, local extraction rules, retention and consent record are approved before the OS ingests reports such as Big Five, MBTI or Hogan?
+- **Q-039 - Owner refinement:** Which approved signals may propose or automatically refine voice, communication style and preferences; where do provenance, diff history and rollback records live?
 
 ## Before building the first OS bundle
 
@@ -25,6 +27,7 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-013 - Workspace boundary:** What metadata may be placed inside a case/code workspace without creating client-data risk?
 - **Q-014 - Runtime parity:** Which Claude/Codex capabilities are required, emulated, degraded or explicitly unavailable in v0?
 - **Q-015 - Hooks policy:** Which events may block, warn or only observe in a corporate workspace?
+- **Q-037 - Ingestion runtime pack:** What are the maximum install size and first-use time, approved model set, prefetch/offline policy, corporate-network behavior and update/rollback rules for the Docling runtime pack?
 
 ## Before the ten-person pilot
 
@@ -40,6 +43,18 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-022 - Synthesis provider:** Which model/provider may process professional memory, and must the pipeline support offline or local-only operation?
 - **Q-023 - Retention and budgets:** What are the default retention windows, rollup windows and per-layer context budgets for the pilot?
 - **Q-024 - Lifetime eligibility:** Which repeated evidence may the weekly deep dream promote automatically, and how can a user inspect, correct or remove a lifetime memory?
-- **Q-025 - Scheduling:** Should Windows and macOS use periodic scheduling, presence-based catch-up, session lifecycle triggers or a layered combination?
+- **Q-025 - Scheduling policy:** Which local daily/weekly windows, timezone-change behavior, catch-up limits, retry/backoff and unattended-model permissions should the pilot use within the layered native-schedule plus presence-recovery architecture?
 - **Q-026 - User rights:** Which inspect, explain, correct, export and delete guarantees must exist before memory persistence is enabled?
 - **Q-027 - Interrupted runs:** When may `bcgos doctor` clear a leftover dreaming lock, and what evidence or confirmation is required before recovery?
+
+## Before enabling wiki navigation
+
+- **Q-028 - Managed allowlist:** Which product decisions, specs, skills, agents, playbooks and documentation enter the first managed atlas?
+- **Q-029 - Page taxonomy:** Which initial topics, entities and relationships justify first-class wiki pages rather than index records?
+- **Q-030 - Memory exposure:** Which memory layers may produce private summaries, and which are pointer-only for the pilot?
+- **Q-031 - Private compilation:** Which approved provider may compile owner/workspace content, and must local-only or offline operation be supported?
+- **Q-032 - Invalidation SLA:** How quickly must correction, deletion or source-access revocation disappear from pages, backlinks, indexes and caches?
+- **Q-033 - Knowledge commands:** Should the user-facing surface be `bcgos wiki`, `bcgos knowledge` or an agent-only capability in v0?
+- **Q-034 - Rollup facets:** Which temporal, topic, entity and active-thread facets may the private wiki derive from L2, L3 and lifetime for the pilot?
+- **Q-035 - Update freshness:** What freshness target and retry/backoff policy applies to managed changes, memory commits and correction events?
+- **Q-036 - Private erasure:** Which private versions, logs and receipts must be deleted or crypto-erased after user correction, deletion or access revocation?

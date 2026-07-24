@@ -147,3 +147,131 @@ func TestVersionCommand(t *testing.T) {
 		t.Fatalf("version exit = %d, output = %s", code, output.String())
 	}
 }
+
+func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
+	var output bytes.Buffer
+	if code := Run([]string{"skills", "index"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"schema_version": 1`) || !strings.Contains(output.String(), `"dream-memory"`) || strings.Contains(output.String(), "Daily dreaming cannot") {
+		t.Fatalf("skills index exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestProfileCommandsSwitchTheCanonicalUserPreference(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runProfile([]string{"show"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "standard"`) {
+		t.Fatalf("profile show exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runProfile([]string{"set", "advanced"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "advanced"`) || !strings.Contains(output.String(), `"source": "configured"`) {
+		t.Fatalf("profile set exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runProfile([]string{"show"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "advanced"`) {
+		t.Fatalf("profile persisted exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runOwner([]string{"init"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"voice"`) || !strings.Contains(output.String(), `"psychological-profile"`) {
+		t.Fatalf("owner init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwner([]string{"interview"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"cold_start"`) || strings.Contains(output.String(), `"psychological-profile"`) {
+		t.Fatalf("owner interview exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestOwnerRefineAppliesEligibleFacetFromStdinAndRequiresConfirmationToRevert(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runOwner([]string{"init"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("owner init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	code := runOwnerWithInput([]string{"refine", "submit", "--facet", "voice", "--evidence", "owner approved three drafts", "--stdin"}, strings.NewReader("# Voice\n\nClear and decisive.\n"), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "proposed"`) || strings.Contains(output.String(), `"audit_id"`) {
+		t.Fatalf("refine submit exit = %d, output = %s", code, output.String())
+	}
+	var proposal struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &proposal); err != nil || proposal.ID == "" {
+		t.Fatalf("proposal receipt = %s, err = %v", output.String(), err)
+	}
+	output.Reset()
+	code = runOwner([]string{"refine", "apply", "--confirm", proposal.ID}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "applied"`) || !strings.Contains(output.String(), `"audit_id"`) {
+		t.Fatalf("confirmed apply exit = %d, output = %s", code, output.String())
+	}
+	var receipt struct {
+		AuditID string `json:"audit_id"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &receipt); err != nil || receipt.AuditID == "" {
+		t.Fatalf("refine receipt = %s, err = %v", output.String(), err)
+	}
+	output.Reset()
+	code = runOwner([]string{"refine", "revert", receipt.AuditID}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code == ExitOK || !strings.Contains(output.String(), "--confirm") {
+		t.Fatalf("unconfirmed revert exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestInitPersistsTheSelectedInteractionProfile(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runInit([]string{"--profile", "power", filepath.Join(root, "workspace")}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "power"`) {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runProfile([]string{"show"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "power"`) || !strings.Contains(output.String(), `"source": "configured"`) {
+		t.Fatalf("profile after init exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestInitPersistsStandardWhenNoProfileIsSelected(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runInit([]string{filepath.Join(root, "workspace")}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runProfile([]string{"show"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "standard"`) || !strings.Contains(output.String(), `"source": "configured"`) {
+		t.Fatalf("profile after default init exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestProductStatusAndDoctorDescribeReadyWorkspace(t *testing.T) {
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "Developer", "case-a")
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runProductStatus([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) || !strings.Contains(output.String(), `"brain_readable": true`) || !strings.Contains(output.String(), `"profile": "standard"`) {
+		t.Fatalf("status exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	available := func(name string) bool { return name == "claude" }
+	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, available); code != ExitOK || !strings.Contains(output.String(), `"claude_code"`) || !strings.Contains(output.String(), `"runtime_capabilities"`) || !strings.Contains(output.String(), `"context_inject"`) || !strings.Contains(output.String(), `"interaction_profile"`) || !strings.Contains(output.String(), `"codex"`) || !strings.Contains(output.String(), `"unavailable"`) {
+		t.Fatalf("doctor exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestDoctorExplainsUninitializedWorkspace(t *testing.T) {
+	root := t.TempDir()
+	var output bytes.Buffer
+	code := runDoctor([]string{filepath.Join(root, "not-initialized")}, &output, &output, func() (string, error) { return filepath.Join(root, "local", "BCGOS"), nil }, func(string) bool { return false })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "action_required"`) || !strings.Contains(output.String(), "bcgos init") {
+		t.Fatalf("doctor exit = %d, output = %s", code, output.String())
+	}
+}

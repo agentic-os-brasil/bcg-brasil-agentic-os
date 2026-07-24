@@ -7,6 +7,19 @@ description: Run or inspect professional memory consolidation through the BCG Br
 
 Use the installed runtime adapter for the canonical memory engine. Never write, summarize or promote memory files directly from the skill.
 
+## Interaction profile
+
+Resolve `interaction-profile` before presenting a human-facing result. The
+memory operation, policy, budgets and safety behavior never vary by profile;
+only the explanation and optional detail do.
+
+- `standard`: state the result, what changed and one safe next action.
+- `advanced`: add the relevant cycle rationale, diagnostics and drill-down
+  pointers when useful.
+- `power`: add explicit source fingerprints, commit/manifests, layer budgets
+  and operational trade-offs on request or when they materially affect a
+  decision.
+
 ## Choose the cycle
 
 - Use **daily light** for session or day closure. It may capture sanitized signals and update L1 only.

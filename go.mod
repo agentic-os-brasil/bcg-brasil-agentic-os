@@ -1,3 +1,3 @@
-module github.com/DScardini91/bcg-brasil-agentic-os
+module github.com/agentic-os-brasil/bcg-brasil-agentic-os
 
 go 1.26.0

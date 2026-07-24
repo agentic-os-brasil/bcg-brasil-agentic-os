@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "skills": [
+    {
+      "id": "dream-memory",
+      "display_name": "Dream Memory",
+      "trigger": "Consolidate daily and weekly professional memory",
+      "default_prompt": "Use $dream-memory to run or inspect the appropriate memory dreaming cycle safely.",
+      "relative_path": "skills/dream-memory/SKILL.md"
+    },
+    {
+      "id": "ingest-content",
+      "display_name": "Ingest Content",
+      "trigger": "Extract professional documents locally and safely",
+      "default_prompt": "Use $ingest-content to process this professional source through the approved local ingestion route.",
+      "relative_path": "skills/ingest-content/SKILL.md"
+    },
+    {
+      "id": "interaction-profile",
+      "display_name": "Interaction Profile",
+      "trigger": "Apply the user's BCGOS communication and disclosure preference",
+      "default_prompt": "Use $interaction-profile to resolve my active BCGOS profile before responding.",
+      "relative_path": "skills/interaction-profile/SKILL.md"
+    }
+  ]
+}
