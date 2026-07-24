@@ -347,3 +347,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The human atlas and runtime adapters can contribute to continuity without becoming memory themselves only after that contract extension and its adapter tests exist. Until then, daily logs remain human-readable sources and cannot be ingested into L1. The existing core remains provider-neutral; capture-contract extension, adapter implementation and exact selection/retention policy remain follow-up work.
 - Refs: specs/006-memory-persistence.md; specs/014-human-atlas-bootstrap.md; internal/memory; bundles/base/skills/dream-memory/SKILL.md
 - Supersedes: none
+
+## PACK - Establish a bounded Session Context Packet before runtime hooks
+
+- Date: 2026-07-24
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Claude and Codex need the same initial orientation, but direct Session Start injection would risk loading private SELF, client or memory content before native lifecycle adapters can resolve authorization, purpose and context budget consistently.
+- Decision: Define a local, runtime-neutral Session Context Packet that exposes only bounded states and pointers for interaction profile, workspace, session-readable owner facets, operating state, atlas availability and the managed skills catalog. It must explicitly report unavailable memory injection and omitted sources, and may not include source bodies or Walter-only facets. Native adapters remain responsible for authorized reading and actual injection.
+- Consequences: `bcgos session packet` gives future adapters one testable input without claiming a product hook exists. Claude and Codex can implement different mechanics over the same packet and failure states. Memory, tasks, private atlas content and sensitive owner facets stay unavailable or pointer-only until their separate contracts are implemented.
+- Refs: specs/004-runtime-portability.md; specs/011-interaction-profile.md; specs/012-skills-index.md; specs/013-owner-context.md; specs/015-session-context-packet.md; internal/sessionctx
+- Supersedes: none

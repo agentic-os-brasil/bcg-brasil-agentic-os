@@ -20,6 +20,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Define and implement a local, professional owner-self registry with facet policies and a cold-start interview contract.
 - [x] Decide that the future human atlas is scoped across managed, owner-private and workspace-private roots, alongside canonical derived memory.
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
+- [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
 
 ## Track A - Contributor onboarding
 
@@ -52,6 +53,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Add Claude and Codex adapter skeletons against the same canonical contract.
 - [x] Add initial conformance fixtures for equivalent capability identity, semantic events and criticality.
 - [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
+- [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
 - [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.

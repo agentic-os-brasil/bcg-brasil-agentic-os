@@ -22,6 +22,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -42,12 +43,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|atlas|skills|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|atlas|session|skills|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|atlas|skills|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|atlas|session|skills|memory>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -64,6 +65,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runOwnerWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "atlas":
 		return runAtlas(args[1:], out, errOut, defaultDataRoot)
+	case "session":
+		return runSession(args[1:], out, errOut, defaultDataRoot)
 	case "skills":
 		return runSkills(args[1:], out, errOut)
 	case "memory":
@@ -422,6 +425,41 @@ func runAtlas(args []string, out, errOut io.Writer, dataRoot func() (string, err
 		return writeJSON(out, status, errOut)
 	}
 	return writeJSON(out, atlas.Inspect(options), errOut)
+}
+
+func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 || args[0] != "packet" {
+		fmt.Fprintln(errOut, "usage: bcgos session packet [workspace-path]")
+		return ExitUsage
+	}
+	path, code := oneOptionalPath("session packet", args[1:], errOut)
+	if code != ExitOK {
+		return code
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	profileState, err := resolveProfile(root, "", false)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	owner, err := ownerctx.Inspect(root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile: profileState, Workspace: inspection, Owner: owner,
+		Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+	})
+	if err := packet.Validate(); err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, packet, errOut)
 }
 
 func resolveProfile(dataRoot, requested string, explicit bool) (profile.State, error) {
