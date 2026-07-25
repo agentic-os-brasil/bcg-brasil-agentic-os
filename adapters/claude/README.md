@@ -9,6 +9,20 @@ product lifecycle event remains explicitly unavailable. `bcgos session bridge
 for a future adapter to consume; it does not install a hook or inject content.
 Development hooks under `.claude/` are not product adapter wiring.
 
+The managed Maestro, Walter and Darwin definitions live in
+`bundles/base/agents/`. They are not active Claude agents yet. Activation must
+prove no-tool Maestro, one active branch, one child per agent and the
+role-gated depth-two graph before `agent_orchestration` can move from
+`unavailable`.
+
+```mermaid
+flowchart LR
+    Catalog["Implemented<br/>managed agent catalog"] --> Adapter["Pending<br/>Claude-native enforcement"]
+    Adapter --> Fixtures["Pending<br/>conformance fixtures"]
+    Fixtures --> Active["Pending<br/>agent orchestration active"]
+    Catalog -.->|current capability| Unavailable["Unavailable<br/>fails closed"]
+```
+
 Future wiring may map Claude-native mechanisms to `session_start`,
 `pre_action_guard`, `post_action_observe`, `stop_finalize` and
 `context_inject`. It must add conformance fixtures before changing a capability

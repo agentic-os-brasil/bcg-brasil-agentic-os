@@ -424,3 +424,25 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The repository cannot promote itself to pilot-ready. Expansion requires production authorities, both clean-device reports, success by both canary users, working rollback, no severity-1/2 incident or data-boundary breach and support-owner acceptance. The ten-person cohort remains a human go/redesign/stop decision.
 - Refs: AUTH; DIST; specs/022-guided-pilot-release.md; bundles/base/skills/maestro-setup-update/SKILL.md; docs/pilot-release-runbook.md
 - Supersedes: none
+
+## HUBS - Govern Maestro through a lean hub-and-spoke core
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs a canonical user-facing hub and bounded internal governance roles without copying Kowalski's broad tool access or delegation model.
+- Decision: Define Maestro as the only user-facing hub. Maestro has no direct tool access and delegates sequentially with one active spoke and no nested delegation. Walter and Darwin are packet-only internal agents without tools, delegation or direct user speech.
+- Consequences: Runtime adapters must enforce tool denial, one-active-spoke and no-nesting invariants before reporting orchestration as available.
+- Refs: MAES; PORT; WSAG; specs/004-runtime-portability.md; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; bundles/base/agents/catalog.json
+- Supersedes: none
+
+## BRCH - Allow multiple governed chains with role-gated depth
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A single global depth-one rule would prevent legitimate specialist chains while preserving the one-active-branch invariant.
+- Decision: Allow multiple governed chain types under Maestro while keeping one active branch by default. Delegation remains sequential, role-gated and maximum depth two; Walter, Darwin, errands and leaf specialists never delegate.
+- Consequences: Cross-chain exchange uses a minimum sanitized packet mediated by Maestro; parallel branches and deeper delegation require a new decision and conformance evidence.
+- Refs: HUBS; WSAG; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; bundles/base/agents/catalog.json; internal/agentcatalog
+- Supersedes: HUBS
