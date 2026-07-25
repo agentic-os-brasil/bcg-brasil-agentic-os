@@ -23,6 +23,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 )
@@ -706,11 +707,23 @@ func runAtlas(args []string, out, errOut io.Writer, dataRoot func() (string, err
 }
 
 func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
-	if len(args) == 0 || args[0] != "packet" {
-		fmt.Fprintln(errOut, "usage: bcgos session packet [workspace-path]")
+	if len(args) == 0 || (args[0] != "packet" && args[0] != "bridge") {
+		fmt.Fprintln(errOut, "usage: bcgos session <packet|bridge> [workspace-path]")
 		return ExitUsage
 	}
-	path, code := oneOptionalPath("session packet", args[1:], errOut)
+	command := args[0]
+	runtimeName := ""
+	remaining := args[1:]
+	if command == "bridge" {
+		flags := newFlagSet("session bridge", errOut)
+		runtime := flags.String("runtime", "", "target runtime: claude or codex")
+		if err := flags.Parse(remaining); err != nil {
+			return ExitUsage
+		}
+		runtimeName = *runtime
+		remaining = flags.Args()
+	}
+	path, code := oneOptionalPath("session "+command, remaining, errOut)
 	if code != ExitOK {
 		return code
 	}
@@ -736,6 +749,13 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 	})
 	if err := packet.Validate(); err != nil {
 		return reportError(errOut, err)
+	}
+	if command == "bridge" {
+		envelope, err := sessionstart.Build(runtimeName, packet)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, envelope, errOut)
 	}
 	return writeJSON(out, packet, errOut)
 }
