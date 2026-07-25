@@ -9,6 +9,33 @@ import (
 	"testing"
 )
 
+func ownedCommands(t *testing.T, path, runtimeName string) []string {
+	t.Helper()
+	config, err := read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooks, err := hooksMap(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups, err := sessionGroups(hooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var commands []string
+	for _, group := range groups {
+		entry := group.(map[string]any)
+		for _, raw := range entry["hooks"].([]any) {
+			hook := raw.(map[string]any)
+			if command, ok := hook["command"].(string); ok && isOwnedCommand(runtimeName, command) {
+				commands = append(commands, command)
+			}
+		}
+	}
+	return commands
+}
+
 func TestInstallStatusAndUninstallPreserveOtherHooks(t *testing.T) {
 	workspace := t.TempDir()
 	path := filepath.Join(workspace, ".codex", "hooks.json")
@@ -22,8 +49,13 @@ func TestInstallStatusAndUninstallPreserveOtherHooks(t *testing.T) {
 	if err != nil || installed.State != "installed" {
 		t.Fatalf("install = %#v, %v", installed, err)
 	}
+	expected, err := filepath.Abs("/opt/maestro/bcgos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := ownedCommands(t, path, "codex")
 	data, err := os.ReadFile(path)
-	if err != nil || !strings.Contains(string(data), "other") || !strings.Contains(string(data), "/opt/maestro/bcgos") || !strings.Contains(string(data), "--adapter-source maestro") {
+	if err != nil || !strings.Contains(string(data), "other") || len(commands) != 1 || !strings.Contains(commands[0], expected) || !strings.Contains(commands[0], "--adapter-source maestro") {
 		t.Fatalf("config = %s, %v", data, err)
 	}
 	status, err := Inspect("codex", workspace)
@@ -80,11 +112,21 @@ func TestInstallUpdatesOwnedExecutableAndKeepsConfigOutOfGit(t *testing.T) {
 	if _, err := Install("claude", workspace, "/opt/maestro/v2/bcgos"); err != nil {
 		t.Fatal(err)
 	}
-	config, err := os.ReadFile(filepath.Join(workspace, ".claude", "settings.local.json"))
+	configPath := filepath.Join(workspace, ".claude", "settings.local.json")
+	config, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(config), "/opt/maestro/v1/bcgos") || !strings.Contains(string(config), "/opt/maestro/v2/bcgos") || strings.Count(string(config), "--adapter-source maestro") != 1 {
+	v1, err := filepath.Abs("/opt/maestro/v1/bcgos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2, err := filepath.Abs("/opt/maestro/v2/bcgos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := ownedCommands(t, configPath, "claude")
+	if len(commands) != 1 || strings.Contains(commands[0], v1) || !strings.Contains(commands[0], v2) || !strings.Contains(commands[0], "--adapter-source maestro") {
 		t.Fatalf("config = %s", config)
 	}
 	exclude, err := os.ReadFile(filepath.Join(gitInfo, "exclude"))
@@ -113,7 +155,12 @@ func TestInstallMigratesLegacyPathLookupWithoutDuplicatingTheHook(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), `"command": "bcgos hook session-start --runtime codex"`) || !strings.Contains(string(data), "/opt/maestro/bcgos") || strings.Count(string(data), "--adapter-source maestro") != 1 || !strings.Contains(string(data), "startup") || !strings.Contains(string(data), "other") {
+	expected, err := filepath.Abs("/opt/maestro/bcgos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := ownedCommands(t, path, "codex")
+	if strings.Contains(string(data), `"command": "bcgos hook session-start --runtime codex"`) || len(commands) != 1 || !strings.Contains(commands[0], expected) || !strings.Contains(commands[0], "--adapter-source maestro") || !strings.Contains(string(data), "startup") || !strings.Contains(string(data), "other") {
 		t.Fatalf("config = %s", data)
 	}
 }
