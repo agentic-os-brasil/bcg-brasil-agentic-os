@@ -1,4 +1,4 @@
-# Spec 025 - Governed agent scaffolding
+# Spec 027 - Governed agent scaffolding
 
 Status: managed workspace, account, practice and specialist templates, atomic
 local instance scaffolding and CLI implemented. Native Claude and Codex

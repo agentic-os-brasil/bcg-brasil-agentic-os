@@ -142,7 +142,7 @@ managed `bundles/base/agents/` root.
 The canonical catalog contains managed always-present agents. Generic,
 data-free workspace and leaf-specialist templates plus their user-local,
 scope-bound instance manifests are governed by
-`specs/025-agent-scaffolding.md`. A local stub does not alter the managed
+`specs/027-agent-scaffolding.md`. A local stub does not alter the managed
 catalog or imply native runtime activation.
 
 The Session Context Packet exposes only the catalog pointer, hub ID and

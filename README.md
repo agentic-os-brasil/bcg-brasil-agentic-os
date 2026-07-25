@@ -172,7 +172,7 @@ duráveis usam um código de quatro letras no
 - [Core de agentes do Maestro](specs/018-maestro-core-agents.md)
  - [Dispatcher sequencial e work packets](specs/023-sequential-agent-dispatch.md)
  - [Promoção governada para contexto da conta](specs/024-account-context-promotion.md)
- - [Scaffolding governado de agentes](specs/025-agent-scaffolding.md)
+ - [Scaffolding governado de agentes](specs/027-agent-scaffolding.md)
 - [Visualização da governança de agentes](docs/visualizations/maestro-agent-governance.md)
 
 ## Confidencialidade
