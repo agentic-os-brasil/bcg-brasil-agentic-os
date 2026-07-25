@@ -1,12 +1,13 @@
 package releasecontract
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestParseAcceptsCompatibleSignedRelease(t *testing.T) {
+func TestParseAcceptsCompatibleReleaseReferences(t *testing.T) {
 	manifest, err := Parse(strings.NewReader(validManifestJSON()))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
@@ -18,8 +19,11 @@ func TestParseAcceptsCompatibleSignedRelease(t *testing.T) {
 
 func TestParseRejectsUnknownAndTrailingJSON(t *testing.T) {
 	for name, body := range map[string]string{
-		"unknown":  strings.Replace(validManifestJSON(), `"product": "maestro"`, `"product": "maestro", "surprise": true`, 1),
-		"trailing": validManifestJSON() + `{}`,
+		"unknown":              strings.Replace(validManifestJSON(), `"product": "maestro"`, `"product": "maestro", "surprise": true`, 1),
+		"trailing":             validManifestJSON() + `{}`,
+		"duplicate top-level":  strings.Replace(validManifestJSON(), `"product": "maestro"`, `"product": "maestro", "product": "maestro"`, 1),
+		"duplicate nested":     strings.Replace(validManifestJSON(), `"id": "maestro-release"`, `"id": "maestro-release", "id": "other"`, 1),
+		"oversized whitespace": validManifestJSON() + strings.Repeat(" ", maximumManifestBytes),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Parse(strings.NewReader(body)); err == nil {
@@ -46,23 +50,32 @@ func TestParseRejectsInvalidReleaseContracts(t *testing.T) {
 		"cli rejects bundle": func(body string) string {
 			return strings.Replace(body, `"compatible_bundle": ">=0.1.0 <0.2.0"`, `"compatible_bundle": ">=0.2.0 <0.3.0"`, 1)
 		},
+		"non-canonical range whitespace": func(body string) string {
+			return strings.Replace(body, `">=0.1.0 <0.2.0"`, `">=0.1.0  <0.2.0"`, 1)
+		},
+		"versionless cli artifact": func(body string) string {
+			return strings.Replace(body, `"name": "bcgos-0.1.0-windows-amd64.exe"`, `"name": "bcgos-windows-amd64.exe"`, 1)
+		},
+		"runtime pack unsupported in v1": func(body string) string {
+			return strings.Replace(body, `"kind": "cli"`, `"kind": "runtime_pack"`, 1)
+		},
 		"bundle rejects cli": func(body string) string {
 			return strings.Replace(body, `"compatible_cli": ">=0.1.0 <0.2.0"`, `"compatible_cli": ">=0.2.0 <0.3.0"`, 1)
 		},
 		"artifact contains path": func(body string) string {
-			return strings.Replace(body, `"name": "bcgos-windows-amd64.exe"`, `"name": "workspace/bcgos.exe"`, 1)
+			return strings.Replace(body, `"name": "bcgos-0.1.0-windows-amd64.exe"`, `"name": "workspace/bcgos.exe"`, 1)
 		},
 		"artifact has uppercase hash": func(body string) string {
 			return strings.Replace(body, strings.Repeat("a", 64), strings.Repeat("A", 64), 1)
 		},
 		"artifact lacks signature": func(body string) string {
-			return strings.Replace(body, `"signature_ref": "bcgos-windows-amd64.exe.sig"`, `"signature_ref": ""`, 1)
+			return strings.Replace(body, `"signature_ref": "bcgos-0.1.0-windows-amd64.exe.sig"`, `"signature_ref": ""`, 1)
 		},
 		"bundle is platform specific": func(body string) string {
 			return strings.Replace(body, `"kind": "bundle", "os": "any", "arch": "any"`, `"kind": "bundle", "os": "windows", "arch": "amd64"`, 1)
 		},
 		"duplicate artifact": func(body string) string {
-			needle := `{"kind": "cli", "os": "windows", "arch": "amd64", "name": "bcgos-windows-amd64.exe", "size": 1234, "sha256": "` + strings.Repeat("a", 64) + `", "signature_ref": "bcgos-windows-amd64.exe.sig"}`
+			needle := `{"kind": "cli", "os": "windows", "arch": "amd64", "name": "bcgos-0.1.0-windows-amd64.exe", "size": 1234, "sha256": "` + strings.Repeat("a", 64) + `", "signature_ref": "bcgos-0.1.0-windows-amd64.exe.sig"}`
 			return strings.Replace(body, needle, needle+","+needle, 1)
 		},
 	}
@@ -103,6 +116,17 @@ func TestPublishedSchemaHasExpectedIdentity(t *testing.T) {
 	}
 }
 
+func TestValidateSchemaFileRejectsGuttedSchema(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "schema.json")
+	body := `{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:bcg-brasil-agentic-os:schema:release-manifest:v1"}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSchemaFile(path); err == nil {
+		t.Fatal("ValidateSchemaFile() accepted a schema without the contract")
+	}
+}
+
 func validManifestJSON() string {
 	return `{
   "schema_version": 1,
@@ -113,8 +137,8 @@ func validManifestJSON() string {
   "cli": {"version": "0.1.0", "compatible_bundle": ">=0.1.0 <0.2.0"},
   "bundle": {"version": "0.1.0", "compatible_cli": ">=0.1.0 <0.2.0"},
   "artifacts": [
-    {"kind": "cli", "os": "windows", "arch": "amd64", "name": "bcgos-windows-amd64.exe", "size": 1234, "sha256": "` + strings.Repeat("a", 64) + `", "signature_ref": "bcgos-windows-amd64.exe.sig"},
-    {"kind": "cli", "os": "darwin", "arch": "arm64", "name": "bcgos-darwin-arm64", "size": 1234, "sha256": "` + strings.Repeat("b", 64) + `", "signature_ref": "bcgos-darwin-arm64.sig"},
+    {"kind": "cli", "os": "windows", "arch": "amd64", "name": "bcgos-0.1.0-windows-amd64.exe", "size": 1234, "sha256": "` + strings.Repeat("a", 64) + `", "signature_ref": "bcgos-0.1.0-windows-amd64.exe.sig"},
+    {"kind": "cli", "os": "darwin", "arch": "arm64", "name": "bcgos-0.1.0-darwin-arm64", "size": 1234, "sha256": "` + strings.Repeat("b", 64) + `", "signature_ref": "bcgos-0.1.0-darwin-arm64.sig"},
     {"kind": "bundle", "os": "any", "arch": "any", "name": "maestro-base-0.1.0.tar.gz", "size": 4321, "sha256": "` + strings.Repeat("c", 64) + `", "signature_ref": "maestro-base-0.1.0.tar.gz.sig"}
   ],
   "migrations": [

@@ -32,8 +32,10 @@ manifest verification.
   compatible bundle range.
 - The base bundle is one platform-neutral, immutable archive containing only
   reviewed managed product content.
-- Optional runtime packs are separately versioned platform artifacts. Docling
-  belongs in a runtime pack rather than the thin CLI or base bundle.
+- Optional runtime packs remain a separately versioned future extension.
+  Manifest v1 intentionally excludes them until their identity, compatibility
+  and migration model is specified. Docling belongs in that future runtime
+  pack rather than the thin CLI or base bundle.
 
 CLI and bundle versions are independent. A release is valid only when the
 declared current versions accept each other. Update planning must also prove
@@ -56,8 +58,23 @@ JSON Schema cannot express:
 - migration targets that match the declared component version and are outside
   the source range.
 
-Strict parsing rejects unknown fields and trailing JSON values. V1 has no
-silent compatibility fallback.
+Strict parsing rejects unknown fields, duplicate object keys, oversized input
+and trailing JSON values. CLI and bundle artifact names contain their component
+version. V1 has no silent compatibility fallback and no runtime-pack entries.
+
+The manifest wire files are exactly `release-manifest.json` and
+`release-manifest.json.sig`. The signature is a raw 64-byte Ed25519 signature
+over the exact manifest bytes as downloaded; there is no JSON reserialization
+or whitespace normalization before verification. An implementation may parse
+only `issuer.id` and `issuer.key_id` as untrusted routing hints, selects a key
+only from its approved local Maestro release-key registry, verifies the
+signature, and only then trusts or semantically validates the manifest fields.
+Every artifact `.sig` likewise signs the exact artifact bytes.
+
+A release version is globally immutable across channels. Promotion from
+`canary` to `beta` or `stable` requires a new release version and a newly signed
+manifest. Publication state must reject reusing a release version with another
+channel or changing the manifest bytes behind an existing version.
 
 ## Distribution boundary
 

@@ -4,6 +4,7 @@
 package releasecontract
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,21 +20,22 @@ const maximumManifestBytes = 1 << 20
 
 var (
 	exactVersionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
+	versionRangePattern = regexp.MustCompile(`^>=(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*) <(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 	identifierPattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
 	hashPattern         = regexp.MustCompile(`^[a-f0-9]{64}$`)
 )
 
 type Manifest struct {
-	SchemaVersion int          `json:"schema_version"`
-	Product       string       `json:"product"`
-	Release       string       `json:"release"`
-	Channel       string       `json:"channel"`
-	Issuer        Issuer       `json:"issuer"`
-	CLI           Component    `json:"cli"`
-	Bundle        Component    `json:"bundle"`
-	Artifacts     []Artifact   `json:"artifacts"`
-	Migrations    []Migration  `json:"migrations"`
-	ReleaseNotes  ReleaseNotes `json:"release_notes"`
+	SchemaVersion int             `json:"schema_version"`
+	Product       string          `json:"product"`
+	Release       string          `json:"release"`
+	Channel       string          `json:"channel"`
+	Issuer        Issuer          `json:"issuer"`
+	CLI           CLIComponent    `json:"cli"`
+	Bundle        BundleComponent `json:"bundle"`
+	Artifacts     []Artifact      `json:"artifacts"`
+	Migrations    []Migration     `json:"migrations"`
+	ReleaseNotes  ReleaseNotes    `json:"release_notes"`
 }
 
 type Issuer struct {
@@ -41,10 +43,14 @@ type Issuer struct {
 	KeyID string `json:"key_id"`
 }
 
-type Component struct {
+type CLIComponent struct {
 	Version          string `json:"version"`
-	CompatibleBundle string `json:"compatible_bundle,omitempty"`
-	CompatibleCLI    string `json:"compatible_cli,omitempty"`
+	CompatibleBundle string `json:"compatible_bundle"`
+}
+
+type BundleComponent struct {
+	Version       string `json:"version"`
+	CompatibleCLI string `json:"compatible_cli"`
 }
 
 type Artifact struct {
@@ -71,7 +77,17 @@ type ReleaseNotes struct {
 }
 
 func Parse(reader io.Reader) (Manifest, error) {
-	decoder := json.NewDecoder(io.LimitReader(reader, maximumManifestBytes+1))
+	body, err := io.ReadAll(io.LimitReader(reader, maximumManifestBytes+1))
+	if err != nil {
+		return Manifest{}, fmt.Errorf("read release manifest: %w", err)
+	}
+	if len(body) > maximumManifestBytes {
+		return Manifest{}, fmt.Errorf("release manifest exceeds %d bytes", maximumManifestBytes)
+	}
+	if err := rejectDuplicateJSONKeys(body); err != nil {
+		return Manifest{}, fmt.Errorf("decode release manifest: %w", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var manifest Manifest
 	if err := decoder.Decode(&manifest); err != nil {
@@ -88,6 +104,83 @@ func Parse(reader io.Reader) (Manifest, error) {
 		return Manifest{}, err
 	}
 	return manifest, nil
+}
+
+func rejectDuplicateJSONKeys(body []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if err := walkJSONValue(decoder, token); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+func walkJSONValue(decoder *json.Decoder, token json.Token) error {
+	delimiter, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delimiter {
+	case '{':
+		seen := map[string]bool{}
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return errors.New("object key is not a string")
+			}
+			if seen[key] {
+				return fmt.Errorf("duplicate JSON object key %q", key)
+			}
+			seen[key] = true
+			valueToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			if err := walkJSONValue(decoder, valueToken); err != nil {
+				return err
+			}
+		}
+		end, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if end != json.Delim('}') {
+			return errors.New("unterminated JSON object")
+		}
+	case '[':
+		for decoder.More() {
+			valueToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			if err := walkJSONValue(decoder, valueToken); err != nil {
+				return err
+			}
+		}
+		end, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if end != json.Delim(']') {
+			return errors.New("unterminated JSON array")
+		}
+	default:
+		return fmt.Errorf("unexpected JSON delimiter %q", delimiter)
+	}
+	return nil
 }
 
 func ValidateSchemaFile(path string) error {
@@ -113,6 +206,31 @@ func ValidateSchemaFile(path string) error {
 	}
 	if schema["$id"] != "urn:bcg-brasil-agentic-os:schema:release-manifest:v1" {
 		return errors.New("release manifest schema has an unexpected identifier")
+	}
+	if schema["type"] != "object" || schema["additionalProperties"] != false {
+		return errors.New("release manifest schema root must be a closed object")
+	}
+	required, ok := schema["required"].([]any)
+	if !ok {
+		return errors.New("release manifest schema must declare required fields")
+	}
+	expected := []string{"schema_version", "product", "release", "channel", "issuer", "cli", "bundle", "artifacts", "migrations", "release_notes"}
+	if len(required) != len(expected) {
+		return errors.New("release manifest schema required fields are incomplete")
+	}
+	for index, name := range expected {
+		if required[index] != name {
+			return fmt.Errorf("release manifest schema required field %d must be %q", index, name)
+		}
+	}
+	definitions, ok := schema["$defs"].(map[string]any)
+	if !ok {
+		return errors.New("release manifest schema definitions are missing")
+	}
+	for _, name := range []string{"version", "identifier", "range", "sha256", "fileReference", "issuer", "cli", "bundle", "artifact", "migration", "releaseNotes"} {
+		if _, ok := definitions[name]; !ok {
+			return fmt.Errorf("release manifest schema definition %q is missing", name)
+		}
 	}
 	return nil
 }
@@ -154,15 +272,12 @@ func (manifest Manifest) Validate() error {
 	return nil
 }
 
-func validateComponents(cli, bundle Component) error {
+func validateComponents(cli CLIComponent, bundle BundleComponent) error {
 	if _, err := parseVersion(cli.Version); err != nil {
 		return fmt.Errorf("invalid CLI version: %w", err)
 	}
 	if _, err := parseVersion(bundle.Version); err != nil {
 		return fmt.Errorf("invalid bundle version: %w", err)
-	}
-	if cli.CompatibleCLI != "" || bundle.CompatibleBundle != "" {
-		return errors.New("component compatibility fields are assigned to the wrong component")
 	}
 	cliRange, err := ParseVersionRange(cli.CompatibleBundle)
 	if err != nil {
@@ -190,7 +305,7 @@ func validateArtifacts(manifest Manifest) error {
 	cliCount := 0
 	bundleCount := 0
 	for _, artifact := range manifest.Artifacts {
-		if artifact.Kind != "cli" && artifact.Kind != "bundle" && artifact.Kind != "runtime_pack" {
+		if artifact.Kind != "cli" && artifact.Kind != "bundle" {
 			return fmt.Errorf("unsupported artifact kind %q", artifact.Kind)
 		}
 		if err := validateArtifactPlatform(artifact); err != nil {
@@ -221,6 +336,9 @@ func validateArtifacts(manifest Manifest) error {
 		switch artifact.Kind {
 		case "cli":
 			cliCount++
+			if !strings.Contains(artifact.Name, manifest.CLI.Version) {
+				return errors.New("CLI artifact name must contain the CLI version")
+			}
 		case "bundle":
 			bundleCount++
 			if !strings.Contains(artifact.Name, manifest.Bundle.Version) {
@@ -266,8 +384,6 @@ func validateMigrations(manifest Manifest) error {
 			target = manifest.CLI.Version
 		case "bundle":
 			target = manifest.Bundle.Version
-		case "runtime_pack":
-			target = migration.To
 		default:
 			return fmt.Errorf("unsupported migration component %q", migration.Component)
 		}
@@ -340,10 +456,10 @@ type VersionRange struct {
 }
 
 func ParseVersionRange(value string) (VersionRange, error) {
-	fields := strings.Fields(value)
-	if len(fields) != 2 || !strings.HasPrefix(fields[0], ">=") || !strings.HasPrefix(fields[1], "<") || strings.HasPrefix(fields[1], "<=") {
+	if !versionRangePattern.MatchString(value) {
 		return VersionRange{}, errors.New(`range must use ">=MAJOR.MINOR.PATCH <MAJOR.MINOR.PATCH"`)
 	}
+	fields := strings.Split(value, " ")
 	lower, err := parseVersion(strings.TrimPrefix(fields[0], ">="))
 	if err != nil {
 		return VersionRange{}, err

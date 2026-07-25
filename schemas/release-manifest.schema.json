@@ -89,7 +89,7 @@
       "additionalProperties": false,
       "required": ["kind", "os", "arch", "name", "size", "sha256", "signature_ref"],
       "properties": {
-        "kind": {"enum": ["cli", "bundle", "runtime_pack"]},
+        "kind": {"enum": ["cli", "bundle"]},
         "os": {"enum": ["windows", "darwin", "linux", "any"]},
         "arch": {"enum": ["amd64", "arm64", "any"]},
         "name": {"$ref": "#/$defs/fileReference"},
@@ -109,7 +109,7 @@
       "required": ["id", "component", "from", "to", "required"],
       "properties": {
         "id": {"$ref": "#/$defs/identifier"},
-        "component": {"enum": ["cli", "bundle", "runtime_pack"]},
+        "component": {"enum": ["cli", "bundle"]},
         "from": {"$ref": "#/$defs/range"},
         "to": {"$ref": "#/$defs/version"},
         "required": {"const": true}
