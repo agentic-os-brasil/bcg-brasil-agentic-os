@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "events": [
+    {
+      "semantic_event": "branch_start",
+      "branch_id": "client-alpha-project",
+      "actor_id": "maestro",
+      "actor_capability": "maestro-cap",
+      "target_id": "workspace-alpha-project"
+    },
+    {
+      "semantic_event": "child_start",
+      "branch_id": "client-alpha-project",
+      "actor_id": "workspace-alpha-project",
+      "actor_capability": "workspace-alpha-project-cap",
+      "target_id": "capability-research-project"
+    },
+    {
+      "semantic_event": "tool_request",
+      "branch_id": "client-alpha-project",
+      "actor_id": "capability-research-project",
+      "actor_capability": "capability-research-project-cap",
+      "scope": "client-alpha-project",
+      "tool": "workspace_reader",
+      "operation": "read",
+      "resource": "bcgos://workspace/client-alpha-project/research.md"
+    },
+    {
+      "semantic_event": "child_finish",
+      "branch_id": "client-alpha-project",
+      "actor_id": "capability-research-project",
+      "actor_capability": "capability-research-project-cap"
+    },
+    {
+      "semantic_event": "branch_finish",
+      "branch_id": "client-alpha-project",
+      "actor_id": "workspace-alpha-project",
+      "actor_capability": "workspace-alpha-project-cap"
+    }
+  ],
+  "adversarial_cases": [
+    {
+      "name": "forged capability",
+      "semantic_event": "tool_request",
+      "actor_id": "capability-research",
+      "actor_capability": "forged",
+      "expected_code": "actor_denied"
+    },
+    {
+      "name": "unregistered target",
+      "semantic_event": "branch_start",
+      "branch_id": "alpha",
+      "actor_id": "maestro",
+      "actor_capability": "maestro-cap",
+      "target_id": "workspace-unknown",
+      "expected_code": "target_denied"
+    },
+    {
+      "name": "scope not bound to target",
+      "semantic_event": "branch_start",
+      "branch_id": "alpha",
+      "actor_id": "maestro",
+      "actor_capability": "maestro-cap",
+      "target_id": "practice-insurance",
+      "expected_code": "edge_denied"
+    },
+    {
+      "name": "maestro tool request",
+      "semantic_event": "tool_request",
+      "actor_id": "maestro",
+      "actor_capability": "maestro-cap",
+      "expected_code": "tool_denied"
+    }
+  ]
+}
