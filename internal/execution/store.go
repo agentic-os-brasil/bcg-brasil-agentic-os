@@ -49,12 +49,22 @@ const AuthorityLocalExecution = "local_execution"
 
 var (
 	ErrRevisionConflict     = errors.New("execution item state revision conflict")
+	ErrAttemptConflict      = errors.New("execution item attempt conflict")
 	ErrContractChanged      = errors.New("execution item contract changed")
 	ErrConfirmationRequired = errors.New("explicit confirmation is required")
 	ErrItemBusy             = errors.New("execution item is busy")
+	ErrActiveItemAmbiguous  = errors.New("multiple active execution items require an explicit item ID")
 	idPattern               = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$`)
 	workspaceIDPattern      = regexp.MustCompile(`^[a-f0-9]{32}$`)
 	logicalRefPattern       = regexp.MustCompile(`^bcgos://[A-Za-z0-9/_-]+$`)
+)
+
+const (
+	MaximumCheckpointSummaryBytes  = 768
+	MaximumCheckpointNextStepBytes = 768
+	MaximumCheckpointBlockerBytes  = 256
+	MaximumCheckpointArtifactRefs  = 8
+	MaximumNextProjectionBytes     = 2048
 )
 
 type Criterion struct {
@@ -97,6 +107,21 @@ type Attempt struct {
 	StartedAt     time.Time    `json:"started_at"`
 }
 
+// Checkpoint is private, bounded handoff context. It may contain professional
+// content, so it is never copied into Transition or injected automatically.
+type Checkpoint struct {
+	SchemaVersion int       `json:"schema_version"`
+	CheckpointID  string    `json:"checkpoint_id"`
+	ItemID        string    `json:"item_id"`
+	WorkspaceID   string    `json:"workspace_id"`
+	AttemptID     string    `json:"attempt_id"`
+	Summary       string    `json:"summary"`
+	NextStep      string    `json:"next_step"`
+	Blocker       string    `json:"blocker,omitempty"`
+	ArtifactRefs  []string  `json:"artifact_refs"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 // Transition is intentionally metadata-only. Contract and professional content
 // never enter transition history.
 type Transition struct {
@@ -113,10 +138,11 @@ type Transition struct {
 // Projections such as state.json may be regenerated from the newest valid
 // revision after an interrupted write.
 type Revision struct {
-	SchemaVersion int        `json:"schema_version"`
-	State         State      `json:"state"`
-	Attempt       *Attempt   `json:"attempt,omitempty"`
-	Transition    Transition `json:"transition"`
+	SchemaVersion int         `json:"schema_version"`
+	State         State       `json:"state"`
+	Attempt       *Attempt    `json:"attempt,omitempty"`
+	Checkpoint    *Checkpoint `json:"checkpoint,omitempty"`
+	Transition    Transition  `json:"transition"`
 }
 
 type CreateInput struct {
@@ -127,17 +153,53 @@ type CreateInput struct {
 	AllowedRefs     []string
 }
 
+type CheckpointInput struct {
+	ExpectedRevision int
+	AttemptID        string
+	Summary          string
+	NextStep         string
+	Blocker          string
+	ArtifactRefs     []string
+}
+
 type Item struct {
-	Contract Contract `json:"contract"`
-	State    State    `json:"state"`
-	Attempt  *Attempt `json:"attempt,omitempty"`
+	Contract   Contract    `json:"contract"`
+	State      State       `json:"state"`
+	Attempt    *Attempt    `json:"attempt,omitempty"`
+	Checkpoint *Checkpoint `json:"checkpoint,omitempty"`
 }
 
 type Export struct {
 	Contract    Contract     `json:"contract"`
 	State       State        `json:"state"`
 	Attempt     *Attempt     `json:"attempt,omitempty"`
+	Checkpoint  *Checkpoint  `json:"checkpoint,omitempty"`
 	Transitions []Transition `json:"transitions"`
+}
+
+// NextProjection is the only execution body designed for bounded model
+// rehydration. It intentionally excludes the objective and completion contract.
+type NextProjection struct {
+	SchemaVersion int        `json:"schema_version"`
+	ItemID        string     `json:"item_id"`
+	State         ItemState  `json:"state"`
+	StateRevision int        `json:"state_revision"`
+	AttemptID     string     `json:"attempt_id,omitempty"`
+	Summary       string     `json:"summary,omitempty"`
+	NextStep      string     `json:"next_step"`
+	Blocker       string     `json:"blocker,omitempty"`
+	ArtifactRefs  []string   `json:"artifact_refs,omitempty"`
+	CheckpointAt  *time.Time `json:"checkpoint_at,omitempty"`
+}
+
+type MutationReceipt struct {
+	SchemaVersion int       `json:"schema_version"`
+	ItemID        string    `json:"item_id"`
+	WorkspaceID   string    `json:"workspace_id"`
+	State         ItemState `json:"state"`
+	StateRevision int       `json:"state_revision"`
+	AttemptID     string    `json:"attempt_id,omitempty"`
+	CheckpointID  string    `json:"checkpoint_id,omitempty"`
 }
 
 type Store struct {
@@ -193,6 +255,9 @@ func (store Store) Create(input CreateInput) (Item, error) {
 	}
 	if err := validateState(state); err != nil {
 		return Item{}, err
+	}
+	if err := validateNextProjection(nextProjection(contract, state, nil)); err != nil {
+		return Item{}, fmt.Errorf("initial next-action projection: %w", err)
 	}
 
 	itemsRoot := store.itemsRoot(input.WorkspaceID)
@@ -295,6 +360,262 @@ func (store Store) Start(workspaceID, itemID string, expectedRevision int) (Item
 	return Item{Contract: item.Contract, State: state, Attempt: &attempt}, nil
 }
 
+func (store Store) Checkpoint(workspaceID, itemID string, input CheckpointInput) (Item, error) {
+	if err := store.validateItemInput(workspaceID, itemID); err != nil {
+		return Item{}, err
+	}
+	if err := validateCheckpointInput(input); err != nil {
+		return Item{}, err
+	}
+	unlock, err := store.lock(workspaceID, itemID)
+	if err != nil {
+		return Item{}, err
+	}
+	defer unlock()
+
+	item, err := store.inspectUnlocked(workspaceID, itemID)
+	if err != nil {
+		return Item{}, err
+	}
+	if item.State.StateRevision != input.ExpectedRevision {
+		return Item{}, ErrRevisionConflict
+	}
+	if item.State.State != StateRunning {
+		return Item{}, fmt.Errorf("execution item must be running to checkpoint, got %s", item.State.State)
+	}
+	if item.Attempt == nil || item.Attempt.State != AttemptActive ||
+		item.State.ActiveAttemptID != input.AttemptID || item.Attempt.AttemptID != input.AttemptID {
+		return Item{}, ErrAttemptConflict
+	}
+	allowed := make(map[string]bool, len(item.Contract.AllowedRefs))
+	for _, reference := range item.Contract.AllowedRefs {
+		allowed[reference] = true
+	}
+	for _, reference := range input.ArtifactRefs {
+		if !allowed[reference] {
+			return Item{}, fmt.Errorf("checkpoint artifact reference %q is not allowed by the execution contract", reference)
+		}
+	}
+	checkpointID, err := store.newID("checkpoint")
+	if err != nil {
+		return Item{}, err
+	}
+	if err := validateID("checkpoint", checkpointID); err != nil {
+		return Item{}, err
+	}
+	now := store.now()
+	checkpoint := Checkpoint{
+		SchemaVersion: 1, CheckpointID: checkpointID, ItemID: itemID,
+		WorkspaceID: workspaceID, AttemptID: input.AttemptID,
+		Summary: strings.TrimSpace(input.Summary), NextStep: strings.TrimSpace(input.NextStep),
+		Blocker:      strings.TrimSpace(input.Blocker),
+		ArtifactRefs: append([]string(nil), input.ArtifactRefs...), CreatedAt: now,
+	}
+	if err := validateCheckpoint(checkpoint); err != nil {
+		return Item{}, err
+	}
+	state := item.State
+	state.StateRevision++
+	state.UpdatedAt = now
+	transition := Transition{
+		SchemaVersion: 1, ItemID: itemID, WorkspaceID: workspaceID,
+		AttemptID: input.AttemptID, State: StateRunning,
+		StateRevision: state.StateRevision, OccurredAt: now,
+	}
+	revision := Revision{
+		SchemaVersion: 1, State: state, Attempt: item.Attempt,
+		Checkpoint: &checkpoint, Transition: transition,
+	}
+	if err := validateRevision(revision); err != nil {
+		return Item{}, err
+	}
+	projection := nextProjection(item.Contract, state, &checkpoint)
+	if err := validateNextProjection(projection); err != nil {
+		return Item{}, err
+	}
+	if err := store.commitRevision(workspaceID, itemID, revision); err != nil {
+		return Item{}, err
+	}
+	return Item{Contract: item.Contract, State: state, Attempt: item.Attempt, Checkpoint: &checkpoint}, nil
+}
+
+func (store Store) Pause(workspaceID, itemID string, expectedRevision int, attemptID string) (Item, error) {
+	if err := store.validateItemInput(workspaceID, itemID); err != nil {
+		return Item{}, err
+	}
+	if err := validateID("attempt", attemptID); err != nil {
+		return Item{}, err
+	}
+	unlock, err := store.lock(workspaceID, itemID)
+	if err != nil {
+		return Item{}, err
+	}
+	defer unlock()
+
+	item, err := store.inspectUnlocked(workspaceID, itemID)
+	if err != nil {
+		return Item{}, err
+	}
+	if item.State.StateRevision != expectedRevision {
+		return Item{}, ErrRevisionConflict
+	}
+	if item.State.State != StateRunning {
+		return Item{}, fmt.Errorf("execution item must be running to pause, got %s", item.State.State)
+	}
+	if item.Attempt == nil || item.Attempt.State != AttemptActive ||
+		item.State.ActiveAttemptID != attemptID || item.Attempt.AttemptID != attemptID {
+		return Item{}, ErrAttemptConflict
+	}
+	if item.Checkpoint == nil || item.Checkpoint.AttemptID != attemptID {
+		return Item{}, errors.New("current attempt must create a checkpoint before pause")
+	}
+	now := store.now()
+	attempt := *item.Attempt
+	attempt.State = AttemptInterrupted
+	state := item.State
+	state.State = StatePaused
+	state.StateRevision++
+	state.ActiveAttemptID = ""
+	state.UpdatedAt = now
+	transition := Transition{
+		SchemaVersion: 1, ItemID: itemID, WorkspaceID: workspaceID,
+		AttemptID: attemptID, State: StatePaused,
+		StateRevision: state.StateRevision, OccurredAt: now,
+	}
+	revision := Revision{
+		SchemaVersion: 1, State: state, Attempt: &attempt,
+		Checkpoint: item.Checkpoint, Transition: transition,
+	}
+	if err := validateRevision(revision); err != nil {
+		return Item{}, err
+	}
+	if err := store.commitRevision(workspaceID, itemID, revision); err != nil {
+		return Item{}, err
+	}
+	return Item{Contract: item.Contract, State: state, Attempt: &attempt, Checkpoint: item.Checkpoint}, nil
+}
+
+func (store Store) Resume(workspaceID, itemID string, expectedRevision int) (Item, error) {
+	if err := store.validateItemInput(workspaceID, itemID); err != nil {
+		return Item{}, err
+	}
+	unlock, err := store.lock(workspaceID, itemID)
+	if err != nil {
+		return Item{}, err
+	}
+	defer unlock()
+
+	item, err := store.inspectUnlocked(workspaceID, itemID)
+	if err != nil {
+		return Item{}, err
+	}
+	if item.State.StateRevision != expectedRevision {
+		return Item{}, ErrRevisionConflict
+	}
+	if item.State.State != StatePaused {
+		return Item{}, fmt.Errorf("execution item must be paused to resume, got %s", item.State.State)
+	}
+	if item.Checkpoint == nil || item.Attempt == nil || item.Attempt.State != AttemptInterrupted {
+		return Item{}, errors.New("paused execution item is missing its checkpoint or interrupted attempt")
+	}
+	attemptID, err := store.newID("attempt")
+	if err != nil {
+		return Item{}, err
+	}
+	if err := validateID("attempt", attemptID); err != nil {
+		return Item{}, err
+	}
+	now := store.now()
+	attempt := Attempt{
+		SchemaVersion: 1, AttemptID: attemptID, ItemID: itemID,
+		WorkspaceID: workspaceID, State: AttemptActive, StartedAt: now,
+	}
+	state := item.State
+	state.State = StateRunning
+	state.StateRevision++
+	state.ActiveAttemptID = attemptID
+	state.UpdatedAt = now
+	transition := Transition{
+		SchemaVersion: 1, ItemID: itemID, WorkspaceID: workspaceID,
+		AttemptID: attemptID, State: StateRunning,
+		StateRevision: state.StateRevision, OccurredAt: now,
+	}
+	revision := Revision{
+		SchemaVersion: 1, State: state, Attempt: &attempt,
+		Checkpoint: item.Checkpoint, Transition: transition,
+	}
+	if err := validateRevision(revision); err != nil {
+		return Item{}, err
+	}
+	if err := store.commitRevision(workspaceID, itemID, revision); err != nil {
+		return Item{}, err
+	}
+	return Item{Contract: item.Contract, State: state, Attempt: &attempt, Checkpoint: item.Checkpoint}, nil
+}
+
+func (store Store) Next(workspaceID, itemID string) (NextProjection, error) {
+	item, err := store.Inspect(workspaceID, itemID)
+	if err != nil {
+		return NextProjection{}, err
+	}
+	projection := nextProjection(item.Contract, item.State, item.Checkpoint)
+	if err := validateNextProjection(projection); err != nil {
+		return NextProjection{}, err
+	}
+	return projection, nil
+}
+
+func (store Store) NextActive(workspaceID string) (NextProjection, error) {
+	if err := validateStoreRoot(store.Root); err != nil {
+		return NextProjection{}, err
+	}
+	if err := validateID("workspace", workspaceID); err != nil {
+		return NextProjection{}, err
+	}
+	entries, err := os.ReadDir(store.itemsRoot(workspaceID))
+	if err != nil {
+		return NextProjection{}, err
+	}
+	active := make([]string, 0, 1)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if err := validateID("item", entry.Name()); err != nil {
+			continue
+		}
+		item, err := store.Inspect(workspaceID, entry.Name())
+		if err != nil {
+			return NextProjection{}, fmt.Errorf("inspect active execution item %s: %w", entry.Name(), err)
+		}
+		if item.State.State == StateRunning || item.State.State == StatePaused {
+			active = append(active, entry.Name())
+		}
+	}
+	if len(active) == 0 {
+		return NextProjection{}, errors.New("no active execution item was found")
+	}
+	if len(active) > 1 {
+		return NextProjection{}, ErrActiveItemAmbiguous
+	}
+	return store.Next(workspaceID, active[0])
+}
+
+func Receipt(item Item) MutationReceipt {
+	receipt := MutationReceipt{
+		SchemaVersion: 1,
+		ItemID:        item.State.ItemID,
+		WorkspaceID:   item.State.WorkspaceID,
+		State:         item.State.State,
+		StateRevision: item.State.StateRevision,
+		AttemptID:     item.State.ActiveAttemptID,
+	}
+	if item.Checkpoint != nil {
+		receipt.CheckpointID = item.Checkpoint.CheckpointID
+	}
+	return receipt
+}
+
 func (store Store) Inspect(workspaceID, itemID string) (Item, error) {
 	if err := store.validateItemInput(workspaceID, itemID); err != nil {
 		return Item{}, err
@@ -326,9 +647,9 @@ func (store Store) inspectUnlocked(workspaceID, itemID string) (Item, error) {
 	if digest != state.ContractSHA256 {
 		return Item{}, ErrContractChanged
 	}
-	item := Item{Contract: contract, State: state, Attempt: revision.Attempt}
-	if item.Attempt != nil && (item.Attempt.ItemID != itemID || item.Attempt.WorkspaceID != workspaceID || item.Attempt.AttemptID != state.ActiveAttemptID) {
-		return Item{}, errors.New("active attempt does not match execution item")
+	item := Item{Contract: contract, State: state, Attempt: revision.Attempt, Checkpoint: revision.Checkpoint}
+	if item.Attempt != nil && (item.Attempt.ItemID != itemID || item.Attempt.WorkspaceID != workspaceID) {
+		return Item{}, errors.New("attempt does not match execution item")
 	}
 	return item, nil
 }
@@ -342,7 +663,10 @@ func (store Store) Export(workspaceID, itemID string) (Export, error) {
 	if err != nil {
 		return Export{}, err
 	}
-	return Export{Contract: item.Contract, State: item.State, Attempt: item.Attempt, Transitions: transitions}, nil
+	return Export{
+		Contract: item.Contract, State: item.State, Attempt: item.Attempt,
+		Checkpoint: item.Checkpoint, Transitions: transitions,
+	}, nil
 }
 
 func (store Store) Delete(workspaceID, itemID string, expectedRevision int, confirmed bool) error {
@@ -525,6 +849,27 @@ func (store Store) fault(point string) error {
 	return store.FaultPoint(point)
 }
 
+func (store Store) commitRevision(workspaceID, itemID string, revision Revision) error {
+	if err := store.fault("before_revision_commit"); err != nil {
+		return err
+	}
+	path := filepath.Join(
+		store.itemRoot(workspaceID, itemID),
+		"revisions",
+		revisionName(revision.State.StateRevision),
+	)
+	if err := writeImmutableRevision(path, revision); err != nil {
+		return err
+	}
+	if err := store.fault("after_revision_commit"); err != nil {
+		return err
+	}
+	if err := writeAtomicJSON(filepath.Join(store.itemRoot(workspaceID, itemID), "state.json"), revision.State); err != nil {
+		return err
+	}
+	return store.fault("after_state_projection")
+}
+
 func validateStoreRoot(root string) error {
 	if strings.TrimSpace(root) == "" {
 		return errors.New("execution store root is required")
@@ -564,6 +909,40 @@ func validateCreateInput(input CreateInput) error {
 		if len(reference) > 512 || !logicalRefPattern.MatchString(reference) {
 			return fmt.Errorf("invalid logical reference %q", reference)
 		}
+	}
+	return nil
+}
+
+func validateCheckpointInput(input CheckpointInput) error {
+	if input.ExpectedRevision < 1 {
+		return errors.New("checkpoint expected revision must be positive")
+	}
+	if err := validateID("attempt", input.AttemptID); err != nil {
+		return err
+	}
+	summary := strings.TrimSpace(input.Summary)
+	if summary == "" || len(summary) > MaximumCheckpointSummaryBytes {
+		return fmt.Errorf("checkpoint summary must contain 1 to %d bytes", MaximumCheckpointSummaryBytes)
+	}
+	next := strings.TrimSpace(input.NextStep)
+	if next == "" || len(next) > MaximumCheckpointNextStepBytes {
+		return fmt.Errorf("checkpoint next step must contain 1 to %d bytes", MaximumCheckpointNextStepBytes)
+	}
+	if len(strings.TrimSpace(input.Blocker)) > MaximumCheckpointBlockerBytes {
+		return fmt.Errorf("checkpoint blocker must contain at most %d bytes", MaximumCheckpointBlockerBytes)
+	}
+	if len(input.ArtifactRefs) > MaximumCheckpointArtifactRefs {
+		return fmt.Errorf("checkpoint may contain at most %d artifact references", MaximumCheckpointArtifactRefs)
+	}
+	seen := make(map[string]bool, len(input.ArtifactRefs))
+	for _, reference := range input.ArtifactRefs {
+		if len(reference) > 512 || !logicalRefPattern.MatchString(reference) {
+			return fmt.Errorf("invalid logical reference %q", reference)
+		}
+		if seen[reference] {
+			return fmt.Errorf("duplicate checkpoint artifact reference %q", reference)
+		}
+		seen[reference] = true
 	}
 	return nil
 }
@@ -625,6 +1004,30 @@ func validateAttempt(attempt Attempt) error {
 	return nil
 }
 
+func validateCheckpoint(checkpoint Checkpoint) error {
+	if checkpoint.SchemaVersion != 1 || checkpoint.CreatedAt.IsZero() {
+		return errors.New("invalid execution checkpoint header")
+	}
+	for kind, id := range map[string]string{
+		"workspace":  checkpoint.WorkspaceID,
+		"item":       checkpoint.ItemID,
+		"attempt":    checkpoint.AttemptID,
+		"checkpoint": checkpoint.CheckpointID,
+	} {
+		if err := validateID(kind, id); err != nil {
+			return err
+		}
+	}
+	return validateCheckpointInput(CheckpointInput{
+		ExpectedRevision: 1,
+		AttemptID:        checkpoint.AttemptID,
+		Summary:          checkpoint.Summary,
+		NextStep:         checkpoint.NextStep,
+		Blocker:          checkpoint.Blocker,
+		ArtifactRefs:     checkpoint.ArtifactRefs,
+	})
+}
+
 func validateTransition(transition Transition) error {
 	if transition.SchemaVersion != 1 || transition.StateRevision < 1 || transition.OccurredAt.IsZero() {
 		return errors.New("invalid execution transition header")
@@ -663,6 +1066,15 @@ func validateRevision(revision Revision) error {
 		revision.State.StateRevision != revision.Transition.StateRevision {
 		return errors.New("execution revision state and transition do not match")
 	}
+	if revision.Checkpoint != nil {
+		if err := validateCheckpoint(*revision.Checkpoint); err != nil {
+			return err
+		}
+		if revision.Checkpoint.ItemID != revision.State.ItemID ||
+			revision.Checkpoint.WorkspaceID != revision.State.WorkspaceID {
+			return errors.New("execution revision checkpoint does not match state")
+		}
+	}
 	if revision.Attempt == nil {
 		if revision.State.ActiveAttemptID != "" || revision.Transition.AttemptID != "" {
 			return errors.New("execution revision is missing its active attempt")
@@ -672,11 +1084,61 @@ func validateRevision(revision Revision) error {
 	if err := validateAttempt(*revision.Attempt); err != nil {
 		return err
 	}
-	if revision.Attempt.AttemptID != revision.State.ActiveAttemptID ||
-		revision.Attempt.AttemptID != revision.Transition.AttemptID ||
+	if revision.Attempt.AttemptID != revision.Transition.AttemptID ||
 		revision.Attempt.ItemID != revision.State.ItemID ||
 		revision.Attempt.WorkspaceID != revision.State.WorkspaceID {
 		return errors.New("execution revision attempt does not match state")
+	}
+	switch revision.State.State {
+	case StateRunning:
+		if revision.Attempt.State != AttemptActive || revision.Attempt.AttemptID != revision.State.ActiveAttemptID {
+			return errors.New("running execution revision requires its active attempt")
+		}
+	case StatePaused:
+		if revision.Attempt.State != AttemptInterrupted || revision.State.ActiveAttemptID != "" || revision.Checkpoint == nil {
+			return errors.New("paused execution revision requires an interrupted attempt and checkpoint")
+		}
+	default:
+		if revision.State.ActiveAttemptID != "" {
+			return errors.New("non-running execution revision cannot retain an active attempt")
+		}
+	}
+	return nil
+}
+
+func nextProjection(contract Contract, state State, checkpoint *Checkpoint) NextProjection {
+	projection := NextProjection{
+		SchemaVersion: 1,
+		ItemID:        state.ItemID,
+		State:         state.State,
+		StateRevision: state.StateRevision,
+		AttemptID:     state.ActiveAttemptID,
+		NextStep:      contract.InitialNextStep,
+	}
+	if checkpoint != nil {
+		projection.Summary = checkpoint.Summary
+		projection.NextStep = checkpoint.NextStep
+		projection.Blocker = checkpoint.Blocker
+		projection.ArtifactRefs = append([]string(nil), checkpoint.ArtifactRefs...)
+		checkpointAt := checkpoint.CreatedAt
+		projection.CheckpointAt = &checkpointAt
+	}
+	return projection
+}
+
+func validateNextProjection(projection NextProjection) error {
+	if projection.SchemaVersion != 1 || projection.StateRevision < 1 || strings.TrimSpace(projection.NextStep) == "" {
+		return errors.New("invalid next-action projection")
+	}
+	if err := validateID("item", projection.ItemID); err != nil {
+		return err
+	}
+	body, err := json.Marshal(projection)
+	if err != nil {
+		return err
+	}
+	if len(body)+1 > MaximumNextProjectionBytes {
+		return fmt.Errorf("next-action projection exceeds %d bytes", MaximumNextProjectionBytes)
 	}
 	return nil
 }

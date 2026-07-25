@@ -39,6 +39,7 @@ var Version = "0.0.0-dev"
 
 const maximumOwnerFacetBytes = 1 << 20
 const maximumWorkContractBytes = 32 << 10
+const maximumWorkCheckpointBytes = 16 << 10
 
 func Run(args []string, out, errOut io.Writer) int {
 	return RunWithInput(args, strings.NewReader(""), out, errOut)
@@ -89,13 +90,20 @@ type workCreateRequest struct {
 	AllowedRefs     []string              `json:"allowed_refs"`
 }
 
+type workCheckpointRequest struct {
+	Summary      string   `json:"summary"`
+	NextStep     string   `json:"next_step"`
+	Blocker      string   `json:"blocker"`
+	ArtifactRefs []string `json:"artifact_refs"`
+}
+
 func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos work <create|start|inspect|export|delete>")
+		fmt.Fprintln(errOut, "usage: bcgos work <create|start|checkpoint|pause|next|resume|inspect|export|delete>")
 		return ExitUsage
 	}
 	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(out, "usage: bcgos work <create|start|inspect|export|delete>")
+		fmt.Fprintln(out, "usage: bcgos work <create|start|checkpoint|pause|next|resume|inspect|export|delete>")
 		return ExitOK
 	}
 	root, err := dataRoot()
@@ -137,7 +145,7 @@ func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func()
 		if err != nil {
 			return reportError(errOut, err)
 		}
-		return writeJSON(out, item, errOut)
+		return writeJSON(out, execution.Receipt(item), errOut)
 	case "start":
 		flags := newFlagSet("work start", errOut)
 		workspacePath := flags.String("workspace", "", "initialized workspace path")
@@ -161,7 +169,130 @@ func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func()
 		if err != nil {
 			return reportError(errOut, err)
 		}
-		return writeJSON(out, item, errOut)
+		return writeJSON(out, execution.Receipt(item), errOut)
+	case "checkpoint":
+		flags := newFlagSet("work checkpoint", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		revision := flags.Int("revision", 0, "expected state revision")
+		attemptID := flags.String("attempt", "", "current attempt identity")
+		stdin := flags.Bool("stdin", false, "read the private checkpoint from standard input")
+		if err := flags.Parse(args[1:]); err != nil {
+			return ExitUsage
+		}
+		if rejectPositionals(flags, errOut) {
+			return ExitUsage
+		}
+		if strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" ||
+			strings.TrimSpace(*attemptID) == "" || *revision < 1 {
+			fmt.Fprintln(errOut, "usage: bcgos work checkpoint --workspace PATH --item ID --revision N --attempt ID --stdin")
+			return ExitUsage
+		}
+		if !*stdin {
+			fmt.Fprintln(errOut, "--stdin is required; private checkpoint bodies must not be passed in process arguments")
+			return ExitUsage
+		}
+		request, err := decodeWorkCheckpointRequest(in)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		item, err := store.Checkpoint(workspaceID, *itemID, execution.CheckpointInput{
+			ExpectedRevision: *revision,
+			AttemptID:        *attemptID,
+			Summary:          request.Summary,
+			NextStep:         request.NextStep,
+			Blocker:          request.Blocker,
+			ArtifactRefs:     request.ArtifactRefs,
+		})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, execution.Receipt(item), errOut)
+	case "pause":
+		flags := newFlagSet("work pause", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		revision := flags.Int("revision", 0, "expected state revision")
+		attemptID := flags.String("attempt", "", "current attempt identity")
+		if err := flags.Parse(args[1:]); err != nil {
+			return ExitUsage
+		}
+		if rejectPositionals(flags, errOut) {
+			return ExitUsage
+		}
+		if strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" ||
+			strings.TrimSpace(*attemptID) == "" || *revision < 1 {
+			fmt.Fprintln(errOut, "usage: bcgos work pause --workspace PATH --item ID --revision N --attempt ID")
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		item, err := store.Pause(workspaceID, *itemID, *revision, *attemptID)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, execution.Receipt(item), errOut)
+	case "resume":
+		flags := newFlagSet("work resume", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		revision := flags.Int("revision", 0, "expected state revision")
+		if err := flags.Parse(args[1:]); err != nil {
+			return ExitUsage
+		}
+		if rejectPositionals(flags, errOut) {
+			return ExitUsage
+		}
+		if strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" || *revision < 1 {
+			fmt.Fprintln(errOut, "usage: bcgos work resume --workspace PATH --item ID --revision N")
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		item, err := store.Resume(workspaceID, *itemID, *revision)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, execution.Receipt(item), errOut)
+	case "next":
+		flags := newFlagSet("work next", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		active := flags.Bool("active", false, "resolve the only active execution item")
+		if err := flags.Parse(args[1:]); err != nil {
+			return ExitUsage
+		}
+		if rejectPositionals(flags, errOut) {
+			return ExitUsage
+		}
+		if strings.TrimSpace(*workspacePath) == "" ||
+			(strings.TrimSpace(*itemID) == "" && !*active) ||
+			(strings.TrimSpace(*itemID) != "" && *active) {
+			fmt.Fprintln(errOut, "usage: bcgos work next --workspace PATH (--item ID | --active)")
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		var projection execution.NextProjection
+		if *active {
+			projection, err = store.NextActive(workspaceID)
+		} else {
+			projection, err = store.Next(workspaceID, *itemID)
+		}
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeCompactJSON(out, projection, errOut)
 	case "inspect", "export", "delete":
 		flags := newFlagSet("work "+args[0], errOut)
 		workspacePath := flags.String("workspace", "", "initialized workspace path")
@@ -248,6 +379,30 @@ func decodeWorkCreateRequest(in io.Reader) (workCreateRequest, error) {
 			return workCreateRequest{}, errors.New("execution contract contains multiple JSON values")
 		}
 		return workCreateRequest{}, err
+	}
+	return request, nil
+}
+
+func decodeWorkCheckpointRequest(in io.Reader) (workCheckpointRequest, error) {
+	body, err := io.ReadAll(io.LimitReader(in, maximumWorkCheckpointBytes+1))
+	if err != nil {
+		return workCheckpointRequest{}, err
+	}
+	if len(body) > maximumWorkCheckpointBytes {
+		return workCheckpointRequest{}, errors.New("execution checkpoint exceeds 16 KiB limit")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	var request workCheckpointRequest
+	if err := decoder.Decode(&request); err != nil {
+		return workCheckpointRequest{}, err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return workCheckpointRequest{}, errors.New("execution checkpoint contains multiple JSON values")
+		}
+		return workCheckpointRequest{}, err
 	}
 	return request, nil
 }
@@ -901,6 +1056,26 @@ func writeJSON(out io.Writer, value any, errOut io.Writer) int {
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(value); err != nil {
+		if !errors.Is(err, io.ErrClosedPipe) {
+			fmt.Fprintln(errOut, err)
+		}
+		return ExitFailure
+	}
+	return ExitOK
+}
+
+func writeCompactJSON(out io.Writer, value any, errOut io.Writer) int {
+	body, err := json.Marshal(value)
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return ExitFailure
+	}
+	body = append(body, '\n')
+	if len(body) > execution.MaximumNextProjectionBytes {
+		fmt.Fprintf(errOut, "next-action projection exceeds %d bytes\n", execution.MaximumNextProjectionBytes)
+		return ExitFailure
+	}
+	if _, err := out.Write(body); err != nil {
 		if !errors.Is(err, io.ErrClosedPipe) {
 			fmt.Fprintln(errOut, err)
 		}

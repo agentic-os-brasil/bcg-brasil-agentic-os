@@ -1,6 +1,6 @@
 # Spec 018 - Execution Ledger V1
 
-Status: accepted direction; initial contract and store in implementation.
+Status: accepted direction; resumable checkpoint loop in implementation.
 
 ## Objective
 
@@ -76,9 +76,11 @@ scope.
 ## Checkpoint and context
 
 A checkpoint may contain only a bounded summary, next step, optional blocker,
-logical artifact references and its source attempt. Session Context exposes
-only `bcgos://execution/active`; an authorized `bcgos work next --active`
-resolves a projection of at most 2 KB.
+logical artifact references and its source attempt. An authorized
+`bcgos work next --active` resolves a projection of at most 2 KB only when
+exactly one running or paused item exists. Ambiguity fails closed and requires
+an explicit item ID. Session Context exposure of `bcgos://execution/active`
+remains a separate adapter-facing slice.
 
 ## Evidence and completion
 
@@ -98,11 +100,13 @@ remain valid.
 Transition history is allowlist-only: opaque IDs, enum state, timestamp and
 revision. It never stores prompts, responses, arguments, raw errors, URLs,
 queries, absolute paths or professional content. Contract and checkpoint bodies
-remain private local data and are never injected automatically.
+remain private local data and are never injected automatically. Mutation
+commands return metadata-only receipts; `next` is the only handoff-body output,
+while `inspect` and `export` are explicit full-body operations.
 
-## Initial implementation slice
+## Implemented slices
 
-The first slice implements:
+The foundation implements:
 
 - item creation, start, inspection, export and confirmed deletion;
 - immutable contract digest;
@@ -111,8 +115,18 @@ The first slice implements:
 - workspace and path isolation;
 - allowlisted transition history.
 
-Checkpoint, resume, Session Context pointer and completion evidence follow in
-separate contract-tested slices.
+The resumable handoff slice implements:
+
+- bounded private checkpoints with allowlisted logical artifact references;
+- explicit pause after a checkpoint from the current attempt;
+- explicit resume through a new attempt identity;
+- `attempt_id + state_revision` fencing against stale writers;
+- bounded `next` projection without the objective or completion contract;
+- fail-closed active-item resolution when more than one item is active;
+- crash recovery from the immutable checkpoint revision.
+
+Session Context pointer, core-witnessed evidence and evidence-backed completion
+follow in separate contract-tested slices.
 
 ## V1 non-goals
 

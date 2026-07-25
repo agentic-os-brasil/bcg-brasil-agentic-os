@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -30,43 +31,38 @@ func TestWorkCreateStartInspectExportAndDelete(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("create exit = %d, output = %s", code, output.String())
 	}
-	var created struct {
-		Contract struct {
-			ItemID string `json:"item_id"`
-		} `json:"contract"`
-		State struct {
-			Revision int `json:"state_revision"`
-		} `json:"state"`
-	}
-	if err := json.Unmarshal(output.Bytes(), &created); err != nil || created.Contract.ItemID == "" || created.State.Revision != 1 {
+	var created execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &created); err != nil || created.ItemID == "" || created.StateRevision != 1 {
 		t.Fatalf("create output = %s, err = %v", output.String(), err)
 	}
+	assertMutationReceiptPrivate(t, output.String())
 
 	output.Reset()
 	code = runWork([]string{
-		"start", "--workspace", workspacePath, "--item", created.Contract.ItemID,
-		"--revision", strconv.Itoa(created.State.Revision),
+		"start", "--workspace", workspacePath, "--item", created.ItemID,
+		"--revision", strconv.Itoa(created.StateRevision),
 	}, strings.NewReader(""), &output, &output, dataRoot)
-	if code != ExitOK || !strings.Contains(output.String(), `"state": "running"`) || !strings.Contains(output.String(), `"active_attempt_id"`) {
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "running"`) || !strings.Contains(output.String(), `"attempt_id"`) {
 		t.Fatalf("start exit = %d, output = %s", code, output.String())
 	}
+	assertMutationReceiptPrivate(t, output.String())
 
 	for _, command := range []string{"inspect", "export"} {
 		output.Reset()
-		code = runWork([]string{command, "--workspace", workspacePath, "--item", created.Contract.ItemID}, strings.NewReader(""), &output, &output, dataRoot)
-		if code != ExitOK || !strings.Contains(output.String(), created.Contract.ItemID) {
+		code = runWork([]string{command, "--workspace", workspacePath, "--item", created.ItemID}, strings.NewReader(""), &output, &output, dataRoot)
+		if code != ExitOK || !strings.Contains(output.String(), created.ItemID) {
 			t.Fatalf("%s exit = %d, output = %s", command, code, output.String())
 		}
 	}
 
 	output.Reset()
-	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", created.Contract.ItemID}, strings.NewReader(""), &output, &output, dataRoot)
+	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", created.ItemID}, strings.NewReader(""), &output, &output, dataRoot)
 	if code == ExitOK || !strings.Contains(output.String(), "--confirm") {
 		t.Fatalf("unconfirmed delete exit = %d, output = %s", code, output.String())
 	}
 
 	output.Reset()
-	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", created.Contract.ItemID, "--revision", "2", "--confirm"}, strings.NewReader(""), &output, &output, dataRoot)
+	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", created.ItemID, "--revision", "2", "--confirm"}, strings.NewReader(""), &output, &output, dataRoot)
 	if code == ExitOK || !strings.Contains(output.String(), "must be paused") {
 		t.Fatalf("running delete exit = %d, output = %s", code, output.String())
 	}
@@ -76,18 +72,103 @@ func TestWorkCreateStartInspectExportAndDelete(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("second create exit = %d, output = %s", code, output.String())
 	}
-	var deletable struct {
-		Contract struct {
-			ItemID string `json:"item_id"`
-		} `json:"contract"`
-	}
+	var deletable execution.MutationReceipt
 	if err := json.Unmarshal(output.Bytes(), &deletable); err != nil {
 		t.Fatal(err)
 	}
 	output.Reset()
-	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", deletable.Contract.ItemID, "--revision", "1", "--confirm"}, strings.NewReader(""), &output, &output, dataRoot)
+	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", deletable.ItemID, "--revision", "1", "--confirm"}, strings.NewReader(""), &output, &output, dataRoot)
 	if code != ExitOK || !strings.Contains(output.String(), `"state": "deleted"`) {
 		t.Fatalf("confirmed delete exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestWorkCheckpointPauseNextAndResume(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	workspacePath := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	contract := `{"objective":"Prove handoff.","initial_next_step":"Start.","criteria":[{"id":"tests","type":"command_check"}],"allowed_refs":["bcgos://workspace/specs/018"]}`
+	code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot)
+	if code != ExitOK {
+		t.Fatalf("create exit = %d, output = %s", code, output.String())
+	}
+	var created execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	output.Reset()
+	code = runWork([]string{"start", "--workspace", workspacePath, "--item", created.ItemID, "--revision", "1"}, strings.NewReader(""), &output, &output, dataRoot)
+	if code != ExitOK {
+		t.Fatalf("start exit = %d, output = %s", code, output.String())
+	}
+	var started execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &started); err != nil {
+		t.Fatal(err)
+	}
+
+	checkpoint := `{"summary":"Tests are failing for the expected reason.","next_step":"Implement the state transitions.","artifact_refs":["bcgos://workspace/specs/018"]}`
+	output.Reset()
+	code = runWork([]string{
+		"checkpoint", "--workspace", workspacePath, "--item", created.ItemID,
+		"--revision", "2", "--attempt", started.AttemptID, "--stdin",
+	}, strings.NewReader(checkpoint), &output, &output, dataRoot)
+	if code != ExitOK || !strings.Contains(output.String(), `"state_revision": 3`) {
+		t.Fatalf("checkpoint exit = %d, output = %s", code, output.String())
+	}
+	assertMutationReceiptPrivate(t, output.String())
+
+	output.Reset()
+	code = runWork([]string{
+		"pause", "--workspace", workspacePath, "--item", created.ItemID,
+		"--revision", "3", "--attempt", started.AttemptID,
+	}, strings.NewReader(""), &output, &output, dataRoot)
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "paused"`) {
+		t.Fatalf("pause exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	code = runWork([]string{"next", "--workspace", workspacePath, "--active"}, strings.NewReader(""), &output, &output, dataRoot)
+	if code != ExitOK || !strings.Contains(output.String(), `"next_step":"Implement the state transitions."`) || strings.Contains(output.String(), `"objective"`) {
+		t.Fatalf("next exit = %d, output = %s", code, output.String())
+	}
+	if output.Len() > execution.MaximumNextProjectionBytes {
+		t.Fatalf("next output contains %d bytes", output.Len())
+	}
+
+	output.Reset()
+	code = runWork([]string{"resume", "--workspace", workspacePath, "--item", created.ItemID, "--revision", "4"}, strings.NewReader(""), &output, &output, dataRoot)
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "running"`) || !strings.Contains(output.String(), `"state_revision": 5`) {
+		t.Fatalf("resume exit = %d, output = %s", code, output.String())
+	}
+}
+
+func assertMutationReceiptPrivate(t *testing.T, body string) {
+	t.Helper()
+	for _, prohibited := range []string{"objective", "criteria", "summary", "next_step", "blocker", "artifact_refs", "allowed_refs"} {
+		if strings.Contains(body, `"`+prohibited+`"`) {
+			t.Fatalf("mutation receipt leaked %q: %s", prohibited, body)
+		}
+	}
+}
+
+func TestWorkCheckpointRequiresPrivateStdin(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	var output bytes.Buffer
+	code := runWork(
+		[]string{"checkpoint", "--workspace", "workspace", "--item", "item", "--revision", "2", "--attempt", "attempt"},
+		strings.NewReader(`{"summary":"private","next_step":"private"}`),
+		&output,
+		&output,
+		dataRoot,
+	)
+	if code == ExitOK || !strings.Contains(output.String(), "--stdin") {
+		t.Fatalf("checkpoint without stdin exit = %d, output = %s", code, output.String())
 	}
 }
 

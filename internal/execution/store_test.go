@@ -19,7 +19,7 @@ const (
 func testStore(t *testing.T) Store {
 	t.Helper()
 	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
-	ids := []string{"item-a", "attempt-a"}
+	ids := []string{"item-a", "attempt-a", "checkpoint-a", "attempt-b", "checkpoint-b"}
 	return Store{
 		Root: t.TempDir(),
 		Now:  func() time.Time { return now },
@@ -148,7 +148,11 @@ func TestTransitionHistoryIsAllowlistedAndPrivate(t *testing.T) {
 		t.Fatalf("transition count = %d", len(entries))
 	}
 	for _, entry := range entries {
-		body, err := os.ReadFile(filepath.Join(root, entry.Name()))
+		var revision Revision
+		if err := readStrictJSON(filepath.Join(root, entry.Name()), &revision); err != nil {
+			t.Fatal(err)
+		}
+		body, err := json.Marshal(revision.Transition)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -158,6 +162,224 @@ func TestTransitionHistoryIsAllowlistedAndPrivate(t *testing.T) {
 				t.Fatalf("transition leaked %q: %s", prohibited, text)
 			}
 		}
+	}
+}
+
+func TestCheckpointPauseNextAndResumeAcrossAttempts(t *testing.T) {
+	store := testStore(t)
+	created, err := store.Create(testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := store.Start(testWorkspaceID, created.Contract.ItemID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	checkpointed, err := store.Checkpoint(testWorkspaceID, created.Contract.ItemID, CheckpointInput{
+		ExpectedRevision: 2,
+		AttemptID:        started.State.ActiveAttemptID,
+		Summary:          "The contract test now captures the observable handoff.",
+		NextStep:         "Implement pause and resume against immutable revisions.",
+		Blocker:          "None.",
+		ArtifactRefs:     []string{"bcgos://workspace/specs/018"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checkpointed.State.State != StateRunning || checkpointed.State.StateRevision != 3 {
+		t.Fatalf("checkpointed state = %#v", checkpointed.State)
+	}
+	if checkpointed.Checkpoint == nil || checkpointed.Checkpoint.AttemptID != started.State.ActiveAttemptID {
+		t.Fatalf("checkpoint = %#v", checkpointed.Checkpoint)
+	}
+
+	paused, err := store.Pause(testWorkspaceID, created.Contract.ItemID, 3, started.State.ActiveAttemptID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paused.State.State != StatePaused || paused.State.StateRevision != 4 || paused.State.ActiveAttemptID != "" {
+		t.Fatalf("paused state = %#v", paused.State)
+	}
+	if paused.Attempt == nil || paused.Attempt.State != AttemptInterrupted {
+		t.Fatalf("paused attempt = %#v", paused.Attempt)
+	}
+
+	next, err := store.Next(testWorkspaceID, created.Contract.ItemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.State != StatePaused || next.StateRevision != 4 || next.NextStep != checkpointed.Checkpoint.NextStep {
+		t.Fatalf("next projection = %#v", next)
+	}
+	body, err := json.Marshal(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) > MaximumNextProjectionBytes {
+		t.Fatalf("next projection contains %d bytes", len(body))
+	}
+	if strings.Contains(string(body), created.Contract.Objective) {
+		t.Fatalf("next projection leaked immutable contract: %s", body)
+	}
+
+	resumed, err := store.Resume(testWorkspaceID, created.Contract.ItemID, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.State.State != StateRunning || resumed.State.StateRevision != 5 || resumed.State.ActiveAttemptID != "attempt-b" {
+		t.Fatalf("resumed state = %#v", resumed.State)
+	}
+	if resumed.Attempt == nil || resumed.Attempt.State != AttemptActive {
+		t.Fatalf("resumed attempt = %#v", resumed.Attempt)
+	}
+
+	if _, err := store.Checkpoint(testWorkspaceID, created.Contract.ItemID, CheckpointInput{
+		ExpectedRevision: 5,
+		AttemptID:        started.State.ActiveAttemptID,
+		Summary:          "A stale writer must not commit.",
+		NextStep:         "This should fail.",
+	}); !errors.Is(err, ErrAttemptConflict) {
+		t.Fatalf("stale attempt error = %v", err)
+	}
+}
+
+func TestCheckpointRequiresCurrentAttemptAndBoundedAllowedProjection(t *testing.T) {
+	store := testStore(t)
+	created, err := store.Create(testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := store.Start(testWorkspaceID, created.Contract.ItemID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := CheckpointInput{
+		ExpectedRevision: 2,
+		AttemptID:        started.State.ActiveAttemptID,
+		Summary:          "Bounded summary.",
+		NextStep:         "Bounded next step.",
+	}
+
+	disallowed := base
+	disallowed.ArtifactRefs = []string{"bcgos://workspace/private/unapproved"}
+	if _, err := store.Checkpoint(testWorkspaceID, created.Contract.ItemID, disallowed); err == nil || !strings.Contains(err.Error(), "not allowed") {
+		t.Fatalf("disallowed reference error = %v", err)
+	}
+
+	oversized := base
+	oversized.Summary = strings.Repeat("x", MaximumCheckpointSummaryBytes+1)
+	if _, err := store.Checkpoint(testWorkspaceID, created.Contract.ItemID, oversized); err == nil || !strings.Contains(err.Error(), "summary") {
+		t.Fatalf("oversized checkpoint error = %v", err)
+	}
+
+	if _, err := store.Pause(testWorkspaceID, created.Contract.ItemID, 2, started.State.ActiveAttemptID); err == nil || !strings.Contains(err.Error(), "checkpoint") {
+		t.Fatalf("pause without checkpoint error = %v", err)
+	}
+}
+
+func TestCreateRejectsInitialNextActionThatCannotFitProjection(t *testing.T) {
+	store := testStore(t)
+	input := testCreateInput()
+	input.InitialNextStep = strings.Repeat("x", 2048)
+	if _, err := store.Create(input); err == nil || !strings.Contains(err.Error(), "projection") {
+		t.Fatalf("oversized initial projection error = %v", err)
+	}
+}
+
+func TestNextProjectionEnforcesExactSerializedByteLimit(t *testing.T) {
+	projection := NextProjection{
+		SchemaVersion: 1,
+		ItemID:        "item-a",
+		State:         StateReady,
+		StateRevision: 1,
+		NextStep:      "",
+	}
+	empty, err := json.Marshal(projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection.NextStep = strings.Repeat("x", MaximumNextProjectionBytes-len(empty)-1)
+	body, err := json.Marshal(projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body)+1 != MaximumNextProjectionBytes {
+		t.Fatalf("boundary projection contains %d bytes", len(body)+1)
+	}
+	if err := validateNextProjection(projection); err != nil {
+		t.Fatalf("boundary projection error = %v", err)
+	}
+	projection.NextStep += "x"
+	if err := validateNextProjection(projection); err == nil {
+		t.Fatal("projection above the serialized byte limit was accepted")
+	}
+}
+
+func TestCheckpointRevisionSurvivesProjectionCrash(t *testing.T) {
+	store := testStore(t)
+	created, err := store.Create(testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := store.Start(testWorkspaceID, created.Contract.ItemID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.FaultPoint = func(point string) error {
+		if point == "after_revision_commit" {
+			return errors.New("simulated projection crash")
+		}
+		return nil
+	}
+	_, err = store.Checkpoint(testWorkspaceID, created.Contract.ItemID, CheckpointInput{
+		ExpectedRevision: 2,
+		AttemptID:        started.State.ActiveAttemptID,
+		Summary:          "Durable checkpoint.",
+		NextStep:         "Recover from the immutable revision.",
+	})
+	if err == nil || !strings.Contains(err.Error(), "simulated") {
+		t.Fatalf("checkpoint crash error = %v", err)
+	}
+
+	recovered, err := (Store{Root: store.Root}).Inspect(testWorkspaceID, created.Contract.ItemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recovered.State.StateRevision != 3 || recovered.Checkpoint == nil || recovered.Checkpoint.Summary != "Durable checkpoint." {
+		t.Fatalf("recovered checkpoint = %#v", recovered)
+	}
+}
+
+func TestNextActiveFailsClosedWhenSelectionIsAmbiguous(t *testing.T) {
+	store := testStore(t)
+	created, err := store.Create(testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Start(testWorkspaceID, created.Contract.ItemID, 1); err != nil {
+		t.Fatal(err)
+	}
+	active, err := store.NextActive(testWorkspaceID)
+	if err != nil || active.ItemID != created.Contract.ItemID {
+		t.Fatalf("active projection = %#v, err = %v", active, err)
+	}
+
+	ids := []string{"item-b", "attempt-c"}
+	store.NewID = func(kind string) (string, error) {
+		id := ids[0]
+		ids = ids[1:]
+		return id, nil
+	}
+	second, err := store.Create(testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Start(testWorkspaceID, second.Contract.ItemID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.NextActive(testWorkspaceID); !errors.Is(err, ErrActiveItemAmbiguous) {
+		t.Fatalf("ambiguous active item error = %v", err)
 	}
 }
 
