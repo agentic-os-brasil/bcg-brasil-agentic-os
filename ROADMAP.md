@@ -20,6 +20,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Define and implement a local, professional owner-self registry with facet policies and a cold-start interview contract.
 - [x] Decide that the future human atlas is scoped across managed, owner-private and workspace-private roots, alongside canonical derived memory.
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
+- [x] Define workspace agents as project specialists and context gatekeepers with compact state and versioned dossiers.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
 
 ## Track A - Contributor onboarding
@@ -61,6 +62,10 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement local refinement submission, policy enforcement, audit snapshots and explicit reversal for owner facets.
 - [ ] Implement approved local assessment ingestion with explicit consent, provenance and confirmation before synthesis.
 - [ ] Implement lifecycle observation capture and approved synthesis adapters that submit refinements to the local core.
+- [x] Bootstrap one local agent per workspace with a reviewed interview and versioned briefing.
+- [x] Implement explicit research-plan approval, hostname allowlists and sourced evidence persistence.
+- [x] Implement attested public economic snapshots with per-claim provenance
+  outside workspace roots and attach them by immutable ID.
 
 ### Discuss before closing the track
 
@@ -165,6 +170,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Implement runtime-neutral contracts and thin Claude/Codex adapters.
 - [x] Implement a deterministic managed skills index and `bcgos skills index` inspection surface.
 - [ ] Add safe context injection, workspace boundaries and capability detection.
+- [x] Add the managed `workspace-agent-setup` skill with fail-closed research approval and provenance workflow.
 - [ ] Package only allowlisted product content; exclude all development harness paths.
 - [ ] Validate install, init, update and rollback without client content.
 

@@ -67,6 +67,33 @@ func TestInitializeRejectsSyncedWorkspaceUntilExplicitlyConfirmed(t *testing.T) 
 	}
 }
 
+func TestInspectRejectsManifestCopiedFromAnotherWorkspace(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "AppData", "BCGOS")
+	workspaceA := filepath.Join(root, "Developer", "case-a")
+	workspaceB := filepath.Join(root, "Developer", "case-b")
+	if _, err := Initialize(Options{WorkspacePath: workspaceA, DataRoot: dataRoot}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(workspaceB, ".bcgos"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := os.ReadFile(filepath.Join(workspaceA, ".bcgos", "workspace.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceB, ".bcgos", "workspace.json"), manifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := Inspect(workspaceB, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.State != "invalid" || inspection.MetadataStatus != "path_mismatch" || inspection.WorkspaceID != "" {
+		t.Fatalf("Inspect() = %#v, want fail-closed path mismatch", inspection)
+	}
+}
+
 func TestDefaultDataRootUsesPerUserApplicationStorage(t *testing.T) {
 	tests := []struct {
 		name     string
