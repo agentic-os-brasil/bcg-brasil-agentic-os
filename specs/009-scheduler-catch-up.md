@@ -57,6 +57,10 @@ Job IDs and cadence are runtime-neutral. Daily and weekly local windows, timezon
 
 Session Start may perform one bounded, read-only status check. If work is due, the runtime adapter enqueues execution after startup and immediately returns control to the user. It may not invoke a model, compile a wiki or wait for completion inside Session Start.
 
+No lifecycle event may wait for a scheduler or worker lock. The eventual worker
+owns serialized execution; hooks read a last committed snapshot or emit a
+best-effort idempotent signal as defined in Spec 016.
+
 If no approved model or eligibility adapter is available, the executor records `unavailable`; it never substitutes a provider or marks the occurrence successful. Deterministic jobs may run unattended only when their own policy permits it.
 
 ## Native adapter contract

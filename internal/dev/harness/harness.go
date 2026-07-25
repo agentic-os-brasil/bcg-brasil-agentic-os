@@ -13,6 +13,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/hookpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
@@ -76,6 +77,15 @@ func Validate(root string, full bool, out io.Writer) error {
 				return err
 			}
 			return policy.Validate()
+		}},
+		{"product hook execution policy", func() error {
+			file, err := os.Open(filepath.Join(root, "bundles", "base", "runtime", "hook-policy.json"))
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+			_, err = hookpolicy.Parse(file)
+			return err
 		}},
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}
