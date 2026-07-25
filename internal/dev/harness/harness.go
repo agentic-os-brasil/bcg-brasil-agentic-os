@@ -15,6 +15,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/hookpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
@@ -86,6 +87,9 @@ func Validate(root string, full bool, out io.Writer) error {
 			defer file.Close()
 			_, err = hookpolicy.Parse(file)
 			return err
+		}},
+		{"release contract", func() error {
+			return releasecontract.ValidateSchemaFile(filepath.Join(root, "schemas", "release-manifest.schema.json"))
 		}},
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}
