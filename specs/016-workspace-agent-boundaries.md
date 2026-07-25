@@ -1,8 +1,8 @@
 # Spec 016 - Workspace agent boundaries
 
-Status: accepted architecture; local agent registry, compact state/dossier
-bootstrap and interview surface implemented. Runtime authorization enforcement
-and adapter conformance remain pending.
+Status: accepted architecture; local agent registry, compact state/dossier,
+interview surface and governed account-promotion core implemented. Native
+runtime authorization enforcement and adapter conformance remain pending.
 
 ## Objective
 
@@ -54,6 +54,10 @@ The account agent does not browse project workspaces. It may hold only facts
 explicitly promoted from a workspace, with source, author, classification and
 review status. Promotion is a deliberate handoff, not automatic memory
 aggregation.
+
+The runtime-neutral promotion, revocation and audit mechanics are defined in
+`specs/020-account-context-promotion.md`. The account-visible record omits the
+raw workspace pointer and resolves provenance through an opaque receipt ID.
 
 ## Cross-workspace delegation
 
