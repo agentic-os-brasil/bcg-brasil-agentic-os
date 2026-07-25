@@ -10,9 +10,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/boundary"
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/decisionlog"
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/skillmeta"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
 // FindRoot walks upward until it finds go.mod.
@@ -43,6 +45,12 @@ func Validate(root string, full bool, out io.Writer) error {
 		{"development skills", func() error {
 			return skillmeta.ValidateDir(filepath.Join(root, "dev", "skills"))
 		}},
+		{"product skills", func() error {
+			return skillmeta.ValidateProductDir(filepath.Join(root, "bundles", "base", "skills"))
+		}},
+		{"skills index", func() error {
+			return skillsindex.Validate(filepath.Join(root, "bundles", "base", "skills"))
+		}},
 		{"Claude skill projections", func() error {
 			return skillmeta.ValidateClaudeProjections(
 				filepath.Join(root, "dev", "skills"),
@@ -53,6 +61,22 @@ func Validate(root string, full bool, out io.Writer) error {
 			return skillmeta.ValidateClaudeRouting(root)
 		}},
 		{"development boundary", func() error { return boundary.Validate(root) }},
+		{"memory contract", func() error {
+			if err := memory.ValidateSchemaFile(filepath.Join(root, "schemas", "memory-policy.schema.json")); err != nil {
+				return err
+			}
+			if err := memory.ValidateArtifactSchemaFile(filepath.Join(root, "schemas", "memory-artifact.schema.json")); err != nil {
+				return err
+			}
+			if err := memory.ValidateCommitSchemaFile(filepath.Join(root, "schemas", "memory-commit.schema.json")); err != nil {
+				return err
+			}
+			policy, err := memory.LoadFile(filepath.Join(root, "bundles", "base", "memory", "policy.json"))
+			if err != nil {
+				return err
+			}
+			return policy.Validate()
+		}},
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}
 	if full {

@@ -12,7 +12,7 @@ Includes credentials, preferences, installed versions, caches and diagnostic log
 
 ## Workspace data
 
-Includes case files, project artifacts, source code and local memory. `bcgos init` may add only minimal, documented and regenerable metadata or adapters. It must not upload or copy workspace content into the managed bundle.
+Includes case files, project artifacts and source code. `bcgos init` may add only minimal, documented and regenerable metadata or adapters. Its current surface is `.bcgos/workspace.json` plus a non-overwriting `brain/README.md` that explains local Markdown navigation; it does not impose content taxonomy. It must not upload or copy workspace content into the managed bundle. Private memory remains user-local application data, not workspace content.
 
 Workspace context is not one undifferentiated local store: raw files, memory,
 indexes, logs and intermediate outputs are scoped to their registered workspace

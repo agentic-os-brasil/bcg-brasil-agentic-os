@@ -11,6 +11,15 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Establish specs, four-letter decisions, unit tests and a cross-platform development harness.
 - [x] Add novice-safe Git guards, recovery, CI and human-reviewed PR flow.
 - [x] Require equal pilot acceptance on Windows and macOS.
+- [x] Establish the L1/L2/L3, lifetime and dreaming memory contract.
+- [x] Add a sanitized default memory policy, contract validator and development skill.
+- [x] Adopt a Karpathy-inspired compiled wiki for governed content and memory navigation.
+- [x] Define Docling as the local-first ingestion substrate and progressive user profiles.
+- [x] Define and implement a canonical user-local interaction profile across product skills.
+- [x] Define and compile a managed skills index for bounded session navigation.
+- [x] Define and implement a local, professional owner-self registry with facet policies and a cold-start interview contract.
+- [x] Decide that the future human atlas is scoped across managed, owner-private and workspace-private roots, alongside canonical derived memory.
+- [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
 
 ## Track A - Contributor onboarding
 
@@ -36,12 +45,19 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 ### Build
 
-- [ ] Implement `bcgos version`, `status` and product-facing `doctor`.
-- [ ] Implement canonical manifest, lock and runtime-capability schemas.
-- [ ] Implement user-space directories on Windows and macOS.
-- [ ] Add Claude and Codex adapter skeletons against the same contracts.
-- [ ] Add conformance fixtures for platform and runtime parity.
-- [ ] Implement idempotent `bcgos init` with data-preservation tests.
+- [x] Implement `bcgos version`, `status` and product-facing `doctor`.
+- [x] Implement versioned runtime-capability manifest, schema and `bcgos doctor` report.
+- [ ] Implement canonical lock and runtime configuration schemas.
+- [x] Implement user-space directories on Windows and macOS.
+- [x] Add Claude and Codex adapter skeletons against the same canonical contract.
+- [x] Add initial conformance fixtures for equivalent capability identity, semantic events and criticality.
+- [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
+- [x] Implement idempotent `bcgos init` with data-preservation tests.
+- [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
+- [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.
+- [x] Implement local refinement submission, policy enforcement, audit snapshots and explicit reversal for owner facets.
+- [ ] Implement approved local assessment ingestion with explicit consent, provenance and confirmation before synthesis.
+- [ ] Implement lifecycle observation capture and approved synthesis adapters that submit refinements to the local core.
 
 ### Discuss before closing the track
 
@@ -54,6 +70,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 ### Build
 
+- [x] Implement and run an isolated local binary-installation trial with checksum verification on Windows, macOS and Linux. This is explicitly not a signed release or pilot distribution channel.
 - [ ] Produce versioned Windows and macOS artifacts in CI.
 - [ ] Define signed release manifest and compatibility rules.
 - [ ] Implement browser-based private-release authentication.
@@ -67,13 +84,83 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Code-signing, SmartScreen, Gatekeeper and provenance requirements.
 - Update cadence, forced security updates and support ownership.
 
-## Track D - First Agent OS bundle
+## Track D - Memory persistence and dreaming
+
+### Build
+
+- [x] Define L1 daily memory, L2 weekly rollups, L3 rolling thematic memory and curated lifetime memory.
+- [x] Define deterministic-first dreaming with source fingerprints, staging, validation, atomic activation and last-known-good preservation.
+- [x] Ship a sanitized runtime-neutral policy and validate it in the development harness.
+- [x] Add `evolve-memory` as the canonical development workflow for memory changes.
+- [x] Separate light daily dreaming from weekly deep dreaming and assign lifetime consolidation to the weekly cycle.
+- [x] Define the versioned local memory layout and provenance envelope.
+- [x] Define and validate the atomic memory commit-manifest schema.
+- [x] Define the durable run-state schema and runtime-neutral core for scheduling, bounded catch-up and diagnostics.
+- [x] Implement append-only L1 capture and bounded daily digests in the runtime-neutral engine.
+- [x] Implement idempotent L2 and L3 rollups with immutable versions and crash-interruption tests.
+- [x] Implement governed weekly lifetime eligibility and version history in the core engine.
+- [x] Implement bounded context assembly with drill-down pointers and diagnostics.
+- [x] Add the runtime-neutral `dream-memory` product skill.
+- [x] Connect sanitized capture, status and bounded context assembly to `bcgos memory`, with dreaming explicitly unavailable without an adapter.
+- [ ] Implement lifetime correction and deletion flows.
+- [ ] Implement stale-lock diagnosis and human-confirmed recovery in `bcgos doctor`.
+- [ ] Implement synthesis and eligibility adapters without embedding provider policy in the core.
+- [ ] Add executable dreaming plus `explain`, `export` and `delete` contracts before enabling persistence for pilot users.
+- [ ] Add equivalent Windows and macOS scheduling or presence-based catch-up adapters.
+- [ ] Add Claude and Codex conformance fixtures for injection and failure reporting.
+
+### Discuss before executing rollups
+
+- Which signals may enter L1 and what sanitization happens before persistence.
+- Synthesis provider, model policy, offline behavior and corporate data constraints.
+- Retention windows, context budgets and lifetime promotion eligibility.
+- User controls for inspect, correct, export and delete.
+- Recovery policy for locks left by interrupted or crashed dreaming runs.
+- Daily/weekly windows, unattended-model permission, catch-up limits and retry/backoff policy.
+- Whether shared organizational knowledge is a separate governed store rather than a memory layer.
+
+## Track E - Content navigation and knowledge wiki
+
+### Build
+
+- [x] Define the managed and private atlas boundaries and the role of wiki versus canonical sources.
+- [x] Define how the private atlas navigates L1/L2/L3/lifetime without becoming another memory store.
+- [x] Define the wiki as downstream navigation over rollups produced by dreaming.
+- [x] Adopt OKF v0.1 plus a governed BCGOS Atlas Profile for wiki bundles.
+- [x] Define event-driven incremental updates, weekly reconciliation and synchronous revocation barriers.
+- [ ] Define page and machine-readable index schemas.
+- [ ] Implement the BCGOS Atlas Profile v1 schema and OKF validator.
+- [ ] Implement the transactional outbox, source watermarks and atomic atlas manifest.
+- [ ] Implement the deterministic managed product-atlas generator.
+- [ ] Generate index, backlinks, orphan/broken-link diagnostics and a generation log.
+- [ ] Add allowlist, provenance, determinism and boundary tests to CI.
+- [ ] Expose bounded product-content pointers for Claude and Codex adapters.
+- [ ] Implement owner/workspace private atlas only after enrollment, privacy and deletion contracts are ready.
+- [ ] Extend the initial private-atlas taxonomy only through scoped templates, ownership rules and privacy tests.
+
+### Discuss before enabling private navigation
+
+- Exact managed content allowlist and initial page taxonomy.
+- Owner/workspace enrollment and access-policy contract.
+- Which memory layers may produce summaries versus pointers only.
+- Which temporal, topic and entity facets may be derived from each rollup layer.
+- Private compilation provider, offline behavior and corporate data constraints.
+- Organizational knowledge approval, synchronization and retirement.
+- User command vocabulary: `bcgos wiki`, `bcgos knowledge` or another surface.
+- Freshness targets, retry/backoff limits and private crypto-erasure policy.
+
+## Track F - First Agent OS bundle
 
 ### Build
 
 - [ ] Select one high-value work use case from observed consultant needs.
+- [x] Define the local-first ingestion contract, managed runtime-pack boundary and standard/advanced/power progressive-disclosure model.
+- [ ] Run a Windows/macOS Docling runtime-pack distribution spike with sanitized fixtures, measuring size, first-use time, offline behavior and extraction quality.
+- [ ] Implement verified installation, capability detection and removal of the ingestion runtime pack.
+- [ ] Implement `bcgos ingest` and the Docling-first, deterministic-fallback execution contract.
 - [ ] Define the minimal bundle manifest, version and compatibility range.
 - [ ] Implement runtime-neutral contracts and thin Claude/Codex adapters.
+- [x] Implement a deterministic managed skills index and `bcgos skills index` inspection surface.
 - [ ] Add safe context injection, workspace boundaries and capability detection.
 - [ ] Package only allowlisted product content; exclude all development harness paths.
 - [ ] Validate install, init, update and rollback without client content.
@@ -84,8 +171,9 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Shared versus local knowledge governance.
 - Which hooks block, warn or observe.
 - Ownership and retirement model for agents and skills.
+- Runtime-pack size, model-prefetch, corporate proxy and offline acceptance thresholds.
 
-## Track E - Ten-person pilot
+## Track G - Ten-person pilot
 
 ### Build
 

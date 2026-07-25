@@ -16,6 +16,8 @@ O agente vai verificar seu ambiente, explicar os termos e oferecer uma unica pro
 start-work -> develop-change -> prepare-pr -> revisao humana
 ```
 
+Mudancas em memoria, dreaming, rollups ou injecao de contexto usam `evolve-memory` dentro da etapa de desenvolvimento.
+
 Se algo der errado, diga: **"Use recover-work. Estou perdido."** O fluxo de recuperacao primeiro preserva seus arquivos e so depois propoe uma acao.
 
 ## Protecoes

@@ -33,6 +33,15 @@ func TestValidateDirRejectsNameDrift(t *testing.T) {
 	}
 }
 
+func TestValidateProductDirRejectsSkillsWithoutInteractionProfileContract(t *testing.T) {
+	root := t.TempDir()
+	writeSkill(t, root, "dream-memory", "dream-memory", "Consolidate professional memory safely.")
+	err := ValidateProductDir(root)
+	if err == nil || !strings.Contains(err.Error(), "must reference the canonical interaction-profile skill") {
+		t.Fatalf("ValidateProductDir() error = %v, want interaction profile rejection", err)
+	}
+}
+
 func TestValidateClaudeProjectionsAcceptsThinMatchingProjection(t *testing.T) {
 	root := t.TempDir()
 	canonical := filepath.Join(root, "dev", "skills")

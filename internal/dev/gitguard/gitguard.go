@@ -13,8 +13,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/clauderouting"
-	devharness "github.com/DScardini91/bcg-brasil-agentic-os/internal/dev/harness"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/clauderouting"
+	devharness "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/harness"
 )
 
 var destructivePatterns = []struct {
@@ -316,6 +316,9 @@ func requiredSkill(input hookInput) string {
 		if strings.HasSuffix(path, "docs/decisions/decision-log.md") {
 			return "record-decision"
 		}
+		if memoryPath(path) {
+			return "evolve-memory"
+		}
 		return "develop-change"
 	}
 	if input.ToolName != "Bash" {
@@ -331,6 +334,9 @@ func requiredSkill(input hookInput) string {
 	}
 	if regexp.MustCompile(`(?i)\bgo\s+run\s+\./dev/harness\s+recover\b`).MatchString(command) {
 		return "recover-work"
+	}
+	if strings.Contains(normalized, "internal/memory") || strings.Contains(normalized, "bundles/base/memory") || strings.Contains(normalized, "schemas/memory-policy.schema.json") || strings.Contains(normalized, "schemas/memory-artifact.schema.json") || strings.Contains(normalized, "schemas/memory-commit.schema.json") || strings.Contains(normalized, "specs/006-memory-persistence.md") {
+		return "evolve-memory"
 	}
 	if regexp.MustCompile(`(?i)\b(git\s+(commit|push)|gh\s+pr\s+create)\b`).MatchString(command) {
 		return "prepare-pr"
@@ -351,6 +357,15 @@ func requiredSkill(input hookInput) string {
 		return ""
 	}
 	return "develop-change"
+}
+
+func memoryPath(path string) bool {
+	return strings.Contains(path, "/internal/memory/") || strings.HasPrefix(path, "internal/memory/") ||
+		strings.Contains(path, "/bundles/base/memory/") || strings.HasPrefix(path, "bundles/base/memory/") ||
+		strings.HasSuffix(path, "schemas/memory-policy.schema.json") ||
+		strings.HasSuffix(path, "schemas/memory-artifact.schema.json") ||
+		strings.HasSuffix(path, "schemas/memory-commit.schema.json") ||
+		strings.HasSuffix(path, "specs/006-memory-persistence.md")
 }
 
 func readOnlyBash(command string) bool {

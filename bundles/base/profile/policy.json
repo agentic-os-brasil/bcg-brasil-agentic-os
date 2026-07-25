@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "default_profile": "standard",
+  "profiles": [
+    {
+      "id": "standard",
+      "communication": "plain_language_one_safe_recommendation",
+      "suggestions": "minimal"
+    },
+    {
+      "id": "advanced",
+      "communication": "concise_rationale_with_explained_options",
+      "suggestions": "approved_diagnostics_and_configuration"
+    },
+    {
+      "id": "power",
+      "communication": "direct_technical_detail_and_tradeoffs",
+      "suggestions": "explicit_technical_alternatives_after_preflight"
+    }
+  ],
+  "invariants": {
+    "controls": "progressive_disclosure_and_communication",
+    "grants_authority": false,
+    "allows_remote_provider": false,
+    "persists_in_memory": false,
+    "stored_in_workspace": false
+  }
+}
