@@ -1,4 +1,4 @@
-# Spec 016 - Non-blocking product hook execution
+# Spec 019 - Non-blocking product hook execution
 
 Status: policy implemented and validated; native product adapters pending.
 

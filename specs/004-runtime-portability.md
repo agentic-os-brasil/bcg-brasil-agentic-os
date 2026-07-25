@@ -94,7 +94,7 @@ remains `unavailable` until a thin adapter and equivalent conformance fixture
 exist; development hooks are never evidence of product hook support.
 
 Every future product adapter must also conform to the non-blocking execution
-policy in Spec 016. A native lifecycle mechanism may translate and emit a
+policy in Spec 019. A native lifecycle mechanism may translate and emit a
 semantic event, but it may not turn the hook into a synchronous worker.
 
 ## Update guarantees

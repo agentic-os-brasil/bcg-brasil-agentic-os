@@ -59,7 +59,7 @@ Session Start may perform one bounded, read-only status check. If work is due, t
 
 No lifecycle event may wait for a scheduler or worker lock. The eventual worker
 owns serialized execution; hooks read a last committed snapshot or emit a
-best-effort idempotent signal as defined in Spec 016.
+best-effort idempotent signal as defined in Spec 019.
 
 If no approved model or eligibility adapter is available, the executor records `unavailable`; it never substitutes a provider or marks the occurrence successful. Deterministic jobs may run unattended only when their own policy permits it.
 
