@@ -25,6 +25,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionhook"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionresolve"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
@@ -713,11 +714,14 @@ func runAtlas(args []string, out, errOut io.Writer, dataRoot func() (string, err
 }
 
 func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
-	if len(args) == 0 || (args[0] != "packet" && args[0] != "bridge") {
-		fmt.Fprintln(errOut, "usage: bcgos session <packet|bridge> [workspace-path]")
+	if len(args) == 0 || (args[0] != "packet" && args[0] != "bridge" && args[0] != "resolve") {
+		fmt.Fprintln(errOut, "usage: bcgos session <packet|bridge|resolve> [workspace-path]")
 		return ExitUsage
 	}
 	command := args[0]
+	if command == "resolve" {
+		return runSessionResolve(args[1:], out, errOut, dataRoot)
+	}
 	runtimeName := ""
 	remaining := args[1:]
 	if command == "bridge" {
@@ -764,6 +768,40 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 		return writeJSON(out, envelope, errOut)
 	}
 	return writeJSON(out, packet, errOut)
+}
+
+func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	flags := newFlagSet("session resolve", errOut)
+	pointer := flags.String("pointer", "", "packet pointer to resolve")
+	purpose := flags.String("purpose", "", "authorized purpose")
+	budget := flags.Int("budget-bytes", 0, "maximum body bytes")
+	if err := flags.Parse(args); err != nil || *pointer == "" || *purpose == "" || flags.NArg() > 1 {
+		fmt.Fprintln(errOut, "usage: bcgos session resolve --pointer <pointer> --purpose session --budget-bytes <1..8192> [workspace-path]")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	path := optionalArg(flags.Args())
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	profileState, err := resolveProfile(root, "", false)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	owner, err := ownerctx.Inspect(root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID})})
+	result, err := sessionresolve.Resolve(root, *pointer, *purpose, packet, *budget)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, result, errOut)
 }
 
 func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {

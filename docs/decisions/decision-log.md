@@ -413,3 +413,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Claude and Codex receive separately managed local configuration and can be removed without deleting user settings. A workspace adapter may be absent in another workspace by design. Installation state and actual runtime execution remain distinct diagnostics.
 - Refs: specs/018-workspace-local-adapter-installation.md; internal/adaptercfg; internal/cli/cli.go
 - Supersedes: none
+
+## RSLV - Resolve session pointers explicitly and under budget
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A pointer-only Session Packet protects private sources at startup, but the runtime needs a governed way to obtain a narrowly authorized source later without turning the hook into a broad reader.
+- Decision: Pointer resolution is an explicit post-start operation with declared `session` purpose and a bounded byte budget. It may read only owner pointers already exposed by the current packet, rejects traversal and returns an omission/budget state rather than broadening access. Hooks never call it.
+- Consequences: The SELF can inform work progressively without injecting all facets. Atlas, skills and memory pointers require separate authorization/resolution contracts; sensitive and unreviewed owner facets remain unreachable.
+- Refs: specs/015-session-context-packet.md; specs/019-authorized-session-pointer-resolution.md; internal/sessionresolve
+- Supersedes: none
