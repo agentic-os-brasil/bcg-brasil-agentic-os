@@ -48,10 +48,12 @@ func TestSharedAdversarialFixturesFailClosedInBothRuntimes(t *testing.T) {
 			Name            string `json:"name"`
 			SemanticEvent   string `json:"semantic_event"`
 			BranchID        string `json:"branch_id"`
+			DispatchID      string `json:"dispatch_id"`
 			ActorID         string `json:"actor_id"`
 			ActorCapability string `json:"actor_capability"`
 			TargetID        string `json:"target_id"`
 			Scope           string `json:"scope"`
+			ScopeKind       string `json:"scope_kind"`
 			Tool            string `json:"tool"`
 			Operation       string `json:"operation"`
 			Resource        string `json:"resource"`
@@ -73,9 +75,11 @@ func TestSharedAdversarialFixturesFailClosedInBothRuntimes(t *testing.T) {
 				}
 				event := NativeEvent{
 					Name:     nativeEventName(runtime, test.SemanticEvent),
-					BranchID: test.BranchID, ActorID: test.ActorID,
+					BranchID: test.BranchID, DispatchID: test.DispatchID,
+					ActorID:         test.ActorID,
 					ActorCapability: test.ActorCapability, TargetID: test.TargetID,
-					Scope: test.Scope, Tool: test.Tool, Operation: test.Operation,
+					Scope: test.Scope, ScopeKind: test.ScopeKind,
+					Tool: test.Tool, Operation: test.Operation,
 					Resource: test.Resource,
 				}
 				assertDenied(t, adapter.Handle(event), test.ExpectedCode)
@@ -94,16 +98,16 @@ func TestAdaptersFailClosedOnCoreToolsParallelismAndRoleEscape(t *testing.T) {
 			}
 			names := nativeNames(runtime)
 			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, ActorID: "maestro", ActorCapability: "maestro-cap", Scope: "anything"}), "tool_denied")
-			assertAllowed(t, adapter.Handle(NativeEvent{Name: names.branchStart, BranchID: "alpha", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "workspace-alpha"}))
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.branchStart, BranchID: "beta", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance"}), "branch_active")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "alpha", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", TargetID: "subject-insurance"}), "edge_denied")
-			assertAllowed(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "alpha", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", TargetID: "capability-research"}))
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "alpha", ActorID: "capability-research", ActorCapability: "capability-research-cap", TargetID: "capability-other"}), "child_active")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "alpha", ActorID: "capability-research", ActorCapability: "capability-research-cap", Scope: "beta", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/file.md"}), "scope_denied")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "alpha", ActorID: "capability-other", ActorCapability: "capability-other-cap", Scope: "alpha", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/file.md"}), "actor_denied")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "alpha", ActorID: "capability-research", ActorCapability: "wrong", Scope: "alpha"}), "actor_denied")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "alpha", ActorID: "capability-research", ActorCapability: "capability-research-cap", Scope: "alpha", Tool: "shell", Operation: "exec", Resource: "bcgos://workspace/alpha/file.md"}), "resource_denied")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "alpha", ActorID: "capability-research", ActorCapability: "capability-research-cap", Scope: "alpha", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/%2e%2e/beta.md"}), "resource_denied")
+			assertAllowed(t, adapter.Handle(NativeEvent{Name: names.branchStart, BranchID: "run-alpha", Scope: "alpha", ScopeKind: "workspace", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "workspace-alpha"}))
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.branchStart, BranchID: "run-beta", Scope: "beta", ScopeKind: "practice", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance"}), "branch_active")
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "run-alpha", DispatchID: "child-1", Scope: "alpha", ScopeKind: "workspace", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", TargetID: "subject-insurance"}), "edge_denied")
+			assertAllowed(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "run-alpha", DispatchID: "child-1", Scope: "alpha", ScopeKind: "workspace", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", TargetID: "capability-research"}))
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "run-alpha", DispatchID: "child-2", Scope: "alpha", ScopeKind: "workspace", ActorID: "capability-research", ActorCapability: "capability-research-cap", TargetID: "capability-other"}), "child_active")
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", DispatchID: "child-1", ActorID: "capability-research", ActorCapability: "capability-research-cap", Scope: "beta", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/file.md"}), "scope_denied")
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", DispatchID: "child-1", ActorID: "capability-other", ActorCapability: "capability-other-cap", Scope: "alpha", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/file.md"}), "actor_denied")
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", DispatchID: "child-1", ActorID: "capability-research", ActorCapability: "wrong", Scope: "alpha"}), "actor_denied")
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", DispatchID: "child-1", ActorID: "capability-research", ActorCapability: "capability-research-cap", Scope: "alpha", Tool: "shell", Operation: "exec", Resource: "bcgos://workspace/alpha/file.md"}), "resource_denied")
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", DispatchID: "child-1", ActorID: "capability-research", ActorCapability: "capability-research-cap", Scope: "alpha", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/%2e%2e/beta.md"}), "resource_denied")
 		})
 	}
 }
@@ -119,9 +123,42 @@ func TestAdaptersRejectUnknownRuntimeEventAndMalformedState(t *testing.T) {
 	}
 	assertDenied(t, adapter.Handle(NativeEvent{Name: "invented"}), "event_unsupported")
 	names := nativeNames("claude")
-	assertDenied(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "alpha", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", TargetID: "capability-research"}), "branch_missing")
+	assertDenied(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "run-alpha", DispatchID: "child-1", Scope: "alpha", ScopeKind: "workspace", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", TargetID: "capability-research"}), "branch_missing")
 	assertDenied(t, adapter.Handle(NativeEvent{Name: names.branchStop, BranchID: "alpha", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap"}), "branch_missing")
-	assertDenied(t, adapter.Handle(NativeEvent{Name: nativeNames("codex").branchStart, BranchID: "alpha", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "workspace-alpha"}), "event_unsupported")
+	assertDenied(t, adapter.Handle(NativeEvent{Name: nativeNames("codex").branchStart, BranchID: "alpha", ScopeKind: "workspace", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "workspace-alpha"}), "event_unsupported")
+}
+
+func TestChildToolRequestsBindTheActiveDispatchID(t *testing.T) {
+	catalog := loadCatalog(t)
+	adapter, err := NewAdapter("claude", catalog, testAuthorizations(), mustStore(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertAllowed(t, adapter.StartBranch(
+		"maestro", "maestro-cap", "workspace-alpha", "run-alpha", "alpha", "workspace",
+	))
+	assertAllowed(t, adapter.StartChild(
+		"workspace-alpha", "workspace-alpha-cap", "capability-research",
+		"run-alpha", "child-1", "alpha", "workspace",
+	))
+	toolEvent := NativeEvent{
+		Name: nativeNames("claude").tool, BranchID: "run-alpha",
+		DispatchID: "child-1", ActorID: "capability-research",
+		ActorCapability: "capability-research-cap", Scope: "alpha",
+		Tool: "workspace_reader", Operation: "read",
+		Resource: "bcgos://workspace/alpha/file.md",
+	}
+	assertAllowed(t, adapter.Handle(toolEvent))
+	assertAllowed(t, adapter.FinishChild(
+		"capability-research", "capability-research-cap", "run-alpha", "child-1",
+	))
+	assertAllowed(t, adapter.StartChild(
+		"workspace-alpha", "workspace-alpha-cap", "capability-research",
+		"run-alpha", "child-2", "alpha", "workspace",
+	))
+	assertDenied(t, adapter.Handle(toolEvent), "dispatch_denied")
+	toolEvent.DispatchID = "child-2"
+	assertAllowed(t, adapter.Handle(toolEvent))
 }
 
 func TestSharedStateSurvivesAdapterReplacementAndRejectsParallelControllers(t *testing.T) {
@@ -136,12 +173,12 @@ func TestSharedStateSurvivesAdapterReplacementAndRejectsParallelControllers(t *t
 		t.Fatal(err)
 	}
 	assertAllowed(t, claude.Handle(NativeEvent{
-		Name: nativeNames("claude").branchStart, BranchID: "alpha",
-		ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "workspace-alpha",
+		Name: nativeNames("claude").branchStart, BranchID: "run-alpha",
+		Scope: "alpha", ScopeKind: "workspace", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "workspace-alpha",
 	}))
 	assertDenied(t, codex.Handle(NativeEvent{
-		Name: nativeNames("codex").branchStart, BranchID: "beta",
-		ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance",
+		Name: nativeNames("codex").branchStart, BranchID: "run-beta",
+		Scope: "beta", ScopeKind: "practice", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance",
 	}), "branch_active")
 
 	restored, err := RestoreStateStore(store.Snapshot(), "recovery-cap")
@@ -153,8 +190,8 @@ func TestSharedStateSurvivesAdapterReplacementAndRejectsParallelControllers(t *t
 		t.Fatal(err)
 	}
 	assertDenied(t, restarted.Handle(NativeEvent{
-		Name: nativeNames("codex").branchStart, BranchID: "beta",
-		ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance",
+		Name: nativeNames("codex").branchStart, BranchID: "run-beta",
+		Scope: "beta", ScopeKind: "practice", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance",
 	}), "branch_active")
 }
 
@@ -167,8 +204,8 @@ func TestLostStopRequiresExplicitAgeBoundedRecovery(t *testing.T) {
 	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
 	adapter.now = func() time.Time { return now }
 	assertAllowed(t, adapter.Handle(NativeEvent{
-		Name: nativeNames("claude").branchStart, BranchID: "alpha",
-		ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "workspace-alpha",
+		Name: nativeNames("claude").branchStart, BranchID: "run-alpha",
+		Scope: "alpha", ScopeKind: "workspace", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "workspace-alpha",
 	}))
 	now = now.Add(4 * time.Minute)
 	if adapter.RecoverStale(5*time.Minute, "wrong") {
@@ -182,8 +219,8 @@ func TestLostStopRequiresExplicitAgeBoundedRecovery(t *testing.T) {
 		t.Fatal("stale branch was not explicitly recovered")
 	}
 	assertAllowed(t, adapter.Handle(NativeEvent{
-		Name: nativeNames("claude").branchStart, BranchID: "beta",
-		ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance",
+		Name: nativeNames("claude").branchStart, BranchID: "run-beta",
+		Scope: "beta", ScopeKind: "practice", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance",
 	}))
 }
 
@@ -229,7 +266,8 @@ func TestAdapterRejectsUnsafeAuthorizationsAndRestoredState(t *testing.T) {
 	}
 
 	restored, err := RestoreStateStore(StateSnapshot{
-		BranchID: "alpha", ScopeKind: "workspace", RootID: "workspace-unknown", Updated: time.Now().UTC(),
+		BranchID: "run-alpha", ScopeID: "alpha", ScopeKind: "workspace",
+		RootID: "workspace-unknown", Updated: time.Now().UTC(),
 	}, "recovery-cap")
 	if err != nil {
 		t.Fatal(err)
@@ -303,10 +341,12 @@ func governedSequence(t *testing.T, runtime string) []NativeEvent {
 		Events        []struct {
 			SemanticEvent   string `json:"semantic_event"`
 			BranchID        string `json:"branch_id"`
+			DispatchID      string `json:"dispatch_id"`
 			ActorID         string `json:"actor_id"`
 			ActorCapability string `json:"actor_capability"`
 			TargetID        string `json:"target_id"`
 			Scope           string `json:"scope"`
+			ScopeKind       string `json:"scope_kind"`
 			Tool            string `json:"tool"`
 			Operation       string `json:"operation"`
 			Resource        string `json:"resource"`
@@ -333,9 +373,11 @@ func governedSequence(t *testing.T, runtime string) []NativeEvent {
 			t.Fatalf("unsupported fixture event %q", event.SemanticEvent)
 		}
 		events = append(events, NativeEvent{
-			Name: nativeName, BranchID: event.BranchID, ActorID: event.ActorID,
+			Name: nativeName, BranchID: event.BranchID,
+			DispatchID: event.DispatchID, ActorID: event.ActorID,
 			ActorCapability: event.ActorCapability, TargetID: event.TargetID,
-			Scope: event.Scope, Tool: event.Tool, Operation: event.Operation,
+			Scope: event.Scope, ScopeKind: event.ScopeKind,
+			Tool: event.Tool, Operation: event.Operation,
 			Resource: event.Resource,
 		})
 	}
