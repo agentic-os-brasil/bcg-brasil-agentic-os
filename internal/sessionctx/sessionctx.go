@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -33,6 +34,7 @@ type Sources struct {
 	Workspace workspace.Inspection
 	Owner     ownerctx.Status
 	Atlas     atlas.Status
+	Execution execution.ActivePointer
 }
 
 type Pointer struct {
@@ -76,6 +78,10 @@ type Memory struct {
 	Message string `json:"message"`
 }
 
+type ExecutionContext struct {
+	Active Pointer `json:"active"`
+}
+
 type Omission struct {
 	Source string `json:"source"`
 	Reason string `json:"reason"`
@@ -88,6 +94,7 @@ type Packet struct {
 	Workspace          Workspace          `json:"workspace"`
 	Owner              Owner              `json:"owner"`
 	Atlas              Atlas              `json:"atlas"`
+	Execution          ExecutionContext   `json:"execution"`
 	Skills             Skills             `json:"skills"`
 	Memory             Memory             `json:"memory"`
 	Omissions          []Omission         `json:"omissions"`
@@ -112,8 +119,9 @@ func Build(sources Sources) Packet {
 			Owner:     pointerAtlas("owner", sources.Atlas.Owner),
 			Workspace: pointerAtlas("workspace", sources.Atlas.Workspace),
 		},
-		Skills: Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
-		Memory: Memory{State: "unavailable", Message: "memory context injection requires a runtime adapter"},
+		Execution: ExecutionContext{Active: executionPointer(sources.Execution)},
+		Skills:    Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
+		Memory:    Memory{State: "unavailable", Message: "memory context injection requires a runtime adapter"},
 	}
 	if sources.Workspace.State != "ready" && sources.Workspace.State != "warning" {
 		packet.Omissions = append(packet.Omissions, Omission{Source: "workspace", Reason: "workspace is not ready"})
@@ -123,6 +131,9 @@ func Build(sources Sources) Packet {
 	}
 	if !sources.Atlas.Owner.Available || !sources.Atlas.Workspace.Available {
 		packet.Omissions = append(packet.Omissions, Omission{Source: "atlas", Reason: "human atlas bootstrap is incomplete"})
+	}
+	if packet.Execution.Active.State == execution.ActivePointerAmbiguous {
+		packet.Omissions = append(packet.Omissions, Omission{Source: "execution", Reason: "multiple active execution items require explicit resolution"})
 	}
 	if len(packet.Omissions) > 0 {
 		packet.State = "partial"
@@ -143,10 +154,42 @@ func (packet Packet) Validate() error {
 			return errors.New("session context packet has an invalid owner facet pointer")
 		}
 	}
+	active := packet.Execution.Active
+	switch active.State {
+	case execution.ActivePointerAvailable:
+		if !active.Available || active.Path != execution.ActivePointerPath {
+			return errors.New("session context packet has an invalid active execution pointer")
+		}
+	case execution.ActivePointerUnavailable, execution.ActivePointerAmbiguous:
+		if active.Available || active.Path != "" {
+			return errors.New("session context packet exposes an unresolved active execution pointer")
+		}
+	default:
+		return errors.New("session context packet has an invalid active execution state")
+	}
+	if active.State == execution.ActivePointerAmbiguous && (packet.State != "partial" || !hasOmission(packet.Omissions, "execution")) {
+		return errors.New("ambiguous active execution must be reported as a partial omission")
+	}
 	if packet.State == "ready" && len(packet.Omissions) != 0 {
 		return errors.New("ready session context packet has omissions")
 	}
 	return nil
+}
+
+func hasOmission(omissions []Omission, source string) bool {
+	for _, omission := range omissions {
+		if omission.Source == source {
+			return true
+		}
+	}
+	return false
+}
+
+func executionPointer(value execution.ActivePointer) Pointer {
+	if value.State == "" {
+		return Pointer{State: execution.ActivePointerUnavailable}
+	}
+	return Pointer{Path: value.Path, Available: value.Available, State: value.State}
 }
 
 func sessionFacets(facets map[string]ownerctx.Facet) map[string]Pointer {

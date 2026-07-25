@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -493,6 +495,112 @@ func TestSessionBridgeProducesTheSameBoundedAdapterInputForEachRuntime(t *testin
 	output.Reset()
 	if code := runSession([]string{"bridge", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"runtime": "codex"`) || strings.Contains(output.String(), "Descreva como voce quer falar") {
 		t.Fatalf("Codex bridge exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestExecutionHandoffAcrossTwoSessionsUsesOnlyTheActivePointer(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	workspacePath := filepath.Join(t.TempDir(), "case-a")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+
+	const objective = "Secret contract body that must never enter Session Context."
+	const summary = "Session A left a bounded checkpoint."
+	const nextStep = "Session B should resume from this bounded next action."
+	contract := `{
+	  "objective": "` + objective + `",
+	  "initial_next_step": "Start in session A.",
+	  "criteria": [{"id": "tests", "type": "command_check", "command": ["go", "version"]}],
+	  "allowed_refs": []
+	}`
+
+	var sessionA bytes.Buffer
+	if code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &sessionA, &sessionA, dataRoot); code != ExitOK {
+		t.Fatalf("session A create exit = %d, output = %s", code, sessionA.String())
+	}
+	var created execution.MutationReceipt
+	if err := json.Unmarshal(sessionA.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	sessionA.Reset()
+	if code := runWork([]string{"start", "--workspace", workspacePath, "--item", created.ItemID, "--revision", strconv.Itoa(created.StateRevision)}, strings.NewReader(""), &sessionA, &sessionA, dataRoot); code != ExitOK {
+		t.Fatalf("session A start exit = %d, output = %s", code, sessionA.String())
+	}
+	var started execution.MutationReceipt
+	if err := json.Unmarshal(sessionA.Bytes(), &started); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := `{"summary":"` + summary + `","next_step":"` + nextStep + `","artifact_refs":[]}`
+	sessionA.Reset()
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--item", created.ItemID, "--revision", strconv.Itoa(started.StateRevision), "--attempt", started.AttemptID, "--stdin"}, strings.NewReader(checkpoint), &sessionA, &sessionA, dataRoot); code != ExitOK {
+		t.Fatalf("session A checkpoint exit = %d, output = %s", code, sessionA.String())
+	}
+	var checkpointed execution.MutationReceipt
+	if err := json.Unmarshal(sessionA.Bytes(), &checkpointed); err != nil {
+		t.Fatal(err)
+	}
+	sessionA.Reset()
+	if code := runWork([]string{"pause", "--workspace", workspacePath, "--item", created.ItemID, "--revision", strconv.Itoa(checkpointed.StateRevision), "--attempt", started.AttemptID}, strings.NewReader(""), &sessionA, &sessionA, dataRoot); code != ExitOK {
+		t.Fatalf("session A pause exit = %d, output = %s", code, sessionA.String())
+	}
+	var paused execution.MutationReceipt
+	if err := json.Unmarshal(sessionA.Bytes(), &paused); err != nil {
+		t.Fatal(err)
+	}
+
+	envelopes := make(map[string]sessionstart.Envelope)
+	for _, runtimeName := range []string{"claude", "codex"} {
+		var sessionB bytes.Buffer
+		if code := runSession([]string{"bridge", "--runtime", runtimeName, workspacePath}, &sessionB, &sessionB, dataRoot); code != ExitOK {
+			t.Fatalf("session B %s bridge exit = %d, output = %s", runtimeName, code, sessionB.String())
+		}
+		var envelope sessionstart.Envelope
+		if err := json.Unmarshal(sessionB.Bytes(), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		pointer := envelope.Packet.Execution.Active
+		if pointer.Path != execution.ActivePointerPath || !pointer.Available || pointer.State != execution.ActivePointerAvailable {
+			t.Fatalf("%s active pointer = %#v", runtimeName, pointer)
+		}
+		for _, prohibited := range []string{objective, summary, nextStep, created.ItemID, started.AttemptID} {
+			if strings.Contains(sessionB.String(), prohibited) {
+				t.Fatalf("%s Session Context leaked %q: %s", runtimeName, prohibited, sessionB.String())
+			}
+		}
+		envelopes[runtimeName] = envelope
+	}
+	if !reflect.DeepEqual(envelopes["claude"].Packet, envelopes["codex"].Packet) {
+		t.Fatalf("runtime packets differ: claude=%#v codex=%#v", envelopes["claude"].Packet, envelopes["codex"].Packet)
+	}
+
+	var sessionB bytes.Buffer
+	if code := runWork([]string{"next", "--workspace", workspacePath, "--active"}, strings.NewReader(""), &sessionB, &sessionB, dataRoot); code != ExitOK {
+		t.Fatalf("session B next exit = %d, output = %s", code, sessionB.String())
+	}
+	var next execution.NextProjection
+	if err := json.Unmarshal(sessionB.Bytes(), &next); err != nil {
+		t.Fatal(err)
+	}
+	if next.ItemID != created.ItemID || next.StateRevision != paused.StateRevision || next.Summary != summary || next.NextStep != nextStep {
+		t.Fatalf("session B next = %#v", next)
+	}
+	sessionB.Reset()
+	if code := runWork([]string{"resume", "--workspace", workspacePath, "--item", next.ItemID, "--revision", strconv.Itoa(next.StateRevision)}, strings.NewReader(""), &sessionB, &sessionB, dataRoot); code != ExitOK {
+		t.Fatalf("session B resume exit = %d, output = %s", code, sessionB.String())
+	}
+	var resumed execution.MutationReceipt
+	if err := json.Unmarshal(sessionB.Bytes(), &resumed); err != nil {
+		t.Fatal(err)
+	}
+	if resumed.AttemptID == "" || resumed.AttemptID == started.AttemptID {
+		t.Fatalf("session B reused stale attempt: %#v", resumed)
+	}
+	sessionB.Reset()
+	code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--item", created.ItemID, "--revision", strconv.Itoa(resumed.StateRevision), "--attempt", started.AttemptID, "--stdin"}, strings.NewReader(checkpoint), &sessionB, &sessionB, dataRoot)
+	if code == ExitOK || !strings.Contains(sessionB.String(), execution.ErrAttemptConflict.Error()) {
+		t.Fatalf("stale session A writer exit = %d, output = %s", code, sessionB.String())
 	}
 }
 
