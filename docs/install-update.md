@@ -42,9 +42,11 @@ duplicate paths, file-count and expanded-size limits.
 - matching release-notes digest;
 - no missing, extra, directory or symlink entry.
 
-This PR intentionally starts from a local release directory. Authenticated
-provider discovery and download are a separate adapter and cannot bypass this
-verifier.
+Authenticated provider discovery and download terminate at this same local
+release boundary and cannot bypass the verifier. `bcgos update --check` emits
+one exact, schema-versioned plan and persists its signed payload. It remains
+unavailable unless the build contains an approved provider registration,
+authority-registry digest and usable native credential store.
 
 ## Activation and recovery
 
@@ -67,9 +69,12 @@ bundle are removed and the previous CLI is restored. Explicit rollback uses
 the same lock and self-check. Local configuration, workspaces and user memory
 are outside every activation path.
 
-On Windows, the CLI launches the independently seeded bootstrapper with its
-own PID and exits. The bootstrapper waits for that process before touching
-`bcgos.exe`; the active executable never attempts to replace itself.
+`bcgos update --confirm <plan-id>` accepts only the exact pending plan, derives
+the managed root from its own protected `bin` path and launches the fixed
+independently seeded bootstrapper with its own PID. Bootstrapper output goes to
+a new owner-data log rather than sharing the CLI JSON stream. The bootstrapper
+waits for that process before touching the active executable, so neither
+Windows nor macOS asks `bcgos` to replace itself.
 
 The bootstrapper seed also establishes the initial release-authority registry
 at the fixed protected path above.
@@ -94,6 +99,6 @@ external release-environment approvals.
 
 - approved operating-system installation directories;
 - production signing keys and native code-signing identities;
-- private provider authentication and download;
+- approved production provider registration and native-store use;
 - a signed bootstrapper seed channel;
 - clean corporate-device acceptance.

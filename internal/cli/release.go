@@ -5,13 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 
 	baserelease "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/release"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseprovider"
 )
-
-var updatePlanIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 type releaseCapabilityResult struct {
 	SchemaVersion        int    `json:"schema_version"`
@@ -78,18 +75,6 @@ func runAuth(args []string, out, errOut io.Writer, service releaseprovider.AuthS
 		}, errOut)
 	default:
 		fmt.Fprintln(errOut, "usage: bcgos auth <login|status|logout>")
-		return ExitUsage
-	}
-}
-
-func runUpdate(args []string, out, errOut io.Writer) int {
-	switch {
-	case len(args) == 1 && args[0] == "--check":
-		return writeReleaseUnavailable(out, errOut, "private_release_update", true, "")
-	case len(args) == 2 && args[0] == "--confirm" && updatePlanIDPattern.MatchString(args[1]):
-		return writeReleaseUnavailable(out, errOut, "private_release_update", true, args[1])
-	default:
-		fmt.Fprintln(errOut, "usage: bcgos update <--check|--confirm PLAN_ID>")
 		return ExitUsage
 	}
 }

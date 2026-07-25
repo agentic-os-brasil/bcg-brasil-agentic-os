@@ -520,37 +520,40 @@ func ReadPlan(path string) (ActivationPlan, error) {
 	return plan, nil
 }
 
+func ValidateReconciliation(planPath string, options PrepareOptions) (bool, error) {
+	plan, err := validateReconciliationPlan(planPath, options)
+	if err != nil {
+		return false, err
+	}
+	receipt, err := readActivationReceipt(planPath, plan)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	current, err := ReadStateForManagedRoot(options.DataRoot, options.ManagedRoot)
+	if err != nil {
+		return true, err
+	}
+	if stateMatchesSource(current, plan) ||
+		stateMatchesCommittedTarget(current, plan, receipt) {
+		return true, nil
+	}
+	return true, errors.New("installed state matches neither the update source nor its committed target")
+}
+
 func ReconcileActivated(planPath string, options ActivateOptions) (bool, error) {
-	plan, err := ReadPlan(planPath)
+	plan, err := validateReconciliationPlan(planPath, options.PrepareOptions)
 	if err != nil {
 		return false, err
-	}
-	if err := validatePlan(planPath, plan); err != nil {
-		return false, err
-	}
-	managedRoot, dataRoot, err := normalizedRoots(options.PrepareOptions.ManagedRoot, options.PrepareOptions.DataRoot)
-	if err != nil {
-		return false, err
-	}
-	if options.PrepareOptions.Transition != "update" ||
-		plan.Transition != options.PrepareOptions.Transition ||
-		plan.ConfirmationPlanID != options.PrepareOptions.ConfirmationPlanID ||
-		plan.FromRelease != options.PrepareOptions.FromRelease ||
-		plan.FromChannel != options.PrepareOptions.FromChannel ||
-		plan.FromCLIVersion != options.PrepareOptions.FromCLIVersion ||
-		plan.FromBundleVersion != options.PrepareOptions.FromBundleVersion ||
-		plan.TargetOS != options.PrepareOptions.TargetOS ||
-		plan.TargetArch != options.PrepareOptions.TargetArch ||
-		plan.ManagedRoot != managedRoot ||
-		plan.DataRoot != dataRoot {
-		return false, errors.New("activation reconciliation options do not match the confirmed plan")
 	}
 	checker := options.CheckCLI
 	if checker == nil {
 		checker = commandSelfCheck
 	}
-	var receipt ActivationReceipt
-	if err := readJSONStrict(filepath.Join(filepath.Dir(planPath), ReceiptName), &receipt); err != nil {
+	receipt, err := readActivationReceipt(planPath, plan)
+	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			unlock, lockErr := acquireReconciliationLock(plan.ManagedRoot)
 			if lockErr != nil {
@@ -560,11 +563,6 @@ func ReconcileActivated(planPath string, options ActivateOptions) (bool, error) 
 			return false, nil
 		}
 		return false, err
-	}
-	if receipt != receiptForPlan(plan, receipt.CommittedAt) ||
-		receipt.CommittedAt.IsZero() ||
-		receipt.CommittedAt.Location() != time.UTC {
-		return false, errors.New("activation receipt does not match the confirmed plan")
 	}
 	unlock, err := acquireReconciliationLock(plan.ManagedRoot)
 	if err != nil {
@@ -615,6 +613,47 @@ func ReconcileActivated(planPath string, options ActivateOptions) (bool, error) 
 		return false, err
 	}
 	return true, nil
+}
+
+func validateReconciliationPlan(planPath string, options PrepareOptions) (ActivationPlan, error) {
+	plan, err := ReadPlan(planPath)
+	if err != nil {
+		return ActivationPlan{}, err
+	}
+	if err := validatePlan(planPath, plan); err != nil {
+		return ActivationPlan{}, err
+	}
+	managedRoot, dataRoot, err := normalizedRoots(options.ManagedRoot, options.DataRoot)
+	if err != nil {
+		return ActivationPlan{}, err
+	}
+	if options.Transition != "update" ||
+		plan.Transition != options.Transition ||
+		plan.ConfirmationPlanID != options.ConfirmationPlanID ||
+		plan.FromRelease != options.FromRelease ||
+		plan.FromChannel != options.FromChannel ||
+		plan.FromCLIVersion != options.FromCLIVersion ||
+		plan.FromBundleVersion != options.FromBundleVersion ||
+		plan.TargetOS != options.TargetOS ||
+		plan.TargetArch != options.TargetArch ||
+		plan.ManagedRoot != managedRoot ||
+		plan.DataRoot != dataRoot {
+		return ActivationPlan{}, errors.New("activation reconciliation options do not match the confirmed plan")
+	}
+	return plan, nil
+}
+
+func readActivationReceipt(planPath string, plan ActivationPlan) (ActivationReceipt, error) {
+	var receipt ActivationReceipt
+	if err := readJSONStrict(filepath.Join(filepath.Dir(planPath), ReceiptName), &receipt); err != nil {
+		return ActivationReceipt{}, err
+	}
+	if receipt != receiptForPlan(plan, receipt.CommittedAt) ||
+		receipt.CommittedAt.IsZero() ||
+		receipt.CommittedAt.Location() != time.UTC {
+		return ActivationReceipt{}, errors.New("activation receipt does not match the confirmed plan")
+	}
+	return receipt, nil
 }
 
 func verifyActivatedPayload(plan ActivationPlan) error {

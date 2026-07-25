@@ -121,6 +121,9 @@ func TestPendingUpdateFailsClosedAfterVerifiedReleaseMutation(t *testing.T) {
 	if _, _, err := ConfirmPending(dataRoot, managedRoot, plan.ID, registry); err == nil {
 		t.Fatal("ConfirmPending() accepted mutated signed release bytes")
 	}
+	if _, err := ValidatePendingLaunch(dataRoot, managedRoot, plan.ID, registry); err == nil {
+		t.Fatal("ValidatePendingLaunch() accepted mutated signed release bytes")
+	}
 }
 
 func TestPendingConfirmationBindsPreparedBytesAndActivationSemantics(t *testing.T) {
@@ -244,6 +247,9 @@ func TestActivationRejectsInstalledStateChangedAfterConfirmation(t *testing.T) {
 	if _, statErr := os.Stat(filepath.Join(managedRoot, "recovery")); !os.IsNotExist(statErr) {
 		t.Fatalf("stale activation wrote recovery payload: %v", statErr)
 	}
+	if _, launchErr := ValidatePendingLaunch(dataRoot, managedRoot, plan.ID, registry); launchErr == nil {
+		t.Fatal("ValidatePendingLaunch() accepted divergent installed state without recovery evidence")
+	}
 }
 
 func TestPendingReconcilesCrashAfterStateCommitBeforeRemoval(t *testing.T) {
@@ -285,6 +291,13 @@ func TestPendingReconcilesCrashAfterStateCommitBeforeRemoval(t *testing.T) {
 	// RemovePending. A fresh confirmation is expected to be stale.
 	if _, _, err := ConfirmPending(dataRoot, managedRoot, plan.ID, registry); err == nil {
 		t.Fatal("ConfirmPending() unexpectedly rebuilt an already committed update")
+	}
+	launchable, err := ValidatePendingLaunch(dataRoot, managedRoot, plan.ID, registry)
+	if err != nil {
+		t.Fatalf("ValidatePendingLaunch() rejected committed recovery: %v", err)
+	}
+	if launchable.Plan.ID != plan.ID {
+		t.Fatalf("launchable recovery plan = %s, want %s", launchable.Plan.ID, plan.ID)
 	}
 	reconciledPending, reconciled, err := ReconcilePending(
 		dataRoot,

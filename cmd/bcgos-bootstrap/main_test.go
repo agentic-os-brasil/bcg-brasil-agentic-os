@@ -24,4 +24,9 @@ func TestManagedRootComesOnlyFromInstalledBootstrapperPath(t *testing.T) {
 	if _, err := managedRootFromExecutablePath(filepath.Join(root, "attacker-bootstrap")); err == nil {
 		t.Fatal("managedRootFromExecutablePath() accepted an unprotected executable name")
 	}
+	if _, err := managedRootFromExecutablePath(
+		filepath.Join(string(filepath.Separator), "bcgos-bootstrap"),
+	); err == nil {
+		t.Fatal("managedRootFromExecutablePath() accepted the filesystem root")
+	}
 }

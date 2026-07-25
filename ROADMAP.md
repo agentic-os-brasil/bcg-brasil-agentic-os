@@ -93,10 +93,10 @@ The roadmap separates things to build from things to decide. Detailed dates rema
   fail-closed secure-store contracts.
 - [x] Implement the dormant macOS Security.framework Keychain backend and
   conformance tests with no plaintext or process-argument fallback. CLI
-  connection remains pending.
+  connection remains gated behind approved provider and authority seeds.
 - [x] Implement the dormant Windows Credential Manager backend and conformance
   tests with direct WinCred calls and no plaintext fallback. CLI connection
-  remains pending.
+  remains gated behind approved provider and authority seeds.
 - [x] Build Windows amd64 and macOS amd64/arm64 candidate CLIs on matching
   native CI runners, then assemble the closed unsigned candidate from the exact
   prebuilt files with per-binary source, runner, toolchain and digest
@@ -114,6 +114,9 @@ The roadmap separates things to build from things to decide. Detailed dates rema
   provider release ID and authenticated manifest digest.
 - [x] Persist a strict pending-update envelope and require signed-release,
   installed-state and activation-plan revalidation before confirmation.
+- [x] Wire `bcgos update --check|--confirm` to durable staging and the detached
+  stable bootstrapper, with exact plan JSON and provider/authority/store gates
+  visible in `status` and `doctor`.
 - [ ] Configure the production provider and release-key registry.
 - [x] Enforce and test that activation writes only managed core and install
   state, never local configuration, memory or workspace data.
