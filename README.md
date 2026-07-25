@@ -98,11 +98,13 @@ bcgos owner init
 bcgos atlas init <workspace>
 bcgos atlas status <workspace>
 bcgos skills index
+bcgos session packet [workspace]
 ```
 
-Os comandos de memória expõem apenas operações já suportadas. Dreaming
-automático, injeção em runtime e o pacote de contexto de sessão dependem de
-adapters que ainda estão sendo entregues ou revisados.
+Os comandos de memória expõem apenas operações já suportadas. O pacote de
+contexto de sessão expõe estados e referências limitadas, sem injetar conteúdo.
+Dreaming automático e injeção em runtime dependem de adapters que ainda estão
+sendo entregues ou revisados.
 
 ## Princípios de produto
 
