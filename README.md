@@ -48,7 +48,7 @@ quando os mecanismos nativos forem diferentes.
 | Workspace local | `bcgos init`, `status` e `doctor` criam e inspecionam o espaço sem misturar dados de trabalho ao core gerenciado. |
 | Agente do workspace | Entrevista e briefing versionado, pesquisa pública aprovada e dossiê isolado por projeto; sandbox rígido dos runtimes ainda está pendente. |
 | Contexto da conta | Promoção explícita de fatos curados e comprovados na origem, com autoridade por capability, recibos assinados, âncora anti-rollback, validade e revogação sem acesso geral aos workspaces. |
-| Core de agentes | Catálogo canônico, enforcement compartilhado e pacotes de trabalho assinados para Maestro, Walter, Darwin e especialistas; wiring e ativação nativa ainda estão pendentes. |
+| Core de agentes | Catálogo canônico, stubs locais de workspace/especialistas, enforcement compartilhado e pacotes de trabalho assinados; wiring e ativação nativa ainda estão pendentes. |
 | Preferência de interação | `standard`, `advanced` e `power`, configuradas localmente e sem alterar permissões. |
 | Contexto do dono | Arquivos locais, editáveis e auditáveis para papel profissional, estilo, voz, preferências e limites. |
 | Atlas humano | Estrutura local não destrutiva para clientes, projetos, pessoas e diário de trabalho. |
@@ -105,6 +105,8 @@ bcgos atlas init <workspace>
 bcgos atlas status <workspace>
 bcgos workspace-agent interview <workspace>
 bcgos workspace-agent status <workspace>
+bcgos agent scaffold --id <id> --role <role> --scope-kind <kind> --scope <id> --parent <id> --parent-role <role>
+bcgos agent status --id <id>
 bcgos skills index
 bcgos session packet [workspace]
 bcgos session bridge --runtime claude|codex [workspace]
@@ -168,8 +170,9 @@ duráveis usam um código de quatro letras no
 - [Fronteiras do agente de workspace](specs/016-workspace-agent-boundaries.md)
 - [Inicialização e pesquisa do agente](specs/017-workspace-agent-initialization.md)
 - [Core de agentes do Maestro](specs/018-maestro-core-agents.md)
-- [Dispatcher sequencial e work packets](specs/023-sequential-agent-dispatch.md)
-- [Promoção governada para contexto da conta](specs/024-account-context-promotion.md)
+ - [Dispatcher sequencial e work packets](specs/023-sequential-agent-dispatch.md)
+ - [Promoção governada para contexto da conta](specs/024-account-context-promotion.md)
+ - [Scaffolding governado de agentes](specs/025-agent-scaffolding.md)
 - [Visualização da governança de agentes](docs/visualizations/maestro-agent-governance.md)
 
 ## Confidencialidade
