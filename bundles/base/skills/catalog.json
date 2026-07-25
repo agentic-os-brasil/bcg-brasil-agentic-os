@@ -23,6 +23,13 @@
       "relative_path": "skills/interaction-profile/SKILL.md"
     },
     {
+      "id": "maestro-setup-update",
+      "display_name": "Maestro Setup and Update",
+      "trigger": "Guide safe setup, updates and recovery conversationally",
+      "default_prompt": "Use $maestro-setup-update to guide me through this Maestro setup or update in plain language.",
+      "relative_path": "skills/maestro-setup-update/SKILL.md"
+    },
+    {
       "id": "workspace-agent-setup",
       "display_name": "Workspace Agent Setup",
       "trigger": "Interview and research one project workspace safely",
