@@ -20,9 +20,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Define and implement a local, professional owner-self registry with facet policies and a cold-start interview contract.
 - [x] Decide that the future human atlas is scoped across managed, owner-private and workspace-private roots, alongside canonical derived memory.
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
-- [x] Define workspace agents as project specialists and context gatekeepers with compact state and versioned dossiers.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
-- [x] Define the lean Maestro, Walter and Darwin core with a no-tool hub, multiple governed chains, one active branch and role-gated depth two.
+- [x] Define the execution-ledger authority boundary and implement the initial local contract, attempt, revision and inspection store.
 
 ## Track A - Contributor onboarding
 
@@ -54,29 +53,19 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement user-space directories on Windows and macOS.
 - [x] Add Claude and Codex adapter skeletons against the same canonical contract.
 - [x] Add initial conformance fixtures for equivalent capability identity, semantic events and criticality.
-- [x] Implement a runtime-neutral Session Start bridge that gives Claude and Codex the same bounded packet without claiming native injection.
-- [x] Implement the bounded native Session Start command payload and workspace-local Claude/Codex configuration with a two-second non-blocking timeout.
-- [x] Implement workspace-local Claude/Codex Session Start adapter installation, inspection and targeted removal.
-- [x] Make `bcgos doctor` distinguish runtime discovery, local adapter configuration and actual lifecycle capability.
-- [x] Define and validate a non-blocking hook-execution policy: snapshots and signals never wait, while only a local deterministic safety guard may deny an unsafe action.
-- [x] Define the per-runtime/per-platform pilot conformance receipt; capability promotion remains blocked on the recorded native-session evidence.
 - [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
 - [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
-- [x] Implement shared authenticated orchestration enforcement and cross-runtime adversarial fixtures, while keeping native activation unavailable.
-- [x] Implement signed bounded work packets and a sequential runtime-neutral dispatcher with replay protection.
-- [x] Implement capability-bound workspace-to-account promotion, integrity receipts and non-destructive revocation.
-- [x] Implement managed, data-free workspace and specialist templates with atomic local instance scaffolding.
-- [ ] Activate Maestro, Walter and Darwin in Claude and Codex only after tool-denial, one-active-branch and role-graph conformance fixtures pass.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
 - [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.
 - [x] Implement local refinement submission, policy enforcement, audit snapshots and explicit reversal for owner facets.
 - [ ] Implement approved local assessment ingestion with explicit consent, provenance and confirmation before synthesis.
 - [ ] Implement lifecycle observation capture and approved synthesis adapters that submit refinements to the local core.
-- [x] Bootstrap one local agent per workspace with a reviewed interview and versioned briefing.
-- [x] Implement explicit research-plan approval, hostname allowlists and sourced evidence persistence.
-- [x] Implement attested public economic snapshots with per-claim provenance
-  outside workspace roots and attach them by immutable ID.
+- [x] Implement `bcgos work create|start|inspect|export|delete` over a workspace-scoped local execution ledger.
+- [ ] Add bounded checkpoint, pause, active-work projection and explicit resume with prior-attempt invalidation.
+- [ ] Add core-witnessed artifact snapshots, command checks and evidence-backed completion.
+- [ ] Expose only the active execution pointer through the Session Context Packet.
+- [ ] Prove handoff across two sessions or agents without transcript or contract reinjection.
 
 ### Discuss before closing the track
 
@@ -84,59 +73,18 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Approved Windows and macOS application directories.
 - Minimum Claude/Codex capability set for v0.
 - What `doctor` may inspect and report on corporate devices.
+- Retention and deletion policy for execution history after the V1 local pilot.
 
 ## Track C - Private distribution and updates
 
 ### Build
 
 - [x] Implement and run an isolated local binary-installation trial with checksum verification on Windows, macOS and Linux. This is explicitly not a signed release or pilot distribution channel.
-- [x] Produce deterministic unsigned, versioned Windows and macOS release
-  candidates through a read-only manual CI workflow.
-- [x] Implement an environment-protected signed-prerelease workflow that
-  builds seeded native binaries, requires platform and Maestro release
-  signatures, verifies the closed set and publishes an immutable prerelease.
-  It remains unavailable until the external authorities below are configured.
-- [ ] Configure production manifest/artifact signing and native Windows/macOS
-  code-signing authorities.
-- [x] Define and validate the provider-neutral signed release manifest and CLI↔bundle compatibility rules.
-- [x] Define and validate the local public release-authority registry,
-  including validity windows and fail-closed revocation.
-- [x] Implement browser device-flow, refresh and private-provider adapters with
-  fail-closed secure-store contracts.
-- [x] Implement the dormant macOS Security.framework Keychain backend and
-  conformance tests with no plaintext or process-argument fallback. CLI
-  connection remains gated behind approved provider and authority seeds.
-- [x] Implement the dormant Windows Credential Manager backend and conformance
-  tests with direct WinCred calls and no plaintext fallback. CLI connection
-  remains gated behind approved provider and authority seeds.
-- [x] Build Windows amd64 and macOS amd64/arm64 candidate CLIs on matching
-  native CI runners, then assemble the closed unsigned candidate from the exact
-  prebuilt files with per-binary source, runner, toolchain and digest
-  provenance. Cross-image byte reproducibility remains unproven.
-- [x] Connect native Keychain/Credential Manager adapters to CLI auth only
-  behind a strict embedded provider-registration contract; the checked-in
-  configuration remains unavailable.
-- [ ] Approve the GitHub App registration, public client ID, native-store use
-  and selected-repository installation, then promote the managed configuration.
-- [x] Implement signed local-release verification, safe staging, bootstrapper
-  activation and last-known-good rollback.
-- [x] Implement provider discovery and manifest-authorized verified download
-  into the local release boundary.
-- [x] Bind provider discovery to deterministic update plans using the immutable
-  provider release ID and authenticated manifest digest.
-- [x] Persist a strict pending-update envelope and require signed-release,
-  installed-state and activation-plan revalidation before confirmation.
-- [x] Wire `bcgos update --check|--confirm` to durable staging and the detached
-  stable bootstrapper, with exact plan JSON and provider/authority/store gates
-  visible in `status` and `doctor`.
-- [ ] Configure the production provider and release-key registry.
-- [x] Enforce and test that activation writes only managed core and install
-  state, never local configuration, memory or workspace data.
-- [x] Generate separately classified isolated Windows/macOS engineering
-  evidence for install, update and rollback behavior.
-- [x] Make the pinned stable bootstrapper create its own verified first-install
-  plan and add sanitized Windows/macOS operator receipts for the ordered
-  clean-device install/update/rollback evidence run.
+- [ ] Produce versioned Windows and macOS artifacts in CI.
+- [ ] Define signed release manifest and compatibility rules.
+- [ ] Implement browser-based private-release authentication.
+- [ ] Implement verified download, staging, activation and rollback.
+- [ ] Ensure updates never overwrite local configuration or work data.
 - [ ] Run install/update/rollback tests on clean corporate devices for both platforms.
 
 ### Discuss before closing the track
@@ -223,15 +171,14 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Implement runtime-neutral contracts and thin Claude/Codex adapters.
 - [x] Implement a deterministic managed skills index and `bcgos skills index` inspection surface.
 - [ ] Add safe context injection, workspace boundaries and capability detection.
-- [x] Add the managed `workspace-agent-setup` skill with fail-closed research approval and provenance workflow.
-- [x] Package only allowlisted product content; exclude all development harness paths.
-- [x] Validate isolated install, init, update and rollback without client content.
+- [ ] Package only allowlisted product content; exclude all development harness paths.
+- [ ] Validate install, init, update and rollback without client content.
 
 ### Discuss before closing the track
 
 - First use case and target persona.
 - Shared versus local knowledge governance.
-- Which narrowly scoped local safety conditions justify a pre-action denial.
+- Which hooks block, warn or observe.
 - Ownership and retirement model for agents and skills.
 - Runtime-pack size, model-prefetch, corporate proxy and offline acceptance thresholds.
 
@@ -239,12 +186,6 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 ### Build
 
-- [x] Define a two-user Windows/macOS canary and evidence-based expansion gate.
-- [x] Establish the Maestro Federated Improvement Loop typed-batch contract: automatic pilot reporting, structural local signals, GitHub as the action inbox and central curation proposals.
-- [x] Implement the user-local batch exporter, enrollment record, bounded spool, Local Darwin federator and born-portable skill collector.
-- [x] Implement the central GitHub App bridge seam, aggregate digest and actionable incident routing.
-- [x] Implement central Darwin advancement-proposal curation with maintainer-only acceptance.
-- [x] Add one-time enrollment/revocation, weekly runtime executor and born-portable skill transport.
 - [ ] Select a balanced Windows/macOS and classic/technical cohort.
 - [ ] Onboard users without requiring Git, Go, Python, Node or Docker.
 - [ ] Measure time-to-first-success, update reliability and support demand.

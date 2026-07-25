@@ -6,6 +6,7 @@ All notable changes will be documented here.
 
 ### Added
 
+- Initial workspace-scoped execution ledger contract and `bcgos work create|start|inspect|export|delete` commands, with immutable contract digests, revision-checked starts and metadata-only transition history.
 - Initial repository foundation.
 - CLI-first private distribution decision.
 - Collaboration contract, roadmap and initial specs.

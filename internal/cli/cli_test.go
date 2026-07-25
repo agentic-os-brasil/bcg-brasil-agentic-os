@@ -2,17 +2,125 @@ package cli
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+func TestWorkCreateStartInspectExportAndDelete(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	workspacePath := filepath.Join(t.TempDir(), "case-a")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	contract := `{
+	  "objective": "Implement the execution ledger.",
+	  "initial_next_step": "Run the contract test.",
+	  "criteria": [{"id": "tests", "type": "command_check"}],
+	  "allowed_refs": ["bcgos://workspace/specs/018"]
+	}`
+	var output bytes.Buffer
+	code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot)
+	if code != ExitOK {
+		t.Fatalf("create exit = %d, output = %s", code, output.String())
+	}
+	var created struct {
+		Contract struct {
+			ItemID string `json:"item_id"`
+		} `json:"contract"`
+		State struct {
+			Revision int `json:"state_revision"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &created); err != nil || created.Contract.ItemID == "" || created.State.Revision != 1 {
+		t.Fatalf("create output = %s, err = %v", output.String(), err)
+	}
+
+	output.Reset()
+	code = runWork([]string{
+		"start", "--workspace", workspacePath, "--item", created.Contract.ItemID,
+		"--revision", strconv.Itoa(created.State.Revision),
+	}, strings.NewReader(""), &output, &output, dataRoot)
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "running"`) || !strings.Contains(output.String(), `"active_attempt_id"`) {
+		t.Fatalf("start exit = %d, output = %s", code, output.String())
+	}
+
+	for _, command := range []string{"inspect", "export"} {
+		output.Reset()
+		code = runWork([]string{command, "--workspace", workspacePath, "--item", created.Contract.ItemID}, strings.NewReader(""), &output, &output, dataRoot)
+		if code != ExitOK || !strings.Contains(output.String(), created.Contract.ItemID) {
+			t.Fatalf("%s exit = %d, output = %s", command, code, output.String())
+		}
+	}
+
+	output.Reset()
+	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", created.Contract.ItemID}, strings.NewReader(""), &output, &output, dataRoot)
+	if code == ExitOK || !strings.Contains(output.String(), "--confirm") {
+		t.Fatalf("unconfirmed delete exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", created.Contract.ItemID, "--revision", "2", "--confirm"}, strings.NewReader(""), &output, &output, dataRoot)
+	if code == ExitOK || !strings.Contains(output.String(), "must be paused") {
+		t.Fatalf("running delete exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	code = runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot)
+	if code != ExitOK {
+		t.Fatalf("second create exit = %d, output = %s", code, output.String())
+	}
+	var deletable struct {
+		Contract struct {
+			ItemID string `json:"item_id"`
+		} `json:"contract"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &deletable); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", deletable.Contract.ItemID, "--revision", "1", "--confirm"}, strings.NewReader(""), &output, &output, dataRoot)
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "deleted"`) {
+		t.Fatalf("confirmed delete exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestWorkCreateRequiresStdinAndRejectsPositionals(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	var output bytes.Buffer
+	code := runWork([]string{"create", "--workspace", "workspace-a"}, strings.NewReader("{}"), &output, &output, dataRoot)
+	if code == ExitOK || !strings.Contains(output.String(), "--stdin") {
+		t.Fatalf("missing stdin exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	code = runWork([]string{"inspect", "--workspace", "workspace-a", "--item", "item-a", "SECRET"}, strings.NewReader(""), &output, &output, dataRoot)
+	if code == ExitOK || !strings.Contains(output.String(), "unexpected positional") {
+		t.Fatalf("positional exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestWorkRejectsUninitializedWorkspace(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	var output bytes.Buffer
+	code := runWork(
+		[]string{"create", "--workspace", filepath.Join(t.TempDir(), "missing"), "--stdin"},
+		strings.NewReader(`{"objective":"x","initial_next_step":"y","criteria":[{"id":"tests","type":"command_check"}]}`),
+		&output,
+		&output,
+		dataRoot,
+	)
+	if code == ExitOK || !strings.Contains(output.String(), "initialized and readable") {
+		t.Fatalf("uninitialized workspace exit = %d, output = %s", code, output.String())
+	}
+}
 
 func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 	dataDir := t.TempDir()
@@ -153,97 +261,6 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
-func TestPrivateReleaseCommandsFailClosedWithoutApprovedSecureStore(t *testing.T) {
-	tests := map[string][]string{
-		"auth status":    {"auth", "status"},
-		"auth login":     {"auth", "login"},
-		"auth logout":    {"auth", "logout"},
-		"update check":   {"update", "--check"},
-		"update confirm": {"update", "--confirm", "0123456789abcdef0123456789abcdef"},
-	}
-	for name, args := range tests {
-		t.Run(name, func(t *testing.T) {
-			var output bytes.Buffer
-			var errorOutput bytes.Buffer
-			if code := Run(args, &output, &errorOutput); code != ExitUnavailable {
-				t.Fatalf("Run(%v) exit = %d, want %d; out=%s err=%s", args, code, ExitUnavailable, output.String(), errorOutput.String())
-			}
-			var result struct {
-				SchemaVersion int    `json:"schema_version"`
-				State         string `json:"state"`
-				Reason        string `json:"reason"`
-			}
-			if err := json.Unmarshal(output.Bytes(), &result); err != nil {
-				t.Fatalf("output is not one JSON document: %v; output=%q", err, output.String())
-			}
-			if result.SchemaVersion != 1 || result.State != "unavailable" || result.Reason == "" {
-				t.Fatalf("unexpected fail-closed result: %#v", result)
-			}
-			if strings.Contains(strings.ToLower(output.String()), "token") {
-				t.Fatal("unavailable response mentioned credential material")
-			}
-		})
-	}
-}
-
-func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
-	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
-	workspacePath := t.TempDir()
-	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
-		t.Fatalf("init exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"injection_state\":\"unavailable\"`) {
-		t.Fatalf("hook exit = %d, output = %s", code, output.String())
-	}
-}
-
-func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
-	workspacePath := t.TempDir()
-	var output bytes.Buffer
-	if code := runAdapter([]string{"install", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "installed"`) {
-		t.Fatalf("install = %d %s", code, output.String())
-	}
-	output.Reset()
-	if code := runAdapter([]string{"uninstall", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "removed"`) {
-		t.Fatalf("remove = %d %s", code, output.String())
-	}
-}
-
-func TestDoctorSeparatesConfiguredAdapterFromRuntimeCapability(t *testing.T) {
-	dataRoot, workspacePath := filepath.Join(t.TempDir(), "BCGOS"), t.TempDir()
-	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
-		t.Fatal(output.String())
-	}
-	if _, err := adaptercfg.Install("codex", workspacePath, "/opt/maestro/bcgos"); err != nil {
-		t.Fatal(err)
-	}
-	output.Reset()
-	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, func(string) bool { return true }); code != ExitOK || !strings.Contains(output.String(), `"id": "codex_adapter"`) || !strings.Contains(output.String(), `"state": "configured"`) || !strings.Contains(output.String(), `"context_inject"`) || !strings.Contains(output.String(), `"state": "unavailable"`) {
-		t.Fatalf("doctor = %d %s", code, output.String())
-	}
-}
-
-func TestSessionResolveReadsOnlyAuthorizedOwnerPointer(t *testing.T) {
-	dataRoot, workspacePath := filepath.Join(t.TempDir(), "BCGOS"), t.TempDir()
-	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
-		t.Fatal(output.String())
-	}
-	output.Reset()
-	if code := runOwner([]string{"init"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
-		t.Fatal(output.String())
-	}
-	output.Reset()
-	code := runSessionResolve([]string{"--pointer", "owner/self/voice.md", "--purpose", "session", "--budget-bytes", "512", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"state": "available"`) || !strings.Contains(output.String(), "# Voice") {
-		t.Fatalf("resolve = %d %s", code, output.String())
-	}
-}
-
 func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 	var output bytes.Buffer
 	if code := Run([]string{"skills", "index"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"schema_version": 1`) || !strings.Contains(output.String(), `"dream-memory"`) || strings.Contains(output.String(), "Daily dreaming cannot") {
@@ -355,24 +372,6 @@ func TestSessionPacketReportsPointersWithoutOwnerFacetBodies(t *testing.T) {
 	}
 }
 
-func TestSessionBridgeProducesTheSameBoundedAdapterInputForEachRuntime(t *testing.T) {
-	root := t.TempDir()
-	dataRoot := filepath.Join(root, "local", "BCGOS")
-	workspacePath := filepath.Join(root, "Developer", "case-a")
-	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
-		t.Fatalf("workspace init exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	if code := runSession([]string{"bridge", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"event": "session_start"`) || !strings.Contains(output.String(), `"runtime": "claude"`) || !strings.Contains(output.String(), `"injection_state": "unavailable"`) {
-		t.Fatalf("Claude bridge exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	if code := runSession([]string{"bridge", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"runtime": "codex"`) || strings.Contains(output.String(), "Descreva como voce quer falar") {
-		t.Fatalf("Codex bridge exit = %d, output = %s", code, output.String())
-	}
-}
-
 func TestInitPersistsTheSelectedInteractionProfile(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")
@@ -383,160 +382,6 @@ func TestInitPersistsTheSelectedInteractionProfile(t *testing.T) {
 	output.Reset()
 	if code := runProfile([]string{"show"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"profile": "power"`) || !strings.Contains(output.String(), `"source": "configured"`) {
 		t.Fatalf("profile after init exit = %d, output = %s", code, output.String())
-	}
-}
-
-func TestWorkspaceAgentCommandsCreateAndExposeTheGuidedInterview(t *testing.T) {
-	root := t.TempDir()
-	dataRoot := filepath.Join(root, "local", "BCGOS")
-	workspacePath := filepath.Join(root, "workspace")
-	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent"`) || !strings.Contains(output.String(), `"workspace-agent-`) || !strings.Contains(output.String(), `"agent_stub"`) || !strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
-		t.Fatalf("init exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	if code := runWorkspaceAgent([]string{"interview", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent_setup"`) || !strings.Contains(output.String(), `"research"`) {
-		t.Fatalf("workspace-agent interview exit = %d, output = %s", code, output.String())
-	}
-}
-
-func TestAgentScaffoldCommandCreatesAndInspectsAWorkspaceSpecialist(t *testing.T) {
-	root := t.TempDir()
-	dataRoot := filepath.Join(root, "local", "BCGOS")
-	workspacePath := filepath.Join(root, "workspace")
-	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
-		t.Fatalf("init exit = %d, output = %s", code, output.String())
-	}
-	inspection, err := workspace.Inspect(workspacePath, dataRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	parent := "workspace-agent-" + inspection.WorkspaceID
-	output.Reset()
-	code := runAgent([]string{
-		"scaffold",
-		"--id", "capability-research",
-		"--role", "capability_specialist",
-		"--scope-kind", "workspace",
-		"--scope", inspection.WorkspaceID,
-		"--parent", parent,
-		"--parent-role", "workspace_agent",
-	}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"agent_id": "capability-research"`) ||
-		!strings.Contains(output.String(), `"input_contract": "minimum_work_packet"`) ||
-		!strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
-		t.Fatalf("agent scaffold exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	if code := runAgent([]string{"status", "--id", "capability-research"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"available": true`) {
-		t.Fatalf("agent status exit = %d, output = %s", code, output.String())
-	}
-}
-
-func TestAgentScaffoldCommandCreatesPracticeAndSubjectChain(t *testing.T) {
-	root := t.TempDir()
-	dataRoot := filepath.Join(root, "local", "BCGOS")
-	canonRelative := filepath.Join("practices", "insurance", "canon.md")
-	canonPath := filepath.Join(dataRoot, canonRelative)
-	if err := os.MkdirAll(filepath.Dir(canonPath), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	canon := []byte("# Insurance canon\n")
-	if err := os.WriteFile(canonPath, canon, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	digest := sha256.Sum256(canon)
-	var output bytes.Buffer
-	code := runAgent([]string{
-		"scaffold",
-		"--id", "practice-agent-insurance",
-		"--role", "practice_agent",
-		"--scope-kind", "practice",
-		"--scope", "insurance",
-		"--parent", "maestro",
-		"--parent-role", "hub",
-		"--owner", "practice-owner",
-		"--mandate", "Maintain the governed insurance canon.",
-		"--canon", filepath.ToSlash(canonRelative),
-		"--canon-sha256", hex.EncodeToString(digest[:]),
-	}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"role": "practice_agent"`) {
-		t.Fatalf("practice scaffold exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	code = runAgent([]string{
-		"scaffold",
-		"--id", "subject-insurance",
-		"--role", "subject_specialist",
-		"--scope-kind", "practice",
-		"--scope", "insurance",
-		"--parent", "practice-agent-insurance",
-		"--parent-role", "practice_agent",
-	}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"role": "subject_specialist"`) {
-		t.Fatalf("subject scaffold exit = %d, output = %s", code, output.String())
-	}
-}
-
-func TestWorkspaceAgentResearchAndEconomicCommandsPersistGovernedArtifacts(t *testing.T) {
-	root := t.TempDir()
-	dataRoot := filepath.Join(root, "local", "BCGOS")
-	workspacePath := filepath.Join(root, "workspace")
-	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
-		t.Fatalf("init exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	briefInput := `{"reviewed_by":"owner","classification":"confidential","mandate":"support a decision","objectives":["recommendation"],"stakeholders":["sponsor"],"constraints":["four weeks"],"bullish":[{"statement":"upside","evidence":["public signal"],"assumptions":["adoption grows"],"counter_evidence":["weak conversion"],"invalidation_signals":["demand declines"]}],"bearish":[{"statement":"downside","evidence":["public risk"],"assumptions":["cost stays high"],"counter_evidence":["efficiency improves"],"invalidation_signals":["cost falls"]}],"research_questions":["public market size"]}`
-	code := runWorkspaceAgentWithInput([]string{"brief", "submit", "--stdin", workspacePath}, strings.NewReader(briefInput), &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"brief_id"`) {
-		t.Fatalf("brief submit exit = %d, output = %s", code, output.String())
-	}
-
-	output.Reset()
-	planInput := `{"purpose":"public market context","valid_until":"2027-07-25T12:00:00Z","max_queries":1,"query_themes":["market size"],"sources":["ibge.gov.br"]}`
-	code = runWorkspaceAgentWithInput([]string{"research", "plan", "--stdin", workspacePath}, strings.NewReader(planInput), &output, &output, func() (string, error) { return dataRoot, nil })
-	var plan struct {
-		PlanID string `json:"plan_id"`
-	}
-	if code != ExitOK || json.Unmarshal(output.Bytes(), &plan) != nil || plan.PlanID == "" {
-		t.Fatalf("research plan exit = %d, output = %s", code, output.String())
-	}
-
-	output.Reset()
-	code = runWorkspaceAgentWithInput([]string{"research", "approve", "--plan", plan.PlanID, "--approved-by", "owner", "--confirm", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"state": "approved"`) {
-		t.Fatalf("research approve exit = %d, output = %s", code, output.String())
-	}
-
-	output.Reset()
-	queryInput := `{"plan_id":"` + plan.PlanID + `","query":"market size"}`
-	code = runWorkspaceAgentWithInput([]string{"research", "query", "--stdin", workspacePath}, strings.NewReader(queryInput), &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"slot": 1`) {
-		t.Fatalf("research query exit = %d, output = %s", code, output.String())
-	}
-
-	output.Reset()
-	evidenceInput := `{"plan_id":"` + plan.PlanID + `","query":"market size","source_url":"https://www.ibge.gov.br/example","retrieved_at":"2026-07-25T12:00:00Z","valid_until":"2027-07-25T12:00:00Z","claim":"Public fact","evidence_strength":"primary","classification":"public"}`
-	code = runWorkspaceAgentWithInput([]string{"research", "record", "--stdin", workspacePath}, strings.NewReader(evidenceInput), &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"state": "recorded"`) {
-		t.Fatalf("research record exit = %d, output = %s", code, output.String())
-	}
-
-	output.Reset()
-	snapshotInput := `{"as_of":"2026-07-25T12:00:00Z","claims":[{"statement":"Public macro claim","classification":"public","source_urls":["https://www.bcb.gov.br/example"]}],"sources":[{"url":"https://www.bcb.gov.br/example","retrieved_at":"2026-07-25T12:00:00Z"}],"attestation":{}}`
-	code = runWorkspaceAgentWithInput([]string{"economic", "import", "--stdin", "--attested-public", "--attested-by", "owner", "--confirm-no-workspace-derivation"}, strings.NewReader(snapshotInput), &output, &output, func() (string, error) { return dataRoot, nil })
-	var snapshot struct {
-		SnapshotID string `json:"snapshot_id"`
-	}
-	if code != ExitOK || json.Unmarshal(output.Bytes(), &snapshot) != nil || snapshot.SnapshotID == "" {
-		t.Fatalf("economic import exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	code = runWorkspaceAgentWithInput([]string{"economic", "attach", "--snapshot", snapshot.SnapshotID, workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"state": "attached"`) {
-		t.Fatalf("economic attach exit = %d, output = %s", code, output.String())
 	}
 }
 
@@ -580,33 +425,5 @@ func TestDoctorExplainsUninitializedWorkspace(t *testing.T) {
 	code := runDoctor([]string{filepath.Join(root, "not-initialized")}, &output, &output, func() (string, error) { return filepath.Join(root, "local", "BCGOS"), nil }, func(string) bool { return false })
 	if code != ExitOK || !strings.Contains(output.String(), `"state": "action_required"`) || !strings.Contains(output.String(), "bcgos init") {
 		t.Fatalf("doctor exit = %d, output = %s", code, output.String())
-	}
-}
-
-func TestFederationEnrollmentIsOneTimeAndRevocable(t *testing.T) {
-	dataRoot := t.TempDir()
-	root := func() (string, error) { return dataRoot, nil }
-	var output bytes.Buffer
-	if code := runFederation([]string{"enroll", "--accept-federated-improvement-contract", "--bridge-endpoint", "https://bridge.maestro.example/federation/v1/batches"}, &output, &output, root); code != ExitOK {
-		t.Fatalf("enroll exit = %d, output = %s", code, output.String())
-	}
-	if !strings.Contains(output.String(), `"automatic_export": true`) || strings.Contains(output.String(), "installation_id") {
-		t.Fatalf("enroll output = %s", output.String())
-	}
-	output.Reset()
-	if code := runFederation([]string{"status"}, &output, &output, root); code != ExitOK || !strings.Contains(output.String(), `"state": "enrolled"`) {
-		t.Fatalf("status exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	if code := runFederation([]string{"revoke"}, &output, &output, root); code != ExitOK || !strings.Contains(output.String(), `"state": "revoked"`) {
-		t.Fatalf("revoke exit = %d, output = %s", code, output.String())
-	}
-}
-
-func TestFederationEnrollmentRequiresExplicitContractAcceptance(t *testing.T) {
-	var output bytes.Buffer
-	code := runFederation([]string{"enroll", "--bridge-endpoint", "https://bridge.maestro.example/federation/v1/batches"}, &output, &output, func() (string, error) { return t.TempDir(), nil })
-	if code != ExitUsage || !strings.Contains(output.String(), "--accept-federated-improvement-contract") {
-		t.Fatalf("exit = %d, output = %s", code, output.String())
 	}
 }

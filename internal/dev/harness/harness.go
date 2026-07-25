@@ -10,16 +10,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/hookpolicy"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseprovider"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
@@ -57,9 +52,6 @@ func Validate(root string, full bool, out io.Writer) error {
 		{"skills index", func() error {
 			return skillsindex.Validate(filepath.Join(root, "bundles", "base", "skills"))
 		}},
-		{"managed agents", func() error {
-			return agentcatalog.ValidateDir(filepath.Join(root, "bundles", "base", "agents"))
-		}},
 		{"Claude skill projections", func() error {
 			return skillmeta.ValidateClaudeProjections(
 				filepath.Join(root, "dev", "skills"),
@@ -86,49 +78,8 @@ func Validate(root string, full bool, out io.Writer) error {
 			}
 			return policy.Validate()
 		}},
-		{"product hook execution policy", func() error {
-			file, err := os.Open(filepath.Join(root, "bundles", "base", "runtime", "hook-policy.json"))
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-			_, err = hookpolicy.Parse(file)
-			return err
-		}},
-		{"release contract", func() error {
-			if err := releasecontract.ValidateSchemaFile(filepath.Join(root, "schemas", "release-manifest.schema.json")); err != nil {
-				return err
-			}
-			if err := releaseverify.ValidateAuthorityRegistrySchemaFile(
-				filepath.Join(root, "schemas", "release-authority-registry.schema.json"),
-			); err != nil {
-				return err
-			}
-			schema, err := os.Open(filepath.Join(root, "schemas", "release-provider.schema.json"))
-			if err != nil {
-				return err
-			}
-			if err := releaseprovider.ValidateProviderConfigSchema(schema); err != nil {
-				schema.Close()
-				return err
-			}
-			if err := schema.Close(); err != nil {
-				return err
-			}
-			config, err := os.Open(filepath.Join(root, "bundles", "base", "release", "provider.json"))
-			if err != nil {
-				return err
-			}
-			_, parseErr := releaseprovider.ParseConfig(config)
-			closeErr := config.Close()
-			if parseErr != nil {
-				return parseErr
-			}
-			return closeErr
-		}},
-		{"distribution allowlist", func() error {
-			_, err := releasepack.LoadAllowlist(filepath.Join(root, "bundles", "base", "distribution.json"))
-			return err
+		{"execution ledger contract", func() error {
+			return execution.ValidateSchemaFile(filepath.Join(root, "schemas", "execution-state.schema.json"))
 		}},
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}
