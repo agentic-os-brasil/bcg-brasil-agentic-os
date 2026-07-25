@@ -108,11 +108,11 @@ type workCheckpointRequest struct {
 
 func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos work <create|start|checkpoint|pause|next|resume|evidence|complete|inspect|export|delete>")
+		fmt.Fprintln(errOut, "usage: bcgos work <create|start|checkpoint|pause|next|resume|tool-start|tool-finish|evidence|complete|inspect|export|delete>")
 		return ExitUsage
 	}
 	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(out, "usage: bcgos work <create|start|checkpoint|pause|next|resume|evidence|complete|inspect|export|delete>")
+		fmt.Fprintln(out, "usage: bcgos work <create|start|checkpoint|pause|next|resume|tool-start|tool-finish|evidence|complete|inspect|export|delete>")
 		return ExitOK
 	}
 	root, err := dataRoot()
@@ -336,6 +336,70 @@ func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func()
 			return reportError(errOut, err)
 		}
 		return writeJSON(out, execution.EvidenceMutationReceipt(result), errOut)
+	case "tool-start":
+		flags := newFlagSet("work tool-start", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		revision := flags.Int("revision", 0, "expected state revision")
+		attemptID := flags.String("attempt", "", "current attempt identity")
+		agentID := flags.String("agent", "", "bounded agent identity")
+		toolID := flags.String("tool", "", "bounded tool identity")
+		if err := flags.Parse(args[1:]); err != nil {
+			return ExitUsage
+		}
+		if rejectPositionals(flags, errOut) {
+			return ExitUsage
+		}
+		if strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" ||
+			strings.TrimSpace(*attemptID) == "" || strings.TrimSpace(*agentID) == "" ||
+			strings.TrimSpace(*toolID) == "" || *revision < 1 {
+			fmt.Fprintln(errOut, "usage: bcgos work tool-start --workspace PATH --item ID --revision N --attempt ID --agent ID --tool ID")
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		result, err := store.StartToolCall(workspaceID, *itemID, execution.ToolCallStartInput{
+			ExpectedRevision: *revision, AttemptID: *attemptID,
+			AgentID: *agentID, ToolID: *toolID,
+		})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, execution.ToolCallReceiptOutput(result), errOut)
+	case "tool-finish":
+		flags := newFlagSet("work tool-finish", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		revision := flags.Int("revision", 0, "expected state revision")
+		attemptID := flags.String("attempt", "", "current attempt identity")
+		callID := flags.String("call", "", "tool call identity")
+		outcome := flags.String("outcome", "", "terminal outcome: succeeded, failed or unavailable")
+		if err := flags.Parse(args[1:]); err != nil {
+			return ExitUsage
+		}
+		if rejectPositionals(flags, errOut) {
+			return ExitUsage
+		}
+		if strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" ||
+			strings.TrimSpace(*attemptID) == "" || strings.TrimSpace(*callID) == "" ||
+			strings.TrimSpace(*outcome) == "" || *revision < 1 {
+			fmt.Fprintln(errOut, "usage: bcgos work tool-finish --workspace PATH --item ID --revision N --attempt ID --call ID --outcome succeeded|failed|unavailable")
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		result, err := store.FinishToolCall(workspaceID, *itemID, execution.ToolCallFinishInput{
+			ExpectedRevision: *revision, AttemptID: *attemptID,
+			ToolCallID: *callID, Outcome: execution.ToolCallState(*outcome),
+		})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, execution.ToolCallReceiptOutput(result), errOut)
 	case "complete":
 		flags := newFlagSet("work complete", errOut)
 		workspacePath := flags.String("workspace", "", "initialized workspace path")

@@ -199,6 +199,63 @@ func TestWorkCheckpointRequiresPrivateStdin(t *testing.T) {
 	}
 }
 
+func TestWorkToolCallLifecycleReturnsMetadataOnlyReceipts(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	workspacePath := filepath.Join(t.TempDir(), "tool-call-workspace")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	contract := `{"objective":"Trace one governed call.","initial_next_step":"Start.","criteria":[{"id":"tests","type":"command_check","command":["go","version"]}]}`
+	var output bytes.Buffer
+	if code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("create output = %s", output.String())
+	}
+	var created execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runWork([]string{
+		"start", "--workspace", workspacePath, "--item", created.ItemID, "--revision", "1",
+	}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("start output = %s", output.String())
+	}
+	var started execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &started); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runWork([]string{
+		"tool-start", "--workspace", workspacePath, "--item", created.ItemID,
+		"--revision", "2", "--attempt", started.AttemptID,
+		"--agent", "codex", "--tool", "github",
+	}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("tool-start output = %s", output.String())
+	}
+	var call execution.ToolCallMutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &call); err != nil || call.ToolCallID == "" {
+		t.Fatalf("tool-start output = %s, err = %v", output.String(), err)
+	}
+	output.Reset()
+	if code := runWork([]string{
+		"tool-finish", "--workspace", workspacePath, "--item", created.ItemID,
+		"--revision", "3", "--attempt", started.AttemptID,
+		"--call", call.ToolCallID, "--outcome", "succeeded",
+	}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("tool-finish output = %s", output.String())
+	}
+	body := strings.ToLower(output.String())
+	if !strings.Contains(body, `"state": "succeeded"`) {
+		t.Fatalf("tool-finish output = %s", output.String())
+	}
+	for _, prohibited := range []string{"prompt", "arguments", "stdout", "stderr", "payload", "error"} {
+		if strings.Contains(body, prohibited) {
+			t.Fatalf("tool receipt leaked %q: %s", prohibited, output.String())
+		}
+	}
+}
+
 func TestWorkCreateRequiresStdinAndRejectsPositionals(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := func() (string, error) { return root, nil }

@@ -9,6 +9,7 @@
     {"$ref": "#/$defs/attempt"},
     {"$ref": "#/$defs/checkpoint"},
     {"$ref": "#/$defs/evidence"},
+    {"$ref": "#/$defs/tool_call"},
     {"$ref": "#/$defs/transition"}
   ],
   "$defs": {
@@ -251,16 +252,52 @@
         }
       ]
     },
+    "tool_call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "tool_call_id", "item_id", "workspace_id",
+        "attempt_id", "agent_id", "tool_id", "state", "started_at"
+      ],
+      "properties": {
+        "schema_version": {"const": 1},
+        "tool_call_id": {"$ref": "#/$defs/id"},
+        "item_id": {"$ref": "#/$defs/id"},
+        "workspace_id": {"$ref": "#/$defs/workspace_id"},
+        "attempt_id": {"$ref": "#/$defs/id"},
+        "agent_id": {"enum": ["claude", "codex", "maestro-core"]},
+        "tool_id": {
+          "enum": [
+            "browser", "filesystem-read", "filesystem-write", "git", "github",
+            "other", "shell", "skill", "subagent", "web"
+          ]
+        },
+        "state": {"enum": ["started", "succeeded", "failed", "unavailable"]},
+        "started_at": {"type": "string", "format": "date-time"},
+        "finished_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "started"}}},
+          "then": {"not": {"required": ["finished_at"]}},
+          "else": {"required": ["finished_at"]}
+        }
+      ]
+    },
     "revision": {
       "type": "object",
       "additionalProperties": false,
       "required": ["schema_version", "state", "transition"],
+      "allOf": [
+        {"not": {"required": ["evidence", "tool_call"]}}
+      ],
       "properties": {
         "schema_version": {"const": 1},
         "state": {"$ref": "#/$defs/state"},
         "attempt": {"$ref": "#/$defs/attempt"},
         "checkpoint": {"$ref": "#/$defs/checkpoint"},
         "evidence": {"$ref": "#/$defs/evidence"},
+        "tool_call": {"$ref": "#/$defs/tool_call"},
         "transition": {"$ref": "#/$defs/transition"}
       }
     }

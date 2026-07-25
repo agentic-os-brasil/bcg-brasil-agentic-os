@@ -50,7 +50,7 @@ quando os mecanismos nativos forem diferentes.
 | Contexto do dono | Arquivos locais, editáveis e auditáveis para papel profissional, estilo, voz, preferências e limites. |
 | Atlas humano | Estrutura local não destrutiva para clientes, projetos, pessoas e diário de trabalho. |
 | Memória | Núcleo local com resumos graduais e contexto limitado; automação de síntese ainda não está ativa. |
-| Execução retomável | Ledger local com contrato imutável, checkpoint privado, pausa/retomada, projeção compacta, receipts de checks executados pelo core e conclusão revalidada. |
+| Execução retomável | Ledger local com contrato imutável, checkpoint privado, pausa/retomada, contrato core para breadcrumbs metadata-only de tool calls, receipts de checks executados pelo core e conclusão revalidada; emissão nativa pelos adapters ainda está pendente. |
 | Skills | Catálogo compacto e atualizado de procedimentos disponíveis. |
 | Desenvolvimento | Harness, testes, CI em Windows/macOS/Linux, decisões versionadas e fluxo de PR com revisão humana. |
 

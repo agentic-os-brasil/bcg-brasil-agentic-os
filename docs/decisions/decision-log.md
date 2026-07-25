@@ -435,3 +435,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The ledger may track execution state but never owns business priority, due date, owner or external task status. Every mutation is revision-checked, takeover invalidates the prior attempt, completion requires core-witnessed evidence, and persisted history excludes prompts, responses, tool payloads, absolute paths and client bodies. Task-provider synchronization, generic tracing, unattended execution and evaluator plugins remain outside V1.
 - Refs: specs/018-execution-ledger-v1.md; schemas/execution-state.schema.json; internal/execution
 - Supersedes: none
+
+## TCAL - Trace tool lifecycle without persisting tool payloads
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Resumable execution needs enough breadcrumbs to show which agent invoked which tool and whether the call finished, while prompts, arguments, queries, output and errors may contain contracts, credentials or professional content that must not become trace data.
+- Decision: Record only an immutable tool-call lifecycle linked to the current execution item and fenced attempt: a runtime identity and tool class from closed canonical registries, opaque call ID, timestamps and `started`, `succeeded`, `failed` or `unavailable` state. Every event advances the execution revision. Tool arguments, prompts, stdout, stderr, error bodies and payload digests remain forbidden.
+- Consequences: Explicit export can reconstruct ordering and unresolved calls without replaying model context or tool content. Free-form IDs cannot become a content channel. Until native adapters emit the events, CLI receipts are declared breadcrumbs rather than authenticated runtime provenance. The ledger is not an observability backend, event bus, cost tracker or process sandbox.
+- Refs: EXEC; specs/018-execution-ledger-v1.md; schemas/execution-state.schema.json; internal/execution/toolcall.go
+- Supersedes: none
