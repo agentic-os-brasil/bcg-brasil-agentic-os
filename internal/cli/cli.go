@@ -827,7 +827,8 @@ func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 	}
 	flags := newFlagSet("hook session-start", errOut)
 	runtimeName := flags.String("runtime", "", "target runtime: claude or codex")
-	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 {
+	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
 		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]")
 		return ExitUsage
 	}
@@ -874,6 +875,7 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 	}
 	flags := newFlagSet("adapter "+args[0], errOut)
 	runtimeName := flags.String("runtime", "", "target runtime: claude or codex")
+	executable := flags.String("executable", "", "path to the installed bcgos executable")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 {
 		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status> --runtime claude|codex [workspace-path]")
 		return ExitUsage
@@ -885,7 +887,14 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 	)
 	switch args[0] {
 	case "install":
-		status, err = adaptercfg.Install(*runtimeName, path)
+		resolvedExecutable := *executable
+		if resolvedExecutable == "" {
+			resolvedExecutable, err = os.Executable()
+			if err != nil {
+				return reportError(errOut, fmt.Errorf("locate installed bcgos executable: %w", err))
+			}
+		}
+		status, err = adaptercfg.Install(*runtimeName, path, resolvedExecutable)
 	case "uninstall":
 		status, err = adaptercfg.Uninstall(*runtimeName, path)
 	case "status":

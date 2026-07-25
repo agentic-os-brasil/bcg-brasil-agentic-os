@@ -43,3 +43,24 @@ func TestClaudeAndCodexSerializationAreSeparateAdapterCalls(t *testing.T) {
 		t.Fatal("adapter output did not preserve runtime identity")
 	}
 }
+
+func TestBuildOmitsOversizedPacketInsteadOfExpandingHookOutput(t *testing.T) {
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile: profile.State{
+			Profile: "standard",
+			Source:  "fallback",
+			Warning: strings.Repeat("warning ", MaximumAdditionalContextBytes),
+		},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+	})
+	output, err := BuildCodex(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(output.HookSpecificOutput.AdditionalContext) > MaximumAdditionalContextBytes {
+		t.Fatalf("context was %d bytes", len(output.HookSpecificOutput.AdditionalContext))
+	}
+	if !strings.Contains(output.HookSpecificOutput.AdditionalContext, "omitted") {
+		t.Fatalf("context = %q", output.HookSpecificOutput.AdditionalContext)
+	}
+}

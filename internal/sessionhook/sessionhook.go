@@ -11,6 +11,12 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 )
 
+// MaximumAdditionalContextBytes keeps native Session Start output small enough
+// to stay within a predictable startup budget. It is deliberately lower than
+// the typical native-hook payload ceilings and is an output limit, not a
+// license to read more source material.
+const MaximumAdditionalContextBytes = 8 << 10
+
 type ClaudeOutput struct {
 	HookSpecificOutput ClaudeHookSpecificOutput `json:"hookSpecificOutput"`
 }
@@ -59,5 +65,14 @@ func contextFor(runtime string, packet sessionctx.Packet) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("encode session envelope: %w", err)
 	}
-	return "Maestro bounded session context (pointers only; unavailable sources are explicit):\n" + string(body), nil
+	context := "Maestro bounded session context (pointers only; unavailable sources are explicit):\n" + string(body)
+	if len(context) <= MaximumAdditionalContextBytes {
+		return context, nil
+	}
+
+	// A hook must remain available even when a future packet gains an unusually
+	// verbose warning. Do not fail the session or truncate JSON mid-document:
+	// return a valid, explicit omission that directs the runtime to the normal
+	// packet command instead.
+	return "Maestro bounded session context omitted: packet exceeded the native hook output budget. Use `bcgos session packet` for the complete pointer-only packet.", nil
 }

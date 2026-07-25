@@ -490,3 +490,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The SELF can inform work progressively without injecting all facets. Atlas, skills and memory pointers require separate authorization/resolution contracts; sensitive and unreviewed owner facets remain unreachable.
 - Refs: specs/015-session-context-packet.md; specs/019-authorized-session-pointer-resolution.md; internal/sessionresolve
 - Supersedes: none
+
+## PILH - Require native receipts before pilot hook promotion
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A workspace-local hook configuration and a unit-tested command payload do not prove that a real Claude or Codex session trusted and invoked the hook. At the same time, pilot users cannot depend on PATH setup or tolerate a slow startup hook.
+- Decision: Install one Maestro-owned Session Start command using the released local executable, with a two-second timeout, an 8 KiB output ceiling and an explicit source marker. Exclude the generated machine-local configuration from the workspace Git index when possible, but refuse installation before any write if that target configuration is already tracked. Keep lifecycle capability `unavailable` until an operator records a direct-command result and a fresh native-session result for each supported runtime/platform.
+- Consequences: Reinstalling after an update changes only Maestro's own command and does not depend on a user shell. A missing native receipt fails closed in product reporting, while conformance remains practical to run in an empty non-client workspace. No memory, worker, network or model operation is added to Session Start, and no absolute machine path can be silently added to an already tracked runtime configuration.
+- Refs: specs/017-native-session-start-hook.md; specs/018-workspace-local-adapter-installation.md; specs/021-pilot-hook-conformance.md; docs/onboarding/pilot-hook-conformance.md; internal/adaptercfg; internal/sessionhook
+- Supersedes: none
