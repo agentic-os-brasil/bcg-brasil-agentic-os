@@ -86,7 +86,10 @@ The roadmap separates things to build from things to decide. Detailed dates rema
   code-signing authorities.
 - [x] Define and validate the provider-neutral signed release manifest and CLI↔bundle compatibility rules.
 - [ ] Implement browser-based private-release authentication.
-- [ ] Implement verified download, staging, activation and rollback.
+- [x] Implement signed local-release verification, safe staging, bootstrapper
+  activation and last-known-good rollback.
+- [ ] Implement authenticated provider discovery and verified download into
+  the local release boundary.
 - [ ] Ensure updates never overwrite local configuration or work data.
 - [ ] Run install/update/rollback tests on clean corporate devices for both platforms.
 
