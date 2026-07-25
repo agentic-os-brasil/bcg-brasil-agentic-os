@@ -207,6 +207,23 @@ func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 	}
 }
 
+func TestSessionResolveReadsOnlyAuthorizedOwnerPointer(t *testing.T) {
+	dataRoot, workspacePath := filepath.Join(t.TempDir(), "BCGOS"), t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runOwner([]string{"init"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	code := runSessionResolve([]string{"--pointer", "owner/self/voice.md", "--purpose", "session", "--budget-bytes", "512", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "available"`) || !strings.Contains(output.String(), "# Voice") {
+		t.Fatalf("resolve = %d %s", code, output.String())
+	}
+}
+
 func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 	var output bytes.Buffer
 	if code := Run([]string{"skills", "index"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"schema_version": 1`) || !strings.Contains(output.String(), `"dream-memory"`) || strings.Contains(output.String(), "Daily dreaming cannot") {
