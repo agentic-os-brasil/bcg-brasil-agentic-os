@@ -1,0 +1,49 @@
+name: release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Immutable MAJOR.MINOR.PATCH candidate version
+        required: true
+        type: string
+      channel:
+        description: Candidate channel
+        required: true
+        default: canary
+        type: choice
+        options:
+          - canary
+          - beta
+          - stable
+
+permissions:
+  contents: read
+
+jobs:
+  build-candidate:
+    name: deterministic unsigned candidate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate source snapshot
+        run: go run ./dev/harness validate --full
+      - name: Build candidate
+        run: >-
+          go run ./dev/release candidate
+          --version "${{ inputs.version }}"
+          --channel "${{ inputs.channel }}"
+          --output dist/release-candidate
+      - name: Verify candidate closure
+        run: go run ./dev/release verify --directory dist/release-candidate
+      - name: Upload unsigned candidate
+        uses: actions/upload-artifact@v6
+        with:
+          name: maestro-${{ inputs.version }}-${{ inputs.channel }}-unsigned
+          path: dist/release-candidate/
+          if-no-files-found: error
+          retention-days: 7

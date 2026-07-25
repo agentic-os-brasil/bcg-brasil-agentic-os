@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/hookpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
@@ -90,6 +91,10 @@ func Validate(root string, full bool, out io.Writer) error {
 		}},
 		{"release contract", func() error {
 			return releasecontract.ValidateSchemaFile(filepath.Join(root, "schemas", "release-manifest.schema.json"))
+		}},
+		{"distribution allowlist", func() error {
+			_, err := releasepack.LoadAllowlist(filepath.Join(root, "bundles", "base", "distribution.json"))
+			return err
 		}},
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}
