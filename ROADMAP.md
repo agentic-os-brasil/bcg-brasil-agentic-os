@@ -91,6 +91,10 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement and run an isolated local binary-installation trial with checksum verification on Windows, macOS and Linux. This is explicitly not a signed release or pilot distribution channel.
 - [x] Produce deterministic unsigned, versioned Windows and macOS release
   candidates through a read-only manual CI workflow.
+- [x] Implement an environment-protected signed-prerelease workflow that
+  builds seeded native binaries, requires platform and Maestro release
+  signatures, verifies the closed set and publishes an immutable prerelease.
+  It remains unavailable until the external authorities below are configured.
 - [ ] Configure production manifest/artifact signing and native Windows/macOS
   code-signing authorities.
 - [x] Define and validate the provider-neutral signed release manifest and CLI↔bundle compatibility rules.

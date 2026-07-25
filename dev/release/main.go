@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	devharness "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/harness"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
@@ -24,12 +25,18 @@ func main() {
 	switch os.Args[1] {
 	case "binary":
 		binary(root, os.Args[2:])
+	case "seeded-binaries":
+		seededBinaries(root, os.Args[2:])
 	case "candidate":
 		candidate(root, os.Args[2:])
 	case "provenance":
 		provenance(root, os.Args[2:])
+	case "sign":
+		sign(root, os.Args[2:])
 	case "verify":
 		verify(root, os.Args[2:])
+	case "verify-signed":
+		verifySigned(root, os.Args[2:])
 	default:
 		usage()
 	}
@@ -41,20 +48,60 @@ func provenance(root string, args []string) {
 	osName := flags.String("os", "", "native target operating system")
 	arch := flags.String("arch", "", "native target architecture")
 	binary := flags.String("binary", "", "native binary path")
+	component := flags.String("component", "cli", "native component: cli or bootstrapper")
 	_ = flags.Parse(args)
 	if *version == "" || *osName == "" || *arch == "" || *binary == "" || flags.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "usage: go run ./dev/release provenance --version MAJOR.MINOR.PATCH --os OS --arch ARCH --binary FILE")
 		os.Exit(2)
 	}
-	output, err := releasepack.WriteBinaryProvenance(
+	output, err := releasepack.WriteNativeProvenance(
 		absoluteFromRoot(root, *binary),
 		*version,
 		releasepack.Target{OS: *osName, Arch: *arch},
+		releasepack.NativeComponent(*component),
 	)
 	if err != nil {
 		fatal(err)
 	}
 	fmt.Printf("native build provenance written at %s\n", output)
+}
+
+func seededBinaries(root string, args []string) {
+	flags := flag.NewFlagSet("seeded-binaries", flag.ExitOnError)
+	version := flags.String("version", "", "immutable MAJOR.MINOR.PATCH release version")
+	osName := flags.String("os", "", "native target operating system")
+	arch := flags.String("arch", "", "native target architecture")
+	output := flags.String("output", "", "new native output directory")
+	provider := flags.String("provider-config", "", "approved public provider configuration")
+	publicationRepo := flags.String("publication-repository", "", "exact OWNER/REPOSITORY publication target")
+	registry := flags.String("authority-registry", "", "approved public authority registry")
+	_ = flags.Parse(args)
+	if *version == "" || *osName == "" || *arch == "" || *output == "" ||
+		*provider == "" || *publicationRepo == "" || *registry == "" || flags.NArg() != 0 {
+		fmt.Fprintln(
+			os.Stderr,
+			"usage: go run ./dev/release seeded-binaries --version MAJOR.MINOR.PATCH --os OS --arch ARCH --provider-config FILE --publication-repository OWNER/REPOSITORY --authority-registry FILE --output DIRECTORY",
+		)
+		os.Exit(2)
+	}
+	artifacts, err := releasepack.BuildSeededNativeBinaries(
+		context.Background(),
+		releasepack.SeededBuildOptions{
+			Root: root, Output: absoluteFromRoot(root, *output), Version: *version,
+			Target:            releasepack.Target{OS: *osName, Arch: *arch},
+			ProviderConfig:    absoluteFromRoot(root, *provider),
+			PublicationRepo:   *publicationRepo,
+			AuthorityRegistry: absoluteFromRoot(root, *registry),
+		},
+	)
+	if err != nil {
+		fatal(err)
+	}
+	fmt.Printf(
+		"seeded native CLI and bootstrapper built with authority registry %s at %s\n",
+		artifacts.AuthorityRegistrySHA256,
+		filepath.Dir(artifacts.CLI),
+	)
 }
 
 func binary(root string, args []string) {
@@ -119,6 +166,61 @@ func verify(root string, args []string) {
 	fmt.Printf("unsigned candidate integrity verified at %s\n", path)
 }
 
+func sign(root string, args []string) {
+	flags := flag.NewFlagSet("sign", flag.ExitOnError)
+	candidate := flags.String("candidate", "", "closed unsigned candidate directory")
+	output := flags.String("output", "", "new signed release directory")
+	registry := flags.String("authority-registry", "", "approved public authority registry")
+	issuer := flags.String("issuer", "", "approved Maestro release issuer")
+	keyID := flags.String("key-id", "", "approved active signing key ID")
+	_ = flags.Parse(args)
+	if *candidate == "" || *output == "" || *registry == "" ||
+		*issuer == "" || *keyID == "" || flags.NArg() != 0 {
+		fmt.Fprintln(
+			os.Stderr,
+			"usage: go run ./dev/release sign --candidate DIR --output DIR --authority-registry FILE --issuer ID --key-id ID < base64-seed",
+		)
+		os.Exit(2)
+	}
+	privateKey, err := releasepack.ParseSigningSeed(os.Stdin)
+	if err != nil {
+		fatal(err)
+	}
+	manifest, err := releasepack.SignCandidate(releasepack.SignCandidateOptions{
+		Candidate: absoluteFromRoot(root, *candidate),
+		Output:    absoluteFromRoot(root, *output),
+		Registry:  absoluteFromRoot(root, *registry),
+		Issuer:    *issuer, KeyID: *keyID, PrivateKey: privateKey,
+		Clock: time.Now,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	fmt.Printf("signed Maestro %s release verified at %s\n", manifest.Release, absoluteFromRoot(root, *output))
+}
+
+func verifySigned(root string, args []string) {
+	flags := flag.NewFlagSet("verify-signed", flag.ExitOnError)
+	directory := flags.String("directory", "", "signed release directory")
+	registry := flags.String("authority-registry", "", "approved public authority registry")
+	_ = flags.Parse(args)
+	if *directory == "" || *registry == "" || flags.NArg() != 0 {
+		fmt.Fprintln(
+			os.Stderr,
+			"usage: go run ./dev/release verify-signed --directory DIR --authority-registry FILE",
+		)
+		os.Exit(2)
+	}
+	if err := releasepack.VerifySignedRelease(
+		absoluteFromRoot(root, *directory),
+		absoluteFromRoot(root, *registry),
+		time.Now,
+	); err != nil {
+		fatal(err)
+	}
+	fmt.Printf("signed release verified at %s\n", absoluteFromRoot(root, *directory))
+}
+
 func absoluteFromRoot(root, value string) string {
 	if filepath.IsAbs(value) {
 		return filepath.Clean(value)
@@ -134,7 +236,10 @@ func optionalAbsoluteFromRoot(root, value string) string {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: go run ./dev/release <binary|candidate|provenance|verify> [options]")
+	fmt.Fprintln(
+		os.Stderr,
+		"usage: go run ./dev/release <binary|seeded-binaries|candidate|provenance|sign|verify|verify-signed> [options]",
+	)
 	os.Exit(2)
 }
 

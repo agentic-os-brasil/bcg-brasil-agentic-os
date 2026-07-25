@@ -1,0 +1,360 @@
+name: signed Maestro prerelease
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Immutable MAJOR.MINOR.PATCH prerelease version
+        required: true
+        type: string
+      channel:
+        description: Prerelease channel
+        required: true
+        default: canary
+        type: choice
+        options:
+          - canary
+          - beta
+      publish_confirmation:
+        description: Type publish-maestro-prerelease
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-source:
+    name: validate source and authority request
+    runs-on: ubuntu-latest
+    environment: maestro-prerelease
+    steps:
+      - name: Require the protected default branch
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/${DEFAULT_BRANCH}" ||
+                "$REF_PROTECTED" != "true" ]]; then
+            echo "Signed publication requires the protected default branch." >&2
+            exit 1
+          fi
+      - name: Require exact publication confirmation
+        shell: bash
+        env:
+          PUBLISH_CONFIRMATION: ${{ inputs.publish_confirmation }}
+        run: |
+          if [[ "$PUBLISH_CONFIRMATION" != "publish-maestro-prerelease" ]]; then
+            echo "Exact prerelease publication confirmation is required." >&2
+            exit 1
+          fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate source snapshot
+        run: go run ./dev/harness validate --full
+      - name: Materialize approved public release inputs
+        shell: bash
+        env:
+          PROVIDER_CONFIG_B64: ${{ vars.MAESTRO_PROVIDER_CONFIG_B64 }}
+          AUTHORITY_REGISTRY_B64: ${{ vars.MAESTRO_AUTHORITY_REGISTRY_B64 }}
+        run: |
+          test -n "$PROVIDER_CONFIG_B64"
+          test -n "$AUTHORITY_REGISTRY_B64"
+          mkdir -p dist/release-authority
+          printf '%s' "$PROVIDER_CONFIG_B64" | base64 --decode > dist/release-authority/provider.json
+          printf '%s' "$AUTHORITY_REGISTRY_B64" | base64 --decode > dist/release-authority/registry.json
+          chmod 600 dist/release-authority/provider.json dist/release-authority/registry.json
+      - name: Upload approved public release inputs
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: maestro-approved-public-release-inputs
+          path: dist/release-authority/
+          if-no-files-found: error
+          retention-days: 3
+
+  build-native:
+    name: seeded and native-signed ${{ matrix.os }}/${{ matrix.arch }}
+    needs: validate-source
+    environment: maestro-prerelease
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows
+            arch: amd64
+            runner: windows-2025
+          - os: darwin
+            arch: amd64
+            runner: macos-15-intel
+          - os: darwin
+            arch: arm64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      TARGET_OS: ${{ matrix.os }}
+      TARGET_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: maestro-approved-public-release-inputs
+          path: dist/release-authority
+      - name: Build seeded native CLI and bootstrapper
+        shell: bash
+        run: >-
+          go run ./dev/release seeded-binaries
+          --version "$RELEASE_VERSION"
+          --os "$TARGET_OS"
+          --arch "$TARGET_ARCH"
+          --provider-config dist/release-authority/provider.json
+          --publication-repository "$GITHUB_REPOSITORY"
+          --authority-registry dist/release-authority/registry.json
+          --output dist/native
+      - name: Authenticode-sign Windows binaries
+        if: matrix.os == 'windows'
+        shell: pwsh
+        env:
+          WINDOWS_PFX_B64: ${{ secrets.MAESTRO_WINDOWS_PFX_B64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.MAESTRO_WINDOWS_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_PFX_B64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_PFX_PASSWORD)) {
+            throw "Approved Windows code-signing identity is unavailable."
+          }
+          $certificate = Join-Path $env:RUNNER_TEMP "maestro-signing.pfx"
+          [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_PFX_B64))
+          try {
+            Get-ChildItem "dist/native/*.exe" | ForEach-Object {
+              & signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+                /f $certificate /p $env:WINDOWS_PFX_PASSWORD $_.FullName
+              if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed." }
+              & signtool verify /pa /all $_.FullName
+              if ($LASTEXITCODE -ne 0) { throw "Authenticode verification failed." }
+            }
+          } finally {
+            Remove-Item -Force -ErrorAction SilentlyContinue $certificate
+          }
+      - name: Developer ID-sign macOS binaries
+        if: matrix.os == 'darwin'
+        shell: bash
+        env:
+          MACOS_P12_B64: ${{ secrets.MAESTRO_MACOS_P12_B64 }}
+          MACOS_P12_PASSWORD: ${{ secrets.MAESTRO_MACOS_P12_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MAESTRO_MACOS_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MAESTRO_MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          test -n "$MACOS_P12_B64"
+          test -n "$MACOS_P12_PASSWORD"
+          test -n "$MACOS_SIGNING_IDENTITY"
+          test -n "$KEYCHAIN_PASSWORD"
+          keychain="$RUNNER_TEMP/maestro-signing.keychain-db"
+          certificate="$RUNNER_TEMP/maestro-signing.p12"
+          original_keychains="$(security list-keychains -d user | tr -d '\"')"
+          printf '%s' "$MACOS_P12_B64" | base64 --decode > "$certificate"
+          cleanup() {
+            if [[ -n "$original_keychains" ]]; then
+              # shellcheck disable=SC2086
+              security list-keychains -d user -s $original_keychains >/dev/null 2>&1 || true
+            fi
+            security delete-keychain "$keychain" >/dev/null 2>&1 || true
+            rm -f "$certificate"
+          }
+          trap cleanup EXIT
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$MACOS_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          for binary in dist/native/bcgos_* dist/native/bcgos-bootstrap_*; do
+            codesign --force --options runtime --timestamp \
+              --sign "$MACOS_SIGNING_IDENTITY" "$binary"
+            codesign --verify --strict --verbose=2 "$binary"
+          done
+      - name: Record signed native provenance
+        shell: bash
+        run: |
+          suffix=""
+          if [[ "$TARGET_OS" == "windows" ]]; then suffix=".exe"; fi
+          go run ./dev/release provenance \
+            --version "$RELEASE_VERSION" \
+            --component cli \
+            --binary "dist/native/bcgos_${RELEASE_VERSION}_${TARGET_OS}_${TARGET_ARCH}${suffix}" \
+            --os "$TARGET_OS" \
+            --arch "$TARGET_ARCH"
+          go run ./dev/release provenance \
+            --version "$RELEASE_VERSION" \
+            --component bootstrapper \
+            --binary "dist/native/bcgos-bootstrap_${RELEASE_VERSION}_${TARGET_OS}_${TARGET_ARCH}${suffix}" \
+            --os "$TARGET_OS" \
+            --arch "$TARGET_ARCH"
+      - name: Upload signed native inputs
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: maestro-seeded-native-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/native/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-prerelease:
+    name: sign release set and publish immutable prerelease
+    needs:
+      - validate-source
+      - build-native
+    runs-on: ubuntu-latest
+    environment: maestro-prerelease
+    permissions:
+      actions: read
+      contents: write
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_CHANNEL: ${{ inputs.channel }}
+      RELEASE_ISSUER: ${{ vars.MAESTRO_RELEASE_ISSUER }}
+      RELEASE_KEY_ID: ${{ vars.MAESTRO_RELEASE_KEY_ID }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: maestro-approved-public-release-inputs
+          path: dist/release-authority
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          pattern: maestro-seeded-native-*
+          path: dist/native
+          merge-multiple: true
+      - name: Assemble native-signed candidate
+        run: >-
+          go run ./dev/release candidate
+          --version "$RELEASE_VERSION"
+          --channel "$RELEASE_CHANNEL"
+          --prebuilt dist/native
+          --output dist/release-candidate
+      - name: Apply approved Maestro release signatures
+        shell: bash
+        env:
+          RELEASE_SIGNING_SEED_B64: ${{ secrets.MAESTRO_ED25519_SEED_B64 }}
+        run: |
+          test -n "$RELEASE_ISSUER"
+          test -n "$RELEASE_KEY_ID"
+          test -n "$RELEASE_SIGNING_SEED_B64"
+          signing_seed="$RELEASE_SIGNING_SEED_B64"
+          unset RELEASE_SIGNING_SEED_B64
+          printf '%s' "$signing_seed" |
+            go run ./dev/release sign \
+              --candidate dist/release-candidate \
+              --output dist/signed-release \
+              --authority-registry dist/release-authority/registry.json \
+              --issuer "$RELEASE_ISSUER" \
+              --key-id "$RELEASE_KEY_ID"
+      - name: Verify signed release closure
+        run: >-
+          go run ./dev/release verify-signed
+          --directory dist/signed-release
+          --authority-registry dist/release-authority/registry.json
+      - name: Reject mutable or existing publication identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_POLICY_TOKEN: ${{ secrets.MAESTRO_RELEASE_POLICY_TOKEN }}
+        run: |
+          test -n "$RELEASE_POLICY_TOKEN"
+          policy="$(
+            GH_TOKEN="$RELEASE_POLICY_TOKEN" gh api \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              "repos/${GITHUB_REPOSITORY}/immutable-releases"
+          )"
+          if [[ "$(jq -r '.enabled // false' <<<"$policy")" != "true" ]]; then
+            echo "GitHub immutable releases are not enabled for $GITHUB_REPOSITORY." >&2
+            exit 1
+          fi
+          tag="maestro-v${RELEASE_VERSION}"
+          repository="${GITHUB_REPOSITORY#*/}"
+          tag_ref="$(
+            gh api graphql \
+              -f query='query($owner:String!,$repository:String!,$ref:String!){repository(owner:$owner,name:$repository){ref(qualifiedName:$ref){id}}}' \
+              -f owner="$GITHUB_REPOSITORY_OWNER" \
+              -f repository="$repository" \
+              -f ref="refs/tags/${tag}" \
+              --jq '.data.repository.ref'
+          )"
+          if [[ "$tag_ref" != "null" ]]; then
+            echo "Tag $tag already exists and cannot be rebound." >&2
+            exit 1
+          fi
+      - name: Publish immutable GitHub prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="maestro-v${RELEASE_VERSION}"
+          notes="dist/signed-release/release-notes-${RELEASE_VERSION}.md"
+          gh release create "$tag" dist/signed-release/* \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Maestro ${RELEASE_VERSION} (${RELEASE_CHANNEL})" \
+            --notes-file "$notes"
+      - name: Verify immutable publication and exact asset closure
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="maestro-v${RELEASE_VERSION}"
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}")"
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$tag"
+          test "$(jq -r '.target_commitish' <<<"$release_json")" = "$GITHUB_SHA"
+          if [[ "$(jq -r '.immutable // false' <<<"$release_json")" != "true" ]]; then
+            echo "Published release is not immutable." >&2
+            exit 1
+          fi
+          find dist/signed-release -maxdepth 1 -type f -exec basename {} \; |
+            LC_ALL=C sort > "$RUNNER_TEMP/local-assets.txt"
+          jq -r '.assets[].name' <<<"$release_json" |
+            LC_ALL=C sort > "$RUNNER_TEMP/remote-assets.txt"
+          if ! diff -u "$RUNNER_TEMP/local-assets.txt" "$RUNNER_TEMP/remote-assets.txt"; then
+            echo "Published assets differ from the verified signed release set." >&2
+            exit 1
+          fi
+          verified=false
+          for attempt in 1 2 3 4 5; do
+            if gh release verify "$tag"; then
+              verified=true
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$verified" != "true" ]]; then
+            echo "GitHub release attestation was not verifiable." >&2
+            exit 1
+          fi
+          for asset in dist/signed-release/*; do
+            gh release verify-asset "$tag" "$asset"
+          done
+      - name: Preserve bootstrapper seed inputs and provenance
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: maestro-${{ inputs.version }}-bootstrapper-seed-inputs
+          path: |
+            dist/native/bcgos-bootstrap_*
+            dist/native/*.provenance.json
+            dist/release-authority/provider.json
+            dist/release-authority/registry.json
+          if-no-files-found: error
+          retention-days: 14

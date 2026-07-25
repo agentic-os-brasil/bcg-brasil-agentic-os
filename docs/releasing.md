@@ -10,16 +10,19 @@ artifacts; they do not clone the source repository.
 2. **Unsigned candidate** - deterministic CLI binaries, base bundle, manifest
    and release notes produced by the manual `release candidate` workflow.
 3. **Signed release** - candidate bytes signed by approved Maestro release and
-   native platform identities. This authority is not configured in the
-   repository.
+   native platform identities.
 4. **Published release** - the signed set is uploaded through an authenticated
    private provider without renaming or replacing manifest entries.
 5. **Pilot-ready release** - clean corporate Windows and macOS install, update
    and rollback evidence exists.
 
-The workflow introduced here stops at state 2. Its GitHub token is read-only,
-it cannot create a Release, and its seven-day artifact is explicitly named
-`unsigned`.
+The read-only `release candidate` workflow stops at state 2. The separately
+environment-protected `signed Maestro prerelease` workflow can reach state 4,
+but only after an operator enters the exact publication confirmation and the
+release environment supplies all approved public configuration, signing
+identities, a read-only release-policy token and secret custody inputs. The
+repository does not contain those authorities, so the workflow fails closed
+until they are configured.
 
 ## Build an unsigned candidate
 
@@ -55,9 +58,41 @@ go run ./dev/release verify --directory dist/release-candidate
 Verification rejects missing, extra, non-regular or digest-mismatched files.
 It proves candidate closure and integrity, not authenticity.
 
+## Build and publish a signed prerelease
+
+The protected workflow:
+
+1. requires the protected default branch and validates the complete source
+   harness;
+2. materializes the approved public provider and release-authority inputs;
+   the provider owner/repository must exactly match the publication repository;
+3. builds seeded native CLI and bootstrapper binaries on matching Windows and
+   macOS runners;
+4. applies and verifies Authenticode or Developer ID signatures;
+5. assembles the final candidate from those exact CLI bytes;
+6. signs each release artifact and the exact final manifest with the approved
+   Maestro Ed25519 identity;
+7. requires repository-level immutable releases and rejects an existing tag;
+8. creates the GitHub prerelease, verifies its GitHub attestation, exact commit
+   and asset closure, then preserves bootstrapper seed provenance as a separate
+   workflow artifact.
+
+The release assets exclude private keys, certificates and provider
+credentials. Signed release notes explicitly say that corporate-device
+acceptance and pilot readiness remain separate gates.
+
+The 14-day bootstrapper workflow artifact also preserves the exact public
+provider and authority-registry bytes whose identities were compiled into the
+native binaries. It is short-lived custody evidence for the installer work; it
+is not the independently signed bootstrapper seed channel and is not pilot
+distribution.
+
 ## Authorities still required
 
 - Maestro Ed25519 production release key and custody process.
+- Approval of the environment-secret custody model for the Ed25519 seed,
+  Authenticode certificate and Developer ID certificate, or replacement with
+  an approved hardware-backed signing service.
 - An approved `release-authority-registry` instance containing only the
   production public keys, validity windows and revocation state.
 - Windows Authenticode identity and macOS Developer ID/notarization.

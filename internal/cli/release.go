@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +11,8 @@ import (
 	baserelease "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/release"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseprovider"
 )
+
+var ProviderConfigBase64 = ""
 
 type releaseCapabilityResult struct {
 	SchemaVersion        int    `json:"schema_version"`
@@ -21,11 +25,22 @@ type releaseCapabilityResult struct {
 }
 
 func defaultReleaseAuthService() releaseprovider.AuthService {
-	config, err := baserelease.Provider()
+	config, err := releaseProviderConfig()
 	if err != nil {
 		return releaseprovider.AuthService{Store: releaseprovider.UnavailableStore{}}
 	}
 	return config.AuthService(releaseprovider.NewNativeSecureStore)
+}
+
+func releaseProviderConfig() (releaseprovider.Config, error) {
+	if ProviderConfigBase64 == "" {
+		return baserelease.Provider()
+	}
+	body, err := base64.StdEncoding.Strict().DecodeString(ProviderConfigBase64)
+	if err != nil {
+		return releaseprovider.Config{}, errors.New("embedded release-provider build override is invalid")
+	}
+	return releaseprovider.ParseConfig(bytes.NewReader(body))
 }
 
 func runAuth(args []string, out, errOut io.Writer, service releaseprovider.AuthService) int {
