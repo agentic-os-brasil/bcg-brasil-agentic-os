@@ -1,8 +1,9 @@
 # Spec 018 - Maestro core agents
 
-Status: accepted architecture; canonical catalog and bounded Session Context
-Packet pointer implemented. Native Claude and Codex activation remains
-unavailable until adapter enforcement and conformance fixtures exist.
+Status: accepted architecture; canonical catalog, bounded Session Context
+Packet pointer, shared fail-closed enforcement and cross-runtime conformance
+fixtures implemented. Native Claude and Codex activation remains unavailable
+until their installed event wiring invokes the enforcement core.
 
 ## Objective
 
@@ -143,9 +144,12 @@ activation state. It never copies prompt bodies into the packet.
 
 ## Runtime activation gate
 
-Canonical definitions being available is not equivalent to agents being
-enabled in Claude or Codex. A runtime may report orchestration available only
-after conformance fixtures prove:
+Canonical definitions and the shared enforcement controller being available
+are not equivalent to agents being enabled in Claude or Codex. The thin adapter
+envelopes map runtime-specific events to one semantic controller and the shared
+fixture proves equivalent decisions. A runtime may report orchestration
+available only after its installed event wiring invokes that controller and the
+fixtures prove:
 
 1. Maestro cannot call tools directly;
 2. only one branch can be active at a time;
@@ -153,16 +157,41 @@ after conformance fixtures prove:
 4. delegation cannot exceed depth two or leave the allowed role graph;
 5. Walter, Darwin, errands and leaf specialists cannot delegate;
 6. workspace scopes remain default-deny and practice agents cannot read raw
-   workspace context; and
-7. an unsupported critical invariant fails closed rather than degrading.
+   workspace context;
+7. authenticated agent IDs, scope and resource grants cannot be forged;
+8. one shared state snapshot survives adapter replacement and has bounded,
+   capability-gated stale recovery; and
+9. an unsupported critical invariant fails closed rather than degrading.
 
-Until then, the Session Context Packet reports definitions `available` and
-runtime activation `unavailable` with a reason.
+`internal/agentorchestration` implements the stateful guard. Claude and Codex
+use distinct adapter event names, while
+`adapters/conformance/agent-orchestration.json` provides the shared sequence.
+Each event is authenticated against an immutable agent authorization: agent
+ID, closed catalog role, branch scope, canonical scope kind, capability digest
+and exact tool, operation and resource-prefix grants. Caller-supplied roles do
+not authorize work. Root roles bind scope kinds (`workspace`, `account`,
+`practice`, `review`, `health` or `errand`); a child must inherit the same
+scope root and kind. A practice chain therefore cannot receive a workspace
+resource grant. `bcgos://public/` is the only explicit cross-scope exception.
+Unregistered agents, forged capabilities, cross-scope resources, unknown
+runtimes and unknown events fail closed. BCGOS resource URIs are parsed and
+canonicalized before comparison; encoded or path traversal is rejected.
+
+Claude and Codex adapters must share one state store per installation. Its
+snapshot preserves the active root, child and last update across adapter
+replacement or process restart, and carries a deterministic fingerprint of the
+complete authorization policy. A replacement adapter with different roles,
+scopes, capabilities or grants is rejected. A lost stop event remains blocked
+until an explicit age-bounded recovery presents the store recovery capability.
+Native wiring owns durable snapshot persistence and atomic restoration; until
+that is installed and proven, the Session Context Packet reports definitions
+`available` and runtime activation `unavailable` with a reason.
 
 ```mermaid
 stateDiagram-v2
     state "Canonical definitions available" as Defined
-    state "Native adapter enforcement" as Adapter
+    state "Shared adapter enforcement" as Adapter
+    state "Installed native wiring" as Wiring
     state "Cross-runtime conformance" as Conformance
     state "Runtime orchestration active" as Active
     state "Runtime orchestration unavailable" as Unavailable
@@ -171,7 +200,8 @@ stateDiagram-v2
     Defined --> Unavailable: current state
     Defined --> Adapter: adapter implemented
     Adapter --> Conformance: enforcement complete
-    Conformance --> Active: every critical invariant passes
+    Conformance --> Wiring: every critical invariant passes
+    Wiring --> Active: runtime events invoke the guard
     Conformance --> Unavailable: failure or unsupported invariant
 ```
 
@@ -185,5 +215,9 @@ stateDiagram-v2
    edges, depth above two or more than one errand helper.
 5. Walter and Darwin point to managed, packet-only definitions.
 6. The Session Context Packet exposes the catalog pointer without prompt bodies.
-7. Claude and Codex remain explicitly unavailable until native adapter tests
-   enforce the same invariants.
+7. Claude and Codex adapter envelopes pass the same conformance fixture and
+   remain explicitly unavailable until native event wiring invokes the guard.
+8. Registered identity, capability, workspace scope and exact resource grants
+   are checked before delegation or tool use.
+9. Shared state rejects parallel controllers, can be restored after restart and
+   requires explicit capability-gated recovery after a stale branch.

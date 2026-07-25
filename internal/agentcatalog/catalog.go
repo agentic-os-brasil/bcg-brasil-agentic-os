@@ -47,6 +47,10 @@ type Agent struct {
 
 var safeAgentID = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
 
+func ValidAgentID(id string) bool {
+	return safeAgentID.MatchString(id)
+}
+
 var roleContracts = map[string]struct {
 	direct        bool
 	tools         string
@@ -62,6 +66,26 @@ var roleContracts = map[string]struct {
 	"reviewer":              {false, "none", false, "sealed_review_packet"},
 	"subject_specialist":    {false, "scoped", false, "bounded_subject_packet"},
 	"workspace_agent":       {false, "scoped", true, "bounded_workspace_packet"},
+}
+
+type RoleContract struct {
+	DirectUserAccess bool
+	ToolAccess       string
+	MayDelegate      bool
+	InputContract    string
+}
+
+func (catalog Catalog) ContractForRole(role string) (RoleContract, bool) {
+	contract, ok := roleContracts[role]
+	if !ok {
+		return RoleContract{}, false
+	}
+	return RoleContract{
+		DirectUserAccess: contract.direct,
+		ToolAccess:       contract.tools,
+		MayDelegate:      contract.mayDelegate,
+		InputContract:    contract.inputContract,
+	}, true
 }
 
 func Parse(reader io.Reader) (Catalog, error) {
@@ -114,7 +138,7 @@ func (catalog Catalog) Validate() error {
 	previous := ""
 	directUsers := 0
 	for _, agent := range catalog.Agents {
-		if !safeAgentID.MatchString(agent.ID) || agent.ID <= previous {
+		if !ValidAgentID(agent.ID) || agent.ID <= previous {
 			return errors.New("agent catalog IDs must be non-empty, unique and sorted")
 		}
 		if agent.RelativePath != "agents/"+agent.ID+"/AGENT.md" {

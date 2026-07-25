@@ -11,16 +11,24 @@ content. Codex must not inherit Claude-specific development hooks as a product
 capability.
 
 The managed Maestro, Walter and Darwin definitions live in
-`bundles/base/agents/`. They are not active Codex agents yet. Activation must
-prove no-tool Maestro, one active branch, one child per agent and the
-role-gated depth-two graph before `agent_orchestration` can move from
-`unavailable`.
+`bundles/base/agents/`. `internal/agentorchestration` now provides the shared
+fail-closed controller, and the Codex envelope maps
+`collaboration_branch_start`, `collaboration_child_start`, `tool_call_guard`,
+`collaboration_child_stop` and `collaboration_branch_stop` to its semantic
+events. The shared conformance fixture proves equivalent decisions with
+Claude, including forged identities, scopes and unregistered targets. Events
+require capability-bound agent identities and exact tool/resource grants. A
+shared recoverable state snapshot prevents a second adapter instance from
+opening a parallel branch. These are not active Codex agents yet: installed
+native event wiring and durable state persistence are still required before
+`agent_orchestration` can move from `unavailable`.
 
 ```mermaid
 flowchart LR
-    Catalog["Implemented<br/>managed agent catalog"] --> Adapter["Pending<br/>Codex-native enforcement"]
-    Adapter --> Fixtures["Pending<br/>conformance fixtures"]
-    Fixtures --> Active["Pending<br/>agent orchestration active"]
+    Catalog["Implemented<br/>managed agent catalog"] --> Adapter["Implemented<br/>shared enforcement"]
+    Adapter --> Fixtures["Implemented<br/>cross-runtime fixtures"]
+    Fixtures --> Wiring["Pending<br/>Codex-native event wiring"]
+    Wiring --> Active["Pending<br/>agent orchestration active"]
     Catalog -.->|current capability| Unavailable["Unavailable<br/>fails closed"]
 ```
 
