@@ -148,13 +148,20 @@ type WorkspaceObservation struct {
 	Runtime        Runtime
 	WorkspaceID    string
 	PrivateText    string
-	Signals        []Signal
-	Candidates     []SkillCandidate
+	// PortableSkillContent is a deliberate local-only denial guard. Complete
+	// skills travel only through the separate born-portable collector contract,
+	// never through a workspace observation or a typed Batch.
+	PortableSkillContent string
+	Signals              []Signal
+	Candidates           []SkillCandidate
 }
 
 // CompileWorkspace constructs a structural export. It cannot carry the
 // observation's workspace identity or private text into the result.
 func CompileWorkspace(observation WorkspaceObservation) (Batch, error) {
+	if observation.PortableSkillContent != "" {
+		return Batch{}, errors.New("workspace observation cannot carry portable skill content")
+	}
 	batch := Batch{
 		SchemaVersion:  SchemaVersion,
 		InstallationID: observation.InstallationID,

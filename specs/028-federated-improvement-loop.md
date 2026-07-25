@@ -1,8 +1,9 @@
 # Spec 028 - Maestro Federated Improvement Loop
 
-Status: accepted architecture; typed local contract, enrollment-bound outbox and
-credential-free HTTPS bridge seam implemented. GitHub App bridge,
-portable-skill collector, runtime adapters and central curation remain pending.
+Status: accepted architecture; typed local contract, enrollment-bound outbox,
+credential-free HTTPS bridge seam, Local Darwin federator and born-portable
+skill collector implemented. GitHub App bridge, runtime adapters and central
+curation remain pending.
 
 ## Objective
 
@@ -105,14 +106,14 @@ accept the proposal before implementation begins.
 ## Delivery phases
 
 1. **FILO contract** - decision, spec, schema/types and non-interference tests.
-2. **Local batch exporter** - user-local queue, enrollment state and bounded
-   retry are implemented. The portable-skill collector remains separately
-   pending because it must prove its root is born-portable before a body can
-   enter any automatic export.
+2. **Local batch exporter** - user-local queue, enrollment state, bounded
+   retry and born-portable skill collector are implemented. A skill body is
+   verified against a strict manifest and never passes through a typed batch.
 3. **GitHub bridge** - GitHub App adapter, automatic weekly digest and
    actionable incident routing.
 4. **Federator** - local Darwin packet adapter and structural skill/insight
-   compilation.
+   compilation are implemented. Its qualitative input is a closed perception
+   taxonomy; it cannot emit local prose or send data itself.
 5. **Curator** - central batch compiler, central Darwin proposals and semantic
    Issue-to-PR promotion.
 6. **Pilot hardening** - Windows/macOS conformance, enrollment/revocation,
