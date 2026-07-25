@@ -3,9 +3,11 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,21 +35,36 @@ func main() {
 		rollback(os.Args[2:])
 	case "version":
 		fmt.Println("bcgos-bootstrap " + Version)
+	case "seed-status":
+		fatalIf(writeSeedStatus(os.Stdout, Version, AuthorityRegistrySHA256))
 	default:
 		usage()
 	}
 }
 
+type seedStatus struct {
+	SchemaVersion           int    `json:"schema_version"`
+	Product                 string `json:"product"`
+	BootstrapperVersion     string `json:"bootstrapper_version"`
+	AuthorityRegistrySHA256 string `json:"authority_registry_sha256"`
+}
+
+func writeSeedStatus(out io.Writer, version, registrySHA256 string) error {
+	return json.NewEncoder(out).Encode(seedStatus{
+		SchemaVersion: 1, Product: "maestro",
+		BootstrapperVersion: version, AuthorityRegistrySHA256: registrySHA256,
+	})
+}
+
 func install(args []string) {
 	flags := flag.NewFlagSet("install", flag.ExitOnError)
-	planPath := flags.String("plan", "", "verified first-install activation plan")
 	verifiedDirectory := flags.String("verified-directory", "", "signed release directory")
 	dataRoot := flags.String("data-root", "", "owner-data root")
 	_ = flags.Parse(args)
-	if *planPath == "" || *verifiedDirectory == "" || *dataRoot == "" || flags.NArg() != 0 {
+	if *verifiedDirectory == "" || *dataRoot == "" || flags.NArg() != 0 {
 		fmt.Fprintln(
 			os.Stderr,
-			"usage: bcgos-bootstrap install --plan FILE --verified-directory DIR --data-root DIR",
+			"usage: bcgos-bootstrap install --verified-directory DIR --data-root DIR",
 		)
 		os.Exit(2)
 	}
@@ -61,13 +78,27 @@ func install(args []string) {
 	fatalIf(err)
 	verified, err := releaseverify.VerifyDirectory(*verifiedDirectory, registry)
 	fatalIf(err)
-	fatalIf(installtx.Activate(*planPath, verified, installtx.ActivateOptions{
-		PrepareOptions: installtx.PrepareOptions{
-			Transition: "install", TargetOS: runtime.GOOS, TargetArch: runtime.GOARCH,
-			ManagedRoot: managedRoot, DataRoot: *dataRoot,
-		},
-	}))
+	fatalIf(firstInstall(verified, managedRoot, *dataRoot, runtime.GOOS, runtime.GOARCH, nil))
 	fmt.Println("Maestro installation complete")
+}
+
+func firstInstall(
+	verified releaseverify.VerifiedRelease,
+	managedRoot, dataRoot, targetOS, targetArch string,
+	checkCLI func(path, version string) error,
+) error {
+	options := installtx.PrepareOptions{
+		Transition: "install", TargetOS: targetOS, TargetArch: targetArch,
+		ManagedRoot: managedRoot, DataRoot: dataRoot,
+	}
+	planPath, err := installtx.Prepare(verified, options)
+	if err != nil {
+		return err
+	}
+	return installtx.Activate(planPath, verified, installtx.ActivateOptions{
+		PrepareOptions: options,
+		CheckCLI:       checkCLI,
+	})
 }
 
 func activate(args []string) {
@@ -170,7 +201,10 @@ func managedRootFromExecutablePath(executable string) (string, error) {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: bcgos-bootstrap <install|activate|rollback|version> [options]")
+	fmt.Fprintln(
+		os.Stderr,
+		"usage: bcgos-bootstrap <install|activate|rollback|version|seed-status> [options]",
+	)
 	os.Exit(2)
 }
 

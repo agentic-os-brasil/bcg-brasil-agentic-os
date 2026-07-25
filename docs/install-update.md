@@ -24,6 +24,14 @@ owner-data-root/
   workspaces/                 # never read or written by activation
 ```
 
+For first installation, an approved operating-system installer places the
+native-signed stable bootstrapper and the exact public authority registry under
+the protected managed root. The bootstrapper takes only the already downloaded
+signed release directory and owner-data root, derives the managed root from its
+own path, verifies the registry seed and complete release, creates the exact
+activation plan itself and activates it. No caller-supplied first-install plan
+or managed root is accepted.
+
 The exact signed CLI and compressed base bundle are copied into the
 transaction with their authenticated sizes and SHA-256 digests. The stable
 bootstrapper re-verifies the signed release and the complete activation
@@ -101,4 +109,4 @@ external release-environment approvals.
 - production signing keys and native code-signing identities;
 - approved production provider registration and native-store use;
 - a signed bootstrapper seed channel;
-- clean corporate-device acceptance.
+- approved corporate-device acceptance of the operator evidence.

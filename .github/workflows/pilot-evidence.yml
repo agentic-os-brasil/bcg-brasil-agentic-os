@@ -25,15 +25,41 @@ jobs:
             platform: macos
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
       - name: Validate source and release contracts
         run: go run ./dev/harness validate --full
       - name: Exercise update and rollback transactions
-        run: go test ./internal/releaseverify ./internal/releaseprovider ./internal/installtx ./internal/updateplan
+        run: >-
+          go test
+          ./cmd/bcgos-bootstrap
+          ./internal/releaseverify
+          ./internal/releaseprovider
+          ./internal/installtx
+          ./internal/updateplan
+          ./internal/dev/pilotacceptance
+      - name: Validate Windows clean-device operator script syntax
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "acceptance/clean-device/windows.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if ($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw "Windows clean-device script has parser errors."
+          }
+      - name: Validate macOS clean-device operator script syntax
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash -n acceptance/clean-device/macos.sh
       - name: Smoke-test isolated Windows trial installation
         if: runner.os == 'Windows'
         shell: pwsh
@@ -54,7 +80,7 @@ jobs:
           go run ./dev/pilot-acceptance validate
           --report "dist/pilot-evidence/${{ matrix.platform }}.json"
       - name: Upload engineering evidence
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: maestro-${{ inputs.version }}-${{ matrix.platform }}-engineering-evidence
           path: dist/pilot-evidence/

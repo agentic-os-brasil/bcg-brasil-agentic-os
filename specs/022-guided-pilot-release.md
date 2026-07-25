@@ -32,9 +32,20 @@ The skill cannot:
 - `isolated_ci` proves engineering behavior on disposable Windows/macOS
   runners and may claim only `engineering_evidence_only`;
 - `corporate_device` requires install, update and rollback passes plus an
-  operator, hashed device identifier, policy context, approved channel, signed
-  manifest, native code signing and authenticated provider. Only it may claim
-  `corporate_device_acceptance`.
+  operator, hashed device identifier, strict policy identifier, approved
+  channel and release bindings. It may claim only
+  `corporate_device_operator_attestation`; corporate acceptance requires an
+  approved external countersignature.
+
+Corporate evidence uses schema-v2 reports assembled from three strict,
+sanitized phase receipts. The receipts must prove the ordered transition
+`none -> baseline -> update -> baseline`, bind the exact baseline and update
+manifest SHA-256 values and preserve each receipt's own SHA-256 in the final
+report. The report also binds both immutable provider release IDs/tags, the
+native bootstrapper digest, authority-registry digest, approved native signer,
+update activation receipt and accepted support owner. Unknown fields,
+duplicate JSON keys, non-exact phase checks or mixed run/device/platform
+identities fail closed.
 
 A report is evidence, not automatic permission to publish or expand a pilot.
 
@@ -46,7 +57,8 @@ A report is evidence, not automatic permission to publish or expand a pilot.
    native credential stores, private provider, support owner and incident path
    are approved.
 3. **Clean-device gate** - one managed Windows and one managed macOS device
-   each pass first install, update and rollback with valid corporate reports.
+   each pass first install, update and rollback with valid operator
+   attestations that the approved external evidence owner countersigns.
 4. **Two-user canary** - one Windows and one macOS user complete the guided
    flow without Git or developer dependencies. Observe for five business days.
 5. **Ten-person pilot** - expand only after both canary users succeed, there is
