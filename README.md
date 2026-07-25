@@ -53,7 +53,7 @@ quando os mecanismos nativos forem diferentes.
 | Atlas humano | Estrutura local não destrutiva para clientes, projetos, pessoas e diário de trabalho. |
 | Memória | Núcleo local com resumos graduais e contexto limitado; automação de síntese ainda não está ativa. |
 | Skills | Catálogo compacto e atualizado de procedimentos disponíveis. |
-| Desenvolvimento | Harness, testes, CI em Windows/macOS/Linux, decisões versionadas, skill de documentação visual e fluxo de PR com revisão humana. |
+| Desenvolvimento | Harness, testes, CI em Windows/macOS/Linux, decisões versionadas e fluxo de PR com revisão humana. |
 
 ## O que ainda não existe
 

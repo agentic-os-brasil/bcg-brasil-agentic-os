@@ -59,11 +59,7 @@ The harness must remain cross-platform, idempotent and usable without an agent o
 
 ## Skill contract
 
-`start-contributing` performs progressive first-time setup. `start-work` creates a safe daily path. `develop-change` classifies and implements changes. `visualize-change` documents material changes with evidence-backed Mermaid views and aligned navigation. `record-decision` records durable choices. `prepare-pr` validates and prepares human review. `recover-work` diagnoses Git state without discarding files.
-
-The harness validates Mermaid fences and requires each block to begin with a
-supported diagram type. This is a structural, dependency-free check rather
-than a claim that every external renderer will produce identical pixels.
+`start-contributing` performs progressive first-time setup. `start-work` creates a safe daily path. `develop-change` classifies and implements changes. `record-decision` records durable choices. `prepare-pr` validates and prepares human review. `recover-work` diagnoses Git state without discarding files.
 
 All skills live under `dev/`, call deterministic repository commands and are excluded from product distribution. `.claude/` and `AGENTS.md` are thin runtime-specific entry points over the same canonical skills.
 

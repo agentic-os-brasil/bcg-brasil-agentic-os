@@ -59,7 +59,7 @@ func TestCatalogAcceptsARegisteredPracticeAgentWithOneBoundedChild(t *testing.T)
 	catalog := mustTestCatalog(t)
 	practice := Agent{
 		ID: "practice-insurance", Role: "practice_agent", DirectUserAccess: false,
-		ToolAccess: "none", MayDelegate: true, InputContract: "bounded_practice_packet",
+		ToolAccess: "scoped", MayDelegate: true, InputContract: "bounded_practice_packet",
 		RelativePath: "agents/practice-insurance/AGENT.md",
 	}
 	catalog.Agents = append(catalog.Agents, Agent{})
@@ -96,6 +96,51 @@ func TestCatalogRejectsToolsParallelismAndUngovernedChains(t *testing.T) {
 			test.mutate(&candidate)
 			if err := candidate.Validate(); err == nil {
 				t.Fatal("expected invalid core contract")
+			}
+		})
+	}
+}
+
+func TestCatalogRejectsUnsafeIDsAndRoleContractDrift(t *testing.T) {
+	base := mustTestCatalog(t)
+
+	tests := []struct {
+		name   string
+		mutate func(*Catalog)
+	}{
+		{"path traversal id", func(value *Catalog) {
+			value.Agents[0].ID = "../darwin"
+			value.Agents[0].RelativePath = "agents/../darwin/AGENT.md"
+		}},
+		{"unknown role", func(value *Catalog) {
+			value.Agents[0].Role = "general_assistant"
+		}},
+		{"practice reads raw workspace", func(value *Catalog) {
+			value.Agents = append(value.Agents, Agent{})
+			copy(value.Agents[3:], value.Agents[2:])
+			value.Agents[2] = Agent{
+				ID: "practice-insurance", Role: "practice_agent",
+				ToolAccess: "none", MayDelegate: true,
+				InputContract: "raw_workspace_context",
+				RelativePath:  "agents/practice-insurance/AGENT.md",
+			}
+		}},
+		{"second reviewer has tools", func(value *Catalog) {
+			value.Agents = append(value.Agents, Agent{
+				ID: "walter-shadow", Role: "reviewer",
+				ToolAccess: "scoped", InputContract: "sealed_review_packet",
+				RelativePath: "agents/walter-shadow/AGENT.md",
+			})
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := base
+			candidate.Agents = append([]Agent(nil), base.Agents...)
+			candidate.Delegation.AllowedEdges = append([]DelegationEdge(nil), base.Delegation.AllowedEdges...)
+			test.mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("expected role or path contract rejection")
 			}
 		})
 	}
