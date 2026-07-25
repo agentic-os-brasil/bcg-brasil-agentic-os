@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workspace Agent Setup"
+  short_description: "Interview and research one project workspace safely"
+  default_prompt: "Use $workspace-agent-setup to create or refresh this workspace agent with reviewed, sourced context."
