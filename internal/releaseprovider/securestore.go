@@ -9,7 +9,7 @@ import (
 
 const (
 	maximumCredentialKeyBytes = 256
-	maximumCredentialBytes    = 64 << 10
+	maximumCredentialBytes    = 5 * 512
 )
 
 type nativeSecretBackend interface {

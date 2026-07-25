@@ -23,6 +23,8 @@ adapter; it does not itself read, inject or summarize private content.
   execution item can be resolved;
 - managed, owner and workspace atlas availability and pointers;
 - the managed skills-catalog pointer, not its full contents;
+- the managed agents-catalog pointer, Maestro hub ID and explicit definition
+  versus runtime-activation states;
 - an explicit unavailable memory-injection capability; and
 - omission diagnostics for sources that are not ready.
 
@@ -71,6 +73,8 @@ conversation or change the capability state reported by `bcgos doctor`.
 - the skills catalog remains a pointer only;
 - memory injection remains explicitly unavailable until adapters exist.
 - packet references never reveal absolute local filesystem paths.
+- agent definitions remain pointer-only and runtime activation remains
+  explicitly unavailable until orchestration enforcement exists.
 - Claude and Codex receive equivalent bridge envelopes while native injection
   remains explicitly unavailable.
 - a two-session handoff proves that Session A can checkpoint and pause, Session

@@ -435,3 +435,25 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The ledger may track execution state but never owns business priority, due date, owner or external task status. Every mutation is revision-checked, takeover invalidates the prior attempt, completion requires core-witnessed evidence, and persisted history excludes prompts, responses, tool payloads, absolute paths and client bodies. Task-provider synchronization, generic tracing, unattended execution and evaluator plugins remain outside V1.
 - Refs: specs/018-execution-ledger-v1.md; schemas/execution-state.schema.json; internal/execution
 - Supersedes: none
+
+## HUBS - Govern Maestro through a lean hub-and-spoke core
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs a canonical user-facing hub and bounded internal governance roles without copying Kowalski's broad tool access or delegation model.
+- Decision: Define Maestro as the only user-facing hub. Maestro has no direct tool access and delegates sequentially with one active spoke and no nested delegation. Walter and Darwin are packet-only internal agents without tools, delegation or direct user speech.
+- Consequences: Runtime adapters must enforce tool denial, one-active-spoke and no-nesting invariants before reporting orchestration as available.
+- Refs: MAES; PORT; WSAG; specs/004-runtime-portability.md; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; bundles/base/agents/catalog.json
+- Supersedes: none
+
+## BRCH - Allow multiple governed chains with role-gated depth
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A single global depth-one rule would prevent legitimate specialist chains while preserving the one-active-branch invariant.
+- Decision: Allow multiple governed chain types under Maestro while keeping one active branch by default. Delegation remains sequential, role-gated and maximum depth two; Walter, Darwin, errands and leaf specialists never delegate.
+- Consequences: Cross-chain exchange uses a minimum sanitized packet mediated by Maestro; parallel branches and deeper delegation require a new decision and conformance evidence.
+- Refs: HUBS; WSAG; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; bundles/base/agents/catalog.json; internal/agentcatalog
+- Supersedes: HUBS

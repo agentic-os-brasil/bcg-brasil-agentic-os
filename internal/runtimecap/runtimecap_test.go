@@ -58,9 +58,19 @@ func TestReportKeepsUnwiredProductHooksExplicitlyUnavailable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	foundAgentOrchestration := false
 	for _, capability := range report.Capabilities {
 		if capability.SemanticEvent == "context_inject" && capability.State != "unavailable" {
 			t.Fatalf("context injection state = %s", capability.State)
 		}
+		if capability.ID == "agent_orchestration" {
+			foundAgentOrchestration = true
+			if capability.State != "unavailable" {
+				t.Fatalf("agent orchestration state = %s", capability.State)
+			}
+		}
+	}
+	if !foundAgentOrchestration {
+		t.Fatal("agent orchestration capability missing")
 	}
 }

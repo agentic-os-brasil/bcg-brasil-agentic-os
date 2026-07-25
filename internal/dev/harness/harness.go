@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
@@ -55,6 +56,9 @@ func Validate(root string, full bool, out io.Writer) error {
 		}},
 		{"skills index", func() error {
 			return skillsindex.Validate(filepath.Join(root, "bundles", "base", "skills"))
+		}},
+		{"managed agents", func() error {
+			return agentcatalog.ValidateDir(filepath.Join(root, "bundles", "base", "agents"))
 		}},
 		{"Claude skill projections", func() error {
 			return skillmeta.ValidateClaudeProjections(

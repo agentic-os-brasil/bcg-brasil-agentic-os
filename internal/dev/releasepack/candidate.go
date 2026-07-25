@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
@@ -36,6 +37,72 @@ type BinaryBuilder interface {
 type GoBinaryBuilder struct{}
 
 func (GoBinaryBuilder) Build(ctx context.Context, root, output, version string, target Target) error {
+	environment := append(filteredEnvironment(os.Environ(), "GOOS", "GOARCH", "CGO_ENABLED"),
+		"GOOS="+target.OS,
+		"GOARCH="+target.Arch,
+		"CGO_ENABLED=0",
+	)
+	return runGoBuild(ctx, root, output, version, target, environment)
+}
+
+type NativeGoBinaryBuilder struct{}
+
+func (NativeGoBinaryBuilder) Build(ctx context.Context, root, output, version string, target Target) error {
+	if runtime.GOOS != target.OS || runtime.GOARCH != target.Arch {
+		return fmt.Errorf(
+			"native release build target %s/%s does not match runner %s/%s",
+			target.OS, target.Arch, runtime.GOOS, runtime.GOARCH,
+		)
+	}
+	cgo := "0"
+	if target.OS == "darwin" {
+		cgo = "1"
+	}
+	environment := append(filteredEnvironment(os.Environ(), "GOOS", "GOARCH", "CGO_ENABLED"),
+		"CGO_ENABLED="+cgo,
+	)
+	return runGoBuild(ctx, root, output, version, target, environment)
+}
+
+type PrebuiltBinaryBuilder struct {
+	Directory string
+}
+
+func (builder PrebuiltBinaryBuilder) Build(_ context.Context, _ string, output, version string, target Target) error {
+	source := filepath.Join(builder.Directory, binaryName(version, target))
+	info, err := os.Lstat(source)
+	if err != nil {
+		return fmt.Errorf("load prebuilt binary for %s/%s: %w", target.OS, target.Arch, err)
+	}
+	if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 1<<30 {
+		return fmt.Errorf("prebuilt binary for %s/%s is not a bounded regular file", target.OS, target.Arch)
+	}
+	input, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	destination, err := os.OpenFile(output, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o755)
+	if err != nil {
+		return err
+	}
+	written, copyErr := io.Copy(destination, io.LimitReader(input, 1<<30+1))
+	closeErr := destination.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if written != info.Size() || written > 1<<30 {
+		return fmt.Errorf("prebuilt binary size changed while copying %s/%s", target.OS, target.Arch)
+	}
+	return closeErr
+}
+
+func runGoBuild(
+	ctx context.Context,
+	root, output, version string,
+	target Target,
+	environment []string,
+) error {
 	command := exec.CommandContext(
 		ctx,
 		"go", "build",
@@ -47,11 +114,7 @@ func (GoBinaryBuilder) Build(ctx context.Context, root, output, version string, 
 		"./cmd/bcgos",
 	)
 	command.Dir = root
-	command.Env = append(filteredEnvironment(os.Environ(), "GOOS", "GOARCH", "CGO_ENABLED"),
-		"GOOS="+target.OS,
-		"GOARCH="+target.Arch,
-		"CGO_ENABLED=0",
-	)
+	command.Env = environment
 	outputBytes, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("build bcgos for %s/%s: %w: %s", target.OS, target.Arch, err, strings.TrimSpace(string(outputBytes)))
@@ -65,12 +128,17 @@ type CandidateOptions struct {
 	Version   string
 	Channel   string
 	Allowlist string
+	Prebuilt  string
 	Builder   BinaryBuilder
 }
 
 func BuildCandidate(ctx context.Context, options CandidateOptions) (releasecontract.Manifest, error) {
 	if options.Builder == nil {
-		options.Builder = GoBinaryBuilder{}
+		if options.Prebuilt != "" {
+			options.Builder = PrebuiltBinaryBuilder{Directory: options.Prebuilt}
+		} else {
+			options.Builder = GoBinaryBuilder{}
+		}
 	}
 	if options.Root == "" || options.Output == "" {
 		return releasecontract.Manifest{}, errors.New("candidate root and output are required")
@@ -186,6 +254,38 @@ func BuildCandidate(ctx context.Context, options CandidateOptions) (releasecontr
 	return manifest, nil
 }
 
+func BuildNativeBinary(
+	ctx context.Context,
+	root, output, version string,
+	target Target,
+	builder BinaryBuilder,
+) error {
+	if root == "" || output == "" {
+		return errors.New("native binary root and output are required")
+	}
+	if !supportedCandidateTarget(target) {
+		return fmt.Errorf("unsupported native release target %s/%s", target.OS, target.Arch)
+	}
+	if _, err := releasecontract.ParseVersionRange(compatibleRange(version)); err != nil {
+		return fmt.Errorf("invalid native binary version %q: %w", version, err)
+	}
+	if filepath.Base(output) != binaryName(version, target) {
+		return fmt.Errorf("native binary output must be named %s", binaryName(version, target))
+	}
+	if _, err := os.Stat(output); err == nil {
+		return fmt.Errorf("native binary output already exists: %s", output)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+		return err
+	}
+	if builder == nil {
+		builder = NativeGoBinaryBuilder{}
+	}
+	return builder.Build(ctx, root, output, version, target)
+}
+
 func VerifyCandidate(directory string) error {
 	manifestFile, err := os.Open(filepath.Join(directory, ManifestName))
 	if err != nil {
@@ -279,6 +379,15 @@ func binaryName(version string, target Target) string {
 		name += ".exe"
 	}
 	return name
+}
+
+func supportedCandidateTarget(target Target) bool {
+	for _, candidate := range candidateTargets {
+		if candidate == target {
+			return true
+		}
+	}
+	return false
 }
 
 func compatibleRange(version string) string {
