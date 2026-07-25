@@ -188,8 +188,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 - [x] Establish the Maestro Federated Improvement Loop typed-batch contract: automatic pilot reporting, structural local signals, GitHub as the action inbox and central curation proposals.
 - [x] Implement the user-local batch exporter, enrollment record, bounded spool, Local Darwin federator and born-portable skill collector.
-- [ ] Implement the minimum-permission GitHub App bridge, weekly digest and actionable incident routing.
-- [ ] Implement central Darwin advancement-proposal curation.
+- [x] Implement the central GitHub App bridge seam, aggregate digest and actionable incident routing.
+- [x] Implement central Darwin advancement-proposal curation with maintainer-only acceptance.
 - [ ] Select a balanced Windows/macOS and classic/technical cohort.
 - [ ] Onboard users without requiring Git, Go, Python, Node or Docker.
 - [ ] Measure time-to-first-success, update reliability and support demand.

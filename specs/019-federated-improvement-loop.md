@@ -1,9 +1,9 @@
 # Spec 019 - Maestro Federated Improvement Loop
 
-Status: accepted architecture; typed local contract, enrollment-bound outbox,
-credential-free HTTPS bridge seam, Local Darwin federator and born-portable
-skill collector implemented. GitHub App bridge, runtime adapters and central
-curation remain pending.
+Status: accepted architecture; local contract/outbox/federator and central
+HTTPS inbox/digest/curator implemented. The central GitHub App publisher takes
+only a bridge-owned installation-token source. Runtime scheduling, pilot
+provisioning and portable-skill transport remain pending.
 
 ## Objective
 
@@ -109,13 +109,16 @@ accept the proposal before implementation begins.
 2. **Local batch exporter** - user-local queue, enrollment state, bounded
    retry and born-portable skill collector are implemented. A skill body is
    verified against a strict manifest and never passes through a typed batch.
-3. **GitHub bridge** - GitHub App adapter, automatic weekly digest and
-   actionable incident routing.
+3. **GitHub bridge** - central HTTPS inbox, aggregate digest, GitHub App Issue
+   publisher seam and actionable incident routing are implemented. Deployment
+   must provide the bridge-owned short-lived App installation-token source.
 4. **Federator** - local Darwin packet adapter and structural skill/insight
    compilation are implemented. Its qualitative input is a closed perception
    taxonomy; it cannot emit local prose or send data itself.
-5. **Curator** - central batch compiler, central Darwin proposals and semantic
-   Issue-to-PR promotion.
+5. **Curator** - central batch compiler and Central Darwin proposals are
+   implemented. It creates draft GitHub proposal/incident artifacts only;
+   human acceptance remains required before source work. Semantic Issue-to-PR
+   promotion is a maintainer workflow, not autonomous behavior.
 6. **Pilot hardening** - Windows/macOS conformance, enrollment/revocation,
    offline recovery, canary-leak tests and pilot runbook.
 
