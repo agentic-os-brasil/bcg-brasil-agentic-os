@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:federation-export-state:v1",
+  "title": "Maestro Federated Improvement Loop local export state",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "installation_id": { "type": "string", "pattern": "^[a-f0-9]{16,64}$" },
+    "bridge_endpoint": { "type": "string", "format": "uri" },
+    "contract_version": { "const": "maestro-pilot-v1" },
+    "accepted_at": { "type": "string", "format": "date-time" },
+    "automatic_export": { "const": true },
+    "revoked_at": { "type": "string", "format": "date-time" }
+  },
+  "required": [
+    "schema_version",
+    "installation_id",
+    "bridge_endpoint",
+    "contract_version",
+    "accepted_at",
+    "automatic_export"
+  ]
+}
