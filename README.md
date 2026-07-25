@@ -163,7 +163,7 @@ duráveis usam um código de quatro letras no
 - [Fronteiras do agente de workspace](specs/016-workspace-agent-boundaries.md)
 - [Inicialização e pesquisa do agente](specs/017-workspace-agent-initialization.md)
 - [Core de agentes do Maestro](specs/018-maestro-core-agents.md)
-- [Dispatcher sequencial e work packets](specs/019-sequential-agent-dispatch.md)
+- [Dispatcher sequencial e work packets](specs/023-sequential-agent-dispatch.md)
 - [Visualização da governança de agentes](docs/visualizations/maestro-agent-governance.md)
 
 ## Confidencialidade

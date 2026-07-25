@@ -1,4 +1,4 @@
-# Spec 019 - Sequential agent dispatch and work packets
+# Spec 023 - Sequential agent dispatch and work packets
 
 Status: accepted architecture; runtime-neutral dispatcher and packet contract
 implemented. Native Claude and Codex wiring remains unavailable.
