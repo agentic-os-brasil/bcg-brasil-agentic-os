@@ -85,30 +85,116 @@ func ConfirmPending(
 	dataRoot, managedRoot, planID string,
 	registry releaseverify.KeyRegistry,
 ) (Pending, releaseverify.VerifiedRelease, error) {
+	pending, verified, current, _, err := validatePendingEvidence(
+		dataRoot,
+		managedRoot,
+		planID,
+		registry,
+	)
+	if err != nil {
+		return Pending{}, releaseverify.VerifiedRelease{}, err
+	}
+	if err := validatePendingSourcePlan(current, pending, verified); err != nil {
+		return Pending{}, releaseverify.VerifiedRelease{}, err
+	}
+	return pending, verified, nil
+}
+
+func ValidatePendingLaunch(
+	dataRoot, managedRoot, planID string,
+	registry releaseverify.KeyRegistry,
+) (Pending, error) {
+	pending, verified, current, options, err := validatePendingEvidence(
+		dataRoot,
+		managedRoot,
+		planID,
+		registry,
+	)
+	if err != nil {
+		return Pending{}, err
+	}
+	recovery, err := installtx.ValidateReconciliation(pending.ActivationPlanPath, options)
+	if err != nil {
+		return Pending{}, err
+	}
+	if recovery {
+		return pending, nil
+	}
+	if err := validatePendingSourcePlan(current, pending, verified); err != nil {
+		return Pending{}, err
+	}
+	return pending, nil
+}
+
+func validatePendingEvidence(
+	dataRoot, managedRoot, planID string,
+	registry releaseverify.KeyRegistry,
+) (
+	Pending,
+	releaseverify.VerifiedRelease,
+	installtx.State,
+	installtx.PrepareOptions,
+	error,
+) {
 	if managedRoot == "" || !pendingPlanIDPattern.MatchString(planID) || registry == nil {
-		return Pending{}, releaseverify.VerifiedRelease{}, errors.New("managed root, pending plan ID and release-key registry are required")
+		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{},
+			errors.New("managed root, pending plan ID and release-key registry are required")
 	}
 	pending, err := LoadPending(dataRoot)
 	if err != nil {
-		return Pending{}, releaseverify.VerifiedRelease{}, err
+		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{}, err
 	}
 	if pending.Plan.ID != planID {
-		return Pending{}, releaseverify.VerifiedRelease{}, errors.New("pending update confirmation does not match the stored plan")
+		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{},
+			errors.New("pending update confirmation does not match the stored plan")
+	}
+	if err := updateplan.Validate(pending.Plan); err != nil {
+		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{}, err
 	}
 	current, err := installtx.ReadStateForManagedRoot(dataRoot, managedRoot)
 	if err != nil {
-		return Pending{}, releaseverify.VerifiedRelease{}, err
+		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{}, err
 	}
 	if pending.Plan.TargetOS != current.TargetOS || pending.Plan.TargetArch != current.TargetArch {
-		return Pending{}, releaseverify.VerifiedRelease{}, errors.New("pending update target does not match the installed target")
+		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{},
+			errors.New("pending update target does not match the installed target")
 	}
 	verified, err := releaseverify.VerifyDirectory(pending.VerifiedDirectory, registry)
 	if err != nil {
-		return Pending{}, releaseverify.VerifiedRelease{}, err
+		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{}, err
 	}
 	if verified.ManifestSHA256 != pending.Plan.ManifestSHA256 {
-		return Pending{}, releaseverify.VerifiedRelease{}, errors.New("pending update manifest no longer matches the confirmed plan")
+		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{},
+			errors.New("pending update manifest no longer matches the confirmed plan")
 	}
+	options := installtx.PrepareOptions{
+		Transition:         "update",
+		ConfirmationPlanID: pending.Plan.ID,
+		FromRelease:        pending.Plan.FromRelease,
+		FromChannel:        pending.Plan.FromChannel,
+		FromCLIVersion:     pending.Plan.FromCLIVersion,
+		FromBundleVersion:  pending.Plan.FromBundleVersion,
+		TargetOS:           current.TargetOS,
+		TargetArch:         current.TargetArch,
+		ManagedRoot:        current.ManagedRoot,
+		DataRoot:           dataRoot,
+	}
+	if _, err := installtx.ValidatePrepared(
+		pending.ActivationPlanPath,
+		verified,
+		options,
+	); err != nil {
+		return Pending{}, releaseverify.VerifiedRelease{}, installtx.State{}, installtx.PrepareOptions{},
+			fmt.Errorf("validate prepared activation: %w", err)
+	}
+	return pending, verified, current, options, nil
+}
+
+func validatePendingSourcePlan(
+	current installtx.State,
+	pending Pending,
+	verified releaseverify.VerifiedRelease,
+) error {
 	recomputed, err := updateplan.Build(
 		current, verified.Manifest, pending.Plan.TargetOS, pending.Plan.TargetArch,
 		updateplan.SourceBinding{
@@ -117,30 +203,12 @@ func ConfirmPending(
 		},
 	)
 	if err != nil {
-		return Pending{}, releaseverify.VerifiedRelease{}, err
+		return err
 	}
 	if recomputed.ID != pending.Plan.ID {
-		return Pending{}, releaseverify.VerifiedRelease{}, errors.New("pending update plan is stale")
+		return errors.New("pending update plan is stale")
 	}
-	if _, err := installtx.ValidatePrepared(
-		pending.ActivationPlanPath,
-		verified,
-		installtx.PrepareOptions{
-			Transition:         "update",
-			ConfirmationPlanID: pending.Plan.ID,
-			FromRelease:        pending.Plan.FromRelease,
-			FromChannel:        pending.Plan.FromChannel,
-			FromCLIVersion:     pending.Plan.FromCLIVersion,
-			FromBundleVersion:  pending.Plan.FromBundleVersion,
-			TargetOS:           current.TargetOS,
-			TargetArch:         current.TargetArch,
-			ManagedRoot:        current.ManagedRoot,
-			DataRoot:           dataRoot,
-		},
-	); err != nil {
-		return Pending{}, releaseverify.VerifiedRelease{}, fmt.Errorf("validate prepared activation: %w", err)
-	}
-	return pending, verified, nil
+	return nil
 }
 
 func ReconcilePending(

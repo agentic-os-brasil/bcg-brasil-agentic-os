@@ -10,7 +10,11 @@ source with conformance coverage. The candidate workflow builds each CLI on a
 matching native runner and assembles the release set from those exact binaries,
 and CLI auth wiring constructs native storage only behind a complete approved
 managed provider registration. The checked-in registration is intentionally
-`unavailable`, so no real login is exposed yet.
+`unavailable`, so no real login is exposed yet. When all three provider,
+authority-seed and native-store gates are approved, `bcgos update --check`
+persists one exact signed plan and `--confirm` starts the stable bootstrapper
+only for that plan; `status` and `doctor` report the same availability
+boundary.
 
 That is engineering readiness, not a distributable pilot release. Production
 signing, provider registration, production Keychain/Credential Manager
@@ -33,6 +37,11 @@ approval and managed-device evidence remain gates outside the repository.
   manifest digest before asking for confirmation.
 - Pending confirmation and the bootstrapper both revalidate the signed
   release, complete activation semantics and exact staged artifact bytes.
+- The CLI emits one JSON document for check, unavailable, authentication,
+  current, error and activation-started states; bootstrapper output is isolated
+  in owner-data logs.
+- Confirmation launches only the fixed regular bootstrapper under the managed
+  root and passes the current CLI PID, exact plan ID and owner-data root.
 - The bootstrapper resolves trust from its protected managed root, consumes
   only the exact durable plan ID and rejects post-confirmation state changes.
 - The registry must match the digest embedded by the approved bootstrapper

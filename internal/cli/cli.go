@@ -65,7 +65,7 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "auth":
 		return runAuth(args[1:], out, errOut, defaultReleaseAuthService())
 	case "update":
-		return runUpdate(args[1:], out, errOut)
+		return runUpdate(args[1:], out, errOut, defaultReleaseUpdateService())
 	case "profile":
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
 	case "owner":
@@ -411,6 +411,7 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	releaseCapability := defaultReleaseCapability()
 	return writeJSON(out, struct {
 		Version      string               `json:"version"`
 		Workspace    workspace.Inspection `json:"workspace"`
@@ -421,12 +422,12 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 		Workspace: inspection,
 		Profile:   state,
 		Capabilities: map[string]string{
-			"bundles":                "unavailable",
+			"bundles":                "supported",
 			"human_atlas_bootstrap":  "supported",
 			"interaction_profile":    "supported",
 			"memory_dreaming":        "unavailable",
-			"private_release_auth":   "unavailable",
-			"updates":                "unavailable",
+			"private_release_auth":   releaseCapability.State,
+			"updates":                releaseCapability.State,
 			"workspace_agent_setup":  "supported",
 			"workspace_research":     "managed_skill_runtime_dependent",
 			"public_economic_rollup": "supported",
@@ -486,14 +487,22 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 		workspaceCheck = doctorCheck{ID: "workspace", State: "warning", Message: "workspace appears to be synchronized; OneDrive-style sync can cause I/O timeouts"}
 		nextActions = append(nextActions, "Move future work to a local folder outside synchronized storage when practical.")
 	}
+	releaseCapability := defaultReleaseCapability()
 	checks := []doctorCheck{
 		workspaceCheck,
 		{ID: "local_data", State: "pass", Message: "private BCGOS data is separated from the workspace"},
 		interactionProfileCheck(profileState),
 		runtimeCheck("claude_code", "claude", available),
 		runtimeCheck("codex", "codex", available),
-		{ID: "bundles", State: "unavailable", Message: "bundle installation is not implemented in this build"},
-		{ID: "updates", State: "unavailable", Message: "update and rollback are not implemented in this build"},
+		{ID: "bundles", State: "pass", Message: "signed bundle activation and last-known-good rollback are supported"},
+		{
+			ID: "private_release_auth", State: releaseCapability.State,
+			Message: releaseCapability.Reason,
+		},
+		{
+			ID: "updates", State: releaseCapability.State,
+			Message: releaseCapability.Reason,
+		},
 	}
 	if !available("claude") && !available("codex") {
 		if state == "ready" {

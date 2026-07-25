@@ -111,7 +111,19 @@ bcgos update --confirm <plan-id>
 
 Every command writes one schema-versioned JSON result to stdout. An available
 update always requires one confirmation bound to its plan ID. Confirmation of
-an unknown, stale or recomputed plan is rejected.
+an unknown, stale or recomputed plan is rejected. Check, unavailable,
+authentication-required, current, error and activation-started states remain
+machine-readable without mixing bootstrapper output into the CLI stream.
+
+The CLI derives its managed root only from a protected
+`managed-root/bin/bcgos[.exe]` location. A check reads the exact installed
+state from the owner-data root, authenticates with the native store, loads only
+the fixed authority registry whose digest is embedded in the CLI build, then
+downloads and stages through the provider-neutral verifier. Confirmation
+reloads the exact pending plan and asynchronously starts only the fixed regular
+`managed-root/bcgos-bootstrap[.exe]`, passing the current CLI PID. The
+bootstrapper writes to a new owner-data log, waits for the CLI to exit and
+independently repeats every trust and state check.
 
 The checked plan and prepared activation transaction are persisted as one
 strict owner-data pending envelope. It records only the authenticated release

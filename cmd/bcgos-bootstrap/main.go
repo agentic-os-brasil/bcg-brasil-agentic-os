@@ -163,6 +163,9 @@ func managedRootFromExecutablePath(executable string) (string, error) {
 	if filepath.Base(root) == "bootstrap" {
 		root = filepath.Dir(root)
 	}
+	if filepath.Dir(filepath.Clean(root)) == filepath.Clean(root) {
+		return "", errors.New("bootstrapper managed root cannot be a filesystem root")
+	}
 	return filepath.Clean(root), nil
 }
 
