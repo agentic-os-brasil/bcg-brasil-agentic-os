@@ -475,16 +475,16 @@ func trustedGoTool() (string, error) {
 	if runtime.GOOS == "windows" {
 		name = "go.exe"
 	}
-	path := filepath.Join(runtime.GOROOT(), "bin", name)
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return "", errors.New("trusted Go tool is unavailable")
-	}
-	info, err := os.Stat(resolved)
+	// runtime.GOROOT is compiled into the running CLI and is not sourced from
+	// the caller environment. Do not canonicalize it with EvalSymlinks:
+	// setup-go installs Windows toolchains behind directory junctions that are
+	// executable by the OS but are not reliably resolvable by EvalSymlinks.
+	path := filepath.Clean(filepath.Join(runtime.GOROOT(), "bin", name))
+	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
 		return "", errors.New("trusted Go tool is unavailable")
 	}
-	return resolved, nil
+	return path, nil
 }
 
 func commandDigest(command []string) (string, error) {
