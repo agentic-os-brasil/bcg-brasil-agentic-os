@@ -1,4 +1,4 @@
-# Spec 018 - Workspace-local adapter installation
+# Spec 026 - Workspace-local adapter installation
 
 Status: implemented for bounded Session Start only.
 
