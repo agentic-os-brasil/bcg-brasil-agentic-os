@@ -33,9 +33,10 @@ func (registry StaticRegistry) Lookup(product, issuer, keyID string) (ed25519.Pu
 }
 
 type VerifiedRelease struct {
-	Directory string
-	Manifest  releasecontract.Manifest
-	PublicKey ed25519.PublicKey
+	Directory      string
+	Manifest       releasecontract.Manifest
+	ManifestSHA256 string
+	PublicKey      ed25519.PublicKey
 }
 
 func VerifyDirectory(directory string, registry KeyRegistry) (VerifiedRelease, error) {
@@ -103,7 +104,10 @@ func VerifyDirectory(directory string, registry KeyRegistry) (VerifiedRelease, e
 		return VerifiedRelease{}, errors.New("signed release directory is incomplete or has colliding names")
 	}
 	keyCopy := append(ed25519.PublicKey(nil), publicKey...)
-	return VerifiedRelease{Directory: directory, Manifest: manifest, PublicKey: keyCopy}, nil
+	return VerifiedRelease{
+		Directory: directory, Manifest: manifest,
+		ManifestSHA256: digest(manifestBody), PublicKey: keyCopy,
+	}, nil
 }
 
 func VerifyManifest(manifestBody, signature []byte, registry KeyRegistry) (releasecontract.Manifest, ed25519.PublicKey, error) {

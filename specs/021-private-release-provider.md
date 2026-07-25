@@ -94,9 +94,12 @@ assets fail closed.
 ## Update planning and confirmation
 
 An update plan is a deterministic digest over the installed release, newer
-release, component versions, exact platform artifacts and target. Standard
-update planning rejects same-version releases and downgrades; rollback remains
-the separate bootstrapper operation.
+release, component versions, exact platform artifacts and target, provider
+identity, immutable provider release ID and SHA-256 of the authenticated
+manifest bytes. Provider discovery rejects malformed or duplicate Maestro
+version tags and requires the selected tag to match the authenticated manifest.
+Standard update planning rejects same-version releases and downgrades; rollback
+remains the separate bootstrapper operation.
 
 The user-facing contract is:
 
