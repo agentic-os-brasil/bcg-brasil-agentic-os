@@ -150,6 +150,28 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/005-development-harness.md; .claude/README.md; dev/skills/start-contributing/SKILL.md
 - Supersedes: none
 
+## WSAG - Make workspace agents enforce context boundaries
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A single user can work across multiple clients and projects. Treating all local work as available context would create a confidentiality risk and an unusable information blob.
+- Decision: Each registered workspace has an owning workspace agent that is the only default reader and writer of its raw context. The OS uses default-deny, runtime-enforced workspace scopes for files, memory, search, indexes, logs and intermediate outputs. Client/account context is curated through explicit promotion; cross-workspace work uses a minimal, expiring and audited delegation packet.
+- Consequences: The product requires a workspace authorization contract and conformance tests, not only agent prompts. Client/account agents cannot browse project workspaces. Capability specialists receive bounded work packets. A user can have multiple independent workspaces for one client or across clients.
+- Refs: specs/002-data-boundaries.md; specs/010-workspace-agent-boundaries.md; specs/004-runtime-portability.md
+- Supersedes: none
+
+## BRIF - Bootstrap workspace agents through approved research
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A workspace agent needs useful initial context, but a large persistent prompt state, untraceable web research or automatic client disclosure would compromise quality and confidentiality.
+- Decision: Initialize each workspace agent through a guided user interview, an explicitly approved and minimized external-research plan, a versioned workspace dossier and a compact operational state. Keep a separate public-only economic rollup; it may be versioned into a workspace but never reads from or writes back to workspace data.
+- Consequences: The product needs approval, provenance, freshness and dossier contracts in addition to workspace authorization. States remain pointer-first; facts, research and bullish/bearish hypotheses carry sources, uncertainty and invalidation signals. Creation may pause before research rather than leaking information through automatic queries.
+- Refs: specs/011-workspace-agent-initialization.md; specs/010-workspace-agent-boundaries.md; specs/002-data-boundaries.md
+- Supersedes: none
+
 ## DUAL - Support Windows and macOS equally
 
 - Date: 2026-07-19
