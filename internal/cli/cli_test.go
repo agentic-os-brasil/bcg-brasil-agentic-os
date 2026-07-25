@@ -178,6 +178,19 @@ func TestPrivateReleaseCommandsFailClosedWithoutApprovedSecureStore(t *testing.T
 				t.Fatal("unavailable response mentioned credential material")
 			}
 		})
+}
+
+func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	code := runHook([]string{"session-start", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"injection_state\":\"unavailable\"`) {
+		t.Fatalf("hook exit = %d, output = %s", code, output.String())
 	}
 }
 
