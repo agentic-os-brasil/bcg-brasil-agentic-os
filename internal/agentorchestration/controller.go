@@ -20,10 +20,12 @@ import (
 type NativeEvent struct {
 	Name            string
 	BranchID        string
+	DispatchID      string
 	ActorID         string
 	ActorCapability string
 	TargetID        string
 	Scope           string
+	ScopeKind       string
 	Tool            string
 	Operation       string
 	Resource        string
@@ -58,12 +60,14 @@ type authorization struct {
 }
 
 type StateSnapshot struct {
-	PolicySHA256 string    `json:"policy_sha256"`
-	BranchID     string    `json:"branch_id"`
-	ScopeKind    string    `json:"scope_kind"`
-	RootID       string    `json:"root_id"`
-	ChildID      string    `json:"child_id,omitempty"`
-	Updated      time.Time `json:"updated"`
+	PolicySHA256    string    `json:"policy_sha256"`
+	BranchID        string    `json:"branch_id"`
+	ScopeID         string    `json:"scope_id"`
+	ScopeKind       string    `json:"scope_kind"`
+	RootID          string    `json:"root_id"`
+	ChildID         string    `json:"child_id,omitempty"`
+	ChildDispatchID string    `json:"child_dispatch_id,omitempty"`
+	Updated         time.Time `json:"updated"`
 }
 
 type StateStore struct {
@@ -83,10 +87,12 @@ func RestoreStateStore(snapshot StateSnapshot, recoveryCapability string) (*Stat
 	if recoveryCapability == "" {
 		return nil, errors.New("orchestration state store requires a recovery capability")
 	}
-	if (snapshot.BranchID == "") != (snapshot.RootID == "") || (snapshot.BranchID == "") != (snapshot.ScopeKind == "") {
+	if (snapshot.BranchID == "") != (snapshot.RootID == "") ||
+		(snapshot.BranchID == "") != (snapshot.ScopeID == "") ||
+		(snapshot.BranchID == "") != (snapshot.ScopeKind == "") {
 		return nil, errors.New("orchestration snapshot has incomplete branch identity")
 	}
-	if snapshot.ChildID != "" && snapshot.RootID == "" {
+	if (snapshot.ChildID == "") != (snapshot.ChildDispatchID == "") || (snapshot.ChildID != "" && snapshot.RootID == "") {
 		return nil, errors.New("orchestration snapshot has a child without a root")
 	}
 	return &StateStore{state: snapshot, recoverySHA256: sha256.Sum256([]byte(recoveryCapability))}, nil
@@ -233,6 +239,23 @@ func canonicalResource(value string, requirePrefix bool) (string, bool) {
 	return "bcgos://" + parsed.Host + resourcePath, true
 }
 
+func NormalizeResource(value string) (string, bool) {
+	return canonicalResource(value, strings.HasSuffix(value, "/"))
+}
+
+func ResourceWithinScope(resource, scopeKind, scope string) bool {
+	normalized, valid := NormalizeResource(resource)
+	if !valid || strings.HasSuffix(normalized, "/") {
+		return false
+	}
+	parsed, _ := url.Parse(normalized)
+	if parsed.Host == "public" {
+		return parsed.Path != "/"
+	}
+	scopeRoot := "/" + scope + "/"
+	return parsed.Host == scopeKind && strings.HasPrefix(parsed.Path, scopeRoot) && len(parsed.Path) > len(scopeRoot)
+}
+
 func resourceBoundToScope(resourcePrefix, scope, scopeKind string) bool {
 	parsed, _ := url.Parse(resourcePrefix)
 	if parsed.Host == "public" {
@@ -280,14 +303,14 @@ func (adapter *Adapter) validateStoreState() error {
 		return nil
 	}
 	root, ok := adapter.authorizations[state.RootID]
-	if !ok || root.scope != state.BranchID || root.scopeKind != state.ScopeKind || !adapter.catalog.AllowsDelegation("hub", root.role, 1) || state.Updated.IsZero() {
+	if !ok || root.scope != state.ScopeID || root.scopeKind != state.ScopeKind || !adapter.catalog.AllowsDelegation("hub", root.role, 1) || state.Updated.IsZero() {
 		return errors.New("orchestration state references an unauthorized root")
 	}
 	if state.ChildID == "" {
 		return nil
 	}
 	child, ok := adapter.authorizations[state.ChildID]
-	if !ok || child.scope != state.BranchID || child.scopeKind != state.ScopeKind || !adapter.catalog.AllowsDelegation(root.role, child.role, 2) {
+	if !ok || child.scope != state.ScopeID || child.scopeKind != state.ScopeKind || !adapter.catalog.AllowsDelegation(root.role, child.role, 2) {
 		return errors.New("orchestration state references an unauthorized child")
 	}
 	return nil
@@ -327,6 +350,46 @@ func (adapter *Adapter) Handle(event NativeEvent) Decision {
 	return decision
 }
 
+func (adapter *Adapter) StartBranch(actorID, capability, targetID, branchID, scopeID, scopeKind string) Decision {
+	return adapter.Handle(NativeEvent{
+		Name:    adapter.nativeEvent("branch_start"),
+		ActorID: actorID, ActorCapability: capability, TargetID: targetID,
+		BranchID: branchID, Scope: scopeID, ScopeKind: scopeKind,
+	})
+}
+
+func (adapter *Adapter) StartChild(actorID, capability, targetID, branchID, dispatchID, scopeID, scopeKind string) Decision {
+	return adapter.Handle(NativeEvent{
+		Name:    adapter.nativeEvent("child_start"),
+		ActorID: actorID, ActorCapability: capability, TargetID: targetID,
+		BranchID: branchID, DispatchID: dispatchID, Scope: scopeID, ScopeKind: scopeKind,
+	})
+}
+
+func (adapter *Adapter) FinishChild(actorID, capability, branchID, dispatchID string) Decision {
+	return adapter.Handle(NativeEvent{
+		Name:    adapter.nativeEvent("child_finish"),
+		ActorID: actorID, ActorCapability: capability, BranchID: branchID,
+		DispatchID: dispatchID,
+	})
+}
+
+func (adapter *Adapter) FinishBranch(actorID, capability, branchID string) Decision {
+	return adapter.Handle(NativeEvent{
+		Name:    adapter.nativeEvent("branch_finish"),
+		ActorID: actorID, ActorCapability: capability, BranchID: branchID,
+	})
+}
+
+func (adapter *Adapter) nativeEvent(semantic string) string {
+	for native, candidate := range adapterEvents[adapter.runtime] {
+		if candidate == semantic {
+			return native
+		}
+	}
+	return ""
+}
+
 func (adapter *Adapter) RecoverStale(maxAge time.Duration, recoveryCapability string) bool {
 	digest := sha256.Sum256([]byte(recoveryCapability))
 	if maxAge <= 0 || subtle.ConstantTimeCompare(adapter.store.recoverySHA256[:], digest[:]) != 1 {
@@ -359,13 +422,14 @@ func (adapter *Adapter) startBranch(event NativeEvent, actor authorization) Deci
 	if !ok {
 		return denied("target_denied")
 	}
-	if event.BranchID == "" || actor.role != "hub" || event.ActorID != "maestro" ||
-		target.scope != event.BranchID || !adapter.catalog.AllowsDelegation(actor.role, target.role, 1) {
+	if event.BranchID == "" || event.Scope == "" || actor.role != "hub" || event.ActorID != "maestro" ||
+		target.scope != event.Scope || target.scopeKind != event.ScopeKind ||
+		!adapter.catalog.AllowsDelegation(actor.role, target.role, 1) {
 		return denied("edge_denied")
 	}
 	adapter.store.state = StateSnapshot{
 		PolicySHA256: adapter.store.state.PolicySHA256, BranchID: event.BranchID,
-		ScopeKind: target.scopeKind, RootID: event.TargetID,
+		ScopeID: event.Scope, ScopeKind: target.scopeKind, RootID: event.TargetID,
 	}
 	return allowed()
 }
@@ -382,13 +446,15 @@ func (adapter *Adapter) startChild(event NativeEvent, actor authorization) Decis
 	if !ok {
 		return denied("target_denied")
 	}
-	if event.BranchID != state.BranchID || event.ActorID != state.RootID ||
-		actor.scope != state.BranchID || target.scope != state.BranchID ||
+	if event.BranchID != state.BranchID || event.DispatchID == "" || event.ActorID != state.RootID ||
+		event.Scope != state.ScopeID || actor.scope != state.ScopeID || target.scope != state.ScopeID ||
 		actor.scopeKind != state.ScopeKind || target.scopeKind != state.ScopeKind ||
+		event.ScopeKind != state.ScopeKind ||
 		!adapter.catalog.AllowsDelegation(actor.role, target.role, 2) {
 		return denied("edge_denied")
 	}
 	adapter.store.state.ChildID = event.TargetID
+	adapter.store.state.ChildDispatchID = event.DispatchID
 	return allowed()
 }
 
@@ -401,11 +467,15 @@ func (adapter *Adapter) guardTool(event NativeEvent, actor authorization) Decisi
 	if state.BranchID == "" {
 		return denied("branch_missing")
 	}
-	if event.BranchID != state.BranchID || event.Scope != actor.scope || actor.scope != state.BranchID || actor.scopeKind != state.ScopeKind {
+	if event.BranchID != state.BranchID || event.Scope != actor.scope || actor.scope != state.ScopeID || actor.scopeKind != state.ScopeKind {
 		return denied("scope_denied")
 	}
 	if event.ActorID != state.RootID && event.ActorID != state.ChildID {
 		return denied("actor_denied")
+	}
+	if (event.ActorID == state.ChildID && event.DispatchID != state.ChildDispatchID) ||
+		(event.ActorID == state.RootID && event.DispatchID != "") {
+		return denied("dispatch_denied")
 	}
 	resource, valid := canonicalResource(event.Resource, false)
 	if !valid {
@@ -427,10 +497,11 @@ func (adapter *Adapter) finishChild(event NativeEvent) Decision {
 	if state.ChildID == "" {
 		return denied("child_missing")
 	}
-	if event.BranchID != state.BranchID || event.ActorID != state.ChildID {
+	if event.BranchID != state.BranchID || event.DispatchID != state.ChildDispatchID || event.ActorID != state.ChildID {
 		return denied("actor_denied")
 	}
 	adapter.store.state.ChildID = ""
+	adapter.store.state.ChildDispatchID = ""
 	return allowed()
 }
 

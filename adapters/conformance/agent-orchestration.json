@@ -3,21 +3,27 @@
   "events": [
     {
       "semantic_event": "branch_start",
-      "branch_id": "client-alpha-project",
+      "branch_id": "run-client-alpha-1",
+      "scope_kind": "workspace",
+      "scope": "client-alpha-project",
       "actor_id": "maestro",
       "actor_capability": "maestro-cap",
       "target_id": "workspace-alpha-project"
     },
     {
       "semantic_event": "child_start",
-      "branch_id": "client-alpha-project",
+      "branch_id": "run-client-alpha-1",
+      "dispatch_id": "child-client-alpha-1",
+      "scope_kind": "workspace",
+      "scope": "client-alpha-project",
       "actor_id": "workspace-alpha-project",
       "actor_capability": "workspace-alpha-project-cap",
       "target_id": "capability-research-project"
     },
     {
       "semantic_event": "tool_request",
-      "branch_id": "client-alpha-project",
+      "branch_id": "run-client-alpha-1",
+      "dispatch_id": "child-client-alpha-1",
       "actor_id": "capability-research-project",
       "actor_capability": "capability-research-project-cap",
       "scope": "client-alpha-project",
@@ -27,13 +33,14 @@
     },
     {
       "semantic_event": "child_finish",
-      "branch_id": "client-alpha-project",
+      "branch_id": "run-client-alpha-1",
+      "dispatch_id": "child-client-alpha-1",
       "actor_id": "capability-research-project",
       "actor_capability": "capability-research-project-cap"
     },
     {
       "semantic_event": "branch_finish",
-      "branch_id": "client-alpha-project",
+      "branch_id": "run-client-alpha-1",
       "actor_id": "workspace-alpha-project",
       "actor_capability": "workspace-alpha-project-cap"
     }
@@ -50,6 +57,8 @@
       "name": "unregistered target",
       "semantic_event": "branch_start",
       "branch_id": "alpha",
+      "scope_kind": "workspace",
+      "scope": "alpha",
       "actor_id": "maestro",
       "actor_capability": "maestro-cap",
       "target_id": "workspace-unknown",
@@ -59,6 +68,8 @@
       "name": "scope not bound to target",
       "semantic_event": "branch_start",
       "branch_id": "alpha",
+      "scope_kind": "workspace",
+      "scope": "alpha",
       "actor_id": "maestro",
       "actor_capability": "maestro-cap",
       "target_id": "practice-insurance",
