@@ -413,3 +413,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Authentication, refresh and verified download are testable independently of production configuration. The CLI exposes schema-versioned auth/update states and binds one confirmation to a deterministic update plan, but remains unavailable until native-store adapters, GitHub App installation and production key registry are approved.
 - Refs: DIST; SECU; UPDT; specs/020-release-distribution.md; specs/021-private-release-provider.md; internal/releaseprovider; internal/updateplan
 - Supersedes: none
+
+## PILT - Gate the ten-person pilot through two users and classified device evidence
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Passing CI or an isolated installer smoke test cannot prove that Maestro installs and updates safely under corporate Windows/macOS policy, and sending a first release directly to ten users would combine distribution, usability and support risk.
+- Decision: Keep natural-language `maestro-setup-update` guidance as the primary pilot experience, with deterministic CLI/bootstrapper enforcement and one confirmation bound to an exact update plan. Classify isolated Windows/macOS runs as engineering evidence only. Require separate corporate-device reports for install, update and rollback, then run a two-user canary with one Windows and one macOS user for five business days before considering the ten-person cohort.
+- Consequences: The repository cannot promote itself to pilot-ready. Expansion requires production authorities, both clean-device reports, success by both canary users, working rollback, no severity-1/2 incident or data-boundary breach and support-owner acceptance. The ten-person cohort remains a human go/redesign/stop decision.
+- Refs: AUTH; DIST; specs/022-guided-pilot-release.md; bundles/base/skills/maestro-setup-update/SKILL.md; docs/pilot-release-runbook.md
+- Supersedes: none

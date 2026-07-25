@@ -94,7 +94,10 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement provider discovery and manifest-authorized verified download
   into the local release boundary.
 - [ ] Configure the production provider and release-key registry.
-- [ ] Ensure updates never overwrite local configuration or work data.
+- [x] Enforce and test that activation writes only managed core and install
+  state, never local configuration, memory or workspace data.
+- [x] Generate separately classified isolated Windows/macOS engineering
+  evidence for install, update and rollback behavior.
 - [ ] Run install/update/rollback tests on clean corporate devices for both platforms.
 
 ### Discuss before closing the track
@@ -182,8 +185,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement a deterministic managed skills index and `bcgos skills index` inspection surface.
 - [ ] Add safe context injection, workspace boundaries and capability detection.
 - [x] Add the managed `workspace-agent-setup` skill with fail-closed research approval and provenance workflow.
-- [ ] Package only allowlisted product content; exclude all development harness paths.
-- [ ] Validate install, init, update and rollback without client content.
+- [x] Package only allowlisted product content; exclude all development harness paths.
+- [x] Validate isolated install, init, update and rollback without client content.
 
 ### Discuss before closing the track
 
@@ -197,6 +200,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 ### Build
 
+- [x] Define a two-user Windows/macOS canary and evidence-based expansion gate.
 - [ ] Select a balanced Windows/macOS and classic/technical cohort.
 - [ ] Onboard users without requiring Git, Go, Python, Node or Docker.
 - [ ] Measure time-to-first-success, update reliability and support demand.
