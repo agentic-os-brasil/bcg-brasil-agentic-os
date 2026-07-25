@@ -3,6 +3,7 @@ package releaseverify
 import (
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,19 +133,34 @@ func TestValidateAuthorityRegistrySchemaFileRejectsGuttedSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	withoutPublicKeyType := strings.Replace(
-		string(published),
-		`"public_key": {
-          "type": "string",`,
-		`"public_key": {`,
-		1,
-	)
-	if withoutPublicKeyType == string(published) {
-		t.Fatal("test fixture did not remove the public_key type")
+	var schema map[string]any
+	if err := json.Unmarshal(published, &schema); err != nil {
+		t.Fatal(err)
+	}
+	definitions, ok := schema["$defs"].(map[string]any)
+	if !ok {
+		t.Fatal("published schema definitions are unavailable")
+	}
+	authority, ok := definitions["authority"].(map[string]any)
+	if !ok {
+		t.Fatal("published authority definition is unavailable")
+	}
+	properties, ok := authority["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("published authority properties are unavailable")
+	}
+	publicKey, ok := properties["public_key"].(map[string]any)
+	if !ok {
+		t.Fatal("published public_key definition is unavailable")
+	}
+	delete(publicKey, "type")
+	withoutPublicKeyType, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatal(err)
 	}
 	for name, body := range map[string]string{
 		"missing root contract":                `{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:bcg-brasil-agentic-os:schema:release-authority-registry:v1"}`,
-		"public key accepts non-string values": withoutPublicKeyType,
+		"public key accepts non-string values": string(withoutPublicKeyType),
 		"empty authority definition": `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:bcg-brasil-agentic-os:schema:release-authority-registry:v1",
