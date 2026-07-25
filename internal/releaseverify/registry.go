@@ -3,7 +3,9 @@ package releaseverify
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +18,7 @@ import (
 const maximumAuthorityRegistryBytes = 1 << 20
 
 var authorityIdentifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
+var authorityRegistryDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 type AuthorityRegistry struct {
 	product string
@@ -84,6 +87,46 @@ func LoadAuthorityRegistry(path string, clock func() time.Time) (AuthorityRegist
 	}
 	defer file.Close()
 	return ParseAuthorityRegistry(file, clock)
+}
+
+func LoadPinnedAuthorityRegistry(
+	path, expectedSHA256 string,
+	clock func() time.Time,
+) (AuthorityRegistry, error) {
+	if !authorityRegistryDigestPattern.MatchString(expectedSHA256) {
+		return AuthorityRegistry{}, errors.New("bootstrapper release-authority seed digest is unavailable")
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return AuthorityRegistry{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return AuthorityRegistry{}, errors.New("seeded release-authority registry must be a regular file")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return AuthorityRegistry{}, err
+	}
+	defer file.Close()
+	openedInfo, err := file.Stat()
+	if err != nil {
+		return AuthorityRegistry{}, err
+	}
+	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
+		return AuthorityRegistry{}, errors.New("seeded release-authority registry changed while opening")
+	}
+	body, err := io.ReadAll(io.LimitReader(file, maximumAuthorityRegistryBytes+1))
+	if err != nil {
+		return AuthorityRegistry{}, err
+	}
+	if len(body) > maximumAuthorityRegistryBytes {
+		return AuthorityRegistry{}, fmt.Errorf("release authority registry exceeds %d bytes", maximumAuthorityRegistryBytes)
+	}
+	sum := sha256.Sum256(body)
+	if hex.EncodeToString(sum[:]) != expectedSHA256 {
+		return AuthorityRegistry{}, errors.New("release-authority registry does not match the bootstrapper seed")
+	}
+	return ParseAuthorityRegistry(bytes.NewReader(body), clock)
 }
 
 func (registry AuthorityRegistry) Lookup(product, issuer, keyID string) (ed25519.PublicKey, bool) {

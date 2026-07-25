@@ -9,7 +9,7 @@ import (
 )
 
 func TestBuildRequiresExplicitConfirmationForUpgrade(t *testing.T) {
-	current := installtx.State{SchemaVersion: 1, Release: "0.1.0", CLIVersion: "0.1.0", BundleVersion: "0.1.0", TargetOS: "darwin", TargetArch: "arm64"}
+	current := installedState("0.1.0")
 	manifest := updateManifest("0.2.0")
 	source := SourceBinding{Provider: "github", ProviderReleaseID: 42, ManifestSHA256: strings.Repeat("a", 64)}
 	first, err := Build(current, manifest, "darwin", "arm64", source)
@@ -29,10 +29,16 @@ func TestBuildRequiresExplicitConfirmationForUpgrade(t *testing.T) {
 	if first.Provider != "github" || first.ProviderReleaseID != 42 || first.ManifestSHA256 != strings.Repeat("a", 64) {
 		t.Fatalf("source binding was not preserved: %#v", first)
 	}
+	if first.SchemaVersion != 2 ||
+		first.FromChannel != current.Channel ||
+		first.FromCLIVersion != current.CLIVersion ||
+		first.FromBundleVersion != current.BundleVersion {
+		t.Fatalf("installed state binding was not preserved: %#v", first)
+	}
 }
 
 func TestBuildRejectsDowngradeAndUnsupportedPlatform(t *testing.T) {
-	current := installtx.State{SchemaVersion: 1, Release: "0.2.0", CLIVersion: "0.2.0", BundleVersion: "0.2.0"}
+	current := installedState("0.2.0")
 	for name, manifest := range map[string]releasecontract.Manifest{
 		"downgrade": updateManifest("0.1.0"),
 		"same":      updateManifest("0.2.0"),
@@ -49,7 +55,7 @@ func TestBuildRejectsDowngradeAndUnsupportedPlatform(t *testing.T) {
 }
 
 func TestBuildRejectsUnboundProviderSource(t *testing.T) {
-	current := installtx.State{SchemaVersion: 1, Release: "0.1.0"}
+	current := installedState("0.1.0")
 	for name, source := range map[string]SourceBinding{
 		"provider":   {Provider: "other", ProviderReleaseID: 42, ManifestSHA256: strings.Repeat("a", 64)},
 		"release id": {Provider: "github", ProviderReleaseID: 0, ManifestSHA256: strings.Repeat("a", 64)},
@@ -60,6 +66,18 @@ func TestBuildRejectsUnboundProviderSource(t *testing.T) {
 				t.Fatal("Build() accepted an unbound source")
 			}
 		})
+	}
+}
+
+func installedState(version string) installtx.State {
+	return installtx.State{
+		SchemaVersion: 2,
+		Release:       version,
+		Channel:       "canary",
+		CLIVersion:    version,
+		BundleVersion: version,
+		TargetOS:      "darwin",
+		TargetArch:    "arm64",
 	}
 }
 

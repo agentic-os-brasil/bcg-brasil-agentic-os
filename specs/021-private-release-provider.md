@@ -113,6 +113,50 @@ Every command writes one schema-versioned JSON result to stdout. An available
 update always requires one confirmation bound to its plan ID. Confirmation of
 an unknown, stale or recomputed plan is rejected.
 
+The checked plan and prepared activation transaction are persisted as one
+strict owner-data pending envelope. It records only the authenticated release
+directory, activation-plan path, plan fields and creation time. Both paths must
+remain inside the owner-data update staging root. Confirmation re-verifies the
+complete signed release, recomputes the plan against the current installed
+state and checks the complete prepared activation contract before returning
+control to the stable bootstrapper. That contract binds channel, target, roots,
+manifest digest, artifact names, sizes and hashes. Confirmation rejects
+mutated prepared bytes; the bootstrapper independently revalidates the same
+signed release and streams the exact authenticated CLI/archive bytes
+immediately before managed-root writes. Duplicate, unknown or trailing JSON
+content fails closed.
+
+The update-plan ID also binds the exact installed release, channel, CLI
+version, bundle version and target. The activation contract carries that plan
+ID and source state. After waiting for the old CLI, the bootstrapper reloads
+the pending envelope by exact ID and `Activate` compares the installed state
+again under the activation lock; a concurrent or stale plan cannot downgrade
+or overwrite a newer activation.
+
+The production bootstrapper derives its managed root from its own installed
+executable path and loads the authority registry only from
+`managed-root/trust/release-authority-registry.json`. The exact registry bytes
+must match a SHA-256 digest injected into the bootstrapper build by the
+approved seed channel; the development default contains no digest and is
+unavailable. Update activation accepts no caller-selected registry, signed
+directory, activation path or target.
+
+Before moving update payloads, activation writes a strict intent receipt bound
+to the plan ID, transaction, source backup, target state, manifest and artifact
+digests. A retry with a remaining pending envelope reclaims only a dead-owner
+lock, then re-verifies the signed release, receipt, active CLI and extracted
+bundle tree. With source State, exact target payload plus backup completes the
+State commit only after the production CLI self-check succeeds again; a failed
+self-check or partial payload restores the backup and retries cleanly. With
+target State, exact evidence consumes the pending plan as successful. This
+makes both pre-State and post-State crash windows idempotent.
+
+Install state schema version 2 retains the canonical managed root so update
+preparation never guesses an activation destination from the current process.
+An exact schema version 1 state without `managed_root` migrates atomically only
+when the caller supplies an authoritative, canonical managed root; unanchored
+migration fails closed. Update and rollback both use this migration path.
+
 ## Availability boundary
 
 The core device-flow, refresh, provider-download, managed registration and plan
