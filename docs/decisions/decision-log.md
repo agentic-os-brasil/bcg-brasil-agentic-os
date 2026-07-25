@@ -512,3 +512,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Reinstalling after an update changes only Maestro's own command and does not depend on a user shell. A missing native receipt fails closed in product reporting, while conformance remains practical to run in an empty non-client workspace. No memory, worker, network or model operation is added to Session Start, and no absolute machine path can be silently added to an already tracked runtime configuration.
 - Refs: specs/017-native-session-start-hook.md; specs/018-workspace-local-adapter-installation.md; specs/021-pilot-hook-conformance.md; docs/onboarding/pilot-hook-conformance.md; internal/adaptercfg; internal/sessionhook
 - Supersedes: none
+
+## STUB - Scaffold governed instances without activating them
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The role catalog, enforcement controller and dispatcher could validate specialist identities, but only Maestro, Walter and Darwin had concrete definitions. Workspace initialization created state and a dossier without a runtime-neutral agent stub, while capability and subject specialists existed only in tests.
+- Decision: Maintain data-free managed templates for workspace, account, practice, capability-specialist and subject-specialist roles. Materialize private local instances durably and atomically with signed immutable role, parent and scope bindings, definition/state hashes and an explicit unavailable runtime state. Resolve the concrete workspace and registered same-scope parent before creation; require accountable owner/mandate for account and practice roots and verify practice canon bytes. Make workspace scaffolding automatic in `bcgos init`; require explicit CLI creation for other roles.
+- Consequences: Every initialized workspace has an inspectable agent definition and teams can prepare bounded specialists without embedding client data or prematurely granting tools. Orphan parents, cross-scope binding, key split-brain, rebinding and tampering fail closed. Native Claude/Codex adapters still must verify the stub, provision private capabilities and pass conformance before activation.
+- Refs: WKPK; WSAG; specs/018-maestro-core-agents.md; specs/023-sequential-agent-dispatch.md; specs/025-agent-scaffolding.md; internal/agentscaffold
+- Supersedes: none

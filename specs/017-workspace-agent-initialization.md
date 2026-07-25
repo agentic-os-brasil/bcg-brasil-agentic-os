@@ -1,9 +1,10 @@
 # Spec 017 - Workspace agent initialization and context
 
-Status: accepted architecture; guided interview, versioned brief, research-plan
-approval, sourced-evidence persistence, attested public economic snapshots and managed
-setup skill implemented. Web execution depends on an approved runtime tool;
-hard runtime isolation adapters remain unavailable.
+Status: accepted architecture; concrete data-free agent stub, guided interview,
+versioned brief, research-plan approval, sourced-evidence persistence, attested
+public economic snapshots and managed setup skill implemented. Web execution
+depends on an approved runtime tool; hard runtime isolation adapters remain
+unavailable.
 
 ## Objective
 
@@ -116,8 +117,9 @@ automatically.
 
 ## Initial executable contract
 
-`bcgos init` creates the compact workspace-agent control plane. The current CLI
-then supports:
+`bcgos init` creates the compact workspace-agent control plane and atomically
+materializes its governed local stub from the managed `workspace_agent`
+template. The current CLI then supports:
 
 ```text
 bcgos workspace-agent interview [workspace-path]

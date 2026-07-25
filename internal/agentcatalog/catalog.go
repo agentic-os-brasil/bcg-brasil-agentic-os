@@ -262,5 +262,16 @@ func ValidateDir(root string) error {
 			return fmt.Errorf("managed agent %s has an empty definition", agent.ID)
 		}
 	}
+	for _, role := range []string{"account_agent", "capability_specialist", "practice_agent", "subject_specialist", "workspace_agent"} {
+		templatePath := filepath.Join(root, "templates", role, "AGENT.md")
+		body, err := os.ReadFile(templatePath)
+		if err != nil {
+			return fmt.Errorf("read managed %s scaffold template: %w", role, err)
+		}
+		if len(body) == 0 || strings.Contains(string(body), "{{") ||
+			strings.Contains(string(body), "}}") {
+			return fmt.Errorf("managed %s scaffold template must be non-empty and data-free", role)
+		}
+	}
 	return nil
 }
