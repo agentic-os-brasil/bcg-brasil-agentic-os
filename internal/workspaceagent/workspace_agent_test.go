@@ -19,7 +19,7 @@ func TestInitializeCreatesCompactAgentControlPlane(t *testing.T) {
 	}
 	for _, relative := range []string{
 		"workspaces/ws-123/agent/agent.json",
-		"workspaces/ws-123/agent/state.md",
+		"workspaces/ws-123/agent/state.json",
 		"workspaces/ws-123/dossier/README.md",
 	} {
 		if _, err := os.Stat(filepath.Join(root, relative)); err != nil {
@@ -35,7 +35,12 @@ func TestInterviewAndResearchApprovalPreserveDisclosureGuardrail(t *testing.T) {
 	}
 
 	plan := ResearchPlan{
+		PlanID:      "plan-123",
 		WorkspaceID: "ws-123",
+		State:       "approved",
+		CreatedAt:   time.Now().UTC(),
+		ValidUntil:  time.Now().UTC().Add(time.Hour),
+		MaxQueries:  1,
 		Purpose:     "understand public market conditions",
 		QueryThemes: []string{"public market size"},
 		Sources:     []string{"official statistics"},

@@ -62,6 +62,10 @@ Implementado agora:
 - perfil de interacao global (`standard`, `advanced` ou `power`) que regula linguagem e sugestoes tecnicas sem alterar permissoes ou dados.
 - indice de skills gerado, humano-legivel e machine-readable para descoberta sem injetar todos os procedimentos na sessao.
 - bootstrap de atlas humano privado para owner e workspace, sem misturar escopos, criar tasks ou alegar wiki compilada.
+- agente dedicado por workspace com state enxuto, briefing versionado, entrevista guiada e dossie local separado.
+- pesquisa publica governada por plano aprovado, allowlist de fontes e evidencia com proveniencia; execucao web depende de uma ferramenta aprovada do runtime.
+- snapshots economicos publicos atestados, com proveniencia por afirmacao,
+  versionados fora dos workspaces e anexados aos projetos apenas por ID.
 
 Ainda nao implementado:
 
@@ -73,6 +77,7 @@ Ainda nao implementado:
 - update, rollback e assinatura de artefatos.
 - adapters de sintese e elegibilidade, instalacao do agendamento nativo, recovery de locks e dreaming executavel no `bcgos memory`.
 - gerador da wiki, schemas de pagina/indice, comandos de navegacao e atlas privado de owner/workspace.
+- enforcement de isolamento no nivel dos runtimes Claude/Codex; o core local ja isola artefatos por workspace, mas nao declara sandbox de ferramentas nativas.
 
 ## Desenvolvimento da solucao
 
@@ -109,7 +114,12 @@ docs/            decisoes e explicacoes para humanos
 
 O contrato de memoria esta em [Spec 006](specs/006-memory-persistence.md). A politica sanitizada vive em `bundles/base/memory/policy.json`, o engine em `internal/memory` e a skill operacional em `bundles/base/skills/dream-memory/`. Dados e rollups reais permanecerao fora do repositorio, em armazenamento local do usuario.
 
-O primeiro `bcgos init` cria apenas `.bcgos/workspace.json` e `brain/README.md` no workspace escolhido. O `brain/` e uma superficie Markdown navegavel para a pessoa; memoria operacional, configuracao e logs ficam no diretorio local gerenciado. A taxonomia de clientes, projetos, pessoas e conhecimento ainda sera definida antes de o produto criar pastas de conteudo automaticamente.
+Dentro da pasta escolhida, o primeiro `bcgos init` cria apenas `.bcgos/workspace.json` e `brain/README.md`. O `brain/` e uma superficie Markdown navegavel para a pessoa; o registro do agente, memoria operacional, configuracao e logs ficam no diretorio local gerenciado. A taxonomia de clientes, projetos, pessoas e conhecimento ainda sera definida antes de o produto criar pastas de conteudo automaticamente.
+
+O mesmo `init` registra um agente local dedicado ao workspace. A skill
+`workspace-agent-setup` conduz a entrevista, salva o briefing revisado fora do
+state compacto e governa pesquisa publica por aprovacao e proveniencia. Nenhuma
+consulta externa e liberada apenas por existir um workspace.
 
 Cada pessoa tambem tem um perfil de interacao local, visivel em `bcgos profile show` e alteravel por `bcgos profile set standard|advanced|power`. Ele e uma preferencia explicita de linguagem e profundidade tecnica, nao uma classificacao de pessoa, permissao ou memoria.
 
@@ -130,6 +140,8 @@ Leia primeiro:
 - [Spec de scheduler e catch-up por presenca](specs/009-scheduler-catch-up.md)
 - [Spec de runtime local de ingestao](specs/010-local-ingestion-runtime.md)
 - [Spec de bootstrap do atlas humano](specs/014-human-atlas-bootstrap.md)
+- [Spec de fronteiras do agente de workspace](specs/015-workspace-agent-boundaries.md)
+- [Spec de inicializacao e pesquisa do agente](specs/016-workspace-agent-initialization.md)
 
 ## Confidencialidade
 

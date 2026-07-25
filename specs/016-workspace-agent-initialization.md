@@ -1,14 +1,15 @@
 # Spec 016 - Workspace agent initialization and context
 
-Status: accepted architecture; guided interview contract, compact local state
-and research-plan approval validation implemented. External research execution,
-economic rollups and runtime adapters remain unavailable.
+Status: accepted architecture; guided interview, versioned brief, research-plan
+approval, sourced-evidence persistence, attested public economic snapshots and managed
+setup skill implemented. Web execution depends on an approved runtime tool;
+hard runtime isolation adapters remain unavailable.
 
 ## Objective
 
 Create a useful workspace agent without turning its state into an untraceable
 context blob. Creation combines a user interview, authorized external research
-and a small public economic snapshot; all substantive context remains
+and a small attested public economic snapshot; all substantive context remains
 workspace-scoped, versioned and attributable.
 
 ## Creation flow
@@ -41,7 +42,7 @@ agent must:
 - prefer an approved source allowlist appropriate to the question, including
   primary sources for company, regulation and macroeconomic facts;
 - record each external query, its approval, source URL, retrieval time,
-  extracted claim, evidence strength and classification;
+  validity date, extracted claim, evidence strength and classification;
 - label uncertainty, disagreement and freshness rather than presenting a
   research summary as established fact.
 
@@ -74,12 +75,14 @@ history. Every entry has provenance, retrieval/creation date, classification,
 authoring agent or user and review/freshness state. It remains inside the
 workspace authorization boundary.
 
-### 3. Public economic rollup: reusable but isolated
+### 3. Attested public economic rollup: reusable but isolated
 
-The OS may maintain a separate, public-only economic rollup sourced from
-approved public material. It contains versioned macroeconomic snapshots and
-their provenance, never client data, workspace-derived queries, metadata,
-synthesis or automatic write-back.
+The OS may maintain a separate economic rollup sourced from independently
+collected public material. Each version records an explicit human attestation
+that no workspace-derived material was used, plus public classification and
+source provenance for every retained claim. This is a governance boundary, not
+automated content detection. It must never receive client data,
+workspace-derived queries, metadata, synthesis or automatic write-back.
 
 A workspace agent can request a filtered snapshot and records the snapshot
 version it used. The snapshot does not grant access to any other workspace.
@@ -92,7 +95,7 @@ agent proposes a new external research plan when the prior approval does not
 cover the query.
 
 Only reviewed, non-confidential facts can be promoted to the account-agent
-layer under Spec 006. Neither interview data nor research findings flow upward
+layer under Spec 015. Neither interview data nor research findings flow upward
 automatically.
 
 ## Acceptance criteria for implementation
@@ -110,3 +113,35 @@ automatically.
    but cannot read from or write to any workspace.
 7. Claude and Codex adapters provide equivalent approval, provenance and
    workspace-isolation behavior or declare setup unsupported.
+
+## Initial executable contract
+
+`bcgos init` creates the compact workspace-agent control plane. The current CLI
+then supports:
+
+```text
+bcgos workspace-agent interview [workspace-path]
+bcgos workspace-agent brief submit --stdin [workspace-path]
+bcgos workspace-agent research plan --stdin [workspace-path]
+bcgos workspace-agent research approve --plan <id> --approved-by <owner> --confirm [workspace-path]
+bcgos workspace-agent research query --stdin [workspace-path]
+bcgos workspace-agent research record --stdin [workspace-path]
+bcgos workspace-agent economic import --stdin --attested-public --attested-by <owner> --confirm-no-workspace-derivation
+bcgos workspace-agent economic attach --snapshot <id> [workspace-path]
+```
+
+Briefs, proposed and approved plans, and evidence are immutable artifacts. The
+current brief and economic snapshot are replaceable pointers, so the compact
+state does not absorb their bodies. Research evidence fails closed unless its
+plan is approved and unexpired, its query consumed an immutable budget slot,
+its exact query is part of the approved themes,
+its URL belongs to the approved hostname allowlist and it is classified public.
+Economic snapshots require an immutable independent-public-source attestation
+and per-claim source provenance. They live outside workspace roots; a workspace
+stores only their immutable ID.
+
+The canonical `workspace-agent-setup` skill conducts the conversation and may
+use a runtime web-search/browser tool only after approval and when an
+enforceable workspace/pre-action guard is present. It reports unavailable
+otherwise. The CLI does not embed a search provider or credential and does not
+claim OS-level filesystem isolation.

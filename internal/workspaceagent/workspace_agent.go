@@ -51,11 +51,27 @@ type Approval struct {
 }
 
 type ResearchPlan struct {
-	WorkspaceID string   `json:"workspace_id"`
-	Purpose     string   `json:"purpose"`
-	QueryThemes []string `json:"query_themes"`
-	Sources     []string `json:"sources"`
-	Approval    Approval `json:"approval"`
+	PlanID      string    `json:"plan_id"`
+	WorkspaceID string    `json:"workspace_id"`
+	State       string    `json:"state"`
+	CreatedAt   time.Time `json:"created_at"`
+	ValidUntil  time.Time `json:"valid_until"`
+	MaxQueries  int       `json:"max_queries"`
+	Purpose     string    `json:"purpose"`
+	QueryThemes []string  `json:"query_themes"`
+	Sources     []string  `json:"sources"`
+	Approval    Approval  `json:"approval"`
+}
+
+type OperationalState struct {
+	SchemaVersion             int       `json:"schema_version"`
+	WorkspaceID               string    `json:"workspace_id"`
+	Lifecycle                 string    `json:"lifecycle"`
+	CurrentBriefID            string    `json:"current_brief_id,omitempty"`
+	CurrentObjective          string    `json:"current_objective,omitempty"`
+	CurrentResearchPlanID     string    `json:"current_research_plan_id,omitempty"`
+	CurrentEconomicSnapshotID string    `json:"current_economic_snapshot_id,omitempty"`
+	UpdatedAt                 time.Time `json:"updated_at"`
 }
 
 type registry struct {
@@ -63,13 +79,6 @@ type registry struct {
 	WorkspaceID   string `json:"workspace_id"`
 	AgentID       string `json:"agent_id"`
 }
-
-const stateTemplate = `# Workspace agent state
-
-Keep this file compact: active mandate, next decision, material constraints,
-approved research scope, freshness signals and pointers only. Do not store raw
-documents, transcripts, research summaries, embeddings or broad history here.
-`
 
 const dossierTemplate = `# Workspace dossier
 
@@ -94,7 +103,12 @@ func Initialize(dataRoot, workspaceID string) (Status, error) {
 	if err := createJSON(filepath.Join(root, "agent", "agent.json"), registry{SchemaVersion: 1, WorkspaceID: workspaceID, AgentID: agentID}); err != nil {
 		return Status{}, err
 	}
-	if err := createText(filepath.Join(root, "agent", "state.md"), stateTemplate); err != nil {
+	if err := createImmutableJSON(filepath.Join(root, "agent", "state.json"), OperationalState{
+		SchemaVersion: 1,
+		WorkspaceID:   workspaceID,
+		Lifecycle:     "setup",
+		UpdatedAt:     time.Now().UTC(),
+	}); err != nil && !errors.Is(err, os.ErrExist) {
 		return Status{}, err
 	}
 	if err := createText(filepath.Join(root, "dossier", "README.md"), dossierTemplate); err != nil {
@@ -123,7 +137,7 @@ func Inspect(dataRoot, workspaceID string) (Status, error) {
 		Initialized:  true,
 		WorkspaceID:  workspaceID,
 		AgentID:      value.AgentID,
-		State:        pointer(root, "agent/state.md"),
+		State:        pointer(root, "agent/state.json"),
 		Dossier:      pointer(root, "dossier/README.md"),
 		Capabilities: capabilities(),
 	}, nil
@@ -145,8 +159,11 @@ func ColdStartInterview() Interview {
 }
 
 func (plan ResearchPlan) Validate() error {
-	if !workspaceIDPattern.MatchString(plan.WorkspaceID) || strings.TrimSpace(plan.Purpose) == "" || len(plan.QueryThemes) == 0 || len(plan.Sources) == 0 {
+	if !workspaceIDPattern.MatchString(plan.WorkspaceID) || !safeID(plan.PlanID) || plan.State != "approved" || strings.TrimSpace(plan.Purpose) == "" || len(plan.QueryThemes) == 0 || len(plan.Sources) == 0 || plan.ValidUntil.IsZero() || plan.MaxQueries < len(plan.QueryThemes) || plan.MaxQueries > 20 {
 		return errors.New("research plan requires workspace, purpose, query themes and sources")
+	}
+	if !plan.ValidUntil.After(plan.CreatedAt) || time.Now().UTC().After(plan.ValidUntil) {
+		return errors.New("research plan is expired")
 	}
 	if plan.Approval.ApprovedAt.IsZero() || strings.TrimSpace(plan.Approval.ApprovedBy) == "" || plan.Approval.DisclosureLevel != "public_only" {
 		return ErrResearchApprovalRequired
@@ -157,9 +174,11 @@ func (plan ResearchPlan) Validate() error {
 func capabilities() map[string]string {
 	return map[string]string{
 		"guided_interview":            "supported",
+		"versioned_brief":             "supported",
 		"research_plan_validation":    "supported",
-		"external_research_execution": "unavailable",
-		"public_economic_rollup":      "unavailable",
+		"research_evidence_store":     "supported",
+		"external_research_execution": "managed_skill_runtime_dependent",
+		"public_economic_rollup":      "supported",
 	}
 }
 
