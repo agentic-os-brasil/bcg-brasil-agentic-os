@@ -150,6 +150,21 @@ The evidence-backed completion slice implements:
 - revalidation of every completion criterion against the immutable contract;
 - completion only after all latest receipts still pass.
 
+The agent tool-call breadcrumb slice implements:
+
+- explicit `started` and terminal `succeeded`, `failed` or `unavailable`
+  lifecycle receipts;
+- linkage to the current execution item and fenced attempt, using a closed
+  runtime identity and tool-class registry that cannot carry caller content;
+- immutable state-revision ordering and complete history only through explicit
+  export;
+- no prompts, arguments, queries, output, errors or opaque tool payloads.
+
+This slice is the deterministic core receipt contract. Native Claude and Codex
+`post_action_observe` emission remains unavailable, so a receipt submitted
+through the CLI is a declared breadcrumb rather than authenticated runtime
+provenance.
+
 The Session Context and handoff slice implements:
 
 - the opaque `bcgos://execution/active` pointer only for one active item;
@@ -162,7 +177,7 @@ The Session Context and handoff slice implements:
 ## V1 non-goals
 
 - business task synchronization;
-- generic agent or tool-call tracing;
+- raw agent/tool payload tracing or general-purpose telemetry;
 - event bus or cloud telemetry;
 - scheduler integration or unattended execution;
 - automatic retries, budgets or cost accounting;
