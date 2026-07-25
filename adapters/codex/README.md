@@ -4,8 +4,11 @@ This is the thin product adapter boundary for Codex. Policies, memory and
 capability states remain canonical in `bundles/base/runtime/capabilities.json`.
 
 Current state: `bcgos doctor` discovers a local Codex executable, while every
-product lifecycle event remains explicitly unavailable. Codex must not inherit
-Claude-specific development hooks as a product capability.
+product lifecycle event remains explicitly unavailable. `bcgos session bridge
+--runtime codex [workspace-path]` supplies the same bounded Session Start
+envelope for a future adapter to consume; it does not install a hook or inject
+content. Codex must not inherit Claude-specific development hooks as a product
+capability.
 
 Future wiring may map Codex-native mechanisms to `session_start`,
 `pre_action_guard`, `post_action_observe`, `stop_finalize` and

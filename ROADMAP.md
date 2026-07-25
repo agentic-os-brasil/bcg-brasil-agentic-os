@@ -20,6 +20,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Define and implement a local, professional owner-self registry with facet policies and a cold-start interview contract.
 - [x] Decide that the future human atlas is scoped across managed, owner-private and workspace-private roots, alongside canonical derived memory.
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
+- [x] Define workspace agents as project specialists and context gatekeepers with compact state and versioned dossiers.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
 - [x] Define the execution-ledger authority boundary and implement the initial local contract, attempt, revision and inspection store.
 
@@ -53,6 +54,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement user-space directories on Windows and macOS.
 - [x] Add Claude and Codex adapter skeletons against the same canonical contract.
 - [x] Add initial conformance fixtures for equivalent capability identity, semantic events and criticality.
+- [x] Implement a runtime-neutral Session Start bridge that gives Claude and Codex the same bounded packet without claiming native injection.
 - [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
 - [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
@@ -66,6 +68,10 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Add core-witnessed artifact snapshots, command checks and evidence-backed completion.
 - [ ] Expose only the active execution pointer through the Session Context Packet.
 - [ ] Prove handoff across two sessions or agents without transcript or contract reinjection.
+- [x] Bootstrap one local agent per workspace with a reviewed interview and versioned briefing.
+- [x] Implement explicit research-plan approval, hostname allowlists and sourced evidence persistence.
+- [x] Implement attested public economic snapshots with per-claim provenance
+  outside workspace roots and attach them by immutable ID.
 
 ### Discuss before closing the track
 
@@ -171,6 +177,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Implement runtime-neutral contracts and thin Claude/Codex adapters.
 - [x] Implement a deterministic managed skills index and `bcgos skills index` inspection surface.
 - [ ] Add safe context injection, workspace boundaries and capability detection.
+- [x] Add the managed `workspace-agent-setup` skill with fail-closed research approval and provenance workflow.
 - [ ] Package only allowlisted product content; exclude all development harness paths.
 - [ ] Validate install, init, update and rollback without client content.
 

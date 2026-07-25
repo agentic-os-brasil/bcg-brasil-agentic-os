@@ -153,6 +153,11 @@ func Inspect(workspacePath, dataRoot string) (Inspection, error) {
 		inspection.MetadataStatus = "invalid"
 		return inspection, nil
 	}
+	if value.WorkspaceID != workspaceID(workspacePath) {
+		inspection.State = "invalid"
+		inspection.MetadataStatus = "path_mismatch"
+		return inspection, nil
+	}
 	inspection.WorkspaceID = value.WorkspaceID
 	inspection.MetadataStatus = "valid"
 	brainInfo, err := os.Stat(filepath.Join(workspacePath, "brain", "README.md"))

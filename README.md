@@ -45,6 +45,7 @@ quando os mecanismos nativos forem diferentes.
 | Capacidade | Estado atual |
 | --- | --- |
 | Workspace local | `bcgos init`, `status` e `doctor` criam e inspecionam o espaço sem misturar dados de trabalho ao core gerenciado. |
+| Agente do workspace | Entrevista e briefing versionado, pesquisa pública aprovada e dossiê isolado por projeto; sandbox rígido dos runtimes ainda está pendente. |
 | Preferência de interação | `standard`, `advanced` e `power`, configuradas localmente e sem alterar permissões. |
 | Contexto do dono | Arquivos locais, editáveis e auditáveis para papel profissional, estilo, voz, preferências e limites. |
 | Atlas humano | Estrutura local não destrutiva para clientes, projetos, pessoas e diário de trabalho. |
@@ -64,6 +65,7 @@ entre outros:
 - memória automática, busca e Wiki compilada;
 - ingestão de documentos com Docling empacotado;
 - sincronização com ferramentas de tarefas.
+- enforcement de isolamento por hooks nos runtimes Claude e Codex.
 
 Nenhuma dessas capacidades deve ser presumida por documentação ou por um
 agente até ter contrato, testes e validação explícitos.
@@ -98,8 +100,11 @@ bcgos profile show
 bcgos owner init
 bcgos atlas init <workspace>
 bcgos atlas status <workspace>
+bcgos workspace-agent interview <workspace>
+bcgos workspace-agent status <workspace>
 bcgos skills index
 bcgos session packet [workspace]
+bcgos session bridge --runtime claude|codex [workspace]
 bcgos work create --workspace <path> --stdin
 bcgos work start --workspace <path> --item <id> --revision <n>
 bcgos work checkpoint --workspace <path> --item <id> --revision <n> --attempt <id> --stdin
@@ -165,6 +170,8 @@ duráveis usam um código de quatro letras no
 - [Navegação e Wiki](specs/007-content-navigation.md)
 - [Contexto profissional do dono](specs/013-owner-context.md)
 - [Atlas humano](specs/014-human-atlas-bootstrap.md)
+- [Fronteiras do agente de workspace](specs/016-workspace-agent-boundaries.md)
+- [Inicialização e pesquisa do agente](specs/017-workspace-agent-initialization.md)
 
 ## Confidencialidade
 

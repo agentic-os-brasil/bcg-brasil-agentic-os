@@ -25,7 +25,9 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 )
 
 const (
@@ -40,6 +42,7 @@ var Version = "0.0.0-dev"
 const maximumOwnerFacetBytes = 1 << 20
 const maximumWorkContractBytes = 32 << 10
 const maximumWorkCheckpointBytes = 16 << 10
+const maximumWorkspaceAgentBytes = 1 << 20
 
 func Run(args []string, out, errOut io.Writer) int {
 	return RunWithInput(args, strings.NewReader(""), out, errOut)
@@ -47,12 +50,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|atlas|session|skills|memory|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory|work>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|atlas|session|skills|memory|work>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory|work>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -67,6 +70,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
 	case "owner":
 		return runOwnerWithInput(args[1:], in, out, errOut, defaultDataRoot)
+	case "workspace-agent":
+		return runWorkspaceAgentWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "atlas":
 		return runAtlas(args[1:], out, errOut, defaultDataRoot)
 	case "session":
@@ -434,14 +439,285 @@ func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	agent, err := workspaceagent.Initialize(root, result.WorkspaceID)
+	if err != nil {
+		return reportError(errOut, err)
+	}
 	state, err := initializeProfile(root, *requestedProfile)
 	if err != nil {
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, struct {
 		workspace.Result
-		Profile profile.State `json:"profile"`
-	}{Result: result, Profile: state}, errOut)
+		Profile        profile.State         `json:"profile"`
+		WorkspaceAgent workspaceagent.Status `json:"workspace_agent"`
+	}{Result: result, Profile: state, WorkspaceAgent: agent}, errOut)
+}
+
+func runWorkspaceAgent(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	return runWorkspaceAgentWithInput(args, strings.NewReader(""), out, errOut, dataRoot)
+}
+
+func runWorkspaceAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent <status|interview|brief|research|economic> [options]")
+		return ExitUsage
+	}
+	if args[0] == "research" {
+		return runWorkspaceAgentResearch(args[1:], in, out, errOut, dataRoot)
+	}
+	if args[0] == "brief" {
+		return runWorkspaceAgentBrief(args[1:], in, out, errOut, dataRoot)
+	}
+	if args[0] == "economic" {
+		return runWorkspaceAgentEconomic(args[1:], in, out, errOut, dataRoot)
+	}
+	path, code := oneOptionalPath("workspace-agent "+args[0], args[1:], errOut)
+	if code != ExitOK {
+		return code
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if inspection.WorkspaceID == "" {
+		fmt.Fprintln(errOut, "workspace is not initialized; run bcgos init first")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "interview":
+		return writeJSON(out, workspaceagent.ColdStartInterview(), errOut)
+	case "status":
+		status, err := workspaceagent.Inspect(root, inspection.WorkspaceID)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent <status|interview|brief|research|economic> [options]")
+		return ExitUsage
+	}
+}
+
+func runWorkspaceAgentBrief(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 || args[0] != "submit" {
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent brief submit --stdin [workspace-path]")
+		return ExitUsage
+	}
+	flags := newFlagSet("workspace-agent brief submit", errOut)
+	stdin := flags.Bool("stdin", false, "read reviewed workspace brief as JSON")
+	if err := flags.Parse(args[1:]); err != nil || !*stdin || flags.NArg() > 1 {
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent brief submit --stdin [workspace-path]")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	workspaceID, code := workspaceAgentID(root, optionalArg(flags.Args()), errOut)
+	if code != ExitOK {
+		return code
+	}
+	var brief workspaceagent.Brief
+	if err := decodeWorkspaceAgentJSON(in, &brief); err != nil {
+		return reportError(errOut, err)
+	}
+	brief.WorkspaceID, brief.BriefID, brief.CreatedAt = workspaceID, "", time.Time{}
+	saved, err := workspaceagent.SaveBrief(root, brief)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, saved, errOut)
+}
+
+func runWorkspaceAgentResearch(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent research <plan|approve|query|record> [options] [workspace-path]")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "plan":
+		flags := newFlagSet("workspace-agent research plan", errOut)
+		stdin := flags.Bool("stdin", false, "read proposed research plan as JSON")
+		if err := flags.Parse(args[1:]); err != nil || !*stdin || flags.NArg() > 1 {
+			fmt.Fprintln(errOut, "usage: bcgos workspace-agent research plan --stdin [workspace-path]")
+			return ExitUsage
+		}
+		workspaceID, code := workspaceAgentID(root, optionalArg(flags.Args()), errOut)
+		if code != ExitOK {
+			return code
+		}
+		var plan workspaceagent.ResearchPlan
+		if err := decodeWorkspaceAgentJSON(in, &plan); err != nil {
+			return reportError(errOut, err)
+		}
+		plan.WorkspaceID, plan.PlanID, plan.State = workspaceID, "", ""
+		plan.CreatedAt, plan.Approval = time.Time{}, workspaceagent.Approval{}
+		created, err := workspaceagent.CreateResearchPlan(root, plan)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, created, errOut)
+	case "approve":
+		flags := newFlagSet("workspace-agent research approve", errOut)
+		planID := flags.String("plan", "", "research plan ID")
+		approvedBy := flags.String("approved-by", "", "approving owner")
+		confirm := flags.Bool("confirm", false, "confirm external disclosure scope")
+		if err := flags.Parse(args[1:]); err != nil || *planID == "" || *approvedBy == "" || !*confirm || flags.NArg() > 1 {
+			fmt.Fprintln(errOut, "usage: bcgos workspace-agent research approve --plan <id> --approved-by <owner> --confirm [workspace-path]")
+			return ExitUsage
+		}
+		workspaceID, code := workspaceAgentID(root, optionalArg(flags.Args()), errOut)
+		if code != ExitOK {
+			return code
+		}
+		approved, err := workspaceagent.ApproveResearchPlan(root, workspaceID, *planID, workspaceagent.Approval{ApprovedAt: time.Now().UTC(), ApprovedBy: *approvedBy, DisclosureLevel: "public_only"})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, approved, errOut)
+	case "query":
+		flags := newFlagSet("workspace-agent research query", errOut)
+		stdin := flags.Bool("stdin", false, "consume one approved external query as JSON")
+		if err := flags.Parse(args[1:]); err != nil || !*stdin || flags.NArg() > 1 {
+			fmt.Fprintln(errOut, "usage: bcgos workspace-agent research query --stdin [workspace-path]")
+			return ExitUsage
+		}
+		workspaceID, code := workspaceAgentID(root, optionalArg(flags.Args()), errOut)
+		if code != ExitOK {
+			return code
+		}
+		var execution workspaceagent.QueryExecution
+		if err := decodeWorkspaceAgentJSON(in, &execution); err != nil {
+			return reportError(errOut, err)
+		}
+		execution.WorkspaceID, execution.ExecutedAt, execution.Slot = workspaceID, time.Time{}, 0
+		consumed, err := workspaceagent.ConsumeResearchQuery(root, execution)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, consumed, errOut)
+	case "record":
+		flags := newFlagSet("workspace-agent research record", errOut)
+		stdin := flags.Bool("stdin", false, "read sourced evidence as JSON")
+		if err := flags.Parse(args[1:]); err != nil || !*stdin || flags.NArg() > 1 {
+			fmt.Fprintln(errOut, "usage: bcgos workspace-agent research record --stdin [workspace-path]")
+			return ExitUsage
+		}
+		workspaceID, code := workspaceAgentID(root, optionalArg(flags.Args()), errOut)
+		if code != ExitOK {
+			return code
+		}
+		var evidence workspaceagent.Evidence
+		if err := decodeWorkspaceAgentJSON(in, &evidence); err != nil {
+			return reportError(errOut, err)
+		}
+		evidence.WorkspaceID = workspaceID
+		if err := workspaceagent.RecordEvidence(root, evidence); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]string{"state": "recorded", "plan_id": evidence.PlanID}, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent research <plan|approve|query|record> [options] [workspace-path]")
+		return ExitUsage
+	}
+}
+
+func runWorkspaceAgentEconomic(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent economic <import|attach> [options]")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "import":
+		flags := newFlagSet("workspace-agent economic import", errOut)
+		stdin := flags.Bool("stdin", false, "read attested public snapshot as JSON")
+		attestedPublic := flags.Bool("attested-public", false, "confirm the snapshot contains only independently sourced public information")
+		attestedBy := flags.String("attested-by", "", "person responsible for the public-source attestation")
+		noWorkspaceDerivation := flags.Bool("confirm-no-workspace-derivation", false, "confirm no workspace or client material contributed to the snapshot")
+		if err := flags.Parse(args[1:]); err != nil || !*stdin || !*attestedPublic || strings.TrimSpace(*attestedBy) == "" || !*noWorkspaceDerivation || flags.NArg() != 0 {
+			fmt.Fprintln(errOut, "usage: bcgos workspace-agent economic import --stdin --attested-public --attested-by <owner> --confirm-no-workspace-derivation")
+			return ExitUsage
+		}
+		var snapshot workspaceagent.EconomicSnapshot
+		if err := decodeWorkspaceAgentJSON(in, &snapshot); err != nil {
+			return reportError(errOut, err)
+		}
+		snapshot.SnapshotID, snapshot.CreatedAt = "", time.Time{}
+		snapshot.Attestation = workspaceagent.PublicAttestation{
+			AttestedBy:            *attestedBy,
+			AttestedAt:            time.Now().UTC(),
+			Origin:                "independent_public_sources",
+			NoWorkspaceDerivation: true,
+		}
+		saved, err := workspaceagent.SaveEconomicSnapshot(root, snapshot)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, saved, errOut)
+	case "attach":
+		flags := newFlagSet("workspace-agent economic attach", errOut)
+		snapshotID := flags.String("snapshot", "", "public economic snapshot ID")
+		if err := flags.Parse(args[1:]); err != nil || *snapshotID == "" || flags.NArg() > 1 {
+			fmt.Fprintln(errOut, "usage: bcgos workspace-agent economic attach --snapshot <id> [workspace-path]")
+			return ExitUsage
+		}
+		workspaceID, code := workspaceAgentID(root, optionalArg(flags.Args()), errOut)
+		if code != ExitOK {
+			return code
+		}
+		if err := workspaceagent.AttachEconomicSnapshot(root, workspaceID, *snapshotID); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]string{"state": "attached", "snapshot_id": *snapshotID}, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent economic <import|attach> [options]")
+		return ExitUsage
+	}
+}
+
+func workspaceAgentID(dataRoot, workspacePath string, errOut io.Writer) (string, int) {
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		return "", reportError(errOut, err)
+	}
+	if inspection.WorkspaceID == "" {
+		fmt.Fprintln(errOut, "workspace is not initialized; run bcgos init first")
+		return "", ExitUsage
+	}
+	return inspection.WorkspaceID, ExitOK
+}
+
+func optionalArg(args []string) string {
+	if len(args) == 1 {
+		return args[0]
+	}
+	return "."
+}
+
+func decodeWorkspaceAgentJSON(in io.Reader, target any) error {
+	decoder := json.NewDecoder(io.LimitReader(in, maximumWorkspaceAgentBytes+1))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("workspace-agent input contains trailing JSON or exceeds 1 MiB")
+	}
+	return nil
 }
 
 func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
@@ -471,11 +747,14 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 		Workspace: inspection,
 		Profile:   state,
 		Capabilities: map[string]string{
-			"bundles":               "unavailable",
-			"human_atlas_bootstrap": "supported",
-			"interaction_profile":   "supported",
-			"memory_dreaming":       "unavailable",
-			"updates":               "unavailable",
+			"bundles":                "unavailable",
+			"human_atlas_bootstrap":  "supported",
+			"interaction_profile":    "supported",
+			"memory_dreaming":        "unavailable",
+			"updates":                "unavailable",
+			"workspace_agent_setup":  "supported",
+			"workspace_research":     "managed_skill_runtime_dependent",
+			"public_economic_rollup": "supported",
 		},
 	}, errOut)
 }
@@ -758,11 +1037,23 @@ func runAtlas(args []string, out, errOut io.Writer, dataRoot func() (string, err
 }
 
 func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
-	if len(args) == 0 || args[0] != "packet" {
-		fmt.Fprintln(errOut, "usage: bcgos session packet [workspace-path]")
+	if len(args) == 0 || (args[0] != "packet" && args[0] != "bridge") {
+		fmt.Fprintln(errOut, "usage: bcgos session <packet|bridge> [workspace-path]")
 		return ExitUsage
 	}
-	path, code := oneOptionalPath("session packet", args[1:], errOut)
+	command := args[0]
+	runtimeName := ""
+	remaining := args[1:]
+	if command == "bridge" {
+		flags := newFlagSet("session bridge", errOut)
+		runtime := flags.String("runtime", "", "target runtime: claude or codex")
+		if err := flags.Parse(remaining); err != nil {
+			return ExitUsage
+		}
+		runtimeName = *runtime
+		remaining = flags.Args()
+	}
+	path, code := oneOptionalPath("session "+command, remaining, errOut)
 	if code != ExitOK {
 		return code
 	}
@@ -788,6 +1079,13 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 	})
 	if err := packet.Validate(); err != nil {
 		return reportError(errOut, err)
+	}
+	if command == "bridge" {
+		envelope, err := sessionstart.Build(runtimeName, packet)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, envelope, errOut)
 	}
 	return writeJSON(out, packet, errOut)
 }
