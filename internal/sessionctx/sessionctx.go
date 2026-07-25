@@ -14,6 +14,7 @@ import (
 )
 
 const skillsCatalogPointer = "bundles/base/skills/catalog.json"
+const agentsCatalogPointer = "bundles/base/agents/catalog.json"
 
 // sessionSafeFacets is intentionally an allowlist rather than an inference
 // from a mutable local registry. Adding a facet to session context requires a
@@ -71,6 +72,14 @@ type Skills struct {
 	State          string `json:"state"`
 }
 
+type Agents struct {
+	CatalogPointer   string `json:"catalog_pointer"`
+	Hub              string `json:"hub"`
+	DefinitionsState string `json:"definitions_state"`
+	RuntimeState     string `json:"runtime_state"`
+	Message          string `json:"message"`
+}
+
 type Memory struct {
 	State   string `json:"state"`
 	Message string `json:"message"`
@@ -89,6 +98,7 @@ type Packet struct {
 	Owner              Owner              `json:"owner"`
 	Atlas              Atlas              `json:"atlas"`
 	Skills             Skills             `json:"skills"`
+	Agents             Agents             `json:"agents"`
 	Memory             Memory             `json:"memory"`
 	Omissions          []Omission         `json:"omissions"`
 }
@@ -113,6 +123,10 @@ func Build(sources Sources) Packet {
 			Workspace: pointerAtlas("workspace", sources.Atlas.Workspace),
 		},
 		Skills: Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
+		Agents: Agents{
+			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: "unavailable",
+			Message: "native agent orchestration requires a runtime adapter with tool and delegation enforcement",
+		},
 		Memory: Memory{State: "unavailable", Message: "memory context injection requires a runtime adapter"},
 	}
 	if sources.Workspace.State != "ready" && sources.Workspace.State != "warning" {
@@ -135,7 +149,7 @@ func (packet Packet) Validate() error {
 	if packet.SchemaVersion != 1 || (packet.State != "ready" && packet.State != "partial") {
 		return errors.New("invalid session context packet header")
 	}
-	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Memory.State != "unavailable" || packet.Memory.Message == "" {
+	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Agents.Message == "" || packet.Memory.State != "unavailable" || packet.Memory.Message == "" {
 		return errors.New("session context packet is missing a required bounded source")
 	}
 	for id, facet := range packet.Owner.Facets {

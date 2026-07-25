@@ -23,6 +23,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Define workspace agents as project specialists and context gatekeepers with compact state and versioned dossiers.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
 - [x] Define the execution-ledger authority boundary and implement the initial local contract, attempt, revision and inspection store.
+- [x] Define the lean Maestro, Walter and Darwin core with a no-tool hub, multiple governed chains, one active branch and role-gated depth two.
 
 ## Track A - Contributor onboarding
 
@@ -58,6 +59,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Define and validate a non-blocking hook-execution policy: snapshots and signals never wait, while only a local deterministic safety guard may deny an unsafe action.
 - [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
 - [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
+- [ ] Activate Maestro, Walter and Darwin in Claude and Codex only after tool-denial, one-active-branch and role-graph conformance fixtures pass.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
 - [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.
@@ -97,8 +99,15 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement browser device-flow, refresh and private-provider adapters with
   fail-closed secure-store contracts.
 - [x] Implement the dormant macOS Security.framework Keychain backend and
-  conformance tests with no plaintext or process-argument fallback. Native
-  candidate build and CLI connection remain pending.
+  conformance tests with no plaintext or process-argument fallback. CLI
+  connection remains pending.
+- [x] Implement the dormant Windows Credential Manager backend and conformance
+  tests with direct WinCred calls and no plaintext fallback. CLI connection
+  remains pending.
+- [x] Build Windows amd64 and macOS amd64/arm64 candidate CLIs on matching
+  native CI runners, then assemble the closed unsigned candidate from the exact
+  prebuilt files with per-binary source, runner, toolchain and digest
+  provenance. Cross-image byte reproducibility remains unproven.
 - [ ] Approve and connect native Keychain/Credential Manager adapters, GitHub
   App registration and selected-repository installation.
 - [x] Implement signed local-release verification, safe staging, bootstrapper
