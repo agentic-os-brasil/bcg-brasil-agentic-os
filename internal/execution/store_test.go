@@ -244,6 +244,71 @@ func TestCheckpointPauseNextAndResumeAcrossAttempts(t *testing.T) {
 	}
 }
 
+func TestActivePointerExposesOnlyTheLogicalResolverAndFailsClosed(t *testing.T) {
+	store := testStore(t)
+
+	pointer, err := store.ActivePointer(testWorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pointer.Available || pointer.State != ActivePointerUnavailable || pointer.Path != "" {
+		t.Fatalf("empty active pointer = %#v", pointer)
+	}
+
+	created, err := store.Create(testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Start(testWorkspaceID, created.Contract.ItemID, created.State.StateRevision); err != nil {
+		t.Fatal(err)
+	}
+	pointer, err = Store{Root: store.Root}.ActivePointer(testWorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pointer.Available || pointer.State != ActivePointerAvailable || pointer.Path != ActivePointerPath {
+		t.Fatalf("single active pointer = %#v", pointer)
+	}
+	body, err := json.Marshal(pointer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, prohibited := range []string{created.Contract.ItemID, created.Contract.Objective, "attempt-a"} {
+		if strings.Contains(string(body), prohibited) {
+			t.Fatalf("active pointer leaked %q: %s", prohibited, body)
+		}
+	}
+
+	secondStore := Store{
+		Root: store.Root,
+		Now:  store.Now,
+		NewID: func(kind string) (string, error) {
+			switch kind {
+			case "item":
+				return "item-b", nil
+			case "attempt":
+				return "attempt-c", nil
+			default:
+				return "", errors.New("unexpected ID request")
+			}
+		},
+	}
+	second, err := secondStore.Create(testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := secondStore.Start(testWorkspaceID, second.Contract.ItemID, second.State.StateRevision); err != nil {
+		t.Fatal(err)
+	}
+	pointer, err = Store{Root: store.Root}.ActivePointer(testWorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pointer.Available || pointer.State != ActivePointerAmbiguous || pointer.Path != "" {
+		t.Fatalf("ambiguous active pointer = %#v", pointer)
+	}
+}
+
 func TestCheckpointRequiresCurrentAttemptAndBoundedAllowedProjection(t *testing.T) {
 	store := testStore(t)
 	created, err := store.Create(testCreateInput())

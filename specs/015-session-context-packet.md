@@ -19,6 +19,8 @@ adapter; it does not itself read, inject or summarize private content.
   appear in the reviewed session-safe allowlist;
 - a pointer to current operating state and the explicit unavailable task
   pointer;
+- an opaque active-execution pointer only when exactly one running or paused
+  execution item can be resolved;
 - managed, owner and workspace atlas availability and pointers;
 - the managed skills-catalog pointer, not its full contents;
 - the managed agents-catalog pointer, Maestro hub ID and explicit definition
@@ -28,7 +30,18 @@ adapter; it does not itself read, inject or summarize private content.
 
 The packet must never contain an owner-facet body, a client/project/daily page,
 a conversation transcript, a memory artifact body, a credential, or a
-Walter-only facet such as the psychological profile.
+Walter-only facet such as the psychological profile. It also must never contain
+an execution item ID, attempt ID, objective, done contract or checkpoint body.
+
+The active execution capability has three states:
+
+- `available` exposes only `bcgos://execution/active`;
+- `unavailable` exposes no path when there is no running or paused item; and
+- `ambiguous` exposes no path and marks the packet `partial` when more than one
+  item is active.
+
+An authorized next session resolves an available pointer explicitly with
+`bcgos work next --active`. The packet itself never performs that read.
 
 Atlas pointers are portable logical references (`bcgos://atlas/<scope>`), not
 local filesystem paths. An adapter resolves a reference only after it has
@@ -64,3 +77,6 @@ conversation or change the capability state reported by `bcgos doctor`.
   explicitly unavailable until orchestration enforcement exists.
 - Claude and Codex receive equivalent bridge envelopes while native injection
   remains explicitly unavailable.
+- a two-session handoff proves that Session A can checkpoint and pause, Session
+  B can resolve and resume with a new attempt, and the stale Session A attempt
+  can no longer mutate the item.

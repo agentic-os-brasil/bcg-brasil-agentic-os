@@ -1029,9 +1029,17 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	activeExecution := execution.ActivePointer{State: execution.ActivePointerUnavailable}
+	if inspection.WorkspaceID != "" {
+		activeExecution, err = (execution.Store{Root: root}).ActivePointer(inspection.WorkspaceID)
+		if err != nil {
+			return reportError(errOut, fmt.Errorf("inspect active execution pointer: %w", err))
+		}
+	}
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner,
-		Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		Atlas:     atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		Execution: activeExecution,
 	})
 	if err := packet.Validate(); err != nil {
 		return reportError(errOut, err)
