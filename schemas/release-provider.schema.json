@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:release-provider:v1",
+  "title": "Maestro private release provider",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state",
+    "provider",
+    "auth_base",
+    "api_base",
+    "client_id",
+    "owner",
+    "repository",
+    "reason"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "state": {"enum": ["unavailable", "approved"]},
+    "provider": {"const": "github"},
+    "auth_base": {"const": "https://github.com"},
+    "api_base": {"const": "https://api.github.com"},
+    "client_id": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]*$"
+    },
+    "owner": {
+      "type": "string",
+      "maxLength": 100,
+      "pattern": "^[A-Za-z0-9._-]*$"
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 100,
+      "pattern": "^[A-Za-z0-9._-]*$"
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 256
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"state": {"const": "approved"}},
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "client_id": {"minLength": 1},
+          "owner": {"minLength": 1},
+          "repository": {"minLength": 1},
+          "reason": {"maxLength": 0}
+        }
+      },
+      "else": {
+        "properties": {
+          "client_id": {"maxLength": 0},
+          "owner": {"maxLength": 0},
+          "repository": {"maxLength": 0},
+          "reason": {"minLength": 1}
+        }
+      }
+    }
+  ]
+}

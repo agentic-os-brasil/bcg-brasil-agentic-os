@@ -7,6 +7,7 @@ import (
 	"io"
 	"regexp"
 
+	baserelease "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/release"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseprovider"
 )
 
@@ -23,9 +24,11 @@ type releaseCapabilityResult struct {
 }
 
 func defaultReleaseAuthService() releaseprovider.AuthService {
-	return releaseprovider.AuthService{
-		Store: releaseprovider.UnavailableStore{},
+	config, err := baserelease.Provider()
+	if err != nil {
+		return releaseprovider.AuthService{Store: releaseprovider.UnavailableStore{}}
 	}
+	return config.AuthService(releaseprovider.NewNativeSecureStore)
 }
 
 func runAuth(args []string, out, errOut io.Writer, service releaseprovider.AuthService) int {
@@ -96,7 +99,7 @@ func writeReleaseUnavailable(out, errOut io.Writer, capability string, confirmat
 		SchemaVersion: 1,
 		Capability:    capability,
 		State:         "unavailable",
-		Reason:        "approved operating-system credential store is not configured",
+		Reason:        "approved release provider or operating-system credential store is not configured",
 		PlanID:        planID,
 	}
 	if confirmation {
