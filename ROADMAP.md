@@ -90,11 +90,15 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement browser device-flow, refresh and private-provider adapters with
   fail-closed secure-store contracts.
 - [x] Implement the dormant macOS Security.framework Keychain backend and
-  conformance tests with no plaintext or process-argument fallback. Native
-  candidate build and CLI connection remain pending.
+  conformance tests with no plaintext or process-argument fallback. CLI
+  connection remains pending.
 - [x] Implement the dormant Windows Credential Manager backend and conformance
-  tests with direct WinCred calls and no plaintext fallback. Native candidate
-  build and CLI connection remain pending.
+  tests with direct WinCred calls and no plaintext fallback. CLI connection
+  remains pending.
+- [x] Build Windows amd64 and macOS amd64/arm64 candidate CLIs on matching
+  native CI runners, then assemble the closed unsigned candidate from the exact
+  prebuilt files with per-binary source, runner, toolchain and digest
+  provenance. Cross-image byte reproducibility remains unproven.
 - [ ] Approve and connect native Keychain/Credential Manager adapters, GitHub
   App registration and selected-repository installation.
 - [x] Implement signed local-release verification, safe staging, bootstrapper
