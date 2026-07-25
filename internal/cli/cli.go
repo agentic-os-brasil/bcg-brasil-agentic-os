@@ -23,6 +23,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionhook"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
@@ -46,12 +47,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|workspace-agent|atlas|session|skills|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|workspace-agent|atlas|session|hook|skills|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|workspace-agent|atlas|session|skills|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|workspace-agent|atlas|session|hook|skills|memory>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -76,6 +77,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runAtlas(args[1:], out, errOut, defaultDataRoot)
 	case "session":
 		return runSession(args[1:], out, errOut, defaultDataRoot)
+	case "hook":
+		return runHook(args[1:], out, errOut, defaultDataRoot)
 	case "skills":
 		return runSkills(args[1:], out, errOut)
 	case "memory":
@@ -772,6 +775,53 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 		return writeJSON(out, envelope, errOut)
 	}
 	return writeJSON(out, packet, errOut)
+}
+
+func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 || args[0] != "session-start" {
+		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]")
+		return ExitUsage
+	}
+	flags := newFlagSet("hook session-start", errOut)
+	runtimeName := flags.String("runtime", "", "target runtime: claude or codex")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 {
+		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	path := optionalArg(flags.Args())
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	profileState, err := resolveProfile(root, "", false)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	owner, err := ownerctx.Inspect(root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile: profileState, Workspace: inspection, Owner: owner,
+		Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+	})
+	var output any
+	switch *runtimeName {
+	case "claude":
+		output, err = sessionhook.BuildClaude(packet)
+	case "codex":
+		output, err = sessionhook.BuildCodex(packet)
+	default:
+		err = fmt.Errorf("unsupported runtime %q", *runtimeName)
+	}
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, output, errOut)
 }
 
 func resolveProfile(dataRoot, requested string, explicit bool) (profile.State, error) {

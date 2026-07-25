@@ -181,6 +181,20 @@ func TestPrivateReleaseCommandsFailClosedWithoutApprovedSecureStore(t *testing.T
 	}
 }
 
+func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	code := runHook([]string{"session-start", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"injection_state\":\"unavailable\"`) {
+		t.Fatalf("hook exit = %d, output = %s", code, output.String())
+	}
+}
+
 func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 	var output bytes.Buffer
 	if code := Run([]string{"skills", "index"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"schema_version": 1`) || !strings.Contains(output.String(), `"dream-memory"`) || strings.Contains(output.String(), "Daily dreaming cannot") {
