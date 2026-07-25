@@ -20,6 +20,19 @@ issuer/key registry before its fields are trusted. Parsing a manifest,
 validating JSON or comparing a checksum does not establish signature trust.
 The manifest issuer is a Maestro identity and key ID, not a repository URL.
 
+`schemas/release-authority-registry.schema.json` defines that local trust root.
+It contains public Ed25519 keys only, scoped to the Maestro product and an
+issuer/key identity. Each key has a bounded UTC validity window and is either
+active or explicitly revoked. Unknown fields, duplicate JSON keys, duplicate
+issuer/key identities, non-canonical public keys and invalid status/time
+combinations fail closed. A future or expired key remains in the inspectable
+registry but cannot verify a release.
+
+Private signing keys, certificate material and custody operations never enter
+the registry or repository. The stable bootstrapper must receive the approved
+registry through its independently signed seed channel; a managed bundle or
+provider response cannot replace the trust root that authenticates it.
+
 The release provider is an adapter. GitHub private Releases is the pilot
 provider, but provider responses cannot add, replace or rename artifacts after
 manifest verification.
