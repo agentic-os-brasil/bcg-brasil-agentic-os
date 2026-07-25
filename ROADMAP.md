@@ -54,6 +54,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Add Claude and Codex adapter skeletons against the same canonical contract.
 - [x] Add initial conformance fixtures for equivalent capability identity, semantic events and criticality.
 - [x] Implement a runtime-neutral Session Start bridge that gives Claude and Codex the same bounded packet without claiming native injection.
+- [x] Define and validate a non-blocking hook-execution policy: snapshots and signals never wait, while only a local deterministic safety guard may deny an unsafe action.
 - [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
 - [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
@@ -178,7 +179,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 - First use case and target persona.
 - Shared versus local knowledge governance.
-- Which hooks block, warn or observe.
+- Which narrowly scoped local safety conditions justify a pre-action denial.
 - Ownership and retirement model for agents and skills.
 - Runtime-pack size, model-prefetch, corporate proxy and offline acceptance thresholds.
 

@@ -391,3 +391,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Product documentation presents Maestro as the user-facing name without breaking current clone, CI, release or CLI references. No command, GitHub organization, release artifact or local-data path changes in this decision.
 - Refs: README.md; specs/001-cli-distribution.md; ROADMAP.md
 - Supersedes: none
+
+## NBLK - Keep product hooks non-blocking
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Lifecycle hooks run in the user's active session. Letting them synchronize with memory, wiki, ingestion or another worker would create visible latency, race conditions and fragile runtime-specific behavior.
+- Decision: Product hooks never own heavy or durable work. Session Start and context injection only read a bounded last-committed snapshot and return an explicit omission when it is unavailable. Post-action and stop hooks only emit best-effort idempotent signals. No hook waits for a worker lock, calls a model, uses the network or retries work. A pre-action guard may synchronously deny only an immediately decidable local safety condition; it never waits to resolve a race.
+- Consequences: A future worker exclusively owns serialized, idempotent writes, expensive execution and recovery from durable due-state. Hook delivery may be duplicated or absent without corrupting committed state. Native Claude and Codex adapters must conform to one executable policy before any product lifecycle capability is reported as available.
+- Refs: specs/004-runtime-portability.md; specs/009-scheduler-catch-up.md; specs/019-nonblocking-hook-execution.md; bundles/base/runtime/hook-policy.json; internal/hookpolicy
+- Supersedes: none
