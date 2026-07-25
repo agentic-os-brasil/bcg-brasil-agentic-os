@@ -178,6 +178,7 @@ func TestPrivateReleaseCommandsFailClosedWithoutApprovedSecureStore(t *testing.T
 				t.Fatal("unavailable response mentioned credential material")
 			}
 		})
+	}
 }
 
 func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {

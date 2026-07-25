@@ -1,4 +1,4 @@
-# Spec 017 - Native Session Start hook payload
+# Spec 025 - Native Session Start hook payload
 
 Status: native command payload implemented; runtime configuration installation pending.
 
