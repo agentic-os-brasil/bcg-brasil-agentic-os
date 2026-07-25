@@ -120,6 +120,24 @@ the hub identity, registered-chain policy, allowed role edges, delegation
 limits, role metadata, tool policy and definition pointers. Agent prompt files
 are managed content and may not contain user, client or workspace data.
 
+The catalog uses a closed role set. Each role has one exact input and tool
+contract so a new registration cannot silently broaden context:
+
+| Role | Input contract | Tools | May delegate |
+| --- | --- | --- | --- |
+| `hub` | `session_context_packet` | none | yes |
+| `account_agent` | `bounded_account_packet` | scoped | yes |
+| `workspace_agent` | `bounded_workspace_packet` | scoped | yes |
+| `practice_agent` | `bounded_practice_packet` | scoped | yes |
+| `reviewer` | `sealed_review_packet` | none | no |
+| `governance_analyst` | `bounded_health_packet` | none | no |
+| `errand_helper` | `bounded_errand_packet` | scoped | no |
+| `capability_specialist` | `minimum_work_packet` | scoped | no |
+| `subject_specialist` | `bounded_subject_packet` | scoped | no |
+
+Agent IDs are path-safe lowercase slugs. Definitions must resolve below the
+managed `bundles/base/agents/` root.
+
 The Session Context Packet exposes only the catalog pointer, hub ID and
 activation state. It never copies prompt bodies into the packet.
 

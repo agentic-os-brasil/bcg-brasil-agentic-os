@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 type Catalog struct {
@@ -41,6 +43,25 @@ type Agent struct {
 	MayDelegate      bool   `json:"may_delegate"`
 	InputContract    string `json:"input_contract"`
 	RelativePath     string `json:"relative_path"`
+}
+
+var safeAgentID = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
+
+var roleContracts = map[string]struct {
+	direct        bool
+	tools         string
+	mayDelegate   bool
+	inputContract string
+}{
+	"account_agent":         {false, "scoped", true, "bounded_account_packet"},
+	"capability_specialist": {false, "scoped", false, "minimum_work_packet"},
+	"errand_helper":         {false, "scoped", false, "bounded_errand_packet"},
+	"governance_analyst":    {false, "none", false, "bounded_health_packet"},
+	"hub":                   {true, "none", true, "session_context_packet"},
+	"practice_agent":        {false, "scoped", true, "bounded_practice_packet"},
+	"reviewer":              {false, "none", false, "sealed_review_packet"},
+	"subject_specialist":    {false, "scoped", false, "bounded_subject_packet"},
+	"workspace_agent":       {false, "scoped", true, "bounded_workspace_packet"},
 }
 
 func Parse(reader io.Reader) (Catalog, error) {
@@ -93,14 +114,18 @@ func (catalog Catalog) Validate() error {
 	previous := ""
 	directUsers := 0
 	for _, agent := range catalog.Agents {
-		if agent.ID == "" || agent.ID <= previous {
+		if !safeAgentID.MatchString(agent.ID) || agent.ID <= previous {
 			return errors.New("agent catalog IDs must be non-empty, unique and sorted")
 		}
-		if agent.Role == "" || agent.InputContract == "" || agent.RelativePath != "agents/"+agent.ID+"/AGENT.md" {
+		if agent.RelativePath != "agents/"+agent.ID+"/AGENT.md" {
 			return fmt.Errorf("agent %s has an invalid role, input contract or definition pointer", agent.ID)
 		}
-		if agent.ToolAccess != "none" && agent.ToolAccess != "scoped" {
-			return fmt.Errorf("agent %s has invalid tool access %q", agent.ID, agent.ToolAccess)
+		contract, ok := roleContracts[agent.Role]
+		if !ok {
+			return fmt.Errorf("agent %s has unsupported role %q", agent.ID, agent.Role)
+		}
+		if agent.DirectUserAccess != contract.direct || agent.ToolAccess != contract.tools || agent.MayDelegate != contract.mayDelegate || agent.InputContract != contract.inputContract {
+			return fmt.Errorf("agent %s violates the %s role contract", agent.ID, agent.Role)
 		}
 		if agent.DirectUserAccess {
 			directUsers++
@@ -200,7 +225,12 @@ func ValidateDir(root string) error {
 		return err
 	}
 	for _, agent := range catalog.Agents {
-		body, err := os.ReadFile(filepath.Join(filepath.Dir(root), filepath.FromSlash(agent.RelativePath)))
+		definitionPath := filepath.Join(filepath.Dir(root), filepath.FromSlash(agent.RelativePath))
+		relative, err := filepath.Rel(root, definitionPath)
+		if err != nil || relative == "." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+			return fmt.Errorf("managed agent %s definition escapes the agent root", agent.ID)
+		}
+		body, err := os.ReadFile(definitionPath)
 		if err != nil {
 			return fmt.Errorf("read managed agent %s: %w", agent.ID, err)
 		}
