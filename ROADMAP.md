@@ -61,6 +61,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement shared authenticated orchestration enforcement and cross-runtime adversarial fixtures, while keeping native activation unavailable.
 - [x] Implement signed bounded work packets and a sequential runtime-neutral dispatcher with replay protection.
 - [x] Implement capability-bound workspace-to-account promotion, integrity receipts and non-destructive revocation.
+- [x] Implement managed, data-free workspace and specialist templates with atomic local instance scaffolding.
 - [ ] Activate Maestro, Walter and Darwin in Claude and Codex only after tool-denial, one-active-branch and role-graph conformance fixtures pass.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
