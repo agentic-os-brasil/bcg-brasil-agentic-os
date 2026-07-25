@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-var ErrSecureStoreUnavailable = errors.New("approved operating-system credential store is unavailable")
+var (
+	ErrSecureStoreUnavailable = errors.New("approved operating-system credential store is unavailable")
+	ErrCredentialNotFound     = errors.New("native credential was not found")
+)
 
 const credentialKey = "maestro/private-release/github-app"
 
@@ -67,6 +70,9 @@ func (service AuthService) Login(ctx context.Context, present func(DeviceAuthori
 
 func (service AuthService) Status() (AuthStatus, error) {
 	token, err := service.load()
+	if errors.Is(err, ErrCredentialNotFound) {
+		return AuthStatus{State: "unauthenticated"}, nil
+	}
 	if err != nil {
 		return AuthStatus{}, err
 	}
@@ -98,7 +104,11 @@ func (service AuthService) Logout() error {
 	if err := service.Store.Available(); err != nil {
 		return err
 	}
-	return service.Store.Delete(credentialKey)
+	err := service.Store.Delete(credentialKey)
+	if errors.Is(err, ErrCredentialNotFound) {
+		return nil
+	}
+	return err
 }
 
 func (service AuthService) load() (Token, error) {

@@ -1,7 +1,9 @@
 # Spec 021 - Private release provider and update confirmation
 
-Status: accepted contract; provider registration and native secure-store
-adapters remain release-environment approvals.
+Status: accepted contract; the macOS native backend source and conformance
+tests are implemented but not connected to a current product artifact. Windows
+integration, native candidate builds, provider registration and production
+approval remain gates.
 
 ## Objective
 
@@ -28,6 +30,24 @@ adapter, authentication is `unavailable`. Environment variables, plaintext
 files, Git credential helpers and `gh auth` are not fallback stores.
 
 No output, error or log may include access, refresh or device credentials.
+
+### Native store adapters
+
+The dormant macOS backend uses Security.framework `SecItem` operations against
+the data-protection Keychain. The credential uses
+`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, is bounded to 64 KiB and
+never enters a process argument, environment variable or plaintext file. A
+build without CGO reports the adapter as `unavailable`; a denied, locked or
+otherwise inaccessible Keychain fails closed at the attempted operation.
+
+The source has unit/conformance coverage and a read-only native probe. Current
+deterministic candidates still use `CGO_ENABLED=0`, select the unavailable
+fallback and do not expose the Keychain backend through
+`defaultReleaseAuthService`. Therefore this PR is source-level engineering
+evidence, not usable product behavior or corporate-device approval. Windows
+Credential Manager must implement the same observable `SecureStore` contract;
+a later wiring change must build native platform artifacts and connect both
+stores under the provider/authority gate.
 
 ## Provider adapter
 

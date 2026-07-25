@@ -89,6 +89,9 @@ The roadmap separates things to build from things to decide. Detailed dates rema
   including validity windows and fail-closed revocation.
 - [x] Implement browser device-flow, refresh and private-provider adapters with
   fail-closed secure-store contracts.
+- [x] Implement the dormant macOS Security.framework Keychain backend and
+  conformance tests with no plaintext or process-argument fallback. Native
+  candidate build and CLI connection remain pending.
 - [ ] Approve and connect native Keychain/Credential Manager adapters, GitHub
   App registration and selected-repository installation.
 - [x] Implement signed local-release verification, safe staging, bootstrapper
