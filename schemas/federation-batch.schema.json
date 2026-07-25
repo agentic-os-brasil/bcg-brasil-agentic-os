@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:federation-batch:v1",
+  "title": "Maestro Federated Improvement Loop batch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "installation_id", "period", "product_version", "runtime", "signals", "candidates"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "installation_id": {"type": "string", "pattern": "^[a-f0-9]{16,64}$"},
+    "period": {"type": "string", "pattern": "^[0-9]{4}-W(0[1-9]|[1-4][0-9]|5[0-3])$"},
+    "product_version": {"type": "string", "pattern": "^v?[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"},
+    "runtime": {"enum": ["claude", "codex"]},
+    "signals": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/signal"}
+    },
+    "candidates": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/candidate"}
+    }
+  },
+  "anyOf": [
+    {"properties": {"signals": {"minItems": 1}}},
+    {"properties": {"candidates": {"minItems": 1}}}
+  ],
+  "$defs": {
+    "capability": {"enum": ["workspace-agent-setup", "dream-memory", "ingest-content", "interaction-profile"]},
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "capability", "stage", "evidence", "confidence", "outcome"],
+      "properties": {
+        "kind": {"enum": ["adoption", "failure", "friction", "workflow_pattern"]},
+        "capability": {"$ref": "#/$defs/capability"},
+        "stage": {"enum": ["first_use", "execution", "handoff", "recovery", "maintenance"]},
+        "evidence": {"enum": ["once", "two_to_three", "four_to_seven", "eight_plus"]},
+        "confidence": {"enum": ["low", "medium", "high"]},
+        "outcome": {"enum": ["improved", "neutral", "blocked", "failed"]}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "trigger", "dependencies", "evidence", "safety_flags", "fingerprint"],
+      "properties": {
+        "class": {"enum": ["workflow_automation", "quality_guard", "context_guidance", "data_boundary"]},
+        "trigger": {"enum": ["workflow_repetition", "capability_gap", "friction_reduction", "quality_risk"]},
+        "dependencies": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/capability"}
+        },
+        "evidence": {"enum": ["once", "two_to_three", "four_to_seven", "eight_plus"]},
+        "safety_flags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {"enum": ["requires_review", "data_boundary", "runtime_parity"]}
+        },
+        "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    }
+  }
+}
