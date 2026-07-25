@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "hub": "maestro",
+  "delegation": {
+    "mode": "role_gated_chains",
+    "registered_chains": "governed_unbounded",
+    "max_active_branches": 1,
+    "max_depth": 2,
+    "max_children_per_agent": 1,
+    "max_errand_helpers": 1,
+    "errand_scope": "basic_reversible",
+    "allowed_edges": [
+      {
+        "from_role": "account_agent",
+        "to_roles": ["capability_specialist"]
+      },
+      {
+        "from_role": "hub",
+        "to_roles": ["account_agent", "errand_helper", "governance_analyst", "practice_agent", "reviewer", "workspace_agent"]
+      },
+      {
+        "from_role": "practice_agent",
+        "to_roles": ["subject_specialist"]
+      },
+      {
+        "from_role": "workspace_agent",
+        "to_roles": ["capability_specialist"]
+      }
+    ]
+  },
+  "agents": [
+    {
+      "id": "darwin",
+      "role": "governance_analyst",
+      "direct_user_access": false,
+      "tool_access": "none",
+      "may_delegate": false,
+      "input_contract": "bounded_health_packet",
+      "relative_path": "agents/darwin/AGENT.md"
+    },
+    {
+      "id": "maestro",
+      "role": "hub",
+      "direct_user_access": true,
+      "tool_access": "none",
+      "may_delegate": true,
+      "input_contract": "session_context_packet",
+      "relative_path": "agents/maestro/AGENT.md"
+    },
+    {
+      "id": "walter",
+      "role": "reviewer",
+      "direct_user_access": false,
+      "tool_access": "none",
+      "may_delegate": false,
+      "input_contract": "sealed_review_packet",
+      "relative_path": "agents/walter/AGENT.md"
+    }
+  ]
+}

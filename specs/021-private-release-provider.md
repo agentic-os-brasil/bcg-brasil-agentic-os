@@ -1,9 +1,8 @@
 # Spec 021 - Private release provider and update confirmation
 
-Status: accepted contract; the macOS native backend source and conformance
-tests are implemented but not connected to a current product artifact. Windows
-integration, native candidate builds, provider registration and production
-approval remain gates.
+Status: accepted contract; the macOS and Windows native backend sources,
+conformance tests and native candidate build path are implemented. Provider
+registration, CLI activation and production approval remain gates.
 
 ## Objective
 
@@ -35,19 +34,32 @@ No output, error or log may include access, refresh or device credentials.
 
 The dormant macOS backend uses Security.framework `SecItem` operations against
 the data-protection Keychain. The credential uses
-`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, is bounded to 64 KiB and
+`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, is bounded to 2.5 KiB for
+parity with Windows Credential Manager and
 never enters a process argument, environment variable or plaintext file. A
 build without CGO reports the adapter as `unavailable`; a denied, locked or
 otherwise inaccessible Keychain fails closed at the attempted operation.
 
-The source has unit/conformance coverage and a read-only native probe. Current
-deterministic candidates still use `CGO_ENABLED=0`, select the unavailable
-fallback and do not expose the Keychain backend through
-`defaultReleaseAuthService`. Therefore this PR is source-level engineering
-evidence, not usable product behavior or corporate-device approval. Windows
-Credential Manager must implement the same observable `SecureStore` contract;
-a later wiring change must build native platform artifacts and connect both
-stores under the provider/authority gate.
+On Windows, the dormant backend calls `CredReadW`, `CredWriteW`,
+`CredDeleteW` and `CredFree` directly. It stores a `CRED_TYPE_GENERIC`
+credential with `CRED_PERSIST_LOCAL_MACHINE`, so the encrypted credential is
+local to the device and never enters PowerShell, a process argument or a
+plaintext file. The common 2.5 KiB payload limit matches the Windows
+Credential Manager maximum required by this pilot contract.
+
+The sources have unit/conformance coverage, native error mapping and
+platform-specific read-only probes. The release-candidate workflow builds each
+CLI binary on its native Windows or macOS runner, with CGO enabled for macOS,
+then assembles the closed candidate on Linux from those exact prebuilt files.
+Every native build emits separate provenance with the source commit, workflow
+run, exact runner image, Go/compiler identity, CGO mode, binary size and
+SHA-256. Rolling runner images mean this records traceability but does not claim
+byte-identical rebuilds across toolchain changes.
+The local all-in-one candidate command retains its CGO-free cross-build fallback
+for development only. `defaultReleaseAuthService` still does not expose either
+backend, so native candidate presence is engineering evidence rather than
+usable provider behavior or corporate-device approval. A later wiring change
+must connect both stores under the provider/authority gate.
 
 ## Provider adapter
 
