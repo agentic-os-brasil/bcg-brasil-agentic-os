@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visualize Change"
+  short_description: "Document changes with governed Mermaid views"
+  default_prompt: "Use $visualize-change to document this implementation with evidence-backed Mermaid diagrams."

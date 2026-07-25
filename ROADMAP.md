@@ -22,6 +22,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
 - [x] Define workspace agents as project specialists and context gatekeepers with compact state and versioned dossiers.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
+- [x] Define the lean Maestro, Walter and Darwin core with a no-tool hub, multiple governed chains, one active branch and role-gated depth two.
+- [x] Add a reusable visual-documentation skill and offline Mermaid structure validation to the development harness.
 
 ## Track A - Contributor onboarding
 
@@ -56,6 +58,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement a runtime-neutral Session Start bridge that gives Claude and Codex the same bounded packet without claiming native injection.
 - [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
 - [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
+- [ ] Activate Maestro, Walter and Darwin in Claude and Codex only after tool-denial, one-active-branch and role-graph conformance fixtures pass.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
 - [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.

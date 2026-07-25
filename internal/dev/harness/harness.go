@@ -10,8 +10,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/mermaiddoc"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
@@ -51,6 +53,9 @@ func Validate(root string, full bool, out io.Writer) error {
 		{"skills index", func() error {
 			return skillsindex.Validate(filepath.Join(root, "bundles", "base", "skills"))
 		}},
+		{"managed agents", func() error {
+			return agentcatalog.ValidateDir(filepath.Join(root, "bundles", "base", "agents"))
+		}},
 		{"Claude skill projections", func() error {
 			return skillmeta.ValidateClaudeProjections(
 				filepath.Join(root, "dev", "skills"),
@@ -60,6 +65,7 @@ func Validate(root string, full bool, out io.Writer) error {
 		{"Claude primary skill routing", func() error {
 			return skillmeta.ValidateClaudeRouting(root)
 		}},
+		{"Mermaid documentation", func() error { return mermaiddoc.Validate(root) }},
 		{"development boundary", func() error { return boundary.Validate(root) }},
 		{"memory contract", func() error {
 			if err := memory.ValidateSchemaFile(filepath.Join(root, "schemas", "memory-policy.schema.json")); err != nil {

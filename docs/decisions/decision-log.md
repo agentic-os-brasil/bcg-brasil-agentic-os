@@ -391,3 +391,25 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Product documentation presents Maestro as the user-facing name without breaking current clone, CI, release or CLI references. No command, GitHub organization, release artifact or local-data path changes in this decision.
 - Refs: README.md; specs/001-cli-distribution.md; ROADMAP.md
 - Supersedes: none
+
+## HUBS - Govern Maestro through a lean hub-and-spoke core
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro already names the product and workspace agents own scoped project context, but the product has no canonical user-facing hub or lean internal governance roles. Copying Kowalski's broad personal operating system, tool access and deep delegation model would add cost and risk that the professional pilot does not need.
+- Decision: Define Maestro as the only user-facing hub. Maestro has no direct tool access and delegates sequentially with at most one active spoke, delegation depth one and no nested delegation. Basic reversible errands may use at most one bounded helper. Define Walter as a packet-only internal pressure-test agent and Darwin as a packet-only system-governance analyst; neither has tools, delegates or speaks directly to the user, and both return their output to Maestro.
+- Consequences: The managed bundle can ship canonical agent definitions before native activation. Claude and Codex adapters must enforce tool denial, one-active-spoke and no-nesting invariants before reporting orchestration as available. A sequence may invoke different spokes one after another, including Walter after specialist work, but never concurrently. Workspace agents retain their separate authorization boundary and receive only a scoped work packet.
+- Refs: MAES; PORT; WSAG; specs/004-runtime-portability.md; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; bundles/base/agents/catalog.json
+- Supersedes: none
+
+## BRCH - Allow multiple governed chains with role-gated depth
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: HUBS correctly made Maestro a no-tool hub and prohibited parallel or recursive delegation, but its global depth-one limit conflated the number of registered chains with the one chain active at a time. It would prevent a workspace agent from using a capability specialist and a practice agent from using a subject specialist.
+- Decision: Allow multiple governed chain types to be registered under Maestro while keeping one active branch by default. Delegation remains sequential, each agent may have at most one active child and maximum depth is two. Allowed edges are role-gated: Maestro may call account, workspace, practice, Walter, Darwin or one basic reversible errand helper; account and workspace agents may call a capability specialist; practice agents may call a subject specialist. Walter, Darwin, errands and leaf specialists never delegate. Practice knowledge cannot read raw workspace context; cross-chain exchange uses a minimum sanitized packet mediated by Maestro.
+- Consequences: Maestro can route to persistent practice expertise without becoming a micro-manager or weakening workspace isolation. Multiple chains may exist, but they do not run concurrently in this baseline. Adding parallel branches, a new delegating role or depth beyond two requires a new decision and conformance evidence. Runtime adapters still fail closed until they enforce the graph, one-active-branch rule and tool boundaries.
+- Refs: HUBS; WSAG; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; bundles/base/agents/catalog.json; internal/agentcatalog
+- Supersedes: HUBS

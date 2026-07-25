@@ -17,8 +17,9 @@ Se o repositorio ainda nao foi clonado em um computador Windows, use primeiro o 
 1. **Comecar:** "Use start-work. Quero alterar ..."
 2. **Desenvolver:** o Claude usa `develop-change`, testes e o harness.
    Para desenvolver memoria, dreaming, rollups ou injecao de contexto, ele deve usar `evolve-memory`. A skill `dream-memory` pertence ao produto distribuido e nao substitui o workflow de desenvolvimento.
-3. **Entregar:** "Use prepare-pr para preparar isso para revisao."
-4. **Se algo parecer estranho:** "Use recover-work. Estou perdido."
+3. **Documentar visualmente:** em mudancas materiais, diga "Use visualize-change para atualizar os READMEs e diagramas Mermaid com o que foi implementado."
+4. **Entregar:** "Use prepare-pr para preparar isso para revisao."
+5. **Se algo parecer estranho:** "Use recover-work. Estou perdido."
 
 Em termos simples: uma **branch** separa seu trabalho; um **commit** salva um checkpoint; um **push** envia a branch ao GitHub; um **PR** pede revisao humana.
 
