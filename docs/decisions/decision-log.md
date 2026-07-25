@@ -468,3 +468,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Account context becomes a deliberate rollup rather than automatic memory aggregation. Partial writes, coordinated tampering and marker-deletion rollback fail closed; revocation linearizes reads while preserving evidence. Native Claude/Codex adapters still must provision private capabilities and integrity keys, provide a durable atomic anchor store and enforce filesystem scopes before activation.
 - Refs: WSAG; BRIF; WKPK; specs/016-workspace-agent-boundaries.md; specs/024-account-context-promotion.md; internal/contextpromotion
 - Supersedes: none
+
+## ADPT - Install product adapters locally per workspace
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A user-wide hook configuration would affect unrelated work and make safe removal difficult, while the product must preserve existing runtime configuration in a consultant's workspace.
+- Decision: Install Maestro runtime adapters as one owned entry in workspace-local runtime configuration. The installer is idempotent, preserves unrelated entries, uses an explicit short timeout and removes only its exact owned entry. Runtime trust remains a runtime concern; installation does not bypass it.
+- Consequences: Claude and Codex receive separately managed local configuration and can be removed without deleting user settings. A workspace adapter may be absent in another workspace by design. Installation state and actual runtime execution remain distinct diagnostics.
+- Refs: specs/018-workspace-local-adapter-installation.md; internal/adaptercfg; internal/cli/cli.go
+- Supersedes: none
