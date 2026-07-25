@@ -1,4 +1,4 @@
-# Spec 018 - Execution Ledger V1
+# Spec 029 - Execution Ledger V1
 
 Status: accepted direction; resumable checkpoint loop in implementation.
 
