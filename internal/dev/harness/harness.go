@@ -13,6 +13,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
@@ -76,6 +77,9 @@ func Validate(root string, full bool, out io.Writer) error {
 				return err
 			}
 			return policy.Validate()
+		}},
+		{"execution ledger contract", func() error {
+			return execution.ValidateSchemaFile(filepath.Join(root, "schemas", "execution-state.schema.json"))
 		}},
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}

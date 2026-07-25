@@ -21,6 +21,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Decide that the future human atlas is scoped across managed, owner-private and workspace-private roots, alongside canonical derived memory.
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
+- [x] Define the execution-ledger authority boundary and implement the initial local contract, attempt, revision and inspection store.
 
 ## Track A - Contributor onboarding
 
@@ -60,6 +61,11 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement local refinement submission, policy enforcement, audit snapshots and explicit reversal for owner facets.
 - [ ] Implement approved local assessment ingestion with explicit consent, provenance and confirmation before synthesis.
 - [ ] Implement lifecycle observation capture and approved synthesis adapters that submit refinements to the local core.
+- [x] Implement `bcgos work create|start|inspect|export|delete` over a workspace-scoped local execution ledger.
+- [ ] Add bounded checkpoint, pause, active-work projection and explicit resume with prior-attempt invalidation.
+- [ ] Add core-witnessed artifact snapshots, command checks and evidence-backed completion.
+- [ ] Expose only the active execution pointer through the Session Context Packet.
+- [ ] Prove handoff across two sessions or agents without transcript or contract reinjection.
 
 ### Discuss before closing the track
 
@@ -67,6 +73,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - Approved Windows and macOS application directories.
 - Minimum Claude/Codex capability set for v0.
 - What `doctor` may inspect and report on corporate devices.
+- Retention and deletion policy for execution history after the V1 local pilot.
 
 ## Track C - Private distribution and updates
 

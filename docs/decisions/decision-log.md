@@ -369,3 +369,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Product documentation presents Maestro as the user-facing name without breaking current clone, CI, release or CLI references. No command, GitHub organization, release artifact or local-data path changes in this decision.
 - Refs: README.md; specs/001-cli-distribution.md; ROADMAP.md
 - Supersedes: none
+
+## EXEC - Materialize resumable execution without creating a task authority
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Long-running agent work must survive session and agent changes without copying the full contract, transcript or evidence back into model context. The existing task pointer deliberately remains unavailable until an authoritative task-source contract exists.
+- Decision: Add a workspace-scoped local execution ledger whose immutable execution items, attempts, bounded checkpoints and evidence-backed completion state are distinct from business tasks. V1 items use `local_execution` authority only. Runtime and Session Context consumers receive opaque pointers before any separately authorized read.
+- Consequences: The ledger may track execution state but never owns business priority, due date, owner or external task status. Every mutation is revision-checked, takeover invalidates the prior attempt, completion requires core-witnessed evidence, and persisted history excludes prompts, responses, tool payloads, absolute paths and client bodies. Task-provider synchronization, generic tracing, unattended execution and evaluator plugins remain outside V1.
+- Refs: specs/018-execution-ledger-v1.md; schemas/execution-state.schema.json; internal/execution
+- Supersedes: none

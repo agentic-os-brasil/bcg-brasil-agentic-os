@@ -49,6 +49,7 @@ quando os mecanismos nativos forem diferentes.
 | Contexto do dono | Arquivos locais, editáveis e auditáveis para papel profissional, estilo, voz, preferências e limites. |
 | Atlas humano | Estrutura local não destrutiva para clientes, projetos, pessoas e diário de trabalho. |
 | Memória | Núcleo local com resumos graduais e contexto limitado; automação de síntese ainda não está ativa. |
+| Execução retomável | Ledger local inicial com contrato imutável, tentativa identificada, revision check e inspeção/exportação; checkpoint, resume e evidência de conclusão ainda não estão ativos. |
 | Skills | Catálogo compacto e atualizado de procedimentos disponíveis. |
 | Desenvolvimento | Harness, testes, CI em Windows/macOS/Linux, decisões versionadas e fluxo de PR com revisão humana. |
 
@@ -99,12 +100,19 @@ bcgos atlas init <workspace>
 bcgos atlas status <workspace>
 bcgos skills index
 bcgos session packet [workspace]
+bcgos work create --workspace <path> --stdin
+bcgos work start --workspace <path> --item <id> --revision <n>
+bcgos work inspect --workspace <path> --item <id>
+bcgos work export --workspace <path> --item <id>
+bcgos work delete --workspace <path> --item <id> --revision <n> --confirm
 ```
 
 Os comandos de memória expõem apenas operações já suportadas. O pacote de
 contexto de sessão expõe estados e referências limitadas, sem injetar conteúdo.
 Dreaming automático e injeção em runtime dependem de adapters que ainda estão
-sendo entregues ou revisados.
+sendo entregues ou revisados. Os comandos `work` implementam somente o primeiro
+slice do ledger local; não devem ser descritos como task sync, handoff automático
+ou conclusão evidence-backed até que os próximos contratos sejam implementados.
 
 ## Princípios de produto
 

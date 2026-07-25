@@ -5,9 +5,122 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+func TestWorkCreateStartInspectExportAndDelete(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	workspacePath := filepath.Join(t.TempDir(), "case-a")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	contract := `{
+	  "objective": "Implement the execution ledger.",
+	  "initial_next_step": "Run the contract test.",
+	  "criteria": [{"id": "tests", "type": "command_check"}],
+	  "allowed_refs": ["bcgos://workspace/specs/018"]
+	}`
+	var output bytes.Buffer
+	code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot)
+	if code != ExitOK {
+		t.Fatalf("create exit = %d, output = %s", code, output.String())
+	}
+	var created struct {
+		Contract struct {
+			ItemID string `json:"item_id"`
+		} `json:"contract"`
+		State struct {
+			Revision int `json:"state_revision"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &created); err != nil || created.Contract.ItemID == "" || created.State.Revision != 1 {
+		t.Fatalf("create output = %s, err = %v", output.String(), err)
+	}
+
+	output.Reset()
+	code = runWork([]string{
+		"start", "--workspace", workspacePath, "--item", created.Contract.ItemID,
+		"--revision", strconv.Itoa(created.State.Revision),
+	}, strings.NewReader(""), &output, &output, dataRoot)
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "running"`) || !strings.Contains(output.String(), `"active_attempt_id"`) {
+		t.Fatalf("start exit = %d, output = %s", code, output.String())
+	}
+
+	for _, command := range []string{"inspect", "export"} {
+		output.Reset()
+		code = runWork([]string{command, "--workspace", workspacePath, "--item", created.Contract.ItemID}, strings.NewReader(""), &output, &output, dataRoot)
+		if code != ExitOK || !strings.Contains(output.String(), created.Contract.ItemID) {
+			t.Fatalf("%s exit = %d, output = %s", command, code, output.String())
+		}
+	}
+
+	output.Reset()
+	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", created.Contract.ItemID}, strings.NewReader(""), &output, &output, dataRoot)
+	if code == ExitOK || !strings.Contains(output.String(), "--confirm") {
+		t.Fatalf("unconfirmed delete exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", created.Contract.ItemID, "--revision", "2", "--confirm"}, strings.NewReader(""), &output, &output, dataRoot)
+	if code == ExitOK || !strings.Contains(output.String(), "must be paused") {
+		t.Fatalf("running delete exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	code = runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot)
+	if code != ExitOK {
+		t.Fatalf("second create exit = %d, output = %s", code, output.String())
+	}
+	var deletable struct {
+		Contract struct {
+			ItemID string `json:"item_id"`
+		} `json:"contract"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &deletable); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	code = runWork([]string{"delete", "--workspace", workspacePath, "--item", deletable.Contract.ItemID, "--revision", "1", "--confirm"}, strings.NewReader(""), &output, &output, dataRoot)
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "deleted"`) {
+		t.Fatalf("confirmed delete exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestWorkCreateRequiresStdinAndRejectsPositionals(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	var output bytes.Buffer
+	code := runWork([]string{"create", "--workspace", "workspace-a"}, strings.NewReader("{}"), &output, &output, dataRoot)
+	if code == ExitOK || !strings.Contains(output.String(), "--stdin") {
+		t.Fatalf("missing stdin exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	code = runWork([]string{"inspect", "--workspace", "workspace-a", "--item", "item-a", "SECRET"}, strings.NewReader(""), &output, &output, dataRoot)
+	if code == ExitOK || !strings.Contains(output.String(), "unexpected positional") {
+		t.Fatalf("positional exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestWorkRejectsUninitializedWorkspace(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	var output bytes.Buffer
+	code := runWork(
+		[]string{"create", "--workspace", filepath.Join(t.TempDir(), "missing"), "--stdin"},
+		strings.NewReader(`{"objective":"x","initial_next_step":"y","criteria":[{"id":"tests","type":"command_check"}]}`),
+		&output,
+		&output,
+		dataRoot,
+	)
+	if code == ExitOK || !strings.Contains(output.String(), "initialized and readable") {
+		t.Fatalf("uninitialized workspace exit = %d, output = %s", code, output.String())
+	}
+}
 
 func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 	dataDir := t.TempDir()
