@@ -65,7 +65,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Implement lifecycle observation capture and approved synthesis adapters that submit refinements to the local core.
 - [x] Implement `bcgos work create|start|inspect|export|delete` over a workspace-scoped local execution ledger.
 - [x] Add bounded checkpoint, pause, active-work projection and explicit resume with prior-attempt invalidation.
-- [ ] Add core-witnessed artifact snapshots, command checks and evidence-backed completion.
+- [x] Add core-witnessed artifact snapshots, command checks and evidence-backed completion.
 - [ ] Expose only the active execution pointer through the Session Context Packet.
 - [ ] Prove handoff across two sessions or agents without transcript or contract reinjection.
 - [x] Bootstrap one local agent per workspace with a reviewed interview and versioned briefing.

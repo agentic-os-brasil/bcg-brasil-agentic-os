@@ -50,7 +50,7 @@ quando os mecanismos nativos forem diferentes.
 | Contexto do dono | Arquivos locais, editáveis e auditáveis para papel profissional, estilo, voz, preferências e limites. |
 | Atlas humano | Estrutura local não destrutiva para clientes, projetos, pessoas e diário de trabalho. |
 | Memória | Núcleo local com resumos graduais e contexto limitado; automação de síntese ainda não está ativa. |
-| Execução retomável | Ledger local com contrato imutável, checkpoint privado e limitado, pausa/retomada entre tentativas e projeção compacta da próxima ação; evidência de conclusão ainda não está ativa. |
+| Execução retomável | Ledger local com contrato imutável, checkpoint privado, pausa/retomada, projeção compacta, receipts de checks executados pelo core e conclusão revalidada. |
 | Skills | Catálogo compacto e atualizado de procedimentos disponíveis. |
 | Desenvolvimento | Harness, testes, CI em Windows/macOS/Linux, decisões versionadas e fluxo de PR com revisão humana. |
 
@@ -111,6 +111,8 @@ bcgos work checkpoint --workspace <path> --item <id> --revision <n> --attempt <i
 bcgos work pause --workspace <path> --item <id> --revision <n> --attempt <id>
 bcgos work next --workspace <path> (--item <id> | --active)
 bcgos work resume --workspace <path> --item <id> --revision <n>
+bcgos work evidence --workspace <path> --item <id> --revision <n> --attempt <id> --criterion <id>
+bcgos work complete --workspace <path> --item <id> --revision <n> --attempt <id>
 bcgos work inspect --workspace <path> --item <id>
 bcgos work export --workspace <path> --item <id>
 bcgos work delete --workspace <path> --item <id> --revision <n> --confirm
@@ -119,12 +121,14 @@ bcgos work delete --workspace <path> --item <id> --revision <n> --confirm
 Os comandos de memória expõem apenas operações já suportadas. O pacote de
 contexto de sessão expõe estados e referências limitadas, sem injetar conteúdo.
 Dreaming automático e injeção em runtime dependem de adapters que ainda estão
-sendo entregues ou revisados. Os comandos `work` implementam o handoff local,
-mas não devem ser descritos como task sync ou conclusão evidence-backed até que
-os próximos contratos sejam implementados. Checkpoints entram somente por stdin
-e `next` devolve no máximo 2 KB sem reinjetar o objetivo ou o contrato de
-conclusão. Mutações devolvem somente recibos técnicos; corpos completos exigem
-uma chamada explícita a `inspect` ou `export`.
+sendo entregues ou revisados. Os comandos `work` implementam handoff e conclusão
+local evidence-backed, mas não são task sync nem generic tracing. Checkpoints
+entram somente por stdin e `next` devolve no máximo 2 KB sem reinjetar o objetivo
+ou o contrato de conclusão. Mutações e checks devolvem somente recibos técnicos;
+corpos completos exigem uma chamada explícita a `inspect` ou `export`.
+Checks Go usam a ferramenta identificada do runtime e ambiente fechado, mas
+`go test` ainda executa código do workspace e pressupõe que esse workspace foi
+autorizado pelo usuário como confiável; isso não constitui sandbox.
 
 ## Princípios de produto
 

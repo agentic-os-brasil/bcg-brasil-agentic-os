@@ -95,6 +95,22 @@ Agent-authored assertions are not completion evidence. Completion reads the
 contract and receipts from disk and succeeds only when all required criteria
 remain valid.
 
+The executable slice fixes command checks to a small no-shell registry:
+`go version`, `go test ./...` and `go vet ./...`. The Go executable resolves
+from the CLI runtime's `GOROOT`, its binary digest enters the receipt, and the
+child receives a closed, offline environment that ignores caller `PATH`,
+`GOFLAGS`, toolchain download and proxy settings. Evidence execution rejects a
+caller-supplied `GOROOT` before resolving the trusted binary. The
+argument vector lives only in the immutable contract. A receipt exposes its
+digest, tool digest, exit code and outcome, never arguments, stdout or stderr.
+`go test` and `go vet` execute code from the selected workspace: they are valid
+only for a user-authorized trusted workspace and are not a process sandbox.
+Artifact
+snapshots accept one allowlisted `bcgos://workspace/...` file reference, reject
+workspace escapes and symlink escapes, and record a core-computed digest.
+Completion re-runs every command and re-hashes every artifact before committing
+`completed`; a stale or failed criterion leaves the item running and unchanged.
+
 ## Privacy
 
 Transition history is allowlist-only: opaque IDs, enum state, timestamp and
@@ -125,8 +141,15 @@ The resumable handoff slice implements:
 - fail-closed active-item resolution when more than one item is active;
 - crash recovery from the immutable checkpoint revision.
 
-Session Context pointer, core-witnessed evidence and evidence-backed completion
-follow in separate contract-tested slices.
+The evidence-backed completion slice implements:
+
+- immutable, metadata-only tool receipts for artifact and command witnesses;
+- complete evidence history in explicit export;
+- no-shell command execution with discarded stdout and stderr;
+- revalidation of every completion criterion against the immutable contract;
+- completion only after all latest receipts still pass.
+
+Session Context pointer remains a separate adapter-facing slice.
 
 ## V1 non-goals
 
