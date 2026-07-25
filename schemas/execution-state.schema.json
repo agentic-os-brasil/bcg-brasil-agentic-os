@@ -7,6 +7,7 @@
     {"$ref": "#/$defs/revision"},
     {"$ref": "#/$defs/state"},
     {"$ref": "#/$defs/attempt"},
+    {"$ref": "#/$defs/checkpoint"},
     {"$ref": "#/$defs/transition"}
   ],
   "$defs": {
@@ -114,6 +115,41 @@
         "started_at": {"type": "string", "format": "date-time"}
       }
     },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "checkpoint_id",
+        "item_id",
+        "workspace_id",
+        "attempt_id",
+        "summary",
+        "next_step",
+        "artifact_refs",
+        "created_at"
+      ],
+      "properties": {
+        "schema_version": {"const": 1},
+        "checkpoint_id": {"$ref": "#/$defs/id"},
+        "item_id": {"$ref": "#/$defs/id"},
+        "workspace_id": {"$ref": "#/$defs/workspace_id"},
+        "attempt_id": {"$ref": "#/$defs/id"},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 768},
+        "next_step": {"type": "string", "minLength": 1, "maxLength": 768},
+        "blocker": {"type": "string", "maxLength": 256},
+        "artifact_refs": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^bcgos://[A-Za-z0-9/_-]+$"
+          }
+        },
+        "created_at": {"type": "string", "format": "date-time"}
+      }
+    },
     "transition": {
       "type": "object",
       "additionalProperties": false,
@@ -145,6 +181,7 @@
         "schema_version": {"const": 1},
         "state": {"$ref": "#/$defs/state"},
         "attempt": {"$ref": "#/$defs/attempt"},
+        "checkpoint": {"$ref": "#/$defs/checkpoint"},
         "transition": {"$ref": "#/$defs/transition"}
       }
     }
