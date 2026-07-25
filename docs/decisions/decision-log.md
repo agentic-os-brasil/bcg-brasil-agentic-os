@@ -358,3 +358,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: `bcgos session packet` gives future adapters one testable input without claiming a product hook exists. Claude and Codex can implement different mechanics over the same packet and failure states. Memory, tasks, private atlas content and sensitive owner facets stay unavailable or pointer-only until their separate contracts are implemented.
 - Refs: specs/004-runtime-portability.md; specs/011-interaction-profile.md; specs/012-skills-index.md; specs/013-owner-context.md; specs/015-session-context-packet.md; internal/sessionctx
 - Supersedes: none
+
+## MAES - Name the professional product Maestro
+
+- Date: 2026-07-24
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The product needs a memorable human name for contributors and future pilot users, while the private repository, current CLI command and distribution mechanics are already referenced by existing development contracts.
+- Decision: Name the BCG Brasil professional Second Brain product **Maestro**. Preserve `bcg-brasil-agentic-os` as the repository identifier and `bcgos` as the technical CLI command during the foundation and pilot-design phase. A future installer and user-facing command migration require a separate compatibility and distribution decision.
+- Consequences: Product documentation presents Maestro as the user-facing name without breaking current clone, CI, release or CLI references. No command, GitHub organization, release artifact or local-data path changes in this decision.
+- Refs: README.md; specs/001-cli-distribution.md; ROADMAP.md
+- Supersedes: none
