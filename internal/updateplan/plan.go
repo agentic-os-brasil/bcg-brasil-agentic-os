@@ -1,0 +1,110 @@
+// Package updateplan builds immutable, confirmation-bound Maestro updates.
+package updateplan
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
+)
+
+type Plan struct {
+	SchemaVersion        int    `json:"schema_version"`
+	ID                   string `json:"id"`
+	State                string `json:"state"`
+	FromRelease          string `json:"from_release"`
+	ToRelease            string `json:"to_release"`
+	Channel              string `json:"channel"`
+	CLIVersion           string `json:"cli_version"`
+	BundleVersion        string `json:"bundle_version"`
+	CLIArtifact          string `json:"cli_artifact"`
+	BundleArtifact       string `json:"bundle_artifact"`
+	TargetOS             string `json:"target_os"`
+	TargetArch           string `json:"target_arch"`
+	ConfirmationRequired bool   `json:"confirmation_required"`
+}
+
+func Build(current installtx.State, manifest releasecontract.Manifest, targetOS, targetArch string) (Plan, error) {
+	currentVersion, err := parseVersion(current.Release)
+	if err != nil {
+		return Plan{}, fmt.Errorf("invalid installed release: %w", err)
+	}
+	nextVersion, err := parseVersion(manifest.Release)
+	if err != nil {
+		return Plan{}, fmt.Errorf("invalid candidate release: %w", err)
+	}
+	if compareVersion(nextVersion, currentVersion) <= 0 {
+		return Plan{}, errors.New("standard update plan must move to a newer release")
+	}
+	var cliName, bundleName string
+	for _, artifact := range manifest.Artifacts {
+		switch {
+		case artifact.Kind == "cli" && artifact.OS == targetOS && artifact.Arch == targetArch:
+			if cliName != "" {
+				return Plan{}, errors.New("release has duplicate target CLI artifacts")
+			}
+			cliName = artifact.Name
+		case artifact.Kind == "bundle":
+			if bundleName != "" {
+				return Plan{}, errors.New("release has duplicate bundle artifacts")
+			}
+			bundleName = artifact.Name
+		}
+	}
+	if cliName == "" || bundleName == "" {
+		return Plan{}, errors.New("release does not support the requested update target")
+	}
+	plan := Plan{
+		SchemaVersion: 1, State: "available",
+		FromRelease: current.Release, ToRelease: manifest.Release, Channel: manifest.Channel,
+		CLIVersion: manifest.CLI.Version, BundleVersion: manifest.Bundle.Version,
+		CLIArtifact: cliName, BundleArtifact: bundleName,
+		TargetOS: targetOS, TargetArch: targetArch, ConfirmationRequired: true,
+	}
+	body, err := json.Marshal(plan)
+	if err != nil {
+		return Plan{}, err
+	}
+	sum := sha256.Sum256(body)
+	plan.ID = hex.EncodeToString(sum[:16])
+	return plan, nil
+}
+
+type version [3]uint64
+
+func parseVersion(value string) (version, error) {
+	parts := strings.Split(value, ".")
+	if len(parts) != 3 {
+		return version{}, fmt.Errorf("%q is not MAJOR.MINOR.PATCH", value)
+	}
+	var parsed version
+	for index, part := range parts {
+		if part == "" || (len(part) > 1 && part[0] == '0') {
+			return version{}, fmt.Errorf("%q is not canonical", value)
+		}
+		number, err := strconv.ParseUint(part, 10, 64)
+		if err != nil {
+			return version{}, fmt.Errorf("%q is not canonical: %w", value, err)
+		}
+		parsed[index] = number
+	}
+	return parsed, nil
+}
+
+func compareVersion(left, right version) int {
+	for index := range left {
+		if left[index] < right[index] {
+			return -1
+		}
+		if left[index] > right[index] {
+			return 1
+		}
+	}
+	return 0
+}
