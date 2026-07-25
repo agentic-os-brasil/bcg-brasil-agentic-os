@@ -13,7 +13,6 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/mermaiddoc"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/hookpolicy"
