@@ -500,3 +500,31 @@ func TestDoctorExplainsUninitializedWorkspace(t *testing.T) {
 		t.Fatalf("doctor exit = %d, output = %s", code, output.String())
 	}
 }
+
+func TestFederationEnrollmentIsOneTimeAndRevocable(t *testing.T) {
+	dataRoot := t.TempDir()
+	root := func() (string, error) { return dataRoot, nil }
+	var output bytes.Buffer
+	if code := runFederation([]string{"enroll", "--accept-federated-improvement-contract", "--bridge-endpoint", "https://bridge.maestro.example/federation/v1/batches"}, &output, &output, root); code != ExitOK {
+		t.Fatalf("enroll exit = %d, output = %s", code, output.String())
+	}
+	if !strings.Contains(output.String(), `"automatic_export": true`) || strings.Contains(output.String(), "installation_id") {
+		t.Fatalf("enroll output = %s", output.String())
+	}
+	output.Reset()
+	if code := runFederation([]string{"status"}, &output, &output, root); code != ExitOK || !strings.Contains(output.String(), `"state": "enrolled"`) {
+		t.Fatalf("status exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runFederation([]string{"revoke"}, &output, &output, root); code != ExitOK || !strings.Contains(output.String(), `"state": "revoked"`) {
+		t.Fatalf("revoke exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestFederationEnrollmentRequiresExplicitContractAcceptance(t *testing.T) {
+	var output bytes.Buffer
+	code := runFederation([]string{"enroll", "--bridge-endpoint", "https://bridge.maestro.example/federation/v1/batches"}, &output, &output, func() (string, error) { return t.TempDir(), nil })
+	if code != ExitUsage || !strings.Contains(output.String(), "--accept-federated-improvement-contract") {
+		t.Fatalf("exit = %d, output = %s", code, output.String())
+	}
+}
