@@ -29,6 +29,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/000-foundation.md
 - Supersedes: none
 
+## FILO - Federate pilot improvement through typed automatic batches
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs to learn from pilot skills, operating friction and qualitative patterns without requiring users to operate Git or approve each report, while client/workspace material must remain local.
+- Decision: Adopt the Maestro Federated Improvement Loop. Enrolled pilot installations automatically emit only typed, bounded batches through a GitHub App bridge; local Darwin federates workspace-scoped signals and structural skill candidates, while central Darwin curates cross-participant batches into advancement proposals. Workspace-private sources may never export prose, code or other content-bearing artifacts; complete skills are eligible only from an explicit born-portable root.
+- Consequences: GitHub is the system of action rather than a raw telemetry store; the bridge, portable-skill collector and Darwin adapters are separately deliverable capabilities. Central curation cannot modify source or release without maintainer acceptance. The compiler and tests must fail closed on unknown fields and prove non-interference for workspace-private canaries.
+- Refs: specs/002-data-boundaries.md; specs/004-runtime-portability.md; specs/016-workspace-agent-boundaries.md; specs/028-federated-improvement-loop.md
+- Supersedes: none
+
 ## USER - Serve classic and technical consultants progressively
 
 - Date: 2026-07-17

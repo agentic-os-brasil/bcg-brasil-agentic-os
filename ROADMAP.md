@@ -239,6 +239,10 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 ### Build
 
 - [x] Define a two-user Windows/macOS canary and evidence-based expansion gate.
+- [x] Establish the Maestro Federated Improvement Loop typed-batch contract: automatic pilot reporting, structural local signals, GitHub as the action inbox and central curation proposals.
+- [ ] Implement the user-local batch exporter, enrollment record, bounded spool and portable-skill collector.
+- [ ] Implement the minimum-permission GitHub App bridge, weekly digest and actionable incident routing.
+- [ ] Implement local Darwin federation packets and central Darwin advancement-proposal curation.
 - [ ] Select a balanced Windows/macOS and classic/technical cohort.
 - [ ] Onboard users without requiring Git, Go, Python, Node or Docker.
 - [ ] Measure time-to-first-success, update reliability and support demand.
