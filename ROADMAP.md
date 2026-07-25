@@ -23,7 +23,6 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Define workspace agents as project specialists and context gatekeepers with compact state and versioned dossiers.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
 - [x] Define the lean Maestro, Walter and Darwin core with a no-tool hub, multiple governed chains, one active branch and role-gated depth two.
-- [x] Add a reusable visual-documentation skill and offline Mermaid structure validation to the development harness.
 
 ## Track A - Contributor onboarding
 
