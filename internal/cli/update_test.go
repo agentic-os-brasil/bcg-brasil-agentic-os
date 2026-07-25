@@ -521,7 +521,7 @@ func TestConfiguredReleaseUpdateConfirmLaunchesExactPostCommitRecovery(t *testin
 }
 
 func TestManagedRootFromCLIExecutablePathIsFixed(t *testing.T) {
-	root := filepath.Join(string(filepath.Separator), "opt", "maestro")
+	root := filepath.Join(t.TempDir(), "maestro")
 	tests := map[string]struct {
 		path string
 		ok   bool
