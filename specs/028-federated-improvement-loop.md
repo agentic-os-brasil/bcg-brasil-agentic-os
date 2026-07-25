@@ -1,6 +1,7 @@
 # Spec 019 - Maestro Federated Improvement Loop
 
-Status: accepted architecture; typed local contract implemented. GitHub bridge,
+Status: accepted architecture; typed local contract, enrollment-bound outbox and
+credential-free HTTPS bridge seam implemented. GitHub App bridge,
 portable-skill collector, runtime adapters and central curation remain pending.
 
 ## Objective
@@ -104,8 +105,10 @@ accept the proposal before implementation begins.
 ## Delivery phases
 
 1. **FILO contract** - decision, spec, schema/types and non-interference tests.
-2. **Local batch exporter** - user-local queue, enrollment state, bounded
-   retry and portable-skill collector.
+2. **Local batch exporter** - user-local queue, enrollment state and bounded
+   retry are implemented. The portable-skill collector remains separately
+   pending because it must prove its root is born-portable before a body can
+   enter any automatic export.
 3. **GitHub bridge** - GitHub App adapter, automatic weekly digest and
    actionable incident routing.
 4. **Federator** - local Darwin packet adapter and structural skill/insight
