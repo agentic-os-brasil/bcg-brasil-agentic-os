@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:advancement-proposal:v1",
+  "title": "Maestro federated advancement proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "period": { "type": "string", "pattern": "^[0-9]{4}-W(0[1-9]|[1-4][0-9]|5[0-3])$" },
+    "kind": { "enum": ["guidance", "shared_skill", "incident"] },
+    "template": { "enum": ["adoption_review", "friction_guidance", "workflow_skill", "failure_incident"] },
+    "evidence": { "enum": ["once", "two_to_three", "four_to_seven", "eight_plus"] },
+    "status": { "const": "draft" },
+    "requires_human_acceptance": { "const": true }
+  },
+  "required": ["schema_version", "id", "period", "kind", "template", "evidence", "status", "requires_human_acceptance"]
+}
