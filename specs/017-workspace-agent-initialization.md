@@ -1,4 +1,4 @@
-# Spec 016 - Workspace agent initialization and context
+# Spec 017 - Workspace agent initialization and context
 
 Status: accepted architecture; guided interview, versioned brief, research-plan
 approval, sourced-evidence persistence, attested public economic snapshots and managed
@@ -95,7 +95,7 @@ agent proposes a new external research plan when the prior approval does not
 cover the query.
 
 Only reviewed, non-confidential facts can be promoted to the account-agent
-layer under Spec 015. Neither interview data nor research findings flow upward
+layer under Spec 016. Neither interview data nor research findings flow upward
 automatically.
 
 ## Acceptance criteria for implementation

@@ -17,7 +17,7 @@ Includes case files, project artifacts and source code. `bcgos init` may add onl
 Workspace context is not one undifferentiated local store: raw files, memory,
 indexes, logs and intermediate outputs are scoped to their registered workspace
 and its owning workspace agent. Cross-workspace access is denied by default and
-requires an explicit, temporary delegation. See `specs/015-workspace-agent-boundaries.md`.
+requires an explicit, temporary delegation. See `specs/016-workspace-agent-boundaries.md`.
 
 ## Prohibited data
 

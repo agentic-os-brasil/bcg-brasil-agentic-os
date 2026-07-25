@@ -1,4 +1,4 @@
-# Spec 015 - Workspace agent boundaries
+# Spec 016 - Workspace agent boundaries
 
 Status: accepted architecture; local agent registry, compact state/dossier
 bootstrap and interview surface implemented. Runtime authorization enforcement
@@ -72,7 +72,7 @@ Changing workspaces is an explicit user action and produces an auditable
 context-switch event.
 
 Workspace-agent setup, compact state, research provenance and public economic
-rollups follow `specs/016-workspace-agent-initialization.md`.
+rollups follow `specs/017-workspace-agent-initialization.md`.
 
 ## Non-goals
 

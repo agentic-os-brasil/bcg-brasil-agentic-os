@@ -158,7 +158,7 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Context: A single user can work across multiple clients and projects. Treating all local work as available context would create a confidentiality risk and an unusable information blob.
 - Decision: Each registered workspace has an owning workspace agent that is the only default reader and writer of its raw context. The OS uses default-deny, runtime-enforced workspace scopes for files, memory, search, indexes, logs and intermediate outputs. Client/account context is curated through explicit promotion; cross-workspace work uses a minimal, expiring and audited delegation packet.
 - Consequences: The product requires a workspace authorization contract and conformance tests, not only agent prompts. Client/account agents cannot browse project workspaces. Capability specialists receive bounded work packets. A user can have multiple independent workspaces for one client or across clients.
-- Refs: specs/002-data-boundaries.md; specs/015-workspace-agent-boundaries.md; specs/004-runtime-portability.md
+- Refs: specs/002-data-boundaries.md; specs/016-workspace-agent-boundaries.md; specs/004-runtime-portability.md
 - Supersedes: none
 
 ## BRIF - Bootstrap workspace agents through approved research
@@ -169,7 +169,7 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Context: A workspace agent needs useful initial context, but a large persistent prompt state, untraceable web research or automatic client disclosure would compromise quality and confidentiality.
 - Decision: Initialize each workspace agent through a guided user interview, an explicitly approved and minimized external-research plan, a versioned workspace dossier and a compact operational state. Keep a separate public-only economic rollup; it may be versioned into a workspace but never reads from or writes back to workspace data.
 - Consequences: The product needs approval, provenance, freshness and dossier contracts in addition to workspace authorization. States remain pointer-first; facts, research and bullish/bearish hypotheses carry sources, uncertainty and invalidation signals. Creation may pause before research rather than leaking information through automatic queries.
-- Refs: specs/016-workspace-agent-initialization.md; specs/015-workspace-agent-boundaries.md; specs/002-data-boundaries.md
+- Refs: specs/017-workspace-agent-initialization.md; specs/016-workspace-agent-boundaries.md; specs/002-data-boundaries.md
 - Supersedes: none
 
 ## DUAL - Support Windows and macOS equally
@@ -368,4 +368,26 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Decision: The future L1 model will combine two workspace-scoped inputs: selected sanitized signals from human daily logs and selected sanitized signals from Claude/Codex conversation adapters. Before a daily-log signal may enter the memory engine, the capture contract must be extended with source kind, provenance and verifiable sanitization attestation; a self-declared CLI `--sanitized` flag is insufficient. L1 remains bounded, append-only and derived; it is not a mirror of a daily page or a session transcript.
 - Consequences: The human atlas and runtime adapters can contribute to continuity without becoming memory themselves only after that contract extension and its adapter tests exist. Until then, daily logs remain human-readable sources and cannot be ingested into L1. The existing core remains provider-neutral; capture-contract extension, adapter implementation and exact selection/retention policy remain follow-up work.
 - Refs: specs/006-memory-persistence.md; specs/014-human-atlas-bootstrap.md; internal/memory; bundles/base/skills/dream-memory/SKILL.md
+- Supersedes: none
+
+## PACK - Establish a bounded Session Context Packet before runtime hooks
+
+- Date: 2026-07-24
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Claude and Codex need the same initial orientation, but direct Session Start injection would risk loading private SELF, client or memory content before native lifecycle adapters can resolve authorization, purpose and context budget consistently.
+- Decision: Define a local, runtime-neutral Session Context Packet that exposes only bounded states and pointers for interaction profile, workspace, session-readable owner facets, operating state, atlas availability and the managed skills catalog. It must explicitly report unavailable memory injection and omitted sources, and may not include source bodies or Walter-only facets. Native adapters remain responsible for authorized reading and actual injection.
+- Consequences: `bcgos session packet` gives future adapters one testable input without claiming a product hook exists. Claude and Codex can implement different mechanics over the same packet and failure states. Memory, tasks, private atlas content and sensitive owner facets stay unavailable or pointer-only until their separate contracts are implemented.
+- Refs: specs/004-runtime-portability.md; specs/011-interaction-profile.md; specs/012-skills-index.md; specs/013-owner-context.md; specs/015-session-context-packet.md; internal/sessionctx
+- Supersedes: none
+
+## MAES - Name the professional product Maestro
+
+- Date: 2026-07-24
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The product needs a memorable human name for contributors and future pilot users, while the private repository, current CLI command and distribution mechanics are already referenced by existing development contracts.
+- Decision: Name the BCG Brasil professional Second Brain product **Maestro**. Preserve `bcg-brasil-agentic-os` as the repository identifier and `bcgos` as the technical CLI command during the foundation and pilot-design phase. A future installer and user-facing command migration require a separate compatibility and distribution decision.
+- Consequences: Product documentation presents Maestro as the user-facing name without breaking current clone, CI, release or CLI references. No command, GitHub organization, release artifact or local-data path changes in this decision.
+- Refs: README.md; specs/001-cli-distribution.md; ROADMAP.md
 - Supersedes: none

@@ -237,6 +237,28 @@ func TestAtlasCommandsBootstrapOnlyPrivateOwnerAndWorkspaceRoots(t *testing.T) {
 	}
 }
 
+func TestSessionPacketReportsPointersWithoutOwnerFacetBodies(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "Developer", "case-a")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("workspace init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwner([]string{"init"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("owner init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runAtlas([]string{"init", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("atlas init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runSession([]string{"packet", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"schema_version": 1`) || !strings.Contains(output.String(), `"catalog_pointer": "bundles/base/skills/catalog.json"`) || strings.Contains(output.String(), "Descreva como voce quer falar") {
+		t.Fatalf("session packet exit = %d, output = %s", code, output.String())
+	}
+}
+
 func TestInitPersistsTheSelectedInteractionProfile(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")
