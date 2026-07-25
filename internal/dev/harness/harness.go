@@ -17,6 +17,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/hookpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
@@ -90,7 +91,12 @@ func Validate(root string, full bool, out io.Writer) error {
 			return err
 		}},
 		{"release contract", func() error {
-			return releasecontract.ValidateSchemaFile(filepath.Join(root, "schemas", "release-manifest.schema.json"))
+			if err := releasecontract.ValidateSchemaFile(filepath.Join(root, "schemas", "release-manifest.schema.json")); err != nil {
+				return err
+			}
+			return releaseverify.ValidateAuthorityRegistrySchemaFile(
+				filepath.Join(root, "schemas", "release-authority-registry.schema.json"),
+			)
 		}},
 		{"distribution allowlist", func() error {
 			_, err := releasepack.LoadAllowlist(filepath.Join(root, "bundles", "base", "distribution.json"))

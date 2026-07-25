@@ -58,9 +58,16 @@ It proves candidate closure and integrity, not authenticity.
 ## Authorities still required
 
 - Maestro Ed25519 production release key and custody process.
+- An approved `release-authority-registry` instance containing only the
+  production public keys, validity windows and revocation state.
 - Windows Authenticode identity and macOS Developer ID/notarization.
 - Authenticated private-release provider registration.
 - Immutable publication ledger across release versions and channels.
 - Clean corporate-device acceptance and incident/support ownership.
+
+The repository validates the registry contract and test fixtures. It does not
+contain a production registry or a private signing key. The independently
+signed bootstrapper seed must install the approved registry before a provider
+release can become trusted.
 
 No production path may convert `unavailable` into an unsigned override.

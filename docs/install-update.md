@@ -33,7 +33,8 @@ Activation copies only the staged CLI and bundle into the managed root.
 `releaseverify.VerifyDirectory` requires:
 
 - the exact `release-manifest.json` and raw 64-byte detached signature;
-- a key found in the approved local Maestro product/issuer/key registry;
+- a currently active key found in the approved local Maestro
+  product/issuer/key registry;
 - matching size, SHA-256 and Ed25519 signature for every artifact;
 - matching release-notes digest;
 - no missing, extra, directory or symlink entry.
@@ -57,6 +58,12 @@ are outside every activation path.
 On Windows, the CLI launches the independently seeded bootstrapper with its
 own PID and exits. The bootstrapper waits for that process before touching
 `bcgos.exe`; the active executable never attempts to replace itself.
+
+The bootstrapper seed also establishes the initial release-authority registry.
+The registry contains public keys only and cannot be replaced by an
+unauthenticated provider response or by the managed bundle it is used to
+verify. Production key custody and the signed seed delivery mechanism remain
+external release-environment approvals.
 
 ## Still unavailable
 

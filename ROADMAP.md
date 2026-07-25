@@ -85,6 +85,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Configure production manifest/artifact signing and native Windows/macOS
   code-signing authorities.
 - [x] Define and validate the provider-neutral signed release manifest and CLI↔bundle compatibility rules.
+- [x] Define and validate the local public release-authority registry,
+  including validity windows and fail-closed revocation.
 - [x] Implement browser device-flow, refresh and private-provider adapters with
   fail-closed secure-store contracts.
 - [ ] Approve and connect native Keychain/Credential Manager adapters, GitHub
