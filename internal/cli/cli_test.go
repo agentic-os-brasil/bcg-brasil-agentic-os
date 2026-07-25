@@ -2,11 +2,15 @@ package cli
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
@@ -295,12 +299,91 @@ func TestWorkspaceAgentCommandsCreateAndExposeTheGuidedInterview(t *testing.T) {
 	dataRoot := filepath.Join(root, "local", "BCGOS")
 	workspacePath := filepath.Join(root, "workspace")
 	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent"`) || !strings.Contains(output.String(), `"workspace-agent-`) {
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent"`) || !strings.Contains(output.String(), `"workspace-agent-`) || !strings.Contains(output.String(), `"agent_stub"`) || !strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
 		t.Fatalf("init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
 	if code := runWorkspaceAgent([]string{"interview", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent_setup"`) || !strings.Contains(output.String(), `"research"`) {
 		t.Fatalf("workspace-agent interview exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestAgentScaffoldCommandCreatesAndInspectsAWorkspaceSpecialist(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := "workspace-agent-" + inspection.WorkspaceID
+	output.Reset()
+	code := runAgent([]string{
+		"scaffold",
+		"--id", "capability-research",
+		"--role", "capability_specialist",
+		"--scope-kind", "workspace",
+		"--scope", inspection.WorkspaceID,
+		"--parent", parent,
+		"--parent-role", "workspace_agent",
+	}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"agent_id": "capability-research"`) ||
+		!strings.Contains(output.String(), `"input_contract": "minimum_work_packet"`) ||
+		!strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
+		t.Fatalf("agent scaffold exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runAgent([]string{"status", "--id", "capability-research"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"available": true`) {
+		t.Fatalf("agent status exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestAgentScaffoldCommandCreatesPracticeAndSubjectChain(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	canonRelative := filepath.Join("practices", "insurance", "canon.md")
+	canonPath := filepath.Join(dataRoot, canonRelative)
+	if err := os.MkdirAll(filepath.Dir(canonPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	canon := []byte("# Insurance canon\n")
+	if err := os.WriteFile(canonPath, canon, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(canon)
+	var output bytes.Buffer
+	code := runAgent([]string{
+		"scaffold",
+		"--id", "practice-agent-insurance",
+		"--role", "practice_agent",
+		"--scope-kind", "practice",
+		"--scope", "insurance",
+		"--parent", "maestro",
+		"--parent-role", "hub",
+		"--owner", "practice-owner",
+		"--mandate", "Maintain the governed insurance canon.",
+		"--canon", filepath.ToSlash(canonRelative),
+		"--canon-sha256", hex.EncodeToString(digest[:]),
+	}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"role": "practice_agent"`) {
+		t.Fatalf("practice scaffold exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	code = runAgent([]string{
+		"scaffold",
+		"--id", "subject-insurance",
+		"--role", "subject_specialist",
+		"--scope-kind", "practice",
+		"--scope", "insurance",
+		"--parent", "practice-agent-insurance",
+		"--parent-role", "practice_agent",
+	}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"role": "subject_specialist"`) {
+		t.Fatalf("subject scaffold exit = %d, output = %s", code, output.String())
 	}
 }
 

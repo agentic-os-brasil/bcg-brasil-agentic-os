@@ -435,3 +435,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Account context becomes a deliberate rollup rather than automatic memory aggregation. Partial writes, coordinated tampering and marker-deletion rollback fail closed; revocation linearizes reads while preserving evidence. Native Claude/Codex adapters still must provision private capabilities and integrity keys, provide a durable atomic anchor store and enforce filesystem scopes before activation.
 - Refs: WSAG; BRIF; WKPK; specs/016-workspace-agent-boundaries.md; specs/020-account-context-promotion.md; internal/contextpromotion
 - Supersedes: none
+
+## STUB - Scaffold governed instances without activating them
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The role catalog, enforcement controller and dispatcher could validate specialist identities, but only Maestro, Walter and Darwin had concrete definitions. Workspace initialization created state and a dossier without a runtime-neutral agent stub, while capability and subject specialists existed only in tests.
+- Decision: Maintain data-free managed templates for workspace, account, practice, capability-specialist and subject-specialist roles. Materialize private local instances durably and atomically with signed immutable role, parent and scope bindings, definition/state hashes and an explicit unavailable runtime state. Resolve the concrete workspace and registered same-scope parent before creation; require accountable owner/mandate for account and practice roots and verify practice canon bytes. Make workspace scaffolding automatic in `bcgos init`; require explicit CLI creation for other roles.
+- Consequences: Every initialized workspace has an inspectable agent definition and teams can prepare bounded specialists without embedding client data or prematurely granting tools. Orphan parents, cross-scope binding, key split-brain, rebinding and tampering fail closed. Native Claude/Codex adapters still must verify the stub, provision private capabilities and pass conformance before activation.
+- Refs: WKPK; WSAG; specs/018-maestro-core-agents.md; specs/019-sequential-agent-dispatch.md; specs/021-agent-scaffolding.md; internal/agentscaffold
+- Supersedes: none

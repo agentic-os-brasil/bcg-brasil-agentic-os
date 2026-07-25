@@ -17,6 +17,7 @@ import (
 	baseprofile "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/profile"
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
@@ -46,12 +47,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|agent|workspace-agent|atlas|session|skills|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|agent|workspace-agent|atlas|session|skills|memory>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -66,6 +67,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
 	case "owner":
 		return runOwnerWithInput(args[1:], in, out, errOut, defaultDataRoot)
+	case "agent":
+		return runAgent(args[1:], out, errOut, defaultDataRoot)
 	case "workspace-agent":
 		return runWorkspaceAgentWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "atlas":
@@ -113,6 +116,10 @@ func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	agentStub, err := agentscaffold.Scaffold(root, agentscaffold.WorkspaceRequest(result.WorkspaceID))
+	if err != nil {
+		return reportError(errOut, err)
+	}
 	state, err := initializeProfile(root, *requestedProfile)
 	if err != nil {
 		return reportError(errOut, err)
@@ -121,7 +128,64 @@ func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 		workspace.Result
 		Profile        profile.State         `json:"profile"`
 		WorkspaceAgent workspaceagent.Status `json:"workspace_agent"`
-	}{Result: result, Profile: state, WorkspaceAgent: agent}, errOut)
+		AgentStub      agentscaffold.Status  `json:"agent_stub"`
+	}{Result: result, Profile: state, WorkspaceAgent: agent, AgentStub: agentStub}, errOut)
+}
+
+func runAgent(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos agent <scaffold|status> [options]")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "scaffold":
+		flags := newFlagSet("agent scaffold", errOut)
+		agentID := flags.String("id", "", "path-safe agent ID")
+		role := flags.String("role", "", "account_agent, practice_agent, workspace_agent, capability_specialist or subject_specialist")
+		scopeKind := flags.String("scope-kind", "", "workspace, account or practice")
+		scopeID := flags.String("scope", "", "immutable scope ID")
+		parent := flags.String("parent", "", "registered parent agent ID")
+		parentRole := flags.String("parent-role", "", "registered parent role")
+		owner := flags.String("owner", "", "accountable owner slug for account/practice roots")
+		mandate := flags.String("mandate", "", "bounded mandate for account/practice roots")
+		canon := flags.String("canon", "", "data-root-relative practice canon path")
+		canonSHA256 := flags.String("canon-sha256", "", "verified practice canon SHA-256")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 ||
+			*agentID == "" || *role == "" || *scopeKind == "" || *scopeID == "" ||
+			*parent == "" || *parentRole == "" {
+			fmt.Fprintln(errOut, "usage: bcgos agent scaffold --id <id> --role <role> --scope-kind <kind> --scope <id> --parent <id> --parent-role <role> [--owner <id> --mandate <text> --canon <path> --canon-sha256 <hash>]")
+			return ExitUsage
+		}
+		status, err := agentscaffold.Scaffold(root, agentscaffold.Request{
+			AgentID: *agentID, Role: *role, ScopeKind: *scopeKind,
+			ScopeID: *scopeID, ParentAgent: *parent, ParentRole: *parentRole,
+			Owner: *owner, Mandate: *mandate,
+			CanonPath: *canon, CanonSHA256: *canonSHA256,
+		})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status, errOut)
+	case "status":
+		flags := newFlagSet("agent status", errOut)
+		agentID := flags.String("id", "", "agent ID")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *agentID == "" {
+			fmt.Fprintln(errOut, "usage: bcgos agent status --id <id>")
+			return ExitUsage
+		}
+		status, err := agentscaffold.Inspect(root, *agentID)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos agent <scaffold|status> [options]")
+		return ExitUsage
+	}
 }
 
 func runWorkspaceAgent(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
