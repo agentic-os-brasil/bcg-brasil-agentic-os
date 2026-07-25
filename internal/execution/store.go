@@ -3,6 +3,7 @@
 package execution
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -56,7 +57,7 @@ var (
 	ErrActiveItemAmbiguous  = errors.New("multiple active execution items require an explicit item ID")
 	idPattern               = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$`)
 	workspaceIDPattern      = regexp.MustCompile(`^[a-f0-9]{32}$`)
-	logicalRefPattern       = regexp.MustCompile(`^bcgos://[A-Za-z0-9/_-]+$`)
+	logicalRefPattern       = regexp.MustCompile(`^bcgos://[A-Za-z0-9/_.-]+$`)
 )
 
 const (
@@ -68,8 +69,10 @@ const (
 )
 
 type Criterion struct {
-	ID   string        `json:"id"`
-	Type CriterionType `json:"type"`
+	ID        string        `json:"id"`
+	Type      CriterionType `json:"type"`
+	TargetRef string        `json:"target_ref,omitempty"`
+	Command   []string      `json:"command,omitempty"`
 }
 
 type Contract struct {
@@ -138,11 +141,12 @@ type Transition struct {
 // Projections such as state.json may be regenerated from the newest valid
 // revision after an interrupted write.
 type Revision struct {
-	SchemaVersion int         `json:"schema_version"`
-	State         State       `json:"state"`
-	Attempt       *Attempt    `json:"attempt,omitempty"`
-	Checkpoint    *Checkpoint `json:"checkpoint,omitempty"`
-	Transition    Transition  `json:"transition"`
+	SchemaVersion int              `json:"schema_version"`
+	State         State            `json:"state"`
+	Attempt       *Attempt         `json:"attempt,omitempty"`
+	Checkpoint    *Checkpoint      `json:"checkpoint,omitempty"`
+	Evidence      *EvidenceReceipt `json:"evidence,omitempty"`
+	Transition    Transition       `json:"transition"`
 }
 
 type CreateInput struct {
@@ -163,18 +167,20 @@ type CheckpointInput struct {
 }
 
 type Item struct {
-	Contract   Contract    `json:"contract"`
-	State      State       `json:"state"`
-	Attempt    *Attempt    `json:"attempt,omitempty"`
-	Checkpoint *Checkpoint `json:"checkpoint,omitempty"`
+	Contract   Contract         `json:"contract"`
+	State      State            `json:"state"`
+	Attempt    *Attempt         `json:"attempt,omitempty"`
+	Checkpoint *Checkpoint      `json:"checkpoint,omitempty"`
+	Evidence   *EvidenceReceipt `json:"evidence,omitempty"`
 }
 
 type Export struct {
-	Contract    Contract     `json:"contract"`
-	State       State        `json:"state"`
-	Attempt     *Attempt     `json:"attempt,omitempty"`
-	Checkpoint  *Checkpoint  `json:"checkpoint,omitempty"`
-	Transitions []Transition `json:"transitions"`
+	Contract    Contract          `json:"contract"`
+	State       State             `json:"state"`
+	Attempt     *Attempt          `json:"attempt,omitempty"`
+	Checkpoint  *Checkpoint       `json:"checkpoint,omitempty"`
+	Evidences   []EvidenceReceipt `json:"evidences,omitempty"`
+	Transitions []Transition      `json:"transitions"`
 }
 
 // NextProjection is the only execution body designed for bounded model
@@ -647,7 +653,10 @@ func (store Store) inspectUnlocked(workspaceID, itemID string) (Item, error) {
 	if digest != state.ContractSHA256 {
 		return Item{}, ErrContractChanged
 	}
-	item := Item{Contract: contract, State: state, Attempt: revision.Attempt, Checkpoint: revision.Checkpoint}
+	item := Item{
+		Contract: contract, State: state, Attempt: revision.Attempt,
+		Checkpoint: revision.Checkpoint, Evidence: revision.Evidence,
+	}
 	if item.Attempt != nil && (item.Attempt.ItemID != itemID || item.Attempt.WorkspaceID != workspaceID) {
 		return Item{}, errors.New("attempt does not match execution item")
 	}
@@ -663,9 +672,13 @@ func (store Store) Export(workspaceID, itemID string) (Export, error) {
 	if err != nil {
 		return Export{}, err
 	}
+	evidences, err := store.evidences(workspaceID, itemID)
+	if err != nil {
+		return Export{}, err
+	}
 	return Export{
 		Contract: item.Contract, State: item.State, Attempt: item.Attempt,
-		Checkpoint: item.Checkpoint, Transitions: transitions,
+		Checkpoint: item.Checkpoint, Evidences: evidences, Transitions: transitions,
 	}, nil
 }
 
@@ -892,6 +905,13 @@ func validateCreateInput(input CreateInput) error {
 	if len(input.Criteria) == 0 {
 		return errors.New("at least one completion criterion is required")
 	}
+	allowed := make(map[string]bool, len(input.AllowedRefs))
+	for _, reference := range input.AllowedRefs {
+		if len(reference) > 512 || !logicalRefPattern.MatchString(reference) {
+			return fmt.Errorf("invalid logical reference %q", reference)
+		}
+		allowed[reference] = true
+	}
 	seen := make(map[string]bool)
 	for _, criterion := range input.Criteria {
 		if err := validateID("criterion", criterion.ID); err != nil {
@@ -904,10 +924,18 @@ func validateCreateInput(input CreateInput) error {
 		if criterion.Type != CriterionArtifactSnapshot && criterion.Type != CriterionCommandCheck {
 			return fmt.Errorf("unsupported completion criterion type %q", criterion.Type)
 		}
-	}
-	for _, reference := range input.AllowedRefs {
-		if len(reference) > 512 || !logicalRefPattern.MatchString(reference) {
-			return fmt.Errorf("invalid logical reference %q", reference)
+		switch criterion.Type {
+		case CriterionArtifactSnapshot:
+			if criterion.TargetRef == "" || !allowed[criterion.TargetRef] || len(criterion.Command) != 0 {
+				return fmt.Errorf("artifact criterion %q requires one allowed target_ref and no command", criterion.ID)
+			}
+			if _, err := workspaceRelativePath(criterion.TargetRef); err != nil {
+				return fmt.Errorf("artifact criterion %q: %w", criterion.ID, err)
+			}
+		case CriterionCommandCheck:
+			if criterion.TargetRef != "" || !allowedCommand(criterion.Command) {
+				return fmt.Errorf("command criterion %q contains an unsupported command", criterion.ID)
+			}
 		}
 	}
 	return nil
@@ -1075,6 +1103,16 @@ func validateRevision(revision Revision) error {
 			return errors.New("execution revision checkpoint does not match state")
 		}
 	}
+	if revision.Evidence != nil {
+		if err := validateEvidenceReceipt(*revision.Evidence); err != nil {
+			return err
+		}
+		if revision.Evidence.ItemID != revision.State.ItemID ||
+			revision.Evidence.WorkspaceID != revision.State.WorkspaceID ||
+			revision.Evidence.AttemptID != revision.Transition.AttemptID {
+			return errors.New("execution revision evidence does not match state")
+		}
+	}
 	if revision.Attempt == nil {
 		if revision.State.ActiveAttemptID != "" || revision.Transition.AttemptID != "" {
 			return errors.New("execution revision is missing its active attempt")
@@ -1097,6 +1135,10 @@ func validateRevision(revision Revision) error {
 	case StatePaused:
 		if revision.Attempt.State != AttemptInterrupted || revision.State.ActiveAttemptID != "" || revision.Checkpoint == nil {
 			return errors.New("paused execution revision requires an interrupted attempt and checkpoint")
+		}
+	case StateCompleted:
+		if revision.Attempt.State != AttemptCompleted || revision.State.ActiveAttemptID != "" {
+			return errors.New("completed execution revision requires its completed attempt")
 		}
 	default:
 		if revision.State.ActiveAttemptID != "" {
@@ -1331,6 +1373,32 @@ func ValidateSchemaFile(path string) error {
 	}
 	if schema["$id"] != "urn:bcg-brasil-agentic-os:schema:execution-state:v1" {
 		return errors.New("execution state schema has an unexpected identifier")
+	}
+	definitions, ok := schema["$defs"].(map[string]any)
+	if !ok {
+		return errors.New("execution state schema is missing definitions")
+	}
+	for _, name := range []string{"criterion", "evidence"} {
+		definition, ok := definitions[name].(map[string]any)
+		if !ok {
+			return fmt.Errorf("execution state schema is missing %s", name)
+		}
+		variants, ok := definition["oneOf"].([]any)
+		if !ok || len(variants) != 2 {
+			return fmt.Errorf("execution state schema %s must have two discriminated variants", name)
+		}
+	}
+	body, err := json.Marshal(schema)
+	if err != nil {
+		return err
+	}
+	for _, required := range []string{
+		`["go","version"]`, `["go","test","./..."]`, `["go","vet","./..."]`,
+		`"tool_sha256"`, `"artifact_snapshot"`, `"command_check"`,
+	} {
+		if !bytes.Contains(body, []byte(required)) {
+			return fmt.Errorf("execution state schema is missing exact contract %s", required)
+		}
 	}
 	return nil
 }

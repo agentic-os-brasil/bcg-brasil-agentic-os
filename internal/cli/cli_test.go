@@ -23,7 +23,7 @@ func TestWorkCreateStartInspectExportAndDelete(t *testing.T) {
 	contract := `{
 	  "objective": "Implement the execution ledger.",
 	  "initial_next_step": "Run the contract test.",
-	  "criteria": [{"id": "tests", "type": "command_check"}],
+	  "criteria": [{"id": "tests", "type": "command_check", "command": ["go", "version"]}],
 	  "allowed_refs": ["bcgos://workspace/specs/018"]
 	}`
 	var output bytes.Buffer
@@ -91,7 +91,7 @@ func TestWorkCheckpointPauseNextAndResume(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	contract := `{"objective":"Prove handoff.","initial_next_step":"Start.","criteria":[{"id":"tests","type":"command_check"}],"allowed_refs":["bcgos://workspace/specs/018"]}`
+	contract := `{"objective":"Prove handoff.","initial_next_step":"Start.","criteria":[{"id":"tests","type":"command_check","command":["go","version"]}],"allowed_refs":["bcgos://workspace/specs/018"]}`
 	code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot)
 	if code != ExitOK {
 		t.Fatalf("create exit = %d, output = %s", code, output.String())
@@ -145,6 +145,31 @@ func TestWorkCheckpointPauseNextAndResume(t *testing.T) {
 	if code != ExitOK || !strings.Contains(output.String(), `"state": "running"`) || !strings.Contains(output.String(), `"state_revision": 5`) {
 		t.Fatalf("resume exit = %d, output = %s", code, output.String())
 	}
+	var resumed execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &resumed); err != nil {
+		t.Fatal(err)
+	}
+
+	output.Reset()
+	code = runWork([]string{
+		"evidence", "--workspace", workspacePath, "--item", created.ItemID,
+		"--revision", "5", "--attempt", resumed.AttemptID, "--criterion", "tests",
+	}, strings.NewReader(""), &output, &output, dataRoot)
+	if code != ExitOK || !strings.Contains(output.String(), `"outcome": "passed"`) ||
+		strings.Contains(output.String(), `"command":`) {
+		t.Fatalf("evidence exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	code = runWork([]string{
+		"complete", "--workspace", workspacePath, "--item", created.ItemID,
+		"--revision", "6", "--attempt", resumed.AttemptID,
+	}, strings.NewReader(""), &output, &output, dataRoot)
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "completed"`) ||
+		!strings.Contains(output.String(), `"state_revision": 7`) {
+		t.Fatalf("complete exit = %d, output = %s", code, output.String())
+	}
+	assertMutationReceiptPrivate(t, output.String())
 }
 
 func assertMutationReceiptPrivate(t *testing.T, body string) {
@@ -193,7 +218,7 @@ func TestWorkRejectsUninitializedWorkspace(t *testing.T) {
 	var output bytes.Buffer
 	code := runWork(
 		[]string{"create", "--workspace", filepath.Join(t.TempDir(), "missing"), "--stdin"},
-		strings.NewReader(`{"objective":"x","initial_next_step":"y","criteria":[{"id":"tests","type":"command_check"}]}`),
+		strings.NewReader(`{"objective":"x","initial_next_step":"y","criteria":[{"id":"tests","type":"command_check","command":["go","version"]}]}`),
 		&output,
 		&output,
 		dataRoot,

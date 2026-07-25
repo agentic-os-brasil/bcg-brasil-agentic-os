@@ -40,8 +40,8 @@ func testCreateInput() CreateInput {
 		Objective:       "Implement a resumable execution contract.",
 		InitialNextStep: "Write the smallest failing contract test.",
 		Criteria: []Criterion{
-			{ID: "unit-tests", Type: CriterionCommandCheck},
-			{ID: "artifact", Type: CriterionArtifactSnapshot},
+			{ID: "unit-tests", Type: CriterionCommandCheck, Command: []string{"go", "version"}},
+			{ID: "artifact", Type: CriterionArtifactSnapshot, TargetRef: "bcgos://workspace/specs/018"},
 		},
 		AllowedRefs: []string{"bcgos://workspace/specs/018"},
 	}
