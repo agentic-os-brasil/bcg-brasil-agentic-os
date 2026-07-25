@@ -250,6 +250,20 @@ func TestInitPersistsTheSelectedInteractionProfile(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAgentCommandsCreateAndExposeTheGuidedInterview(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent"`) || !strings.Contains(output.String(), `"workspace-agent-`) {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWorkspaceAgent([]string{"interview", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent_setup"`) || !strings.Contains(output.String(), `"research"`) {
+		t.Fatalf("workspace-agent interview exit = %d, output = %s", code, output.String())
+	}
+}
+
 func TestInitPersistsStandardWhenNoProfileIsSelected(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

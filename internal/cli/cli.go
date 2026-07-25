@@ -23,6 +23,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 )
 
 const (
@@ -42,12 +43,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|atlas|skills|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|skills|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|atlas|skills|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|skills|memory>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -62,6 +63,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
 	case "owner":
 		return runOwnerWithInput(args[1:], in, out, errOut, defaultDataRoot)
+	case "workspace-agent":
+		return runWorkspaceAgent(args[1:], out, errOut, defaultDataRoot)
 	case "atlas":
 		return runAtlas(args[1:], out, errOut, defaultDataRoot)
 	case "skills":
@@ -101,14 +104,55 @@ func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	agent, err := workspaceagent.Initialize(root, result.WorkspaceID)
+	if err != nil {
+		return reportError(errOut, err)
+	}
 	state, err := initializeProfile(root, *requestedProfile)
 	if err != nil {
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, struct {
 		workspace.Result
-		Profile profile.State `json:"profile"`
-	}{Result: result, Profile: state}, errOut)
+		Profile        profile.State         `json:"profile"`
+		WorkspaceAgent workspaceagent.Status `json:"workspace_agent"`
+	}{Result: result, Profile: state, WorkspaceAgent: agent}, errOut)
+}
+
+func runWorkspaceAgent(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent <status|interview> [workspace-path]")
+		return ExitUsage
+	}
+	path, code := oneOptionalPath("workspace-agent "+args[0], args[1:], errOut)
+	if code != ExitOK {
+		return code
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if inspection.WorkspaceID == "" {
+		fmt.Fprintln(errOut, "workspace is not initialized; run bcgos init first")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "interview":
+		return writeJSON(out, workspaceagent.ColdStartInterview(), errOut)
+	case "status":
+		status, err := workspaceagent.Inspect(root, inspection.WorkspaceID)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent <status|interview> [workspace-path]")
+		return ExitUsage
+	}
 }
 
 func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
@@ -143,6 +187,8 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 			"interaction_profile":   "supported",
 			"memory_dreaming":       "unavailable",
 			"updates":               "unavailable",
+			"workspace_agent_setup": "supported",
+			"workspace_research":    "unavailable",
 		},
 	}, errOut)
 }

@@ -1,6 +1,8 @@
-# Spec 006 - Workspace agent boundaries
+# Spec 015 - Workspace agent boundaries
 
-Status: accepted architecture; implementation pending.
+Status: accepted architecture; local agent registry, compact state/dossier
+bootstrap and interview surface implemented. Runtime authorization enforcement
+and adapter conformance remain pending.
 
 ## Objective
 
@@ -70,7 +72,7 @@ Changing workspaces is an explicit user action and produces an auditable
 context-switch event.
 
 Workspace-agent setup, compact state, research provenance and public economic
-rollups follow `specs/011-workspace-agent-initialization.md`.
+rollups follow `specs/016-workspace-agent-initialization.md`.
 
 ## Non-goals
 

@@ -1,6 +1,8 @@
-# Spec 007 - Workspace agent initialization and context
+# Spec 016 - Workspace agent initialization and context
 
-Status: accepted architecture; implementation pending.
+Status: accepted architecture; guided interview contract, compact local state
+and research-plan approval validation implemented. External research execution,
+economic rollups and runtime adapters remain unavailable.
 
 ## Objective
 
