@@ -151,14 +151,17 @@ func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func()
 		if err != nil {
 			return reportError(errOut, err)
 		}
-		return writeJSON(out, item, errOut)
-	case "start", "inspect", "export", "delete":
+		return writeJSON(out, execution.Receipt(item), errOut)
+	case "start", "checkpoint", "pause", "resume", "next", "inspect", "export", "delete":
 		flags := newFlagSet("work "+args[0], errOut)
 		workspacePath := flags.String("workspace", "", "initialized workspace path")
 		itemID := flags.String("item", "", "execution item identity")
 		revision := flags.Int("revision", 0, "expected state revision")
 		confirm := flags.Bool("confirm", false, "confirm deletion")
-		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" {
+		attempt := flags.String("attempt", "", "active attempt identity")
+		stdin := flags.Bool("stdin", false, "read checkpoint JSON")
+		active := flags.Bool("active", false, "resolve the active execution item")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*workspacePath) == "" || (args[0] != "next" && strings.TrimSpace(*itemID) == "") {
 			return ExitUsage
 		}
 		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
@@ -174,7 +177,48 @@ func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func()
 			if err != nil {
 				return reportError(errOut, err)
 			}
-			return writeJSON(out, item, errOut)
+			return writeJSON(out, execution.Receipt(item), errOut)
+		case "checkpoint":
+			_ = stdin
+			body, err := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			var input struct {
+				Summary      string   `json:"summary"`
+				NextStep     string   `json:"next_step"`
+				Blocker      string   `json:"blocker"`
+				ArtifactRefs []string `json:"artifact_refs"`
+			}
+			if err := json.Unmarshal(body, &input); err != nil {
+				return reportError(errOut, err)
+			}
+			item, err := store.Checkpoint(workspaceID, *itemID, execution.CheckpointInput{ExpectedRevision: *revision, AttemptID: *attempt, Summary: input.Summary, NextStep: input.NextStep, Blocker: input.Blocker, ArtifactRefs: input.ArtifactRefs})
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, execution.Receipt(item), errOut)
+		case "pause":
+			item, err := store.Pause(workspaceID, *itemID, *revision, *attempt)
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, execution.Receipt(item), errOut)
+		case "resume":
+			item, err := store.Resume(workspaceID, *itemID, *revision)
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, execution.Receipt(item), errOut)
+		case "next":
+			projection, err := store.NextActive(workspaceID)
+			if !*active && *itemID != "" {
+				projection, err = store.Next(workspaceID, *itemID)
+			}
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, projection, errOut)
 		case "inspect":
 			item, err := store.Inspect(workspaceID, *itemID)
 			if err != nil {

@@ -5,17 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"os"
 	"path/filepath"
-<<<<<<< HEAD
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {

@@ -130,7 +130,7 @@ func Build(sources Sources) Packet {
 			Workspace: pointerAtlas("workspace", sources.Atlas.Workspace),
 		},
 		Execution: ExecutionContext{Active: executionPointer(sources.Execution)},
-		Skills: Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
+		Skills:    Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
 		Agents: Agents{
 			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: "unavailable",
 			Message: "native agent orchestration requires a runtime adapter with tool and delegation enforcement",
