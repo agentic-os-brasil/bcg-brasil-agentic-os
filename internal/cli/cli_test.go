@@ -195,6 +195,18 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	}
 }
 
+func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runAdapter([]string{"install", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "installed"`) {
+		t.Fatalf("install = %d %s", code, output.String())
+	}
+	output.Reset()
+	if code := runAdapter([]string{"uninstall", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "removed"`) {
+		t.Fatalf("remove = %d %s", code, output.String())
+	}
+}
+
 func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 	var output bytes.Buffer
 	if code := Run([]string{"skills", "index"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"schema_version": 1`) || !strings.Contains(output.String(), `"dream-memory"`) || strings.Contains(output.String(), "Daily dreaming cannot") {

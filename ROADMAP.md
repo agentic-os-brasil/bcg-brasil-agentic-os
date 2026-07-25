@@ -56,6 +56,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Add initial conformance fixtures for equivalent capability identity, semantic events and criticality.
 - [x] Implement a runtime-neutral Session Start bridge that gives Claude and Codex the same bounded packet without claiming native injection.
 - [x] Implement the bounded native Session Start command payload; runtime configuration installation remains separate and unavailable.
+- [x] Implement workspace-local Claude/Codex Session Start adapter installation, inspection and targeted removal.
 - [x] Define and validate a non-blocking hook-execution policy: snapshots and signals never wait, while only a local deterministic safety guard may deny an unsafe action.
 - [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
 - [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
