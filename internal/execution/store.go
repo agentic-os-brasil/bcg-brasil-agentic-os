@@ -154,6 +154,7 @@ type Revision struct {
 	Attempt       *Attempt         `json:"attempt,omitempty"`
 	Checkpoint    *Checkpoint      `json:"checkpoint,omitempty"`
 	Evidence      *EvidenceReceipt `json:"evidence,omitempty"`
+	ToolCall      *ToolCallReceipt `json:"tool_call,omitempty"`
 	Transition    Transition       `json:"transition"`
 }
 
@@ -188,6 +189,7 @@ type Export struct {
 	Attempt     *Attempt          `json:"attempt,omitempty"`
 	Checkpoint  *Checkpoint       `json:"checkpoint,omitempty"`
 	Evidences   []EvidenceReceipt `json:"evidences,omitempty"`
+	ToolCalls   []ToolCallReceipt `json:"tool_calls,omitempty"`
 	Transitions []Transition      `json:"transitions"`
 }
 
@@ -722,9 +724,14 @@ func (store Store) Export(workspaceID, itemID string) (Export, error) {
 	if err != nil {
 		return Export{}, err
 	}
+	toolCalls, err := store.toolCalls(workspaceID, itemID)
+	if err != nil {
+		return Export{}, err
+	}
 	return Export{
 		Contract: item.Contract, State: item.State, Attempt: item.Attempt,
-		Checkpoint: item.Checkpoint, Evidences: evidences, Transitions: transitions,
+		Checkpoint: item.Checkpoint, Evidences: evidences, ToolCalls: toolCalls,
+		Transitions: transitions,
 	}, nil
 }
 
@@ -1159,6 +1166,22 @@ func validateRevision(revision Revision) error {
 			return errors.New("execution revision evidence does not match state")
 		}
 	}
+	if revision.ToolCall != nil {
+		if revision.Evidence != nil {
+			return errors.New("execution revision cannot contain both evidence and a tool call")
+		}
+		if err := validateToolCallReceipt(*revision.ToolCall); err != nil {
+			return err
+		}
+		if revision.ToolCall.ItemID != revision.State.ItemID ||
+			revision.ToolCall.WorkspaceID != revision.State.WorkspaceID ||
+			revision.ToolCall.AttemptID != revision.Transition.AttemptID {
+			return errors.New("execution revision tool call does not match state")
+		}
+		if revision.State.State != StateRunning {
+			return errors.New("execution tool call revision requires a running item")
+		}
+	}
 	if revision.Attempt == nil {
 		if revision.State.ActiveAttemptID != "" || revision.Transition.AttemptID != "" {
 			return errors.New("execution revision is missing its active attempt")
@@ -1441,6 +1464,7 @@ func ValidateSchemaFile(path string) error {
 	for _, required := range []string{
 		`["go","version"]`, `["go","test","./..."]`, `["go","vet","./..."]`,
 		`"tool_sha256"`, `"artifact_snapshot"`, `"command_check"`,
+		`"tool_call"`, `"started"`, `"succeeded"`, `"unavailable"`,
 	} {
 		if !bytes.Contains(body, []byte(required)) {
 			return fmt.Errorf("execution state schema is missing exact contract %s", required)
