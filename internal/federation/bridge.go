@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 )
 
 // HTTPBridge is a narrow pilot-device adapter. It speaks only to the
@@ -16,6 +17,12 @@ import (
 type HTTPBridge struct {
 	endpoint string
 	client   *http.Client
+}
+
+// PortableSkillBridge is kept separate from Bridge because its content-bearing
+// payload is permitted only for the born-portable origin class.
+type PortableSkillBridge interface {
+	SubmitPortable(context.Context, string, PortableSkillPackage) error
 }
 
 func NewHTTPBridge(endpoint string, client *http.Client) (*HTTPBridge, error) {
@@ -59,6 +66,49 @@ func (bridge *HTTPBridge) Submit(ctx context.Context, batch Batch) error {
 		return fmt.Errorf("federation bridge returned status %d", response.StatusCode)
 	}
 	return nil
+}
+
+func (bridge *HTTPBridge) SubmitPortable(ctx context.Context, installationID string, packageValue PortableSkillPackage) error {
+	if bridge == nil || bridge.client == nil || !installationIDPattern.MatchString(installationID) {
+		return errors.New("federation portable skill bridge is not configured")
+	}
+	if err := packageValue.Validate(); err != nil {
+		return err
+	}
+	endpoint, err := bridge.portableEndpoint()
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(packageValue)
+	if err != nil {
+		return err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("X-Maestro-Federation-Schema", fmt.Sprintf("%d", SchemaVersion))
+	request.Header.Set("X-Maestro-Installation-ID", installationID)
+	response, err := bridge.client.Do(request)
+	if err != nil {
+		return errors.New("federation bridge is unavailable")
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("federation bridge returned status %d", response.StatusCode)
+	}
+	return nil
+}
+
+func (bridge *HTTPBridge) portableEndpoint() (string, error) {
+	endpoint, err := url.Parse(bridge.endpoint)
+	if err != nil || path.Base(endpoint.Path) != "batches" {
+		return "", errors.New("federation batch endpoint cannot derive portable skill endpoint")
+	}
+	endpoint.Path = path.Join(path.Dir(endpoint.Path), "portable-skills")
+	return endpoint.String(), nil
 }
 
 func parseHTTPSURL(value string) (*url.URL, error) {

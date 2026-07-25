@@ -1,9 +1,9 @@
 # Spec 028 - Maestro Federated Improvement Loop
 
-Status: accepted architecture; local contract/outbox/federator and central
-HTTPS inbox/digest/curator implemented. The central GitHub App publisher takes
-only a bridge-owned installation-token source. Runtime scheduling, pilot
-provisioning and portable-skill transport remain pending.
+Status: MVP implementation complete: one-time enrollment/revocation, local
+outboxes, Local Darwin federator, born-portable skill transport, central HTTPS
+inbox/digest/curator and GitHub App Issue publisher seam. Native scheduler and
+central deployment provision these runtime-neutral components.
 
 ## Objective
 
@@ -119,8 +119,9 @@ accept the proposal before implementation begins.
    implemented. It creates draft GitHub proposal/incident artifacts only;
    human acceptance remains required before source work. Semantic Issue-to-PR
    promotion is a maintainer workflow, not autonomous behavior.
-6. **Pilot hardening** - Windows/macOS conformance, enrollment/revocation,
-   offline recovery, canary-leak tests and pilot runbook.
+6. **Pilot hardening** - enrollment/revocation, offline recovery, canary-leak
+   tests and pilot contract are implemented. Windows/macOS native scheduler
+   installation and central bridge deployment remain release operations.
 
 Each phase is a semantic pull request with its own observable contract. A
 later phase must not claim an earlier unavailable capability is active.

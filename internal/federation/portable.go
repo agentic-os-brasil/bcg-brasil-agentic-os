@@ -3,8 +3,10 @@ package federation
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -33,8 +35,8 @@ type PortableSkillManifest struct {
 }
 
 type PortableSkillPackage struct {
-	Manifest PortableSkillManifest
-	Content  string
+	Manifest PortableSkillManifest `json:"manifest"`
+	Content  string                `json:"content"`
 }
 
 // PortableSkillCollector accepts complete skill content only from the managed
@@ -104,7 +106,11 @@ func (collector PortableSkillCollector) collectOne(skillID string) (PortableSkil
 	if manifest.ContentSHA256 != hex.EncodeToString(digest[:]) {
 		return PortableSkillPackage{}, errors.New("portable skill content hash does not match manifest")
 	}
-	return PortableSkillPackage{Manifest: manifest, Content: string(contents)}, nil
+	packageValue := PortableSkillPackage{Manifest: manifest, Content: string(contents)}
+	if err := packageValue.Validate(); err != nil {
+		return PortableSkillPackage{}, err
+	}
+	return packageValue, nil
 }
 
 func (manifest PortableSkillManifest) Validate() error {
@@ -112,6 +118,41 @@ func (manifest PortableSkillManifest) Validate() error {
 		return errors.New("invalid born-portable skill manifest")
 	}
 	return nil
+}
+
+func (packageValue PortableSkillPackage) Validate() error {
+	if err := packageValue.Manifest.Validate(); err != nil {
+		return err
+	}
+	contents := []byte(packageValue.Content)
+	if len(contents) == 0 || len(contents) > MaximumPortableSkillBytes {
+		return errors.New("portable skill content is outside the approved size")
+	}
+	digest := sha256.Sum256(contents)
+	if packageValue.Manifest.ContentSHA256 != hex.EncodeToString(digest[:]) {
+		return errors.New("portable skill content hash does not match manifest")
+	}
+	return nil
+}
+
+func ParsePortableSkill(reader io.Reader) (PortableSkillPackage, error) {
+	decoder := json.NewDecoder(reader)
+	decoder.DisallowUnknownFields()
+	var packageValue PortableSkillPackage
+	if err := decoder.Decode(&packageValue); err != nil {
+		return PortableSkillPackage{}, err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return PortableSkillPackage{}, errors.New("portable skill package contains multiple JSON values")
+		}
+		return PortableSkillPackage{}, err
+	}
+	if err := packageValue.Validate(); err != nil {
+		return PortableSkillPackage{}, err
+	}
+	return packageValue, nil
 }
 
 // ValidatePortableSkillManifestSchemaFile makes the strict manifest contract
