@@ -20,6 +20,9 @@ func TestVerifyDirectoryAuthenticatesClosedRelease(t *testing.T) {
 	if verified.Manifest.Release != "0.1.0" || len(verified.Manifest.Artifacts) != 2 {
 		t.Fatalf("unexpected verified release: %#v", verified.Manifest)
 	}
+	if len(verified.ManifestSHA256) != 64 {
+		t.Fatalf("authenticated manifest digest = %q", verified.ManifestSHA256)
+	}
 }
 
 func TestVerifyDirectoryFailsClosedOnTamperingAndUnknownKeys(t *testing.T) {

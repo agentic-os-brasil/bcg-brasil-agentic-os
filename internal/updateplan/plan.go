@@ -27,10 +27,30 @@ type Plan struct {
 	BundleArtifact       string `json:"bundle_artifact"`
 	TargetOS             string `json:"target_os"`
 	TargetArch           string `json:"target_arch"`
+	Provider             string `json:"provider"`
+	ProviderReleaseID    int64  `json:"provider_release_id"`
+	ManifestSHA256       string `json:"manifest_sha256"`
 	ConfirmationRequired bool   `json:"confirmation_required"`
 }
 
-func Build(current installtx.State, manifest releasecontract.Manifest, targetOS, targetArch string) (Plan, error) {
+type SourceBinding struct {
+	Provider          string
+	ProviderReleaseID int64
+	ManifestSHA256    string
+}
+
+func Build(
+	current installtx.State,
+	manifest releasecontract.Manifest,
+	targetOS, targetArch string,
+	source SourceBinding,
+) (Plan, error) {
+	if source.Provider != "github" ||
+		source.ProviderReleaseID <= 0 ||
+		len(source.ManifestSHA256) != 64 ||
+		strings.Trim(source.ManifestSHA256, "0123456789abcdef") != "" {
+		return Plan{}, errors.New("update source binding is invalid")
+	}
 	currentVersion, err := parseVersion(current.Release)
 	if err != nil {
 		return Plan{}, fmt.Errorf("invalid installed release: %w", err)
@@ -65,7 +85,9 @@ func Build(current installtx.State, manifest releasecontract.Manifest, targetOS,
 		FromRelease: current.Release, ToRelease: manifest.Release, Channel: manifest.Channel,
 		CLIVersion: manifest.CLI.Version, BundleVersion: manifest.Bundle.Version,
 		CLIArtifact: cliName, BundleArtifact: bundleName,
-		TargetOS: targetOS, TargetArch: targetArch, ConfirmationRequired: true,
+		TargetOS: targetOS, TargetArch: targetArch,
+		Provider: source.Provider, ProviderReleaseID: source.ProviderReleaseID,
+		ManifestSHA256: source.ManifestSHA256, ConfirmationRequired: true,
 	}
 	body, err := json.Marshal(plan)
 	if err != nil {
@@ -74,6 +96,18 @@ func Build(current installtx.State, manifest releasecontract.Manifest, targetOS,
 	sum := sha256.Sum256(body)
 	plan.ID = hex.EncodeToString(sum[:16])
 	return plan, nil
+}
+
+func CompareVersions(left, right string) (int, error) {
+	leftVersion, err := parseVersion(left)
+	if err != nil {
+		return 0, err
+	}
+	rightVersion, err := parseVersion(right)
+	if err != nil {
+		return 0, err
+	}
+	return compareVersion(leftVersion, rightVersion), nil
 }
 
 type version [3]uint64

@@ -29,6 +29,8 @@ approval and managed-device evidence remain gates outside the repository.
   two-run equality evidence.
 - Bundle contains only `bundles/base/distribution.json` entries.
 - Manifest/artifact tampering, extra files and unsafe archives fail closed.
+- Update plans bind the immutable provider release ID and authenticated
+  manifest digest before asking for confirmation.
 - Install, update, automatic restoration and explicit rollback tests pass.
 - Isolated reports say `engineering_evidence_only`.
 

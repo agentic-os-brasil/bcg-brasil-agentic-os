@@ -110,6 +110,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
   activation and last-known-good rollback.
 - [x] Implement provider discovery and manifest-authorized verified download
   into the local release boundary.
+- [x] Bind provider discovery to deterministic update plans using the immutable
+  provider release ID and authenticated manifest digest.
 - [ ] Configure the production provider and release-key registry.
 - [x] Enforce and test that activation writes only managed core and install
   state, never local configuration, memory or workspace data.
