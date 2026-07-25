@@ -21,8 +21,8 @@ permissions:
   contents: read
 
 jobs:
-  build-candidate:
-    name: deterministic unsigned candidate
+  validate-source:
+    name: validate source snapshot
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -32,11 +32,109 @@ jobs:
           cache: true
       - name: Validate source snapshot
         run: go run ./dev/harness validate --full
-      - name: Build candidate
+
+  build-native:
+    name: native ${{ matrix.os }}/${{ matrix.arch }}
+    needs: validate-source
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      TARGET_OS: ${{ matrix.os }}
+      TARGET_ARCH: ${{ matrix.arch }}
+      TARGET_SUFFIX: ${{ matrix.suffix }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows
+            arch: amd64
+            runner: windows-2025
+            suffix: .exe
+          - os: darwin
+            arch: amd64
+            runner: macos-15-intel
+            suffix: ""
+          - os: darwin
+            arch: arm64
+            runner: macos-15
+            suffix: ""
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build native Windows candidate binary
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: >-
+          go run ./dev/release binary
+          --version "$env:RELEASE_VERSION"
+          --os "$env:TARGET_OS"
+          --arch "$env:TARGET_ARCH"
+          --output "dist/native/bcgos_${env:RELEASE_VERSION}_${env:TARGET_OS}_${env:TARGET_ARCH}${env:TARGET_SUFFIX}"
+      - name: Build native macOS candidate binary
+        if: matrix.os == 'darwin'
+        shell: bash
+        run: >-
+          go run ./dev/release binary
+          --version "$RELEASE_VERSION"
+          --os "$TARGET_OS"
+          --arch "$TARGET_ARCH"
+          --output "dist/native/bcgos_${RELEASE_VERSION}_${TARGET_OS}_${TARGET_ARCH}${TARGET_SUFFIX}"
+      - name: Record native binary provenance
+        shell: bash
+        if: matrix.os == 'darwin'
+        run: >-
+          go run ./dev/release provenance
+          --version "$RELEASE_VERSION"
+          --binary "dist/native/bcgos_${RELEASE_VERSION}_${TARGET_OS}_${TARGET_ARCH}${TARGET_SUFFIX}"
+          --os "$TARGET_OS"
+          --arch "$TARGET_ARCH"
+      - name: Record native binary provenance
+        shell: pwsh
+        if: matrix.os == 'windows'
+        run: >-
+          go run ./dev/release provenance
+          --version "$env:RELEASE_VERSION"
+          --binary "dist/native/bcgos_${env:RELEASE_VERSION}_${env:TARGET_OS}_${env:TARGET_ARCH}${env:TARGET_SUFFIX}"
+          --os "$env:TARGET_OS"
+          --arch "$env:TARGET_ARCH"
+      - name: Upload native candidate binary
+        uses: actions/upload-artifact@v6
+        with:
+          name: maestro-native-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/native/
+          if-no-files-found: error
+          retention-days: 7
+
+  assemble-candidate:
+    name: assemble deterministic unsigned candidate
+    needs:
+      - validate-source
+      - build-native
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_CHANNEL: ${{ inputs.channel }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download native candidate binaries
+        uses: actions/download-artifact@v6
+        with:
+          pattern: maestro-native-*
+          path: dist/native
+          merge-multiple: true
+      - name: Assemble candidate
         run: >-
           go run ./dev/release candidate
-          --version "${{ inputs.version }}"
-          --channel "${{ inputs.channel }}"
+          --version "$RELEASE_VERSION"
+          --channel "$RELEASE_CHANNEL"
+          --prebuilt dist/native
           --output dist/release-candidate
       - name: Verify candidate closure
         run: go run ./dev/release verify --directory dist/release-candidate
@@ -45,5 +143,12 @@ jobs:
         with:
           name: maestro-${{ inputs.version }}-${{ inputs.channel }}-unsigned
           path: dist/release-candidate/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload native build provenance
+        uses: actions/upload-artifact@v6
+        with:
+          name: maestro-${{ inputs.version }}-${{ inputs.channel }}-build-provenance
+          path: dist/native/*.provenance.json
           if-no-files-found: error
           retention-days: 7

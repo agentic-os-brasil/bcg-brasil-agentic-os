@@ -6,20 +6,25 @@ The repository can build deterministic unsigned candidates, verify a signed
 release set, stage and activate an update, roll back, model private-provider
 authentication and generate explicitly isolated Windows/macOS evidence. A
 macOS Keychain backend and a Windows Credential Manager backend exist in
-source with conformance coverage, but current candidates and CLI wiring still
-report native storage as unavailable.
+source with conformance coverage. The candidate workflow builds each CLI on a
+matching native runner and assembles the release set from those exact binaries,
+but CLI provider wiring still reports native storage as unavailable.
 
 That is engineering readiness, not a distributable pilot release. Production
-signing, native Windows/macOS candidate wiring, provider registration,
-production Keychain/Credential Manager approval and managed-device evidence
-remain gates outside the repository.
+signing, provider registration, production Keychain/Credential Manager
+approval and managed-device evidence remain gates outside the repository.
 
 ## Gate checklist
 
 ### 1. Engineering
 
 - Full development harness passes on Windows and macOS.
-- Candidate bytes reproduce from the same source snapshot.
+- Each candidate CLI is built on its matching native runner before assembly.
+- Each native binary records source commit, workflow run, runner image,
+  Go/compiler identity, CGO mode, size and SHA-256 provenance.
+- Byte-identical native rebuilds across runner-image or toolchain updates are
+  not claimed; reproducibility requires a separately pinned toolchain and
+  two-run equality evidence.
 - Bundle contains only `bundles/base/distribution.json` entries.
 - Manifest/artifact tampering, extra files and unsafe archives fail closed.
 - Install, update, automatic restoration and explicit rollback tests pass.
