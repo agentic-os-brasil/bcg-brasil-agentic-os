@@ -1,7 +1,7 @@
 # Spec 020 - Adapter diagnostics
 
 Status: local configuration inspection implemented; runtime execution evidence
-and conformance fixtures pending.
+and conformance receipts pending.
 
 `bcgos doctor` reports runtime executable discovery and workspace adapter
 configuration as distinct checks. A configured adapter means that Maestro's
