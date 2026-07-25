@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:release-manifest:v1",
+  "title": "Maestro release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "product",
+    "release",
+    "channel",
+    "issuer",
+    "cli",
+    "bundle",
+    "artifacts",
+    "migrations",
+    "release_notes"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "product": {"const": "maestro"},
+    "release": {"$ref": "#/$defs/version"},
+    "channel": {"enum": ["stable", "beta", "canary"]},
+    "issuer": {"$ref": "#/$defs/issuer"},
+    "cli": {"$ref": "#/$defs/cli"},
+    "bundle": {"$ref": "#/$defs/bundle"},
+    "artifacts": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "migrations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/migration"}
+    },
+    "release_notes": {"$ref": "#/$defs/releaseNotes"}
+  },
+  "$defs": {
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "range": {
+      "type": "string",
+      "pattern": "^>=(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*) <(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "fileReference": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\\\\\s]+$"
+    },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "key_id"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "key_id": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "cli": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "compatible_bundle"],
+      "properties": {
+        "version": {"$ref": "#/$defs/version"},
+        "compatible_bundle": {"$ref": "#/$defs/range"}
+      }
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "compatible_cli"],
+      "properties": {
+        "version": {"$ref": "#/$defs/version"},
+        "compatible_cli": {"$ref": "#/$defs/range"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "os", "arch", "name", "size", "sha256", "signature_ref"],
+      "properties": {
+        "kind": {"enum": ["cli", "bundle"]},
+        "os": {"enum": ["windows", "darwin", "linux", "any"]},
+        "arch": {"enum": ["amd64", "arm64", "any"]},
+        "name": {"$ref": "#/$defs/fileReference"},
+        "size": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "signature_ref": {
+          "allOf": [
+            {"$ref": "#/$defs/fileReference"},
+            {"type": "string", "pattern": "\\.sig$"}
+          ]
+        }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "component", "from", "to", "required"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "component": {"enum": ["cli", "bundle"]},
+        "from": {"$ref": "#/$defs/range"},
+        "to": {"$ref": "#/$defs/version"},
+        "required": {"const": true}
+      }
+    },
+    "releaseNotes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256"],
+      "properties": {
+        "name": {"$ref": "#/$defs/fileReference"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

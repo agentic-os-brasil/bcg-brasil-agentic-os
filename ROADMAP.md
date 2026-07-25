@@ -81,7 +81,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 - [x] Implement and run an isolated local binary-installation trial with checksum verification on Windows, macOS and Linux. This is explicitly not a signed release or pilot distribution channel.
 - [ ] Produce versioned Windows and macOS artifacts in CI.
-- [ ] Define signed release manifest and compatibility rules.
+- [x] Define and validate the provider-neutral signed release manifest and CLI↔bundle compatibility rules.
 - [ ] Implement browser-based private-release authentication.
 - [ ] Implement verified download, staging, activation and rollback.
 - [ ] Ensure updates never overwrite local configuration or work data.

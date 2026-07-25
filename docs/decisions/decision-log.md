@@ -392,13 +392,13 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: README.md; specs/001-cli-distribution.md; ROADMAP.md
 - Supersedes: none
 
-## NBLK - Keep product hooks non-blocking
+## DIST - Make the signed manifest the portable release authority
 
 - Date: 2026-07-25
 - Status: accepted
 - Owner: Daniel Scardini
-- Context: Lifecycle hooks run in the user's active session. Letting them synchronize with memory, wiki, ingestion or another worker would create visible latency, race conditions and fragile runtime-specific behavior.
-- Decision: Product hooks never own heavy or durable work. Session Start and context injection only read a bounded last-committed snapshot and return an explicit omission when it is unavailable. Post-action and stop hooks only emit best-effort idempotent signals. No hook waits for a worker lock, calls a model, uses the network or retries work. A pre-action guard may synchronously deny only an immediately decidable local safety condition; it never waits to resolve a race.
-- Consequences: A future worker exclusively owns serialized, idempotent writes, expensive execution and recovery from durable due-state. Hook delivery may be duplicated or absent without corrupting committed state. Native Claude and Codex adapters must conform to one executable policy before any product lifecycle capability is reported as available.
-- Refs: specs/004-runtime-portability.md; specs/009-scheduler-catch-up.md; specs/019-nonblocking-hook-execution.md; bundles/base/runtime/hook-policy.json; internal/hookpolicy
+- Context: The pilot needs one verifiable release contract even if the source repository or artifact provider changes, while CLI, managed bundles and optional runtime packs evolve independently.
+- Decision: Treat a signed, versioned release manifest as the portable authority for Maestro distribution. Bind trust to the Maestro product identity and an explicit signing-key identifier rather than to a GitHub owner name. Record CLI and bundle artifacts separately with immutable versions, compatibility ranges and allowlisted content; keep the release provider behind an adapter. Runtime packs remain a future, separately versioned schema extension rather than an underspecified v1 entry.
+- Consequences: A GitHub transfer does not silently redefine the trust root. The bootstrapper and `bcgos` must reject unknown issuers, incompatible versions, unsigned manifests, duplicate JSON keys, unlisted artifacts and content from workspace or user-local data roots. Release versions cannot be relabeled across channels; promotion requires a new version and signed manifest. Production key custody, platform code-signing identities and provider registration remain explicit release-environment approvals.
+- Refs: RELS; UPDT; SECU; DATA; specs/001-cli-distribution.md; specs/020-release-distribution.md; schemas/release-manifest.schema.json
 - Supersedes: none
