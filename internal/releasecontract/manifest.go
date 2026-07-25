@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 const maximumManifestBytes = 1 << 20
@@ -231,6 +233,63 @@ func ValidateSchemaFile(path string) error {
 		if _, ok := definitions[name]; !ok {
 			return fmt.Errorf("release manifest schema definition %q is missing", name)
 		}
+	}
+	_, err = compileSchema(schema)
+	return err
+}
+
+// ValidateSchemaDocument validates an exact manifest JSON document against the
+// published structural contract. Parsing and semantic validation remain the
+// responsibility of Parse.
+func ValidateSchemaDocument(path string, body []byte) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	var rawSchema map[string]any
+	if err := decoder.Decode(&rawSchema); err != nil {
+		return err
+	}
+	schema, err := compileSchema(rawSchema)
+	if err != nil {
+		return err
+	}
+
+	documentDecoder := json.NewDecoder(bytes.NewReader(body))
+	var document any
+	if err := documentDecoder.Decode(&document); err != nil {
+		return err
+	}
+	if err := ensureSingleJSONValue(documentDecoder); err != nil {
+		return err
+	}
+
+	return schema.Validate(document)
+}
+
+func compileSchema(rawSchema map[string]any) (*jsonschema.Schema, error) {
+	compiler := jsonschema.NewCompiler()
+	const resource = "release-manifest.schema.json"
+	if err := compiler.AddResource(resource, rawSchema); err != nil {
+		return nil, fmt.Errorf("add release manifest schema: %w", err)
+	}
+	schema, err := compiler.Compile(resource)
+	if err != nil {
+		return nil, fmt.Errorf("compile release manifest schema: %w", err)
+	}
+	return schema, nil
+}
+
+func ensureSingleJSONValue(decoder *json.Decoder) error {
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
 	}
 	return nil
 }

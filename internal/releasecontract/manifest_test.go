@@ -127,6 +127,70 @@ func TestValidateSchemaFileRejectsGuttedSchema(t *testing.T) {
 	}
 }
 
+func TestSchemaRejectsDriftedArtifactKind(t *testing.T) {
+	schemaPath := filepath.Join("..", "..", "schemas", "release-manifest.schema.json")
+	body, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drifted := strings.Replace(string(body), `"kind": {"enum": ["cli", "bundle"]}`, `"kind": {"enum": ["runtime_pack"]}`, 1)
+	if drifted == string(body) {
+		t.Fatal("test setup did not mutate the artifact kind enum")
+	}
+	driftedPath := filepath.Join(t.TempDir(), "schema.json")
+	if err := os.WriteFile(driftedPath, []byte(drifted), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSchemaDocument(driftedPath, []byte(validManifestJSON())); err == nil {
+		t.Fatal("schema accepted a canonical manifest after artifact-kind drift")
+	}
+}
+
+func TestSchemaAndParserAgreeOnStructuralFixtures(t *testing.T) {
+	schemaPath := filepath.Join("..", "..", "schemas", "release-manifest.schema.json")
+	duplicateArtifact := `{"kind": "cli", "os": "windows", "arch": "amd64", "name": "bcgos-0.1.0-windows-amd64.exe", "size": 1234, "sha256": "` + strings.Repeat("a", 64) + `", "signature_ref": "bcgos-0.1.0-windows-amd64.exe.sig"}`
+
+	cases := map[string]struct {
+		body        string
+		schemaValid bool
+		parseValid  bool
+	}{
+		"valid": {
+			body:        validManifestJSON(),
+			schemaValid: true,
+			parseValid:  true,
+		},
+		"unknown field": {
+			body:        strings.Replace(validManifestJSON(), `"product": "maestro"`, `"product": "maestro", "surprise": true`, 1),
+			schemaValid: false,
+			parseValid:  false,
+		},
+		"runtime pack": {
+			body:        strings.Replace(validManifestJSON(), `"kind": "cli"`, `"kind": "runtime_pack"`, 1),
+			schemaValid: false,
+			parseValid:  false,
+		},
+		"duplicate artifact is semantic": {
+			body:        strings.Replace(validManifestJSON(), duplicateArtifact, duplicateArtifact+","+duplicateArtifact, 1),
+			schemaValid: true,
+			parseValid:  false,
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			schemaErr := ValidateSchemaDocument(schemaPath, []byte(test.body))
+			if (schemaErr == nil) != test.schemaValid {
+				t.Fatalf("schema valid = %v, want %v (err: %v)", schemaErr == nil, test.schemaValid, schemaErr)
+			}
+			_, parseErr := Parse(strings.NewReader(test.body))
+			if (parseErr == nil) != test.parseValid {
+				t.Fatalf("parser valid = %v, want %v (err: %v)", parseErr == nil, test.parseValid, parseErr)
+			}
+		})
+	}
+}
+
 func validManifestJSON() string {
 	return `{
   "schema_version": 1,
