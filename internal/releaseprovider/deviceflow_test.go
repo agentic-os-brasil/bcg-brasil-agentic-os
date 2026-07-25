@@ -75,6 +75,23 @@ func TestAuthServiceRequiresSecureStoreBeforeStartingDeviceFlow(t *testing.T) {
 	}
 }
 
+func TestAuthServiceTreatsMissingNativeCredentialAsLoggedOut(t *testing.T) {
+	service := AuthService{
+		Flow:  DeviceFlowClient{Now: func() time.Time { return time.Unix(1000, 0).UTC() }},
+		Store: newNativeSecureStore(&memorySecretBackend{values: map[string][]byte{}}),
+	}
+	status, err := service.Status()
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if status.State != "unauthenticated" || status.Refresh {
+		t.Fatalf("Status() = %#v", status)
+	}
+	if err := service.Logout(); err != nil {
+		t.Fatalf("Logout() should be idempotent, error = %v", err)
+	}
+}
+
 func TestAssetRedirectDropsAuthorizationOnDifferentHost(t *testing.T) {
 	provider := GitHubProvider{HTTPClient: &http.Client{}, Token: "provider-token"}
 	redirect := provider.redirectSafeClient().CheckRedirect
