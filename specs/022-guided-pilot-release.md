@@ -1,4 +1,4 @@
-# Spec 020 - Guided pilot release
+# Spec 022 - Guided pilot release
 
 Status: accepted pilot gate; production authorities and device evidence remain
 pending until recorded.
