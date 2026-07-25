@@ -402,3 +402,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: A future worker exclusively owns serialized, idempotent writes, expensive execution and recovery from durable due-state. Hook delivery may be duplicated or absent without corrupting committed state. Native Claude and Codex adapters must conform to one executable policy before any product lifecycle capability is reported as available.
 - Refs: specs/004-runtime-portability.md; specs/009-scheduler-catch-up.md; specs/016-nonblocking-hook-execution.md; bundles/base/runtime/hook-policy.json; internal/hookpolicy
 - Supersedes: none
+
+## ADPT - Install product adapters locally per workspace
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A user-wide hook configuration would affect unrelated work and make safe removal difficult, while the product must preserve existing runtime configuration in a consultant's workspace.
+- Decision: Install Maestro runtime adapters as one owned entry in workspace-local runtime configuration. The installer is idempotent, preserves unrelated entries, uses an explicit short timeout and removes only its exact owned entry. Runtime trust remains a runtime concern; installation does not bypass it.
+- Consequences: Claude and Codex receive separately managed local configuration and can be removed without deleting user settings. A workspace adapter may be absent in another workspace by design. Installation state and actual runtime execution remain distinct diagnostics.
+- Refs: specs/018-workspace-local-adapter-installation.md; internal/adaptercfg; internal/cli/cli.go
+- Supersedes: none

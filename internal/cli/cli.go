@@ -17,6 +17,7 @@ import (
 	baseprofile "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/profile"
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
@@ -47,12 +48,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|hook|skills|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|hook|adapter|skills|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|hook|skills|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|hook|adapter|skills|memory>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -75,6 +76,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runSession(args[1:], out, errOut, defaultDataRoot)
 	case "hook":
 		return runHook(args[1:], out, errOut, defaultDataRoot)
+	case "adapter":
+		return runAdapter(args[1:], out, errOut)
 	case "skills":
 		return runSkills(args[1:], out, errOut)
 	case "memory":
@@ -808,6 +811,36 @@ func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, output, errOut)
+}
+
+func runAdapter(args []string, out, errOut io.Writer) int {
+	if len(args) == 0 || (args[0] != "install" && args[0] != "uninstall" && args[0] != "status") {
+		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status> --runtime claude|codex [workspace-path]")
+		return ExitUsage
+	}
+	flags := newFlagSet("adapter "+args[0], errOut)
+	runtimeName := flags.String("runtime", "", "target runtime: claude or codex")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 {
+		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status> --runtime claude|codex [workspace-path]")
+		return ExitUsage
+	}
+	path := optionalArg(flags.Args())
+	var (
+		status adaptercfg.Status
+		err    error
+	)
+	switch args[0] {
+	case "install":
+		status, err = adaptercfg.Install(*runtimeName, path)
+	case "uninstall":
+		status, err = adaptercfg.Uninstall(*runtimeName, path)
+	case "status":
+		status, err = adaptercfg.Inspect(*runtimeName, path)
+	}
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, status, errOut)
 }
 
 func resolveProfile(dataRoot, requested string, explicit bool) (profile.State, error) {
