@@ -259,6 +259,24 @@ func TestSessionPacketReportsPointersWithoutOwnerFacetBodies(t *testing.T) {
 	}
 }
 
+func TestSessionBridgeProducesTheSameBoundedAdapterInputForEachRuntime(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "Developer", "case-a")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("workspace init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runSession([]string{"bridge", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"event": "session_start"`) || !strings.Contains(output.String(), `"runtime": "claude"`) || !strings.Contains(output.String(), `"injection_state": "unavailable"`) {
+		t.Fatalf("Claude bridge exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runSession([]string{"bridge", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"runtime": "codex"`) || strings.Contains(output.String(), "Descreva como voce quer falar") {
+		t.Fatalf("Codex bridge exit = %d, output = %s", code, output.String())
+	}
+}
+
 func TestInitPersistsTheSelectedInteractionProfile(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

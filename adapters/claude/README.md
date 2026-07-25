@@ -4,8 +4,10 @@ This is the thin product adapter boundary for Claude. Policies, memory and
 capability states remain canonical in `bundles/base/runtime/capabilities.json`.
 
 Current state: `bcgos doctor` discovers a local Claude executable, while every
-product lifecycle event remains explicitly unavailable. Development hooks under
-`.claude/` are not product adapter wiring.
+product lifecycle event remains explicitly unavailable. `bcgos session bridge
+--runtime claude [workspace-path]` supplies a bounded Session Start envelope
+for a future adapter to consume; it does not install a hook or inject content.
+Development hooks under `.claude/` are not product adapter wiring.
 
 Future wiring may map Claude-native mechanisms to `session_start`,
 `pre_action_guard`, `post_action_observe`, `stop_finalize` and
