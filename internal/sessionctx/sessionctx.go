@@ -15,6 +15,19 @@ import (
 
 const skillsCatalogPointer = "bundles/base/skills/catalog.json"
 
+// sessionSafeFacets is intentionally an allowlist rather than an inference
+// from a mutable local registry. Adding a facet to session context requires a
+// reviewed change here and contract tests, even when its registry reader list
+// says "session".
+var sessionSafeFacets = map[string]struct{}{
+	"professional-role":   {},
+	"communication-style": {},
+	"voice":               {},
+	"preferences":         {},
+	"decision-rules":      {},
+	"working-boundaries":  {},
+}
+
 type Sources struct {
 	Profile   profile.State
 	Workspace workspace.Inspection
@@ -94,7 +107,11 @@ func Build(sources Sources) Packet {
 			OperatingState: pointer(sources.Owner.OperatingState),
 			Tasks:          pointer(sources.Owner.Tasks),
 		},
-		Atlas:  Atlas{Managed: pointerAtlas(sources.Atlas.Managed), Owner: pointerAtlas(sources.Atlas.Owner), Workspace: pointerAtlas(sources.Atlas.Workspace)},
+		Atlas: Atlas{
+			Managed:   pointerAtlas("managed", sources.Atlas.Managed),
+			Owner:     pointerAtlas("owner", sources.Atlas.Owner),
+			Workspace: pointerAtlas("workspace", sources.Atlas.Workspace),
+		},
 		Skills: Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
 		Memory: Memory{State: "unavailable", Message: "memory context injection requires a runtime adapter"},
 	}
@@ -135,7 +152,7 @@ func (packet Packet) Validate() error {
 func sessionFacets(facets map[string]ownerctx.Facet) map[string]Pointer {
 	result := make(map[string]Pointer)
 	for id, facet := range facets {
-		if hasReader(facet.Readers, "session") {
+		if _, safe := sessionSafeFacets[id]; safe && facet.Sensitivity != "sensitive" && hasReader(facet.Readers, "session") {
 			result[id] = pointer(facet.Pointer)
 		}
 	}
@@ -155,6 +172,10 @@ func pointer(value ownerctx.Pointer) Pointer {
 	return Pointer{Path: value.Path, Available: value.Available, State: value.State}
 }
 
-func pointerAtlas(value atlas.Pointer) Pointer {
-	return Pointer{Path: value.Path, Available: value.Available, State: value.State}
+func pointerAtlas(scope string, value atlas.Pointer) Pointer {
+	pointer := Pointer{Available: value.Available, State: value.State}
+	if value.State != "unavailable" {
+		pointer.Path = "bcgos://atlas/" + scope
+	}
+	return pointer
 }

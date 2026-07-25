@@ -15,7 +15,8 @@ adapter; it does not itself read, inject or summarize private content.
 
 - the interaction-profile ID and configuration source;
 - workspace identity, readiness and brain readability;
-- pointers to owner facets that explicitly allow the `session` reader;
+- pointers to owner facets that both explicitly allow the `session` reader and
+  appear in the reviewed session-safe allowlist;
 - a pointer to current operating state and the explicit unavailable task
   pointer;
 - managed, owner and workspace atlas availability and pointers;
@@ -27,6 +28,15 @@ The packet must never contain an owner-facet body, a client/project/daily page,
 a conversation transcript, a memory artifact body, a credential, or a
 Walter-only facet such as the psychological profile.
 
+Atlas pointers are portable logical references (`bcgos://atlas/<scope>`), not
+local filesystem paths. An adapter resolves a reference only after it has
+resolved its own workspace, purpose and authorization.
+
+`reader=session` is necessary but not sufficient for an owner facet. The
+packet fails closed: a sensitive facet is always omitted, and a new non-
+sensitive facet remains omitted until it is added to the reviewed session-safe
+allowlist with contract tests.
+
 ## Runtime boundary
 
 The packet is a local, runtime-neutral contract. It does not install a Claude
@@ -37,8 +47,9 @@ own context budget, and report unavailable or omitted sources consistently.
 
 ## Validation
 
-- session-readable owner pointers are included and Walter-only pointers are
-  omitted;
+- reviewed session-safe owner pointers are included; sensitive, Walter-only
+  and unreviewed owner pointers are omitted;
 - missing owner, workspace or atlas sources produce a valid `partial` packet;
 - the skills catalog remains a pointer only;
 - memory injection remains explicitly unavailable until adapters exist.
+- packet references never reveal absolute local filesystem paths.

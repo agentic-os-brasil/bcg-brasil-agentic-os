@@ -1,6 +1,8 @@
 package sessionctx
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
@@ -33,8 +35,54 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 	if _, ok := packet.Owner.Facets["psychological-profile"]; ok {
 		t.Fatalf("sensitive Walter-only facet leaked into packet: %#v", packet.Owner.Facets)
 	}
+	if packet.Atlas.Owner.Path != "bcgos://atlas/owner" || packet.Atlas.Workspace.Path != "bcgos://atlas/workspace" {
+		t.Fatalf("atlas references must be portable: %#v", packet.Atlas)
+	}
 	if packet.Skills.CatalogPointer != "bundles/base/skills/catalog.json" || packet.Memory.State != "unavailable" {
 		t.Fatalf("bounded sources = %#v", packet)
+	}
+	encoded, err := json.Marshal(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "/local/") || strings.Contains(string(encoded), "/work/") {
+		t.Fatalf("packet leaked an absolute local path: %s", encoded)
+	}
+}
+
+func TestBuildFailsClosedForSensitiveSessionReadableFacet(t *testing.T) {
+	packet := Build(Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+		Owner: ownerctx.Status{Initialized: true, Facets: map[string]ownerctx.Facet{
+			"psychological-profile": {
+				Pointer:     ownerctx.Pointer{Path: "owner/self/psychological-profile.md", Available: true, State: "available"},
+				Readers:     []string{"session", "walter"},
+				Sensitivity: "sensitive",
+			},
+		}},
+		Atlas: atlas.Status{Managed: atlas.Pointer{State: "unavailable"}},
+	})
+	if _, ok := packet.Owner.Facets["psychological-profile"]; ok {
+		t.Fatalf("sensitive session-readable facet leaked into packet: %#v", packet.Owner.Facets)
+	}
+}
+
+func TestBuildAllowsOnlyKnownSessionSafeFacets(t *testing.T) {
+	packet := Build(Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+		Owner: ownerctx.Status{Initialized: true, Facets: map[string]ownerctx.Facet{
+			"unreviewed-future-facet": {
+				Pointer:     ownerctx.Pointer{Path: "owner/self/unreviewed-future-facet.md", Available: true, State: "available"},
+				Readers:     []string{"session"},
+				Sensitivity: "professional",
+			},
+		}},
+		Atlas: atlas.Status{Managed: atlas.Pointer{State: "unavailable"}},
+	})
+	if len(packet.Owner.Facets) != 0 {
+		t.Fatalf("unreviewed facet entered the packet: %#v", packet.Owner.Facets)
 	}
 }
 
