@@ -4,6 +4,7 @@
 package federation
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -180,7 +181,14 @@ func cloneCandidates(values []SkillCandidate) []SkillCandidate {
 }
 
 func Parse(reader io.Reader) (Batch, error) {
-	decoder := json.NewDecoder(reader)
+	payload, err := io.ReadAll(reader)
+	if err != nil {
+		return Batch{}, err
+	}
+	if err := rejectDuplicateKeys(payload); err != nil {
+		return Batch{}, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
 	var batch Batch
 	if err := decoder.Decode(&batch); err != nil {
@@ -197,6 +205,56 @@ func Parse(reader io.Reader) (Batch, error) {
 		return Batch{}, err
 	}
 	return batch, nil
+}
+
+func rejectDuplicateKeys(payload []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	if err := walkJSON(decoder); err != nil {
+		return err
+	}
+	return nil
+}
+
+func walkJSON(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	switch delimiter := token.(type) {
+	case json.Delim:
+		switch delimiter {
+		case '{':
+			seen := map[string]struct{}{}
+			for decoder.More() {
+				keyToken, err := decoder.Token()
+				if err != nil {
+					return err
+				}
+				key, ok := keyToken.(string)
+				if !ok {
+					return errors.New("federation object key is not a string")
+				}
+				if _, exists := seen[key]; exists {
+					return fmt.Errorf("duplicate federation object key %q", key)
+				}
+				seen[key] = struct{}{}
+				if err := walkJSON(decoder); err != nil {
+					return err
+				}
+			}
+			_, err = decoder.Token()
+			return err
+		case '[':
+			for decoder.More() {
+				if err := walkJSON(decoder); err != nil {
+					return err
+				}
+			}
+			_, err = decoder.Token()
+			return err
+		}
+	}
+	return nil
 }
 
 func (batch Batch) Validate() error {

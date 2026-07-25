@@ -85,6 +85,20 @@ func TestParseRejectsUnknownOrUnapprovedWireData(t *testing.T) {
 	}
 }
 
+func TestParseRejectsDuplicateKeysAndOversizedBatch(t *testing.T) {
+	duplicate := `{"schema_version":1,"schema_version":1,"installation_id":"a1b2c3d4e5f60708","period":"2026-W30","product_version":"v0.1.0","runtime":"claude","signals":[],"candidates":[]}`
+	if _, err := Parse(strings.NewReader(duplicate)); err == nil {
+		t.Fatal("duplicate object key was accepted")
+	}
+	batch := Batch{SchemaVersion: 1, InstallationID: "a1b2c3d4e5f60708", Period: "2026-W30", ProductVersion: "v0.1.0", Runtime: RuntimeClaude}
+	for i := 0; i < 9; i++ {
+		batch.Signals = append(batch.Signals, Signal{Kind: SignalFriction, Capability: CapabilityWorkspaceAgentSetup, Stage: StageFirstUse, Evidence: EvidenceOnce, Confidence: ConfidenceLow, Outcome: OutcomeNeutral})
+	}
+	if err := batch.Validate(); err == nil {
+		t.Fatal("oversized signal batch was accepted")
+	}
+}
+
 func TestBatchRejectsPortableSkillContentUntilPortableCollectorExists(t *testing.T) {
 	batch := Batch{
 		SchemaVersion:  1,
