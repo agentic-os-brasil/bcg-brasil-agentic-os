@@ -402,3 +402,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: A GitHub transfer does not silently redefine the trust root. The bootstrapper and `bcgos` must reject unknown issuers, incompatible versions, unsigned manifests, duplicate JSON keys, unlisted artifacts and content from workspace or user-local data roots. Release versions cannot be relabeled across channels; promotion requires a new version and signed manifest. Production key custody, platform code-signing identities and provider registration remain explicit release-environment approvals.
 - Refs: RELS; UPDT; SECU; DATA; specs/001-cli-distribution.md; specs/020-release-distribution.md; schemas/release-manifest.schema.json
 - Supersedes: none
+
+## AUTH - Use GitHub App device flow with native-store fail-closed authentication
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Pilot users need browser-based access to a private release without cloning source or managing personal tokens, while provider credentials must not enter files, environment variables, logs or the managed bundle.
+- Decision: Use a least-privilege GitHub App device flow for the pilot provider, with read-only Contents access to the selected release repository and short-lived user credentials stored only through an approved native Keychain or Windows Credential Manager adapter. Keep provider transport behind an adapter, strip authorization on cross-host asset redirects and authenticate the signed manifest before accepting its artifact list. If the native store or provider registration is absent, report `unavailable`; do not fall back to plaintext, Git helpers, environment variables or `gh`.
+- Consequences: Authentication, refresh and verified download are testable independently of production configuration. The CLI exposes schema-versioned auth/update states and binds one confirmation to a deterministic update plan, but remains unavailable until native-store adapters, GitHub App installation and production key registry are approved.
+- Refs: DIST; SECU; UPDT; specs/020-release-distribution.md; specs/021-private-release-provider.md; internal/releaseprovider; internal/updateplan
+- Supersedes: none

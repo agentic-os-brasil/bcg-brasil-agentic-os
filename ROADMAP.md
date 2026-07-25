@@ -85,11 +85,15 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Configure production manifest/artifact signing and native Windows/macOS
   code-signing authorities.
 - [x] Define and validate the provider-neutral signed release manifest and CLI↔bundle compatibility rules.
-- [ ] Implement browser-based private-release authentication.
+- [x] Implement browser device-flow, refresh and private-provider adapters with
+  fail-closed secure-store contracts.
+- [ ] Approve and connect native Keychain/Credential Manager adapters, GitHub
+  App registration and selected-repository installation.
 - [x] Implement signed local-release verification, safe staging, bootstrapper
   activation and last-known-good rollback.
-- [ ] Implement authenticated provider discovery and verified download into
-  the local release boundary.
+- [x] Implement provider discovery and manifest-authorized verified download
+  into the local release boundary.
+- [ ] Configure the production provider and release-key registry.
 - [ ] Ensure updates never overwrite local configuration or work data.
 - [ ] Run install/update/rollback tests on clean corporate devices for both platforms.
 

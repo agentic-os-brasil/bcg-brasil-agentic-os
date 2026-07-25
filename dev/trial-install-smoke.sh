@@ -4,7 +4,13 @@ set -euo pipefail
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 trial_root="$(mktemp -d)"
-trap 'rm -rf "$trial_root"' EXIT
+cleanup_trial_root() {
+  # Go's module cache makes downloaded sources read-only. Restore write
+  # permission so cleanup remains reliable on macOS as well as Linux.
+  chmod -R u+w "$trial_root" 2>/dev/null || true
+  rm -rf "$trial_root"
+}
+trap cleanup_trial_root EXIT
 
 artifact_dir="$trial_root/artifact"
 install_root="$trial_root/install"

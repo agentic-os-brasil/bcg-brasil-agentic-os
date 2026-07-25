@@ -46,25 +46,14 @@ func VerifyDirectory(directory string, registry KeyRegistry) (VerifiedRelease, e
 	if err != nil {
 		return VerifiedRelease{}, err
 	}
-	manifest, err := releasecontract.Parse(bytes.NewReader(manifestBody))
-	if err != nil {
-		return VerifiedRelease{}, err
-	}
-	publicKey, ok := registry.Lookup(manifest.Product, manifest.Issuer.ID, manifest.Issuer.KeyID)
-	if !ok || len(publicKey) != ed25519.PublicKeySize {
-		return VerifiedRelease{}, fmt.Errorf("release key %s/%s/%s is not approved", manifest.Product, manifest.Issuer.ID, manifest.Issuer.KeyID)
-	}
 	manifestSignature, err := readRegular(filepath.Join(directory, ManifestSignatureName), ed25519.SignatureSize)
 	if err != nil {
 		return VerifiedRelease{}, err
 	}
-	if len(manifestSignature) != ed25519.SignatureSize {
-		return VerifiedRelease{}, errors.New("release manifest signature has an invalid length")
+	manifest, publicKey, err := VerifyManifest(manifestBody, manifestSignature, registry)
+	if err != nil {
+		return VerifiedRelease{}, err
 	}
-	if !ed25519.Verify(publicKey, manifestBody, manifestSignature) {
-		return VerifiedRelease{}, errors.New("release manifest signature verification failed")
-	}
-
 	expected := map[string]bool{
 		ManifestName:               true,
 		ManifestSignatureName:      true,
@@ -115,6 +104,27 @@ func VerifyDirectory(directory string, registry KeyRegistry) (VerifiedRelease, e
 	}
 	keyCopy := append(ed25519.PublicKey(nil), publicKey...)
 	return VerifiedRelease{Directory: directory, Manifest: manifest, PublicKey: keyCopy}, nil
+}
+
+func VerifyManifest(manifestBody, signature []byte, registry KeyRegistry) (releasecontract.Manifest, ed25519.PublicKey, error) {
+	if registry == nil {
+		return releasecontract.Manifest{}, nil, errors.New("approved release-key registry is required")
+	}
+	manifest, err := releasecontract.Parse(bytes.NewReader(manifestBody))
+	if err != nil {
+		return releasecontract.Manifest{}, nil, err
+	}
+	publicKey, ok := registry.Lookup(manifest.Product, manifest.Issuer.ID, manifest.Issuer.KeyID)
+	if !ok || len(publicKey) != ed25519.PublicKeySize {
+		return releasecontract.Manifest{}, nil, fmt.Errorf("release key %s/%s/%s is not approved", manifest.Product, manifest.Issuer.ID, manifest.Issuer.KeyID)
+	}
+	if len(signature) != ed25519.SignatureSize {
+		return releasecontract.Manifest{}, nil, errors.New("release manifest signature has an invalid length")
+	}
+	if !ed25519.Verify(publicKey, manifestBody, signature) {
+		return releasecontract.Manifest{}, nil, errors.New("release manifest signature verification failed")
+	}
+	return manifest, append(ed25519.PublicKey(nil), publicKey...), nil
 }
 
 func readRegular(path string, maximum int64) ([]byte, error) {
