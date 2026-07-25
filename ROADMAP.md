@@ -133,6 +133,9 @@ The roadmap separates things to build from things to decide. Detailed dates rema
   state, never local configuration, memory or workspace data.
 - [x] Generate separately classified isolated Windows/macOS engineering
   evidence for install, update and rollback behavior.
+- [x] Make the pinned stable bootstrapper create its own verified first-install
+  plan and add sanitized Windows/macOS operator receipts for the ordered
+  clean-device install/update/rollback evidence run.
 - [ ] Run install/update/rollback tests on clean corporate devices for both platforms.
 
 ### Discuss before closing the track

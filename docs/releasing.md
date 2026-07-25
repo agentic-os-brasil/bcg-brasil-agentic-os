@@ -87,6 +87,14 @@ native binaries. It is short-lived custody evidence for the installer work; it
 is not the independently signed bootstrapper seed channel and is not pilot
 distribution.
 
+After the approved installer channel turns those inputs into a platform-signed
+seed package, `acceptance/clean-device/` verifies one real Windows or macOS
+device through first install, signed update and rollback. Its three sanitized
+receipts are digest-bound into a schema-v2 operator attestation. The repository
+does not authenticate the operator or device, so an approved external
+countersignature is still required for corporate acceptance. These files are
+not release assets and cannot promote the release automatically.
+
 ## Authorities still required
 
 - Maestro Ed25519 production release key and custody process.
@@ -98,7 +106,8 @@ distribution.
 - Windows Authenticode identity and macOS Developer ID/notarization.
 - Authenticated private-release provider registration.
 - Immutable publication ledger across release versions and channels.
-- Clean corporate-device acceptance and incident/support ownership.
+- Approved corporate-device countersignature/acceptance and incident/support
+  ownership.
 
 The repository validates the registry contract and test fixtures. It does not
 contain a production registry or a private signing key. The independently

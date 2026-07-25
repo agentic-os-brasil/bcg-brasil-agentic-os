@@ -130,4 +130,5 @@ confined to `installers/trial`.
 - Deterministic packaging excludes every non-allowlisted path.
 - Release notes disclose capability gaps and migration requirements.
 - Validation distinguishes candidate build, signed publication, local
-  installation, corporate-device acceptance and pilot readiness.
+  installation, operator-attested device evidence, approved corporate-device
+  acceptance and pilot readiness.

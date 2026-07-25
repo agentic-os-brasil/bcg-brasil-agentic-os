@@ -14,7 +14,12 @@ managed provider registration. The checked-in registration is intentionally
 authority-seed and native-store gates are approved, `bcgos update --check`
 persists one exact signed plan and `--confirm` starts the stable bootstrapper
 only for that plan; `status` and `doctor` report the same availability
-boundary.
+boundary. The stable bootstrapper now prepares its own first-install activation
+plan after verifying the pinned registry and complete signed release; it does
+not accept a caller-authored plan or managed root. Clean-device operator scripts
+for Windows and macOS verify native signatures, registry-seed identity, exact
+manifest/plan bindings and a sanitized owner-data sentinel before writing phase
+receipts.
 
 That is engineering readiness, not a distributable pilot release. Production
 signing, provider registration, production Keychain/Credential Manager
@@ -81,8 +86,16 @@ state. For each platform:
 7. validate a `corporate_device` report without storing hostnames, usernames,
    serial numbers or other raw device identifiers.
 
-The report uses a one-way device identifier hash and an operator ID. It does
-not enter the product bundle.
+Use `acceptance/clean-device/` to record the ordered transition
+`none -> baseline -> update -> baseline`. The final schema-v2 report consumes
+the three immutable receipt files, binds both provider release identities and
+manifest digests, one native signer, one bootstrapper/registry seed, the update
+activation receipt, and the named operator/support owner. It uses a one-way
+device identifier hash and never records raw paths, hostnames, usernames,
+serial numbers or logs. This is an operator attestation, not authenticated
+corporate acceptance: the approved external evidence owner must countersign it
+before the clean-device gate can close. Reports and operator scripts do not
+enter the product bundle.
 
 ## Cohort progression
 
