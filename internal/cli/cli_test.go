@@ -158,7 +158,7 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 		t.Fatalf("init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	code := runHook([]string{"session-start", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
+	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
 	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"injection_state\":\"unavailable\"`) {
 		t.Fatalf("hook exit = %d, output = %s", code, output.String())
 	}
@@ -182,7 +182,7 @@ func TestDoctorSeparatesConfiguredAdapterFromRuntimeCapability(t *testing.T) {
 	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
 		t.Fatal(output.String())
 	}
-	if _, err := adaptercfg.Install("codex", workspacePath); err != nil {
+	if _, err := adaptercfg.Install("codex", workspacePath, "/opt/maestro/bcgos"); err != nil {
 		t.Fatal(err)
 	}
 	output.Reset()

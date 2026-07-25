@@ -60,7 +60,8 @@ entre outros:
 
 - instalador e atualizações seguras para usuários finais;
 - releases assinados e autenticação de distribuição;
-- hooks de produto para Claude e Codex;
+- recibos de conformance em sessões reais de Claude e Codex antes de declarar
+  hooks de produto disponíveis;
 - memória automática, busca e Wiki compilada;
 - ingestão de documentos com Docling empacotado;
 - sincronização com ferramentas de tarefas.
@@ -104,12 +105,15 @@ bcgos workspace-agent status <workspace>
 bcgos skills index
 bcgos session packet [workspace]
 bcgos session bridge --runtime claude|codex [workspace]
+bcgos hook session-start --runtime claude|codex [workspace]
+bcgos adapter install|status|uninstall --runtime claude|codex [workspace]
 ```
 
 Os comandos de memória expõem apenas operações já suportadas. O pacote de
 contexto de sessão expõe estados e referências limitadas, sem injetar conteúdo.
-Dreaming automático e injeção em runtime dependem de adapters que ainda estão
-sendo entregues ou revisados.
+Dreaming automático continua indisponível. O Session Start já tem uma
+configuração local, limitada e removível, mas permanece `unavailable` no
+produto até receber evidência de execução nativa em Claude e Codex.
 
 ## Princípios de produto
 
