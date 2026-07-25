@@ -2,7 +2,9 @@ package releaseverify
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -82,6 +84,55 @@ func TestAuthorityRegistryRechecksValidityAtEveryLookup(t *testing.T) {
 	now = time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)
 	if _, ok := registry.Lookup("maestro", "maestro-release", "pilot-active"); ok {
 		t.Fatal("Lookup() accepted an authority after valid_until")
+	}
+}
+
+func TestPinnedAuthorityRegistryRejectsCopiedBootstrapperTrustSubstitution(t *testing.T) {
+	now := time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC)
+	approvedBody := []byte(validAuthorityRegistryJSON())
+	sum := sha256.Sum256(approvedBody)
+	pinnedDigest := hex.EncodeToString(sum[:])
+	approvedPath := filepath.Join(t.TempDir(), "trust", "release-authority-registry.json")
+	if err := os.MkdirAll(filepath.Dir(approvedPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(approvedPath, approvedBody, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadPinnedAuthorityRegistry(
+		approvedPath,
+		pinnedDigest,
+		func() time.Time { return now },
+	); err != nil {
+		t.Fatalf("LoadPinnedAuthorityRegistry(approved) error = %v", err)
+	}
+
+	attackerBody := strings.Replace(
+		string(approvedBody),
+		base64.StdEncoding.EncodeToString(bytesOf(1, ed25519.PublicKeySize)),
+		base64.StdEncoding.EncodeToString(bytesOf(9, ed25519.PublicKeySize)),
+		1,
+	)
+	copiedRootPath := filepath.Join(t.TempDir(), "trust", "release-authority-registry.json")
+	if err := os.MkdirAll(filepath.Dir(copiedRootPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(copiedRootPath, []byte(attackerBody), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadPinnedAuthorityRegistry(
+		copiedRootPath,
+		pinnedDigest,
+		func() time.Time { return now },
+	); err == nil {
+		t.Fatal("copied bootstrapper root established an adjacent attacker registry")
+	}
+	if _, err := LoadPinnedAuthorityRegistry(
+		approvedPath,
+		"",
+		func() time.Time { return now },
+	); err == nil {
+		t.Fatal("bootstrapper without an embedded seed digest established authority")
 	}
 }
 

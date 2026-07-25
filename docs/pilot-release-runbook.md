@@ -31,6 +31,17 @@ approval and managed-device evidence remain gates outside the repository.
 - Manifest/artifact tampering, extra files and unsafe archives fail closed.
 - Update plans bind the immutable provider release ID and authenticated
   manifest digest before asking for confirmation.
+- Pending confirmation and the bootstrapper both revalidate the signed
+  release, complete activation semantics and exact staged artifact bytes.
+- The bootstrapper resolves trust from its protected managed root, consumes
+  only the exact durable plan ID and rejects post-confirmation state changes.
+- The registry must match the digest embedded by the approved bootstrapper
+  seed; the development build remains unavailable without that digest.
+- An activation intent makes pre-State and post-State crash retries idempotent
+  only after dead-lock, backup, CLI, full bundle-tree and repeated CLI
+  self-check reconciliation.
+- Existing schema-v1 install state migrates only with an authoritative managed
+  root, preserving update and rollback continuity.
 - Install, update, automatic restoration and explicit rollback tests pass.
 - Isolated reports say `engineering_evidence_only`.
 

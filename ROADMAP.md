@@ -112,6 +112,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
   into the local release boundary.
 - [x] Bind provider discovery to deterministic update plans using the immutable
   provider release ID and authenticated manifest digest.
+- [x] Persist a strict pending-update envelope and require signed-release,
+  installed-state and activation-plan revalidation before confirmation.
 - [ ] Configure the production provider and release-key registry.
 - [x] Enforce and test that activation writes only managed core and install
   state, never local configuration, memory or workspace data.

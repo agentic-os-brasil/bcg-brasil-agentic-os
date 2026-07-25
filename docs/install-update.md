@@ -24,9 +24,12 @@ owner-data-root/
   workspaces/                 # never read or written by activation
 ```
 
-The base bundle is extracted into the transaction with traversal, links,
-special file types, duplicate paths, file-count and expanded-size limits.
-Activation copies only the staged CLI and bundle into the managed root.
+The exact signed CLI and compressed base bundle are copied into the
+transaction with their authenticated sizes and SHA-256 digests. The stable
+bootstrapper re-verifies the signed release and the complete activation
+contract. Activation then hashes the exact CLI bytes it copies and hashes the
+exact archive stream it extracts, with traversal, links, special file types,
+duplicate paths, file-count and expanded-size limits.
 
 ## Signed local-release boundary
 
@@ -45,10 +48,19 @@ verifier.
 
 ## Activation and recovery
 
-The bootstrapper takes a validated plan inside
-`owner-data-root/updates/<transaction>`. It acquires a fail-closed activation
-lock, preserves the current CLI under `managed-root/recovery`, installs the
-immutable bundle version, activates the new CLI and runs `bcgos version`.
+For updates, the bootstrapper takes only the exact durable confirmation plan ID
+and owner-data root. After the launching CLI exits, it derives the managed root
+from its own protected installed path, loads
+`managed-root/trust/release-authority-registry.json`, reloads the matching
+pending envelope and repeats confirmation. The registry bytes must match the
+SHA-256 seed embedded in that exact bootstrapper build; copying the executable
+beside a different registry cannot establish a new authority. Provider
+directories, activation paths, target and trust registry are not
+caller-selected flags. Under the activation lock it rejects any
+installed-state change since confirmation,
+revalidates all signed release, plan and staged-byte bindings, preserves the
+current CLI under `managed-root/recovery`, installs the immutable bundle,
+activates the new CLI and runs `bcgos version`.
 
 If file activation, self-check or durable state commit fails, the new CLI and
 bundle are removed and the previous CLI is restored. Explicit rollback uses
@@ -59,7 +71,20 @@ On Windows, the CLI launches the independently seeded bootstrapper with its
 own PID and exits. The bootstrapper waits for that process before touching
 `bcgos.exe`; the active executable never attempts to replace itself.
 
-The bootstrapper seed also establishes the initial release-authority registry.
+The bootstrapper seed also establishes the initial release-authority registry
+at the fixed protected path above.
+The bootstrapper build defaults to no registry seed and therefore remains
+unavailable until release authority approves and injects the exact digest.
+
+For updates, activation writes a strict intent receipt before moving managed
+payloads. If the process stops at any later boundary, the next invocation
+reclaims only a lock whose recorded process has exited, then re-verifies the
+signed source, receipt, active CLI, backup and complete installed bundle tree.
+An exact activated payload can finish the state commit only after the same
+`bcgos version` self-check succeeds during recovery. A failed self-check or
+partial payload restores the source CLI and removes the target bundle before a
+clean retry. An exact committed target consumes the pending plan as already
+successful; divergent state fails closed.
 The registry contains public keys only and cannot be replaced by an
 unauthenticated provider response or by the managed bundle it is used to
 verify. Production key custody and the signed seed delivery mechanism remain

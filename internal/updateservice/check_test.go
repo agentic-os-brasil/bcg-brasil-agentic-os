@@ -55,7 +55,7 @@ func TestCheckBindsLatestProviderReleaseAndManifestDigest(t *testing.T) {
 		}, nil
 	}
 	result, err := Check(context.Background(), CheckOptions{
-		Current:  installtx.State{SchemaVersion: 1, Release: "0.1.0"},
+		Current:  checkCurrent("darwin", "arm64"),
 		TargetOS: "darwin", TargetArch: "arm64", StagingRoot: t.TempDir(),
 		Provider: provider, Registry: releaseverify.StaticRegistry{}, Download: download,
 	})
@@ -81,7 +81,7 @@ func TestCheckRejectsDuplicateOrMismatchedProviderIdentity(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Check(context.Background(), CheckOptions{
-				Current:  installtx.State{Release: "0.1.0"},
+				Current:  checkCurrent("darwin", "arm64"),
 				TargetOS: "darwin", TargetArch: "arm64", StagingRoot: t.TempDir(),
 				Provider: fakeProvider{releases: releases}, Registry: releaseverify.StaticRegistry{},
 			})
@@ -93,7 +93,7 @@ func TestCheckRejectsDuplicateOrMismatchedProviderIdentity(t *testing.T) {
 
 	stagingRoot := t.TempDir()
 	mismatchOptions := CheckOptions{
-		Current:  installtx.State{Release: "0.1.0"},
+		Current:  checkCurrent("darwin", "arm64"),
 		TargetOS: "darwin", TargetArch: "arm64", StagingRoot: stagingRoot,
 		Provider: fakeProvider{releases: []releaseprovider.Release{{ID: 42, TagName: "maestro-v0.2.0"}}},
 		Registry: releaseverify.StaticRegistry{},
@@ -130,7 +130,7 @@ func TestCheckRejectsDuplicateOrMismatchedProviderIdentity(t *testing.T) {
 func TestCheckRemovesProvisionalDownloadWhenPlanCannotSupportTarget(t *testing.T) {
 	stagingRoot := t.TempDir()
 	_, err := Check(context.Background(), CheckOptions{
-		Current:  installtx.State{Release: "0.1.0"},
+		Current:  checkCurrent("windows", "arm64"),
 		TargetOS: "windows", TargetArch: "arm64", StagingRoot: stagingRoot,
 		Provider: fakeProvider{releases: []releaseprovider.Release{{ID: 42, TagName: "maestro-v0.3.0"}}},
 		Registry: releaseverify.StaticRegistry{},
@@ -167,5 +167,17 @@ func updateManifest(version string) releasecontract.Manifest {
 			{Kind: "cli", OS: "darwin", Arch: "arm64", Name: "bcgos_" + version + "_darwin_arm64"},
 			{Kind: "bundle", OS: "any", Arch: "any", Name: "maestro-base_" + version + ".tar.gz"},
 		},
+	}
+}
+
+func checkCurrent(targetOS, targetArch string) installtx.State {
+	return installtx.State{
+		SchemaVersion: 2,
+		Release:       "0.1.0",
+		Channel:       "canary",
+		CLIVersion:    "0.1.0",
+		BundleVersion: "0.1.0",
+		TargetOS:      targetOS,
+		TargetArch:    targetArch,
 	}
 }
