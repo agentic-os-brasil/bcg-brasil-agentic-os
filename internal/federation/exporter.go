@@ -2,6 +2,7 @@ package federation
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -62,6 +63,15 @@ type QueuedBatch struct {
 	Exhausted     bool      `json:"exhausted"`
 }
 
+type QueuedPortableSkill struct {
+	SchemaVersion int                  `json:"schema_version"`
+	Package       PortableSkillPackage `json:"package"`
+	QueuedAt      time.Time            `json:"queued_at"`
+	Attempts      int                  `json:"attempts"`
+	NextAttemptAt time.Time            `json:"next_attempt_at"`
+	Exhausted     bool                 `json:"exhausted"`
+}
+
 type FlushReport struct {
 	Delivered int
 	Retained  int
@@ -72,6 +82,16 @@ type FlushReport struct {
 // Callers must not point it at a workspace.
 type ExportStore struct {
 	Root string
+}
+
+// NewInstallationID creates the opaque identifier used at the bridge ingress.
+// It is not derived from a workspace, person, machine or customer.
+func NewInstallationID() (string, error) {
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(value), nil
 }
 
 func (store ExportStore) Enroll(enrollment Enrollment) error {
@@ -274,6 +294,121 @@ func (store ExportStore) FlushHTTP(ctx context.Context, client *http.Client, now
 	return store.Flush(ctx, bridge, now)
 }
 
+// EnqueuePortable keeps content-bearing packages separate from typed batches.
+// The package has already passed the born-portable collector's root, manifest
+// and hash checks; it still cannot enter a workspace batch.
+func (store ExportStore) EnqueuePortable(packageValue PortableSkillPackage, queuedAt time.Time) error {
+	if queuedAt.IsZero() {
+		return errors.New("portable skill queue time is required")
+	}
+	if err := packageValue.Validate(); err != nil {
+		return err
+	}
+	enrollment, err := store.Enrollment()
+	if err != nil {
+		return err
+	}
+	if !enrollment.RevokedAt.IsZero() {
+		return ErrExportRevoked
+	}
+	if err := os.MkdirAll(store.portableOutboxRoot(), 0o700); err != nil {
+		return err
+	}
+	path, err := store.portableQueuedPath(packageValue)
+	if err != nil {
+		return err
+	}
+	item := QueuedPortableSkill{SchemaVersion: SchemaVersion, Package: packageValue, QueuedAt: queuedAt.UTC(), NextAttemptAt: queuedAt.UTC()}
+	if err := writeNewJSON(path, item); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	return nil
+}
+
+func (store ExportStore) PendingPortable() ([]QueuedPortableSkill, error) {
+	if err := store.validateRoot(); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(store.portableOutboxRoot())
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	pending := make([]QueuedPortableSkill, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			return nil, fmt.Errorf("invalid portable skill outbox entry %q", entry.Name())
+		}
+		var item QueuedPortableSkill
+		if err := readStrictJSON(filepath.Join(store.portableOutboxRoot(), entry.Name()), &item); err != nil {
+			return nil, err
+		}
+		if err := item.Validate(); err != nil {
+			return nil, err
+		}
+		pending = append(pending, item)
+	}
+	sort.Slice(pending, func(left, right int) bool { return pending[left].NextAttemptAt.Before(pending[right].NextAttemptAt) })
+	return pending, nil
+}
+
+func (store ExportStore) FlushPortable(ctx context.Context, bridge PortableSkillBridge, now time.Time) (FlushReport, error) {
+	if bridge == nil || now.IsZero() {
+		return FlushReport{}, errors.New("portable skill bridge and flush time are required")
+	}
+	enrollment, err := store.Enrollment()
+	if err != nil {
+		return FlushReport{}, err
+	}
+	if !enrollment.RevokedAt.IsZero() {
+		return FlushReport{}, ErrExportRevoked
+	}
+	pending, err := store.PendingPortable()
+	if err != nil {
+		return FlushReport{}, err
+	}
+	report := FlushReport{}
+	for _, item := range pending {
+		if item.Exhausted {
+			report.Exhausted++
+			continue
+		}
+		if item.NextAttemptAt.After(now) {
+			report.Retained++
+			continue
+		}
+		path, err := store.portableQueuedPath(item.Package)
+		if err != nil {
+			return FlushReport{}, err
+		}
+		if err := bridge.SubmitPortable(ctx, enrollment.InstallationID, item.Package); err == nil {
+			if err := os.Remove(path); err != nil {
+				return FlushReport{}, err
+			}
+			report.Delivered++
+			continue
+		}
+		item.Attempts++
+		if item.Attempts >= MaximumDeliveryAttempts {
+			item.Attempts = MaximumDeliveryAttempts
+			item.Exhausted = true
+			item.NextAttemptAt = time.Time{}
+		} else {
+			item.NextAttemptAt = now.UTC().Add(retryDelay(item.Attempts))
+		}
+		if err := item.Validate(); err != nil {
+			return FlushReport{}, err
+		}
+		if err := writeAtomicJSON(path, item); err != nil {
+			return FlushReport{}, err
+		}
+		report.Retained++
+	}
+	return report, nil
+}
+
 // LocalState exists for support and tests. It deliberately exposes only the
 // enrollment record, never pending payloads or remote errors.
 func (store ExportStore) LocalState() (string, error) {
@@ -316,6 +451,25 @@ func (item QueuedBatch) Validate() error {
 	return nil
 }
 
+func (item QueuedPortableSkill) Validate() error {
+	if item.SchemaVersion != SchemaVersion || item.QueuedAt.IsZero() || item.Attempts < 0 || item.Attempts > MaximumDeliveryAttempts {
+		return errors.New("invalid queued portable skill")
+	}
+	if err := item.Package.Validate(); err != nil {
+		return err
+	}
+	if item.Exhausted {
+		if item.Attempts != MaximumDeliveryAttempts || !item.NextAttemptAt.IsZero() {
+			return errors.New("invalid exhausted queued portable skill")
+		}
+		return nil
+	}
+	if item.NextAttemptAt.IsZero() {
+		return errors.New("queued portable skill requires next attempt")
+	}
+	return nil
+}
+
 func (store ExportStore) readEnrollment() (Enrollment, error) {
 	var enrollment Enrollment
 	if err := readStrictJSON(store.enrollmentPath(), &enrollment); err != nil {
@@ -336,6 +490,15 @@ func (store ExportStore) queuedPath(batch Batch) (string, error) {
 	return filepath.Join(store.outboxRoot(), hex.EncodeToString(digest[:])+".json"), nil
 }
 
+func (store ExportStore) portableQueuedPath(packageValue PortableSkillPackage) (string, error) {
+	encoded, err := json.Marshal(packageValue)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(encoded)
+	return filepath.Join(store.portableOutboxRoot(), hex.EncodeToString(digest[:])+".json"), nil
+}
+
 func (store ExportStore) validateRoot() error {
 	if strings.TrimSpace(store.Root) == "" {
 		return errors.New("federation store root is required")
@@ -345,6 +508,9 @@ func (store ExportStore) validateRoot() error {
 
 func (store ExportStore) enrollmentPath() string { return filepath.Join(store.Root, "enrollment.json") }
 func (store ExportStore) outboxRoot() string     { return filepath.Join(store.Root, "outbox") }
+func (store ExportStore) portableOutboxRoot() string {
+	return filepath.Join(store.Root, "portable-outbox")
+}
 
 func retryDelay(attempt int) time.Duration {
 	switch attempt {

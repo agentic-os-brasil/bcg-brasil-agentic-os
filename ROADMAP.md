@@ -190,6 +190,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement the user-local batch exporter, enrollment record, bounded spool, Local Darwin federator and born-portable skill collector.
 - [x] Implement the central GitHub App bridge seam, aggregate digest and actionable incident routing.
 - [x] Implement central Darwin advancement-proposal curation with maintainer-only acceptance.
+- [x] Add one-time enrollment/revocation, weekly runtime executor and born-portable skill transport.
 - [ ] Select a balanced Windows/macOS and classic/technical cohort.
 - [ ] Onboard users without requiring Git, Go, Python, Node or Docker.
 - [ ] Measure time-to-first-success, update reliability and support demand.

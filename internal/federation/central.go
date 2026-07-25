@@ -48,11 +48,38 @@ type CentralBridge struct {
 }
 
 func (bridge CentralBridge) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodPost || request.URL.Path != "/federation/v1/batches" {
+	if request.Method != http.MethodPost || (request.URL.Path != "/federation/v1/batches" && request.URL.Path != "/federation/v1/portable-skills") {
 		http.NotFound(writer, request)
 		return
 	}
-	request.Body = http.MaxBytesReader(writer, request.Body, 32<<10)
+	maximumBody := int64(32 << 10)
+	if request.URL.Path == "/federation/v1/portable-skills" {
+		maximumBody = MaximumPortableSkillBytes + (16 << 10)
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, maximumBody)
+	if request.URL.Path == "/federation/v1/portable-skills" {
+		installationID := request.Header.Get("X-Maestro-Installation-ID")
+		packageValue, err := ParsePortableSkill(request.Body)
+		if err != nil {
+			http.Error(writer, "invalid portable skill package", http.StatusBadRequest)
+			return
+		}
+		accepted, err := bridge.Inbox.AcceptPortable(installationID, packageValue)
+		if err != nil {
+			if errors.Is(err, ErrUntrustedInstallation) {
+				http.Error(writer, "untrusted installation", http.StatusForbidden)
+				return
+			}
+			http.Error(writer, "federation bridge unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if accepted {
+			writer.WriteHeader(http.StatusAccepted)
+		} else {
+			writer.WriteHeader(http.StatusOK)
+		}
+		return
+	}
 	batch, err := Parse(request.Body)
 	if err != nil {
 		http.Error(writer, "invalid federation batch", http.StatusBadRequest)
@@ -170,7 +197,68 @@ func (inbox CentralInbox) Digest(period string) (CentralDigest, error) {
 	return digest, nil
 }
 
-func (inbox CentralInbox) batchRoot() string { return filepath.Join(inbox.Root, "batches") }
+// AcceptPortable stores an explicitly born-portable package without retaining
+// the submitting installation identity. Identity is used only at the ingress
+// gate; central curation sees the package and manifest, never a workspace.
+func (inbox CentralInbox) AcceptPortable(installationID string, packageValue PortableSkillPackage) (bool, error) {
+	if strings.TrimSpace(inbox.Root) == "" {
+		return false, errors.New("central federation inbox root is required")
+	}
+	if !installationIDPattern.MatchString(installationID) || !inbox.AllowedInstallations[installationID] {
+		return false, ErrUntrustedInstallation
+	}
+	if err := packageValue.Validate(); err != nil {
+		return false, err
+	}
+	if err := os.MkdirAll(inbox.portableRoot(), 0o700); err != nil {
+		return false, err
+	}
+	encoded, err := json.Marshal(packageValue)
+	if err != nil {
+		return false, err
+	}
+	digest := sha256.Sum256(encoded)
+	path := filepath.Join(inbox.portableRoot(), hex.EncodeToString(digest[:])+".json")
+	if err := writeNewJSON(path, packageValue); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (inbox CentralInbox) PortableSkills() ([]PortableSkillPackage, error) {
+	if strings.TrimSpace(inbox.Root) == "" {
+		return nil, errors.New("central federation inbox root is required")
+	}
+	entries, err := os.ReadDir(inbox.portableRoot())
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	packages := make([]PortableSkillPackage, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			return nil, fmt.Errorf("invalid central portable skill entry %q", entry.Name())
+		}
+		var packageValue PortableSkillPackage
+		if err := readStrictJSON(filepath.Join(inbox.portableRoot(), entry.Name()), &packageValue); err != nil {
+			return nil, err
+		}
+		if err := packageValue.Validate(); err != nil {
+			return nil, err
+		}
+		packages = append(packages, packageValue)
+	}
+	sort.Slice(packages, func(left, right int) bool { return packages[left].Manifest.SkillID < packages[right].Manifest.SkillID })
+	return packages, nil
+}
+
+func (inbox CentralInbox) batchRoot() string    { return filepath.Join(inbox.Root, "batches") }
+func (inbox CentralInbox) portableRoot() string { return filepath.Join(inbox.Root, "portable-skills") }
 
 func tallyKey(value any) (string, error) {
 	encoded, err := json.Marshal(value)

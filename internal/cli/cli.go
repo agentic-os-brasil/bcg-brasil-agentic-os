@@ -18,6 +18,7 @@ import (
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
@@ -46,12 +47,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory|federation>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory|federation>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -76,10 +77,91 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runSkills(args[1:], out, errOut)
 	case "memory":
 		return runMemory(args[1:], in, out, errOut)
+	case "federation":
+		return runFederation(args[1:], out, errOut, defaultDataRoot)
 	default:
 		fmt.Fprintf(errOut, "unknown command %q\n", args[0])
 		return ExitUsage
 	}
+}
+
+func runFederation(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos federation <enroll|status|revoke>")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	store := federation.ExportStore{Root: filepath.Join(root, "federation")}
+	switch args[0] {
+	case "enroll":
+		flags := newFlagSet("federation enroll", errOut)
+		accepted := flags.Bool("accept-federated-improvement-contract", false, "accept the one-time automatic pilot reporting contract")
+		endpoint := flags.String("bridge-endpoint", "", "managed HTTPS batch bridge endpoint")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+			fmt.Fprintln(errOut, "usage: bcgos federation enroll --accept-federated-improvement-contract --bridge-endpoint https://bridge.example/federation/v1/batches")
+			return ExitUsage
+		}
+		if !*accepted {
+			fmt.Fprintln(errOut, "--accept-federated-improvement-contract is required; enrollment authorizes automatic typed pilot reporting until revocation")
+			return ExitUsage
+		}
+		installationID, err := federation.NewInstallationID()
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if err := store.Enroll(federation.Enrollment{InstallationID: installationID, BridgeEndpoint: *endpoint, ContractVersion: federation.PilotContractVersion, AcceptedAt: time.Now().UTC(), AutomaticExport: true}); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeFederationStatus(out, "enrolled", store, errOut)
+	case "status":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos federation status")
+			return ExitUsage
+		}
+		enrollment, err := store.Enrollment()
+		if errors.Is(err, federation.ErrNotEnrolled) {
+			return writeJSON(out, struct {
+				State string `json:"state"`
+			}{State: "not_enrolled"}, errOut)
+		}
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		state := "enrolled"
+		if !enrollment.RevokedAt.IsZero() {
+			state = "revoked"
+		}
+		return writeFederationStatus(out, state, store, errOut)
+	case "revoke":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos federation revoke")
+			return ExitUsage
+		}
+		if err := store.Revoke(time.Now().UTC()); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeFederationStatus(out, "revoked", store, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos federation <enroll|status|revoke>")
+		return ExitUsage
+	}
+}
+
+func writeFederationStatus(out io.Writer, state string, store federation.ExportStore, errOut io.Writer) int {
+	enrollment, err := store.Enrollment()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, struct {
+		State           string    `json:"state"`
+		ContractVersion string    `json:"contract_version"`
+		AcceptedAt      time.Time `json:"accepted_at"`
+		AutomaticExport bool      `json:"automatic_export"`
+		RevokedAt       time.Time `json:"revoked_at,omitempty"`
+	}{State: state, ContractVersion: enrollment.ContractVersion, AcceptedAt: enrollment.AcceptedAt, AutomaticExport: enrollment.AutomaticExport, RevokedAt: enrollment.RevokedAt}, errOut)
 }
 
 func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
