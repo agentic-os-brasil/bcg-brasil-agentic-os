@@ -48,6 +48,14 @@ const (
 
 const AuthorityLocalExecution = "local_execution"
 
+const ActivePointerPath = "bcgos://execution/active"
+
+const (
+	ActivePointerAvailable   = "available"
+	ActivePointerUnavailable = "unavailable"
+	ActivePointerAmbiguous   = "ambiguous"
+)
+
 var (
 	ErrRevisionConflict     = errors.New("execution item state revision conflict")
 	ErrAttemptConflict      = errors.New("execution item attempt conflict")
@@ -206,6 +214,15 @@ type MutationReceipt struct {
 	StateRevision int       `json:"state_revision"`
 	AttemptID     string    `json:"attempt_id,omitempty"`
 	CheckpointID  string    `json:"checkpoint_id,omitempty"`
+}
+
+// ActivePointer is a metadata-only capability pointer. It intentionally omits
+// the active item and attempt identities; an authorized caller resolves the
+// bounded handoff later through `bcgos work next --active`.
+type ActivePointer struct {
+	Path      string `json:"path,omitempty"`
+	Available bool   `json:"available"`
+	State     string `json:"state"`
 }
 
 type Store struct {
@@ -572,15 +589,49 @@ func (store Store) Next(workspaceID, itemID string) (NextProjection, error) {
 }
 
 func (store Store) NextActive(workspaceID string) (NextProjection, error) {
-	if err := validateStoreRoot(store.Root); err != nil {
-		return NextProjection{}, err
-	}
-	if err := validateID("workspace", workspaceID); err != nil {
-		return NextProjection{}, err
-	}
-	entries, err := os.ReadDir(store.itemsRoot(workspaceID))
+	active, err := store.activeItemIDs(workspaceID)
 	if err != nil {
 		return NextProjection{}, err
+	}
+	if len(active) == 0 {
+		return NextProjection{}, errors.New("no active execution item was found")
+	}
+	if len(active) > 1 {
+		return NextProjection{}, ErrActiveItemAmbiguous
+	}
+	return store.Next(workspaceID, active[0])
+}
+
+// ActivePointer reports whether the workspace has one safely resolvable
+// running or paused item without exposing its identity or execution content.
+func (store Store) ActivePointer(workspaceID string) (ActivePointer, error) {
+	active, err := store.activeItemIDs(workspaceID)
+	if err != nil {
+		return ActivePointer{}, err
+	}
+	switch len(active) {
+	case 0:
+		return ActivePointer{State: ActivePointerUnavailable}, nil
+	case 1:
+		return ActivePointer{Path: ActivePointerPath, Available: true, State: ActivePointerAvailable}, nil
+	default:
+		return ActivePointer{State: ActivePointerAmbiguous}, nil
+	}
+}
+
+func (store Store) activeItemIDs(workspaceID string) ([]string, error) {
+	if err := validateStoreRoot(store.Root); err != nil {
+		return nil, err
+	}
+	if err := validateID("workspace", workspaceID); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(store.itemsRoot(workspaceID))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	active := make([]string, 0, 1)
 	for _, entry := range entries {
@@ -592,19 +643,14 @@ func (store Store) NextActive(workspaceID string) (NextProjection, error) {
 		}
 		item, err := store.Inspect(workspaceID, entry.Name())
 		if err != nil {
-			return NextProjection{}, fmt.Errorf("inspect active execution item %s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("inspect active execution item %s: %w", entry.Name(), err)
 		}
 		if item.State.State == StateRunning || item.State.State == StatePaused {
 			active = append(active, entry.Name())
 		}
 	}
-	if len(active) == 0 {
-		return NextProjection{}, errors.New("no active execution item was found")
-	}
-	if len(active) > 1 {
-		return NextProjection{}, ErrActiveItemAmbiguous
-	}
-	return store.Next(workspaceID, active[0])
+	sort.Strings(active)
+	return active, nil
 }
 
 func Receipt(item Item) MutationReceipt {

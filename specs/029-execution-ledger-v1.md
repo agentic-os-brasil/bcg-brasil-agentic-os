@@ -79,8 +79,9 @@ A checkpoint may contain only a bounded summary, next step, optional blocker,
 logical artifact references and its source attempt. An authorized
 `bcgos work next --active` resolves a projection of at most 2 KB only when
 exactly one running or paused item exists. Ambiguity fails closed and requires
-an explicit item ID. Session Context exposure of `bcgos://execution/active`
-remains a separate adapter-facing slice.
+an explicit item ID. The Session Context Packet exposes only
+`bcgos://execution/active` when that same resolution is unambiguous. It never
+exposes the item ID, attempt ID, objective, done contract or checkpoint body.
 
 ## Evidence and completion
 
@@ -149,7 +150,14 @@ The evidence-backed completion slice implements:
 - revalidation of every completion criterion against the immutable contract;
 - completion only after all latest receipts still pass.
 
-Session Context pointer remains a separate adapter-facing slice.
+The Session Context and handoff slice implements:
+
+- the opaque `bcgos://execution/active` pointer only for one active item;
+- unavailable and ambiguous states without an execution identity;
+- identical Claude and Codex runtime-neutral bridge packets;
+- explicit bounded resolution through `bcgos work next --active`; and
+- a two-session handoff test with a new fenced attempt and stale-writer
+  rejection.
 
 ## V1 non-goals
 

@@ -115,6 +115,9 @@ bcgos work delete --workspace <path> --item <id> --revision <n> --confirm
 
 Os comandos de memória expõem apenas operações já suportadas. O pacote de
 contexto de sessão expõe estados e referências limitadas, sem injetar conteúdo.
+Quando existe exatamente uma execução ativa, ele expõe somente
+`bcgos://execution/active`; IDs, contrato, objetivo e checkpoint ficam fora do
+pacote e exigem resolução explícita por `work next --active`.
 Dreaming automático e injeção em runtime dependem de adapters que ainda estão
 sendo entregues ou revisados. Os comandos `work` implementam handoff e conclusão
 local evidence-backed, mas não são task sync nem generic tracing. Checkpoints
