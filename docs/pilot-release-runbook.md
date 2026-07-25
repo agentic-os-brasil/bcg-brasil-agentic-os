@@ -5,8 +5,9 @@
 The repository can build deterministic unsigned candidates, verify a signed
 release set, stage and activate an update, roll back, model private-provider
 authentication and generate explicitly isolated Windows/macOS evidence. A
-macOS Keychain backend exists in source with conformance coverage, but current
-candidates and CLI wiring still report native storage as unavailable.
+macOS Keychain backend and a Windows Credential Manager backend exist in
+source with conformance coverage, but current candidates and CLI wiring still
+report native storage as unavailable.
 
 That is engineering readiness, not a distributable pilot release. Production
 signing, native Windows/macOS candidate wiring, provider registration,

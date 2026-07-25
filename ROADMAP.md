@@ -92,6 +92,9 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement the dormant macOS Security.framework Keychain backend and
   conformance tests with no plaintext or process-argument fallback. Native
   candidate build and CLI connection remain pending.
+- [x] Implement the dormant Windows Credential Manager backend and conformance
+  tests with direct WinCred calls and no plaintext fallback. Native candidate
+  build and CLI connection remain pending.
 - [ ] Approve and connect native Keychain/Credential Manager adapters, GitHub
   App registration and selected-repository installation.
 - [x] Implement signed local-release verification, safe staging, bootstrapper
