@@ -47,6 +47,7 @@ quando os mecanismos nativos forem diferentes.
 | --- | --- |
 | Workspace local | `bcgos init`, `status` e `doctor` criam e inspecionam o espaço sem misturar dados de trabalho ao core gerenciado. |
 | Agente do workspace | Entrevista e briefing versionado, pesquisa pública aprovada e dossiê isolado por projeto; sandbox rígido dos runtimes ainda está pendente. |
+| Contexto da conta | Promoção explícita de fatos curados e comprovados na origem, com autoridade por capability, recibos assinados, âncora anti-rollback, validade e revogação sem acesso geral aos workspaces. |
 | Core de agentes | Catálogo canônico, enforcement compartilhado e pacotes de trabalho assinados para Maestro, Walter, Darwin e especialistas; wiring e ativação nativa ainda estão pendentes. |
 | Preferência de interação | `standard`, `advanced` e `power`, configuradas localmente e sem alterar permissões. |
 | Contexto do dono | Arquivos locais, editáveis e auditáveis para papel profissional, estilo, voz, preferências e limites. |
@@ -164,6 +165,7 @@ duráveis usam um código de quatro letras no
 - [Inicialização e pesquisa do agente](specs/017-workspace-agent-initialization.md)
 - [Core de agentes do Maestro](specs/018-maestro-core-agents.md)
 - [Dispatcher sequencial e work packets](specs/023-sequential-agent-dispatch.md)
+- [Promoção governada para contexto da conta](specs/024-account-context-promotion.md)
 - [Visualização da governança de agentes](docs/visualizations/maestro-agent-governance.md)
 
 ## Confidencialidade

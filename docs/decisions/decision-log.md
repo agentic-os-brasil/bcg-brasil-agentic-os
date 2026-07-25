@@ -457,3 +457,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Maestro can coordinate sequential specialists without becoming a context blob. Old packets cannot close later work in the same workspace, practice packets cannot point to workspace resources and native runtimes must persist dispatcher/orchestration state before activation.
 - Refs: BRCH; WSAG; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; specs/023-sequential-agent-dispatch.md; internal/agentdispatch; internal/agentorchestration
 - Supersedes: none
+
+## PROM - Promote workspace facts without account browsing
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: An account agent needs durable client-level context, but letting it browse project workspaces would collapse confidentiality boundaries and recreate the context blob the workspace architecture is designed to prevent.
+- Decision: Promote one curated, approved and expiring statement at a time through capability-bound workspace and account grants. Verify the declared hash against source bytes, keep the raw artifact pointer in a workspace-owned signed receipt and expose only the statement, source hash and opaque receipt ID to the account. Use prepared/final signed receipts plus a trusted monotonic anchor; transition that anchor before writing non-destructive revocation evidence.
+- Consequences: Account context becomes a deliberate rollup rather than automatic memory aggregation. Partial writes, coordinated tampering and marker-deletion rollback fail closed; revocation linearizes reads while preserving evidence. Native Claude/Codex adapters still must provision private capabilities and integrity keys, provide a durable atomic anchor store and enforce filesystem scopes before activation.
+- Refs: WSAG; BRIF; WKPK; specs/016-workspace-agent-boundaries.md; specs/024-account-context-promotion.md; internal/contextpromotion
+- Supersedes: none
