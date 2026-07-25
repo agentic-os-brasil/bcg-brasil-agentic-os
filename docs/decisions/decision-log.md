@@ -413,3 +413,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Maestro can route to persistent practice expertise without becoming a micro-manager or weakening workspace isolation. Multiple chains may exist, but they do not run concurrently in this baseline. Adding parallel branches, a new delegating role or depth beyond two requires a new decision and conformance evidence. Runtime adapters still fail closed until they enforce the graph, one-active-branch rule and tool boundaries.
 - Refs: HUBS; WSAG; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; bundles/base/agents/catalog.json; internal/agentcatalog
 - Supersedes: HUBS
+
+## WKPK - Delegate through bounded signed work packets
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Role-gated chains prevent topology drift, but delegation would still leak context or become replayable if Maestro or a workspace agent passed free-form conversation state, raw dossiers or reusable scope claims to the next agent.
+- Decision: Every root and child delegation uses a signed, expiring and pointer-only work packet with strict objective, pointer and constraint budgets. A root packet ID is the unique branch instance and a child packet ID is the unique child dispatch instance. Children inherit the parent's scope root and kind. Packet verification, orchestration state and registered identity/capability checks all fail closed.
+- Consequences: Maestro can coordinate sequential specialists without becoming a context blob. Old packets cannot close later work in the same workspace, practice packets cannot point to workspace resources and native runtimes must persist dispatcher/orchestration state before activation.
+- Refs: BRCH; WSAG; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; specs/019-sequential-agent-dispatch.md; internal/agentdispatch; internal/agentorchestration
+- Supersedes: none
