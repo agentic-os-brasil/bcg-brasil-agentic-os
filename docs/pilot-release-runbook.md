@@ -8,7 +8,9 @@ authentication and generate explicitly isolated Windows/macOS evidence. A
 macOS Keychain backend and a Windows Credential Manager backend exist in
 source with conformance coverage. The candidate workflow builds each CLI on a
 matching native runner and assembles the release set from those exact binaries,
-but CLI provider wiring still reports native storage as unavailable.
+and CLI auth wiring constructs native storage only behind a complete approved
+managed provider registration. The checked-in registration is intentionally
+`unavailable`, so no real login is exposed yet.
 
 That is engineering readiness, not a distributable pilot release. Production
 signing, provider registration, production Keychain/Credential Manager
@@ -37,6 +39,8 @@ approval and managed-device evidence remain gates outside the repository.
   approved and applied before artifact hashing/signing.
 - GitHub App has browser device flow enabled, read-only Contents access and is
   installed only on the private release repository.
+- Managed provider configuration contains the approved public client ID and
+  exact selected repository, with no secret or partial-registration fallback.
 - Keychain and Windows Credential Manager adapters pass conformance tests.
 - Bootstrapper seed has an approved signed installation channel.
 - Support owner, incident path and rollback retention are named.

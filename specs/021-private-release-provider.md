@@ -1,8 +1,9 @@
 # Spec 021 - Private release provider and update confirmation
 
 Status: accepted contract; the macOS and Windows native backend sources,
-conformance tests and native candidate build path are implemented. Provider
-registration, CLI activation and production approval remain gates.
+conformance tests, native candidate build path and fail-closed provider/auth
+wiring are implemented. Provider registration and production approval remain
+gates, so the current managed configuration stays explicitly `unavailable`.
 
 ## Objective
 
@@ -30,6 +31,14 @@ files, Git credential helpers and `gh auth` are not fallback stores.
 
 No output, error or log may include access, refresh or device credentials.
 
+The managed provider configuration is embedded in the CLI and distributed as
+inspectable bundle content. It contains only the public GitHub App client ID,
+fixed GitHub API/auth endpoints and selected repository coordinates. Strict
+parsing rejects duplicate or unknown fields and partial registration. The
+native credential store is constructed only when the complete managed
+configuration state is `approved`; the checked-in production-neutral
+configuration is `unavailable` and contains no client ID or repository.
+
 ### Native store adapters
 
 The dormant macOS backend uses Security.framework `SecItem` operations against
@@ -56,10 +65,11 @@ run, exact runner image, Go/compiler identity, CGO mode, binary size and
 SHA-256. Rolling runner images mean this records traceability but does not claim
 byte-identical rebuilds across toolchain changes.
 The local all-in-one candidate command retains its CGO-free cross-build fallback
-for development only. `defaultReleaseAuthService` still does not expose either
-backend, so native candidate presence is engineering evidence rather than
-usable provider behavior or corporate-device approval. A later wiring change
-must connect both stores under the provider/authority gate.
+for development only. `defaultReleaseAuthService` connects the native backend
+only after the embedded provider registration is complete and approved.
+Because the current configuration is intentionally unavailable, candidate
+presence remains engineering evidence rather than usable provider behavior or
+corporate-device approval.
 
 ## Provider adapter
 
@@ -102,8 +112,8 @@ an unknown, stale or recomputed plan is rejected.
 
 ## Availability boundary
 
-The core device-flow, refresh, provider-download and plan contracts are
-implemented and tested without network listeners. The shipped CLI remains
-`unavailable` until an approved native secure-store adapter, GitHub App
-registration, repository installation and production release-key registry are
+The core device-flow, refresh, provider-download, managed registration and plan
+contracts are implemented and tested without network listeners. The shipped
+CLI remains `unavailable` until GitHub App registration, selected-repository
+installation, native-store approval and a production release-key registry are
 configured. It must not silently fall back to a weaker path.

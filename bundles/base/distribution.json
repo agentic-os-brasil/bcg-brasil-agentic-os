@@ -10,6 +10,10 @@
       "path": "profile/policy.json"
     },
     {
+      "source": "bundles/base/release/provider.json",
+      "path": "release/provider.json"
+    },
+    {
       "source": "bundles/base/runtime/capabilities.json",
       "path": "runtime/capabilities.json"
     },
@@ -80,6 +84,10 @@
     {
       "source": "schemas/release-manifest.schema.json",
       "path": "schemas/release-manifest.schema.json"
+    },
+    {
+      "source": "schemas/release-provider.schema.json",
+      "path": "schemas/release-provider.schema.json"
     },
     {
       "source": "schemas/runtime-capabilities.schema.json",

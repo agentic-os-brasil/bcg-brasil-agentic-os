@@ -101,8 +101,11 @@ The roadmap separates things to build from things to decide. Detailed dates rema
   native CI runners, then assemble the closed unsigned candidate from the exact
   prebuilt files with per-binary source, runner, toolchain and digest
   provenance. Cross-image byte reproducibility remains unproven.
-- [ ] Approve and connect native Keychain/Credential Manager adapters, GitHub
-  App registration and selected-repository installation.
+- [x] Connect native Keychain/Credential Manager adapters to CLI auth only
+  behind a strict embedded provider-registration contract; the checked-in
+  configuration remains unavailable.
+- [ ] Approve the GitHub App registration, public client ID, native-store use
+  and selected-repository installation, then promote the managed configuration.
 - [x] Implement signed local-release verification, safe staging, bootstrapper
   activation and last-known-good rollback.
 - [x] Implement provider discovery and manifest-authorized verified download

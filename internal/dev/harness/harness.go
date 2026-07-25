@@ -18,6 +18,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/hookpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseprovider"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
@@ -98,9 +99,32 @@ func Validate(root string, full bool, out io.Writer) error {
 			if err := releasecontract.ValidateSchemaFile(filepath.Join(root, "schemas", "release-manifest.schema.json")); err != nil {
 				return err
 			}
-			return releaseverify.ValidateAuthorityRegistrySchemaFile(
+			if err := releaseverify.ValidateAuthorityRegistrySchemaFile(
 				filepath.Join(root, "schemas", "release-authority-registry.schema.json"),
-			)
+			); err != nil {
+				return err
+			}
+			schema, err := os.Open(filepath.Join(root, "schemas", "release-provider.schema.json"))
+			if err != nil {
+				return err
+			}
+			if err := releaseprovider.ValidateProviderConfigSchema(schema); err != nil {
+				schema.Close()
+				return err
+			}
+			if err := schema.Close(); err != nil {
+				return err
+			}
+			config, err := os.Open(filepath.Join(root, "bundles", "base", "release", "provider.json"))
+			if err != nil {
+				return err
+			}
+			_, parseErr := releaseprovider.ParseConfig(config)
+			closeErr := config.Close()
+			if parseErr != nil {
+				return parseErr
+			}
+			return closeErr
 		}},
 		{"distribution allowlist", func() error {
 			_, err := releasepack.LoadAllowlist(filepath.Join(root, "bundles", "base", "distribution.json"))
