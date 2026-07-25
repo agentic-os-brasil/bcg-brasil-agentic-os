@@ -1,0 +1,62 @@
+name: pilot engineering evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Candidate MAJOR.MINOR.PATCH used for evidence labeling
+        required: true
+        default: 0.1.0
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-evidence:
+    name: isolated ${{ matrix.platform }} evidence
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate source and release contracts
+        run: go run ./dev/harness validate --full
+      - name: Exercise update and rollback transactions
+        run: go test ./internal/releaseverify ./internal/releaseprovider ./internal/installtx ./internal/updateplan
+      - name: Smoke-test isolated Windows trial installation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./dev/trial-install-smoke.ps1
+      - name: Smoke-test isolated macOS trial installation
+        if: runner.os == 'macOS'
+        shell: bash
+        run: ./dev/trial-install-smoke.sh
+      - name: Classify isolated evidence
+        run: >-
+          go run ./dev/pilot-acceptance isolated
+          --run-id "${{ github.run_id }}-${{ matrix.platform }}"
+          --platform "${{ matrix.platform }}"
+          --version "${{ inputs.version }}"
+          --output "dist/pilot-evidence/${{ matrix.platform }}.json"
+      - name: Validate evidence report
+        run: >-
+          go run ./dev/pilot-acceptance validate
+          --report "dist/pilot-evidence/${{ matrix.platform }}.json"
+      - name: Upload engineering evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: maestro-${{ inputs.version }}-${{ matrix.platform }}-engineering-evidence
+          path: dist/pilot-evidence/
+          if-no-files-found: error
+          retention-days: 14

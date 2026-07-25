@@ -50,12 +50,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|workspace-agent|atlas|session|skills|memory|work>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory|work>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|workspace-agent|atlas|session|skills|memory|work>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -66,6 +66,10 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "version":
 		fmt.Fprintf(out, "bcgos %s\n", Version)
 		return ExitOK
+	case "auth":
+		return runAuth(args[1:], out, errOut, defaultReleaseAuthService())
+	case "update":
+		return runUpdate(args[1:], out, errOut)
 	case "profile":
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
 	case "owner":
@@ -818,6 +822,7 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 			"human_atlas_bootstrap":  "supported",
 			"interaction_profile":    "supported",
 			"memory_dreaming":        "unavailable",
+			"private_release_auth":   "unavailable",
 			"updates":                "unavailable",
 			"workspace_agent_setup":  "supported",
 			"workspace_research":     "managed_skill_runtime_dependent",

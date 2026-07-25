@@ -392,6 +392,39 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: README.md; specs/001-cli-distribution.md; ROADMAP.md
 - Supersedes: none
 
+## DIST - Make the signed manifest the portable release authority
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The pilot needs one verifiable release contract even if the source repository or artifact provider changes, while CLI, managed bundles and optional runtime packs evolve independently.
+- Decision: Treat a signed, versioned release manifest as the portable authority for Maestro distribution. Bind trust to the Maestro product identity and an explicit signing-key identifier rather than to a GitHub owner name. Record CLI and bundle artifacts separately with immutable versions, compatibility ranges and allowlisted content; keep the release provider behind an adapter. Runtime packs remain a future, separately versioned schema extension rather than an underspecified v1 entry.
+- Consequences: A GitHub transfer does not silently redefine the trust root. The bootstrapper and `bcgos` must reject unknown issuers, incompatible versions, unsigned manifests, duplicate JSON keys, unlisted artifacts and content from workspace or user-local data roots. Release versions cannot be relabeled across channels; promotion requires a new version and signed manifest. Production key custody, platform code-signing identities and provider registration remain explicit release-environment approvals.
+- Refs: RELS; UPDT; SECU; DATA; specs/001-cli-distribution.md; specs/020-release-distribution.md; schemas/release-manifest.schema.json
+- Supersedes: none
+
+## AUTH - Use GitHub App device flow with native-store fail-closed authentication
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Pilot users need browser-based access to a private release without cloning source or managing personal tokens, while provider credentials must not enter files, environment variables, logs or the managed bundle.
+- Decision: Use a least-privilege GitHub App device flow for the pilot provider, with read-only Contents access to the selected release repository and short-lived user credentials stored only through an approved native Keychain or Windows Credential Manager adapter. Keep provider transport behind an adapter, strip authorization on cross-host asset redirects and authenticate the signed manifest before accepting its artifact list. If the native store or provider registration is absent, report `unavailable`; do not fall back to plaintext, Git helpers, environment variables or `gh`.
+- Consequences: Authentication, refresh and verified download are testable independently of production configuration. The CLI exposes schema-versioned auth/update states and binds one confirmation to a deterministic update plan, but remains unavailable until native-store adapters, GitHub App installation and production key registry are approved.
+- Refs: DIST; SECU; UPDT; specs/020-release-distribution.md; specs/021-private-release-provider.md; internal/releaseprovider; internal/updateplan
+- Supersedes: none
+
+## PILT - Gate the ten-person pilot through two users and classified device evidence
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Passing CI or an isolated installer smoke test cannot prove that Maestro installs and updates safely under corporate Windows/macOS policy, and sending a first release directly to ten users would combine distribution, usability and support risk.
+- Decision: Keep natural-language `maestro-setup-update` guidance as the primary pilot experience, with deterministic CLI/bootstrapper enforcement and one confirmation bound to an exact update plan. Classify isolated Windows/macOS runs as engineering evidence only. Require separate corporate-device reports for install, update and rollback, then run a two-user canary with one Windows and one macOS user for five business days before considering the ten-person cohort.
+- Consequences: The repository cannot promote itself to pilot-ready. Expansion requires production authorities, both clean-device reports, success by both canary users, working rollback, no severity-1/2 incident or data-boundary breach and support-owner acceptance. The ten-person cohort remains a human go/redesign/stop decision.
+- Refs: AUTH; DIST; specs/022-guided-pilot-release.md; bundles/base/skills/maestro-setup-update/SKILL.md; docs/pilot-release-runbook.md
+- Supersedes: none
+
 ## EXEC - Materialize resumable execution without creating a task authority
 
 - Date: 2026-07-25
