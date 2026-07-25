@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -20,6 +21,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
@@ -44,6 +46,7 @@ var Version = "0.0.0-dev"
 
 const maximumOwnerFacetBytes = 1 << 20
 const maximumWorkspaceAgentBytes = 1 << 20
+const maximumWorkContractBytes = 32 << 10
 
 func Run(args []string, out, errOut io.Writer) int {
 	return RunWithInput(args, strings.NewReader(""), out, errOut)
@@ -51,12 +54,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation|work>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation|work>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -93,10 +96,121 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runMemory(args[1:], in, out, errOut)
 	case "federation":
 		return runFederation(args[1:], out, errOut, defaultDataRoot)
+	case "work":
+		return runWork(args[1:], in, out, errOut, defaultDataRoot)
 	default:
 		fmt.Fprintf(errOut, "unknown command %q\n", args[0])
 		return ExitUsage
 	}
+}
+
+type workCreateRequest struct {
+	Objective       string                `json:"objective"`
+	InitialNextStep string                `json:"initial_next_step"`
+	Criteria        []execution.Criterion `json:"criteria"`
+	AllowedRefs     []string              `json:"allowed_refs"`
+}
+
+func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos work <create|start|inspect|export|delete>")
+		return ExitUsage
+	}
+	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+		fmt.Fprintln(out, "usage: bcgos work <create|start|inspect|export|delete>")
+		return ExitOK
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "create":
+		flags := newFlagSet("work create", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		stdin := flags.Bool("stdin", false, "read execution contract from standard input")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*workspacePath) == "" || !*stdin {
+			fmt.Fprintln(errOut, "usage: bcgos work create --workspace PATH --stdin")
+			return ExitUsage
+		}
+		body, err := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
+		if err != nil || len(body) > maximumWorkContractBytes {
+			return reportError(errOut, errors.New("execution contract exceeds 32 KiB limit"))
+		}
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		var req workCreateRequest
+		if err := decoder.Decode(&req); err != nil {
+			return reportError(errOut, err)
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		item, err := store.Create(execution.CreateInput{WorkspaceID: workspaceID, Objective: req.Objective, InitialNextStep: req.InitialNextStep, Criteria: req.Criteria, AllowedRefs: req.AllowedRefs})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, item, errOut)
+	case "start", "inspect", "export", "delete":
+		flags := newFlagSet("work "+args[0], errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		revision := flags.Int("revision", 0, "expected state revision")
+		confirm := flags.Bool("confirm", false, "confirm deletion")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" {
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		switch args[0] {
+		case "start":
+			if *revision < 1 {
+				return ExitUsage
+			}
+			item, err := store.Start(workspaceID, *itemID, *revision)
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, item, errOut)
+		case "inspect":
+			item, err := store.Inspect(workspaceID, *itemID)
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, item, errOut)
+		case "export":
+			item, err := store.Export(workspaceID, *itemID)
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, item, errOut)
+		default:
+			if !*confirm || *revision < 1 {
+				return ExitUsage
+			}
+			if err := store.Delete(workspaceID, *itemID, *revision, true); err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, map[string]string{"item_id": *itemID, "state": "deleted", "workspace_id": workspaceID}, errOut)
+		}
+	default:
+		fmt.Fprintf(errOut, "unknown work command %q\n", args[0])
+		return ExitUsage
+	}
+}
+
+func executionStoreForWorkspace(dataRoot, workspacePath string) (execution.Store, string, error) {
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		return execution.Store{}, "", err
+	}
+	if inspection.State != "ready" && inspection.State != "warning" {
+		return execution.Store{}, "", errors.New("workspace must be initialized and readable before accessing execution items")
+	}
+	return execution.Store{Root: dataRoot}, inspection.WorkspaceID, nil
 }
 
 func runFederation(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
