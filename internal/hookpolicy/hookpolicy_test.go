@@ -14,7 +14,7 @@ func TestBasePolicyMakesEveryHookNonWaiting(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, event := range policy.Events {
-		if event.MayWaitForWorker || event.MayUseNetwork || event.MayCallModel {
+		if event.MayWaitForWorker || event.MayUseNetwork || event.MayCallModel || event.MayRetry {
 			t.Fatalf("event %s permits synchronous expensive work: %#v", event.Event, event)
 		}
 	}
@@ -49,5 +49,21 @@ func TestPolicyRejectsWorkerWaitForGuard(t *testing.T) {
 }`))
 	if err == nil || !strings.Contains(err.Error(), "pre_action_guard") {
 		t.Fatalf("Parse() error = %v, want pre_action_guard rejection", err)
+	}
+}
+
+func TestPolicyRejectsRetryPermission(t *testing.T) {
+	_, err := hookpolicy.Parse(strings.NewReader(`{
+  "schema_version": 1,
+  "events": [
+    {"event":"session_start","mode":"snapshot","may_block":false,"may_wait_for_worker":false,"may_use_network":false,"may_call_model":false,"may_retry":true,"allowed_work":["read_committed_snapshot"]},
+    {"event":"context_inject","mode":"snapshot","may_block":false,"may_wait_for_worker":false,"may_use_network":false,"may_call_model":false,"may_retry":false,"allowed_work":["read_committed_snapshot"]},
+    {"event":"pre_action_guard","mode":"deterministic_guard","may_block":true,"may_wait_for_worker":false,"may_use_network":false,"may_call_model":false,"may_retry":false,"allowed_work":["evaluate_local_guard"]},
+    {"event":"post_action_observe","mode":"signal","may_block":false,"may_wait_for_worker":false,"may_use_network":false,"may_call_model":false,"may_retry":false,"allowed_work":["emit_idempotent_signal"]},
+    {"event":"stop_finalize","mode":"signal","may_block":false,"may_wait_for_worker":false,"may_use_network":false,"may_call_model":false,"may_retry":false,"allowed_work":["emit_idempotent_signal"]}
+  ]
+}`))
+	if err == nil || !strings.Contains(err.Error(), "may not retry") {
+		t.Fatalf("Parse() error = %v, want retry rejection", err)
 	}
 }

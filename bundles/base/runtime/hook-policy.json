@@ -8,6 +8,7 @@
       "may_wait_for_worker": false,
       "may_use_network": false,
       "may_call_model": false,
+      "may_retry": false,
       "allowed_work": ["read_committed_snapshot"]
     },
     {
@@ -17,6 +18,7 @@
       "may_wait_for_worker": false,
       "may_use_network": false,
       "may_call_model": false,
+      "may_retry": false,
       "allowed_work": ["read_committed_snapshot"]
     },
     {
@@ -26,6 +28,7 @@
       "may_wait_for_worker": false,
       "may_use_network": false,
       "may_call_model": false,
+      "may_retry": false,
       "allowed_work": ["evaluate_local_guard"]
     },
     {
@@ -35,6 +38,7 @@
       "may_wait_for_worker": false,
       "may_use_network": false,
       "may_call_model": false,
+      "may_retry": false,
       "allowed_work": ["emit_idempotent_signal"]
     },
     {
@@ -44,6 +48,7 @@
       "may_wait_for_worker": false,
       "may_use_network": false,
       "may_call_model": false,
+      "may_retry": false,
       "allowed_work": ["emit_idempotent_signal"]
     }
   ]

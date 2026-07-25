@@ -22,6 +22,7 @@ type EventPolicy struct {
 	MayWaitForWorker bool     `json:"may_wait_for_worker"`
 	MayUseNetwork    bool     `json:"may_use_network"`
 	MayCallModel     bool     `json:"may_call_model"`
+	MayRetry         bool     `json:"may_retry"`
 	AllowedWork      []string `json:"allowed_work"`
 }
 
@@ -78,6 +79,9 @@ func (policy Policy) Validate() error {
 		}
 		if event.MayWaitForWorker || event.MayUseNetwork || event.MayCallModel {
 			return fmt.Errorf("hook event %s may not wait for a worker, use network, or call a model", event.Event)
+		}
+		if event.MayRetry {
+			return fmt.Errorf("hook event %s may not retry", event.Event)
 		}
 		if len(event.AllowedWork) != 1 || event.AllowedWork[0] != expected.allowedWork {
 			return fmt.Errorf("hook event %s has invalid allowed work", event.Event)
