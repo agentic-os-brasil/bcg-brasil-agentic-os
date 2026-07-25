@@ -369,6 +369,39 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
+func TestPrivateReleaseCommandsFailClosedWithoutApprovedSecureStore(t *testing.T) {
+	tests := map[string][]string{
+		"auth status":    {"auth", "status"},
+		"auth login":     {"auth", "login"},
+		"auth logout":    {"auth", "logout"},
+		"update check":   {"update", "--check"},
+		"update confirm": {"update", "--confirm", "0123456789abcdef0123456789abcdef"},
+	}
+	for name, args := range tests {
+		t.Run(name, func(t *testing.T) {
+			var output bytes.Buffer
+			var errorOutput bytes.Buffer
+			if code := Run(args, &output, &errorOutput); code != ExitUnavailable {
+				t.Fatalf("Run(%v) exit = %d, want %d; out=%s err=%s", args, code, ExitUnavailable, output.String(), errorOutput.String())
+			}
+			var result struct {
+				SchemaVersion int    `json:"schema_version"`
+				State         string `json:"state"`
+				Reason        string `json:"reason"`
+			}
+			if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+				t.Fatalf("output is not one JSON document: %v; output=%q", err, output.String())
+			}
+			if result.SchemaVersion != 1 || result.State != "unavailable" || result.Reason == "" {
+				t.Fatalf("unexpected fail-closed result: %#v", result)
+			}
+			if strings.Contains(strings.ToLower(output.String()), "token") {
+				t.Fatal("unavailable response mentioned credential material")
+			}
+		})
+	}
+}
+
 func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 	var output bytes.Buffer
 	if code := Run([]string{"skills", "index"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"schema_version": 1`) || !strings.Contains(output.String(), `"dream-memory"`) || strings.Contains(output.String(), "Daily dreaming cannot") {

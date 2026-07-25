@@ -55,6 +55,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Add Claude and Codex adapter skeletons against the same canonical contract.
 - [x] Add initial conformance fixtures for equivalent capability identity, semantic events and criticality.
 - [x] Implement a runtime-neutral Session Start bridge that gives Claude and Codex the same bounded packet without claiming native injection.
+- [x] Define and validate a non-blocking hook-execution policy: snapshots and signals never wait, while only a local deterministic safety guard may deny an unsafe action.
 - [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
 - [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
@@ -86,11 +87,29 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 ### Build
 
 - [x] Implement and run an isolated local binary-installation trial with checksum verification on Windows, macOS and Linux. This is explicitly not a signed release or pilot distribution channel.
-- [ ] Produce versioned Windows and macOS artifacts in CI.
-- [ ] Define signed release manifest and compatibility rules.
-- [ ] Implement browser-based private-release authentication.
-- [ ] Implement verified download, staging, activation and rollback.
-- [ ] Ensure updates never overwrite local configuration or work data.
+- [x] Produce deterministic unsigned, versioned Windows and macOS release
+  candidates through a read-only manual CI workflow.
+- [ ] Configure production manifest/artifact signing and native Windows/macOS
+  code-signing authorities.
+- [x] Define and validate the provider-neutral signed release manifest and CLI↔bundle compatibility rules.
+- [x] Define and validate the local public release-authority registry,
+  including validity windows and fail-closed revocation.
+- [x] Implement browser device-flow, refresh and private-provider adapters with
+  fail-closed secure-store contracts.
+- [x] Implement the dormant macOS Security.framework Keychain backend and
+  conformance tests with no plaintext or process-argument fallback. Native
+  candidate build and CLI connection remain pending.
+- [ ] Approve and connect native Keychain/Credential Manager adapters, GitHub
+  App registration and selected-repository installation.
+- [x] Implement signed local-release verification, safe staging, bootstrapper
+  activation and last-known-good rollback.
+- [x] Implement provider discovery and manifest-authorized verified download
+  into the local release boundary.
+- [ ] Configure the production provider and release-key registry.
+- [x] Enforce and test that activation writes only managed core and install
+  state, never local configuration, memory or workspace data.
+- [x] Generate separately classified isolated Windows/macOS engineering
+  evidence for install, update and rollback behavior.
 - [ ] Run install/update/rollback tests on clean corporate devices for both platforms.
 
 ### Discuss before closing the track
@@ -178,14 +197,14 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement a deterministic managed skills index and `bcgos skills index` inspection surface.
 - [ ] Add safe context injection, workspace boundaries and capability detection.
 - [x] Add the managed `workspace-agent-setup` skill with fail-closed research approval and provenance workflow.
-- [ ] Package only allowlisted product content; exclude all development harness paths.
-- [ ] Validate install, init, update and rollback without client content.
+- [x] Package only allowlisted product content; exclude all development harness paths.
+- [x] Validate isolated install, init, update and rollback without client content.
 
 ### Discuss before closing the track
 
 - First use case and target persona.
 - Shared versus local knowledge governance.
-- Which hooks block, warn or observe.
+- Which narrowly scoped local safety conditions justify a pre-action denial.
 - Ownership and retirement model for agents and skills.
 - Runtime-pack size, model-prefetch, corporate proxy and offline acceptance thresholds.
 
@@ -193,6 +212,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 ### Build
 
+- [x] Define a two-user Windows/macOS canary and evidence-based expansion gate.
 - [ ] Select a balanced Windows/macOS and classic/technical cohort.
 - [ ] Onboard users without requiring Git, Go, Python, Node or Docker.
 - [ ] Measure time-to-first-success, update reliability and support demand.

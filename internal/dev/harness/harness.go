@@ -12,9 +12,13 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/hookpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
@@ -80,6 +84,27 @@ func Validate(root string, full bool, out io.Writer) error {
 		}},
 		{"execution ledger contract", func() error {
 			return execution.ValidateSchemaFile(filepath.Join(root, "schemas", "execution-state.schema.json"))
+		}},
+		{"product hook execution policy", func() error {
+			file, err := os.Open(filepath.Join(root, "bundles", "base", "runtime", "hook-policy.json"))
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+			_, err = hookpolicy.Parse(file)
+			return err
+		}},
+		{"release contract", func() error {
+			if err := releasecontract.ValidateSchemaFile(filepath.Join(root, "schemas", "release-manifest.schema.json")); err != nil {
+				return err
+			}
+			return releaseverify.ValidateAuthorityRegistrySchemaFile(
+				filepath.Join(root, "schemas", "release-authority-registry.schema.json"),
+			)
+		}},
+		{"distribution allowlist", func() error {
+			_, err := releasepack.LoadAllowlist(filepath.Join(root, "bundles", "base", "distribution.json"))
+			return err
 		}},
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}

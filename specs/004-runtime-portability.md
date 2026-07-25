@@ -93,6 +93,10 @@ only implemented capability is local executable discovery. Every product event
 remains `unavailable` until a thin adapter and equivalent conformance fixture
 exist; development hooks are never evidence of product hook support.
 
+Every future product adapter must also conform to the non-blocking execution
+policy in Spec 019. A native lifecycle mechanism may translate and emit a
+semantic event, but it may not turn the hook into a synchronous worker.
+
 ## Update guarantees
 
 CLI, bundle and adapter versions declare compatible ranges. `bcgos update` must reject incompatible combinations, preserve the active version and provide rollback.

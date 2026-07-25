@@ -1,6 +1,8 @@
 # Spec 001 - CLI distribution contract
 
-Status: direction accepted; CLI entrypoint, initial memory bridge, workspace init, status and doctor implemented; install, update and release distribution pending.
+Status: direction and release-manifest contract accepted; CLI entrypoint,
+initial memory bridge, workspace init, status and doctor implemented; packaging,
+install, update, production signing and release publication pending.
 
 ## User journey
 
@@ -60,6 +62,12 @@ Windows, macOS and Linux.
 ## Distribution source
 
 The pilot release provider is the GitHub API for private releases in this repository. The implementation must hide that provider behind an interface so a future BCG artifact source can replace it.
+
+The provider is not the release trust root. `specs/020-release-distribution.md`
+and `schemas/release-manifest.schema.json` define a portable manifest whose
+issuer and signing-key identity remain stable across a repository transfer.
+Provider metadata is untrusted until the detached manifest signature and exact
+artifact identities are verified.
 
 ## Release contents
 

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:release-authority-registry:v1",
+  "title": "Maestro release authority registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "product",
+    "authorities"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "product": {"const": "maestro"},
+    "authorities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/authority"}
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "key_id",
+        "algorithm",
+        "public_key",
+        "status",
+        "valid_from",
+        "valid_until"
+      ],
+      "properties": {
+        "issuer": {"$ref": "#/$defs/identifier"},
+        "key_id": {"$ref": "#/$defs/identifier"},
+        "algorithm": {"const": "ed25519"},
+        "public_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{43}=$"
+        },
+        "status": {"enum": ["active", "revoked"]},
+        "valid_from": {"$ref": "#/$defs/utcTimestamp"},
+        "valid_until": {"$ref": "#/$defs/utcTimestamp"},
+        "revoked_at": {"$ref": "#/$defs/utcTimestamp"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "revoked"}},
+            "required": ["status"]
+          },
+          "then": {"required": ["revoked_at"]},
+          "else": {
+            "not": {"required": ["revoked_at"]}
+          }
+        }
+      ]
+    }
+  }
+}
