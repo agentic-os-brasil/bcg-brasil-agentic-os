@@ -1,4 +1,4 @@
-# Spec 019 - Maestro Federated Improvement Loop
+# Spec 028 - Maestro Federated Improvement Loop
 
 Status: accepted architecture; typed local contract, enrollment-bound outbox and
 credential-free HTTPS bridge seam implemented. GitHub App bridge,
