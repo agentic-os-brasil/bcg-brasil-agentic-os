@@ -494,6 +494,8 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 		interactionProfileCheck(profileState),
 		runtimeCheck("claude_code", "claude", available),
 		runtimeCheck("codex", "codex", available),
+		adapterCheck("claude_adapter", "claude", inspection.WorkspacePath),
+		adapterCheck("codex_adapter", "codex", inspection.WorkspacePath),
 		{ID: "bundles", State: "unavailable", Message: "bundle installation is not implemented in this build"},
 		{ID: "updates", State: "unavailable", Message: "update and rollback are not implemented in this build"},
 	}
@@ -921,6 +923,17 @@ func runtimeCheck(id, executable string, available func(string) bool) doctorChec
 		return doctorCheck{ID: id, State: "available", Message: executable + " was found"}
 	}
 	return doctorCheck{ID: id, State: "unavailable", Message: executable + " was not found; this is not a BCGOS installation failure"}
+}
+
+func adapterCheck(id, runtime, workspacePath string) doctorCheck {
+	status, err := adaptercfg.Inspect(runtime, workspacePath)
+	if err != nil {
+		return doctorCheck{ID: id, State: "warning", Message: "adapter configuration cannot be inspected safely: " + err.Error()}
+	}
+	if status.State == "installed" {
+		return doctorCheck{ID: id, State: "configured", Message: "workspace-local adapter is configured; runtime trust and execution remain separate checks"}
+	}
+	return doctorCheck{ID: id, State: "unavailable", Message: "workspace-local adapter is not configured"}
 }
 
 func interactionProfileCheck(state profile.State) doctorCheck {

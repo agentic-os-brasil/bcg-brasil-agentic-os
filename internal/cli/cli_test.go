@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 )
 
 func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
@@ -171,6 +173,21 @@ func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 	output.Reset()
 	if code := runAdapter([]string{"uninstall", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "removed"`) {
 		t.Fatalf("remove = %d %s", code, output.String())
+	}
+}
+
+func TestDoctorSeparatesConfiguredAdapterFromRuntimeCapability(t *testing.T) {
+	dataRoot, workspacePath := filepath.Join(t.TempDir(), "BCGOS"), t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	if _, err := adaptercfg.Install("codex", workspacePath); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, func(string) bool { return true }); code != ExitOK || !strings.Contains(output.String(), `"id": "codex_adapter"`) || !strings.Contains(output.String(), `"state": "configured"`) || !strings.Contains(output.String(), `"context_inject"`) || !strings.Contains(output.String(), `"state": "unavailable"`) {
+		t.Fatalf("doctor = %d %s", code, output.String())
 	}
 }
 
