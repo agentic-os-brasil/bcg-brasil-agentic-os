@@ -1,7 +1,7 @@
 # Spec 015 - Session Context Packet
 
-Status: initial local packet implemented; Claude and Codex lifecycle adapters
-remain unavailable.
+Status: local packet and runtime-neutral Session Start bridge implemented;
+Claude and Codex native lifecycle adapters remain unavailable.
 
 ## Objective
 
@@ -45,6 +45,11 @@ Session Start or context injection is available. A future adapter must resolve
 purpose and authorization again before reading a pointed source, respect its
 own context budget, and report unavailable or omitted sources consistently.
 
+`bcgos session bridge --runtime claude|codex [workspace-path]` emits the same
+bounded Session Start envelope for either runtime. It is an adapter input, not
+native lifecycle wiring: it cannot read a pointed source, inject content into a
+conversation or change the capability state reported by `bcgos doctor`.
+
 ## Validation
 
 - reviewed session-safe owner pointers are included; sensitive, Walter-only
@@ -53,3 +58,5 @@ own context budget, and report unavailable or omitted sources consistently.
 - the skills catalog remains a pointer only;
 - memory injection remains explicitly unavailable until adapters exist.
 - packet references never reveal absolute local filesystem paths.
+- Claude and Codex receive equivalent bridge envelopes while native injection
+  remains explicitly unavailable.

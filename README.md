@@ -99,6 +99,7 @@ bcgos atlas init <workspace>
 bcgos atlas status <workspace>
 bcgos skills index
 bcgos session packet [workspace]
+bcgos session bridge --runtime claude|codex [workspace]
 ```
 
 Os comandos de memória expõem apenas operações já suportadas. O pacote de
