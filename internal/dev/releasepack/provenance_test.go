@@ -31,12 +31,39 @@ func TestWriteBinaryProvenanceCapturesBoundedBuildEvidence(t *testing.T) {
 	if err := json.Unmarshal(body, &provenance); err != nil {
 		t.Fatal(err)
 	}
-	if provenance.BinaryName != filepath.Base(binary) ||
+	if provenance.SchemaVersion != 2 ||
+		provenance.Component != string(NativeCLI) ||
+		provenance.BinaryName != filepath.Base(binary) ||
 		provenance.BinarySize != int64(len("native binary")) ||
 		len(provenance.BinarySHA256) != 64 ||
 		!provenance.CGOEnabled ||
 		provenance.ImageVersion != "20260725.1" {
 		t.Fatalf("unexpected provenance: %#v", provenance)
+	}
+}
+
+func TestWriteNativeProvenanceCoversBootstrapper(t *testing.T) {
+	target := Target{OS: "windows", Arch: "amd64"}
+	binary := filepath.Join(t.TempDir(), bootstrapperBinaryName("0.1.0", target))
+	if err := os.WriteFile(binary, []byte("stable bootstrapper"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	setProvenanceEnvironment(t)
+	output, err := WriteNativeProvenance(binary, "0.1.0", target, NativeBootstrapper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var provenance BinaryProvenance
+	if err := json.Unmarshal(body, &provenance); err != nil {
+		t.Fatal(err)
+	}
+	if provenance.Component != string(NativeBootstrapper) ||
+		provenance.BinaryName != filepath.Base(binary) {
+		t.Fatalf("unexpected bootstrapper provenance: %#v", provenance)
 	}
 }
 

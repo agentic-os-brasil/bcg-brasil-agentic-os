@@ -17,6 +17,7 @@ import (
 
 type BinaryProvenance struct {
 	SchemaVersion int    `json:"schema_version"`
+	Component     string `json:"component"`
 	SourceSHA     string `json:"source_sha"`
 	RunID         string `json:"run_id"`
 	RunAttempt    string `json:"run_attempt"`
@@ -35,10 +36,23 @@ type BinaryProvenance struct {
 }
 
 func WriteBinaryProvenance(binary, version string, target Target) (string, error) {
+	return WriteNativeProvenance(binary, version, target, NativeCLI)
+}
+
+func WriteNativeProvenance(
+	binary, version string,
+	target Target,
+	component NativeComponent,
+) (string, error) {
 	if !supportedCandidateTarget(target) {
 		return "", fmt.Errorf("unsupported provenance target %s/%s", target.OS, target.Arch)
 	}
 	expectedName := binaryName(version, target)
+	if component == NativeBootstrapper {
+		expectedName = bootstrapperBinaryName(version, target)
+	} else if component != NativeCLI {
+		return "", fmt.Errorf("unsupported provenance component %q", component)
+	}
 	if filepath.Base(binary) != expectedName {
 		return "", fmt.Errorf("provenance binary must be named %s", expectedName)
 	}
@@ -64,7 +78,8 @@ func WriteBinaryProvenance(binary, version string, target Target) (string, error
 		}
 	}
 	provenance := BinaryProvenance{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
+		Component:     string(component),
 		SourceSHA:     sourceSHA,
 		RunID:         fields["GITHUB_RUN_ID"],
 		RunAttempt:    fields["GITHUB_RUN_ATTEMPT"],

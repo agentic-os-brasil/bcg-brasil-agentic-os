@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -593,6 +594,31 @@ func TestReleaseCapabilityRequiresProviderAuthorityAndNativeStore(t *testing.T) 
 				t.Fatalf("unexpected capability inspection: %#v", inspection)
 			}
 		})
+	}
+}
+
+func TestReleaseProviderBuildOverrideRequiresStrictApprovedConfig(t *testing.T) {
+	original := ProviderConfigBase64
+	t.Cleanup(func() { ProviderConfigBase64 = original })
+	approved := `{"schema_version":1,"state":"approved","provider":"github",` +
+		`"auth_base":"https://github.com","api_base":"https://api.github.com",` +
+		`"client_id":"client-id","owner":"agentic-os-brasil","repository":"maestro","reason":""}`
+	ProviderConfigBase64 = base64.StdEncoding.EncodeToString([]byte(approved))
+	config, err := releaseProviderConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !config.Approved() || config.Owner != "agentic-os-brasil" {
+		t.Fatalf("unexpected release provider override: %#v", config)
+	}
+
+	ProviderConfigBase64 = "not-base64!"
+	if _, err := releaseProviderConfig(); err == nil {
+		t.Fatal("releaseProviderConfig() accepted malformed build override")
+	}
+	ProviderConfigBase64 = base64.StdEncoding.EncodeToString([]byte(approved + "\n{}"))
+	if _, err := releaseProviderConfig(); err == nil {
+		t.Fatal("releaseProviderConfig() accepted trailing configuration")
 	}
 }
 

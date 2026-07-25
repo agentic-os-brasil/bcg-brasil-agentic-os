@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	baserelease "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/release"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseprovider"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
@@ -86,7 +85,7 @@ type configuredReleaseUpdateService struct {
 }
 
 func defaultReleaseUpdateService() releaseUpdateService {
-	config, err := baserelease.Provider()
+	config, err := releaseProviderConfig()
 	if err != nil {
 		return unavailableReleaseUpdateService{reason: "embedded release-provider configuration is invalid"}
 	}
@@ -122,7 +121,7 @@ func defaultReleaseUpdateService() releaseUpdateService {
 }
 
 func defaultReleaseCapability() releaseCapabilityInspection {
-	config, err := baserelease.Provider()
+	config, err := releaseProviderConfig()
 	if err != nil {
 		return releaseCapabilityInspection{
 			State: "unavailable", Reason: "embedded release-provider configuration is invalid",
