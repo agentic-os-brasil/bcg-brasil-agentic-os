@@ -1,4 +1,4 @@
-# Spec 019 - Private release provider and update confirmation
+# Spec 021 - Private release provider and update confirmation
 
 Status: accepted contract; provider registration and native secure-store
 adapters remain release-environment approvals.
