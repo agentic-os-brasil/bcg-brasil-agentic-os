@@ -19,6 +19,8 @@ import (
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
@@ -80,7 +82,7 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "session":
 		return runSession(args[1:], out, errOut, defaultDataRoot)
 	case "hook":
-		return runHook(args[1:], out, errOut, defaultDataRoot)
+		return runHookWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "adapter":
 		return runAdapter(args[1:], out, errOut)
 	case "skills":
@@ -503,6 +505,7 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 		runtimeCheck("codex", "codex", available),
 		adapterCheck("claude_adapter", "claude", inspection.WorkspacePath),
 		adapterCheck("codex_adapter", "codex", inspection.WorkspacePath),
+		lifecycleReceiptCheck(root, inspection.WorkspaceID),
 		{ID: "bundles", State: "pass", Message: "signed bundle activation and last-known-good rollback are supported"},
 		{
 			ID: "private_release_auth", State: releaseCapability.State,
@@ -821,8 +824,15 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 }
 
 func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	return runHookWithInput(args, strings.NewReader(""), out, errOut, dataRoot)
+}
+
+func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) > 0 && args[0] == "claude" {
+		return runClaudeHook(args[1:], in, out, errOut, dataRoot)
+	}
 	if len(args) == 0 || args[0] != "session-start" {
-		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]")
+		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]\n       bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
 		return ExitUsage
 	}
 	flags := newFlagSet("hook session-start", errOut)
@@ -866,6 +876,71 @@ func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, output, errOut)
+}
+
+func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
+		return ExitUsage
+	}
+	flags := newFlagSet("hook claude "+args[0], errOut)
+	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
+		fmt.Fprintln(errOut, "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(optionalArg(flags.Args()), root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "session-start", "context-injection":
+		profileState, err := resolveProfile(root, "", false)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		owner, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID})})
+		eventName := "SessionStart"
+		if args[0] == "context-injection" {
+			eventName = "UserPromptSubmit"
+		}
+		response, err := sessionhook.BuildClaudeEvent(packet, eventName)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, response, errOut)
+	case "pre-action-guard", "post-action-receipt", "stop-finalization":
+		body, err := io.ReadAll(io.LimitReader(in, 64<<10))
+		if err != nil {
+			return reportError(errOut, fmt.Errorf("read Claude hook input: %w", err))
+		}
+		native, err := claudeadapter.Parse(body)
+		if err != nil {
+			return reportError(errOut, fmt.Errorf("parse Claude hook input: %w", err))
+		}
+		if args[0] == "pre-action-guard" {
+			return writeJSON(out, claudeadapter.Guard(native), errOut)
+		}
+		event := lifecycle.PostActionObserve
+		if args[0] == "stop-finalization" {
+			event = lifecycle.StopFinalize
+		}
+		if _, err := lifecycle.Record(root, inspection.WorkspaceID, claudeadapter.Receipt(event, native)); err != nil {
+			return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
+		}
+		return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
+		return ExitUsage
+	}
 }
 
 func runAdapter(args []string, out, errOut io.Writer) int {
@@ -969,6 +1044,21 @@ func interactionProfileCheck(state profile.State) doctorCheck {
 func commandAvailable(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+func lifecycleReceiptCheck(dataRoot, workspaceID string) doctorCheck {
+	summary, err := lifecycle.Diagnose(dataRoot, workspaceID)
+	if err != nil {
+		return doctorCheck{ID: "lifecycle_receipts", State: "warning", Message: "lifecycle receipt diagnostics could not be read: " + err.Error()}
+	}
+	switch summary.State {
+	case "observed":
+		return doctorCheck{ID: "lifecycle_receipts", State: "pass", Message: fmt.Sprintf("%d metadata-safe lifecycle receipt(s) observed; capability promotion still requires the pilot conformance record", summary.Observed)}
+	case "warning":
+		return doctorCheck{ID: "lifecycle_receipts", State: "warning", Message: fmt.Sprintf("%d lifecycle receipt failure(s) recorded; inspect the local diagnostic before relying on the adapter", summary.Failed)}
+	default:
+		return doctorCheck{ID: "lifecycle_receipts", State: "unavailable", Message: "no native lifecycle receipt has been recorded"}
+	}
 }
 
 func defaultDataRoot() (string, error) {

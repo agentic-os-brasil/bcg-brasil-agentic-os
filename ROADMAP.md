@@ -60,8 +60,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Make `bcgos doctor` distinguish runtime discovery, local adapter configuration and actual lifecycle capability.
 - [x] Define and validate a non-blocking hook-execution policy: snapshots and signals never wait, while only a local deterministic safety guard may deny an unsafe action.
 - [x] Define the per-runtime/per-platform pilot conformance receipt; capability promotion remains blocked on the recorded native-session evidence.
-- [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
-- [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
+- [x] Add Claude lifecycle conformance fixtures for injection, deterministic guard, metadata-safe receipts and failure diagnosis; Codex fixture parity remains explicit.
+- [x] Wire the Session Context Packet into the Claude lifecycle adapter with bounded authorization and omission reporting; Codex remains unavailable pending native wiring.
 - [x] Implement shared authenticated orchestration enforcement and cross-runtime adversarial fixtures, while keeping native activation unavailable.
 - [x] Implement signed bounded work packets and a sequential runtime-neutral dispatcher with replay protection.
 - [x] Implement capability-bound workspace-to-account promotion, integrity receipts and non-destructive revocation.

@@ -1,6 +1,6 @@
 # Spec 019 - Non-blocking product hook execution
 
-Status: policy implemented and validated; native product adapters pending.
+Status: policy implemented and validated; Claude lifecycle wiring is implemented but pilot capability promotion remains pending.
 
 ## Objective
 
@@ -27,8 +27,11 @@ waiting.
 ## Worker boundary
 
 The future worker owns serialized, idempotent writes and any expensive work.
-Signals may be duplicated or dropped without corrupting a committed state; the
-worker recovers from durable due-state and source watermarks. Its lock belongs
+Signals may be duplicated or dropped without corrupting a committed state. A
+hook may append a small metadata-only, idempotent receipt as its signal outbox;
+this is not a worker-owned product-state mutation and it never takes a worker
+lock, retries or performs reconciliation. The worker recovers from durable
+due-state and source watermarks. Its lock belongs
 to the worker alone. A hook must never contend for it.
 
 `pre_action_guard` is the only synchronous exception. It is limited to an
@@ -43,6 +46,7 @@ requires exactly the canonical semantic events and rejects a policy that lets
 any event wait for a worker, make a network request or call a model. The
 development validation and unit tests load this policy directly.
 
-This does not install a Claude or Codex product hook. Native adapters remain
-unavailable until they map to this contract and pass equivalent conformance
-fixtures.
+The Claude adapter maps the complete initial lifecycle behind this contract and
+records metadata-safe local delivery receipts. Codex retains the same
+conformance vocabulary without product lifecycle bindings. Product capability
+state remains unavailable until qualifying native-session evidence is recorded.

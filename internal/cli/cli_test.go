@@ -197,6 +197,33 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	}
 }
 
+func TestClaudeLifecycleHooksConformWithoutPromotingCapability(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"claude", "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(`{}`), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "UserPromptSubmit"`) {
+		t.Fatalf("context hook = %d %s", code, output.String())
+	}
+	output.Reset()
+	guardInput := strings.NewReader(`{"session_id":"session-a","tool_use_id":"tool-a","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}`)
+	if code := runHookWithInput([]string{"claude", "pre-action-guard", "--adapter-source", "maestro", workspacePath}, guardInput, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+		t.Fatalf("guard hook = %d %s", code, output.String())
+	}
+	output.Reset()
+	receiptInput := strings.NewReader(`{"session_id":"session-a","tool_use_id":"tool-a","tool_name":"Bash","tool_input":{"command":"pwd"}}`)
+	if code := runHookWithInput([]string{"claude", "post-action-receipt", "--adapter-source", "maestro", workspacePath}, receiptInput, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"continue": true`) {
+		t.Fatalf("receipt hook = %d %s", code, output.String())
+	}
+	output.Reset()
+	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, func(string) bool { return true }); code != ExitOK || !strings.Contains(output.String(), "lifecycle_receipts") || !strings.Contains(output.String(), "capability promotion still requires the pilot conformance record") || !strings.Contains(output.String(), "product adapter pending") {
+		t.Fatalf("doctor = %d %s", code, output.String())
+	}
+}
+
 func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 	workspacePath := t.TempDir()
 	var output bytes.Buffer
