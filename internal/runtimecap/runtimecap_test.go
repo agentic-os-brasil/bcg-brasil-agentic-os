@@ -1,6 +1,7 @@
 package runtimecap_test
 
 import (
+	"strings"
 	"testing"
 
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
@@ -26,6 +27,32 @@ func TestManifestHasEquivalentClaudeAndCodexCapabilities(t *testing.T) {
 		other := codex.Capabilities[index]
 		if capability.ID != other.ID || capability.SemanticEvent != other.SemanticEvent || capability.Criticality != other.Criticality {
 			t.Fatalf("capability[%d] claude=%#v codex=%#v", index, capability, other)
+		}
+	}
+}
+
+func TestClaudeLifecycleRemainsUnavailableOnlyForPendingNativeEvidence(t *testing.T) {
+	manifest, err := baseruntime.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := manifest.Report("claude", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := map[string]bool{
+		"session_start": true, "pre_action_guard": true, "post_action_observe": true,
+		"stop_finalize": true, "context_inject": true,
+	}
+	for _, capability := range report.Capabilities {
+		if !events[capability.SemanticEvent] || capability.ID == "agent_orchestration" {
+			continue
+		}
+		if capability.State != "unavailable" ||
+			!strings.Contains(capability.Reason, "qualifying native conformance evidence") ||
+			strings.Contains(capability.Reason, "adapter pending") ||
+			strings.Contains(capability.Reason, "no product") {
+			t.Fatalf("Claude lifecycle capability reports stale state: %#v", capability)
 		}
 	}
 }

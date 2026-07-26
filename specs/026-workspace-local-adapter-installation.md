@@ -1,24 +1,29 @@
 # Spec 026 - Workspace-local adapter installation
 
-Status: implemented for bounded Session Start only.
+Status: bounded Session Start implemented for Claude and Codex; complete Claude
+lifecycle configuration implemented.
 
-`bcgos adapter install --runtime claude|codex [workspace]` adds only one
-Maestro-owned Session Start command entry to the runtime's workspace-local
-configuration. Claude uses `.claude/settings.local.json`; Codex uses
+`bcgos adapter install --runtime claude|codex [workspace]` adds only
+Maestro-owned commands to the runtime's workspace-local configuration. Codex
+receives one bounded Session Start entry. Claude receives `SessionStart`,
+`UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` entries mapped to the
+canonical lifecycle. Claude uses `.claude/settings.local.json`; Codex uses
 `.codex/hooks.json`. This avoids mutating a user-wide configuration and keeps
 the adapter scoped to a professional workspace.
 
 Installation preserves unrelated configuration entries and is idempotent.
-The command points to the local released executable, rather than relying on a
+The commands point to the local released executable, rather than relying on a
 consultant's PATH; reinstalling after an update replaces only Maestro's owned
-entry. `status` identifies whether the owned entry is present; `uninstall`
-removes only that entry. The installer also records the generated local
-configuration path in the workspace Git exclusion file when one exists, so an
-absolute machine-specific executable path is not accidentally committed.
+entries. Claude `status` is installed only when every lifecycle binding has its
+expected timeout and async mode; `uninstall` removes only those owned entries.
+The installer also records the generated local configuration path in the
+workspace Git exclusion file when one exists, so an absolute machine-specific
+executable path is not accidentally committed.
 If that configuration is already tracked by Git, installation fails before any
 write; an ignore rule cannot protect a file already in the index.
-The installed command has a two-second timeout and invokes the bounded,
-read-only Session Start entrypoint. It does not start a worker or make a
+Every installed command has a two-second timeout. Claude `PostToolUse` and
+`Stop` are explicitly asynchronous; the other bindings perform only their
+bounded inline responsibility. No binding starts a worker or makes a
 network/model request.
 
 The runtime still requires its ordinary local trust/review behavior. An

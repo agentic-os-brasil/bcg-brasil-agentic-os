@@ -60,7 +60,7 @@ entre outros:
 
 - instalador e atualizações seguras para usuários finais;
 - releases assinados e autenticação de distribuição;
-- hooks de produto para Claude e Codex;
+- lifecycle completo para Codex e evidência nativa qualificante dos hooks Claude;
 - memória automática, busca e Wiki compilada;
 - ingestão de documentos com Docling empacotado;
 - sincronização com ferramentas de tarefas.
@@ -127,6 +127,11 @@ corpos completos exigem uma chamada explícita a `inspect` ou `export`.
 Checks Go usam a ferramenta identificada do runtime e ambiente fechado, mas
 `go test` ainda executa código do workspace e pressupõe que esse workspace foi
 autorizado pelo usuário como confiável; isso não constitui sandbox.
+O core também suporta um gate opcional de parecer Walter autenticado e
+vinculado à revisão exata do ledger. A custódia da chave e os adapters nativos
+de assinatura/orquestração ainda estão indisponíveis; portanto Maestro não
+anuncia execução autônoma de long-running goals. Métricas de canary permanecem
+locais, fechadas e sem transporte ou federação.
 
 ## Princípios de produto
 

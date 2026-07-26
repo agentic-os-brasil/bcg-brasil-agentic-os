@@ -1,6 +1,7 @@
 # Spec 019 - Non-blocking product hook execution
 
-Status: policy implemented and validated; native product adapters pending.
+Status: policy implemented and validated; Claude mapping implemented with
+native conformance evidence pending.
 
 ## Objective
 
@@ -43,6 +44,7 @@ requires exactly the canonical semantic events and rejects a policy that lets
 any event wait for a worker, make a network request or call a model. The
 development validation and unit tests load this policy directly.
 
-This does not install a Claude or Codex product hook. Native adapters remain
-unavailable until they map to this contract and pass equivalent conformance
-fixtures.
+The Claude adapter maps these events and configures `PostToolUse` and `Stop` as
+asynchronous command hooks. Codex complete lifecycle wiring remains pending.
+Both runtimes stay `unavailable` in the capability manifest until their
+qualifying native conformance evidence exists.

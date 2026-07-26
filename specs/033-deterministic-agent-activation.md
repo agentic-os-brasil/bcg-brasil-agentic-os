@@ -1,4 +1,4 @@
-# Spec 030 — Deterministic agent activation and PXpert advisory
+# Spec 033 — Deterministic agent activation and PXpert advisory
 
 ## Status
 
