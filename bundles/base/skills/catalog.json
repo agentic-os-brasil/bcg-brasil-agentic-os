@@ -9,6 +9,13 @@
       "relative_path": "skills/dream-memory/SKILL.md"
     },
     {
+      "id": "extract-work-items",
+      "display_name": "Extract Work Items",
+      "trigger": "Extract proposed decisions and actions from supplied meeting notes",
+      "default_prompt": "Use $extract-work-items to identify proposed decisions, actions, follow-ups and risks in these notes.",
+      "relative_path": "skills/extract-work-items/SKILL.md"
+    },
+    {
       "id": "grill-me",
       "display_name": "Grill Me",
       "trigger": "Stress-test a plan through a live sharp-question dialogue",
@@ -42,6 +49,13 @@
       "trigger": "Guide safe setup, updates and recovery conversationally",
       "default_prompt": "Use $maestro-setup-update to guide me through this Maestro setup or update in plain language.",
       "relative_path": "skills/maestro-setup-update/SKILL.md"
+    },
+    {
+      "id": "meeting-to-work-items",
+      "display_name": "Meeting to Work Items",
+      "trigger": "Review proposed meeting actions before any write occurs",
+      "default_prompt": "Use $meeting-to-work-items to review these notes and prepare confirmed follow-ups without filing anything yet.",
+      "relative_path": "skills/meeting-to-work-items/SKILL.md"
     },
     {
       "id": "storyline",

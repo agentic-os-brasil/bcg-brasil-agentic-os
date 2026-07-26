@@ -1,0 +1,4 @@
+interface:
+  display_name: "Extract Work Items"
+  short_description: "Extract proposed decisions and actions from supplied meeting notes"
+  default_prompt: "Use $extract-work-items to identify proposed decisions, actions, follow-ups and risks in these notes."

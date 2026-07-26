@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meeting to Work Items"
+  short_description: "Review proposed meeting actions before any write occurs"
+  default_prompt: "Use $meeting-to-work-items to review these notes and prepare confirmed follow-ups without filing anything yet."

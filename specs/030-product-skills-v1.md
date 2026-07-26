@@ -46,11 +46,21 @@ skill becomes managed it must name its complete input/output packet,
 confirmation boundary, idempotency behavior, partial-failure recovery and
 evaluation fixtures.
 
+## Wave 2
+
+`extract-work-items` is an atomic advisory method over user-supplied notes.
+`meeting-to-work-items` is the first managed orchestrator: it composes that
+method and a human correction step, then returns confirmed proposals only.
+Neither skill may write a task, decision, atlas entry, memory item or external
+message. A future writer receives only the confirmed subset and needs its own
+authority, confirmation, idempotency, receipt and recovery contract.
+
 ## Deferred work
 
 `diagram` and `make-pdf` wait for deterministic artifact contracts. `task`,
-`schedule`, `start-day`, `eod` and `meeting-to-work-items` wait for governed
-external or multi-source authority. `handoff`, `decision-log`, `consolidate`
+`schedule`, `start-day` and `eod` wait for governed external or multi-source
+authority; `meeting-to-work-items` remains advisory until its mutation path has
+that authority. `handoff`, `decision-log`, `consolidate`
 and `setup` must compose existing canonical capabilities rather than create new
 writers. `newcase`, `record-learning`, `record-concept` and `retro` require
 their workspace or owner-private contracts.

@@ -34,6 +34,14 @@
       "path": "skills/dream-memory/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/extract-work-items/SKILL.md",
+      "path": "skills/extract-work-items/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/extract-work-items/agents/openai.yaml",
+      "path": "skills/extract-work-items/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/grill-me/SKILL.md",
       "path": "skills/grill-me/SKILL.md"
     },
@@ -72,6 +80,14 @@
     {
       "source": "bundles/base/skills/maestro-setup-update/agents/openai.yaml",
       "path": "skills/maestro-setup-update/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/meeting-to-work-items/SKILL.md",
+      "path": "skills/meeting-to-work-items/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/meeting-to-work-items/agents/openai.yaml",
+      "path": "skills/meeting-to-work-items/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/storyline/SKILL.md",
