@@ -21,6 +21,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
@@ -56,7 +57,7 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation|canary|work>")
 		return ExitUsage
 	}
 	switch args[0] {
@@ -98,12 +99,30 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runMemory(args[1:], in, out, errOut)
 	case "federation":
 		return runFederation(args[1:], out, errOut, defaultDataRoot)
+	case "canary":
+		return runCanary(args[1:], out, errOut, defaultDataRoot)
 	case "work":
 		return runWork(args[1:], in, out, errOut, defaultDataRoot)
 	default:
 		fmt.Fprintf(errOut, "unknown command %q\n", args[0])
 		return ExitUsage
 	}
+}
+
+func runCanary(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) != 1 || args[0] != "report" {
+		fmt.Fprintln(errOut, "usage: bcgos canary report")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	report, err := (canary.Store{Root: filepath.Join(root, "canary")}).Report()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, report, errOut)
 }
 
 type workCreateRequest struct {

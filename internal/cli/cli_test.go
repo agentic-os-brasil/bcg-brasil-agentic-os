@@ -16,7 +16,21 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 )
+
+func TestCanaryReportCommandIsLocalOnly(t *testing.T) {
+	root := t.TempDir()
+	if err := (canary.Store{Root: filepath.Join(root, "canary")}).Append(canary.Receipt{RecordedAt: time.Now().UTC(), Event: canary.EventFirstValue, Outcome: canary.OutcomeSucceeded, Duration: canary.DurationUnderFiveMinutes}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runCanary([]string{"report"}, &output, &output, func() (string, error) { return root, nil }); code != ExitOK || !strings.Contains(output.String(), `"receipt_count": 1`) {
+		t.Fatalf("report = %d %s", code, output.String())
+	}
+}
 
 func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 	dataDir := t.TempDir()
