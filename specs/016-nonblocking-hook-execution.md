@@ -27,8 +27,11 @@ waiting.
 ## Worker boundary
 
 The future worker owns serialized, idempotent writes and any expensive work.
-Signals may be duplicated or dropped without corrupting a committed state; the
-worker recovers from durable due-state and source watermarks. Its lock belongs
+Signals may be duplicated or dropped without corrupting a committed state. A
+hook may append a small metadata-only, idempotent receipt as its signal outbox;
+this is not a worker-owned product-state mutation and it never takes a worker
+lock, retries or performs reconciliation. The worker recovers from durable
+due-state and source watermarks. Its lock belongs
 to the worker alone. A hook must never contend for it.
 
 `pre_action_guard` is the only synchronous exception. It is limited to an

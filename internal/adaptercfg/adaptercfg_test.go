@@ -138,6 +138,67 @@ func TestInstallUpdatesOwnedExecutableAndKeepsConfigOutOfGit(t *testing.T) {
 	}
 }
 
+func TestClaudeInstallOwnsTheCompleteLifecycleAndLeavesOtherHooksUntouched(t *testing.T) {
+	workspace := t.TempDir()
+	path := filepath.Join(workspace, ".claude", "settings.local.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"hooks":{"PreToolUse":[{"matcher":"Write|Edit","hooks":[{"type":"command","command":"other"}]}]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	config, err := read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooks, err := hooksMap(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"} {
+		groups, err := groupsForEvent(hooks, event)
+		if err != nil || len(groups) == 0 {
+			t.Fatalf("%s groups = %#v, %v", event, groups, err)
+		}
+		found := false
+		for _, group := range groups {
+			for _, raw := range group.(map[string]any)["hooks"].([]any) {
+				hook := raw.(map[string]any)
+				if isOwnedEventCommand("claude", event, hook["command"]) {
+					found = true
+					if (event == "PostToolUse" || event == "Stop") != (hook["async"] == true) {
+						t.Fatalf("%s async = %#v", event, hook)
+					}
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("missing owned Claude binding for %s", event)
+		}
+	}
+	if !hasOwnedBindings(config, "claude") || !strings.Contains(string(mustRead(t, path)), "other") {
+		t.Fatalf("config did not preserve other hook: %s", mustRead(t, path))
+	}
+	if _, err := Uninstall("claude", workspace); err != nil {
+		t.Fatal(err)
+	}
+	if data := string(mustRead(t, path)); strings.Contains(data, "--adapter-source maestro") || !strings.Contains(data, "other") {
+		t.Fatalf("uninstall config = %s", data)
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
 func TestInstallMigratesLegacyPathLookupWithoutDuplicatingTheHook(t *testing.T) {
 	workspace := t.TempDir()
 	path := filepath.Join(workspace, ".codex", "hooks.json")

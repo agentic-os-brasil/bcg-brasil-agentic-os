@@ -24,6 +24,9 @@ func TestBuildUsesNativeSessionStartContextWithoutSourceBodies(t *testing.T) {
 	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "professional self body") {
 		t.Fatalf("output exposed a source body: %s", output.HookSpecificOutput.AdditionalContext)
 	}
+	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "wiring is not installed") || !strings.Contains(output.HookSpecificOutput.AdditionalContext, "capability remains unavailable") {
+		t.Fatalf("adapter context reported the wrong lifecycle state: %s", output.HookSpecificOutput.AdditionalContext)
+	}
 }
 
 func TestClaudeAndCodexSerializationAreSeparateAdapterCalls(t *testing.T) {
@@ -41,6 +44,14 @@ func TestClaudeAndCodexSerializationAreSeparateAdapterCalls(t *testing.T) {
 	}
 	if !strings.Contains(claude.HookSpecificOutput.AdditionalContext, `"runtime":"claude"`) || !strings.Contains(codex.HookSpecificOutput.AdditionalContext, `"runtime":"codex"`) {
 		t.Fatal("adapter output did not preserve runtime identity")
+	}
+}
+
+func TestClaudeContextInjectionUsesTheSameBoundedPacketWithNativeEventName(t *testing.T) {
+	packet := sessionctx.Build(sessionctx.Sources{Profile: profile.State{Profile: "standard", Source: "configured"}, Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"}})
+	output, err := BuildClaudeEvent(packet, "UserPromptSubmit")
+	if err != nil || output.HookSpecificOutput.HookEventName != "UserPromptSubmit" || !strings.Contains(output.HookSpecificOutput.AdditionalContext, `"runtime":"claude"`) {
+		t.Fatalf("output = %#v, %v", output, err)
 	}
 }
 

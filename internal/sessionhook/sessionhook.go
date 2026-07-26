@@ -41,11 +41,21 @@ type CodexHookSpecificOutput struct {
 }
 
 func BuildClaude(packet sessionctx.Packet) (ClaudeOutput, error) {
+	return BuildClaudeEvent(packet, "SessionStart")
+}
+
+// BuildClaudeEvent keeps the bounded shared packet identical across Claude's
+// SessionStart and UserPromptSubmit surfaces while preserving each native event
+// name in the adapter response.
+func BuildClaudeEvent(packet sessionctx.Packet, eventName string) (ClaudeOutput, error) {
+	if eventName != "SessionStart" && eventName != "UserPromptSubmit" {
+		return ClaudeOutput{}, fmt.Errorf("unsupported Claude hook event %q", eventName)
+	}
 	context, err := contextFor("claude", packet)
 	if err != nil {
 		return ClaudeOutput{}, err
 	}
-	return ClaudeOutput{HookSpecificOutput: ClaudeHookSpecificOutput{HookEventName: "SessionStart", AdditionalContext: context}}, nil
+	return ClaudeOutput{HookSpecificOutput: ClaudeHookSpecificOutput{HookEventName: eventName, AdditionalContext: context}}, nil
 }
 
 func BuildCodex(packet sessionctx.Packet) (CodexOutput, error) {
@@ -61,6 +71,11 @@ func contextFor(runtime string, packet sessionctx.Packet) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// This serializer is invoked by an installed adapter (or its direct
+	// conformance command). The manifest still owns capability state, so do not
+	// claim native availability; merely avoid telling a real adapter session
+	// that its wiring is absent.
+	envelope.Message = "bounded adapter payload emitted; capability remains unavailable until qualified native-session conformance evidence is recorded"
 	body, err := json.Marshal(envelope)
 	if err != nil {
 		return "", fmt.Errorf("encode session envelope: %w", err)

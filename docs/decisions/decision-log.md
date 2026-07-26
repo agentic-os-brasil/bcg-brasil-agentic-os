@@ -435,3 +435,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Reinstalling after an update changes only Maestro's own command and does not depend on a user shell. A missing native receipt fails closed in product reporting, while conformance remains practical to run in an empty non-client workspace. No memory, worker, network or model operation is added to Session Start, and no absolute machine path can be silently added to an already tracked runtime configuration.
 - Refs: specs/017-native-session-start-hook.md; specs/018-workspace-local-adapter-installation.md; specs/021-pilot-hook-conformance.md; docs/onboarding/pilot-hook-conformance.md; internal/adaptercfg; internal/sessionhook
 - Supersedes: none
+
+## CLVE - Wire the Claude lifecycle vertical behind neutral contracts
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro has a bounded Session Start command and a portable lifecycle vocabulary, but a pilot cannot rely on skeletal adapters or infer runtime support from configuration alone. The first vertical must make the Claude mapping observable without weakening Codex parity or allowing hooks to become workers.
+- Decision: Define one runtime-neutral lifecycle contract and metadata-safe receipt store. Wire Claude Code first: `SessionStart` for session start, `UserPromptSubmit` for bounded context injection, `PreToolUse` for an immediately decidable local deny rule, `PostToolUse` for a post-action receipt and `Stop` for finalization. Session/context remain snapshot-only; the guard never grants permission; post/stop emit only idempotent local receipt signals and do not wait, retry, call a model or use the network. Codex retains equivalent conformance fixtures but no product lifecycle wiring. The capability manifest remains unchanged until a qualifying native-session receipt exists.
+- Consequences: Adapter installation may manage the five Claude hook bindings while preserving unrelated local configuration. Doctor can diagnose recorded lifecycle receipts separately from capability state. Receipts carry opaque identifiers, event metadata and safe diagnostics only; no prompt, transcript, tool input/output, owner body or workspace path is persisted. Distribution, workspace layout and federation remain outside this change.
+- Refs: specs/004-runtime-portability.md; specs/016-nonblocking-hook-execution.md; specs/021-pilot-hook-conformance.md; internal/lifecycle; internal/claudeadapter; internal/adaptercfg
+- Supersedes: none
