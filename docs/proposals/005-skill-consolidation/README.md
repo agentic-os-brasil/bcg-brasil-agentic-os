@@ -87,3 +87,10 @@ Two principles define the set:
   proposal we defer eval authoring to implementation, per skill.
 - Any change to the Hub's own constitution (its `CLAUDE.md`) — a separate follow-up, once
   agents and skills are both settled.
+
+## Development handoff
+
+The promotion boundary and the first safe implementation slice are defined in
+[`PROMOTION-CONTRACT.md`](PROMOTION-CONTRACT.md). The 19 draft skills remain proposal
+artifacts until that contract is satisfied; `wayfinder` is the suggested first candidate
+because it can be evaluated without external authority or mutation.
