@@ -49,9 +49,14 @@ type Brief struct {
 	ReviewedBy        string    `json:"reviewed_by"`
 	Classification    string    `json:"classification"`
 	Mandate           string    `json:"mandate"`
+	Decision          string    `json:"decision,omitempty"`
+	TimeHorizon       string    `json:"time_horizon,omitempty"`
 	Objectives        []string  `json:"objectives"`
 	Stakeholders      []string  `json:"stakeholders"`
+	Materials         []string  `json:"materials,omitempty"`
 	Constraints       []string  `json:"constraints"`
+	SuccessSignals    []string  `json:"success_signals,omitempty"`
+	OpenQuestions     []string  `json:"open_questions,omitempty"`
 	Bullish           []Thesis  `json:"bullish"`
 	Bearish           []Thesis  `json:"bearish"`
 	ResearchQuestions []string  `json:"research_questions"`

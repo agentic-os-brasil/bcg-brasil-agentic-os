@@ -642,7 +642,7 @@ func TestWorkspaceAgentCommandsCreateAndExposeTheGuidedInterview(t *testing.T) {
 		t.Fatalf("init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runWorkspaceAgent([]string{"interview", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent_setup"`) || !strings.Contains(output.String(), `"research"`) {
+	if code := runWorkspaceAgent([]string{"interview", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent_setup"`) || !strings.Contains(output.String(), `"decision_and_horizon"`) || !strings.Contains(output.String(), `"handoff"`) {
 		t.Fatalf("workspace-agent interview exit = %d, output = %s", code, output.String())
 	}
 }
