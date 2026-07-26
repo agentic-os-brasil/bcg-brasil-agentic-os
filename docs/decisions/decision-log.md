@@ -402,3 +402,25 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: GitHub is the system of action rather than a raw telemetry store; the bridge, portable-skill collector and Darwin adapters are separately deliverable capabilities. Central curation cannot modify source or release without maintainer acceptance. The compiler and tests must fail closed on unknown fields and prove non-interference for workspace-private canaries.
 - Refs: specs/002-data-boundaries.md; specs/004-runtime-portability.md; specs/016-workspace-agent-boundaries.md; specs/019-federated-improvement-loop.md
 - Supersedes: none
+
+## LOOP - Govern long-running work through evidence-gated agent loops
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs to carry multi-step professional work across context compaction and runtime turns without turning a broad task into an untraceable agent conversation or allowing a specialist, reviewer or scheduler to bypass workspace boundaries and human authority.
+- Decision: Model long-running work as a Maestro-owned goal with an explicit Done Contract, durable breadcrumbs and an evidence ledger. Maestro sequences a bounded chain: workspace agent prepares and validates the scoped work state; specialists receive a minimum work packet and return evidence-backed findings to the workspace agent; the workspace agent returns the permitted result to Maestro; Maestro composes a proposed advancement; Walter independently returns approve, refine or needs-human-decision exclusively to Maestro. On `refine`, or after a human decision where more work is required, Maestro sends the loop back down to the workspace agent and specialist. Only an approved Walter review plus every required Done Contract evidence item can permit completion. Workspace content remains with its workspace agent; Walter receives only the sanitized orchestration record and never writes workspace state or speaks directly to the user.
+- Consequences: Long-running continuity is reconstructable from state, breadcrumbs and evidence rather than an unbounded prompt. Native Claude/Codex hooks and schedulers may invoke the same state machine but cannot change its authority or completion rules. Recovery requires signed transition receipts plus a monotonic anchor outside user-local state; macOS Keychain and Windows Credential Manager provide the initial adapters, while unsupported hosts fail closed. The first implementation does not claim autonomous background execution, direct model invocation or new workspace read permissions.
+- Refs: specs/016-workspace-agent-boundaries.md; specs/017-workspace-agent-initialization.md; specs/020-long-running-goals.md; internal/longrun
+- Supersedes: none
+
+## CANY - Keep canary observability local, closed and out of federation
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The pilot needs evidence of first value, recovery, operational reliability and friction, but a raw telemetry stream would violate workspace boundaries and accidentally turn the canary into an advanced federated-learning program.
+- Decision: Record only a closed, metadata-only canary receipt vocabulary locally and render an aggregate local report. The vocabulary permits duration/count buckets, closed capability IDs and outcomes; it forbids text, error messages, user/workspace/client identifiers, paths, prompts and content. It has no federation bridge, Darwin-curation or network route.
+- Consequences: The canary can measure value and operational friction without widening the existing FIL batch or exporting data. Scheduler receipts remain separate because their local error field is not a telemetry-safe contract. Any future export or learning use needs a new decision and privacy review.
+- Refs: specs/021-canary-observability.md; schemas/canary-receipt.schema.json; schemas/canary-report.schema.json; internal/canary
+- Supersedes: none

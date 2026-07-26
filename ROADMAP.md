@@ -22,6 +22,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
 - [x] Define workspace agents as project specialists and context gatekeepers with compact state and versioned dossiers.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
+- [x] Implement Maestro long-running core: immutable Done Contracts, receipt-backed persistence, evidence breadcrumbs, workspace-mediated specialist results, Walter review and completion audit.
 
 ## Track A - Contributor onboarding
 
@@ -56,6 +57,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement a runtime-neutral Session Start bridge that gives Claude and Codex the same bounded packet without claiming native injection.
 - [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
 - [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
+- [ ] Wire native Claude and Codex lifecycle triggers to the already implemented Maestro long-running state machine, with equivalent recovery and failure-reporting fixtures.
+- [x] Provide macOS Keychain and Windows Credential Manager monotonic anchors for Maestro long-running recovery.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
 - [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.
@@ -191,9 +194,12 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement the central GitHub App bridge seam, aggregate digest and actionable incident routing.
 - [x] Implement central Darwin advancement-proposal curation with maintainer-only acceptance.
 - [x] Add one-time enrollment/revocation, weekly runtime executor and born-portable skill transport.
+- [x] Add the runtime-neutral Maestro long-running core and local CLI lifecycle; native runtime trigger wiring remains a separate adapter deliverable.
+- [x] Implement local-only metadata canary receipts, aggregate report, schemas and privacy tests; no federation route was added.
+- [ ] Wire Claude/Codex lifecycle adapters to emit the approved canary receipts automatically, with equivalent privacy fixtures.
 - [ ] Select a balanced Windows/macOS and classic/technical cohort.
 - [ ] Onboard users without requiring Git, Go, Python, Node or Docker.
-- [ ] Measure time-to-first-success, update reliability and support demand.
+- [ ] Measure time-to-first-success, update reliability and support demand using the approved local canary report after lifecycle adapters exist.
 - [ ] Capture sanitized failure modes and prioritize the next shared capabilities.
 - [ ] Run a pilot retrospective and decide the next distribution model.
 

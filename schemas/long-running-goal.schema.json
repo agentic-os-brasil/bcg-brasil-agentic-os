@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:long-running-goal:v1",
+  "title": "Maestro long-running goal state",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "contract": { "$ref": "#/$defs/done_contract" },
+    "status": { "enum": ["draft", "active", "awaiting_walter", "awaiting_human", "completed", "blocked"] },
+    "phase": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+    "breadcrumbs": { "type": "array", "items": { "$ref": "#/$defs/breadcrumb" } },
+    "needs_fresh_walter_review": { "type": "boolean" },
+    "workspace_ready": { "type": "boolean" },
+    "specialist_returned": { "type": "boolean" },
+    "completed_deliverables": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" }, "uniqueItems": true },
+    "blocker_refs": { "type": "array", "items": { "$ref": "#/$defs/reference" }, "uniqueItems": true },
+    "ledger_revision": { "type": "integer", "minimum": 0 },
+    "walter_approved_ledger": { "type": "integer", "minimum": 0 },
+    "completion_audit": { "$ref": "#/$defs/completion_audit" },
+    "delegations": { "type": "array", "items": { "$ref": "#/$defs/delegation" } },
+    "events": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/event" } }
+  },
+  "required": ["schema_version", "id", "contract", "status", "evidence", "breadcrumbs", "needs_fresh_walter_review", "workspace_ready", "specialist_returned", "completed_deliverables", "blocker_refs", "ledger_revision", "walter_approved_ledger", "delegations", "events"],
+  "$defs": {
+    "reference": { "type": "string", "pattern": "^(goal|test|artifact|review|runtime|finding|decision|blocker)://[A-Za-z0-9][A-Za-z0-9._~:@!$&'()*+,;=%?-]{0,240}$" },
+    "done_contract": { "type": "object", "additionalProperties": false, "properties": { "revision": { "type": "integer", "minimum": 1 }, "objective_ref": { "$ref": "#/$defs/reference" }, "deliverables": { "type": "array" }, "required_evidence": { "type": "array" }, "non_goal_refs": { "type": "array", "items": { "$ref": "#/$defs/reference" } }, "authority": { "const": "human_for_external_action" } }, "required": ["revision", "objective_ref", "deliverables", "required_evidence", "non_goal_refs", "authority"] },
+    "evidence": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "class": { "enum": ["test", "artifact", "review", "runtime"] }, "reference": { "$ref": "#/$defs/reference" }, "verified": { "type": "boolean" } }, "required": ["id", "class", "reference", "verified"] },
+    "breadcrumb": { "type": "object", "additionalProperties": false, "properties": { "phase": { "type": "string" }, "decision_ref": { "$ref": "#/$defs/reference" }, "evidence_ref": { "$ref": "#/$defs/reference" }, "next_action": { "type": "string" }, "action": { "type": "string" } }, "required": ["phase", "next_action", "action"] },
+    "completion_audit": { "type": "object", "additionalProperties": false, "properties": { "goal_id": { "type": "string" }, "ledger_revision": { "type": "integer" }, "phase": { "type": "string" }, "phase_complete": { "type": "boolean" }, "completed_deliverables": { "type": "array" }, "no_blockers": { "type": "boolean" } }, "required": ["goal_id", "ledger_revision", "phase", "phase_complete", "completed_deliverables", "no_blockers"] },
+    "delegation": { "type": "object", "additionalProperties": false, "properties": { "goal_id": { "type": "string" }, "delegation_id": { "type": "string" }, "revision": { "type": "integer" }, "phase": { "type": "string" }, "question_id": { "type": "string" }, "capability": { "type": "string" }, "purpose": { "type": "string" }, "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/reference" } } }, "required": ["goal_id", "delegation_id", "revision", "phase", "question_id", "capability", "purpose", "evidence_refs"] },
+    "event": { "type": "object", "additionalProperties": true, "properties": { "sequence": { "type": "integer", "minimum": 1 }, "kind": { "enum": ["activated", "evidence", "workspace_checkpoint", "delegated", "workspace_result", "walter_requested", "walter_reviewed", "human_resumed", "completion_audited", "completed"] }, "mac": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "required": ["sequence", "kind", "mac"] }
+  }
+}

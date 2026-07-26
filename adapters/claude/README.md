@@ -15,3 +15,17 @@ Future wiring may map Claude-native mechanisms to `session_start`,
 state. At Session Start it must also resolve the user-local interaction profile
 and inject only its bounded ID and managed policy pointer; the profile must not
 be derived from or persisted into memory.
+
+## Maestro long-running boundary
+
+The shared `internal/longrun` core and `bcgos goal` lifecycle are implemented.
+A future Claude adapter must act as a workspace-loop adapter: it may resolve
+workspace context under existing authorization, but must return only a typed
+`WorkspaceCheckpoint` or `WorkspaceResult`. Specialist output must return
+through that workspace adapter; it may not be written into a Maestro goal
+directly. Walter receives only `WalterRecord` and returns a revision-matched
+`WalterReview` to Maestro. Native scheduling or hooks remain unavailable until
+this mapping has equivalent Claude/Codex conformance fixtures. The adapter
+must also provide a secure monotonic anchor outside the user-local state root;
+macOS uses the shared Keychain implementation and Windows uses Credential
+Manager. Without it, the core fails closed rather than allowing recovery.

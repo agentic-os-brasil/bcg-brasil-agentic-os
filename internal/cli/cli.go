@@ -18,7 +18,9 @@ import (
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/longrun"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
@@ -40,6 +42,8 @@ var Version = "0.0.0-dev"
 
 const maximumOwnerFacetBytes = 1 << 20
 const maximumWorkspaceAgentBytes = 1 << 20
+const maximumLongRunInputBytes = 64 << 10
+const maximumCanaryInputBytes = 16 << 10
 
 func Run(args []string, out, errOut io.Writer) int {
 	return RunWithInput(args, strings.NewReader(""), out, errOut)
@@ -47,12 +51,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory|federation>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory|federation|canary|goal>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory|federation>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|skills|memory|federation|canary|goal>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -79,10 +83,77 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runMemory(args[1:], in, out, errOut)
 	case "federation":
 		return runFederation(args[1:], out, errOut, defaultDataRoot)
+	case "canary":
+		return runCanary(args[1:], in, out, errOut, defaultDataRoot)
+	case "goal":
+		return runLongRunningGoal(args[1:], in, out, errOut, defaultDataRoot)
 	default:
 		fmt.Fprintf(errOut, "unknown command %q\n", args[0])
 		return ExitUsage
 	}
+}
+
+// runCanary is deliberately local-only. It records and reports a closed
+// receipt vocabulary; it has no federation enrollment, bridge or network path.
+func runCanary(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return runCanaryWithStore(args, in, out, errOut, canary.Store{Root: filepath.Join(root, "canary")})
+}
+
+func runCanaryWithStore(args []string, in io.Reader, out, errOut io.Writer, store canary.Store) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos canary <record|report>")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "record":
+		flags := newFlagSet("canary record", errOut)
+		stdin := flags.Bool("stdin", false, "read a closed metadata-only receipt from standard input")
+		if err := flags.Parse(args[1:]); err != nil || !*stdin || flags.NArg() != 0 {
+			fmt.Fprintln(errOut, "usage: bcgos canary record --stdin")
+			return ExitUsage
+		}
+		var receipt canary.Receipt
+		if err := decodeCanaryJSON(in, &receipt); err != nil {
+			return reportError(errOut, err)
+		}
+		if err := store.Append(receipt); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, struct {
+			State string       `json:"state"`
+			Event canary.Event `json:"event"`
+		}{State: "recorded", Event: receipt.Event}, errOut)
+	case "report":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos canary report")
+			return ExitUsage
+		}
+		report, err := store.Report()
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, report, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos canary <record|report>")
+		return ExitUsage
+	}
+}
+
+func decodeCanaryJSON(in io.Reader, target any) error {
+	decoder := json.NewDecoder(io.LimitReader(in, maximumCanaryInputBytes+1))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("canary input contains trailing JSON or exceeds 16 KiB")
+	}
+	return nil
 }
 
 func runFederation(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
@@ -148,6 +219,113 @@ func runFederation(args []string, out, errOut io.Writer, dataRoot func() (string
 		fmt.Fprintln(errOut, "usage: bcgos federation <enroll|status|revoke>")
 		return ExitUsage
 	}
+}
+
+// runLongRunningGoal only creates and observes goals. The workspace and Walter
+// mutation boundaries belong to capability-bound runtime adapters, not to a
+// generic CLI JSON endpoint that could impersonate either role.
+func runLongRunningGoal(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	anchor, err := longrun.DefaultAnchor()
+	if errors.Is(err, longrun.ErrMonotonicAnchorUnavailable) {
+		fmt.Fprintln(errOut, "long-running goals are unavailable until the runtime provides a secure monotonic anchor")
+		return ExitUnavailable
+	}
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return runLongRunningGoalWithStore(args, in, out, errOut, longrun.Store{Root: filepath.Join(root, "long-running"), Anchor: anchor})
+}
+
+func runLongRunningGoalWithStore(args []string, in io.Reader, out, errOut io.Writer, store longrun.Store) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos goal <create|status> [options]")
+		return ExitUsage
+	}
+	if args[0] == "create" {
+		flags := newFlagSet("goal create", errOut)
+		id, phase, stdin := flags.String("id", "", "goal ID"), flags.String("phase", "", "initial phase ID"), flags.Bool("stdin", false, "read Done Contract JSON")
+		if err := flags.Parse(args[1:]); err != nil || !*stdin || flags.NArg() != 0 || *id == "" || *phase == "" {
+			fmt.Fprintln(errOut, "usage: bcgos goal create --id <goal-id> --phase <phase-id> --stdin")
+			return ExitUsage
+		}
+		var contract longrun.DoneContract
+		if err := decodeLongRunJSON(in, &contract); err != nil {
+			return reportError(errOut, err)
+		}
+		goal, err := longrun.NewActiveGoal(*id, contract, *phase)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if err := store.Create(goal); errors.Is(err, longrun.ErrMonotonicAnchorUnavailable) {
+			fmt.Fprintln(errOut, "long-running goals are unavailable until the runtime provides a secure monotonic anchor")
+			return ExitUnavailable
+		} else if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeLongRunGoal(out, goal, errOut)
+	}
+	if args[0] != "status" {
+		fmt.Fprintln(errOut, "usage: bcgos goal <create|status> [options]")
+		return ExitUsage
+	}
+	flags := newFlagSet("goal status", errOut)
+	id := flags.String("id", "", "goal ID")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *id == "" {
+		fmt.Fprintln(errOut, "usage: bcgos goal status --id <goal-id>")
+		return ExitUsage
+	}
+	goal, err := store.Load(*id)
+	if errors.Is(err, longrun.ErrMonotonicAnchorUnavailable) {
+		fmt.Fprintln(errOut, "long-running goals are unavailable until the runtime provides a secure monotonic anchor")
+		return ExitUnavailable
+	}
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeLongRunGoal(out, goal, errOut)
+}
+func decodeLongRunJSON(in io.Reader, target any) error {
+	decoder := json.NewDecoder(io.LimitReader(in, maximumLongRunInputBytes+1))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("long-running input contains trailing JSON or exceeds 64 KiB")
+	}
+	return nil
+}
+func writeLongRunGoal(out io.Writer, goal *longrun.Goal, errOut io.Writer) int {
+	return writeJSON(out, struct {
+		ID                     string               `json:"id"`
+		Status                 longrun.Status       `json:"status"`
+		Phase                  string               `json:"phase"`
+		Contract               longrun.DoneContract `json:"contract"`
+		LedgerRevision         int                  `json:"ledger_revision"`
+		NeedsFreshWalterReview bool                 `json:"needs_fresh_walter_review"`
+		Evidence               []longrun.Evidence   `json:"evidence"`
+		Breadcrumbs            []longrun.Breadcrumb `json:"breadcrumbs"`
+		NextAction             string               `json:"next_action"`
+	}{ID: goal.ID(), Status: goal.Status(), Phase: goal.Phase(), Contract: goal.Contract(), LedgerRevision: goal.LedgerRevision(), NeedsFreshWalterReview: goal.NeedsFreshWalterReview(), Evidence: goal.Evidence(), Breadcrumbs: goal.Breadcrumbs(), NextAction: nextLongRunAction(goal)}, errOut)
+}
+
+func nextLongRunAction(goal *longrun.Goal) string {
+	if goal.Status() == longrun.Completed {
+		return "completed"
+	}
+	if goal.Status() == longrun.AwaitingHuman {
+		return "await_human_decision"
+	}
+	breadcrumbs := goal.Breadcrumbs()
+	if len(breadcrumbs) > 0 {
+		return string(breadcrumbs[len(breadcrumbs)-1].NextAction)
+	}
+	return "activate_workspace_loop"
 }
 
 func writeFederationStatus(out io.Writer, state string, store federation.ExportStore, errOut io.Writer) int {
@@ -500,8 +678,10 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 		Profile:   state,
 		Capabilities: map[string]string{
 			"bundles":                "unavailable",
+			"canary_observability":   "supported_local_only",
 			"human_atlas_bootstrap":  "supported",
 			"interaction_profile":    "supported",
+			"long_running_goals":     "macos_keychain_windows_credential_manager",
 			"memory_dreaming":        "unavailable",
 			"updates":                "unavailable",
 			"workspace_agent_setup":  "supported",

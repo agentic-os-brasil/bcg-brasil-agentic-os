@@ -51,6 +51,8 @@ quando os mecanismos nativos forem diferentes.
 | Atlas humano | Estrutura local não destrutiva para clientes, projetos, pessoas e diário de trabalho. |
 | Memória | Núcleo local com resumos graduais e contexto limitado; automação de síntese ainda não está ativa. |
 | Skills | Catálogo compacto e atualizado de procedimentos disponíveis. |
+| Modo long-running | Done Contract, breadcrumbs, ledger de evidências, loop Maestro → workspace agent → specialist → workspace agent → Maestro → Walter → Maestro e auditoria explícita de conclusão. macOS usa Keychain e Windows usa Credential Manager. |
+| Observabilidade do canary | Recibos locais, metadata-only e de vocabulário fechado para primeiro valor, retomada, lifecycle, intervenções e falhas por capability; `bcgos canary report` produz o relatório agregado sem rota de rede ou federação. |
 | Desenvolvimento | Harness, testes, CI em Windows/macOS/Linux, decisões versionadas e fluxo de PR com revisão humana. |
 
 ## O que ainda não existe
@@ -104,12 +106,35 @@ bcgos workspace-agent status <workspace>
 bcgos skills index
 bcgos session packet [workspace]
 bcgos session bridge --runtime claude|codex [workspace]
+bcgos goal create --id <goal-id> --phase <phase-id> --stdin
+bcgos goal status --id <goal-id>
+bcgos canary record --stdin
+bcgos canary report
 ```
 
 Os comandos de memória expõem apenas operações já suportadas. O pacote de
 contexto de sessão expõe estados e referências limitadas, sem injetar conteúdo.
 Dreaming automático e injeção em runtime dependem de adapters que ainda estão
 sendo entregues ou revisados.
+
+O núcleo long-running usa apenas IDs
+opacos no core. Um especialista não pode fechar um objetivo; o resultado dele
+passa de volta pelo workspace agent. Walter recebe o registro composto pelo
+Maestro, devolve a decisão somente ao Maestro e a aprovação expira quando o
+ledger muda. As mutações do workspace e do Walter são reservadas aos adapters
+com capacidade própria. Para preservar irreversibilidade após recuperação, o
+host precisa fornecer uma âncora monotônica segura fora dos dados locais.
+No macOS, `bcgos goal` usa o Keychain; no Windows, o Credential Manager. Em
+outros hosts, declara a capacidade indisponível em vez de persistir um estado
+que possa sofrer rollback. O comando não cria hook nativo, acesso novo ao
+workspace ou execução autônoma em segundo plano.
+
+O relatório do canary é uma superfície local para a operação do piloto. Ele
+aceita apenas recibos tipados e não aceita conteúdo de clientes, nomes,
+identificadores de workspace, caminhos, prompts ou mensagens de erro. Ainda
+não há hook nativo Claude/Codex para produzir esses recibos automaticamente;
+quando os adaptadores existirem, eles usarão o mesmo contrato fechado. O
+canary não abre uma rota de rede e não altera o fluxo de federação existente.
 
 ## Princípios de produto
 
@@ -157,6 +182,7 @@ duráveis usam um código de quatro letras no
 - [Atlas humano](specs/014-human-atlas-bootstrap.md)
 - [Fronteiras do agente de workspace](specs/016-workspace-agent-boundaries.md)
 - [Inicialização e pesquisa do agente](specs/017-workspace-agent-initialization.md)
+- [Objetivos long-running do Maestro](specs/020-long-running-goals.md)
 
 ## Confidencialidade
 

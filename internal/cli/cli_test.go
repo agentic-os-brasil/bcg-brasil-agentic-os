@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/longrun"
 )
 
 func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
@@ -173,6 +176,51 @@ func TestFederationEnrollmentRequiresExplicitContractAcceptance(t *testing.T) {
 	code := runFederation([]string{"enroll", "--bridge-endpoint", "https://bridge.maestro.example/federation/v1/batches"}, &output, &output, func() (string, error) { return t.TempDir(), nil })
 	if code != ExitUsage || !strings.Contains(output.String(), "--accept-federated-improvement-contract") {
 		t.Fatalf("exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestCanaryCLIProducesOnlyLocalMetadataReport(t *testing.T) {
+	store := canary.Store{Root: t.TempDir()}
+	var output bytes.Buffer
+	receipt := `{"recorded_at":"2026-07-25T12:00:00Z","event":"capability_failure","outcome":"failed","capability":"workspace-agent"}`
+	if code := runCanaryWithStore([]string{"record", "--stdin"}, strings.NewReader(receipt), &output, &output, store); code != ExitOK || !strings.Contains(output.String(), `"state": "recorded"`) {
+		t.Fatalf("record exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runCanaryWithStore([]string{"report"}, strings.NewReader(""), &output, &output, store); code != ExitOK || !strings.Contains(output.String(), `"capability": "workspace-agent"`) || strings.Contains(output.String(), "client-secret-CANARY") {
+		t.Fatalf("report exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestCanaryCLIRejectsContentBearingInput(t *testing.T) {
+	store := canary.Store{Root: t.TempDir()}
+	var output bytes.Buffer
+	receipt := `{"recorded_at":"2026-07-25T12:00:00Z","event":"first_value","outcome":"succeeded","duration":"under_ten_minutes","client_note":"client-secret-CANARY"}`
+	if code := runCanaryWithStore([]string{"record", "--stdin"}, strings.NewReader(receipt), &output, &output, store); code == ExitOK || strings.Contains(output.String(), "client-secret-CANARY") {
+		t.Fatalf("content-bearing input exit = %d, output = %s", code, output.String())
+	}
+	if _, err := os.Stat(filepath.Join(store.Root, "receipts")); !os.IsNotExist(err) {
+		t.Fatalf("content-bearing input created a receipt directory: %v", err)
+	}
+}
+
+func TestLongRunningGoalCLIReportsUnavailableWithoutSecureHostAnchor(t *testing.T) {
+	var output bytes.Buffer
+	contract := `{"revision":1,"objective_ref":"goal://maestro-pilot","deliverables":[{"id":"runtime","kind":"capability"}],"required_evidence":["test"],"non_goal_refs":["decision://no-autonomous-release"],"authority":"human_for_external_action"}`
+	store := longrun.Store{Root: t.TempDir()}
+	if code := runLongRunningGoalWithStore([]string{"create", "--id", "maestro-pilot", "--phase", "pilot-runtime", "--stdin"}, strings.NewReader(contract), &output, &output, store); code != ExitUnavailable || !strings.Contains(output.String(), "secure monotonic anchor") {
+		t.Fatalf("unavailable exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestLongRunningGoalStatusExplainsTheNextSafeAction(t *testing.T) {
+	goal, err := longrun.NewActiveGoal("maestro-pilot", longrun.DoneContract{Revision: 1, ObjectiveRef: "goal://maestro-pilot", Deliverables: []longrun.Deliverable{{ID: "runtime", Kind: longrun.DeliverableCapability}}, RequiredEvidence: []longrun.EvidenceClass{longrun.EvidenceTest}, NonGoalRefs: []string{"decision://no-release"}, Authority: longrun.AuthorityHumanForExternalAction}, "pilot-runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := writeLongRunGoal(&output, goal, &output); code != ExitOK || !strings.Contains(output.String(), `"next_action": "activate_workspace_loop"`) {
+		t.Fatalf("goal status = %s", output.String())
 	}
 }
 

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:canary-report:v1",
+  "title": "Maestro Canary Observability Report",
+  "description": "Local-only, metadata-only canary report. It intentionally has no identity, content, client, workspace or free-text fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_count",
+    "first_value",
+    "resume",
+    "lifecycle",
+    "manual_interventions",
+    "capability_failures"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "receipt_count": { "type": "integer", "minimum": 0 },
+    "first_value": { "type": "array", "items": { "$ref": "#/$defs/duration_count" } },
+    "resume": { "type": "array", "items": { "$ref": "#/$defs/outcome_count" } },
+    "lifecycle": { "type": "array", "items": { "$ref": "#/$defs/lifecycle_count" } },
+    "manual_interventions": { "type": "array", "items": { "$ref": "#/$defs/count_bucket_count" } },
+    "capability_failures": { "type": "array", "items": { "$ref": "#/$defs/capability_count" } }
+  },
+  "$defs": {
+    "outcome": { "enum": ["succeeded", "failed", "blocked"] },
+    "duration": { "enum": ["under_five_minutes", "under_ten_minutes", "under_thirty_minutes", "over_thirty_minutes"] },
+    "count_bucket": { "enum": ["once", "two_to_three", "four_to_seven", "eight_plus"] },
+    "capability": { "enum": ["long-running-goals", "workspace-agent", "session-context", "installation", "updates"] },
+    "duration_count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duration", "count"],
+      "properties": { "duration": { "$ref": "#/$defs/duration" }, "count": { "type": "integer", "minimum": 1 } }
+    },
+    "outcome_count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "count"],
+      "properties": { "outcome": { "$ref": "#/$defs/outcome" }, "count": { "type": "integer", "minimum": 1 } }
+    },
+    "lifecycle_count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "outcome", "count"],
+      "properties": {
+        "event": { "enum": ["installation", "update", "rollback"] },
+        "outcome": { "$ref": "#/$defs/outcome" },
+        "count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "count_bucket_count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count_bucket", "count"],
+      "properties": { "count_bucket": { "$ref": "#/$defs/count_bucket" }, "count": { "type": "integer", "minimum": 1 } }
+    },
+    "capability_count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability", "count"],
+      "properties": { "capability": { "$ref": "#/$defs/capability" }, "count": { "type": "integer", "minimum": 1 } }
+    }
+  }
+}
