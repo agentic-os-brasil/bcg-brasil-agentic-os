@@ -282,3 +282,97 @@ func TestInstallRejectsMalformedSessionStartGroupInsteadOfOverwriting(t *testing
 		t.Fatalf("config changed: %s, %v", data, err)
 	}
 }
+
+func TestClaudeInstallOwnsCompleteLifecycleAndKeepsObserveHooksAsync(t *testing.T) {
+	workspace := t.TempDir()
+	path := filepath.Join(workspace, ".claude", "settings.local.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"other"}]}]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	config, err := read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooks, err := hooksMap(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"} {
+		groups, err := groupsForEvent(hooks, event)
+		if err != nil || len(groups) == 0 {
+			t.Fatalf("%s groups = %#v, %v", event, groups, err)
+		}
+		found := false
+		for _, group := range groups {
+			for _, raw := range group.(map[string]any)["hooks"].([]any) {
+				entry := raw.(map[string]any)
+				if !isOwnedEventCommand("claude", event, entry["command"]) {
+					continue
+				}
+				found = true
+				if entry["timeout"] != float64(2) {
+					t.Fatalf("%s timeout = %#v", event, entry["timeout"])
+				}
+				wantAsync := event == "PostToolUse" || event == "Stop"
+				if got, _ := entry["async"].(bool); got != wantAsync {
+					t.Fatalf("%s async = %v, want %v", event, got, wantAsync)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("owned %s binding not found", event)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || !strings.Contains(string(data), `"command": "other"`) {
+		t.Fatalf("unrelated hook was not preserved: %s, %v", data, err)
+	}
+}
+
+func TestClaudeInspectRequiresEveryOwnedLifecycleBinding(t *testing.T) {
+	workspace := t.TempDir()
+	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(workspace, ".claude", "settings.local.json")
+	config, err := read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooks := config["hooks"].(map[string]any)
+	delete(hooks, "Stop")
+	if err := write(path, config); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Inspect("claude", workspace)
+	if err != nil || status.State != "absent" {
+		t.Fatalf("status = %#v, %v", status, err)
+	}
+}
+
+func TestClaudeUninstallRemovesOnlyOwnedLifecycleBindings(t *testing.T) {
+	workspace := t.TempDir()
+	path := filepath.Join(workspace, ".claude", "settings.local.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"other"}]}]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall("claude", workspace); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || !strings.Contains(string(data), `"command": "other"`) || strings.Contains(string(data), "--adapter-source maestro") {
+		t.Fatalf("config after uninstall = %s, %v", data, err)
+	}
+}

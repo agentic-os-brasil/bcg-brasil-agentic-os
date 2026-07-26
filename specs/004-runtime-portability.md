@@ -1,6 +1,7 @@
 # Spec 004 - Runtime portability
 
-Status: direction accepted; canonical capability manifest and diagnostic report implemented; lifecycle wiring and native adapters pending.
+Status: direction accepted; canonical capability manifest and diagnostic report
+implemented; Claude lifecycle wiring implemented with native evidence pending.
 
 ## Objective
 
@@ -94,10 +95,13 @@ defines its portable shape, and `internal/runtimecap` validates and reports the
 same capability IDs, semantic events and criticality for Claude and Codex.
 `bcgos doctor` reports the detected runtime plus its derived capability view.
 
-The initial adapter directories deliberately contain no lifecycle wiring. Their
-only implemented capability is local executable discovery. Every product event
-remains `unavailable` until a thin adapter and equivalent conformance fixture
-exist; development hooks are never evidence of product hook support.
+The Claude adapter maps the complete initial lifecycle behind the neutral
+contract and records metadata-only local delivery receipts. Codex retains the
+same vocabulary and Session Start payload but has no complete lifecycle
+binding. Every product event remains `unavailable` in the capability manifest
+until the relevant thin adapter and qualifying native-session conformance
+evidence exist; local configuration, direct-command tests and development hooks
+are never evidence of product hook support.
 
 Every future product adapter must also conform to the non-blocking execution
 policy in Spec 019. A native lifecycle mechanism may translate and emit a

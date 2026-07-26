@@ -41,26 +41,45 @@ type CodexHookSpecificOutput struct {
 }
 
 func BuildClaude(packet sessionctx.Packet) (ClaudeOutput, error) {
-	context, err := contextFor("claude", packet)
+	return BuildClaudeEvent(packet, "SessionStart")
+}
+
+// BuildClaudeEvent keeps the bounded shared packet identical across Claude's
+// SessionStart and UserPromptSubmit surfaces while preserving each native
+// event name in the adapter response.
+func BuildClaudeEvent(packet sessionctx.Packet, eventName string) (ClaudeOutput, error) {
+	if eventName != "SessionStart" && eventName != "UserPromptSubmit" {
+		return ClaudeOutput{}, fmt.Errorf("unsupported Claude hook event %q", eventName)
+	}
+	semanticEvent := "session_start"
+	if eventName == "UserPromptSubmit" {
+		semanticEvent = "context_inject"
+	}
+	context, err := contextFor("claude", semanticEvent, packet)
 	if err != nil {
 		return ClaudeOutput{}, err
 	}
-	return ClaudeOutput{HookSpecificOutput: ClaudeHookSpecificOutput{HookEventName: "SessionStart", AdditionalContext: context}}, nil
+	return ClaudeOutput{HookSpecificOutput: ClaudeHookSpecificOutput{HookEventName: eventName, AdditionalContext: context}}, nil
 }
 
 func BuildCodex(packet sessionctx.Packet) (CodexOutput, error) {
-	context, err := contextFor("codex", packet)
+	context, err := contextFor("codex", "session_start", packet)
 	if err != nil {
 		return CodexOutput{}, err
 	}
 	return CodexOutput{HookSpecificOutput: CodexHookSpecificOutput{HookEventName: "SessionStart", AdditionalContext: context}}, nil
 }
 
-func contextFor(runtime string, packet sessionctx.Packet) (string, error) {
+func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string, error) {
 	envelope, err := sessionstart.Build(runtime, packet)
 	if err != nil {
 		return "", err
 	}
+	envelope.Event = semanticEvent
+	// This serializer is invoked by an adapter or its direct conformance
+	// command. The manifest still owns capability state, so report emitted
+	// payload separately from qualifying native-session evidence.
+	envelope.Message = "bounded adapter payload emitted; capability remains unavailable until qualifying native-session conformance evidence is recorded"
 	body, err := json.Marshal(envelope)
 	if err != nil {
 		return "", fmt.Errorf("encode session envelope: %w", err)
