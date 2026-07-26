@@ -2,6 +2,20 @@
   "schema_version": 1,
   "skills": [
     {
+      "id": "consolidate",
+      "display_name": "Consolidate",
+      "trigger": "Propose ranked cleanup from supplied records without editing",
+      "default_prompt": "Use $consolidate to identify the highest-value cleanup proposals in these records.",
+      "relative_path": "skills/consolidate/SKILL.md"
+    },
+    {
+      "id": "decision-log",
+      "display_name": "Decision Log",
+      "trigger": "Draft a reviewable decision record without writing it",
+      "default_prompt": "Use $decision-log to draft a durable record of this decision for my review.",
+      "relative_path": "skills/decision-log/SKILL.md"
+    },
+    {
       "id": "dream-memory",
       "display_name": "Dream Memory",
       "trigger": "Consolidate daily and weekly professional memory",
@@ -28,6 +42,13 @@
       "trigger": "Stress-test a plan through a live sharp-question dialogue",
       "default_prompt": "Use $grill-me to stress-test this plan one question at a time.",
       "relative_path": "skills/grill-me/SKILL.md"
+    },
+    {
+      "id": "handoff",
+      "display_name": "Handoff",
+      "trigger": "Prepare a compact handoff without claiming durable recovery",
+      "default_prompt": "Use $handoff to prepare a concise resume note from the work state I provide.",
+      "relative_path": "skills/handoff/SKILL.md"
     },
     {
       "id": "ingest-content",
@@ -63,6 +84,27 @@
       "trigger": "Review proposed meeting actions before any write occurs",
       "default_prompt": "Use $meeting-to-work-items to review these notes and prepare confirmed follow-ups without filing anything yet.",
       "relative_path": "skills/meeting-to-work-items/SKILL.md"
+    },
+    {
+      "id": "record-concept",
+      "display_name": "Record Concept",
+      "trigger": "Prepare a reusable method candidate without promoting it",
+      "default_prompt": "Use $record-concept to turn this method into a reviewable reusable concept.",
+      "relative_path": "skills/record-concept/SKILL.md"
+    },
+    {
+      "id": "record-learning",
+      "display_name": "Record Learning",
+      "trigger": "Distill a professional learning candidate without private writes",
+      "default_prompt": "Use $record-learning to turn this experience into a durable learning candidate.",
+      "relative_path": "skills/record-learning/SKILL.md"
+    },
+    {
+      "id": "retro",
+      "display_name": "Retro",
+      "trigger": "Review a supplied work period and set one observable next intention",
+      "default_prompt": "Use $retro to reflect on this recap and define one concrete intention for next week.",
+      "relative_path": "skills/retro/SKILL.md"
     },
     {
       "id": "start-day",

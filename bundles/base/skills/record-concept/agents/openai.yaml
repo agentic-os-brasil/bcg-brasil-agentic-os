@@ -1,0 +1,4 @@
+interface:
+  display_name: "Record Concept"
+  short_description: "Prepare a reusable method candidate without promoting it"
+  default_prompt: "Use $record-concept to turn this method into a reviewable reusable concept."

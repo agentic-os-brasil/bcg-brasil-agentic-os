@@ -1,0 +1,4 @@
+interface:
+  display_name: "Record Learning"
+  short_description: "Distill a professional learning candidate without private writes"
+  default_prompt: "Use $record-learning to turn this experience into a durable learning candidate."

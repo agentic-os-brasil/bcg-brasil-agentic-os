@@ -1,0 +1,4 @@
+interface:
+  display_name: "Handoff"
+  short_description: "Prepare a compact handoff without claiming durable recovery"
+  default_prompt: "Use $handoff to prepare a concise resume note from the work state I provide."

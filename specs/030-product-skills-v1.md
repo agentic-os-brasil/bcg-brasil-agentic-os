@@ -62,6 +62,15 @@ inputs. They may compose Wave 1/2 methods but cannot read calendar, mail,
 tasks, workspace history or memory, and cannot create a daily log. Their future
 integration paths remain deferred under the external-source authority contract.
 
+## Wave 4
+
+`decision-log`, `handoff`, `consolidate`, `record-learning`, `record-concept`
+and `retro` are managed preparation or reflection methods. They work only from
+current-request content, produce drafts or proposals, and explicitly do not
+write decisions, execution state, memory, concepts or owner-private history.
+They compose the future canonical writers by preparing bounded input; they do
+not duplicate those writers.
+
 ## Deferred work
 
 `diagram` and `make-pdf` wait for deterministic artifact contracts. `task`,

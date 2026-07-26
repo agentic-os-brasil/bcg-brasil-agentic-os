@@ -1,0 +1,4 @@
+interface:
+  display_name: "Decision Log"
+  short_description: "Draft a reviewable decision record without writing it"
+  default_prompt: "Use $decision-log to draft a durable record of this decision for my review."

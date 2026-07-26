@@ -1,0 +1,4 @@
+interface:
+  display_name: "Retro"
+  short_description: "Review a supplied work period and set one observable next intention"
+  default_prompt: "Use $retro to reflect on this recap and define one concrete intention for next week."

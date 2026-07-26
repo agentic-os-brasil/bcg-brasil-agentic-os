@@ -34,6 +34,22 @@
       "path": "skills/dream-memory/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/consolidate/SKILL.md",
+      "path": "skills/consolidate/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/consolidate/agents/openai.yaml",
+      "path": "skills/consolidate/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/decision-log/SKILL.md",
+      "path": "skills/decision-log/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/decision-log/agents/openai.yaml",
+      "path": "skills/decision-log/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/eod/SKILL.md",
       "path": "skills/eod/SKILL.md"
     },
@@ -56,6 +72,14 @@
     {
       "source": "bundles/base/skills/grill-me/agents/openai.yaml",
       "path": "skills/grill-me/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/handoff/SKILL.md",
+      "path": "skills/handoff/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/handoff/agents/openai.yaml",
+      "path": "skills/handoff/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/ingest-content/SKILL.md",
@@ -96,6 +120,30 @@
     {
       "source": "bundles/base/skills/meeting-to-work-items/agents/openai.yaml",
       "path": "skills/meeting-to-work-items/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/record-concept/SKILL.md",
+      "path": "skills/record-concept/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/record-concept/agents/openai.yaml",
+      "path": "skills/record-concept/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/record-learning/SKILL.md",
+      "path": "skills/record-learning/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/record-learning/agents/openai.yaml",
+      "path": "skills/record-learning/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/retro/SKILL.md",
+      "path": "skills/retro/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/retro/agents/openai.yaml",
+      "path": "skills/retro/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/start-day/SKILL.md",
