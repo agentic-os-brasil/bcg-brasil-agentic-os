@@ -405,6 +405,13 @@ func (adapter *Adapter) RecoverStale(maxAge time.Duration, recoveryCapability st
 	return true
 }
 
+// Snapshot exposes the metadata-only shared orchestration state for product
+// status and governed completion flows. It never exposes capabilities or tool
+// grants.
+func (adapter *Adapter) Snapshot() StateSnapshot {
+	return adapter.store.Snapshot()
+}
+
 func (adapter *Adapter) authenticate(id, capability string) (authorization, bool) {
 	value, ok := adapter.authorizations[id]
 	if !ok || capability == "" {
