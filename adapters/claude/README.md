@@ -3,11 +3,17 @@
 This is the thin product adapter boundary for Claude. Policies, memory and
 capability states remain canonical in `bundles/base/runtime/capabilities.json`.
 
-Current state: `bcgos doctor` discovers a local Claude executable, while every
-product lifecycle event remains explicitly unavailable. `bcgos session bridge
---runtime claude [workspace-path]` supplies a bounded Session Start envelope
-for a future adapter to consume; it does not install a hook or inject content.
-Development hooks under `.claude/` are not product adapter wiring.
+Current implementation: workspace-local configuration maps Claude
+`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` to
+the canonical lifecycle. Session and context output stay bounded and
+pointer-only. The guard fails closed on invalid input and denies only the
+implemented protected-root deletion policy. Post/stop entries are asynchronous
+and emit metadata-only local receipts.
+
+Every product lifecycle event remains explicitly `unavailable` in the
+capability manifest. `bcgos doctor` diagnoses configuration and receipts
+separately, because neither local installation nor a development hook proves
+execution in a qualifying native Claude session.
 
 The managed Maestro, Walter and Darwin definitions live in
 `bundles/base/agents/`. `internal/agentorchestration` now provides the shared
@@ -30,9 +36,9 @@ flowchart LR
     Catalog -.->|current capability| Unavailable["Unavailable<br/>fails closed"]
 ```
 
-Future wiring may map Claude-native mechanisms to `session_start`,
-`pre_action_guard`, `post_action_observe`, `stop_finalize` and
-`context_inject`. It must add conformance fixtures before changing a capability
-state. At Session Start it must also resolve the user-local interaction profile
-and inject only its bounded ID and managed policy pointer; the profile must not
-be derived from or persisted into memory.
+The lifecycle wiring maps `session_start`, `pre_action_guard`,
+`post_action_observe`, `stop_finalize` and `context_inject`, but conformance
+evidence is still required before any capability-state change. Session Start
+resolves the user-local interaction profile and injects only its bounded ID and
+managed policy pointer; the profile is not derived from or persisted into
+memory.

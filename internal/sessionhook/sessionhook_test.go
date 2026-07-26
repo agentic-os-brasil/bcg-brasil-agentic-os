@@ -44,6 +44,23 @@ func TestClaudeAndCodexSerializationAreSeparateAdapterCalls(t *testing.T) {
 	}
 }
 
+func TestClaudeContextInjectionUsesTheSameBoundedPacketWithNativeEventName(t *testing.T) {
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+	})
+	output, err := BuildClaudeEvent(packet, "UserPromptSubmit")
+	if err != nil || output.HookSpecificOutput.HookEventName != "UserPromptSubmit" ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, `"runtime":"claude"`) ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, `"event":"context_inject"`) {
+		t.Fatalf("output = %#v, %v", output, err)
+	}
+	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "wiring is not installed") ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "capability remains unavailable") {
+		t.Fatalf("adapter output reported the wrong evidence state: %#v", output)
+	}
+}
+
 func TestBuildOmitsOversizedPacketInsteadOfExpandingHookOutput(t *testing.T) {
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profile.State{

@@ -21,7 +21,13 @@ type Status struct {
 	State   string `json:"state"`
 }
 
-// Install writes one workspace-local Session Start command for the given
+type binding struct {
+	NativeEvent string
+	Command     string
+	Async       bool
+}
+
+// Install writes the owned workspace-local lifecycle bindings for the given
 // released CLI executable. The executable is explicit so an installed hook
 // never depends on a consultant's PATH or shell profile.
 func Install(runtimeName, workspace, executable string) (Status, error) {
@@ -29,7 +35,7 @@ func Install(runtimeName, workspace, executable string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	command, err := commandFor(runtimeName, executable)
+	bindings, err := bindingsFor(runtimeName, executable)
 	if err != nil {
 		return Status{}, err
 	}
@@ -41,16 +47,28 @@ func Install(runtimeName, workspace, executable string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	groups, err := sessionGroups(hooks)
-	if err != nil {
-		return Status{}, err
+	// Validate every existing target group before any configuration or Git
+	// exclusion write.
+	for _, binding := range bindings {
+		groups, err := groupsForEvent(hooks, binding.NativeEvent)
+		if err != nil {
+			return Status{}, err
+		}
+		if err := validateEventGroups(binding.NativeEvent, groups); err != nil {
+			return Status{}, err
+		}
 	}
-	if err := validateGroups(groups); err != nil {
-		return Status{}, err
-	}
-	updated, changed := updateOwnedHook(groups, runtimeName, command)
 	if err := rejectTrackedConfig(workspace, path); err != nil {
 		return Status{}, err
+	}
+	changed := false
+	for _, binding := range bindings {
+		groups, _ := groupsForEvent(hooks, binding.NativeEvent)
+		updated, bindingChanged := updateOwnedEventHook(groups, runtimeName, binding.NativeEvent, binding.Command, binding.Async)
+		if bindingChanged {
+			hooks[binding.NativeEvent] = updated
+			changed = true
+		}
 	}
 	if err := ensureLocalConfigExcluded(workspace, path); err != nil {
 		return Status{}, err
@@ -58,7 +76,6 @@ func Install(runtimeName, workspace, executable string) (Status, error) {
 	if !changed {
 		return Status{Runtime: runtimeName, Path: path, State: "installed"}, nil
 	}
-	hooks["SessionStart"] = updated
 	config["hooks"] = hooks
 	if err := write(path, config); err != nil {
 		return Status{}, err
@@ -84,37 +101,24 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	groups, err := sessionGroups(hooks)
+	bindings, err := bindingsFor(runtimeName, "bcgos")
 	if err != nil {
 		return Status{}, err
 	}
-	if err := validateGroups(groups); err != nil {
-		return Status{}, err
-	}
-	filtered := make([]any, 0, len(groups))
-	for _, group := range groups {
-		entry := group.(map[string]any)
-		entries := entry["hooks"].([]any)
-		kept := make([]any, 0, len(entries))
-		for _, raw := range entries {
-			hook := raw.(map[string]any)
-			if !isOwnedCommand(runtimeName, hook["command"]) {
-				kept = append(kept, raw)
-			}
+	for _, binding := range bindings {
+		groups, err := groupsForEvent(hooks, binding.NativeEvent)
+		if err != nil {
+			return Status{}, err
 		}
-		if len(kept) > 0 {
-			copy := make(map[string]any, len(entry))
-			for key, value := range entry {
-				copy[key] = value
-			}
-			copy["hooks"] = kept
-			filtered = append(filtered, copy)
+		if err := validateEventGroups(binding.NativeEvent, groups); err != nil {
+			return Status{}, err
 		}
-	}
-	if len(filtered) == 0 {
-		delete(hooks, "SessionStart")
-	} else {
-		hooks["SessionStart"] = filtered
+		filtered := removeOwnedHooks(groups, runtimeName, binding.NativeEvent)
+		if len(filtered) == 0 {
+			delete(hooks, binding.NativeEvent)
+		} else {
+			hooks[binding.NativeEvent] = filtered
+		}
 	}
 	config["hooks"] = hooks
 	if err := write(path, config); err != nil {
@@ -141,14 +145,20 @@ func Inspect(runtimeName, workspace string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	groups, err := sessionGroups(hooks)
+	bindings, err := bindingsFor(runtimeName, "bcgos")
 	if err != nil {
 		return Status{}, err
 	}
-	if err := validateGroups(groups); err != nil {
-		return Status{}, err
+	for _, binding := range bindings {
+		groups, err := groupsForEvent(hooks, binding.NativeEvent)
+		if err != nil {
+			return Status{}, err
+		}
+		if err := validateEventGroups(binding.NativeEvent, groups); err != nil {
+			return Status{}, err
+		}
 	}
-	if hasOwnedCommand(config, runtimeName) {
+	if hasOwnedBindings(config, runtimeName) {
 		return Status{Runtime: runtimeName, Path: path, State: "installed"}, nil
 	}
 	return Status{Runtime: runtimeName, Path: path, State: "absent"}, nil
@@ -165,14 +175,39 @@ func target(runtimeName, workspace string) (string, error) {
 }
 
 func commandFor(runtimeName, executable string) (string, error) {
+	bindings, err := bindingsFor(runtimeName, executable)
+	if err != nil {
+		return "", err
+	}
+	return bindings[0].Command, nil
+}
+
+func bindingsFor(runtimeName, executable string) ([]binding, error) {
 	if strings.TrimSpace(executable) == "" {
-		return "", errors.New("adapter executable must not be empty")
+		return nil, errors.New("adapter executable must not be empty")
 	}
 	abs, err := filepath.Abs(executable)
 	if err != nil {
-		return "", fmt.Errorf("resolve adapter executable: %w", err)
+		return nil, fmt.Errorf("resolve adapter executable: %w", err)
 	}
-	return quoteCommandPath(abs) + " hook session-start --runtime " + runtimeName + " " + adapterSourceMarker, nil
+	prefix := quoteCommandPath(abs) + " hook "
+	switch runtimeName {
+	case "codex":
+		return []binding{{
+			NativeEvent: "SessionStart",
+			Command:     prefix + "session-start --runtime codex " + adapterSourceMarker,
+		}}, nil
+	case "claude":
+		return []binding{
+			{NativeEvent: "SessionStart", Command: prefix + "claude session-start " + adapterSourceMarker},
+			{NativeEvent: "UserPromptSubmit", Command: prefix + "claude context-injection " + adapterSourceMarker},
+			{NativeEvent: "PreToolUse", Command: prefix + "claude pre-action-guard " + adapterSourceMarker},
+			{NativeEvent: "PostToolUse", Command: prefix + "claude post-action-receipt " + adapterSourceMarker, Async: true},
+			{NativeEvent: "Stop", Command: prefix + "claude stop-finalization " + adapterSourceMarker, Async: true},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported runtime %q", runtimeName)
+	}
 }
 
 func quoteCommandPath(path string) string {
@@ -255,26 +290,34 @@ func hooksMap(config map[string]any) (map[string]any, error) {
 }
 
 func sessionGroups(hooks map[string]any) ([]any, error) {
-	value, exists := hooks["SessionStart"]
+	return groupsForEvent(hooks, "SessionStart")
+}
+
+func groupsForEvent(hooks map[string]any, event string) ([]any, error) {
+	value, exists := hooks[event]
 	if !exists {
 		return nil, nil
 	}
 	groups, ok := value.([]any)
 	if !ok {
-		return nil, errors.New("runtime configuration SessionStart must be a list")
+		return nil, fmt.Errorf("runtime configuration %s must be a list", event)
 	}
 	return groups, nil
 }
 
 func validateGroups(groups []any) error {
+	return validateEventGroups("SessionStart", groups)
+}
+
+func validateEventGroups(event string, groups []any) error {
 	for _, group := range groups {
 		entry, ok := group.(map[string]any)
 		if !ok {
-			return errors.New("runtime configuration SessionStart group must be an object")
+			return fmt.Errorf("runtime configuration %s group must be an object", event)
 		}
 		entries, ok := entry["hooks"].([]any)
 		if !ok {
-			return errors.New("runtime configuration SessionStart hooks must be a list")
+			return fmt.Errorf("runtime configuration %s hooks must be a list", event)
 		}
 		for _, raw := range entries {
 			if _, ok := raw.(map[string]any); !ok {
@@ -310,7 +353,48 @@ func hasOwnedCommand(config map[string]any, runtimeName string) bool {
 	return false
 }
 
+func hasOwnedBindings(config map[string]any, runtimeName string) bool {
+	hooks, err := hooksMap(config)
+	if err != nil {
+		return false
+	}
+	bindings, err := bindingsFor(runtimeName, "bcgos")
+	if err != nil {
+		return false
+	}
+	for _, binding := range bindings {
+		found := false
+		groups, err := groupsForEvent(hooks, binding.NativeEvent)
+		if err != nil || validateEventGroups(binding.NativeEvent, groups) != nil {
+			return false
+		}
+		for _, group := range groups {
+			entry := group.(map[string]any)
+			for _, raw := range entry["hooks"].([]any) {
+				hook := raw.(map[string]any)
+				if isOwnedEventCommand(runtimeName, binding.NativeEvent, hook["command"]) &&
+					hook["timeout"] == float64(2) &&
+					asyncMatches(binding.Async, hook["async"]) {
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func updateOwnedHook(groups []any, runtimeName, command string) ([]any, bool) {
+	return updateOwnedEventHook(groups, runtimeName, "SessionStart", command, false)
+}
+
+func updateOwnedEventHook(groups []any, runtimeName, event, command string, asynchronous bool) ([]any, bool) {
 	updated := make([]any, 0, len(groups)+1)
 	installed := false
 	changed := false
@@ -320,7 +404,7 @@ func updateOwnedHook(groups []any, runtimeName, command string) ([]any, bool) {
 		kept := make([]any, 0, len(entries))
 		for _, raw := range entries {
 			hook := raw.(map[string]any)
-			if !isOwnedCommand(runtimeName, hook["command"]) {
+			if !isOwnedEventCommand(runtimeName, event, hook["command"]) {
 				kept = append(kept, raw)
 				continue
 			}
@@ -328,10 +412,10 @@ func updateOwnedHook(groups []any, runtimeName, command string) ([]any, bool) {
 				changed = true
 				continue
 			}
-			if hook["command"] != command || hook["timeout"] != float64(2) {
+			if hook["command"] != command || hook["timeout"] != float64(2) || !asyncMatches(asynchronous, hook["async"]) {
 				changed = true
 			}
-			kept = append(kept, hookEntry(command))
+			kept = append(kept, hookEntryFor(command, asynchronous))
 			installed = true
 		}
 		copy := make(map[string]any, len(entry))
@@ -344,20 +428,85 @@ func updateOwnedHook(groups []any, runtimeName, command string) ([]any, bool) {
 	if installed {
 		return updated, changed
 	}
-	return append(updated, map[string]any{"hooks": []any{hookEntry(command)}}), true
+	return append(updated, map[string]any{"hooks": []any{hookEntryFor(command, asynchronous)}}), true
 }
 
 func hookEntry(command string) map[string]any {
-	return map[string]any{"type": "command", "command": command, "timeout": 2}
+	return hookEntryFor(command, false)
+}
+
+func hookEntryFor(command string, asynchronous bool) map[string]any {
+	entry := map[string]any{"type": "command", "command": command, "timeout": 2}
+	if asynchronous {
+		entry["async"] = true
+	}
+	return entry
+}
+
+func asyncMatches(expected bool, value any) bool {
+	actual, _ := value.(bool)
+	return actual == expected
 }
 
 func isOwnedCommand(runtimeName string, value any) bool {
+	return isOwnedEventCommand(runtimeName, "SessionStart", value)
+}
+
+func isOwnedEventCommand(runtimeName, event string, value any) bool {
 	command, ok := value.(string)
 	if !ok {
 		return false
 	}
 	command = strings.TrimSpace(command)
-	return strings.HasSuffix(command, " hook session-start --runtime "+runtimeName+" "+adapterSourceMarker) || command == "bcgos hook session-start --runtime "+runtimeName
+	if runtimeName == "codex" && event == "SessionStart" {
+		return strings.HasSuffix(command, " hook session-start --runtime codex "+adapterSourceMarker) ||
+			command == "bcgos hook session-start --runtime codex"
+	}
+	if runtimeName != "claude" {
+		return false
+	}
+	commands := map[string]string{
+		"SessionStart":     "claude session-start",
+		"UserPromptSubmit": "claude context-injection",
+		"PreToolUse":       "claude pre-action-guard",
+		"PostToolUse":      "claude post-action-receipt",
+		"Stop":             "claude stop-finalization",
+	}
+	suffix, exists := commands[event]
+	if !exists {
+		return false
+	}
+	if event == "SessionStart" &&
+		(strings.HasSuffix(command, " hook session-start --runtime claude "+adapterSourceMarker) ||
+			command == "bcgos hook session-start --runtime claude") {
+		return true
+	}
+	return strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker) ||
+		command == "bcgos hook "+suffix
+}
+
+func removeOwnedHooks(groups []any, runtimeName, event string) []any {
+	filtered := make([]any, 0, len(groups))
+	for _, group := range groups {
+		entry := group.(map[string]any)
+		entries := entry["hooks"].([]any)
+		kept := make([]any, 0, len(entries))
+		for _, raw := range entries {
+			hook := raw.(map[string]any)
+			if !isOwnedEventCommand(runtimeName, event, hook["command"]) {
+				kept = append(kept, raw)
+			}
+		}
+		if len(kept) > 0 {
+			copied := make(map[string]any, len(entry))
+			for key, value := range entry {
+				copied[key] = value
+			}
+			copied["hooks"] = kept
+			filtered = append(filtered, copied)
+		}
+	}
+	return filtered
 }
 
 func rejectTrackedConfig(workspace, configPath string) error {

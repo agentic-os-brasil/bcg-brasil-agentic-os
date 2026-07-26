@@ -21,8 +21,10 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
@@ -87,7 +89,7 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "session":
 		return runSession(args[1:], out, errOut, defaultDataRoot)
 	case "hook":
-		return runHook(args[1:], out, errOut, defaultDataRoot)
+		return runHookWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "adapter":
 		return runAdapter(args[1:], out, errOut)
 	case "skills":
@@ -807,6 +809,7 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 		runtimeCheck("codex", "codex", available),
 		adapterCheck("claude_adapter", "claude", inspection.WorkspacePath),
 		adapterCheck("codex_adapter", "codex", inspection.WorkspacePath),
+		lifecycleReceiptCheck(root, inspection.WorkspaceID),
 		{ID: "bundles", State: "pass", Message: "signed bundle activation and last-known-good rollback are supported"},
 		{
 			ID: "private_release_auth", State: releaseCapability.State,
@@ -1133,8 +1136,15 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 }
 
 func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	return runHookWithInput(args, strings.NewReader(""), out, errOut, dataRoot)
+}
+
+func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) > 0 && args[0] == "claude" {
+		return runClaudeHook(args[1:], in, out, errOut, dataRoot)
+	}
 	if len(args) == 0 || args[0] != "session-start" {
-		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]")
+		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]\n       bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
 		return ExitUsage
 	}
 	flags := newFlagSet("hook session-start", errOut)
@@ -1178,6 +1188,96 @@ func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, output, errOut)
+}
+
+func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	const usage = "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]"
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, usage)
+		return ExitUsage
+	}
+	action := args[0]
+	flags := newFlagSet("hook claude "+action, errOut)
+	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
+		fmt.Fprintln(errOut, usage)
+		return ExitUsage
+	}
+	switch action {
+	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
+	default:
+		fmt.Fprintln(errOut, usage)
+		return ExitUsage
+	}
+
+	var native claudeadapter.NativeInput
+	if action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" {
+		parsed, err := claudeadapter.ParseReader(in)
+		if err != nil {
+			if action == "pre-action-guard" {
+				return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+			}
+			return reportError(errOut, fmt.Errorf("parse bounded Claude hook input: %w", err))
+		}
+		native = parsed
+	}
+
+	// The safety decision depends only on the bounded native payload. It must
+	// not be weakened by missing, malformed or slow workspace state.
+	if action == "pre-action-guard" {
+		response, err := claudeadapter.Guard(native)
+		if err != nil {
+			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+		}
+		return writeJSON(out, response, errOut)
+	}
+
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(optionalArg(flags.Args()), root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch action {
+	case "session-start", "context-injection":
+		profileState, err := resolveProfile(root, "", false)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		owner, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		packet := sessionctx.Build(sessionctx.Sources{
+			Profile: profileState, Workspace: inspection, Owner: owner,
+			Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		})
+		eventName := "SessionStart"
+		if action == "context-injection" {
+			eventName = "UserPromptSubmit"
+		}
+		response, err := sessionhook.BuildClaudeEvent(packet, eventName)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, response, errOut)
+	case "post-action-receipt", "stop-finalization":
+		event := lifecycle.PostActionObserve
+		if action == "stop-finalization" {
+			event = lifecycle.StopFinalize
+		}
+		receipt, err := claudeadapter.Receipt(event, native)
+		if err != nil {
+			return reportError(errOut, fmt.Errorf("build lifecycle receipt: %w", err))
+		}
+		if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
+			return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
+		}
+		return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
+	}
+	panic("unreachable Claude hook action")
 }
 
 func runAdapter(args []string, out, errOut io.Writer) int {
@@ -1269,6 +1369,22 @@ func adapterCheck(id, runtime, workspacePath string) doctorCheck {
 		return doctorCheck{ID: id, State: "configured", Message: "workspace-local adapter is configured; runtime trust and execution remain separate checks"}
 	}
 	return doctorCheck{ID: id, State: "unavailable", Message: "workspace-local adapter is not configured"}
+}
+
+func lifecycleReceiptCheck(dataRoot, workspaceID string) doctorCheck {
+	if workspaceID == "" {
+		return doctorCheck{ID: "lifecycle_receipts", State: "unavailable", Message: "no initialized workspace exists for lifecycle receipt evidence"}
+	}
+	summary, err := lifecycle.Diagnose(dataRoot, workspaceID)
+	if err != nil {
+		return doctorCheck{ID: "lifecycle_receipts", State: "warning", Message: "lifecycle receipt diagnostics could not be read: " + err.Error()}
+	}
+	switch summary.State {
+	case "observed":
+		return doctorCheck{ID: "lifecycle_receipts", State: "pass", Message: fmt.Sprintf("%d metadata-safe lifecycle receipt(s) observed; capability promotion still requires the pilot conformance record", summary.Observed)}
+	default:
+		return doctorCheck{ID: "lifecycle_receipts", State: "unavailable", Message: "no native lifecycle receipt has been recorded"}
+	}
 }
 
 func interactionProfileCheck(state profile.State) doctorCheck {

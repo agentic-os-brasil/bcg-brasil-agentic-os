@@ -4,17 +4,19 @@ Status: native command payload and local configuration installation implemented;
 runtime conformance receipts pending.
 
 `bcgos hook session-start --runtime claude|codex [workspace-path]` is the thin
-command entrypoint that a future native runtime configuration invokes. It emits
-one bounded Session Context Packet as additional context. Claude and Codex use
-separate adapter serializers; the shared envelope is not evidence that their
-native hook-output protocols are interchangeable.
+direct-conformance entrypoint. Installed Claude configuration invokes the
+equivalent runtime-specific `bcgos hook claude session-start` entrypoint, while
+Codex invokes the shared command with `--runtime codex`. Each emits one bounded
+Session Context Packet as additional context. Claude and Codex use separate
+adapter serializers; the shared envelope is not evidence that their native
+hook-output protocols are interchangeable.
 
 The command is deliberately read-only: it builds the existing pointer-only
 packet, never reads a pointed owner, atlas or memory source, does not wait for
 a worker and does not make a network or model request. If a source is not ready
 the packet reports an omission. The native configuration installer is a
-separate concern; until it is installed, product capabilities remain
-`unavailable`.
+separate concern, and even an installed command leaves product capabilities
+`unavailable` until qualifying native-session evidence exists.
 
 Claude and Codex receive the same packet body, differing only in the explicit
 runtime field. Each native adapter must prove its own output shape and use a

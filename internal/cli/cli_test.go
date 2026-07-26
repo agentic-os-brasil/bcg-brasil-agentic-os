@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
@@ -200,6 +201,84 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
 	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"injection_state\":\"unavailable\"`) {
 		t.Fatalf("hook exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestClaudeGuardFailsClosedBeforeWorkspaceInspection(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{name: "malformed", input: `{"tool_name":`},
+		{name: "oversized", input: `{"tool_name":"Bash","tool_input":{"command":"echo ` + strings.Repeat("x", (64<<10)+1) + `"}}`},
+		{name: "evaluation failure", input: `{"tool_name":"Bash","tool_input":{"command":"rm -rf \"/"}}`},
+		{name: "unsupported parameter expansion", input: `{"tool_name":"Bash","tool_input":{"command":"rm -rf ${UNSET:-/}"}}`},
+		{name: "unsupported root glob", input: `{"tool_name":"Bash","tool_input":{"command":"rm -rf /*"}}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			rootCalled := false
+			code := runHookWithInput(
+				[]string{"claude", "pre-action-guard", "--adapter-source", "maestro", "/workspace-that-must-not-be-inspected"},
+				strings.NewReader(test.input),
+				&output,
+				&output,
+				func() (string, error) {
+					rootCalled = true
+					return "", errors.New("workspace inspection must not run")
+				},
+			)
+			if code != ExitOK || rootCalled || !strings.Contains(output.String(), `"permissionDecision": "deny"`) ||
+				!strings.Contains(output.String(), "Nothing was changed") {
+				t.Fatalf("guard = %d, rootCalled=%v, output=%s", code, rootCalled, output.String())
+			}
+		})
+	}
+}
+
+func TestClaudeLifecycleHooksRemainUnavailableWhileRecordingMetadataOnlyEvidence(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"claude", "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(`{}`), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "UserPromptSubmit"`) {
+		t.Fatalf("context hook = %d %s", code, output.String())
+	}
+	output.Reset()
+	receiptInput := `{"session_id":"session-a","tool_use_id":"toolu_a","tool_name":"Bash","tool_input":{"command":"sensitive client command"}}`
+	if code := runHookWithInput([]string{"claude", "post-action-receipt", "--adapter-source", "maestro", workspacePath}, strings.NewReader(receiptInput), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"continue": true`) {
+		t.Fatalf("receipt hook = %d %s", code, output.String())
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"claude", "stop-finalization", "--adapter-source", "maestro", workspacePath}, strings.NewReader(`{"session_id":"session-a"}`), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"continue": true`) {
+		t.Fatalf("stop hook = %d %s", code, output.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiptRoot := filepath.Join(dataRoot, "runtime", "receipts", inspection.WorkspaceID)
+	entries, err := os.ReadDir(receiptRoot)
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("receipt entries = %v, %v", entries, err)
+	}
+	for _, entry := range entries {
+		body, err := os.ReadFile(filepath.Join(receiptRoot, entry.Name()))
+		if err != nil || strings.Contains(string(body), "sensitive client command") ||
+			strings.Contains(string(body), "session-a") || strings.Contains(string(body), workspacePath) {
+			t.Fatalf("unsafe receipt = %s, %v", body, err)
+		}
+	}
+	output.Reset()
+	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, func(string) bool { return true }); code != ExitOK ||
+		!strings.Contains(output.String(), `"id": "lifecycle_receipts"`) ||
+		!strings.Contains(output.String(), "capability promotion still requires") ||
+		!strings.Contains(output.String(), `"state": "unavailable"`) {
+		t.Fatalf("doctor = %d %s", code, output.String())
 	}
 }
 

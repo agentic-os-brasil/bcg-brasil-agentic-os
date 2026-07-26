@@ -60,7 +60,7 @@ entre outros:
 
 - instalador e atualizações seguras para usuários finais;
 - releases assinados e autenticação de distribuição;
-- hooks de produto para Claude e Codex;
+- lifecycle completo para Codex e evidência nativa qualificante dos hooks Claude;
 - memória automática, busca e Wiki compilada;
 - ingestão de documentos com Docling empacotado;
 - sincronização com ferramentas de tarefas.

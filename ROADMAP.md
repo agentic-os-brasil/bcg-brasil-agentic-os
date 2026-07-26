@@ -53,8 +53,9 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement user-space directories on Windows and macOS.
 - [x] Add Claude and Codex adapter skeletons against the same canonical contract.
 - [x] Add initial conformance fixtures for equivalent capability identity, semantic events and criticality.
-- [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
-- [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
+- [x] Add Claude lifecycle fixtures for bounded injection, fail-closed guard behavior, async receipt configuration and failure diagnosis.
+- [x] Wire the Session Context Packet into the Claude lifecycle adapter with bounded authorization and omission reporting.
+- [ ] Wire the complete Codex lifecycle and record qualifying native evidence for each supported runtime/platform.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
 - [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.
@@ -65,7 +66,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Add bounded checkpoint, pause, active-work projection and explicit resume with prior-attempt invalidation.
 - [x] Add core-witnessed artifact snapshots, command checks and evidence-backed completion.
 - [x] Add the metadata-only core receipt contract for agent tool-call lifecycle breadcrumbs.
-- [ ] Wire Claude and Codex `post_action_observe` adapters to emit equivalent authenticated tool-call receipts.
+- [x] Wire Claude `post_action_observe` to metadata-only lifecycle receipts without promoting native capability.
+- [ ] Wire equivalent Codex lifecycle receipts and bind native receipts to the execution-ledger breadcrumb contract.
 - [x] Expose only the active execution pointer through the Session Context Packet.
 - [x] Prove handoff across two sessions or agents without transcript or contract reinjection.
 - [x] Bootstrap one local agent per workspace with a reviewed interview and versioned briefing.

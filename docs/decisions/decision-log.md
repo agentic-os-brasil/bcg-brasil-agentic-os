@@ -391,3 +391,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Explicit export can reconstruct ordering and unresolved calls without replaying model context or tool content. Free-form IDs cannot become a content channel. Until native adapters emit the events, CLI receipts are declared breadcrumbs rather than authenticated runtime provenance. The ledger is not an observability backend, event bus, cost tracker or process sandbox.
 - Refs: EXEC; specs/018-execution-ledger-v1.md; schemas/execution-state.schema.json; internal/execution/toolcall.go
 - Supersedes: none
+
+## CLVE - Wire the Claude lifecycle vertical behind neutral contracts
+
+- Date: 2026-07-26
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro has a bounded Session Start command and portable lifecycle vocabulary, but a pilot cannot infer support from configuration alone or allow a safety guard to depend on workspace inspection.
+- Decision: Wire Claude SessionStart, UserPromptSubmit, PreToolUse, PostToolUse and Stop to the canonical lifecycle. Parse pre-action input under a fixed bound before workspace access and return a native fail-closed denial for malformed, oversized or unevaluable input. Keep post-action and stop asynchronous and persist only validated metadata receipts. Leave every capability unavailable until qualifying native-session evidence exists.
+- Consequences: Claude has a complete locally installable lifecycle vertical without turning hooks into workers or weakening its native permission flow. The protected-root rule recognizes only a bounded simple-command grammar, receipt path components are validated, Codex remains incomplete, and capability promotion still requires the pilot conformance protocol.
+- Refs: specs/004-runtime-portability.md; specs/019-nonblocking-hook-execution.md; specs/021-pilot-hook-conformance.md; specs/025-native-session-start-hook.md; specs/026-workspace-local-adapter-installation.md; specs/030-claude-lifecycle-vertical.md; internal/claudeadapter; internal/lifecycle
+- Supersedes: none
