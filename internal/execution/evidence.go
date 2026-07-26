@@ -218,6 +218,12 @@ func (store Store) Complete(workspaceID, itemID string, input CompletionInput) (
 		unlock()
 		return Item{}, err
 	}
+	if item.Contract.RequireWalterReview {
+		if err := store.currentWalterApproval(workspaceID, itemID, item.State); err != nil {
+			unlock()
+			return Item{}, err
+		}
+	}
 	unlock()
 
 	for _, criterion := range item.Contract.Criteria {

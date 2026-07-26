@@ -115,11 +115,11 @@ type workCreateRequest struct {
 
 func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos work <create|start|inspect|export|delete>")
+		fmt.Fprintln(errOut, "usage: bcgos work <create|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
 		return ExitUsage
 	}
 	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(out, "usage: bcgos work <create|start|inspect|export|delete>")
+		fmt.Fprintln(out, "usage: bcgos work <create|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
 		return ExitOK
 	}
 	root, err := dataRoot()
@@ -242,6 +242,64 @@ func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func()
 			}
 			return writeJSON(out, map[string]string{"item_id": *itemID, "state": "deleted", "workspace_id": workspaceID}, errOut)
 		}
+	case "evidence":
+		flags := newFlagSet("work evidence", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		revision := flags.Int("revision", 0, "expected state revision")
+		attemptID := flags.String("attempt", "", "current attempt identity")
+		criterionID := flags.String("criterion", "", "completion criterion identity")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) ||
+			strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" ||
+			strings.TrimSpace(*attemptID) == "" || strings.TrimSpace(*criterionID) == "" ||
+			*revision < 1 {
+			fmt.Fprintln(errOut, "usage: bcgos work evidence --workspace PATH --item ID --revision N --attempt ID --criterion ID")
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		inspection, err := workspace.Inspect(*workspacePath, root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		result, err := store.CollectEvidence(workspaceID, *itemID, execution.EvidenceInput{
+			WorkspaceRoot: inspection.WorkspacePath, ExpectedRevision: *revision,
+			AttemptID: *attemptID, CriterionID: *criterionID,
+		})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, execution.EvidenceMutationReceipt(result), errOut)
+	case "complete":
+		flags := newFlagSet("work complete", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		revision := flags.Int("revision", 0, "expected state revision")
+		attemptID := flags.String("attempt", "", "current attempt identity")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) ||
+			strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" ||
+			strings.TrimSpace(*attemptID) == "" || *revision < 1 {
+			fmt.Fprintln(errOut, "usage: bcgos work complete --workspace PATH --item ID --revision N --attempt ID")
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		inspection, err := workspace.Inspect(*workspacePath, root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		item, err := store.Complete(workspaceID, *itemID, execution.CompletionInput{
+			WorkspaceRoot: inspection.WorkspacePath, ExpectedRevision: *revision,
+			AttemptID: *attemptID,
+		})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, execution.Receipt(item), errOut)
 	default:
 		fmt.Fprintf(errOut, "unknown work command %q\n", args[0])
 		return ExitUsage

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:canary-receipt:v1",
+  "title": "Maestro local canary receipt",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "recorded_at", "event", "outcome", "duration"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "event": {"const": "first_value"},
+        "outcome": {"const": "succeeded"},
+        "duration": {"enum": ["under_five_minutes", "under_ten_minutes", "under_thirty_minutes", "over_thirty_minutes"]}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "recorded_at", "event", "outcome"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "event": {"enum": ["goal_resume", "installation", "update", "rollback"]},
+        "outcome": {"enum": ["succeeded", "failed", "blocked"]}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "recorded_at", "event", "outcome", "count"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "event": {"const": "manual_intervention"},
+        "outcome": {"const": "neutral"},
+        "count": {"enum": ["once", "two_to_three", "four_to_seven", "eight_plus"]}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "recorded_at", "event", "outcome", "capability"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "event": {"const": "capability_failure"},
+        "outcome": {"enum": ["failed", "blocked"]},
+        "capability": {"enum": ["execution", "workspace-agent", "session-context", "installation", "updates"]}
+      }
+    }
+  ]
+}

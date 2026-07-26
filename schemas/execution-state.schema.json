@@ -10,6 +10,7 @@
     {"$ref": "#/$defs/checkpoint"},
     {"$ref": "#/$defs/evidence"},
     {"$ref": "#/$defs/tool_call"},
+    {"$ref": "#/$defs/walter_review"},
     {"$ref": "#/$defs/transition"}
   ],
   "$defs": {
@@ -67,6 +68,7 @@
         "initial_next_step",
         "criteria",
         "allowed_refs",
+        "require_walter_review",
         "created_at"
       ],
       "properties": {
@@ -89,8 +91,23 @@
             "pattern": "^bcgos://[A-Za-z0-9/_.-]+$"
           }
         },
+        "require_walter_review": {"type": "boolean"},
+        "walter_public_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
         "created_at": {"type": "string", "format": "date-time"}
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"require_walter_review": {"const": true}},
+            "required": ["require_walter_review"]
+          },
+          "then": {"required": ["walter_public_key"]},
+          "else": {"not": {"required": ["walter_public_key"]}}
+        }
+      ]
     },
     "state": {
       "type": "object",
@@ -284,12 +301,38 @@
         }
       ]
     },
+    "walter_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "review_id", "item_id", "workspace_id",
+        "attempt_id", "reviewed_revision", "recorded_revision",
+        "contract_sha256", "decision", "signer_sha256",
+        "envelope_sha256", "observed_at"
+      ],
+      "properties": {
+        "schema_version": {"const": 1},
+        "review_id": {"$ref": "#/$defs/id"},
+        "item_id": {"$ref": "#/$defs/id"},
+        "workspace_id": {"$ref": "#/$defs/workspace_id"},
+        "attempt_id": {"$ref": "#/$defs/id"},
+        "reviewed_revision": {"type": "integer", "minimum": 1},
+        "recorded_revision": {"type": "integer", "minimum": 2},
+        "contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "decision": {"enum": ["approved", "rejected"]},
+        "signer_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "envelope_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "observed_at": {"type": "string", "format": "date-time"}
+      }
+    },
     "revision": {
       "type": "object",
       "additionalProperties": false,
       "required": ["schema_version", "state", "transition"],
       "allOf": [
-        {"not": {"required": ["evidence", "tool_call"]}}
+        {"not": {"required": ["evidence", "tool_call"]}},
+        {"not": {"required": ["evidence", "walter_review"]}},
+        {"not": {"required": ["tool_call", "walter_review"]}}
       ],
       "properties": {
         "schema_version": {"const": 1},
@@ -298,6 +341,7 @@
         "checkpoint": {"$ref": "#/$defs/checkpoint"},
         "evidence": {"$ref": "#/$defs/evidence"},
         "tool_call": {"$ref": "#/$defs/tool_call"},
+        "walter_review": {"$ref": "#/$defs/walter_review"},
         "transition": {"$ref": "#/$defs/transition"}
       }
     }

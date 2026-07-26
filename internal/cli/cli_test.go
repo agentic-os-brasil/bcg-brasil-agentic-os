@@ -455,7 +455,7 @@ func TestSessionBridgeProducesTheSameBoundedAdapterInputForEachRuntime(t *testin
 	}
 }
 
-func TestExecutionHandoffAcrossTwoSessionsUsesOnlyTheActivePointer(t *testing.T) {
+func TestExecutionHandoffAcrossTwoSessionsRecoversAndCompletesFirstSessionArtifact(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := func() (string, error) { return root, nil }
 	workspacePath := filepath.Join(t.TempDir(), "case-a")
@@ -464,13 +464,17 @@ func TestExecutionHandoffAcrossTwoSessionsUsesOnlyTheActivePointer(t *testing.T)
 	}
 
 	const objective = "Secret contract body that must never enter Session Context."
-	const summary = "Session A left a bounded checkpoint."
-	const nextStep = "Session B should resume from this bounded next action."
+	const summary = "Completed: Session A drafted delivery.md. Pending: recover it and finish the delivery."
+	const nextStep = "Session B should recover delivery.md and finalize it."
+	const artifactRef = "bcgos://workspace/delivery.md"
+	const sessionADraft = "# Delivery\n\nDraft started in session A.\n"
+	const sessionBFinal = "# Delivery\n\nCompleted after recovery in session B.\n"
+	artifactPath := filepath.Join(workspacePath, "delivery.md")
 	contract := `{
 	  "objective": "` + objective + `",
 	  "initial_next_step": "Start in session A.",
-	  "criteria": [{"id": "tests", "type": "command_check", "command": ["go", "version"]}],
-	  "allowed_refs": []
+	  "criteria": [{"id": "delivery", "type": "artifact_snapshot", "target_ref": "` + artifactRef + `"}],
+	  "allowed_refs": ["` + artifactRef + `"]
 	}`
 
 	var sessionA bytes.Buffer
@@ -489,7 +493,10 @@ func TestExecutionHandoffAcrossTwoSessionsUsesOnlyTheActivePointer(t *testing.T)
 	if err := json.Unmarshal(sessionA.Bytes(), &started); err != nil {
 		t.Fatal(err)
 	}
-	checkpoint := `{"summary":"` + summary + `","next_step":"` + nextStep + `","artifact_refs":[]}`
+	if err := os.WriteFile(artifactPath, []byte(sessionADraft), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := `{"summary":"` + summary + `","next_step":"` + nextStep + `","artifact_refs":["` + artifactRef + `"]}`
 	sessionA.Reset()
 	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--item", created.ItemID, "--revision", strconv.Itoa(started.StateRevision), "--attempt", started.AttemptID, "--stdin"}, strings.NewReader(checkpoint), &sessionA, &sessionA, dataRoot); code != ExitOK {
 		t.Fatalf("session A checkpoint exit = %d, output = %s", code, sessionA.String())
@@ -543,6 +550,13 @@ func TestExecutionHandoffAcrossTwoSessionsUsesOnlyTheActivePointer(t *testing.T)
 	if next.ItemID != created.ItemID || next.StateRevision != paused.StateRevision || next.Summary != summary || next.NextStep != nextStep {
 		t.Fatalf("session B next = %#v", next)
 	}
+	if len(next.ArtifactRefs) != 1 || next.ArtifactRefs[0] != artifactRef {
+		t.Fatalf("session B recovered artifact references = %#v", next.ArtifactRefs)
+	}
+	recoveredArtifactPath := filepath.Join(workspacePath, filepath.FromSlash(strings.TrimPrefix(next.ArtifactRefs[0], "bcgos://workspace/")))
+	if artifact, err := os.ReadFile(recoveredArtifactPath); err != nil || string(artifact) != sessionADraft {
+		t.Fatalf("session B did not recover session A artifact = %q, err = %v", artifact, err)
+	}
 	sessionB.Reset()
 	if code := runWork([]string{"resume", "--workspace", workspacePath, "--item", next.ItemID, "--revision", strconv.Itoa(next.StateRevision)}, strings.NewReader(""), &sessionB, &sessionB, dataRoot); code != ExitOK {
 		t.Fatalf("session B resume exit = %d, output = %s", code, sessionB.String())
@@ -558,6 +572,37 @@ func TestExecutionHandoffAcrossTwoSessionsUsesOnlyTheActivePointer(t *testing.T)
 	code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--item", created.ItemID, "--revision", strconv.Itoa(resumed.StateRevision), "--attempt", started.AttemptID, "--stdin"}, strings.NewReader(checkpoint), &sessionB, &sessionB, dataRoot)
 	if code == ExitOK || !strings.Contains(sessionB.String(), execution.ErrAttemptConflict.Error()) {
 		t.Fatalf("stale session A writer exit = %d, output = %s", code, sessionB.String())
+	}
+	if err := os.WriteFile(recoveredArtifactPath, []byte(sessionBFinal), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sessionB.Reset()
+	if code := runWork([]string{"evidence", "--workspace", workspacePath, "--item", created.ItemID, "--revision", strconv.Itoa(resumed.StateRevision), "--attempt", resumed.AttemptID, "--criterion", "delivery"}, strings.NewReader(""), &sessionB, &sessionB, dataRoot); code != ExitOK || !strings.Contains(sessionB.String(), `"outcome": "passed"`) || strings.Contains(sessionB.String(), sessionBFinal) {
+		t.Fatalf("session B evidence exit = %d, output = %s", code, sessionB.String())
+	}
+	var evidenced execution.EvidenceReceiptOutput
+	if err := json.Unmarshal(sessionB.Bytes(), &evidenced); err != nil {
+		t.Fatal(err)
+	}
+	sessionB.Reset()
+	if code := runWork([]string{"complete", "--workspace", workspacePath, "--item", created.ItemID, "--revision", strconv.Itoa(evidenced.StateRevision), "--attempt", resumed.AttemptID}, strings.NewReader(""), &sessionB, &sessionB, dataRoot); code != ExitOK || !strings.Contains(sessionB.String(), `"state": "completed"`) {
+		t.Fatalf("session B complete exit = %d, output = %s", code, sessionB.String())
+	}
+	assertExecutionMutationPrivate(t, sessionB.String())
+	if artifact, err := os.ReadFile(recoveredArtifactPath); err != nil || string(artifact) != sessionBFinal {
+		t.Fatalf("recovered artifact = %q, err = %v", artifact, err)
+	}
+}
+
+func assertExecutionMutationPrivate(t *testing.T, body string) {
+	t.Helper()
+	for _, prohibited := range []string{
+		"objective", "criteria", "summary", "next_step", "blocker",
+		"artifact_refs", "allowed_refs", "walter_reviews",
+	} {
+		if strings.Contains(body, `"`+prohibited+`"`) {
+			t.Fatalf("mutation receipt leaked %q: %s", prohibited, body)
+		}
 	}
 }
 
