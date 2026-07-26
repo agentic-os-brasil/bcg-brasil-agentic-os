@@ -55,6 +55,13 @@ Neither skill may write a task, decision, atlas entry, memory item or external
 message. A future writer receives only the confirmed subset and needs its own
 authority, confirmation, idempotency, receipt and recovery contract.
 
+## Wave 3
+
+`start-day` and `eod` are advisory orchestration skills over current-request
+inputs. They may compose Wave 1/2 methods but cannot read calendar, mail,
+tasks, workspace history or memory, and cannot create a daily log. Their future
+integration paths remain deferred under the external-source authority contract.
+
 ## Deferred work
 
 `diagram` and `make-pdf` wait for deterministic artifact contracts. `task`,

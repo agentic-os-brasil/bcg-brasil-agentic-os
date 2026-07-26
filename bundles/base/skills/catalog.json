@@ -9,6 +9,13 @@
       "relative_path": "skills/dream-memory/SKILL.md"
     },
     {
+      "id": "eod",
+      "display_name": "End of Day",
+      "trigger": "Review supplied work and prepare a concise next-day start",
+      "default_prompt": "Use $eod to close this workday from the recap I provide, without filing anything yet.",
+      "relative_path": "skills/eod/SKILL.md"
+    },
+    {
       "id": "extract-work-items",
       "display_name": "Extract Work Items",
       "trigger": "Extract proposed decisions and actions from supplied meeting notes",
@@ -56,6 +63,13 @@
       "trigger": "Review proposed meeting actions before any write occurs",
       "default_prompt": "Use $meeting-to-work-items to review these notes and prepare confirmed follow-ups without filing anything yet.",
       "relative_path": "skills/meeting-to-work-items/SKILL.md"
+    },
+    {
+      "id": "start-day",
+      "display_name": "Start Day",
+      "trigger": "Turn supplied commitments into a focused workday plan",
+      "default_prompt": "Use $start-day to turn my commitments and available time into a focused plan.",
+      "relative_path": "skills/start-day/SKILL.md"
     },
     {
       "id": "storyline",

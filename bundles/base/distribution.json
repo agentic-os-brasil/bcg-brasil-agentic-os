@@ -34,6 +34,14 @@
       "path": "skills/dream-memory/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/eod/SKILL.md",
+      "path": "skills/eod/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/eod/agents/openai.yaml",
+      "path": "skills/eod/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/extract-work-items/SKILL.md",
       "path": "skills/extract-work-items/SKILL.md"
     },
@@ -88,6 +96,14 @@
     {
       "source": "bundles/base/skills/meeting-to-work-items/agents/openai.yaml",
       "path": "skills/meeting-to-work-items/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/start-day/SKILL.md",
+      "path": "skills/start-day/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/start-day/agents/openai.yaml",
+      "path": "skills/start-day/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/storyline/SKILL.md",

@@ -252,7 +252,7 @@ func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 	if code := Run([]string{"skills", "index"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"schema_version": 1`) || !strings.Contains(output.String(), `"dream-memory"`) || strings.Contains(output.String(), "Daily dreaming cannot") {
 		t.Fatalf("skills index exit = %d, output = %s", code, output.String())
 	}
-	for _, skillID := range []string{"extract-work-items", "grill-me", "investigate", "meeting-to-work-items", "storyline", "wayfinder"} {
+	for _, skillID := range []string{"eod", "extract-work-items", "grill-me", "investigate", "meeting-to-work-items", "start-day", "storyline", "wayfinder"} {
 		if !strings.Contains(output.String(), `"`+skillID+`"`) {
 			t.Fatalf("skills index is missing Wave 1 skill %q: %s", skillID, output.String())
 		}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Start Day"
+  short_description: "Turn supplied commitments into a focused workday plan"
+  default_prompt: "Use $start-day to turn my commitments and available time into a focused plan."

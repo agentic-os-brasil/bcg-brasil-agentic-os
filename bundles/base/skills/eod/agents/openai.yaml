@@ -1,0 +1,4 @@
+interface:
+  display_name: "End of Day"
+  short_description: "Review supplied work and prepare a concise next-day start"
+  default_prompt: "Use $eod to close this workday from the recap I provide, without filing anything yet."
