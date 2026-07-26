@@ -1,0 +1,4 @@
+interface:
+  display_name: "Teste e evidência"
+  short_description: "Define verificações proporcionais e deixa lacunas de evidência visíveis"
+  default_prompt: "Use $test-and-evidence para definir e revisar a evidência desta entrega técnica."

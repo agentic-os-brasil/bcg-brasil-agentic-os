@@ -348,6 +348,20 @@ func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 	}
 }
 
+func TestBundlesPlanExplainsThatDataBundlesAreNotActivated(t *testing.T) {
+	var output bytes.Buffer
+	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "unavailable"`) || !strings.Contains(output.String(), `"id": "engineering-core"`) || !strings.Contains(output.String(), "not implemented") {
+		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestBundlesPlanKeepsClassicConsultingOnTheBaseBundle(t *testing.T) {
+	var output bytes.Buffer
+	if code := Run([]string{"bundles", "plan", "--track", "consulting"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "base_only"`) || strings.Contains(output.String(), `"id": "data-practice"`) {
+		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
+	}
+}
+
 func TestProfileCommandsSwitchTheCanonicalUserPreference(t *testing.T) {
 	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
 	var output bytes.Buffer

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Execução de dados reproduzível"
+  short_description: "Registra o necessário para repetir uma análise sem copiar dados sensíveis"
+  default_prompt: "Use $reproducible-data-run para tornar esta análise ou pipeline reproduzível."

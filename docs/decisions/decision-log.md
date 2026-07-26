@@ -403,6 +403,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/004-runtime-portability.md; specs/019-nonblocking-hook-execution.md; specs/021-pilot-hook-conformance.md; specs/025-native-session-start-hook.md; specs/026-workspace-local-adapter-installation.md; specs/030-claude-lifecycle-vertical.md; internal/claudeadapter; internal/lifecycle
 - Supersedes: none
 
+## CAPS - Separate professional capability bundles from interaction profile
+
+- Date: 2026-07-26
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro serves classic consultants, technical explorers, software engineers, data scientists and data engineers. A single base skills catalog would either overload nontechnical users or make technical workflows invisible, while reusing the interaction profile for role selection would turn a communication preference into identity and authority.
+- Decision: Maintain an explicit source catalog of professional capability bundles, independent from the canonical interaction profile. `base` serves consulting; `engineering-core` serves technical explorers and software engineering; `data-practice` serves data science and data engineering and depends on engineering core. Optional bundles remain explicitly unavailable until a separately versioned release, compatibility and local activation contract exists. Track planning may inspect dependencies but may not persist selection, install a bundle or change workspace state.
+- Consequences: Professional skills can be authored, cataloged and harness-validated now without shipping them in the base distribution or misrepresenting them as active. Capability tracks never grant permissions, data scope, provider access or approval. Future onboarding must obtain explicit confirmation and use a verified reversible activation transaction.
+- Refs: USER; PROF; SKIX; RELS; specs/012-skills-index.md; specs/020-release-distribution.md; specs/030-professional-capability-bundles.md; bundles/catalog/catalog.json; internal/capabilitybundle
+- Supersedes: none
+
 ## ORCH - Keep Maestro completion in the execution ledger
 
 - Date: 2026-07-26

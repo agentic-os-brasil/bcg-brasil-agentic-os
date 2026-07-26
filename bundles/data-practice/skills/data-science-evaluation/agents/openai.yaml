@@ -1,0 +1,4 @@
+interface:
+  display_name: "Avaliação de ciência de dados"
+  short_description: "Conecta problema, baseline, qualidade da avaliação e decisão de promoção"
+  default_prompt: "Use $data-science-evaluation para avaliar se esta abordagem melhora a decisão de negócio."

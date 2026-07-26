@@ -58,6 +58,7 @@ invented memory or ungoverned automation.
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
 | ✅ Governed completion | High-stakes work can require a separately authenticated Walter review before completion. |
 | ✅ Bounded delegation | Maestro can dispatch a narrow packet to the right agent; a signed packet never grants broad tool access or completion authority. |
+| ✅ Professional capability bundles | Engineering and data-practice tracks are catalogued and fail closed; optional activation remains unavailable until a separate release contract exists. |
 | ✅ Pilot canary | Local reports aggregate typed outcomes, capability failures, interventions and receipt metadata — never work content. |
 | ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |
 
@@ -126,6 +127,7 @@ delivery and validation contract, see [CONTRIBUTING.md](CONTRIBUTING.md).
 | [`adapters/`](adapters) | Claude and Codex projections of shared contracts | In progress |
 | [`dev/`](dev) | Contributor-only harness, governance and development skills | Active |
 | [`acceptance/`](acceptance) | Clean-device and pilot acceptance evidence | In progress |
+| [`bundles/`](bundles) | Versioned professional capability catalogs and optional tracks | Available for inspection; activation unavailable |
 
 ---
 
