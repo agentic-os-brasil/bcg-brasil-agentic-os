@@ -140,6 +140,20 @@ func (dispatcher *Dispatcher) FinishRoot(packet WorkPacket) agentorchestration.D
 	return dispatcher.gate.FinishBranch(packet.TargetAgentID, capability, packet.PacketID)
 }
 
+func (dispatcher *Dispatcher) guardRootTool(packet WorkPacket, tool, operation, resource string) agentorchestration.Decision {
+	if err := dispatcher.Verify(packet); err != nil || packet.ParentPacketID != "" {
+		return packetDenied()
+	}
+	capability := dispatcher.credentials[packet.TargetAgentID]
+	if capability == "" {
+		return packetDenied()
+	}
+	return dispatcher.gate.GuardTool(
+		packet.TargetAgentID, capability, packet.PacketID, "",
+		packet.ScopeID, packet.ScopeKind, tool, operation, resource,
+	)
+}
+
 func (dispatcher *Dispatcher) issue(issuer, parentID string, request PacketRequest) (WorkPacket, error) {
 	if err := validateRequest(request); err != nil {
 		return WorkPacket{}, err
