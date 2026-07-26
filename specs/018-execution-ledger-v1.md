@@ -171,8 +171,9 @@ The Session Context and handoff slice implements:
 - unavailable and ambiguous states without an execution identity;
 - identical Claude and Codex runtime-neutral bridge packets;
 - explicit bounded resolution through `bcgos work next --active`; and
-- a two-session handoff test with a new fenced attempt and stale-writer
-  rejection.
+- a two-session handoff test that resumes a fenced attempt, rejects the stale
+  writer, updates an artifact started in the first session, collects
+  metadata-only evidence and completes the durable done contract.
 
 ## V1 non-goals
 
