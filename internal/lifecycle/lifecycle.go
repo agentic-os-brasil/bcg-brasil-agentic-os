@@ -32,7 +32,7 @@ var (
 	workspaceIDPattern  = regexp.MustCompile(`^[a-f0-9]{32}$`)
 	idempotencyPattern  = regexp.MustCompile(`^[a-f0-9]{32}$`)
 	metadataNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.:-]{0,127}$`)
-	validDiagnostics    = map[string]bool{"": true, "delivery_failed": true}
+	validDiagnostics    = map[string]bool{"": true}
 )
 
 // Receipt deliberately excludes prompt text, tool input/output, native session
@@ -52,7 +52,6 @@ type Summary struct {
 	State       string   `json:"state"`
 	ReceiptRoot string   `json:"receipt_root"`
 	Observed    int      `json:"observed"`
-	Failed      int      `json:"failed"`
 	Events      []string `json:"events"`
 	LatestAt    string   `json:"latest_at,omitempty"`
 	Diagnostic  string   `json:"diagnostic,omitempty"`
@@ -147,11 +146,7 @@ func Diagnose(dataRoot, workspaceID string) (Summary, error) {
 			return Summary{}, fmt.Errorf("receipt filename does not match bounded metadata")
 		}
 		events[receipt.Event] = true
-		if receipt.State == "failed" {
-			summary.Failed++
-		} else {
-			summary.Observed++
-		}
+		summary.Observed++
 		if latest.OccurredAt.Before(receipt.OccurredAt) {
 			latest = receipt
 		}
@@ -160,14 +155,10 @@ func Diagnose(dataRoot, workspaceID string) (Summary, error) {
 		summary.Events = append(summary.Events, event)
 	}
 	sort.Strings(summary.Events)
-	if summary.Observed+summary.Failed == 0 {
+	if summary.Observed == 0 {
 		return summary, nil
 	}
-	if summary.Failed > 0 {
-		summary.State = "warning"
-	} else {
-		summary.State = "observed"
-	}
+	summary.State = "observed"
 	summary.LatestAt = latest.OccurredAt.Format(time.RFC3339)
 	summary.Diagnostic = latest.Diagnostic
 	return summary, nil
@@ -202,7 +193,7 @@ func validateReceipt(receipt Receipt) error {
 	if !validEvents[receipt.Event] {
 		return fmt.Errorf("unsupported lifecycle event %q", receipt.Event)
 	}
-	if receipt.State != "observed" && receipt.State != "failed" {
+	if receipt.State != "observed" {
 		return fmt.Errorf("unsupported receipt state %q", receipt.State)
 	}
 	if !idempotencyPattern.MatchString(receipt.IdempotencyKey) {

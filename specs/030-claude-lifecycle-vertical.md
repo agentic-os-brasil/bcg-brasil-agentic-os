@@ -65,3 +65,8 @@ Codex retains the same canonical event vocabulary and Session Start serializer.
 It has no complete product lifecycle binding in this vertical, so its
 capabilities remain unavailable rather than being represented as emulated or
 degraded.
+
+Failure receipts are not claimed by this vertical: the installed native hooks
+observe successful PostToolUse and Stop callbacks only. A later failure-hook
+contract must add a producer and tests before `failed` diagnostics become part
+of the lifecycle receipt vocabulary.

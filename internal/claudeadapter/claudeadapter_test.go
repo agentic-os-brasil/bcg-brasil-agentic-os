@@ -24,6 +24,8 @@ func TestGuardDeniesCanonicalDestructiveRootVariants(t *testing.T) {
 		`rm -rf "$HOME"`,
 		"rm -rf $HOME/.",
 		"rm -rf ${HOME}/.",
+		"X=1 rm -rf /",
+		"LC_ALL=C /bin/rm -rf $HOME/.",
 	}
 	for _, command := range tests {
 		t.Run(command, func(t *testing.T) {

@@ -135,6 +135,9 @@ func destructiveRootRemoval(command string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	for len(fields) > 0 && isLeadingAssignment(fields[0].Value) {
+		fields = fields[1:]
+	}
 	if len(fields) == 0 || !isRMExecutable(fields[0].Value) {
 		return false, nil
 	}
@@ -174,6 +177,19 @@ func destructiveRootRemoval(command string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func isLeadingAssignment(value string) bool {
+	name, _, found := strings.Cut(value, "=")
+	if !found || name == "" {
+		return false
+	}
+	for index, character := range name {
+		if !(character == '_' || character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || (index > 0 && character >= '0' && character <= '9')) {
+			return false
+		}
+	}
+	return true
 }
 
 func isRMExecutable(value string) bool {
