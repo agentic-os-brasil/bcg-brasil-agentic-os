@@ -69,6 +69,9 @@ func Validate(root string, full bool, out io.Writer) error {
 		{"Claude primary skill routing", func() error {
 			return skillmeta.ValidateClaudeRouting(root)
 		}},
+		{"GitHub Actions trust policy", func() error {
+			return validateActionPins(root)
+		}},
 		{"development boundary", func() error { return boundary.Validate(root) }},
 		{"memory contract", func() error {
 			if err := memory.ValidateSchemaFile(filepath.Join(root, "schemas", "memory-policy.schema.json")); err != nil {

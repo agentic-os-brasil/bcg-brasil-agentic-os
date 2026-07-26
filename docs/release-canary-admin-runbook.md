@@ -1,0 +1,165 @@
+# Maestro canary release: external trust-gate runbook
+
+This runbook covers controls that deliberately live outside the repository. It
+is a prerequisite for a real canary run, not authorization to publish and not
+evidence that the pilot gates in `specs/022-guided-pilot-release.md` have
+passed.
+
+## Status boundary
+
+The repository can build and verify deterministic unsigned candidates. The
+signed prerelease workflow fails closed when production signing, provider or
+GitHub governance authorities are absent.
+
+The last administrative diagnosis on 2026-07-26 reported:
+
+- GitHub Actions jobs could not start because account billing or the Actions
+  spending limit blocked runner execution;
+- the private repository plan did not permit the required protection for
+  `main`;
+- the `maestro-prerelease` protected environment and its reviewers were not
+  configured;
+- repository-level SHA-pinning enforcement and immutable GitHub releases were
+  disabled.
+
+Those observations are external state and can change without a commit. They
+were not reverified while preparing this runbook because the available local
+GitHub credentials were invalid. An administrator must recheck each item in the
+GitHub UI or authenticated API and attach current evidence to the release
+ticket. Until then, treat every item above as unresolved.
+
+Production release keys, native signing identities, approved provider
+registration, managed-device evidence, a support owner and an incident path
+also remain external gates. A green repository harness cannot substitute for
+them.
+
+## Required GitHub controls
+
+Keep the repository private. Do not make it public to obtain a plan feature, and
+do not weaken source protection, environment approval, immutable releases,
+action pinning or signing to make the workflow run.
+
+Before dispatching a release:
+
+1. Restore GitHub Actions billing and configure an approved non-zero spending
+   limit. Prove that one harmless workflow job advances from `queued` to
+   `in_progress`.
+2. Select a GitHub plan or equivalent enterprise control plane that supports
+   required reviews for both protected branches and a protected environment in
+   this private repository. Recheck current GitHub plan capabilities before
+   purchase because they are provider policy, not a repository contract.
+3. Protect `main`, or create an equivalent ruleset, with:
+   - pull-request-only changes;
+   - at least one independent approval;
+   - stale-review dismissal and required conversation resolution;
+   - the three required checks named `development harness (ubuntu-latest)`,
+     `development harness (windows-latest)` and
+     `development harness (macos-latest)`;
+   - enforcement for administrators;
+   - no force push, deletion or bypass actor.
+4. Create the `maestro-prerelease` environment:
+   - allow deployments only from protected `main`;
+   - make an independent release or security custodian (or a tightly scoped
+     custodian team) the required reviewer;
+   - prevent self-review;
+   - restrict workflow dispatch authority so the initiator and approver are
+     different people;
+   - disable administrator bypass.
+
+   GitHub's standard required-reviewer list is an any-one gate; listing Daniel
+   and a custodian does not require both approvals. If policy requires two
+   approvals, enforce that with an approved custom deployment protection rule
+   or equivalent external control and retain its evidence.
+5. Restrict Actions to the approved allowlist and enable full-SHA pinning at
+   the organization or repository level. The development harness is the
+   repository-level backstop: it parses every
+   `.github/workflows/**/*.{yml,yaml}` and every
+   `.github/actions/**/action.{yml,yaml}` file. External `owner/repository`
+   actions must use a full 40-hex commit SHA. Local `./` actions are accepted
+   only as clean repository-relative paths, and `docker://` actions only with a
+   lowercase `sha256` digest.
+6. Enable immutable releases. Confirm the signed workflow rejects both an
+   existing version tag and a changed asset set.
+
+Record the ruleset, environment, Actions policy and immutable-release settings
+in the release ticket without copying secrets.
+
+## Protected environment inputs
+
+Store these values only in the `maestro-prerelease` environment. Never commit
+them, paste them into a ticket or move them to repository-wide secrets.
+
+| Type | Exact name | Expected custody or content |
+| --- | --- | --- |
+| Variable | `MAESTRO_PROVIDER_CONFIG_B64` | Base64 approved public provider configuration, bound to the exact private release repository. |
+| Variable | `MAESTRO_AUTHORITY_REGISTRY_B64` | Base64 approved public Maestro authority registry with validity and revocation state. |
+| Variable | `MAESTRO_RELEASE_ISSUER` | Production Maestro release issuer identifier. |
+| Variable | `MAESTRO_RELEASE_KEY_ID` | Production Ed25519 public-key identifier. |
+| Secret | `MAESTRO_WINDOWS_PFX_B64` | Base64 Authenticode certificate bundle under Windows-signing custody. |
+| Secret | `MAESTRO_WINDOWS_PFX_PASSWORD` | Password for the Windows signing bundle. |
+| Secret | `MAESTRO_MACOS_P12_B64` | Base64 Developer ID certificate bundle under macOS-signing custody. |
+| Secret | `MAESTRO_MACOS_P12_PASSWORD` | Password for the macOS signing bundle. |
+| Secret | `MAESTRO_MACOS_SIGNING_IDENTITY` | Exact approved Developer ID identity. |
+| Secret | `MAESTRO_MACOS_KEYCHAIN_PASSWORD` | Password for the workflow's ephemeral keychain. |
+| Secret | `MAESTRO_ED25519_SEED_B64` | Production Maestro release-signing seed; migrate to an approved hardware-backed signer when available. |
+| Secret | `MAESTRO_RELEASE_POLICY_TOKEN` | Least-privileged installation token used only to read immutable-release policy. |
+
+An administrator must confirm that each input exists without revealing its
+value. Environment secrets must remain unavailable until independent approval.
+
+## Canary execution
+
+Use a reviewed commit on protected `main` and an unused canonical semantic
+version.
+
+1. Confirm the three required CI checks passed for the exact source commit.
+2. Dispatch **release candidate** from `main` with that version and the
+   `canary` channel. Treat its artifact as unsigned engineering output only.
+3. Verify candidate closure with:
+
+   ```text
+   go run ./dev/release verify --directory dist/release-candidate
+   ```
+
+4. Dispatch **signed Maestro prerelease** from the same protected commit,
+   version and channel, using its exact publication confirmation. The
+   independent environment reviewer approves the job.
+5. Capture the workflow URL, immutable release URL and tag, source commit,
+   manifest digest, signed asset checksums, native-signing evidence and GitHub
+   attestation result.
+6. Through the approved OS installation channel, seed the platform-signed
+   bootstrapper and authority registry on one clean managed Windows device and
+   one clean managed macOS device.
+7. Follow `acceptance/clean-device/README.md` to record install, update and
+   rollback receipts for the same run ID, assemble sanitized device reports and
+   obtain the approved external countersignatures.
+
+Neither publication nor two device reports automatically make the release
+pilot-ready. Cohort progression remains a human decision under Spec 022.
+
+## Stop and rollback
+
+Stop immediately on signature or key mismatch, native-signing warning,
+credential leakage, unexpected bundle content, workspace or owner-data
+mutation, failed restoration, missing authority, or a severity-1/2 incident.
+Preserve immutable evidence and last-known-good artifacts. Do not retag,
+replace release assets, force-update or use an unsigned override.
+
+Rollback is an authenticated activation of the previously approved release,
+bound to its provider release ID, manifest digest and activation receipt. It is
+not deletion or asset replacement.
+
+## Administrator-owned open items
+
+- restore and fund GitHub Actions, then prove runners start;
+- procure and configure private-repository branch and environment controls;
+- configure `main`, `maestro-prerelease`, action policy and immutable releases;
+- appoint independent reviewers, signing custodians, support owner and incident
+  owner;
+- provision native signing, the production Maestro release authority, provider
+  registration and least-privileged policy reader;
+- provide clean managed Windows and macOS devices and external evidence
+  countersignatures.
+
+Until every item is currently evidenced and the signed pipeline plus
+clean-device sequence succeeds, Maestro is not release-ready.
