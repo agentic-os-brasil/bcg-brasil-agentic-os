@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "state": "unavailable",
+  "provider": "github",
+  "auth_base": "https://github.com",
+  "api_base": "https://api.github.com",
+  "client_id": "",
+  "owner": "",
+  "repository": "",
+  "reason": "approved GitHub App registration and selected-repository installation are pending"
+}

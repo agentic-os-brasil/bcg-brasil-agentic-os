@@ -1,0 +1,269 @@
+package releaseverify
+
+import (
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestParseAuthorityRegistryExposesOnlyCurrentlyActiveKeys(t *testing.T) {
+	now := time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC)
+	activeKey := base64.StdEncoding.EncodeToString(bytesOf(1, ed25519.PublicKeySize))
+	revokedKey := base64.StdEncoding.EncodeToString(bytesOf(2, ed25519.PublicKeySize))
+	expiredKey := base64.StdEncoding.EncodeToString(bytesOf(3, ed25519.PublicKeySize))
+
+	body := `{
+  "schema_version": 1,
+  "product": "maestro",
+  "authorities": [
+    {
+      "issuer": "maestro-release",
+      "key_id": "pilot-active",
+      "algorithm": "ed25519",
+      "public_key": "` + activeKey + `",
+      "status": "active",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z"
+    },
+    {
+      "issuer": "maestro-release",
+      "key_id": "pilot-revoked",
+      "algorithm": "ed25519",
+      "public_key": "` + revokedKey + `",
+      "status": "revoked",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z",
+      "revoked_at": "2026-07-20T00:00:00Z"
+    },
+    {
+      "issuer": "maestro-release",
+      "key_id": "pilot-expired",
+      "algorithm": "ed25519",
+      "public_key": "` + expiredKey + `",
+      "status": "active",
+      "valid_from": "2025-01-01T00:00:00Z",
+      "valid_until": "2026-01-01T00:00:00Z"
+    }
+  ]
+}`
+
+	registry, err := ParseAuthorityRegistry(strings.NewReader(body), func() time.Time { return now })
+	if err != nil {
+		t.Fatalf("ParseAuthorityRegistry() error = %v", err)
+	}
+	got, ok := registry.Lookup("maestro", "maestro-release", "pilot-active")
+	if !ok || string(got) != string(bytesOf(1, ed25519.PublicKeySize)) {
+		t.Fatalf("Lookup(active) = %x, %v", got, ok)
+	}
+	for _, keyID := range []string{"pilot-revoked", "pilot-expired"} {
+		if _, ok := registry.Lookup("maestro", "maestro-release", keyID); ok {
+			t.Fatalf("Lookup(%s) exposed an unavailable authority", keyID)
+		}
+	}
+}
+
+func TestAuthorityRegistryRechecksValidityAtEveryLookup(t *testing.T) {
+	now := time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC)
+	registry, err := ParseAuthorityRegistry(
+		strings.NewReader(validAuthorityRegistryJSON()),
+		func() time.Time { return now },
+	)
+	if err != nil {
+		t.Fatalf("ParseAuthorityRegistry() error = %v", err)
+	}
+	if _, ok := registry.Lookup("maestro", "maestro-release", "pilot-active"); !ok {
+		t.Fatal("Lookup() rejected an authority inside its validity window")
+	}
+	now = time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)
+	if _, ok := registry.Lookup("maestro", "maestro-release", "pilot-active"); ok {
+		t.Fatal("Lookup() accepted an authority after valid_until")
+	}
+}
+
+func TestPinnedAuthorityRegistryRejectsCopiedBootstrapperTrustSubstitution(t *testing.T) {
+	now := time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC)
+	approvedBody := []byte(validAuthorityRegistryJSON())
+	sum := sha256.Sum256(approvedBody)
+	pinnedDigest := hex.EncodeToString(sum[:])
+	approvedPath := filepath.Join(t.TempDir(), "trust", "release-authority-registry.json")
+	if err := os.MkdirAll(filepath.Dir(approvedPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(approvedPath, approvedBody, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadPinnedAuthorityRegistry(
+		approvedPath,
+		pinnedDigest,
+		func() time.Time { return now },
+	); err != nil {
+		t.Fatalf("LoadPinnedAuthorityRegistry(approved) error = %v", err)
+	}
+
+	attackerBody := strings.Replace(
+		string(approvedBody),
+		base64.StdEncoding.EncodeToString(bytesOf(1, ed25519.PublicKeySize)),
+		base64.StdEncoding.EncodeToString(bytesOf(9, ed25519.PublicKeySize)),
+		1,
+	)
+	copiedRootPath := filepath.Join(t.TempDir(), "trust", "release-authority-registry.json")
+	if err := os.MkdirAll(filepath.Dir(copiedRootPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(copiedRootPath, []byte(attackerBody), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadPinnedAuthorityRegistry(
+		copiedRootPath,
+		pinnedDigest,
+		func() time.Time { return now },
+	); err == nil {
+		t.Fatal("copied bootstrapper root established an adjacent attacker registry")
+	}
+	if _, err := LoadPinnedAuthorityRegistry(
+		approvedPath,
+		"",
+		func() time.Time { return now },
+	); err == nil {
+		t.Fatal("bootstrapper without an embedded seed digest established authority")
+	}
+}
+
+func TestParseAuthorityRegistryRejectsUnsafeContracts(t *testing.T) {
+	now := time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC)
+	valid := validAuthorityRegistryJSON()
+	tests := map[string]string{
+		"unknown field":     strings.Replace(valid, `"product": "maestro"`, `"product": "maestro", "extra": true`, 1),
+		"duplicate field":   strings.Replace(valid, `"product": "maestro"`, `"product": "maestro", "product": "maestro"`, 1),
+		"wrong product":     strings.Replace(valid, `"product": "maestro"`, `"product": "other"`, 1),
+		"unknown algorithm": strings.Replace(valid, `"algorithm": "ed25519"`, `"algorithm": "rsa"`, 1),
+		"short key": strings.Replace(
+			valid,
+			base64.StdEncoding.EncodeToString(bytesOf(1, ed25519.PublicKeySize)),
+			base64.StdEncoding.EncodeToString([]byte("short")),
+			1,
+		),
+		"invalid status":            strings.Replace(valid, `"status": "active"`, `"status": "pending"`, 1),
+		"invalid window":            strings.Replace(valid, `"valid_until": "2027-01-01T00:00:00Z"`, `"valid_until": "2025-01-01T00:00:00Z"`, 1),
+		"active with revocation":    strings.Replace(valid, `"valid_until": "2027-01-01T00:00:00Z"`, `"valid_until": "2027-01-01T00:00:00Z", "revoked_at": "2026-07-20T00:00:00Z"`, 1),
+		"revoked without timestamp": strings.Replace(valid, `"status": "active"`, `"status": "revoked"`, 1),
+		"duplicate authority": strings.Replace(
+			valid,
+			"\n  ]",
+			",\n"+strings.TrimSuffix(strings.TrimPrefix(validAuthorityEntry(), "    "), "\n")+"\n  ]",
+			1,
+		),
+	}
+
+	for name, body := range tests {
+		t.Run(name, func(t *testing.T) {
+			if _, err := ParseAuthorityRegistry(strings.NewReader(body), func() time.Time { return now }); err == nil {
+				t.Fatal("ParseAuthorityRegistry() accepted an unsafe registry")
+			}
+		})
+	}
+}
+
+func TestPublishedAuthorityRegistrySchemaHasExpectedIdentity(t *testing.T) {
+	path := filepath.Join("..", "..", "schemas", "release-authority-registry.schema.json")
+	if err := ValidateAuthorityRegistrySchemaFile(path); err != nil {
+		t.Fatalf("ValidateAuthorityRegistrySchemaFile() error = %v", err)
+	}
+}
+
+func TestValidateAuthorityRegistrySchemaFileRejectsGuttedSchema(t *testing.T) {
+	publishedPath := filepath.Join("..", "..", "schemas", "release-authority-registry.schema.json")
+	published, err := os.ReadFile(publishedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(published, &schema); err != nil {
+		t.Fatal(err)
+	}
+	definitions, ok := schema["$defs"].(map[string]any)
+	if !ok {
+		t.Fatal("published schema definitions are unavailable")
+	}
+	authority, ok := definitions["authority"].(map[string]any)
+	if !ok {
+		t.Fatal("published authority definition is unavailable")
+	}
+	properties, ok := authority["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("published authority properties are unavailable")
+	}
+	publicKey, ok := properties["public_key"].(map[string]any)
+	if !ok {
+		t.Fatal("published public_key definition is unavailable")
+	}
+	delete(publicKey, "type")
+	withoutPublicKeyType, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"missing root contract":                `{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:bcg-brasil-agentic-os:schema:release-authority-registry:v1"}`,
+		"public key accepts non-string values": string(withoutPublicKeyType),
+		"empty authority definition": `{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:release-authority-registry:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "product", "authorities"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "product": {"const": "maestro"},
+    "authorities": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/authority"}}
+  },
+  "$defs": {"authority": {}}
+}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "schema.json")
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := ValidateAuthorityRegistrySchemaFile(path); err == nil {
+				t.Fatal("ValidateAuthorityRegistrySchemaFile() accepted a schema without the contract")
+			}
+		})
+	}
+}
+
+func validAuthorityRegistryJSON() string {
+	return `{
+  "schema_version": 1,
+  "product": "maestro",
+  "authorities": [
+` + validAuthorityEntry() + `  ]
+}`
+}
+
+func validAuthorityEntry() string {
+	return `    {
+      "issuer": "maestro-release",
+      "key_id": "pilot-active",
+      "algorithm": "ed25519",
+      "public_key": "` + base64.StdEncoding.EncodeToString(bytesOf(1, ed25519.PublicKeySize)) + `",
+      "status": "active",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z"
+    }
+`
+}
+
+func bytesOf(value byte, count int) []byte {
+	result := make([]byte, count)
+	for index := range result {
+		result[index] = value
+	}
+	return result
+}

@@ -22,6 +22,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
 - [x] Define workspace agents as project specialists and context gatekeepers with compact state and versioned dossiers.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
+- [x] Define the lean Maestro, Walter and Darwin core with a no-tool hub, multiple governed chains, one active branch and role-gated depth two.
 
 ## Track A - Contributor onboarding
 
@@ -59,8 +60,12 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Make `bcgos doctor` distinguish runtime discovery, local adapter configuration and actual lifecycle capability.
 - [x] Define and validate a non-blocking hook-execution policy: snapshots and signals never wait, while only a local deterministic safety guard may deny an unsafe action.
 - [x] Define the per-runtime/per-platform pilot conformance receipt; capability promotion remains blocked on the recorded native-session evidence.
-- [x] Add Claude lifecycle conformance fixtures for injection, deterministic guard, metadata-safe receipts and failure diagnosis; Codex fixture parity remains explicit.
-- [x] Wire the Session Context Packet into the Claude lifecycle adapter with bounded authorization and omission reporting; Codex remains unavailable pending native wiring.
+- [ ] Add conformance fixtures for actual lifecycle injection and failure reporting once adapters exist.
+- [ ] Wire the Session Context Packet into Claude and Codex lifecycle adapters with equivalent authorization and omission reporting.
+- [x] Implement shared authenticated orchestration enforcement and cross-runtime adversarial fixtures, while keeping native activation unavailable.
+- [x] Implement signed bounded work packets and a sequential runtime-neutral dispatcher with replay protection.
+- [x] Implement capability-bound workspace-to-account promotion, integrity receipts and non-destructive revocation.
+- [ ] Activate Maestro, Walter and Darwin in Claude and Codex only after tool-denial, one-active-branch and role-graph conformance fixtures pass.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
 - [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.
@@ -84,11 +89,46 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 ### Build
 
 - [x] Implement and run an isolated local binary-installation trial with checksum verification on Windows, macOS and Linux. This is explicitly not a signed release or pilot distribution channel.
-- [ ] Produce versioned Windows and macOS artifacts in CI.
-- [ ] Define signed release manifest and compatibility rules.
-- [ ] Implement browser-based private-release authentication.
-- [ ] Implement verified download, staging, activation and rollback.
-- [ ] Ensure updates never overwrite local configuration or work data.
+- [x] Produce deterministic unsigned, versioned Windows and macOS release
+  candidates through a read-only manual CI workflow.
+- [ ] Configure production manifest/artifact signing and native Windows/macOS
+  code-signing authorities.
+- [x] Define and validate the provider-neutral signed release manifest and CLI↔bundle compatibility rules.
+- [x] Define and validate the local public release-authority registry,
+  including validity windows and fail-closed revocation.
+- [x] Implement browser device-flow, refresh and private-provider adapters with
+  fail-closed secure-store contracts.
+- [x] Implement the dormant macOS Security.framework Keychain backend and
+  conformance tests with no plaintext or process-argument fallback. CLI
+  connection remains gated behind approved provider and authority seeds.
+- [x] Implement the dormant Windows Credential Manager backend and conformance
+  tests with direct WinCred calls and no plaintext fallback. CLI connection
+  remains gated behind approved provider and authority seeds.
+- [x] Build Windows amd64 and macOS amd64/arm64 candidate CLIs on matching
+  native CI runners, then assemble the closed unsigned candidate from the exact
+  prebuilt files with per-binary source, runner, toolchain and digest
+  provenance. Cross-image byte reproducibility remains unproven.
+- [x] Connect native Keychain/Credential Manager adapters to CLI auth only
+  behind a strict embedded provider-registration contract; the checked-in
+  configuration remains unavailable.
+- [ ] Approve the GitHub App registration, public client ID, native-store use
+  and selected-repository installation, then promote the managed configuration.
+- [x] Implement signed local-release verification, safe staging, bootstrapper
+  activation and last-known-good rollback.
+- [x] Implement provider discovery and manifest-authorized verified download
+  into the local release boundary.
+- [x] Bind provider discovery to deterministic update plans using the immutable
+  provider release ID and authenticated manifest digest.
+- [x] Persist a strict pending-update envelope and require signed-release,
+  installed-state and activation-plan revalidation before confirmation.
+- [x] Wire `bcgos update --check|--confirm` to durable staging and the detached
+  stable bootstrapper, with exact plan JSON and provider/authority/store gates
+  visible in `status` and `doctor`.
+- [ ] Configure the production provider and release-key registry.
+- [x] Enforce and test that activation writes only managed core and install
+  state, never local configuration, memory or workspace data.
+- [x] Generate separately classified isolated Windows/macOS engineering
+  evidence for install, update and rollback behavior.
 - [ ] Run install/update/rollback tests on clean corporate devices for both platforms.
 
 ### Discuss before closing the track
@@ -176,8 +216,8 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement a deterministic managed skills index and `bcgos skills index` inspection surface.
 - [ ] Add safe context injection, workspace boundaries and capability detection.
 - [x] Add the managed `workspace-agent-setup` skill with fail-closed research approval and provenance workflow.
-- [ ] Package only allowlisted product content; exclude all development harness paths.
-- [ ] Validate install, init, update and rollback without client content.
+- [x] Package only allowlisted product content; exclude all development harness paths.
+- [x] Validate isolated install, init, update and rollback without client content.
 
 ### Discuss before closing the track
 
@@ -191,6 +231,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 
 ### Build
 
+- [x] Define a two-user Windows/macOS canary and evidence-based expansion gate.
 - [ ] Select a balanced Windows/macOS and classic/technical cohort.
 - [ ] Onboard users without requiring Git, Go, Python, Node or Docker.
 - [ ] Measure time-to-first-success, update reliability and support demand.

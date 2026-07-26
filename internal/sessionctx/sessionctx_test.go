@@ -38,7 +38,7 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 	if packet.Atlas.Owner.Path != "bcgos://atlas/owner" || packet.Atlas.Workspace.Path != "bcgos://atlas/workspace" {
 		t.Fatalf("atlas references must be portable: %#v", packet.Atlas)
 	}
-	if packet.Skills.CatalogPointer != "bundles/base/skills/catalog.json" || packet.Memory.State != "unavailable" {
+	if packet.Skills.CatalogPointer != "bundles/base/skills/catalog.json" || packet.Agents.CatalogPointer != "bundles/base/agents/catalog.json" || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Memory.State != "unavailable" {
 		t.Fatalf("bounded sources = %#v", packet)
 	}
 	encoded, err := json.Marshal(packet)

@@ -392,15 +392,81 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: README.md; specs/001-cli-distribution.md; ROADMAP.md
 - Supersedes: none
 
-## NBLK - Keep product hooks non-blocking
+## DIST - Make the signed manifest the portable release authority
 
 - Date: 2026-07-25
 - Status: accepted
 - Owner: Daniel Scardini
-- Context: Lifecycle hooks run in the user's active session. Letting them synchronize with memory, wiki, ingestion or another worker would create visible latency, race conditions and fragile runtime-specific behavior.
-- Decision: Product hooks never own heavy or durable work. Session Start and context injection only read a bounded last-committed snapshot and return an explicit omission when it is unavailable. Post-action and stop hooks only emit best-effort idempotent signals. No hook waits for a worker lock, calls a model, uses the network or retries work. A pre-action guard may synchronously deny only an immediately decidable local safety condition; it never waits to resolve a race.
-- Consequences: A future worker exclusively owns serialized, idempotent writes, expensive execution and recovery from durable due-state. Hook delivery may be duplicated or absent without corrupting committed state. Native Claude and Codex adapters must conform to one executable policy before any product lifecycle capability is reported as available.
-- Refs: specs/004-runtime-portability.md; specs/009-scheduler-catch-up.md; specs/016-nonblocking-hook-execution.md; bundles/base/runtime/hook-policy.json; internal/hookpolicy
+- Context: The pilot needs one verifiable release contract even if the source repository or artifact provider changes, while CLI, managed bundles and optional runtime packs evolve independently.
+- Decision: Treat a signed, versioned release manifest as the portable authority for Maestro distribution. Bind trust to the Maestro product identity and an explicit signing-key identifier rather than to a GitHub owner name. Record CLI and bundle artifacts separately with immutable versions, compatibility ranges and allowlisted content; keep the release provider behind an adapter. Runtime packs remain a future, separately versioned schema extension rather than an underspecified v1 entry.
+- Consequences: A GitHub transfer does not silently redefine the trust root. The bootstrapper and `bcgos` must reject unknown issuers, incompatible versions, unsigned manifests, duplicate JSON keys, unlisted artifacts and content from workspace or user-local data roots. Release versions cannot be relabeled across channels; promotion requires a new version and signed manifest. Production key custody, platform code-signing identities and provider registration remain explicit release-environment approvals.
+- Refs: RELS; UPDT; SECU; DATA; specs/001-cli-distribution.md; specs/020-release-distribution.md; schemas/release-manifest.schema.json
+- Supersedes: none
+
+## AUTH - Use GitHub App device flow with native-store fail-closed authentication
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Pilot users need browser-based access to a private release without cloning source or managing personal tokens, while provider credentials must not enter files, environment variables, logs or the managed bundle.
+- Decision: Use a least-privilege GitHub App device flow for the pilot provider, with read-only Contents access to the selected release repository and short-lived user credentials stored only through an approved native Keychain or Windows Credential Manager adapter. Keep provider transport behind an adapter, strip authorization on cross-host asset redirects and authenticate the signed manifest before accepting its artifact list. If the native store or provider registration is absent, report `unavailable`; do not fall back to plaintext, Git helpers, environment variables or `gh`.
+- Consequences: Authentication, refresh and verified download are testable independently of production configuration. The CLI exposes schema-versioned auth/update states and binds one confirmation to a deterministic update plan, but remains unavailable until native-store adapters, GitHub App installation and production key registry are approved.
+- Refs: DIST; SECU; UPDT; specs/020-release-distribution.md; specs/021-private-release-provider.md; internal/releaseprovider; internal/updateplan
+- Supersedes: none
+
+## PILT - Gate the ten-person pilot through two users and classified device evidence
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Passing CI or an isolated installer smoke test cannot prove that Maestro installs and updates safely under corporate Windows/macOS policy, and sending a first release directly to ten users would combine distribution, usability and support risk.
+- Decision: Keep natural-language `maestro-setup-update` guidance as the primary pilot experience, with deterministic CLI/bootstrapper enforcement and one confirmation bound to an exact update plan. Classify isolated Windows/macOS runs as engineering evidence only. Require separate corporate-device reports for install, update and rollback, then run a two-user canary with one Windows and one macOS user for five business days before considering the ten-person cohort.
+- Consequences: The repository cannot promote itself to pilot-ready. Expansion requires production authorities, both clean-device reports, success by both canary users, working rollback, no severity-1/2 incident or data-boundary breach and support-owner acceptance. The ten-person cohort remains a human go/redesign/stop decision.
+- Refs: AUTH; DIST; specs/022-guided-pilot-release.md; bundles/base/skills/maestro-setup-update/SKILL.md; docs/pilot-release-runbook.md
+- Supersedes: none
+
+## HUBS - Govern Maestro through a lean hub-and-spoke core
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs a canonical user-facing hub and bounded internal governance roles without copying Kowalski's broad tool access or delegation model.
+- Decision: Define Maestro as the only user-facing hub. Maestro has no direct tool access and delegates sequentially with one active spoke and no nested delegation. Walter and Darwin are packet-only internal agents without tools, delegation or direct user speech.
+- Consequences: Runtime adapters must enforce tool denial, one-active-spoke and no-nesting invariants before reporting orchestration as available.
+- Refs: MAES; PORT; WSAG; specs/004-runtime-portability.md; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; bundles/base/agents/catalog.json
+- Supersedes: none
+
+## BRCH - Allow multiple governed chains with role-gated depth
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A single global depth-one rule would prevent legitimate specialist chains while preserving the one-active-branch invariant.
+- Decision: Allow multiple governed chain types under Maestro while keeping one active branch by default. Delegation remains sequential, role-gated and maximum depth two; Walter, Darwin, errands and leaf specialists never delegate.
+- Consequences: Cross-chain exchange uses a minimum sanitized packet mediated by Maestro; parallel branches and deeper delegation require a new decision and conformance evidence.
+- Refs: HUBS; WSAG; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; bundles/base/agents/catalog.json; internal/agentcatalog
+- Supersedes: HUBS
+
+## WKPK - Delegate through bounded signed work packets
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Role-gated chains prevent topology drift, but delegation would still leak context or become replayable if Maestro or a workspace agent passed free-form conversation state, raw dossiers or reusable scope claims to the next agent.
+- Decision: Every root and child delegation uses a signed, expiring and pointer-only work packet with strict objective, pointer and constraint budgets. A root packet ID is the unique branch instance and a child packet ID is the unique child dispatch instance. Children inherit the parent's scope root and kind. Packet verification, orchestration state and registered identity/capability checks all fail closed.
+- Consequences: Maestro can coordinate sequential specialists without becoming a context blob. Old packets cannot close later work in the same workspace, practice packets cannot point to workspace resources and native runtimes must persist dispatcher/orchestration state before activation.
+- Refs: BRCH; WSAG; specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; specs/023-sequential-agent-dispatch.md; internal/agentdispatch; internal/agentorchestration
+- Supersedes: none
+
+## PROM - Promote workspace facts without account browsing
+
+- Date: 2026-07-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: An account agent needs durable client-level context, but letting it browse project workspaces would collapse confidentiality boundaries and recreate the context blob the workspace architecture is designed to prevent.
+- Decision: Promote one curated, approved and expiring statement at a time through capability-bound workspace and account grants. Verify the declared hash against source bytes, keep the raw artifact pointer in a workspace-owned signed receipt and expose only the statement, source hash and opaque receipt ID to the account. Use prepared/final signed receipts plus a trusted monotonic anchor; transition that anchor before writing non-destructive revocation evidence.
+- Consequences: Account context becomes a deliberate rollup rather than automatic memory aggregation. Partial writes, coordinated tampering and marker-deletion rollback fail closed; revocation linearizes reads while preserving evidence. Native Claude/Codex adapters still must provision private capabilities and integrity keys, provide a durable atomic anchor store and enforce filesystem scopes before activation.
+- Refs: WSAG; BRIF; WKPK; specs/016-workspace-agent-boundaries.md; specs/024-account-context-promotion.md; internal/contextpromotion
 - Supersedes: none
 
 ## ADPT - Install product adapters locally per workspace
@@ -411,7 +477,7 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Context: A user-wide hook configuration would affect unrelated work and make safe removal difficult, while the product must preserve existing runtime configuration in a consultant's workspace.
 - Decision: Install Maestro runtime adapters as one owned entry in workspace-local runtime configuration. The installer is idempotent, preserves unrelated entries, uses an explicit short timeout and removes only its exact owned entry. Runtime trust remains a runtime concern; installation does not bypass it.
 - Consequences: Claude and Codex receive separately managed local configuration and can be removed without deleting user settings. A workspace adapter may be absent in another workspace by design. Installation state and actual runtime execution remain distinct diagnostics.
-- Refs: specs/018-workspace-local-adapter-installation.md; internal/adaptercfg; internal/cli/cli.go
+- Refs: specs/026-workspace-local-adapter-installation.md; internal/adaptercfg; internal/cli/cli.go
 - Supersedes: none
 
 ## RSLV - Resolve session pointers explicitly and under budget
@@ -434,15 +500,4 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Decision: Install one Maestro-owned Session Start command using the released local executable, with a two-second timeout, an 8 KiB output ceiling and an explicit source marker. Exclude the generated machine-local configuration from the workspace Git index when possible, but refuse installation before any write if that target configuration is already tracked. Keep lifecycle capability `unavailable` until an operator records a direct-command result and a fresh native-session result for each supported runtime/platform.
 - Consequences: Reinstalling after an update changes only Maestro's own command and does not depend on a user shell. A missing native receipt fails closed in product reporting, while conformance remains practical to run in an empty non-client workspace. No memory, worker, network or model operation is added to Session Start, and no absolute machine path can be silently added to an already tracked runtime configuration.
 - Refs: specs/017-native-session-start-hook.md; specs/018-workspace-local-adapter-installation.md; specs/021-pilot-hook-conformance.md; docs/onboarding/pilot-hook-conformance.md; internal/adaptercfg; internal/sessionhook
-- Supersedes: none
-
-## CLVE - Wire the Claude lifecycle vertical behind neutral contracts
-
-- Date: 2026-07-25
-- Status: accepted
-- Owner: Daniel Scardini
-- Context: Maestro has a bounded Session Start command and a portable lifecycle vocabulary, but a pilot cannot rely on skeletal adapters or infer runtime support from configuration alone. The first vertical must make the Claude mapping observable without weakening Codex parity or allowing hooks to become workers.
-- Decision: Define one runtime-neutral lifecycle contract and metadata-safe receipt store. Wire Claude Code first: `SessionStart` for session start, `UserPromptSubmit` for bounded context injection, `PreToolUse` for an immediately decidable local deny rule, `PostToolUse` for a post-action receipt and `Stop` for finalization. Session/context remain snapshot-only; the guard never grants permission; post/stop emit only idempotent local receipt signals and do not wait, retry, call a model or use the network. Codex retains equivalent conformance fixtures but no product lifecycle wiring. The capability manifest remains unchanged until a qualifying native-session receipt exists.
-- Consequences: Adapter installation may manage the five Claude hook bindings while preserving unrelated local configuration. Doctor can diagnose recorded lifecycle receipts separately from capability state. Receipts carry opaque identifiers, event metadata and safe diagnostics only; no prompt, transcript, tool input/output, owner body or workspace path is persisted. Distribution, workspace layout and federation remain outside this change.
-- Refs: specs/004-runtime-portability.md; specs/016-nonblocking-hook-execution.md; specs/021-pilot-hook-conformance.md; internal/lifecycle; internal/claudeadapter; internal/adaptercfg
 - Supersedes: none

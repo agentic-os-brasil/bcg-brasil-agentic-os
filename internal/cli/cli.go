@@ -19,8 +19,6 @@ import (
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
@@ -51,12 +49,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|hook|adapter|skills|memory>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|workspace-agent|atlas|session|hook|adapter|skills|memory>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|profile|owner|workspace-agent|atlas|session|hook|adapter|skills|memory>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|workspace-agent|atlas|session|hook|adapter|skills|memory>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -67,6 +65,10 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "version":
 		fmt.Fprintf(out, "bcgos %s\n", Version)
 		return ExitOK
+	case "auth":
+		return runAuth(args[1:], out, errOut, defaultReleaseAuthService())
+	case "update":
+		return runUpdate(args[1:], out, errOut, defaultReleaseUpdateService())
 	case "profile":
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
 	case "owner":
@@ -78,7 +80,7 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "session":
 		return runSession(args[1:], out, errOut, defaultDataRoot)
 	case "hook":
-		return runHookWithInput(args[1:], in, out, errOut, defaultDataRoot)
+		return runHook(args[1:], out, errOut, defaultDataRoot)
 	case "adapter":
 		return runAdapter(args[1:], out, errOut)
 	case "skills":
@@ -416,6 +418,7 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	releaseCapability := defaultReleaseCapability()
 	return writeJSON(out, struct {
 		Version      string               `json:"version"`
 		Workspace    workspace.Inspection `json:"workspace"`
@@ -426,11 +429,12 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 		Workspace: inspection,
 		Profile:   state,
 		Capabilities: map[string]string{
-			"bundles":                "unavailable",
+			"bundles":                "supported",
 			"human_atlas_bootstrap":  "supported",
 			"interaction_profile":    "supported",
 			"memory_dreaming":        "unavailable",
-			"updates":                "unavailable",
+			"private_release_auth":   releaseCapability.State,
+			"updates":                releaseCapability.State,
 			"workspace_agent_setup":  "supported",
 			"workspace_research":     "managed_skill_runtime_dependent",
 			"public_economic_rollup": "supported",
@@ -490,6 +494,7 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 		workspaceCheck = doctorCheck{ID: "workspace", State: "warning", Message: "workspace appears to be synchronized; OneDrive-style sync can cause I/O timeouts"}
 		nextActions = append(nextActions, "Move future work to a local folder outside synchronized storage when practical.")
 	}
+	releaseCapability := defaultReleaseCapability()
 	checks := []doctorCheck{
 		workspaceCheck,
 		{ID: "local_data", State: "pass", Message: "private BCGOS data is separated from the workspace"},
@@ -498,9 +503,15 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 		runtimeCheck("codex", "codex", available),
 		adapterCheck("claude_adapter", "claude", inspection.WorkspacePath),
 		adapterCheck("codex_adapter", "codex", inspection.WorkspacePath),
-		lifecycleReceiptCheck(root, inspection.WorkspaceID),
-		{ID: "bundles", State: "unavailable", Message: "bundle installation is not implemented in this build"},
-		{ID: "updates", State: "unavailable", Message: "update and rollback are not implemented in this build"},
+		{ID: "bundles", State: "pass", Message: "signed bundle activation and last-known-good rollback are supported"},
+		{
+			ID: "private_release_auth", State: releaseCapability.State,
+			Message: releaseCapability.Reason,
+		},
+		{
+			ID: "updates", State: releaseCapability.State,
+			Message: releaseCapability.Reason,
+		},
 	}
 	if !available("claude") && !available("codex") {
 		if state == "ready" {
@@ -810,15 +821,8 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 }
 
 func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
-	return runHookWithInput(args, strings.NewReader(""), out, errOut, dataRoot)
-}
-
-func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
-	if len(args) > 0 && args[0] == "claude" {
-		return runClaudeHook(args[1:], in, out, errOut, dataRoot)
-	}
 	if len(args) == 0 || args[0] != "session-start" {
-		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]\n       bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
+		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]")
 		return ExitUsage
 	}
 	flags := newFlagSet("hook session-start", errOut)
@@ -862,71 +866,6 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, output, errOut)
-}
-
-func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
-	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
-		return ExitUsage
-	}
-	flags := newFlagSet("hook claude "+args[0], errOut)
-	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
-	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
-		fmt.Fprintln(errOut, "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
-		return ExitUsage
-	}
-	root, err := dataRoot()
-	if err != nil {
-		return reportError(errOut, err)
-	}
-	inspection, err := workspace.Inspect(optionalArg(flags.Args()), root)
-	if err != nil {
-		return reportError(errOut, err)
-	}
-	switch args[0] {
-	case "session-start", "context-injection":
-		profileState, err := resolveProfile(root, "", false)
-		if err != nil {
-			return reportError(errOut, err)
-		}
-		owner, err := ownerctx.Inspect(root)
-		if err != nil {
-			return reportError(errOut, err)
-		}
-		packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID})})
-		eventName := "SessionStart"
-		if args[0] == "context-injection" {
-			eventName = "UserPromptSubmit"
-		}
-		response, err := sessionhook.BuildClaudeEvent(packet, eventName)
-		if err != nil {
-			return reportError(errOut, err)
-		}
-		return writeJSON(out, response, errOut)
-	case "pre-action-guard", "post-action-receipt", "stop-finalization":
-		body, err := io.ReadAll(io.LimitReader(in, 64<<10))
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("read Claude hook input: %w", err))
-		}
-		native, err := claudeadapter.Parse(body)
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("parse Claude hook input: %w", err))
-		}
-		if args[0] == "pre-action-guard" {
-			return writeJSON(out, claudeadapter.Guard(native), errOut)
-		}
-		event := lifecycle.PostActionObserve
-		if args[0] == "stop-finalization" {
-			event = lifecycle.StopFinalize
-		}
-		if _, err := lifecycle.Record(root, inspection.WorkspaceID, claudeadapter.Receipt(event, native)); err != nil {
-			return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
-		}
-		return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
-	default:
-		fmt.Fprintln(errOut, "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
-		return ExitUsage
-	}
 }
 
 func runAdapter(args []string, out, errOut io.Writer) int {
@@ -1030,21 +969,6 @@ func interactionProfileCheck(state profile.State) doctorCheck {
 func commandAvailable(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
-}
-
-func lifecycleReceiptCheck(dataRoot, workspaceID string) doctorCheck {
-	summary, err := lifecycle.Diagnose(dataRoot, workspaceID)
-	if err != nil {
-		return doctorCheck{ID: "lifecycle_receipts", State: "warning", Message: "lifecycle receipt diagnostics could not be read: " + err.Error()}
-	}
-	switch summary.State {
-	case "observed":
-		return doctorCheck{ID: "lifecycle_receipts", State: "pass", Message: fmt.Sprintf("%d metadata-safe lifecycle receipt(s) observed; capability promotion still requires the pilot conformance record", summary.Observed)}
-	case "warning":
-		return doctorCheck{ID: "lifecycle_receipts", State: "warning", Message: fmt.Sprintf("%d lifecycle receipt failure(s) recorded; inspect the local diagnostic before relying on the adapter", summary.Failed)}
-	default:
-		return doctorCheck{ID: "lifecycle_receipts", State: "unavailable", Message: "no native lifecycle receipt has been recorded"}
-	}
 }
 
 func defaultDataRoot() (string, error) {

@@ -11,13 +11,14 @@ quebrar contribuições, scripts ou futuros instaladores.
 Maestro ajuda consultores, times BCG X, cientistas de dados e engenheiros a
 organizar trabalho profissional e trabalhar melhor com agentes. Ele combina:
 
-```text
-Arquivos de trabalho legíveis      Continuidade compacta do agente
-clientes · projetos · notas        resumos locais, controlados e rastreáveis
-              \                    /
-               Maestro
-              /                    \
-preferências explícitas       skills e regras compartilhadas
+```mermaid
+flowchart LR
+    User["Profissional BCG"] <--> Maestro["Maestro"]
+    Work["Arquivos legíveis<br/>clientes · projetos · notas"] --> Maestro
+    Continuity["Continuidade compacta<br/>resumos locais e rastreáveis"] --> Maestro
+    Preferences["Preferências explícitas"] --> Maestro
+    Skills["Skills e regras compartilhadas"] --> Maestro
+    Maestro --> WorkResult["Trabalho orientado por contexto"]
 ```
 
 Uma pessoa deve conseguir abrir seus arquivos e encontrar o contexto por conta
@@ -46,6 +47,8 @@ quando os mecanismos nativos forem diferentes.
 | --- | --- |
 | Workspace local | `bcgos init`, `status` e `doctor` criam e inspecionam o espaço sem misturar dados de trabalho ao core gerenciado. |
 | Agente do workspace | Entrevista e briefing versionado, pesquisa pública aprovada e dossiê isolado por projeto; sandbox rígido dos runtimes ainda está pendente. |
+| Contexto da conta | Promoção explícita de fatos curados e comprovados na origem, com autoridade por capability, recibos assinados, âncora anti-rollback, validade e revogação sem acesso geral aos workspaces. |
+| Core de agentes | Catálogo canônico, enforcement compartilhado e pacotes de trabalho assinados para Maestro, Walter, Darwin e especialistas; wiring e ativação nativa ainda estão pendentes. |
 | Preferência de interação | `standard`, `advanced` e `power`, configuradas localmente e sem alterar permissões. |
 | Contexto do dono | Arquivos locais, editáveis e auditáveis para papel profissional, estilo, voz, preferências e limites. |
 | Atlas humano | Estrutura local não destrutiva para clientes, projetos, pessoas e diário de trabalho. |
@@ -60,8 +63,9 @@ entre outros:
 
 - instalador e atualizações seguras para usuários finais;
 - releases assinados e autenticação de distribuição;
-- recibos de conformance em sessões reais de Claude e Codex antes de declarar
-  hooks de produto disponíveis;
+- hooks de produto para Claude e Codex, com recibos de conformance em sessões
+  reais antes de declarar disponibilidade;
+- ativação nativa do core Maestro/Walter/Darwin com enforcement de tools e delegação;
 - memória automática, busca e Wiki compilada;
 - ingestão de documentos com Docling empacotado;
 - sincronização com ferramentas de tarefas.
@@ -72,15 +76,14 @@ agente até ter contrato, testes e validação explícitos.
 
 ## Como os dados ficam separados
 
-```text
-Core gerenciado do Maestro
-  políticas, skills, contratos e versões distribuíveis
-
-Dados locais do usuário
-  preferências, contexto do dono, memória, logs e credenciais
-
-Workspace de trabalho
-  arquivos Markdown de clientes, projetos, pessoas e diário
+```mermaid
+flowchart TB
+    Install["Instalação local do Maestro"]
+    Install --> Core["Core gerenciado<br/>políticas · skills · contratos · versões"]
+    Install --> Local["Dados locais do usuário<br/>preferências · contexto · memória · logs · credenciais"]
+    Install --> Workspace["Workspace de trabalho<br/>clientes · projetos · pessoas · diário"]
+    Core -.->|não incorpora| Local
+    Core -.->|não incorpora| Workspace
 ```
 
 Dados de cliente, pessoas, conversas, memória, credenciais e arquivos reais
@@ -129,7 +132,10 @@ produto até receber evidência de execução nativa em Claude e Codex.
    se confundem.
 6. **Claude-first, Codex-compatible.** A experiência pode variar, mas os
    contratos importantes não.
-7. **Evolução governada.** Mudanças estruturais precisam de decisão, teste e
+7. **Hub enxuto.** Maestro não usa tools e coordena múltiplas cadeias
+   governadas, mantendo uma branch ativa por padrão e profundidade máxima 2
+   somente por arestas de papel autorizadas.
+8. **Evolução governada.** Mudanças estruturais precisam de decisão, teste e
    revisão humana.
 
 ## Para contribuir
@@ -161,6 +167,10 @@ duráveis usam um código de quatro letras no
 - [Atlas humano](specs/014-human-atlas-bootstrap.md)
 - [Fronteiras do agente de workspace](specs/016-workspace-agent-boundaries.md)
 - [Inicialização e pesquisa do agente](specs/017-workspace-agent-initialization.md)
+- [Core de agentes do Maestro](specs/018-maestro-core-agents.md)
+- [Dispatcher sequencial e work packets](specs/023-sequential-agent-dispatch.md)
+- [Promoção governada para contexto da conta](specs/024-account-context-promotion.md)
+- [Visualização da governança de agentes](docs/visualizations/maestro-agent-governance.md)
 
 ## Confidencialidade
 

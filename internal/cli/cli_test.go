@@ -150,6 +150,39 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
+func TestPrivateReleaseCommandsFailClosedWithoutApprovedSecureStore(t *testing.T) {
+	tests := map[string][]string{
+		"auth status":    {"auth", "status"},
+		"auth login":     {"auth", "login"},
+		"auth logout":    {"auth", "logout"},
+		"update check":   {"update", "--check"},
+		"update confirm": {"update", "--confirm", "0123456789abcdef0123456789abcdef"},
+	}
+	for name, args := range tests {
+		t.Run(name, func(t *testing.T) {
+			var output bytes.Buffer
+			var errorOutput bytes.Buffer
+			if code := Run(args, &output, &errorOutput); code != ExitUnavailable {
+				t.Fatalf("Run(%v) exit = %d, want %d; out=%s err=%s", args, code, ExitUnavailable, output.String(), errorOutput.String())
+			}
+			var result struct {
+				SchemaVersion int    `json:"schema_version"`
+				State         string `json:"state"`
+				Reason        string `json:"reason"`
+			}
+			if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+				t.Fatalf("output is not one JSON document: %v; output=%q", err, output.String())
+			}
+			if result.SchemaVersion != 1 || result.State != "unavailable" || result.Reason == "" {
+				t.Fatalf("unexpected fail-closed result: %#v", result)
+			}
+			if strings.Contains(strings.ToLower(output.String()), "token") {
+				t.Fatal("unavailable response mentioned credential material")
+			}
+		})
+	}
+}
+
 func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
 	workspacePath := t.TempDir()
@@ -161,33 +194,6 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
 	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"injection_state\":\"unavailable\"`) {
 		t.Fatalf("hook exit = %d, output = %s", code, output.String())
-	}
-}
-
-func TestClaudeLifecycleHooksConformWithoutPromotingCapability(t *testing.T) {
-	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
-	workspacePath := t.TempDir()
-	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
-		t.Fatal(output.String())
-	}
-	output.Reset()
-	if code := runHookWithInput([]string{"claude", "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(`{}`), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "UserPromptSubmit"`) {
-		t.Fatalf("context hook = %d %s", code, output.String())
-	}
-	output.Reset()
-	guardInput := strings.NewReader(`{"session_id":"session-a","tool_use_id":"tool-a","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}`)
-	if code := runHookWithInput([]string{"claude", "pre-action-guard", "--adapter-source", "maestro", workspacePath}, guardInput, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) {
-		t.Fatalf("guard hook = %d %s", code, output.String())
-	}
-	output.Reset()
-	receiptInput := strings.NewReader(`{"session_id":"session-a","tool_use_id":"tool-a","tool_name":"Bash","tool_input":{"command":"pwd"}}`)
-	if code := runHookWithInput([]string{"claude", "post-action-receipt", "--adapter-source", "maestro", workspacePath}, receiptInput, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"continue": true`) {
-		t.Fatalf("receipt hook = %d %s", code, output.String())
-	}
-	output.Reset()
-	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, func(string) bool { return true }); code != ExitOK || !strings.Contains(output.String(), "lifecycle_receipts") || !strings.Contains(output.String(), "capability promotion still requires the pilot conformance record") || !strings.Contains(output.String(), "product adapter pending") {
-		t.Fatalf("doctor = %d %s", code, output.String())
 	}
 }
 

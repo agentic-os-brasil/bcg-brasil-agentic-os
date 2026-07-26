@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "files": [
+    {
+      "source": "bundles/base/memory/policy.json",
+      "path": "memory/policy.json"
+    },
+    {
+      "source": "bundles/base/profile/policy.json",
+      "path": "profile/policy.json"
+    },
+    {
+      "source": "bundles/base/release/provider.json",
+      "path": "release/provider.json"
+    },
+    {
+      "source": "bundles/base/runtime/capabilities.json",
+      "path": "runtime/capabilities.json"
+    },
+    {
+      "source": "bundles/base/skills/INDEX.md",
+      "path": "skills/INDEX.md"
+    },
+    {
+      "source": "bundles/base/skills/catalog.json",
+      "path": "skills/catalog.json"
+    },
+    {
+      "source": "bundles/base/skills/dream-memory/SKILL.md",
+      "path": "skills/dream-memory/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/dream-memory/agents/openai.yaml",
+      "path": "skills/dream-memory/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/ingest-content/SKILL.md",
+      "path": "skills/ingest-content/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/ingest-content/agents/openai.yaml",
+      "path": "skills/ingest-content/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/interaction-profile/SKILL.md",
+      "path": "skills/interaction-profile/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/interaction-profile/agents/openai.yaml",
+      "path": "skills/interaction-profile/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/maestro-setup-update/SKILL.md",
+      "path": "skills/maestro-setup-update/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/maestro-setup-update/agents/openai.yaml",
+      "path": "skills/maestro-setup-update/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/workspace-agent-setup/SKILL.md",
+      "path": "skills/workspace-agent-setup/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/workspace-agent-setup/agents/openai.yaml",
+      "path": "skills/workspace-agent-setup/agents/openai.yaml"
+    },
+    {
+      "source": "schemas/interaction-profile.schema.json",
+      "path": "schemas/interaction-profile.schema.json"
+    },
+    {
+      "source": "schemas/memory-artifact.schema.json",
+      "path": "schemas/memory-artifact.schema.json"
+    },
+    {
+      "source": "schemas/memory-commit.schema.json",
+      "path": "schemas/memory-commit.schema.json"
+    },
+    {
+      "source": "schemas/memory-policy.schema.json",
+      "path": "schemas/memory-policy.schema.json"
+    },
+    {
+      "source": "schemas/release-manifest.schema.json",
+      "path": "schemas/release-manifest.schema.json"
+    },
+    {
+      "source": "schemas/release-provider.schema.json",
+      "path": "schemas/release-provider.schema.json"
+    },
+    {
+      "source": "schemas/runtime-capabilities.schema.json",
+      "path": "schemas/runtime-capabilities.schema.json"
+    },
+    {
+      "source": "schemas/scheduler-state.schema.json",
+      "path": "schemas/scheduler-state.schema.json"
+    }
+  ]
+}
