@@ -381,6 +381,16 @@ func (adapter *Adapter) FinishBranch(actorID, capability, branchID string) Decis
 	})
 }
 
+func (adapter *Adapter) GuardTool(actorID, capability, branchID, dispatchID, scopeID, scopeKind, tool, operation, resource string) Decision {
+	return adapter.Handle(NativeEvent{
+		Name:    adapter.nativeEvent("tool_request"),
+		ActorID: actorID, ActorCapability: capability,
+		BranchID: branchID, DispatchID: dispatchID,
+		Scope: scopeID, ScopeKind: scopeKind,
+		Tool: tool, Operation: operation, Resource: resource,
+	})
+}
+
 func (adapter *Adapter) nativeEvent(semantic string) string {
 	for native, candidate := range adapterEvents[adapter.runtime] {
 		if candidate == semantic {
@@ -403,6 +413,18 @@ func (adapter *Adapter) RecoverStale(maxAge time.Duration, recoveryCapability st
 	}
 	adapter.store.state = StateSnapshot{PolicySHA256: state.PolicySHA256}
 	return true
+}
+
+// Runtime identifies the native event vocabulary bound to this adapter. It is
+// metadata only; it does not expose authorization capabilities or state.
+func (adapter *Adapter) Runtime() string {
+	return adapter.runtime
+}
+
+// Snapshot exposes metadata-only orchestration state for governed status and
+// completion checks. It never exposes capabilities or tool grants.
+func (adapter *Adapter) Snapshot() StateSnapshot {
+	return adapter.store.Snapshot()
 }
 
 func (adapter *Adapter) authenticate(id, capability string) (authorization, bool) {
