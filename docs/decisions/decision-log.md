@@ -391,3 +391,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Explicit export can reconstruct ordering and unresolved calls without replaying model context or tool content. Free-form IDs cannot become a content channel. Until native adapters emit the events, CLI receipts are declared breadcrumbs rather than authenticated runtime provenance. The ledger is not an observability backend, event bus, cost tracker or process sandbox.
 - Refs: EXEC; specs/018-execution-ledger-v1.md; schemas/execution-state.schema.json; internal/execution/toolcall.go
 - Supersedes: none
+
+## SKIL - Build product skills as bounded methods before orchestrated workflows
+
+- Date: 2026-07-26
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Proposal 005 identifies useful professional methods, but a folder of `SKILL.md` files cannot itself grant roles, tools, persistence, connectors or runtime availability. The first product skills need a consistent path that keeps context lean and allows Claude/Codex parity without creating speculative authority.
+- Decision: Promote only four no-authority methods in the first wave: `wayfinder`, `investigate`, `storyline` and `grill-me`. Each is canonical under the managed bundle, resolves `interaction-profile`, receives only user-supplied content, performs no tool call, persistence, delegation, retrieval or external disclosure, and returns an advisory result. Larger proposals are decomposed into atomic methods and orchestrators; an orchestrator may compose an existing capability but cannot recreate its authority or write path.
+- Consequences: The skills index exposes only the four bounded methods. Tool wrappers, multi-source rituals, memory writers, tasks, scheduling and owner-private workflows stay unavailable until their separate contracts provide authority, confirmation, receipts, recovery and evaluations. Native automatic loading remains unavailable until adapters prove it; users may inspect or invoke the managed instructions through supported runtime surfaces.
+- Refs: specs/030-product-skills-v1.md; specs/011-interaction-profile.md; specs/012-skills-index.md; docs/proposals/005-skill-consolidation; bundles/base/skills
+- Supersedes: none

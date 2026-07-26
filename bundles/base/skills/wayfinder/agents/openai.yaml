@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wayfinder"
+  short_description: "Structure a fuzzy problem into a bounded issue tree"
+  default_prompt: "Use $wayfinder to structure this problem before we decide how to investigate it."

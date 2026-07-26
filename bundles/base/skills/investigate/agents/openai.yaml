@@ -1,0 +1,4 @@
+interface:
+  display_name: "Investigate"
+  short_description: "Diagnose a surprising result before proposing a fix"
+  default_prompt: "Use $investigate to turn this symptom into evidence-backed hypotheses and a verification plan."

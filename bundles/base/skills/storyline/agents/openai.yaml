@@ -1,0 +1,4 @@
+interface:
+  display_name: "Storyline"
+  short_description: "Build an executive argument before producing artifacts"
+  default_prompt: "Use $storyline to turn these claims into a clear executive narrative."

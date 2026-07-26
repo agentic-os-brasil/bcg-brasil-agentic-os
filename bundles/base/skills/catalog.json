@@ -9,6 +9,13 @@
       "relative_path": "skills/dream-memory/SKILL.md"
     },
     {
+      "id": "grill-me",
+      "display_name": "Grill Me",
+      "trigger": "Stress-test a plan through a live sharp-question dialogue",
+      "default_prompt": "Use $grill-me to stress-test this plan one question at a time.",
+      "relative_path": "skills/grill-me/SKILL.md"
+    },
+    {
       "id": "ingest-content",
       "display_name": "Ingest Content",
       "trigger": "Extract professional documents locally and safely",
@@ -23,11 +30,32 @@
       "relative_path": "skills/interaction-profile/SKILL.md"
     },
     {
+      "id": "investigate",
+      "display_name": "Investigate",
+      "trigger": "Diagnose a surprising result before proposing a fix",
+      "default_prompt": "Use $investigate to turn this symptom into evidence-backed hypotheses and a verification plan.",
+      "relative_path": "skills/investigate/SKILL.md"
+    },
+    {
       "id": "maestro-setup-update",
       "display_name": "Maestro Setup and Update",
       "trigger": "Guide safe setup, updates and recovery conversationally",
       "default_prompt": "Use $maestro-setup-update to guide me through this Maestro setup or update in plain language.",
       "relative_path": "skills/maestro-setup-update/SKILL.md"
+    },
+    {
+      "id": "storyline",
+      "display_name": "Storyline",
+      "trigger": "Build an executive argument before producing artifacts",
+      "default_prompt": "Use $storyline to turn these claims into a clear executive narrative.",
+      "relative_path": "skills/storyline/SKILL.md"
+    },
+    {
+      "id": "wayfinder",
+      "display_name": "Wayfinder",
+      "trigger": "Structure a fuzzy problem into a bounded issue tree",
+      "default_prompt": "Use $wayfinder to structure this problem before we decide how to investigate it.",
+      "relative_path": "skills/wayfinder/SKILL.md"
     },
     {
       "id": "workspace-agent-setup",
