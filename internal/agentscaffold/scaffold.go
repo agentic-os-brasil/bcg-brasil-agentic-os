@@ -13,7 +13,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,17 +23,27 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 )
 
+var expertVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
+
+func validExpertVersion(value string) bool {
+	return expertVersion.MatchString(value)
+}
+
 type Request struct {
-	AgentID     string `json:"agent_id"`
-	Role        string `json:"role"`
-	ScopeKind   string `json:"scope_kind"`
-	ScopeID     string `json:"scope_id"`
-	ParentAgent string `json:"parent_agent_id"`
-	ParentRole  string `json:"parent_role"`
-	Owner       string `json:"owner,omitempty"`
-	Mandate     string `json:"mandate,omitempty"`
-	CanonPath   string `json:"canon_path,omitempty"`
-	CanonSHA256 string `json:"canon_sha256,omitempty"`
+	AgentID         string `json:"agent_id"`
+	Role            string `json:"role"`
+	ScopeKind       string `json:"scope_kind"`
+	ScopeID         string `json:"scope_id"`
+	ParentAgent     string `json:"parent_agent_id"`
+	ParentRole      string `json:"parent_role"`
+	AccountAgentID  string `json:"account_agent_id,omitempty"`
+	Owner           string `json:"owner,omitempty"`
+	Mandate         string `json:"mandate,omitempty"`
+	CanonPath       string `json:"canon_path,omitempty"`
+	CanonSHA256     string `json:"canon_sha256,omitempty"`
+	ExpertKind      string `json:"expert_kind,omitempty"`
+	ExpertVersion   string `json:"expert_version,omitempty"`
+	ExpertLifecycle string `json:"expert_lifecycle,omitempty"`
 }
 
 type Instance struct {
@@ -42,10 +54,14 @@ type Instance struct {
 	ScopeID           string    `json:"scope_id"`
 	ParentAgentID     string    `json:"parent_agent_id"`
 	ParentRole        string    `json:"parent_role"`
+	AccountAgentID    string    `json:"account_agent_id,omitempty"`
 	Owner             string    `json:"owner,omitempty"`
 	Mandate           string    `json:"mandate,omitempty"`
 	CanonPath         string    `json:"canon_path,omitempty"`
 	CanonSHA256       string    `json:"canon_sha256,omitempty"`
+	ExpertKind        string    `json:"expert_kind,omitempty"`
+	ExpertVersion     string    `json:"expert_version,omitempty"`
+	ExpertLifecycle   string    `json:"expert_lifecycle,omitempty"`
 	InputContract     string    `json:"input_contract"`
 	ToolAccess        string    `json:"tool_access"`
 	MayDelegate       bool      `json:"may_delegate"`
@@ -153,9 +169,12 @@ func Scaffold(dataRoot string, request Request) (Status, error) {
 		SchemaVersion: 1, AgentID: request.AgentID, Role: request.Role,
 		ScopeKind: request.ScopeKind, ScopeID: request.ScopeID,
 		ParentAgentID: request.ParentAgent, ParentRole: request.ParentRole,
-		Owner: request.Owner, Mandate: strings.TrimSpace(request.Mandate),
+		AccountAgentID: request.AccountAgentID,
+		Owner:          request.Owner, Mandate: strings.TrimSpace(request.Mandate),
 		CanonPath: request.CanonPath, CanonSHA256: strings.ToLower(request.CanonSHA256),
-		InputContract: contract.InputContract, ToolAccess: contract.ToolAccess,
+		ExpertKind: request.ExpertKind, ExpertVersion: request.ExpertVersion,
+		ExpertLifecycle: request.ExpertLifecycle,
+		InputContract:   contract.InputContract, ToolAccess: contract.ToolAccess,
 		MayDelegate:       contract.MayDelegate,
 		DefinitionPath:    filepath.ToSlash(filepath.Join(finalDirectory, "AGENT.md")),
 		DefinitionSHA256:  templateSHA256,
@@ -227,13 +246,61 @@ func Inspect(dataRoot, agentID string) (Status, error) {
 		AgentID: status.Instance.AgentID, Role: status.Instance.Role,
 		ScopeKind: status.Instance.ScopeKind, ScopeID: status.Instance.ScopeID,
 		ParentAgent: status.Instance.ParentAgentID, ParentRole: status.Instance.ParentRole,
-		Owner: status.Instance.Owner, Mandate: status.Instance.Mandate,
+		AccountAgentID: status.Instance.AccountAgentID,
+		Owner:          status.Instance.Owner, Mandate: status.Instance.Mandate,
 		CanonPath: status.Instance.CanonPath, CanonSHA256: status.Instance.CanonSHA256,
+		ExpertKind: status.Instance.ExpertKind, ExpertVersion: status.Instance.ExpertVersion,
+		ExpertLifecycle: status.Instance.ExpertLifecycle,
 	}
 	if err := validateResolvedBindings(root, integrityKey, catalog, request); err != nil {
 		return Status{}, err
 	}
 	return status, nil
+}
+
+// ListPXperts returns only fully validated, signed Helix PXpert registrations.
+// A malformed or tampered registration fails the whole listing rather than
+// silently changing the routing registry.
+func ListPXperts(dataRoot string) ([]Instance, error) {
+	root, err := os.OpenRoot(dataRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	directory, err := root.Open(filepath.Join("agents", "instances"))
+	if errors.Is(err, os.ErrNotExist) {
+		return []Instance{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	entries, err := directory.ReadDir(-1)
+	closeErr := directory.Close()
+	if err != nil {
+		return nil, err
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	integrityKey, err := readIntegrityKey(root)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	instances := []Instance{}
+	for _, entry := range entries {
+		if !entry.IsDir() || !agentcatalog.ValidAgentID(entry.Name()) {
+			return nil, errors.New("agent registry contains an invalid instance entry")
+		}
+		status, err := inspect(root, entry.Name(), integrityKey)
+		if err != nil {
+			return nil, err
+		}
+		if status.Instance.Role == "pa_expert" {
+			instances = append(instances, status.Instance)
+		}
+	}
+	return instances, nil
 }
 
 func inspect(root *os.Root, agentID string, integrityKey []byte) (Status, error) {
@@ -256,8 +323,11 @@ func inspect(root *os.Root, agentID string, integrityKey []byte) (Status, error)
 		AgentID: instance.AgentID, Role: instance.Role,
 		ScopeKind: instance.ScopeKind, ScopeID: instance.ScopeID,
 		ParentAgent: instance.ParentAgentID, ParentRole: instance.ParentRole,
-		Owner: instance.Owner, Mandate: instance.Mandate,
+		AccountAgentID: instance.AccountAgentID,
+		Owner:          instance.Owner, Mandate: instance.Mandate,
 		CanonPath: instance.CanonPath, CanonSHA256: instance.CanonSHA256,
+		ExpertKind: instance.ExpertKind, ExpertVersion: instance.ExpertVersion,
+		ExpertLifecycle: instance.ExpertLifecycle,
 	}
 	contract, err := validateRequest(catalog, request)
 	if err != nil || instance.SchemaVersion != 1 ||
@@ -324,8 +394,15 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 	if !ok || contract.DirectUserAccess {
 		return agentcatalog.RoleContract{}, errors.New("agent scaffold role is unsupported")
 	}
+	if request.Role != "case_agent" && request.AccountAgentID != "" {
+		return agentcatalog.RoleContract{}, errors.New("only a case agent may declare a Client Account Agent relation")
+	}
+	if request.Role != "pa_expert" && request.ExpertLifecycle != "" {
+		return agentcatalog.RoleContract{}, errors.New("only a PXpert may declare a Helix lifecycle")
+	}
 	hasRootMetadata := request.Owner != "" || strings.TrimSpace(request.Mandate) != "" ||
-		request.CanonPath != "" || request.CanonSHA256 != ""
+		request.CanonPath != "" || request.CanonSHA256 != "" ||
+		request.ExpertKind != "" || request.ExpertVersion != "" || request.ExpertLifecycle != ""
 	switch request.Role {
 	case "account_agent":
 		if request.AgentID != "account-agent-"+request.ScopeID ||
@@ -346,6 +423,39 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 			request.CanonPath == "" || !validSHA256(request.CanonSHA256) ||
 			!catalog.AllowsDelegation("hub", "practice_agent", 1) {
 			return agentcatalog.RoleContract{}, errors.New("practice agent scaffold requires an owner, bounded mandate, verified canon and exact Maestro-owned practice scope")
+		}
+	case "client_account_agent":
+		if request.AgentID != "client-account-agent-"+request.ScopeID ||
+			request.ScopeKind != "account" ||
+			request.ParentAgent != "maestro" || request.ParentRole != "hub" ||
+			!agentcatalog.ValidAgentID(request.Owner) ||
+			strings.TrimSpace(request.Mandate) == "" || len([]byte(strings.TrimSpace(request.Mandate))) > 500 ||
+			request.CanonPath != "" || request.CanonSHA256 != "" ||
+			request.ExpertKind != "" || request.ExpertVersion != "" ||
+			!catalog.AllowsDelegation("hub", "client_account_agent", 1) {
+			return agentcatalog.RoleContract{}, errors.New("client account agent scaffold requires an owner, bounded mandate and exact Maestro-owned account scope")
+		}
+	case "case_agent":
+		if request.AgentID != "case-agent-"+request.ScopeID ||
+			request.ScopeKind != "case" ||
+			request.ParentAgent != "maestro" || request.ParentRole != "hub" ||
+			!agentcatalog.ValidAgentID(request.AccountAgentID) ||
+			hasRootMetadata ||
+			!catalog.AllowsDelegation("hub", "case_agent", 1) {
+			return agentcatalog.RoleContract{}, errors.New("case agent scaffold requires Maestro root ownership and an exact registered Client Account Agent relation")
+		}
+	case "pa_expert":
+		if request.AgentID != "pxpert-"+strings.ToLower(request.ExpertKind)+"-"+request.ScopeID ||
+			request.ScopeKind != "practice" ||
+			request.ParentAgent != "maestro" || request.ParentRole != "hub" ||
+			!agentcatalog.ValidAgentID(request.Owner) ||
+			strings.TrimSpace(request.Mandate) == "" || len([]byte(strings.TrimSpace(request.Mandate))) > 500 ||
+			request.CanonPath == "" || !validSHA256(request.CanonSHA256) ||
+			(request.ExpertKind != "FPA" && request.ExpertKind != "IPA") ||
+			!validExpertVersion(request.ExpertVersion) ||
+			request.ExpertLifecycle != "draft" ||
+			!catalog.AllowsDelegation("hub", "pa_expert", 1) {
+			return agentcatalog.RoleContract{}, errors.New("PXpert scaffold requires Helix curator, FPA/IPA kind, semantic version, bounded mandate and verified canon")
 		}
 	case "workspace_agent":
 		if request.AgentID != "workspace-agent-"+request.ScopeID ||
@@ -370,7 +480,7 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 			return agentcatalog.RoleContract{}, errors.New("subject specialist scaffold has an invalid practice parent or scope")
 		}
 	default:
-		return agentcatalog.RoleContract{}, errors.New("only workspace and leaf specialist roles have managed scaffold templates")
+		return agentcatalog.RoleContract{}, errors.New("agent role has no managed scaffold template")
 	}
 	return contract, nil
 }
@@ -382,12 +492,27 @@ func validateResolvedBindings(root *os.Root, integrityKey []byte, catalog agentc
 		}
 		return validateWorkspaceScope(root, request.ScopeID)
 	}
-	if request.Role == "account_agent" || request.Role == "practice_agent" {
+	if request.Role == "case_agent" {
 		if !managedAgentHasRole(catalog, request.ParentAgent, request.ParentRole) {
-			return errors.New("account or practice agent parent is not the registered Maestro hub")
+			return errors.New("case agent parent is not the registered Maestro hub")
+		}
+		account, err := inspect(root, request.AccountAgentID, integrityKey)
+		if err != nil || account.Instance.Role != "client_account_agent" ||
+			account.Instance.ScopeKind != "account" {
+			return errors.New("case agent account relation is not a valid registered Client Account Agent")
+		}
+		return nil
+	}
+	if request.Role == "account_agent" || request.Role == "practice_agent" ||
+		request.Role == "client_account_agent" || request.Role == "pa_expert" {
+		if !managedAgentHasRole(catalog, request.ParentAgent, request.ParentRole) {
+			return errors.New("root agent parent is not the registered Maestro hub")
 		}
 		if request.Role == "practice_agent" {
 			return validatePracticeCanon(root, request.ScopeID, request.CanonPath, request.CanonSHA256)
+		}
+		if request.Role == "pa_expert" {
+			return validatePXpertCanon(root, request.AgentID, request.CanonPath, request.CanonSHA256)
 		}
 		return nil
 	}
@@ -448,6 +573,39 @@ func validatePracticeCanon(root *os.Root, practiceID, canonPath, expectedSHA256 
 	return nil
 }
 
+func validatePXpertCanon(root *os.Root, expertID, canonPath, expectedSHA256 string) error {
+	cleaned := filepath.Clean(canonPath)
+	slashed := filepath.ToSlash(cleaned)
+	prefix := "helix/experts/" + expertID + "/"
+	if filepath.IsAbs(cleaned) || slashed == "." || !strings.HasPrefix(slashed, prefix) ||
+		len(slashed) <= len(prefix) || !validSHA256(expectedSHA256) {
+		return errors.New("PXpert canon must be a specific artifact inside its Helix expert scope")
+	}
+	expertRoot, err := root.OpenRoot(filepath.Join("helix", "experts", expertID))
+	if err != nil {
+		return errors.New("PXpert Helix canon scope is unavailable")
+	}
+	defer expertRoot.Close()
+	file, err := expertRoot.Open(filepath.FromSlash(strings.TrimPrefix(slashed, prefix)))
+	if err != nil {
+		return errors.New("PXpert Helix canon is unavailable")
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return errors.New("PXpert Helix canon must be a regular scoped artifact")
+	}
+	digest := sha256.New()
+	if _, err := io.Copy(digest, file); err != nil {
+		return err
+	}
+	actual := hex.EncodeToString(digest.Sum(nil))
+	if !hmac.Equal([]byte(actual), []byte(strings.ToLower(expectedSHA256))) {
+		return errors.New("PXpert Helix canon hash does not match the registered artifact")
+	}
+	return nil
+}
+
 func managedAgentHasRole(catalog agentcatalog.Catalog, agentID, role string) bool {
 	for _, agent := range catalog.Agents {
 		if agent.ID == agentID {
@@ -483,10 +641,14 @@ func matchesRequest(instance Instance, request Request, contract agentcatalog.Ro
 		instance.ScopeID == request.ScopeID &&
 		instance.ParentAgentID == request.ParentAgent &&
 		instance.ParentRole == request.ParentRole &&
+		instance.AccountAgentID == request.AccountAgentID &&
 		instance.Owner == request.Owner &&
 		instance.Mandate == strings.TrimSpace(request.Mandate) &&
 		instance.CanonPath == request.CanonPath &&
 		instance.CanonSHA256 == strings.ToLower(request.CanonSHA256) &&
+		instance.ExpertKind == request.ExpertKind &&
+		instance.ExpertVersion == request.ExpertVersion &&
+		instance.ExpertLifecycle == request.ExpertLifecycle &&
 		instance.InputContract == contract.InputContract &&
 		instance.ToolAccess == contract.ToolAccess &&
 		instance.MayDelegate == contract.MayDelegate &&

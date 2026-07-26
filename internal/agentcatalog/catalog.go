@@ -59,10 +59,13 @@ var roleContracts = map[string]struct {
 }{
 	"account_agent":         {false, "scoped", true, "bounded_account_packet"},
 	"capability_specialist": {false, "scoped", false, "minimum_work_packet"},
+	"case_agent":            {false, "scoped", false, "bounded_case_packet"},
+	"client_account_agent":  {false, "scoped", false, "bounded_client_account_packet"},
 	"errand_helper":         {false, "scoped", false, "bounded_errand_packet"},
 	"governance_analyst":    {false, "none", false, "bounded_health_packet"},
 	"hub":                   {true, "none", true, "session_context_packet"},
 	"practice_agent":        {false, "scoped", true, "bounded_practice_packet"},
+	"pa_expert":             {false, "none", false, "bounded_advisory_packet"},
 	"reviewer":              {false, "none", false, "sealed_review_packet"},
 	"subject_specialist":    {false, "scoped", false, "bounded_subject_packet"},
 	"workspace_agent":       {false, "scoped", true, "bounded_workspace_packet"},
@@ -222,7 +225,7 @@ func (catalog Catalog) roleMayDelegate(role string) bool {
 func validateDelegationEdges(edges []DelegationEdge) error {
 	wanted := []DelegationEdge{
 		{FromRole: "account_agent", ToRoles: []string{"capability_specialist"}},
-		{FromRole: "hub", ToRoles: []string{"account_agent", "errand_helper", "governance_analyst", "practice_agent", "reviewer", "workspace_agent"}},
+		{FromRole: "hub", ToRoles: []string{"account_agent", "case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer", "workspace_agent"}},
 		{FromRole: "practice_agent", ToRoles: []string{"subject_specialist"}},
 		{FromRole: "workspace_agent", ToRoles: []string{"capability_specialist"}},
 	}
@@ -262,7 +265,7 @@ func ValidateDir(root string) error {
 			return fmt.Errorf("managed agent %s has an empty definition", agent.ID)
 		}
 	}
-	for _, role := range []string{"account_agent", "capability_specialist", "practice_agent", "subject_specialist", "workspace_agent"} {
+	for _, role := range []string{"account_agent", "capability_specialist", "case_agent", "client_account_agent", "pa_expert", "practice_agent", "subject_specialist", "workspace_agent"} {
 		templatePath := filepath.Join(root, "templates", role, "AGENT.md")
 		body, err := os.ReadFile(templatePath)
 		if err != nil {

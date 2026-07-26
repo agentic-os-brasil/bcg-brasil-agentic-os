@@ -132,10 +132,13 @@ var adapterEvents = map[string]map[string]string{
 var roleScopeKinds = map[string]map[string]bool{
 	"account_agent":         {"account": true},
 	"capability_specialist": {"account": true, "workspace": true},
+	"case_agent":            {"case": true},
+	"client_account_agent":  {"account": true},
 	"errand_helper":         {"errand": true},
 	"governance_analyst":    {"health": true},
 	"hub":                   {"control": true},
 	"practice_agent":        {"practice": true},
+	"pa_expert":             {"practice": true},
 	"reviewer":              {"review": true},
 	"subject_specialist":    {"practice": true},
 	"workspace_agent":       {"workspace": true},
