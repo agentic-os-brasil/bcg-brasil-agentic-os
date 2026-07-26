@@ -127,6 +127,11 @@ corpos completos exigem uma chamada explícita a `inspect` ou `export`.
 Checks Go usam a ferramenta identificada do runtime e ambiente fechado, mas
 `go test` ainda executa código do workspace e pressupõe que esse workspace foi
 autorizado pelo usuário como confiável; isso não constitui sandbox.
+O core também suporta um gate opcional de parecer Walter autenticado e
+vinculado à revisão exata do ledger. A custódia da chave e os adapters nativos
+de assinatura/orquestração ainda estão indisponíveis; portanto Maestro não
+anuncia execução autônoma de long-running goals. Métricas de canary permanecem
+locais, fechadas e sem transporte ou federação.
 
 ## Princípios de produto
 

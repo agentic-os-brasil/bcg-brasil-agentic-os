@@ -21,6 +21,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
@@ -56,7 +57,7 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation|canary|work>")
 		return ExitUsage
 	}
 	switch args[0] {
@@ -98,12 +99,30 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runMemory(args[1:], in, out, errOut)
 	case "federation":
 		return runFederation(args[1:], out, errOut, defaultDataRoot)
+	case "canary":
+		return runCanary(args[1:], out, errOut, defaultDataRoot)
 	case "work":
 		return runWork(args[1:], in, out, errOut, defaultDataRoot)
 	default:
 		fmt.Fprintf(errOut, "unknown command %q\n", args[0])
 		return ExitUsage
 	}
+}
+
+func runCanary(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) != 1 || args[0] != "report" {
+		fmt.Fprintln(errOut, "usage: bcgos canary report")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	report, err := (canary.Store{Root: filepath.Join(root, "canary")}).Report()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, report, errOut)
 }
 
 type workCreateRequest struct {
@@ -115,11 +134,11 @@ type workCreateRequest struct {
 
 func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos work <create|start|inspect|export|delete>")
+		fmt.Fprintln(errOut, "usage: bcgos work <create|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
 		return ExitUsage
 	}
 	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(out, "usage: bcgos work <create|start|inspect|export|delete>")
+		fmt.Fprintln(out, "usage: bcgos work <create|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
 		return ExitOK
 	}
 	root, err := dataRoot()
@@ -242,6 +261,64 @@ func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func()
 			}
 			return writeJSON(out, map[string]string{"item_id": *itemID, "state": "deleted", "workspace_id": workspaceID}, errOut)
 		}
+	case "evidence":
+		flags := newFlagSet("work evidence", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		revision := flags.Int("revision", 0, "expected state revision")
+		attemptID := flags.String("attempt", "", "current attempt identity")
+		criterionID := flags.String("criterion", "", "completion criterion identity")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) ||
+			strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" ||
+			strings.TrimSpace(*attemptID) == "" || strings.TrimSpace(*criterionID) == "" ||
+			*revision < 1 {
+			fmt.Fprintln(errOut, "usage: bcgos work evidence --workspace PATH --item ID --revision N --attempt ID --criterion ID")
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		inspection, err := workspace.Inspect(*workspacePath, root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		result, err := store.CollectEvidence(workspaceID, *itemID, execution.EvidenceInput{
+			WorkspaceRoot: inspection.WorkspacePath, ExpectedRevision: *revision,
+			AttemptID: *attemptID, CriterionID: *criterionID,
+		})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, execution.EvidenceMutationReceipt(result), errOut)
+	case "complete":
+		flags := newFlagSet("work complete", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		itemID := flags.String("item", "", "execution item identity")
+		revision := flags.Int("revision", 0, "expected state revision")
+		attemptID := flags.String("attempt", "", "current attempt identity")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) ||
+			strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*itemID) == "" ||
+			strings.TrimSpace(*attemptID) == "" || *revision < 1 {
+			fmt.Fprintln(errOut, "usage: bcgos work complete --workspace PATH --item ID --revision N --attempt ID")
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		inspection, err := workspace.Inspect(*workspacePath, root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		item, err := store.Complete(workspaceID, *itemID, execution.CompletionInput{
+			WorkspaceRoot: inspection.WorkspacePath, ExpectedRevision: *revision,
+			AttemptID: *attemptID,
+		})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, execution.Receipt(item), errOut)
 	default:
 		fmt.Fprintf(errOut, "unknown work command %q\n", args[0])
 		return ExitUsage

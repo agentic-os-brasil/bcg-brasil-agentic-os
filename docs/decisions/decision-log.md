@@ -402,3 +402,25 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Claude has a complete locally installable lifecycle vertical without turning hooks into workers or weakening its native permission flow. The protected-root rule recognizes only a bounded simple-command grammar, receipt path components are validated, Codex remains incomplete, and capability promotion still requires the pilot conformance protocol.
 - Refs: specs/004-runtime-portability.md; specs/019-nonblocking-hook-execution.md; specs/021-pilot-hook-conformance.md; specs/025-native-session-start-hook.md; specs/026-workspace-local-adapter-installation.md; specs/030-claude-lifecycle-vertical.md; internal/claudeadapter; internal/lifecycle
 - Supersedes: none
+
+## ORCH - Keep Maestro completion in the execution ledger
+
+- Date: 2026-07-26
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs long-running goals, Walter review and recoverable completion, while the workspace-scoped execution ledger already owns immutable revisions, fenced attempts, evidence and crash recovery. A second goal store would create competing completion authorities and divergent recovery rules.
+- Decision: Model a Maestro goal as a governed view over one canonical `local_execution` item. The execution ledger remains the only durable completion authority. Maestro may add typed review receipts and orchestration projections to that ledger, but may not create an independent goal state machine, lock, event head or completion store.
+- Consequences: Existing execution revisions, attempts, checkpoints and core-witnessed evidence are reused. A current authenticated Walter approval may become an additional completion condition, but cannot replace evidence or grant external authority. Runtime adapters expose the capability only after authenticated review conformance exists.
+- Refs: EXEC; TCAL; specs/029-execution-ledger-v1.md; specs/031-maestro-goal-orchestration.md
+- Supersedes: none
+
+## CANY - Keep pilot observability local and closed
+
+- Date: 2026-07-26
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The two-user canary needs time-to-value, resumption, lifecycle, intervention and capability-failure signals without turning professional work into telemetry or expanding federation before the first vertical is proven.
+- Decision: Store canary receipts only in the user's local application state using a closed, versioned metadata schema. Receipts contain typed buckets and outcomes only; they contain no user, workspace, client, prompt, path, arbitrary attribute or error text. Aggregation is local and no network or federation adapter consumes the receipts.
+- Consequences: Pilot operators can inspect a bounded aggregate report without exporting workspace content. Cross-device or organizational learning remains unavailable and requires a separate approved privacy, consent and transport decision.
+- Refs: specs/003-pilot-success.md; specs/032-canary-observability.md; schemas/canary-receipt.schema.json; schemas/canary-report.schema.json; internal/canary
+- Supersedes: none

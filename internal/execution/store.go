@@ -84,16 +84,18 @@ type Criterion struct {
 }
 
 type Contract struct {
-	SchemaVersion   int         `json:"schema_version"`
-	ContractVersion int         `json:"contract_version"`
-	ItemID          string      `json:"item_id"`
-	WorkspaceID     string      `json:"workspace_id"`
-	AuthorityKind   string      `json:"authority_kind"`
-	Objective       string      `json:"objective"`
-	InitialNextStep string      `json:"initial_next_step"`
-	Criteria        []Criterion `json:"criteria"`
-	AllowedRefs     []string    `json:"allowed_refs"`
-	CreatedAt       time.Time   `json:"created_at"`
+	SchemaVersion       int         `json:"schema_version"`
+	ContractVersion     int         `json:"contract_version"`
+	ItemID              string      `json:"item_id"`
+	WorkspaceID         string      `json:"workspace_id"`
+	AuthorityKind       string      `json:"authority_kind"`
+	Objective           string      `json:"objective"`
+	InitialNextStep     string      `json:"initial_next_step"`
+	Criteria            []Criterion `json:"criteria"`
+	AllowedRefs         []string    `json:"allowed_refs"`
+	RequireWalterReview bool        `json:"require_walter_review"`
+	WalterPublicKey     string      `json:"walter_public_key,omitempty"`
+	CreatedAt           time.Time   `json:"created_at"`
 }
 
 type State struct {
@@ -149,21 +151,24 @@ type Transition struct {
 // Projections such as state.json may be regenerated from the newest valid
 // revision after an interrupted write.
 type Revision struct {
-	SchemaVersion int              `json:"schema_version"`
-	State         State            `json:"state"`
-	Attempt       *Attempt         `json:"attempt,omitempty"`
-	Checkpoint    *Checkpoint      `json:"checkpoint,omitempty"`
-	Evidence      *EvidenceReceipt `json:"evidence,omitempty"`
-	ToolCall      *ToolCallReceipt `json:"tool_call,omitempty"`
-	Transition    Transition       `json:"transition"`
+	SchemaVersion int                  `json:"schema_version"`
+	State         State                `json:"state"`
+	Attempt       *Attempt             `json:"attempt,omitempty"`
+	Checkpoint    *Checkpoint          `json:"checkpoint,omitempty"`
+	Evidence      *EvidenceReceipt     `json:"evidence,omitempty"`
+	ToolCall      *ToolCallReceipt     `json:"tool_call,omitempty"`
+	WalterReview  *WalterReviewReceipt `json:"walter_review,omitempty"`
+	Transition    Transition           `json:"transition"`
 }
 
 type CreateInput struct {
-	WorkspaceID     string
-	Objective       string
-	InitialNextStep string
-	Criteria        []Criterion
-	AllowedRefs     []string
+	WorkspaceID         string
+	Objective           string
+	InitialNextStep     string
+	Criteria            []Criterion
+	AllowedRefs         []string
+	RequireWalterReview bool
+	WalterPublicKey     string
 }
 
 type CheckpointInput struct {
@@ -184,13 +189,14 @@ type Item struct {
 }
 
 type Export struct {
-	Contract    Contract          `json:"contract"`
-	State       State             `json:"state"`
-	Attempt     *Attempt          `json:"attempt,omitempty"`
-	Checkpoint  *Checkpoint       `json:"checkpoint,omitempty"`
-	Evidences   []EvidenceReceipt `json:"evidences,omitempty"`
-	ToolCalls   []ToolCallReceipt `json:"tool_calls,omitempty"`
-	Transitions []Transition      `json:"transitions"`
+	Contract      Contract              `json:"contract"`
+	State         State                 `json:"state"`
+	Attempt       *Attempt              `json:"attempt,omitempty"`
+	Checkpoint    *Checkpoint           `json:"checkpoint,omitempty"`
+	Evidences     []EvidenceReceipt     `json:"evidences,omitempty"`
+	ToolCalls     []ToolCallReceipt     `json:"tool_calls,omitempty"`
+	WalterReviews []WalterReviewReceipt `json:"walter_reviews,omitempty"`
+	Transitions   []Transition          `json:"transitions"`
 }
 
 // NextProjection is the only execution body designed for bounded model
@@ -250,16 +256,18 @@ func (store Store) Create(input CreateInput) (Item, error) {
 	}
 	now := store.now()
 	contract := Contract{
-		SchemaVersion:   1,
-		ContractVersion: 1,
-		ItemID:          itemID,
-		WorkspaceID:     input.WorkspaceID,
-		AuthorityKind:   AuthorityLocalExecution,
-		Objective:       strings.TrimSpace(input.Objective),
-		InitialNextStep: strings.TrimSpace(input.InitialNextStep),
-		Criteria:        append([]Criterion(nil), input.Criteria...),
-		AllowedRefs:     append([]string(nil), input.AllowedRefs...),
-		CreatedAt:       now,
+		SchemaVersion:       1,
+		ContractVersion:     1,
+		ItemID:              itemID,
+		WorkspaceID:         input.WorkspaceID,
+		AuthorityKind:       AuthorityLocalExecution,
+		Objective:           strings.TrimSpace(input.Objective),
+		InitialNextStep:     strings.TrimSpace(input.InitialNextStep),
+		Criteria:            append([]Criterion(nil), input.Criteria...),
+		AllowedRefs:         append([]string(nil), input.AllowedRefs...),
+		RequireWalterReview: input.RequireWalterReview,
+		WalterPublicKey:     strings.TrimSpace(input.WalterPublicKey),
+		CreatedAt:           now,
 	}
 	digest, err := contractDigest(contract)
 	if err != nil {
@@ -728,10 +736,14 @@ func (store Store) Export(workspaceID, itemID string) (Export, error) {
 	if err != nil {
 		return Export{}, err
 	}
+	walterReviews, err := store.walterReviews(workspaceID, itemID)
+	if err != nil {
+		return Export{}, err
+	}
 	return Export{
 		Contract: item.Contract, State: item.State, Attempt: item.Attempt,
 		Checkpoint: item.Checkpoint, Evidences: evidences, ToolCalls: toolCalls,
-		Transitions: transitions,
+		WalterReviews: walterReviews, Transitions: transitions,
 	}, nil
 }
 
@@ -947,6 +959,9 @@ func validateCreateInput(input CreateInput) error {
 	if err := validateID("workspace", input.WorkspaceID); err != nil {
 		return err
 	}
+	if err := validateWalterContractSettings(input.RequireWalterReview, input.WalterPublicKey); err != nil {
+		return err
+	}
 	objective := strings.TrimSpace(input.Objective)
 	if objective == "" || len(objective) > 4096 {
 		return errors.New("execution objective must contain 1 to 4096 bytes")
@@ -1038,7 +1053,9 @@ func validateContract(contract Contract) error {
 	return validateCreateInput(CreateInput{
 		WorkspaceID: contract.WorkspaceID, Objective: contract.Objective,
 		InitialNextStep: contract.InitialNextStep, Criteria: contract.Criteria,
-		AllowedRefs: contract.AllowedRefs,
+		AllowedRefs:         contract.AllowedRefs,
+		RequireWalterReview: contract.RequireWalterReview,
+		WalterPublicKey:     contract.WalterPublicKey,
 	})
 }
 
@@ -1170,6 +1187,9 @@ func validateRevision(revision Revision) error {
 		if revision.Evidence != nil {
 			return errors.New("execution revision cannot contain both evidence and a tool call")
 		}
+		if revision.WalterReview != nil {
+			return errors.New("execution revision cannot contain multiple mutation receipts")
+		}
 		if err := validateToolCallReceipt(*revision.ToolCall); err != nil {
 			return err
 		}
@@ -1180,6 +1200,23 @@ func validateRevision(revision Revision) error {
 		}
 		if revision.State.State != StateRunning {
 			return errors.New("execution tool call revision requires a running item")
+		}
+	}
+	if revision.WalterReview != nil {
+		if revision.Evidence != nil {
+			return errors.New("execution revision cannot contain multiple mutation receipts")
+		}
+		if err := validateWalterReviewReceipt(*revision.WalterReview); err != nil {
+			return err
+		}
+		if revision.WalterReview.ItemID != revision.State.ItemID ||
+			revision.WalterReview.WorkspaceID != revision.State.WorkspaceID ||
+			revision.WalterReview.AttemptID != revision.Transition.AttemptID ||
+			revision.WalterReview.RecordedRevision != revision.State.StateRevision {
+			return errors.New("execution Walter review does not match state")
+		}
+		if revision.State.State != StateRunning {
+			return errors.New("Walter review revision requires a running item")
 		}
 	}
 	if revision.Attempt == nil {
@@ -1465,6 +1502,7 @@ func ValidateSchemaFile(path string) error {
 		`["go","version"]`, `["go","test","./..."]`, `["go","vet","./..."]`,
 		`"tool_sha256"`, `"artifact_snapshot"`, `"command_check"`,
 		`"tool_call"`, `"started"`, `"succeeded"`, `"unavailable"`,
+		`"walter_review"`, `"require_walter_review"`, `"approved"`, `"rejected"`,
 	} {
 		if !bytes.Contains(body, []byte(required)) {
 			return fmt.Errorf("execution state schema is missing exact contract %s", required)

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:canary-report:v1",
+  "title": "Maestro local canary aggregate report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "receipt_count", "first_value", "resume", "lifecycle", "manual_interventions", "capability_failures"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "receipt_count": {"type": "integer", "minimum": 0},
+    "first_value": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["duration", "count"],
+        "properties": {
+          "duration": {"enum": ["under_five_minutes", "under_ten_minutes", "under_thirty_minutes", "over_thirty_minutes"]},
+          "count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "resume": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "count"],
+        "properties": {
+          "outcome": {"enum": ["succeeded", "failed", "blocked"]},
+          "count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event", "outcome", "count"],
+        "properties": {
+          "event": {"enum": ["installation", "update", "rollback"]},
+          "outcome": {"enum": ["succeeded", "failed", "blocked"]},
+          "count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "manual_interventions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["count_bucket", "count"],
+        "properties": {
+          "count_bucket": {"enum": ["once", "two_to_three", "four_to_seven", "eight_plus"]},
+          "count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "capability_failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["capability", "count"],
+        "properties": {
+          "capability": {"enum": ["execution", "workspace-agent", "session-context", "installation", "updates"]},
+          "count": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}
