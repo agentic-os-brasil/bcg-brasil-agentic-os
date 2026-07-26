@@ -6,6 +6,7 @@
 |---|---|---|
 | Consolidate | Propose ranked cleanup from supplied records without editing | `skills/consolidate/SKILL.md` |
 | Decision Log | Draft a reviewable decision record without writing it | `skills/decision-log/SKILL.md` |
+| Diagram | Create an editable diagram specification without rendering | `skills/diagram/SKILL.md` |
 | Dream Memory | Consolidate daily and weekly professional memory | `skills/dream-memory/SKILL.md` |
 | End of Day | Review supplied work and prepare a concise next-day start | `skills/eod/SKILL.md` |
 | Extract Work Items | Extract proposed decisions and actions from supplied meeting notes | `skills/extract-work-items/SKILL.md` |
@@ -15,11 +16,16 @@
 | Interaction Profile | Apply the user's BCGOS communication and disclosure preference | `skills/interaction-profile/SKILL.md` |
 | Investigate | Diagnose a surprising result before proposing a fix | `skills/investigate/SKILL.md` |
 | Maestro Setup and Update | Guide safe setup, updates and recovery conversationally | `skills/maestro-setup-update/SKILL.md` |
+| Make PDF | Prepare a print-ready document specification without rendering | `skills/make-pdf/SKILL.md` |
 | Meeting to Work Items | Review proposed meeting actions before any write occurs | `skills/meeting-to-work-items/SKILL.md` |
+| New Case | Prepare a new-workspace kickoff packet without creating it | `skills/newcase/SKILL.md` |
 | Record Concept | Prepare a reusable method candidate without promoting it | `skills/record-concept/SKILL.md` |
 | Record Learning | Distill a professional learning candidate without private writes | `skills/record-learning/SKILL.md` |
 | Retro | Review a supplied work period and set one observable next intention | `skills/retro/SKILL.md` |
+| Schedule | Propose meeting slots from supplied availability only | `skills/schedule/SKILL.md` |
+| Setup | Guide safe Maestro setup without implicit changes | `skills/setup/SKILL.md` |
 | Start Day | Turn supplied commitments into a focused workday plan | `skills/start-day/SKILL.md` |
 | Storyline | Build an executive argument before producing artifacts | `skills/storyline/SKILL.md` |
+| Task | Prepare a proposed task operation without changing tasks | `skills/task/SKILL.md` |
 | Wayfinder | Structure a fuzzy problem into a bounded issue tree | `skills/wayfinder/SKILL.md` |
 | Workspace Agent Setup | Interview and research one project workspace safely | `skills/workspace-agent-setup/SKILL.md` |

@@ -1,0 +1,4 @@
+interface:
+  display_name: "New Case"
+  short_description: "Prepare a new-workspace kickoff packet without creating it"
+  default_prompt: "Use $newcase to turn these proposal details into a reviewable kickoff packet."

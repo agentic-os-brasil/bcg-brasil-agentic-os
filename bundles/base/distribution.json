@@ -50,6 +50,14 @@
       "path": "skills/decision-log/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/diagram/SKILL.md",
+      "path": "skills/diagram/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/diagram/agents/openai.yaml",
+      "path": "skills/diagram/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/eod/SKILL.md",
       "path": "skills/eod/SKILL.md"
     },
@@ -114,12 +122,28 @@
       "path": "skills/maestro-setup-update/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/make-pdf/SKILL.md",
+      "path": "skills/make-pdf/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/make-pdf/agents/openai.yaml",
+      "path": "skills/make-pdf/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/meeting-to-work-items/SKILL.md",
       "path": "skills/meeting-to-work-items/SKILL.md"
     },
     {
       "source": "bundles/base/skills/meeting-to-work-items/agents/openai.yaml",
       "path": "skills/meeting-to-work-items/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/newcase/SKILL.md",
+      "path": "skills/newcase/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/newcase/agents/openai.yaml",
+      "path": "skills/newcase/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/record-concept/SKILL.md",
@@ -146,6 +170,22 @@
       "path": "skills/retro/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/schedule/SKILL.md",
+      "path": "skills/schedule/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/schedule/agents/openai.yaml",
+      "path": "skills/schedule/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/setup/SKILL.md",
+      "path": "skills/setup/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/setup/agents/openai.yaml",
+      "path": "skills/setup/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/start-day/SKILL.md",
       "path": "skills/start-day/SKILL.md"
     },
@@ -160,6 +200,14 @@
     {
       "source": "bundles/base/skills/storyline/agents/openai.yaml",
       "path": "skills/storyline/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/task/SKILL.md",
+      "path": "skills/task/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/task/agents/openai.yaml",
+      "path": "skills/task/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/wayfinder/SKILL.md",

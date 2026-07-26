@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task"
+  short_description: "Prepare a proposed task operation without changing tasks"
+  default_prompt: "Use $task to turn this request into a reviewable task proposal."

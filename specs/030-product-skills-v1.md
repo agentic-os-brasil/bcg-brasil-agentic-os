@@ -71,15 +71,24 @@ write decisions, execution state, memory, concepts or owner-private history.
 They compose the future canonical writers by preparing bounded input; they do
 not duplicate those writers.
 
+## Wave 5
+
+`diagram`, `make-pdf`, `task`, `schedule`, `newcase` and `setup` complete the
+initial proposal inventory as safe preparation or orchestration skills. Diagram
+and PDF return specifications, task and schedule return proposals, and new-case
+and setup point to separately invoked guided capabilities. Rendering, filesystem writes,
+task/calendar mutations, ingestion, installation and workspace creation remain
+explicitly unavailable until their deterministic capability contracts exist.
+
 ## Deferred work
 
-`diagram` and `make-pdf` wait for deterministic artifact contracts. `task`,
-`schedule`, `start-day` and `eod` wait for governed external or multi-source
-authority; `meeting-to-work-items` remains advisory until its mutation path has
-that authority. `handoff`, `decision-log`, `consolidate`
-and `setup` must compose existing canonical capabilities rather than create new
-writers. `newcase`, `record-learning`, `record-concept` and `retro` require
-their workspace or owner-private contracts.
+The rendering path for `diagram`/`make-pdf` and the mutation/integration paths
+for `task`, `schedule`, `start-day`, `eod` and `meeting-to-work-items` wait for
+governed authority. `handoff`, `decision-log`, `consolidate` and `setup` may
+prepare or point to canonical capabilities but must not create new writers or
+invoke a mutating route implicitly. `newcase`, `record-learning`,
+`record-concept` and `retro` retain their workspace or owner-private contracts
+for any future persistence.
 
 ## Portfolio decomposition
 

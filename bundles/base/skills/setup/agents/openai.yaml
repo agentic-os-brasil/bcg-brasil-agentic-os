@@ -1,0 +1,4 @@
+interface:
+  display_name: "Setup"
+  short_description: "Guide safe Maestro setup without implicit changes"
+  default_prompt: "Use $setup to guide me through the safe next step for Maestro setup."

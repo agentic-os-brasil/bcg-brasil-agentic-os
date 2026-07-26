@@ -1,0 +1,4 @@
+interface:
+  display_name: "Make PDF"
+  short_description: "Prepare a print-ready document specification without rendering"
+  default_prompt: "Use $make-pdf to prepare this content for a future shareable PDF."

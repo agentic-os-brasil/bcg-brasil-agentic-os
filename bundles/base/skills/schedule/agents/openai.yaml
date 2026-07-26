@@ -1,0 +1,4 @@
+interface:
+  display_name: "Schedule"
+  short_description: "Propose meeting slots from supplied availability only"
+  default_prompt: "Use $schedule to propose slots from the availability I provide."

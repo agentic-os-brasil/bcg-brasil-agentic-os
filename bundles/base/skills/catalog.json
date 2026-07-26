@@ -16,6 +16,13 @@
       "relative_path": "skills/decision-log/SKILL.md"
     },
     {
+      "id": "diagram",
+      "display_name": "Diagram",
+      "trigger": "Create an editable diagram specification without rendering",
+      "default_prompt": "Use $diagram to turn this description into an editable diagram specification.",
+      "relative_path": "skills/diagram/SKILL.md"
+    },
+    {
       "id": "dream-memory",
       "display_name": "Dream Memory",
       "trigger": "Consolidate daily and weekly professional memory",
@@ -79,11 +86,25 @@
       "relative_path": "skills/maestro-setup-update/SKILL.md"
     },
     {
+      "id": "make-pdf",
+      "display_name": "Make PDF",
+      "trigger": "Prepare a print-ready document specification without rendering",
+      "default_prompt": "Use $make-pdf to prepare this content for a future shareable PDF.",
+      "relative_path": "skills/make-pdf/SKILL.md"
+    },
+    {
       "id": "meeting-to-work-items",
       "display_name": "Meeting to Work Items",
       "trigger": "Review proposed meeting actions before any write occurs",
       "default_prompt": "Use $meeting-to-work-items to review these notes and prepare confirmed follow-ups without filing anything yet.",
       "relative_path": "skills/meeting-to-work-items/SKILL.md"
+    },
+    {
+      "id": "newcase",
+      "display_name": "New Case",
+      "trigger": "Prepare a new-workspace kickoff packet without creating it",
+      "default_prompt": "Use $newcase to turn these proposal details into a reviewable kickoff packet.",
+      "relative_path": "skills/newcase/SKILL.md"
     },
     {
       "id": "record-concept",
@@ -107,6 +128,20 @@
       "relative_path": "skills/retro/SKILL.md"
     },
     {
+      "id": "schedule",
+      "display_name": "Schedule",
+      "trigger": "Propose meeting slots from supplied availability only",
+      "default_prompt": "Use $schedule to propose slots from the availability I provide.",
+      "relative_path": "skills/schedule/SKILL.md"
+    },
+    {
+      "id": "setup",
+      "display_name": "Setup",
+      "trigger": "Guide safe Maestro setup without implicit changes",
+      "default_prompt": "Use $setup to guide me through the safe next step for Maestro setup.",
+      "relative_path": "skills/setup/SKILL.md"
+    },
+    {
       "id": "start-day",
       "display_name": "Start Day",
       "trigger": "Turn supplied commitments into a focused workday plan",
@@ -119,6 +154,13 @@
       "trigger": "Build an executive argument before producing artifacts",
       "default_prompt": "Use $storyline to turn these claims into a clear executive narrative.",
       "relative_path": "skills/storyline/SKILL.md"
+    },
+    {
+      "id": "task",
+      "display_name": "Task",
+      "trigger": "Prepare a proposed task operation without changing tasks",
+      "default_prompt": "Use $task to turn this request into a reviewable task proposal.",
+      "relative_path": "skills/task/SKILL.md"
     },
     {
       "id": "wayfinder",
