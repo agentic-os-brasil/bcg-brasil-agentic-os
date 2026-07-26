@@ -190,6 +190,11 @@ func checkFormatting(root string) error {
 func runCommand(root, name string, args ...string) error {
 	command := exec.Command(name, args...)
 	command.Dir = root
+	// Git exports local repository variables to hooks. The full gate launches Go
+	// tests, and those tests create independent temporary Git repositories;
+	// inheriting the parent repository context makes their Git commands operate
+	// on the wrong worktree.
+	command.Env = childEnvironment(os.Environ())
 	var output bytes.Buffer
 	command.Stdout = &output
 	command.Stderr = &output
@@ -197,4 +202,37 @@ func runCommand(root, name string, args ...string) error {
 		return fmt.Errorf("%s %s: %w\n%s", name, strings.Join(args, " "), err, strings.TrimSpace(output.String()))
 	}
 	return nil
+}
+
+func childEnvironment(environment []string) []string {
+	filtered := make([]string, 0, len(environment))
+	for _, entry := range environment {
+		name, _, _ := strings.Cut(entry, "=")
+		if gitLocalEnvironmentNames[name] {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
+}
+
+// gitLocalEnvironmentNames mirrors `git rev-parse --local-env-vars`. A hook
+// exports these for its own repository; subprocess tests must not inherit them
+// when they create or inspect a different repository.
+var gitLocalEnvironmentNames = map[string]bool{
+	"GIT_ALTERNATE_OBJECT_DIRECTORIES": true,
+	"GIT_CONFIG":                       true,
+	"GIT_CONFIG_PARAMETERS":            true,
+	"GIT_CONFIG_COUNT":                 true,
+	"GIT_OBJECT_DIRECTORY":             true,
+	"GIT_DIR":                          true,
+	"GIT_WORK_TREE":                    true,
+	"GIT_IMPLICIT_WORK_TREE":           true,
+	"GIT_GRAFT_FILE":                   true,
+	"GIT_INDEX_FILE":                   true,
+	"GIT_NO_REPLACE_OBJECTS":           true,
+	"GIT_REPLACE_REF_BASE":             true,
+	"GIT_PREFIX":                       true,
+	"GIT_SHALLOW_FILE":                 true,
+	"GIT_COMMON_DIR":                   true,
 }
