@@ -22,7 +22,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Run full development harness
+      - name: Run full development harness (includes parsed action-pin policy)
         run: go run ./dev/harness validate --full
       - name: Validate Windows clean-device operator script syntax
         if: runner.os == 'Windows'
