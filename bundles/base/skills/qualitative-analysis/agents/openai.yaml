@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qualitative Analysis"
+  short_description: "Synthesize bounded qualitative evidence into themes and implications"
+  default_prompt: "Use $qualitative-analysis to synthesize the approved qualitative evidence for this case."

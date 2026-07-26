@@ -1,11 +1,15 @@
 package agentdispatch
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
 func TestDispatcherIssuesSealedSequentialWorkspacePackets(t *testing.T) {
@@ -14,7 +18,7 @@ func TestDispatcherIssuesSealedSequentialWorkspacePackets(t *testing.T) {
 	dispatcher.now = func() time.Time { return now }
 
 	root, decision, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "workspace-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
 		Objective:   "Assess the approved public research against the project hypothesis.",
 		Pointers:    []string{"bcgos://workspace/alpha/dossier/research.md", "bcgos://public/economic/snapshot-2026-07-25.json"},
 		Constraints: []string{"Do not read another workspace.", "Return evidence and uncertainty."},
@@ -26,7 +30,7 @@ func TestDispatcherIssuesSealedSequentialWorkspacePackets(t *testing.T) {
 	if err := dispatcher.Verify(root); err != nil {
 		t.Fatal(err)
 	}
-	if root.IssuerAgentID != "maestro" || root.TargetAgentID != "workspace-alpha" || root.ParentPacketID != "" {
+	if root.IssuerAgentID != "maestro" || root.TargetAgentID != "workspace-agent-alpha" || root.ParentPacketID != "" {
 		t.Fatalf("unexpected root packet: %#v", root)
 	}
 
@@ -45,12 +49,13 @@ func TestDispatcherIssuesSealedSequentialWorkspacePackets(t *testing.T) {
 		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
 		Objective: "Pressure-test source freshness and provenance.",
 		Pointers:  []string{"bcgos://workspace/alpha/dossier/research.md"},
+		SkillID:   "qualitative-analysis",
 		TTL:       time.Hour,
 	})
 	if err != nil || !childDecision.Allowed {
 		t.Fatalf("child dispatch failed: packet=%#v decision=%#v err=%v", child, childDecision, err)
 	}
-	if child.ParentPacketID != root.PacketID || child.IssuerAgentID != "workspace-alpha" {
+	if child.ParentPacketID != root.PacketID || child.IssuerAgentID != "workspace-agent-alpha" {
 		t.Fatalf("unexpected child packet: %#v", child)
 	}
 	if decision := dispatcher.FinishChild(child); !decision.Allowed {
@@ -60,6 +65,7 @@ func TestDispatcherIssuesSealedSequentialWorkspacePackets(t *testing.T) {
 		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
 		Objective: "Check a second bounded question.",
 		Pointers:  []string{"bcgos://workspace/alpha/dossier/research.md"},
+		SkillID:   "quantitative-analysis",
 		TTL:       time.Hour,
 	})
 	if err != nil || !secondDecision.Allowed {
@@ -75,7 +81,7 @@ func TestDispatcherIssuesSealedSequentialWorkspacePackets(t *testing.T) {
 		t.Fatalf("finish root = %#v", decision)
 	}
 	replacement, replacementDecision, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "workspace-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
 		Objective: "Start a later independent branch in the same workspace.",
 		TTL:       time.Hour,
 	})
@@ -105,7 +111,7 @@ func TestDispatcherRejectsTamperingExpiryAndCrossScopePointers(t *testing.T) {
 	}
 
 	packet, decision, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "workspace-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
 		Objective: "Summarize bounded evidence.",
 		Pointers:  []string{"bcgos://workspace/alpha/dossier/index.md"},
 		TTL:       time.Hour,
@@ -128,6 +134,105 @@ func TestDispatcherRejectsTamperingExpiryAndCrossScopePointers(t *testing.T) {
 	}
 }
 
+func TestDispatcherKeepsSkillSelectionWithTheVerticalOwner(t *testing.T) {
+	dispatcher := newTestDispatcher(t)
+	if err := dispatcher.SelectDirectSkill("workspace-agent-alpha", "deck-storyline"); err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.SelectDirectSkill("capability-research", "deck-storyline"); err == nil {
+		t.Fatal("capability specialist selected a direct skill")
+	}
+
+	root, decision, err := dispatcher.StartRoot(PacketRequest{
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Prepare the approved case analysis.", TTL: time.Hour,
+	})
+	if err != nil || !decision.Allowed {
+		t.Fatalf("root dispatch failed: %#v %v", decision, err)
+	}
+	if _, _, err := dispatcher.StartChild(root, PacketRequest{
+		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Synthesize qualitative evidence.", TTL: time.Hour,
+	}); err == nil {
+		t.Fatal("child delegation without an atomic skill was accepted")
+	}
+	child, childDecision, err := dispatcher.StartChild(root, PacketRequest{
+		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Synthesize qualitative evidence.", SkillID: "qualitative-analysis", TTL: time.Hour,
+	})
+	if err != nil || !childDecision.Allowed || child.SkillID != "qualitative-analysis" {
+		t.Fatalf("bounded skill delegation failed: %#v %#v %v", child, childDecision, err)
+	}
+	tampered := child
+	tampered.SkillID = "quantitative-analysis"
+	if err := dispatcher.Verify(tampered); err == nil {
+		t.Fatal("tampered skill selection verified")
+	}
+}
+
+func TestVerticalSkillDelegationConformanceAcrossRuntimes(t *testing.T) {
+	body, err := os.ReadFile("../../adapters/conformance/vertical-skill-delegation.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Direct struct {
+			AgentID string `json:"agent_id"`
+			SkillID string `json:"skill_id"`
+			Allowed bool   `json:"allowed"`
+		} `json:"direct_selection"`
+		Delegated struct {
+			Parent  string `json:"parent_agent_id"`
+			Target  string `json:"target_agent_id"`
+			Kind    string `json:"scope_kind"`
+			Scope   string `json:"scope_id"`
+			SkillID string `json:"skill_id"`
+			Allowed bool   `json:"allowed"`
+		} `json:"delegated_selection"`
+		Denials []struct {
+			Target  string `json:"target_agent_id"`
+			Kind    string `json:"scope_kind"`
+			Scope   string `json:"scope_id"`
+			SkillID string `json:"skill_id"`
+		} `json:"denials"`
+	}
+	if err := json.Unmarshal(body, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	for _, runtime := range []string{"claude", "codex"} {
+		t.Run(runtime, func(t *testing.T) {
+			dispatcher := newSkillTestDispatcherForRuntime(t, runtime)
+			if err := dispatcher.SelectDirectSkill(fixture.Direct.AgentID, fixture.Direct.SkillID); (err == nil) != fixture.Direct.Allowed {
+				t.Fatalf("direct selection error = %v", err)
+			}
+			root, decision, err := dispatcher.StartRoot(PacketRequest{
+				TargetAgentID: fixture.Delegated.Parent, ScopeKind: fixture.Delegated.Kind,
+				ScopeID: fixture.Delegated.Scope, Objective: "Run bounded conformance.", TTL: time.Hour,
+			})
+			if err != nil || !decision.Allowed {
+				t.Fatalf("root = %#v %v", decision, err)
+			}
+			_, decision, err = dispatcher.StartChild(root, PacketRequest{
+				TargetAgentID: fixture.Delegated.Target, ScopeKind: fixture.Delegated.Kind,
+				ScopeID: fixture.Delegated.Scope, Objective: "Run named method.",
+				SkillID: fixture.Delegated.SkillID, TTL: time.Hour,
+			})
+			if err != nil || decision.Allowed != fixture.Delegated.Allowed {
+				t.Fatalf("delegated selection = %#v %v", decision, err)
+			}
+			for _, denial := range fixture.Denials {
+				_, decision, err := dispatcher.StartChild(root, PacketRequest{
+					TargetAgentID: denial.Target, ScopeKind: denial.Kind, ScopeID: denial.Scope,
+					Objective: "Exercise denied method selection.", SkillID: denial.SkillID, TTL: time.Hour,
+				})
+				if err == nil || decision.Allowed {
+					t.Fatalf("denial %q was allowed: %#v %v", denial.SkillID, decision, err)
+				}
+			}
+		})
+	}
+}
+
 func TestPacketBudgetsRejectBlobContext(t *testing.T) {
 	dispatcher := newTestDispatcher(t)
 	large := make([]byte, 1100)
@@ -135,20 +240,20 @@ func TestPacketBudgetsRejectBlobContext(t *testing.T) {
 		large[index] = 'x'
 	}
 	if _, _, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "workspace-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
 		Objective: string(large), TTL: time.Hour,
 	}); err == nil {
 		t.Fatal("oversized objective accepted")
 	}
 	if _, _, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "workspace-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
 		Objective: "Read one bounded source.",
 		Pointers:  []string{"bcgos://workspace/alpha/"}, TTL: time.Hour,
 	}); err == nil {
 		t.Fatal("broad workspace-root pointer accepted")
 	}
 	if _, _, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "workspace-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
 		Objective: "Read one bounded source.",
 		Pointers:  []string{"bcgos://workspace/alpha/dossier/"}, TTL: time.Hour,
 	}); err == nil {
@@ -157,8 +262,24 @@ func TestPacketBudgetsRejectBlobContext(t *testing.T) {
 }
 
 func newTestDispatcher(t *testing.T) *Dispatcher {
+	return newSkillTestDispatcherForRuntime(t, "claude")
+}
+
+func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher {
 	t.Helper()
 	catalog, err := agentcatalog.ParseFile("../../bundles/base/agents/catalog.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := skillpolicy.ParseFile("../../bundles/base/skills/agent-skill-policy.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	skills, err := skillsindex.Build("../../bundles/base/skills")
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := skillpolicy.Compile(policy, skills, catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,18 +289,18 @@ func newTestDispatcher(t *testing.T) *Dispatcher {
 	}
 	grants := []agentorchestration.Authorization{
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
-		{AgentID: "workspace-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-alpha-cap"},
+		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-agent-alpha-cap"},
 		{AgentID: "capability-research", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-research-cap"},
 		{AgentID: "practice-insurance", Role: "practice_agent", Scope: "insurance", ScopeKind: "practice", Capability: "practice-insurance-cap"},
 	}
-	adapter, err := agentorchestration.NewAdapter("claude", catalog, grants, store)
+	adapter, err := agentorchestration.NewAdapter(runtime, catalog, grants, store)
 	if err != nil {
 		t.Fatal(err)
 	}
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
-		"maestro": "maestro-cap", "workspace-alpha": "workspace-alpha-cap",
+		"maestro": "maestro-cap", "workspace-agent-alpha": "workspace-agent-alpha-cap",
 		"capability-research": "capability-research-cap", "practice-insurance": "practice-insurance-cap",
-	})
+	}, registry)
 	if err != nil {
 		t.Fatal(err)
 	}
