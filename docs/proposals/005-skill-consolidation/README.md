@@ -87,3 +87,11 @@ Two principles define the set:
   proposal we defer eval authoring to implementation, per skill.
 - Any change to the Hub's own constitution (its `CLAUDE.md`) — a separate follow-up, once
   agents and skills are both settled.
+
+## First pilot under discussion
+
+`wayfinder` is the first candidate for a bounded implementation. Its proposed contract
+and design-time fixtures are in [`skills/wayfinder/SKILL.md`](skills/wayfinder/SKILL.md)
+and [`evals/wayfinder.md`](evals/wayfinder.md). These remain proposal artifacts until a
+promotion review accepts the authority, runtime-parity and evaluation contracts; they do
+not add a managed catalog entry.
