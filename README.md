@@ -1,185 +1,135 @@
-# Maestro
+<p align="center">
+  <img src="docs/assets/maestro-hero.svg" alt="Maestro — trabalho profissional, continuidade governada e evolução segura" width="960">
+</p>
 
-> O Second Brain profissional do BCG Brasil: contexto de trabalho que uma pessoa consegue navegar e agentes conseguem usar com segurança.
+<h1 align="center">Maestro</h1>
 
-Maestro é o nome do produto. O repositório continua `bcg-brasil-agentic-os` e
-o comando técnico continua `bcgos` durante a fundação do piloto, para não
-quebrar contribuições, scripts ou futuros instaladores.
+<p align="center">
+  <strong>O sistema operacional profissional para trabalho que precisa continuar — com contexto, governança e privacidade.</strong>
+</p>
 
-## O que estamos construindo
+<p align="center">
+  <img src="https://img.shields.io/badge/MAESTRO-v0.1.0%20target-243047?style=for-the-badge&labelColor=0B1020" alt="Maestro v0.1.0 target">
+  <img src="https://img.shields.io/badge/PILOT-private-12B886?style=for-the-badge&labelColor=0B1020" alt="Private pilot">
+  <img src="https://img.shields.io/badge/PRIVACY-bounded%20by%20design-5B8DEF?style=for-the-badge&labelColor=0B1020" alt="Privacy bounded by design">
+  <img src="https://img.shields.io/badge/RUNTIME-Claude--first%20%C2%B7%20Codex--compatible-F4B942?style=for-the-badge&labelColor=0B1020" alt="Claude-first and Codex-compatible">
+</p>
 
-Maestro ajuda consultores, times BCG X, cientistas de dados e engenheiros a
-organizar trabalho profissional e trabalhar melhor com agentes. Ele combina:
+<p align="center">
+  <a href="#the-promise">Promise</a> ·
+  <a href="#what-is-ready">What is ready</a> ·
+  <a href="#pilot-boundaries">Pilot boundaries</a> ·
+  <a href="#start-here">Start here</a> ·
+  <a href="ROADMAP.md">Roadmap</a>
+</p>
+
+---
+
+## The promise
+
+Work should not reset because a conversation ended, a handoff happened, or an
+agent lost the thread. Maestro keeps the important parts of professional work
+**legible, bounded and recoverable** — without turning client material into a
+generic prompt dump.
+
+| 🧭 Continue the work | 🛡️ Keep the boundaries | ✨ Improve with evidence |
+| --- | --- | --- |
+| A durable local ledger records the objective, checkpoints, evidence and the next safe action. | Managed product, local owner context and client workspace stay physically and logically separate. | The canary observes only typed, metadata-only signals; no prompts, documents or client content leave the workspace. |
+
+### A workday that does not start over
 
 ```text
-Arquivos de trabalho legíveis      Continuidade compacta do agente
-clientes · projetos · notas        resumos locais, controlados e rastreáveis
-              \                    /
-               Maestro
-              /                    \
-preferências explícitas       skills e regras compartilhadas
+Define the outcome  →  Execute deliberately  →  Pause or hand off  →  Resume with proof  →  Improve the product
+       contract              evidence               checkpoint              ledger                typed canary
 ```
 
-Uma pessoa deve conseguir abrir seus arquivos e encontrar o contexto por conta
-própria. O agente deve receber apenas o contexto necessário para a tarefa, sem
-transformar documentos inteiros, conversas ou dados de cliente em prompt.
+Maestro is designed for consultants, BCG X practitioners, data scientists and
+engineers who need the same thing: useful continuity without silent access,
+invented memory or ungoverned automation.
 
-## Para quem
+## What is ready
 
-O primeiro piloto é para pessoas com níveis técnicos muito diferentes. A
-experiência-alvo é alguém que quer começar a trabalhar, não aprender Git,
-Python, Go, Docker ou arquitetura de agentes.
+### 🏅 Toward the v0.1.0 pilot
 
-- **Consultor:** linguagem simples, caminho recomendado e contexto de caso
-  navegável.
-- **Usuário avançado:** opções e diagnósticos extras quando pedir.
-- **Usuário power:** detalhes técnicos e alternativas aprovadas, sem receber
-  permissões extras.
-
-Windows e macOS são plataformas de primeira classe do piloto. Claude é o
-runtime principal; Codex deve preservar os mesmos contratos e limites, mesmo
-quando os mecanismos nativos forem diferentes.
-
-## O que já existe
-
-| Capacidade | Estado atual |
+| Capability | What it means today |
 | --- | --- |
-| Workspace local | `bcgos init`, `status` e `doctor` criam e inspecionam o espaço sem misturar dados de trabalho ao core gerenciado. |
-| Preferência de interação | `standard`, `advanced` e `power`, configuradas localmente e sem alterar permissões. |
-| Contexto do dono | Arquivos locais, editáveis e auditáveis para papel profissional, estilo, voz, preferências e limites. |
-| Atlas humano | Estrutura local não destrutiva para clientes, projetos, pessoas e diário de trabalho. |
-| Memória | Núcleo local com resumos graduais e contexto limitado; automação de síntese ainda não está ativa. |
-| Execução retomável | Ledger local com contrato imutável, checkpoint privado, pausa/retomada, contrato core para breadcrumbs metadata-only de tool calls, receipts de checks executados pelo core e conclusão revalidada; emissão nativa pelos adapters ainda está pendente. |
-| Skills | Catálogo compacto e atualizado de procedimentos disponíveis. |
-| Desenvolvimento | Harness, testes, CI em Windows/macOS/Linux, decisões versionadas e fluxo de PR com revisão humana. |
+| ✅ Local workspace | `bcgos init`, `status` and `doctor` establish a local workspace without mixing it into the managed core. |
+| ✅ Professional context | Owner profile, skills index, human atlas and bounded session pointers stay inspectable and local. |
+| ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
+| ✅ Governed completion | High-stakes work can require a separately authenticated Walter review before completion. |
+| ✅ Bounded delegation | Maestro can dispatch a narrow packet to the right agent; a signed packet never grants broad tool access or completion authority. |
+| ✅ Pilot canary | Local reports aggregate typed outcomes, capability failures, interventions and receipt metadata — never work content. |
+| ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |
 
-## O que ainda não existe
+> **Truth in labeling.** `v0.1.0` is the product target and canary contract,
+> not a claim that a signed end-user release is already
+> available. Pilot distribution, native schedulers and hosted bridge operation
+> remain release operations with their own evidence.
 
-Maestro ainda **não** está pronto para distribuição ao piloto. Ainda faltam,
-entre outros:
+## Pilot boundaries
 
-- instalador e atualizações seguras para usuários finais;
-- releases assinados e autenticação de distribuição;
-- lifecycle completo para Codex e evidência nativa qualificante dos hooks Claude;
-- memória automática, busca e Wiki compilada;
-- ingestão de documentos com Docling empacotado;
-- sincronização com ferramentas de tarefas.
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>🔒 Data stays scoped</h3>
+      <p>Client files, prompts, paths, people, conversation text and credentials do not enter telemetry or federated batches.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>🧱 Authority stays narrow</h3>
+      <p>Maestro remains read-oriented. Any action travels through a bounded, authenticated delegation contract — never an implicit tool grant.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>👤 Humans keep the final say</h3>
+      <p>Central Darwin may curate recurring patterns into proposals. It cannot merge code, publish skills or release software.</p>
+    </td>
+  </tr>
+</table>
 
-Nenhuma dessas capacidades deve ser presumida por documentação ou por um
-agente até ter contrato, testes e validação explícitos.
+### What the canary measures
 
-## Como os dados ficam separados
+| Signal | Why it matters | What is excluded |
+| --- | --- | --- |
+| Time to first value | Whether the pilot becomes useful quickly | Task content, files and client names |
+| Resume success | Whether long-running work survives interruption | Objective prose and checkpoint body |
+| Install, update and rollback | Whether delivery is reliable | Device identity and credentials |
+| Manual interventions | Where the experience still asks too much of people | Free-text support history |
+| Capability failures | Which product surfaces need improvement | Error messages and runtime logs |
+| Receipt metadata | Whether governed work completed safely | Inputs, outputs and evidence content |
 
-```text
-Core gerenciado do Maestro
-  políticas, skills, contratos e versões distribuíveis
+## Start here
 
-Dados locais do usuário
-  preferências, contexto do dono, memória, logs e credenciais
+### 👋 Pilot participant
 
-Workspace de trabalho
-  arquivos Markdown de clientes, projetos, pessoas e diário
-```
+The repository is the factory, not the product installation. Pilot users will
+use a verified release and `bcgos` — not Git, Go, Python, Node or Docker.
+Distribution is intentionally not yet declared ready until signed artifacts and
+clean-device evidence exist.
 
-Dados de cliente, pessoas, conversas, memória, credenciais e arquivos reais
-nunca pertencem ao repositório ou a bundles distribuídos. O usuário escolhe o
-diretório do workspace; a recomendação forte é usar uma pasta local fora de
-OneDrive e outros diretórios sincronizados.
-
-## Comandos atuais
-
-Estes comandos existem para desenvolvimento e testes locais; a instalação de
-usuário final ainda está em construção.
-
-```text
-bcgos init <workspace>
-bcgos doctor <workspace>
-bcgos profile show
-bcgos owner init
-bcgos atlas init <workspace>
-bcgos atlas status <workspace>
-bcgos skills index
-bcgos session packet [workspace]
-bcgos work create --workspace <path> --stdin
-bcgos work start --workspace <path> --item <id> --revision <n>
-bcgos work checkpoint --workspace <path> --item <id> --revision <n> --attempt <id> --stdin
-bcgos work pause --workspace <path> --item <id> --revision <n> --attempt <id>
-bcgos work next --workspace <path> (--item <id> | --active)
-bcgos work resume --workspace <path> --item <id> --revision <n>
-bcgos work evidence --workspace <path> --item <id> --revision <n> --attempt <id> --criterion <id>
-bcgos work complete --workspace <path> --item <id> --revision <n> --attempt <id>
-bcgos work inspect --workspace <path> --item <id>
-bcgos work export --workspace <path> --item <id>
-bcgos work delete --workspace <path> --item <id> --revision <n> --confirm
-```
-
-Os comandos de memória expõem apenas operações já suportadas. O pacote de
-contexto de sessão expõe estados e referências limitadas, sem injetar conteúdo.
-Quando existe exatamente uma execução ativa, ele expõe somente
-`bcgos://execution/active`; IDs, contrato, objetivo e checkpoint ficam fora do
-pacote e exigem resolução explícita por `work next --active`.
-Dreaming automático e injeção em runtime dependem de adapters que ainda estão
-sendo entregues ou revisados. Os comandos `work` implementam handoff e conclusão
-local evidence-backed, mas não são task sync nem generic tracing. Checkpoints
-entram somente por stdin e `next` devolve no máximo 2 KB sem reinjetar o objetivo
-ou o contrato de conclusão. Mutações e checks devolvem somente recibos técnicos;
-corpos completos exigem uma chamada explícita a `inspect` ou `export`.
-Checks Go usam a ferramenta identificada do runtime e ambiente fechado, mas
-`go test` ainda executa código do workspace e pressupõe que esse workspace foi
-autorizado pelo usuário como confiável; isso não constitui sandbox.
-O core também suporta um gate opcional de parecer Walter autenticado e
-vinculado à revisão exata do ledger. A custódia da chave e os adapters nativos
-de assinatura/orquestração ainda estão indisponíveis; portanto Maestro não
-anuncia execução autônoma de long-running goals. Métricas de canary permanecem
-locais, fechadas e sem transporte ou federação.
-
-## Princípios de produto
-
-1. **Trabalho profissional apenas.** Maestro não é um sistema para vida
-   pessoal, finanças ou outros domínios fora do BCG.
-2. **Baixa fricção.** O sistema deve guiar a pessoa, não exigir experiência de
-   desenvolvimento.
-3. **Arquivos legíveis primeiro.** O usuário pode abrir e corrigir seu próprio
-   contexto.
-4. **Contexto limitado e rastreável.** O agente recebe resumos e ponteiros,
-   não um despejo de dados.
-5. **Privacidade por escopo.** Conteúdo gerenciado, pessoal e de workspace não
-   se confundem.
-6. **Claude-first, Codex-compatible.** A experiência pode variar, mas os
-   contratos importantes não.
-7. **Evolução governada.** Mudanças estruturais precisam de decisão, teste e
-   revisão humana.
-
-## Para contribuir
-
-O repositório é a fábrica; não é a instalação do usuário final. Um
-contribuidor começa por [CONTRIBUTING.md](CONTRIBUTING.md). No Claude, diga:
-
-> Use `start-contributing` e me guie passo a passo.
-
-Antes de abrir um PR, rode:
+### 🧑‍💻 Contributor
 
 ```text
-go run ./dev/harness validate --full
+1. Read CONTRIBUTING.md
+2. Run: go run ./dev/harness setup
+3. Start a session and say: “Use start-contributing.”
+4. Follow: start-work → develop-change → prepare-pr → human review
 ```
 
-Use o [template de PR](.github/pull_request_template.md) para deixar claro o
-resultado, testes, limites de dados e o que ficou fora do escopo. Decisões
-duráveis usam um código de quatro letras no
-[decision log](docs/decisions/decision-log.md).
+For the complete product map, see the [roadmap](ROADMAP.md). For the actual
+delivery and validation contract, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Onde se aprofundar
+## Product map
 
-- [Roadmap](ROADMAP.md)
-- [Contrato de colaboração](COLLAB.md)
-- [Decisões do projeto](docs/decisions/decision-log.md)
-- [Arquitetura de memória](specs/006-memory-persistence.md)
-- [Navegação e Wiki](specs/007-content-navigation.md)
-- [Contexto profissional do dono](specs/013-owner-context.md)
-- [Atlas humano](specs/014-human-atlas-bootstrap.md)
+| Surface | Purpose | State |
+| --- | --- | --- |
+| [`bcgos`](cmd/bcgos) | Local product CLI and bounded inspection surfaces | Building |
+| [`specs/`](specs) | Runtime-neutral contracts and architectural boundaries | Active |
+| [`adapters/`](adapters) | Claude and Codex projections of shared contracts | In progress |
+| [`dev/`](dev) | Contributor-only harness, governance and development skills | Active |
+| [`acceptance/`](acceptance) | Clean-device and pilot acceptance evidence | In progress |
 
-## Confidencialidade
+---
 
-Este repositório privado armazena código, templates, contratos e conteúdo
-sanitizado distribuível. Nunca faça commit de material de cliente, dados
-pessoais, credenciais, conversas, memória operacional ou arquivos de trabalho.
+<p align="center">
+  <strong>Professional work deserves continuity — without surrendering control.</strong><br>
+  Built privately for the BCG Brasil pilot.
+</p>

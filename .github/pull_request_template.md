@@ -1,101 +1,90 @@
 <!--
-Use this template to make the PR understandable without reconstructing the
-diff. Delete guidance comments before requesting review. State facts only:
-never mark a check or capability that did not actually run or exist.
+  MAKE THE CHANGE EASY TO TRUST.
+  Delete guidance comments before requesting review. State only observed facts:
+  no imagined checks, capabilities or pilot readiness.
 -->
 
-# What this PR delivers
+# ✨ What changes for people?
 
-## 1. Executive summary
+<!-- In 2–3 sentences: the problem, the outcome and who benefits. Lead with the
+     user or operator impact — not a file-by-file account. -->
 
-<!-- Two or three sentences in plain language:
-     - What problem or opportunity existed?
-     - What is different after this PR?
-     - Who benefits or what risk is reduced? -->
+## 🎯 Outcome at a glance
 
-## 2. What changed
+| Before | After | Why it matters |
+| --- | --- | --- |
+|  |  |  |
 
-<!-- Group changes by outcome, not by every file touched. -->
+## 🧩 What is in this PR
 
 ### Delivered
 
-- **[Capability or outcome]** — what now works and how someone uses it.
-- **[Guardrail or correction]** — what unsafe, confusing or incorrect behavior is prevented.
+- [ ] **Capability** — what now works and how it is experienced.
+- [ ] **Guardrail** — what unsafe, confusing or incorrect behavior is prevented.
 
-### Important implementation choices
+### Deliberate choices
 
-<!-- Only decisions a reviewer needs to understand the solution. Include a
-     spec or four-letter decision reference when applicable. -->
+<!-- Only choices that a reviewer needs to evaluate. Link the decision or spec
+     that governs the change when one exists. -->
 
-- **[Choice]** — why this approach was chosen.
+- **Choice** — why this was the smallest safe path.
 
-## 3. Relevant impact
+## 🗺️ Review route
 
-<!-- Fill only the surfaces affected by this PR. A single “No relevant impact
-     beyond internal documentation” line is valid for simple changes. -->
+1. Start with `specs/NNN-...` or the governing decision — what must remain true.
+2. Review the named implementation surface — how the outcome is achieved.
+3. Confirm the named test or command — what proves the observable behavior.
 
-| Affected audience or surface | Before | After |
+## 🧪 Evidence, not optimism
+
+| Evidence | Result | Notes |
 | --- | --- | --- |
-| [surface affected] |  |  |
+| Targeted test or manual check | ⬜ pass / ⬜ not applicable |  |
+| `go run ./dev/harness validate` | ⬜ pass / ⬜ not run |  |
+| `go run ./dev/harness validate --full` | ⬜ pass / ⬜ not run |  |
+| CI — Windows, macOS, Linux | ⬜ pending / ⬜ pass / ⬜ unavailable |  |
 
-## 4. How to review
+### Observable behavior protected
 
-<!-- Give the reviewer the shortest useful path through the diff. -->
-
-1. Start with `[file or spec](path)` to understand the contract.
-2. Review `[file or module](path)` for the implementation.
-3. Confirm `[test or command](path)` covers the observable behavior.
-
-## 5. Evidence
-
-### Tests and checks run
-
-<!-- List only commands actually run and their result. CI is populated after
-     the PR is opened. -->
-
-| Evidence | Result |
-| --- | --- |
-| `go run ./dev/harness validate --full` | pass / not run — reason |
-| Targeted test: `…` | pass / not applicable — reason |
-| CI: Windows, macOS, Linux | pending / pass / fail |
-| Manual check: `…` | pass / not applicable — reason |
-
-### Coverage of relevant behavior
-
-<!-- Name the test, characterization or manual validation that protects the
-     relevant behavior. For docs/mechanical work: state “not applicable —
-     reason”. -->
-
-## 6. Contracts, safety and data boundaries
-
-### Decisions and specs
-
-- Decision: `NONE` / `ABCD` — one-line consequence.
-- Spec: `NONE` / `specs/NNN-...` — what changed or why none changed.
-
-### Privacy and storage
-
-- [ ] No client data, personal data, credentials, conversations or real memory is included.
-- [ ] Managed core remains separate from local owner data and workspaces.
-- [ ] New local writes are non-destructive, scoped and recoverable.
-- Not applicable / exception and rationale:
-
-### Runtime portability
-
-- Claude: native / emulated / degraded / unavailable — explanation.
-- Codex: native / emulated / degraded / unavailable — explanation.
-- Shared contract or intentional difference:
-
-## 7. What this PR explicitly does not do
-
-<!-- Name nearby expectations that remain pending. This prevents a reviewer
-     or pilot user from inferring a larger promise from a small change. -->
+<!-- Name the test, characterization or manual scenario. For docs/mechanical
+     work, write “Not applicable — <reason>”. -->
 
 -
 
-## 8. Follow-up
+## 🛡️ Contracts, privacy and portability
 
-<!-- Leave empty when there is no concrete next item. Link issue, decision,
-     roadmap track or next PR when there is one. -->
+### Governing contract
+
+- Decision: `NONE` / `ABCD` — consequence:
+- Spec: `NONE` / `specs/NNN-...` — consequence:
+
+### Data boundary
+
+- [ ] No client data, personal data, credentials, conversations or real memory is included.
+- [ ] Managed core remains separate from owner-local and workspace-local data.
+- [ ] New writes are scoped, non-destructive and recoverable.
+- [ ] Telemetry/receipts contain only the allowed metadata or typed vocabulary.
+- Exception (if any) and rationale:
+
+### Runtime truth
+
+| Runtime | State | What this PR proves |
+| --- | --- | --- |
+| Claude | ⬜ native / ⬜ emulated / ⬜ degraded / ⬜ unavailable |  |
+| Codex | ⬜ native / ⬜ emulated / ⬜ degraded / ⬜ unavailable |  |
+
+- Shared contract or intentional difference:
+
+## 🚫 Explicitly not included
+
+<!-- Name adjacent expectations still outside this PR. This is part of the
+     product contract, not a weakness. -->
+
+-
+
+## ➡️ Follow-up
+
+<!-- Link a concrete next issue, decision, roadmap item or PR. Leave empty if
+     there is no real follow-up. -->
 
 -
