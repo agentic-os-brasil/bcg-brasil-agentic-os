@@ -82,6 +82,23 @@ jobs:
           --os "$TARGET_OS"
           --arch "$TARGET_ARCH"
           --output "dist/native/bcgos_${RELEASE_VERSION}_${TARGET_OS}_${TARGET_ARCH}${TARGET_SUFFIX}"
+      - name: Smoke-test native macOS candidate binary
+        if: matrix.os == 'darwin'
+        shell: bash
+        run: |
+          binary="dist/native/bcgos_${RELEASE_VERSION}_${TARGET_OS}_${TARGET_ARCH}${TARGET_SUFFIX}"
+          chmod +x "$binary"
+          output=$("$binary" version)
+          test "$output" = "bcgos $RELEASE_VERSION"
+      - name: Smoke-test native Windows candidate binary
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $binary = "dist/native/bcgos_${env:RELEASE_VERSION}_${env:TARGET_OS}_${env:TARGET_ARCH}${env:TARGET_SUFFIX}"
+          $output = (& $binary version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $output -ne "bcgos $env:RELEASE_VERSION") {
+            throw "Native Windows candidate did not report the requested version."
+          }
       - name: Record native binary provenance
         shell: bash
         if: matrix.os == 'darwin'
