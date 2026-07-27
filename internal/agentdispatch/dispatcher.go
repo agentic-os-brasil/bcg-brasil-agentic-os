@@ -18,11 +18,13 @@ import (
 )
 
 const (
-	maxObjectiveBytes  = 1000
-	maxPointers        = 12
-	maxConstraints     = 8
-	maxConstraintBytes = 300
-	maxPacketTTL       = 24 * time.Hour
+	legacyPacketSchemaVersion = 1
+	packetSchemaVersion       = 2
+	maxObjectiveBytes         = 1000
+	maxPointers               = 12
+	maxConstraints            = 8
+	maxConstraintBytes        = 300
+	maxPacketTTL              = 24 * time.Hour
 )
 
 type PacketRequest struct {
@@ -107,6 +109,9 @@ func (dispatcher *Dispatcher) StartChild(parent WorkPacket, request PacketReques
 	if err := dispatcher.Verify(parent); err != nil {
 		return WorkPacket{}, packetDenied(), err
 	}
+	if parent.SchemaVersion != packetSchemaVersion {
+		return WorkPacket{}, packetDenied(), errors.New("legacy work packet is completion-only")
+	}
 	if request.ScopeID != parent.ScopeID || request.ScopeKind != parent.ScopeKind {
 		return WorkPacket{}, packetDenied(), errors.New("child packet must inherit the parent scope root")
 	}
@@ -132,7 +137,14 @@ func (dispatcher *Dispatcher) StartChild(parent WorkPacket, request PacketReques
 // SelectDirectSkill verifies that a vertical agent's role may select a managed
 // method inside its own context. It intentionally does not create a packet,
 // grant tools or transfer ownership to another agent.
-func (dispatcher *Dispatcher) SelectDirectSkill(agentID, skillID string) error {
+func (dispatcher *Dispatcher) SelectDirectSkill(root WorkPacket, agentID, capability, skillID string) error {
+	if root.SchemaVersion != packetSchemaVersion || root.ParentPacketID != "" ||
+		root.TargetAgentID != agentID || dispatcher.Verify(root) != nil {
+		return errors.New("direct skill selection requires a current signed root packet")
+	}
+	if decision := dispatcher.gate.AuthorizeActiveRoot(agentID, capability, root.PacketID, root.ScopeID, root.ScopeKind); !decision.Allowed {
+		return errors.New("direct skill selection is not authorized for the active root")
+	}
 	role, ok := dispatcher.gate.RoleForAgent(agentID)
 	if !ok || !dispatcher.skills.AllowsDirect(role, skillID) {
 		return errors.New("direct skill selection is not allowed for this agent role")
@@ -200,7 +212,7 @@ func (dispatcher *Dispatcher) issue(issuer, parentID string, request PacketReque
 		pointers = append(pointers, normalized)
 	}
 	packet := WorkPacket{
-		SchemaVersion: 1, PacketID: packetID, ParentPacketID: parentID,
+		SchemaVersion: packetSchemaVersion, PacketID: packetID, ParentPacketID: parentID,
 		IssuerAgentID: issuer, TargetAgentID: request.TargetAgentID,
 		ScopeKind: request.ScopeKind, ScopeID: request.ScopeID,
 		Objective: strings.TrimSpace(request.Objective), Pointers: pointers,
@@ -253,7 +265,7 @@ func (dispatcher *Dispatcher) validateSkillSelection(issuer, target, skillID str
 }
 
 func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
-	if packet.SchemaVersion != 1 || !agentcatalog.ValidAgentID(packet.IssuerAgentID) ||
+	if (packet.SchemaVersion != legacyPacketSchemaVersion && packet.SchemaVersion != packetSchemaVersion) || !agentcatalog.ValidAgentID(packet.IssuerAgentID) ||
 		!agentcatalog.ValidAgentID(packet.TargetAgentID) || !validPacketID(packet.PacketID) ||
 		(packet.ParentPacketID != "" && !validPacketID(packet.ParentPacketID)) || packet.Signature == "" {
 		return errors.New("work packet header is invalid")
@@ -271,15 +283,22 @@ func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
 		return errors.New("work packet is not within its validity window")
 	}
 	child := packet.ParentPacketID != ""
-	if err := validateRequest(PacketRequest{
+	request := PacketRequest{
 		TargetAgentID: packet.TargetAgentID, ScopeKind: packet.ScopeKind,
 		ScopeID: packet.ScopeID, Objective: packet.Objective, Pointers: packet.Pointers,
 		Constraints: packet.Constraints, SkillID: packet.SkillID, TTL: packet.ExpiresAt.Sub(packet.IssuedAt),
-	}, child); err != nil {
+	}
+	if packet.SchemaVersion == legacyPacketSchemaVersion {
+		if packet.SkillID != "" || validateLegacyRequest(request) != nil {
+			return errors.New("legacy work packet violates its completion-only contract")
+		}
+	} else if err := validateRequest(request, child); err != nil {
 		return err
 	}
-	if err := dispatcher.validateSkillSelection(packet.IssuerAgentID, packet.TargetAgentID, packet.SkillID, child); err != nil {
-		return err
+	if packet.SchemaVersion == packetSchemaVersion {
+		if err := dispatcher.validateSkillSelection(packet.IssuerAgentID, packet.TargetAgentID, packet.SkillID, child); err != nil {
+			return err
+		}
 	}
 	seen := make(map[string]bool, len(packet.Pointers))
 	for _, pointer := range packet.Pointers {
@@ -292,6 +311,15 @@ func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
 		seen[pointer] = true
 	}
 	return nil
+}
+
+// validateLegacyRequest accepts only schema-v1 packets already in flight so
+// they can finish safely after the schema-v2 skill boundary is deployed.
+func validateLegacyRequest(request PacketRequest) error {
+	if request.SkillID != "" {
+		return errors.New("legacy work packet cannot carry a skill selection")
+	}
+	return validateRequest(request, false)
 }
 
 func (dispatcher *Dispatcher) signature(packet WorkPacket) (string, error) {

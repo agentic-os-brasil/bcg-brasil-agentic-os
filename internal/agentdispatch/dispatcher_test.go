@@ -136,11 +136,8 @@ func TestDispatcherRejectsTamperingExpiryAndCrossScopePointers(t *testing.T) {
 
 func TestDispatcherKeepsSkillSelectionWithTheVerticalOwner(t *testing.T) {
 	dispatcher := newTestDispatcher(t)
-	if err := dispatcher.SelectDirectSkill("workspace-agent-alpha", "deck-storyline"); err != nil {
-		t.Fatal(err)
-	}
-	if err := dispatcher.SelectDirectSkill("capability-research", "deck-storyline"); err == nil {
-		t.Fatal("capability specialist selected a direct skill")
+	if err := dispatcher.SelectDirectSkill(WorkPacket{}, "workspace-agent-alpha", "workspace-agent-alpha-cap", "deck-storyline"); err == nil {
+		t.Fatal("inactive workspace agent selected a direct skill")
 	}
 
 	root, decision, err := dispatcher.StartRoot(PacketRequest{
@@ -149,6 +146,15 @@ func TestDispatcherKeepsSkillSelectionWithTheVerticalOwner(t *testing.T) {
 	})
 	if err != nil || !decision.Allowed {
 		t.Fatalf("root dispatch failed: %#v %v", decision, err)
+	}
+	if err := dispatcher.SelectDirectSkill(root, "workspace-agent-alpha", "workspace-agent-alpha-cap", "deck-storyline"); err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.SelectDirectSkill(root, "capability-research", "capability-research-cap", "deck-storyline"); err == nil {
+		t.Fatal("capability specialist selected a direct skill")
+	}
+	if err := dispatcher.SelectDirectSkill(root, "workspace-agent-alpha", "forged", "deck-storyline"); err == nil {
+		t.Fatal("forged capability selected a direct skill")
 	}
 	if _, _, err := dispatcher.StartChild(root, PacketRequest{
 		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
@@ -163,10 +169,75 @@ func TestDispatcherKeepsSkillSelectionWithTheVerticalOwner(t *testing.T) {
 	if err != nil || !childDecision.Allowed || child.SkillID != "qualitative-analysis" {
 		t.Fatalf("bounded skill delegation failed: %#v %#v %v", child, childDecision, err)
 	}
+	if err := dispatcher.SelectDirectSkill(root, "workspace-agent-alpha", "workspace-agent-alpha-cap", "deck-storyline"); err == nil {
+		t.Fatal("root selected a direct skill while its child was active")
+	}
 	tampered := child
 	tampered.SkillID = "quantitative-analysis"
 	if err := dispatcher.Verify(tampered); err == nil {
 		t.Fatal("tampered skill selection verified")
+	}
+}
+
+func TestDispatcherAcceptsLegacyChildOnlyForInFlightCompletion(t *testing.T) {
+	dispatcher := newTestDispatcher(t)
+	root, decision, err := dispatcher.StartRoot(PacketRequest{
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Complete an already-started work item.", TTL: time.Hour,
+	})
+	if err != nil || !decision.Allowed {
+		t.Fatalf("root dispatch failed: %#v %v", decision, err)
+	}
+	child, decision, err := dispatcher.StartChild(root, PacketRequest{
+		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Complete a bounded work item.", SkillID: "qualitative-analysis", TTL: time.Hour,
+	})
+	if err != nil || !decision.Allowed {
+		t.Fatalf("child dispatch failed: %#v %v", decision, err)
+	}
+	legacy := child
+	legacy.SchemaVersion = 1
+	legacy.SkillID = ""
+	legacy.Signature, err = dispatcher.signature(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.Verify(legacy); err != nil {
+		t.Fatalf("in-flight v1 child was not verifiable: %v", err)
+	}
+	if decision := dispatcher.FinishChild(legacy); !decision.Allowed {
+		t.Fatalf("in-flight v1 child was not finishable: %#v", decision)
+	}
+	legacy.SkillID = "qualitative-analysis"
+	legacy.Signature, err = dispatcher.signature(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.Verify(legacy); err == nil {
+		t.Fatal("legacy packet carrying a new skill selection verified")
+	}
+}
+
+func TestDispatcherRejectsLegacyPacketAsNewDelegationParent(t *testing.T) {
+	dispatcher := newTestDispatcher(t)
+	root, decision, err := dispatcher.StartRoot(PacketRequest{
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Drain a legacy root without opening new work.", TTL: time.Hour,
+	})
+	if err != nil || !decision.Allowed {
+		t.Fatalf("root dispatch failed: %#v %v", decision, err)
+	}
+	legacy := root
+	legacy.SchemaVersion = 1
+	legacy.Signature, err = dispatcher.signature(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, decision, err := dispatcher.StartChild(legacy, PacketRequest{
+		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Attempt a new delegation from a legacy packet.", SkillID: "qualitative-analysis", TTL: time.Hour,
+	}); err == nil || decision.Allowed {
+		t.Fatalf("legacy packet opened new delegation: %#v %v", decision, err)
 	}
 }
 
@@ -253,15 +324,15 @@ func TestVerticalSkillDelegationConformanceAcrossRuntimes(t *testing.T) {
 	for _, runtime := range []string{"claude", "codex"} {
 		t.Run(runtime, func(t *testing.T) {
 			dispatcher := newSkillTestDispatcherForRuntime(t, runtime)
-			if err := dispatcher.SelectDirectSkill(fixture.Direct.AgentID, fixture.Direct.SkillID); (err == nil) != fixture.Direct.Allowed {
-				t.Fatalf("direct selection error = %v", err)
-			}
 			root, decision, err := dispatcher.StartRoot(PacketRequest{
 				TargetAgentID: fixture.Delegated.Parent, ScopeKind: fixture.Delegated.Kind,
 				ScopeID: fixture.Delegated.Scope, Objective: "Run bounded conformance.", TTL: time.Hour,
 			})
 			if err != nil || !decision.Allowed {
 				t.Fatalf("root = %#v %v", decision, err)
+			}
+			if err := dispatcher.SelectDirectSkill(root, fixture.Direct.AgentID, "workspace-agent-alpha-cap", fixture.Direct.SkillID); (err == nil) != fixture.Direct.Allowed {
+				t.Fatalf("direct selection error = %v", err)
 			}
 			_, decision, err = dispatcher.StartChild(root, PacketRequest{
 				TargetAgentID: fixture.Delegated.Target, ScopeKind: fixture.Delegated.Kind,

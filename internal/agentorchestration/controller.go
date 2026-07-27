@@ -405,6 +405,31 @@ func (adapter *Adapter) GuardTool(actorID, capability, branchID, dispatchID, sco
 	})
 }
 
+// AuthorizeActiveRoot proves that a capability-bound root agent still owns the
+// active branch before it performs a local, non-tool action such as selecting
+// a managed skill. It creates no lifecycle event and grants no resource access.
+func (adapter *Adapter) AuthorizeActiveRoot(actorID, capability, branchID, scopeID, scopeKind string) Decision {
+	actor, ok := adapter.authenticate(actorID, capability)
+	if !ok {
+		return denied("actor_denied")
+	}
+	adapter.store.mu.Lock()
+	defer adapter.store.mu.Unlock()
+	state := adapter.store.state
+	if state.BranchID == "" {
+		return denied("branch_missing")
+	}
+	if state.ChildID != "" {
+		return denied("child_active")
+	}
+	if actorID != state.RootID || branchID != state.BranchID ||
+		scopeID != state.ScopeID || scopeKind != state.ScopeKind ||
+		actor.scope != state.ScopeID || actor.scopeKind != state.ScopeKind {
+		return denied("actor_denied")
+	}
+	return allowed()
+}
+
 func (adapter *Adapter) nativeEvent(semantic string) string {
 	for native, candidate := range adapterEvents[adapter.runtime] {
 		if candidate == semantic {
