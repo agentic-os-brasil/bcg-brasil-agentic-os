@@ -170,6 +170,57 @@ func TestDispatcherKeepsSkillSelectionWithTheVerticalOwner(t *testing.T) {
 	}
 }
 
+func TestDispatcherPreservesGovernedSubjectDelegationWithoutTransversalSkill(t *testing.T) {
+	dispatcher := newTestDispatcher(t)
+	root, decision, err := dispatcher.StartRoot(PacketRequest{
+		TargetAgentID: "practice-insurance", ScopeKind: "practice", ScopeID: "insurance",
+		Objective: "Review the approved insurance subject canon.", TTL: time.Hour,
+	})
+	if err != nil || !decision.Allowed {
+		t.Fatalf("practice root dispatch failed: %#v %v", decision, err)
+	}
+	child, childDecision, err := dispatcher.StartChild(root, PacketRequest{
+		TargetAgentID: "subject-insurance", ScopeKind: "practice", ScopeID: "insurance",
+		Objective: "Pressure-test the subject canon.", TTL: time.Hour,
+	})
+	if err != nil || !childDecision.Allowed || child.SkillID != "" {
+		t.Fatalf("subject delegation failed: packet=%#v decision=%#v err=%v", child, childDecision, err)
+	}
+	if err := dispatcher.Verify(child); err != nil {
+		t.Fatal(err)
+	}
+	if decision := dispatcher.FinishChild(child); !decision.Allowed {
+		t.Fatalf("finish subject child = %#v", decision)
+	}
+	if decision := dispatcher.FinishRoot(root); !decision.Allowed {
+		t.Fatalf("finish practice root = %#v", decision)
+	}
+}
+
+func TestDispatcherPreservesAccountCapabilityDelegationWithManagedSkill(t *testing.T) {
+	dispatcher := newTestDispatcher(t)
+	root, decision, err := dispatcher.StartRoot(PacketRequest{
+		TargetAgentID: "account-agent-alpha", ScopeKind: "account", ScopeID: "account-alpha",
+		Objective: "Prepare the approved account analysis.", TTL: time.Hour,
+	})
+	if err != nil || !decision.Allowed {
+		t.Fatalf("account root dispatch failed: %#v %v", decision, err)
+	}
+	child, childDecision, err := dispatcher.StartChild(root, PacketRequest{
+		TargetAgentID: "capability-account", ScopeKind: "account", ScopeID: "account-alpha",
+		Objective: "Synthesize bounded account evidence.", SkillID: "qualitative-analysis", TTL: time.Hour,
+	})
+	if err != nil || !childDecision.Allowed || child.SkillID != "qualitative-analysis" {
+		t.Fatalf("account capability delegation failed: packet=%#v decision=%#v err=%v", child, childDecision, err)
+	}
+	if decision := dispatcher.FinishChild(child); !decision.Allowed {
+		t.Fatalf("finish account child = %#v", decision)
+	}
+	if decision := dispatcher.FinishRoot(root); !decision.Allowed {
+		t.Fatalf("finish account root = %#v", decision)
+	}
+}
+
 func TestVerticalSkillDelegationConformanceAcrossRuntimes(t *testing.T) {
 	body, err := os.ReadFile("../../adapters/conformance/vertical-skill-delegation.json")
 	if err != nil {
@@ -289,17 +340,21 @@ func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher 
 	}
 	grants := []agentorchestration.Authorization{
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
+		{AgentID: "account-agent-alpha", Role: "account_agent", Scope: "account-alpha", ScopeKind: "account", Capability: "account-agent-alpha-cap"},
+		{AgentID: "capability-account", Role: "capability_specialist", Scope: "account-alpha", ScopeKind: "account", Capability: "capability-account-cap"},
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-agent-alpha-cap"},
 		{AgentID: "capability-research", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-research-cap"},
 		{AgentID: "practice-insurance", Role: "practice_agent", Scope: "insurance", ScopeKind: "practice", Capability: "practice-insurance-cap"},
+		{AgentID: "subject-insurance", Role: "subject_specialist", Scope: "insurance", ScopeKind: "practice", Capability: "subject-insurance-cap"},
 	}
 	adapter, err := agentorchestration.NewAdapter(runtime, catalog, grants, store)
 	if err != nil {
 		t.Fatal(err)
 	}
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
-		"maestro": "maestro-cap", "workspace-agent-alpha": "workspace-agent-alpha-cap",
-		"capability-research": "capability-research-cap", "practice-insurance": "practice-insurance-cap",
+		"maestro": "maestro-cap", "account-agent-alpha": "account-agent-alpha-cap", "capability-account": "capability-account-cap",
+		"workspace-agent-alpha": "workspace-agent-alpha-cap", "capability-research": "capability-research-cap",
+		"practice-insurance": "practice-insurance-cap", "subject-insurance": "subject-insurance-cap",
 	}, registry)
 	if err != nil {
 		t.Fatal(err)

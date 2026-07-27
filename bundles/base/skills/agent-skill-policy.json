@@ -13,6 +13,15 @@
   ],
   "delegated": [
     {
+      "from_role": "account_agent",
+      "to_role": "capability_specialist",
+      "skill_ids": [
+        "deck-storyline",
+        "qualitative-analysis",
+        "quantitative-analysis"
+      ]
+    },
+    {
       "from_role": "workspace_agent",
       "to_role": "capability_specialist",
       "skill_ids": [

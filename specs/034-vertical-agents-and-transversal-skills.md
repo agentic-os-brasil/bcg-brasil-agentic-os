@@ -47,13 +47,15 @@ without opening a child delegation. Direct selection is local to the agent
 context and is not a transfer of ownership.
 
 When the work is sufficiently bounded and benefits from independent execution,
-the parent may create one child WorkPacket. That packet names exactly one
-managed skill, its objective, exact pointers, constraints, expiry and expected
-return. The capability specialist receives no general context, no persistent
-access and no right to select additional skills. It returns evidence pointers,
-a concise result, assumptions, risks and an explicit failure state to its
-parent. The parent validates and integrates the result before returning to
-Maestro.
+the parent may create one child WorkPacket. A packet for a
+`capability_specialist` names exactly one managed skill, its objective, exact
+pointers, constraints, expiry and expected return. The capability specialist
+receives no general context, no persistent access and no right to select
+additional skills. Existing `practice_agent` → `subject_specialist` dispatch
+remains a governed subject packet and does not acquire a transversal skill
+requirement in this slice. Each child returns evidence pointers, a concise
+result, assumptions, risks and an explicit failure state to its parent. The
+parent validates and integrates the result before returning to Maestro.
 
 The current dispatcher remains intentionally sequential: one active branch and
 one active child. Qualitative and quantitative work may be delegated in
@@ -84,11 +86,13 @@ agent-skill policy. The policy lists only stable managed skill IDs and the role
 contexts in which they may be selected. It has no user, client, case,
 tool, credential or runtime-specific data.
 
-For delegated execution, the dispatcher verifies that the parent role may
-assign the selected skill and the child role may execute it. It signs that
-selection as part of the WorkPacket. Unknown, duplicate, missing or tampered
-skill IDs fail closed. Root packets issued by Maestro do not select a case
-skill: the receiving vertical agent remains responsible for method choice.
+For delegated capability execution, the dispatcher verifies that the parent
+role may assign the selected skill and the child role may execute it. It signs
+that selection as part of the WorkPacket. Unknown, duplicate, missing or
+tampered skill IDs fail closed for capability specialists. Subject-specialist
+packets retain their existing governed contract and reject an unexpected skill
+ID. Root packets issued by Maestro do not select a case skill: the receiving
+vertical agent remains responsible for method choice.
 
 ## Acceptance criteria
 

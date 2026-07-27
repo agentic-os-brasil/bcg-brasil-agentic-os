@@ -219,7 +219,7 @@ func validateRequest(request PacketRequest, child bool) error {
 		len(request.Pointers) > maxPointers || len(request.Constraints) > maxConstraints {
 		return errors.New("work packet exceeds its bounded contract")
 	}
-	if (!child && request.SkillID != "") || (child && request.SkillID == "") {
+	if !child && request.SkillID != "" {
 		return errors.New("work packet has an invalid skill selection boundary")
 	}
 	for _, constraint := range request.Constraints {
@@ -234,10 +234,20 @@ func (dispatcher *Dispatcher) validateSkillSelection(issuer, target, skillID str
 	if !child {
 		return nil
 	}
-	issuerRole, issuerOK := dispatcher.gate.RoleForAgent(issuer)
+	_, issuerOK := dispatcher.gate.RoleForAgent(issuer)
 	targetRole, targetOK := dispatcher.gate.RoleForAgent(target)
-	if !issuerOK || !targetOK || !dispatcher.skills.AllowsDelegated(issuerRole, targetRole, skillID) {
+	if !issuerOK || !targetOK {
 		return errors.New("delegated skill selection is not allowed for these agent roles")
+	}
+	if targetRole != "capability_specialist" {
+		if skillID != "" {
+			return errors.New("skill selection is only available to capability specialists")
+		}
+		return nil
+	}
+	issuerRole, _ := dispatcher.gate.RoleForAgent(issuer)
+	if skillID == "" || !dispatcher.skills.AllowsDelegated(issuerRole, targetRole, skillID) {
+		return errors.New("capability specialist delegation requires an authorized managed skill")
 	}
 	return nil
 }
