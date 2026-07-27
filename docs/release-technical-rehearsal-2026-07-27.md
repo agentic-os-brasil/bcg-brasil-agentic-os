@@ -13,6 +13,10 @@ acceptance evidence.
 - Result: success
 - Executed: 2026-07-27 (UTC)
 
+This record describes the workflow revision used by this historical run. It
+predates the later in-workflow native `version` smoke-test gate, so it does
+not claim that the subsequent gate ran in this rehearsal.
+
 ## Checks passed
 
 The run completed all stages for the unsigned candidate:
