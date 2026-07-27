@@ -20,6 +20,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseprovider"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
@@ -56,6 +57,23 @@ func Validate(root string, full bool, out io.Writer) error {
 		}},
 		{"skills index", func() error {
 			return skillsindex.Validate(filepath.Join(root, "bundles", "base", "skills"))
+		}},
+		{"agent skill policy", func() error {
+			skillsRoot := filepath.Join(root, "bundles", "base", "skills")
+			policy, err := skillpolicy.ParseFile(filepath.Join(skillsRoot, "agent-skill-policy.json"))
+			if err != nil {
+				return err
+			}
+			skills, err := skillsindex.Build(skillsRoot)
+			if err != nil {
+				return err
+			}
+			agents, err := agentcatalog.ParseFile(filepath.Join(root, "bundles", "base", "agents", "catalog.json"))
+			if err != nil {
+				return err
+			}
+			_, err = skillpolicy.Compile(policy, skills, agents)
+			return err
 		}},
 		{"managed agents", func() error {
 			return agentcatalog.ValidateDir(filepath.Join(root, "bundles", "base", "agents"))

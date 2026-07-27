@@ -2,6 +2,13 @@
   "schema_version": 1,
   "skills": [
     {
+      "id": "deck-storyline",
+      "display_name": "Deck and Storyline",
+      "trigger": "Build one decision-led professional storyline and deck plan",
+      "default_prompt": "Use $deck-storyline to turn the approved case evidence into a decision-led deck plan.",
+      "relative_path": "skills/deck-storyline/SKILL.md"
+    },
+    {
       "id": "dream-memory",
       "display_name": "Dream Memory",
       "trigger": "Consolidate daily and weekly professional memory",
@@ -28,6 +35,20 @@
       "trigger": "Guide safe setup, updates and recovery conversationally",
       "default_prompt": "Use $maestro-setup-update to guide me through this Maestro setup or update in plain language.",
       "relative_path": "skills/maestro-setup-update/SKILL.md"
+    },
+    {
+      "id": "qualitative-analysis",
+      "display_name": "Qualitative Analysis",
+      "trigger": "Synthesize bounded qualitative evidence into themes and implications",
+      "default_prompt": "Use $qualitative-analysis to synthesize the approved qualitative evidence for this case.",
+      "relative_path": "skills/qualitative-analysis/SKILL.md"
+    },
+    {
+      "id": "quantitative-analysis",
+      "display_name": "Quantitative Analysis",
+      "trigger": "Analyze bounded quantitative evidence with explicit assumptions and checks",
+      "default_prompt": "Use $quantitative-analysis to analyze the approved quantitative evidence for this case.",
+      "relative_path": "skills/quantitative-analysis/SKILL.md"
     },
     {
       "id": "workspace-agent-setup",

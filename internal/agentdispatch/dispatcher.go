@@ -14,6 +14,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
 )
 
 const (
@@ -31,6 +32,7 @@ type PacketRequest struct {
 	Objective     string
 	Pointers      []string
 	Constraints   []string
+	SkillID       string
 	TTL           time.Duration
 }
 
@@ -45,6 +47,7 @@ type WorkPacket struct {
 	Objective      string    `json:"objective"`
 	Pointers       []string  `json:"pointers,omitempty"`
 	Constraints    []string  `json:"constraints,omitempty"`
+	SkillID        string    `json:"skill_id,omitempty"`
 	IssuedAt       time.Time `json:"issued_at"`
 	ExpiresAt      time.Time `json:"expires_at"`
 	Signature      string    `json:"signature"`
@@ -54,10 +57,11 @@ type Dispatcher struct {
 	gate        *agentorchestration.Adapter
 	signingKey  []byte
 	credentials map[string]string
+	skills      skillpolicy.Registry
 	now         func() time.Time
 }
 
-func New(gate *agentorchestration.Adapter, signingCapability string, credentials map[string]string) (*Dispatcher, error) {
+func New(gate *agentorchestration.Adapter, signingCapability string, credentials map[string]string, policies ...skillpolicy.Registry) (*Dispatcher, error) {
 	if gate == nil || signingCapability == "" || credentials["maestro"] == "" {
 		return nil, errors.New("dispatcher requires a gate, signing capability and Maestro credential")
 	}
@@ -68,9 +72,16 @@ func New(gate *agentorchestration.Adapter, signingCapability string, credentials
 		}
 		values[id] = capability
 	}
+	var skills skillpolicy.Registry
+	if len(policies) > 1 {
+		return nil, errors.New("dispatcher accepts at most one managed skill policy")
+	}
+	if len(policies) == 1 {
+		skills = policies[0]
+	}
 	return &Dispatcher{
 		gate: gate, signingKey: []byte(signingCapability),
-		credentials: values, now: time.Now,
+		credentials: values, skills: skills, now: time.Now,
 	}, nil
 }
 
@@ -118,6 +129,17 @@ func (dispatcher *Dispatcher) StartChild(parent WorkPacket, request PacketReques
 	return packet, decision, nil
 }
 
+// SelectDirectSkill verifies that a vertical agent's role may select a managed
+// method inside its own context. It intentionally does not create a packet,
+// grant tools or transfer ownership to another agent.
+func (dispatcher *Dispatcher) SelectDirectSkill(agentID, skillID string) error {
+	role, ok := dispatcher.gate.RoleForAgent(agentID)
+	if !ok || !dispatcher.skills.AllowsDirect(role, skillID) {
+		return errors.New("direct skill selection is not allowed for this agent role")
+	}
+	return nil
+}
+
 func (dispatcher *Dispatcher) FinishChild(packet WorkPacket) agentorchestration.Decision {
 	if err := dispatcher.Verify(packet); err != nil || packet.ParentPacketID == "" {
 		return packetDenied()
@@ -155,7 +177,11 @@ func (dispatcher *Dispatcher) guardRootTool(packet WorkPacket, tool, operation, 
 }
 
 func (dispatcher *Dispatcher) issue(issuer, parentID string, request PacketRequest) (WorkPacket, error) {
-	if err := validateRequest(request); err != nil {
+	child := parentID != ""
+	if err := validateRequest(request, child); err != nil {
+		return WorkPacket{}, err
+	}
+	if err := dispatcher.validateSkillSelection(issuer, request.TargetAgentID, request.SkillID, child); err != nil {
 		return WorkPacket{}, err
 	}
 	packetID, err := randomID()
@@ -178,14 +204,14 @@ func (dispatcher *Dispatcher) issue(issuer, parentID string, request PacketReque
 		IssuerAgentID: issuer, TargetAgentID: request.TargetAgentID,
 		ScopeKind: request.ScopeKind, ScopeID: request.ScopeID,
 		Objective: strings.TrimSpace(request.Objective), Pointers: pointers,
-		Constraints: append([]string(nil), request.Constraints...),
-		IssuedAt:    now, ExpiresAt: now.Add(request.TTL),
+		Constraints: append([]string(nil), request.Constraints...), SkillID: request.SkillID,
+		IssuedAt: now, ExpiresAt: now.Add(request.TTL),
 	}
 	packet.Signature, err = dispatcher.signature(packet)
 	return packet, err
 }
 
-func validateRequest(request PacketRequest) error {
+func validateRequest(request PacketRequest, child bool) error {
 	objective := strings.TrimSpace(request.Objective)
 	if !agentcatalog.ValidAgentID(request.TargetAgentID) || request.ScopeKind == "" || request.ScopeID == "" ||
 		objective == "" || len([]byte(objective)) > maxObjectiveBytes ||
@@ -193,10 +219,35 @@ func validateRequest(request PacketRequest) error {
 		len(request.Pointers) > maxPointers || len(request.Constraints) > maxConstraints {
 		return errors.New("work packet exceeds its bounded contract")
 	}
+	if !child && request.SkillID != "" {
+		return errors.New("work packet has an invalid skill selection boundary")
+	}
 	for _, constraint := range request.Constraints {
 		if strings.TrimSpace(constraint) == "" || len([]byte(constraint)) > maxConstraintBytes {
 			return errors.New("work packet constraint is empty or oversized")
 		}
+	}
+	return nil
+}
+
+func (dispatcher *Dispatcher) validateSkillSelection(issuer, target, skillID string, child bool) error {
+	if !child {
+		return nil
+	}
+	_, issuerOK := dispatcher.gate.RoleForAgent(issuer)
+	targetRole, targetOK := dispatcher.gate.RoleForAgent(target)
+	if !issuerOK || !targetOK {
+		return errors.New("delegated skill selection is not allowed for these agent roles")
+	}
+	if targetRole != "capability_specialist" {
+		if skillID != "" {
+			return errors.New("skill selection is only available to capability specialists")
+		}
+		return nil
+	}
+	issuerRole, _ := dispatcher.gate.RoleForAgent(issuer)
+	if skillID == "" || !dispatcher.skills.AllowsDelegated(issuerRole, targetRole, skillID) {
+		return errors.New("capability specialist delegation requires an authorized managed skill")
 	}
 	return nil
 }
@@ -219,11 +270,15 @@ func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
 	if packet.IssuedAt.After(now) || !packet.ExpiresAt.After(now) || packet.ExpiresAt.Sub(packet.IssuedAt) > maxPacketTTL {
 		return errors.New("work packet is not within its validity window")
 	}
+	child := packet.ParentPacketID != ""
 	if err := validateRequest(PacketRequest{
 		TargetAgentID: packet.TargetAgentID, ScopeKind: packet.ScopeKind,
 		ScopeID: packet.ScopeID, Objective: packet.Objective, Pointers: packet.Pointers,
-		Constraints: packet.Constraints, TTL: packet.ExpiresAt.Sub(packet.IssuedAt),
-	}); err != nil {
+		Constraints: packet.Constraints, SkillID: packet.SkillID, TTL: packet.ExpiresAt.Sub(packet.IssuedAt),
+	}, child); err != nil {
+		return err
+	}
+	if err := dispatcher.validateSkillSelection(packet.IssuerAgentID, packet.TargetAgentID, packet.SkillID, child); err != nil {
 		return err
 	}
 	seen := make(map[string]bool, len(packet.Pointers))

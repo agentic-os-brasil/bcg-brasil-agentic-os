@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quantitative Analysis"
+  short_description: "Analyze bounded quantitative evidence with explicit assumptions and checks"
+  default_prompt: "Use $quantitative-analysis to analyze the approved quantitative evidence for this case."

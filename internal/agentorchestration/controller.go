@@ -112,6 +112,17 @@ type Adapter struct {
 	now            func() time.Time
 }
 
+// RoleForAgent exposes only the already-validated catalog role to trusted
+// runtime-neutral dispatch code. It never authenticates a caller or grants
+// tools, data access or delegation authority.
+func (adapter *Adapter) RoleForAgent(agentID string) (string, bool) {
+	authorization, ok := adapter.authorizations[agentID]
+	if !ok {
+		return "", false
+	}
+	return authorization.role, true
+}
+
 var adapterEvents = map[string]map[string]string{
 	"claude": {
 		"agent_branch_start": "branch_start",

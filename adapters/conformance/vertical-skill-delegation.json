@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "direct_selection": {
+    "agent_id": "workspace-agent-alpha",
+    "skill_id": "deck-storyline",
+    "allowed": true
+  },
+  "delegated_selection": {
+    "parent_agent_id": "workspace-agent-alpha",
+    "target_agent_id": "capability-research",
+    "scope_kind": "workspace",
+    "scope_id": "alpha",
+    "skill_id": "qualitative-analysis",
+    "allowed": true
+  },
+  "denials": [
+    {"target_agent_id": "capability-research", "scope_kind": "workspace", "scope_id": "alpha", "skill_id": ""},
+    {"target_agent_id": "capability-research", "scope_kind": "workspace", "scope_id": "alpha", "skill_id": "unmanaged-method"}
+  ]
+}
