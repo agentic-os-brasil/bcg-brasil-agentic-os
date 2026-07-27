@@ -168,12 +168,84 @@ func TestBriefRequiresBalancedTheses(t *testing.T) {
 	}
 	_, err := SaveBrief(root, Brief{
 		WorkspaceID: "ws-theses", ReviewedBy: "owner", Classification: "internal",
-		Mandate: "Support a decision", Objectives: []string{"recommendation"},
+		Mandate: "Support a decision", Objectives: []string{"recommendation"}, Constraints: []string{"no external research"},
 		Bullish: []Thesis{{Statement: "Upside", Evidence: []string{"signal"}, Assumptions: []string{"growth"}, CounterEvidence: []string{"weakness"}, InvalidationSignals: []string{"decline"}}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "bullish and one bearish") {
 		t.Fatalf("SaveBrief() error = %v, want balanced thesis requirement", err)
 	}
+}
+
+func TestFirstValueCreatesArtifactMetricsAndResumableHandoff(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root, "ws-value"); err != nil {
+		t.Fatal(err)
+	}
+	run, err := StartFirstValue(root, "ws-value")
+	if err != nil || run.Status != "started" {
+		t.Fatalf("StartFirstValue() = %#v, %v", run, err)
+	}
+	if err := RecordFirstValueIntervention(root, "ws-value", run.RunID, "brief_correction"); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := CompleteFirstValue(root, "ws-value", run.RunID, filepath.Join(root, "workspace", "brain", "deliverables"), firstValueFixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Artifact.Path == "" || receipt.Metrics.ManualInterventions != 1 || receipt.Handoff.NextStep == "" {
+		t.Fatalf("receipt=%#v", receipt)
+	}
+	contents, err := os.ReadFile(receipt.Artifact.Path)
+	if err != nil || !strings.Contains(string(contents), "# Pilot decision brief") {
+		t.Fatalf("artifact=%q err=%v", contents, err)
+	}
+	state, err := FirstValueStatus(root, "ws-value")
+	if err != nil || state.Handoff.RunID != run.RunID {
+		t.Fatalf("status=%#v err=%v", state, err)
+	}
+	if _, err := StartFirstValue(root, "ws-value"); err != nil {
+		t.Fatal(err)
+	}
+	state, err = FirstValueStatus(root, "ws-value")
+	if err != nil || state.Handoff.RunID != "" {
+		t.Fatalf("active status=%#v err=%v", state, err)
+	}
+}
+
+func TestFirstValueRejectsBriefWithoutConstraints(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root, "ws-incomplete"); err != nil {
+		t.Fatal(err)
+	}
+	run, err := StartFirstValue(root, "ws-incomplete")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := firstValueFixture()
+	input.Brief.Constraints = nil
+	if _, err := CompleteFirstValue(root, "ws-incomplete", run.RunID, filepath.Join(root, "deliverables"), input); err == nil || !strings.Contains(err.Error(), "first-value brief") {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestFirstValueRejectsPlanBeyondThreeActions(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root, "ws-plan"); err != nil {
+		t.Fatal(err)
+	}
+	run, err := StartFirstValue(root, "ws-plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := firstValueFixture()
+	input.Plan = append(input.Plan, input.Plan[0], input.Plan[0], input.Plan[0])
+	if _, err := CompleteFirstValue(root, "ws-plan", run.RunID, filepath.Join(root, "deliverables"), input); err == nil || !strings.Contains(err.Error(), "one to three actions") {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func firstValueFixture() FirstValueSubmission {
+	return FirstValueSubmission{Brief: Brief{ReviewedBy: "owner", Classification: "internal", Mandate: "Support a pilot decision", Decision: "Choose the scope", TimeHorizon: "two weeks", Objectives: []string{"recommend a scope"}, Stakeholders: []string{"sponsor"}, Materials: []string{"approved notes"}, Constraints: []string{"no external research"}, SuccessSignals: []string{"sponsor can decide"}, OpenQuestions: []string{"who owns delivery"}, Bullish: []Thesis{{Statement: "upside", Evidence: []string{"signal"}, Assumptions: []string{"adoption"}, CounterEvidence: []string{"risk"}, InvalidationSignals: []string{"decline"}}}, Bearish: []Thesis{{Statement: "downside", Evidence: []string{"risk"}, Assumptions: []string{"cost"}, CounterEvidence: []string{"efficiency"}, InvalidationSignals: []string{"cost falls"}}}}, Plan: []PlanAction{{Outcome: "confirm scope", Owner: "sponsor", CompletionCriterion: "scope recorded"}}, ArtifactTitle: "Pilot decision brief", NextStep: "Review scope with sponsor", NextOwner: "project lead"}
 }
 
 func TestExpiredResearchPlanFailsClosed(t *testing.T) {

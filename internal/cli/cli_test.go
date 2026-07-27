@@ -643,7 +643,7 @@ func TestWorkspaceAgentCommandsCreateAndExposeTheGuidedInterview(t *testing.T) {
 		t.Fatalf("init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runWorkspaceAgent([]string{"interview", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent_setup"`) || !strings.Contains(output.String(), `"research"`) {
+	if code := runWorkspaceAgent([]string{"interview", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent_setup"`) || !strings.Contains(output.String(), `"decision_and_horizon"`) || !strings.Contains(output.String(), `"handoff"`) {
 		t.Fatalf("workspace-agent interview exit = %d, output = %s", code, output.String())
 	}
 }
@@ -907,6 +907,61 @@ func TestWorkspaceAgentResearchAndEconomicCommandsPersistGovernedArtifacts(t *te
 	code = runWorkspaceAgentWithInput([]string{"economic", "attach", "--snapshot", snapshot.SnapshotID, workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil })
 	if code != ExitOK || !strings.Contains(output.String(), `"state": "attached"`) {
 		t.Fatalf("economic attach exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestWorkspaceAgentFirstValueCommandsProduceResumableArtifact(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	code := runWorkspaceAgentWithInput([]string{"value", "start", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil })
+	var started struct {
+		RunID string `json:"run_id"`
+	}
+	if code != ExitOK || json.Unmarshal(output.Bytes(), &started) != nil || started.RunID == "" {
+		t.Fatalf("start exit = %d, output = %s", code, output.String())
+	}
+
+	input := `{"brief":{"reviewed_by":"owner","classification":"internal","mandate":"support a pilot decision","decision":"choose the scope","time_horizon":"two weeks","objectives":["recommend a scope"],"stakeholders":["sponsor"],"materials":["approved notes"],"constraints":["no external research"],"success_signals":["sponsor can decide"],"open_questions":["who owns delivery"],"bullish":[{"statement":"upside","evidence":["signal"],"assumptions":["adoption"],"counter_evidence":["risk"],"invalidation_signals":["decline"]}],"bearish":[{"statement":"downside","evidence":["risk"],"assumptions":["cost"],"counter_evidence":["efficiency"],"invalidation_signals":["cost falls"]}]},"plan":[{"outcome":"confirm scope","owner":"sponsor","completion_criterion":"scope recorded"}],"artifact_title":"Pilot decision brief","next_step":"Review scope with sponsor","next_owner":"project lead"}`
+	output.Reset()
+	code = runWorkspaceAgentWithInput([]string{"value", "submit", "--run", started.RunID, "--stdin", workspacePath}, strings.NewReader(input), &output, &output, func() (string, error) { return dataRoot, nil })
+	var receipt struct {
+		Artifact struct {
+			Path string `json:"path"`
+		} `json:"artifact"`
+	}
+	if code != ExitOK || json.Unmarshal(output.Bytes(), &receipt) != nil || !strings.HasPrefix(receipt.Artifact.Path, filepath.Join(workspacePath, "brain", "deliverables")+string(os.PathSeparator)) {
+		t.Fatalf("submit exit = %d, receipt = %#v, output = %s", code, receipt, output.String())
+	}
+	if _, err := os.Stat(receipt.Artifact.Path); err != nil {
+		t.Fatalf("governed artifact: %v", err)
+	}
+
+	output.Reset()
+	code = runWorkspaceAgentWithInput([]string{"value", "status", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"next_step": "Review scope with sponsor"`) {
+		t.Fatalf("status exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	code = runWorkspaceAgentWithInput([]string{"value", "start", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil })
+	var incompleteRun struct {
+		RunID string `json:"run_id"`
+	}
+	if code != ExitOK || json.Unmarshal(output.Bytes(), &incompleteRun) != nil || incompleteRun.RunID == "" {
+		t.Fatalf("second start exit = %d, output = %s", code, output.String())
+	}
+	invalidInput := strings.Replace(input, `"constraints":["no external research"]`, `"constraints":[]`, 1)
+	output.Reset()
+	code = runWorkspaceAgentWithInput([]string{"value", "submit", "--run", incompleteRun.RunID, "--stdin", workspacePath}, strings.NewReader(invalidInput), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitFailure || !strings.Contains(output.String(), "first-value brief is incomplete") {
+		t.Fatalf("incomplete submit exit = %d, output = %s", code, output.String())
 	}
 }
 

@@ -71,6 +71,10 @@ type OperationalState struct {
 	CurrentObjective          string    `json:"current_objective,omitempty"`
 	CurrentResearchPlanID     string    `json:"current_research_plan_id,omitempty"`
 	CurrentEconomicSnapshotID string    `json:"current_economic_snapshot_id,omitempty"`
+	CurrentPlanID             string    `json:"current_plan_id,omitempty"`
+	CurrentArtifactID         string    `json:"current_artifact_id,omitempty"`
+	CurrentHandoffID          string    `json:"current_handoff_id,omitempty"`
+	CurrentNextStep           string    `json:"current_next_step,omitempty"`
 	UpdatedAt                 time.Time `json:"updated_at"`
 }
 
@@ -148,12 +152,12 @@ func ColdStartInterview() Interview {
 		Kind:         "workspace_agent_setup",
 		Instructions: "Conduct a concise, user-reviewed setup interview. Do not persist answers automatically. Before external research, show the minimized query plan and obtain explicit approval.",
 		Steps: []InterviewStep{
-			{Field: "mandate", Question: "Qual problema, decisão ou entrega este workspace deve apoiar?"},
-			{Field: "scope", Question: "Qual é o cliente/projeto, horizonte, classificação e quais materiais locais estão autorizados?"},
-			{Field: "stakeholders", Question: "Quem usa o trabalho e quais restrições, riscos ou dependências importam?"},
-			{Field: "hypotheses", Question: "Quais hipóteses de upside, downside e perguntas em aberto devemos testar?"},
-			{Field: "research", Question: "Quais perguntas públicas justificam pesquisa e quais termos/fontes podem ser usados sem revelar estratégia confidencial?"},
-			{Field: "refresh", Question: "Quais sinais ou datas devem disparar a atualização do contexto?"},
+			{Field: "decision_and_horizon", Question: "Qual decisão ou entrega este workspace deve apoiar, e até quando?"},
+			{Field: "audience_and_constraints", Question: "Quem usará o resultado e quais classificação, restrições ou dependências importam?"},
+			{Field: "first_value", Question: "Que resultado concreto faria este primeiro passo ser útil?"},
+			{Field: "authorized_material", Question: "Quais materiais locais podem ser considerados e o que deve ficar fora de escopo?"},
+			{Field: "balanced_hypotheses", Question: "Qual é a hipótese de upside e a de downside mais importantes? O que mudaria cada visão?"},
+			{Field: "handoff", Question: "O que continua em aberto e qual é o próximo passo prático, com responsável?"},
 		},
 	}
 }

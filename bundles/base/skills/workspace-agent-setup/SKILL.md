@@ -15,45 +15,59 @@ Resolve the canonical `interaction-profile` before starting. It controls how
 much technical detail is shown during setup, but never changes approval,
 classification, provenance or workspace-isolation requirements.
 
-## Workflow
+## First useful result
 
 1. Resolve the active workspace with `bcgos status`. Stop if it is missing,
    ambiguous or different from the workspace shown to the user.
-2. Run `bcgos workspace-agent interview <workspace-path>` and conduct the
-   questions conversationally. Show the consolidated briefing to the user
-   before persisting it.
-3. Persist the reviewed JSON briefing with
-   `bcgos workspace-agent brief submit --stdin <workspace-path>`. Keep bullish
-   and bearish hypotheses distinct from facts; each thesis needs evidence,
-   assumptions, counter-evidence and invalidation signals.
-4. Propose a minimized public research plan. Use only hostname allowlist entries
+2. Start `bcgos workspace-agent value start <workspace-path>` before the first
+   question. Keep its run ID inside the workflow; do not expose it to a
+   non-technical user.
+3. Run `bcgos workspace-agent interview <workspace-path>` conversationally.
+   Ask the six minimum questions: decision/horizon; audience/constraints;
+   useful result; authorized material; balanced hypotheses; and next step.
+   Show the consolidated brief and one-to-three-action plan before writing.
+4. Persist the reviewed result with `bcgos workspace-agent value submit --run
+   <id> --stdin <workspace-path>`. It creates the classified decision brief,
+   compact handoff and local first-value receipt.
+5. On a correction, record only its kind with `bcgos workspace-agent value
+   intervention --run <id> --kind <brief_correction|plan_correction|artifact_revision>
+   <workspace-path>`.
+6. Later, use `bcgos workspace-agent value status <workspace-path>` to resume
+   from the handoff. Do not repeat the interview or inject its transcript.
+
+The first-value flow does not browse, ingest documents, query a wiki, dream
+memory, refresh economics or create an agent. External research remains the
+separate approved flow below.
+
+## Optional public research
+1. Propose a minimized public research plan. Use only hostname allowlist entries
    and never include confidential project names, stakeholder names, unpublished
    strategy or client-provided facts in query themes.
-5. Persist the proposal with
+2. Persist the proposal with
    `bcgos workspace-agent research plan --stdin <workspace-path>`. Display the
    exact purpose, query themes and source allowlist. Continue only after the
    user explicitly approves it.
-6. Record approval with
+3. Record approval with
    `bcgos workspace-agent research approve --plan <id> --approved-by <owner> --confirm <workspace-path>`.
-7. Execute external research only when the runtime exposes both an approved
+4. Execute external research only when the runtime exposes both an approved
    web-search/browser tool and an enforceable workspace/pre-action guard.
    Otherwise report the research capability as unavailable; never substitute
    an unapproved API, credential or provider, and never claim hard isolation.
-8. Immediately before each external query, consume one immutable budget slot
+5. Immediately before each external query, consume one immutable budget slot
    with `bcgos workspace-agent research query --stdin <workspace-path>`. Stop
    when the approved budget is exhausted.
-9. For every retained claim, call
+6. For every retained claim, call
    `bcgos workspace-agent research record --stdin <workspace-path>` with the
    plan ID, exact approved query, HTTPS source URL, retrieval time, claim,
    evidence strength, validity date and public classification. Reject expired
    plans/evidence and queries or sources outside the approved plan.
-10. A public macroeconomic snapshot may be imported with
+7. A public macroeconomic snapshot may be imported with
    `bcgos workspace-agent economic import --stdin --attested-public
    --attested-by <owner> --confirm-no-workspace-derivation`, then attached by
    snapshot ID. Every claim must be public and reference a declared source.
    The human attestation is a governance boundary, not automated content
    detection; never use workspace queries, metadata or client-derived synthesis.
-11. Return the workspace, briefing version, approved plan, sourced findings,
+8. Return the workspace, briefing version, approved plan, sourced findings,
     economic snapshot version, freshness gaps and unavailable capabilities.
 
 ## Refresh

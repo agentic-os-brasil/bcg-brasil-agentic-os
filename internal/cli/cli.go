@@ -704,7 +704,7 @@ func runWorkspaceAgent(args []string, out, errOut io.Writer, dataRoot func() (st
 
 func runWorkspaceAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos workspace-agent <status|interview|brief|research|economic> [options]")
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent <status|interview|brief|research|economic|value> [options]")
 		return ExitUsage
 	}
 	if args[0] == "research" {
@@ -715,6 +715,9 @@ func runWorkspaceAgentWithInput(args []string, in io.Reader, out, errOut io.Writ
 	}
 	if args[0] == "economic" {
 		return runWorkspaceAgentEconomic(args[1:], in, out, errOut, dataRoot)
+	}
+	if args[0] == "value" {
+		return runWorkspaceAgentValue(args[1:], in, out, errOut, dataRoot)
 	}
 	path, code := oneOptionalPath("workspace-agent "+args[0], args[1:], errOut)
 	if code != ExitOK {
@@ -742,7 +745,85 @@ func runWorkspaceAgentWithInput(args []string, in io.Reader, out, errOut io.Writ
 		}
 		return writeJSON(out, status, errOut)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos workspace-agent <status|interview|brief|research|economic> [options]")
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent <status|interview|brief|research|economic|value> [options]")
+		return ExitUsage
+	}
+}
+
+func runWorkspaceAgentValue(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent value <start|intervention|submit|status> [options] [workspace-path]")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "start", "status":
+		path, code := oneOptionalPath("workspace-agent value "+args[0], args[1:], errOut)
+		if code != ExitOK {
+			return code
+		}
+		workspaceID, code := workspaceAgentID(root, path, errOut)
+		if code != ExitOK {
+			return code
+		}
+		if args[0] == "start" {
+			receipt, err := workspaceagent.StartFirstValue(root, workspaceID)
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, receipt, errOut)
+		}
+		state, err := workspaceagent.FirstValueStatus(root, workspaceID)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, state, errOut)
+	case "intervention":
+		flags := newFlagSet("workspace-agent value intervention", errOut)
+		runID := flags.String("run", "", "first-value run ID")
+		kind := flags.String("kind", "", "brief_correction, plan_correction or artifact_revision")
+		if err := flags.Parse(args[1:]); err != nil || *runID == "" || *kind == "" || flags.NArg() > 1 {
+			fmt.Fprintln(errOut, "usage: bcgos workspace-agent value intervention --run <id> --kind <brief_correction|plan_correction|artifact_revision> [workspace-path]")
+			return ExitUsage
+		}
+		workspaceID, code := workspaceAgentID(root, optionalArg(flags.Args()), errOut)
+		if code != ExitOK {
+			return code
+		}
+		if err := workspaceagent.RecordFirstValueIntervention(root, workspaceID, *runID, *kind); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]string{"state": "recorded", "run_id": *runID, "kind": *kind}, errOut)
+	case "submit":
+		flags := newFlagSet("workspace-agent value submit", errOut)
+		runID := flags.String("run", "", "first-value run ID")
+		stdin := flags.Bool("stdin", false, "read reviewed first-value submission as JSON")
+		if err := flags.Parse(args[1:]); err != nil || !*stdin || *runID == "" || flags.NArg() > 1 {
+			fmt.Fprintln(errOut, "usage: bcgos workspace-agent value submit --run <id> --stdin [workspace-path]")
+			return ExitUsage
+		}
+		inspection, err := workspace.Inspect(optionalArg(flags.Args()), root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if inspection.WorkspaceID == "" {
+			fmt.Fprintln(errOut, "workspace is not initialized; run bcgos init first")
+			return ExitUsage
+		}
+		var submission workspaceagent.FirstValueSubmission
+		if err := decodeWorkspaceAgentJSON(in, &submission); err != nil {
+			return reportError(errOut, err)
+		}
+		receipt, err := workspaceagent.CompleteFirstValue(root, inspection.WorkspaceID, *runID, filepath.Join(inspection.WorkspacePath, "brain", "deliverables"), submission)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos workspace-agent value <start|intervention|submit|status> [options] [workspace-path]")
 		return ExitUsage
 	}
 }
