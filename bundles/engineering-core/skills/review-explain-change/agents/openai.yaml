@@ -1,0 +1,4 @@
+interface:
+  display_name: "Revisar e explicar mudança"
+  short_description: "Prepara uma mudança técnica para revisão humana com evidência e limites claros"
+  default_prompt: "Use $review-explain-change para preparar esta mudança técnica para revisão humana."

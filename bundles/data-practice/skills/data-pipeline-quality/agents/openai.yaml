@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qualidade de pipeline de dados"
+  short_description: "Define contratos, verificações e recuperação para pipelines operáveis"
+  default_prompt: "Use $data-pipeline-quality para desenhar ou avaliar a qualidade deste pipeline de dados."

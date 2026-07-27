@@ -1,0 +1,4 @@
+interface:
+  display_name: "Entrega orientada por especificação"
+  short_description: "Transforma uma necessidade técnica em um contrato de entrega revisável"
+  default_prompt: "Use $spec-driven-delivery para estruturar esta entrega técnica antes de implementar."

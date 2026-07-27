@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/capabilitybundle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
@@ -52,11 +53,21 @@ func Validate(root string, full bool, out io.Writer) error {
 		{"development skills", func() error {
 			return skillmeta.ValidateDir(filepath.Join(root, "dev", "skills"))
 		}},
-		{"product skills", func() error {
-			return skillmeta.ValidateProductDir(filepath.Join(root, "bundles", "base", "skills"))
-		}},
-		{"skills index", func() error {
-			return skillsindex.Validate(filepath.Join(root, "bundles", "base", "skills"))
+		{"capability bundles", func() error {
+			catalog, err := capabilitybundle.LoadFile(filepath.Join(root, "bundles", "catalog", "catalog.json"))
+			if err != nil {
+				return err
+			}
+			for _, bundle := range catalog.Bundles {
+				skillsRoot := filepath.Join(root, filepath.FromSlash(filepath.Dir(bundle.CatalogPointer)))
+				if err := skillmeta.ValidateProductDir(skillsRoot); err != nil {
+					return fmt.Errorf("validate product skills for bundle %s: %w", bundle.ID, err)
+				}
+				if err := skillsindex.Validate(skillsRoot); err != nil {
+					return fmt.Errorf("validate skills index for bundle %s: %w", bundle.ID, err)
+				}
+			}
+			return nil
 		}},
 		{"agent skill policy", func() error {
 			skillsRoot := filepath.Join(root, "bundles", "base", "skills")

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/capabilitybundle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/gitguard"
 	devharness "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/harness"
@@ -50,8 +51,15 @@ func skillsIndexCommand(root string, args []string) {
 		fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness skills-index")
 		os.Exit(2)
 	}
-	fatalIf(skillsindex.Write(filepath.Join(root, "bundles", "base", "skills")))
-	fmt.Println("skills index regenerated")
+	catalog, err := capabilitybundle.LoadFile(filepath.Join(root, "bundles", "catalog", "catalog.json"))
+	if err != nil {
+		fatal(err)
+	}
+	for _, bundle := range catalog.Bundles {
+		skillsRoot := filepath.Join(root, filepath.FromSlash(filepath.Dir(bundle.CatalogPointer)))
+		fatalIf(skillsindex.Write(skillsRoot))
+	}
+	fmt.Println("skills indexes regenerated")
 }
 
 func guardCommand(root string, args []string) {

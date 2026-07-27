@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "bundles": [
+    {
+      "id": "base",
+      "display_name": "Base profissional",
+      "availability": "included",
+      "availability_reason": "",
+      "depends_on": [],
+      "tracks": [
+        "consulting"
+      ],
+      "catalog_pointer": "bundles/base/skills/catalog.json"
+    },
+    {
+      "id": "engineering-core",
+      "display_name": "Fundamentos de engenharia",
+      "availability": "unavailable",
+      "availability_reason": "A identidade de release, a compatibilidade e a ativação local de bundles opcionais ainda não foram implementadas.",
+      "depends_on": [
+        "base"
+      ],
+      "tracks": [
+        "software-engineering",
+        "technical-explorer"
+      ],
+      "catalog_pointer": "bundles/engineering-core/skills/catalog.json"
+    },
+    {
+      "id": "data-practice",
+      "display_name": "Prática de dados",
+      "availability": "unavailable",
+      "availability_reason": "A identidade de release, a compatibilidade e a ativação local de bundles opcionais ainda não foram implementadas.",
+      "depends_on": [
+        "engineering-core"
+      ],
+      "tracks": [
+        "data-engineering",
+        "data-science"
+      ],
+      "catalog_pointer": "bundles/data-practice/skills/catalog.json"
+    }
+  ]
+}

@@ -19,6 +19,7 @@ import (
 	baseprofile "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/profile"
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
+	bundlecatalog "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/catalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/activationpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
@@ -59,12 +60,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation|canary|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|bundles|memory|federation|work>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation|work>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|bundles|memory|federation|work>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -97,6 +98,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runAdapter(args[1:], out, errOut)
 	case "skills":
 		return runSkills(args[1:], out, errOut)
+	case "bundles":
+		return runBundles(args[1:], out, errOut)
 	case "memory":
 		return runMemory(args[1:], in, out, errOut)
 	case "federation":
@@ -1223,6 +1226,48 @@ func runSkills(args []string, out, errOut io.Writer) int {
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, catalog, errOut)
+}
+
+func runBundles(args []string, out, errOut io.Writer) int {
+	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+		fmt.Fprintln(out, "usage: bcgos bundles <index|plan --track TRACK[,TRACK...]>")
+		return ExitOK
+	}
+	catalog, err := bundlecatalog.Catalog()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	switch args[0] {
+	case "index":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos bundles index")
+			return ExitUsage
+		}
+		return writeJSON(out, catalog, errOut)
+	case "plan":
+		flags := newFlagSet("bundles plan", errOut)
+		tracks := flags.String("track", "", "comma-separated declared capability tracks")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*tracks) == "" {
+			fmt.Fprintln(errOut, "usage: bcgos bundles plan --track TRACK[,TRACK...]")
+			return ExitUsage
+		}
+		plan, err := catalog.PlanForTracks(splitTracks(*tracks))
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, plan, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos bundles <index|plan --track TRACK[,TRACK...]>")
+		return ExitUsage
+	}
+}
+
+func splitTracks(value string) []string {
+	parts := strings.Split(value, ",")
+	for index := range parts {
+		parts[index] = strings.TrimSpace(parts[index])
+	}
+	return parts
 }
 
 func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
