@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/maestro-hero.svg" alt="Maestro — trabalho profissional, continuidade governada e evolução segura" width="960">
+  <img src="docs/assets/maestro-hero-v2.png" alt="Maestro conduzindo trabalho contínuo, delegação governada e aprendizagem segura" width="1200">
 </p>
 
 <h1 align="center">Maestro</h1>
