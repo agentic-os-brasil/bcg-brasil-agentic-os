@@ -40,15 +40,14 @@ type FirstValueArtifact struct {
 	SHA256     string `json:"sha256"`
 }
 type FirstValueHandoff struct {
-	HandoffID         string    `json:"handoff_id"`
-	RunID             string    `json:"run_id"`
-	BriefID           string    `json:"brief_id"`
-	PlanID            string    `json:"plan_id"`
-	ArtifactID        string    `json:"artifact_id"`
-	NextStep          string    `json:"next_step"`
-	NextOwner         string    `json:"next_owner"`
-	OpenQuestionCount int       `json:"open_question_count"`
-	CreatedAt         time.Time `json:"created_at"`
+	HandoffID         string `json:"handoff_id"`
+	RunID             string `json:"run_id"`
+	BriefID           string `json:"brief_id"`
+	PlanID            string `json:"plan_id"`
+	ArtifactID        string `json:"artifact_id"`
+	NextStep          string `json:"next_step"`
+	NextOwner         string `json:"next_owner"`
+	OpenQuestionCount int    `json:"open_question_count"`
 }
 type FirstValueReceipt struct {
 	RunID    string             `json:"run_id"`
@@ -158,7 +157,7 @@ func CompleteFirstValue(root, workspaceID, runID, deliverables string, submissio
 	if err := createImmutableJSON(filepath.Join(workspaceAgentRoot(root, workspaceID), "dossier", "artifacts", artifactID+".json"), artifact); err != nil {
 		return FirstValueReceipt{}, err
 	}
-	handoff := FirstValueHandoff{HandoffID: identifier("first-value-handoff", runID, artifactID), RunID: runID, BriefID: brief.BriefID, PlanID: planID, ArtifactID: artifactID, NextStep: submission.NextStep, NextOwner: submission.NextOwner, OpenQuestionCount: len(brief.OpenQuestions), CreatedAt: now}
+	handoff := FirstValueHandoff{HandoffID: identifier("first-value-handoff", runID, artifactID), RunID: runID, BriefID: brief.BriefID, PlanID: planID, ArtifactID: artifactID, NextStep: submission.NextStep, NextOwner: submission.NextOwner, OpenQuestionCount: len(brief.OpenQuestions)}
 	if err := writeAtomicJSON(filepath.Join(workspaceAgentRoot(root, workspaceID), "agent", "first-value-handoff.json"), handoff); err != nil {
 		return FirstValueReceipt{}, err
 	}
@@ -210,7 +209,7 @@ func FirstValueStatus(root, workspaceID string) (FirstValueState, error) {
 
 func validateFirstValue(s FirstValueSubmission) error {
 	b := s.Brief
-	if strings.TrimSpace(b.Decision) == "" || strings.TrimSpace(b.TimeHorizon) == "" || len(b.Materials) == 0 || len(b.SuccessSignals) == 0 || len(b.OpenQuestions) == 0 || len(b.Stakeholders) == 0 || strings.TrimSpace(s.ArtifactTitle) == "" || strings.TrimSpace(s.NextStep) == "" || strings.TrimSpace(s.NextOwner) == "" {
+	if strings.TrimSpace(b.Decision) == "" || strings.TrimSpace(b.TimeHorizon) == "" || len(b.Materials) == 0 || len(b.Constraints) == 0 || len(b.SuccessSignals) == 0 || len(b.OpenQuestions) == 0 || len(b.Stakeholders) == 0 || strings.TrimSpace(s.ArtifactTitle) == "" || strings.TrimSpace(s.NextStep) == "" || strings.TrimSpace(s.NextOwner) == "" {
 		return errors.New("first-value brief is incomplete")
 	}
 	b.WorkspaceID = "first-value"

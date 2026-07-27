@@ -306,8 +306,8 @@ func validateDraftPlan(plan ResearchPlan) error {
 }
 
 func validateBrief(brief Brief) error {
-	if !workspaceIDPattern.MatchString(brief.WorkspaceID) || strings.TrimSpace(brief.ReviewedBy) == "" || strings.TrimSpace(brief.Mandate) == "" || len(brief.Objectives) == 0 {
-		return errors.New("brief requires workspace, reviewer, mandate and objectives")
+	if !workspaceIDPattern.MatchString(brief.WorkspaceID) || strings.TrimSpace(brief.ReviewedBy) == "" || strings.TrimSpace(brief.Mandate) == "" || len(brief.Objectives) == 0 || len(brief.Constraints) == 0 {
+		return errors.New("brief requires workspace, reviewer, mandate, objectives and constraints")
 	}
 	if brief.Classification != "public" && brief.Classification != "internal" && brief.Classification != "confidential" {
 		return errors.New("brief classification must be public, internal or confidential")

@@ -168,7 +168,7 @@ func TestBriefRequiresBalancedTheses(t *testing.T) {
 	}
 	_, err := SaveBrief(root, Brief{
 		WorkspaceID: "ws-theses", ReviewedBy: "owner", Classification: "internal",
-		Mandate: "Support a decision", Objectives: []string{"recommendation"},
+		Mandate: "Support a decision", Objectives: []string{"recommendation"}, Constraints: []string{"no external research"},
 		Bullish: []Thesis{{Statement: "Upside", Evidence: []string{"signal"}, Assumptions: []string{"growth"}, CounterEvidence: []string{"weakness"}, InvalidationSignals: []string{"decline"}}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "bullish and one bearish") {
@@ -212,7 +212,7 @@ func TestFirstValueCreatesArtifactMetricsAndResumableHandoff(t *testing.T) {
 	}
 }
 
-func TestFirstValueRejectsIncompleteBriefAndPlanBeyondThreeActions(t *testing.T) {
+func TestFirstValueRejectsBriefWithoutConstraints(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root, "ws-incomplete"); err != nil {
 		t.Fatal(err)
@@ -222,9 +222,24 @@ func TestFirstValueRejectsIncompleteBriefAndPlanBeyondThreeActions(t *testing.T)
 		t.Fatal(err)
 	}
 	input := firstValueFixture()
-	input.Brief.Materials = nil
-	input.Plan = append(input.Plan, input.Plan[0], input.Plan[0], input.Plan[0])
+	input.Brief.Constraints = nil
 	if _, err := CompleteFirstValue(root, "ws-incomplete", run.RunID, filepath.Join(root, "deliverables"), input); err == nil || !strings.Contains(err.Error(), "first-value brief") {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestFirstValueRejectsPlanBeyondThreeActions(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root, "ws-plan"); err != nil {
+		t.Fatal(err)
+	}
+	run, err := StartFirstValue(root, "ws-plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := firstValueFixture()
+	input.Plan = append(input.Plan, input.Plan[0], input.Plan[0], input.Plan[0])
+	if _, err := CompleteFirstValue(root, "ws-plan", run.RunID, filepath.Join(root, "deliverables"), input); err == nil || !strings.Contains(err.Error(), "one to three actions") {
 		t.Fatalf("error=%v", err)
 	}
 }
