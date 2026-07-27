@@ -68,6 +68,7 @@ func (catalog Catalog) Validate() error {
 		return errors.New("capability bundle catalog must use schema version 1 and contain base plus optional bundles")
 	}
 	byID := make(map[string]Bundle, len(catalog.Bundles))
+	trackOwners := make(map[string]string)
 	for _, bundle := range catalog.Bundles {
 		if !validID(bundle.ID) || strings.TrimSpace(bundle.DisplayName) == "" || bundle.CatalogPointer != "bundles/"+bundle.ID+"/skills/catalog.json" {
 			return fmt.Errorf("capability bundle %q has invalid identity or catalog pointer", bundle.ID)
@@ -82,12 +83,14 @@ func (catalog Catalog) Validate() error {
 		} else if bundle.Availability != Unavailable || strings.TrimSpace(bundle.AvailabilityReason) == "" {
 			return fmt.Errorf("optional capability bundle %q must remain explicitly unavailable until release activation exists", bundle.ID)
 		}
-		seenTracks := map[string]bool{}
 		for _, track := range bundle.Tracks {
-			if !validID(track) || seenTracks[track] {
-				return fmt.Errorf("capability bundle %q has invalid or duplicate track %q", bundle.ID, track)
+			if !validID(track) {
+				return fmt.Errorf("capability bundle %q has invalid track %q", bundle.ID, track)
 			}
-			seenTracks[track] = true
+			if owner, exists := trackOwners[track]; exists {
+				return fmt.Errorf("capability track %q is claimed by bundles %q and %q", track, owner, bundle.ID)
+			}
+			trackOwners[track] = bundle.ID
 		}
 		byID[bundle.ID] = bundle
 	}
@@ -107,6 +110,29 @@ func (catalog Catalog) Validate() error {
 			if _, ok := byID[dependency]; !ok {
 				return fmt.Errorf("capability bundle %q depends on unknown bundle %q", bundle.ID, dependency)
 			}
+		}
+	}
+	visitState := make(map[string]uint8, len(byID))
+	var visit func(string) error
+	visit = func(id string) error {
+		switch visitState[id] {
+		case 1:
+			return fmt.Errorf("capability bundle catalog contains dependency cycle involving %q", id)
+		case 2:
+			return nil
+		}
+		visitState[id] = 1
+		for _, dependency := range byID[id].DependsOn {
+			if err := visit(dependency); err != nil {
+				return err
+			}
+		}
+		visitState[id] = 2
+		return nil
+	}
+	for _, bundle := range catalog.Bundles {
+		if err := visit(bundle.ID); err != nil {
+			return err
 		}
 	}
 	return nil

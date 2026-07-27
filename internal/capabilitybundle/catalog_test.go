@@ -45,6 +45,35 @@ func TestParseRejectsOptionalBundleThatClaimsActivation(t *testing.T) {
 	}
 }
 
+func TestParseRejectsDuplicateTrackAcrossBundles(t *testing.T) {
+	broken := strings.Replace(validCatalog, `"tracks": ["software-engineering", "technical-explorer"]`, `"tracks": ["consulting", "technical-explorer"]`, 1)
+	if _, err := capabilitybundle.Parse(strings.NewReader(broken)); err == nil || !strings.Contains(err.Error(), "claimed by bundles") {
+		t.Fatalf("Parse() error = %v", err)
+	}
+}
+
+func TestParseRejectsTwoNodeDependencyCycle(t *testing.T) {
+	broken := strings.Replace(validCatalog, `"depends_on": ["base"]`, `"depends_on": ["data-practice"]`, 1)
+	if _, err := capabilitybundle.Parse(strings.NewReader(broken)); err == nil || !strings.Contains(err.Error(), "dependency cycle") {
+		t.Fatalf("Parse() error = %v", err)
+	}
+}
+
+func TestParseRejectsLongDependencyCycle(t *testing.T) {
+	const longCycleCatalog = `{
+  "schema_version": 1,
+  "bundles": [
+    {"id": "base", "display_name": "Base", "availability": "included", "availability_reason": "", "depends_on": [], "tracks": ["consulting"], "catalog_pointer": "bundles/base/skills/catalog.json"},
+    {"id": "alpha", "display_name": "Alpha", "availability": "unavailable", "availability_reason": "release activation is not implemented", "depends_on": ["gamma"], "tracks": ["alpha-track"], "catalog_pointer": "bundles/alpha/skills/catalog.json"},
+    {"id": "beta", "display_name": "Beta", "availability": "unavailable", "availability_reason": "release activation is not implemented", "depends_on": ["alpha"], "tracks": ["beta-track"], "catalog_pointer": "bundles/beta/skills/catalog.json"},
+    {"id": "gamma", "display_name": "Gamma", "availability": "unavailable", "availability_reason": "release activation is not implemented", "depends_on": ["beta"], "tracks": ["gamma-track"], "catalog_pointer": "bundles/gamma/skills/catalog.json"}
+  ]
+}`
+	if _, err := capabilitybundle.Parse(strings.NewReader(longCycleCatalog)); err == nil || !strings.Contains(err.Error(), "dependency cycle") {
+		t.Fatalf("Parse() error = %v", err)
+	}
+}
+
 const validCatalog = `{
   "schema_version": 1,
   "bundles": [

@@ -1,4 +1,4 @@
-# Spec 030 - Professional capability bundles
+# Spec 035 - Professional capability bundles
 
 Status: source topology, skill catalogs and inspection-only planning
 implemented. Optional release identity, compatibility and local activation
@@ -98,7 +98,8 @@ plan but cannot claim that a track has been installed or cause any activation.
 
 ## Acceptance evidence
 
-- The catalog rejects unknown dependencies, duplicate identities/tracks and an
+- The catalog rejects unknown dependencies, duplicate identities, duplicate
+  tracks across the entire catalog and dependency cycles, and an
   optional bundle that claims to be included.
 - Track planning resolves `data-science` through `base`, `engineering-core`
   and `data-practice`, but reports it as unavailable.
