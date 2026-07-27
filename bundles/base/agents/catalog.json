@@ -16,7 +16,7 @@
       },
       {
         "from_role": "hub",
-        "to_roles": ["account_agent", "errand_helper", "governance_analyst", "practice_agent", "reviewer", "workspace_agent"]
+        "to_roles": ["account_agent", "case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer", "workspace_agent"]
       },
       {
         "from_role": "practice_agent",

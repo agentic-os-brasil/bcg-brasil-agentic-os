@@ -12,7 +12,7 @@ func TestCatalogAcceptsLeanMaestroCore(t *testing.T) {
 			MaxErrandHelpers: 1, ErrandScope: "basic_reversible",
 			AllowedEdges: []DelegationEdge{
 				{FromRole: "account_agent", ToRoles: []string{"capability_specialist"}},
-				{FromRole: "hub", ToRoles: []string{"account_agent", "errand_helper", "governance_analyst", "practice_agent", "reviewer", "workspace_agent"}},
+				{FromRole: "hub", ToRoles: []string{"account_agent", "case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer", "workspace_agent"}},
 				{FromRole: "practice_agent", ToRoles: []string{"subject_specialist"}},
 				{FromRole: "workspace_agent", ToRoles: []string{"capability_specialist"}},
 			},
@@ -47,6 +47,11 @@ func TestCatalogAllowsOnlyTheGovernedDepthTwoChains(t *testing.T) {
 		{"workspace_agent", "subject_specialist", 2, false},
 		{"reviewer", "capability_specialist", 2, false},
 		{"practice_agent", "subject_specialist", 3, false},
+		{"hub", "client_account_agent", 1, true},
+		{"hub", "case_agent", 1, true},
+		{"client_account_agent", "case_agent", 2, false},
+		{"hub", "pa_expert", 1, true},
+		{"case_agent", "pa_expert", 2, false},
 	}
 	for _, test := range tests {
 		if got := catalog.AllowsDelegation(test.from, test.to, test.depth); got != test.want {

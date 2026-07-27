@@ -6,10 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -18,7 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/activationpolicy"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 func TestCanaryReportCommandIsLocalOnly(t *testing.T) {
@@ -723,6 +724,128 @@ func TestAgentScaffoldCommandCreatesPracticeAndSubjectChain(t *testing.T) {
 	}, &output, &output, func() (string, error) { return dataRoot, nil })
 	if code != ExitOK || !strings.Contains(output.String(), `"role": "subject_specialist"`) {
 		t.Fatalf("subject scaffold exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	canonRelative := filepath.Join("helix", "experts", "pxpert-fpa-pricing", "canon.md")
+	canonPath := filepath.Join(dataRoot, canonRelative)
+	if err := os.MkdirAll(filepath.Dir(canonPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	canon := []byte("# Pricing PXpert canon\n")
+	if err := os.WriteFile(canonPath, canon, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	canonDigest := sha256.Sum256(canon)
+	canonSHA256 := hex.EncodeToString(canonDigest[:])
+	var output bytes.Buffer
+	code := runAgent([]string{
+		"hire",
+		"--id", "pxpert-fpa-pricing",
+		"--role", "pa_expert",
+		"--scope-kind", "practice",
+		"--scope", "pricing",
+		"--parent", "maestro",
+		"--parent-role", "hub",
+		"--owner", "helix-curator",
+		"--mandate", "Advise with the governed pricing canon.",
+		"--canon", filepath.ToSlash(canonRelative),
+		"--canon-sha256", canonSHA256,
+		"--expert-kind", "FPA",
+		"--expert-version", "1.0.0",
+	}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"expert_kind": "FPA"`) ||
+		!strings.Contains(output.String(), `"runtime_state": "unavailable"`) ||
+		!strings.Contains(output.String(), `"expert_lifecycle": "draft"`) {
+		t.Fatalf("PXpert hire exit = %d, output = %s", code, output.String())
+	}
+
+	planInput := `{"envelope":{"schema_version":1,"episode_id":"episode-cli","owner":"case_agent","posture":"balanced","consequence":"medium","reversibility":"reversible","sensitivity":"internal","knowledge_need":"none"}}`
+	output.Reset()
+	code = runAgentWithInput([]string{"plan", "--stdin"}, strings.NewReader(planInput), &output, &output, func() (string, error) { return dataRoot, nil })
+	var plan activationpolicy.RoutePlan
+	if code != ExitOK || json.Unmarshal(output.Bytes(), &plan) != nil ||
+		plan.Route != activationpolicy.D1Targeted || len(plan.Experts) != 0 ||
+		!plan.RequiresAssurance || plan.MayAuthorizeDispatch {
+		t.Fatalf("activation plan exit = %d, output = %s", code, output.String())
+	}
+
+	request := activationpolicy.AdvisoryRequest{
+		SchemaVersion: 1, RequestID: "advisory-cli",
+		EpisodeSHA256: activationpolicy.SHA256Hex([]byte(plan.EpisodeID)),
+		PlanSHA256:    plan.PlanSHA256,
+		Expert: activationpolicy.PXpert{
+			ID: "pxpert-fpa-pricing", Kind: activationpolicy.ExpertFPA,
+			Version: "1.0.0", CanonSHA256: canonSHA256,
+			Lifecycle: activationpolicy.Published,
+		},
+		QuestionCode: "pricing-strategy", Classification: activationpolicy.Internal,
+		Facts: []activationpolicy.AdvisoryFact{{
+			Code: "market-signal", Classification: activationpolicy.Internal,
+			ValueCode: "abstracted-market-signal",
+		}},
+		OutputSections: []string{"findings", "challenges"},
+		Attestation: activationpolicy.DeclassificationAttestation{
+			ExporterID: "maestro", NoClientIdentifiers: true,
+			NoStakeholderIdentifiers: true, NoRawExcerpts: true,
+		},
+	}
+	requestBody, _ := json.Marshal(activationAdvisoryInput{
+		Envelope: activationpolicy.IntentEnvelope{
+			SchemaVersion: 1, EpisodeID: "episode-cli", Owner: activationpolicy.OwnerCase,
+			Posture: activationpolicy.Balanced, Consequence: activationpolicy.Medium,
+			Reversibility: activationpolicy.Reversible, Sensitivity: activationpolicy.Internal,
+			KnowledgeNeed: activationpolicy.Functional,
+		},
+		Request: request,
+	})
+	output.Reset()
+	code = runAgentWithInput([]string{"declassify", "--stdin"}, bytes.NewReader(requestBody), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code == ExitOK {
+		t.Fatal("draft PXpert was treated as a published Helix expert")
+	}
+
+	completion := activationCompletionInput{
+		Envelope: activationpolicy.IntentEnvelope{
+			SchemaVersion: 1, EpisodeID: "episode-cli", Owner: activationpolicy.OwnerCase,
+			Posture: activationpolicy.Balanced, Consequence: activationpolicy.Medium,
+			Reversibility: activationpolicy.Reversible, Sensitivity: activationpolicy.Internal,
+			KnowledgeNeed: activationpolicy.None,
+		},
+		Plan: plan,
+		Receipts: []activationpolicy.CompletionReceipt{
+			{SchemaVersion: 1, EpisodeID: plan.EpisodeID, PlanSHA256: plan.PlanSHA256, Kind: activationpolicy.OwnerReceipt, ActorID: "case_agent", EvidenceAuthority: "unverified_breadcrumb"},
+			{SchemaVersion: 1, EpisodeID: plan.EpisodeID, PlanSHA256: plan.PlanSHA256, Kind: activationpolicy.AssuranceReceipt, ActorID: "walter", EvidenceAuthority: "unverified_breadcrumb"},
+		},
+	}
+	completionBody, _ := json.Marshal(completion)
+	output.Reset()
+	code = runAgentWithInput([]string{"verify", "--stdin"}, bytes.NewReader(completionBody), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "shadow_evaluated"`) ||
+		!strings.Contains(output.String(), `"may_complete_execution": false`) {
+		t.Fatalf("verify exit = %d, output = %s", code, output.String())
+	}
+
+	tampered := completion
+	tampered.Plan.Route = activationpolicy.D0Direct
+	tampered.Plan.Experts = nil
+	tampered.Plan.RequiresAssurance = false
+	tampered.Plan.AssuranceAgentID = ""
+	tampered.Plan.PlanSHA256 = activationpolicy.PlanDigest(tampered.Plan)
+	tampered.Receipts = []activationpolicy.CompletionReceipt{{
+		SchemaVersion: 1, EpisodeID: tampered.Plan.EpisodeID,
+		PlanSHA256: tampered.Plan.PlanSHA256,
+		Kind:       activationpolicy.OwnerReceipt, ActorID: "case_agent",
+		EvidenceAuthority: "unverified_breadcrumb",
+	}}
+	tamperedBody, _ := json.Marshal(tampered)
+	output.Reset()
+	code = runAgentWithInput([]string{"verify", "--stdin"}, bytes.NewReader(tamperedBody), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code == ExitOK {
+		t.Fatal("rehashed caller-tampered plan bypassed deterministic recomputation")
 	}
 }
 

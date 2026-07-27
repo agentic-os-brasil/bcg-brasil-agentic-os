@@ -102,6 +102,84 @@ func TestScaffoldCreatesWorkspaceAccountAndPracticeSpecialistChains(t *testing.T
 	}
 }
 
+func TestScaffoldHiresClientAccountCaseAndVersionedPXpert(t *testing.T) {
+	root := t.TempDir()
+	account := Request{
+		AgentID: "client-account-agent-client-alpha", Role: "client_account_agent",
+		ScopeKind: "account", ScopeID: "client-alpha",
+		ParentAgent: "maestro", ParentRole: "hub",
+		Owner: "account-owner", Mandate: "Act as the Partner-like account intelligence owner.",
+	}
+	accountStatus, err := Scaffold(root, account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accountStatus.Instance.InputContract != "bounded_client_account_packet" ||
+		accountStatus.Instance.MayDelegate {
+		t.Fatalf("unexpected Client Account Agent: %#v", accountStatus.Instance)
+	}
+
+	caseRequest := Request{
+		AgentID: "case-agent-transformation", Role: "case_agent",
+		ScopeKind: "case", ScopeID: "transformation",
+		ParentAgent: "maestro", ParentRole: "hub", AccountAgentID: account.AgentID,
+	}
+	caseStatus, err := Scaffold(root, caseRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if caseStatus.Instance.InputContract != "bounded_case_packet" ||
+		caseStatus.Instance.MayDelegate {
+		t.Fatalf("unexpected Case Agent: %#v", caseStatus.Instance)
+	}
+
+	canonPath, canonSHA256 := preparePXpertCanon(t, root, "pxpert-fpa-pricing")
+	expert := Request{
+		AgentID: "pxpert-fpa-pricing", Role: "pa_expert",
+		ScopeKind: "practice", ScopeID: "pricing",
+		ParentAgent: "maestro", ParentRole: "hub",
+		Owner: "helix-curator", Mandate: "Advise cases with the maintained pricing canon.",
+		CanonPath: canonPath, CanonSHA256: canonSHA256,
+		ExpertKind: "FPA", ExpertVersion: "1.0.0", ExpertLifecycle: "draft",
+	}
+	expertStatus, err := Scaffold(root, expert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expertStatus.Instance.InputContract != "bounded_advisory_packet" ||
+		expertStatus.Instance.ToolAccess != "none" ||
+		expertStatus.Instance.ExpertKind != "FPA" ||
+		expertStatus.Instance.ExpertVersion != "1.0.0" ||
+		expertStatus.Instance.ExpertLifecycle != "draft" {
+		t.Fatalf("unexpected PXpert: %#v", expertStatus.Instance)
+	}
+}
+
+func TestPXpertHireRejectsMissingVersionAndChangedCanon(t *testing.T) {
+	root := t.TempDir()
+	canonPath, canonSHA256 := preparePXpertCanon(t, root, "pxpert-ipa-insurance")
+	request := Request{
+		AgentID: "pxpert-ipa-insurance", Role: "pa_expert",
+		ScopeKind: "practice", ScopeID: "insurance",
+		ParentAgent: "maestro", ParentRole: "hub",
+		Owner: "helix-curator", Mandate: "Advise cases with the maintained insurance canon.",
+		CanonPath: canonPath, CanonSHA256: canonSHA256, ExpertKind: "IPA", ExpertLifecycle: "draft",
+	}
+	if _, err := Scaffold(root, request); err == nil {
+		t.Fatal("unversioned PXpert was hired")
+	}
+	request.ExpertVersion = "1.0.0"
+	if _, err := Scaffold(root, request); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(canonPath)), []byte("changed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Inspect(root, request.AgentID); err == nil {
+		t.Fatal("PXpert with changed Helix canon remained valid")
+	}
+}
+
 func TestScaffoldRejectsUngovernedRolesEdgesAndScopeReuse(t *testing.T) {
 	root := t.TempDir()
 	tests := []Request{
@@ -354,6 +432,21 @@ func preparePracticeCanon(t *testing.T, root, practiceID string) (string, string
 		t.Fatal(err)
 	}
 	body := []byte("# Governed practice canon\n")
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(body)
+	return filepath.ToSlash(relative), hex.EncodeToString(digest[:])
+}
+
+func preparePXpertCanon(t *testing.T, root, expertID string) (string, string) {
+	t.Helper()
+	relative := filepath.Join("helix", "experts", expertID, "canon.md")
+	path := filepath.Join(root, relative)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("# Governed Helix PXpert canon\n")
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
