@@ -68,7 +68,6 @@ const (
 )
 
 type PlannerProposal struct {
-	RequestedRoute   Route    `json:"requested_route,omitempty"`
 	RequestedExperts []string `json:"requested_expert_ids,omitempty"`
 }
 
@@ -229,10 +228,6 @@ func normalizeEnvelope(input IntentEnvelope) (IntentEnvelope, error) {
 		}
 	}
 	input.PlannerProposal.RequestedExperts = append([]string(nil), input.PlannerProposal.RequestedExperts...)
-	if proposed := input.PlannerProposal.RequestedRoute; proposed != "" &&
-		proposed != D0Direct && proposed != D1Targeted && proposed != D2Governed && proposed != Blocked {
-		return IntentEnvelope{}, errors.New("planner proposed an invalid route")
-	}
 	sort.Strings(input.PlannerProposal.RequestedExperts)
 	input.PlannerProposal.RequestedExperts = compact(input.PlannerProposal.RequestedExperts)
 	return input, nil
@@ -333,7 +328,8 @@ func selectExperts(input IntentEnvelope, registry []PXpert, limit int) ([]Select
 		found := false
 		for _, id := range input.PlannerProposal.RequestedExperts {
 			expert, ok := byID[id]
-			if ok && expert.Kind == kind && !used[expert.ID] {
+			if ok && expert.Lifecycle == Published &&
+				expert.Kind == kind && !used[expert.ID] {
 				candidate, found = expert, true
 				break
 			}

@@ -50,18 +50,46 @@ func TestOmittedPostureDefaultsToBalanced(t *testing.T) {
 	}
 }
 
-func TestSemanticProposalCannotReduceHardRoute(t *testing.T) {
-	plan, err := Plan(IntentEnvelope{
-		SchemaVersion: 1, EpisodeID: "episode-02", Owner: OwnerAccount,
-		Posture: Direct, Consequence: High, Reversibility: Reversible,
-		Sensitivity: Confidential, KnowledgeNeed: None, ExternalEffect: true,
-		PlannerProposal: PlannerProposal{RequestedRoute: D0Direct},
-	}, nil)
-	if err != nil {
-		t.Fatal(err)
+func TestRequestedRouteIsOutsideTheClosedPlannerProposal(t *testing.T) {
+	var envelope IntentEnvelope
+	body := []byte(`{"schema_version":1,"episode_id":"episode-02","owner":"client_account_agent","posture":"direct","consequence":"high","reversibility":"reversible","sensitivity":"confidential","knowledge_need":"none","external_effect":true,"planner_proposal":{"requested_route":"D0_DIRECT"}}`)
+	if err := DecodeStrict(body, &envelope); err == nil {
+		t.Fatal("non-canonical requested_route was accepted")
 	}
-	if plan.Route != D2Governed || !plan.RequiresAssurance {
-		t.Fatalf("planner reduced hard route: %#v", plan)
+}
+
+func TestUnpublishedSuggestedPXpertFallsBackOrFailsClosed(t *testing.T) {
+	base := IntentEnvelope{
+		SchemaVersion: 1, EpisodeID: "episode-suggestion", Owner: OwnerCase,
+		Posture: Balanced, Consequence: Low, Reversibility: Reversible,
+		Sensitivity: Internal, KnowledgeNeed: Functional,
+	}
+	for _, lifecycle := range []ExpertLifecycle{Draft, Retired} {
+		t.Run(string(lifecycle)+" falls back", func(t *testing.T) {
+			input := base
+			input.PlannerProposal.RequestedExperts = []string{"pxpert-fpa-suggested"}
+			plan, err := Plan(input, []PXpert{
+				{ID: "pxpert-fpa-suggested", Kind: ExpertFPA, Version: "2.0.0", CanonSHA256: digest("suggested"), Lifecycle: lifecycle},
+				{ID: "pxpert-fpa-published", Kind: ExpertFPA, Version: "1.0.0", CanonSHA256: digest("published"), Lifecycle: Published},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(plan.Experts) != 1 || plan.Experts[0].ID != "pxpert-fpa-published" {
+				t.Fatalf("unpublished suggestion did not fall back: %#v", plan.Experts)
+			}
+		})
+		t.Run(string(lifecycle)+" fails closed without fallback", func(t *testing.T) {
+			input := base
+			input.PlannerProposal.RequestedExperts = []string{"pxpert-fpa-suggested"}
+			_, err := Plan(input, []PXpert{{
+				ID: "pxpert-fpa-suggested", Kind: ExpertFPA, Version: "2.0.0",
+				CanonSHA256: digest("suggested"), Lifecycle: lifecycle,
+			}})
+			if err == nil {
+				t.Fatal("unpublished suggestion was selected without a published fallback")
+			}
+		})
 	}
 }
 

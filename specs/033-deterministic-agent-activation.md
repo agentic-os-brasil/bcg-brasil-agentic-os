@@ -33,7 +33,10 @@ Every route is computed from an `IntentEnvelope` with:
 
 Unknown fields and values fail closed. Narrative task text is deliberately not
 part of the authority-bearing envelope. A planner may propose exact expert IDs
-but cannot reduce the route, budgets, sensitivity or confirmation requirement.
+but cannot propose a route or reduce the route, budgets, sensitivity or
+confirmation requirement. A proposed expert is eligible only when its exact
+registry entry is `published`; `draft` and `retired` suggestions fall back to a
+compatible published expert or fail closed.
 
 ## Deterministic policy
 
