@@ -287,11 +287,15 @@ func TestClaudeLifecycleHooksRemainUnavailableWhileRecordingMetadataOnlyEvidence
 			strings.Contains(string(body), "session-a") || strings.Contains(string(body), workspacePath) {
 			t.Fatalf("unsafe receipt = %s, %v", body, err)
 		}
+		if !strings.Contains(string(body), `"provenance": "adapter_command"`) {
+			t.Fatalf("receipt did not state unverified adapter provenance: %s", body)
+		}
 	}
 	output.Reset()
 	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, func(string) bool { return true }); code != ExitOK ||
 		!strings.Contains(output.String(), `"id": "lifecycle_receipts"`) ||
-		!strings.Contains(output.String(), "capability promotion still requires") ||
+		!strings.Contains(output.String(), "adapter-command lifecycle receipt") ||
+		!strings.Contains(output.String(), "native-session conformance") ||
 		!strings.Contains(output.String(), `"state": "unavailable"`) {
 		t.Fatalf("doctor = %d %s", code, output.String())
 	}

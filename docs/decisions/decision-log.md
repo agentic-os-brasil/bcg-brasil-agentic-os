@@ -403,6 +403,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/004-runtime-portability.md; specs/019-nonblocking-hook-execution.md; specs/021-pilot-hook-conformance.md; specs/025-native-session-start-hook.md; specs/026-workspace-local-adapter-installation.md; specs/030-claude-lifecycle-vertical.md; internal/claudeadapter; internal/lifecycle
 - Supersedes: none
 
+## LIFE - Separate adapter receipts from native lifecycle evidence
+
+- Date: 2026-07-27
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A metadata-only receipt can prove that the Maestro adapter command executed, but the same command can be invoked directly outside a native Claude or Codex session. Calling that receipt native would collapse local configuration, harness execution and runtime observation into one untrustworthy state.
+- Decision: Persist lifecycle receipts with the explicit provenance `adapter_command`, meaning a bounded Maestro adapter command produced the receipt but native runtime invocation remains unverified. `bcgos doctor` must diagnose adapter-command receipts separately from native conformance. Native capability promotion requires a runtime/platform conformance record under the pilot protocol, never a local receipt, configuration entry or direct command. Environment probes may report blockers but cannot alter the capability manifest.
+- Consequences: Post-action and Stop receipts remain useful for bounded diagnostics without overstating runtime evidence. Claude and Codex continue `unavailable` until their own fresh-session proof exists. Future trusted native attestation requires a separate producer and contract rather than adding an unverified flag to the hook command.
+- Refs: CLVE; TCAL; specs/004-runtime-portability.md; specs/020-adapter-diagnostics.md; specs/021-pilot-hook-conformance.md; specs/030-claude-lifecycle-vertical.md; internal/lifecycle
+- Supersedes: none
+
 ## CAPS - Separate professional capability bundles from interaction profile
 
 - Date: 2026-07-26
