@@ -20,7 +20,7 @@ customize them, and explicitly confirms the result before it is persisted.
 | `case_agent` | execution, analysis, code and deliverables for one case | case/workspace |
 | `walter` | internal pressure-test and review gate | governance |
 | `darwin` | drift, health and operating-model observation | governance |
-| `pa_expert` | versioned Functional/Industrial Practice advice from Helix Brasil | Helix |
+| `pa_expert` | versioned Functional/Industrial Practice advice from the PA Expert registry | PA Expert registry |
 
 The interview may also personalize scoped practice and specialist agents when
 they are created. Every agent has one emoji-avatar. The avatar is a display
@@ -36,7 +36,7 @@ so a name cannot silently become global across clients or projects. The owner
 does not own the underlying role authority. Maestro
 remains the system hub; Client Account remains the account relationship layer;
 Case remains the project execution owner; Walter and Darwin remain governance
-roles; and PA expert canon/version remain centrally curated by Helix Brasil.
+roles; and PA Expert canon/version remain centrally curated by the PA Expert registry.
 
 Profiles are stored locally at `agents/personalization.json`, are strict JSON,
 must be explicitly confirmed, and are written atomically with restrictive
@@ -76,5 +76,5 @@ and continues to enforce the catalog role and scope independently.
    boundaries.
 5. Legacy role strings never appear in newly persisted profiles or signed
    role fields.
-6. Helix PA expert version and canon remain centrally owned despite local display
+6. PA Expert version and canon remain centrally owned despite local display
    customization.

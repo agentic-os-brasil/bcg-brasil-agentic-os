@@ -669,7 +669,7 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 			return reportError(errOut, err)
 		}
 		if expected.PlanSHA256 != input.Plan.PlanSHA256 {
-			return reportError(errOut, errors.New("completion plan does not match the current deterministic policy and Helix registry"))
+			return reportError(errOut, errors.New("completion plan does not match the current deterministic policy and PA Expert registry"))
 		}
 		if err := activationpolicy.VerifyCompletion(input.Plan, input.Receipts); err != nil {
 			return reportError(errOut, err)
@@ -716,7 +716,7 @@ func localPAExpertRegistry(root string) ([]activationpolicy.PAExpert, error) {
 	if err != nil {
 		return nil, err
 	}
-	managed, err := baseagents.ManagedHelixRegistry()
+	managed, err := baseagents.ManagedPAExpertRegistry()
 	if err != nil {
 		return nil, err
 	}
@@ -730,7 +730,7 @@ func localPAExpertRegistry(root string) ([]activationpolicy.PAExpert, error) {
 		if !ok || instance.ExpertKind != string(expert.Kind) ||
 			instance.ExpertVersion != expert.Version ||
 			instance.CanonSHA256 != expert.CanonSHA256 {
-			return nil, errors.New("published Helix PA expert is not installed with its exact signed canon")
+			return nil, errors.New("published PA Expert is not installed with its exact signed canon")
 		}
 		experts = append(experts, expert)
 	}

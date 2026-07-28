@@ -13,8 +13,8 @@ import (
 //go:embed catalog.json
 var catalogJSON []byte
 
-//go:embed helix-registry.json
-var helixRegistryJSON []byte
+//go:embed pa-expert-registry.json
+var paExpertRegistryJSON []byte
 
 //go:embed templates/*/AGENT.md
 var templates embed.FS
@@ -23,24 +23,24 @@ func Catalog() (agentcatalog.Catalog, error) {
 	return agentcatalog.Parse(bytes.NewReader(catalogJSON))
 }
 
-type HelixRegistry struct {
+type PAExpertRegistry struct {
 	SchemaVersion int                         `json:"schema_version"`
 	Authority     string                      `json:"authority"`
 	Experts       []activationpolicy.PAExpert `json:"experts"`
 }
 
-func ManagedHelixRegistry() (HelixRegistry, error) {
-	var registry HelixRegistry
-	if err := activationpolicy.DecodeStrict(helixRegistryJSON, &registry); err != nil {
-		return HelixRegistry{}, err
+func ManagedPAExpertRegistry() (PAExpertRegistry, error) {
+	var registry PAExpertRegistry
+	if err := activationpolicy.DecodeStrict(paExpertRegistryJSON, &registry); err != nil {
+		return PAExpertRegistry{}, err
 	}
-	if registry.SchemaVersion != 1 || registry.Authority != "helix-brasil" {
-		return HelixRegistry{}, errors.New("managed Helix registry authority is invalid")
+	if registry.SchemaVersion != 2 || registry.Authority != "pa-expert-registry-v2" {
+		return PAExpertRegistry{}, errors.New("managed PA Expert registry authority is invalid")
 	}
 	previous := ""
 	for _, expert := range registry.Experts {
 		if expert.ID <= previous || !activationpolicy.IsValidPublishedPAExpert(expert) {
-			return HelixRegistry{}, errors.New("managed Helix experts must be valid, unique and sorted")
+			return PAExpertRegistry{}, errors.New("managed PA Experts must be valid, unique and sorted")
 		}
 		previous = expert.ID
 	}

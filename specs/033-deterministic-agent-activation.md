@@ -93,9 +93,9 @@ dispatch.
 
 ## PA expert advisory boundary
 
-A PA expert is a centrally versioned Helix Brasil agent of kind `FPA` or `IPA`.
-It contributes the best maintained functional or industry perspective but has
-no client or case scope.
+A PA expert is a centrally versioned advisory agent of kind `FPA` or `IPA`,
+maintained through the PA Expert registry. It contributes the best maintained
+functional or industry perspective but has no client or case scope.
 
 The advisory request is a bounded shadow-assessment packet. It may contain only
 an opaque request ID, episode and route digests, exact expert identity/version/
@@ -135,7 +135,7 @@ Missing, extra, duplicated, stale or digest-mismatched breadcrumbs fail closed.
 The CLI returns `shadow_evaluated`, never `complete`. This makes intended
 participation testable without claiming that execution occurred.
 The CLI recomputes the plan from the original closed envelope and the current
-signed local Helix registry before advisory export or completion. Advisory
+signed local PA Expert registry before advisory export or completion. Advisory
 export also binds the request to the digest of the exact episode ID. A caller
 cannot modify a plan and merely recompute its public digest.
 
@@ -148,16 +148,24 @@ Managed scaffolding supports:
 - `case_agent`: exact `case`-scoped project execution, related immutably to its
   exact Client Account Agent and owned sequentially by Maestro;
 - `pa_expert`: FPA/IPA advisory agent, owned by Maestro and bound to an exact
-  Helix canon version and digest.
+  PA Expert canon version and digest.
 
 Scaffolding is idempotent and immutable for a given agent ID. It creates signed
 local registration and data-free definition/state files, but leaves runtime
 state `unavailable`. A `pa_expert` scaffold is always `draft` and is never
 inferred to be published. It additionally requires expert kind, semantic
 version, curator and verified canon. A separate authenticated, centrally
-distributed Helix lifecycle must publish it before routing can select it.
+distributed PA Expert registry lifecycle must publish it before routing can
+select it.
 Updating canon or version requires a new immutable registration/version
 workflow; it is not an in-place prompt edit.
+
+The PA Expert registry schema is version 2 and uses the generic
+`pa-experts/<expert-id>/...` canon namespace. Previous registry authorities and
+canon namespaces are not auto-renamed or silently reinterpreted: legacy signed
+artifacts fail closed and require explicit re-registration. Re-registration
+must preserve the exact canon bytes and digest when the advisory content is
+intended to remain unchanged.
 
 The legacy role names remain accepted only as compatibility input aliases:
 `account_agent` resolves to `client_account_agent`, and `workspace_agent`

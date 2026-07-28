@@ -22,12 +22,21 @@ func TestManagedScaffoldTemplatesAreEmbeddedAndDataFree(t *testing.T) {
 	}
 }
 
-func TestManagedHelixRegistryStartsEmptyAndAuthoritative(t *testing.T) {
-	registry, err := ManagedHelixRegistry()
+func TestManagedPAExpertRegistryStartsEmptyAndAuthoritative(t *testing.T) {
+	registry, err := ManagedPAExpertRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if registry.Authority != "helix-brasil" || len(registry.Experts) != 0 {
-		t.Fatalf("unexpected initial Helix registry: %#v", registry)
+	if registry.SchemaVersion != 2 || registry.Authority != "pa-expert-registry-v2" || len(registry.Experts) != 0 {
+		t.Fatalf("unexpected initial PA Expert registry: %#v", registry)
+	}
+}
+
+func TestManagedPAExpertRegistryRejectsLegacySchema(t *testing.T) {
+	original := paExpertRegistryJSON
+	t.Cleanup(func() { paExpertRegistryJSON = original })
+	paExpertRegistryJSON = []byte(`{"schema_version":1,"authority":"legacy-pa-expert-registry","experts":[]}`)
+	if _, err := ManagedPAExpertRegistry(); err == nil {
+		t.Fatal("legacy PA Expert registry schema was accepted")
 	}
 }

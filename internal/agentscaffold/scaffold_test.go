@@ -162,7 +162,7 @@ func TestScaffoldHiresClientAccountCaseAndVersionedPAExpert(t *testing.T) {
 		AgentID: "pa-expert-fpa-pricing", Role: "pa_expert",
 		ScopeKind: "practice", ScopeID: "pricing",
 		ParentAgent: "maestro", ParentRole: "hub",
-		Owner: "helix-curator", Mandate: "Advise cases with the maintained pricing canon.",
+		Owner: "pa-expert-curator", Mandate: "Advise cases with the maintained pricing canon.",
 		CanonPath: canonPath, CanonSHA256: canonSHA256,
 		ExpertKind: "FPA", ExpertVersion: "1.0.0", ExpertLifecycle: "draft",
 	}
@@ -186,7 +186,7 @@ func TestPAExpertHireRejectsMissingVersionAndChangedCanon(t *testing.T) {
 		AgentID: "pa-expert-ipa-insurance", Role: "pa_expert",
 		ScopeKind: "practice", ScopeID: "insurance",
 		ParentAgent: "maestro", ParentRole: "hub",
-		Owner: "helix-curator", Mandate: "Advise cases with the maintained insurance canon.",
+		Owner: "pa-expert-curator", Mandate: "Advise cases with the maintained insurance canon.",
 		CanonPath: canonPath, CanonSHA256: canonSHA256, ExpertKind: "IPA", ExpertLifecycle: "draft",
 	}
 	if _, err := Scaffold(root, request); err == nil {
@@ -200,7 +200,23 @@ func TestPAExpertHireRejectsMissingVersionAndChangedCanon(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := Inspect(root, request.AgentID); err == nil {
-		t.Fatal("PA expert with changed Helix canon remained valid")
+		t.Fatal("PA expert with changed canon remained valid")
+	}
+}
+
+func TestPAExpertRejectsLegacyCanonNamespace(t *testing.T) {
+	root := t.TempDir()
+	_, err := Scaffold(root, Request{
+		AgentID: "pa-expert-fpa-pricing", Role: "pa_expert",
+		ScopeKind: "practice", ScopeID: "pricing",
+		ParentAgent: "maestro", ParentRole: "hub",
+		Owner: "pa-expert-curator", Mandate: "Advise with the maintained pricing canon.",
+		CanonPath:   "legacy-pa-experts/pa-expert-fpa-pricing/canon.md",
+		CanonSHA256: strings.Repeat("a", 64), ExpertKind: "FPA",
+		ExpertVersion: "1.0.0", ExpertLifecycle: "draft",
+	})
+	if err == nil {
+		t.Fatal("legacy PA Expert canon namespace was accepted")
 	}
 }
 
@@ -465,12 +481,12 @@ func preparePracticeCanon(t *testing.T, root, practiceID string) (string, string
 
 func preparePAExpertCanon(t *testing.T, root, expertID string) (string, string) {
 	t.Helper()
-	relative := filepath.Join("helix", "experts", expertID, "canon.md")
+	relative := filepath.Join("pa-experts", expertID, "canon.md")
 	path := filepath.Join(root, relative)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	body := []byte("# Governed Helix PA expert canon\n")
+	body := []byte("# Governed PA Expert canon\n")
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
 	}

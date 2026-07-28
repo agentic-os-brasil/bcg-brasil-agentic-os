@@ -276,7 +276,7 @@ func Inspect(dataRoot, agentID string) (Status, error) {
 	return status, nil
 }
 
-// ListPAExperts returns only fully validated, signed Helix PA expert registrations.
+// ListPAExperts returns only fully validated, signed PA Expert registrations.
 // A malformed or tampered registration fails the whole listing rather than
 // silently changing the routing registry.
 func ListPAExperts(dataRoot string) ([]Instance, error) {
@@ -425,7 +425,7 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 		return agentcatalog.RoleContract{}, errors.New("only a case agent may declare a Client Account Agent relation")
 	}
 	if canonicalRole != "pa_expert" && request.ExpertLifecycle != "" {
-		return agentcatalog.RoleContract{}, errors.New("only a PA expert may declare a Helix lifecycle")
+		return agentcatalog.RoleContract{}, errors.New("only a PA expert may declare a PA Expert registry lifecycle")
 	}
 	hasRootMetadata := request.Owner != "" || strings.TrimSpace(request.Mandate) != "" ||
 		request.CanonPath != "" || request.CanonSHA256 != "" ||
@@ -472,7 +472,7 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 			!validExpertVersion(request.ExpertVersion) ||
 			request.ExpertLifecycle != "draft" ||
 			!catalog.AllowsDelegation("hub", "pa_expert", 1) {
-			return agentcatalog.RoleContract{}, errors.New("PA expert scaffold requires Helix curator, FPA/IPA kind, semantic version, bounded mandate and verified canon")
+			return agentcatalog.RoleContract{}, errors.New("PA expert scaffold requires a PA Expert curator, FPA/IPA kind, semantic version, bounded mandate and verified canon")
 		}
 	case "capability_specialist":
 		validParent := (catalog.CanonicalRole(request.ParentRole) == "case_agent" && request.ScopeKind == "workspace")
@@ -584,24 +584,24 @@ func validatePracticeCanon(root *os.Root, practiceID, canonPath, expectedSHA256 
 func validatePAExpertCanon(root *os.Root, expertID, canonPath, expectedSHA256 string) error {
 	cleaned := filepath.Clean(canonPath)
 	slashed := filepath.ToSlash(cleaned)
-	prefix := "helix/experts/" + expertID + "/"
+	prefix := "pa-experts/" + expertID + "/"
 	if filepath.IsAbs(cleaned) || slashed == "." || !strings.HasPrefix(slashed, prefix) ||
 		len(slashed) <= len(prefix) || !validSHA256(expectedSHA256) {
-		return errors.New("PA expert canon must be a specific artifact inside its Helix expert scope")
+		return errors.New("PA expert canon must be a specific artifact inside its registry scope")
 	}
-	expertRoot, err := root.OpenRoot(filepath.Join("helix", "experts", expertID))
+	expertRoot, err := root.OpenRoot(filepath.Join("pa-experts", expertID))
 	if err != nil {
-		return errors.New("PA expert Helix canon scope is unavailable")
+		return errors.New("PA Expert canon scope is unavailable")
 	}
 	defer expertRoot.Close()
 	file, err := expertRoot.Open(filepath.FromSlash(strings.TrimPrefix(slashed, prefix)))
 	if err != nil {
-		return errors.New("PA expert Helix canon is unavailable")
+		return errors.New("PA Expert canon is unavailable")
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		return errors.New("PA expert Helix canon must be a regular scoped artifact")
+		return errors.New("PA Expert canon must be a regular scoped artifact")
 	}
 	digest := sha256.New()
 	if _, err := io.Copy(digest, file); err != nil {
@@ -609,7 +609,7 @@ func validatePAExpertCanon(root *os.Root, expertID, canonPath, expectedSHA256 st
 	}
 	actual := hex.EncodeToString(digest.Sum(nil))
 	if !hmac.Equal([]byte(actual), []byte(strings.ToLower(expectedSHA256))) {
-		return errors.New("PA expert Helix canon hash does not match the registered artifact")
+		return errors.New("PA Expert canon hash does not match the registered artifact")
 	}
 	return nil
 }
