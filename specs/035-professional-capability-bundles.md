@@ -1,8 +1,8 @@
 # Spec 035 - Professional capability bundles
 
-Status: source topology, skill catalogs and inspection-only planning
-implemented. Optional release identity, compatibility and local activation
-remain unavailable.
+Status: source topology and skill catalogs implemented. The neutral engineering
+quality methods are included in the base bundle; specialized engineering and
+data bundles remain unavailable until their separate activation contract exists.
 
 ## Objective
 
@@ -36,11 +36,16 @@ The source inventory is `bundles/catalog/catalog.json`:
 
 | Bundle | Included now | Tracks | Depends on |
 | --- | --- | --- | --- |
-| `base` | Yes | `consulting` | none |
+| `base` | Yes | `consulting` (plus transversal quality methods) | none |
 | `engineering-core` | No — explicitly unavailable | `technical-explorer`, `software-engineering` | `base` |
 | `data-practice` | No — explicitly unavailable | `data-science`, `data-engineering` | `engineering-core` |
 
-`engineering-core` contains reusable delivery practices: specification-first
+The base bundle contains six neutral engineering quality methods: coverage
+diagnosis, focused unit-test waves, strict expected-failure capture, QA gates,
+pull-request review and the pull-request quality loop. They are transversal
+quality controls, not a software-engineering identity or tool grant.
+
+`engineering-core` retains specialized delivery practices: specification-first
 delivery, proportionate tests/evidence and human review explanation.
 `data-practice` adds data-pipeline quality, data-science evaluation and
 reproducible data runs. These extract reusable principles from Kowalski's
@@ -57,14 +62,16 @@ its skill metadata, its interaction-profile reference and generated catalog.
 plan --track <track[,track...]>` resolves the selected bundles and dependencies
 without changing local state.
 
-For `consulting`, the result is `base_only`. Plans that require an optional
-bundle return `unavailable` with the reason that release identity,
+For `consulting`, the result is `base_only` and its active skills index includes
+the neutral quality methods. Plans that require an optional bundle return
+`unavailable` with the reason that release identity,
 compatibility and local activation do not yet exist. The command must never
 write a selection, install a package, modify a workspace, contact a provider or
-present optional bundles as installed.
+present specialized optional bundles as installed.
 
 The existing `bcgos skills index` remains the index of the active base bundle.
-It must not list source-only optional skills as active capabilities.
+It lists the six explicitly included quality methods and must not list
+source-only optional skills as active capabilities.
 
 ## Future activation contract
 
@@ -105,4 +112,5 @@ plan but cannot claim that a track has been installed or cause any activation.
   and `data-practice`, but reports it as unavailable.
 - Track planning resolves `consulting` to the base bundle only.
 - The full harness validates all declared bundle skill directories and generated
-  indexes without allowing optional content into `bundles/base/distribution.json`.
+  indexes; the distribution allowlist contains the six explicit quality methods
+  and no specialized optional content.

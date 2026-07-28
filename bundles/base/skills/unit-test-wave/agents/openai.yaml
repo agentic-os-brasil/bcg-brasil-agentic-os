@@ -1,0 +1,4 @@
+interface:
+  display_name: "Onda de testes unitários"
+  short_description: "Orquestra uma onda de testes focada, com cobertura e evidência"
+  default_prompt: "Use $unit-test-wave para planejar e validar uma onda cirúrgica de testes."

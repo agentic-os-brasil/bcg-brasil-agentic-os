@@ -1,0 +1,4 @@
+interface:
+  display_name: "Diagnóstico de cobertura"
+  short_description: "Mapeia cobertura e escolhe o próximo alvo de testes por risco"
+  default_prompt: "Use $coverage-diagnose para diagnosticar a cobertura e recomendar a próxima onda de testes."

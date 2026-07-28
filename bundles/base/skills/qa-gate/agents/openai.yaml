@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gate de QA"
+  short_description: "Classifica a qualidade de uma mudança com evidência proporcional"
+  default_prompt: "Use $qa-gate para montar um pacote de QA e separar pass, hold e indisponível."

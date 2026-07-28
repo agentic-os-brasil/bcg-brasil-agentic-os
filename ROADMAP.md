@@ -22,7 +22,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
 - [x] Define the execution-ledger authority boundary and implement the initial local contract, attempt, revision and inspection store.
-- [x] Define an inspectable capability-bundle topology that keeps interaction profile separate from professional practice, with source-only engineering and data bundles.
+- [x] Define an inspectable capability-bundle topology that keeps interaction profile separate from professional practice, with neutral quality methods in base and source-only specialized engineering/data bundles.
 
 ## Track A - Contributor onboarding
 
@@ -183,6 +183,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Define the minimal bundle manifest, version and compatibility range.
 - [ ] Implement runtime-neutral contracts and thin Claude/Codex adapters.
 - [x] Implement a deterministic managed skills index and `bcgos skills index` inspection surface.
+- [x] Include the neutral engineering quality loop in the base bundle: coverage diagnosis, focused test waves, strict bug capture, QA gate, PR review and PR quality loop.
 - [x] Create reusable source bundles for technical explorers, software engineering, data science and data engineering, without activating them in a user installation.
 - [ ] Define optional-bundle release identity, compatibility, verified activation, rollback and selected-bundle local state before onboarding can install a track.
 - [ ] Add safe context injection, workspace boundaries and capability detection.
