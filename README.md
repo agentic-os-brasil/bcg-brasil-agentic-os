@@ -51,6 +51,7 @@ quando os mecanismos nativos forem diferentes.
 | Memória | Núcleo local com resumos graduais e contexto limitado; automação de síntese ainda não está ativa. |
 | Execução retomável | Ledger local com contrato imutável, checkpoint privado, pausa/retomada, contrato core para breadcrumbs metadata-only de tool calls, receipts de checks executados pelo core e conclusão revalidada; emissão nativa pelos adapters ainda está pendente. |
 | Skills | Catálogo compacto e atualizado de procedimentos disponíveis. |
+| Ingestão local | Contrato provider-neutral, selector Docling-first, adapter MarkItDown bounded e `bcgos ingest` fail-closed; conversão só fica disponível após instalação e verificação aprovada do runtime pack. |
 | Desenvolvimento | Harness, testes, CI em Windows/macOS/Linux, decisões versionadas e fluxo de PR com revisão humana. |
 
 ## O que ainda não existe
@@ -62,7 +63,7 @@ entre outros:
 - releases assinados e autenticação de distribuição;
 - hooks de produto para Claude e Codex;
 - memória automática, busca e Wiki compilada;
-- ingestão de documentos com Docling empacotado;
+- runtime pack verificado de ingestão com Docling/MarkItDown;
 - sincronização com ferramentas de tarefas.
 
 Nenhuma dessas capacidades deve ser presumida por documentação ou por um
@@ -99,6 +100,7 @@ bcgos owner init
 bcgos atlas init <workspace>
 bcgos atlas status <workspace>
 bcgos skills index
+bcgos ingest --workspace <path> --source <local-file> --adapter markitdown
 bcgos session packet [workspace]
 bcgos work create --workspace <path> --stdin
 bcgos work start --workspace <path> --item <id> --revision <n>

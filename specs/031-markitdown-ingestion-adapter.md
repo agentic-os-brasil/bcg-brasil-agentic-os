@@ -42,15 +42,21 @@ status, fidelity and warnings. It never includes source bodies, prompts,
 provider responses or absolute paths.
 
 The core reports `unavailable`, `blocked` or `degraded` explicitly. A provider
-failure must not update memory, the atlas, the wiki or shared knowledge.
+failure must not update memory, the atlas, the wiki or shared knowledge. The
+core owns a Docling-first route selector; MarkItDown is selected only after
+that selector observes `unavailable`, `unsupported` or `degraded` primary
+state.
 
 ## Runtime-pack boundary
 
 MarkItDown and its required format extras belong to the separately versioned
-ingestion runtime pack. The pack must pin versions, verify hashes and expose a
-single local executable contract to the Go CLI. The CLI must not shell out to a
-contributor's ad-hoc Python environment, accept credentials in chat or enable
-network access as a fallback.
+ingestion runtime pack. The pack must pin versions, verify hashes, carry
+managed-installer provenance and expose a single local executable contract to
+the Go CLI. The CLI must not execute a pack without an approved verifier
+supplied by the managed installer; the current source-only slice therefore
+remains `unavailable` until that signed installation path exists. It must not
+shell out to a contributor's ad-hoc Python environment, accept credentials in
+chat or enable network access as a fallback.
 
 ## Initial acceptance evidence
 

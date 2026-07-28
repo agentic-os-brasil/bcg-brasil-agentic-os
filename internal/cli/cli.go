@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -23,6 +24,8 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest/markitdown"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
@@ -54,12 +57,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|ingest|federation|work>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|federation|work>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|memory|ingest|federation|work>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -94,6 +97,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runSkills(args[1:], out, errOut)
 	case "memory":
 		return runMemory(args[1:], in, out, errOut)
+	case "ingest":
+		return runIngest(args[1:], out, errOut, defaultDataRoot)
 	case "federation":
 		return runFederation(args[1:], out, errOut, defaultDataRoot)
 	case "work":
@@ -1130,6 +1135,79 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, result, errOut)
+}
+
+func runIngest(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	flags := newFlagSet("ingest", errOut)
+	workspacePath := flags.String("workspace", "", "initialized workspace path")
+	sourcePath := flags.String("source", "", "local source file")
+	adapterName := flags.String("adapter", "markitdown", "local adapter: markitdown")
+	if err := flags.Parse(args); err != nil || rejectPositionals(flags, errOut) {
+		fmt.Fprintln(errOut, "usage: bcgos ingest --workspace PATH --source PATH [--adapter markitdown]")
+		return ExitUsage
+	}
+	if strings.TrimSpace(*workspacePath) == "" || strings.TrimSpace(*sourcePath) == "" {
+		fmt.Fprintln(errOut, "usage: bcgos ingest --workspace PATH --source PATH [--adapter markitdown]")
+		return ExitUsage
+	}
+	if *adapterName != "markitdown" {
+		fmt.Fprintln(errOut, "only the markitdown local adapter is available in this release")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(*workspacePath, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if inspection.State != "ready" && inspection.State != "warning" {
+		fmt.Fprintln(errOut, "workspace must be initialized and readable before ingestion; run bcgos init <workspace-path>")
+		return ExitUsage
+	}
+	policy := ingest.DefaultPolicy()
+	// Docling remains the primary substrate. Until its managed runtime pack is
+	// installed, the core makes the explicit unavailable -> fallback decision.
+	decision, err := ingest.SelectFallback(ingest.PrimaryUnavailable, *adapterName)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	// The signed pack verifier is injected by the future managed installer.
+	// Keeping it nil here is intentional: an unsigned or locally forged pack
+	// must not become executable merely because its files exist.
+	pack, err := markitdown.ResolvePack(root, nil)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	result, conversionErr := (markitdown.Adapter{
+		Command:      pack.Command,
+		ArtifactRoot: filepath.Join(root, "ingestion", "artifacts"),
+		WorkspaceID:  inspection.WorkspaceID,
+		Route:        decision.Route,
+		Policy:       policy,
+	}).Convert(context.Background(), ingest.Request{
+		SourcePath:    *sourcePath,
+		WorkspacePath: inspection.WorkspacePath,
+		Policy:        policy,
+	})
+	if pack.State != "ready" {
+		result.Warnings = append(result.Warnings, pack.Reason)
+	}
+	if conversionErr != nil && result.Status == ingest.StatusBlocked {
+		_ = writeJSON(out, result, errOut)
+		return ExitUsage
+	}
+	if code := writeJSON(out, result, errOut); code != ExitOK {
+		return code
+	}
+	if result.Status == ingest.StatusUnavailable {
+		return ExitUnavailable
+	}
+	if result.Status == ingest.StatusBlocked {
+		return ExitUsage
+	}
+	return ExitOK
 }
 
 func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {

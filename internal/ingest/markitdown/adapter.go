@@ -25,6 +25,7 @@ type Adapter struct {
 	Command      []string
 	ArtifactRoot string
 	WorkspaceID  string
+	Route        string
 	Policy       ingest.Policy
 	Timeout      time.Duration
 }
@@ -55,19 +56,18 @@ func (a Adapter) Convert(ctx context.Context, source ingest.Request) (ingest.Res
 	result := ingest.Result{
 		SchemaVersion: ingest.SchemaVersion,
 		Adapter:       "markitdown",
-		Route:         "markitdown_local",
+		Route:         a.Route,
 		Status:        ingest.StatusUnavailable,
 		Fidelity:      ingest.FidelityUnknown,
 		WorkspaceID:   a.WorkspaceID,
+	}
+	if result.Route == "" {
+		result.Route = "markitdown_local"
 	}
 
 	if !workspaceIDPattern.MatchString(a.WorkspaceID) {
 		result.Status = ingest.StatusBlocked
 		return result, errors.New("markitdown workspace identity is invalid")
-	}
-	if len(a.Command) == 0 || strings.TrimSpace(a.Command[0]) == "" {
-		result.Warnings = []string{"managed MarkItDown runtime command is not configured"}
-		return result, nil
 	}
 	if strings.TrimSpace(a.ArtifactRoot) == "" {
 		result.Status = ingest.StatusBlocked
@@ -89,6 +89,10 @@ func (a Adapter) Convert(ctx context.Context, source ingest.Request) (ingest.Res
 	if err != nil {
 		result.Warnings = []string{"source fingerprint unavailable"}
 		return result, err
+	}
+	if len(a.Command) == 0 || strings.TrimSpace(a.Command[0]) == "" {
+		result.Warnings = []string{"managed MarkItDown runtime command is not configured"}
+		return result, nil
 	}
 
 	if err := ensureArtifactRoot(a.ArtifactRoot); err != nil {

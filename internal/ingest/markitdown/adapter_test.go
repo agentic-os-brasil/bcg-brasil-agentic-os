@@ -25,6 +25,7 @@ func TestMarkItDownAdapterWritesBoundedMetadataSafeArtifact(t *testing.T) {
 		Command:      []string{os.Args[0], "-test.run=TestMarkItDownHelperProcess"},
 		ArtifactRoot: artifactRoot,
 		WorkspaceID:  "workspace-a",
+		Route:        "markitdown_fallback",
 		Policy:       ingest.DefaultPolicy(),
 		Timeout:      5 * time.Second,
 	}).Convert(context.Background(), ingest.Request{SourcePath: sourcePath, WorkspacePath: root, Policy: ingest.DefaultPolicy()})
@@ -33,6 +34,9 @@ func TestMarkItDownAdapterWritesBoundedMetadataSafeArtifact(t *testing.T) {
 	}
 	if result.Status != ingest.StatusUsable || result.Fidelity != ingest.FidelityTextual {
 		t.Fatalf("result = %+v", result)
+	}
+	if result.Route != "markitdown_fallback" {
+		t.Fatalf("route = %q", result.Route)
 	}
 	if strings.Contains(result.ArtifactRef, string(filepath.Separator)+"Users"+string(filepath.Separator)) {
 		t.Fatalf("artifact ref leaked absolute path: %q", result.ArtifactRef)
