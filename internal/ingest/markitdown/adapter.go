@@ -65,10 +65,6 @@ func (a Adapter) Convert(ctx context.Context, source ingest.Request) (ingest.Res
 		result.Status = ingest.StatusBlocked
 		return result, errors.New("markitdown workspace identity is invalid")
 	}
-	if len(a.Command) == 0 || strings.TrimSpace(a.Command[0]) == "" {
-		result.Warnings = []string{"managed MarkItDown runtime command is not configured"}
-		return result, nil
-	}
 	if strings.TrimSpace(a.ArtifactRoot) == "" {
 		result.Status = ingest.StatusBlocked
 		return result, errors.New("markitdown artifact root is required")
@@ -89,6 +85,10 @@ func (a Adapter) Convert(ctx context.Context, source ingest.Request) (ingest.Res
 	if err != nil {
 		result.Warnings = []string{"source fingerprint unavailable"}
 		return result, err
+	}
+	if len(a.Command) == 0 || strings.TrimSpace(a.Command[0]) == "" {
+		result.Warnings = []string{"managed MarkItDown runtime command is not configured"}
+		return result, nil
 	}
 
 	if err := ensureArtifactRoot(a.ArtifactRoot); err != nil {
