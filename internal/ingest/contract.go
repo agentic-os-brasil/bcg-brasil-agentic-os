@@ -100,7 +100,19 @@ func (r Request) Validate() (os.FileInfo, error) {
 		return nil, errors.New("plugin ingestion is unavailable in the local contract")
 	}
 
-	workspaceInfo, err := os.Stat(r.WorkspacePath)
+	workspacePath, err := filepath.Abs(filepath.Clean(r.WorkspacePath))
+	if err != nil {
+		return nil, fmt.Errorf("resolve ingestion workspace: %w", err)
+	}
+	sourcePath, err := filepath.Abs(filepath.Clean(r.SourcePath))
+	if err != nil {
+		return nil, fmt.Errorf("resolve ingestion source: %w", err)
+	}
+	if !pathWithin(workspacePath, sourcePath) {
+		return nil, errors.New("ingestion source is outside the workspace scope")
+	}
+
+	workspaceInfo, err := os.Stat(workspacePath)
 	if err != nil {
 		return nil, fmt.Errorf("inspect ingestion workspace: %w", err)
 	}
@@ -108,7 +120,7 @@ func (r Request) Validate() (os.FileInfo, error) {
 		return nil, errors.New("ingestion workspace path is not a directory")
 	}
 
-	info, err := os.Lstat(r.SourcePath)
+	info, err := os.Lstat(sourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("inspect ingestion source: %w", err)
 	}
@@ -118,14 +130,33 @@ func (r Request) Validate() (os.FileInfo, error) {
 	if !info.Mode().IsRegular() {
 		return nil, errors.New("ingestion source must be a regular file")
 	}
+	resolvedWorkspace, err := filepath.EvalSymlinks(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve ingestion workspace: %w", err)
+	}
+	resolvedSource, err := filepath.EvalSymlinks(sourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve ingestion source: %w", err)
+	}
+	if !pathWithin(resolvedWorkspace, resolvedSource) {
+		return nil, errors.New("ingestion source resolves outside the workspace scope")
+	}
 	if info.Size() > policy.MaxInputBytes {
 		return nil, fmt.Errorf("ingestion source exceeds %d byte limit", policy.MaxInputBytes)
 	}
-	ext := strings.ToLower(filepath.Ext(r.SourcePath))
+	ext := strings.ToLower(filepath.Ext(sourcePath))
 	if !policy.AllowedExts[ext] {
 		return nil, fmt.Errorf("ingestion format %q is not allowlisted", ext)
 	}
 	return info, nil
+}
+
+func pathWithin(root, candidate string) bool {
+	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
+	if err != nil || relative == ".." {
+		return false
+	}
+	return !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && relative != "."
 }
 
 func Fingerprint(path string) (string, error) {
