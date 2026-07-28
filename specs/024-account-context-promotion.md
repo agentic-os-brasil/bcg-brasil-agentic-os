@@ -16,8 +16,9 @@ A promotion requires:
 
 - a unique promotion, account and source-workspace ID;
 - one reviewed single-line statement of at most 1,000 bytes. The deterministic
-  core rejects copied multiline or Markdown/code-shaped bodies, but does not
-  infer semantic curation from an arbitrary single-line string;
+  core rejects copied multiline bodies and fenced code blocks. It does not
+  infer semantic curation, Markdown intent or provenance from an arbitrary
+  single-line string; review and the source receipt remain the authority;
 - one canonical artifact URI inside the source workspace;
 - the artifact SHA-256, verified against the bytes of the resolved regular
   workspace file, plus author and workspace-owned source receipt;
