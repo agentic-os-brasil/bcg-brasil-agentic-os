@@ -291,7 +291,7 @@ func TestPromotionRequiresReviewedCuratedFact(t *testing.T) {
 	now := time.Date(2026, 7, 25, 16, 0, 0, 0, time.UTC)
 	for name, mutate := range map[string]func(*Promotion){
 		"unapproved review": func(input *Promotion) { input.ReviewStatus = "proposed" },
-		"raw workspace content": func(input *Promotion) {
+		"multiline or markdown-shaped workspace content": func(input *Promotion) {
 			input.Statement = "# Raw filing\n\nConfidential working notes copied from the workspace."
 		},
 	} {
