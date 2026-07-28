@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:ingestion-result:v1",
+  "title": "Maestro local ingestion result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "adapter", "route", "status", "fidelity",
+    "source_name", "source_sha256", "format", "workspace_id", "output_bytes"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "adapter": {"type": "string", "minLength": 1},
+    "route": {"type": "string", "minLength": 1},
+    "status": {"enum": ["usable", "partial", "degraded", "unavailable", "blocked"]},
+    "fidelity": {"enum": ["structured", "textual", "unknown"]},
+    "source_name": {"type": "string", "minLength": 1, "pattern": "^[^/\\\\]+$"},
+    "source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "format": {"type": "string", "minLength": 1},
+    "workspace_id": {"type": "string", "minLength": 1},
+    "output_bytes": {"type": "integer", "minimum": 0},
+    "warnings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "artifact_ref": {"type": "string", "minLength": 1, "pattern": "^[^/\\\\]+(/[A-Za-z0-9._-]+)*$"}
+  }
+}

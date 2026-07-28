@@ -468,3 +468,13 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: `bcgos skills index` exposes the six quality methods without selecting an engineering persona or granting tools. The base bundle grows only by an explicit allowlist, while specialized engineering/data skills remain fail-closed and require the future activation contract. Development hooks can be delivered separately to contributors without entering release artifacts.
 - Refs: specs/035-professional-capability-bundles.md; specs/036-base-engineering-quality.md; bundles/base/distribution.json; bundles/base/skills/catalog.json; bundles/base/skills/INDEX.md
 - Supersedes: CAPS
+## MIDO - Add MarkItDown as a bounded local ingestion fallback
+
+- Date: 2026-07-28
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The Maestro ingestion contract needs a local, deterministic path for document formats that are not covered well by the primary Docling route. Microsoft MarkItDown converts several document and text formats to Markdown, but it has broad I/O behavior, optional network/cloud integrations and does not own Maestro's policy, provenance or workspace boundaries.
+- Decision: Integrate the built-in offline MarkItDown converter only as an optional, managed-runtime adapter behind the Docling-first route. The adapter accepts approved local files or streams, uses an explicit format allowlist, disables plugins and network/cloud routes, enforces workspace and size/time boundaries, emits provenance and quality classification, and reports `unavailable` or `degraded` rather than silently falling back. MarkItDown does not replace Docling and is not added to the Kowalski canonical pipeline.
+- Consequences: The Maestro runtime pack may pin MarkItDown and only the required format extras with hashes and platform validation. Initial implementation focuses on a provider-neutral ingestion contract, a fail-closed adapter runner and sanitized fixtures; ZIP, URL, YouTube, plugin, Azure and other remote routes remain out of scope. The Kowalski pipeline may use MarkItDown only as a comparative benchmark until separate evidence justifies a change.
+- Refs: specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md; internal/ingest; adapters/ingest/markitdown; https://github.com/microsoft/markitdown
+- Supersedes: none
