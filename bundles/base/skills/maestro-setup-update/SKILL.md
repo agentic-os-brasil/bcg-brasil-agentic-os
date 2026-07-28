@@ -85,8 +85,9 @@ next step at a time and keep engineering detail behind the scenes.
   2. `🔎 O que estou conferindo` — signature, version and compatibility in
      plain language;
   3. `👍 O que preciso de você` — one short confirmation only when required;
-  4. `🛟 Se algo der errado` — explain that the last-known-good version is
-     restored.
+  4. `🛟 Se a ativação falhar` — explain that, when a last-known-good version
+     exists, the system attempts to restore it, then confirms the result and
+     says when rollback is unavailable.
 - Before confirmation, say the impact in human terms: `Atualizar da versão
   X para Y troca apenas o programa, mantém sua pasta de trabalho e permite
   voltar à versão anterior. Posso prosseguir?` Do not ask the user to repeat a
