@@ -265,3 +265,31 @@ func TestExpiredResearchPlanFailsClosed(t *testing.T) {
 		t.Fatalf("CreateResearchPlan() error = %v, want expired plan rejection", err)
 	}
 }
+
+func TestWorkspaceAgentRejectsInactiveAndCrossWorkspaceResearchAccess(t *testing.T) {
+	root := t.TempDir()
+	brief := firstValueFixture().Brief
+	brief.WorkspaceID = "ws-missing"
+	if _, err := SaveBrief(root, brief); err == nil || !strings.Contains(err.Error(), "not initialized") {
+		t.Fatalf("SaveBrief() error = %v, want inactive workspace rejection", err)
+	}
+	if _, err := Initialize(root, "ws-alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Initialize(root, "ws-beta"); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := CreateResearchPlan(root, ResearchPlan{
+		WorkspaceID: "ws-alpha", ValidUntil: time.Now().UTC().Add(time.Hour), MaxQueries: 1,
+		Purpose: "public context", QueryThemes: []string{"market size"}, Sources: []string{"ibge.gov.br"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApproveResearchPlan(root, "ws-beta", plan.PlanID, Approval{ApprovedAt: time.Now().UTC(), ApprovedBy: "owner", DisclosureLevel: "public_only"}); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("cross-workspace approval error = %v, want not exist", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "workspaces", "ws-beta", "research", "plans", "approved", plan.PlanID+".json")); !os.IsNotExist(err) {
+		t.Fatalf("cross-workspace approval wrote evidence: %v", err)
+	}
+}

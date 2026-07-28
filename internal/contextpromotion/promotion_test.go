@@ -270,6 +270,52 @@ func TestPromotionRejectsForgedOrOutOfScopeAuthority(t *testing.T) {
 	}
 }
 
+func TestPromotionRejectsForgedWorkspaceIDBeforeWritingEvidence(t *testing.T) {
+	root := t.TempDir()
+	service := testService(t)
+	input := validPromotion(time.Date(2026, 7, 25, 16, 0, 0, 0, time.UTC))
+	input.WorkspaceID = "ws-beta"
+	input.SourceURI = "bcgos://workspace/ws-beta/dossier/public-filing.md"
+	prepareSource(t, root, &input)
+	if err := service.Promote(root, input, "workspace-owner", "owner-cap"); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("Promote() error = %v, want ErrUnauthorized", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "accounts", input.AccountID)); !os.IsNotExist(err) {
+		t.Fatalf("forged workspace ID wrote account evidence: %v", err)
+	}
+}
+
+func TestPromotionRequiresReviewedCuratedFact(t *testing.T) {
+	root := t.TempDir()
+	service := testService(t)
+	now := time.Date(2026, 7, 25, 16, 0, 0, 0, time.UTC)
+	for name, mutate := range map[string]func(*Promotion){
+		"unapproved review": func(input *Promotion) { input.ReviewStatus = "proposed" },
+		"multiline or markdown-shaped workspace content": func(input *Promotion) {
+			input.Statement = "# Raw filing\n\nConfidential working notes copied from the workspace."
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := validPromotion(now)
+			mutate(&input)
+			prepareSource(t, root, &input)
+			if err := service.Promote(root, input, "workspace-owner", "owner-cap"); err == nil {
+				t.Fatal("promotion accepted context outside the reviewed curated-fact contract")
+			}
+		})
+	}
+}
+
+func TestPromotionRejectsTraversalOutsideWorkspaceRoot(t *testing.T) {
+	root := t.TempDir()
+	service := testService(t)
+	input := validPromotion(time.Date(2026, 7, 25, 16, 0, 0, 0, time.UTC))
+	input.SourceURI = "bcgos://workspace/ws-alpha/../ws-beta/dossier/public-filing.md"
+	if err := service.Promote(root, input, "workspace-owner", "owner-cap"); err == nil {
+		t.Fatal("promotion accepted a source path outside the allowed workspace root")
+	}
+}
+
 func TestSignedRecordAndAuditTamperingFailClosed(t *testing.T) {
 	root := t.TempDir()
 	service := testService(t)
