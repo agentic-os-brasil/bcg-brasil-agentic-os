@@ -53,7 +53,6 @@ invented memory or ungoverned automation.
 
 | Capability | What it means today |
 | --- | --- |
-<<<<<<< HEAD
 | Workspace local | `bcgos init`, `status` e `doctor` criam e inspecionam o espaço sem misturar dados de trabalho ao core gerenciado. |
 | Preferência de interação | `standard`, `advanced` e `power`, configuradas localmente e sem alterar permissões. |
 | Contexto do dono | Arquivos locais, editáveis e auditáveis para papel profissional, estilo, voz, preferências e limites. |

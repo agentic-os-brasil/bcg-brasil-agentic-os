@@ -392,7 +392,6 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: EXEC; specs/018-execution-ledger-v1.md; schemas/execution-state.schema.json; internal/execution/toolcall.go
 - Supersedes: none
 
-<<<<<<< HEAD
 ## CLVE - Wire the Claude lifecycle vertical behind neutral contracts
 
 - Date: 2026-07-26
