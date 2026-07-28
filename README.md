@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/MAESTRO-v0.1.0%20target-243047?style=for-the-badge&labelColor=0B1020" alt="Maestro v0.1.0 target">
-  <img src="https://img.shields.io/badge/PILOT-private-12B886?style=for-the-badge&labelColor=0B1020" alt="Private pilot">
+  <img src="https://img.shields.io/badge/STATUS-contract--validated-12B886?style=for-the-badge&labelColor=0B1020" alt="Contract validated; runtime qualification pending">
   <img src="https://img.shields.io/badge/PRIVACY-bounded%20by%20design-5B8DEF?style=for-the-badge&labelColor=0B1020" alt="Privacy bounded by design">
   <img src="https://img.shields.io/badge/RUNTIME-Claude--first%20%C2%B7%20Codex--compatible-F4B942?style=for-the-badge&labelColor=0B1020" alt="Claude-first and Codex-compatible">
 </p>
@@ -49,7 +49,7 @@ invented memory or ungoverned automation.
 
 ## What is ready
 
-### 🏅 Toward the v0.1.0 pilot
+### 🏅 Toward the v0.1.0 pilot — contract layer validated
 
 | Capability | What it means today |
 | --- | --- |
@@ -57,15 +57,35 @@ invented memory or ungoverned automation.
 | ✅ Professional context | Owner profile, skills index, human atlas and bounded session pointers stay inspectable and local. |
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
 | ✅ Governed completion | High-stakes work can require a separately authenticated Walter review before completion. |
-| ✅ Bounded delegation | Maestro can dispatch a narrow packet to the right agent; a signed packet never grants broad tool access or completion authority. |
+| ✅ Bounded delegation contract | The deterministic core can dispatch a narrow packet to the right agent; native runtime activation remains unavailable until adapter qualification. |
 | ✅ Professional capability bundles | Neutral engineering quality methods ship in the base bundle; specialized engineering and data-practice tracks remain catalogued and fail closed until a separate release contract exists. |
-| ✅ Pilot canary | Local reports aggregate typed outcomes, capability failures, interventions and receipt metadata — never work content. |
+| ✅ Canary contract | The local store can aggregate typed outcomes, capability failures, interventions and receipt metadata — native telemetry remains unavailable and no work content is exported. |
 | ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |
 
-> **Truth in labeling.** `v0.1.0` is the product target and canary contract,
-> not a claim that a signed end-user release is already
-> available. Pilot distribution, native schedulers and hosted bridge operation
-> remain release operations with their own evidence.
+> **Truth in labeling.** `v0.1.0` is the product target and contract/canary
+> baseline, not a claim that native runtime activation, telemetry, a signed
+> end-user release or a user pilot is available. Pilot distribution, native
+> schedulers and hosted bridge operation remain release operations with their
+> own evidence.
+
+### Maturity ladder
+
+Maestro advances only when the evidence for the next tier exists:
+
+1. **Contract-validated** — deterministic core, skills, agent contracts and
+   local harness pass; runtime capabilities may still be `unavailable`.
+2. **Runtime-qualified** — one supported runtime/platform invokes the installed
+   adapter in a fresh native session with bounded evidence.
+3. **Technical shadow** — two human-in-the-loop users exercise one bounded use
+   case with compensating controls and explicit stop criteria.
+4. **Controlled pilot** — signed release, clean-device acceptance, support and
+   incident ownership, plus the pilot gate are complete.
+5. **Production** — the controlled pilot meets its success and safety criteria
+   and the release owner records promotion.
+
+The repository is currently at tier 1. Q-011 (one concrete use case, persona
+and acceptance metric) must close before tier 3; no user pilot should be
+described as active while native lifecycle evidence is pending.
 
 ## Pilot boundaries
 
@@ -137,5 +157,5 @@ direct-contract tests, adapter-command receipts and native-session proof. See
 
 <p align="center">
   <strong>Professional work deserves continuity — without surrendering control.</strong><br>
-  Built privately for the BCG Brasil pilot.
+  Built privately toward the BCG Brasil pilot.
 </p>
