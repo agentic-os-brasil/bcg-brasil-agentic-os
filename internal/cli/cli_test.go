@@ -156,6 +156,33 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
+func TestIngestReportsUnavailableWithoutVerifiedRuntimePack(t *testing.T) {
+	dataRoot, workspacePath := filepath.Join(t.TempDir(), "BCGOS"), t.TempDir()
+	sourcePath := filepath.Join(t.TempDir(), "brief.docx")
+	if err := os.WriteFile(sourcePath, []byte("fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("init exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	code := runIngest([]string{"--workspace", workspacePath, "--source", sourcePath}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitUnavailable {
+		t.Fatalf("ingest exit = %d, output = %s", code, output.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatalf("ingest result is not JSON: %v; output=%s", err, output.String())
+	}
+	if result["status"] != "unavailable" || result["source_name"] != "brief.docx" {
+		t.Fatalf("ingest result = %#v", result)
+	}
+	if _, err := os.Stat(filepath.Join(dataRoot, "ingestion", "artifacts")); !os.IsNotExist(err) {
+		t.Fatalf("unavailable ingestion created artifacts: %v", err)
+	}
+}
+
 func TestPrivateReleaseCommandsFailClosedWithoutApprovedSecureStore(t *testing.T) {
 	tests := map[string][]string{
 		"auth status":    {"auth", "status"},
