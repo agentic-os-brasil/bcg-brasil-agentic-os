@@ -330,7 +330,7 @@ func (input Promotion) validate(now time.Time) error {
 	if !agentcatalog.ValidAgentID(input.PromotionID) ||
 		!agentcatalog.ValidAgentID(input.AccountID) ||
 		!agentcatalog.ValidAgentID(input.WorkspaceID) ||
-		strings.TrimSpace(input.Statement) == "" || len([]byte(strings.TrimSpace(input.Statement))) > 1000 ||
+		!isCuratedStatement(input.Statement) ||
 		strings.TrimSpace(input.Author) == "" || strings.TrimSpace(input.ApprovedBy) == "" ||
 		input.Classification != "account_safe" || input.ReviewStatus != "approved" ||
 		input.ApprovedAt.IsZero() || !input.ValidUntil.After(input.ApprovedAt) ||
@@ -344,6 +344,16 @@ func (input Promotion) validate(now time.Time) error {
 		return errors.New("promotion source is not a specific artifact in the source workspace")
 	}
 	return nil
+}
+
+// isCuratedStatement preserves the account-context boundary: a promotion is
+// one reviewed fact, not a copied workspace artifact. Provenance stays in the
+// workspace receipt, so the account record never needs multi-line source
+// material or Markdown/code blocks.
+func isCuratedStatement(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return trimmed != "" && len([]byte(trimmed)) <= 1000 &&
+		!strings.ContainsAny(trimmed, "\r\n") && !strings.Contains(trimmed, "```")
 }
 
 func (service *Service) Revoke(root string, input Revocation, actor, capability string) error {
@@ -582,7 +592,7 @@ func validAuditReceipt(receipt AuditReceipt, sequence int, action string, state 
 func validateAccountRecord(record accountRecord, accountID, promotionID string) error {
 	if record.SchemaVersion != 1 || record.AccountID != accountID ||
 		record.PromotionID != promotionID || !agentcatalog.ValidAgentID(record.WorkspaceID) ||
-		strings.TrimSpace(record.Statement) == "" || len([]byte(record.Statement)) > 1000 ||
+		!isCuratedStatement(record.Statement) ||
 		!validSHA256(record.SourceSHA256) || !validSHA256(record.SourceReceiptID) ||
 		strings.TrimSpace(record.Author) == "" || strings.TrimSpace(record.ApprovedBy) == "" ||
 		record.Classification != "account_safe" || record.ReviewStatus != "approved" ||

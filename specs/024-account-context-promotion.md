@@ -15,7 +15,8 @@ workspaces or aggregate their memory.
 A promotion requires:
 
 - a unique promotion, account and source-workspace ID;
-- one curated statement of at most 1,000 bytes;
+- one curated single-line statement of at most 1,000 bytes (never a copied
+  raw artifact or Markdown/code block);
 - one canonical artifact URI inside the source workspace;
 - the artifact SHA-256, verified against the bytes of the resolved regular
   workspace file, plus author and workspace-owned source receipt;
