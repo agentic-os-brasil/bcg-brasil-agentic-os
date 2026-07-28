@@ -347,9 +347,10 @@ func (input Promotion) validate(now time.Time) error {
 }
 
 // isCuratedStatement preserves the account-context boundary: a promotion is
-// one reviewed fact, not a copied workspace artifact. Provenance stays in the
-// workspace receipt, so the account record never needs multi-line source
-// material or Markdown/code blocks.
+// one reviewed fact, not a copied workspace artifact. The deterministic core
+// rejects multi-line and Markdown/code-shaped bodies; it cannot prove that an
+// arbitrary single-line string is semantically curated. Provenance stays in
+// the workspace receipt, so the account record never needs source material.
 func isCuratedStatement(value string) bool {
 	trimmed := strings.TrimSpace(value)
 	return trimmed != "" && len([]byte(trimmed)) <= 1000 &&
