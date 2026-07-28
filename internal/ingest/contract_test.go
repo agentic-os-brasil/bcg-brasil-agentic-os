@@ -9,7 +9,11 @@ import (
 
 func TestRequestValidateAcceptsAllowlistedLocalSource(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "report.docx")
+	nested := filepath.Join(root, "incoming")
+	if err := os.Mkdir(nested, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(nested, "report.docx")
 	if err := os.WriteFile(source, []byte("fixture"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -20,6 +24,57 @@ func TestRequestValidateAcceptsAllowlistedLocalSource(t *testing.T) {
 	}
 	if info.Size() != int64(len("fixture")) {
 		t.Fatalf("size = %d", info.Size())
+	}
+}
+
+func TestRequestValidateRejectsSourceOutsideWorkspace(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	outside := filepath.Join(parent, "outside")
+	if err := os.MkdirAll(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outside, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(outside, "report.docx")
+	if err := os.WriteFile(source, []byte("fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, candidate := range map[string]string{
+		"direct":    source,
+		"traversal": filepath.Join(workspace, "..", "outside", "report.docx"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := (Request{SourcePath: candidate, WorkspacePath: workspace, Policy: DefaultPolicy()}).Validate()
+			if err == nil || !strings.Contains(err.Error(), "outside the workspace scope") {
+				t.Fatalf("Validate() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestRequestValidateRejectsSymlinkedParentEscape(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	outside := filepath.Join(parent, "outside")
+	if err := os.MkdirAll(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outside, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(outside, "report.docx")
+	if err := os.WriteFile(source, []byte("fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	linked := filepath.Join(workspace, "linked")
+	if err := os.Symlink(outside, linked); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	_, err := (Request{SourcePath: filepath.Join(linked, "report.docx"), WorkspacePath: workspace, Policy: DefaultPolicy()}).Validate()
+	if err == nil || !strings.Contains(err.Error(), "resolves outside the workspace scope") {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
