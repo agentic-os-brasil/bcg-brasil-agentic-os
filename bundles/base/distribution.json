@@ -118,6 +118,14 @@
       "path": "schemas/interaction-profile.schema.json"
     },
     {
+      "source": "schemas/ingestion-result.schema.json",
+      "path": "schemas/ingestion-result.schema.json"
+    },
+    {
+      "source": "schemas/ingestion-runtime-pack.schema.json",
+      "path": "schemas/ingestion-runtime-pack.schema.json"
+    },
+    {
       "source": "schemas/memory-artifact.schema.json",
       "path": "schemas/memory-artifact.schema.json"
     },
