@@ -54,6 +54,10 @@ covered.
 
 ### 3. Pilot-ready (device + operating evidence)
 
+- [ ] Q-011 first-use case contract is explicitly approved, with an approved
+  target cohort (classic and technical consultants), one acceptance metric,
+  stop criteria and a named product owner. A proposed contract or a generic
+  “pilot value” statement does not close this gate.
 - [ ] An approved installation channel has delivered the platform-signed
   bootstrapper and the exact authority-registry seed.
 - [ ] A clean managed Windows device produces passing install, update and

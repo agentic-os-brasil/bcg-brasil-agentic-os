@@ -22,7 +22,7 @@ This file contains decisions that still require discussion. It is not a decision
 
 ## Before building the first OS bundle
 
-- **Q-011 - Initial capability:** Which single work use case proves value for both classic and technical consultants?
+- **Q-011 - Initial capability:** Which single work use case proves value for both classic and technical consultants? A bounded Case Agent decision brief is proposed in [`docs/pilot/first-use-case-contract.md`](pilot/first-use-case-contract.md), but remains open until the product owner explicitly approves the use case, persona and metric.
 - **Q-012 - Knowledge governance:** What can be shared organization-wide, what stays local, and who owns approval and retirement?
 - **Q-013 - Workspace boundary:** What metadata may be placed inside a case/code workspace without creating client-data risk?
 - **Q-014 - Runtime parity:** Which Claude/Codex capabilities are required, emulated, degraded or explicitly unavailable in v0?
