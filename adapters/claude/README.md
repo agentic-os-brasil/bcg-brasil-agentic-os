@@ -14,7 +14,9 @@ Every product lifecycle event remains explicitly `unavailable` in the
 capability manifest. `bcgos doctor` diagnoses configuration and receipts
 separately. A receipt is marked `adapter_command`: it proves the bounded
 Maestro command ran, not that Claude invoked it in a qualifying native session.
-See Spec 035 for the evidence matrix.
+The lifecycle probe also blocks native qualification below Claude `2.1.177`
+and reports the evidence class for each event. See Spec 035 and
+`docs/lifecycle-readiness.md` for the evidence matrix.
 
 The managed Maestro, Walter and Darwin definitions live in
 `bundles/base/agents/`. `internal/agentorchestration` now provides the shared

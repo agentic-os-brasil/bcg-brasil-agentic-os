@@ -65,9 +65,11 @@ promotion. The executable cross-runtime matrix in Spec 035 keeps this
 distinction testable.
 
 Codex retains the same canonical event vocabulary and Session Start serializer.
-It has no complete product lifecycle binding in this vertical, so its
-capabilities remain unavailable rather than being represented as emulated or
-degraded.
+Its adapter registry marks Session Start as configured and contract-tested but
+not natively observed; context injection, pre-action, post-action and Stop are
+explicitly blocked because the current runtime exposes no verified product
+surface for them. Its capabilities remain unavailable rather than being
+represented as emulated or degraded.
 
 Failure receipts are not claimed by this vertical: the installed native hooks
 observe successful PostToolUse and Stop callbacks only. A later failure-hook

@@ -24,8 +24,10 @@ type lifecycleFixtureRow struct {
 type lifecycleFixtureRuntime struct {
 	Binding        string `json:"binding"`
 	Implementation string `json:"implementation"`
+	EvidenceClass  string `json:"evidence_class"`
 	NativeEvidence string `json:"native_evidence"`
 	ManifestState  string `json:"manifest_state"`
+	Blocker        string `json:"blocker"`
 }
 
 func TestLifecycleConformanceFixtureKeepsBothRuntimesUnavailableWithoutNativeEvidence(t *testing.T) {
@@ -64,7 +66,7 @@ func TestLifecycleConformanceFixtureKeepsBothRuntimesUnavailableWithoutNativeEvi
 		if !ok || seen[row.SemanticEvent] || row.Claude.ManifestState != "unavailable" || row.Codex.ManifestState != "unavailable" || states.Claude.State != row.Claude.ManifestState || states.Codex.State != row.Codex.ManifestState {
 			t.Fatalf("fixture row is not fail-closed: %#v; capability=%#v", row, states)
 		}
-		if row.Claude.NativeEvidence != "pending" || row.Codex.NativeEvidence == "" {
+		if row.Claude.EvidenceClass != "contract-tested" || row.Claude.NativeEvidence != "pending" || row.Claude.Blocker == "" || row.Codex.Blocker == "" || row.Codex.NativeEvidence == "" {
 			t.Fatalf("fixture evidence state is incomplete: %#v", row)
 		}
 		seen[row.SemanticEvent] = true
@@ -72,8 +74,8 @@ func TestLifecycleConformanceFixtureKeepsBothRuntimesUnavailableWithoutNativeEvi
 	if fixture.Events[0].Codex.Implementation != "configured" || fixture.Events[0].Codex.Binding != "SessionStart" {
 		t.Fatalf("Codex SessionStart fixture = %#v", fixture.Events[0].Codex)
 	}
-	if fixture.Events[0].Codex.NativeEvidence != "blocked" {
-		t.Fatalf("Codex SessionStart native evidence must stay blocked: %#v", fixture.Events[0].Codex)
+	if fixture.Events[0].Codex.NativeEvidence != "not_observed" || fixture.Events[0].Codex.EvidenceClass != "contract-tested" {
+		t.Fatalf("Codex SessionStart native evidence must stay unqualified: %#v", fixture.Events[0].Codex)
 	}
 	codexSessionStart := byEvent[fixture.Events[0].SemanticEvent].Codex
 	if codexSessionStart.Mechanism != "workspace-local Codex SessionStart binding implemented" || codexSessionStart.Reason != "complete Codex lifecycle conformance is blocked; native SessionStart qualification is not yet supported" {

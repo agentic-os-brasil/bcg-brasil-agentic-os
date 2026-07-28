@@ -15,6 +15,15 @@ native evidence is absent.
 
 ## Evidence classes
 
+The executable matrix uses four promotion classes, in ascending order:
+`configured`, `contract-tested`, `adapter-observed` and `native-qualified`.
+`configured` proves only topology, `contract-tested` adds direct deterministic
+tests, and `adapter-observed` proves that the bounded Maestro command emitted
+an `adapter_command` receipt. Only `native-qualified` may support a capability
+promotion, and it must carry a reproducible fresh-session observation from the
+runtime itself. `blocked` is an implementation state for a missing native
+surface, not an evidence class.
+
 | Class | What it proves | What it does not prove |
 | --- | --- | --- |
 | Local configuration | The workspace contains Maestro-owned bindings with expected timeout/async settings. | Runtime trust or invocation. |
@@ -30,7 +39,7 @@ manifest remains `unavailable` for all lifecycle events in this version.
 
 | Semantic event | Claude binding | Claude evidence | Codex binding | Codex evidence |
 | --- | --- | --- | --- | --- |
-| `session_start` | `SessionStart`, pointer-only packet | configuration + direct contract; native pending | `SessionStart`, pointer-only packet | configuration + direct contract; blocked until a complete Codex lifecycle contract exists |
+| `session_start` | `SessionStart`, pointer-only packet | contract-tested; native pending | `SessionStart`, pointer-only packet | contract-tested; native pending |
 | `context_inject` | `UserPromptSubmit`, pointer-only packet | configuration + direct contract; native pending | none | blocked: no product binding |
 | `pre_action_guard` | `PreToolUse`, bounded deterministic deny | configuration + direct contract; native pending | none | blocked: no product binding |
 | `post_action_observe` | async `PostToolUse`, metadata-only receipt | configuration + direct contract; native pending | none | blocked: no product binding |
@@ -47,13 +56,15 @@ go run ./dev/lifecycle-probe --runtime codex
 
 It reads only the local executable path and `--version` under a two-second
 budget. It starts no model session, changes no runtime configuration, writes no
-receipt and cannot modify the capability manifest. A result of `blocked` or
+receipt and cannot modify the capability manifest. It also reports each
+canonical event's binding, evidence class and blocker. A result of `blocked` or
 `not_observed` is evidence of a limitation, not a product failure to hide.
 
 For Claude, the current lifecycle contract requires at least `2.1.177` before
 a native-session trial may begin. Codex has a locally configured Session Start
-command, but this is not a supported native-trial path on its own: the probe
-remains blocked until the missing product lifecycle bindings are implemented.
+command, but its remaining canonical events have no verified native surface.
+The probe keeps Session Start unqualified and marks the remaining events
+blocked until those native bindings exist.
 
 ## Native trial protocol
 

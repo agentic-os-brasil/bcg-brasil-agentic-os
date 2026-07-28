@@ -7,8 +7,9 @@ Current state: `bcgos doctor` discovers a local Codex executable, while every
 product lifecycle event remains explicitly unavailable. Workspace-local
 configuration can install one bounded `SessionStart` command; it does not prove
 that Codex trusted, invoked or injected it. Context injection, guard,
-post-action and Stop bindings are not implemented. Codex must not inherit
-Claude-specific development hooks as a product capability.
+post-action and Stop are explicit `blocked` surfaces in the adapter registry,
+not emulations. Codex must not inherit Claude-specific development hooks as a
+product capability.
 
 The managed Maestro, Walter and Darwin definitions live in
 `bundles/base/agents/`. `internal/agentorchestration` now provides the shared
@@ -39,6 +40,6 @@ state. At Session Start it must also resolve the user-local interaction profile
 and inject only its bounded ID and managed policy pointer; the profile must not
 be derived from or persisted into memory.
 
-Spec 035 records the current evidence matrix: Codex Session Start configuration
-is not native invocation evidence, and its remaining lifecycle bindings are
-not implemented.
+Spec 035 and `docs/lifecycle-readiness.md` record the current evidence matrix:
+Codex Session Start configuration is not native invocation evidence, and its
+remaining lifecycle bindings are blocked until a real native surface exists.
