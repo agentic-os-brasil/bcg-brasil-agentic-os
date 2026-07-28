@@ -1,6 +1,6 @@
-// Package codexadapter exposes only the Codex lifecycle surfaces verified by
-// the current runtime contract. Unsupported events are represented as blocked
-// rather than being emulated with local commands or unit-test receipts.
+// Package codexadapter exposes the Codex lifecycle surfaces verified by the
+// current runtime contract. Native observation remains separate from local
+// configuration and contract tests.
 package codexadapter
 
 import (
@@ -10,8 +10,8 @@ import (
 )
 
 // Surfaces is the installed Codex topology for the current supported runtime.
-// SessionStart has a bounded command seam; the remaining canonical events do
-// not have a native product surface and must stay blocked.
+// Codex exposes all five canonical command-hook events; none is qualified by
+// this topology report alone.
 func Surfaces() []lifecycle.Surface {
 	return []lifecycle.Surface{
 		{
@@ -20,10 +20,10 @@ func Surfaces() []lifecycle.Surface {
 			NativeObservation: "not_observed", CapabilityState: "unavailable",
 			Blocker: "native Codex SessionStart observation is pending",
 		},
-		blocked(lifecycle.ContextInject),
-		blocked(lifecycle.PreActionGuard),
-		blocked(lifecycle.PostActionObserve),
-		blocked(lifecycle.StopFinalize),
+		configured(lifecycle.ContextInject, "UserPromptSubmit"),
+		configured(lifecycle.PreActionGuard, "PreToolUse"),
+		configured(lifecycle.PostActionObserve, "PostToolUse"),
+		configured(lifecycle.StopFinalize, "Stop"),
 	}
 }
 
@@ -32,18 +32,15 @@ func RequireSurface(event string) error {
 		if surface.SemanticEvent != event {
 			continue
 		}
-		if surface.Implementation == "blocked" {
-			return fmt.Errorf("Codex lifecycle event %q is blocked: %s", event, surface.Blocker)
-		}
 		return nil
 	}
 	return fmt.Errorf("unsupported lifecycle event %q", event)
 }
 
-func blocked(event string) lifecycle.Surface {
+func configured(event, binding string) lifecycle.Surface {
 	return lifecycle.Surface{
-		SemanticEvent: event, NativeBinding: "none", Implementation: "blocked",
-		NativeObservation: "blocked", CapabilityState: "unavailable",
-		Blocker: "the current Codex runtime exposes only a SessionStart command seam; no native product surface is available for this event",
+		SemanticEvent: event, NativeBinding: binding, Implementation: "configured",
+		EvidenceClass: lifecycle.EvidenceContractTested, NativeObservation: "not_observed",
+		CapabilityState: "unavailable", Blocker: "native Codex observation is pending",
 	}
 }

@@ -61,6 +61,19 @@ func TestClaudeContextInjectionUsesTheSameBoundedPacketWithNativeEventName(t *te
 	}
 }
 
+func TestCodexContextInjectionUsesTheSameBoundedPacketWithNativeEventName(t *testing.T) {
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+	})
+	output, err := BuildCodexEvent(packet, "UserPromptSubmit")
+	if err != nil || output.HookSpecificOutput.HookEventName != "UserPromptSubmit" ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, `"runtime":"codex"`) ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, `"event":"context_inject"`) {
+		t.Fatalf("output = %#v, %v", output, err)
+	}
+}
+
 func TestBuildOmitsOversizedPacketInsteadOfExpandingHookOutput(t *testing.T) {
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profile.State{

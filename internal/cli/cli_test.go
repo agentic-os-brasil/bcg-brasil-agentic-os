@@ -328,6 +328,33 @@ func TestClaudeLifecycleHooksRemainUnavailableWhileRecordingMetadataOnlyEvidence
 	}
 }
 
+func TestCodexLifecycleHooksUseSharedContractsWithoutNativePromotion(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"codex", "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(`{}`), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "UserPromptSubmit"`) {
+		t.Fatalf("Codex context hook = %d %s", code, output.String())
+	}
+	output.Reset()
+	guardInput := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}`
+	if code := runHookWithInput([]string{"codex", "pre-action-guard", "--adapter-source", "maestro", workspacePath}, strings.NewReader(guardInput), &output, &output, func() (string, error) { return "", errors.New("workspace inspection must not run") }); code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+		t.Fatalf("Codex guard = %d %s", code, output.String())
+	}
+	output.Reset()
+	receiptInput := `{"session_id":"session-a","tool_use_id":"toolu_a","tool_name":"Bash","tool_input":{"command":"sensitive client command"}}`
+	if code := runHookWithInput([]string{"codex", "post-action-receipt", "--adapter-source", "maestro", workspacePath}, strings.NewReader(receiptInput), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"continue": true`) {
+		t.Fatalf("Codex receipt hook = %d %s", code, output.String())
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"codex", "stop-finalization", "--adapter-source", "maestro", workspacePath}, strings.NewReader(`{"session_id":"session-a"}`), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"continue": true`) {
+		t.Fatalf("Codex stop hook = %d %s", code, output.String())
+	}
+}
+
 func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 	workspacePath := t.TempDir()
 	var output bytes.Buffer

@@ -34,7 +34,7 @@ are still required before `agent_orchestration` can move from `unavailable`.
 flowchart LR
     Catalog["Implemented<br/>managed agent catalog"] --> Adapter["Implemented<br/>shared enforcement"]
     Adapter --> Fixtures["Implemented<br/>cross-runtime fixtures"]
-    Fixtures --> Wiring["Pending<br/>Claude-native event wiring"]
+    Fixtures --> Wiring["Configured<br/>Claude-native lifecycle wiring"]
     Wiring --> Active["Pending<br/>agent orchestration active"]
     Catalog -.->|current capability| Unavailable["Unavailable<br/>fails closed"]
 ```

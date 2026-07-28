@@ -19,10 +19,10 @@ flowchart LR
 | Event | Claude 2.1.119 | Codex 0.144.1 | Native promotion blocker |
 | --- | --- | --- | --- |
 | `session_start` | configured + contract-tested; native observation blocked by version | configured + contract-tested; native observation not captured | Fresh native-session observation from a qualifying runtime |
-| `context_inject` | configured + contract-tested; native observation blocked by version | blocked; no verified native surface | Claude version; Codex native binding |
-| `pre_action_guard` | configured + contract-tested; native observation blocked by version | blocked; no verified native surface | Claude version; Codex native binding |
-| `post_action_observe` | configured async + contract-tested; native observation blocked by version | blocked; no verified native surface | Claude version; Codex native binding |
-| `stop_finalize` | configured async + contract-tested; native observation blocked by version | blocked; no verified native surface | Claude version; Codex native binding |
+| `context_inject` | configured + contract-tested; native observation blocked by version | configured + contract-tested; native observation not captured | Claude version; fresh Codex native observation |
+| `pre_action_guard` | configured + contract-tested; native observation blocked by version | configured + contract-tested; native observation not captured | Claude version; fresh Codex native observation |
+| `post_action_observe` | configured async + contract-tested; native observation blocked by version | configured + contract-tested; native observation not captured | Claude version; fresh Codex native observation |
+| `stop_finalize` | configured async + contract-tested; native observation blocked by version | configured + contract-tested; native observation not captured | Claude version; fresh Codex native observation |
 
 The canonical manifest remains `unavailable` for every lifecycle capability.
 The local probe reports the same matrix without starting a model session,
@@ -32,9 +32,9 @@ writing a receipt or changing runtime configuration.
 
 - Claude is detected at `2.1.119`; the lifecycle contract requires `2.1.177`.
   No Claude native trial is eligible until the runtime is upgraded.
-- Codex is detected at `0.144.1`; the installed product topology exposes only
-  a SessionStart command seam. The other four events are explicit `blocked`
-  states, not emulations.
+- Codex is detected at `0.144.1`; its stable hooks feature exposes the five
+  command-hook events. The adapter configures all five, but none is promoted
+  without fresh native-session observation.
 - `adapter_command` receipts remain diagnostic only. They do not become native
   evidence and cannot change the manifest.
 - `.codex/RUNTIME-CONTRACT.md` and `.codex/CODEX-RUNTIME.md` are not present in
@@ -47,11 +47,9 @@ writing a receipt or changing runtime configuration.
 
 1. Upgrade Claude to at least `2.1.177`, install the exact workspace-local
    bindings, and capture a fresh native observation for all five events.
-2. Capture native Codex SessionStart observation if the runtime accepts the
-   installed seam.
-3. Implement and qualify Codex context, guard, post-action and stop surfaces
-   only when the runtime exposes a real native mechanism for each one.
-4. Promote a capability only from a reviewed `native-qualified` record with
+2. Capture native Codex observations for all five configured events, including
+   trust review for the workspace-local hook definitions.
+3. Promote a capability only from a reviewed `native-qualified` record with
    runtime/platform identity and bounded event evidence.
 
 Until then, readiness remains contract-validated only; neither runtime is

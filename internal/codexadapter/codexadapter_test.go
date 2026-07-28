@@ -6,7 +6,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 )
 
-func TestSurfacesExposeOnlyCodexSessionStart(t *testing.T) {
+func TestSurfacesExposeAllCodexLifecycleEventsWithoutNativeQualification(t *testing.T) {
 	surfaces := Surfaces()
 	if len(surfaces) != 5 {
 		t.Fatalf("surfaces = %#v", surfaces)
@@ -18,8 +18,8 @@ func TestSurfacesExposeOnlyCodexSessionStart(t *testing.T) {
 				t.Fatalf("SessionStart surface = %#v", surface)
 			}
 		case lifecycle.ContextInject, lifecycle.PreActionGuard, lifecycle.PostActionObserve, lifecycle.StopFinalize:
-			if surface.NativeBinding != "none" || surface.Implementation != "blocked" || surface.NativeObservation != "blocked" || surface.CapabilityState != "unavailable" || surface.Blocker == "" {
-				t.Fatalf("blocked Codex surface = %#v", surface)
+			if surface.NativeBinding == "none" || surface.Implementation != "configured" || surface.EvidenceClass != lifecycle.EvidenceContractTested || surface.NativeObservation != "not_observed" || surface.CapabilityState != "unavailable" || surface.Blocker == "" {
+				t.Fatalf("unqualified Codex surface = %#v", surface)
 			}
 		default:
 			t.Fatalf("unexpected Codex event = %#v", surface)
@@ -27,13 +27,13 @@ func TestSurfacesExposeOnlyCodexSessionStart(t *testing.T) {
 	}
 }
 
-func TestRequireSurfaceFailsClosedForUnsupportedCodexEvents(t *testing.T) {
-	if err := RequireSurface(lifecycle.SessionStart); err != nil {
-		t.Fatal(err)
-	}
-	for _, event := range []string{lifecycle.ContextInject, lifecycle.PreActionGuard, lifecycle.PostActionObserve, lifecycle.StopFinalize} {
-		if err := RequireSurface(event); err == nil {
-			t.Fatalf("Codex event %q was treated as natively available", event)
+func TestRequireSurfaceAcceptsOnlyCanonicalCodexEvents(t *testing.T) {
+	for _, event := range []string{lifecycle.SessionStart, lifecycle.ContextInject, lifecycle.PreActionGuard, lifecycle.PostActionObserve, lifecycle.StopFinalize} {
+		if err := RequireSurface(event); err != nil {
+			t.Fatalf("Codex event %q was not recognized: %v", event, err)
 		}
+	}
+	if err := RequireSurface("unknown"); err == nil {
+		t.Fatal("unknown Codex event was accepted")
 	}
 }

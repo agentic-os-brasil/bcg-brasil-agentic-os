@@ -1,7 +1,7 @@
 # Spec 035 - Lifecycle evidence matrix
 
-Status: Claude configuration and direct-contract harness implemented; Codex
-Session Start configuration implemented; native runtime evidence unavailable.
+Status: Claude and Codex configuration and direct-contract harnesses
+implemented; native runtime evidence unavailable.
 
 ## Objective
 
@@ -40,10 +40,10 @@ manifest remains `unavailable` for all lifecycle events in this version.
 | Semantic event | Claude binding | Claude evidence | Codex binding | Codex evidence |
 | --- | --- | --- | --- | --- |
 | `session_start` | `SessionStart`, pointer-only packet | contract-tested; native pending | `SessionStart`, pointer-only packet | contract-tested; native pending |
-| `context_inject` | `UserPromptSubmit`, pointer-only packet | configuration + direct contract; native pending | none | blocked: no product binding |
-| `pre_action_guard` | `PreToolUse`, bounded deterministic deny | configuration + direct contract; native pending | none | blocked: no product binding |
-| `post_action_observe` | async `PostToolUse`, metadata-only receipt | configuration + direct contract; native pending | none | blocked: no product binding |
-| `stop_finalize` | async `Stop`, metadata-only receipt | configuration + direct contract; native pending | none | blocked: no product binding |
+| `context_inject` | `UserPromptSubmit`, pointer-only packet | configuration + direct contract; native pending | `UserPromptSubmit`, pointer-only packet | contract-tested; native pending |
+| `pre_action_guard` | `PreToolUse`, bounded deterministic deny | configuration + direct contract; native pending | `PreToolUse`, bounded deterministic deny | contract-tested; native pending |
+| `post_action_observe` | async `PostToolUse`, metadata-only receipt | configuration + direct contract; native pending | `PostToolUse`, metadata-only receipt | contract-tested; native pending |
+| `stop_finalize` | async `Stop`, metadata-only receipt | configuration + direct contract; native pending | `Stop`, metadata-only receipt | contract-tested; native pending |
 
 ## Probe
 
@@ -61,10 +61,9 @@ canonical event's binding, evidence class and blocker. A result of `blocked` or
 `not_observed` is evidence of a limitation, not a product failure to hide.
 
 For Claude, the current lifecycle contract requires at least `2.1.177` before
-a native-session trial may begin. Codex has a locally configured Session Start
-command, but its remaining canonical events have no verified native surface.
-The probe keeps Session Start unqualified and marks the remaining events
-blocked until those native bindings exist.
+a native-session trial may begin. Codex `0.144.1` exposes the five command-hook
+events and the adapter configures all five. The probe keeps every Codex event
+unqualified until a fresh native-session observation is captured.
 
 ## Native trial protocol
 

@@ -77,8 +77,13 @@ func TestLifecycleConformanceFixtureKeepsBothRuntimesUnavailableWithoutNativeEvi
 	if fixture.Events[0].Codex.NativeEvidence != "not_observed" || fixture.Events[0].Codex.EvidenceClass != "contract-tested" {
 		t.Fatalf("Codex SessionStart native evidence must stay unqualified: %#v", fixture.Events[0].Codex)
 	}
+	for _, row := range fixture.Events {
+		if row.Codex.Implementation != "configured" || row.Codex.EvidenceClass != "contract-tested" || row.Codex.NativeEvidence != "not_observed" || row.Codex.Blocker == "" {
+			t.Fatalf("Codex lifecycle surface must remain configured but unobserved: %#v", row.Codex)
+		}
+	}
 	codexSessionStart := byEvent[fixture.Events[0].SemanticEvent].Codex
-	if codexSessionStart.Mechanism != "workspace-local Codex SessionStart binding implemented" || codexSessionStart.Reason != "complete Codex lifecycle conformance is blocked; native SessionStart qualification is not yet supported" {
+	if codexSessionStart.Mechanism != "workspace-local Codex SessionStart binding implemented" || codexSessionStart.Reason != "qualifying native conformance evidence is pending" {
 		t.Fatalf("Codex SessionStart capability details drifted: %#v", codexSessionStart)
 	}
 }

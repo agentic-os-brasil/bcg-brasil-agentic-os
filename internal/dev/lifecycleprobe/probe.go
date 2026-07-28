@@ -52,7 +52,8 @@ func Probe(runtime string, lookPath func(string) (string, error), version func(s
 	}
 	result.RuntimeVersion = strings.TrimSpace(output)
 	if runtime == "codex" {
-		result.Blocker = "Codex has only a SessionStart configuration seam; context injection, guard, post-action and stop bindings are not implemented"
+		result.State = "not_observed"
+		result.Blocker = "Codex lifecycle hooks are configured, but no fresh native-session observation has been captured"
 		return result, nil
 	}
 	if !lifecycle.MeetsClaudeMinimum(result.RuntimeVersion) {
