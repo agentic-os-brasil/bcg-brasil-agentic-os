@@ -3,10 +3,10 @@ name: workspace-agent-setup
 description: Create or resume one workspace agent through a reviewed interview, approved public research, sourced evidence and an optional public economic snapshot. Use whenever a new client project workspace is initialized or its briefing needs refresh.
 ---
 
-# Workspace Agent Setup
+# Case Agent Setup (workspace-first compatibility command)
 
 Build useful project context while preserving the workspace as a confidentiality
-boundary. The workspace agent owns this workflow and must never borrow context
+boundary. The Case Agent owns this workflow and must never borrow context
 from another workspace.
 
 ## Interaction profile
@@ -23,6 +23,7 @@ classification, provenance or workspace-isolation requirements.
    question. Keep its run ID inside the workflow; do not expose it to a
    non-technical user.
 3. Run `bcgos workspace-agent interview <workspace-path>` conversationally.
+   The compatibility command operates the canonical `case_agent` role.
    Ask the six minimum questions: decision/horizon; audience/constraints;
    useful result; authorized material; balanced hypotheses; and next step.
    Show the consolidated brief and one-to-three-action plan before writing.
@@ -82,7 +83,7 @@ approved themes or domains requires a new plan and approval.
   bodies or transcripts.
 - Briefs, plans, approvals and evidence are immutable, workspace-scoped
   artifacts with provenance.
-- No cross-workspace lookup or automatic promotion to account context occurs.
+- No cross-workspace lookup or automatic promotion to Client Account context occurs.
 - Attested public economic snapshots are stored outside every workspace and can
   only be attached by immutable ID. Each claim points to declared public
   sources and records who attested that no workspace material was used.

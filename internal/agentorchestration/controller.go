@@ -141,9 +141,8 @@ var adapterEvents = map[string]map[string]string{
 }
 
 var roleScopeKinds = map[string]map[string]bool{
-	"account_agent":         {"account": true},
 	"capability_specialist": {"account": true, "workspace": true},
-	"case_agent":            {"case": true},
+	"case_agent":            {"case": true, "workspace": true},
 	"client_account_agent":  {"account": true},
 	"errand_helper":         {"errand": true},
 	"governance_analyst":    {"health": true},
@@ -152,7 +151,6 @@ var roleScopeKinds = map[string]map[string]bool{
 	"pa_expert":             {"practice": true},
 	"reviewer":              {"review": true},
 	"subject_specialist":    {"practice": true},
-	"workspace_agent":       {"workspace": true},
 }
 
 func NewAdapter(runtime string, catalog agentcatalog.Catalog, grants []Authorization, store *StateStore) (*Adapter, error) {
@@ -185,7 +183,9 @@ func NewAdapter(runtime string, catalog agentcatalog.Catalog, grants []Authoriza
 func validateAuthorizations(catalog agentcatalog.Catalog, grants []Authorization) (map[string]authorization, string, error) {
 	values := make(map[string]authorization, len(grants))
 	for _, grant := range grants {
-		contract, ok := catalog.ContractForRole(grant.Role)
+		role := catalog.CanonicalRole(grant.Role)
+		grant.Role = role
+		contract, ok := catalog.ContractForRole(role)
 		if !agentcatalog.ValidAgentID(grant.AgentID) || !ok || grant.Capability == "" {
 			return nil, "", errors.New("agent authorization is incomplete or uses an unsupported role")
 		}

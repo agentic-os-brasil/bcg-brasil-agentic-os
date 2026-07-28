@@ -1,6 +1,6 @@
 # Spec 027 - Governed agent scaffolding
 
-Status: managed workspace, account, practice and specialist templates, atomic
+Status: managed Client Account, Case, practice and specialist templates, atomic
 local instance scaffolding and CLI implemented. Native Claude and Codex
 registration, credentials and tool grants remain unavailable.
 
@@ -15,8 +15,8 @@ instance is already active.
 Managed templates live in:
 
 ```text
-bundles/base/agents/templates/workspace_agent/AGENT.md
-bundles/base/agents/templates/account_agent/AGENT.md
+bundles/base/agents/templates/case_agent/AGENT.md
+bundles/base/agents/templates/client_account_agent/AGENT.md
 bundles/base/agents/templates/practice_agent/AGENT.md
 bundles/base/agents/templates/capability_specialist/AGENT.md
 bundles/base/agents/templates/subject_specialist/AGENT.md
@@ -50,14 +50,16 @@ and are never overwritten.
 
 | Scaffold role | Required parent | Scope | Delegation |
 | --- | --- | --- | --- |
-| `workspace_agent` | canonical `maestro` / `hub` | exact workspace | one capability specialist |
-| `account_agent` | canonical `maestro` / `hub` | exact account | one capability specialist |
+| `case_agent` | canonical `maestro` / `hub` | exact case/project workspace | one capability specialist |
+| `client_account_agent` | canonical `maestro` / `hub` | exact client account | no direct child; Maestro mediates Case activation |
 | `practice_agent` | canonical `maestro` / `hub` | exact practice and verified canon | one subject specialist |
 | `capability_specialist` | workspace or account agent | same workspace or account | none |
 | `subject_specialist` | practice agent | same practice | none |
 
-Workspace agents use the canonical identity
-`workspace-agent-<workspace-id>`. Capability and subject specialists use the
+Case agents created by the existing workspace-first CLI use the compatibility
+identity `workspace-agent-<workspace-id>` during migration; new explicit case
+roots use `case-agent-<case-id>`. Both persist the canonical role
+`case_agent`. Capability and subject specialists use the
 `capability-` and `subject-` prefixes. The managed catalog's closed role
 contracts and allowed edge at the correct depth are checked before any file is
 created. A workspace stub additionally requires the concrete workspace-agent
@@ -69,8 +71,8 @@ specialist's parent is resolved from a signed local instance, and its actual
 role, scope kind and scope ID must match; caller-declared parent metadata is
 never sufficient.
 
-`bcgos init` automatically scaffolds the owning workspace agent after creating
-its compact state and dossier. Account agents, practice agents and leaf
+`bcgos init` automatically scaffolds the owning Case Agent after creating its
+compact state and dossier. Client Account Agents, practice agents and leaf
 specialists require an explicit command. A leaf always requires an already
 registered matching parent:
 
@@ -115,8 +117,8 @@ Until then, `runtime_state` is `unavailable` and dispatch must fail closed.
 
 ## Acceptance criteria
 
-1. Every new workspace receives one idempotent concrete workspace-agent stub.
-2. Account and practice roots require a named owner and mandate; practice canon
+1. Every new workspace receives one idempotent concrete Case Agent stub.
+2. Client Account and practice roots require a named owner and mandate; practice canon
    bytes must match the declared digest.
 3. Capability and subject specialist stubs can be created only on catalogued
    role edges with a concrete registered parent in the exact same scope.
@@ -125,3 +127,16 @@ Until then, `runtime_state` is `unavailable` and dispatch must fail closed.
 6. Definition tampering is detected and never silently repaired.
 7. Partial instances are not reported as initialized.
 8. Scaffolding never grants tools, credentials or runtime availability.
+
+## Identity, personalization and ownership
+
+The first setup interview is exposed by `bcgos agent interview`. It explains
+Maestro, Client Account, Case, Walter, Darwin and PA expert, offers name and
+emoji-avatar suggestions, and asks for an explicit owner and ownership scope.
+A confirmed profile is persisted with `bcgos agent personalize --stdin`.
+
+Display names and emoji avatars are presentation data only. The signed agent
+registration still owns the role, scope, parent relation, tool contract and
+runtime state. `account_agent` and `workspace_agent` remain accepted only as
+input aliases for `client_account_agent` and `case_agent`; they are not nodes
+in the canonical graph.

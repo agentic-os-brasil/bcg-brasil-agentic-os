@@ -11,22 +11,22 @@
     "errand_scope": "basic_reversible",
     "allowed_edges": [
       {
-        "from_role": "account_agent",
+        "from_role": "case_agent",
         "to_roles": ["capability_specialist"]
       },
       {
         "from_role": "hub",
-        "to_roles": ["account_agent", "case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer", "workspace_agent"]
+        "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer"]
       },
       {
         "from_role": "practice_agent",
         "to_roles": ["subject_specialist"]
-      },
-      {
-        "from_role": "workspace_agent",
-        "to_roles": ["capability_specialist"]
       }
     ]
+  },
+  "legacy_aliases": {
+    "account_agent": {"canonical_role": "client_account_agent", "status": "compatibility_only"},
+    "workspace_agent": {"canonical_role": "case_agent", "status": "compatibility_only"}
   },
   "agents": [
     {
@@ -36,7 +36,11 @@
       "tool_access": "none",
       "may_delegate": false,
       "input_contract": "bounded_health_packet",
-      "relative_path": "agents/darwin/AGENT.md"
+      "relative_path": "agents/darwin/AGENT.md",
+      "display_name": "Darwin",
+      "default_emoji": "🧬",
+      "ownership_scope": "governance",
+      "customizable": true
     },
     {
       "id": "maestro",
@@ -45,7 +49,11 @@
       "tool_access": "none",
       "may_delegate": true,
       "input_contract": "session_context_packet",
-      "relative_path": "agents/maestro/AGENT.md"
+      "relative_path": "agents/maestro/AGENT.md",
+      "display_name": "Maestro",
+      "default_emoji": "🎼",
+      "ownership_scope": "system",
+      "customizable": true
     },
     {
       "id": "walter",
@@ -54,7 +62,11 @@
       "tool_access": "none",
       "may_delegate": false,
       "input_contract": "sealed_review_packet",
-      "relative_path": "agents/walter/AGENT.md"
+      "relative_path": "agents/walter/AGENT.md",
+      "display_name": "Walter",
+      "default_emoji": "🛡️",
+      "ownership_scope": "governance",
+      "customizable": true
     }
   ]
 }

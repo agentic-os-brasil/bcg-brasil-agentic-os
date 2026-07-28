@@ -23,25 +23,24 @@ The current role graph maps this distinction as follows:
 ```mermaid
 flowchart TD
     M["Maestro\ncontrol plane; no tools"] --> A["Client Account Agent\nreviewed longitudinal account context"]
-    M --> C["Case Agent\nauthoritative lifecycle"]
-    M --> W0["Workspace Agent\nstaged runtime context owner"]
-    W0 -. "selects directly" .-> S["Managed transversal skills\ndeck · quali · quant"]
-    W0 -. "one bounded child when justified" .-> W["Capability specialist\none skill + minimum WorkPacket"]
+    M --> C["Case Agent\nauthoritative lifecycle and workspace context"]
+    C -. "selects directly" .-> S["Managed transversal skills\ndeck · quali · quant"]
+    C -. "one bounded child when justified" .-> W["Capability specialist\none skill + minimum WorkPacket"]
     W --> R["Result + evidence + limits"]
     R --> W0
     W0 --> P["Reviewed promotion only"]
     P --> A
 ```
 
-Client Account Agent, Case Agent and PXpert are the authoritative lifecycle
-roles. Runtime adoption is staged: `workspace_agent` and `account_agent`
-remain the compatibility roles for existing registered instances until an
-explicit owner-confirmed migration retires them. This specification adds no
-alias or automatic role conversion.
+Client Account Agent, Case Agent and PA expert are the authoritative lifecycle
+roles. The former `workspace_agent` and `account_agent` names are input-only
+compatibility aliases; new registrations and the delegation graph use only the
+canonical roles. Existing technical workspace IDs remain readable during
+migration, but are never emitted as new role nodes.
 
 ## Selection and delegation
 
-The Workspace Agent receives the intent, authorized pointers, constraints
+The Case Agent receives the intent, authorized pointers, constraints
 and Definition of Done. It may select one or more compatible skills directly
 without opening a child delegation. Direct selection is local to a current
 signed root packet, authenticated by the root agent capability, and is denied
@@ -70,8 +69,8 @@ raising a catalog limit.
 
 - Maestro routes and synthesizes; it does not choose or execute case methods
   through tools.
-- Client/Case lifecycle roles receive only their approved context; the staged
-  Workspace Agent does not broaden its existing workspace boundary.
+- Client/Case lifecycle roles receive only their approved context; the Case
+  Agent does not broaden its existing workspace boundary.
 - A skill is not a tool grant. Tool-operation-resource authorization remains
   governed by Spec 018 and the shared enforcement controller.
 - A capability specialist is a temporary execution leaf, not a transversal
@@ -102,12 +101,12 @@ vertical agent remains responsible for method choice.
 ## Acceptance criteria
 
 1. The managed bundle describes the skills without changing the authoritative
-   Client/Case/PXpert lifecycle or removing staged runtime compatibility.
+   Client/Case/PA expert lifecycle or removing staged runtime compatibility.
 2. A direct skill selection is allowed only for a role explicitly listed in the
    managed policy and never changes its tool or resource grants.
 3. A delegated capability WorkPacket names exactly one catalogued skill and
    rejects unknown, duplicate, missing or tampered values.
-4. The Workspace Agent parent remains accountable for the child result and no child
+4. The Case Agent parent remains accountable for the child result and no child
    receives general browsing, persistent memory or child-delegation rights.
 5. Claude and Codex shared-core conformance exercise identical allow and
    denial cases; this is not native adapter evidence, so activation remains

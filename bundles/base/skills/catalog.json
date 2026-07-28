@@ -2,6 +2,13 @@
   "schema_version": 1,
   "skills": [
     {
+      "id": "agent-identity-setup",
+      "display_name": "Agent Identity Setup",
+      "trigger": "Name and personalize governed agents",
+      "default_prompt": "Use $agent-identity-setup to choose names, emoji-avatars and ownership for my agents.",
+      "relative_path": "skills/agent-identity-setup/SKILL.md"
+    },
+    {
       "id": "deck-storyline",
       "display_name": "Deck and Storyline",
       "trigger": "Build one decision-led professional storyline and deck plan",

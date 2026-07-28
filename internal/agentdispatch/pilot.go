@@ -347,7 +347,7 @@ func (pilot *Pilot) Delegate(intent Intent) (Dispatch, Receipt, error) {
 		return Dispatch{}, receipt, err
 	}
 	instance, exists := pilot.instances[targetID]
-	if !exists || !instance.Available || instance.Role != "workspace_agent" ||
+	if !exists || !instance.Available || (instance.Role != "case_agent" && instance.Role != "workspace_agent") ||
 		instance.ScopeKind != "workspace" || instance.ScopeID != intent.WorkspaceID ||
 		instance.ParentAgentID != "maestro" {
 		receipt, err := pilot.recordFailure("workspace", targetID, intent.WorkspaceID, "target_unavailable", StateUnavailable)

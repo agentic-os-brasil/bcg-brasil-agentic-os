@@ -4,6 +4,7 @@
 
 | Skill | Use when | Pointer |
 |---|---|---|
+| Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
 | Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/deck-storyline/SKILL.md` |
 | Dream Memory | Consolidate daily and weekly professional memory | `skills/dream-memory/SKILL.md` |
 | Ingest Content | Extract professional documents locally and safely | `skills/ingest-content/SKILL.md` |

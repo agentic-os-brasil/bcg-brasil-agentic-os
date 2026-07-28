@@ -22,6 +22,7 @@ import (
 	bundlecatalog "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/catalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/activationpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
@@ -459,12 +460,18 @@ func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	managedIdentities, err := loadManagedIdentities(root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
 	return writeJSON(out, struct {
 		workspace.Result
-		Profile        profile.State         `json:"profile"`
-		WorkspaceAgent workspaceagent.Status `json:"workspace_agent"`
-		AgentStub      agentscaffold.Status  `json:"agent_stub"`
-	}{Result: result, Profile: state, WorkspaceAgent: agent, AgentStub: agentStub}, errOut)
+		Profile                profile.State             `json:"profile"`
+		CaseAgent              workspaceagent.Status     `json:"case_agent"`
+		AgentStub              agentscaffold.Status      `json:"agent_stub"`
+		AgentIdentityInterview agentidentity.Interview   `json:"agent_identity_interview"`
+		ManagedAgentIdentities []agentidentity.Selection `json:"managed_agent_identities"`
+	}{Result: result, Profile: state, CaseAgent: agent, AgentStub: agentStub, AgentIdentityInterview: agentidentity.InitialInterview(), ManagedAgentIdentities: managedIdentities}, errOut)
 }
 
 func runAgent(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
@@ -488,7 +495,7 @@ type activationAdvisoryInput struct {
 
 func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos agent <hire|scaffold|status|plan|declassify|verify|monitor> [options]")
+		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|hire|scaffold|status|plan|declassify|verify|monitor> [options]")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -496,6 +503,52 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		return reportError(errOut, err)
 	}
 	switch args[0] {
+	case "interview":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos agent interview")
+			return ExitUsage
+		}
+		return writeJSON(out, agentidentity.InitialInterview(), errOut)
+	case "personalize":
+		if err := requireAgentStdin(args[1:], errOut); err != nil {
+			return ExitUsage
+		}
+		body, err := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
+		if err != nil || len(body) > maximumWorkContractBytes {
+			return reportError(errOut, errors.New("agent personalization input exceeds 32 KiB"))
+		}
+		var input agentidentity.Profile
+		if err := agentidentity.DecodeStrict(body, &input); err != nil {
+			return reportError(errOut, err)
+		}
+		input.UpdatedAt = time.Now().UTC()
+		if err := agentidentity.Save(root, input); err != nil {
+			return reportError(errOut, err)
+		}
+		saved, err := agentidentity.Load(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, saved, errOut)
+	case "identity":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos agent identity")
+			return ExitUsage
+		}
+		profile, err := agentidentity.Load(root)
+		if errors.Is(err, os.ErrNotExist) {
+			return writeJSON(out, struct {
+				Interview     agentidentity.Interview   `json:"interview"`
+				ManagedAgents []agentidentity.Selection `json:"managed_agents"`
+			}{Interview: agentidentity.InitialInterview(), ManagedAgents: agentidentity.ResolveManaged(agentidentity.Profile{})}, errOut)
+		}
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, struct {
+			Profile       agentidentity.Profile     `json:"profile"`
+			ManagedAgents []agentidentity.Selection `json:"managed_agents"`
+		}{Profile: profile, ManagedAgents: agentidentity.ResolveManaged(profile)}, errOut)
 	case "scaffold", "hire":
 		command := "agent " + args[0]
 		flags := newFlagSet(command, errOut)
@@ -510,8 +563,8 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		mandate := flags.String("mandate", "", "bounded mandate for account/practice roots")
 		canon := flags.String("canon", "", "data-root-relative practice canon path")
 		canonSHA256 := flags.String("canon-sha256", "", "verified practice canon SHA-256")
-		expertKind := flags.String("expert-kind", "", "PXpert kind: FPA or IPA")
-		expertVersion := flags.String("expert-version", "", "PXpert semantic version")
+		expertKind := flags.String("expert-kind", "", "PA expert kind: FPA or IPA")
+		expertVersion := flags.String("expert-version", "", "PA expert semantic version")
 		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 ||
 			*agentID == "" || *role == "" || *scopeKind == "" || *scopeID == "" ||
 			*parent == "" || *parentRole == "" {
@@ -556,7 +609,7 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		if err := decodeActivationJSON(in, &input); err != nil {
 			return reportError(errOut, err)
 		}
-		experts, err := localPXpertRegistry(root)
+		experts, err := localPAExpertRegistry(root)
 		if err != nil {
 			return reportError(errOut, err)
 		}
@@ -573,7 +626,7 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		if err := decodeActivationJSON(in, &input); err != nil {
 			return reportError(errOut, err)
 		}
-		experts, err := localPXpertRegistry(root)
+		experts, err := localPAExpertRegistry(root)
 		if err != nil {
 			return reportError(errOut, err)
 		}
@@ -587,7 +640,7 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 			(input.Envelope.Sensitivity != activationpolicy.Public &&
 				input.Envelope.Sensitivity != activationpolicy.Internal) ||
 			!planSelectsExpert(plan, input.Request.Expert) {
-			return reportError(errOut, errors.New("advisory request is not bound to the current deterministic plan and hired PXpert"))
+			return reportError(errOut, errors.New("advisory request is not bound to the current deterministic plan and hired PA expert"))
 		}
 		receipt, err := activationpolicy.Declassify(input.Request)
 		if err != nil {
@@ -602,7 +655,7 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		if err := decodeActivationJSON(in, &input); err != nil {
 			return reportError(errOut, err)
 		}
-		experts, err := localPXpertRegistry(root)
+		experts, err := localPAExpertRegistry(root)
 		if err != nil {
 			return reportError(errOut, err)
 		}
@@ -637,13 +690,24 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		}
 		return writeJSON(out, report, errOut)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos agent <hire|scaffold|status|plan|declassify|verify|monitor> [options]")
+		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|identity|hire|scaffold|status|plan|declassify|verify|monitor> [options]")
 		return ExitUsage
 	}
 }
 
-func localPXpertRegistry(root string) ([]activationpolicy.PXpert, error) {
-	instances, err := agentscaffold.ListPXperts(root)
+func loadManagedIdentities(root string) ([]agentidentity.Selection, error) {
+	profile, err := agentidentity.Load(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return agentidentity.ResolveManaged(agentidentity.Profile{}), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return agentidentity.ResolveManaged(profile), nil
+}
+
+func localPAExpertRegistry(root string) ([]activationpolicy.PAExpert, error) {
+	instances, err := agentscaffold.ListPAExperts(root)
 	if err != nil {
 		return nil, err
 	}
@@ -655,20 +719,20 @@ func localPXpertRegistry(root string) ([]activationpolicy.PXpert, error) {
 	for _, instance := range instances {
 		byID[instance.AgentID] = instance
 	}
-	experts := make([]activationpolicy.PXpert, 0, len(managed.Experts))
+	experts := make([]activationpolicy.PAExpert, 0, len(managed.Experts))
 	for _, expert := range managed.Experts {
 		instance, ok := byID[expert.ID]
 		if !ok || instance.ExpertKind != string(expert.Kind) ||
 			instance.ExpertVersion != expert.Version ||
 			instance.CanonSHA256 != expert.CanonSHA256 {
-			return nil, errors.New("published Helix PXpert is not installed with its exact signed canon")
+			return nil, errors.New("published Helix PA expert is not installed with its exact signed canon")
 		}
 		experts = append(experts, expert)
 	}
 	return experts, nil
 }
 
-func planSelectsExpert(plan activationpolicy.RoutePlan, expert activationpolicy.PXpert) bool {
+func planSelectsExpert(plan activationpolicy.RoutePlan, expert activationpolicy.PAExpert) bool {
 	for _, selected := range plan.Experts {
 		if selected.ID == expert.ID && selected.Kind == expert.Kind &&
 			selected.Version == expert.Version && selected.CanonSHA256 == expert.CanonSHA256 &&
@@ -1082,7 +1146,7 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 			"memory_dreaming":        "unavailable",
 			"private_release_auth":   releaseCapability.State,
 			"updates":                releaseCapability.State,
-			"workspace_agent_setup":  "supported",
+			"case_agent_setup":       "supported",
 			"workspace_research":     "managed_skill_runtime_dependent",
 			"public_economic_rollup": "supported",
 		},

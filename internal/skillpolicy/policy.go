@@ -93,8 +93,9 @@ func Compile(policy Policy, skills skillsindex.Catalog, agents agentcatalog.Cata
 }
 
 func (policy Policy) AllowsDirect(role, skillID string) bool {
+	role = canonicalRole(role)
 	for _, rule := range policy.Direct {
-		if rule.Role == role && contains(rule.SkillIDs, skillID) {
+		if canonicalRole(rule.Role) == role && contains(rule.SkillIDs, skillID) {
 			return true
 		}
 	}
@@ -102,8 +103,9 @@ func (policy Policy) AllowsDirect(role, skillID string) bool {
 }
 
 func (policy Policy) AllowsDelegated(fromRole, toRole, skillID string) bool {
+	fromRole, toRole = canonicalRole(fromRole), canonicalRole(toRole)
 	for _, rule := range policy.Delegated {
-		if rule.FromRole == fromRole && rule.ToRole == toRole && contains(rule.SkillIDs, skillID) {
+		if canonicalRole(rule.FromRole) == fromRole && canonicalRole(rule.ToRole) == toRole && contains(rule.SkillIDs, skillID) {
 			return true
 		}
 	}
@@ -133,16 +135,17 @@ func validateDirect(rules []DirectRule, known map[string]bool) error {
 }
 
 func directRole(role string) bool {
-	return role == "case_agent" || role == "workspace_agent"
+	return canonicalRole(role) == "case_agent"
 }
 
 func validateDelegated(rules []DelegatedRule, known map[string]bool, agents agentcatalog.Catalog) error {
 	previous := ""
 	for _, rule := range rules {
-		from, fromOK := (agentcatalog.Catalog{}).ContractForRole(rule.FromRole)
-		to, toOK := (agentcatalog.Catalog{}).ContractForRole(rule.ToRole)
-		key := rule.FromRole + "\x00" + rule.ToRole
-		if !fromOK || !toOK || !from.MayDelegate || to.MayDelegate || !agents.AllowsDelegation(rule.FromRole, rule.ToRole, 2) || key <= previous || len(rule.SkillIDs) == 0 {
+		fromRole, toRole := canonicalRole(rule.FromRole), canonicalRole(rule.ToRole)
+		from, fromOK := (agentcatalog.Catalog{}).ContractForRole(fromRole)
+		to, toOK := (agentcatalog.Catalog{}).ContractForRole(toRole)
+		key := fromRole + "\x00" + toRole
+		if !fromOK || !toOK || !from.MayDelegate || to.MayDelegate || !agents.AllowsDelegation(fromRole, toRole, 2) || key <= previous || len(rule.SkillIDs) == 0 {
 			return errors.New("agent skill delegated rules are invalid or unsorted")
 		}
 		if err := validateSkills(rule.SkillIDs, known); err != nil {
@@ -151,6 +154,17 @@ func validateDelegated(rules []DelegatedRule, known map[string]bool, agents agen
 		previous = key
 	}
 	return nil
+}
+
+func canonicalRole(role string) string {
+	switch role {
+	case "account_agent":
+		return "client_account_agent"
+	case "workspace_agent":
+		return "case_agent"
+	default:
+		return role
+	}
 }
 
 func validateSkills(skillIDs []string, known map[string]bool) error {

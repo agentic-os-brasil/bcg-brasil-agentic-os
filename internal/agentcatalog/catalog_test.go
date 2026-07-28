@@ -11,10 +11,9 @@ func TestCatalogAcceptsLeanMaestroCore(t *testing.T) {
 			MaxActiveBranches: 1, MaxDepth: 2, MaxChildrenPerAgent: 1,
 			MaxErrandHelpers: 1, ErrandScope: "basic_reversible",
 			AllowedEdges: []DelegationEdge{
-				{FromRole: "account_agent", ToRoles: []string{"capability_specialist"}},
-				{FromRole: "hub", ToRoles: []string{"account_agent", "case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer", "workspace_agent"}},
+				{FromRole: "case_agent", ToRoles: []string{"capability_specialist"}},
+				{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer"}},
 				{FromRole: "practice_agent", ToRoles: []string{"subject_specialist"}},
-				{FromRole: "workspace_agent", ToRoles: []string{"capability_specialist"}},
 			},
 		},
 		Agents: []Agent{
