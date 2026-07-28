@@ -19,12 +19,12 @@ principal-agent menu. Explain each role before asking for a choice:
 - Case Agent — the project execution and delivery owner;
 - Walter — internal pressure-test and review gate;
 - Darwin — governance, drift and system-health analyst; and
-- PA expert — versioned FPA/IPA advisory from Helix Brasil.
+- PA expert — versioned FPA/IPA advisory from the PA Expert registry.
 
 Show the default name, suggested alternatives, purpose and suggested
 emoji-avatar. Ask the owner for an explicit `owner_id`, one name and one emoji
 per role, plus the ownership scope. The owner may customize presentation, but
-cannot change role authority, scope rules, Helix versioning or review gates.
+cannot change role authority, scope rules, PA Expert versioning or review gates.
 
 Before writing, show the complete proposed profile and ask for one explicit
 confirmation. Persist only the confirmed strict JSON profile through
@@ -32,4 +32,4 @@ confirmation. Persist only the confirmed strict JSON profile through
 invalid emoji or ownership-scope mismatch must fail closed.
 
 Personalization is local owner data. It is never copied into managed templates,
-client context, telemetry or Helix advisory packets.
+client context, telemetry or PA Expert advisory packets.

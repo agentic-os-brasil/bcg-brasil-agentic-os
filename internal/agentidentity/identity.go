@@ -111,13 +111,13 @@ func InitialInterview() Interview {
 		Kind:                 "agent_identity_setup",
 		SchemaVersion:        SchemaVersion,
 		Instructions:         "Escolha nomes e emojis para os agents principais. A personalização muda a forma como eles aparecem, nunca suas permissões, escopos ou autoridade.",
-		OwnershipExplanation: "Você será o owner da personalização. A autoridade operacional continua pertencendo à camada do agent: Maestro, conta, case, governança ou Helix.",
+		OwnershipExplanation: "Você será o owner da personalização. A autoridade operacional continua pertencendo à camada do agent: Maestro, conta, case, governança ou PA Expert registry.",
 		AvatarExplanation:    "Cada agent sempre aparece com um emoji-avatar. Você pode aceitar a sugestão ou escolher outro emoji válido; o emoji não concede nenhuma capacidade.",
 		Steps: []InterviewStep{
 			{Field: "owner_id", Question: "Quem será o owner desta configuração de identidade?", Explanation: "Use um identificador estável do proprietário, não um nome sensível ou credencial."},
 			{Field: "agent_names", Question: "Que nomes você quer usar para Maestro, Client Account, Case, Walter, Darwin e PA experts?", Explanation: "Você pode escolher individualmente ou aceitar as sugestões abaixo; conta e case serão vinculados ao agent_id concreto."},
 			{Field: "agent_emojis", Question: "Que emoji-avatar deve acompanhar cada agent?", Explanation: "O emoji é visual e personalizável; a definição técnica continua versionada no catálogo."},
-			{Field: "ownership_scope", Question: "Esta personalização é global, de uma conta, de um case ou do Helix?", Explanation: "O scope limita onde o nome e o avatar podem ser usados."},
+			{Field: "ownership_scope", Question: "Esta personalização é global, de uma conta, de um case ou do PA Expert registry?", Explanation: "O scope limita onde o nome e o avatar podem ser usados."},
 			{Field: "confirmation", Question: "Confirma os nomes, emojis e ownership antes de salvar?", Explanation: "Nada é persistido sem esta confirmação explícita."},
 		},
 		Agents: []RoleDescriptor{
@@ -126,7 +126,7 @@ func InitialInterview() Interview {
 			{Role: "case_agent", Purpose: "Executa análise, código e entregas de um case", DefaultName: "Case Lead", DefaultEmoji: "⚙️", Suggestions: []string{"Case Lead", "Forge", "Mission Control"}, EmojiSuggestions: []string{"⚙️", "🛠️", "🚀"}, OwnershipScope: "case", CustomizationNote: "Personalização vale apenas para o case registrado."},
 			{Role: "walter", Purpose: "Pressure-test interno de materiais e recomendações", DefaultName: "Walter", DefaultEmoji: "🛡️", Suggestions: []string{"Walter", "Sentinel", "Red Team"}, EmojiSuggestions: []string{"🛡️", "🔍", "⚖️"}, OwnershipScope: "governance", CustomizationNote: "A personalização não altera o veto ou o gate de revisão."},
 			{Role: "darwin", Purpose: "Analisa drift, saúde e governança do sistema", DefaultName: "Darwin", DefaultEmoji: "🧬", Suggestions: []string{"Darwin", "Observer", "Steward"}, EmojiSuggestions: []string{"🧬", "👁️", "🌱"}, OwnershipScope: "governance", CustomizationNote: "Darwin continua sem execução autônoma ou escrita persistente."},
-			{Role: "pa_expert", Purpose: "Advisory FPA/IPA versionado pelo Helix Brasil", DefaultName: "PA Expert", DefaultEmoji: "🧠", Suggestions: []string{"PA Expert", "Advisor", "Lens"}, EmojiSuggestions: []string{"🧠", "💡", "🔬"}, OwnershipScope: "helix", CustomizationNote: "O owner pode personalizar a apresentação; a versão e o canon continuam centralizados no Helix."},
+			{Role: "pa_expert", Purpose: "Advisory FPA/IPA versionado pelo PA Expert registry", DefaultName: "PA Expert", DefaultEmoji: "🧠", Suggestions: []string{"PA Expert", "Advisor", "Lens"}, EmojiSuggestions: []string{"🧠", "💡", "🔬"}, OwnershipScope: "pa_expert_registry", CustomizationNote: "O owner pode personalizar a apresentação; a versão e o canon continuam centralizados no PA Expert registry."},
 		},
 	}
 }
@@ -190,7 +190,7 @@ func validOwnershipScope(role, scope string) bool {
 	case "walter", "darwin":
 		return scope == "governance"
 	case "pa_expert":
-		return scope == "helix"
+		return scope == "pa_expert_registry"
 	case "practice_agent":
 		return scope == "practice"
 	case "capability_specialist", "subject_specialist":

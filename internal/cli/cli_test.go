@@ -797,7 +797,7 @@ func TestAgentScaffoldCommandCreatesPracticeAndSubjectChain(t *testing.T) {
 func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")
-	canonRelative := filepath.Join("helix", "experts", "pa-expert-fpa-pricing", "canon.md")
+	canonRelative := filepath.Join("pa-experts", "pa-expert-fpa-pricing", "canon.md")
 	canonPath := filepath.Join(dataRoot, canonRelative)
 	if err := os.MkdirAll(filepath.Dir(canonPath), 0o700); err != nil {
 		t.Fatal(err)
@@ -817,7 +817,7 @@ func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 		"--scope", "pricing",
 		"--parent", "maestro",
 		"--parent-role", "hub",
-		"--owner", "helix-curator",
+		"--owner", "pa-expert-curator",
 		"--mandate", "Advise with the governed pricing canon.",
 		"--canon", filepath.ToSlash(canonRelative),
 		"--canon-sha256", canonSHA256,
@@ -872,7 +872,7 @@ func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 	output.Reset()
 	code = runAgentWithInput([]string{"declassify", "--stdin"}, bytes.NewReader(requestBody), &output, &output, func() (string, error) { return dataRoot, nil })
 	if code == ExitOK {
-		t.Fatal("draft PA expert was treated as a published Helix expert")
+		t.Fatal("draft PA expert was treated as published")
 	}
 
 	completion := activationCompletionInput{
