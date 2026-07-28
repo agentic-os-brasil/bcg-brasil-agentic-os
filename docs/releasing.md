@@ -115,3 +115,10 @@ signed bootstrapper seed must install the approved registry before a provider
 release can become trusted.
 
 No production path may convert `unavailable` into an unsigned override.
+
+## Release decision checklist
+
+Use [`docs/release-gates-checklist.md`](release-gates-checklist.md) as the
+evidence record. It separates a technical rehearsal, a signed release and a
+pilot-ready release, and names the external owner for every gate. A candidate
+that passes local closure verification remains unsigned engineering output.
