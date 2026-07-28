@@ -130,6 +130,9 @@ func (r Request) Validate() (os.FileInfo, error) {
 	if !info.Mode().IsRegular() {
 		return nil, errors.New("ingestion source must be a regular file")
 	}
+	if hasSymlinkComponent(workspacePath, sourcePath) {
+		return nil, errors.New("ingestion source symlink components are not allowed")
+	}
 	resolvedWorkspace, err := filepath.EvalSymlinks(workspacePath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve ingestion workspace: %w", err)
@@ -157,6 +160,25 @@ func pathWithin(root, candidate string) bool {
 		return false
 	}
 	return !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && relative != "."
+}
+
+func hasSymlinkComponent(root, candidate string) bool {
+	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
+	if err != nil || relative == "." || strings.HasPrefix(relative, "..") {
+		return false
+	}
+	current := filepath.Clean(root)
+	for _, component := range strings.Split(relative, string(filepath.Separator)) {
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return false
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func Fingerprint(path string) (string, error) {
