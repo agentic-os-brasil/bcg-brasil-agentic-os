@@ -51,7 +51,7 @@ quando os mecanismos nativos forem diferentes.
 | Memória | Núcleo local com resumos graduais e contexto limitado; automação de síntese ainda não está ativa. |
 | Execução retomável | Ledger local com contrato imutável, checkpoint privado, pausa/retomada, contrato core para breadcrumbs metadata-only de tool calls, receipts de checks executados pelo core e conclusão revalidada; emissão nativa pelos adapters ainda está pendente. |
 | Skills | Catálogo compacto e atualizado de procedimentos disponíveis. |
-| Ingestão local | Contrato provider-neutral, adapter MarkItDown bounded e `bcgos ingest` com resolução fail-closed do runtime pack; conversão só fica disponível após instalação do pack verificado. |
+| Ingestão local | Contrato provider-neutral, selector Docling-first, adapter MarkItDown bounded e `bcgos ingest` fail-closed; conversão só fica disponível após instalação e verificação aprovada do runtime pack. |
 | Desenvolvimento | Harness, testes, CI em Windows/macOS/Linux, decisões versionadas e fluxo de PR com revisão humana. |
 
 ## O que ainda não existe

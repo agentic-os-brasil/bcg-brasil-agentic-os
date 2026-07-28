@@ -171,7 +171,7 @@ The roadmap separates things to build from things to decide. Detailed dates rema
 - [ ] Select one high-value work use case from observed consultant needs.
 - [x] Define the local-first ingestion contract, managed runtime-pack boundary and standard/advanced/power progressive-disclosure model.
 - [x] Define the provider-neutral ingestion result contract and bounded MarkItDown fallback adapter source.
-- [x] Implement `bcgos ingest` dispatch with fail-closed managed-pack resolution.
+- [x] Implement `bcgos ingest` dispatch with fail-closed managed-pack resolution and primary-route fallback selection.
 - [ ] Run a Windows/macOS Docling runtime-pack distribution spike with sanitized fixtures, measuring size, first-use time, offline behavior and extraction quality.
 - [ ] Implement verified installation, capability detection and removal of the ingestion runtime pack.
 - [ ] Implement `bcgos ingest` and the Docling-first, deterministic-fallback execution contract.
