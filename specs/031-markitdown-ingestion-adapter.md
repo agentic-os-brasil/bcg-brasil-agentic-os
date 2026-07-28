@@ -28,10 +28,12 @@ An ingestion request must provide:
 - a format allowlist and input/output byte limits;
 - a provider route selected by the core, not by arbitrary source content.
 
-Symlinks, directories, network locations, plugins and implicit remote fetches
-are rejected. The source remains where the user selected it; derived Markdown
-and metadata-safe receipts are written to user-local application storage under
-the workspace scope.
+The source path must remain within the initialized workspace after both lexical
+and symlink resolution checks. Symlinks (including symlinked parent
+directories), directories, network locations, plugins and implicit remote
+fetches are rejected. The source remains where the user selected it; derived
+Markdown and metadata-safe receipts are written to user-local application
+storage under the workspace scope.
 
 ## Result contract
 
