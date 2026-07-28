@@ -80,6 +80,9 @@ func TestScaffoldCreatesWorkspaceAccountAndPracticeSpecialistChains(t *testing.T
 	if err != nil {
 		t.Fatalf("Scaffold(%s): %v", request.AgentID, err)
 	}
+	if status.Instance.ParentRole != "case_agent" {
+		t.Fatalf("legacy parent role was persisted: %q", status.Instance.ParentRole)
+	}
 	if status.Instance.MayDelegate || status.Instance.ToolAccess != "scoped" ||
 		status.Instance.ParentAgentID != request.ParentAgent ||
 		status.Instance.ScopeID != request.ScopeID {

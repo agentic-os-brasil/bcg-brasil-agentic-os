@@ -25,6 +25,7 @@ type RoleDescriptor struct {
 	DefaultName       string   `json:"default_name"`
 	DefaultEmoji      string   `json:"default_emoji"`
 	Suggestions       []string `json:"suggestions"`
+	EmojiSuggestions  []string `json:"emoji_suggestions"`
 	OwnershipScope    string   `json:"ownership_scope"`
 	CustomizationNote string   `json:"customization_note"`
 }
@@ -120,12 +121,12 @@ func InitialInterview() Interview {
 			{Field: "confirmation", Question: "Confirma os nomes, emojis e ownership antes de salvar?", Explanation: "Nada é persistido sem esta confirmação explícita."},
 		},
 		Agents: []RoleDescriptor{
-			{Role: "maestro", Purpose: "Hub user-facing que coordena o trabalho", DefaultName: "Maestro", DefaultEmoji: "🎼", Suggestions: []string{"Maestro", "Conductor", "Orquestrador"}, OwnershipScope: "system", CustomizationNote: "Nome e avatar podem ser personalizados pelo owner; autoridade permanece no hub."},
-			{Role: "client_account_agent", Purpose: "Owner partner-like do relacionamento e contexto curado da conta", DefaultName: "Account Partner", DefaultEmoji: "🤝", Suggestions: []string{"Account Partner", "Compass", "Navigator"}, OwnershipScope: "account", CustomizationNote: "Personalização vale apenas para a conta registrada."},
-			{Role: "case_agent", Purpose: "Executa análise, código e entregas de um case", DefaultName: "Case Lead", DefaultEmoji: "⚙️", Suggestions: []string{"Case Lead", "Forge", "Mission Control"}, OwnershipScope: "case", CustomizationNote: "Personalização vale apenas para o case registrado."},
-			{Role: "walter", Purpose: "Pressure-test interno de materiais e recomendações", DefaultName: "Walter", DefaultEmoji: "🛡️", Suggestions: []string{"Walter", "Sentinel", "Red Team"}, OwnershipScope: "governance", CustomizationNote: "A personalização não altera o veto ou o gate de revisão."},
-			{Role: "darwin", Purpose: "Analisa drift, saúde e governança do sistema", DefaultName: "Darwin", DefaultEmoji: "🧬", Suggestions: []string{"Darwin", "Observer", "Steward"}, OwnershipScope: "governance", CustomizationNote: "Darwin continua sem execução autônoma ou escrita persistente."},
-			{Role: "pa_expert", Purpose: "Advisory FPA/IPA versionado pelo Helix Brasil", DefaultName: "PA Expert", DefaultEmoji: "🧠", Suggestions: []string{"PA Expert", "Advisor", "Lens"}, OwnershipScope: "helix", CustomizationNote: "O owner pode personalizar a apresentação; a versão e o canon continuam centralizados no Helix."},
+			{Role: "maestro", Purpose: "Hub user-facing que coordena o trabalho", DefaultName: "Maestro", DefaultEmoji: "🎼", Suggestions: []string{"Maestro", "Conductor", "Orquestrador"}, EmojiSuggestions: []string{"🎼", "🎵", "🎻"}, OwnershipScope: "system", CustomizationNote: "Nome e avatar podem ser personalizados pelo owner; autoridade permanece no hub."},
+			{Role: "client_account_agent", Purpose: "Owner partner-like do relacionamento e contexto curado da conta", DefaultName: "Account Partner", DefaultEmoji: "🤝", Suggestions: []string{"Account Partner", "Compass", "Navigator"}, EmojiSuggestions: []string{"🤝", "🧭", "🌐"}, OwnershipScope: "account", CustomizationNote: "Personalização vale apenas para a conta registrada."},
+			{Role: "case_agent", Purpose: "Executa análise, código e entregas de um case", DefaultName: "Case Lead", DefaultEmoji: "⚙️", Suggestions: []string{"Case Lead", "Forge", "Mission Control"}, EmojiSuggestions: []string{"⚙️", "🛠️", "🚀"}, OwnershipScope: "case", CustomizationNote: "Personalização vale apenas para o case registrado."},
+			{Role: "walter", Purpose: "Pressure-test interno de materiais e recomendações", DefaultName: "Walter", DefaultEmoji: "🛡️", Suggestions: []string{"Walter", "Sentinel", "Red Team"}, EmojiSuggestions: []string{"🛡️", "🔍", "⚖️"}, OwnershipScope: "governance", CustomizationNote: "A personalização não altera o veto ou o gate de revisão."},
+			{Role: "darwin", Purpose: "Analisa drift, saúde e governança do sistema", DefaultName: "Darwin", DefaultEmoji: "🧬", Suggestions: []string{"Darwin", "Observer", "Steward"}, EmojiSuggestions: []string{"🧬", "👁️", "🌱"}, OwnershipScope: "governance", CustomizationNote: "Darwin continua sem execução autônoma ou escrita persistente."},
+			{Role: "pa_expert", Purpose: "Advisory FPA/IPA versionado pelo Helix Brasil", DefaultName: "PA Expert", DefaultEmoji: "🧠", Suggestions: []string{"PA Expert", "Advisor", "Lens"}, EmojiSuggestions: []string{"🧠", "💡", "🔬"}, OwnershipScope: "helix", CustomizationNote: "O owner pode personalizar a apresentação; a versão e o canon continuam centralizados no Helix."},
 		},
 	}
 }
@@ -260,9 +261,7 @@ func Load(root string) (Profile, error) {
 		return Profile{}, err
 	}
 	var profile Profile
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&profile); err != nil {
+	if err := DecodeStrict(body, &profile); err != nil {
 		return Profile{}, err
 	}
 	if err := profile.Validate(); err != nil {

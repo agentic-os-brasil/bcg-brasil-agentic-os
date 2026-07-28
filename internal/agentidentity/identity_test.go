@@ -16,7 +16,7 @@ func TestInitialInterviewExplainsNamesAvatarsAndOwnership(t *testing.T) {
 		t.Fatal("interview omitted ownership or avatar explanation")
 	}
 	for _, descriptor := range interview.Agents {
-		if descriptor.DefaultName == "" || descriptor.DefaultEmoji == "" || len(descriptor.Suggestions) < 2 || descriptor.Purpose == "" {
+		if descriptor.DefaultName == "" || descriptor.DefaultEmoji == "" || len(descriptor.Suggestions) < 2 || len(descriptor.EmojiSuggestions) < 2 || descriptor.Purpose == "" {
 			t.Fatalf("incomplete descriptor: %#v", descriptor)
 		}
 	}
@@ -55,6 +55,28 @@ func TestLegacyRolesResolveToCanonicalRoles(t *testing.T) {
 	}
 	if got := CanonicalRole("workspace_agent"); got != "case_agent" {
 		t.Fatalf("workspace alias = %q", got)
+	}
+}
+
+func TestLoadRejectsTrailingJSON(t *testing.T) {
+	root := t.TempDir()
+	profile := Profile{
+		SchemaVersion: SchemaVersion, OwnerID: "daniel", Confirmed: true, UpdatedAt: time.Now().UTC(),
+		Selections: []Selection{{Role: "maestro", DisplayName: "Maestro", Emoji: "🎼", OwnerID: "daniel", OwnershipScope: "system"}},
+	}
+	if err := Save(root, profile); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "agents", "personalization.json")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(body, []byte("{}\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(root); err == nil {
+		t.Fatal("trailing JSON was accepted")
 	}
 }
 

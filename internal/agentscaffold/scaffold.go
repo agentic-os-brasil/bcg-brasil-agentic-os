@@ -122,6 +122,7 @@ func Scaffold(dataRoot string, request Request) (Status, error) {
 		return Status{}, err
 	}
 	request.Role = catalog.CanonicalRole(request.Role)
+	request.ParentRole = catalog.CanonicalRole(request.ParentRole)
 	contract, err := validateRequest(catalog, request)
 	if err != nil {
 		return Status{}, err

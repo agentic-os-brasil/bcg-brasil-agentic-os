@@ -93,6 +93,11 @@ Practice roots additionally provide `--owner`, `--mandate`, `--canon` and
 prompts remain data-free: this bounded metadata stays only in the signed local
 instance manifest.
 
+The identity and ownership fields are part of the signed instance contract. A
+manifest created before this contract was introduced is not silently upgraded:
+its old HMAC and template digest require explicit re-scaffolding under the
+canonical role. Compatibility aliases apply to new input requests only.
+
 ## Security and activation boundary
 
 All paths are accessed through an OS-enforced local data root. Agent and scope

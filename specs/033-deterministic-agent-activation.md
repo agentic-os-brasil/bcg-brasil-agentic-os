@@ -40,7 +40,9 @@ compatible published expert or fail closed.
 
 ## Deterministic policy
 
-Policy version `pae-v1` produces exactly one shadow route:
+Policy version `pae-v1` produces exactly one shadow route. It is a breaking
+policy version: route plans stamped with the previous policy version must be
+replanned rather than accepted under the new contracts.
 
 - `D0_DIRECT`: accountable agent only;
 - `D1_TARGETED`: accountable agent plus one exact PA expert when knowledge is

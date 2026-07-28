@@ -27,16 +27,18 @@ flowchart TD
     C -. "selects directly" .-> S["Managed transversal skills\ndeck · quali · quant"]
     C -. "one bounded child when justified" .-> W["Capability specialist\none skill + minimum WorkPacket"]
     W --> R["Result + evidence + limits"]
-    R --> W0
-    W0 --> P["Reviewed promotion only"]
+    R --> C
+    C --> P["Reviewed promotion only"]
     P --> A
 ```
 
 Client Account Agent, Case Agent and PA expert are the authoritative lifecycle
 roles. The former `workspace_agent` and `account_agent` names are input-only
 compatibility aliases; new registrations and the delegation graph use only the
-canonical roles. Existing technical workspace IDs remain readable during
-migration, but are never emitted as new role nodes.
+canonical roles. Existing technical workspace IDs remain recognizable during
+migration, but manifests created before the identity/signature schema must be
+explicitly re-scaffolded; legacy role names are never emitted as new role
+nodes.
 
 ## Selection and delegation
 
