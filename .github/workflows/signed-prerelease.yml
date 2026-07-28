@@ -183,6 +183,34 @@ jobs:
               --sign "$MACOS_SIGNING_IDENTITY" "$binary"
             codesign --verify --strict --verbose=2 "$binary"
           done
+      - name: Notarize macOS binaries
+        if: matrix.os == 'darwin'
+        shell: bash
+        env:
+          NOTARY_KEY_B64: ${{ secrets.MAESTRO_MACOS_NOTARY_KEY_B64 }}
+          NOTARY_KEY_ID: ${{ secrets.MAESTRO_MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MAESTRO_MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$NOTARY_KEY_B64"
+          test -n "$NOTARY_KEY_ID"
+          test -n "$NOTARY_ISSUER_ID"
+          notary_key="$RUNNER_TEMP/maestro-notary-key.p8"
+          printf '%s' "$NOTARY_KEY_B64" | base64 --decode > "$notary_key"
+          cleanup() { rm -f "$notary_key"; }
+          trap cleanup EXIT
+          for binary in dist/native/bcgos_* dist/native/bcgos-bootstrap_*; do
+            archive="$RUNNER_TEMP/$(basename "$binary").zip"
+            evidence="dist/native/$(basename "$binary").notary.json"
+            ditto -c -k --keepParent "$binary" "$archive"
+            xcrun notarytool submit "$archive" \
+              --key "$notary_key" \
+              --key-id "$NOTARY_KEY_ID" \
+              --issuer "$NOTARY_ISSUER_ID" \
+              --wait --output-format json > "$evidence"
+            jq -e '.status == "Accepted"' "$evidence" >/dev/null
+            spctl --assess --type execute --verbose=2 "$binary"
+          done
       - name: Record signed native provenance
         shell: bash
         run: |
@@ -354,6 +382,7 @@ jobs:
           path: |
             dist/native/bcgos-bootstrap_*
             dist/native/*.provenance.json
+            dist/native/*.notary.json
             dist/release-authority/provider.json
             dist/release-authority/registry.json
           if-no-files-found: error
