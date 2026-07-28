@@ -73,7 +73,27 @@ func TestRequestValidateRejectsSymlinkedParentEscape(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 	_, err := (Request{SourcePath: filepath.Join(linked, "report.docx"), WorkspacePath: workspace, Policy: DefaultPolicy()}).Validate()
-	if err == nil || !strings.Contains(err.Error(), "resolves outside the workspace scope") {
+	if err == nil || !strings.Contains(err.Error(), "symlink components") {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestRequestValidateRejectsSymlinkedParentWithinWorkspace(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "real")
+	linked := filepath.Join(root, "linked")
+	if err := os.Mkdir(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(target, "report.docx")
+	if err := os.WriteFile(source, []byte("fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, linked); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	_, err := (Request{SourcePath: filepath.Join(linked, "report.docx"), WorkspacePath: root, Policy: DefaultPolicy()}).Validate()
+	if err == nil || !strings.Contains(err.Error(), "symlink components") {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
