@@ -174,7 +174,7 @@ func TestVersionCommand(t *testing.T) {
 
 func TestIngestReportsUnavailableWithoutVerifiedRuntimePack(t *testing.T) {
 	dataRoot, workspacePath := filepath.Join(t.TempDir(), "BCGOS"), t.TempDir()
-	sourcePath := filepath.Join(t.TempDir(), "brief.docx")
+	sourcePath := filepath.Join(workspacePath, "brief.docx")
 	if err := os.WriteFile(sourcePath, []byte("fixture"), 0o600); err != nil {
 		t.Fatal(err)
 	}
