@@ -20,7 +20,10 @@
   <a href="#what-is-ready">What is ready</a> ·
   <a href="#pilot-boundaries">Pilot boundaries</a> ·
   <a href="#start-here">Start here</a> ·
-  <a href="ROADMAP.md">Roadmap</a>
+  <a href="docs/onboarding/maestro-user-onboarding.md">Onboarding</a> ·
+  <a href="docs/roadmap/maestro-evolution-roadmap.md">Product evolution</a> ·
+  <a href="ROADMAP.md">Engineering roadmap</a> ·
+  <a href="LICENSE.md">Closed-source license</a>
 </p>
 
 ---
@@ -46,6 +49,26 @@ Define the outcome  →  Execute deliberately  →  Pause or hand off  →  Resu
 Maestro is designed for consultants, BCG X practitioners, data scientists and
 engineers who need the same thing: useful continuity without silent access,
 invented memory or ungoverned automation.
+
+## Why Maestro
+
+Maestro turns agent assistance into a professional operating model. It keeps
+the work legible across sessions, bounds authority by workspace and capability,
+and improves from typed operational evidence rather than exporting client
+content. The result is a product that can be adopted by a non-technical pilot
+user while still giving engineering, security and leadership a contract they
+can inspect.
+
+| Product advantage | What the user experiences |
+| --- | --- |
+| Continuity | Resume a long-running work item from an explicit checkpoint and next safe action. |
+| Governed execution | Scope, identity, evidence and human review remain visible at the point of action. |
+| Local-first knowledge | Ingestion is designed around local Docling with approved deterministic fallbacks, never an implicit remote upload. |
+| Runtime neutrality | Claude-first and Codex-compatible projections share product contracts and conformance language. |
+| Privacy-safe improvement | The canary can measure friction and reliability without collecting prompts, documents or client names. |
+
+For the full user journey, read the [Maestro user onboarding](docs/onboarding/maestro-user-onboarding.md).
+For the business-facing evolution path, read the [product evolution roadmap](docs/roadmap/maestro-evolution-roadmap.md).
 
 ## What is ready
 
@@ -139,6 +162,18 @@ clean-device evidence exist.
 For the complete product map, see the [roadmap](ROADMAP.md). For the actual
 delivery and validation contract, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+### For a pilot user
+
+The detailed onboarding covers workspace choice, first value, pause/resume,
+ingestion, profiles, safe recovery and the boundary between an implemented
+contract and a released runtime.
+
+### For a decision-maker
+
+The product roadmap explains the value unlocked by each evolution horizon,
+which evidence is required before the promise expands and why distribution,
+ingestion and governance are intentionally sequenced.
+
 ## Product map
 
 | Surface | Purpose | State |
@@ -181,5 +216,7 @@ bcgos work delete --workspace <path> --item <id> --revision <n> --confirm
 
 <p align="center">
   <strong>Professional work deserves continuity — without surrendering control.</strong><br>
-  Built privately toward the BCG Brasil pilot.
+  Built privately toward the BCG Brasil pilot.<br>
+  Developed by Daniel Scardini · Julia Ribeiro · Marcelho Sanches<br>
+  <a href="LICENSE.md">Maestro Proprietary License v1.0 · All rights reserved</a>
 </p>
