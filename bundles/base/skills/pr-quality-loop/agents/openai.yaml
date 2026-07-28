@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quality loop de PR"
+  short_description: "Orquestra QA e revisão de PR sem duplicar coleta ou pular gates"
+  default_prompt: "Use $pr-quality-loop para conduzir o ciclo evidence-gated deste PR."

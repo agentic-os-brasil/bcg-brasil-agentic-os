@@ -1,0 +1,4 @@
+interface:
+  display_name: "Captura de bug via teste"
+  short_description: "Registra bugs reais expostos por testes sem esconder a falha"
+  default_prompt: "Use $xfail-bug-capture quando um teste revelar um bug real no código de produção."

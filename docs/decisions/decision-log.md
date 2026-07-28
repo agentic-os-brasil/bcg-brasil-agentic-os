@@ -457,3 +457,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The executable slice can test intended composition, fail closed on missing expertise and produce caller-asserted shadow breadcrumbs, but it cannot authorize dispatch, export an advisory packet or mark execution complete. Case and Client Account Agents remain separate Maestro roots joined by a signed relation, avoiding cross-scope child inheritance. Darwin observes deduplicated window metadata and proposes later policy versions but cannot tune a live episode. Native authority requires authenticated envelope provenance, Execution Ledger budgets/receipts and a qualified privacy adapter.
 - Refs: specs/033-deterministic-agent-activation.md; internal/activationpolicy; internal/agentscaffold
 - Supersedes: none
+
+## BQAC - Include neutral engineering quality methods in base
+
+- Date: 2026-07-27
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The first quality-loop skills were authored as source-only engineering capability content, but QA, test-wave and pull-request hygiene are transversal safeguards needed by every professional workflow. Keeping them unavailable would make the active product surface omit the minimum evidence loop while specialized engineering activation is still pending.
+- Decision: Include `coverage-diagnose`, `unit-test-wave`, `xfail-bug-capture`, `qa-gate`, `pr-review` and `pr-quality-loop` in the active base bundle and its signed distribution allowlist. Keep specification-first delivery, human review explanation and test/evidence methods in the unavailable `engineering-core` source bundle. Keep development hooks outside product distribution.
+- Consequences: `bcgos skills index` exposes the six quality methods without selecting an engineering persona or granting tools. The base bundle grows only by an explicit allowlist, while specialized engineering/data skills remain fail-closed and require the future activation contract. Development hooks can be delivered separately to contributors without entering release artifacts.
+- Refs: specs/035-professional-capability-bundles.md; specs/036-base-engineering-quality.md; bundles/base/distribution.json; bundles/base/skills/catalog.json; bundles/base/skills/INDEX.md
+- Supersedes: CAPS

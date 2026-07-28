@@ -9,6 +9,13 @@
       "relative_path": "skills/agent-identity-setup/SKILL.md"
     },
     {
+      "id": "coverage-diagnose",
+      "display_name": "Diagnóstico de cobertura",
+      "trigger": "Mapeia cobertura e escolhe o próximo alvo de testes por risco",
+      "default_prompt": "Use $coverage-diagnose para diagnosticar a cobertura e recomendar a próxima onda de testes.",
+      "relative_path": "skills/coverage-diagnose/SKILL.md"
+    },
+    {
       "id": "deck-storyline",
       "display_name": "Deck and Storyline",
       "trigger": "Build one decision-led professional storyline and deck plan",
@@ -44,6 +51,27 @@
       "relative_path": "skills/maestro-setup-update/SKILL.md"
     },
     {
+      "id": "pr-quality-loop",
+      "display_name": "Quality loop de PR",
+      "trigger": "Orquestra QA e revisão de PR sem duplicar coleta ou pular gates",
+      "default_prompt": "Use $pr-quality-loop para conduzir o ciclo evidence-gated deste PR.",
+      "relative_path": "skills/pr-quality-loop/SKILL.md"
+    },
+    {
+      "id": "pr-review",
+      "display_name": "Revisão de pull request",
+      "trigger": "Revisa PR por risco, gates determinísticos e evidência atual",
+      "default_prompt": "Use $pr-review para revisar este pull request com evidência e verdict sem fazer merge.",
+      "relative_path": "skills/pr-review/SKILL.md"
+    },
+    {
+      "id": "qa-gate",
+      "display_name": "Gate de QA",
+      "trigger": "Classifica a qualidade de uma mudança com evidência proporcional",
+      "default_prompt": "Use $qa-gate para montar um pacote de QA e separar pass, hold e indisponível.",
+      "relative_path": "skills/qa-gate/SKILL.md"
+    },
+    {
       "id": "qualitative-analysis",
       "display_name": "Qualitative Analysis",
       "trigger": "Synthesize bounded qualitative evidence into themes and implications",
@@ -58,11 +86,25 @@
       "relative_path": "skills/quantitative-analysis/SKILL.md"
     },
     {
+      "id": "unit-test-wave",
+      "display_name": "Onda de testes unitários",
+      "trigger": "Orquestra uma onda de testes focada, com cobertura e evidência",
+      "default_prompt": "Use $unit-test-wave para planejar e validar uma onda cirúrgica de testes.",
+      "relative_path": "skills/unit-test-wave/SKILL.md"
+    },
+    {
       "id": "workspace-agent-setup",
       "display_name": "Workspace Agent Setup",
       "trigger": "Interview and research one project workspace safely",
       "default_prompt": "Use $workspace-agent-setup to create or refresh this workspace agent with reviewed, sourced context.",
       "relative_path": "skills/workspace-agent-setup/SKILL.md"
+    },
+    {
+      "id": "xfail-bug-capture",
+      "display_name": "Captura de bug via teste",
+      "trigger": "Registra bugs reais expostos por testes sem esconder a falha",
+      "default_prompt": "Use $xfail-bug-capture quando um teste revelar um bug real no código de produção.",
+      "relative_path": "skills/xfail-bug-capture/SKILL.md"
     }
   ]
 }
