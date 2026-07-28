@@ -2,6 +2,12 @@
 
 The roadmap separates things to build from things to decide. Detailed dates remain open until the corporate Windows and macOS environments are validated. Unresolved choices live in `docs/OPEN-QUESTIONS.md`; accepted choices move to the four-letter decision log.
 
+For the product narrative, user onboarding and value proposition, see the
+[Maestro product evolution roadmap](docs/roadmap/maestro-evolution-roadmap.md)
+and the [detailed user onboarding](docs/onboarding/maestro-user-onboarding.md).
+This file remains the engineering execution tracker; the product roadmap must
+not be used as evidence that a pending capability is already released.
+
 ## Current foundation
 
 - [x] Define the professional-only scope and broad target audience.
