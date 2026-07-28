@@ -15,8 +15,9 @@ workspaces or aggregate their memory.
 A promotion requires:
 
 - a unique promotion, account and source-workspace ID;
-- one curated single-line statement of at most 1,000 bytes (never a copied
-  raw artifact or Markdown/code block);
+- one reviewed single-line statement of at most 1,000 bytes. The deterministic
+  core rejects copied multiline or Markdown/code-shaped bodies, but does not
+  infer semantic curation from an arbitrary single-line string;
 - one canonical artifact URI inside the source workspace;
 - the artifact SHA-256, verified against the bytes of the resolved regular
   workspace file, plus author and workspace-owned source receipt;
