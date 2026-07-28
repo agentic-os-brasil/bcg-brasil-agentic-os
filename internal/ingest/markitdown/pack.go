@@ -1,6 +1,9 @@
 package markitdown
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +17,7 @@ import (
 const packSchemaVersion = 1
 
 var versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
+var sha256Pattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 type Pack struct {
 	State   string
@@ -27,11 +31,19 @@ type manifest struct {
 	Version       string `json:"version"`
 	PythonPath    string `json:"python_path"`
 	ScriptPath    string `json:"script_path"`
+	PythonSHA256  string `json:"python_sha256"`
+	ScriptSHA256  string `json:"script_sha256"`
+	Provenance    string `json:"provenance"`
 }
 
-func ResolvePack(dataRoot string) (Pack, error) {
+type ManifestVerifier func([]byte) error
+
+func ResolvePack(dataRoot string, verify ManifestVerifier) (Pack, error) {
 	if strings.TrimSpace(dataRoot) == "" {
 		return Pack{State: "unavailable", Reason: "local data root is not configured"}, nil
+	}
+	if verify == nil {
+		return Pack{State: "unavailable", Reason: "approved ingestion pack verifier is unavailable"}, nil
 	}
 	packRoot := filepath.Join(dataRoot, "ingestion", "markitdown")
 	manifestPath := filepath.Join(packRoot, "pack.json")
@@ -44,7 +56,14 @@ func ResolvePack(dataRoot string) (Pack, error) {
 	}
 	defer file.Close()
 
-	decoder := json.NewDecoder(file)
+	body, err := io.ReadAll(io.LimitReader(file, 1<<20+1))
+	if err != nil || len(body) > 1<<20 {
+		return Pack{State: "unavailable", Reason: "MarkItDown runtime pack manifest cannot be inspected"}, nil
+	}
+	if err := verify(body); err != nil {
+		return Pack{State: "unavailable", Reason: "MarkItDown runtime pack manifest verification failed"}, nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var value manifest
 	if err := decoder.Decode(&value); err != nil {
@@ -71,6 +90,12 @@ func ResolvePack(dataRoot string) (Pack, error) {
 	if err := regularFile(scriptPath); err != nil {
 		return Pack{State: "unavailable", Reason: "MarkItDown runtime pack adapter is unavailable"}, nil
 	}
+	if err := verifyDigest(pythonPath, value.PythonSHA256); err != nil {
+		return Pack{State: "unavailable", Reason: "MarkItDown runtime pack executable verification failed"}, nil
+	}
+	if err := verifyDigest(scriptPath, value.ScriptSHA256); err != nil {
+		return Pack{State: "unavailable", Reason: "MarkItDown runtime pack adapter verification failed"}, nil
+	}
 	return Pack{State: "ready", Command: []string{pythonPath, scriptPath, "--request-stdin"}}, nil
 }
 
@@ -81,8 +106,11 @@ func validateManifest(value manifest) error {
 	if value.Adapter != "markitdown" || !versionPattern.MatchString(value.Version) {
 		return errors.New("invalid MarkItDown pack identity")
 	}
-	if value.PythonPath == "" || value.ScriptPath == "" {
+	if value.PythonPath == "" || value.ScriptPath == "" || value.Provenance != "bcgos-managed-installer" {
 		return errors.New("MarkItDown pack paths are required")
+	}
+	if !sha256Pattern.MatchString(value.PythonSHA256) || !sha256Pattern.MatchString(value.ScriptSHA256) {
+		return errors.New("MarkItDown pack digests are required")
 	}
 	return nil
 }
@@ -105,6 +133,23 @@ func regularFile(path string) error {
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return errors.New("path is not a regular file")
+	}
+	return nil
+}
+
+func verifyDigest(path, expected string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return err
+	}
+	actual := hex.EncodeToString(hash.Sum(nil))
+	if actual != expected {
+		return errors.New("runtime pack digest mismatch")
 	}
 	return nil
 }

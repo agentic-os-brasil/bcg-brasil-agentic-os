@@ -1617,7 +1617,16 @@ func runIngest(args []string, out, errOut io.Writer, dataRoot func() (string, er
 		return ExitUsage
 	}
 	policy := ingest.DefaultPolicy()
-	pack, err := markitdown.ResolvePack(root)
+	// Docling remains the primary substrate. Until its managed runtime pack is
+	// installed, the core makes the explicit unavailable -> fallback decision.
+	decision, err := ingest.SelectFallback(ingest.PrimaryUnavailable, *adapterName)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	// The signed pack verifier is injected by the future managed installer.
+	// Keeping it nil here is intentional: an unsigned or locally forged pack
+	// must not become executable merely because its files exist.
+	pack, err := markitdown.ResolvePack(root, nil)
 	if err != nil {
 		return reportError(errOut, err)
 	}
@@ -1625,6 +1634,7 @@ func runIngest(args []string, out, errOut io.Writer, dataRoot func() (string, er
 		Command:      pack.Command,
 		ArtifactRoot: filepath.Join(root, "ingestion", "artifacts"),
 		WorkspaceID:  inspection.WorkspaceID,
+		Route:        decision.Route,
 		Policy:       policy,
 	}).Convert(context.Background(), ingest.Request{
 		SourcePath:    *sourcePath,

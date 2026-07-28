@@ -25,6 +25,7 @@ type Adapter struct {
 	Command      []string
 	ArtifactRoot string
 	WorkspaceID  string
+	Route        string
 	Policy       ingest.Policy
 	Timeout      time.Duration
 }
@@ -55,10 +56,13 @@ func (a Adapter) Convert(ctx context.Context, source ingest.Request) (ingest.Res
 	result := ingest.Result{
 		SchemaVersion: ingest.SchemaVersion,
 		Adapter:       "markitdown",
-		Route:         "markitdown_local",
+		Route:         a.Route,
 		Status:        ingest.StatusUnavailable,
 		Fidelity:      ingest.FidelityUnknown,
 		WorkspaceID:   a.WorkspaceID,
+	}
+	if result.Route == "" {
+		result.Route = "markitdown_local"
 	}
 
 	if !workspaceIDPattern.MatchString(a.WorkspaceID) {
