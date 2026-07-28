@@ -24,9 +24,9 @@ func Catalog() (agentcatalog.Catalog, error) {
 }
 
 type HelixRegistry struct {
-	SchemaVersion int                       `json:"schema_version"`
-	Authority     string                    `json:"authority"`
-	Experts       []activationpolicy.PXpert `json:"experts"`
+	SchemaVersion int                         `json:"schema_version"`
+	Authority     string                      `json:"authority"`
+	Experts       []activationpolicy.PAExpert `json:"experts"`
 }
 
 func ManagedHelixRegistry() (HelixRegistry, error) {
@@ -39,7 +39,7 @@ func ManagedHelixRegistry() (HelixRegistry, error) {
 	}
 	previous := ""
 	for _, expert := range registry.Experts {
-		if expert.ID <= previous || !activationpolicy.IsValidPublishedPXpert(expert) {
+		if expert.ID <= previous || !activationpolicy.IsValidPublishedPAExpert(expert) {
 			return HelixRegistry{}, errors.New("managed Helix experts must be valid, unique and sorted")
 		}
 		previous = expert.ID
@@ -48,8 +48,14 @@ func ManagedHelixRegistry() (HelixRegistry, error) {
 }
 
 func Template(role string) ([]byte, error) {
+	if role == "account_agent" {
+		role = "client_account_agent"
+	}
+	if role == "workspace_agent" {
+		role = "case_agent"
+	}
 	switch role {
-	case "account_agent", "case_agent", "client_account_agent", "pa_expert", "practice_agent", "workspace_agent", "capability_specialist", "subject_specialist":
+	case "case_agent", "client_account_agent", "pa_expert", "practice_agent", "capability_specialist", "subject_specialist":
 	default:
 		return nil, fmt.Errorf("no managed scaffold template for role %q", role)
 	}

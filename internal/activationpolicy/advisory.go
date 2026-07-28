@@ -26,7 +26,7 @@ type AdvisoryRequest struct {
 	RequestID      string                      `json:"request_id"`
 	EpisodeSHA256  string                      `json:"episode_sha256"`
 	PlanSHA256     string                      `json:"plan_sha256"`
-	Expert         PXpert                      `json:"expert"`
+	Expert         PAExpert                    `json:"expert"`
 	QuestionCode   string                      `json:"question_code"`
 	Classification Classification              `json:"classification"`
 	Facts          []AdvisoryFact              `json:"facts"`
@@ -80,7 +80,7 @@ var questionCode = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
 func Declassify(request AdvisoryRequest) (DeclassificationReceipt, error) {
 	if request.SchemaVersion != 1 || !validID(request.RequestID) ||
 		!validSHA256(request.EpisodeSHA256) || !validSHA256(request.PlanSHA256) ||
-		!validPXpert(request.Expert) || !questionCode.MatchString(request.QuestionCode) ||
+		!validPAExpert(request.Expert) || !questionCode.MatchString(request.QuestionCode) ||
 		len(request.QuestionCode) > 80 {
 		return DeclassificationReceipt{}, errors.New("advisory request identity or expert binding is invalid")
 	}

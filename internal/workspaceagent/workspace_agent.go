@@ -28,6 +28,7 @@ type Status struct {
 	Initialized  bool              `json:"initialized"`
 	WorkspaceID  string            `json:"workspace_id"`
 	AgentID      string            `json:"agent_id"`
+	Role         string            `json:"role"`
 	State        Pointer           `json:"state"`
 	Dossier      Pointer           `json:"dossier"`
 	Capabilities map[string]string `json:"capabilities"`
@@ -82,6 +83,7 @@ type registry struct {
 	SchemaVersion int    `json:"schema_version"`
 	WorkspaceID   string `json:"workspace_id"`
 	AgentID       string `json:"agent_id"`
+	Role          string `json:"role"`
 }
 
 const dossierTemplate = `# Workspace dossier
@@ -104,7 +106,7 @@ func Initialize(dataRoot, workspaceID string) (Status, error) {
 		return Status{}, err
 	}
 	agentID := "workspace-agent-" + workspaceID
-	if err := createJSON(filepath.Join(root, "agent", "agent.json"), registry{SchemaVersion: 1, WorkspaceID: workspaceID, AgentID: agentID}); err != nil {
+	if err := createJSON(filepath.Join(root, "agent", "agent.json"), registry{SchemaVersion: 1, WorkspaceID: workspaceID, AgentID: agentID, Role: "case_agent"}); err != nil {
 		return Status{}, err
 	}
 	if err := createImmutableJSON(filepath.Join(root, "agent", "state.json"), OperationalState{
@@ -134,13 +136,14 @@ func Inspect(dataRoot, workspaceID string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	if value.WorkspaceID != workspaceID || value.AgentID != "workspace-agent-"+workspaceID {
+	if value.WorkspaceID != workspaceID || value.AgentID != "workspace-agent-"+workspaceID || (value.Role != "" && value.Role != "case_agent") {
 		return Status{}, errors.New("workspace agent registry does not match workspace")
 	}
 	return Status{
 		Initialized:  true,
 		WorkspaceID:  workspaceID,
 		AgentID:      value.AgentID,
+		Role:         "case_agent",
 		State:        pointer(root, "agent/state.json"),
 		Dossier:      pointer(root, "dossier/README.md"),
 		Capabilities: capabilities(),
@@ -149,7 +152,7 @@ func Inspect(dataRoot, workspaceID string) (Status, error) {
 
 func ColdStartInterview() Interview {
 	return Interview{
-		Kind:         "workspace_agent_setup",
+		Kind:         "case_agent_setup",
 		Instructions: "Conduct a concise, user-reviewed setup interview. Do not persist answers automatically. Before external research, show the minimized query plan and obtain explicit approval.",
 		Steps: []InterviewStep{
 			{Field: "decision_and_horizon", Question: "Qual decisão ou entrega este workspace deve apoiar, e até quando?"},

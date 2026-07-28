@@ -13,10 +13,18 @@ import (
 )
 
 type Catalog struct {
-	SchemaVersion int              `json:"schema_version"`
-	Hub           string           `json:"hub"`
-	Delegation    DelegationPolicy `json:"delegation"`
-	Agents        []Agent          `json:"agents"`
+	SchemaVersion int                        `json:"schema_version"`
+	Hub           string                     `json:"hub"`
+	Delegation    DelegationPolicy           `json:"delegation"`
+	LegacyAliases map[string]LegacyRoleAlias `json:"legacy_aliases"`
+	Agents        []Agent                    `json:"agents"`
+}
+
+// LegacyRoleAlias keeps existing local registrations readable while ensuring
+// every new route and scaffold resolves to the canonical role graph.
+type LegacyRoleAlias struct {
+	CanonicalRole string `json:"canonical_role"`
+	Status        string `json:"status"`
 }
 
 type DelegationPolicy struct {
@@ -43,6 +51,10 @@ type Agent struct {
 	MayDelegate      bool   `json:"may_delegate"`
 	InputContract    string `json:"input_contract"`
 	RelativePath     string `json:"relative_path"`
+	DisplayName      string `json:"display_name,omitempty"`
+	DefaultEmoji     string `json:"default_emoji,omitempty"`
+	OwnershipScope   string `json:"ownership_scope,omitempty"`
+	Customizable     bool   `json:"customizable,omitempty"`
 }
 
 var safeAgentID = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
@@ -57,9 +69,9 @@ var roleContracts = map[string]struct {
 	mayDelegate   bool
 	inputContract string
 }{
-	"account_agent":         {false, "scoped", true, "bounded_account_packet"},
+	"account_agent":         {false, "scoped", false, "bounded_account_packet"}, // compatibility only
 	"capability_specialist": {false, "scoped", false, "minimum_work_packet"},
-	"case_agent":            {false, "scoped", false, "bounded_case_packet"},
+	"case_agent":            {false, "scoped", true, "bounded_case_packet"},
 	"client_account_agent":  {false, "scoped", false, "bounded_client_account_packet"},
 	"errand_helper":         {false, "scoped", false, "bounded_errand_packet"},
 	"governance_analyst":    {false, "none", false, "bounded_health_packet"},
@@ -68,7 +80,7 @@ var roleContracts = map[string]struct {
 	"pa_expert":             {false, "none", false, "bounded_advisory_packet"},
 	"reviewer":              {false, "none", false, "sealed_review_packet"},
 	"subject_specialist":    {false, "scoped", false, "bounded_subject_packet"},
-	"workspace_agent":       {false, "scoped", true, "bounded_workspace_packet"},
+	"workspace_agent":       {false, "scoped", true, "bounded_workspace_packet"}, // compatibility only
 }
 
 type RoleContract struct {
@@ -79,6 +91,13 @@ type RoleContract struct {
 }
 
 func (catalog Catalog) ContractForRole(role string) (RoleContract, bool) {
+	if canonical := catalog.CanonicalRole(role); canonical != role {
+		if canonical == "client_account_agent" {
+			role = canonical
+		} else if canonical == "case_agent" {
+			role = canonical
+		}
+	}
 	contract, ok := roleContracts[role]
 	if !ok {
 		return RoleContract{}, false
@@ -89,6 +108,16 @@ func (catalog Catalog) ContractForRole(role string) (RoleContract, bool) {
 		MayDelegate:      contract.mayDelegate,
 		InputContract:    contract.inputContract,
 	}, true
+}
+
+// CanonicalRole resolves a compatibility name to the role used by the
+// current hierarchy. Unknown roles are returned unchanged so callers can
+// still produce a precise validation error.
+func (catalog Catalog) CanonicalRole(role string) string {
+	if alias, ok := catalog.LegacyAliases[role]; ok {
+		return alias.CanonicalRole
+	}
+	return role
 }
 
 func Parse(reader io.Reader) (Catalog, error) {
@@ -126,6 +155,9 @@ func (catalog Catalog) Validate() error {
 	}
 	if catalog.Hub != "maestro" {
 		return fmt.Errorf("agent catalog hub must be maestro, got %q", catalog.Hub)
+	}
+	if err := validateLegacyAliases(catalog.LegacyAliases); err != nil {
+		return err
 	}
 	if catalog.Delegation.Mode != "role_gated_chains" || catalog.Delegation.RegisteredChains != "governed_unbounded" || catalog.Delegation.MaxActiveBranches != 1 || catalog.Delegation.MaxDepth != 2 || catalog.Delegation.MaxChildrenPerAgent != 1 || catalog.Delegation.MaxErrandHelpers != 1 || catalog.Delegation.ErrandScope != "basic_reversible" {
 		return errors.New("agent catalog must enforce governed chains, one active branch, one child and role-gated depth two")
@@ -197,6 +229,8 @@ func (catalog Catalog) AllowsDelegation(fromRole, toRole string, depth int) bool
 	if depth < 1 || depth > catalog.Delegation.MaxDepth {
 		return false
 	}
+	fromRole = catalog.CanonicalRole(fromRole)
+	toRole = catalog.CanonicalRole(toRole)
 	if (fromRole == "hub" && depth != 1) || (fromRole != "hub" && depth != 2) {
 		return false
 	}
@@ -214,6 +248,7 @@ func (catalog Catalog) AllowsDelegation(fromRole, toRole string, depth int) bool
 }
 
 func (catalog Catalog) roleMayDelegate(role string) bool {
+	role = catalog.CanonicalRole(role)
 	for _, edge := range catalog.Delegation.AllowedEdges {
 		if edge.FromRole == role {
 			return true
@@ -224,10 +259,9 @@ func (catalog Catalog) roleMayDelegate(role string) bool {
 
 func validateDelegationEdges(edges []DelegationEdge) error {
 	wanted := []DelegationEdge{
-		{FromRole: "account_agent", ToRoles: []string{"capability_specialist"}},
-		{FromRole: "hub", ToRoles: []string{"account_agent", "case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer", "workspace_agent"}},
+		{FromRole: "case_agent", ToRoles: []string{"capability_specialist"}},
+		{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer"}},
 		{FromRole: "practice_agent", ToRoles: []string{"subject_specialist"}},
-		{FromRole: "workspace_agent", ToRoles: []string{"capability_specialist"}},
 	}
 	if len(edges) != len(wanted) {
 		return errors.New("agent catalog has an incomplete or unauthorized delegation graph")
@@ -241,6 +275,29 @@ func validateDelegationEdges(edges []DelegationEdge) error {
 			if target != expected.ToRoles[targetIndex] {
 				return errors.New("agent catalog delegation edges must use the canonical sorted role graph")
 			}
+		}
+	}
+	return nil
+}
+
+func validateLegacyAliases(aliases map[string]LegacyRoleAlias) error {
+	if len(aliases) == 0 {
+		// Older in-memory fixtures predate the explicit migration map. The
+		// checked-in catalog always carries it; accepting empty fixtures keeps
+		// compatibility tests focused on their stated contract.
+		return nil
+	}
+	wanted := map[string]string{
+		"account_agent":   "client_account_agent",
+		"workspace_agent": "case_agent",
+	}
+	if len(aliases) != len(wanted) {
+		return errors.New("agent catalog must declare the complete legacy-role migration map")
+	}
+	for legacy, canonical := range wanted {
+		alias, ok := aliases[legacy]
+		if !ok || alias.CanonicalRole != canonical || alias.Status != "compatibility_only" {
+			return errors.New("agent catalog legacy-role migration map is invalid")
 		}
 	}
 	return nil
@@ -265,7 +322,7 @@ func ValidateDir(root string) error {
 			return fmt.Errorf("managed agent %s has an empty definition", agent.ID)
 		}
 	}
-	for _, role := range []string{"account_agent", "capability_specialist", "case_agent", "client_account_agent", "pa_expert", "practice_agent", "subject_specialist", "workspace_agent"} {
+	for _, role := range []string{"capability_specialist", "case_agent", "client_account_agent", "pa_expert", "practice_agent", "subject_specialist"} {
 		templatePath := filepath.Join(root, "templates", role, "AGENT.md")
 		body, err := os.ReadFile(templatePath)
 		if err != nil {

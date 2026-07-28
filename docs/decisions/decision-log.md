@@ -447,13 +447,13 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/003-pilot-success.md; specs/032-canary-observability.md; schemas/canary-receipt.schema.json; schemas/canary-report.schema.json; internal/canary
 - Supersedes: none
 
-## PXRT - Route accountable agents and PXperts through deterministic policy
+## PAEX - Route accountable agents and PA experts through deterministic policy
 
 - Date: 2026-07-26
 - Status: accepted
 - Owner: Daniel Scardini
-- Context: Client Account Agents, Case Agents and centrally maintained PA Experts need repeatable activation and declassification boundaries. Prompt-only routing cannot guarantee when an expert participates, prevent client context from crossing into Helix scope or give Darwin stable evidence for calibration.
-- Decision: Introduce a closed, versioned activation policy with `direct`, `balanced` and `deliberative` postures, starting at `balanced`. In the first shadow slice, the policy deterministically evaluates D0 direct, D1 targeted, D2 governed or blocked routes; semantic planning may propose but never reduce a hard floor. PXpert selection requires an exact signed local scaffold plus a version published by the central Helix Brasil registry. Initial route proportions are shadow hypotheses, never quotas.
+- Context: Client Account Agents, Case Agents and centrally maintained PA experts need repeatable activation and declassification boundaries. Prompt-only routing cannot guarantee when an expert participates, prevent client context from crossing into Helix scope or give Darwin stable evidence for calibration.
+- Decision: Introduce a closed, versioned activation policy with `direct`, `balanced` and `deliberative` postures, starting at `balanced`. In the first shadow slice, the policy deterministically evaluates D0 direct, D1 targeted, D2 governed or blocked routes; semantic planning may propose but never reduce a hard floor. PA expert selection requires an exact signed local scaffold plus a version published by the central Helix Brasil registry. Initial route proportions are shadow hypotheses, never quotas.
 - Consequences: The executable slice can test intended composition, fail closed on missing expertise and produce caller-asserted shadow breadcrumbs, but it cannot authorize dispatch, export an advisory packet or mark execution complete. Case and Client Account Agents remain separate Maestro roots joined by a signed relation, avoiding cross-scope child inheritance. Darwin observes deduplicated window metadata and proposes later policy versions but cannot tune a live episode. Native authority requires authenticated envelope provenance, Execution Ledger budgets/receipts and a qualified privacy adapter.
 - Refs: specs/033-deterministic-agent-activation.md; internal/activationpolicy; internal/agentscaffold
 - Supersedes: none

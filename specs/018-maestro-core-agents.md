@@ -16,14 +16,13 @@ Kowalski OS.
 ```mermaid
 flowchart TB
     User["User"] <--> Maestro["Maestro<br/>hub · no tools"]
-    Maestro --> Account["Account agent"]
-    Maestro --> Workspace["Workspace agent"]
+    Maestro --> Account["Client Account Agent"]
+    Maestro --> Case["Case Agent"]
     Maestro --> Practice["Practice agent"]
     Maestro --> Errand["Errand helper<br/>basic · reversible"]
     Maestro --> Walter["Walter<br/>reviewer · leaf"]
     Maestro --> Darwin["Darwin<br/>governance analyst · leaf"]
-    Account --> CapabilityA["Capability specialist · leaf"]
-    Workspace --> CapabilityW["Capability specialist · leaf"]
+    Case --> CapabilityW["Capability specialist · leaf"]
     Practice --> Subject["Subject specialist · leaf"]
 ```
 
@@ -75,8 +74,9 @@ delegate. Substantive project work remains with the owning workspace agent.
 
 ## Governed chain roles
 
-- An `account_agent` or `workspace_agent` may delegate to one
-  `capability_specialist` at depth two.
+- A `case_agent` may delegate to one `capability_specialist` at depth two.
+- A `client_account_agent` owns the partner-like account context and does not
+  directly delegate children; Maestro mediates Case activation.
 - A `practice_agent` may delegate to one `subject_specialist` at depth two.
 - Walter (`reviewer`), Darwin (`governance_analyst`), `errand_helper`,
   `capability_specialist` and `subject_specialist` are leaves.
@@ -89,17 +89,17 @@ delegate. Substantive project work remains with the owning workspace agent.
 sequenceDiagram
     actor User
     participant Maestro
-    participant Workspace as Workspace agent
+    participant Case as Case Agent
     participant Capability as Capability specialist
     participant Practice as Practice agent
     participant Subject as Subject specialist
     participant Walter
 
     User->>Maestro: professional request
-    Maestro->>Workspace: minimum workspace packet
-    Workspace->>Capability: one bounded child task
-    Capability-->>Workspace: specialist result
-    Workspace-->>Maestro: scoped result
+    Maestro->>Case: minimum case packet
+    Case->>Capability: one bounded child task
+    Capability-->>Case: specialist result
+    Case-->>Maestro: scoped result
     Note over Maestro,Practice: first branch is closed before another opens
     Maestro->>Practice: sanitized subject packet
     Practice->>Subject: one bounded child task
@@ -127,8 +127,8 @@ contract so a new registration cannot silently broaden context:
 | Role | Input contract | Tools | May delegate |
 | --- | --- | --- | --- |
 | `hub` | `session_context_packet` | none | yes |
-| `account_agent` | `bounded_account_packet` | scoped | yes |
-| `workspace_agent` | `bounded_workspace_packet` | scoped | yes |
+| `client_account_agent` | `bounded_client_account_packet` | scoped | no |
+| `case_agent` | `bounded_case_packet` | scoped | yes |
 | `practice_agent` | `bounded_practice_packet` | scoped | yes |
 | `reviewer` | `sealed_review_packet` | none | no |
 | `governance_analyst` | `bounded_health_packet` | none | no |

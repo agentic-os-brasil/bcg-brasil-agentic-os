@@ -9,6 +9,9 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
 )
 
 func TestWorkspaceScaffoldIsConcreteDataFreeAndIdempotent(t *testing.T) {
@@ -21,7 +24,7 @@ func TestWorkspaceScaffoldIsConcreteDataFreeAndIdempotent(t *testing.T) {
 	}
 	if !first.Initialized || first.Existing ||
 		first.Instance.AgentID != "workspace-agent-ws-alpha" ||
-		first.Instance.InputContract != "bounded_workspace_packet" ||
+		first.Instance.InputContract != "bounded_case_packet" ||
 		first.Instance.ToolAccess != "scoped" || !first.Instance.MayDelegate ||
 		first.Instance.RuntimeState != "unavailable" {
 		t.Fatalf("unexpected workspace scaffold: %#v", first)
@@ -43,6 +46,25 @@ func TestWorkspaceScaffoldIsConcreteDataFreeAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestScaffoldUsesConfirmedAgentPersonalizationWithoutChangingAuthority(t *testing.T) {
+	root := t.TempDir()
+	initializeWorkspaceScope(t, root, "ws-personalized")
+	if err := agentidentity.Save(root, agentidentity.Profile{
+		SchemaVersion: 1, OwnerID: "daniel", Confirmed: true, UpdatedAt: time.Now().UTC(),
+		Selections: []agentidentity.Selection{{Role: "case_agent", AgentID: "workspace-agent-ws-personalized", DisplayName: "Forge", Emoji: "⚙️", OwnerID: "daniel", OwnershipScope: "case"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Scaffold(root, WorkspaceRequest("ws-personalized"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Instance.DisplayName != "Forge" || status.Instance.Emoji != "⚙️" || status.Instance.OwnerID != "daniel" ||
+		status.Instance.OwnershipScope != "case" || status.Instance.RuntimeState != "unavailable" {
+		t.Fatalf("unexpected personalized scaffold: %#v", status.Instance)
+	}
+}
+
 func TestScaffoldCreatesWorkspaceAccountAndPracticeSpecialistChains(t *testing.T) {
 	root := t.TempDir()
 	initializeWorkspaceScope(t, root, "ws-alpha")
@@ -58,6 +80,9 @@ func TestScaffoldCreatesWorkspaceAccountAndPracticeSpecialistChains(t *testing.T
 	if err != nil {
 		t.Fatalf("Scaffold(%s): %v", request.AgentID, err)
 	}
+	if status.Instance.ParentRole != "case_agent" {
+		t.Fatalf("legacy parent role was persisted: %q", status.Instance.ParentRole)
+	}
 	if status.Instance.MayDelegate || status.Instance.ToolAccess != "scoped" ||
 		status.Instance.ParentAgentID != request.ParentAgent ||
 		status.Instance.ScopeID != request.ScopeID {
@@ -72,13 +97,12 @@ func TestScaffoldCreatesWorkspaceAccountAndPracticeSpecialistChains(t *testing.T
 	if _, err := Scaffold(root, account); err != nil {
 		t.Fatal(err)
 	}
-	accountCapability := Request{
+	if _, err := Scaffold(root, Request{
 		AgentID: "capability-account-research", Role: "capability_specialist",
 		ScopeKind: "account", ScopeID: "client-alpha",
 		ParentAgent: account.AgentID, ParentRole: "account_agent",
-	}
-	if _, err := Scaffold(root, accountCapability); err != nil {
-		t.Fatal(err)
+	}); err == nil {
+		t.Fatal("Client Account Agent unexpectedly delegated a case capability directly")
 	}
 
 	canonPath, canonSHA256 := preparePracticeCanon(t, root, "insurance")
@@ -102,7 +126,7 @@ func TestScaffoldCreatesWorkspaceAccountAndPracticeSpecialistChains(t *testing.T
 	}
 }
 
-func TestScaffoldHiresClientAccountCaseAndVersionedPXpert(t *testing.T) {
+func TestScaffoldHiresClientAccountCaseAndVersionedPAExpert(t *testing.T) {
 	root := t.TempDir()
 	account := Request{
 		AgentID: "client-account-agent-client-alpha", Role: "client_account_agent",
@@ -129,13 +153,13 @@ func TestScaffoldHiresClientAccountCaseAndVersionedPXpert(t *testing.T) {
 		t.Fatal(err)
 	}
 	if caseStatus.Instance.InputContract != "bounded_case_packet" ||
-		caseStatus.Instance.MayDelegate {
+		!caseStatus.Instance.MayDelegate {
 		t.Fatalf("unexpected Case Agent: %#v", caseStatus.Instance)
 	}
 
-	canonPath, canonSHA256 := preparePXpertCanon(t, root, "pxpert-fpa-pricing")
+	canonPath, canonSHA256 := preparePAExpertCanon(t, root, "pa-expert-fpa-pricing")
 	expert := Request{
-		AgentID: "pxpert-fpa-pricing", Role: "pa_expert",
+		AgentID: "pa-expert-fpa-pricing", Role: "pa_expert",
 		ScopeKind: "practice", ScopeID: "pricing",
 		ParentAgent: "maestro", ParentRole: "hub",
 		Owner: "helix-curator", Mandate: "Advise cases with the maintained pricing canon.",
@@ -151,22 +175,22 @@ func TestScaffoldHiresClientAccountCaseAndVersionedPXpert(t *testing.T) {
 		expertStatus.Instance.ExpertKind != "FPA" ||
 		expertStatus.Instance.ExpertVersion != "1.0.0" ||
 		expertStatus.Instance.ExpertLifecycle != "draft" {
-		t.Fatalf("unexpected PXpert: %#v", expertStatus.Instance)
+		t.Fatalf("unexpected PA expert: %#v", expertStatus.Instance)
 	}
 }
 
-func TestPXpertHireRejectsMissingVersionAndChangedCanon(t *testing.T) {
+func TestPAExpertHireRejectsMissingVersionAndChangedCanon(t *testing.T) {
 	root := t.TempDir()
-	canonPath, canonSHA256 := preparePXpertCanon(t, root, "pxpert-ipa-insurance")
+	canonPath, canonSHA256 := preparePAExpertCanon(t, root, "pa-expert-ipa-insurance")
 	request := Request{
-		AgentID: "pxpert-ipa-insurance", Role: "pa_expert",
+		AgentID: "pa-expert-ipa-insurance", Role: "pa_expert",
 		ScopeKind: "practice", ScopeID: "insurance",
 		ParentAgent: "maestro", ParentRole: "hub",
 		Owner: "helix-curator", Mandate: "Advise cases with the maintained insurance canon.",
 		CanonPath: canonPath, CanonSHA256: canonSHA256, ExpertKind: "IPA", ExpertLifecycle: "draft",
 	}
 	if _, err := Scaffold(root, request); err == nil {
-		t.Fatal("unversioned PXpert was hired")
+		t.Fatal("unversioned PA expert was hired")
 	}
 	request.ExpertVersion = "1.0.0"
 	if _, err := Scaffold(root, request); err != nil {
@@ -176,7 +200,7 @@ func TestPXpertHireRejectsMissingVersionAndChangedCanon(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := Inspect(root, request.AgentID); err == nil {
-		t.Fatal("PXpert with changed Helix canon remained valid")
+		t.Fatal("PA expert with changed Helix canon remained valid")
 	}
 }
 
@@ -439,14 +463,14 @@ func preparePracticeCanon(t *testing.T, root, practiceID string) (string, string
 	return filepath.ToSlash(relative), hex.EncodeToString(digest[:])
 }
 
-func preparePXpertCanon(t *testing.T, root, expertID string) (string, string) {
+func preparePAExpertCanon(t *testing.T, root, expertID string) (string, string) {
 	t.Helper()
 	relative := filepath.Join("helix", "experts", expertID, "canon.md")
 	path := filepath.Join(root, relative)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	body := []byte("# Governed Helix PXpert canon\n")
+	body := []byte("# Governed Helix PA expert canon\n")
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
 	}

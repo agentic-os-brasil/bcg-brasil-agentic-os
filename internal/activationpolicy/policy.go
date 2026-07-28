@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-const PolicyVersion = "pxrt-v1"
+const PolicyVersion = "pae-v1"
 
 type Posture string
 type ConsequenceLevel string
@@ -87,7 +87,7 @@ type IntentEnvelope struct {
 	PlannerProposal  PlannerProposal    `json:"planner_proposal,omitempty"`
 }
 
-type PXpert struct {
+type PAExpert struct {
 	ID          string          `json:"id"`
 	Kind        ExpertKind      `json:"kind"`
 	Version     string          `json:"version"`
@@ -95,7 +95,7 @@ type PXpert struct {
 	Lifecycle   ExpertLifecycle `json:"lifecycle"`
 }
 
-type SelectedPXpert struct {
+type SelectedPAExpert struct {
 	ID          string     `json:"id"`
 	Kind        ExpertKind `json:"kind"`
 	Version     string     `json:"version"`
@@ -110,24 +110,24 @@ type Budget struct {
 }
 
 type RoutePlan struct {
-	SchemaVersion             int              `json:"schema_version"`
-	EpisodeID                 string           `json:"episode_id"`
-	Owner                     Owner            `json:"owner"`
-	Posture                   Posture          `json:"posture"`
-	Route                     Route            `json:"route"`
-	PolicyVersion             string           `json:"policy_version"`
-	Shadow                    bool             `json:"shadow"`
-	AuthorityState            string           `json:"authority_state"`
-	MayAuthorizeDispatch      bool             `json:"may_authorize_dispatch"`
-	RequiresAssurance         bool             `json:"requires_assurance"`
-	AssuranceAgentID          string           `json:"assurance_agent_id,omitempty"`
-	RequiresHumanConfirmation bool             `json:"requires_human_confirmation"`
-	Experts                   []SelectedPXpert `json:"experts"`
-	Budget                    Budget           `json:"budget"`
-	ReasonCodes               []string         `json:"reason_codes"`
-	StopConditions            []string         `json:"stop_conditions"`
-	InputSHA256               string           `json:"input_sha256"`
-	PlanSHA256                string           `json:"plan_sha256"`
+	SchemaVersion             int                `json:"schema_version"`
+	EpisodeID                 string             `json:"episode_id"`
+	Owner                     Owner              `json:"owner"`
+	Posture                   Posture            `json:"posture"`
+	Route                     Route              `json:"route"`
+	PolicyVersion             string             `json:"policy_version"`
+	Shadow                    bool               `json:"shadow"`
+	AuthorityState            string             `json:"authority_state"`
+	MayAuthorizeDispatch      bool               `json:"may_authorize_dispatch"`
+	RequiresAssurance         bool               `json:"requires_assurance"`
+	AssuranceAgentID          string             `json:"assurance_agent_id,omitempty"`
+	RequiresHumanConfirmation bool               `json:"requires_human_confirmation"`
+	Experts                   []SelectedPAExpert `json:"experts"`
+	Budget                    Budget             `json:"budget"`
+	ReasonCodes               []string           `json:"reason_codes"`
+	StopConditions            []string           `json:"stop_conditions"`
+	InputSHA256               string             `json:"input_sha256"`
+	PlanSHA256                string             `json:"plan_sha256"`
 }
 
 var (
@@ -151,7 +151,7 @@ func DecodeStrict(body []byte, target any) error {
 	return nil
 }
 
-func Plan(envelope IntentEnvelope, registry []PXpert) (RoutePlan, error) {
+func Plan(envelope IntentEnvelope, registry []PAExpert) (RoutePlan, error) {
 	normalized, err := normalizeEnvelope(envelope)
 	if err != nil {
 		return RoutePlan{}, err
@@ -166,7 +166,7 @@ func Plan(envelope IntentEnvelope, registry []PXpert) (RoutePlan, error) {
 		Posture: normalized.Posture, Route: route,
 		PolicyVersion: PolicyVersion, Shadow: true,
 		AuthorityState: "caller_asserted_shadow", MayAuthorizeDispatch: false,
-		Experts: []SelectedPXpert{}, ReasonCodes: reasons,
+		Experts: []SelectedPAExpert{}, ReasonCodes: reasons,
 		StopConditions: []string{"budget_exhausted", "digest_drift", "missing_receipt", "scope_violation"},
 		InputSHA256:    SHA256Hex(inputBody),
 	}
@@ -224,7 +224,7 @@ func normalizeEnvelope(input IntentEnvelope) (IntentEnvelope, error) {
 	}
 	for _, id := range input.PlannerProposal.RequestedExperts {
 		if !validID(id) {
-			return IntentEnvelope{}, errors.New("planner proposed an invalid PXpert ID")
+			return IntentEnvelope{}, errors.New("planner proposed an invalid PA expert ID")
 		}
 	}
 	input.PlannerProposal.RequestedExperts = append([]string(nil), input.PlannerProposal.RequestedExperts...)
@@ -289,7 +289,7 @@ func decide(input IntentEnvelope) (Route, []string) {
 	}
 }
 
-func selectExperts(input IntentEnvelope, registry []PXpert, limit int) ([]SelectedPXpert, error) {
+func selectExperts(input IntentEnvelope, registry []PAExpert, limit int) ([]SelectedPAExpert, error) {
 	required := []ExpertKind{}
 	switch input.KnowledgeNeed {
 	case Functional:
@@ -300,19 +300,19 @@ func selectExperts(input IntentEnvelope, registry []PXpert, limit int) ([]Select
 		required = append(required, ExpertFPA, ExpertIPA)
 	}
 	if len(required) == 0 {
-		return []SelectedPXpert{}, nil
+		return []SelectedPAExpert{}, nil
 	}
 	if len(required) > limit {
 		return nil, errors.New("activation route expert budget cannot satisfy required knowledge kinds")
 	}
-	byID := make(map[string]PXpert, len(registry))
-	var valid []PXpert
+	byID := make(map[string]PAExpert, len(registry))
+	var valid []PAExpert
 	for _, expert := range registry {
-		if !validPXpertShape(expert) {
-			return nil, errors.New("PXpert registry contains a malformed entry")
+		if !validPAExpertShape(expert) {
+			return nil, errors.New("PA expert registry contains a malformed entry")
 		}
 		if _, exists := byID[expert.ID]; exists {
-			return nil, errors.New("PXpert registry contains a duplicate immutable ID")
+			return nil, errors.New("PA expert registry contains a duplicate immutable ID")
 		}
 		byID[expert.ID] = expert
 		if expert.Lifecycle != Published {
@@ -321,10 +321,10 @@ func selectExperts(input IntentEnvelope, registry []PXpert, limit int) ([]Select
 		valid = append(valid, expert)
 	}
 	sort.Slice(valid, func(i, j int) bool { return valid[i].ID < valid[j].ID })
-	selected := make([]SelectedPXpert, 0, len(required))
+	selected := make([]SelectedPAExpert, 0, len(required))
 	used := map[string]bool{}
 	for _, kind := range required {
-		var candidate PXpert
+		var candidate PAExpert
 		found := false
 		for _, id := range input.PlannerProposal.RequestedExperts {
 			expert, ok := byID[id]
@@ -343,10 +343,10 @@ func selectExperts(input IntentEnvelope, registry []PXpert, limit int) ([]Select
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("no published %s PXpert satisfies the deterministic route", kind)
+			return nil, fmt.Errorf("no published %s PA expert satisfies the deterministic route", kind)
 		}
 		used[candidate.ID] = true
-		selected = append(selected, SelectedPXpert{
+		selected = append(selected, SelectedPAExpert{
 			ID: candidate.ID, Kind: candidate.Kind, Version: candidate.Version,
 			CanonSHA256: strings.ToLower(candidate.CanonSHA256),
 		})
@@ -354,15 +354,15 @@ func selectExperts(input IntentEnvelope, registry []PXpert, limit int) ([]Select
 	return selected, nil
 }
 
-func validPXpert(expert PXpert) bool {
-	return validPXpertShape(expert) && expert.Lifecycle == Published
+func validPAExpert(expert PAExpert) bool {
+	return validPAExpertShape(expert) && expert.Lifecycle == Published
 }
 
-func IsValidPublishedPXpert(expert PXpert) bool {
-	return validPXpert(expert)
+func IsValidPublishedPAExpert(expert PAExpert) bool {
+	return validPAExpert(expert)
 }
 
-func validPXpertShape(expert PXpert) bool {
+func validPAExpertShape(expert PAExpert) bool {
 	return validID(expert.ID) && (expert.Kind == ExpertFPA || expert.Kind == ExpertIPA) &&
 		semver.MatchString(expert.Version) && validSHA256(expert.CanonSHA256) &&
 		(expert.Lifecycle == Draft || expert.Lifecycle == Published || expert.Lifecycle == Retired)

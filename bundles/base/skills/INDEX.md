@@ -4,6 +4,7 @@
 
 | Skill | Use when | Pointer |
 |---|---|---|
+| Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
 | Diagnóstico de cobertura | Mapeia cobertura e escolhe o próximo alvo de testes por risco | `skills/coverage-diagnose/SKILL.md` |
 | Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/deck-storyline/SKILL.md` |
 | Dream Memory | Consolidate daily and weekly professional memory | `skills/dream-memory/SKILL.md` |

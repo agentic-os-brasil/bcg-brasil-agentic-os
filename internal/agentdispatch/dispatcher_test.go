@@ -268,24 +268,21 @@ func TestDispatcherPreservesGovernedSubjectDelegationWithoutTransversalSkill(t *
 	}
 }
 
-func TestDispatcherPreservesAccountCapabilityDelegationWithManagedSkill(t *testing.T) {
+func TestDispatcherKeepsClientAccountAsASeparateMaestroRoot(t *testing.T) {
 	dispatcher := newTestDispatcher(t)
 	root, decision, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "account-agent-alpha", ScopeKind: "account", ScopeID: "account-alpha",
+		TargetAgentID: "client-account-agent-alpha", ScopeKind: "account", ScopeID: "account-alpha",
 		Objective: "Prepare the approved account analysis.", TTL: time.Hour,
 	})
 	if err != nil || !decision.Allowed {
 		t.Fatalf("account root dispatch failed: %#v %v", decision, err)
 	}
-	child, childDecision, err := dispatcher.StartChild(root, PacketRequest{
+	_, childDecision, err := dispatcher.StartChild(root, PacketRequest{
 		TargetAgentID: "capability-account", ScopeKind: "account", ScopeID: "account-alpha",
 		Objective: "Synthesize bounded account evidence.", SkillID: "qualitative-analysis", TTL: time.Hour,
 	})
-	if err != nil || !childDecision.Allowed || child.SkillID != "qualitative-analysis" {
-		t.Fatalf("account capability delegation failed: packet=%#v decision=%#v err=%v", child, childDecision, err)
-	}
-	if decision := dispatcher.FinishChild(child); !decision.Allowed {
-		t.Fatalf("finish account child = %#v", decision)
+	if err == nil || childDecision.Allowed {
+		t.Fatalf("Client Account Agent unexpectedly delegated a child: decision=%#v err=%v", childDecision, err)
 	}
 	if decision := dispatcher.FinishRoot(root); !decision.Allowed {
 		t.Fatalf("finish account root = %#v", decision)
@@ -411,7 +408,7 @@ func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher 
 	}
 	grants := []agentorchestration.Authorization{
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
-		{AgentID: "account-agent-alpha", Role: "account_agent", Scope: "account-alpha", ScopeKind: "account", Capability: "account-agent-alpha-cap"},
+		{AgentID: "client-account-agent-alpha", Role: "client_account_agent", Scope: "account-alpha", ScopeKind: "account", Capability: "client-account-agent-alpha-cap"},
 		{AgentID: "capability-account", Role: "capability_specialist", Scope: "account-alpha", ScopeKind: "account", Capability: "capability-account-cap"},
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-agent-alpha-cap"},
 		{AgentID: "capability-research", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-research-cap"},
@@ -423,7 +420,7 @@ func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher 
 		t.Fatal(err)
 	}
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
-		"maestro": "maestro-cap", "account-agent-alpha": "account-agent-alpha-cap", "capability-account": "capability-account-cap",
+		"maestro": "maestro-cap", "client-account-agent-alpha": "client-account-agent-alpha-cap", "capability-account": "capability-account-cap",
 		"workspace-agent-alpha": "workspace-agent-alpha-cap", "capability-research": "capability-research-cap",
 		"practice-insurance": "practice-insurance-cap", "subject-insurance": "subject-insurance-cap",
 	}, registry)

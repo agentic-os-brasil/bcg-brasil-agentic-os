@@ -7,9 +7,9 @@ import (
 )
 
 func TestBalancedPolicyRoutesDeterministically(t *testing.T) {
-	registry := []PXpert{
-		{ID: "pxpert-fpa-pricing", Kind: ExpertFPA, Version: "1.2.0", CanonSHA256: digest("pricing"), Lifecycle: Published},
-		{ID: "pxpert-ipa-insurance", Kind: ExpertIPA, Version: "2.0.1", CanonSHA256: digest("insurance"), Lifecycle: Published},
+	registry := []PAExpert{
+		{ID: "pa-expert-fpa-pricing", Kind: ExpertFPA, Version: "1.2.0", CanonSHA256: digest("pricing"), Lifecycle: Published},
+		{ID: "pa-expert-ipa-insurance", Kind: ExpertIPA, Version: "2.0.1", CanonSHA256: digest("insurance"), Lifecycle: Published},
 	}
 	envelope := IntentEnvelope{
 		SchemaVersion: 1, EpisodeID: "episode-01", Owner: OwnerCase,
@@ -20,11 +20,11 @@ func TestBalancedPolicyRoutesDeterministically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := Plan(envelope, append([]PXpert(nil), registry...))
+	second, err := Plan(envelope, append([]PAExpert(nil), registry...))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Route != D1Targeted || len(first.Experts) != 1 || first.Experts[0].ID != "pxpert-fpa-pricing" {
+	if first.Route != D1Targeted || len(first.Experts) != 1 || first.Experts[0].ID != "pa-expert-fpa-pricing" {
 		t.Fatalf("unexpected route: %#v", first)
 	}
 	if first.PlanSHA256 != second.PlanSHA256 || first.InputSHA256 != second.InputSHA256 {
@@ -58,7 +58,7 @@ func TestRequestedRouteIsOutsideTheClosedPlannerProposal(t *testing.T) {
 	}
 }
 
-func TestUnpublishedSuggestedPXpertFallsBackOrFailsClosed(t *testing.T) {
+func TestUnpublishedSuggestedPAExpertFallsBackOrFailsClosed(t *testing.T) {
 	base := IntentEnvelope{
 		SchemaVersion: 1, EpisodeID: "episode-suggestion", Owner: OwnerCase,
 		Posture: Balanced, Consequence: Low, Reversibility: Reversible,
@@ -67,23 +67,23 @@ func TestUnpublishedSuggestedPXpertFallsBackOrFailsClosed(t *testing.T) {
 	for _, lifecycle := range []ExpertLifecycle{Draft, Retired} {
 		t.Run(string(lifecycle)+" falls back", func(t *testing.T) {
 			input := base
-			input.PlannerProposal.RequestedExperts = []string{"pxpert-fpa-suggested"}
-			plan, err := Plan(input, []PXpert{
-				{ID: "pxpert-fpa-suggested", Kind: ExpertFPA, Version: "2.0.0", CanonSHA256: digest("suggested"), Lifecycle: lifecycle},
-				{ID: "pxpert-fpa-published", Kind: ExpertFPA, Version: "1.0.0", CanonSHA256: digest("published"), Lifecycle: Published},
+			input.PlannerProposal.RequestedExperts = []string{"pa-expert-fpa-suggested"}
+			plan, err := Plan(input, []PAExpert{
+				{ID: "pa-expert-fpa-suggested", Kind: ExpertFPA, Version: "2.0.0", CanonSHA256: digest("suggested"), Lifecycle: lifecycle},
+				{ID: "pa-expert-fpa-published", Kind: ExpertFPA, Version: "1.0.0", CanonSHA256: digest("published"), Lifecycle: Published},
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(plan.Experts) != 1 || plan.Experts[0].ID != "pxpert-fpa-published" {
+			if len(plan.Experts) != 1 || plan.Experts[0].ID != "pa-expert-fpa-published" {
 				t.Fatalf("unpublished suggestion did not fall back: %#v", plan.Experts)
 			}
 		})
 		t.Run(string(lifecycle)+" fails closed without fallback", func(t *testing.T) {
 			input := base
-			input.PlannerProposal.RequestedExperts = []string{"pxpert-fpa-suggested"}
-			_, err := Plan(input, []PXpert{{
-				ID: "pxpert-fpa-suggested", Kind: ExpertFPA, Version: "2.0.0",
+			input.PlannerProposal.RequestedExperts = []string{"pa-expert-fpa-suggested"}
+			_, err := Plan(input, []PAExpert{{
+				ID: "pa-expert-fpa-suggested", Kind: ExpertFPA, Version: "2.0.0",
 				CanonSHA256: digest("suggested"), Lifecycle: lifecycle,
 			}})
 			if err == nil {
@@ -98,9 +98,9 @@ func TestRequiredExpertFailsClosedWhenUnavailable(t *testing.T) {
 		SchemaVersion: 1, EpisodeID: "episode-03", Owner: OwnerCase,
 		Posture: Balanced, Consequence: Low, Reversibility: Reversible,
 		Sensitivity: Internal, KnowledgeNeed: Industry,
-	}, []PXpert{{ID: "pxpert-ipa-retail", Kind: ExpertIPA, Version: "1.0.0", CanonSHA256: digest("retail"), Lifecycle: Draft}})
+	}, []PAExpert{{ID: "pa-expert-ipa-retail", Kind: ExpertIPA, Version: "1.0.0", CanonSHA256: digest("retail"), Lifecycle: Draft}})
 	if err == nil {
-		t.Fatal("unavailable required PXpert was silently bypassed")
+		t.Fatal("unavailable required PA expert was silently bypassed")
 	}
 }
 
@@ -129,8 +129,8 @@ func TestPlanJSONDoesNotContainNarrativeTaskContent(t *testing.T) {
 }
 
 func TestPostureCalibrationMatrixKeepsHardFloors(t *testing.T) {
-	expert := PXpert{
-		ID: "pxpert-fpa-pricing", Kind: ExpertFPA, Version: "1.0.0",
+	expert := PAExpert{
+		ID: "pa-expert-fpa-pricing", Kind: ExpertFPA, Version: "1.0.0",
 		CanonSHA256: digest("canon"), Lifecycle: Published,
 	}
 	base := IntentEnvelope{
@@ -156,7 +156,7 @@ func TestPostureCalibrationMatrixKeepsHardFloors(t *testing.T) {
 			input := base
 			input.Posture = test.posture
 			test.mutate(&input)
-			plan, err := Plan(input, []PXpert{expert})
+			plan, err := Plan(input, []PAExpert{expert})
 			if err != nil {
 				t.Fatal(err)
 			}

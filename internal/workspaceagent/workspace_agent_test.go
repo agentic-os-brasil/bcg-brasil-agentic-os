@@ -30,7 +30,7 @@ func TestInitializeCreatesCompactAgentControlPlane(t *testing.T) {
 
 func TestInterviewAndResearchApprovalPreserveDisclosureGuardrail(t *testing.T) {
 	interview := ColdStartInterview()
-	if interview.Kind != "workspace_agent_setup" || len(interview.Steps) < 5 {
+	if interview.Kind != "case_agent_setup" || len(interview.Steps) < 5 {
 		t.Fatalf("ColdStartInterview() = %#v", interview)
 	}
 

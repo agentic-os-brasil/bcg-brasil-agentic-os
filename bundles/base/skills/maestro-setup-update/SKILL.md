@@ -28,17 +28,23 @@ signature, data-separation or acceptance requirements.
      package.
    - If login is required, run `bcgos auth login`, show the approved browser
      address and short user code, and wait for completion.
-4. Run `bcgos update --check`. Explain the installed and proposed versions,
+4. On first setup, run `bcgos agent interview`. Explain each principal agent,
+   show the suggested names and emoji-avatars, and ask the owner to choose or
+   customize them. Explain that ownership and personalization are separate
+   from authority. Persist only after explicit confirmation with
+   `bcgos agent personalize --stdin`; malformed, unconfirmed or cross-scope
+   profiles fail closed.
+5. Run `bcgos update --check`. Explain the installed and proposed versions,
    whether CLI and bundle both change, and whether a migration is required.
-5. If an update is available, ask one short confirmation naming the exact
+6. If an update is available, ask one short confirmation naming the exact
    target version and impact. Do not confirm on the user's behalf and do not
    reuse confirmation for a different plan ID.
-6. After confirmation, run `bcgos update --confirm <plan-id>`. Let the stable
+7. After confirmation, run `bcgos update --confirm <plan-id>`. Let the stable
    bootstrapper wait for the CLI to exit, activate and self-check. Do not try to
    replace the running executable directly.
-7. Run `bcgos status` and `bcgos doctor` again. Report the active versions and
+8. Run `bcgos status` and `bcgos doctor` again. Report the active versions and
    whether rollback remains available.
-8. If activation fails, explain that the last-known-good version was restored.
+9. If activation fails, explain that the last-known-good version was restored.
    Offer explicit rollback only when a valid previous state exists.
 
 ## Communication contract

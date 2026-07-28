@@ -657,12 +657,34 @@ func TestWorkspaceAgentCommandsCreateAndExposeTheGuidedInterview(t *testing.T) {
 	dataRoot := filepath.Join(root, "local", "BCGOS")
 	workspacePath := filepath.Join(root, "workspace")
 	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent"`) || !strings.Contains(output.String(), `"workspace-agent-`) || !strings.Contains(output.String(), `"agent_stub"`) || !strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"case_agent"`) || !strings.Contains(output.String(), `"workspace-agent-`) || !strings.Contains(output.String(), `"agent_stub"`) || !strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
 		t.Fatalf("init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runWorkspaceAgent([]string{"interview", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"workspace_agent_setup"`) || !strings.Contains(output.String(), `"decision_and_horizon"`) || !strings.Contains(output.String(), `"handoff"`) {
+	if code := runWorkspaceAgent([]string{"interview", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"case_agent_setup"`) || !strings.Contains(output.String(), `"decision_and_horizon"`) || !strings.Contains(output.String(), `"handoff"`) {
 		t.Fatalf("workspace-agent interview exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestAgentIdentityInterviewAndPersonalizationAreExplicit(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	var output bytes.Buffer
+	if code := runAgentWithInput([]string{"interview"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
+		!strings.Contains(output.String(), `"agent_identity_setup"`) ||
+		!strings.Contains(output.String(), `"ownership_explanation"`) ||
+		!strings.Contains(output.String(), `"default_emoji"`) ||
+		!strings.Contains(output.String(), `"client_account_agent"`) {
+		t.Fatalf("identity interview = %d, output = %s", code, output.String())
+	}
+	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"updated_at":"2026-07-28T00:00:00Z","selections":[{"role":"client_account_agent","agent_id":"client-account-agent-acme","display_name":"Compass","emoji":"🧭","owner_id":"daniel","ownership_scope":"account"},{"role":"case_agent","agent_id":"case-agent-pricing","display_name":"Forge","emoji":"⚙️","owner_id":"daniel","ownership_scope":"case"}]}`
+	output.Reset()
+	if code := runAgentWithInput([]string{"personalize", "--stdin"}, strings.NewReader(profile), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"display_name": "Compass"`) {
+		t.Fatalf("identity personalize = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runAgentWithInput([]string{"identity"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"ownership_scope": "case"`) {
+		t.Fatalf("identity status = %d, output = %s", code, output.String())
 	}
 }
 
@@ -748,12 +770,12 @@ func TestAgentScaffoldCommandCreatesPracticeAndSubjectChain(t *testing.T) {
 func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")
-	canonRelative := filepath.Join("helix", "experts", "pxpert-fpa-pricing", "canon.md")
+	canonRelative := filepath.Join("helix", "experts", "pa-expert-fpa-pricing", "canon.md")
 	canonPath := filepath.Join(dataRoot, canonRelative)
 	if err := os.MkdirAll(filepath.Dir(canonPath), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	canon := []byte("# Pricing PXpert canon\n")
+	canon := []byte("# Pricing PA expert canon\n")
 	if err := os.WriteFile(canonPath, canon, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -762,7 +784,7 @@ func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 	var output bytes.Buffer
 	code := runAgent([]string{
 		"hire",
-		"--id", "pxpert-fpa-pricing",
+		"--id", "pa-expert-fpa-pricing",
 		"--role", "pa_expert",
 		"--scope-kind", "practice",
 		"--scope", "pricing",
@@ -778,7 +800,7 @@ func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 	if code != ExitOK || !strings.Contains(output.String(), `"expert_kind": "FPA"`) ||
 		!strings.Contains(output.String(), `"runtime_state": "unavailable"`) ||
 		!strings.Contains(output.String(), `"expert_lifecycle": "draft"`) {
-		t.Fatalf("PXpert hire exit = %d, output = %s", code, output.String())
+		t.Fatalf("PA expert hire exit = %d, output = %s", code, output.String())
 	}
 
 	planInput := `{"envelope":{"schema_version":1,"episode_id":"episode-cli","owner":"case_agent","posture":"balanced","consequence":"medium","reversibility":"reversible","sensitivity":"internal","knowledge_need":"none"}}`
@@ -795,8 +817,8 @@ func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 		SchemaVersion: 1, RequestID: "advisory-cli",
 		EpisodeSHA256: activationpolicy.SHA256Hex([]byte(plan.EpisodeID)),
 		PlanSHA256:    plan.PlanSHA256,
-		Expert: activationpolicy.PXpert{
-			ID: "pxpert-fpa-pricing", Kind: activationpolicy.ExpertFPA,
+		Expert: activationpolicy.PAExpert{
+			ID: "pa-expert-fpa-pricing", Kind: activationpolicy.ExpertFPA,
 			Version: "1.0.0", CanonSHA256: canonSHA256,
 			Lifecycle: activationpolicy.Published,
 		},
@@ -823,7 +845,7 @@ func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 	output.Reset()
 	code = runAgentWithInput([]string{"declassify", "--stdin"}, bytes.NewReader(requestBody), &output, &output, func() (string, error) { return dataRoot, nil })
 	if code == ExitOK {
-		t.Fatal("draft PXpert was treated as a published Helix expert")
+		t.Fatal("draft PA expert was treated as a published Helix expert")
 	}
 
 	completion := activationCompletionInput{

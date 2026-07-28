@@ -1,4 +1,4 @@
-# Spec 017 - Workspace agent initialization and context
+# Spec 017 - Case agent (workspace-first) initialization and context
 
 Status: accepted architecture; concrete data-free agent stub, guided interview,
 versioned brief, research-plan approval, sourced-evidence persistence, attested
@@ -8,7 +8,7 @@ unavailable.
 
 ## Objective
 
-Create a useful workspace agent without turning its state into an untraceable
+Create a useful Case Agent without turning its workspace state into an untraceable
 context blob. Creation combines a user interview, authorized external research
 and a small attested public economic snapshot; all substantive context remains
 workspace-scoped, versioned and attributable.
@@ -16,7 +16,8 @@ workspace-scoped, versioned and attributable.
 ## Creation flow
 
 `bcgos init` registers the workspace boundary first. It then offers a guided
-workspace-agent setup that collects only the information needed to establish
+Case Agent setup (the `workspace-agent` command remains a compatibility
+surface) that collects only the information needed to establish
 the mandate:
 
 1. client/account and project label;
@@ -95,9 +96,9 @@ user request, source expiry, material news or an identified evidence gap. The
 agent proposes a new external research plan when the prior approval does not
 cover the query.
 
-Only reviewed, non-confidential facts can be promoted to the account-agent
-layer under Spec 016. Neither interview data nor research findings flow upward
-automatically.
+Only reviewed, non-confidential facts can be promoted periodically to the
+Client Account Agent layer under Spec 016. Neither interview data nor research
+findings flow upward automatically.
 
 ## Acceptance criteria for implementation
 
@@ -117,9 +118,10 @@ automatically.
 
 ## Initial executable contract
 
-`bcgos init` creates the compact workspace-agent control plane and atomically
-materializes its governed local stub from the managed `workspace_agent`
-template. The current CLI then supports:
+`bcgos init` creates the compact Case Agent control plane and atomically
+materializes its governed local stub from the managed `case_agent` template.
+The current CLI retains the `workspace-agent` command as a compatibility
+surface and supports:
 
 ```text
 bcgos workspace-agent interview [workspace-path]
