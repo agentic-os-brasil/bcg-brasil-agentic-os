@@ -26,6 +26,14 @@
       "path": "skills/catalog.json"
     },
     {
+      "source": "bundles/base/skills/coverage-diagnose/SKILL.md",
+      "path": "skills/coverage-diagnose/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/coverage-diagnose/agents/openai.yaml",
+      "path": "skills/coverage-diagnose/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/dream-memory/SKILL.md",
       "path": "skills/dream-memory/SKILL.md"
     },
@@ -58,12 +66,52 @@
       "path": "skills/maestro-setup-update/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/pr-quality-loop/SKILL.md",
+      "path": "skills/pr-quality-loop/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/pr-quality-loop/agents/openai.yaml",
+      "path": "skills/pr-quality-loop/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/pr-review/SKILL.md",
+      "path": "skills/pr-review/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/pr-review/agents/openai.yaml",
+      "path": "skills/pr-review/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/qa-gate/SKILL.md",
+      "path": "skills/qa-gate/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/qa-gate/agents/openai.yaml",
+      "path": "skills/qa-gate/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/workspace-agent-setup/SKILL.md",
       "path": "skills/workspace-agent-setup/SKILL.md"
     },
     {
       "source": "bundles/base/skills/workspace-agent-setup/agents/openai.yaml",
       "path": "skills/workspace-agent-setup/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/unit-test-wave/SKILL.md",
+      "path": "skills/unit-test-wave/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/unit-test-wave/agents/openai.yaml",
+      "path": "skills/unit-test-wave/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/xfail-bug-capture/SKILL.md",
+      "path": "skills/xfail-bug-capture/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/xfail-bug-capture/agents/openai.yaml",
+      "path": "skills/xfail-bug-capture/agents/openai.yaml"
     },
     {
       "source": "schemas/interaction-profile.schema.json",

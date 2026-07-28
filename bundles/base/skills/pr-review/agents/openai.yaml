@@ -1,0 +1,4 @@
+interface:
+  display_name: "Revisão de pull request"
+  short_description: "Revisa PR por risco, gates determinísticos e evidência atual"
+  default_prompt: "Use $pr-review para revisar este pull request com evidência e verdict sem fazer merge."
