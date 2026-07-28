@@ -27,10 +27,11 @@ runtime enforcement where that adapter does not exist.
 - forged workspace identity cannot bootstrap an Atlas or write its files;
 - a promotion with a forged workspace ID, source from another workspace, a
   traversal path or an escaping symlink is rejected;
-- promotion fails without `approved` review status or with a multi-line or
-  Markdown/code-shaped body. The deterministic core does not claim to infer
-  semantic curation from an arbitrary single-line string; account context
-  stores only the reviewed statement and opaque source receipt;
+- promotion fails without `approved` review status or with a multi-line body or
+  fenced code block. The deterministic core does not claim to infer semantic
+  curation, Markdown intent or provenance from an arbitrary single-line
+  string; account context stores only the reviewed statement and opaque source
+  receipt;
 - an inactive workspace cannot save a brief; a research-plan ID from another
   workspace cannot be approved or create destination evidence;
 - source hashes, signed receipts and the monotonic promotion anchor detect
