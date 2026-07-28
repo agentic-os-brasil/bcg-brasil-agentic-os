@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "receipt_provenance": "adapter_command",
+  "events": [
+    {
+      "semantic_event": "session_start",
+      "claude": {"binding": "SessionStart", "implementation": "configured", "native_evidence": "pending", "manifest_state": "unavailable"},
+      "codex": {"binding": "SessionStart", "implementation": "configured", "native_evidence": "blocked", "manifest_state": "unavailable"}
+    },
+    {
+      "semantic_event": "context_inject",
+      "claude": {"binding": "UserPromptSubmit", "implementation": "configured", "native_evidence": "pending", "manifest_state": "unavailable"},
+      "codex": {"binding": "none", "implementation": "not_implemented", "native_evidence": "blocked", "manifest_state": "unavailable"}
+    },
+    {
+      "semantic_event": "pre_action_guard",
+      "claude": {"binding": "PreToolUse", "implementation": "configured", "native_evidence": "pending", "manifest_state": "unavailable"},
+      "codex": {"binding": "none", "implementation": "not_implemented", "native_evidence": "blocked", "manifest_state": "unavailable"}
+    },
+    {
+      "semantic_event": "post_action_observe",
+      "claude": {"binding": "PostToolUse", "implementation": "configured_async", "native_evidence": "pending", "manifest_state": "unavailable"},
+      "codex": {"binding": "none", "implementation": "not_implemented", "native_evidence": "blocked", "manifest_state": "unavailable"}
+    },
+    {
+      "semantic_event": "stop_finalize",
+      "claude": {"binding": "Stop", "implementation": "configured_async", "native_evidence": "pending", "manifest_state": "unavailable"},
+      "codex": {"binding": "none", "implementation": "not_implemented", "native_evidence": "blocked", "manifest_state": "unavailable"}
+    }
+  ]
+}

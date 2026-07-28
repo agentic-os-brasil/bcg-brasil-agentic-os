@@ -17,6 +17,7 @@ func TestRecordIsIdempotentAndMetadataOnly(t *testing.T) {
 		Runtime:       "claude",
 		Event:         PostActionObserve,
 		State:         "observed",
+		Provenance:    AdapterCommand,
 		OccurredAt:    time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC),
 		IdempotencyKey: IdempotencyKey(
 			"session-secret",
@@ -39,7 +40,7 @@ func TestRecordIsIdempotentAndMetadataOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, prohibited := range []string{"session-secret", "tool-secret", "command", "workspace_path"} {
+	for _, prohibited := range []string{"session-secret", "tool-secret", "tool_input", "workspace_path"} {
 		if strings.Contains(string(body), prohibited) {
 			t.Fatalf("receipt exposed %q: %s", prohibited, body)
 		}
@@ -57,6 +58,7 @@ func TestRecordRejectsPathShapedWorkspaceAndReceiptIdentifiers(t *testing.T) {
 		Runtime:        "claude",
 		Event:          StopFinalize,
 		State:          "observed",
+		Provenance:     AdapterCommand,
 		IdempotencyKey: IdempotencyKey("session"),
 	}
 	if _, err := Record(root, "../escape", valid); err == nil {
@@ -73,6 +75,23 @@ func TestRecordRejectsPathShapedWorkspaceAndReceiptIdentifiers(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "runtime", "escape")); !os.IsNotExist(err) {
 		t.Fatalf("invalid receipt escaped its root: %v", err)
+	}
+}
+
+func TestRecordRejectsMissingOrInventedProvenance(t *testing.T) {
+	valid := Receipt{
+		SchemaVersion:  1,
+		Runtime:        "claude",
+		Event:          StopFinalize,
+		State:          "observed",
+		IdempotencyKey: IdempotencyKey("session"),
+	}
+	if _, err := Record(t.TempDir(), testWorkspaceID, valid); err == nil || !strings.Contains(err.Error(), "provenance") {
+		t.Fatalf("Record missing provenance error = %v", err)
+	}
+	valid.Provenance = "native_runtime"
+	if _, err := Record(t.TempDir(), testWorkspaceID, valid); err == nil || !strings.Contains(err.Error(), "provenance") {
+		t.Fatalf("Record invented provenance error = %v", err)
 	}
 }
 

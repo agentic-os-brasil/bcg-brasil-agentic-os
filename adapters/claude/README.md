@@ -12,8 +12,9 @@ and emit metadata-only local receipts.
 
 Every product lifecycle event remains explicitly `unavailable` in the
 capability manifest. `bcgos doctor` diagnoses configuration and receipts
-separately, because neither local installation nor a development hook proves
-execution in a qualifying native Claude session.
+separately. A receipt is marked `adapter_command`: it proves the bounded
+Maestro command ran, not that Claude invoked it in a qualifying native session.
+See Spec 035 for the evidence matrix.
 
 The managed Maestro, Walter and Darwin definitions live in
 `bundles/base/agents/`. `internal/agentorchestration` now provides the shared

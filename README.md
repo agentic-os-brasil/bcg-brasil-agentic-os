@@ -129,6 +129,10 @@ delivery and validation contract, see [CONTRIBUTING.md](CONTRIBUTING.md).
 | [`acceptance/`](acceptance) | Clean-device and pilot acceptance evidence | In progress |
 | [`bundles/`](bundles) | Versioned professional capability catalogs and optional tracks | Available for inspection; activation unavailable |
 
+Lifecycle adapter evidence is intentionally separated into configuration,
+direct-contract tests, adapter-command receipts and native-session proof. See
+[the lifecycle evidence matrix](specs/035-lifecycle-evidence-matrix.md).
+
 ---
 
 <p align="center">

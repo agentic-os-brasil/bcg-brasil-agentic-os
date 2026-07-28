@@ -5,13 +5,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 func TestInitializeCreatesSeparateOwnerAndWorkspaceHumanAtlasWithoutTasks(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")
 	workspacePath := filepath.Join(root, "Developer", "case-a")
-	status, err := Initialize(Options{DataRoot: dataRoot, WorkspacePath: workspacePath, WorkspaceID: "workspace-a"})
+	registered, err := workspace.Initialize(workspace.Options{DataRoot: dataRoot, WorkspacePath: workspacePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := Initialize(Options{DataRoot: dataRoot, WorkspacePath: workspacePath, WorkspaceID: registered.WorkspaceID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +57,13 @@ func TestInitializeCreatesSeparateOwnerAndWorkspaceHumanAtlasWithoutTasks(t *tes
 
 func TestInitializeDoesNotOverwriteOwnerAtlasContent(t *testing.T) {
 	root := t.TempDir()
-	options := Options{DataRoot: filepath.Join(root, "local", "BCGOS"), WorkspacePath: filepath.Join(root, "Developer", "case-a"), WorkspaceID: "workspace-a"}
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "Developer", "case-a")
+	registered, err := workspace.Initialize(workspace.Options{DataRoot: dataRoot, WorkspacePath: workspacePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := Options{DataRoot: dataRoot, WorkspacePath: workspacePath, WorkspaceID: registered.WorkspaceID}
 	if _, err := Initialize(options); err != nil {
 		t.Fatal(err)
 	}
@@ -65,5 +77,25 @@ func TestInitializeDoesNotOverwriteOwnerAtlasContent(t *testing.T) {
 	body, err := os.ReadFile(index)
 	if err != nil || string(body) != "# My owner atlas\n" {
 		t.Fatalf("owner index = %q, err = %v", body, err)
+	}
+}
+
+func TestInitializeRejectsForgedWorkspaceIDWithoutWritingOwnerOrWorkspaceAtlas(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "Developer", "case-a")
+	if _, err := workspace.Initialize(workspace.Options{DataRoot: dataRoot, WorkspacePath: workspacePath}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Initialize(Options{DataRoot: dataRoot, WorkspacePath: workspacePath, WorkspaceID: "forged-workspace"}); err == nil {
+		t.Fatal("atlas bootstrap accepted a forged workspace identity")
+	}
+	for _, path := range []string{
+		filepath.Join(dataRoot, "atlas", "owner"),
+		filepath.Join(workspacePath, "brain", "clients"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("forged workspace identity wrote atlas content at %s: %v", path, err)
+		}
 	}
 }

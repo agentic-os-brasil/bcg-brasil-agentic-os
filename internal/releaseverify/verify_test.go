@@ -65,6 +65,14 @@ func TestVerifyDirectoryFailsClosedOnTamperingAndUnknownKeys(t *testing.T) {
 	}
 }
 
+func TestVerifyManifestAuthenticatesIssuerBeforeSemanticValidation(t *testing.T) {
+	body := []byte(`{"issuer":{"id":"unknown","key_id":"unknown"},"surprise":true}`)
+	_, _, err := VerifyManifest(body, make([]byte, ed25519.SignatureSize), StaticRegistry{})
+	if err == nil || !strings.Contains(err.Error(), "not approved") {
+		t.Fatalf("VerifyManifest() error = %v, want unapproved issuer before semantic validation", err)
+	}
+}
+
 func signedReleaseFixture(t *testing.T) (string, StaticRegistry) {
 	t.Helper()
 	directory := t.TempDir()
