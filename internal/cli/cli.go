@@ -1764,9 +1764,9 @@ func lifecycleReceiptCheck(dataRoot, workspaceID string) doctorCheck {
 	}
 	switch summary.State {
 	case "observed":
-		return doctorCheck{ID: "lifecycle_receipts", State: "pass", Message: fmt.Sprintf("%d metadata-safe lifecycle receipt(s) observed; capability promotion still requires the pilot conformance record", summary.Observed)}
+		return doctorCheck{ID: "lifecycle_receipts", State: "pass", Message: fmt.Sprintf("%d metadata-safe adapter-command lifecycle receipt(s) observed; native-session conformance is still required for capability promotion", summary.Observed)}
 	default:
-		return doctorCheck{ID: "lifecycle_receipts", State: "unavailable", Message: "no native lifecycle receipt has been recorded"}
+		return doctorCheck{ID: "lifecycle_receipts", State: "unavailable", Message: "no adapter-command lifecycle receipt has been recorded; native conformance is separately required"}
 	}
 }
 

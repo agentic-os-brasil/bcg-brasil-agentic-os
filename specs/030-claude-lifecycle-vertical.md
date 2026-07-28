@@ -47,8 +47,10 @@ read or prompt/tool payload persistence.
 
 Receipts live under private local data at
 `runtime/receipts/<opaque-workspace-id>/`. They retain only schema version,
-runtime, canonical event, timestamp, optional validated tool name, closed
-diagnostic and a one-way idempotency digest. Native session/tool-use IDs,
+runtime, canonical event, `adapter_command` provenance, timestamp, optional
+validated tool name, closed diagnostic and a one-way idempotency digest. The
+provenance proves only that the bounded adapter command ran, not that Claude
+invoked it natively. Native session/tool-use IDs,
 commands, tool output, prompts, workspace paths, owner context and client
 content are not stored. Workspace IDs and filename components are validated
 before path construction.
@@ -59,7 +61,8 @@ The capability manifest stays `unavailable`. Unit and configuration fixtures
 prove the local contract, not that a qualifying Claude version trusted and
 invoked each hook in a fresh native session. Only the pilot conformance protocol
 in Spec 021 can supply that evidence and authorize a later capability
-promotion.
+promotion. The executable cross-runtime matrix in Spec 035 keeps this
+distinction testable.
 
 Codex retains the same canonical event vocabulary and Session Start serializer.
 It has no complete product lifecycle binding in this vertical, so its

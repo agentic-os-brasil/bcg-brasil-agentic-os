@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 type Options struct {
@@ -49,6 +51,13 @@ var workspaceFiles = map[string]string{
 func Initialize(options Options) (Status, error) {
 	if strings.TrimSpace(options.DataRoot) == "" || strings.TrimSpace(options.WorkspacePath) == "" || strings.TrimSpace(options.WorkspaceID) == "" {
 		return Status{}, errors.New("data root, workspace path and workspace id are required")
+	}
+	inspection, err := workspace.Inspect(options.WorkspacePath, options.DataRoot)
+	if err != nil {
+		return Status{}, err
+	}
+	if inspection.State == "uninitialized" || inspection.State == "invalid" || inspection.State == "incomplete" || inspection.WorkspaceID != options.WorkspaceID {
+		return Status{}, errors.New("atlas bootstrap requires the registered workspace identity")
 	}
 	ownerRoot := filepath.Join(options.DataRoot, "atlas", "owner")
 	workspaceRoot := filepath.Join(options.WorkspacePath, "brain")

@@ -101,6 +101,9 @@ them, paste them into a ticket or move them to repository-wide secrets.
 | Secret | `MAESTRO_MACOS_P12_PASSWORD` | Password for the macOS signing bundle. |
 | Secret | `MAESTRO_MACOS_SIGNING_IDENTITY` | Exact approved Developer ID identity. |
 | Secret | `MAESTRO_MACOS_KEYCHAIN_PASSWORD` | Password for the workflow's ephemeral keychain. |
+| Secret | `MAESTRO_MACOS_NOTARY_KEY_B64` | Base64 App Store Connect API private key (`.p8`) held by the notarization custodian. |
+| Secret | `MAESTRO_MACOS_NOTARY_KEY_ID` | App Store Connect API key ID authorized for notarization. |
+| Secret | `MAESTRO_MACOS_NOTARY_ISSUER_ID` | App Store Connect API issuer ID authorized for notarization. |
 | Secret | `MAESTRO_ED25519_SEED_B64` | Production Maestro release-signing seed; migrate to an approved hardware-backed signer when available. |
 | Secret | `MAESTRO_RELEASE_POLICY_TOKEN` | Least-privileged installation token used only to read immutable-release policy. |
 

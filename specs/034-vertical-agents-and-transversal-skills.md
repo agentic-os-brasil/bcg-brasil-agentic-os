@@ -43,8 +43,10 @@ alias or automatic role conversion.
 
 The Workspace Agent receives the intent, authorized pointers, constraints
 and Definition of Done. It may select one or more compatible skills directly
-without opening a child delegation. Direct selection is local to the agent
-context and is not a transfer of ownership.
+without opening a child delegation. Direct selection is local to a current
+signed root packet, authenticated by the root agent capability, and is denied
+while a child is active. It is not a transfer of ownership, a tool grant or a
+lifecycle event.
 
 When the work is sufficiently bounded and benefits from independent execution,
 the parent may create one child WorkPacket. A packet for a
@@ -89,7 +91,10 @@ tool, credential or runtime-specific data.
 For delegated capability execution, the dispatcher verifies that the parent
 role may assign the selected skill and the child role may execute it. It signs
 that selection as part of the WorkPacket. Unknown, duplicate, missing or
-tampered skill IDs fail closed for capability specialists. Subject-specialist
+tampered skill IDs fail closed for capability specialists. New packets use
+schema version 2. A schema-version-1 child with no skill selection may only be
+verified and finished as an in-flight completion during rollout; it cannot
+express a new method choice or open a new delegation. Subject-specialist
 packets retain their existing governed contract and reject an unexpected skill
 ID. Root packets issued by Maestro do not select a case skill: the receiving
 vertical agent remains responsible for method choice.
@@ -104,7 +109,8 @@ vertical agent remains responsible for method choice.
    rejects unknown, duplicate, missing or tampered values.
 4. The Workspace Agent parent remains accountable for the child result and no child
    receives general browsing, persistent memory or child-delegation rights.
-5. Claude and Codex conformance exercise identical allow and denial cases;
-   native activation remains unavailable until adapter delivery is proven.
+5. Claude and Codex shared-core conformance exercise identical allow and
+   denial cases; this is not native adapter evidence, so activation remains
+   unavailable until installed adapter delivery is proven.
 6. The current sequential limit remains enforced until a later parallel join
    contract is accepted and tested.

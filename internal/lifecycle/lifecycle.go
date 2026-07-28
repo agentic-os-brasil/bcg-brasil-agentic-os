@@ -1,5 +1,5 @@
 // Package lifecycle owns runtime-neutral lifecycle vocabulary and the small,
-// metadata-only receipt outbox used to diagnose native adapter delivery.
+// metadata-only receipt outbox used to diagnose adapter-command delivery.
 package lifecycle
 
 import (
@@ -22,6 +22,10 @@ const (
 	PreActionGuard    = "pre_action_guard"
 	PostActionObserve = "post_action_observe"
 	StopFinalize      = "stop_finalize"
+	// AdapterCommand means the bounded Maestro adapter command produced this
+	// receipt. It deliberately does not claim that a qualifying native runtime
+	// session invoked that command.
+	AdapterCommand = "adapter_command"
 )
 
 var (
@@ -33,15 +37,19 @@ var (
 	idempotencyPattern  = regexp.MustCompile(`^[a-f0-9]{32}$`)
 	metadataNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.:-]{0,127}$`)
 	validDiagnostics    = map[string]bool{"": true}
+	validProvenance     = map[string]bool{AdapterCommand: true}
 )
 
 // Receipt deliberately excludes prompt text, tool input/output, native session
 // IDs and workspace paths. IdempotencyKey is a one-way digest of native IDs.
+// Provenance describes only the local producer and never serves as proof of
+// native runtime invocation.
 type Receipt struct {
 	SchemaVersion  int       `json:"schema_version"`
 	Runtime        string    `json:"runtime"`
 	Event          string    `json:"event"`
 	State          string    `json:"state"`
+	Provenance     string    `json:"provenance"`
 	OccurredAt     time.Time `json:"occurred_at"`
 	IdempotencyKey string    `json:"idempotency_key"`
 	ToolName       string    `json:"tool_name,omitempty"`
@@ -53,6 +61,7 @@ type Summary struct {
 	ReceiptRoot string   `json:"receipt_root"`
 	Observed    int      `json:"observed"`
 	Events      []string `json:"events"`
+	Provenance  []string `json:"provenance"`
 	LatestAt    string   `json:"latest_at,omitempty"`
 	Diagnostic  string   `json:"diagnostic,omitempty"`
 }
@@ -132,6 +141,7 @@ func Diagnose(dataRoot, workspaceID string) (Summary, error) {
 		return Summary{}, fmt.Errorf("read receipt root: %w", err)
 	}
 	events := map[string]bool{}
+	provenance := map[string]bool{}
 	var latest Receipt
 	for _, entry := range entries {
 		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !strings.HasSuffix(entry.Name(), ".json") {
@@ -146,6 +156,7 @@ func Diagnose(dataRoot, workspaceID string) (Summary, error) {
 			return Summary{}, fmt.Errorf("receipt filename does not match bounded metadata")
 		}
 		events[receipt.Event] = true
+		provenance[receipt.Provenance] = true
 		summary.Observed++
 		if latest.OccurredAt.Before(receipt.OccurredAt) {
 			latest = receipt
@@ -154,7 +165,11 @@ func Diagnose(dataRoot, workspaceID string) (Summary, error) {
 	for event := range events {
 		summary.Events = append(summary.Events, event)
 	}
+	for source := range provenance {
+		summary.Provenance = append(summary.Provenance, source)
+	}
 	sort.Strings(summary.Events)
+	sort.Strings(summary.Provenance)
 	if summary.Observed == 0 {
 		return summary, nil
 	}
@@ -196,6 +211,9 @@ func validateReceipt(receipt Receipt) error {
 	if receipt.State != "observed" {
 		return fmt.Errorf("unsupported receipt state %q", receipt.State)
 	}
+	if !validProvenance[receipt.Provenance] {
+		return fmt.Errorf("unsupported lifecycle receipt provenance %q", receipt.Provenance)
+	}
 	if !idempotencyPattern.MatchString(receipt.IdempotencyKey) {
 		return errors.New("invalid receipt idempotency key")
 	}
@@ -228,6 +246,7 @@ func sameIdempotentReceipt(left, right Receipt) bool {
 		left.Runtime == right.Runtime &&
 		left.Event == right.Event &&
 		left.State == right.State &&
+		left.Provenance == right.Provenance &&
 		left.IdempotencyKey == right.IdempotencyKey &&
 		left.ToolName == right.ToolName &&
 		left.Diagnostic == right.Diagnostic

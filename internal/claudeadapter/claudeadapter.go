@@ -117,6 +117,7 @@ func Receipt(event string, input NativeInput) (lifecycle.Receipt, error) {
 		Runtime:        "claude",
 		Event:          event,
 		State:          "observed",
+		Provenance:     lifecycle.AdapterCommand,
 		ToolName:       toolName,
 		IdempotencyKey: lifecycle.IdempotencyKey(parts...),
 	}, nil

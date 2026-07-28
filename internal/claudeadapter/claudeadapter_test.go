@@ -104,7 +104,7 @@ func TestReceiptHashesValidatedNativeIdentifiers(t *testing.T) {
 	}
 	if receipt.SchemaVersion != 1 || receipt.IdempotencyKey == "" ||
 		strings.Contains(receipt.IdempotencyKey, input.SessionID) ||
-		receipt.ToolName != "Bash" {
+		receipt.ToolName != "Bash" || receipt.Provenance != lifecycle.AdapterCommand {
 		t.Fatalf("receipt = %#v", receipt)
 	}
 	input.SessionID = "../escape"
