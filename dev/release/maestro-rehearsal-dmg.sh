@@ -67,7 +67,7 @@ cat > "$STAGING/README-REHEARSAL.md" <<EOF
 # Maestro Installer Rehearsal — unsigned
 
 This DMG runs a technical installation rehearsal for Maestro ${VERSION}.
-Double-click `Maestro Installer Rehearsal.app` to open the visual wizard. It
+Double-click \`Maestro Installer Rehearsal.app\` to open the visual wizard. It
 launches --simulate, which creates an isolated sandbox and exercises the same
 verify -> install -> open flow without signed release inputs.
 
