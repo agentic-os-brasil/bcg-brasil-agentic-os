@@ -197,11 +197,28 @@ type RevocationFence struct {
 type ApplyReport struct {
 	State              string `json:"state"`
 	Version            string `json:"version"`
+	ReceiptID          string `json:"receipt_id"`
+	TriggerRef         string `json:"trigger_ref"`
 	Fingerprint        string `json:"fingerprint"`
 	Watermark          string `json:"watermark"`
 	CollectionSequence uint64 `json:"collection_sequence"`
 	Items              int    `json:"items"`
 	Removed            int    `json:"removed"`
+}
+
+type ImportAudit struct {
+	SchemaVersion      int       `json:"schema_version"`
+	ReceiptID          string    `json:"receipt_id"`
+	TriggerRef         string    `json:"trigger_ref"`
+	ReceiptEmittedAt   time.Time `json:"receipt_emitted_at"`
+	SnapshotDigest     string    `json:"snapshot_digest"`
+	State              string    `json:"state"`
+	Version            string    `json:"version"`
+	Fingerprint        string    `json:"fingerprint"`
+	Watermark          string    `json:"watermark"`
+	CollectionSequence uint64    `json:"collection_sequence"`
+	Items              int       `json:"items"`
+	Removed            int       `json:"removed"`
 }
 
 type Status struct {
@@ -215,6 +232,13 @@ type Status struct {
 	Items              int       `json:"items"`
 	RefreshHours       int       `json:"refresh_hours,omitempty"`
 	StaleHours         int       `json:"stale_hours,omitempty"`
+}
+
+type SchedulePolicy struct {
+	EnrolledAt   time.Time `json:"enrolled_at"`
+	RefreshHours int       `json:"refresh_hours"`
+	StaleHours   int       `json:"stale_hours"`
+	Timezone     string    `json:"timezone"`
 }
 
 func ParseSnapshot(reader io.Reader) (Snapshot, error) {

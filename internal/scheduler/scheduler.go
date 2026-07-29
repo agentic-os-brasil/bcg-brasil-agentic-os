@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,8 +18,9 @@ import (
 type Cadence string
 
 const (
-	Daily  Cadence = "daily"
-	Weekly Cadence = "weekly"
+	Daily    Cadence = "daily"
+	Weekly   Cadence = "weekly"
+	Interval Cadence = "interval"
 )
 
 type ReceiptState string
@@ -38,12 +40,13 @@ var (
 // Job describes cadence only. Native schedulers may wake the process, but this
 // runtime-neutral contract remains responsible for deciding what is due.
 type Job struct {
-	ID          string
-	Cadence     Cadence
-	Weekday     time.Weekday
-	LocalHour   int
-	LocalMinute int
-	MaxCatchUp  int
+	ID            string
+	Cadence       Cadence
+	Weekday       time.Weekday
+	LocalHour     int
+	LocalMinute   int
+	IntervalHours int
+	MaxCatchUp    int
 }
 
 type Occurrence struct {
@@ -159,8 +162,15 @@ func validateJob(job Job) error {
 	if !jobIDPattern.MatchString(job.ID) {
 		return fmt.Errorf("invalid scheduler job ID %q", job.ID)
 	}
-	if job.Cadence != Daily && job.Cadence != Weekly {
+	if job.Cadence != Daily && job.Cadence != Weekly && job.Cadence != Interval {
 		return fmt.Errorf("invalid cadence for job %q", job.ID)
+	}
+	if job.Cadence == Interval {
+		if job.IntervalHours <= 0 || job.IntervalHours > 8760 {
+			return fmt.Errorf("invalid interval for job %q", job.ID)
+		}
+	} else if job.IntervalHours != 0 {
+		return fmt.Errorf("calendar job %q cannot define an interval", job.ID)
 	}
 	if job.LocalHour < 0 || job.LocalHour > 23 || job.LocalMinute < 0 || job.LocalMinute > 59 {
 		return fmt.Errorf("invalid local schedule for job %q", job.ID)
@@ -175,6 +185,9 @@ func validateJob(job Job) error {
 }
 
 func nextOccurrence(job Job, after time.Time) time.Time {
+	if job.Cadence == Interval {
+		return after.Add(time.Duration(job.IntervalHours) * time.Hour)
+	}
 	location := after.Location()
 	candidate := time.Date(after.Year(), after.Month(), after.Day(), job.LocalHour, job.LocalMinute, 0, 0, location)
 	if job.Cadence == Weekly {
@@ -211,8 +224,17 @@ func (store Store) EnsureEnrollment(workspaceID string, enrolledAt time.Time) (E
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return Enrollment{}, err
 	}
-	path := filepath.Join(store.workspaceRoot(workspaceID), "enrollment.json")
-	if enrollment, err := readEnrollment(path); err == nil {
+	root, err := openSchedulerRoot(store.Root)
+	if err != nil {
+		return Enrollment{}, err
+	}
+	defer root.Close()
+	workspace := filepath.Join("workspaces", workspaceID)
+	if err := ensureSchedulerDirectory(root, workspace); err != nil {
+		return Enrollment{}, err
+	}
+	path := filepath.Join(workspace, "enrollment.json")
+	if enrollment, err := readEnrollmentAt(root, path); err == nil {
 		return enrollment, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return Enrollment{}, err
@@ -220,13 +242,10 @@ func (store Store) EnsureEnrollment(workspaceID string, enrolledAt time.Time) (E
 	if enrolledAt.IsZero() {
 		return Enrollment{}, errors.New("enrollment time is required")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return Enrollment{}, err
-	}
 	enrollment := Enrollment{SchemaVersion: 1, WorkspaceID: workspaceID, EnrolledAt: enrolledAt}
-	if err := writeNewJSON(path, enrollment); err != nil {
+	if err := writeNewJSONAt(root, path, enrollment); err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return readEnrollment(path)
+			return readEnrollmentAt(root, path)
 		}
 		return Enrollment{}, err
 	}
@@ -240,31 +259,44 @@ func (store Store) AppendReceipt(workspaceID string, receipt Receipt) error {
 	if err := validateReceipt(receipt); err != nil {
 		return err
 	}
+	root, err := openSchedulerRoot(store.Root)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	receipt.SchemaVersion = 1
 	receipt.WorkspaceID = workspaceID
-	directory := filepath.Join(store.workspaceRoot(workspaceID), "receipts", receipt.JobID)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
+	directory := filepath.Join("workspaces", workspaceID, "receipts", receipt.JobID)
+	if err := ensureSchedulerDirectory(root, directory); err != nil {
 		return err
 	}
 	name := receipt.AttemptedAt.UTC().Format("20060102T150405.000000000Z") + "-" + receipt.ScheduledFor.UTC().Format("20060102T150405.000000000Z") + ".json"
-	return writeNewJSON(filepath.Join(directory, name), receipt)
+	return writeNewJSONAt(root, filepath.Join(directory, name), receipt)
 }
 
 func (store Store) Receipts(workspaceID string) ([]Receipt, error) {
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return nil, err
 	}
-	root := filepath.Join(store.workspaceRoot(workspaceID), "receipts")
+	anchored, err := openSchedulerRoot(store.Root)
+	if err != nil {
+		return nil, err
+	}
+	defer anchored.Close()
+	root := filepath.Join("workspaces", workspaceID, "receipts")
 	var receipts []Receipt
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+	err = fs.WalkDir(anchored.FS(), root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("scheduler path %s must not be a symlink", path)
 		}
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			return nil
 		}
 		var receipt Receipt
-		if err := readStrictJSON(path, &receipt); err != nil {
+		if err := readStrictJSONAt(anchored, path, &receipt); err != nil {
 			return err
 		}
 		if receipt.SchemaVersion != 1 || receipt.WorkspaceID != workspaceID {
@@ -290,6 +322,68 @@ func (store Store) Receipts(workspaceID string) ([]Receipt, error) {
 
 func (store Store) workspaceRoot(workspaceID string) string {
 	return filepath.Join(store.Root, "workspaces", workspaceID)
+}
+
+func openSchedulerRoot(path string) (*os.Root, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(absolute, 0o700); err != nil {
+		return nil, err
+	}
+	info, err := os.Lstat(absolute)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return nil, errors.New("scheduler root must be a real directory")
+	}
+	root, err := os.OpenRoot(absolute)
+	if err != nil {
+		return nil, err
+	}
+	openedInfo, err := root.Stat(".")
+	if err != nil || !os.SameFile(info, openedInfo) {
+		_ = root.Close()
+		if err != nil {
+			return nil, err
+		}
+		return nil, errors.New("scheduler root changed during secure open")
+	}
+	if openedInfo.Mode().Perm()&0o077 != 0 {
+		if err := root.Chmod(".", 0o700); err != nil {
+			_ = root.Close()
+			return nil, err
+		}
+	}
+	return root, nil
+}
+
+func ensureSchedulerDirectory(root *os.Root, relative string) error {
+	if err := root.MkdirAll(relative, 0o700); err != nil {
+		return err
+	}
+	info, err := root.Lstat(relative)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return errors.New("scheduler path must be a real directory")
+	}
+	opened, err := root.OpenRoot(relative)
+	if err != nil {
+		return err
+	}
+	defer opened.Close()
+	openedInfo, err := opened.Stat(".")
+	if err != nil || !os.SameFile(info, openedInfo) {
+		if err != nil {
+			return err
+		}
+		return errors.New("scheduler directory changed during secure open")
+	}
+	return nil
 }
 
 func validateStoreInput(root, workspaceID string) error {
@@ -318,9 +412,9 @@ func validateReceipt(receipt Receipt) error {
 	return nil
 }
 
-func readEnrollment(path string) (Enrollment, error) {
+func readEnrollmentAt(root *os.Root, path string) (Enrollment, error) {
 	var enrollment Enrollment
-	if err := readStrictJSON(path, &enrollment); err != nil {
+	if err := readStrictJSONAt(root, path, &enrollment); err != nil {
 		return Enrollment{}, err
 	}
 	if enrollment.SchemaVersion != 1 || !workspaceIDPattern.MatchString(enrollment.WorkspaceID) || enrollment.EnrolledAt.IsZero() {
@@ -329,6 +423,43 @@ func readEnrollment(path string) (Enrollment, error) {
 	return enrollment, nil
 }
 
+func readStrictJSONAt(root *os.Root, path string, target any) error {
+	info, err := root.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return errors.New("scheduler JSON path must be a regular file")
+	}
+	file, err := root.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	openedInfo, err := file.Stat()
+	if err != nil || !os.SameFile(info, openedInfo) {
+		if err != nil {
+			return err
+		}
+		return errors.New("scheduler JSON path changed during secure open")
+	}
+	decoder := json.NewDecoder(file)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("scheduler file contains multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+// readStrictJSON is retained for static schema files supplied by the
+// developer harness. Runtime scheduler state always uses readStrictJSONAt.
 func readStrictJSON(path string, target any) error {
 	file, err := os.Open(path)
 	if err != nil {
@@ -350,8 +481,8 @@ func readStrictJSON(path string, target any) error {
 	return nil
 }
 
-func writeNewJSON(path string, value any) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+func writeNewJSONAt(root *os.Root, path string, value any) error {
+	file, err := root.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
