@@ -160,6 +160,14 @@ not be used as evidence that a pending capability is already released.
 - [x] Implement the first BCGOS managed-profile and OKF validator slice.
 - [ ] Implement the transactional outbox, source watermarks and atomic atlas manifest.
 - [x] Implement the deterministic managed product-atlas generator.
+- [x] Define the separate SharePoint organizational work-retrieval atlas,
+  Claude-only collection boundary and explicit-intent query contract.
+- [ ] Implement the strict SharePoint snapshot validator, incremental local
+  catalog compiler, revocation barriers and active manifest.
+- [ ] Implement `bcgos prior-work status|import|find` and the explicit
+  `find-prior-work` product skill.
+- [ ] Qualify one native Claude SharePoint test-root sync; keep Codex
+  collection `unavailable/corporate_policy`.
 - [x] Generate index, backlinks, orphan/broken-link diagnostics and a generation log.
 - [x] Add allowlist, provenance, determinism and boundary tests to CI.
 - [x] Add a bounded Darwin check/reconcile routine without automatic commits or pushes.

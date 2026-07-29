@@ -500,3 +500,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The first implementation can be consumed by any OKF-aware tool without a Google runtime dependency. Generated concepts, indexes, backlinks and logs remain reviewable in Git and reproducible from pinned sources. LLM-generated enrichment, private atlas compilation, provider selection and autonomous publication remain separate follow-up contracts.
 - Refs: specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/014-human-atlas-bootstrap.md; internal/atlas; https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f; https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
 - Supersedes: none
+
+## SPWK - Keep SharePoint prior-work retrieval separate and Claude-collected
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A senior office stakeholder needs to recover prior work with natural-language requests spanning themes, clients, projects, years and audiences. The corporate environment permits SharePoint access in Claude but forbids the equivalent connection in Codex. Adding this corpus to the managed wiki, owner memory or every workspace would leak scope and make ordinary sessions traverse cross-client metadata.
+- Decision: Create a physically separate organizational `sharepoint-work` OKF bundle containing bounded metadata, facets and source pointers from explicitly enrolled SharePoint roots. Claude is the only V1 collection adapter; Codex collection is `unavailable/corporate_policy` and cannot use browser, token, Graph or copied-link fallbacks. The normalized snapshot, compiler and query engine remain runtime-neutral. The bundle is selected only for explicit prior-work retrieval and is never injected at Session Start or searched by general wiki routing.
+- Consequences: Periodic refresh uses full or provider-delta snapshots, watermarks, synchronous deletion/access-revocation barriers, immutable versions and an atomic active manifest. The catalog stores no raw deck body, prompt, transcript or credential. Query returns ranked source pointers and rechecks SharePoint authorization when opened. Native readiness still requires an approved Claude MCP trial over a sanitized SharePoint scope; local fixtures cannot promote the capability.
+- Refs: specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/009-scheduler-catch-up.md; specs/037-sharepoint-work-retrieval-wiki.md; schemas/sharepoint-work-catalog.schema.json
+- Supersedes: none
