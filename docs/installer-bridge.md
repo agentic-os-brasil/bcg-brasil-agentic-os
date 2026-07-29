@@ -1,0 +1,51 @@
+# Installer bridge contract
+
+`cmd/maestro-installer` is the executable bridge behind the Maestro visual
+wizard. It is designed for a user who can write to the corporate user profile
+but cannot elevate to device administrator.
+
+## First install
+
+1. The package supplies the exact signed release directory, a native-signed
+   seeded `bcgos-bootstrap` and the public authority registry.
+2. The bridge verifies the Ed25519-signed manifest and every artifact through
+   `releaseverify.VerifyDirectory`.
+3. It verifies the native bootstrapper identity (`codesign` on macOS or
+   Authenticode through PowerShell on Windows).
+4. It calls `bcgos-bootstrap seed-status` and requires its embedded registry
+   digest and release version to match the supplied inputs.
+5. It creates a new user-level managed root, installs the exact registry and
+   bootstrapper, and delegates activation to `bcgos-bootstrap install`.
+6. It runs `bcgos version` from the activated path before returning success.
+
+The bridge refuses existing non-empty managed roots, never mutates the global
+`PATH`, never accepts an unsigned override and removes only a newly-created
+managed root if first activation fails. Owner data remains a separate root.
+
+## Visual mode and tests
+
+Visual mode serves the dependency-free wizard on loopback and exposes only
+typed `/api/state`, `POST /api/verify`, `POST /api/install` and
+`POST /api/open-data` endpoints. The
+verify endpoint runs the complete read-only plan (`installer.Prepare`) so the
+wizard can show a real green check before the user confirms installation; it
+does not create directories or copy files. When the package contains
+the conventional `release/`, `wizard/`, `authority-registry.json` and one
+versioned native bootstrapper beside the executable, the user can launch it
+without flags. `--headless` is available for clean-device automation and does
+not skip any verification. No telemetry, runtime hook or model request is
+started by the installer.
+
+The final action opens the installed user-data directory, not a made-up
+workspace. A workspace is chosen and initialized by the person after install;
+the bridge never silently creates one or claims that a preview has one.
+
+For a local unsigned visual test, `--preview` intentionally skips all release
+inputs and serves only the static wizard. It cannot verify or install anything;
+the footer remains in presentation mode. This mode is suitable for inspecting
+the DMG UX and is not evidence of a technical rehearsal, signed release or
+pilot readiness.
+
+The actual signed package must still be assembled by the release workflow and
+must carry native signing/notarization evidence before it can be called
+pilot-ready.
