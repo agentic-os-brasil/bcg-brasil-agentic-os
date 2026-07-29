@@ -121,6 +121,9 @@ func (catalog Catalog) Validate() error {
 			}
 			writes[write] = true
 		}
+		if writes["none"] && len(writes) != 1 {
+			return fmt.Errorf("maintenance job %q cannot combine none with concrete writes", job.ID)
+		}
 	}
 	for _, required := range []string{
 		"memory-l1-capture", "memory-daily", "memory-weekly", "memory-retention-check",

@@ -65,3 +65,27 @@ func TestManagedJobsCannotWritePrivateState(t *testing.T) {
 		t.Fatal("managed job with private writes was accepted")
 	}
 }
+
+func TestPublishedSchemaCompilesAndMatchesCatalog(t *testing.T) {
+	if err := ValidateSchemaFile("../../schemas/maintenance-jobs.schema.json"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSchemaAndCatalog("../../schemas/maintenance-jobs.schema.json", "../../bundles/base/runtime/maintenance.json"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCatalogRejectsMixedNoneWrites(t *testing.T) {
+	catalog := Catalog{
+		SchemaVersion: 1,
+		CatalogState:  CatalogOnly,
+		Jobs: []Job{{
+			ID: "mixed-writes", Category: "runtime", Trigger: "daily", Executor: "deterministic", Scope: "owner",
+			Availability: Unavailable, AvailabilityReason: "not installed", DefaultEnabled: true,
+			Unattended: "deterministic_only", Writes: []string{"none", "runtime_index"}, SuccessBoundary: "check",
+		}},
+	}
+	if err := catalog.Validate(); err == nil {
+		t.Fatal("mixed none and concrete writes were accepted")
+	}
+}
