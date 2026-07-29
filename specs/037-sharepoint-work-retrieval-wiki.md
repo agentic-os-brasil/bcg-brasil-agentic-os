@@ -76,7 +76,8 @@ set of enrolled SharePoint roots. It never means tenant-wide discovery by
 default.
 
 Each root is identified by opaque tenant, site, drive/library and folder
-references. Enrollment records:
+references. The enrollment is strict JSON conforming to
+`schemas/sharepoint-work-enrollment.schema.json` and records:
 
 - the owning tenant reference;
 - the approved site/library/folder roots;
@@ -257,10 +258,15 @@ catalog version proves synchronization success.
 The intended CLI contract is:
 
 ```text
+bcgos prior-work enroll --stdin --confirm
 bcgos prior-work status
 bcgos prior-work import --snapshot <normalized-json> --receipt <adapter-command-receipt>
-bcgos prior-work find --explicit --query "<request>" [--limit <n>]
+bcgos prior-work find --explicit --stdin [--limit <n>]
 ```
+
+The query body travels through standard input so client, project and people
+terms do not enter process arguments or shell history. Enrollment is create-only;
+scope expansion requires a newly confirmed policy rather than an overwrite.
 
 The intended product skill is `find-prior-work`. It activates only for explicit
 retrieval of prior professional material and uses the local index first. A sync
