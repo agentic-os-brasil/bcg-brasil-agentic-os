@@ -24,6 +24,7 @@ not be used as evidence that a pending capability is already released.
 - [x] Define and implement a canonical user-local interaction profile across product skills.
 - [x] Define and compile a managed skills index for bounded session navigation.
 - [x] Define and implement a local, professional owner-self registry with facet policies and a cold-start interview contract.
+- [x] Define the universal maintenance catalog for memory, wiki, runtime health, self observation and update diagnosis.
 - [x] Decide that the future human atlas is scoped across managed, owner-private and workspace-private roots, alongside canonical derived memory.
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
@@ -135,6 +136,7 @@ not be used as evidence that a pending capability is already released.
 - [ ] Implement synthesis and eligibility adapters without embedding provider policy in the core.
 - [ ] Add executable dreaming plus `explain`, `export` and `delete` contracts before enabling persistence for pilot users.
 - [ ] Add equivalent Windows and macOS scheduling or presence-based catch-up adapters.
+- [ ] Qualify maintenance executors and promote individual jobs only after native evidence and owning-subsystem receipts.
 - [ ] Add Claude and Codex conformance fixtures for injection and failure reporting.
 
 ### Discuss before executing rollups
@@ -164,6 +166,7 @@ not be used as evidence that a pending capability is already released.
 - [ ] Add allowlist, provenance, determinism and boundary tests to CI.
 - [ ] Expose bounded product-content pointers for Claude and Codex adapters.
 - [ ] Implement owner/workspace private atlas only after enrollment, privacy and deletion contracts are ready.
+- [x] Prebuild a platform-neutral maintenance plane and honest macOS/Windows wake templates.
 - [ ] Extend the initial private-atlas taxonomy only through scoped templates, ownership rules and privacy tests.
 
 ### Discuss before enabling private navigation

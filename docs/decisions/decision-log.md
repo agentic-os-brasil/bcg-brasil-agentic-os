@@ -414,6 +414,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: CLVE; TCAL; specs/004-runtime-portability.md; specs/020-adapter-diagnostics.md; specs/021-pilot-hook-conformance.md; specs/030-claude-lifecycle-vertical.md; internal/lifecycle
 - Supersedes: none
 
+## AUTO - Prebuild a cross-platform maintenance plane in the base bundle
+
+- Date: 2026-07-28
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Daniel explicitly expanded the initial three-job scheduler discussion into a request for the maximum safe set of daily improvements: memory sync and rollups, wiki maintenance, runtime health, self observation and update diagnosis. Maestro must offer that sense of continuous improvement without copying personal, client-specific or macOS-only automation into a platform-neutral product bundle.
+- Decision: The base bundle carries a declarative catalog of 14 universal maintenance contracts: sanitized L1 capture, daily and weekly memory cycles, retention checks, incremental wiki sync, wiki reconciliation and integrity checks, skills-index refresh, runtime health and drift checks, capability rechecks, self-observation proposals and update checks. This is an explicit catalog expansion, not activation: every initial job remains unavailable until its owning subsystem and executor are qualified. The catalog contains no operating-system schedule, local path, credential, provider command or activation grant. A presence/catch-up wake mechanism is a runtime adapter, not a catalog job. macOS LaunchAgents and Windows Task Scheduler definitions are disabled reference templates; a future installer may render and enable them only after qualification. Client integrations, Kowalski/Darwin governance, auto-commit, telemetry aggregation, briefs and external ingest providers remain optional packs or outside Maestro.
+- Consequences: Deterministic read-only checks and approved local synchronization can run automatically when their adapters are available. Model-backed dreaming, self refinement and external ingestion remain prebuilt but fail closed until the user/workspace policy and runtime adapter explicitly permit unattended execution. Disabled templates cannot create recurring failure noise, and scheduler receipts never prove memory or wiki publication; each owning subsystem retains its durable success boundary.
+- Refs: specs/006-memory-persistence.md; specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/009-scheduler-catch-up.md; specs/020-release-distribution.md; bundles/base/runtime/maintenance.json; schemas/maintenance-jobs.schema.json
+- Supersedes: none
+
 ## CAPS - Separate professional capability bundles from interaction profile
 
 - Date: 2026-07-26

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:maintenance-jobs:v1",
+  "title": "BCG Brasil Agentic OS maintenance catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "catalog_state", "jobs"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "catalog_state": {"const": "catalog_only"},
+    "jobs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/job"}
+    }
+  },
+  "$defs": {
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "category",
+        "trigger",
+        "executor",
+        "scope",
+        "availability",
+        "availability_reason",
+        "default_enabled",
+        "unattended",
+        "writes",
+        "success_boundary"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
+        "category": {"enum": ["memory", "wiki", "runtime", "self", "update"]},
+        "trigger": {"enum": ["presence", "daily", "weekly", "event", "daily_or_presence", "weekly_or_presence", "bundle_update_or_presence"]},
+        "executor": {"enum": ["deterministic", "local_adapter", "model_adapter"]},
+        "scope": {"enum": ["owner", "workspace", "managed"]},
+        "availability": {"const": "unavailable"},
+        "availability_reason": {"type": "string", "minLength": 1, "maxLength": 512},
+        "default_enabled": {"type": "boolean"},
+        "unattended": {"enum": ["deterministic_only", "policy_gated", "never"]},
+        "writes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["none", "memory_l1", "memory_rollups", "wiki_private", "runtime_index", "owner_observation", "local_diagnostics"]}
+        },
+        "success_boundary": {"type": "string", "minLength": 1, "maxLength": 512}
+      }
+    }
+  }
+}
