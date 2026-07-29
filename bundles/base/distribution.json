@@ -62,6 +62,14 @@
       "path": "skills/catalog.json"
     },
     {
+      "source": "bundles/base/skills/agent-identity-setup/SKILL.md",
+      "path": "skills/agent-identity-setup/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/agent-identity-setup/agents/openai.yaml",
+      "path": "skills/agent-identity-setup/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/coverage-diagnose/SKILL.md",
       "path": "skills/coverage-diagnose/SKILL.md"
     },
@@ -70,12 +78,28 @@
       "path": "skills/coverage-diagnose/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/deck-storyline/SKILL.md",
+      "path": "skills/deck-storyline/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/deck-storyline/agents/openai.yaml",
+      "path": "skills/deck-storyline/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/dream-memory/SKILL.md",
       "path": "skills/dream-memory/SKILL.md"
     },
     {
       "source": "bundles/base/skills/dream-memory/agents/openai.yaml",
       "path": "skills/dream-memory/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/find-prior-work/SKILL.md",
+      "path": "skills/find-prior-work/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/find-prior-work/agents/openai.yaml",
+      "path": "skills/find-prior-work/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/ingest-content/SKILL.md",
@@ -124,6 +148,22 @@
     {
       "source": "bundles/base/skills/qa-gate/agents/openai.yaml",
       "path": "skills/qa-gate/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/qualitative-analysis/SKILL.md",
+      "path": "skills/qualitative-analysis/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/qualitative-analysis/agents/openai.yaml",
+      "path": "skills/qualitative-analysis/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/quantitative-analysis/SKILL.md",
+      "path": "skills/quantitative-analysis/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/quantitative-analysis/agents/openai.yaml",
+      "path": "skills/quantitative-analysis/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/workspace-agent-setup/SKILL.md",
@@ -188,6 +228,18 @@
     {
       "source": "schemas/scheduler-state.schema.json",
       "path": "schemas/scheduler-state.schema.json"
+    },
+    {
+      "source": "schemas/sharepoint-work-catalog.schema.json",
+      "path": "schemas/sharepoint-work-catalog.schema.json"
+    },
+    {
+      "source": "schemas/sharepoint-work-enrollment.schema.json",
+      "path": "schemas/sharepoint-work-enrollment.schema.json"
+    },
+    {
+      "source": "schemas/sharepoint-work-import-receipt.schema.json",
+      "path": "schemas/sharepoint-work-import-receipt.schema.json"
     }
   ]
 }
