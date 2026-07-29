@@ -94,7 +94,9 @@ Following a result link remains subject to SharePoint's current authorization.
 ## Canonical catalog snapshot
 
 The Claude adapter emits strict JSON conforming to
-`schemas/sharepoint-work-catalog.schema.json`.
+`schemas/sharepoint-work-catalog.schema.json` and a separately parsed,
+binding receipt conforming to
+`schemas/sharepoint-work-import-receipt.schema.json`.
 
 A snapshot contains:
 
