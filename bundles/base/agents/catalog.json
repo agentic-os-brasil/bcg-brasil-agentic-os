@@ -33,7 +33,7 @@
       "id": "darwin",
       "role": "governance_analyst",
       "direct_user_access": false,
-      "tool_access": "none",
+      "tool_access": "scoped",
       "may_delegate": false,
       "input_contract": "bounded_health_packet",
       "relative_path": "agents/darwin/AGENT.md",

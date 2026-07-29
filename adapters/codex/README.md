@@ -42,3 +42,10 @@ from or persisted into memory.
 Spec 035 and `docs/lifecycle-readiness.md` record the current evidence matrix:
 Codex configuration is not native invocation evidence. Each of the five
 bindings remains unavailable until a real native-session observation exists.
+
+Darwin 🧬 is the governance surgeon, not a separate housekeeping agent. The
+runtime-neutral `internal/darwin` contract accepts the same bounded packet in
+interactive and `headless_housekeeping` modes, applies only the signed
+`health/maestro-system` grants and persists metadata-only receipts. Codex
+native invocation of that seam remains unavailable until a qualifying native
+session observes it.

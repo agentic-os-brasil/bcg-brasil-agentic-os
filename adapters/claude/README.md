@@ -45,3 +45,10 @@ evidence is still required before any capability-state change. Session Start
 resolves the user-local interaction profile and injects only its bounded ID and
 managed policy pointer; the profile is not derived from or persisted into
 memory.
+
+Darwin 🧬 is the governance surgeon, not a separate housekeeping agent. The
+runtime-neutral `internal/darwin` contract accepts the same bounded packet in
+interactive and `headless_housekeeping` modes, applies only the signed
+`health/maestro-system` grants and persists metadata-only receipts. Claude
+native invocation of that seam remains unavailable until a qualifying native
+session observes it.

@@ -79,7 +79,8 @@ raising a catalog limit.
   persona or a second case owner.
 - Walter reviews a sealed packet independently; Challenger and final-review
   are review modes, not separate agents.
-- Darwin observes operating-model health and drift; it does not become a case
+- Darwin observes operating-model health and drift and may perform only
+  reversible `health/maestro-system` maintenance; it never becomes a case
   execution worker.
 
 ## Managed skill policy

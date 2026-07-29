@@ -86,10 +86,12 @@ collections or invalid fingerprints fail locally before transport.
 
 ## Darwin roles
 
-### Local Darwin - federator
+### Local Darwin - federator and bounded surgeon
 
 The local Darwin receives a deterministic, workspace-scoped health packet. It
-does not read other workspaces, use network tools or send data itself. It
+does not read other workspaces, use network tools or send data itself. The
+same Darwin identity may execute only reversible local maintenance in the
+signed `health/maestro-system` scope and records a metadata-only receipt. It
 selects an approved typed signal or structural candidate and hands it to the
 compiler. Qualitative perception is expressed by a controlled taxonomy and
 template slots, not generated prose.
@@ -112,9 +114,10 @@ accept the proposal before implementation begins.
 3. **GitHub bridge** - central HTTPS inbox, aggregate digest, GitHub App Issue
    publisher seam and actionable incident routing are implemented. Deployment
    must provide the bridge-owned short-lived App installation-token source.
-4. **Federator** - local Darwin packet adapter and structural skill/insight
-   compilation are implemented. Its qualitative input is a closed perception
-   taxonomy; it cannot emit local prose or send data itself.
+4. **Federator** - local Darwin packet adapter, scoped maintenance executor and
+   structural skill/insight compilation are implemented. Its qualitative input
+   is a closed perception taxonomy; it cannot emit local prose or send data
+   itself.
 5. **Curator** - central batch compiler and Central Darwin proposals are
    implemented. It creates draft GitHub proposal/incident artifacts only;
    human acceptance remains required before source work. Semantic Issue-to-PR
@@ -132,7 +135,9 @@ later phase must not claim an earlier unavailable capability is active.
 closed version-one batch vocabulary. Its contract tests prove that unknown
 fields/values fail closed and that changing workspace-private identity or text
 cannot affect a compiled structural export.
-It does not read files, invoke a Darwin, enroll a pilot user or contact GitHub.
+The federation compiler does not read files, invoke a second Darwin, enroll a
+pilot user or contact GitHub; the separate local housekeeping executor owns
+the same Darwin identity and scoped maintenance path.
 
 ## Acceptance criteria
 
@@ -142,4 +147,5 @@ It does not read files, invoke a Darwin, enroll a pilot user or contact GitHub.
 4. Claude and Codex adapters can produce equivalent typed batches or report
    federation unavailable.
 5. GitHub bridge credentials never enter a pilot device, workspace or bundle.
-6. Central curation results in proposals, never autonomous source changes.
+6. Central curation results in proposals, never autonomous source changes;
+   local Darwin repair receipts remain metadata-only and local.
