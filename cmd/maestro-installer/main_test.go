@@ -146,6 +146,20 @@ func TestResolvePreviewDefaultsDoesNotRequireReleaseInputs(t *testing.T) {
 	}
 }
 
+func TestResolveSimulationDefaultsUsesIsolatedRoots(t *testing.T) {
+	root := t.TempDir()
+	options := options{wizardDir: filepath.Join(root, "wizard"), simulationRoot: filepath.Join(root, "sandbox")}
+	if err := resolveSimulationDefaults(&options); err != nil {
+		t.Fatal(err)
+	}
+	if options.managedRoot != filepath.Join(root, "sandbox", "managed") || options.dataRoot != filepath.Join(root, "sandbox", "data") {
+		t.Fatalf("simulation roots = %q, %q", options.managedRoot, options.dataRoot)
+	}
+	if options.releaseDir != "" || options.bootstrapper != "" || options.authorityRegistry != "" {
+		t.Fatalf("simulation unexpectedly resolved release inputs: %#v", options)
+	}
+}
+
 func TestResolveDefaultsUsesUserSpaceRootsWhenPackageIsComplete(t *testing.T) {
 	root := t.TempDir()
 	bootstrapper := filepath.Join(root, "bcgos-bootstrap_0.1.0_"+runtime.GOOS+"_"+runtime.GOARCH)
