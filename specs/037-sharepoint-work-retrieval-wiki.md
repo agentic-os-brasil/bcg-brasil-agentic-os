@@ -35,10 +35,12 @@ the equivalent connection in Codex.
   binding the tenant, roots, sequence, watermark and snapshot digest. Only the
   native conformance protocol may later classify a receipt as native-qualified;
   neither a snapshot nor an adapter-command receipt promotes capability state.
-- The local adapter boundary authenticates that receipt with a private
-  installation key and also binds the receipt ID, active policy and enrollment
-  fingerprint. This proves that the bounded local adapter command emitted the
-  receipt; it still does not prove that Claude invoked it natively.
+- Enrollment pins an Ed25519 collector public key and key ID. A trusted
+  Claude-owned collector process keeps the private key outside the Maestro
+  store and signs the receipt over its complete canonical body. Maestro exposes
+  verification only: neither Codex nor an ordinary local caller can mint a
+  trusted receipt. The signature binds the receipt ID, snapshot, active policy
+  and enrollment fingerprint; it still does not prove native invocation.
 - Local configuration, a fixture or a direct adapter invocation is not native
   SharePoint evidence. Capability promotion requires an approved Claude
   connection and a native read-only trial over a sanitized test scope.
@@ -102,6 +104,13 @@ The Claude adapter emits strict JSON conforming to
 `schemas/sharepoint-work-catalog.schema.json` and a separately parsed,
 binding receipt conforming to
 `schemas/sharepoint-work-import-receipt.schema.json`.
+
+JSON Schema validates the structural envelope. The Go importer is the
+authoritative semantic validator for cross-field invariants that JSON Schema
+cannot express portably: exact root-result coverage, normalized label
+uniqueness, item/tombstone composite conflicts and the combined item limit.
+Import requires both layers; passing the schema alone never authorizes
+publication.
 
 A snapshot contains:
 

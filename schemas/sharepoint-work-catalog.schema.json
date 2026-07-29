@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1",
   "title": "Maestro SharePoint work catalog snapshot",
+  "description": "Structural envelope. Cross-field root coverage, normalized uniqueness, composite conflicts, and the combined item/tombstone limit are enforced by the authoritative Go importer.",
   "type": "object",
   "additionalProperties": false,
   "required": [

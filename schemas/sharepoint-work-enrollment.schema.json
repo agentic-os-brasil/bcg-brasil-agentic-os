@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-enrollment:v1",
   "title": "Maestro SharePoint work enrollment",
+  "description": "Pins the trusted Claude collector verification key. The corresponding private key is runtime-owned and must never be stored by Maestro or Codex.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,6 +11,8 @@
     "purpose",
     "policy_version",
     "authorized_by",
+    "collector_key_id",
+    "collector_public_key",
     "enrolled_at",
     "authorization_expires_at",
     "scope_expansion_confirm_after",
@@ -27,6 +30,13 @@
     "purpose": {"const": "prior_work_retrieval"},
     "policy_version": {"type": "string", "minLength": 1, "maxLength": 128},
     "authorized_by": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/opaque_ref"},
+    "collector_key_id": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/opaque_ref"},
+    "collector_public_key": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "minLength": 44,
+      "maxLength": 44
+    },
     "enrolled_at": {"type": "string", "format": "date-time"},
     "authorization_expires_at": {"type": "string", "format": "date-time"},
     "scope_expansion_confirm_after": {"type": "string", "format": "date-time"},
