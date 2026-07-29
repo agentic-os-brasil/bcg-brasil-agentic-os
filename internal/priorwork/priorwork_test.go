@@ -39,6 +39,7 @@ func testEnrollment() Enrollment {
 		ScopeExpansionConfirmAfter: testTime.AddDate(0, 6, 0),
 		RefreshHours:               24,
 		StaleHours:                 72,
+		ScheduleTimezone:           "America/Sao_Paulo",
 		MaxItemBytes:               100_000_000,
 		MaxSnapshotItems:           10_000,
 		AllowedItemTypes:           []string{"file", "folder"},
@@ -140,6 +141,7 @@ func newImportReceipt(
 		PolicyVersion: enrollment.PolicyVersion, EnrollmentFingerprint: enrollmentFingerprint,
 		CollectionSequence: snapshot.CollectionSequence, Watermark: snapshot.Watermark,
 		SnapshotDigest: snapshotDigest, KeyID: enrollment.CollectorKeyID,
+		TriggerRef: "trigger-manual-test",
 	}
 	body, err := receiptSigningBody(receipt)
 	if err != nil {
@@ -213,6 +215,23 @@ func TestImportReceiptMustBindExactSnapshot(t *testing.T) {
 	receipt.SnapshotDigest = strings.Repeat("0", 64)
 	if err := ValidateImportReceipt(receipt, snapshot); err == nil {
 		t.Fatal("expected a mismatched adapter-command receipt to fail")
+	}
+	receipt = testReceipt(snapshot, testEnrollment())
+	receipt.TriggerRef = ""
+	if err := ValidateImportReceipt(receipt, snapshot); err == nil {
+		t.Fatal("expected a missing trigger reference to fail")
+	}
+}
+
+func TestEnrollmentRequiresIANAScheduleTimezone(t *testing.T) {
+	enrollment := testEnrollment()
+	enrollment.ScheduleTimezone = ""
+	if err := ValidateEnrollment(enrollment); err == nil {
+		t.Fatal("expected missing schedule timezone to fail")
+	}
+	enrollment.ScheduleTimezone = "UTC-3"
+	if err := ValidateEnrollment(enrollment); err == nil {
+		t.Fatal("expected non-IANA schedule timezone to fail")
 	}
 }
 

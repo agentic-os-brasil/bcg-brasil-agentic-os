@@ -26,6 +26,7 @@ var (
 	opaqueRefPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:!,-]{0,255}$`)
 	watermarkPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._~:/+=-]{0,511}$`)
 	digestPattern    = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	timezonePattern  = regexp.MustCompile(`^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+)+$`)
 )
 
 type RootRef struct {
@@ -119,6 +120,7 @@ type ImportReceipt struct {
 	Watermark             string    `json:"watermark"`
 	SnapshotDigest        string    `json:"snapshot_digest"`
 	KeyID                 string    `json:"key_id"`
+	TriggerRef            string    `json:"trigger_ref"`
 	Signature             string    `json:"signature"`
 }
 
@@ -135,6 +137,7 @@ type Enrollment struct {
 	ScopeExpansionConfirmAfter time.Time `json:"scope_expansion_confirm_after"`
 	RefreshHours               int       `json:"refresh_hours"`
 	StaleHours                 int       `json:"stale_hours"`
+	ScheduleTimezone           string    `json:"schedule_timezone"`
 	MaxItemBytes               int64     `json:"max_item_bytes"`
 	MaxSnapshotItems           int       `json:"max_snapshot_items"`
 	AllowedItemTypes           []string  `json:"allowed_item_types"`
@@ -288,7 +291,7 @@ func ValidateImportReceipt(receipt ImportReceipt, snapshot Snapshot) error {
 		receipt.CollectionSequence != snapshot.CollectionSequence ||
 		receipt.Watermark != snapshot.Watermark || receipt.SnapshotDigest != digest ||
 		validateLabel(receipt.PolicyVersion, 128) != nil || receipt.EnrollmentFingerprint == "" ||
-		!opaqueRefPattern.MatchString(receipt.KeyID) {
+		!opaqueRefPattern.MatchString(receipt.KeyID) || !opaqueRefPattern.MatchString(receipt.TriggerRef) {
 		return errors.New("SharePoint import receipt does not bind the snapshot")
 	}
 	signature, err := base64.StdEncoding.Strict().DecodeString(receipt.Signature)
@@ -372,12 +375,20 @@ func ValidateEnrollment(enrollment Enrollment) error {
 		!enrollment.AuthorizationExpiresAt.After(enrollment.EnrolledAt) ||
 		enrollment.ScopeExpansionConfirmAfter.Before(enrollment.EnrolledAt) ||
 		enrollment.ScopeExpansionConfirmAfter.After(enrollment.AuthorizationExpiresAt) ||
-		enrollment.RefreshHours <= 0 || enrollment.MaxItemBytes <= 0 || enrollment.MaxItemBytes > 1<<40 ||
+		enrollment.RefreshHours <= 0 || enrollment.RefreshHours > 8760 ||
+		enrollment.StaleHours <= 0 || enrollment.StaleHours > 8760 ||
+		enrollment.MaxItemBytes <= 0 || enrollment.MaxItemBytes > 1<<40 ||
 		enrollment.MaxSnapshotItems <= 0 || enrollment.MaxSnapshotItems > maximumItems ||
 		enrollment.StaleHours < enrollment.RefreshHours || len(enrollment.Roots) == 0 ||
 		len(enrollment.Roots) > maximumRoots || len(enrollment.AllowedOrigins) == 0 ||
 		len(enrollment.AllowedItemTypes) == 0 {
 		return errors.New("invalid prior-work enrollment")
+	}
+	if len(enrollment.ScheduleTimezone) > 64 || !timezonePattern.MatchString(enrollment.ScheduleTimezone) {
+		return errors.New("invalid prior-work scheduler timezone")
+	}
+	if _, err := time.LoadLocation(enrollment.ScheduleTimezone); err != nil {
+		return errors.New("invalid prior-work scheduler timezone")
 	}
 	publicKey, err := base64.StdEncoding.Strict().DecodeString(enrollment.CollectorPublicKey)
 	if err != nil || len(publicKey) != ed25519.PublicKeySize {
