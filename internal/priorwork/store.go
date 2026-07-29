@@ -345,7 +345,7 @@ func (store Store) Apply(snapshot Snapshot, receipt ImportReceipt, access Access
 	if err := store.verifyActiveUnchanged(hasActive, active); err != nil {
 		return ApplyReport{}, err
 	}
-	if err := atomicWriteAt(store.Root, "active.json", manifest); err != nil {
+	if err := writeActiveManifest(store.Root, manifest); err != nil {
 		return ApplyReport{}, err
 	}
 	if err := store.clearActiveBarriers(snapshot.Items, snapshot.CollectionSequence); err != nil {
