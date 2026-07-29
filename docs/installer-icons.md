@@ -67,16 +67,29 @@ if ($windresSHA256 -notmatch '^[a-f0-9]{64}$') { throw "Approved windres fingerp
   -Icon $iconPath `
   -IconSHA256 $iconManifest.ico_sha256 `
   -ResourceCompilerSHA256 $windresSHA256 `
-  -Output (Join-Path (Resolve-Path .\dist).Path "maestro-installer.exe")
+  -WizardDir (Resolve-Path .\installers\wizard) `
+  -OutputDirectory (Join-Path (Resolve-Path .\dist).Path "maestro-installer-windows")
 ```
 
 This contract requires the approved MinGW `windres` executable on the Windows
 release worker. It creates a temporary `.syso` resource object, builds the
-installer and removes the temporary source/object in a `finally` block. The
-provenance file records the icon, compiler, approved compiler fingerprint,
-resource-object digests and the explicit `unsigned-candidate` status. Missing
-`windres`, a changed icon, an unapproved compiler fingerprint or a failed
-resource build stops the process; no unsigned bypass is accepted.
+installer and packages a self-contained directory with `maestro-installer.exe`,
+the `wizard/` assets, the canonical `.ico`, `README-UNSIGNED.md` and the
+`Run-Maestro-Rehearsal.cmd` launcher and the provenance file. Temporary
+source/object files are removed in a `finally` block, and a partially created
+output directory is removed if any step fails.
+The provenance file records the icon, compiler, approved compiler fingerprint,
+resource-object digests, the packaged wizard root, the rehearsal launcher and
+the explicit `unsigned-candidate` status. Missing `windres`, a changed icon,
+an unapproved compiler fingerprint or a failed resource build stops the
+process; no unsigned bypass is accepted.
+
+The package can therefore be copied to a clean Windows sandbox and launched by
+double-clicking `Run-Maestro-Rehearsal.cmd`. The launcher passes `--simulate`
+and the adjacent `wizard/` directory to the executable, creates a unique
+user-profile sandbox and opens the visual installation flow. This is a
+technical rehearsal only: the package remains unsigned until the approved
+Authenticode step runs.
 
 ## Current evidence boundary
 
