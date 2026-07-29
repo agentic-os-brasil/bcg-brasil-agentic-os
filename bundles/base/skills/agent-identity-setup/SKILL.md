@@ -18,7 +18,7 @@ principal-agent menu. Explain each role before asking for a choice:
 - Client Account Agent — the partner-like account relationship owner;
 - Case Agent — the project execution and delivery owner;
 - Walter — internal pressure-test and review gate;
-- Darwin — governance, drift and system-health analyst; and
+- Darwin 🧬 — governance, drift and bounded system-maintenance surgeon; and
 - PA expert — versioned FPA/IPA advisory from the PA Expert registry.
 
 Show the default name, suggested alternatives, purpose and suggested

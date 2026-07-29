@@ -161,6 +161,23 @@ func TestChildToolRequestsBindTheActiveDispatchID(t *testing.T) {
 	assertAllowed(t, adapter.Handle(toolEvent))
 }
 
+func TestDarwinScopedMaintenanceGrantIsEquivalentAndFailClosed(t *testing.T) {
+	catalog := loadCatalog(t)
+	for _, runtime := range []string{"claude", "codex"} {
+		t.Run(runtime, func(t *testing.T) {
+			adapter, err := NewAdapter(runtime, catalog, testAuthorizations(), mustStore(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertAllowed(t, adapter.StartBranch("maestro", "maestro-cap", "darwin", "darwin-run", "maestro-system", "health"))
+			assertAllowed(t, adapter.GuardTool("darwin", "darwin-cap", "darwin-run", "", "maestro-system", "health", "filesystem", "write", "bcgos://health/maestro-system/derived/receipt.json"))
+			assertDenied(t, adapter.GuardTool("darwin", "darwin-cap", "darwin-run", "", "maestro-system", "health", "shell", "exec", "bcgos://health/maestro-system/derived/receipt.json"), "resource_denied")
+			assertDenied(t, adapter.GuardTool("darwin", "darwin-cap", "darwin-run", "", "maestro-system", "health", "filesystem", "write", "bcgos://workspace/secret/file.md"), "resource_denied")
+			assertAllowed(t, adapter.FinishBranch("darwin", "darwin-cap", "darwin-run"))
+		})
+	}
+}
+
 func TestSharedStateSurvivesAdapterReplacementAndRejectsParallelControllers(t *testing.T) {
 	catalog := loadCatalog(t)
 	store := mustStore(t)
@@ -394,6 +411,10 @@ func testAuthorizations() []Authorization {
 		{AgentID: "capability-other", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-other-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/alpha/"}}},
 		{AgentID: "practice-insurance", Role: "practice_agent", Scope: "beta", ScopeKind: "practice", Capability: "practice-insurance-cap"},
 		{AgentID: "subject-insurance", Role: "subject_specialist", Scope: "alpha", ScopeKind: "practice", Capability: "subject-insurance-cap"},
+		{AgentID: "darwin", Role: "governance_analyst", Scope: "maestro-system", ScopeKind: "health", Capability: "darwin-cap", Tools: []ToolGrant{
+			{Tool: "filesystem", Operation: "read", ResourcePrefix: "bcgos://health/maestro-system/"},
+			{Tool: "filesystem", Operation: "write", ResourcePrefix: "bcgos://health/maestro-system/"},
+		}},
 	}
 }
 
