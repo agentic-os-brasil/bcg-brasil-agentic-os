@@ -58,6 +58,28 @@ go run ./dev/release verify --directory dist/release-candidate
 Verification rejects missing, extra, non-regular or digest-mismatched files.
 It proves candidate closure and integrity, not authenticity.
 
+## Produce a local readiness report
+
+Before requesting an external release run, use the read-only readiness report
+with explicit paths:
+
+```text
+go run ./dev/release readiness \
+  --provider-config bundles/base/release/provider.json \
+  --authority-registry path/to/release-authority-registry.json \
+  --authority-registry-sha256 <exact-lowercase-sha256> \
+  --candidate dist/release-candidate
+```
+
+The report is deterministic JSON with stable check IDs. It validates the
+managed schemas, provider configuration, pinned authority registry, candidate
+closure and dispatchable release workflows. Missing inputs are
+`unavailable`; malformed or tampered inputs are `blocked`. It never contacts a
+provider, opens a credential store, signs or notarizes bytes, installs an
+update, or promotes a release. Its claim is only
+`local_contract_evidence`; signature, provider authentication and clean-device
+acceptance remain explicit external gates.
+
 ## Build and publish a signed prerelease
 
 The protected workflow:

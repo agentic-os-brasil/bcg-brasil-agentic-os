@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	devharness "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/harness"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasereadiness"
 )
 
 func main() {
@@ -37,8 +39,43 @@ func main() {
 		verify(root, os.Args[2:])
 	case "verify-signed":
 		verifySigned(root, os.Args[2:])
+	case "readiness":
+		readiness(root, os.Args[2:])
 	default:
 		usage()
+	}
+}
+
+func readiness(root string, args []string) {
+	flags := flag.NewFlagSet("readiness", flag.ExitOnError)
+	provider := flags.String("provider-config", "", "explicit public provider configuration path")
+	registry := flags.String("authority-registry", "", "explicit public authority registry path")
+	registryDigest := flags.String("authority-registry-sha256", "", "exact lowercase SHA-256 pin for the authority registry")
+	candidate := flags.String("candidate", "", "explicit unsigned candidate directory")
+	_ = flags.Parse(args)
+	if flags.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./dev/release readiness [--provider-config FILE] [--authority-registry FILE --authority-registry-sha256 SHA256] [--candidate DIRECTORY]")
+		os.Exit(2)
+	}
+	report := releasereadiness.Evaluate(releasereadiness.Options{
+		Root:                    root,
+		ProviderConfig:          optionalAbsoluteFromRoot(root, *provider),
+		AuthorityRegistry:       optionalAbsoluteFromRoot(root, *registry),
+		AuthorityRegistrySHA256: *registryDigest,
+		Candidate:               optionalAbsoluteFromRoot(root, *candidate),
+	})
+	if err := json.NewEncoder(os.Stdout).Encode(report); err != nil {
+		fatal(err)
+	}
+	for _, check := range report.Checks {
+		if check.State == releasereadiness.StateBlocked {
+			os.Exit(1)
+		}
+	}
+	for _, check := range report.Checks {
+		if check.State == releasereadiness.StateUnavailable || check.State == releasereadiness.StateNotEvaluated {
+			os.Exit(3)
+		}
 	}
 }
 
@@ -238,7 +275,7 @@ func optionalAbsoluteFromRoot(root, value string) string {
 func usage() {
 	fmt.Fprintln(
 		os.Stderr,
-		"usage: go run ./dev/release <binary|seeded-binaries|candidate|provenance|sign|verify|verify-signed> [options]",
+		"usage: go run ./dev/release <binary|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness> [options]",
 	)
 	os.Exit(2)
 }
