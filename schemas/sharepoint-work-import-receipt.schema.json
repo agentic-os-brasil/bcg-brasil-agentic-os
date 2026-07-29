@@ -24,16 +24,16 @@
     "producer_runtime": {"const": "claude"},
     "outcome": {"const": "succeeded"},
     "emitted_at": {"type": "string", "format": "date-time"},
-    "tenant_ref": {"$ref": "sharepoint-work-catalog.schema.json#/$defs/opaque_ref"},
+    "tenant_ref": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/opaque_ref"},
     "roots": {
       "type": "array",
       "minItems": 1,
       "maxItems": 128,
-      "items": {"$ref": "sharepoint-work-catalog.schema.json#/$defs/root"},
+      "items": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/root"},
       "uniqueItems": true
     },
     "collection_sequence": {"type": "integer", "minimum": 1},
-    "watermark": {"$ref": "sharepoint-work-catalog.schema.json#/$defs/watermark"},
+    "watermark": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/watermark"},
     "snapshot_digest": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
