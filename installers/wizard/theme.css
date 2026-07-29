@@ -72,3 +72,4 @@
 button:focus-visible{outline:2px solid var(--teal);outline-offset:4px}
 .step:disabled{cursor:default;opacity:.52}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.next-command{max-width:100%}.next-command code{max-width:min(68vw,620px);overflow-wrap:anywhere;text-align:left}.command-hint{display:block;max-width:620px;margin:-20px auto 0;color:#708687;font-size:10px;line-height:1.5;text-align:center}

@@ -16,8 +16,10 @@ authorities allowed to verify, activate or roll back bytes.
    path are shown before any write.
 3. **Instalação** — the exact per-user destination and the atomic activation
    plan are explained. The user confirms once.
-4. **Pronto** — the first `bcgos doctor` command and the recovery promise are
-   visible.
+4. **Pronto** — the first `doctor` command and the recovery promise are
+   visible. In a connected install, the command uses the exact user-profile
+   executable returned by the bridge; in a technical rehearsal, it remains a
+   clearly labelled conceptual command.
 
 The **Ver como funciona** action opens a compact in-product explainer with the
 same three contract movements — check, install, conduct — so a non-technical
@@ -56,6 +58,13 @@ bridge must:
 The normal destination is user-level application storage (`%LOCALAPPDATA%\\BCGOS`
 on Windows and `~/Library/Application Support/BCGOS` on macOS). The wizard
 does not modify the global `PATH`, workspace content or credentials.
+
+After a connected install, the first-command card uses the exact `cli_path`
+returned by the bridge. On macOS it copies `"<installed-cli>" doctor`; on
+Windows PowerShell it copies `& "<installed-cli>" doctor`. This keeps the
+instruction executable for a standard user without requiring a shell restart
+or a global `PATH` change. Static preview and disconnected mode keep the
+shorthand `bcgos doctor` and explicitly remain non-installing.
 
 ## Visual identity
 

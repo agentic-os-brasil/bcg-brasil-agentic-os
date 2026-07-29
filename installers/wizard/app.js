@@ -3,11 +3,14 @@
   const steps = [...document.querySelectorAll('.step')];
   const platformLabel = document.querySelector('#platform-label');
   const destination = document.querySelector('#install-destination');
+  const firstCommand = document.querySelector('#first-command');
+  const commandHint = document.querySelector('#command-hint');
   const stageAnnouncement = document.querySelector('#stage-announcement');
   const mode = document.body.dataset.mode || 'preview';
   const sessionToken = new URLSearchParams(window.location.search).get('session') || '';
   let runtime = false;
   let simulation = false;
+  let runtimePlatform = '';
   let planDigest = '';
   let verified = false;
   const platform = /Win/i.test(navigator.userAgent) ? 'Windows' : /Mac/i.test(navigator.userAgent) ? 'macOS' : 'seu dispositivo';
@@ -50,6 +53,30 @@
   function setButtonLabel(button, label) {
     const text = button?.querySelector('span');
     if (text) text.textContent = label;
+  }
+
+  function commandForPath(path) {
+    const value = String(path || '').trim();
+    if (!value) return 'bcgos doctor';
+    if (/windows/i.test(runtimePlatform || platform)) {
+      return `& "${value.replace(/"/g, '\\"')}" doctor`;
+    }
+    return `"${value.replace(/"/g, '\\"')}" doctor`;
+  }
+
+  function setFirstCommand(path) {
+    if (!firstCommand) return;
+    firstCommand.textContent = commandForPath(path);
+    if (commandHint && path) {
+      commandHint.textContent = /windows/i.test(runtimePlatform || platform)
+        ? 'Windows · PowerShell · caminho exato do seu perfil · não altera o PATH global.'
+        : 'Caminho exato do seu perfil · não altera o PATH global.';
+    }
+  }
+
+  function setSimulationCommandHint() {
+    if (!commandHint) return;
+    commandHint.textContent = 'Ensaio técnico: nenhum executável de release foi instalado; o comando real aparece após um release conectado.';
   }
 
   function setProgress(stage) {
@@ -148,6 +175,7 @@
       document.body.dataset.mode = 'runtime';
       updateModeBanner(state);
       updateFinishCopy();
+      runtimePlatform = state.platform || '';
       platformLabel.textContent = state.platform || platform;
       destination.textContent = state.managed_root || destination.textContent;
       document.querySelector('.footer b').textContent = simulation ? 'ensaio técnico conectado' : 'instalação conectada';
@@ -207,6 +235,8 @@
       if (!response.ok) throw new Error(payload.error || 'A instalação foi interrompida com segurança.');
       setProgress('complete');
       show('finish');
+      if (simulation) setSimulationCommandHint();
+      else setFirstCommand(payload.cli_path);
       showStatus(simulation
         ? `Ensaio concluído. Sandbox de dados: ${payload.data_root}`
         : `Instalação concluída. Dados do usuário: ${payload.data_root}`);
@@ -239,6 +269,17 @@
     }
   }
 
+  async function copyFirstCommand() {
+    const command = firstCommand?.textContent || 'bcgos doctor';
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(command);
+      showStatus(`Comando copiado: ${command}`);
+    } catch (_) {
+      showStatus('Não foi possível copiar automaticamente. Selecione o comando e copie manualmente.');
+    }
+  }
+
   document.addEventListener('click', async event => {
     const next = event.target.closest('[data-next]');
     const previous = event.target.closest('[data-prev]');
@@ -258,7 +299,7 @@
     if (action === 'install') await installRelease();
     if (action === 'open-data') await openDataFolder();
     if (action === 'copy-path') navigator.clipboard?.writeText(destination.textContent);
-    if (action === 'copy-command') navigator.clipboard?.writeText('bcgos doctor');
+    if (action === 'copy-command') await copyFirstCommand();
     if (action === 'close') window.close();
   });
 
