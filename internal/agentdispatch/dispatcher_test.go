@@ -96,6 +96,31 @@ func TestDispatcherIssuesSealedSequentialWorkspacePackets(t *testing.T) {
 	}
 }
 
+func TestDispatcherKeepsWalterAsAReviewLeaf(t *testing.T) {
+	dispatcher := newTestDispatcher(t)
+	packet, decision, err := dispatcher.StartRoot(PacketRequest{
+		TargetAgentID: "walter", ScopeKind: "review", ScopeID: "review-episode",
+		Objective: "Pressure-test the material recommendation before completion.",
+		Constraints: []string{
+			"Review only the sealed packet.",
+			"Return a bounded verdict and concrete fixes when needed.",
+		}, TTL: time.Hour,
+	})
+	if err != nil || !decision.Allowed {
+		t.Fatalf("Walter review dispatch failed: packet=%#v decision=%#v err=%v", packet, decision, err)
+	}
+	child, childDecision, err := dispatcher.StartChild(packet, PacketRequest{
+		TargetAgentID: "capability-research", ScopeKind: "review", ScopeID: "review-episode",
+		Objective: "Delegate the review to another specialist.", TTL: time.Hour,
+	})
+	if err == nil && childDecision.Allowed {
+		t.Fatalf("Walter opened a child branch: packet=%#v decision=%#v", child, childDecision)
+	}
+	if finish := dispatcher.FinishRoot(packet); !finish.Allowed {
+		t.Fatalf("Walter review branch did not close: %#v", finish)
+	}
+}
+
 func TestDispatcherRejectsTamperingExpiryAndCrossScopePointers(t *testing.T) {
 	dispatcher := newTestDispatcher(t)
 	now := time.Date(2026, 7, 25, 15, 0, 0, 0, time.UTC)
@@ -408,6 +433,7 @@ func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher 
 	}
 	grants := []agentorchestration.Authorization{
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
+		{AgentID: "walter", Role: "reviewer", Scope: "review-episode", ScopeKind: "review", Capability: "walter-cap"},
 		{AgentID: "client-account-agent-alpha", Role: "client_account_agent", Scope: "account-alpha", ScopeKind: "account", Capability: "client-account-agent-alpha-cap"},
 		{AgentID: "capability-account", Role: "capability_specialist", Scope: "account-alpha", ScopeKind: "account", Capability: "capability-account-cap"},
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-agent-alpha-cap"},
@@ -420,7 +446,7 @@ func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher 
 		t.Fatal(err)
 	}
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
-		"maestro": "maestro-cap", "client-account-agent-alpha": "client-account-agent-alpha-cap", "capability-account": "capability-account-cap",
+		"maestro": "maestro-cap", "walter": "walter-cap", "client-account-agent-alpha": "client-account-agent-alpha-cap", "capability-account": "capability-account-cap",
 		"workspace-agent-alpha": "workspace-agent-alpha-cap", "capability-research": "capability-research-cap",
 		"practice-insurance": "practice-insurance-cap", "subject-insurance": "subject-insurance-cap",
 	}, registry)

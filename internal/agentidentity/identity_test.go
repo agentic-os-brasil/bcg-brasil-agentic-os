@@ -19,6 +19,9 @@ func TestInitialInterviewExplainsNamesAvatarsAndOwnership(t *testing.T) {
 		if descriptor.DefaultName == "" || descriptor.DefaultEmoji == "" || len(descriptor.Suggestions) < 2 || len(descriptor.EmojiSuggestions) < 2 || descriptor.Purpose == "" {
 			t.Fatalf("incomplete descriptor: %#v", descriptor)
 		}
+		if descriptor.Role == "walter" && descriptor.DefaultEmoji != "🦉" {
+			t.Fatalf("Walter default emoji = %q, want owl", descriptor.DefaultEmoji)
+		}
 	}
 }
 

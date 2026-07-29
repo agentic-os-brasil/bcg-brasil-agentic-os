@@ -64,7 +64,7 @@
       "input_contract": "sealed_review_packet",
       "relative_path": "agents/walter/AGENT.md",
       "display_name": "Walter",
-      "default_emoji": "🛡️",
+      "default_emoji": "🦉",
       "ownership_scope": "governance",
       "customizable": true
     }

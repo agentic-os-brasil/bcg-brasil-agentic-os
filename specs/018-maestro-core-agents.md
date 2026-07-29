@@ -58,10 +58,18 @@ delegate. Substantive project work remains with the owning workspace agent.
 
 - is an internal pressure-test, not a second general assistant;
 - receives a sealed review packet prepared by Maestro;
+- reconstructs the judgment independently instead of echoing Maestro's rationale;
 - returns `approved`, `refine-and-return` or `missing-the-mark`;
 - surfaces at most three load-bearing objections, each with a concrete fix;
 - has no tools, delegation or direct user channel;
 - does not own execution or replace the user's judgment.
+
+`refine-and-return` and `missing-the-mark` return control to Maestro and do not
+satisfy completion. Only a qualified adapter may translate an independently
+supported `approved` verdict into the separate binary, authenticated review
+decision used by the execution ledger. The conversational verdict must never
+grant authority or become an indefinite veto loop: each objection names an
+owner, a concrete fix and an exit condition.
 
 ### Darwin
 

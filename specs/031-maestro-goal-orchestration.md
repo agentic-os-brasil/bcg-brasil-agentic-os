@@ -44,6 +44,13 @@ or other mutation after review invalidates it and requires a new signed review.
 A rejected review never satisfies completion. Evidence remains mandatory and
 is re-witnessed immediately before completion.
 
+The ledger's binary `approved`/`rejected` decision is not the conversational
+Walter verdict. Maestro may receive `refine-and-return` or
+`missing-the-mark` first; those outcomes return the packet to the producing
+owner and cannot be translated into completion. A qualified adapter may issue
+the signed `approved` envelope only after Walter independently reviewed the
+sealed packet and the final evidence satisfies the contract.
+
 ## Durability and replay
 
 Review commits use the existing revision-first publication and regenerable
