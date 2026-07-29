@@ -94,6 +94,23 @@ func ValidateUninstall(runtimeName, workspace string) error {
 	return nil
 }
 
+// LocalConfigExcludePath returns the Git exclude file touched by installation,
+// or an empty path when the workspace is not a Git checkout.
+func LocalConfigExcludePath(runtimeName, workspace string) (string, error) {
+	_, err := target(runtimeName, workspace)
+	if err != nil {
+		return "", err
+	}
+	gitDir, err := gitDirForWorkspace(workspace)
+	if err != nil {
+		return "", err
+	}
+	if gitDir == "" {
+		return "", nil
+	}
+	return filepath.Join(gitDir, "info", "exclude"), nil
+}
+
 // Install writes the owned workspace-local lifecycle bindings for the given
 // released CLI executable. The executable is explicit so an installed hook
 // never depends on a consultant's PATH or shell profile.

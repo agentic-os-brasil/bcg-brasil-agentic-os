@@ -1832,6 +1832,9 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 		body   []byte
 	}
 	snapshotFile := func(path string) (fileSnapshot, error) {
+		if path == "" {
+			return fileSnapshot{}, nil
+		}
 		info, statErr := os.Lstat(path)
 		if errors.Is(statErr, os.ErrNotExist) {
 			return fileSnapshot{path: path}, nil
@@ -1849,6 +1852,9 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 		return fileSnapshot{path: path, exists: true, mode: info.Mode().Perm(), body: body}, nil
 	}
 	restoreFile := func(snapshot fileSnapshot) error {
+		if snapshot.path == "" {
+			return nil
+		}
 		if !snapshot.exists {
 			if err := os.Remove(snapshot.path); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return err
@@ -1882,18 +1888,35 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 		if inspectErr != nil {
 			return reportError(errOut, inspectErr)
 		}
+		excludePath, excludeErr := adaptercfg.LocalConfigExcludePath(*runtimeName, path)
+		if excludeErr != nil {
+			return reportError(errOut, excludeErr)
+		}
 		snapshot, snapshotErr := snapshotFile(priorAdapter.Path)
 		if snapshotErr != nil {
 			return reportError(errOut, snapshotErr)
 		}
+		excludeSnapshot, snapshotErr := snapshotFile(excludePath)
+		if snapshotErr != nil {
+			return reportError(errOut, snapshotErr)
+		}
+		restoreAdapterState := func() error {
+			if restoreErr := restoreFile(snapshot); restoreErr != nil {
+				return restoreErr
+			}
+			return restoreFile(excludeSnapshot)
+		}
 		previousProjection, _ := runtimeprojection.Inspect(*runtimeName, path)
 		result.Status, err = adaptercfg.Install(*runtimeName, path, resolvedExecutable)
 		if err != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
+				return reportError(errOut, fmt.Errorf("adapter install failed and rollback failed: %w (original: %v)", restoreErr, err))
+			}
 			return reportError(errOut, err)
 		}
 		result.Projection, err = runtimeprojection.Install(*runtimeName, path)
 		if err != nil {
-			if restoreErr := restoreFile(snapshot); restoreErr != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
 				return reportError(errOut, fmt.Errorf("projection failed and adapter rollback failed: %w (original: %v)", restoreErr, err))
 			}
 			if previousProjection.State == "absent" {
@@ -1911,17 +1934,34 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 		if inspectErr != nil {
 			return reportError(errOut, inspectErr)
 		}
+		excludePath, excludeErr := adaptercfg.LocalConfigExcludePath(*runtimeName, path)
+		if excludeErr != nil {
+			return reportError(errOut, excludeErr)
+		}
 		snapshot, snapshotErr := snapshotFile(priorAdapter.Path)
 		if snapshotErr != nil {
 			return reportError(errOut, snapshotErr)
 		}
+		excludeSnapshot, snapshotErr := snapshotFile(excludePath)
+		if snapshotErr != nil {
+			return reportError(errOut, snapshotErr)
+		}
+		restoreAdapterState := func() error {
+			if restoreErr := restoreFile(snapshot); restoreErr != nil {
+				return restoreErr
+			}
+			return restoreFile(excludeSnapshot)
+		}
 		result.Status, err = adaptercfg.Uninstall(*runtimeName, path)
 		if err != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
+				return reportError(errOut, fmt.Errorf("adapter uninstall failed and rollback failed: %w (original: %v)", restoreErr, err))
+			}
 			return reportError(errOut, err)
 		}
 		result.Projection, err = runtimeprojection.Uninstall(*runtimeName, path)
 		if err != nil {
-			if restoreErr := restoreFile(snapshot); restoreErr != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
 				return reportError(errOut, fmt.Errorf("projection uninstall failed and adapter rollback failed: %w (original: %v)", restoreErr, err))
 			}
 		}

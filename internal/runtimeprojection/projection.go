@@ -325,8 +325,12 @@ func layout(runtimeName, workspace string) (runtimeLayout, error) {
 	if err != nil {
 		return runtimeLayout{}, err
 	}
-	if info, err := os.Lstat(absolute); err == nil && info.Mode()&os.ModeSymlink != 0 {
+	if info, err := os.Lstat(absolute); err != nil {
+		return runtimeLayout{}, err
+	} else if info.Mode()&os.ModeSymlink != 0 {
 		return runtimeLayout{}, errors.New("workspace must not be a symlink")
+	} else if !info.IsDir() {
+		return runtimeLayout{}, errors.New("workspace must be a directory")
 	}
 	if runtimeName == "claude" {
 		return runtimeLayout{orientation: "CLAUDE.md", root: filepath.Join(".claude", "skills"), runtimeName: "Claude Code"}, nil
