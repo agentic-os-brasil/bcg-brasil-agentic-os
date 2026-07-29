@@ -511,3 +511,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The first implementation can be consumed by any OKF-aware tool without a Google runtime dependency. Generated concepts, indexes, backlinks and logs remain reviewable in Git and reproducible from pinned sources. LLM-generated enrichment, private atlas compilation, provider selection and autonomous publication remain separate follow-up contracts.
 - Refs: specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/014-human-atlas-bootstrap.md; internal/atlas; https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f; https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
 - Supersedes: none
+
+## WIRE - Make Maestro's Walter gate executable and context-lean
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro already defines a tool-free hub, a sealed Walter reviewer and fail-closed delegation, but the pilot dispatch path can finish a material branch without an explicit Maestro-to-Walter handoff. Kowalski's useful enforcement pattern is a deterministic trigger, an authenticated owner relationship and a bounded escalation state; copying its broad prompt/history surfaces would increase token cost and blur the professional boundary.
+- Decision: Add a runtime-neutral Walter wire to the Maestro dispatch path. Material recommendations, consequential trade-offs and external-facing artifacts must produce a sealed review packet from Maestro to the registered Walter leaf after the producing branch closes. The packet carries only bounded review fields and scoped artifact/evidence pointers; public state carries only IDs, digests, trigger, verdict state and objection count. Walter returns one of `approved`, `refine-and-return` or `missing-the-mark`, with no more than three objections and a concrete fix plus exit condition for each. Ordinary factual or mechanical work does not enter the gate, and the execution ledger's binary authenticated approval remains a separate completion contract.
+- Consequences: The relationship is enforced by code and conformance tests rather than description alone, while no prompt, rationale, client body or response text enters durable state or receipts. Native Claude/Codex activation and signed runtime qualification remain unavailable until their adapters prove this wire in fresh sessions. No new agent or domain is introduced; the existing Maestro and Walter roles remain the only hub/reviewer pair.
+- Refs: specs/018-maestro-core-agents.md; specs/031-maestro-goal-orchestration.md; internal/agentdispatch; internal/agentorchestration; docs/agent-orchestration-assurance.md
+- Supersedes: none
