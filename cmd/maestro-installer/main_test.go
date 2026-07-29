@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 )
@@ -55,6 +57,38 @@ func TestWizardCloseRequiresSessionAndInvokesShutdown(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `"closing"`) {
 		t.Fatalf("body = %s", recorder.Body.String())
+	}
+}
+
+func TestWizardLifecycleDrainsActiveMutationAndRejectsNewWork(t *testing.T) {
+	lifecycle := newWizardLifecycle()
+	if !lifecycle.beginMutation() {
+		t.Fatal("first mutation was rejected")
+	}
+	if !lifecycle.requestClose() {
+		t.Fatal("first close was not accepted")
+	}
+	if lifecycle.requestClose() {
+		t.Fatal("repeated close was not idempotent")
+	}
+	if lifecycle.beginMutation() {
+		t.Fatal("new mutation was accepted after close request")
+	}
+	drained := make(chan error, 1)
+	go func() { drained <- lifecycle.waitDrained(context.Background()) }()
+	select {
+	case <-drained:
+		t.Fatal("lifecycle drained before active mutation completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+	lifecycle.endMutation()
+	select {
+	case err := <-drained:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("lifecycle did not drain active mutation")
 	}
 }
 
