@@ -144,6 +144,23 @@ func (registry AuthorityRegistry) Lookup(product, issuer, keyID string) (ed25519
 	return append(ed25519.PublicKey(nil), key.publicKey...), true
 }
 
+// HasActiveKey reports whether the registry contains at least one authority
+// that is active at the registry clock. It does not expose identities or key
+// material and is used by local readiness checks before a manifest selects a
+// specific issuer.
+func (registry AuthorityRegistry) HasActiveKey() bool {
+	if registry.clock == nil {
+		return false
+	}
+	now := registry.clock()
+	for _, key := range registry.keys {
+		if key.status == "active" && !now.Before(key.validFrom) && now.Before(key.validUntil) {
+			return true
+		}
+	}
+	return false
+}
+
 func (document authorityRegistryDocument) registryWithClock(clock func() time.Time) (AuthorityRegistry, error) {
 	if document.SchemaVersion != 1 {
 		return AuthorityRegistry{}, fmt.Errorf("unsupported release authority registry schema version %d", document.SchemaVersion)

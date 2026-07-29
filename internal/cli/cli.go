@@ -24,10 +24,13 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/activationpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/codexadapter"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/darwin"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
@@ -501,7 +504,7 @@ type activationAdvisoryInput struct {
 
 func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|hire|scaffold|status|plan|declassify|verify|monitor> [options]")
+		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|hire|scaffold|status|plan|declassify|verify|monitor|darwin> [options]")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -509,6 +512,8 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		return reportError(errOut, err)
 	}
 	switch args[0] {
+	case "darwin":
+		return runDarwin(args[1:], in, out, errOut, root)
 	case "interview":
 		if len(args) != 1 {
 			fmt.Fprintln(errOut, "usage: bcgos agent interview")
@@ -696,7 +701,97 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		}
 		return writeJSON(out, report, errOut)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|identity|hire|scaffold|status|plan|declassify|verify|monitor> [options]")
+		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|identity|hire|scaffold|status|plan|declassify|verify|monitor|darwin> [options]")
+		return ExitUsage
+	}
+}
+
+func runDarwin(args []string, in io.Reader, out, errOut io.Writer, root string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos agent darwin <assess|housekeeping> --stdin")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "assess":
+		if err := requireAgentStdin(args[1:], errOut); err != nil {
+			return ExitUsage
+		}
+		var packet darwin.HealthPacket
+		if err := decodeActivationJSON(in, &packet); err != nil {
+			return reportError(errOut, err)
+		}
+		assessment, err := darwin.Plan(packet)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, assessment, errOut)
+	case "housekeeping":
+		flags := newFlagSet("agent darwin housekeeping", errOut)
+		stdin := flags.Bool("stdin", false, "read the closed Darwin health packet from standard input")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || !*stdin {
+			fmt.Fprintln(errOut, "usage: bcgos agent darwin housekeeping --stdin")
+			return ExitUsage
+		}
+		maestroCapability := strings.TrimSpace(os.Getenv("BCGOS_MAESTRO_CAPABILITY"))
+		darwinCapability := strings.TrimSpace(os.Getenv("BCGOS_DARWIN_CAPABILITY"))
+		recoveryCapability := strings.TrimSpace(os.Getenv("BCGOS_RECOVERY_CAPABILITY"))
+		if maestroCapability == "" || darwinCapability == "" || recoveryCapability == "" {
+			return reportError(errOut, errors.New("Darwin housekeeping requires BCGOS_MAESTRO_CAPABILITY, BCGOS_DARWIN_CAPABILITY and BCGOS_RECOVERY_CAPABILITY"))
+		}
+		var packet darwin.HealthPacket
+		if err := decodeActivationJSON(in, &packet); err != nil {
+			return reportError(errOut, err)
+		}
+		if packet.Mode != darwin.Interactive && packet.Mode != darwin.HeadlessHousekeeping {
+			return reportError(errOut, errors.New("Darwin housekeeping requires interactive or headless_housekeeping input mode"))
+		}
+		packet.Mode = darwin.HeadlessHousekeeping
+		catalog, err := baseagents.Catalog()
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		state, err := agentorchestration.NewStateStore(recoveryCapability)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		adapter, err := agentorchestration.NewAdapter(packet.Runtime, catalog, []agentorchestration.Authorization{
+			{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: maestroCapability},
+			darwin.Authorization(darwinCapability),
+		}, state)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		branchID := "darwin-" + packet.WindowID
+		if decision := adapter.StartBranch("maestro", maestroCapability, "darwin", branchID, darwin.MaintenanceScope, darwin.ScopeKind); !decision.Allowed {
+			return reportError(errOut, errors.New("Darwin housekeeping branch was denied"))
+		}
+		guard := darwin.AdapterGuard(adapter, darwinCapability, branchID, "")
+		invoker := darwin.FilesystemInvoker{Root: filepath.Join(root, "darwin")}
+		assessment, err := darwin.Plan(packet)
+		if err != nil {
+			_ = adapter.FinishBranch("darwin", darwinCapability, branchID)
+			return reportError(errOut, err)
+		}
+		receipt, executeErr := darwin.Execute(context.Background(), packet, assessment, guard, invoker, time.Now)
+		finishDecision := adapter.FinishBranch("darwin", darwinCapability, branchID)
+		if !finishDecision.Allowed {
+			return reportError(errOut, errors.New("Darwin housekeeping branch could not be closed"))
+		}
+		if storeErr := (darwin.Store{Root: filepath.Join(root, "darwin")}).Append(receipt); storeErr != nil {
+			return reportError(errOut, storeErr)
+		}
+		if executeErr != nil {
+			return reportError(errOut, executeErr)
+		}
+		if receipt.Outcome == darwin.OutcomeBlocked || receipt.Outcome == darwin.OutcomeFailed {
+			if err := writeJSON(out, receipt, errOut); err != ExitOK {
+				return err
+			}
+			return ExitFailure
+		}
+		return writeJSON(out, receipt, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos agent darwin <assess|housekeeping> --stdin")
 		return ExitUsage
 	}
 }
@@ -1669,8 +1764,11 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	if len(args) > 0 && args[0] == "claude" {
 		return runClaudeHook(args[1:], in, out, errOut, dataRoot)
 	}
+	if len(args) > 0 && args[0] == "codex" {
+		return runCodexHook(args[1:], in, out, errOut, dataRoot)
+	}
 	if len(args) == 0 || args[0] != "session-start" {
-		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]\n       bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
+		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]\n       bcgos hook <claude|codex> <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
 		return ExitUsage
 	}
 	flags := newFlagSet("hook session-start", errOut)
@@ -1714,6 +1812,88 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, output, errOut)
+}
+
+func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	const usage = "usage: bcgos hook codex <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]"
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, usage)
+		return ExitUsage
+	}
+	action := args[0]
+	flags := newFlagSet("hook codex "+action, errOut)
+	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
+		fmt.Fprintln(errOut, usage)
+		return ExitUsage
+	}
+	switch action {
+	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
+	default:
+		fmt.Fprintln(errOut, usage)
+		return ExitUsage
+	}
+	var native codexadapter.NativeInput
+	if action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" {
+		parsed, err := codexadapter.ParseReader(in)
+		if err != nil {
+			if action == "pre-action-guard" {
+				return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+			}
+			return reportError(errOut, err)
+		}
+		native = parsed
+	}
+	if action == "pre-action-guard" {
+		response, err := codexadapter.Guard(native)
+		if err != nil {
+			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+		}
+		return writeJSON(out, response, errOut)
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(optionalArg(flags.Args()), root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if action == "session-start" || action == "context-injection" {
+		profileState, err := resolveProfile(root, "", false)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		owner, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		packet := sessionctx.Build(sessionctx.Sources{
+			Profile: profileState, Workspace: inspection, Owner: owner,
+			Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		})
+		eventName := "SessionStart"
+		if action == "context-injection" {
+			eventName = "UserPromptSubmit"
+		}
+		response, err := sessionhook.BuildCodexEvent(packet, eventName)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, response, errOut)
+	}
+	event := lifecycle.PostActionObserve
+	if action == "stop-finalization" {
+		event = lifecycle.StopFinalize
+	}
+	receipt, err := codexadapter.Receipt(event, native)
+	if err != nil {
+		return reportError(errOut, fmt.Errorf("build lifecycle receipt: %w", err))
+	}
+	if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
+		return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
+	}
+	return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
 }
 
 func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {

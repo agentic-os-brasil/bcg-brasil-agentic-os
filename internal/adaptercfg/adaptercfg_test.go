@@ -95,8 +95,11 @@ func TestInstallUpdatesOwnedExecutableAndKeepsConfigOutOfGit(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is required to exercise workspace exclusion")
 	}
+	clearGitIndexFile(t)
 	workspace := t.TempDir()
-	if output, err := exec.Command("git", "-C", workspace, "init", "-q").CombinedOutput(); err != nil {
+	initCommand := exec.Command("git", "-C", workspace, "init", "-q")
+	initCommand.Env = withoutGitIndexFile(os.Environ())
+	if output, err := initCommand.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v (%s)", err, output)
 	}
 	gitInfo := filepath.Join(workspace, ".git", "info")
@@ -169,8 +172,11 @@ func TestInstallRefusesTrackedRuntimeConfiguration(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is required to exercise tracked-configuration protection")
 	}
+	clearGitIndexFile(t)
 	workspace := t.TempDir()
-	if output, err := exec.Command("git", "-C", workspace, "init", "-q").CombinedOutput(); err != nil {
+	initCommand := exec.Command("git", "-C", workspace, "init", "-q")
+	initCommand.Env = withoutGitIndexFile(os.Environ())
+	if output, err := initCommand.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v (%s)", err, output)
 	}
 	path := filepath.Join(workspace, ".codex", "hooks.json")
@@ -181,7 +187,9 @@ func TestInstallRefusesTrackedRuntimeConfiguration(t *testing.T) {
 	if err := os.WriteFile(path, original, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if output, err := exec.Command("git", "-C", workspace, "add", ".codex/hooks.json").CombinedOutput(); err != nil {
+	command := exec.Command("git", "-C", workspace, "add", ".codex/hooks.json")
+	command.Env = withoutGitIndexFile(os.Environ())
+	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git add: %v (%s)", err, output)
 	}
 	excludePath := filepath.Join(workspace, ".git", "info", "exclude")
@@ -203,6 +211,43 @@ func TestInstallRefusesTrackedRuntimeConfiguration(t *testing.T) {
 	if err != nil || string(excludeAfter) != string(excludeBefore) {
 		t.Fatalf("exclude changed for rejected install: %s, %v", excludeAfter, err)
 	}
+}
+
+func withoutGitIndexFile(environment []string) []string {
+	filtered := make([]string, 0, len(environment))
+	for _, variable := range environment {
+		if !strings.HasPrefix(variable, "GIT_INDEX_FILE=") &&
+			!strings.HasPrefix(variable, "GIT_DIR=") &&
+			!strings.HasPrefix(variable, "GIT_WORK_TREE=") {
+			filtered = append(filtered, variable)
+		}
+	}
+	return filtered
+}
+
+func clearGitIndexFile(t *testing.T) {
+	t.Helper()
+	values := make(map[string]string, 3)
+	present := make(map[string]bool, 3)
+	for _, name := range []string{"GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE"} {
+		value, exists := os.LookupEnv(name)
+		if exists {
+			values[name] = value
+			present[name] = true
+		}
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, name := range []string{"GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE"} {
+			if present[name] {
+				_ = os.Setenv(name, values[name])
+			} else {
+				_ = os.Unsetenv(name)
+			}
+		}
+	})
 }
 
 func TestInstalledCommandPassesTheOwnedMarkerToItsExecutable(t *testing.T) {

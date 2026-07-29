@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "agent_id": "darwin",
+  "display_name": "Darwin",
+  "emoji": "🧬",
+  "scope": "maestro-system",
+  "scope_kind": "health",
+  "modes": [
+    {"runtime": "claude", "mode": "interactive"},
+    {"runtime": "claude", "mode": "headless_housekeeping"},
+    {"runtime": "codex", "mode": "interactive"},
+    {"runtime": "codex", "mode": "headless_housekeeping"}
+  ],
+  "denied_resources": [
+    "bcgos://workspace/case-a/derived.json",
+    "bcgos://health/other-system/derived.json"
+  ]
+}

@@ -277,10 +277,13 @@ func bindingsFor(runtimeName, executable string) ([]binding, error) {
 	prefix := quoteCommandPath(abs) + " hook "
 	switch runtimeName {
 	case "codex":
-		return []binding{{
-			NativeEvent: "SessionStart",
-			Command:     prefix + "session-start --runtime codex " + adapterSourceMarker,
-		}}, nil
+		return []binding{
+			{NativeEvent: "SessionStart", Command: prefix + "session-start --runtime codex " + adapterSourceMarker},
+			{NativeEvent: "UserPromptSubmit", Command: prefix + "codex context-injection " + adapterSourceMarker},
+			{NativeEvent: "PreToolUse", Command: prefix + "codex pre-action-guard " + adapterSourceMarker},
+			{NativeEvent: "PostToolUse", Command: prefix + "codex post-action-receipt " + adapterSourceMarker},
+			{NativeEvent: "Stop", Command: prefix + "codex stop-finalization " + adapterSourceMarker},
+		}, nil
 	case "claude":
 		return []binding{
 			{NativeEvent: "SessionStart", Command: prefix + "claude session-start " + adapterSourceMarker},
@@ -542,9 +545,20 @@ func isOwnedEventCommand(runtimeName, event string, value any) bool {
 		return false
 	}
 	command = strings.TrimSpace(command)
-	if runtimeName == "codex" && event == "SessionStart" {
-		return strings.HasSuffix(command, " hook session-start --runtime codex "+adapterSourceMarker) ||
-			command == "bcgos hook session-start --runtime codex"
+	if runtimeName == "codex" {
+		commands := map[string]string{
+			"SessionStart":     "session-start --runtime codex",
+			"UserPromptSubmit": "codex context-injection",
+			"PreToolUse":       "codex pre-action-guard",
+			"PostToolUse":      "codex post-action-receipt",
+			"Stop":             "codex stop-finalization",
+		}
+		suffix, exists := commands[event]
+		if !exists {
+			return false
+		}
+		return strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker) ||
+			command == "bcgos hook "+suffix
 	}
 	if runtimeName != "claude" {
 		return false

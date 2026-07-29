@@ -44,7 +44,7 @@ func TestLifecycleConformanceFixtureMatchesInstalledBindingTopology(t *testing.T
 			if runtimeName == "codex" {
 				contract = row.Codex
 			}
-			if contract.Implementation == "not_implemented" {
+			if contract.Implementation == "blocked" || contract.Implementation == "not_implemented" {
 				if contract.Binding != "none" {
 					t.Fatalf("%s unimplemented fixture has binding %q", runtimeName, contract.Binding)
 				}

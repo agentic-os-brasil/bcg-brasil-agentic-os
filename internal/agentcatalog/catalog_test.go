@@ -17,7 +17,7 @@ func TestCatalogAcceptsLeanMaestroCore(t *testing.T) {
 			},
 		},
 		Agents: []Agent{
-			{ID: "darwin", Role: "governance_analyst", DirectUserAccess: false, ToolAccess: "none", MayDelegate: false, InputContract: "bounded_health_packet", RelativePath: "agents/darwin/AGENT.md"},
+			{ID: "darwin", Role: "governance_analyst", DirectUserAccess: false, ToolAccess: "scoped", MayDelegate: false, InputContract: "bounded_health_packet", RelativePath: "agents/darwin/AGENT.md"},
 			{ID: "maestro", Role: "hub", DirectUserAccess: true, ToolAccess: "none", MayDelegate: true, InputContract: "session_context_packet", RelativePath: "agents/maestro/AGENT.md"},
 			{ID: "walter", Role: "reviewer", DirectUserAccess: false, ToolAccess: "none", MayDelegate: false, InputContract: "sealed_review_packet", RelativePath: "agents/walter/AGENT.md"},
 		},

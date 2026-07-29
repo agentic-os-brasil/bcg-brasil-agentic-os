@@ -489,3 +489,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The installed runtime is navigable by a human and can invoke the actual product skills without copying the whole repository. Updates are idempotent and hash-aware. This projection is not native runtime evidence and never promotes a capability in the manifest.
 - Refs: specs/026-workspace-local-adapter-installation.md; bundles/base/runtime/orientation.md.tmpl; internal/runtimeprojection
 - Supersedes: none
+
+## DARN - Make Darwin the scoped operational surgeon
+
+- Date: 2026-07-28
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The current Darwin definition is packet-only and recommendation-only, while the intended Agentic OS role is the operational counterpart of Kowalski's Darwin: it diagnoses and repairs Maestro system drift through a headless housekeeping mode. A no-tools Darwin cannot close the health loop or recover bounded product failures.
+- Decision: Darwin remains a non-user-facing governance leaf, but receives a signed `scoped_system_maintenance` authority with explicit read, probe, write/edit and validation grants over managed Maestro state only. Interactive and headless housekeeping invocations use the same Darwin identity, tool contract, bounded health packet, remediation plan, fail-closed executor and metadata-only repair receipt. Darwin may repair reversible system issues, but cannot access client/workspace content, credentials, broad network, release or merge authority. Material policy or source changes return through Maestro and Walter.
+- Consequences: The catalog, role contracts, specs and adapters must replace Darwin's `tool_access: none`/recommend-only posture with scoped maintenance authority. Deterministic surfaces still prepare packets and enforce grants; Darwin's headless execution owns diagnosis and remediation. Native runtime qualification remains required before claiming active runtime capability. Housekeeping failures remain recoverable through receipts and scheduler state.
+- Refs: specs/018-maestro-core-agents.md; specs/028-federated-improvement-loop.md; specs/032-canary-observability.md; bundles/base/agents/darwin/AGENT.md; internal/agentcatalog; internal/scheduler; internal/federation; internal/lifecycle
+- Supersedes: none

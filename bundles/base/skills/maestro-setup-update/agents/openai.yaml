@@ -1,4 +1,4 @@
 interface:
   display_name: "Maestro Setup and Update"
   short_description: "Guide safe setup, updates and recovery conversationally"
-  default_prompt: "Use $maestro-setup-update to guide me through this Maestro setup or update in plain language."
+  default_prompt: "Use $maestro-setup-update to guide me through this Maestro setup or update in plain language, with helpful emojis and respectful adult analogies."

@@ -74,7 +74,7 @@ var roleContracts = map[string]struct {
 	"case_agent":            {false, "scoped", true, "bounded_case_packet"},
 	"client_account_agent":  {false, "scoped", false, "bounded_client_account_packet"},
 	"errand_helper":         {false, "scoped", false, "bounded_errand_packet"},
-	"governance_analyst":    {false, "none", false, "bounded_health_packet"},
+	"governance_analyst":    {false, "scoped", false, "bounded_health_packet"},
 	"hub":                   {true, "none", true, "session_context_packet"},
 	"practice_agent":        {false, "scoped", true, "bounded_practice_packet"},
 	"pa_expert":             {false, "none", false, "bounded_advisory_packet"},
@@ -211,7 +211,7 @@ func (catalog Catalog) Validate() error {
 	}{
 		"maestro": {"hub", true, "none", true, "session_context_packet"},
 		"walter":  {"reviewer", false, "none", false, "sealed_review_packet"},
-		"darwin":  {"governance_analyst", false, "none", false, "bounded_health_packet"},
+		"darwin":  {"governance_analyst", false, "scoped", false, "bounded_health_packet"},
 	}
 	for id, contract := range wanted {
 		agent, ok := seen[id]

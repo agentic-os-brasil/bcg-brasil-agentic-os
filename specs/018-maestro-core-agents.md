@@ -68,8 +68,11 @@ delegate. Substantive project work remains with the owning workspace agent.
 - evaluates system health, drift, coverage gaps and avoidable operating friction;
 - receives a bounded health packet produced by deterministic product surfaces;
 - proposes at most three prioritized changes with evidence and trade-offs;
-- observes and recommends but does not execute repairs;
-- has no tools, delegation or direct user channel;
+- diagnoses and executes only reversible repairs inside the signed
+  `health/maestro-system` scope;
+- has scoped tools, no delegation and no direct user channel;
+- interactive and `headless_housekeeping` are modes of the same Darwin
+  identity, executor and metadata-only receipt contract;
 - returns proposals to Maestro; material proposals pass through Walter.
 
 ## Governed chain roles
@@ -131,7 +134,7 @@ contract so a new registration cannot silently broaden context:
 | `case_agent` | `bounded_case_packet` | scoped | yes |
 | `practice_agent` | `bounded_practice_packet` | scoped | yes |
 | `reviewer` | `sealed_review_packet` | none | no |
-| `governance_analyst` | `bounded_health_packet` | none | no |
+| `governance_analyst` | `bounded_health_packet` | scoped (`health/maestro-system`) | no |
 | `errand_helper` | `bounded_errand_packet` | scoped | no |
 | `capability_specialist` | `minimum_work_packet` | scoped | no |
 | `subject_specialist` | `bounded_subject_packet` | scoped | no |
@@ -214,12 +217,14 @@ stateDiagram-v2
 ## Acceptance criteria
 
 1. The canonical catalog identifies Maestro as the sole direct hub.
-2. The catalog rejects tool access for Maestro, Walter or Darwin.
+2. The catalog rejects tool access for Maestro and Walter, and rejects any
+   Darwin grant outside the bounded `health/maestro-system` scope.
 3. The catalog permits workspace-to-capability and practice-to-subject chains
    at depth two.
 4. The catalog rejects parallel branches, multiple children, unauthorized role
    edges, depth above two or more than one errand helper.
-5. Walter and Darwin point to managed, packet-only definitions.
+5. Walter points to a managed packet-only definition; Darwin points to a
+   managed packet-and-receipt definition with scoped maintenance authority.
 6. The Session Context Packet exposes the catalog pointer without prompt bodies.
 7. Claude and Codex adapter envelopes pass the same conformance fixture and
    remain explicitly unavailable until native event wiring invokes the guard.

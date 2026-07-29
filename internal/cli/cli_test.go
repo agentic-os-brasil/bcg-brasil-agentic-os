@@ -328,6 +328,33 @@ func TestClaudeLifecycleHooksRemainUnavailableWhileRecordingMetadataOnlyEvidence
 	}
 }
 
+func TestCodexLifecycleHooksUseSharedContractsWithoutNativePromotion(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"codex", "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(`{}`), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "UserPromptSubmit"`) {
+		t.Fatalf("Codex context hook = %d %s", code, output.String())
+	}
+	output.Reset()
+	guardInput := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}`
+	if code := runHookWithInput([]string{"codex", "pre-action-guard", "--adapter-source", "maestro", workspacePath}, strings.NewReader(guardInput), &output, &output, func() (string, error) { return "", errors.New("workspace inspection must not run") }); code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+		t.Fatalf("Codex guard = %d %s", code, output.String())
+	}
+	output.Reset()
+	receiptInput := `{"session_id":"session-a","tool_use_id":"toolu_a","tool_name":"Bash","tool_input":{"command":"sensitive client command"}}`
+	if code := runHookWithInput([]string{"codex", "post-action-receipt", "--adapter-source", "maestro", workspacePath}, strings.NewReader(receiptInput), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"continue": true`) {
+		t.Fatalf("Codex receipt hook = %d %s", code, output.String())
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"codex", "stop-finalization", "--adapter-source", "maestro", workspacePath}, strings.NewReader(`{"session_id":"session-a"}`), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"continue": true`) {
+		t.Fatalf("Codex stop hook = %d %s", code, output.String())
+	}
+}
+
 func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 	workspacePath := t.TempDir()
 	var output bytes.Buffer
@@ -718,6 +745,34 @@ func TestAgentIdentityInterviewAndPersonalizationAreExplicit(t *testing.T) {
 	output.Reset()
 	if code := runAgentWithInput([]string{"identity"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"ownership_scope": "case"`) {
 		t.Fatalf("identity status = %d, output = %s", code, output.String())
+	}
+}
+
+func TestDarwinHeadlessHousekeepingUsesTheScopedAgentContract(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	t.Setenv("BCGOS_MAESTRO_CAPABILITY", "maestro-test-cap")
+	t.Setenv("BCGOS_DARWIN_CAPABILITY", "darwin-test-cap")
+	t.Setenv("BCGOS_RECOVERY_CAPABILITY", "recovery-test-cap")
+	packet := `{"schema_version":1,"window_id":"cli-window","runtime":"claude","mode":"interactive","observations":[{"code":"state_stale","severity":"low","count":1}]}`
+	var output bytes.Buffer
+	code := runAgentWithInput([]string{"darwin", "housekeeping", "--stdin"}, strings.NewReader(packet), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"agent_id": "darwin"`) || !strings.Contains(output.String(), `"mode": "headless_housekeeping"`) || !strings.Contains(output.String(), `"emoji": "🧬"`) {
+		t.Fatalf("exit=%d output=%s", code, output.String())
+	}
+	receipts, err := os.ReadDir(filepath.Join(dataRoot, "darwin", "receipts"))
+	if err != nil || len(receipts) != 1 {
+		t.Fatalf("receipts=%v err=%v", receipts, err)
+	}
+}
+
+func TestDarwinHeadlessHousekeepingRequiresExplicitCapabilities(t *testing.T) {
+	t.Setenv("BCGOS_MAESTRO_CAPABILITY", "")
+	t.Setenv("BCGOS_DARWIN_CAPABILITY", "")
+	t.Setenv("BCGOS_RECOVERY_CAPABILITY", "")
+	var output bytes.Buffer
+	code := runAgentWithInput([]string{"darwin", "housekeeping", "--stdin"}, strings.NewReader(`{}`), &output, &output, func() (string, error) { return t.TempDir(), nil })
+	if code == ExitOK || !strings.Contains(output.String(), "requires BCGOS_MAESTRO_CAPABILITY") {
+		t.Fatalf("exit=%d output=%s", code, output.String())
 	}
 }
 

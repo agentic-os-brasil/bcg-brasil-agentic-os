@@ -64,10 +64,11 @@ in Spec 021 can supply that evidence and authorize a later capability
 promotion. The executable cross-runtime matrix in Spec 035 keeps this
 distinction testable.
 
-Codex retains the same canonical event vocabulary and Session Start serializer.
-It has no complete product lifecycle binding in this vertical, so its
-capabilities remain unavailable rather than being represented as emulated or
-degraded.
+Codex retains the same canonical event vocabulary and bounded serializers.
+Its current runtime exposes all five command-hook surfaces, so the adapter
+configures Session Start, prompt submission, pre-action, post-action and Stop.
+All remain contract-tested but not natively observed; capabilities remain
+unavailable rather than being represented as emulated or degraded.
 
 Failure receipts are not claimed by this vertical: the installed native hooks
 observe successful PostToolUse and Stop callbacks only. A later failure-hook

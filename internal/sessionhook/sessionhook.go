@@ -63,11 +63,24 @@ func BuildClaudeEvent(packet sessionctx.Packet, eventName string) (ClaudeOutput,
 }
 
 func BuildCodex(packet sessionctx.Packet) (CodexOutput, error) {
-	context, err := contextFor("codex", "session_start", packet)
+	return BuildCodexEvent(packet, "SessionStart")
+}
+
+// BuildCodexEvent keeps the bounded packet shared across Codex session and
+// prompt hooks while preserving the native event name in the response.
+func BuildCodexEvent(packet sessionctx.Packet, eventName string) (CodexOutput, error) {
+	if eventName != "SessionStart" && eventName != "UserPromptSubmit" {
+		return CodexOutput{}, fmt.Errorf("unsupported Codex hook event %q", eventName)
+	}
+	semanticEvent := "session_start"
+	if eventName == "UserPromptSubmit" {
+		semanticEvent = "context_inject"
+	}
+	context, err := contextFor("codex", semanticEvent, packet)
 	if err != nil {
 		return CodexOutput{}, err
 	}
-	return CodexOutput{HookSpecificOutput: CodexHookSpecificOutput{HookEventName: "SessionStart", AdditionalContext: context}}, nil
+	return CodexOutput{HookSpecificOutput: CodexHookSpecificOutput{HookEventName: eventName, AdditionalContext: context}}, nil
 }
 
 func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string, error) {
