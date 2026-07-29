@@ -73,6 +73,12 @@ amd64`, `darwin/amd64`, `darwin/arm64`). The rehearsal writes only beneath the
 explicit sandbox root; it never requests elevation or changes the global
 `PATH`.
 
+The Windows visual installer candidate uses the separate
+[`build-windows-installer.ps1`](../dev/release/build-windows-installer.ps1)
+factory step. It embeds the hash-verified `.ico` as a PE resource through the
+approved `windres` tool and writes unsigned provenance; Authenticode remains a
+later protected-environment step.
+
 ## External CI unblock
 
 The validation workflow is enabled and the PR jobs are configured for hosted
