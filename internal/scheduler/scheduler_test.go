@@ -3,7 +3,10 @@ package scheduler
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -127,5 +130,47 @@ func TestSchedulerStorePersistsEnrollmentAndReceipts(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, []Receipt{receipt}) {
 		t.Fatalf("receipts = %#v", got)
+	}
+}
+
+func TestSchedulerStoreRejectsSymlinkedStatePaths(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires Windows developer-mode privileges")
+	}
+	root := t.TempDir()
+	outside := t.TempDir()
+	rootParent := t.TempDir()
+	rootLink := filepath.Join(rootParent, "store")
+	if err := os.Symlink(outside, rootLink); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (Store{Root: rootLink}).EnsureEnrollment("case-a", time.Now().UTC()); err == nil {
+		t.Fatal("scheduler followed a symlinked root")
+	}
+	store := Store{Root: root}
+	if err := os.MkdirAll(filepath.Join(root, "workspaces"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "workspaces", "case-a")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.EnsureEnrollment("case-a", time.Now().UTC()); err == nil {
+		t.Fatal("scheduler followed a symlinked workspace")
+	}
+
+	root = t.TempDir()
+	store = Store{Root: root}
+	if _, err := store.EnsureEnrollment("case-a", time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(root, "workspaces", "case-a", "receipts")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "workspaces", "case-a", "receipts")); err != nil {
+		t.Fatal(err)
+	}
+	receipt := Receipt{JobID: "memory-daily", ScheduledFor: time.Now().UTC(), AttemptedAt: time.Now().UTC(), State: Succeeded}
+	if err := store.AppendReceipt("case-a", receipt); err == nil {
+		t.Fatal("scheduler followed a symlinked receipt directory")
 	}
 }
