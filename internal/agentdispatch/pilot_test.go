@@ -57,6 +57,157 @@ func TestPilotAcceptsOnlyAuthenticatedTargetReturnForBothRuntimes(t *testing.T) 
 	}
 }
 
+func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			pilot := newTestPilot(t, runtimeName)
+			now := time.Date(2026, 7, 29, 18, 0, 0, 0, time.UTC)
+			pilot.now = func() time.Time { return now }
+			pilot.dispatcher.now = pilot.now
+
+			dispatch, sourceReceipt, err := pilot.Delegate(Intent{
+				WorkspaceID: "alpha", Objective: "Prepare the bounded pilot recommendation.",
+				Pointers: []string{"bcgos://workspace/alpha/dossier/recommendation.md"}, TTL: time.Hour,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			producer := newTestExecutor(t, runtimeName, "workspace-agent-alpha", "workspace-alpha-cap", now)
+			result := ReturnBody{
+				Summary:      "The bounded pilot is supported by the reviewed evidence.",
+				EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/evidence.md"},
+			}
+			envelope, err := producer.SealReturn(dispatch, result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pilot.Return(envelope, result); err != nil {
+				t.Fatal(err)
+			}
+
+			reviewDispatch, reviewReceipt, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
+				Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test the recommendation before escalation.",
+				Audience: "case sponsor", Recommendation: "Choose the bounded pilot scope.",
+				DefinitionOfDone: "Sponsor can decide from the reviewed artifact.",
+				ArtifactRefs:     []string{"bcgos://workspace/alpha/dossier/recommendation.md"},
+				EvidenceRefs:     []string{"bcgos://workspace/alpha/dossier/evidence.md"},
+				Uncertainties:    []string{"The source refresh date should be reconfirmed before publication."}, TTL: time.Hour,
+			})
+			if err != nil || reviewReceipt.State != StateDelegated || reviewReceipt.Review == nil ||
+				reviewReceipt.Review.State != ReviewDispatched || reviewDispatch.Packet.TargetAgentID != "walter" {
+				t.Fatalf("Walter wire = dispatch=%#v receipt=%#v err=%v", reviewDispatch, reviewReceipt, err)
+			}
+			if reviewDispatch.Packet.Review.SourcePacketID != dispatch.Packet.PacketID ||
+				reviewDispatch.Packet.Review.SourceScopeID != "alpha" {
+				t.Fatalf("review packet lost source binding: %#v", reviewDispatch.Packet.Review)
+			}
+
+			walter := newTestExecutor(t, runtimeName, "walter", "walter-cap", now)
+			if _, err := walter.SealReturn(reviewDispatch, ReturnBody{Summary: "bypass"}); err == nil {
+				t.Fatal("Walter generic return bypassed the typed verdict contract")
+			}
+			verdict := WalterReviewBody{
+				Verdict:      WalterApproved,
+				EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/evidence.md"},
+			}
+			reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, verdict)
+			if err != nil {
+				t.Fatal(err)
+			}
+			completed, err := pilot.ReturnWalterReview(reviewEnvelope, verdict)
+			if err != nil || completed.State != StateCompleted || completed.Review == nil ||
+				completed.Review.State != ReviewApproved || completed.Review.ObjectionCount != 0 {
+				t.Fatalf("Walter verdict = %#v err=%v", completed, err)
+			}
+			encoded, _ := json.Marshal(completed)
+			for _, forbidden := range []string{"Choose the bounded pilot scope.", "source refresh date", "case sponsor"} {
+				if strings.Contains(string(encoded), forbidden) {
+					t.Fatalf("compact review state leaked %q: %s", forbidden, encoded)
+				}
+			}
+		})
+	}
+}
+
+func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T) {
+	pilot := newTestPilot(t, "claude")
+	now := time.Date(2026, 7, 29, 18, 0, 0, 0, time.UTC)
+	pilot.now = func() time.Time { return now }
+	pilot.dispatcher.now = pilot.now
+	dispatch, sourceReceipt, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Prepare one recommendation.", TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer := newTestExecutor(t, "claude", "workspace-agent-alpha", "workspace-alpha-cap", now)
+	result := ReturnBody{Summary: "Bounded recommendation."}
+	envelope, err := producer.SealReturn(dispatch, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pilot.Return(envelope, result); err != nil {
+		t.Fatal(err)
+	}
+	reviewDispatch, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
+		Trigger: ReviewConsequentialTradeoff, ReviewObjective: "Pressure-test the trade-off.",
+		Audience: "sponsor", Recommendation: "Choose option A.", DefinitionOfDone: "The trade-off is explicit.", TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	walter := newTestExecutor(t, "claude", "walter", "walter-cap", now)
+	refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, Objections: []WalterObjection{{
+		Code: "missing-counterevidence", Fix: "Add the counter-evidence to the recommendation.", ExitCondition: "The evidence pointer is present and reviewed.",
+	}}}
+	reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, refinement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := pilot.ReturnWalterReview(reviewEnvelope, refinement)
+	if err != nil || receipt.Review == nil || receipt.Review.State != ReviewRefineReturn || receipt.Review.ObjectionCount != 1 {
+		t.Fatalf("refinement = %#v err=%v", receipt, err)
+	}
+	if receipt.Review.State == ReviewApproved {
+		t.Fatal("refinement was promoted to approval")
+	}
+}
+
+func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
+	pilot := newTestPilot(t, "codex")
+	pilot.instances["walter"] = Instance{
+		AgentID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review",
+		ParentAgentID: "maestro", Available: false,
+	}
+	dispatch, sourceReceipt, err := pilot.Delegate(Intent{
+		WorkspaceID: "alpha", Objective: "Prepare one material recommendation.", TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer := newTestExecutor(t, "codex", "workspace-agent-alpha", "workspace-alpha-cap", time.Now())
+	result := ReturnBody{Summary: "Bounded recommendation."}
+	envelope, err := producer.SealReturn(dispatch, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pilot.Return(envelope, result); err != nil {
+		t.Fatal(err)
+	}
+	_, receipt, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
+		Trigger: ReviewExternalArtifact, ReviewObjective: "Check the artifact before sharing.",
+		Audience: "sponsor", Recommendation: "Share the bounded artifact.",
+		DefinitionOfDone: "The sponsor can inspect the artifact.", TTL: time.Hour,
+	})
+	if err == nil || receipt.State != StateUnavailable || receipt.FailureCode != "target_unavailable" ||
+		receipt.Review == nil || receipt.Review.State != ReviewUnavailable ||
+		receipt.Review.SourcePacketID != sourceReceipt.DelegationID {
+		t.Fatalf("unavailable Walter state = %#v, err=%v", receipt, err)
+	}
+	encoded, _ := json.Marshal(receipt)
+	if strings.Contains(string(encoded), "Share the bounded artifact.") {
+		t.Fatalf("review prose leaked into unavailable receipt: %s", encoded)
+	}
+}
+
 func TestPilotRejectsForgedReplayedCrossRuntimeAndCrossScopeReturns(t *testing.T) {
 	now := time.Date(2026, 7, 25, 18, 0, 0, 0, time.UTC)
 	body := ReturnBody{Summary: "Bounded finding."}
@@ -483,6 +634,7 @@ func testInstances() []Instance {
 	return []Instance{
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", ScopeKind: "workspace", ScopeID: "alpha", ParentAgentID: "maestro", Available: true},
 		{AgentID: "errand-helper", Role: "errand_helper", ScopeKind: "errand", ScopeID: "pilot", ParentAgentID: "maestro", Available: true},
+		{AgentID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review", ParentAgentID: "maestro", Available: true},
 	}
 }
 
@@ -498,6 +650,7 @@ func newTestDispatcherForRuntime(t *testing.T, runtimeName string) *Dispatcher {
 	}
 	grants := []agentorchestration.Authorization{
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
+		{AgentID: "walter", Role: "reviewer", Scope: "review", ScopeKind: "review", Capability: "walter-cap"},
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-alpha-cap"},
 		{AgentID: "errand-helper", Role: "errand_helper", Scope: "pilot", ScopeKind: "errand", Capability: "errand-helper-cap", Tools: []agentorchestration.ToolGrant{
 			{Tool: errandTool, Operation: string(ErrandCreateEphemeralNote), ResourcePrefix: "bcgos://errand/pilot/"},
@@ -510,7 +663,7 @@ func newTestDispatcherForRuntime(t *testing.T, runtimeName string) *Dispatcher {
 		t.Fatal(err)
 	}
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
-		"maestro": "maestro-cap", "workspace-agent-alpha": "workspace-alpha-cap",
+		"maestro": "maestro-cap", "walter": "walter-cap", "workspace-agent-alpha": "workspace-alpha-cap",
 		"errand-helper": "errand-helper-cap", "practice-insurance": "practice-insurance-cap",
 	})
 	if err != nil {

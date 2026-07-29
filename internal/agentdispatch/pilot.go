@@ -160,19 +160,20 @@ const (
 // Receipt is safe for public status surfaces: it contains identity, timing,
 // state and digests only. Work packet, result and failure prose never enter it.
 type Receipt struct {
-	SchemaVersion int       `json:"schema_version"`
-	DelegationID  string    `json:"delegation_id"`
-	OwnerAgentID  string    `json:"owner_agent_id"`
-	TargetAgentID string    `json:"target_agent_id,omitempty"`
-	Runtime       string    `json:"runtime,omitempty"`
-	ScopeKind     string    `json:"scope_kind,omitempty"`
-	ScopeID       string    `json:"scope_id,omitempty"`
-	State         State     `json:"state"`
-	PacketSHA256  string    `json:"packet_sha256,omitempty"`
-	ResultSHA256  string    `json:"result_sha256,omitempty"`
-	FailureCode   string    `json:"failure_code,omitempty"`
-	IssuedAt      time.Time `json:"issued_at,omitempty"`
-	CompletedAt   time.Time `json:"completed_at,omitempty"`
+	SchemaVersion int            `json:"schema_version"`
+	DelegationID  string         `json:"delegation_id"`
+	OwnerAgentID  string         `json:"owner_agent_id"`
+	TargetAgentID string         `json:"target_agent_id,omitempty"`
+	Runtime       string         `json:"runtime,omitempty"`
+	ScopeKind     string         `json:"scope_kind,omitempty"`
+	ScopeID       string         `json:"scope_id,omitempty"`
+	State         State          `json:"state"`
+	PacketSHA256  string         `json:"packet_sha256,omitempty"`
+	ResultSHA256  string         `json:"result_sha256,omitempty"`
+	FailureCode   string         `json:"failure_code,omitempty"`
+	Review        *ReviewSummary `json:"review,omitempty"`
+	IssuedAt      time.Time      `json:"issued_at,omitempty"`
+	CompletedAt   time.Time      `json:"completed_at,omitempty"`
 }
 
 type ReturnBody struct {
@@ -231,10 +232,28 @@ func (executor *Executor) SealReturn(dispatch Dispatch, body ReturnBody) (Execut
 	if dispatch.Runtime != executor.runtime || dispatch.Packet.TargetAgentID != executor.targetID {
 		return ExecutionEnvelope{}, errors.New("executor is not authorized for this dispatch")
 	}
+	if dispatch.Packet.Review != nil {
+		return ExecutionEnvelope{}, errors.New("Walter dispatch requires a typed review verdict")
+	}
 	if err := validateReturnBody(body, dispatch.Packet.ScopeKind, dispatch.Packet.ScopeID); err != nil {
 		return ExecutionEnvelope{}, err
 	}
 	return executor.seal(dispatch, ExecutionSucceeded, digestBody(normalizeReturnBody(body)))
+}
+
+// SealWalterReview is the only success envelope Walter may produce. Keeping
+// it separate from SealReturn prevents a generic summary from bypassing the
+// bounded conversational verdict contract.
+func (executor *Executor) SealWalterReview(dispatch Dispatch, body WalterReviewBody) (ExecutionEnvelope, error) {
+	if dispatch.Runtime != executor.runtime || dispatch.Packet.TargetAgentID != executor.targetID ||
+		executor.targetID != "walter" || dispatch.Packet.Review == nil {
+		return ExecutionEnvelope{}, errors.New("executor is not authorized for this Walter review")
+	}
+	normalized := normalizeWalterReviewBody(body)
+	if err := validateWalterReviewBody(normalized, *dispatch.Packet.Review); err != nil {
+		return ExecutionEnvelope{}, err
+	}
+	return executor.seal(dispatch, ExecutionSucceeded, digestBody(normalized))
 }
 
 func (executor *Executor) SealFailure(dispatch Dispatch, body FailureBody) (ExecutionEnvelope, error) {
@@ -331,10 +350,66 @@ func NewPilot(dispatcher *Dispatcher, instances []Instance) (*Pilot, error) {
 		}
 		registered[instance.AgentID] = instance
 	}
+	// Walter is a managed core leaf, not a user-scaffolded workspace instance.
+	// Material review remains unavailable unless the dispatcher also carries his
+	// authenticated capability; the synthetic registration only preserves the
+	// canonical fixed review scope and does not grant authority.
+	if _, exists := registered["walter"]; !exists && dispatcher.credentials["walter"] != "" {
+		registered["walter"] = Instance{
+			AgentID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review",
+			ParentAgentID: "maestro", Available: true,
+		}
+	}
 	return &Pilot{
 		dispatcher: dispatcher, runtime: dispatcher.gate.Runtime(), instances: registered,
 		now: time.Now, records: make(map[string]pilotRecord), usedNonces: make(map[string]bool),
 	}, nil
+}
+
+// RequireWalterReview closes the producing branch before opening exactly one
+// direct Walter branch. The review packet binds the source packet digest and
+// keeps the durable projection to IDs, digests, trigger and verdict metadata.
+func (pilot *Pilot) RequireWalterReview(sourceDelegationID string, request WalterReviewRequest) (Dispatch, Receipt, error) {
+	pilot.mu.Lock()
+	defer pilot.mu.Unlock()
+
+	source, exists := pilot.records[sourceDelegationID]
+	if !exists || source.receipt.State != StateCompleted || source.packet.TargetAgentID == "walter" {
+		receipt, err := pilot.recordReviewFailure(source, request, "source_not_complete", StateFailed)
+		return Dispatch{}, receipt, err
+	}
+	if err := pilot.dispatcher.Verify(source.packet); err != nil {
+		receipt, failure := pilot.recordReviewFailure(source, request, "source_packet_invalid", StateFailed)
+		return Dispatch{}, receipt, failure
+	}
+	if err := validateReviewRequest(request); err != nil {
+		receipt, failure := pilot.recordReviewFailure(source, request, "review_invalid", StateFailed)
+		return Dispatch{}, receipt, failure
+	}
+	review := ReviewPacket{
+		SourcePacketID: source.packet.PacketID, SourcePacketSHA256: digestBody(source.packet),
+		SourceScopeKind: source.packet.ScopeKind, SourceScopeID: source.packet.ScopeID,
+		Trigger: request.Trigger, Audience: strings.TrimSpace(request.Audience),
+		Recommendation:   strings.TrimSpace(request.Recommendation),
+		DefinitionOfDone: strings.TrimSpace(request.DefinitionOfDone),
+		ArtifactRefs:     append([]string(nil), request.ArtifactRefs...),
+		EvidenceRefs:     append([]string(nil), request.EvidenceRefs...),
+		Uncertainties:    append([]string(nil), request.Uncertainties...),
+	}
+	if err := validateReviewPacket(&review, "", request.ReviewObjective); err != nil {
+		receipt, failure := pilot.recordReviewFailure(source, request, "review_invalid", StateFailed)
+		return Dispatch{}, receipt, failure
+	}
+	instance, exists := pilot.instances["walter"]
+	if !exists || !instance.Available || instance.Role != "reviewer" || instance.ScopeKind != "review" ||
+		instance.ScopeID != "review" || instance.ParentAgentID != "maestro" {
+		receipt, failure := pilot.recordReviewFailure(source, request, "target_unavailable", StateUnavailable)
+		return Dispatch{}, receipt, failure
+	}
+	return pilot.start(instance, PacketRequest{
+		TargetAgentID: "walter", ScopeKind: "review", ScopeID: "review",
+		Objective: request.ReviewObjective, Review: &review, TTL: request.TTL,
+	}, nil)
 }
 
 func (pilot *Pilot) Delegate(intent Intent) (Dispatch, Receipt, error) {
@@ -408,6 +483,7 @@ func (pilot *Pilot) start(instance Instance, request PacketRequest, errand *Erra
 		ScopeKind: instance.ScopeKind, ScopeID: instance.ScopeID,
 		State: StateDelegated, PacketSHA256: packetSHA256, IssuedAt: packet.IssuedAt,
 	}
+	receipt.Review = reviewSummary(request.Review, ReviewDispatched)
 	var privateErrand *ErrandContract
 	if errand != nil {
 		copy := *errand
@@ -504,6 +580,9 @@ func (pilot *Pilot) ObserveErrandTool(envelope ErrandToolEnvelope) agentorchestr
 func (pilot *Pilot) Return(envelope ExecutionEnvelope, body ReturnBody) (Receipt, error) {
 	pilot.mu.Lock()
 	defer pilot.mu.Unlock()
+	if record, ok := pilot.records[envelope.PacketID]; ok && record.packet.Review != nil {
+		return pilot.rejectEnvelope(envelope, "review_verdict_required", errors.New("Walter dispatch requires a typed review verdict"))
+	}
 	normalized := normalizeReturnBody(body)
 	if err := validateReturnBody(normalized, envelope.ScopeKind, envelope.ScopeID); err != nil {
 		return pilot.rejectEnvelope(envelope, "return_invalid", err)
@@ -519,6 +598,45 @@ func (pilot *Pilot) Return(envelope ExecutionEnvelope, body ReturnBody) (Receipt
 		return pilot.rejectEnvelope(envelope, "completion_denied", fmt.Errorf("orchestration guard denied completion: %s", decision.Code))
 	}
 	return pilot.complete(record, envelope, "", StateCompleted), nil
+}
+
+// ReturnWalterReview authenticates and closes the Walter leaf with a bounded
+// conversational verdict. A refine or missing verdict closes only the review
+// branch; it never becomes execution-ledger approval or final business
+// completion authority.
+func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterReviewBody) (Receipt, error) {
+	pilot.mu.Lock()
+	defer pilot.mu.Unlock()
+	normalized := normalizeWalterReviewBody(body)
+	record, exists := pilot.records[envelope.PacketID]
+	if !exists || record.packet.Review == nil {
+		return pilot.rejectEnvelope(envelope, "review_not_found", errors.New("Walter review packet is not active"))
+	}
+	if err := validateWalterReviewBody(normalized, *record.packet.Review); err != nil {
+		return pilot.rejectEnvelope(envelope, "review_invalid", err)
+	}
+	verified, err := pilot.verifyEnvelope(envelope, ExecutionSucceeded, digestBody(normalized))
+	if err != nil {
+		return pilot.rejectEnvelope(envelope, envelopeFailureCode(err), err)
+	}
+	if decision := pilot.dispatcher.FinishRoot(verified.packet); !decision.Allowed {
+		return pilot.rejectEnvelope(envelope, "completion_denied", fmt.Errorf("Walter review close denied: %s", decision.Code))
+	}
+	state := ReviewState(ReviewMissingMark)
+	switch normalized.Verdict {
+	case WalterApproved:
+		state = ReviewApproved
+	case WalterRefineAndReturn:
+		state = ReviewRefineReturn
+	}
+	receipt := pilot.complete(verified, envelope, "", StateCompleted, state)
+	if receipt.Review != nil {
+		receipt.Review.ObjectionCount = len(normalized.Objections)
+	}
+	updated := pilot.records[receipt.DelegationID]
+	updated.receipt = receipt
+	pilot.records[receipt.DelegationID] = updated
+	return receipt, nil
 }
 
 func (pilot *Pilot) Fail(envelope ExecutionEnvelope, body FailureBody) (Receipt, error) {
@@ -539,6 +657,9 @@ func (pilot *Pilot) Fail(envelope ExecutionEnvelope, body FailureBody) (Receipt,
 	}
 	if decision := pilot.dispatcher.FinishRoot(record.packet); !decision.Allowed {
 		return pilot.rejectEnvelope(envelope, "completion_denied", fmt.Errorf("orchestration guard denied failure close: %s", decision.Code))
+	}
+	if record.packet.Review != nil {
+		return pilot.complete(record, envelope, normalized.Code, StateFailed, ReviewUnavailable), nil
 	}
 	return pilot.complete(record, envelope, normalized.Code, StateFailed), nil
 }
@@ -632,12 +753,15 @@ func (pilot *Pilot) verifyErrandToolEnvelope(record pilotRecord, envelope Errand
 	return nil
 }
 
-func (pilot *Pilot) complete(record pilotRecord, envelope ExecutionEnvelope, failureCode string, state State) Receipt {
+func (pilot *Pilot) complete(record pilotRecord, envelope ExecutionEnvelope, failureCode string, state State, reviewState ...ReviewState) Receipt {
 	receipt := record.receipt
 	receipt.State = state
 	receipt.ResultSHA256 = envelope.ResultSHA256
 	receipt.FailureCode = failureCode
 	receipt.CompletedAt = pilot.now().UTC()
+	if receipt.Review != nil && len(reviewState) > 0 && reviewState[0] != "" {
+		receipt.Review.State = reviewState[0]
+	}
 	pilot.records[receipt.DelegationID] = pilotRecord{receipt: receipt, packet: record.packet}
 	pilot.usedNonces[envelope.Nonce] = true
 	return receipt
@@ -680,6 +804,24 @@ func (pilot *Pilot) recordFailure(scopeKind, targetID, scopeID, code string, sta
 	}
 	pilot.records[id] = pilotRecord{receipt: receipt}
 	return receipt, errors.New(code)
+}
+
+// recordReviewFailure keeps the unavailable/failed projection as useful as a
+// successful review without persisting any review body. The source binding is
+// copied from the producer receipt, never from untrusted request prose.
+func (pilot *Pilot) recordReviewFailure(source pilotRecord, request WalterReviewRequest, code string, state State) (Receipt, error) {
+	receipt, err := pilot.recordFailure("review", "walter", "review", code, state)
+	if request.Trigger.valid() {
+		receipt.Review = &ReviewSummary{Trigger: request.Trigger, State: ReviewUnavailable}
+		if source.receipt.DelegationID != "" {
+			receipt.Review.SourcePacketID = source.receipt.DelegationID
+			receipt.Review.SourcePacketSHA256 = source.receipt.PacketSHA256
+		}
+		record := pilot.records[receipt.DelegationID]
+		record.receipt = receipt
+		pilot.records[receipt.DelegationID] = record
+	}
+	return receipt, err
 }
 
 var (
