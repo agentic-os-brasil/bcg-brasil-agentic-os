@@ -35,6 +35,7 @@
           <span class="status-dot"></span>
           <span>MAESTRO SETUP</span><span class="music-signature" aria-hidden="true">♪</span>
           <span class="topbar-spacer"></span>
+          <span class="connection-badge" id="connection-badge" data-mode="preview" role="status" aria-live="polite">MODO NÃO CONECTADO</span>
           <span class="platform" id="platform-label">Detectando plataforma</span>
           <button class="help" type="button" data-action="help" aria-label="Ajuda">?</button>
         </header>
@@ -45,7 +46,7 @@
             <h1 id="welcome-title" tabindex="-1">Maestro no seu PC.<br><em>Sem interromper seu trabalho.</em></h1>
             <p class="lead">Instale o Maestro em poucos passos. Ele fica no seu usuário, não altera seus projetos nem workspaces e mantém uma volta segura se algo não parecer certo.</p>
             <div class="hero-actions">
-              <button class="primary" type="button" data-next="check"><span>Instalar no meu perfil</span><span class="arrow">↗</span></button>
+              <button class="primary" type="button" data-next="check"><span id="welcome-action-label">Abrir fluxo visual</span><span class="arrow">↗</span></button>
               <button class="quiet" type="button" data-action="details">Ver como funciona</button>
             </div>
             <div class="micro-proof"><span class="checkmark">✓</span> Sem administrador · seus projetos continuam onde estão</div>
@@ -91,7 +92,7 @@
         <section class="panel panel-finish" data-panel="finish" aria-labelledby="finish-title" hidden>
           <div class="finish-mark"><img src="assets/maestro-mark.svg" alt=""></div><span class="eyebrow">ETAPA 04 · PRONTO</span><h1 id="finish-title" tabindex="-1">O palco está pronto.<br><em>Agora, conduza.</em></h1><p class="lead" id="finish-lead" aria-live="polite">Esta é uma prévia visual. Nenhum arquivo foi instalado; no modo real, o Maestro ficará no seu perfil.</p><div class="next-command"><span>PRIMEIRO COMANDO</span><code id="first-command">bcgos doctor</code><button type="button" data-action="copy-command" aria-label="Copiar comando">⧉</button></div><small class="command-hint" id="command-hint">Após instalar, o comando usa o caminho exato do seu perfil e não altera o PATH global.</small><div class="finish-actions"><button class="primary" type="button" data-action="open-data"><span>Abrir pasta do Maestro</span><span class="arrow">↗</span></button><button class="quiet" type="button" data-action="close">Fechar instalador</button></div><div class="callout runtime-status" id="workspace-status" role="status" aria-live="polite" hidden><span>i</span><p></p></div><p class="finish-footnote">Você poderá atualizar pelo próprio Maestro. Se algo não parecer certo, o rollback preserva a última versão boa.</p></section>
 
-        <footer class="footer"><span>MAESTRO · CONTINUIDADE COM CONTROLE</span><span>v0.1.0 · <b>modo de apresentação</b></span></footer>
+        <footer class="footer"><span>MAESTRO · CONTINUIDADE COM CONTROLE</span><span>v0.1.0 · <b id="runtime-label">modo de apresentação</b></span></footer>
       </main>
     </div>
     <dialog class="modal" id="help-modal"><button class="modal-close" data-action="close-help" aria-label="Fechar">×</button><span class="eyebrow">AJUDA RÁPIDA</span><h2>O Maestro não precisa de administrador.</h2><p>A instalação usa apenas uma pasta do seu perfil. A assinatura do release e o rollback ficam sob responsabilidade do bootstrapper verificado.</p><button class="primary" data-action="close-help">Entendi</button></dialog>

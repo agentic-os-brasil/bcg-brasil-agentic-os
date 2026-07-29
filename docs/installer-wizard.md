@@ -27,6 +27,12 @@ person can understand the flow without leaving the installer. The shell uses
 short panel transitions, orbit drift and a restrained scan line; all motion is
 disabled for users who prefer reduced motion.
 
+The first screen also exposes the connection state immediately: `MODO NÃO
+CONECTADO` for a static visual inspection, `ENSAIO TÉCNICO` for `--simulate`,
+and `RELEASE CONECTADO` for a real bridge session. The primary action follows
+that state (`Abrir fluxo visual`, `Simular instalação`, or `Instalar no meu
+perfil`) so the user never has to infer whether a click will mutate anything.
+
 ## Accessible progression
 
 The visual progression is also a keyboard and assistive-technology contract:

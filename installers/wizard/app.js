@@ -3,6 +3,9 @@
   const steps = [...document.querySelectorAll('.step')];
   const platformLabel = document.querySelector('#platform-label');
   const destination = document.querySelector('#install-destination');
+  const connectionBadge = document.querySelector('#connection-badge');
+  const welcomeActionLabel = document.querySelector('#welcome-action-label');
+  const runtimeLabel = document.querySelector('#runtime-label');
   const firstCommand = document.querySelector('#first-command');
   const commandHint = document.querySelector('#command-hint');
   const stageAnnouncement = document.querySelector('#stage-announcement');
@@ -111,6 +114,22 @@
     banner.hidden = true;
   }
 
+  function updateConnectionChrome(state) {
+    const connectedMode = state?.mode || 'preview';
+    const copy = connectedMode === 'simulation'
+      ? { badge: 'ENSAIO TÉCNICO', action: 'Simular instalação', footer: 'ensaio técnico conectado' }
+      : connectedMode === 'runtime'
+      ? { badge: 'RELEASE CONECTADO', action: 'Instalar no meu perfil', footer: 'instalação conectada' }
+      : { badge: 'MODO NÃO CONECTADO', action: 'Abrir fluxo visual', footer: 'modo de apresentação' };
+    document.body.dataset.runtimeMode = connectedMode;
+    if (connectionBadge) {
+      connectionBadge.textContent = copy.badge;
+      connectionBadge.dataset.mode = connectedMode;
+    }
+    if (welcomeActionLabel) welcomeActionLabel.textContent = copy.action;
+    if (runtimeLabel) runtimeLabel.textContent = copy.footer;
+  }
+
   function updateFinishCopy() {
     const lead = document.querySelector('#finish-lead');
     if (!lead) return;
@@ -166,6 +185,7 @@
   }
 
   async function discoverRuntime() {
+    updateConnectionChrome();
     try {
       const response = await fetch('/api/state');
       if (!response.ok) return;
@@ -173,12 +193,12 @@
       runtime = true;
       simulation = state.mode === 'simulation';
       document.body.dataset.mode = 'runtime';
+      updateConnectionChrome(state);
       updateModeBanner(state);
       updateFinishCopy();
       runtimePlatform = state.platform || '';
       platformLabel.textContent = state.platform || platform;
       destination.textContent = state.managed_root || destination.textContent;
-      document.querySelector('.footer b').textContent = simulation ? 'ensaio técnico conectado' : 'instalação conectada';
     } catch (_) {
       // Opening index.html directly is a deliberate, non-mutating preview.
     }
