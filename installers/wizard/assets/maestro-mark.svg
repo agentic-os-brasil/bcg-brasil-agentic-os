@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Maestro mark</title>
+  <desc id="desc">A luminous mint orbit around a conductor baton on a deep green-black field.</desc>
+  <defs>
+    <linearGradient id="orbit" x1="18" y1="22" x2="106" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#31E0B5"/>
+      <stop offset="1" stop-color="#17B995"/>
+    </linearGradient>
+    <linearGradient id="baton" x1="28" y1="98" x2="104" y2="20" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#43CBAA"/>
+      <stop offset=".48" stop-color="#9BE8D1"/>
+      <stop offset="1" stop-color="#E5FFF5"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="58" fill="#031211"/>
+  <ellipse cx="64" cy="64" rx="45" ry="19" fill="none" stroke="url(#orbit)" stroke-width="3" transform="rotate(-28 64 64)"/>
+  <ellipse cx="64" cy="64" rx="19" ry="45" fill="none" stroke="#31E0B5" stroke-opacity=".42" stroke-width="2" transform="rotate(-28 64 64)"/>
+  <circle cx="29" cy="42" r="4" fill="#E5FFF5"/>
+  <circle cx="92" cy="88" r="4" fill="#8BDCCC"/>
+  <path d="M30 98 92 27" stroke="url(#baton)" stroke-width="6" stroke-linecap="round"/>
+  <path d="m88 22 11-5-6 11" fill="none" stroke="#E5FFF5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="31" cy="99" r="6" fill="#43CBAA" stroke="#E5FFF5" stroke-width="2"/>
+</svg>
