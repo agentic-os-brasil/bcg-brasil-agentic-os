@@ -173,6 +173,9 @@
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'A instalação foi interrompida com segurança.');
       show('finish');
+      showStatus(simulation
+        ? `Ensaio concluído. Sandbox de dados: ${payload.data_root}`
+        : `Instalação concluída. Dados do usuário: ${payload.data_root}`);
     } catch (error) {
       showError('install', error.message);
     } finally {
