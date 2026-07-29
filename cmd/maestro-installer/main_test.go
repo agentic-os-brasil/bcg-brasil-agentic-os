@@ -26,6 +26,7 @@ func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
 		{"verify rejects get", http.MethodGet, "/api/verify", http.StatusMethodNotAllowed},
 		{"install rejects get", http.MethodGet, "/api/install", http.StatusMethodNotAllowed},
 		{"open data rejects get", http.MethodGet, "/api/open-data", http.StatusMethodNotAllowed},
+		{"close rejects get", http.MethodGet, "/api/close", http.StatusMethodNotAllowed},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -36,6 +37,24 @@ func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
 				t.Fatalf("status = %d, want %d", recorder.Code, test.want)
 			}
 		})
+	}
+}
+
+func TestWizardCloseRequiresSessionAndInvokesShutdown(t *testing.T) {
+	closed := false
+	handler := wizardHandler(options{sessionToken: "test-token", shutdown: func() { closed = true }})
+	request := httptest.NewRequest(http.MethodPost, "/api/close", nil)
+	request.Header.Set("X-Maestro-Session", "test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if !closed {
+		t.Fatal("close endpoint did not invoke the session shutdown")
+	}
+	if !strings.Contains(recorder.Body.String(), `"closing"`) {
+		t.Fatalf("body = %s", recorder.Body.String())
 	}
 }
 

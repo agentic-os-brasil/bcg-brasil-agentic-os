@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 )
@@ -37,6 +38,7 @@ type options struct {
 	simulationRoot    string
 	sessionToken      string
 	origin            string
+	shutdown          func()
 }
 
 func main() {
@@ -232,7 +234,14 @@ func serveWizard(options options) {
 	}
 	options.origin = origin
 	options.sessionToken = sessionToken
+	server := &http.Server{}
+	options.shutdown = func() {
+		time.AfterFunc(100*time.Millisecond, func() {
+			_ = server.Close()
+		})
+	}
 	mux := wizardHandler(options)
+	server.Handler = mux
 	launchURL := origin + "/?session=" + url.QueryEscape(sessionToken)
 	label := "Maestro installer wizard"
 	if options.simulate {
@@ -240,7 +249,7 @@ func serveWizard(options options) {
 	}
 	fmt.Println(label + ": " + launchURL)
 	openBrowser(launchURL)
-	if err := http.Serve(listener, mux); err != nil && !strings.Contains(err.Error(), "Server closed") {
+	if err := server.Serve(listener); err != nil && !strings.Contains(err.Error(), "Server closed") {
 		writeError(err)
 		os.Exit(1)
 	}
@@ -371,6 +380,19 @@ func wizardHandler(options options) http.Handler {
 			return
 		}
 		writeHTTPJSON(writer, map[string]any{"path": options.dataRoot, "status": "opened"})
+	})
+	mux.HandleFunc("/api/close", func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if !authorizeMutation(writer, request, options) {
+			return
+		}
+		writeHTTPJSON(writer, map[string]any{"status": "closing"})
+		if options.shutdown != nil {
+			options.shutdown()
+		}
 	})
 	return mux
 }
