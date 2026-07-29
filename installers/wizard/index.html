@@ -41,19 +41,21 @@
 
         <section class="panel panel-welcome is-visible" data-panel="welcome">
           <div class="hero-copy">
-            <span class="eyebrow">SEU TRABALHO, COM CONTINUIDADE</span>
-            <h1>O próximo passo<br><em>já tem um regente.</em></h1>
-            <p class="lead">Instale o Maestro no seu computador de trabalho. Ele fica no seu perfil, não pede permissão de administrador e não mexe nos seus projetos.</p>
+            <span class="eyebrow">INSTALAÇÃO NO SEU PERFIL · SEM ADMINISTRADOR</span>
+            <h1>Maestro no seu PC.<br><em>Sem interromper seu trabalho.</em></h1>
+            <p class="lead">Instale o Maestro em poucos passos. Ele fica no seu usuário, não altera seus projetos nem workspaces e mantém uma volta segura se algo não parecer certo.</p>
             <div class="hero-actions">
-              <button class="primary" type="button" data-next="check"><span>Começar instalação</span><span class="arrow">↗</span></button>
+              <button class="primary" type="button" data-next="check"><span>Instalar no meu perfil</span><span class="arrow">↗</span></button>
               <button class="quiet" type="button" data-action="details">Ver como funciona</button>
             </div>
-            <div class="micro-proof"><span class="checkmark">✓</span> Você poderá cancelar antes de qualquer mudança</div>
+            <div class="micro-proof"><span class="checkmark">✓</span> Sem administrador · seus projetos continuam onde estão</div>
           </div>
           <div class="hero-art" aria-label="Maestro conduzindo órbitas de trabalho">
+            <div class="identity-plaque"><span>MAESTRO / 01</span><b>CONDUCTOR · USER SPACE</b></div>
             <div class="halo halo-one"></div><div class="halo halo-two"></div>
             <div class="orb orb-one"></div><div class="orb orb-two"></div><div class="orb orb-three"></div>
             <img src="assets/maestro-mark.svg" alt="" class="hero-mark">
+            <img src="assets/maestro-app-icon.svg" alt="Maestro" class="hero-avatar">
             <div class="baton-line"></div>
             <span class="art-caption">CONTEXTO · EXECUÇÃO · EVIDÊNCIA</span>
           </div>
@@ -66,6 +68,8 @@
 
         <section class="panel panel-check" data-panel="check" hidden>
           <div class="section-heading"><span class="eyebrow">ETAPA 02 · VERIFICAÇÃO</span><h1>Vamos conferir<br><em>antes de tocar.</em></h1><p>O Maestro só continua quando o release, a assinatura e o destino da instalação estiverem coerentes.</p></div>
+          <div class="signal-track" data-progress role="list" aria-label="Percurso da instalação"><div class="signal-step is-active" data-progress-step="verify" role="listitem"><span>01</span><b>Conferir</b><small>release e destino</small></div><div class="signal-step" data-progress-step="install" role="listitem"><span>02</span><b>Instalar</b><small>no seu perfil</small></div><div class="signal-step" data-progress-step="complete" role="listitem"><span>03</span><b>Pronto</b><small>primeiro comando</small></div></div>
+          <div class="signal-track" data-progress role="list" aria-label="Percurso da instalação"><div class="signal-step is-active" data-progress-step="verify" role="listitem"><span>01</span><b>Conferir</b><small>release e destino</small></div><div class="signal-step" data-progress-step="install" role="listitem"><span>02</span><b>Instalar</b><small>no seu perfil</small></div><div class="signal-step" data-progress-step="complete" role="listitem"><span>03</span><b>Pronto</b><small>primeiro comando</small></div></div>
           <div class="check-list">
             <div class="check-item" data-check="release"><span class="check-icon">◌</span><div><b>Release autorizado</b><small>Confirmando a versão recebida</small></div><strong>aguardando</strong></div>
             <div class="check-item" data-check="signature"><span class="check-icon">◌</span><div><b>Assinatura e integridade</b><small>O conteúdo não foi alterado</small></div><strong>aguardando</strong></div>
@@ -78,6 +82,7 @@
 
         <section class="panel panel-install" data-panel="install" hidden>
           <div class="section-heading"><span class="eyebrow">ETAPA 03 · SEU ESPAÇO</span><h1>Preparar o palco<br><em>para o trabalho.</em></h1><p>Escolha apenas onde o Maestro deve viver. Seus arquivos e workspaces ficam separados e intocados.</p></div>
+          <div class="signal-track" data-progress role="list" aria-label="Percurso da instalação"><div class="signal-step" data-progress-step="verify" role="listitem"><span>01</span><b>Conferir</b><small>release e destino</small></div><div class="signal-step is-active" data-progress-step="install" role="listitem"><span>02</span><b>Instalar</b><small>no seu perfil</small></div><div class="signal-step" data-progress-step="complete" role="listitem"><span>03</span><b>Pronto</b><small>primeiro comando</small></div></div>
           <div class="destination"><label for="install-destination">Local de instalação</label><div class="path-field"><span id="install-destination">Detectando seu perfil…</span><button type="button" data-action="copy-path" aria-label="Copiar local">⧉</button></div><small>O caminho é exclusivo do seu usuário. Não altera o computador inteiro.</small></div>
           <div class="install-note"><span class="note-icon">✦</span><div><b>O que será feito</b><ul><li>validar o release uma última vez</li><li>ativar o core em uma transação atômica</li><li>manter seus dados locais fora da atualização</li></ul></div></div>
           <div class="callout runtime-error" id="runtime-error-install" hidden><span>!</span><p></p></div><div class="runtime-statusline" id="runtime-install-status" role="status" hidden><span class="pulse"></span><p></p></div>

@@ -18,7 +18,7 @@ flowchart TB
     User["User"] <--> Maestro["Maestro<br/>sole direct interface · no tools"]
 
     subgraph Core["Core governance leaves"]
-        Walter["Walter<br/>pressure-test"]
+        Walter["Walter 🦉<br/>pressure-test"]
         Darwin["Darwin 🧬<br/>governance surgeon · scoped health tools"]
         Errand["Errand helper<br/>basic · reversible"]
     end
