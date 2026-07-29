@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version",
+    "receipt_id",
     "evidence_class",
     "capability",
     "producer_runtime",
@@ -13,12 +14,16 @@
     "emitted_at",
     "tenant_ref",
     "roots",
+    "policy_version",
+    "enrollment_fingerprint",
     "collection_sequence",
     "watermark",
-    "snapshot_digest"
+    "snapshot_digest",
+    "mac"
   ],
   "properties": {
     "schema_version": {"const": 1},
+    "receipt_id": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/opaque_ref"},
     "evidence_class": {"const": "adapter_command"},
     "capability": {"const": "sharepoint_work_collection"},
     "producer_runtime": {"const": "claude"},
@@ -32,11 +37,14 @@
       "items": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/root"},
       "uniqueItems": true
     },
+    "policy_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "enrollment_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "collection_sequence": {"type": "integer", "minimum": 1},
     "watermark": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/watermark"},
     "snapshot_digest": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
-    }
+    },
+    "mac": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
   }
 }

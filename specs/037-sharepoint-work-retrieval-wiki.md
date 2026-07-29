@@ -35,6 +35,10 @@ the equivalent connection in Codex.
   binding the tenant, roots, sequence, watermark and snapshot digest. Only the
   native conformance protocol may later classify a receipt as native-qualified;
   neither a snapshot nor an adapter-command receipt promotes capability state.
+- The local adapter boundary authenticates that receipt with a private
+  installation key and also binds the receipt ID, active policy and enrollment
+  fingerprint. This proves that the bounded local adapter command emitted the
+  receipt; it still does not prove that Claude invoked it natively.
 - Local configuration, a fixture or a direct adapter invocation is not native
   SharePoint evidence. Capability promotion requires an approved Claude
   connection and a native read-only trial over a sanitized test scope.
@@ -201,6 +205,11 @@ The query engine is unavailable unless the caller sets
 - “quero recuperar um deck antigo”;
 - “procure o material que apresentei para ...”; and
 - an explicit `bcgos prior-work find` command.
+
+Explicit intent is a routing gate, not authorization. The query also requires
+an actor reference and purpose that match the active, unexpired enrollment.
+Expiry is evaluated with the local product clock; callers cannot supply or
+backdate it.
 
 General research, ordinary workspace questions and Session Start do not satisfy
 the gate.

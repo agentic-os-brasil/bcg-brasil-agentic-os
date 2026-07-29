@@ -82,7 +82,8 @@
     "bounded_label": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 256
+      "maxLength": 256,
+      "pattern": "^[^\\s\\x00-\\x1F\\x7F](?:[^\\x00-\\x1F\\x7F]{0,254}[^\\s\\x00-\\x1F\\x7F])?$"
     },
     "facet_values": {
       "type": "array",
@@ -161,13 +162,13 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 256,
-            "pattern": "^[^/\\\\\\x00-\\x1F\\x7F]+$"
+            "pattern": "^[^/\\\\\\s\\x00-\\x1F\\x7F](?:[^/\\\\\\x00-\\x1F\\x7F]{0,254}[^/\\\\\\s\\x00-\\x1F\\x7F])?$"
           }
         },
         "source_url": {
           "type": "string",
           "format": "uri",
-          "pattern": "^https://",
+          "pattern": "^https://(?:[A-Za-z0-9-]+\\.)*sharepoint\\.com(?:/[^?#]*)?$",
           "maxLength": 2048
         },
         "created_at": {"type": "string", "format": "date-time"},
