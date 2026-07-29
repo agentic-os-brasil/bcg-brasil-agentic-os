@@ -46,11 +46,13 @@ does not modify the global `PATH`, workspace content or credentials.
 
 The wizard converges with the presentation material: deep green-black field,
 luminous mint orbit lines and typography, quiet white copy and a restrained
-secondary aqua accent. The faceless conductor mark remains the visual anchor;
-the orbit/constellation treatment carries the “digital second brain” idea into
-the installation moment. SVG keeps the assets small, deterministic and
-inspectable in the release factory; no remote fonts, JavaScript packages or
-network calls are required. Native `.ico`/`.icns` packaging is specified in
+secondary aqua accent. The Maestro avatar is visible as a small conductor
+identity plaque and a native app-icon medallion; the baton/orbit mark remains
+the secondary visual anchor. The orbit/constellation treatment carries the
+“digital second brain” idea into the installation moment. SVG keeps the assets
+small, deterministic and inspectable in the release factory; no remote fonts,
+JavaScript packages or network calls are required. Native `.ico`/`.icns`
+packaging is specified in
 [`docs/installer-icons.md`](installer-icons.md) and still requires platform
 signing evidence.
 

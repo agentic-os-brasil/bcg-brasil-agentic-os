@@ -49,3 +49,12 @@
 .runtime-statusline{display:flex;align-items:center;gap:10px;max-width:720px;margin-top:18px;color:#8fdacb;font-size:11px;letter-spacing:.01em}.runtime-statusline .pulse{flex:none;width:6px;height:6px}.runtime-statusline p{margin:0}
 .preview-banner{display:flex;align-items:flex-start;gap:12px;max-width:720px;margin-top:24px;padding:13px 16px;border:1px solid rgba(155,216,200,.38);background:rgba(155,216,200,.06);color:#b7d9d0}.preview-banner span{flex:none;color:var(--gold);font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}.preview-banner p{margin:0;font-size:11px;line-height:1.5}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* Maestro identity layer: the conductor avatar sits inside the orbit system. */
+.identity-plaque{position:absolute;z-index:3;top:18px;left:20px;display:grid;gap:5px;padding:9px 11px;border-left:2px solid var(--teal);background:rgba(3,18,17,.62);backdrop-filter:blur(7px);color:#8bdccc;font:700 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em}
+.identity-plaque b{color:#668d86;font-size:8px;font-weight:600;letter-spacing:.08em}
+.hero-mark{width:190px;height:190px;opacity:.32}
+.hero-avatar{position:absolute;width:132px;height:132px;left:50%;top:50%;z-index:2;transform:translate(-50%,-50%);border:1px solid rgba(49,224,181,.58);border-radius:31px;box-shadow:0 0 0 9px rgba(49,224,181,.06),0 18px 38px rgba(0,0,0,.35),0 0 34px rgba(49,224,181,.23)}
+.hero-mark,.halo,.orb,.baton-line,.art-caption{z-index:1}
+.hero-avatar{z-index:2}
+@media(max-width:580px){html,body{width:100%;overflow-x:hidden}.shell,.content,.panel,.panel-welcome,.hero-copy,.hero-actions{width:100%;max-width:100%;min-width:0}.panel-welcome>.hero-art,.panel-welcome>.hero-copy{width:calc(100vw - 36px);max-width:calc(100vw - 36px);min-width:0}.identity-plaque{top:14px;left:14px}.hero-avatar{width:108px;height:108px;border-radius:25px}.hero-mark{width:160px;height:160px}.hero-copy h1,.section-heading h1,.panel-finish h1{font-size:40px;letter-spacing:-.065em}.lead{width:100%;max-width:100%;overflow-wrap:anywhere}}
