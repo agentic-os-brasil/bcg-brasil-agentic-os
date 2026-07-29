@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/capabilitybundle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/boundary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
@@ -168,6 +169,13 @@ func Validate(root string, full bool, out io.Writer) error {
 		{"distribution allowlist", func() error {
 			_, err := releasepack.LoadAllowlist(filepath.Join(root, "bundles", "base", "distribution.json"))
 			return err
+		}},
+		{"managed OKF wiki", func() error {
+			return atlas.VerifyManagedUpToDate(
+				root,
+				filepath.Join(root, "dev", "wiki", "managed-allowlist.json"),
+				filepath.Join(root, "bundles", "base", "atlas", "managed"),
+			)
 		}},
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}

@@ -742,6 +742,34 @@ func TestAgentIdentityInterviewAndPersonalizationAreExplicit(t *testing.T) {
 	}
 }
 
+func TestDarwinHeadlessHousekeepingUsesTheScopedAgentContract(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	t.Setenv("BCGOS_MAESTRO_CAPABILITY", "maestro-test-cap")
+	t.Setenv("BCGOS_DARWIN_CAPABILITY", "darwin-test-cap")
+	t.Setenv("BCGOS_RECOVERY_CAPABILITY", "recovery-test-cap")
+	packet := `{"schema_version":1,"window_id":"cli-window","runtime":"claude","mode":"interactive","observations":[{"code":"state_stale","severity":"low","count":1}]}`
+	var output bytes.Buffer
+	code := runAgentWithInput([]string{"darwin", "housekeeping", "--stdin"}, strings.NewReader(packet), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"agent_id": "darwin"`) || !strings.Contains(output.String(), `"mode": "headless_housekeeping"`) || !strings.Contains(output.String(), `"emoji": "🧬"`) {
+		t.Fatalf("exit=%d output=%s", code, output.String())
+	}
+	receipts, err := os.ReadDir(filepath.Join(dataRoot, "darwin", "receipts"))
+	if err != nil || len(receipts) != 1 {
+		t.Fatalf("receipts=%v err=%v", receipts, err)
+	}
+}
+
+func TestDarwinHeadlessHousekeepingRequiresExplicitCapabilities(t *testing.T) {
+	t.Setenv("BCGOS_MAESTRO_CAPABILITY", "")
+	t.Setenv("BCGOS_DARWIN_CAPABILITY", "")
+	t.Setenv("BCGOS_RECOVERY_CAPABILITY", "")
+	var output bytes.Buffer
+	code := runAgentWithInput([]string{"darwin", "housekeeping", "--stdin"}, strings.NewReader(`{}`), &output, &output, func() (string, error) { return t.TempDir(), nil })
+	if code == ExitOK || !strings.Contains(output.String(), "requires BCGOS_MAESTRO_CAPABILITY") {
+		t.Fatalf("exit=%d output=%s", code, output.String())
+	}
+}
+
 func TestAgentScaffoldCommandCreatesAndInspectsAWorkspaceSpecialist(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

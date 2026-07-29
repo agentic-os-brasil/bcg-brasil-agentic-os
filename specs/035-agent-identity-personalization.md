@@ -19,7 +19,7 @@ customize them, and explicitly confirms the result before it is persisted.
 | `client_account_agent` | partner-like account relationship and curated context | client account |
 | `case_agent` | execution, analysis, code and deliverables for one case | case/workspace |
 | `walter` | internal pressure-test and review gate | governance |
-| `darwin` | drift, health and operating-model observation | governance |
+| `darwin` | drift, health and bounded operating-model maintenance | governance |
 | `pa_expert` | versioned Functional/Industrial Practice advice from the PA Expert registry | PA Expert registry |
 
 The interview may also personalize scoped practice and specialist agents when
@@ -35,8 +35,9 @@ is rejected. Account and case selections must bind to an explicit `agent_id`,
 so a name cannot silently become global across clients or projects. The owner
 does not own the underlying role authority. Maestro
 remains the system hub; Client Account remains the account relationship layer;
-Case remains the project execution owner; Walter and Darwin remain governance
-roles; and PA Expert canon/version remain centrally curated by the PA Expert registry.
+Case remains the project execution owner; Walter remains a review role; Darwin
+is the governance surgeon but is limited to `health/maestro-system`; and PA
+expert canon/version remain centrally curated by the PA Expert registry.
 
 Profiles are stored locally at `agents/personalization.json`, are strict JSON,
 must be explicitly confirmed, and are written atomically with restrictive

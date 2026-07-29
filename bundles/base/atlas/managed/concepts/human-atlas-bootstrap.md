@@ -1,3 +1,38 @@
+---
+type: Implementation Boundary
+title: Human atlas bootstrap
+description: The local human-readable atlas scaffold and its explicit limits.
+resource: repo://specs/014-human-atlas-bootstrap.md
+tags:
+    - atlas
+    - local
+    - privacy
+sources:
+    - id: human-atlas-bootstrap
+      resource: repo://specs/014-human-atlas-bootstrap.md
+      title: Human atlas bootstrap
+status: stable
+x-bcgos-profile-version: "1"
+x-bcgos-stable-id: managed/human-atlas-bootstrap
+x-bcgos-scope: managed
+x-bcgos-source-fingerprint: 9f91374969082548e5090f7a0e55e9bccda1d8d121d65a4c9abf2f61ed04a749
+x-bcgos-freshness: fresh
+x-bcgos-status: active
+x-bcgos-generator-version: bcgos-managed-wiki/0.1
+x-bcgos-policy-version: managed-product/1
+---
+
+# Source snapshot
+
+This managed concept is generated from the reviewed repository source `specs/014-human-atlas-bootstrap.md`. The source remains authoritative.
+
+## Related
+
+- [Content navigation through a compiled LLM wiki](/concepts/content-navigation.md)
+- [Wiki update lifecycle and OKF profile](/concepts/wiki-okf.md)
+
+## Source content
+
 # Spec 014 - Human atlas bootstrap
 
 Status: initial local bootstrap and first managed OKF compiler implemented;

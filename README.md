@@ -84,6 +84,7 @@ For the business-facing evolution path, read the [product evolution roadmap](doc
 | ✅ Professional capability bundles | Neutral engineering quality methods ship in the base bundle; specialized engineering and data-practice tracks remain catalogued and fail closed until a separate release contract exists. |
 | ✅ Canary contract | The local store can aggregate typed outcomes, capability failures, interventions and receipt metadata — native telemetry remains unavailable and no work content is exported. |
 | ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |
+| ✅ Darwin 🧬 operational surgeon | The same Darwin contract supports interactive and headless housekeeping with scoped `health/maestro-system` repairs and metadata-only receipts; native runtime invocation remains unavailable. |
 | 🛠️ Automatic maintenance contract | A base-bundle catalog prebuilds memory, wiki, runtime-health, self-observation and update jobs; each remains unavailable until its executor and native evidence are qualified. |
 | ✅ Local ingestion | Provider-neutral contract, Docling-first fallback selector, bounded MarkItDown adapter and fail-closed `bcgos ingest`; conversion remains unavailable until an approved managed runtime pack is verified. |
 

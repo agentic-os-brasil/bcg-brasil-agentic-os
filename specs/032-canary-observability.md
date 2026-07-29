@@ -3,6 +3,10 @@
 Status: accepted contract; local receipt store and aggregate report implemented.
 Native lifecycle emission remains unavailable.
 
+Darwin housekeeping receipts are a separate local metadata contract. They
+identify `darwin`/`🧬`, mode and bounded action outcomes, but do not promote a
+Claude or Codex lifecycle capability without qualifying native evidence.
+
 ## Objective
 
 Measure whether the first pilot vertical creates value and remains operable

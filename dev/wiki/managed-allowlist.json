@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "okf_version": "0.2",
+  "generator_version": "bcgos-managed-wiki/0.1",
+  "policy_version": "managed-product/1",
+  "log_date": "2026-07-28",
+  "sources": [
+    {
+      "id": "content-navigation",
+      "path": "specs/007-content-navigation.md",
+      "type": "Architecture Contract",
+      "title": "Content navigation through a compiled LLM wiki",
+      "description": "The governed navigation contract for a compiled Maestro atlas.",
+      "tags": ["atlas", "navigation", "governance"],
+      "related": ["wiki-okf", "human-atlas-bootstrap"]
+    },
+    {
+      "id": "wiki-okf",
+      "path": "specs/008-wiki-update-okf.md",
+      "type": "Architecture Contract",
+      "title": "Wiki update lifecycle and OKF profile",
+      "description": "The lifecycle, validation and publication contract for OKF bundles.",
+      "tags": ["okf", "lifecycle", "validation"],
+      "related": ["content-navigation", "human-atlas-bootstrap", "release-distribution"]
+    },
+    {
+      "id": "human-atlas-bootstrap",
+      "path": "specs/014-human-atlas-bootstrap.md",
+      "type": "Implementation Boundary",
+      "title": "Human atlas bootstrap",
+      "description": "The local human-readable atlas scaffold and its explicit limits.",
+      "tags": ["atlas", "local", "privacy"],
+      "related": ["content-navigation", "wiki-okf"]
+    },
+    {
+      "id": "release-distribution",
+      "path": "docs/releasing.md",
+      "type": "Release Playbook",
+      "title": "Maestro release and distribution",
+      "description": "The signed release and publication flow for Maestro artifacts.",
+      "tags": ["release", "distribution", "trust"],
+      "related": ["wiki-okf", "install-update"]
+    },
+    {
+      "id": "install-update",
+      "path": "docs/install-update.md",
+      "type": "User Playbook",
+      "title": "Install, update and rollback",
+      "description": "The user-facing installation and reversible update contract.",
+      "tags": ["install", "update", "rollback"],
+      "related": ["release-distribution"]
+    }
+  ]
+}
