@@ -59,16 +59,17 @@ type commandRunner func(context.Context, string, ...string) ([]byte, error)
 // come from the same immutable release package. AuthorityRegistry is the
 // public registry that the seeded bootstrapper is compiled to pin.
 type Options struct {
-	ReleaseDir        string
-	Bootstrapper      string
-	AuthorityRegistry string
-	ManagedRoot       string
-	DataRoot          string
-	TargetOS          string
-	TargetArch        string
-	Clock             func() time.Time
-	VerifyNative      nativeVerifier
-	Run               commandRunner
+	ReleaseDir         string
+	Bootstrapper       string
+	AuthorityRegistry  string
+	ManagedRoot        string
+	DataRoot           string
+	TargetOS           string
+	TargetArch         string
+	Clock              func() time.Time
+	VerifyNative       nativeVerifier
+	Run                commandRunner
+	ExpectedPlanDigest string
 }
 
 // Plan is the result shown by the wizard before it allows the one install
@@ -86,6 +87,7 @@ type Plan struct {
 	ManifestSHA256      string `json:"manifest_sha256"`
 	RegistrySHA256      string `json:"registry_sha256"`
 	BootstrapperVersion string `json:"bootstrapper_version"`
+	PlanDigest          string `json:"plan_digest"`
 }
 
 // Result is the durable handoff summary returned after bootstrapper success.
@@ -178,7 +180,7 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 		status.AuthorityRegistrySHA256 != registryDigest {
 		return Plan{}, releaseverify.VerifiedRelease{}, errors.New("bootstrapper seed does not bind this release and authority registry")
 	}
-	return Plan{
+	plan := Plan{
 		Release:             verified.Manifest.Release,
 		Channel:             verified.Manifest.Channel,
 		TargetOS:            options.TargetOS,
@@ -191,7 +193,9 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 		ManifestSHA256:      verified.ManifestSHA256,
 		RegistrySHA256:      registryDigest,
 		BootstrapperVersion: status.BootstrapperVersion,
-	}, verified, nil
+	}
+	plan.PlanDigest = PlanDigest(plan)
+	return plan, verified, nil
 }
 
 // Install performs a first install after Prepare's complete verification. It
@@ -202,6 +206,9 @@ func Install(ctx context.Context, options Options) (Result, error) {
 	plan, _, err := Prepare(options)
 	if err != nil {
 		return Result{}, err
+	}
+	if options.ExpectedPlanDigest != "" && options.ExpectedPlanDigest != plan.PlanDigest {
+		return Result{}, errors.New("verified release changed since confirmation")
 	}
 	if err := ensureFreshManagedRoot(plan.ManagedRoot); err != nil {
 		return Result{}, err
@@ -273,6 +280,19 @@ func Install(ctx context.Context, options Options) (Result, error) {
 		return Result{}, fmt.Errorf("installed CLI self-check failed: %w", err)
 	}
 	return Result{Plan: plan, CLIPath: cliPath, Output: strings.TrimSpace(string(output))}, nil
+}
+
+// PlanDigest returns the stable digest bound to one verify/install handoff.
+// The digest field itself is blanked before encoding so the value is not
+// recursive. Struct field order is stable and the plan contains no maps.
+func PlanDigest(plan Plan) string {
+	plan.PlanDigest = ""
+	body, err := json.Marshal(plan)
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(body)
+	return hex.EncodeToString(digest[:])
 }
 
 func runCommand(run commandRunner) commandRunner {

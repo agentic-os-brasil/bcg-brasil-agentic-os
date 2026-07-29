@@ -26,10 +26,12 @@ managed root if first activation fails. Owner data remains a separate root.
 
 Visual mode serves the dependency-free wizard on loopback and exposes only
 typed `/api/state`, `POST /api/verify`, `POST /api/install` and
-`POST /api/open-data` endpoints. The
-verify endpoint runs the complete read-only plan (`installer.Prepare`) so the
-wizard can show a real green check before the user confirms installation; it
-does not create directories or copy files. When the package contains
+`POST /api/open-data` endpoints. Mutating calls require the unguessable
+per-session header and an exact `plan_digest` returned by `/api/verify`; this
+prevents a random local page from triggering installation or racing a changed
+release. The verify endpoint runs the complete read-only plan
+(`installer.Prepare`) so the wizard can show a real green check before the user
+confirms installation; it does not create directories or copy files. When the package contains
 the conventional `release/`, `wizard/`, `authority-registry.json` and one
 versioned native bootstrapper beside the executable, the user can launch it
 without flags. `--headless` is available for clean-device automation and does
@@ -42,9 +44,12 @@ the bridge never silently creates one or claims that a preview has one.
 
 For a local unsigned visual test, `--preview` intentionally skips all release
 inputs and serves only the static wizard. It cannot verify or install anything;
-the footer remains in presentation mode. This mode is suitable for inspecting
-the DMG UX and is not evidence of a technical rehearsal, signed release or
-pilot readiness.
+the footer remains in presentation mode. For an end-to-end local technical
+rehearsal, use `--simulate`: it creates an isolated sandbox, returns a
+simulation plan, exercises the confirmation-bound install transaction and
+opens the resulting data directory. Simulation labels itself as rehearsal and
+never presents its files as signed release bytes. Neither mode is evidence of
+a signed release or pilot readiness.
 
 The actual signed package must still be assembled by the release workflow and
 must carry native signing/notarization evidence before it can be called

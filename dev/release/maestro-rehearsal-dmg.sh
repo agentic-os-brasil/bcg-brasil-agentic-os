@@ -1,22 +1,23 @@
 #!/bin/sh
 set -eu
 
-# Build a local-only visual DMG. This is deliberately outside the signed
-# release factory: it contains no release, authority registry or bootstrapper
-# inputs and can only launch the non-mutating --preview mode.
+# Build a local-only technical rehearsal DMG. This is deliberately outside the
+# signed release factory: it contains no release, authority registry or
+# bootstrapper inputs. It exercises the wizard's verify -> install -> open
+# flow in an isolated simulation sandbox and never claims signed trust.
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-VERSION=${MAESTRO_PREVIEW_VERSION:-0.1.0}
-OUTPUT=${MAESTRO_PREVIEW_OUTPUT:-"$ROOT/dist/Maestro-Installer-${VERSION}-unsigned.dmg"}
-STAGING=${MAESTRO_PREVIEW_STAGING:-"$ROOT/dist/maestro-preview-dmg"}
-WIZARD_DIR=${MAESTRO_PREVIEW_WIZARD_DIR:-"$ROOT/installers/wizard"}
-APP_NAME="Maestro Installer Preview.app"
+VERSION=${MAESTRO_REHEARSAL_VERSION:-0.1.0}
+OUTPUT=${MAESTRO_REHEARSAL_OUTPUT:-"$ROOT/dist/Maestro-Installer-${VERSION}-rehearsal.dmg"}
+STAGING=${MAESTRO_REHEARSAL_STAGING:-"$ROOT/dist/maestro-rehearsal-dmg"}
+WIZARD_DIR=${MAESTRO_REHEARSAL_WIZARD_DIR:-"$ROOT/installers/wizard"}
+APP_NAME="Maestro Installer Rehearsal.app"
 APP="$STAGING/$APP_NAME"
 ICONSET="$STAGING/maestro.iconset"
 
 case "$(uname -s)" in
   Darwin) ;;
-  *) echo "error: preview DMG requires macOS tooling (hdiutil, iconutil, sips, qlmanage)" >&2; exit 2 ;;
+  *) echo "error: rehearsal DMG requires macOS tooling (hdiutil, iconutil, sips, qlmanage)" >&2; exit 2 ;;
 esac
 for command in go hdiutil iconutil sips qlmanage SetFile; do
   command -v "$command" >/dev/null 2>&1 || { echo "error: missing required command: $command" >&2; exit 2; }
@@ -50,11 +51,11 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleDisplayName</key><string>Maestro Installer Preview</string>
-<key>CFBundleExecutable</key><string>Maestro Preview</string>
+<key>CFBundleDisplayName</key><string>Maestro Installer Rehearsal</string>
+<key>CFBundleExecutable</key><string>Maestro Rehearsal</string>
 <key>CFBundleIconFile</key><string>maestro.icns</string>
-<key>CFBundleIdentifier</key><string>com.bcgbrasil.maestro.installer.preview</string>
-<key>CFBundleName</key><string>Maestro Installer Preview</string>
+<key>CFBundleIdentifier</key><string>com.bcgbrasil.maestro.installer.rehearsal</string>
+<key>CFBundleName</key><string>Maestro Installer Rehearsal</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>$VERSION</string>
 <key>CFBundleVersion</key><string>${VERSION}-unsigned</string>
@@ -63,26 +64,28 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <key>LSUIElement</key><true/>
 </dict></plist>
 EOF
-cat > "$APP/Contents/MacOS/Maestro Preview" <<'EOF'
+cat > "$APP/Contents/MacOS/Maestro Rehearsal" <<'EOF'
 #!/bin/sh
 set -eu
 contents_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-exec "$contents_dir/Resources/maestro-installer" --preview --wizard-dir "$contents_dir/Resources/wizard"
+exec "$contents_dir/Resources/maestro-installer" --simulate --wizard-dir "$contents_dir/Resources/wizard"
 EOF
-chmod +x "$APP/Contents/MacOS/Maestro Preview"
+chmod +x "$APP/Contents/MacOS/Maestro Rehearsal"
 
-cat > "$STAGING/README-UNSIGNED.md" <<EOF
-# Maestro Installer Preview — unsigned
+cat > "$STAGING/README-REHEARSAL.md" <<EOF
+# Maestro Installer Rehearsal — unsigned
 
-This DMG is a local visual preview for Maestro ${VERSION}.
-It launches only the non-mutating --preview mode. It contains no signed
-release, authority registry or bootstrapper and cannot install the product.
+This DMG runs a technical installation rehearsal for Maestro ${VERSION}.
+It launches --simulate, which creates an isolated sandbox and exercises the
+same verify -> install -> open flow without signed release inputs.
 
-This artifact is not evidence of a technical rehearsal, signed release,
-notarization or pilot readiness.
+The rehearsal does not install the product, does not assert Ed25519,
+Authenticode or notarization, and does not change the global PATH.
+
+This artifact is not a signed release, notarized package or pilot evidence.
 EOF
 
 mkdir -p "$(dirname -- "$OUTPUT")"
-hdiutil create -volname "Maestro Preview (unsigned)" -srcfolder "$STAGING" -format UDZO -ov "$OUTPUT" >/dev/null
-echo "unsigned preview DMG: $OUTPUT"
+hdiutil create -volname "Maestro Rehearsal (unsigned)" -srcfolder "$STAGING" -format UDZO -ov "$OUTPUT" >/dev/null
+echo "unsigned rehearsal DMG: $OUTPUT"
 shasum -a 256 "$OUTPUT"

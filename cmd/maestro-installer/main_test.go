@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -8,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 )
 
 func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
@@ -36,8 +40,9 @@ func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
 }
 
 func TestWizardOpenDataReportsMissingDataRoot(t *testing.T) {
-	handler := wizardHandler(options{dataRoot: filepath.Join(t.TempDir(), "missing")})
+	handler := wizardHandler(options{dataRoot: filepath.Join(t.TempDir(), "missing"), sessionToken: "test-token"})
 	request := httptest.NewRequest(http.MethodPost, "/api/open-data", nil)
+	request.Header.Set("X-Maestro-Session", "test-token")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
@@ -45,6 +50,66 @@ func TestWizardOpenDataReportsMissingDataRoot(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "pasta de dados ainda não existe") {
 		t.Fatalf("body = %s", recorder.Body.String())
+	}
+}
+
+func TestWizardMutationsRequireSessionToken(t *testing.T) {
+	handler := wizardHandler(options{sessionToken: "expected"})
+	request := httptest.NewRequest(http.MethodPost, "/api/verify", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
+func TestSimulationRunsConfirmationBoundInstall(t *testing.T) {
+	root := t.TempDir()
+	managedRoot := filepath.Join(root, "managed")
+	dataRoot := filepath.Join(root, "data")
+	handler := wizardHandler(options{
+		simulate: true, simulationRoot: root, managedRoot: managedRoot, dataRoot: dataRoot,
+		sessionToken: "test-token",
+	})
+	verifyRequest := httptest.NewRequest(http.MethodPost, "/api/verify", nil)
+	verifyRequest.Header.Set("X-Maestro-Session", "test-token")
+	verifyRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(verifyRecorder, verifyRequest)
+	if verifyRecorder.Code != http.StatusOK {
+		t.Fatalf("verify status = %d, body = %s", verifyRecorder.Code, verifyRecorder.Body.String())
+	}
+	var plan installer.Plan
+	if err := json.Unmarshal(verifyRecorder.Body.Bytes(), &plan); err != nil {
+		t.Fatal(err)
+	}
+	if plan.PlanDigest == "" || plan.Release != "0.1.0-simulation" {
+		t.Fatalf("simulation plan = %#v", plan)
+	}
+	installRequest := httptest.NewRequest(http.MethodPost, "/api/install", bytes.NewBufferString(`{"plan_digest":"`+plan.PlanDigest+`"}`))
+	installRequest.Header.Set("X-Maestro-Session", "test-token")
+	installRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(installRecorder, installRequest)
+	if installRecorder.Code != http.StatusOK {
+		t.Fatalf("install status = %d, body = %s", installRecorder.Code, installRecorder.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(managedRoot, "INSTALL-REHEARSAL.txt")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSimulationInstallRejectsWrongPlanDigest(t *testing.T) {
+	root := t.TempDir()
+	handler := wizardHandler(options{simulate: true, simulationRoot: root, managedRoot: filepath.Join(root, "managed"), dataRoot: filepath.Join(root, "data"), sessionToken: "test-token"})
+	verifyRequest := httptest.NewRequest(http.MethodPost, "/api/verify", nil)
+	verifyRequest.Header.Set("X-Maestro-Session", "test-token")
+	verifyRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(verifyRecorder, verifyRequest)
+	installRequest := httptest.NewRequest(http.MethodPost, "/api/install", bytes.NewBufferString(`{"plan_digest":"wrong"}`))
+	installRequest.Header.Set("X-Maestro-Session", "test-token")
+	installRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(installRecorder, installRequest)
+	if installRecorder.Code != http.StatusConflict {
+		t.Fatalf("install status = %d, want %d", installRecorder.Code, http.StatusConflict)
 	}
 }
 
