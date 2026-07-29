@@ -26,12 +26,20 @@ Until every precondition is evidenced,
 4. Emit one strict full or delta snapshot conforming to
    `schemas/sharepoint-work-catalog.schema.json`.
 5. Sign the complete canonical adapter-command receipt with the runtime-owned
-   Ed25519 key. Never write the private key into the Maestro data root, bundle,
-   repository, logs or command arguments.
+   Ed25519 key, including the scheduler occurrence reference supplied for a
+   scheduled run (or a unique explicit manual trigger reference). Never write
+   the private key into the Maestro data root, bundle, repository, logs or
+   command arguments.
 6. Call `bcgos prior-work import` with snapshot and receipt files. The CLI
    binds authorization to the authenticated local OS principal; the adapter
    cannot supply or override an actor reference.
 7. Record only metadata-safe counts, opaque watermark, sequence and outcome.
+
+The canonical job ID is `sharepoint-work-sync`. Presence recovery is bounded to
+one due occurrence per invocation. The local scheduler marks success only after
+the collector's signed occurrence reference matches, a durable import audit
+exists and the report matches the active manifest; an MCP, authentication or
+qualification failure remains due.
 
 ## Codex boundary
 

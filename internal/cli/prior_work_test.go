@@ -31,7 +31,8 @@ func cliPriorWorkEnrollment(t *testing.T) string {
 		CollectorPublicKey: base64.StdEncoding.EncodeToString(publicKey),
 		EnrolledAt:         now, AuthorizationExpiresAt: now.AddDate(1, 0, 0),
 		ScopeExpansionConfirmAfter: now.AddDate(0, 6, 0),
-		RefreshHours:               24, StaleHours: 72, MaxItemBytes: 100_000_000,
+		RefreshHours:               24, StaleHours: 72, ScheduleTimezone: "America/Sao_Paulo",
+		MaxItemBytes:     100_000_000,
 		MaxSnapshotItems: 10_000, AllowedItemTypes: []string{"file", "folder"},
 		AllowedOrigins: []string{"https://bcgbr.sharepoint.com"},
 		Roots: []priorwork.RootRef{{
@@ -141,7 +142,7 @@ func TestPriorWorkCLIEndToEndSignedImportAndSuzanoFind(t *testing.T) {
 		Tombstones: []priorwork.Tombstone{},
 	}
 	receipt, signingBody, err := priorwork.BuildUnsignedImportReceipt(
-		snapshot, enrollment, "receipt-cli-e2e", now,
+		snapshot, enrollment, "receipt-cli-e2e", "manual-cli-e2e", now,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -180,5 +181,40 @@ func TestPriorWorkCLIEndToEndSignedImportAndSuzanoFind(t *testing.T) {
 		strings.NewReader(""), &output, &output, resolve,
 	); code != ExitFailure || !strings.Contains(output.String(), "not authorized") {
 		t.Fatalf("wrong purpose exit=%d output=%s", code, output.String())
+	}
+}
+
+func TestPriorWorkSyncDueCodexIsUnavailableAndRemainsDue(t *testing.T) {
+	dataRoot := t.TempDir()
+	resolve := func() (string, error) { return dataRoot, nil }
+	var enrollment priorwork.Enrollment
+	if err := json.Unmarshal([]byte(cliPriorWorkEnrollment(t)), &enrollment); err != nil {
+		t.Fatal(err)
+	}
+	enrollment.EnrolledAt = time.Now().UTC().Add(-48 * time.Hour).Truncate(time.Second)
+	enrollment.ScopeExpansionConfirmAfter = enrollment.EnrolledAt.AddDate(0, 6, 0)
+	enrollment.AuthorizationExpiresAt = enrollment.EnrolledAt.AddDate(2, 0, 0)
+	body, err := json.Marshal(enrollment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runPriorWork(
+		[]string{"enroll", "--stdin", "--confirm"},
+		bytes.NewReader(body), &output, &output, resolve,
+	); code != ExitOK {
+		t.Fatalf("enroll exit=%d output=%s", code, output.String())
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		output.Reset()
+		code := runPriorWork(
+			[]string{"sync-due", "--runtime", "codex"},
+			strings.NewReader(""), &output, &output, resolve,
+		)
+		if code != ExitUnavailable || !strings.Contains(output.String(), `"due": true`) ||
+			!strings.Contains(output.String(), `"state": "unavailable"`) ||
+			!strings.Contains(output.String(), "corporate_policy") {
+			t.Fatalf("attempt=%d exit=%d output=%s", attempt, code, output.String())
+		}
 	}
 }

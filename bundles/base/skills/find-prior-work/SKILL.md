@@ -27,6 +27,9 @@ questions, Session Start or speculative context gathering.
      capability is qualified and the enrolled scope is unchanged;
    - in Codex, report `unavailable/corporate_policy` and stop. Do not open a
      browser, reuse cookies, request Graph credentials or try another connector.
+   Use `bcgos prior-work sync-due --runtime <claude|codex>` only as a bounded,
+   non-blocking presence-recovery check. Failed or unavailable attempts remain
+   due and never count as a successful synchronization.
 
 ## Retrieval rules
 

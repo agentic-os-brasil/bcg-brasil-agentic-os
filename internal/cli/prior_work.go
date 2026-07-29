@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,8 @@ import (
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorworksync"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 const maximumPriorWorkQueryBytes = 64 << 10
@@ -25,12 +28,12 @@ func runPriorWork(
 	dataRoot func() (string, error),
 ) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos prior-work <actor|enroll|status|import|find>")
+		fmt.Fprintln(errOut, "usage: bcgos prior-work <actor|enroll|status|import|find|sync-due>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos prior-work <actor|enroll|status|import|find>")
+		fmt.Fprintln(out, "usage: bcgos prior-work <actor|enroll|status|import|find|sync-due>")
 		return ExitOK
 	case "actor":
 		if len(args) != 1 {
@@ -54,10 +57,66 @@ func runPriorWork(
 		return runPriorWorkImport(args[1:], out, errOut, dataRoot)
 	case "find":
 		return runPriorWorkFind(args[1:], in, out, errOut, dataRoot)
+	case "sync-due":
+		return runPriorWorkSyncDue(args[1:], out, errOut, dataRoot)
 	default:
 		fmt.Fprintf(errOut, "unknown prior-work command %q\n", args[0])
 		return ExitUsage
 	}
+}
+
+func runPriorWorkSyncDue(
+	args []string,
+	out io.Writer,
+	errOut io.Writer,
+	dataRoot func() (string, error),
+) int {
+	flags := flag.NewFlagSet("prior-work sync-due", flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	runtime := flags.String("runtime", "", "active runtime: claude or codex")
+	purpose := flags.String("purpose", "prior_work_retrieval", "authorized retrieval purpose")
+	if err := flags.Parse(args); err != nil {
+		return ExitUsage
+	}
+	if flags.NArg() != 0 || (*runtime != "claude" && *runtime != "codex") {
+		fmt.Fprintln(errOut, "usage: bcgos prior-work sync-due --runtime <claude|codex>")
+		return ExitUsage
+	}
+	store, err := priorWorkStore(dataRoot)
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	access, err := localPriorWorkAccess(*purpose)
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	policy, err := store.SchedulePolicy(access)
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	service := priorworksync.Service{
+		Store: scheduler.Store{Root: filepath.Join(root, "scheduler")},
+	}
+	report, err := service.RunPresence(context.Background(), *runtime, policy)
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	if code := writePriorWorkJSON(out, report); code != ExitOK {
+		return code
+	}
+	for _, receipt := range report.Receipts {
+		if receipt.State == scheduler.Unavailable {
+			return ExitUnavailable
+		}
+		if receipt.State == scheduler.Failed {
+			return ExitFailure
+		}
+	}
+	return ExitOK
 }
 
 func runPriorWorkEnroll(

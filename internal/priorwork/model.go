@@ -119,6 +119,7 @@ type ImportReceipt struct {
 	Watermark             string    `json:"watermark"`
 	SnapshotDigest        string    `json:"snapshot_digest"`
 	KeyID                 string    `json:"key_id"`
+	TriggerRef            string    `json:"trigger_ref"`
 	Signature             string    `json:"signature"`
 }
 
@@ -135,6 +136,7 @@ type Enrollment struct {
 	ScopeExpansionConfirmAfter time.Time `json:"scope_expansion_confirm_after"`
 	RefreshHours               int       `json:"refresh_hours"`
 	StaleHours                 int       `json:"stale_hours"`
+	ScheduleTimezone           string    `json:"schedule_timezone"`
 	MaxItemBytes               int64     `json:"max_item_bytes"`
 	MaxSnapshotItems           int       `json:"max_snapshot_items"`
 	AllowedItemTypes           []string  `json:"allowed_item_types"`
@@ -194,11 +196,28 @@ type RevocationFence struct {
 type ApplyReport struct {
 	State              string `json:"state"`
 	Version            string `json:"version"`
+	ReceiptID          string `json:"receipt_id"`
+	TriggerRef         string `json:"trigger_ref"`
 	Fingerprint        string `json:"fingerprint"`
 	Watermark          string `json:"watermark"`
 	CollectionSequence uint64 `json:"collection_sequence"`
 	Items              int    `json:"items"`
 	Removed            int    `json:"removed"`
+}
+
+type ImportAudit struct {
+	SchemaVersion      int       `json:"schema_version"`
+	ReceiptID          string    `json:"receipt_id"`
+	TriggerRef         string    `json:"trigger_ref"`
+	ReceiptEmittedAt   time.Time `json:"receipt_emitted_at"`
+	SnapshotDigest     string    `json:"snapshot_digest"`
+	State              string    `json:"state"`
+	Version            string    `json:"version"`
+	Fingerprint        string    `json:"fingerprint"`
+	Watermark          string    `json:"watermark"`
+	CollectionSequence uint64    `json:"collection_sequence"`
+	Items              int       `json:"items"`
+	Removed            int       `json:"removed"`
 }
 
 type Status struct {
@@ -212,6 +231,13 @@ type Status struct {
 	Items              int       `json:"items"`
 	RefreshHours       int       `json:"refresh_hours,omitempty"`
 	StaleHours         int       `json:"stale_hours,omitempty"`
+}
+
+type SchedulePolicy struct {
+	EnrolledAt   time.Time `json:"enrolled_at"`
+	RefreshHours int       `json:"refresh_hours"`
+	StaleHours   int       `json:"stale_hours"`
+	Timezone     string    `json:"timezone"`
 }
 
 func ParseSnapshot(reader io.Reader) (Snapshot, error) {
@@ -318,7 +344,7 @@ func ValidateImportReceipt(receipt ImportReceipt, snapshot Snapshot) error {
 		receipt.CollectionSequence != snapshot.CollectionSequence ||
 		receipt.Watermark != snapshot.Watermark || receipt.SnapshotDigest != digest ||
 		validateLabel(receipt.PolicyVersion, 128) != nil || receipt.EnrollmentFingerprint == "" ||
-		!opaqueRefPattern.MatchString(receipt.KeyID) {
+		!opaqueRefPattern.MatchString(receipt.KeyID) || !opaqueRefPattern.MatchString(receipt.TriggerRef) {
 		return errors.New("SharePoint import receipt does not bind the snapshot")
 	}
 	signature, err := base64.StdEncoding.Strict().DecodeString(receipt.Signature)
@@ -414,6 +440,12 @@ func ValidateEnrollment(enrollment Enrollment) error {
 	publicKey, err := base64.StdEncoding.Strict().DecodeString(enrollment.CollectorPublicKey)
 	if err != nil || len(publicKey) != ed25519.PublicKeySize {
 		return errors.New("invalid prior-work collector public key")
+	}
+	if len(enrollment.ScheduleTimezone) > 64 {
+		return errors.New("invalid prior-work schedule timezone")
+	}
+	if _, err := time.LoadLocation(enrollment.ScheduleTimezone); err != nil {
+		return errors.New("invalid prior-work schedule timezone")
 	}
 	seen := map[string]bool{}
 	for _, root := range enrollment.Roots {

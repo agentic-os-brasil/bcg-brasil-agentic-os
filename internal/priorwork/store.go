@@ -151,6 +151,11 @@ func (store Store) Apply(snapshot Snapshot, receipt ImportReceipt, access Access
 	if snapshot.TenantRef != enrollment.TenantRef || !rootsEqual(snapshot.Roots, enrollment.Roots) {
 		return ApplyReport{}, errors.New("snapshot tenant or roots do not match enrollment")
 	}
+	if audit, err := store.loadImportAudit(receipt); err == nil {
+		return audit.report(), nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return ApplyReport{}, err
+	}
 	if len(snapshot.Items)+len(snapshot.Tombstones) > enrollment.MaxSnapshotItems {
 		return ApplyReport{}, errors.New("snapshot exceeds enrolled item limit")
 	}
@@ -259,10 +264,15 @@ func (store Store) Apply(snapshot Snapshot, receipt ImportReceipt, access Access
 		if err := store.clearActiveBarriers(snapshot.Items, active.CollectionSequence); err != nil {
 			return ApplyReport{}, err
 		}
-		return ApplyReport{
+		report := ApplyReport{
 			State: "unchanged", Version: active.Version, Fingerprint: active.Fingerprint,
 			Watermark: active.Watermark, CollectionSequence: active.CollectionSequence, Items: active.ItemCount,
-		}, nil
+			ReceiptID: receipt.ReceiptID, TriggerRef: receipt.TriggerRef,
+		}
+		if err := store.writeImportAudit(receipt, report); err != nil {
+			return ApplyReport{}, err
+		}
+		return report, nil
 	}
 
 	allTombstones := append(append([]Tombstone(nil), snapshot.Tombstones...), missing...)
@@ -351,11 +361,16 @@ func (store Store) Apply(snapshot Snapshot, receipt ImportReceipt, access Access
 	if err := store.clearActiveBarriers(snapshot.Items, snapshot.CollectionSequence); err != nil {
 		return ApplyReport{}, err
 	}
-	return ApplyReport{
+	report := ApplyReport{
 		State: "published", Version: version, Fingerprint: fingerprint,
 		Watermark: snapshot.Watermark, CollectionSequence: snapshot.CollectionSequence,
 		Items: len(catalog.Items), Removed: len(allTombstones),
-	}, nil
+		ReceiptID: receipt.ReceiptID, TriggerRef: receipt.TriggerRef,
+	}
+	if err := store.writeImportAudit(receipt, report); err != nil {
+		return ApplyReport{}, err
+	}
+	return report, nil
 }
 
 func sameImmutableManifest(left, right Manifest) bool {
@@ -406,6 +421,133 @@ func (store Store) Status(access AccessContext) (Status, error) {
 		Fingerprint:        manifest.Fingerprint, Items: manifest.ItemCount,
 		RefreshHours: enrollment.RefreshHours, StaleHours: enrollment.StaleHours,
 	}, nil
+}
+
+func (store Store) SchedulePolicy(access AccessContext) (SchedulePolicy, error) {
+	enrollment, err := store.loadEnrollment()
+	if err != nil {
+		return SchedulePolicy{}, err
+	}
+	if err := authorize(enrollment, access); err != nil {
+		return SchedulePolicy{}, err
+	}
+	if !store.now().Before(enrollment.AuthorizationExpiresAt) {
+		return SchedulePolicy{}, errors.New("prior-work enrollment authorization has expired")
+	}
+	return SchedulePolicy{
+		EnrolledAt: enrollment.EnrolledAt, RefreshHours: enrollment.RefreshHours,
+		StaleHours: enrollment.StaleHours, Timezone: enrollment.ScheduleTimezone,
+	}, nil
+}
+
+func (store Store) VerifyPublication(report ApplyReport, access AccessContext) error {
+	if (report.State != "published" && report.State != "unchanged") ||
+		!versionPattern.MatchString(report.Version) ||
+		!opaqueRefPattern.MatchString(report.ReceiptID) ||
+		!opaqueRefPattern.MatchString(report.TriggerRef) ||
+		report.CollectionSequence == 0 || !digestPattern.MatchString(report.Fingerprint) ||
+		!watermarkPattern.MatchString(report.Watermark) || report.Items < 0 {
+		return errors.New("invalid prior-work publication proof")
+	}
+	releaseLock, err := store.acquireImportLock()
+	if err != nil {
+		return err
+	}
+	defer releaseLock()
+	enrollment, err := store.loadEnrollment()
+	if err != nil {
+		return err
+	}
+	if err := authorize(enrollment, access); err != nil {
+		return err
+	}
+	audit, err := store.loadImportAuditByID(report.ReceiptID)
+	if err != nil {
+		return err
+	}
+	if audit.report() != report {
+		return errors.New("prior-work publication proof does not match its durable import audit")
+	}
+	manifest, _, err := store.loadActive()
+	if err != nil {
+		return err
+	}
+	if manifest.Version != report.Version ||
+		manifest.CollectionSequence != report.CollectionSequence ||
+		manifest.Fingerprint != report.Fingerprint ||
+		manifest.Watermark != report.Watermark ||
+		manifest.ItemCount != report.Items {
+		return errors.New("prior-work publication proof does not match the active manifest")
+	}
+	return nil
+}
+
+func (audit ImportAudit) report() ApplyReport {
+	return ApplyReport{
+		State: audit.State, Version: audit.Version, ReceiptID: audit.ReceiptID,
+		TriggerRef: audit.TriggerRef, Fingerprint: audit.Fingerprint,
+		Watermark: audit.Watermark, CollectionSequence: audit.CollectionSequence,
+		Items: audit.Items, Removed: audit.Removed,
+	}
+}
+
+func (store Store) writeImportAudit(receipt ImportReceipt, report ApplyReport) error {
+	audit := ImportAudit{
+		SchemaVersion: 1, ReceiptID: receipt.ReceiptID, TriggerRef: receipt.TriggerRef,
+		ReceiptEmittedAt: receipt.EmittedAt, SnapshotDigest: receipt.SnapshotDigest,
+		State: report.State, Version: report.Version, Fingerprint: report.Fingerprint,
+		Watermark: report.Watermark, CollectionSequence: report.CollectionSequence,
+		Items: report.Items, Removed: report.Removed,
+	}
+	path := filepath.Join("imports", opaqueFilename(receipt.ReceiptID)+".json")
+	if _, err := loadJSONAt[ImportAudit](store.Root, path); err == nil {
+		return errors.New("prior-work receipt ID already has a durable import audit")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return atomicWriteAt(store.Root, path, audit)
+}
+
+func (store Store) loadImportAudit(receipt ImportReceipt) (ImportAudit, error) {
+	audit, err := store.loadImportAuditByID(receipt.ReceiptID)
+	if err != nil {
+		return ImportAudit{}, err
+	}
+	if audit.TriggerRef != receipt.TriggerRef ||
+		!audit.ReceiptEmittedAt.Equal(receipt.EmittedAt) ||
+		audit.SnapshotDigest != receipt.SnapshotDigest {
+		return ImportAudit{}, errors.New("prior-work receipt replay does not match its durable import audit")
+	}
+	manifest, _, err := store.loadActive()
+	if err != nil {
+		return ImportAudit{}, err
+	}
+	if manifest.Version != audit.Version || manifest.Fingerprint != audit.Fingerprint ||
+		manifest.CollectionSequence != audit.CollectionSequence || manifest.Watermark != audit.Watermark {
+		return ImportAudit{}, errors.New("prior-work receipt audit no longer matches the active manifest")
+	}
+	return audit, nil
+}
+
+func (store Store) loadImportAuditByID(receiptID string) (ImportAudit, error) {
+	if !opaqueRefPattern.MatchString(receiptID) {
+		return ImportAudit{}, errors.New("invalid prior-work receipt ID")
+	}
+	path := filepath.Join("imports", opaqueFilename(receiptID)+".json")
+	audit, err := loadJSONAt[ImportAudit](store.Root, path)
+	if err != nil {
+		return ImportAudit{}, err
+	}
+	if audit.SchemaVersion != 1 || audit.ReceiptID != receiptID ||
+		!opaqueRefPattern.MatchString(audit.TriggerRef) || audit.ReceiptEmittedAt.IsZero() ||
+		!digestPattern.MatchString(audit.SnapshotDigest) ||
+		(audit.State != "published" && audit.State != "unchanged") ||
+		!versionPattern.MatchString(audit.Version) || !digestPattern.MatchString(audit.Fingerprint) ||
+		!watermarkPattern.MatchString(audit.Watermark) || audit.CollectionSequence == 0 ||
+		audit.Items < 0 || audit.Removed < 0 {
+		return ImportAudit{}, errors.New("invalid prior-work durable import audit")
+	}
+	return audit, nil
 }
 
 func freshnessState(publishedAt time.Time, enrollment Enrollment, now time.Time) string {
@@ -647,7 +789,7 @@ func (store Store) prepareRoot() error {
 	if rootInfo.Mode().Perm()&0o077 != 0 {
 		return errors.New("prior-work root permissions must not grant group or other access")
 	}
-	for _, child := range []string{"barriers", "snapshots", "versions"} {
+	for _, child := range []string{"barriers", "imports", "snapshots", "versions"} {
 		if err := root.Mkdir(child, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
 			return err
 		}

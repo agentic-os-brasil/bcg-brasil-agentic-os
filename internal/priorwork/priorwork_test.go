@@ -6,11 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 var testTime = time.Date(2023, 8, 15, 12, 0, 0, 0, time.UTC)
 var testCollectorPrivateKey = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x42}, ed25519.SeedSize))
 var testCollectorPublicKey = testCollectorPrivateKey.Public().(ed25519.PublicKey)
+var testReceiptCounter atomic.Uint64
 
 func testRoot() RootRef {
 	return RootRef{SiteRef: "site-consulting", DriveRef: "drive-projects", FolderRef: "folder-enrolled"}
@@ -39,6 +42,7 @@ func testEnrollment() Enrollment {
 		ScopeExpansionConfirmAfter: testTime.AddDate(0, 6, 0),
 		RefreshHours:               24,
 		StaleHours:                 72,
+		ScheduleTimezone:           "America/Sao_Paulo",
 		MaxItemBytes:               100_000_000,
 		MaxSnapshotItems:           10_000,
 		AllowedItemTypes:           []string{"file", "folder"},
@@ -101,7 +105,8 @@ func testSnapshot(mode, previous, watermark string, items []Item, tombstones []T
 }
 
 func testReceipt(snapshot Snapshot, enrollment Enrollment) ImportReceipt {
-	receipt, err := newImportReceipt(snapshot, enrollment, testCollectorPrivateKey, "receipt-test", snapshot.GeneratedAt)
+	receiptID := fmt.Sprintf("receipt-test-%d", testReceiptCounter.Add(1))
+	receipt, err := newImportReceipt(snapshot, enrollment, testCollectorPrivateKey, receiptID, snapshot.GeneratedAt)
 	if err != nil {
 		panic(err)
 	}
@@ -139,7 +144,7 @@ func newImportReceipt(
 		TenantRef: snapshot.TenantRef, Roots: append([]RootRef(nil), snapshot.Roots...),
 		PolicyVersion: enrollment.PolicyVersion, EnrollmentFingerprint: enrollmentFingerprint,
 		CollectionSequence: snapshot.CollectionSequence, Watermark: snapshot.Watermark,
-		SnapshotDigest: snapshotDigest, KeyID: enrollment.CollectorKeyID,
+		SnapshotDigest: snapshotDigest, KeyID: enrollment.CollectorKeyID, TriggerRef: "manual-test",
 	}
 	body, err := receiptSigningBody(receipt)
 	if err != nil {
@@ -306,6 +311,14 @@ func TestStoreFullDeltaIdempotencyAndExplicitQuery(t *testing.T) {
 	}
 	if first.State != "published" || first.Items != 1 {
 		t.Fatalf("unexpected first report: %#v", first)
+	}
+	if err := store.VerifyPublication(first, testAccess()); err != nil {
+		t.Fatalf("active publication proof did not verify: %v", err)
+	}
+	forged := first
+	forged.Fingerprint = strings.Repeat("0", 64)
+	if err := store.VerifyPublication(forged, testAccess()); err == nil {
+		t.Fatal("forged publication proof matched no active manifest")
 	}
 
 	now = testTime.Add(2 * time.Hour)
