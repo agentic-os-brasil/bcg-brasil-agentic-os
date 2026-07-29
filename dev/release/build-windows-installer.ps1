@@ -11,6 +11,12 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$WizardDir,
     [Parameter(Mandatory = $true)]
+    [string]$ReleaseDirectory,
+    [Parameter(Mandatory = $true)]
+    [string]$AuthorityRegistry,
+    [Parameter(Mandatory = $true)]
+    [string]$Bootstrapper,
+    [Parameter(Mandatory = $true)]
     [ValidatePattern('^[a-f0-9]{64}$')]
     [string]$ResourceCompilerSHA256,
     [Parameter(Mandatory = $true)]
@@ -57,6 +63,9 @@ function Get-SafeTreeDigest([string]$Root) {
 
 Require-AbsolutePath $Icon "Icon"
 Require-AbsolutePath $WizardDir "WizardDir"
+Require-AbsolutePath $ReleaseDirectory "ReleaseDirectory"
+Require-AbsolutePath $AuthorityRegistry "AuthorityRegistry"
+Require-AbsolutePath $Bootstrapper "Bootstrapper"
 Require-AbsolutePath $OutputDirectory "OutputDirectory"
 
 $iconItem = Get-Item -LiteralPath $Icon -ErrorAction Stop
@@ -77,6 +86,21 @@ if ($null -ne $wizardReparse -and @($wizardReparse).Count -gt 0) {
     throw "WizardDir contains a reparse point."
 }
 $initialWizardDigest = Get-SafeTreeDigest $wizardItem.FullName
+$releaseItem = Get-Item -LiteralPath $ReleaseDirectory -ErrorAction Stop
+$initialReleaseDigest = Get-SafeTreeDigest $releaseItem.FullName
+$registryItem = Get-Item -LiteralPath $AuthorityRegistry -ErrorAction Stop
+if ($registryItem.PSIsContainer -or ($registryItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw "AuthorityRegistry must be a regular non-reparse file."
+}
+$registryDigest = (Get-FileHash -LiteralPath $registryItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+$bootstrapperItem = Get-Item -LiteralPath $Bootstrapper -ErrorAction Stop
+if ($bootstrapperItem.PSIsContainer -or ($bootstrapperItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw "Bootstrapper must be a regular non-reparse file."
+}
+if ($bootstrapperItem.Name -notmatch '^bcgos-bootstrap_.+_windows_amd64\.exe$') {
+    throw "Bootstrapper must use the versioned bcgos-bootstrap_<version>_windows_amd64.exe package name."
+}
+$bootstrapperDigest = (Get-FileHash -LiteralPath $bootstrapperItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $buildPackageDir = Join-Path $root "cmd\maestro-installer"
@@ -105,6 +129,9 @@ $sysoPath = Join-Path $buildPackageDir "maestro-installer-$nonce.syso"
 $stagingRoot = Join-Path ([IO.Path]::GetTempPath()) "maestro-installer-input-$nonce"
 $stagedIconPath = Join-Path $stagingRoot "maestro-app-icon.ico"
 $stagedWizardPath = Join-Path $stagingRoot "wizard"
+$stagedReleasePath = Join-Path $stagingRoot "release"
+$stagedRegistryPath = Join-Path $stagingRoot "authority-registry.json"
+$stagedBootstrapperPath = Join-Path $stagingRoot $bootstrapperItem.Name
 $previousGOOS = $env:GOOS
 $previousGOARCH = $env:GOARCH
 $succeeded = $false
@@ -113,6 +140,9 @@ try {
 	New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
 	Copy-Item -LiteralPath $iconItem.FullName -Destination $stagedIconPath
 	Copy-Item -LiteralPath $wizardItem.FullName -Destination $stagedWizardPath -Recurse
+	Copy-Item -LiteralPath $releaseItem.FullName -Destination $stagedReleasePath -Recurse
+	Copy-Item -LiteralPath $registryItem.FullName -Destination $stagedRegistryPath
+	Copy-Item -LiteralPath $bootstrapperItem.FullName -Destination $stagedBootstrapperPath
 	$stagedIconItem = Get-Item -LiteralPath $stagedIconPath -ErrorAction Stop
 	if ($stagedIconItem.PSIsContainer -or ($stagedIconItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
 		throw "Staged icon must be a regular non-reparse file."
@@ -123,6 +153,16 @@ try {
 	$stagedWizardDigest = Get-SafeTreeDigest $stagedWizardPath
 	if ($stagedWizardDigest -ne $initialWizardDigest) {
 		throw "Wizard changed while it was staged."
+	}
+	$stagedReleaseDigest = Get-SafeTreeDigest $stagedReleasePath
+	if ($stagedReleaseDigest -ne $initialReleaseDigest) {
+		throw "Release changed while it was staged."
+	}
+	if ((Get-FileHash -LiteralPath $stagedRegistryPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $registryDigest) {
+		throw "Authority registry changed while it was staged."
+	}
+	if ((Get-FileHash -LiteralPath $stagedBootstrapperPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $bootstrapperDigest) {
+		throw "Bootstrapper changed while it was staged."
 	}
 	if ((Get-FileHash -LiteralPath $iconItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $IconSHA256) {
 		throw "Icon changed while it was staged."
@@ -153,11 +193,32 @@ try {
     if ((Get-FileHash -LiteralPath $iconItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $IconSHA256) {
         throw "Icon changed during packaging."
     }
-    if ((Get-SafeTreeDigest $wizardItem.FullName) -ne $initialWizardDigest) {
-        throw "Wizard changed during packaging."
-    }
-    Copy-Item -LiteralPath $stagedWizardPath -Destination (Join-Path $packageOutput "wizard") -Recurse
-    Copy-Item -LiteralPath $stagedIconPath -Destination (Join-Path $packageOutput "maestro-app-icon.ico")
+	if ((Get-SafeTreeDigest $wizardItem.FullName) -ne $initialWizardDigest) {
+		throw "Wizard changed during packaging."
+	}
+	if ((Get-SafeTreeDigest $releaseItem.FullName) -ne $initialReleaseDigest) {
+		throw "Release changed during packaging."
+	}
+	if ((Get-FileHash -LiteralPath $registryItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $registryDigest) {
+		throw "Authority registry changed during packaging."
+	}
+	if ((Get-FileHash -LiteralPath $bootstrapperItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $bootstrapperDigest) {
+		throw "Bootstrapper changed during packaging."
+	}
+	Copy-Item -LiteralPath $stagedWizardPath -Destination (Join-Path $packageOutput "wizard") -Recurse
+	Copy-Item -LiteralPath $stagedReleasePath -Destination (Join-Path $packageOutput "release") -Recurse
+	Copy-Item -LiteralPath $stagedRegistryPath -Destination (Join-Path $packageOutput "authority-registry.json")
+	Copy-Item -LiteralPath $stagedBootstrapperPath -Destination (Join-Path $packageOutput $bootstrapperItem.Name)
+	Copy-Item -LiteralPath $stagedIconPath -Destination (Join-Path $packageOutput "maestro-app-icon.ico")
+	if ((Get-SafeTreeDigest (Join-Path $packageOutput "release")) -ne $initialReleaseDigest) {
+		throw "Packaged release changed while it was copied."
+	}
+	if ((Get-FileHash -LiteralPath (Join-Path $packageOutput "authority-registry.json") -Algorithm SHA256).Hash.ToLowerInvariant() -ne $registryDigest) {
+		throw "Packaged authority registry changed while it was copied."
+	}
+	if ((Get-FileHash -LiteralPath (Join-Path $packageOutput $bootstrapperItem.Name) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $bootstrapperDigest) {
+		throw "Packaged bootstrapper changed while it was copied."
+	}
 
     $resourceDigest = (Get-FileHash -LiteralPath $sysoPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $provenance = [ordered]@{
@@ -168,6 +229,13 @@ try {
         icon = $iconItem.Name
         icon_sha256 = $iconDigest
         wizard_root = "wizard"
+        release_root = "release"
+        release_tree_sha256 = $initialReleaseDigest
+        authority_registry = "authority-registry.json"
+        authority_registry_sha256 = $registryDigest
+        bootstrapper = $bootstrapperItem.Name
+        bootstrapper_sha256 = $bootstrapperDigest
+        installable_inputs = "bundled"
         rehearsal_launcher = "Run-Maestro-Rehearsal.cmd"
         resource_compiler = $compilerPath
         resource_compiler_sha256 = $compilerDigest
@@ -185,6 +253,11 @@ Abra Run-Maestro-Rehearsal.cmd para iniciar o ensaio técnico. Ele chama o
 wizard com --simulate, usa apenas o seu perfil de usuário e não pede
 administrador. Esta versão ainda não possui Authenticode; use somente para
 ensaio técnico.
+
+O executável também carrega o release/, o authority-registry.json e o
+bootstrapper nativo que foram fornecidos ao empacotador. O caminho real só
+prossegue quando esses bytes passarem pela verificação de assinatura; este
+candidato continua sem Authenticode e não é uma release apta para piloto.
 "@ | Set-Content -LiteralPath (Join-Path $packageOutput "README-UNSIGNED.md") -Encoding utf8
     @"
 @echo off
