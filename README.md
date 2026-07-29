@@ -85,6 +85,7 @@ For the business-facing evolution path, read the [product evolution roadmap](doc
 | ✅ Canary contract | The local store can aggregate typed outcomes, capability failures, interventions and receipt metadata — native telemetry remains unavailable and no work content is exported. |
 | ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |
 | ✅ Darwin 🧬 operational surgeon | The same Darwin contract supports interactive and headless housekeeping with scoped `health/maestro-system` repairs and metadata-only receipts; native runtime invocation remains unavailable. |
+| 🛠️ Automatic maintenance contract | A base-bundle catalog prebuilds memory, wiki, runtime-health, self-observation and update jobs; each remains unavailable until its executor and native evidence are qualified. |
 | ✅ Local ingestion | Provider-neutral contract, Docling-first fallback selector, bounded MarkItDown adapter and fail-closed `bcgos ingest`; conversion remains unavailable until an approved managed runtime pack is verified. |
 
 > **Truth in labeling.** `v0.1.0` is the product target and contract/canary
@@ -162,6 +163,16 @@ clean-device evidence exist.
 
 For the complete product map, see the [roadmap](ROADMAP.md). For the actual
 delivery and validation contract, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Automatic maintenance, with honest boundaries
+
+`bcgos maintenance status` shows whether the maintenance plane is merely
+prebuilt or actually executable. `bcgos maintenance catalog` exposes the
+platform-neutral job contracts; `bcgos maintenance wake --trigger presence`
+returns an unavailable state until a qualified executor exists. macOS and
+Windows wake templates live under [`adapters/`](adapters) and are disabled
+reference artifacts, not raw tasks inside the immutable base bundle. A wake-up
+never counts as a successful memory commit or wiki publication.
 
 ### For a pilot user
 

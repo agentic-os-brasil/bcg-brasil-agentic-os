@@ -54,6 +54,10 @@
       "path": "runtime/capabilities.json"
     },
     {
+      "source": "bundles/base/runtime/maintenance.json",
+      "path": "runtime/maintenance.json"
+    },
+    {
       "source": "bundles/base/skills/INDEX.md",
       "path": "skills/INDEX.md"
     },
@@ -172,6 +176,10 @@
     {
       "source": "schemas/memory-policy.schema.json",
       "path": "schemas/memory-policy.schema.json"
+    },
+    {
+      "source": "schemas/maintenance-jobs.schema.json",
+      "path": "schemas/maintenance-jobs.schema.json"
     },
     {
       "source": "schemas/release-manifest.schema.json",
