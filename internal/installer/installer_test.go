@@ -36,6 +36,44 @@ func TestDefaultPathsKeepManagedAndOwnerDataSeparate(t *testing.T) {
 	}
 }
 
+func TestCanonicalInstallRootResolvesSymlinkedParent(t *testing.T) {
+	root := t.TempDir()
+	physical := filepath.Join(root, "physical")
+	if err := os.Mkdir(physical, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(root, "alias")
+	if err := os.Symlink(physical, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	resolved, err := canonicalInstallRoot(filepath.Join(alias, "managed"), "managed root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := canonicalInstallRoot(filepath.Join(physical, "managed"), "expected root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !samePhysicalPath(resolved, want) {
+		t.Fatalf("resolved root = %q, want %q", resolved, want)
+	}
+}
+
+func TestCanonicalInstallRootRejectsSymlinkedLeaf(t *testing.T) {
+	root := t.TempDir()
+	physical := filepath.Join(root, "physical")
+	if err := os.Mkdir(physical, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(root, "alias")
+	if err := os.Symlink(physical, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := canonicalInstallRoot(alias, "owner-data root"); err == nil {
+		t.Fatal("canonicalInstallRoot accepted a symlinked leaf")
+	}
+}
+
 func TestPrepareRejectsBootstrapperNameDriftBeforeNativeCheck(t *testing.T) {
 	if err := validateBootstrapperName("wrong-name", "0.1.0", "darwin", "arm64"); err == nil || !strings.Contains(err.Error(), "bootstrapper must be named") {
 		t.Fatalf("validateBootstrapperName error = %v, want name rejection", err)
@@ -112,7 +150,11 @@ func TestInstallDelegatesOnlyAfterFullSeedBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Release != "0.1.0" || result.CLIPath != filepath.Join(managedRoot, "bin", "bcgos") {
+	expectedCLIPath, err := canonicalInstallRoot(filepath.Join(managedRoot, "bin", "bcgos"), "expected CLI root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Release != "0.1.0" || result.CLIPath != expectedCLIPath {
 		t.Fatalf("unexpected install result: %#v", result)
 	}
 	if _, err := os.Stat(filepath.Join(managedRoot, "trust", "release-authority-registry.json")); err != nil {

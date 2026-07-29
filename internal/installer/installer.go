@@ -144,6 +144,16 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 			options.DataRoot = filepath.Clean(absolute)
 		}
 	}
+	managedRoot, err := canonicalInstallRoot(options.ManagedRoot, "managed root")
+	if err != nil {
+		return Plan{}, releaseverify.VerifiedRelease{}, err
+	}
+	dataRoot, err := canonicalInstallRoot(options.DataRoot, "owner-data root")
+	if err != nil {
+		return Plan{}, releaseverify.VerifiedRelease{}, err
+	}
+	options.ManagedRoot = managedRoot
+	options.DataRoot = dataRoot
 	if within(options.ManagedRoot, options.DataRoot) || within(options.DataRoot, options.ManagedRoot) {
 		return Plan{}, releaseverify.VerifiedRelease{}, errors.New("managed and owner-data roots must be separate")
 	}
@@ -437,6 +447,67 @@ func ensureFreshManagedRoot(path string) error {
 		return errors.New("managed root already exists; refusing to replace it")
 	}
 	return nil
+}
+
+// canonicalInstallRoot resolves existing ancestors before the installer uses
+// a root. This makes the physical separation check authoritative even when a
+// caller supplies an alias such as a symlinked parent or Windows junction.
+// A root that is itself a symlink/reparse point is rejected so the destination
+// shown in the plan cannot silently redirect after confirmation.
+func canonicalInstallRoot(path, label string) (string, error) {
+	absolute, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("normalize %s: %w", label, err)
+	}
+	current := absolute
+	var suffix []string
+	for {
+		info, statErr := os.Lstat(current)
+		if statErr == nil {
+			resolved, resolveErr := filepath.EvalSymlinks(current)
+			if resolveErr != nil {
+				return "", fmt.Errorf("resolve %s: %w", label, resolveErr)
+			}
+			if len(suffix) == 0 {
+				if info.Mode()&os.ModeSymlink != 0 {
+					return "", fmt.Errorf("%s must not be a symlink or reparse point", label)
+				}
+				parent := filepath.Dir(current)
+				if parent != current {
+					resolvedParent, parentErr := filepath.EvalSymlinks(parent)
+					if parentErr != nil {
+						return "", fmt.Errorf("resolve %s parent: %w", label, parentErr)
+					}
+					expected := filepath.Join(resolvedParent, filepath.Base(current))
+					if !samePhysicalPath(resolved, expected) {
+						return "", fmt.Errorf("%s must not be a symlink or reparse point", label)
+					}
+				}
+			}
+			for index := len(suffix) - 1; index >= 0; index-- {
+				resolved = filepath.Join(resolved, suffix[index])
+			}
+			return filepath.Clean(resolved), nil
+		}
+		if !errors.Is(statErr, os.ErrNotExist) {
+			return "", fmt.Errorf("inspect %s: %w", label, statErr)
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", fmt.Errorf("resolve %s: no existing parent", label)
+		}
+		suffix = append(suffix, filepath.Base(current))
+		current = parent
+	}
+}
+
+func samePhysicalPath(left, right string) bool {
+	left = filepath.Clean(left)
+	right = filepath.Clean(right)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
 }
 
 func within(root, candidate string) bool {
