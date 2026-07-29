@@ -18,6 +18,7 @@
     "scope_expansion_confirm_after",
     "refresh_hours",
     "stale_hours",
+    "schedule_timezone",
     "max_item_bytes",
     "max_snapshot_items",
     "allowed_item_types",
@@ -42,6 +43,12 @@
     "scope_expansion_confirm_after": {"type": "string", "format": "date-time"},
     "refresh_hours": {"type": "integer", "minimum": 1, "maximum": 8760},
     "stale_hours": {"type": "integer", "minimum": 1, "maximum": 8760},
+    "schedule_timezone": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+)+$"
+    },
     "max_item_bytes": {"type": "integer", "minimum": 1, "maximum": 1099511627776},
     "max_snapshot_items": {"type": "integer", "minimum": 1, "maximum": 100000},
     "allowed_item_types": {
