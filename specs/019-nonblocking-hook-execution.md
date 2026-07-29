@@ -45,6 +45,8 @@ any event wait for a worker, make a network request or call a model. The
 development validation and unit tests load this policy directly.
 
 The Claude adapter maps these events and configures `PostToolUse` and `Stop` as
-asynchronous command hooks. Codex complete lifecycle wiring remains pending.
-Both runtimes stay `unavailable` in the capability manifest until their
-qualifying native conformance evidence exists.
+asynchronous command hooks. The Codex adapter maps the same five events to its
+native command-hook surface; Codex command hooks are synchronous because its
+runtime does not support asynchronous handlers yet. Both runtimes stay
+`unavailable` in the capability manifest until their qualifying native
+conformance evidence exists.

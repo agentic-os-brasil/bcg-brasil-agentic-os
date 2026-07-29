@@ -28,6 +28,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/codexadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
@@ -1668,8 +1669,11 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	if len(args) > 0 && args[0] == "claude" {
 		return runClaudeHook(args[1:], in, out, errOut, dataRoot)
 	}
+	if len(args) > 0 && args[0] == "codex" {
+		return runCodexHook(args[1:], in, out, errOut, dataRoot)
+	}
 	if len(args) == 0 || args[0] != "session-start" {
-		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]\n       bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
+		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]\n       bcgos hook <claude|codex> <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]")
 		return ExitUsage
 	}
 	flags := newFlagSet("hook session-start", errOut)
@@ -1713,6 +1717,88 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, output, errOut)
+}
+
+func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	const usage = "usage: bcgos hook codex <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]"
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, usage)
+		return ExitUsage
+	}
+	action := args[0]
+	flags := newFlagSet("hook codex "+action, errOut)
+	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
+		fmt.Fprintln(errOut, usage)
+		return ExitUsage
+	}
+	switch action {
+	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
+	default:
+		fmt.Fprintln(errOut, usage)
+		return ExitUsage
+	}
+	var native codexadapter.NativeInput
+	if action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" {
+		parsed, err := codexadapter.ParseReader(in)
+		if err != nil {
+			if action == "pre-action-guard" {
+				return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+			}
+			return reportError(errOut, err)
+		}
+		native = parsed
+	}
+	if action == "pre-action-guard" {
+		response, err := codexadapter.Guard(native)
+		if err != nil {
+			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+		}
+		return writeJSON(out, response, errOut)
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(optionalArg(flags.Args()), root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if action == "session-start" || action == "context-injection" {
+		profileState, err := resolveProfile(root, "", false)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		owner, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		packet := sessionctx.Build(sessionctx.Sources{
+			Profile: profileState, Workspace: inspection, Owner: owner,
+			Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		})
+		eventName := "SessionStart"
+		if action == "context-injection" {
+			eventName = "UserPromptSubmit"
+		}
+		response, err := sessionhook.BuildCodexEvent(packet, eventName)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, response, errOut)
+	}
+	event := lifecycle.PostActionObserve
+	if action == "stop-finalization" {
+		event = lifecycle.StopFinalize
+	}
+	receipt, err := codexadapter.Receipt(event, native)
+	if err != nil {
+		return reportError(errOut, fmt.Errorf("build lifecycle receipt: %w", err))
+	}
+	if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
+		return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
+	}
+	return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
 }
 
 func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {

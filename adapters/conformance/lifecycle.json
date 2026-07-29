@@ -4,28 +4,28 @@
   "events": [
     {
       "semantic_event": "session_start",
-      "claude": {"binding": "SessionStart", "implementation": "configured", "native_evidence": "pending", "manifest_state": "unavailable"},
-      "codex": {"binding": "SessionStart", "implementation": "configured", "native_evidence": "blocked", "manifest_state": "unavailable"}
+      "claude": {"binding": "SessionStart", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "pending", "manifest_state": "unavailable", "blocker": "qualifying native-session observation is pending"},
+      "codex": {"binding": "SessionStart", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "not_observed", "manifest_state": "unavailable", "blocker": "native Codex SessionStart observation is pending"}
     },
     {
       "semantic_event": "context_inject",
-      "claude": {"binding": "UserPromptSubmit", "implementation": "configured", "native_evidence": "pending", "manifest_state": "unavailable"},
-      "codex": {"binding": "none", "implementation": "not_implemented", "native_evidence": "blocked", "manifest_state": "unavailable"}
+      "claude": {"binding": "UserPromptSubmit", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "pending", "manifest_state": "unavailable", "blocker": "qualifying native-session observation is pending"},
+      "codex": {"binding": "UserPromptSubmit", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "not_observed", "manifest_state": "unavailable", "blocker": "native Codex UserPromptSubmit observation is pending"}
     },
     {
       "semantic_event": "pre_action_guard",
-      "claude": {"binding": "PreToolUse", "implementation": "configured", "native_evidence": "pending", "manifest_state": "unavailable"},
-      "codex": {"binding": "none", "implementation": "not_implemented", "native_evidence": "blocked", "manifest_state": "unavailable"}
+      "claude": {"binding": "PreToolUse", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "pending", "manifest_state": "unavailable", "blocker": "qualifying native-session observation is pending"},
+      "codex": {"binding": "PreToolUse", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "not_observed", "manifest_state": "unavailable", "blocker": "native Codex PreToolUse observation is pending"}
     },
     {
       "semantic_event": "post_action_observe",
-      "claude": {"binding": "PostToolUse", "implementation": "configured_async", "native_evidence": "pending", "manifest_state": "unavailable"},
-      "codex": {"binding": "none", "implementation": "not_implemented", "native_evidence": "blocked", "manifest_state": "unavailable"}
+      "claude": {"binding": "PostToolUse", "implementation": "configured_async", "evidence_class": "contract-tested", "native_evidence": "pending", "manifest_state": "unavailable", "blocker": "qualifying native-session observation is pending"},
+      "codex": {"binding": "PostToolUse", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "not_observed", "manifest_state": "unavailable", "blocker": "native Codex PostToolUse observation is pending"}
     },
     {
       "semantic_event": "stop_finalize",
-      "claude": {"binding": "Stop", "implementation": "configured_async", "native_evidence": "pending", "manifest_state": "unavailable"},
-      "codex": {"binding": "none", "implementation": "not_implemented", "native_evidence": "blocked", "manifest_state": "unavailable"}
+      "claude": {"binding": "Stop", "implementation": "configured_async", "evidence_class": "contract-tested", "native_evidence": "pending", "manifest_state": "unavailable", "blocker": "qualifying native-session observation is pending"},
+      "codex": {"binding": "Stop", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "not_observed", "manifest_state": "unavailable", "blocker": "native Codex Stop observation is pending"}
     }
   ]
 }

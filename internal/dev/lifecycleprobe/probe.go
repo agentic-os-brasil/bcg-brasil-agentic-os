@@ -6,24 +6,26 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/codexadapter"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 )
 
-const ClaudeMinimumVersion = "2.1.177"
+const ClaudeMinimumVersion = lifecycle.ClaudeMinimumVersion
 
 type Result struct {
-	SchemaVersion      int    `json:"schema_version"`
-	Runtime            string `json:"runtime"`
-	ExecutableDetected bool   `json:"executable_detected"`
-	RuntimeVersion     string `json:"runtime_version,omitempty"`
-	State              string `json:"state"`
-	EvidenceClass      string `json:"evidence_class"`
-	NativeObservation  string `json:"native_observation"`
-	CapabilityState    string `json:"capability_state"`
-	Blocker            string `json:"blocker"`
+	SchemaVersion      int                 `json:"schema_version"`
+	Runtime            string              `json:"runtime"`
+	ExecutableDetected bool                `json:"executable_detected"`
+	RuntimeVersion     string              `json:"runtime_version,omitempty"`
+	State              string              `json:"state"`
+	EvidenceClass      string              `json:"evidence_class"`
+	NativeObservation  string              `json:"native_observation"`
+	CapabilityState    string              `json:"capability_state"`
+	Blocker            string              `json:"blocker"`
+	Surfaces           []lifecycle.Surface `json:"surfaces"`
 }
 
 func Probe(runtime string, lookPath func(string) (string, error), version func(string) (string, error)) (Result, error) {
@@ -31,9 +33,15 @@ func Probe(runtime string, lookPath func(string) (string, error), version func(s
 		return Result{}, fmt.Errorf("unsupported runtime %q", runtime)
 	}
 	result := Result{SchemaVersion: 1, Runtime: runtime, State: "blocked", EvidenceClass: "environment_probe", NativeObservation: "not_observed", CapabilityState: "unavailable"}
+	if runtime == "claude" {
+		result.Surfaces = claudeSurfaces("runtime native observation is not available")
+	} else {
+		result.Surfaces = codexadapter.Surfaces()
+	}
 	executable, err := lookPath(runtime)
 	if err != nil {
 		result.Blocker = runtime + " executable was not found"
+		setSurfaceBlocker(result.Surfaces, result.Blocker)
 		return result, nil
 	}
 	result.ExecutableDetected = true
@@ -44,15 +52,18 @@ func Probe(runtime string, lookPath func(string) (string, error), version func(s
 	}
 	result.RuntimeVersion = strings.TrimSpace(output)
 	if runtime == "codex" {
-		result.Blocker = "Codex has only a SessionStart configuration seam; context injection, guard, post-action and stop bindings are not implemented"
+		result.State = "not_observed"
+		result.Blocker = "Codex lifecycle hooks are configured, but no fresh native-session observation has been captured"
 		return result, nil
 	}
-	if belowClaudeMinimum(result.RuntimeVersion) {
+	if !lifecycle.MeetsClaudeMinimum(result.RuntimeVersion) {
 		result.Blocker = "Claude Code " + result.RuntimeVersion + " is below the required " + ClaudeMinimumVersion + " lifecycle-hook contract version"
+		setSurfaceBlocker(result.Surfaces, result.Blocker)
 		return result, nil
 	}
 	result.State = "not_observed"
 	result.Blocker = "Claude version satisfies the local minimum, but no fresh native-session observation has been captured"
+	setSurfaceBlocker(result.Surfaces, result.Blocker)
 	return result, nil
 }
 
@@ -71,24 +82,34 @@ func SystemProbe(runtime string) (Result, error) {
 	})
 }
 
-var versionPattern = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
+func claudeSurfaces(defaultBlocker string) []lifecycle.Surface {
+	bindings := []struct {
+		event   string
+		binding string
+	}{
+		{lifecycle.SessionStart, "SessionStart"},
+		{lifecycle.ContextInject, "UserPromptSubmit"},
+		{lifecycle.PreActionGuard, "PreToolUse"},
+		{lifecycle.PostActionObserve, "PostToolUse"},
+		{lifecycle.StopFinalize, "Stop"},
+	}
+	surfaces := make([]lifecycle.Surface, 0, len(bindings))
+	for _, value := range bindings {
+		surfaces = append(surfaces, lifecycle.Surface{
+			SemanticEvent: value.event, NativeBinding: value.binding,
+			Implementation: "configured", EvidenceClass: lifecycle.EvidenceContractTested,
+			NativeObservation: "not_observed", CapabilityState: "unavailable",
+			Blocker: defaultBlocker,
+		})
+	}
+	return surfaces
+}
 
-func belowClaudeMinimum(value string) bool {
-	match := versionPattern.FindStringSubmatch(value)
-	if len(match) != 4 {
-		return true
-	}
-	actual := [3]int{}
-	minimum := [3]int{2, 1, 177}
-	for index := range actual {
-		parsed, err := strconv.Atoi(match[index+1])
-		if err != nil {
-			return true
-		}
-		actual[index] = parsed
-		if actual[index] != minimum[index] {
-			return actual[index] < minimum[index]
+func setSurfaceBlocker(surfaces []lifecycle.Surface, blocker string) {
+	for index := range surfaces {
+		surfaces[index].Blocker = blocker
+		if surfaces[index].NativeObservation == "not_observed" && strings.Contains(blocker, "below the required") {
+			surfaces[index].NativeObservation = "blocked"
 		}
 	}
-	return false
 }
