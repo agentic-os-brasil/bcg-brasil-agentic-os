@@ -2,10 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-import-receipt:v1",
   "title": "Maestro SharePoint work import receipt",
+  "description": "Structurally validates a receipt signed outside Maestro by the enrolled Claude collector. Signature and enrollment binding are verified by the Go importer.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
+    "receipt_id",
     "evidence_class",
     "capability",
     "producer_runtime",
@@ -13,30 +15,44 @@
     "emitted_at",
     "tenant_ref",
     "roots",
+    "policy_version",
+    "enrollment_fingerprint",
     "collection_sequence",
     "watermark",
-    "snapshot_digest"
+    "snapshot_digest",
+    "key_id",
+    "signature"
   ],
   "properties": {
     "schema_version": {"const": 1},
+    "receipt_id": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/opaque_ref"},
     "evidence_class": {"const": "adapter_command"},
     "capability": {"const": "sharepoint_work_collection"},
     "producer_runtime": {"const": "claude"},
     "outcome": {"const": "succeeded"},
     "emitted_at": {"type": "string", "format": "date-time"},
-    "tenant_ref": {"$ref": "sharepoint-work-catalog.schema.json#/$defs/opaque_ref"},
+    "tenant_ref": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/opaque_ref"},
     "roots": {
       "type": "array",
       "minItems": 1,
       "maxItems": 128,
-      "items": {"$ref": "sharepoint-work-catalog.schema.json#/$defs/root"},
+      "items": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/root"},
       "uniqueItems": true
     },
+    "policy_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "enrollment_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "collection_sequence": {"type": "integer", "minimum": 1},
-    "watermark": {"$ref": "sharepoint-work-catalog.schema.json#/$defs/watermark"},
+    "watermark": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/watermark"},
     "snapshot_digest": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
+    },
+    "key_id": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/opaque_ref"},
+    "signature": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "minLength": 88,
+      "maxLength": 88
     }
   }
 }

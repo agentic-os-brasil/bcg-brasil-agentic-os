@@ -35,6 +35,12 @@ the equivalent connection in Codex.
   binding the tenant, roots, sequence, watermark and snapshot digest. Only the
   native conformance protocol may later classify a receipt as native-qualified;
   neither a snapshot nor an adapter-command receipt promotes capability state.
+- Enrollment pins an Ed25519 collector public key and key ID. A trusted
+  Claude-owned collector process keeps the private key outside the Maestro
+  store and signs the receipt over its complete canonical body. Maestro exposes
+  verification only: neither Codex nor an ordinary local caller can mint a
+  trusted receipt. The signature binds the receipt ID, snapshot, active policy
+  and enrollment fingerprint; it still does not prove native invocation.
 - Local configuration, a fixture or a direct adapter invocation is not native
   SharePoint evidence. Capability promotion requires an approved Claude
   connection and a native read-only trial over a sanitized test scope.
@@ -97,6 +103,13 @@ The Claude adapter emits strict JSON conforming to
 `schemas/sharepoint-work-catalog.schema.json` and a separately parsed,
 binding receipt conforming to
 `schemas/sharepoint-work-import-receipt.schema.json`.
+
+The published JSON Schema documents and independently validates the structural
+envelope for adapters and conformance tooling. The import path enforces the
+same closed Go envelope plus authoritative cross-field invariants that JSON
+Schema cannot express portably: exact root-result coverage, normalized label
+uniqueness, item/tombstone composite conflicts and the combined item limit.
+Passing an external schema check alone never authorizes publication.
 
 A snapshot contains:
 
@@ -200,6 +213,11 @@ The query engine is unavailable unless the caller sets
 - “quero recuperar um deck antigo”;
 - “procure o material que apresentei para ...”; and
 - an explicit `bcgos prior-work find` command.
+
+Explicit intent is a routing gate, not authorization. The query also requires
+an actor reference and purpose that match the active, unexpired enrollment.
+Expiry is evaluated with the local product clock; callers cannot supply or
+backdate it.
 
 General research, ordinary workspace questions and Session Start do not satisfy
 the gate.
