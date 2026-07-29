@@ -133,6 +133,53 @@ func TestEvaluateBlocksTamperedCandidateManifest(t *testing.T) {
 	}
 }
 
+func TestEvaluateAcceptsUnsignedCandidatePlaceholderAgainstPinnedRegistry(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	registryPath := filepath.Join(t.TempDir(), "registry.json")
+	registryBody := []byte(validRegistryJSON("2026-01-01T00:00:00Z", "2027-01-01T00:00:00Z"))
+	if err := os.WriteFile(registryPath, registryBody, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	candidate := t.TempDir()
+	manifest := `{"schema_version":1,"product":"maestro","release":"0.1.0","channel":"canary","issuer":{"id":"maestro-release-candidate","key_id":"candidate-unavailable"},"cli":{"version":"0.1.0","compatible_bundle":">=0.1.0 <0.2.0"},"bundle":{"version":"0.1.0","compatible_cli":">=0.1.0 <0.2.0"},"artifacts":[{"kind":"cli","os":"darwin","arch":"arm64","name":"maestro-cli_0.1.0_darwin_arm64","size":1,"sha256":"` + strings.Repeat("a", 64) + `","signature_ref":"maestro-cli_0.1.0_darwin_arm64.sig"},{"kind":"bundle","os":"any","arch":"any","name":"maestro-base_0.1.0.tar.gz","size":1,"sha256":"` + strings.Repeat("b", 64) + `","signature_ref":"maestro-base_0.1.0.tar.gz.sig"}],"migrations":[],"release_notes":{"name":"release-notes-0.1.0.md","sha256":"` + strings.Repeat("c", 64) + `"}}`
+	if err := os.WriteFile(filepath.Join(candidate, "release-manifest.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(registryBody)
+	report := Evaluate(Options{
+		Root:                    root,
+		AuthorityRegistry:       registryPath,
+		AuthorityRegistrySHA256: hex.EncodeToString(sum[:]),
+		Candidate:               candidate,
+		Clock:                   func() time.Time { return time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC) },
+	})
+	if check := findCheck(report, "authority_registry"); check.State != StateConfigured {
+		t.Fatalf("unsigned placeholder issuer was treated as an authority mismatch: %#v", check)
+	}
+}
+
+func TestEvaluateDoesNotReadWorkflowsFromCurrentDirectoryWhenRootMissing(t *testing.T) {
+	report := Evaluate(Options{})
+	if check := findCheck(report, "release_workflows"); check.State != StateBlocked {
+		t.Fatalf("missing root workflow check = %#v", check)
+	}
+}
+
+func TestEvaluateRejectsSymlinkedProviderConfig(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "provider.json")
+	link := filepath.Join(t.TempDir(), "provider-link.json")
+	body := `{"schema_version":1,"state":"unavailable","provider":"github","auth_base":"https://github.com","api_base":"https://api.github.com","client_id":"","owner":"","repository":"","reason":"not enrolled"}`
+	if err := os.WriteFile(target, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if check := evaluateProvider(link); check.State != StateBlocked {
+		t.Fatalf("symlinked provider config = %#v", check)
+	}
+}
+
 func findCheck(report Report, id string) Check {
 	for _, check := range report.Checks {
 		if check.ID == id {

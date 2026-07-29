@@ -20,13 +20,15 @@ import (
 )
 
 const (
-	StatePass         = "pass"
-	StateConfigured   = "configured"
-	StateUnavailable  = "unavailable"
-	StateBlocked      = "blocked"
-	StateNotEvaluated = "not_evaluated"
-	ReadinessClaim    = "local_contract_evidence"
-	Capability        = "release_readiness"
+	StatePass                 = "pass"
+	StateConfigured           = "configured"
+	StateUnavailable          = "unavailable"
+	StateBlocked              = "blocked"
+	StateNotEvaluated         = "not_evaluated"
+	ReadinessClaim            = "local_contract_evidence"
+	Capability                = "release_readiness"
+	unsignedCandidateIssuerID = "maestro-release-candidate"
+	unsignedCandidateKeyID    = "candidate-unavailable"
 )
 
 // Options identifies only explicit, read-only inputs. Empty optional paths
@@ -121,14 +123,15 @@ func evaluateProvider(path string) Check {
 	if path == "" {
 		return Check{ID: "provider_config", State: StateUnavailable, Reason: "no provider configuration path was supplied", NextAction: "supply --provider-config with the approved public provider configuration"}
 	}
-	body, err := os.ReadFile(path)
+	file, err := openBoundedRegularFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Check{ID: "provider_config", State: StateUnavailable, Reason: "provider configuration is not present", NextAction: "supply the approved public provider configuration"}
 		}
 		return Check{ID: "provider_config", State: StateBlocked, Reason: "provider configuration could not be read", NextAction: "repair the provider configuration path and permissions"}
 	}
-	config, err := releaseprovider.ParseConfig(bytes.NewReader(body))
+	defer file.Close()
+	config, err := releaseprovider.ParseConfig(file)
 	if err != nil {
 		return Check{ID: "provider_config", State: StateBlocked, Reason: "provider configuration failed contract validation", NextAction: "repair or replace the provider configuration"}
 	}
@@ -170,6 +173,9 @@ func evaluateAuthority(options Options) Check {
 		if err != nil {
 			return Check{ID: "authority_registry", State: StateBlocked, Reason: "candidate manifest failed semantic validation before authority matching", NextAction: "rebuild the candidate from the exact reviewed source snapshot"}
 		}
+		if manifest.Issuer.ID == unsignedCandidateIssuerID && manifest.Issuer.KeyID == unsignedCandidateKeyID {
+			return Check{ID: "authority_registry", State: StateConfigured, Reason: "pinned authority registry is structurally valid; unsigned candidate uses the explicit placeholder issuer and requires signing-time authority matching"}
+		}
 		if _, ok := registry.Lookup(manifest.Product, manifest.Issuer.ID, manifest.Issuer.KeyID); !ok {
 			return Check{ID: "authority_registry", State: StateBlocked, Reason: "candidate issuer is not active in the pinned authority registry", NextAction: "use an approved active issuer and key for the release"}
 		}
@@ -194,6 +200,9 @@ func evaluateCandidate(options Options) Check {
 }
 
 func evaluateWorkflows(root string) Check {
+	if strings.TrimSpace(root) == "" {
+		return Check{ID: "release_workflows", State: StateBlocked, Reason: "repository root is required before reading release workflows", NextAction: "run from a repository resolved by the development harness"}
+	}
 	paths := []string{
 		filepath.Join(root, ".github", "workflows", "release-candidate.yml"),
 		filepath.Join(root, ".github", "workflows", "signed-prerelease.yml"),
@@ -209,6 +218,34 @@ func evaluateWorkflows(root string) Check {
 		}
 	}
 	return Check{ID: "release_workflows", State: StatePass, Reason: "candidate and signed-release workflows are present and dispatchable"}
+}
+
+// openBoundedRegularFile rejects symlinked configuration paths and verifies
+// that the file opened is the same regular file observed by Lstat. The parser
+// then enforces the byte bound while decoding, so callers never need an
+// unbounded os.ReadFile before contract validation.
+func openBoundedRegularFile(path string) (*os.File, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("configuration must be a regular file")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	openedInfo, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
+		_ = file.Close()
+		return nil, errors.New("configuration changed while opening")
+	}
+	return file, nil
 }
 
 func isSHA256(value string) bool {
