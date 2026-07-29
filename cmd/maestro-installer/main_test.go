@@ -63,6 +63,18 @@ func TestWizardMutationsRequireSessionToken(t *testing.T) {
 	}
 }
 
+func TestWizardMutationsRejectWrongOrigin(t *testing.T) {
+	handler := wizardHandler(options{sessionToken: "expected", origin: "http://127.0.0.1:1234"})
+	request := httptest.NewRequest(http.MethodPost, "/api/verify", nil)
+	request.Header.Set("X-Maestro-Session", "expected")
+	request.Header.Set("Origin", "http://evil.example")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
 func TestSimulationRunsConfirmationBoundInstall(t *testing.T) {
 	root := t.TempDir()
 	managedRoot := filepath.Join(root, "managed")
