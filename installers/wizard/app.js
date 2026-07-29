@@ -205,6 +205,26 @@
     }
   }
 
+  async function closeInstaller() {
+    if (!runtime) {
+      showStatus('Esta é uma prévia visual: feche esta aba quando terminar.');
+      window.close();
+      return;
+    }
+    const button = document.querySelector('[data-action="close"]');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/close', requestOptions('POST'));
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível encerrar o instalador.');
+      showStatus('O instalador foi encerrado com segurança. Esta janela pode ser fechada.');
+      window.close();
+    } catch (error) {
+      showStatus(error.message);
+      button.disabled = false;
+    }
+  }
+
   document.addEventListener('click', async event => {
     const next = event.target.closest('[data-next]');
     const previous = event.target.closest('[data-prev]');
@@ -225,7 +245,7 @@
     if (action === 'open-data') await openDataFolder();
     if (action === 'copy-path') navigator.clipboard?.writeText(destination.textContent);
     if (action === 'copy-command') navigator.clipboard?.writeText('bcgos doctor');
-    if (action === 'close') window.close();
+    if (action === 'close') await closeInstaller();
   });
 
   discoverRuntime();

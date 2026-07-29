@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 )
@@ -37,6 +38,78 @@ type options struct {
 	simulationRoot    string
 	sessionToken      string
 	origin            string
+	shutdown          func()
+	shutdownGraceful  func(context.Context) error
+	lifecycle         *wizardLifecycle
+}
+
+type wizardLifecycle struct {
+	mu            sync.Mutex
+	closing       bool
+	active        int
+	drained       chan struct{}
+	drainedClosed bool
+}
+
+func newWizardLifecycle() *wizardLifecycle {
+	return &wizardLifecycle{drained: make(chan struct{})}
+}
+
+func (lifecycle *wizardLifecycle) beginMutation() bool {
+	if lifecycle == nil {
+		return true
+	}
+	lifecycle.mu.Lock()
+	defer lifecycle.mu.Unlock()
+	if lifecycle.closing {
+		return false
+	}
+	lifecycle.active++
+	return true
+}
+
+func (lifecycle *wizardLifecycle) endMutation() {
+	if lifecycle == nil {
+		return
+	}
+	lifecycle.mu.Lock()
+	defer lifecycle.mu.Unlock()
+	if lifecycle.active > 0 {
+		lifecycle.active--
+	}
+	if lifecycle.closing && lifecycle.active == 0 && !lifecycle.drainedClosed {
+		close(lifecycle.drained)
+		lifecycle.drainedClosed = true
+	}
+}
+
+func (lifecycle *wizardLifecycle) requestClose() bool {
+	if lifecycle == nil {
+		return true
+	}
+	lifecycle.mu.Lock()
+	defer lifecycle.mu.Unlock()
+	if lifecycle.closing {
+		return false
+	}
+	lifecycle.closing = true
+	if lifecycle.active == 0 && !lifecycle.drainedClosed {
+		close(lifecycle.drained)
+		lifecycle.drainedClosed = true
+	}
+	return true
+}
+
+func (lifecycle *wizardLifecycle) waitDrained(ctx context.Context) error {
+	if lifecycle == nil {
+		return nil
+	}
+	select {
+	case <-lifecycle.drained:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func main() {
@@ -232,7 +305,14 @@ func serveWizard(options options) {
 	}
 	options.origin = origin
 	options.sessionToken = sessionToken
+	options.lifecycle = newWizardLifecycle()
+	server := &http.Server{}
+	options.shutdown = func() {
+		_ = server.Close()
+	}
+	options.shutdownGraceful = server.Shutdown
 	mux := wizardHandler(options)
+	server.Handler = mux
 	launchURL := origin + "/?session=" + url.QueryEscape(sessionToken)
 	label := "Maestro installer wizard"
 	if options.simulate {
@@ -240,7 +320,7 @@ func serveWizard(options options) {
 	}
 	fmt.Println(label + ": " + launchURL)
 	openBrowser(launchURL)
-	if err := http.Serve(listener, mux); err != nil && !strings.Contains(err.Error(), "Server closed") {
+	if err := server.Serve(listener); err != nil && !strings.Contains(err.Error(), "Server closed") {
 		writeError(err)
 		os.Exit(1)
 	}
@@ -287,6 +367,11 @@ func wizardHandler(options options) http.Handler {
 		if !authorizeMutation(writer, request, options) {
 			return
 		}
+		if options.lifecycle != nil && !options.lifecycle.beginMutation() {
+			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": "o instalador está sendo encerrado"})
+			return
+		}
+		defer options.lifecycle.endMutation()
 		if options.simulate {
 			plan := simulationPlan(options)
 			stateMu.Lock()
@@ -313,6 +398,11 @@ func wizardHandler(options options) http.Handler {
 		if !authorizeMutation(writer, request, options) {
 			return
 		}
+		if options.lifecycle != nil && !options.lifecycle.beginMutation() {
+			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": "o instalador está sendo encerrado"})
+			return
+		}
+		defer options.lifecycle.endMutation()
 		requestedDigest, err := decodePlanDigest(writer, request)
 		if err != nil {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -357,6 +447,11 @@ func wizardHandler(options options) http.Handler {
 		if !authorizeMutation(writer, request, options) {
 			return
 		}
+		if options.lifecycle != nil && !options.lifecycle.beginMutation() {
+			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": "o instalador está sendo encerrado"})
+			return
+		}
+		defer options.lifecycle.endMutation()
 		if options.dataRoot == "" {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": "a pasta de dados do Maestro não está configurada"})
 			return
@@ -371,6 +466,37 @@ func wizardHandler(options options) http.Handler {
 			return
 		}
 		writeHTTPJSON(writer, map[string]any{"path": options.dataRoot, "status": "opened"})
+	})
+	mux.HandleFunc("/api/close", func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if !authorizeMutation(writer, request, options) {
+			return
+		}
+		firstClose := options.lifecycle == nil || options.lifecycle.requestClose()
+		writeHTTPJSON(writer, map[string]any{"status": "closing"})
+		if firstClose {
+			if options.lifecycle == nil {
+				if options.shutdown != nil {
+					options.shutdown()
+				}
+				return
+			}
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if options.lifecycle != nil {
+					_ = options.lifecycle.waitDrained(ctx)
+				}
+				if options.shutdownGraceful != nil {
+					_ = options.shutdownGraceful(ctx)
+				} else if options.shutdown != nil {
+					options.shutdown()
+				}
+			}()
+		}
 	})
 	return mux
 }

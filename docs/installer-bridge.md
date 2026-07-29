@@ -25,8 +25,8 @@ managed root if first activation fails. Owner data remains a separate root.
 ## Visual mode and tests
 
 Visual mode serves the dependency-free wizard on loopback and exposes only
-typed `/api/state`, `POST /api/verify`, `POST /api/install` and
-`POST /api/open-data` endpoints. Mutating calls require the unguessable
+typed `/api/state`, `POST /api/verify`, `POST /api/install`,
+`POST /api/open-data` and `POST /api/close` endpoints. Mutating calls require the unguessable
 per-session header and an exact `plan_digest` returned by `/api/verify`; this
 prevents a random local page from triggering installation or racing a changed
 release. The verify endpoint runs the complete read-only plan
@@ -50,6 +50,11 @@ simulation plan, exercises the confirmation-bound install transaction and
 opens the resulting data directory. Simulation labels itself as rehearsal and
 never presents its files as signed release bytes. Neither mode is evidence of
 a signed release or pilot readiness.
+
+The close action is also session-bound: the wizard posts to `/api/close`, the
+bridge returns the closing acknowledgement and then shuts down its loopback
+server. This avoids depending on the browser's `window.close()` policy and
+does not expose a public unauthenticated shutdown route.
 
 The actual signed package must still be assembled by the release workflow and
 must carry native signing/notarization evidence before it can be called
@@ -79,6 +84,12 @@ local-only DMG containing `Maestro Installer Rehearsal.app`. Double-clicking
 that app starts the same `--simulate` wizard flow; the DMG README repeats the
 three user actions and the no-administrator boundary. This artifact is still
 unsigned and is not a pilot release.
+
+The Windows visual installer candidate uses the separate
+[`build-windows-installer.ps1`](../dev/release/build-windows-installer.ps1)
+factory step. It embeds the hash-verified `.ico` as a PE resource through the
+approved `windres` tool and writes unsigned provenance; Authenticode remains a
+later protected-environment step.
 
 ## External CI unblock
 
