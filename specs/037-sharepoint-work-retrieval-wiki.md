@@ -105,12 +105,12 @@ The Claude adapter emits strict JSON conforming to
 binding receipt conforming to
 `schemas/sharepoint-work-import-receipt.schema.json`.
 
-JSON Schema validates the structural envelope. The Go importer is the
-authoritative semantic validator for cross-field invariants that JSON Schema
-cannot express portably: exact root-result coverage, normalized label
+The published JSON Schema documents and independently validates the structural
+envelope for adapters and conformance tooling. The import path enforces the
+same closed Go envelope plus authoritative cross-field invariants that JSON
+Schema cannot express portably: exact root-result coverage, normalized label
 uniqueness, item/tombstone composite conflicts and the combined item limit.
-Import requires both layers; passing the schema alone never authorizes
-publication.
+Passing an external schema check alone never authorizes publication.
 
 A snapshot contains:
 
