@@ -90,7 +90,9 @@ references. The enrollment is strict JSON conforming to
 - the read-only purpose `prior_work_retrieval`;
 - exact allowed SharePoint origins, allowed item types and size limits;
 - refresh and stale windows;
-- an opaque authorizing-actor reference and policy version;
+- an explicit IANA schedule timezone;
+- an opaque authorizing-actor reference bound at enrollment to the
+  authenticated local operating-system principal, plus policy version;
 - authorization expiry; and
 - the time after which a new scope expansion requires confirmation.
 
@@ -218,7 +220,9 @@ The query engine is unavailable unless the caller sets
 Explicit intent is a routing gate, not authorization. The query also requires
 an actor reference and purpose that match the active, unexpired enrollment.
 Expiry is evaluated with the local product clock; callers cannot supply or
-backdate it.
+backdate it. The CLI derives the actor from the authenticated local
+operating-system principal; prompt text and command arguments cannot declare or
+override it.
 
 General research, ordinary workspace questions and Session Start do not satisfy
 the gate.
@@ -246,9 +250,17 @@ The canonical scheduler job ID is `sharepoint-work-sync`.
   The next authorized Claude session performs bounded catch-up after startup.
 - Codex records `unavailable` for collection and leaves the occurrence due.
 - Session Start never waits for SharePoint or compiles the wiki.
+- `bcgos prior-work sync-due --runtime <claude|codex>` performs one bounded
+  presence-recovery decision under an exclusive local-process claim. A live
+  owner is never displaced by age; a dead process claim is recoverable. An
+  unavailable or failed receipt does not consume the occurrence; only a
+  collector result with a signed occurrence reference, durable import audit and
+  active-manifest match marks it succeeded. Persisted errors use a closed
+  metadata-safe taxonomy, never raw MCP/provider text.
 - The default product proposal is a 24-hour refresh window, a 72-hour stale
-  warning and one bounded catch-up attempt per presence. Final pilot values
-  remain configuration.
+  warning, an explicit `America/Sao_Paulo` schedule timezone and one bounded
+  catch-up attempt per presence. The scheduler derives its elapsed interval
+  from `refresh_hours`; final pilot values remain configuration.
 
 A scheduler receipt proves an attempt. Only an atomically published active
 catalog version proves synchronization success.
@@ -276,10 +288,12 @@ catalog version proves synchronization success.
 The intended CLI contract is:
 
 ```text
+bcgos prior-work actor
 bcgos prior-work enroll --stdin --confirm
 bcgos prior-work status
-bcgos prior-work import --snapshot <normalized-json> --receipt <adapter-command-receipt>
+bcgos prior-work import --snapshot <normalized-json> --receipt <signed-adapter-command-receipt>
 bcgos prior-work find --explicit --stdin [--limit <n>]
+bcgos prior-work sync-due --runtime <claude|codex>
 ```
 
 The query body travels through standard input so client, project and people
