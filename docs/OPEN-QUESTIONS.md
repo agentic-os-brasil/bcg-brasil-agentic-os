@@ -49,7 +49,7 @@ This file contains decisions that still require discussion. It is not a decision
 
 ## Before enabling wiki navigation
 
-- **Q-028 - Managed allowlist:** Which product decisions, specs, skills, agents, playbooks and documentation enter the first managed atlas?
+- **Q-028 - Managed allowlist:** Resolved for the first slice: `specs/007`, `specs/008`, `specs/014`, `docs/releasing.md` and `docs/install-update.md`; expansion to additional product sources still requires review.
 - **Q-029 - Page taxonomy:** Which initial topics, entities and relationships justify first-class wiki pages rather than index records?
 - **Q-030 - Memory exposure:** Which memory layers may produce private summaries, and which are pointer-only for the pilot?
 - **Q-031 - Private compilation:** Which approved provider may compile owner/workspace content, and must local-only or offline operation be supported?

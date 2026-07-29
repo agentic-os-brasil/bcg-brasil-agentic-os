@@ -1,6 +1,6 @@
 # Spec 007 - Content navigation through a compiled LLM wiki
 
-Status: architecture accepted; managed atlas implementation and private memory atlas pending.
+Status: architecture accepted; deterministic managed atlas compiler/validator implemented; private memory atlas pending.
 
 ## Objective
 
@@ -114,7 +114,7 @@ Every generated page or index record requires:
 
 Human-readable Markdown is the primary navigation format. A deterministic machine-readable index may support routing, validation and adapters. The index is generated and must never become a separately maintained source of truth.
 
-Every atlas is published as an OKF v0.1 Knowledge Bundle using the BCGOS Atlas Profile defined by Spec 008. OKF provides the portable Markdown, frontmatter, path identity, standard links, `index.md` and `log.md`; the BCGOS profile provides scope, authority, privacy, freshness, invalidation and atomic lifecycle guarantees.
+Every atlas is published as an OKF v0.2 Knowledge Bundle using the BCGOS Atlas Profile defined by Spec 008. OKF provides the portable Markdown, frontmatter, path identity, standard links, `index.md` and `log.md`; the BCGOS profile provides scope, authority, privacy, freshness, invalidation and atomic lifecycle guarantees.
 
 ## Query and context behavior
 
@@ -146,7 +146,9 @@ Graph visualization, embeddings, vector search, Obsidian compatibility and a gra
 
 ## V1 implementation boundary
 
-V1 implements only the managed product atlas:
+V1 implements only the managed product atlas. The first deterministic compiler and
+OKF/profile validator are available through the development-only harness; durable
+event outbox, runtime pointer refresh and private compilation remain pending.
 
 1. Define the page and machine-readable index schemas.
 2. Compile allowlisted decisions, specs, product skills and product documentation.

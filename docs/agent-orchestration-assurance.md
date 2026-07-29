@@ -12,6 +12,7 @@ does not promote a product capability from `unavailable`.
 | One branch and one child are active at a time | Shared state and controller tests reject parallel branches and children | Adapter uses one durable shared state store across restarts/processes | unavailable |
 | Delegation state can recover safely | Snapshot restore validates policy, root, child and recovery capability; stale recovery is capability-gated | Durable atomic persistence plus restart/partition conformance | unavailable |
 | Packets and completion authority are bounded | Dispatcher and pilot tests verify signed packets, scope inheritance, target-authenticated execution envelopes, nonce replay rejection and finish authority | Adapter delivers only authenticated packets/envelopes without exposing capabilities | unavailable |
+| Material output cannot bypass Walter | `RequireWalterReview` binds a completed producer packet to a sealed, source-scoped review packet; generic Walter returns are rejected; typed verdicts are capped and projected to compact state | Native adapter emits the sealed packet and observes Walter's typed verdict in the same governed session | unavailable |
 | Direct skill selection stays with the active owner | Dispatcher tests require a signed active root packet, matching agent capability and no active child | Native agent execution proves the same root/capability binding | unavailable |
 | Claude/Codex semantic parity | Shared controller fixtures execute both event vocabularies and denial cases | Native session conformance from installed Claude and Codex adapters | unavailable |
 
@@ -29,6 +30,13 @@ does not promote a product capability from `unavailable`.
   leaf specialist or while a child is active;
 - schema-v1 child packet used for a new skill selection;
 - schema-v1 root or child packet used as the parent of a new delegation.
+- material recommendation, consequential trade-off or external artifact returned
+  without a Walter handoff;
+- Walter packet opened before the producer closes, bound to a forged source
+  digest/scope, or completed through the generic return path;
+- more than three objections, an approved verdict with objections, or a
+  missing-the-mark verdict without a concrete fix and exit condition;
+- review prose, audience or uncertainty leaked into the durable receipt.
 
 ## Explicitly unavailable
 

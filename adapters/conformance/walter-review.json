@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "max_objections": 3,
+  "triggers": [
+    "material_recommendation",
+    "consequential_tradeoff",
+    "external_artifact"
+  ],
+  "verdicts": [
+    "approved",
+    "refine-and-return",
+    "missing-the-mark"
+  ],
+  "receipt_fields": [
+    "trigger",
+    "state",
+    "source_packet_id",
+    "source_packet_sha256",
+    "objection_count"
+  ]
+}

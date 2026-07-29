@@ -1,16 +1,20 @@
 # Spec 008 - Wiki update lifecycle and BCGOS OKF profile
 
-Status: architecture accepted; schemas, compiler, event outbox and runtime integration pending.
+Status: architecture accepted; initial managed compiler/validator implemented; schemas, event outbox, durable manifests and runtime integration pending.
 
 ## Objective
 
 Update each compiled wiki safely and incrementally while keeping its output portable across humans, agents and tools.
 
-Open Knowledge Format v0.1 defines the exchange envelope. The BCGOS Atlas Profile v1 defines the additional governance and lifecycle required for professional, owner-private and workspace-private knowledge. OKF remains a format, not an authorization or storage system.
+Open Knowledge Format v0.2 defines the exchange envelope. The BCGOS Atlas Profile v1 defines the additional governance and lifecycle required for professional, owner-private and workspace-private knowledge. OKF remains a format, not an authorization or storage system.
+
+The normative OKF base is the GoogleCloudPlatform `knowledge-catalog/okf/SPEC.md`
+v0.2. Maestro does not require Google Cloud, Knowledge Catalog or a proprietary
+consumer to read or publish a conformant bundle.
 
 ## Standards boundary
 
-### OKF v0.1 core
+### OKF v0.2 core
 
 Every atlas is an OKF Knowledge Bundle:
 
@@ -23,7 +27,7 @@ Every atlas is an OKF Knowledge Bundle:
 - concept ID derived from the bundle-relative path without `.md`;
 - best-effort consumption of unknown types, optional fields and broken links.
 
-The root `index.md` declares `okf_version: "0.1"`. BCGOS does not introduce a competing concept-ID field or a proprietary link syntax.
+The root `index.md` declares `okf_version: "0.2"`. BCGOS does not introduce a competing concept-ID field or a proprietary link syntax.
 
 ### BCGOS Atlas Profile v1
 
@@ -174,6 +178,7 @@ Last-known-good preservation never bypasses a denial barrier. If rebuilding fail
 ## Cadence and triggers
 
 - **Managed atlas:** compile in CI after allowlisted product sources change; publish with the compatible managed bundle.
+- **Local Darwin reconcile:** a bounded maintenance job may run the development-only managed compiler and validator against a configured Maestro checkout; it never reads private bundles, calls an LLM, commits, pushes or publishes a release.
 - **L1 activity:** update bounded day/session pointers after a valid daily memory commit; do not synthesize semantic pages from raw captures.
 - **L2/L3/lifetime:** compile temporal and semantic routes after a successful weekly deep-memory commit.
 - **Correction/deletion/revocation:** apply the denial barrier synchronously, then compile immediately from the high-priority event.
@@ -198,7 +203,11 @@ Backlinks and indexes belong to the same atomic atlas transaction as their chang
 
 ## V1 implementation boundary
 
-V1 implements the managed bundle first:
+V1 implements the managed bundle first. The initial deterministic compiler and
+validator are now available through the development-only harness. It writes a
+reviewable local candidate with a best-effort directory swap; it is not yet the
+durable versioned-manifest or last-known-good publication mechanism. The
+remaining items are the durable lifecycle pieces:
 
 1. BCGOS Atlas Profile v1 schema and OKF validator.
 2. Deterministic compiler for allowlisted managed sources.

@@ -150,6 +150,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/005-development-harness.md; .claude/README.md; dev/skills/start-contributing/SKILL.md
 - Supersedes: none
 
+## WIZR - Give the signed installer one branded, user-space wizard
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Pilot users can install software in their corporate user profile but may not have administrator permissions or technical context. The release trust and rollback contracts already exist, but the first visual interaction is still missing.
+- Decision: The Maestro installer uses one dependency-free, cross-platform visual wizard with a midnight/teal/gold identity derived from the Maestro conductor mark. It explains four states (welcome, verification, installation and ready), states the user-space/no-admin boundary, and delegates every trust-bearing operation to the signed `bcgos-bootstrap` process. Static assets are deterministic SVG and the wizard never provides an unsigned fallback.
+- Consequences: A future executable bridge can reuse the same screens and status vocabulary on Windows and macOS. The visual layer can be reviewed independently, while pilot readiness still requires signed artifacts, native signing/notarization and clean-device evidence. The global PATH, workspaces and owner data remain outside the installer transaction.
+- Refs: installers/wizard; docs/installer-wizard.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
+- Supersedes: none
+
 ## DUAL - Support Windows and macOS equally
 
 - Date: 2026-07-19
@@ -414,6 +425,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: CLVE; TCAL; specs/004-runtime-portability.md; specs/020-adapter-diagnostics.md; specs/021-pilot-hook-conformance.md; specs/030-claude-lifecycle-vertical.md; internal/lifecycle
 - Supersedes: none
 
+## AUTO - Prebuild a cross-platform maintenance plane in the base bundle
+
+- Date: 2026-07-28
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Daniel explicitly expanded the initial three-job scheduler discussion into a request for the maximum safe set of daily improvements: memory sync and rollups, wiki maintenance, runtime health, self observation and update diagnosis. Maestro must offer that sense of continuous improvement without copying personal, client-specific or macOS-only automation into a platform-neutral product bundle.
+- Decision: The base bundle carries a declarative catalog of 14 universal maintenance contracts: sanitized L1 capture, daily and weekly memory cycles, retention checks, incremental wiki sync, wiki reconciliation and integrity checks, skills-index refresh, runtime health and drift checks, capability rechecks, self-observation proposals and update checks. This is an explicit catalog expansion, not activation: every initial job remains unavailable until its owning subsystem and executor are qualified. The catalog contains no operating-system schedule, local path, credential, provider command or activation grant. A presence/catch-up wake mechanism is a runtime adapter, not a catalog job. macOS LaunchAgents and Windows Task Scheduler definitions are disabled reference templates; a future installer may render and enable them only after qualification. Client integrations, Kowalski/Darwin governance, auto-commit, telemetry aggregation, briefs and external ingest providers remain optional packs or outside Maestro.
+- Consequences: Deterministic read-only checks and approved local synchronization can run automatically when their adapters are available. Model-backed dreaming, self refinement and external ingestion remain prebuilt but fail closed until the user/workspace policy and runtime adapter explicitly permit unattended execution. Disabled templates cannot create recurring failure noise, and scheduler receipts never prove memory or wiki publication; each owning subsystem retains its durable success boundary.
+- Refs: specs/006-memory-persistence.md; specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/009-scheduler-catch-up.md; specs/020-release-distribution.md; bundles/base/runtime/maintenance.json; schemas/maintenance-jobs.schema.json
+- Supersedes: none
+
 ## CAPS - Separate professional capability bundles from interaction profile
 
 - Date: 2026-07-26
@@ -499,4 +521,26 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Decision: Darwin remains a non-user-facing governance leaf, but receives a signed `scoped_system_maintenance` authority with explicit read, probe, write/edit and validation grants over managed Maestro state only. Interactive and headless housekeeping invocations use the same Darwin identity, tool contract, bounded health packet, remediation plan, fail-closed executor and metadata-only repair receipt. Darwin may repair reversible system issues, but cannot access client/workspace content, credentials, broad network, release or merge authority. Material policy or source changes return through Maestro and Walter.
 - Consequences: The catalog, role contracts, specs and adapters must replace Darwin's `tool_access: none`/recommend-only posture with scoped maintenance authority. Deterministic surfaces still prepare packets and enforce grants; Darwin's headless execution owns diagnosis and remediation. Native runtime qualification remains required before claiming active runtime capability. Housekeeping failures remain recoverable through receipts and scheduler state.
 - Refs: specs/018-maestro-core-agents.md; specs/028-federated-improvement-loop.md; specs/032-canary-observability.md; bundles/base/agents/darwin/AGENT.md; internal/agentcatalog; internal/scheduler; internal/federation; internal/lifecycle
+- Supersedes: none
+
+## OKFW - Use Karpathy-style maintenance with Google OKF bundles
+
+- Date: 2026-07-28
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs a durable, human-readable and agent-readable knowledge surface. Karpathy's LLM-Wiki pattern provides the maintenance model, while Google's Open Knowledge Format provides an open interchange boundary. Neither format nor pattern supplies Maestro's authority, privacy, revocation or publication guarantees.
+- Decision: Build the managed Maestro atlas as a deterministic, versioned Google OKF v0.2 bundle, using the Karpathy pattern for incremental source integration and cross-link maintenance. Preserve a namespaced BCGOS profile for scope, provenance, lifecycle and policy; managed content is allowlist-first and private/owner/workspace content remains physically separate and unavailable to this compiler. Darwin may detect drift and invoke a bounded managed reconciliation, but it may not synthesize, publish private content or bypass review/ release gates.
+- Consequences: The first implementation can be consumed by any OKF-aware tool without a Google runtime dependency. Generated concepts, indexes, backlinks and logs remain reviewable in Git and reproducible from pinned sources. LLM-generated enrichment, private atlas compilation, provider selection and autonomous publication remain separate follow-up contracts.
+- Refs: specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/014-human-atlas-bootstrap.md; internal/atlas; https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f; https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
+- Supersedes: none
+
+## WIRE - Make Maestro's Walter gate executable and context-lean
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro already defines a tool-free hub, a sealed Walter reviewer and fail-closed delegation, but the pilot dispatch path can finish a material branch without an explicit Maestro-to-Walter handoff. Kowalski's useful enforcement pattern is a deterministic trigger, an authenticated owner relationship and a bounded escalation state; copying its broad prompt/history surfaces would increase token cost and blur the professional boundary.
+- Decision: Add a runtime-neutral Walter wire to the Maestro dispatch path. Material recommendations, consequential trade-offs and external-facing artifacts must produce a sealed review packet from Maestro to the registered Walter leaf after the producing branch closes. The packet carries only bounded review fields and scoped artifact/evidence pointers; public state carries only IDs, digests, trigger, verdict state and objection count. Walter returns one of `approved`, `refine-and-return` or `missing-the-mark`, with no more than three objections and a concrete fix plus exit condition for each. Ordinary factual or mechanical work does not enter the gate, and the execution ledger's binary authenticated approval remains a separate completion contract.
+- Consequences: The relationship is enforced by code and conformance tests rather than description alone, while no prompt, rationale, client body or response text enters durable state or receipts. Native Claude/Codex activation and signed runtime qualification remain unavailable until their adapters prove this wire in fresh sessions. No new agent or domain is introduced; the existing Maestro and Walter roles remain the only hub/reviewer pair.
+- Refs: specs/018-maestro-core-agents.md; specs/031-maestro-goal-orchestration.md; internal/agentdispatch; internal/agentorchestration; docs/agent-orchestration-assurance.md
 - Supersedes: none

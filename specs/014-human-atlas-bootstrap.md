@@ -1,7 +1,7 @@
 # Spec 014 - Human atlas bootstrap
 
-Status: initial local bootstrap implemented; compiled atlas, private OKF bundles
-and runtime navigation remain unavailable.
+Status: initial local bootstrap and first managed OKF compiler implemented;
+private OKF bundles and runtime navigation remain unavailable.
 
 ## Objective
 
@@ -31,8 +31,8 @@ private roots:
 ```
 
 The owner root is private user data. The workspace root is scoped to its
-workspace identity. Managed atlas content remains unavailable until a versioned
-bundle ships it; the command must not create a fake managed root in user data.
+workspace identity. Managed atlas content ships separately in the versioned
+managed OKF bundle; the command must not create a fake managed root in user data.
 
 `owner/self/` remains the owner identity source and is not copied into the
 owner atlas. `tasks/` is deliberately absent until an authoritative task-source
