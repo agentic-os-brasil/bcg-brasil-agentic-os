@@ -51,6 +51,15 @@ owner and cannot be translated into completion. A qualified adapter may issue
 the signed `approved` envelope only after Walter independently reviewed the
 sealed packet and the final evidence satisfies the contract.
 
+The runtime-neutral pilot enforces the handoff before any material result is
+presented as complete. Closed triggers are `material_recommendation`,
+`consequential_tradeoff` and `external_artifact`; `RequireWalterReview` rejects
+an incomplete producer, binds the source packet digest and scope, and opens
+only the registered Walter reviewer. `ReturnWalterReview` accepts only the
+typed verdict envelope, caps objections at three, and projects compact review
+state (`dispatched`, `approved`, `refine-and-return`, `missing-the-mark` or
+`unavailable`).
+
 ## Durability and replay
 
 Review commits use the existing revision-first publication and regenerable

@@ -3,6 +3,7 @@ package agentdispatch
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -104,6 +105,12 @@ func TestDispatcherKeepsWalterAsAReviewLeaf(t *testing.T) {
 		Constraints: []string{
 			"Review only the sealed packet.",
 			"Return a bounded verdict and concrete fixes when needed.",
+		}, Review: &ReviewPacket{
+			SourcePacketID: strings.Repeat("a", 64), SourcePacketSHA256: strings.Repeat("b", 64),
+			SourceScopeKind: "workspace", SourceScopeID: "alpha",
+			Trigger: ReviewMaterialRecommendation, Audience: "case sponsor",
+			Recommendation: "Choose the bounded pilot scope.", DefinitionOfDone: "Sponsor can decide from the reviewed artifact.",
+			ArtifactRefs: []string{"bcgos://workspace/alpha/dossier/recommendation.md"},
 		}, TTL: time.Hour,
 	})
 	if err != nil || !decision.Allowed {

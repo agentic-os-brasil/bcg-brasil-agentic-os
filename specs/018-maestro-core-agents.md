@@ -32,6 +32,15 @@ each agent may have at most one active child and maximum depth is two. A
 workflow may complete one chain and then call Walter; it may not keep both
 branches active concurrently.
 
+Material output has one deterministic review seam: after the producing root is
+completed, Maestro seals a bounded `ReviewPacket` with the source packet ID and
+digest, trigger, audience, recommendation, definition of done, pointers and
+uncertainties, then opens Walter as a direct leaf. Walter returns a typed
+`approved`, `refine-and-return` or `missing-the-mark` verdict. The receipt keeps
+only the source digest, trigger, verdict state and objection count; review prose
+and packet bodies remain ephemeral. A generic return cannot close a Walter
+packet, and a review verdict cannot grant execution-ledger completion authority.
+
 The adapter-owned delegation channel is control-plane orchestration, not
 general tool access. Maestro may select and dispatch an allowed direct spoke
 through that channel while remaining unable to call filesystem, shell, web,
@@ -116,8 +125,8 @@ sequenceDiagram
     Practice->>Subject: one bounded child task
     Subject-->>Practice: subject result
     Practice-->>Maestro: bounded recommendation
-    Maestro->>Walter: sealed review packet
-    Walter-->>Maestro: verdict and concrete fixes
+    Maestro->>Walter: sealed ReviewPacket after producer closes
+    Walter-->>Maestro: typed verdict and concrete fixes
     Maestro-->>User: accountable synthesis
 ```
 
