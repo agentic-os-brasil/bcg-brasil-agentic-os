@@ -1,15 +1,15 @@
 # Spec 026 - Workspace-local adapter installation
 
-Status: bounded Session Start implemented for Claude and Codex; complete Claude
-lifecycle configuration implemented.
+Status: complete five-event lifecycle configuration implemented for Claude and
+Codex; native runtime qualification remains separate.
 
 `bcgos adapter install --runtime claude|codex [workspace]` adds only
-Maestro-owned commands to the runtime's workspace-local configuration. Codex
-receives one bounded Session Start entry. Claude receives `SessionStart`,
-`UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` entries mapped to the
-canonical lifecycle. Claude uses `.claude/settings.local.json`; Codex uses
-`.codex/hooks.json`. This avoids mutating a user-wide configuration and keeps
-the adapter scoped to a professional workspace.
+Maestro-owned commands to the runtime's workspace-local configuration. Both
+Claude and Codex receive `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
+`PostToolUse` and `Stop` entries mapped to the canonical lifecycle. Claude uses
+`.claude/settings.local.json`; Codex uses `.codex/hooks.json`. This avoids
+mutating a user-wide configuration and keeps the adapter scoped to a
+professional workspace.
 
 The same command also installs the user-facing runtime projection from the
 active base bundle. Claude receives a managed `CLAUDE.md` and the complete
