@@ -51,6 +51,18 @@
     if (text) text.textContent = label;
   }
 
+  function setProgress(stage) {
+    const order = ['verify', 'install', 'complete'];
+    const current = order.indexOf(stage);
+    document.querySelectorAll('[data-progress]').forEach(track => {
+      track.querySelectorAll('[data-progress-step]').forEach(step => {
+        const position = order.indexOf(step.dataset.progressStep);
+        step.classList.toggle('is-active', position === current);
+        step.classList.toggle('is-done', position < current);
+      });
+    });
+  }
+
   function requestOptions(method, body) {
     const headers = { 'Content-Type': 'application/json' };
     if (sessionToken) headers['X-Maestro-Session'] = sessionToken;
@@ -92,6 +104,9 @@
       step.classList.toggle('is-current', active);
       step.classList.toggle('is-done', position < index);
     });
+    if (name === 'check') setProgress('verify');
+    if (name === 'install') setProgress('install');
+    if (name === 'finish') setProgress('complete');
     if (name === 'check' && mode === 'preview' && !runtime) {
       window.setTimeout(() => {
         document.querySelectorAll('.check-item').forEach((item, index) => {
@@ -142,6 +157,7 @@
       markChecks(simulation ? 'simulated' : 'ready');
       verified = true;
       planDigest = payload.plan_digest || '';
+      setProgress('install');
       show('install');
     } catch (error) {
       showError('check', error.message);
@@ -172,6 +188,7 @@
       const response = await fetch('/api/install', requestOptions('POST', { plan_digest: planDigest }));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'A instalação foi interrompida com segurança.');
+      setProgress('complete');
       show('finish');
       showStatus(simulation
         ? `Ensaio concluído. Sandbox de dados: ${payload.data_root}`

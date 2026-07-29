@@ -58,3 +58,12 @@
 .hero-mark,.halo,.orb,.baton-line,.art-caption{z-index:1}
 .hero-avatar{z-index:2}
 @media(max-width:580px){html,body{width:100%;overflow-x:hidden}.shell,.content,.panel,.panel-welcome,.hero-copy,.hero-actions{width:100%;max-width:100%;min-width:0}.panel-welcome>.hero-art,.panel-welcome>.hero-copy{width:calc(100vw - 36px);max-width:calc(100vw - 36px);min-width:0}.identity-plaque{top:14px;left:14px}.hero-avatar{width:108px;height:108px;border-radius:25px}.hero-mark{width:160px;height:160px}.hero-copy h1,.section-heading h1,.panel-finish h1{font-size:40px;letter-spacing:-.065em}.lead{width:100%;max-width:100%;overflow-wrap:anywhere}}
+
+/* A small conductor track makes the current install state legible at a glance. */
+.signal-track{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:720px;margin-top:30px}
+.signal-step{display:grid;gap:4px;min-height:67px;padding:11px 12px;border:1px solid rgba(49,224,181,.13);background:rgba(4,27,25,.46);transition:border-color .25s ease,background .25s ease,transform .25s ease,box-shadow .25s ease}
+.signal-step>span{color:#5e8580;font:700 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}
+.signal-step b{font-size:11px;font-weight:800}.signal-step small{color:#6e918c;font-size:10px}
+.signal-step.is-active{border-color:rgba(49,224,181,.68);background:rgba(7,48,42,.68);box-shadow:0 0 0 1px rgba(49,224,181,.08),0 0 24px rgba(49,224,181,.08);transform:translateY(-2px)}
+.signal-step.is-active>span{color:var(--teal)}.signal-step.is-done{border-color:rgba(139,220,204,.33);background:rgba(7,33,30,.58)}.signal-step.is-done>span:after{content:"  ✓";color:var(--teal)}
+@media(max-width:580px){.signal-track{grid-template-columns:1fr;gap:6px;margin-top:24px}.signal-step{min-height:0;grid-template-columns:34px 1fr;align-items:center;padding:9px 11px}.signal-step>span{grid-row:span 2}.signal-step small{grid-column:2}}
