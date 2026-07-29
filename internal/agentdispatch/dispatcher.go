@@ -35,24 +35,26 @@ type PacketRequest struct {
 	Pointers      []string
 	Constraints   []string
 	SkillID       string
+	Review        *ReviewPacket
 	TTL           time.Duration
 }
 
 type WorkPacket struct {
-	SchemaVersion  int       `json:"schema_version"`
-	PacketID       string    `json:"packet_id"`
-	ParentPacketID string    `json:"parent_packet_id,omitempty"`
-	IssuerAgentID  string    `json:"issuer_agent_id"`
-	TargetAgentID  string    `json:"target_agent_id"`
-	ScopeKind      string    `json:"scope_kind"`
-	ScopeID        string    `json:"scope_id"`
-	Objective      string    `json:"objective"`
-	Pointers       []string  `json:"pointers,omitempty"`
-	Constraints    []string  `json:"constraints,omitempty"`
-	SkillID        string    `json:"skill_id,omitempty"`
-	IssuedAt       time.Time `json:"issued_at"`
-	ExpiresAt      time.Time `json:"expires_at"`
-	Signature      string    `json:"signature"`
+	SchemaVersion  int           `json:"schema_version"`
+	PacketID       string        `json:"packet_id"`
+	ParentPacketID string        `json:"parent_packet_id,omitempty"`
+	IssuerAgentID  string        `json:"issuer_agent_id"`
+	TargetAgentID  string        `json:"target_agent_id"`
+	ScopeKind      string        `json:"scope_kind"`
+	ScopeID        string        `json:"scope_id"`
+	Objective      string        `json:"objective"`
+	Pointers       []string      `json:"pointers,omitempty"`
+	Constraints    []string      `json:"constraints,omitempty"`
+	SkillID        string        `json:"skill_id,omitempty"`
+	Review         *ReviewPacket `json:"review,omitempty"`
+	IssuedAt       time.Time     `json:"issued_at"`
+	ExpiresAt      time.Time     `json:"expires_at"`
+	Signature      string        `json:"signature"`
 }
 
 type Dispatcher struct {
@@ -217,7 +219,11 @@ func (dispatcher *Dispatcher) issue(issuer, parentID string, request PacketReque
 		ScopeKind: request.ScopeKind, ScopeID: request.ScopeID,
 		Objective: strings.TrimSpace(request.Objective), Pointers: pointers,
 		Constraints: append([]string(nil), request.Constraints...), SkillID: request.SkillID,
+		Review:   cloneReviewPacket(request.Review),
 		IssuedAt: now, ExpiresAt: now.Add(request.TTL),
+	}
+	if err := validateReviewPacket(packet.Review, packet.PacketID, packet.Objective); err != nil {
+		return WorkPacket{}, err
 	}
 	packet.Signature, err = dispatcher.signature(packet)
 	return packet, err
@@ -230,6 +236,12 @@ func validateRequest(request PacketRequest, child bool) error {
 		request.TTL <= 0 || request.TTL > maxPacketTTL ||
 		len(request.Pointers) > maxPointers || len(request.Constraints) > maxConstraints {
 		return errors.New("work packet exceeds its bounded contract")
+	}
+	if (request.TargetAgentID == "walter") != (request.Review != nil) {
+		return errors.New("Walter dispatch requires exactly one sealed review packet")
+	}
+	if request.Review != nil && (child || request.ScopeKind != "review") {
+		return errors.New("Walter review must be a direct review root")
 	}
 	if !child && request.SkillID != "" {
 		return errors.New("work packet has an invalid skill selection boundary")
@@ -286,13 +298,16 @@ func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
 	request := PacketRequest{
 		TargetAgentID: packet.TargetAgentID, ScopeKind: packet.ScopeKind,
 		ScopeID: packet.ScopeID, Objective: packet.Objective, Pointers: packet.Pointers,
-		Constraints: packet.Constraints, SkillID: packet.SkillID, TTL: packet.ExpiresAt.Sub(packet.IssuedAt),
+		Constraints: packet.Constraints, SkillID: packet.SkillID, Review: cloneReviewPacket(packet.Review), TTL: packet.ExpiresAt.Sub(packet.IssuedAt),
 	}
 	if packet.SchemaVersion == legacyPacketSchemaVersion {
 		if packet.SkillID != "" || validateLegacyRequest(request) != nil {
 			return errors.New("legacy work packet violates its completion-only contract")
 		}
 	} else if err := validateRequest(request, child); err != nil {
+		return err
+	}
+	if err := validateReviewPacket(packet.Review, packet.PacketID, packet.Objective); err != nil {
 		return err
 	}
 	if packet.SchemaVersion == packetSchemaVersion {
