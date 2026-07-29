@@ -64,6 +64,7 @@ not be used as evidence that a pending capability is already released.
 - [x] Wire the Session Context Packet into the Claude lifecycle adapter with bounded authorization and omission reporting.
 - [ ] Wire the complete Codex lifecycle and record qualifying native evidence for each supported runtime/platform.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
+- [x] Project a rich, bounded runtime orientation and real base skills during adapter installation, preserving user-authored files and failing closed on conflicts.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
 - [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.
 - [x] Implement local refinement submission, policy enforcement, audit snapshots and explicit reversal for owner facets.

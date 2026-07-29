@@ -127,6 +127,32 @@ configuração e dados existentes. O `status` mostra a situação; o `doctor`
 explica diagnósticos. Nenhum desses comandos cria clientes, projetos ou
 conteúdo de trabalho sem pedido explícito.
 
+### Passo 2.1 — Conecte o Maestro ao seu runtime
+
+Depois do `init`, escolha o runtime que você usa no workspace:
+
+```text
+bcgos adapter install --runtime claude <workspace>
+# ou
+bcgos adapter install --runtime codex <workspace>
+```
+
+Esse passo instala os hooks locais e também deixa no próprio workspace uma
+orientação completa e legível (`CLAUDE.md` ou `AGENTS.md`) com os blocos do OS,
+além das skills reais do bundle em `.claude/skills/` ou `.codex/skills/`.
+Você pode abrir esses arquivos diretamente no editor. A instalação preserva
+texto que já exista; se uma skill gerenciada tiver sido alterada manualmente,
+ela para com `conflict` em vez de sobrescrevê-la.
+
+Confira o resultado:
+
+```text
+bcgos adapter status --runtime claude <workspace>
+```
+
+Troque `claude` por `codex` quando aplicável. A configuração local prepara o
+runtime, mas não prova que uma capability nativa já foi qualificada.
+
 ### Passo 3 — Escolha a profundidade de interação
 
 ```text

@@ -334,6 +334,12 @@ func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 	if code := runAdapter([]string{"install", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "installed"`) {
 		t.Fatalf("install = %d %s", code, output.String())
 	}
+	if body, err := os.ReadFile(filepath.Join(workspacePath, "AGENTS.md")); err != nil || !strings.Contains(string(body), "Memória e persistência") {
+		t.Fatalf("runtime orientation = %q, %v", body, err)
+	}
+	if body, err := os.ReadFile(filepath.Join(workspacePath, ".codex", "skills", "dream-memory", "SKILL.md")); err != nil || !strings.Contains(string(body), "name: dream-memory") {
+		t.Fatalf("installed skill = %q, %v", body, err)
+	}
 	output.Reset()
 	if code := runAdapter([]string{"uninstall", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "removed"`) {
 		t.Fatalf("remove = %d %s", code, output.String())

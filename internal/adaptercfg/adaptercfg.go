@@ -27,6 +27,73 @@ type binding struct {
 	Async       bool
 }
 
+// ValidateInstall performs the read-only checks used by Install. Callers that
+// coordinate another local transaction can use it to fail closed before either
+// side writes.
+func ValidateInstall(runtimeName, workspace, executable string) error {
+	path, err := target(runtimeName, workspace)
+	if err != nil {
+		return err
+	}
+	bindings, err := bindingsFor(runtimeName, executable)
+	if err != nil {
+		return err
+	}
+	config, err := read(path)
+	if err != nil {
+		return err
+	}
+	hooks, err := hooksMap(config)
+	if err != nil {
+		return err
+	}
+	for _, binding := range bindings {
+		groups, err := groupsForEvent(hooks, binding.NativeEvent)
+		if err != nil {
+			return err
+		}
+		if err := validateEventGroups(binding.NativeEvent, groups); err != nil {
+			return err
+		}
+	}
+	return rejectTrackedConfig(workspace, path)
+}
+
+// ValidateUninstall performs the read-only checks used by Uninstall.
+func ValidateUninstall(runtimeName, workspace string) error {
+	path, err := target(runtimeName, workspace)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	config, err := read(path)
+	if err != nil {
+		return err
+	}
+	hooks, err := hooksMap(config)
+	if err != nil {
+		return err
+	}
+	bindings, err := bindingsFor(runtimeName, "bcgos")
+	if err != nil {
+		return err
+	}
+	for _, binding := range bindings {
+		groups, err := groupsForEvent(hooks, binding.NativeEvent)
+		if err != nil {
+			return err
+		}
+		if err := validateEventGroups(binding.NativeEvent, groups); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Install writes the owned workspace-local lifecycle bindings for the given
 // released CLI executable. The executable is explicit so an installed hook
 // never depends on a consultant's PATH or shell profile.

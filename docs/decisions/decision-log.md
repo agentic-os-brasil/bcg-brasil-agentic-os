@@ -478,3 +478,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The Maestro runtime pack may pin MarkItDown and only the required format extras with hashes and platform validation. Initial implementation focuses on a provider-neutral ingestion contract, a fail-closed adapter runner and sanitized fixtures; ZIP, URL, YouTube, plugin, Azure and other remote routes remain out of scope. The Kowalski pipeline may use MarkItDown only as a comparative benchmark until separate evidence justifies a change.
 - Refs: specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md; internal/ingest; adapters/ingest/markitdown; https://github.com/microsoft/markitdown
 - Supersedes: none
+
+## PROJ - Install the human runtime projection and real base skills
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A pilot user should be able to clone or receive the CLI and immediately understand the Agentic OS without learning Git or development. The prior adapter installer configured hooks but left the runtime without its orientation or product skills.
+- Decision: `bcgos adapter install` materializes a concise, rich `CLAUDE.md` or `AGENTS.md` from the managed orientation template and installs every active base-bundle `SKILL.md` under the runtime's local skills directory. A workspace manifest and explicit markers define ownership; user-authored orientation content is preserved, and modified or symlinked managed files fail closed.
+- Consequences: The installed runtime is navigable by a human and can invoke the actual product skills without copying the whole repository. Updates are idempotent and hash-aware. This projection is not native runtime evidence and never promotes a capability in the manifest.
+- Refs: specs/026-workspace-local-adapter-installation.md; bundles/base/runtime/orientation.md.tmpl; internal/runtimeprojection
+- Supersedes: none

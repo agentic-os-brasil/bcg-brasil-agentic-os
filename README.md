@@ -77,6 +77,7 @@ For the business-facing evolution path, read the [product evolution roadmap](doc
 | Capability | What it means today |
 | --- | --- |
 | ✅ Local workspace | `bcgos init`, `status` and `doctor` establish a local workspace without mixing it into the managed core. |
+| ✅ Guided runtime projection | `bcgos adapter install` installs hooks, a concise but complete `CLAUDE.md`/`AGENTS.md`, and the real base skills with idempotent, conflict-safe ownership. |
 | ✅ Professional context | Owner profile, skills index, human atlas and bounded session pointers stay inspectable and local. |
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
 | ✅ Governed completion | High-stakes work can require a separately authenticated Walter review before completion. |
@@ -197,6 +198,8 @@ bcgos owner init
 bcgos atlas init <workspace>
 bcgos atlas status <workspace>
 bcgos skills index
+bcgos adapter install --runtime claude <workspace>
+bcgos adapter status --runtime claude <workspace>
 bcgos ingest --workspace <path> --source <local-file> --adapter markitdown
 bcgos session packet [workspace]
 bcgos work create --workspace <path> --stdin
