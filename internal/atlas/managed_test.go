@@ -1,0 +1,194 @@
+package atlas
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestReconcileManagedProducesDeterministicOKFBundle(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "specs/one.md", "# One\n\nThe first source.\n")
+	writeTestFile(t, root, "specs/two.md", "# Two\n\nThe second source.\n")
+	allowlist := filepath.Join(root, "allowlist.json")
+	writeTestFile(t, root, "allowlist.json", `{
+  "schema_version": 1,
+  "okf_version": "0.2",
+  "generator_version": "test",
+  "policy_version": "1",
+  "log_date": "2026-07-28",
+  "sources": [
+    {"id":"one","path":"specs/one.md","type":"Reference","title":"One","description":"The first source.","tags":["one"],"related":["two"]},
+    {"id":"two","path":"specs/two.md","type":"Reference","title":"Two","description":"The second source.","tags":["two"],"related":["one"]}
+  ]
+}`)
+
+	output := filepath.Join(root, "bundle")
+	first, err := ReconcileManaged(root, allowlist, output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstSnapshot := snapshotDirectory(t, output)
+	second, err := ReconcileManaged(root, allowlist, output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondSnapshot := snapshotDirectory(t, output)
+	if first.Fingerprint == "" || first.Fingerprint != second.Fingerprint {
+		t.Fatalf("fingerprints = %q and %q", first.Fingerprint, second.Fingerprint)
+	}
+	if firstSnapshot != secondSnapshot {
+		t.Fatal("reconciliation is not deterministic")
+	}
+	if err := ValidateManagedBundle(output); err != nil {
+		t.Fatal(err)
+	}
+	one, err := os.ReadFile(filepath.Join(output, "concepts", "one.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"type: Reference",
+		"x-bcgos-scope: managed",
+		"sources:",
+		"/concepts/two.md",
+		"# Source snapshot",
+	} {
+		if !strings.Contains(string(one), expected) {
+			t.Fatalf("one.md missing %q:\n%s", expected, one)
+		}
+	}
+}
+
+func TestReconcileManagedRejectsSourceOutsideManagedRoots(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "dev/private.md", "# private\n")
+	allowlist := filepath.Join(root, "allowlist.json")
+	writeTestFile(t, root, "allowlist.json", `{
+  "schema_version": 1,
+  "okf_version": "0.2",
+  "generator_version": "test",
+  "policy_version": "1",
+  "log_date": "2026-07-28",
+  "sources": [{"id":"private","path":"dev/private.md","type":"Reference","title":"Private"}]
+}`)
+	if _, err := ReconcileManaged(root, allowlist, filepath.Join(root, "bundle")); err == nil {
+		t.Fatal("managed reconciliation accepted a development source")
+	}
+}
+
+func TestReconcileManagedRejectsInvalidCalendarDate(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "README.md", "# Product\n")
+	allowlist := `{
+  "schema_version": 1,
+  "okf_version": "0.2",
+  "generator_version": "test/1",
+  "policy_version": "managed-product/1",
+  "log_date": "2026-02-31",
+  "sources": [{"id":"readme","path":"README.md","type":"Product","title":"Product"}]
+}`
+	allowlistPath := filepath.Join(root, "allowlist.json")
+	if err := os.WriteFile(allowlistPath, []byte(allowlist), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReconcileManaged(root, allowlistPath, filepath.Join(root, "atlas")); err == nil {
+		t.Fatal("expected invalid calendar date to be rejected")
+	}
+}
+
+func TestReconcileManagedRejectsSourceIDPathTraversal(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "README.md", "# Product\n")
+	allowlist := `{
+  "schema_version": 1,
+  "okf_version": "0.2",
+  "generator_version": "test/1",
+  "policy_version": "managed-product/1",
+  "log_date": "2026-07-28",
+  "sources": [{"id":"../escape","path":"README.md","type":"Product","title":"Product"}]
+}`
+	allowlistPath := filepath.Join(root, "allowlist.json")
+	if err := os.WriteFile(allowlistPath, []byte(allowlist), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReconcileManaged(root, allowlistPath, filepath.Join(root, "atlas")); err == nil {
+		t.Fatal("expected source ID path traversal to be rejected")
+	}
+}
+
+func TestValidateManagedBundleRejectsMissingConceptType(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "index.md", "okf_version: \"0.2\"\n\n# Bundle\n")
+	writeTestFile(t, root, "log.md", "# Directory Update Log\n")
+	writeTestFile(t, root, "broken.md", "# Missing frontmatter\n")
+	if err := ValidateManagedBundle(root); err == nil || !strings.Contains(err.Error(), "frontmatter") {
+		t.Fatalf("ValidateManagedBundle() error = %v", err)
+	}
+}
+
+func TestVerifyManagedUpToDateDetectsStaleGeneratedOutput(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "specs/one.md", "# One\n")
+	allowlist := filepath.Join(root, "allowlist.json")
+	writeTestFile(t, root, "allowlist.json", `{
+  "schema_version": 1,
+  "okf_version": "0.2",
+  "generator_version": "test",
+  "policy_version": "1",
+  "log_date": "2026-07-28",
+  "sources": [{"id":"one","path":"specs/one.md","type":"Reference","title":"One"}]
+}`)
+	output := filepath.Join(root, "bundle")
+	if _, err := ReconcileManaged(root, allowlist, output); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(output, "index.md"), []byte("okf_version: \"0.2\"\n\n# Stale\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyManagedUpToDate(root, allowlist, output); err == nil || !strings.Contains(err.Error(), "stale") {
+		t.Fatalf("VerifyManagedUpToDate() error = %v", err)
+	}
+}
+
+func writeTestFile(t *testing.T, root, relative, body string) {
+	t.Helper()
+	path := filepath.Join(root, filepath.FromSlash(relative))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func snapshotDirectory(t *testing.T, root string) string {
+	t.Helper()
+	var builder strings.Builder
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		builder.WriteString(filepath.ToSlash(relative))
+		builder.WriteByte('\n')
+		builder.Write(body)
+		builder.WriteString("\n---\n")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return builder.String()
+}

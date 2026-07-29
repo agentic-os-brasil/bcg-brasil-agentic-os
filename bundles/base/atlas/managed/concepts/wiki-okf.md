@@ -1,3 +1,39 @@
+---
+type: Architecture Contract
+title: Wiki update lifecycle and OKF profile
+description: The lifecycle, validation and publication contract for OKF bundles.
+resource: repo://specs/008-wiki-update-okf.md
+tags:
+    - okf
+    - lifecycle
+    - validation
+sources:
+    - id: wiki-okf
+      resource: repo://specs/008-wiki-update-okf.md
+      title: Wiki update lifecycle and OKF profile
+status: stable
+x-bcgos-profile-version: "1"
+x-bcgos-stable-id: managed/wiki-okf
+x-bcgos-scope: managed
+x-bcgos-source-fingerprint: 3c2b98d6132a20e6f61c6f2920bb06d7d9936e816ee76c20d9ac9b4e440241ea
+x-bcgos-freshness: fresh
+x-bcgos-status: active
+x-bcgos-generator-version: bcgos-managed-wiki/0.1
+x-bcgos-policy-version: managed-product/1
+---
+
+# Source snapshot
+
+This managed concept is generated from the reviewed repository source `specs/008-wiki-update-okf.md`. The source remains authoritative.
+
+## Related
+
+- [Content navigation through a compiled LLM wiki](/concepts/content-navigation.md)
+- [Human atlas bootstrap](/concepts/human-atlas-bootstrap.md)
+- [Maestro release and distribution](/concepts/release-distribution.md)
+
+## Source content
+
 # Spec 008 - Wiki update lifecycle and BCGOS OKF profile
 
 Status: architecture accepted; initial managed compiler/validator implemented; schemas, event outbox, durable manifests and runtime integration pending.

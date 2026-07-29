@@ -1,3 +1,38 @@
+---
+type: Architecture Contract
+title: Content navigation through a compiled LLM wiki
+description: The governed navigation contract for a compiled Maestro atlas.
+resource: repo://specs/007-content-navigation.md
+tags:
+    - atlas
+    - navigation
+    - governance
+sources:
+    - id: content-navigation
+      resource: repo://specs/007-content-navigation.md
+      title: Content navigation through a compiled LLM wiki
+status: stable
+x-bcgos-profile-version: "1"
+x-bcgos-stable-id: managed/content-navigation
+x-bcgos-scope: managed
+x-bcgos-source-fingerprint: 3c2b98d6132a20e6f61c6f2920bb06d7d9936e816ee76c20d9ac9b4e440241ea
+x-bcgos-freshness: fresh
+x-bcgos-status: active
+x-bcgos-generator-version: bcgos-managed-wiki/0.1
+x-bcgos-policy-version: managed-product/1
+---
+
+# Source snapshot
+
+This managed concept is generated from the reviewed repository source `specs/007-content-navigation.md`. The source remains authoritative.
+
+## Related
+
+- [Wiki update lifecycle and OKF profile](/concepts/wiki-okf.md)
+- [Human atlas bootstrap](/concepts/human-atlas-bootstrap.md)
+
+## Source content
+
 # Spec 007 - Content navigation through a compiled LLM wiki
 
 Status: architecture accepted; deterministic managed atlas compiler/validator implemented; private memory atlas pending.

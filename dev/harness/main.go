@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/capabilitybundle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/gitguard"
@@ -40,8 +41,36 @@ func main() {
 		claudeCommand(root, os.Args[2:])
 	case "skills-index":
 		skillsIndexCommand(root, os.Args[2:])
+	case "wiki":
+		wikiCommand(root, os.Args[2:])
 	default:
 		usage()
+		os.Exit(2)
+	}
+}
+
+func wikiCommand(root string, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness wiki <reconcile|validate|verify> [--allowlist path] [--output path]")
+		os.Exit(2)
+	}
+	flags := flag.NewFlagSet("wiki", flag.ExitOnError)
+	allowlist := flags.String("allowlist", filepath.Join(root, "dev", "wiki", "managed-allowlist.json"), "managed source allowlist")
+	output := flags.String("output", filepath.Join(root, "bundles", "base", "atlas", "managed"), "managed OKF output directory")
+	_ = flags.Parse(args[1:])
+	switch args[0] {
+	case "reconcile":
+		report, err := atlas.ReconcileManaged(root, *allowlist, *output)
+		fatalIf(err)
+		fmt.Printf("managed wiki reconciled: %d concepts, fingerprint %s\n", report.Concepts, report.Fingerprint)
+	case "validate":
+		fatalIf(atlas.ValidateManagedBundle(*output))
+		fmt.Println("managed wiki bundle valid")
+	case "verify":
+		fatalIf(atlas.VerifyManagedUpToDate(root, *allowlist, *output))
+		fmt.Println("managed wiki bundle current")
+	default:
+		fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness wiki <reconcile|validate|verify> [--allowlist path] [--output path]")
 		os.Exit(2)
 	}
 }
@@ -130,7 +159,7 @@ func decisionCommand(root string, args []string) {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness <validate|decision|doctor|setup|recover|guard|claude|skills-index> [options]")
+	fmt.Fprintln(os.Stderr, "usage: go run ./dev/harness <validate|decision|doctor|setup|recover|guard|claude|skills-index|wiki> [options]")
 }
 
 func fatalIf(err error) {

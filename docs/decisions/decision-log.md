@@ -489,3 +489,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The catalog, role contracts, specs and adapters must replace Darwin's `tool_access: none`/recommend-only posture with scoped maintenance authority. Deterministic surfaces still prepare packets and enforce grants; Darwin's headless execution owns diagnosis and remediation. Native runtime qualification remains required before claiming active runtime capability. Housekeeping failures remain recoverable through receipts and scheduler state.
 - Refs: specs/018-maestro-core-agents.md; specs/028-federated-improvement-loop.md; specs/032-canary-observability.md; bundles/base/agents/darwin/AGENT.md; internal/agentcatalog; internal/scheduler; internal/federation; internal/lifecycle
 - Supersedes: none
+
+## OKFW - Use Karpathy-style maintenance with Google OKF bundles
+
+- Date: 2026-07-28
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs a durable, human-readable and agent-readable knowledge surface. Karpathy's LLM-Wiki pattern provides the maintenance model, while Google's Open Knowledge Format provides an open interchange boundary. Neither format nor pattern supplies Maestro's authority, privacy, revocation or publication guarantees.
+- Decision: Build the managed Maestro atlas as a deterministic, versioned Google OKF v0.2 bundle, using the Karpathy pattern for incremental source integration and cross-link maintenance. Preserve a namespaced BCGOS profile for scope, provenance, lifecycle and policy; managed content is allowlist-first and private/owner/workspace content remains physically separate and unavailable to this compiler. Darwin may detect drift and invoke a bounded managed reconciliation, but it may not synthesize, publish private content or bypass review/ release gates.
+- Consequences: The first implementation can be consumed by any OKF-aware tool without a Google runtime dependency. Generated concepts, indexes, backlinks and logs remain reviewable in Git and reproducible from pinned sources. LLM-generated enrichment, private atlas compilation, provider selection and autonomous publication remain separate follow-up contracts.
+- Refs: specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/014-human-atlas-bootstrap.md; internal/atlas; https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f; https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
+- Supersedes: none
