@@ -29,6 +29,29 @@ The source SVG is deterministic and inspectable; the platform-specific
 conversion must be hash-recorded in the release manifest and performed before
 the native signature is applied.
 
+## Reproducible factory command
+
+On the macOS release worker, generate both native formats from the canonical
+source with:
+
+```bash
+go run ./dev/release icons \
+  --source installers/wizard/assets/maestro-app-icon.svg \
+  --output dist/native-icons
+```
+
+The command requires the system `qlmanage`, `sips` and `iconutil` tools. It
+emits `maestro-app-icon.icns`, `maestro-app-icon.ico` and
+`maestro-app-icon-manifest.json`, which records the source and output SHA-256
+digests plus the SHA-256 fingerprints of the three rasterization tools. The
+`.ico` is PNG-backed and ready for a Windows resource compiler;
+the command itself does not embed it in a PE file or apply Authenticode.
+
+The rehearsal DMG uses this same command. The signed release factory must
+consume the recorded assets before signing the final native installer, must
+run with the approved tool fingerprints and must fail if the source or
+generated digest changes between packaging and signing.
+
 ## Current evidence boundary
 
 The visual branch proves the icon and theme render in the dependency-free

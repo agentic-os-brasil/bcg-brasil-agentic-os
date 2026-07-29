@@ -27,6 +27,8 @@ func main() {
 	switch os.Args[1] {
 	case "binary":
 		binary(root, os.Args[2:])
+	case "icons":
+		icons(root, os.Args[2:])
 	case "seeded-binaries":
 		seededBinaries(root, os.Args[2:])
 	case "candidate":
@@ -275,7 +277,7 @@ func optionalAbsoluteFromRoot(root, value string) string {
 func usage() {
 	fmt.Fprintln(
 		os.Stderr,
-		"usage: go run ./dev/release <binary|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness> [options]",
+		"usage: go run ./dev/release <binary|icons|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness> [options]",
 	)
 	os.Exit(2)
 }

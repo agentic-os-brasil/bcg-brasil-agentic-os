@@ -13,39 +13,30 @@ STAGING=${MAESTRO_REHEARSAL_STAGING:-"$ROOT/dist/maestro-rehearsal-dmg"}
 WIZARD_DIR=${MAESTRO_REHEARSAL_WIZARD_DIR:-"$ROOT/installers/wizard"}
 APP_NAME="Maestro Installer Rehearsal.app"
 APP="$STAGING/$APP_NAME"
-ICONSET="$STAGING/maestro.iconset"
 
 case "$(uname -s)" in
   Darwin) ;;
-  *) echo "error: rehearsal DMG requires macOS tooling (hdiutil, iconutil, sips, qlmanage)" >&2; exit 2 ;;
+  *) echo "error: rehearsal DMG requires macOS tooling (hdiutil, qlmanage, sips, iconutil)" >&2; exit 2 ;;
 esac
-for command in go hdiutil iconutil sips qlmanage SetFile; do
+for command in go hdiutil SetFile; do
   command -v "$command" >/dev/null 2>&1 || { echo "error: missing required command: $command" >&2; exit 2; }
 done
 [ -d "$WIZARD_DIR" ] || { echo "error: wizard directory not found: $WIZARD_DIR" >&2; exit 2; }
 [ -f "$WIZARD_DIR/assets/maestro-app-icon.svg" ] || { echo "error: app icon source not found" >&2; exit 2; }
 
 rm -rf "$STAGING" "$OUTPUT"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$ICONSET" "$STAGING/.icon-render"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp -R "$WIZARD_DIR" "$APP/Contents/Resources/wizard"
 
 go build -o "$APP/Contents/Resources/maestro-installer" ./cmd/maestro-installer
 
-qlmanage -t -s 512 -o "$STAGING/.icon-render" "$WIZARD_DIR/assets/maestro-app-icon.svg" >/dev/null
-rendered="$STAGING/.icon-render/maestro-app-icon.svg.png"
-for size in 16 32 128 256 512; do
-  sips -z "$size" "$size" "$rendered" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
-done
-sips -z 32 32 "$rendered" --out "$ICONSET/icon_16x16@2x.png" >/dev/null
-sips -z 64 64 "$rendered" --out "$ICONSET/icon_32x32@2x.png" >/dev/null
-sips -z 256 256 "$rendered" --out "$ICONSET/icon_128x128@2x.png" >/dev/null
-sips -z 512 512 "$rendered" --out "$ICONSET/icon_256x256@2x.png" >/dev/null
-sips -z 1024 1024 "$rendered" --out "$ICONSET/icon_512x512@2x.png" >/dev/null
-iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/maestro.icns"
-cp "$APP/Contents/Resources/maestro.icns" "$STAGING/.VolumeIcon.icns"
+go run ./dev/release icons \
+  --source "$WIZARD_DIR/assets/maestro-app-icon.svg" \
+  --output "$STAGING" >/dev/null
+cp "$STAGING/maestro-app-icon.icns" "$APP/Contents/Resources/maestro.icns"
+cp "$STAGING/maestro-app-icon.icns" "$STAGING/.VolumeIcon.icns"
 SetFile -a V "$STAGING/.VolumeIcon.icns"
 SetFile -a C "$STAGING"
-rm -rf "$ICONSET" "$STAGING/.icon-render"
 
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -81,6 +72,10 @@ same verify -> install -> open flow without signed release inputs.
 
 The rehearsal does not install the product, does not assert Ed25519,
 Authenticode or notarization, and does not change the global PATH.
+
+The DMG includes the deterministic Maestro icon manifest and both native icon
+formats generated from the canonical SVG. It does not embed or assert a
+Windows executable signature.
 
 This artifact is not a signed release, notarized package or pilot evidence.
 EOF
