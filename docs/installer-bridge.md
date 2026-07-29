@@ -54,3 +54,14 @@ a signed release or pilot readiness.
 The actual signed package must still be assembled by the release workflow and
 must carry native signing/notarization evidence before it can be called
 pilot-ready.
+
+## External CI unblock
+
+The validation workflow is enabled and the PR jobs are configured for hosted
+`ubuntu-latest`, `windows-latest` and `macos-latest` runners. If all three
+checks fail with zero steps, inspect the check-run annotation before changing
+code. The observed blocker is an account payment failure or spending limit;
+an administrator must fix **Settings → Billing & plans** for the GitHub
+account/organization and then rerun the failed workflow. Success means each
+job has started and reports its actual harness steps; a green local rehearsal
+cannot substitute for that remote evidence.
