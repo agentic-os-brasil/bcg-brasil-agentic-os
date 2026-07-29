@@ -27,6 +27,34 @@ function Require-AbsolutePath([string]$Path, [string]$Label) {
     }
 }
 
+function Get-SafeTreeDigest([string]$Root) {
+    $rootItem = Get-Item -LiteralPath $Root -ErrorAction Stop
+    if (-not $rootItem.PSIsContainer -or ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Tree root must be a regular non-reparse directory."
+    }
+    $lines = [Collections.Generic.List[string]]::new()
+    foreach ($entry in @(Get-ChildItem -LiteralPath $rootItem.FullName -Recurse -Force | Sort-Object FullName)) {
+        if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw "Tree contains a reparse point: $($entry.FullName)"
+        }
+        $relative = $entry.FullName.Substring($rootItem.FullName.Length).TrimStart([char[]]@('\', '/'))
+        if ($entry.PSIsContainer) {
+            $lines.Add("D|$relative")
+            continue
+        }
+        $digest = (Get-FileHash -LiteralPath $entry.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        $lines.Add("F|$relative|$($entry.Length)|$digest")
+    }
+    $payload = [Text.Encoding]::UTF8.GetBytes(($lines -join "`n"))
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($payload)).Replace('-', '')).ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
 Require-AbsolutePath $Icon "Icon"
 Require-AbsolutePath $WizardDir "WizardDir"
 Require-AbsolutePath $OutputDirectory "OutputDirectory"
@@ -48,6 +76,7 @@ $wizardReparse = Get-ChildItem -LiteralPath $wizardItem.FullName -Recurse -Force
 if ($null -ne $wizardReparse -and @($wizardReparse).Count -gt 0) {
     throw "WizardDir contains a reparse point."
 }
+$initialWizardDigest = Get-SafeTreeDigest $wizardItem.FullName
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $buildPackageDir = Join-Path $root "cmd\maestro-installer"
@@ -73,13 +102,34 @@ $outputFull = Join-Path $packageOutput "maestro-installer.exe"
 $nonce = [Guid]::NewGuid().ToString("N")
 $rcPath = Join-Path ([IO.Path]::GetTempPath()) "maestro-installer-$nonce.rc"
 $sysoPath = Join-Path $buildPackageDir "maestro-installer-$nonce.syso"
+$stagingRoot = Join-Path ([IO.Path]::GetTempPath()) "maestro-installer-input-$nonce"
+$stagedIconPath = Join-Path $stagingRoot "maestro-app-icon.ico"
+$stagedWizardPath = Join-Path $stagingRoot "wizard"
 $previousGOOS = $env:GOOS
 $previousGOARCH = $env:GOARCH
 $succeeded = $false
 
 try {
+	New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
+	Copy-Item -LiteralPath $iconItem.FullName -Destination $stagedIconPath
+	Copy-Item -LiteralPath $wizardItem.FullName -Destination $stagedWizardPath -Recurse
+	$stagedIconItem = Get-Item -LiteralPath $stagedIconPath -ErrorAction Stop
+	if ($stagedIconItem.PSIsContainer -or ($stagedIconItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+		throw "Staged icon must be a regular non-reparse file."
+	}
+	if ((Get-FileHash -LiteralPath $stagedIconPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $IconSHA256) {
+		throw "Staged icon SHA-256 does not match the approved input."
+	}
+	$stagedWizardDigest = Get-SafeTreeDigest $stagedWizardPath
+	if ($stagedWizardDigest -ne $initialWizardDigest) {
+		throw "Wizard changed while it was staged."
+	}
+	if ((Get-FileHash -LiteralPath $iconItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $IconSHA256) {
+		throw "Icon changed while it was staged."
+	}
+
     @"
-1 ICON "$($iconItem.FullName)"
+1 ICON "$($stagedIconItem.FullName)"
 "@ | Set-Content -LiteralPath $rcPath -Encoding ascii
 
     & $compilerPath --target=pe-x86-64 -i $rcPath -o $sysoPath
@@ -100,8 +150,14 @@ try {
         Pop-Location
     }
 
-    Copy-Item -LiteralPath $wizardItem.FullName -Destination (Join-Path $packageOutput "wizard") -Recurse
-    Copy-Item -LiteralPath $iconItem.FullName -Destination (Join-Path $packageOutput "maestro-app-icon.ico")
+    if ((Get-FileHash -LiteralPath $iconItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $IconSHA256) {
+        throw "Icon changed during packaging."
+    }
+    if ((Get-SafeTreeDigest $wizardItem.FullName) -ne $initialWizardDigest) {
+        throw "Wizard changed during packaging."
+    }
+    Copy-Item -LiteralPath $stagedWizardPath -Destination (Join-Path $packageOutput "wizard") -Recurse
+    Copy-Item -LiteralPath $stagedIconPath -Destination (Join-Path $packageOutput "maestro-app-icon.ico")
 
     $resourceDigest = (Get-FileHash -LiteralPath $sysoPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $provenance = [ordered]@{
@@ -152,6 +208,7 @@ pause
 finally {
     Remove-Item -LiteralPath $rcPath -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $sysoPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $stagingRoot -Recurse -Force -ErrorAction SilentlyContinue
     if (-not $succeeded -and $outputCreated) {
         Remove-Item -LiteralPath $packageOutput -Recurse -Force -ErrorAction SilentlyContinue
     }
