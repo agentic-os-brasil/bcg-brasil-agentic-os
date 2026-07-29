@@ -150,6 +150,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/005-development-harness.md; .claude/README.md; dev/skills/start-contributing/SKILL.md
 - Supersedes: none
 
+## WIZR - Give the signed installer one branded, user-space wizard
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Pilot users can install software in their corporate user profile but may not have administrator permissions or technical context. The release trust and rollback contracts already exist, but the first visual interaction is still missing.
+- Decision: The Maestro installer uses one dependency-free, cross-platform visual wizard with a midnight/teal/gold identity derived from the Maestro conductor mark. It explains four states (welcome, verification, installation and ready), states the user-space/no-admin boundary, and delegates every trust-bearing operation to the signed `bcgos-bootstrap` process. Static assets are deterministic SVG and the wizard never provides an unsigned fallback.
+- Consequences: A future executable bridge can reuse the same screens and status vocabulary on Windows and macOS. The visual layer can be reviewed independently, while pilot readiness still requires signed artifacts, native signing/notarization and clean-device evidence. The global PATH, workspaces and owner data remain outside the installer transaction.
+- Refs: installers/wizard; docs/installer-wizard.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
+- Supersedes: none
+
 ## DUAL - Support Windows and macOS equally
 
 - Date: 2026-07-19
