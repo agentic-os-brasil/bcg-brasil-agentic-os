@@ -74,15 +74,21 @@ shorthand `bcgos doctor` and explicitly remain non-installing.
 
 ## Visual identity
 
-The wizard converges with the presentation material: deep green-black field,
-luminous mint orbit lines and typography, quiet white copy and a restrained
-secondary aqua accent. The Maestro avatar is visible as a small conductor
-identity plaque and a native app-icon medallion; the baton/orbit mark remains
-the secondary visual anchor. The orbit/constellation treatment carries the
-“digital second brain” idea into the installation moment. SVG keeps the assets
-small, deterministic and inspectable in the release factory; no remote fonts,
-JavaScript packages or network calls are required. Native `.ico`/`.icns`
-packaging is specified in
+The wizard uses a small Maestro identity system rather than a generic themed
+installer: a transparent conductor avatar is the primary hero, the
+`MAESTRO / AGENTIC OS` lockup is the wordmark, and the baton/orbit mark is the
+secondary seal. The palette converges with the presentation material — deep
+green-black field, luminous mint, quiet white and a restrained aqua accent.
+The orbit/constellation treatment carries the “digital second brain” idea into
+the installation moment, while the staff and two notes give the regent a
+musical signature without turning the screen into a concert poster. The
+conductor mark anchors the rail and hero while the completion state keeps the
+baton/orbit seal as a compact “show is ready” stamp; the native app-icon
+remains a separate square asset for the operating system shell.
+
+SVG keeps the assets small, deterministic and inspectable in the release
+factory; no remote fonts, JavaScript packages or network calls are required.
+Native `.ico`/`.icns` packaging is specified in
 [`docs/installer-icons.md`](installer-icons.md) and still requires platform
 signing evidence.
 
