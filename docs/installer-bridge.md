@@ -55,6 +55,24 @@ The actual signed package must still be assembled by the release workflow and
 must carry native signing/notarization evidence before it can be called
 pilot-ready.
 
+### Cross-platform rehearsal commands
+
+The same bridge contract can be exercised without administrator permission on
+both pilot targets:
+
+```powershell
+.\maestro-installer.exe --simulate --wizard-dir .\wizard --simulation-root $env:TEMP\maestro-rehearsal
+```
+
+```bash
+./maestro-installer --simulate --wizard-dir ./wizard --simulation-root "$(mktemp -d)"
+```
+
+The Windows and macOS binaries are built for the release matrix (`windows/
+amd64`, `darwin/amd64`, `darwin/arm64`). The rehearsal writes only beneath the
+explicit sandbox root; it never requests elevation or changes the global
+`PATH`.
+
 ## External CI unblock
 
 The validation workflow is enabled and the PR jobs are configured for hosted
