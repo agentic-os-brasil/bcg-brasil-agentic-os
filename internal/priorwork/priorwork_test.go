@@ -219,6 +219,23 @@ func TestImportReceiptMustBindExactSnapshot(t *testing.T) {
 	if err := ValidateImportReceipt(receipt, snapshot); err == nil {
 		t.Fatal("expected a mismatched adapter-command receipt to fail")
 	}
+	receipt = testReceipt(snapshot, testEnrollment())
+	receipt.TriggerRef = ""
+	if err := ValidateImportReceipt(receipt, snapshot); err == nil {
+		t.Fatal("expected a missing trigger reference to fail")
+	}
+}
+
+func TestEnrollmentRequiresIANAScheduleTimezone(t *testing.T) {
+	enrollment := testEnrollment()
+	enrollment.ScheduleTimezone = ""
+	if err := ValidateEnrollment(enrollment); err == nil {
+		t.Fatal("expected missing schedule timezone to fail")
+	}
+	enrollment.ScheduleTimezone = "UTC-3"
+	if err := ValidateEnrollment(enrollment); err == nil {
+		t.Fatal("expected non-IANA schedule timezone to fail")
+	}
 }
 
 func TestStoreRejectsUnauthorizedActorAndForgedReceipt(t *testing.T) {

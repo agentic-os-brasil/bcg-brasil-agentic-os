@@ -26,6 +26,7 @@ var (
 	opaqueRefPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:!,-]{0,255}$`)
 	watermarkPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._~:/+=-]{0,511}$`)
 	digestPattern    = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	timezonePattern  = regexp.MustCompile(`^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+)+$`)
 )
 
 type RootRef struct {
@@ -437,15 +438,15 @@ func ValidateEnrollment(enrollment Enrollment) error {
 		len(enrollment.AllowedOrigins) > 32 || len(enrollment.AllowedItemTypes) == 0 {
 		return errors.New("invalid prior-work enrollment")
 	}
+	if len(enrollment.ScheduleTimezone) > 64 || !timezonePattern.MatchString(enrollment.ScheduleTimezone) {
+		return errors.New("invalid prior-work scheduler timezone")
+	}
+	if _, err := time.LoadLocation(enrollment.ScheduleTimezone); err != nil {
+		return errors.New("invalid prior-work scheduler timezone")
+	}
 	publicKey, err := base64.StdEncoding.Strict().DecodeString(enrollment.CollectorPublicKey)
 	if err != nil || len(publicKey) != ed25519.PublicKeySize {
 		return errors.New("invalid prior-work collector public key")
-	}
-	if len(enrollment.ScheduleTimezone) > 64 {
-		return errors.New("invalid prior-work schedule timezone")
-	}
-	if _, err := time.LoadLocation(enrollment.ScheduleTimezone); err != nil {
-		return errors.New("invalid prior-work schedule timezone")
 	}
 	seen := map[string]bool{}
 	for _, root := range enrollment.Roots {
