@@ -2,6 +2,42 @@
   "schema_version": 1,
   "files": [
     {
+      "source": "bundles/base/atlas/managed/backlinks.json",
+      "path": "atlas/managed/backlinks.json"
+    },
+    {
+      "source": "bundles/base/atlas/managed/concepts/content-navigation.md",
+      "path": "atlas/managed/concepts/content-navigation.md"
+    },
+    {
+      "source": "bundles/base/atlas/managed/concepts/human-atlas-bootstrap.md",
+      "path": "atlas/managed/concepts/human-atlas-bootstrap.md"
+    },
+    {
+      "source": "bundles/base/atlas/managed/concepts/install-update.md",
+      "path": "atlas/managed/concepts/install-update.md"
+    },
+    {
+      "source": "bundles/base/atlas/managed/concepts/release-distribution.md",
+      "path": "atlas/managed/concepts/release-distribution.md"
+    },
+    {
+      "source": "bundles/base/atlas/managed/concepts/wiki-okf.md",
+      "path": "atlas/managed/concepts/wiki-okf.md"
+    },
+    {
+      "source": "bundles/base/atlas/managed/diagnostics.json",
+      "path": "atlas/managed/diagnostics.json"
+    },
+    {
+      "source": "bundles/base/atlas/managed/index.md",
+      "path": "atlas/managed/index.md"
+    },
+    {
+      "source": "bundles/base/atlas/managed/log.md",
+      "path": "atlas/managed/log.md"
+    },
+    {
       "source": "bundles/base/memory/policy.json",
       "path": "memory/policy.json"
     },

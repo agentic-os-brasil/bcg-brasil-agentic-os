@@ -1,0 +1,22 @@
+{
+  "content-navigation": [
+    "human-atlas-bootstrap",
+    "wiki-okf"
+  ],
+  "human-atlas-bootstrap": [
+    "content-navigation",
+    "wiki-okf"
+  ],
+  "install-update": [
+    "release-distribution"
+  ],
+  "release-distribution": [
+    "install-update",
+    "wiki-okf"
+  ],
+  "wiki-okf": [
+    "content-navigation",
+    "human-atlas-bootstrap",
+    "release-distribution"
+  ]
+}

@@ -154,14 +154,15 @@ not be used as evidence that a pending capability is already released.
 - [x] Define the managed and private atlas boundaries and the role of wiki versus canonical sources.
 - [x] Define how the private atlas navigates L1/L2/L3/lifetime without becoming another memory store.
 - [x] Define the wiki as downstream navigation over rollups produced by dreaming.
-- [x] Adopt OKF v0.1 plus a governed BCGOS Atlas Profile for wiki bundles.
+- [x] Adopt Google OKF v0.2 plus a governed BCGOS Atlas Profile for wiki bundles.
 - [x] Define event-driven incremental updates, weekly reconciliation and synchronous revocation barriers.
-- [ ] Define page and machine-readable index schemas.
-- [ ] Implement the BCGOS Atlas Profile v1 schema and OKF validator.
+- [x] Define the first page and machine-readable index schemas for the managed bundle.
+- [x] Implement the first BCGOS managed-profile and OKF validator slice.
 - [ ] Implement the transactional outbox, source watermarks and atomic atlas manifest.
-- [ ] Implement the deterministic managed product-atlas generator.
-- [ ] Generate index, backlinks, orphan/broken-link diagnostics and a generation log.
-- [ ] Add allowlist, provenance, determinism and boundary tests to CI.
+- [x] Implement the deterministic managed product-atlas generator.
+- [x] Generate index, backlinks, orphan/broken-link diagnostics and a generation log.
+- [x] Add allowlist, provenance, determinism and boundary tests to CI.
+- [x] Add a bounded Darwin check/reconcile routine without automatic commits or pushes.
 - [ ] Expose bounded product-content pointers for Claude and Codex adapters.
 - [ ] Implement owner/workspace private atlas only after enrollment, privacy and deletion contracts are ready.
 - [ ] Extend the initial private-atlas taxonomy only through scoped templates, ownership rules and privacy tests.
