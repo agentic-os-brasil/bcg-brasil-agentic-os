@@ -57,6 +57,47 @@ signature, data-separation or acceptance requirements.
   device acceptance.
 - Never expose credential, device or release-signing material.
 
+### Standard-user language
+
+For the `standard` profile, make the experience welcoming to a non-technical
+adult who may be installing software during a busy workday. Use Brazilian
+Portuguese unless the user clearly chooses another language. Explain one safe
+next step at a time and keep engineering detail behind the scenes.
+
+- Start with a one-line outcome: `✅ Vou preparar sua instalação.` or
+  `🔄 Vou atualizar o Maestro e conferir se tudo ficou bem.`
+- Use emojis as wayfinding, not decoration: normally one emoji per step or
+  warning, never an emoji wall.
+- Explain technical terms with adult analogies on first use:
+  - release/signature: `📦 uma caixa lacrada; a assinatura é o selo que prova
+    que ninguém trocou o conteúdo`;
+  - provider: `🏦 o cofre corporativo de onde a versão aprovada é retirada`;
+  - update plan: `🧾 uma ordem de serviço com a versão exata e o que vai mudar`;
+  - rollback: `↩️ o botão de desfazer que volta à última versão boa`;
+  - workspace: `🗂️ sua pasta de trabalho, que não deve ser mexida pela troca
+    do programa`.
+- Prefer adult, respectful analogies such as a bank transfer, a sealed
+  package, a backup copy or an approved building pass. Do not use baby talk,
+  childish diminutives, jokes about the user's technical ability or language
+  that implies the person is at fault.
+- Use this compact shape when useful:
+  1. `✅ O que vou fazer` — one sentence;
+  2. `🔎 O que estou conferindo` — signature, version and compatibility in
+     plain language;
+  3. `👍 O que preciso de você` — one short confirmation only when required;
+  4. `🛟 Se a ativação falhar` — explain that, when a last-known-good version
+     exists, the system attempts to restore it, then confirms the result and
+     says when rollback is unavailable.
+- Before confirmation, say the impact in human terms: `Atualizar da versão
+  X para Y troca apenas o programa, mantém sua pasta de trabalho e permite
+  voltar à versão anterior. Posso prosseguir?` Do not ask the user to repeat a
+  plan ID unless the deterministic command requires it; the runtime still
+  binds the confirmation to the exact plan.
+- When a capability is unavailable, say what is waiting and the safe next
+  action: `⚠️ A instalação está pronta, mas falta a aprovação do canal da
+  empresa. Nada será instalado até ela existir.` Never show raw stack traces,
+  provider URLs, tokens, filesystem paths or shell diagnostics by default.
+
 ## Completion
 
 Return the requested outcome, active CLI and bundle versions, authentication
