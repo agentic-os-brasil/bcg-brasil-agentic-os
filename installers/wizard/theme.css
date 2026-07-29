@@ -49,6 +49,7 @@
 .runtime-statusline{display:flex;align-items:center;gap:10px;max-width:720px;margin-top:18px;color:#8fdacb;font-size:11px;letter-spacing:.01em}.runtime-statusline .pulse{flex:none;width:6px;height:6px}.runtime-statusline p{margin:0}
 .preview-banner{display:flex;align-items:flex-start;gap:12px;max-width:720px;margin-top:24px;padding:13px 16px;border:1px solid rgba(155,216,200,.38);background:rgba(155,216,200,.06);color:#b7d9d0}.preview-banner span{flex:none;color:var(--gold);font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}.preview-banner p{margin:0;font-size:11px;line-height:1.5}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
 /* Maestro identity layer: the conductor avatar sits inside the orbit system. */
 .identity-plaque{position:absolute;z-index:3;top:18px;left:20px;display:grid;gap:5px;padding:9px 11px;border-left:2px solid var(--teal);background:rgba(3,18,17,.62);backdrop-filter:blur(7px);color:#8bdccc;font:700 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em}
 .identity-plaque b{color:#668d86;font-size:8px;font-weight:600;letter-spacing:.08em}
@@ -56,7 +57,7 @@
 .hero-avatar{position:absolute;width:132px;height:132px;left:50%;top:50%;z-index:2;transform:translate(-50%,-50%);border:1px solid rgba(49,224,181,.58);border-radius:31px;box-shadow:0 0 0 9px rgba(49,224,181,.06),0 18px 38px rgba(0,0,0,.35),0 0 34px rgba(49,224,181,.23)}
 .hero-mark,.halo,.orb,.baton-line,.art-caption{z-index:1}
 .hero-avatar{z-index:2}
-@media(max-width:580px){html,body{width:100%;overflow-x:hidden}.shell,.content,.panel,.panel-welcome,.hero-copy,.hero-actions{width:100%;max-width:100%;min-width:0}.panel-welcome>.hero-art,.panel-welcome>.hero-copy{width:calc(100vw - 36px);max-width:calc(100vw - 36px);min-width:0}.identity-plaque{top:14px;left:14px}.hero-avatar{width:108px;height:108px;border-radius:25px}.hero-mark{width:160px;height:160px}.hero-copy h1,.section-heading h1,.panel-finish h1{font-size:40px;letter-spacing:-.065em}.lead{width:100%;max-width:100%;overflow-wrap:anywhere}}
+@media(max-width:580px){html,body{width:100%;overflow-x:hidden}.shell,.content,.panel,.panel-welcome,.hero-copy,.hero-actions{width:100%;max-width:100%;min-width:0}.panel-welcome>.hero-art,.panel-welcome>.hero-copy{width:100%;max-width:100%;min-width:0}.hero-copy{max-width:340px;overflow-wrap:anywhere}.identity-plaque{top:14px;left:14px}.hero-avatar{width:108px;height:108px;border-radius:25px}.hero-mark{width:160px;height:160px}.hero-copy h1,.section-heading h1,.panel-finish h1{font-size:40px;letter-spacing:-.065em}.lead{width:100%;max-width:340px;overflow-wrap:anywhere}}
 
 /* A small conductor track makes the current install state legible at a glance. */
 .signal-track{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:720px;margin-top:30px}
@@ -66,3 +67,15 @@
 .signal-step.is-active{border-color:rgba(49,224,181,.68);background:rgba(7,48,42,.68);box-shadow:0 0 0 1px rgba(49,224,181,.08),0 0 24px rgba(49,224,181,.08);transform:translateY(-2px)}
 .signal-step.is-active>span{color:var(--teal)}.signal-step.is-done{border-color:rgba(139,220,204,.33);background:rgba(7,33,30,.58)}.signal-step.is-done>span:after{content:"  ✓";color:var(--teal)}
 @media(max-width:580px){.signal-track{grid-template-columns:1fr;gap:6px;margin-top:24px}.signal-step{min-height:0;grid-template-columns:34px 1fr;align-items:center;padding:9px 11px}.signal-step>span{grid-row:span 2}.signal-step small{grid-column:2}}
+
+/* Keyboard and assistive-technology affordances stay quiet until needed. */
+button:focus-visible{outline:2px solid var(--teal);outline-offset:4px}
+.step:disabled{cursor:default;opacity:.52}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.next-command{max-width:100%}.next-command code{max-width:min(68vw,620px);overflow-wrap:anywhere;text-align:left}.command-hint{display:block;max-width:620px;margin:-20px auto 0;color:#708687;font-size:10px;line-height:1.5;text-align:center}
+
+/* The first screen makes the connected state impossible to miss. */
+.connection-badge{display:inline-flex;align-items:center;min-height:24px;padding:0 9px;border:1px solid rgba(155,216,200,.3);border-radius:999px;color:#91ada8;font:800 8px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;white-space:nowrap;transition:color .25s,border-color .25s,background .25s,box-shadow .25s}
+.connection-badge[data-mode="simulation"]{border-color:rgba(215,181,109,.5);background:rgba(215,181,109,.08);color:#d8c489}
+.connection-badge[data-mode="runtime"]{border-color:rgba(49,224,181,.52);background:rgba(49,224,181,.08);color:var(--teal);box-shadow:0 0 18px rgba(49,224,181,.08)}
+@media(max-width:580px){.topbar{gap:6px;min-width:0;overflow:hidden}.topbar-spacer{display:none}.connection-badge{flex:0 1 96px;min-width:0;max-width:96px;overflow:hidden;text-overflow:ellipsis;letter-spacing:.06em;font-size:7px}.help{flex:0 0 24px;margin-left:3px}}

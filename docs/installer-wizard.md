@@ -16,14 +16,37 @@ authorities allowed to verify, activate or roll back bytes.
    path are shown before any write.
 3. **Instalação** — the exact per-user destination and the atomic activation
    plan are explained. The user confirms once.
-4. **Pronto** — the first `bcgos doctor` command and the recovery promise are
-   visible.
+4. **Pronto** — the first `doctor` command and the recovery promise are
+   visible. In a connected install, the command uses the exact user-profile
+   executable returned by the bridge; in a technical rehearsal, it remains a
+   clearly labelled conceptual command.
 
 The **Ver como funciona** action opens a compact in-product explainer with the
 same three contract movements — check, install, conduct — so a non-technical
 person can understand the flow without leaving the installer. The shell uses
 short panel transitions, orbit drift and a restrained scan line; all motion is
 disabled for users who prefer reduced motion.
+
+The first screen also exposes the connection state immediately: `MODO NÃO
+CONECTADO` for a static visual inspection, `ENSAIO TÉCNICO` for `--simulate`,
+and `RELEASE CONECTADO` for a real bridge session. The primary action follows
+that state (`Abrir fluxo visual`, `Simular instalação`, or `Instalar no meu
+perfil`) so the user never has to infer whether a click will mutate anything.
+
+## Accessible progression
+
+The visual progression is also a keyboard and assistive-technology contract:
+
+- future steps are native-disabled until the preceding action succeeds;
+- the active step exposes `aria-current="step"` and the panel title receives
+  focus after navigation;
+- verification, installation and workspace outcomes use live status regions,
+  while failures use an alert region;
+- the visual focus ring is only added for keyboard navigation, preserving the
+  quiet presentation for pointer users.
+
+These affordances describe the same gated flow; they do not create a second
+installation path or bypass the bridge's verification rules.
 
 ## Runtime handoff
 
@@ -42,19 +65,33 @@ The normal destination is user-level application storage (`%LOCALAPPDATA%\\BCGOS
 on Windows and `~/Library/Application Support/BCGOS` on macOS). The wizard
 does not modify the global `PATH`, workspace content or credentials.
 
+After a connected install, the first-command card uses the exact `cli_path`
+returned by the bridge. On macOS it copies `"<installed-cli>" doctor`; on
+Windows PowerShell it copies `& "<installed-cli>" doctor`. This keeps the
+instruction executable for a standard user without requiring a shell restart
+or a global `PATH` change. Static preview and disconnected mode keep the
+shorthand `bcgos doctor` and explicitly remain non-installing.
+
 ## Visual identity
 
 The wizard converges with the presentation material: deep green-black field,
 luminous mint orbit lines and typography, quiet white copy and a restrained
- secondary aqua accent. The Maestro avatar is visible as a small conductor
- identity plaque and a native app-icon medallion; the faceless conductor mark
- remains the visual anchor and the baton/orbit mark remains the secondary visual
- anchor. The orbit/constellation treatment carries the “digital second brain”
- idea into the installation moment. SVG keeps the assets small, deterministic
- and inspectable in the release factory; no remote fonts, JavaScript packages or
- network calls are required. Native `.ico`/`.icns` packaging is specified in
+secondary aqua accent. The Maestro avatar is visible as a small conductor
+identity plaque and a native app-icon medallion; the baton/orbit mark remains
+the secondary visual anchor. The orbit/constellation treatment carries the
+“digital second brain” idea into the installation moment. SVG keeps the assets
+small, deterministic and inspectable in the release factory; no remote fonts,
+JavaScript packages or network calls are required. Native `.ico`/`.icns`
+packaging is specified in
 [`docs/installer-icons.md`](installer-icons.md) and still requires platform
 signing evidence.
+
+For a real package candidate, the macOS factory is
+[`dev/release/build-macos-installer.sh`](../dev/release/build-macos-installer.sh).
+Unlike the rehearsal DMG, it requires the exact release directory, authority
+registry and native bootstrapper as explicit inputs and passes them to the
+bridge. It remains `unsigned-candidate` until the protected Developer ID and
+notarization steps run.
 
 ### Musical references
 
