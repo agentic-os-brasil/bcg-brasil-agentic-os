@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 )
@@ -26,6 +28,7 @@ func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
 		{"verify rejects get", http.MethodGet, "/api/verify", http.StatusMethodNotAllowed},
 		{"install rejects get", http.MethodGet, "/api/install", http.StatusMethodNotAllowed},
 		{"open data rejects get", http.MethodGet, "/api/open-data", http.StatusMethodNotAllowed},
+		{"close rejects get", http.MethodGet, "/api/close", http.StatusMethodNotAllowed},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -36,6 +39,56 @@ func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
 				t.Fatalf("status = %d, want %d", recorder.Code, test.want)
 			}
 		})
+	}
+}
+
+func TestWizardCloseRequiresSessionAndInvokesShutdown(t *testing.T) {
+	closed := false
+	handler := wizardHandler(options{sessionToken: "test-token", shutdown: func() { closed = true }})
+	request := httptest.NewRequest(http.MethodPost, "/api/close", nil)
+	request.Header.Set("X-Maestro-Session", "test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if !closed {
+		t.Fatal("close endpoint did not invoke the session shutdown")
+	}
+	if !strings.Contains(recorder.Body.String(), `"closing"`) {
+		t.Fatalf("body = %s", recorder.Body.String())
+	}
+}
+
+func TestWizardLifecycleDrainsActiveMutationAndRejectsNewWork(t *testing.T) {
+	lifecycle := newWizardLifecycle()
+	if !lifecycle.beginMutation() {
+		t.Fatal("first mutation was rejected")
+	}
+	if !lifecycle.requestClose() {
+		t.Fatal("first close was not accepted")
+	}
+	if lifecycle.requestClose() {
+		t.Fatal("repeated close was not idempotent")
+	}
+	if lifecycle.beginMutation() {
+		t.Fatal("new mutation was accepted after close request")
+	}
+	drained := make(chan error, 1)
+	go func() { drained <- lifecycle.waitDrained(context.Background()) }()
+	select {
+	case <-drained:
+		t.Fatal("lifecycle drained before active mutation completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+	lifecycle.endMutation()
+	select {
+	case err := <-drained:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("lifecycle did not drain active mutation")
 	}
 }
 
