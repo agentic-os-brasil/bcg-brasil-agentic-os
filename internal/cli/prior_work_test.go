@@ -31,7 +31,9 @@ func cliPriorWorkEnrollment(t *testing.T) string {
 		CollectorPublicKey: base64.StdEncoding.EncodeToString(publicKey),
 		EnrolledAt:         now, AuthorizationExpiresAt: now.AddDate(1, 0, 0),
 		ScopeExpansionConfirmAfter: now.AddDate(0, 6, 0),
-		RefreshHours:               24, StaleHours: 72, MaxItemBytes: 100_000_000,
+		RefreshHours:               24, StaleHours: 72,
+		ScheduleTimezone: "America/Sao_Paulo",
+		MaxItemBytes:     100_000_000,
 		MaxSnapshotItems: 10_000, AllowedItemTypes: []string{"file", "folder"},
 		AllowedOrigins: []string{"https://bcgbr.sharepoint.com"},
 		Roots: []priorwork.RootRef{{
@@ -141,7 +143,7 @@ func TestPriorWorkCLIEndToEndSignedImportAndSuzanoFind(t *testing.T) {
 		Tombstones: []priorwork.Tombstone{},
 	}
 	receipt, signingBody, err := priorwork.BuildUnsignedImportReceipt(
-		snapshot, enrollment, "receipt-cli-e2e", now,
+		snapshot, enrollment, "receipt-cli-e2e", "trigger-manual-cli", now,
 	)
 	if err != nil {
 		t.Fatal(err)

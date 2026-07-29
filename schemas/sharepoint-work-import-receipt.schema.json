@@ -21,6 +21,7 @@
     "watermark",
     "snapshot_digest",
     "key_id",
+    "trigger_ref",
     "signature"
   ],
   "properties": {
@@ -48,6 +49,7 @@
       "pattern": "^[a-f0-9]{64}$"
     },
     "key_id": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/opaque_ref"},
+    "trigger_ref": {"$ref": "urn:bcg-brasil-agentic-os:schema:sharepoint-work-catalog:v1#/$defs/opaque_ref"},
     "signature": {
       "type": "string",
       "contentEncoding": "base64",

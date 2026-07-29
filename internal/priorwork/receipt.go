@@ -14,6 +14,7 @@ func BuildUnsignedImportReceipt(
 	snapshot Snapshot,
 	enrollment Enrollment,
 	receiptID string,
+	triggerRef string,
 	emittedAt time.Time,
 ) (ImportReceipt, []byte, error) {
 	if err := ValidateSnapshot(snapshot); err != nil {
@@ -22,8 +23,8 @@ func BuildUnsignedImportReceipt(
 	if err := ValidateEnrollment(enrollment); err != nil {
 		return ImportReceipt{}, nil, err
 	}
-	if !opaqueRefPattern.MatchString(receiptID) {
-		return ImportReceipt{}, nil, errors.New("invalid prior-work receipt ID")
+	if !opaqueRefPattern.MatchString(receiptID) || !opaqueRefPattern.MatchString(triggerRef) {
+		return ImportReceipt{}, nil, errors.New("invalid prior-work receipt or trigger reference")
 	}
 	snapshotDigest, err := fingerprintSnapshot(snapshot)
 	if err != nil {
@@ -40,7 +41,7 @@ func BuildUnsignedImportReceipt(
 		TenantRef: snapshot.TenantRef, Roots: append([]RootRef(nil), snapshot.Roots...),
 		PolicyVersion: enrollment.PolicyVersion, EnrollmentFingerprint: enrollmentFingerprint,
 		CollectionSequence: snapshot.CollectionSequence, Watermark: snapshot.Watermark,
-		SnapshotDigest: snapshotDigest, KeyID: enrollment.CollectorKeyID,
+		SnapshotDigest: snapshotDigest, KeyID: enrollment.CollectorKeyID, TriggerRef: triggerRef,
 	}
 	body, err := receiptSigningBody(receipt)
 	if err != nil {
