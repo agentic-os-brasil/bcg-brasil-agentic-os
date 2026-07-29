@@ -88,6 +88,23 @@ if ($null -ne $wizardReparse -and @($wizardReparse).Count -gt 0) {
 $initialWizardDigest = Get-SafeTreeDigest $wizardItem.FullName
 $releaseItem = Get-Item -LiteralPath $ReleaseDirectory -ErrorAction Stop
 $initialReleaseDigest = Get-SafeTreeDigest $releaseItem.FullName
+$releaseManifestPath = Join-Path $releaseItem.FullName "release-manifest.json"
+$releaseManifestItem = Get-Item -LiteralPath $releaseManifestPath -ErrorAction Stop
+if ($releaseManifestItem.PSIsContainer -or ($releaseManifestItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw "Release manifest must be a regular non-reparse file."
+}
+if ($releaseManifestItem.Length -gt 1MB) {
+    throw "Release manifest exceeds the 1 MiB packaging bound."
+}
+try {
+    $releaseManifest = Get-Content -LiteralPath $releaseManifestPath -Raw -ErrorAction Stop | ConvertFrom-Json
+}
+catch {
+    throw "Release manifest is not valid JSON: $($_.Exception.Message)"
+}
+if ($releaseManifest.product -ne "maestro" -or $releaseManifest.release -ne $Version) {
+    throw "Release manifest identity does not match -Version $Version."
+}
 $registryItem = Get-Item -LiteralPath $AuthorityRegistry -ErrorAction Stop
 if ($registryItem.PSIsContainer -or ($registryItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
     throw "AuthorityRegistry must be a regular non-reparse file."
@@ -97,8 +114,12 @@ $bootstrapperItem = Get-Item -LiteralPath $Bootstrapper -ErrorAction Stop
 if ($bootstrapperItem.PSIsContainer -or ($bootstrapperItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
     throw "Bootstrapper must be a regular non-reparse file."
 }
-if ($bootstrapperItem.Name -notmatch '^bcgos-bootstrap_.+_windows_amd64\.exe$') {
+$bootstrapperVersionMatch = [regex]::Match($bootstrapperItem.Name, '^bcgos-bootstrap_(?<version>(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))_windows_amd64\.exe$')
+if (-not $bootstrapperVersionMatch.Success) {
     throw "Bootstrapper must use the versioned bcgos-bootstrap_<version>_windows_amd64.exe package name."
+}
+if ($bootstrapperVersionMatch.Groups["version"].Value -ne $Version) {
+    throw "Bootstrapper version does not match -Version $Version."
 }
 $bootstrapperDigest = (Get-FileHash -LiteralPath $bootstrapperItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 
@@ -181,7 +202,7 @@ try {
     $env:GOARCH = "amd64"
     Push-Location $root
     try {
-        & $go.Source build -mod=readonly -buildvcs=false -trimpath -o $outputFull ./cmd/maestro-installer
+    & $go.Source build -mod=readonly -buildvcs=false -trimpath -o $outputFull ./cmd/maestro-installer
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $outputFull)) {
             throw "Windows Maestro installer build failed."
         }
@@ -189,6 +210,8 @@ try {
     finally {
         Pop-Location
     }
+
+    $installerDigest = (Get-FileHash -LiteralPath $outputFull -Algorithm SHA256).Hash.ToLowerInvariant()
 
     if ((Get-FileHash -LiteralPath $iconItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $IconSHA256) {
         throw "Icon changed during packaging."
@@ -210,6 +233,9 @@ try {
 	Copy-Item -LiteralPath $stagedRegistryPath -Destination (Join-Path $packageOutput "authority-registry.json")
 	Copy-Item -LiteralPath $stagedBootstrapperPath -Destination (Join-Path $packageOutput $bootstrapperItem.Name)
 	Copy-Item -LiteralPath $stagedIconPath -Destination (Join-Path $packageOutput "maestro-app-icon.ico")
+	if ((Get-SafeTreeDigest (Join-Path $packageOutput "wizard")) -ne $initialWizardDigest) {
+		throw "Packaged wizard changed while it was copied."
+	}
 	if ((Get-SafeTreeDigest (Join-Path $packageOutput "release")) -ne $initialReleaseDigest) {
 		throw "Packaged release changed while it was copied."
 	}
@@ -226,9 +252,11 @@ try {
         version = $Version
         target_os = "windows"
         target_arch = "amd64"
+        bridge_sha256 = $installerDigest
         icon = $iconItem.Name
         icon_sha256 = $iconDigest
         wizard_root = "wizard"
+        wizard_tree_sha256 = $initialWizardDigest
         release_root = "release"
         release_tree_sha256 = $initialReleaseDigest
         authority_registry = "authority-registry.json"

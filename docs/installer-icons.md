@@ -82,12 +82,14 @@ the native bootstrapper, the canonical `.ico`, `README-UNSIGNED.md` and the
 `Run-Maestro-Rehearsal.cmd` launcher and the provenance file. Temporary
 source/object files are removed in a `finally` block, and a partially created
 output directory is removed if any step fails.
-The provenance file records the icon, compiler, approved compiler fingerprint,
-resource-object digests, the packaged wizard and release roots, the registry
-and bootstrapper digests, the rehearsal launcher and the explicit
-`unsigned-candidate` status. Missing `windres`, a changed input, an
-unapproved compiler fingerprint or a failed resource build stops the process;
-no unsigned bypass is accepted.
+The provenance file records the installer/bridge digest, wizard tree digest,
+icon, compiler, approved compiler fingerprint, resource-object digests, the
+packaged wizard and release roots, the registry and bootstrapper digests, the
+rehearsal launcher and the explicit `unsigned-candidate` status. Missing
+`windres`, a changed input, an
+unapproved compiler fingerprint, a manifest/bootstrapper version mismatch, a
+changed packaged tree or a failed resource build stops the process; no
+unsigned bypass is accepted.
 
 The package can therefore be copied to a clean Windows sandbox and launched by
 double-clicking `Run-Maestro-Rehearsal.cmd`. The launcher passes `--simulate`
