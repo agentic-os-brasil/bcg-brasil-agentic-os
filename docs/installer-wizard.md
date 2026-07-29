@@ -25,6 +25,21 @@ person can understand the flow without leaving the installer. The shell uses
 short panel transitions, orbit drift and a restrained scan line; all motion is
 disabled for users who prefer reduced motion.
 
+## Accessible progression
+
+The visual progression is also a keyboard and assistive-technology contract:
+
+- future steps are native-disabled until the preceding action succeeds;
+- the active step exposes `aria-current="step"` and the panel title receives
+  focus after navigation;
+- verification, installation and workspace outcomes use live status regions,
+  while failures use an alert region;
+- the visual focus ring is only added for keyboard navigation, preserving the
+  quiet presentation for pointer users.
+
+These affordances describe the same gated flow; they do not create a second
+installation path or bypass the bridge's verification rules.
+
 ## Runtime handoff
 
 The visual shell is intentionally not a trust implementation. The executable

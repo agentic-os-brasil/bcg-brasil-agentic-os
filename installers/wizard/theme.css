@@ -67,3 +67,8 @@
 .signal-step.is-active{border-color:rgba(49,224,181,.68);background:rgba(7,48,42,.68);box-shadow:0 0 0 1px rgba(49,224,181,.08),0 0 24px rgba(49,224,181,.08);transform:translateY(-2px)}
 .signal-step.is-active>span{color:var(--teal)}.signal-step.is-done{border-color:rgba(139,220,204,.33);background:rgba(7,33,30,.58)}.signal-step.is-done>span:after{content:"  ✓";color:var(--teal)}
 @media(max-width:580px){.signal-track{grid-template-columns:1fr;gap:6px;margin-top:24px}.signal-step{min-height:0;grid-template-columns:34px 1fr;align-items:center;padding:9px 11px}.signal-step>span{grid-row:span 2}.signal-step small{grid-column:2}}
+
+/* Keyboard and assistive-technology affordances stay quiet until needed. */
+button:focus-visible{outline:2px solid var(--teal);outline-offset:4px}
+.step:disabled{cursor:default;opacity:.52}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

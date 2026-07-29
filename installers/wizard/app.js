@@ -3,6 +3,7 @@
   const steps = [...document.querySelectorAll('.step')];
   const platformLabel = document.querySelector('#platform-label');
   const destination = document.querySelector('#install-destination');
+  const stageAnnouncement = document.querySelector('#stage-announcement');
   const mode = document.body.dataset.mode || 'preview';
   const sessionToken = new URLSearchParams(window.location.search).get('session') || '';
   let runtime = false;
@@ -59,6 +60,8 @@
         const position = order.indexOf(step.dataset.progressStep);
         step.classList.toggle('is-active', position === current);
         step.classList.toggle('is-done', position < current);
+        if (position === current) step.setAttribute('aria-current', 'step');
+        else step.removeAttribute('aria-current');
       });
     });
   }
@@ -91,7 +94,7 @@
       : 'Esta é uma prévia visual. Nenhum arquivo foi instalado; no modo real, o Maestro ficará no seu perfil.';
   }
 
-  function show(name) {
+  function show(name, { focusHeading = true } = {}) {
     panels.forEach(panel => {
       const visible = panel.dataset.panel === name;
       panel.hidden = !visible;
@@ -103,7 +106,21 @@
       const active = position === index;
       step.classList.toggle('is-current', active);
       step.classList.toggle('is-done', position < index);
+      step.disabled = position > index;
+      if (active) step.setAttribute('aria-current', 'step');
+      else step.removeAttribute('aria-current');
     });
+    const announcements = {
+      welcome: 'Etapa 1 de 4: boas-vindas. Escolha instalar o Maestro no seu perfil.',
+      check: 'Etapa 2 de 4: verificação. Confira o release antes de qualquer mudança.',
+      install: 'Etapa 3 de 4: instalação. O Maestro ficará no seu espaço de usuário.',
+      finish: 'Etapa 4 de 4: pronto. O Maestro está preparado para o primeiro comando.'
+    };
+    if (stageAnnouncement) stageAnnouncement.textContent = announcements[name] || '';
+    if (focusHeading) {
+      const heading = document.querySelector(`[data-panel="${name}"] h1`);
+      if (heading) window.requestAnimationFrame(() => heading.focus());
+    }
     if (name === 'check') setProgress('verify');
     if (name === 'install') setProgress('install');
     if (name === 'finish') setProgress('complete');
@@ -234,7 +251,7 @@
     if (action === 'details') document.querySelector('#flow-modal').showModal();
     if (action === 'close-flow') {
       document.querySelector('#flow-modal').close();
-      show('check');
+      show('check', { focusHeading: false });
       document.querySelector('[data-action="verify"]').focus();
     }
     if (action === 'verify') await verifyRelease();
