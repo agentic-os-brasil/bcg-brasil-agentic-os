@@ -58,6 +58,19 @@ go run ./dev/release verify --directory dist/release-candidate
 Verification rejects missing, extra, non-regular or digest-mismatched files.
 It proves candidate closure and integrity, not authenticity.
 
+## Assemble the macOS installer candidate
+
+The visual installer is packaged separately from the CLI candidate because it
+must carry the exact release directory, native bootstrapper and authority
+registry that the bridge will verify. Use
+`dev/release/build-macos-installer.sh` with explicit absolute paths to those
+inputs, the target-architecture bridge and the hash-approved `.icns`. The
+factory emits a DMG containing `Maestro Installer.app`, records tree/file
+digests and labels the result `unsigned-candidate`. It never creates keys,
+signs, notarizes or publishes the package. The protected release workflow must
+repeat the same packaging with approved inputs before the package can be
+called a signed release.
+
 ## Produce a local readiness report
 
 Before requesting an external release run, use the read-only readiness report

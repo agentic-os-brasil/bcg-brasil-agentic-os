@@ -29,6 +29,12 @@ The source SVG is deterministic and inspectable; the platform-specific
 conversion must be hash-recorded in the release manifest and performed before
 the native signature is applied.
 
+The macOS installer candidate consumes the generated `.icns` through
+`dev/release/build-macos-installer.sh`. The factory records its digest in the
+package provenance and copies the same icon into the app bundle and mounted
+DMG volume; Developer ID signing and notarization remain separate protected
+steps.
+
 ## Current evidence boundary
 
 The visual branch proves the icon and theme render in the dependency-free

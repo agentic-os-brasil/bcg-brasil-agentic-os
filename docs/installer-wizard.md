@@ -86,6 +86,13 @@ packaging is specified in
 [`docs/installer-icons.md`](installer-icons.md) and still requires platform
 signing evidence.
 
+For a real package candidate, the macOS factory is
+[`dev/release/build-macos-installer.sh`](../dev/release/build-macos-installer.sh).
+Unlike the rehearsal DMG, it requires the exact release directory, authority
+registry and native bootstrapper as explicit inputs and passes them to the
+bridge. It remains `unsigned-candidate` until the protected Developer ID and
+notarization steps run.
+
 ### Musical references
 
 Music stays in the composition rather than becoming a theme costume: the
