@@ -15,7 +15,7 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/release-distribution
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 3c2b98d6132a20e6f61c6f2920bb06d7d9936e816ee76c20d9ac9b4e440241ea
+x-bcgos-source-fingerprint: 9f91374969082548e5090f7a0e55e9bccda1d8d121d65a4c9abf2f61ed04a749
 x-bcgos-freshness: fresh
 x-bcgos-status: active
 x-bcgos-generator-version: bcgos-managed-wiki/0.1
@@ -92,6 +92,28 @@ go run ./dev/release verify --directory dist/release-candidate
 
 Verification rejects missing, extra, non-regular or digest-mismatched files.
 It proves candidate closure and integrity, not authenticity.
+
+## Produce a local readiness report
+
+Before requesting an external release run, use the read-only readiness report
+with explicit paths:
+
+```text
+go run ./dev/release readiness \
+  --provider-config bundles/base/release/provider.json \
+  --authority-registry path/to/release-authority-registry.json \
+  --authority-registry-sha256 <exact-lowercase-sha256> \
+  --candidate dist/release-candidate
+```
+
+The report is deterministic JSON with stable check IDs. It validates the
+managed schemas, provider configuration, pinned authority registry, candidate
+closure and dispatchable release workflows. Missing inputs are
+`unavailable`; malformed or tampered inputs are `blocked`. It never contacts a
+provider, opens a credential store, signs or notarizes bytes, installs an
+update, or promotes a release. Its claim is only
+`local_contract_evidence`; signature, provider authentication and clean-device
+acceptance remain explicit external gates.
 
 ## Build and publish a signed prerelease
 

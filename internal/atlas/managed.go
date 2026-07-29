@@ -1,6 +1,7 @@
 package atlas
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -17,8 +18,9 @@ import (
 )
 
 const (
-	managedOKFVersion = "0.2"
-	managedScope      = "managed"
+	managedOKFVersion            = "0.2"
+	managedScope                 = "managed"
+	maximumManagedAllowlistBytes = 128 << 10
 )
 
 // ManagedAllowlist is the reviewed source contract for the product atlas.
@@ -211,7 +213,17 @@ func loadManagedAllowlist(path string) (ManagedAllowlist, error) {
 		return ManagedAllowlist{}, err
 	}
 	defer file.Close()
-	decoder := json.NewDecoder(file)
+	body, err := io.ReadAll(io.LimitReader(file, maximumManagedAllowlistBytes+1))
+	if err != nil {
+		return ManagedAllowlist{}, err
+	}
+	if len(body) > maximumManagedAllowlistBytes {
+		return ManagedAllowlist{}, fmt.Errorf("managed allowlist exceeds %d bytes", maximumManagedAllowlistBytes)
+	}
+	if err := rejectDuplicateManagedJSONKeys(body); err != nil {
+		return ManagedAllowlist{}, fmt.Errorf("decode managed allowlist: %w", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var allowlist ManagedAllowlist
 	if err := decoder.Decode(&allowlist); err != nil {
@@ -225,6 +237,83 @@ func loadManagedAllowlist(path string) (ManagedAllowlist, error) {
 		return ManagedAllowlist{}, err
 	}
 	return allowlist, nil
+}
+
+func rejectDuplicateManagedJSONKeys(body []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if err := walkManagedJSONValue(decoder, token); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+func walkManagedJSONValue(decoder *json.Decoder, token json.Token) error {
+	delimiter, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delimiter {
+	case '{':
+		seen := map[string]bool{}
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return errors.New("managed allowlist object key is not a string")
+			}
+			if seen[key] {
+				return fmt.Errorf("duplicate JSON object key %q", key)
+			}
+			seen[key] = true
+			valueToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			if err := walkManagedJSONValue(decoder, valueToken); err != nil {
+				return err
+			}
+		}
+		end, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if end != json.Delim('}') {
+			return errors.New("unterminated managed allowlist object")
+		}
+	case '[':
+		for decoder.More() {
+			valueToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			if err := walkManagedJSONValue(decoder, valueToken); err != nil {
+				return err
+			}
+		}
+		end, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if end != json.Delim(']') {
+			return errors.New("unterminated managed allowlist array")
+		}
+	default:
+		return fmt.Errorf("unexpected managed allowlist delimiter %q", delimiter)
+	}
+	return nil
 }
 
 func validateManagedAllowlist(root string, allowlist ManagedAllowlist) error {
