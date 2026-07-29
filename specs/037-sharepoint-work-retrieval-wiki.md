@@ -90,7 +90,8 @@ references. The enrollment is strict JSON conforming to
 - the read-only purpose `prior_work_retrieval`;
 - exact allowed SharePoint origins, allowed item types and size limits;
 - refresh and stale windows;
-- an opaque authorizing-actor reference and policy version;
+- an opaque authorizing-actor reference bound at enrollment to the
+  authenticated local operating-system principal, plus policy version;
 - authorization expiry; and
 - the time after which a new scope expansion requires confirmation.
 
@@ -218,7 +219,9 @@ The query engine is unavailable unless the caller sets
 Explicit intent is a routing gate, not authorization. The query also requires
 an actor reference and purpose that match the active, unexpired enrollment.
 Expiry is evaluated with the local product clock; callers cannot supply or
-backdate it.
+backdate it. The CLI derives the actor from the authenticated local
+operating-system principal; prompt text and command arguments cannot declare or
+override it.
 
 General research, ordinary workspace questions and Session Start do not satisfy
 the gate.
@@ -276,9 +279,10 @@ catalog version proves synchronization success.
 The intended CLI contract is:
 
 ```text
+bcgos prior-work actor
 bcgos prior-work enroll --stdin --confirm
 bcgos prior-work status
-bcgos prior-work import --snapshot <normalized-json> --receipt <adapter-command-receipt>
+bcgos prior-work import --snapshot <normalized-json> --receipt <signed-adapter-command-receipt>
 bcgos prior-work find --explicit --stdin [--limit <n>]
 ```
 

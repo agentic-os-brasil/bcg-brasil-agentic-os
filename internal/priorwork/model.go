@@ -244,6 +244,36 @@ func ParseSnapshot(reader io.Reader) (Snapshot, error) {
 	return snapshot, nil
 }
 
+func ParseEnrollment(reader io.Reader) (Enrollment, error) {
+	body, err := io.ReadAll(io.LimitReader(reader, 1<<20))
+	if err != nil {
+		return Enrollment{}, err
+	}
+	if len(body) >= 1<<20 {
+		return Enrollment{}, errors.New("prior-work enrollment exceeds one MiB")
+	}
+	if err := rejectDuplicateJSONKeys(body); err != nil {
+		return Enrollment{}, fmt.Errorf("decode prior-work enrollment: %w", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	var enrollment Enrollment
+	if err := decoder.Decode(&enrollment); err != nil {
+		return Enrollment{}, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return Enrollment{}, errors.New("prior-work enrollment contains multiple JSON values")
+		}
+		return Enrollment{}, err
+	}
+	if err := ValidateEnrollment(enrollment); err != nil {
+		return Enrollment{}, err
+	}
+	return enrollment, nil
+}
+
 func ParseImportReceipt(reader io.Reader, snapshot Snapshot) (ImportReceipt, error) {
 	body, err := io.ReadAll(io.LimitReader(reader, 1<<20))
 	if err != nil {
@@ -372,11 +402,13 @@ func ValidateEnrollment(enrollment Enrollment) error {
 		!enrollment.AuthorizationExpiresAt.After(enrollment.EnrolledAt) ||
 		enrollment.ScopeExpansionConfirmAfter.Before(enrollment.EnrolledAt) ||
 		enrollment.ScopeExpansionConfirmAfter.After(enrollment.AuthorizationExpiresAt) ||
-		enrollment.RefreshHours <= 0 || enrollment.MaxItemBytes <= 0 || enrollment.MaxItemBytes > 1<<40 ||
+		enrollment.RefreshHours <= 0 || enrollment.RefreshHours > 8760 ||
+		enrollment.StaleHours <= 0 || enrollment.StaleHours > 8760 ||
+		enrollment.MaxItemBytes <= 0 || enrollment.MaxItemBytes > 1<<40 ||
 		enrollment.MaxSnapshotItems <= 0 || enrollment.MaxSnapshotItems > maximumItems ||
 		enrollment.StaleHours < enrollment.RefreshHours || len(enrollment.Roots) == 0 ||
 		len(enrollment.Roots) > maximumRoots || len(enrollment.AllowedOrigins) == 0 ||
-		len(enrollment.AllowedItemTypes) == 0 {
+		len(enrollment.AllowedOrigins) > 32 || len(enrollment.AllowedItemTypes) == 0 {
 		return errors.New("invalid prior-work enrollment")
 	}
 	publicKey, err := base64.StdEncoding.Strict().DecodeString(enrollment.CollectorPublicKey)

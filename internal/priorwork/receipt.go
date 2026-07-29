@@ -5,7 +5,49 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"time"
 )
+
+// BuildUnsignedImportReceipt returns the canonical body a trusted external
+// collector must sign. It never accepts, loads or stores a private key.
+func BuildUnsignedImportReceipt(
+	snapshot Snapshot,
+	enrollment Enrollment,
+	receiptID string,
+	emittedAt time.Time,
+) (ImportReceipt, []byte, error) {
+	if err := ValidateSnapshot(snapshot); err != nil {
+		return ImportReceipt{}, nil, err
+	}
+	if err := ValidateEnrollment(enrollment); err != nil {
+		return ImportReceipt{}, nil, err
+	}
+	if !opaqueRefPattern.MatchString(receiptID) {
+		return ImportReceipt{}, nil, errors.New("invalid prior-work receipt ID")
+	}
+	snapshotDigest, err := fingerprintSnapshot(snapshot)
+	if err != nil {
+		return ImportReceipt{}, nil, err
+	}
+	enrollmentFingerprint, err := fingerprintEnrollment(enrollment)
+	if err != nil {
+		return ImportReceipt{}, nil, err
+	}
+	receipt := ImportReceipt{
+		SchemaVersion: 1, ReceiptID: receiptID, EvidenceClass: "adapter_command",
+		Capability: "sharepoint_work_collection", ProducerRuntime: "claude",
+		Outcome: "succeeded", EmittedAt: emittedAt.UTC(),
+		TenantRef: snapshot.TenantRef, Roots: append([]RootRef(nil), snapshot.Roots...),
+		PolicyVersion: enrollment.PolicyVersion, EnrollmentFingerprint: enrollmentFingerprint,
+		CollectionSequence: snapshot.CollectionSequence, Watermark: snapshot.Watermark,
+		SnapshotDigest: snapshotDigest, KeyID: enrollment.CollectorKeyID,
+	}
+	body, err := receiptSigningBody(receipt)
+	if err != nil {
+		return ImportReceipt{}, nil, err
+	}
+	return receipt, body, nil
+}
 
 func VerifyImportReceipt(receipt ImportReceipt, snapshot Snapshot, enrollment Enrollment) error {
 	if err := ValidateImportReceipt(receipt, snapshot); err != nil {

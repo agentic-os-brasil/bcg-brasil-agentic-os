@@ -101,3 +101,38 @@ func TestReportKeepsUnwiredProductHooksExplicitlyUnavailable(t *testing.T) {
 		t.Fatal("agent orchestration capability missing")
 	}
 }
+
+func TestSharePointCollectionBoundaryIsRuntimeHonest(t *testing.T) {
+	manifest, err := baseruntime.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, runtime := range []string{"claude", "codex"} {
+		report, err := manifest.Report(runtime, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		foundCollection := false
+		foundQuery := false
+		for _, capability := range report.Capabilities {
+			switch capability.ID {
+			case "sharepoint_work_collection":
+				foundCollection = true
+				if capability.State != "unavailable" {
+					t.Fatalf("%s collection state=%s", runtime, capability.State)
+				}
+				if runtime == "codex" && capability.Reason != "corporate_policy" {
+					t.Fatalf("Codex collection reason=%q", capability.Reason)
+				}
+			case "sharepoint_work_local_query":
+				foundQuery = true
+				if capability.State != "native" {
+					t.Fatalf("%s local query state=%s", runtime, capability.State)
+				}
+			}
+		}
+		if !foundCollection || !foundQuery {
+			t.Fatalf("%s missing prior-work capabilities", runtime)
+		}
+	}
+}
