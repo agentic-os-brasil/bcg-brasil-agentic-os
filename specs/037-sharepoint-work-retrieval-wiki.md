@@ -30,6 +30,11 @@ the equivalent connection in Codex.
   runtime-neutral. After Claude has produced a valid local catalog, either
   runtime may query the local derived index when the actor and purpose are
   authorized.
+- `adapter_runtime: claude` is declared provenance, not authorization and not
+  proof of native invocation. Import records a separate adapter-command receipt
+  binding the tenant, roots, sequence, watermark and snapshot digest. Only the
+  native conformance protocol may later classify a receipt as native-qualified;
+  neither a snapshot nor an adapter-command receipt promotes capability state.
 - Local configuration, a fixture or a direct adapter invocation is not native
   SharePoint evidence. Capability promotion requires an approved Claude
   connection and a native read-only trial over a sanitized test scope.
@@ -76,9 +81,10 @@ references. Enrollment records:
 - the owning tenant reference;
 - the approved site/library/folder roots;
 - the read-only purpose `prior_work_retrieval`;
-- allowed item types and size limits;
+- exact allowed SharePoint origins, allowed item types and size limits;
 - refresh and stale windows;
-- the authorizing actor and policy version; and
+- an opaque authorizing-actor reference and policy version;
+- authorization expiry; and
 - the time after which a new scope expansion requires confirmation.
 
 The collector may enumerate only descendants of those roots. It does not edit,
@@ -94,7 +100,8 @@ A snapshot contains:
 
 - opaque tenant and root references;
 - `full` or `delta` mode;
-- previous and current watermarks;
+- a monotonic collection sequence plus previous and current watermarks;
+- one explicit `complete` result for every enrolled root;
 - collection timestamp and adapter runtime;
 - folder and file records;
 - explicit deletion/access-revocation tombstones; and
@@ -108,6 +115,12 @@ Each item may contain only bounded retrieval metadata:
 - client, project, theme, year, audience, person and presenter facets;
 - bounded search terms derived by the authorized adapter; and
 - sensitivity and lifecycle status.
+
+Opaque native IDs use a versioned encoding accepted by the schema; the V1
+adapter may preserve safe native Graph characters or emit a deterministic
+base64url/hash reference. Item identity is the composite
+`tenant + site + drive + folder-root + item_ref`. Tombstones carry the same
+root, so an item ID reused in another drive cannot be removed accidentally.
 
 Facets are routing hypotheses, not source truth. The result always points back
 to SharePoint and exposes provenance and freshness.
@@ -131,10 +144,12 @@ Claude SharePoint MCP
 
 Rules:
 
-1. A delta must name the exact active previous watermark. Stale, forked or
-   replayed deltas fail closed.
-2. A complete snapshot may replace the active catalog only when every enrolled
-   root reports successful enumeration.
+1. The first snapshot is a complete sequence `1` snapshot without a previous
+   watermark. Every later full or delta snapshot increments the active sequence
+   exactly once and names the exact active previous watermark. Stale, forked,
+   concurrent or replayed snapshots fail closed.
+2. A complete snapshot may replace the active catalog only when `root_results`
+   contains exactly one `complete` result for every enrolled root.
 3. Missing items in a valid complete snapshot and explicit tombstones in a
    delta are denied before compilation.
 4. Enrichment failures may preserve last-known-good metadata, but a deletion or
@@ -143,6 +158,13 @@ Rules:
    idempotent.
 6. Logs and scheduler receipts contain counts, opaque watermarks and states,
    never names, paths, URLs or client facets.
+7. One exclusive local import lock serializes validation, barrier publication,
+   compilation and manifest compare-and-swap. A crashed/stale lock fails closed
+   for operator recovery; it is never silently stolen.
+8. A barrier carries the composite item identity, policy/enrollment
+   fingerprint, collection sequence and snapshot digest. It is cleared only by
+   a newer successfully published snapshot that explicitly reports that same
+   composite item active.
 
 ## Wiki shape
 
@@ -217,6 +239,8 @@ catalog version proves synchronization success.
 - No raw slide text, document body, prompt, transcript, credential or access
   token enters the catalog or wiki.
 - URLs and human-readable facets remain in private local storage only.
+- Source URLs must use an exact origin enrolled for the tenant and contain no
+  query or fragment; sharing/authentication links are rejected.
 - Client metadata cannot enter the managed product bundle, Git, canary or
   federated improvement batch.
 - Search results are bounded and do not grant access to the underlying item.
@@ -232,7 +256,7 @@ The intended CLI contract is:
 
 ```text
 bcgos prior-work status
-bcgos prior-work import --snapshot <normalized-json>
+bcgos prior-work import --snapshot <normalized-json> --receipt <adapter-command-receipt>
 bcgos prior-work find --explicit --query "<request>" [--limit <n>]
 ```
 
@@ -257,6 +281,11 @@ Claude with the approved SharePoint connection.
 8. Logs and scheduler receipts contain no names, paths, URLs or client facets.
 9. A native Claude trial enumerates a sanitized SharePoint test root,
    publishes the catalog and retrieves one expected deck.
+10. A partial full scan, a missing required array, a reused item ID in another
+    drive, a stale full replay and two concurrent successors all fail safely.
+11. An adapter-command receipt can authorize a bounded local import but cannot
+    promote the SharePoint collector from `unavailable`; native qualification
+    remains separate evidence.
 
 ## Delivery boundary
 
@@ -265,4 +294,3 @@ query engine, Claude skill projection, Codex fail-closed state and sanitized
 fixtures. A real SharePoint scan remains unavailable in Codex and requires a
 separately authenticated Claude session. Until that native trial exists, the
 runtime capability remains `unavailable` even when all local tests pass.
-

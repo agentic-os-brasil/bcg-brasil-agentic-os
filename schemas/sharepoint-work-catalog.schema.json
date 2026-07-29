@@ -10,18 +10,24 @@
     "adapter_runtime",
     "tenant_ref",
     "mode",
+    "collection_sequence",
     "generated_at",
     "watermark",
     "roots",
+    "root_results",
     "items",
     "tombstones"
   ],
   "properties": {
     "schema_version": {"const": 1},
     "source": {"const": "sharepoint"},
-    "adapter_runtime": {"const": "claude"},
+    "adapter_runtime": {
+      "const": "claude",
+      "description": "Declared producer metadata only; it is not native runtime evidence or import authorization."
+    },
     "tenant_ref": {"$ref": "#/$defs/opaque_ref"},
     "mode": {"enum": ["full", "delta"]},
+    "collection_sequence": {"type": "integer", "minimum": 1},
     "generated_at": {"type": "string", "format": "date-time"},
     "previous_watermark": {"$ref": "#/$defs/watermark"},
     "watermark": {"$ref": "#/$defs/watermark"},
@@ -30,6 +36,13 @@
       "minItems": 1,
       "maxItems": 128,
       "items": {"$ref": "#/$defs/root"},
+      "uniqueItems": true
+    },
+    "root_results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/root_result"},
       "uniqueItems": true
     },
     "items": {
@@ -45,9 +58,12 @@
   },
   "allOf": [
     {
-      "if": {"properties": {"mode": {"const": "delta"}}},
-      "then": {"required": ["previous_watermark"]},
-      "else": {"not": {"required": ["previous_watermark"]}}
+      "if": {"properties": {"collection_sequence": {"const": 1}}, "required": ["collection_sequence"]},
+      "then": {
+        "properties": {"mode": {"const": "full"}},
+        "not": {"required": ["previous_watermark"]}
+      },
+      "else": {"required": ["previous_watermark"]}
     }
   ],
   "$defs": {
@@ -55,7 +71,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:!,-]{0,255}$"
     },
     "watermark": {
       "type": "string",
@@ -84,18 +100,19 @@
         "folder_ref": {"$ref": "#/$defs/opaque_ref"}
       }
     },
+    "root_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "state"],
+      "properties": {
+        "root": {"$ref": "#/$defs/root"},
+        "state": {"const": "complete"}
+      }
+    },
     "facets": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "clients",
-        "projects",
-        "themes",
-        "years",
-        "audiences",
-        "people",
-        "presenters"
-      ],
+      "required": ["clients", "projects", "themes", "years", "audiences", "people", "presenters"],
       "properties": {
         "clients": {"$ref": "#/$defs/facet_values"},
         "projects": {"$ref": "#/$defs/facet_values"},
@@ -140,7 +157,12 @@
         "path_segments": {
           "type": "array",
           "maxItems": 64,
-          "items": {"$ref": "#/$defs/bounded_label"}
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[^/\\\\\\u0000-\\u001F\\u007F]+$"
+          }
         },
         "source_url": {
           "type": "string",
@@ -167,8 +189,9 @@
     "tombstone": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["item_ref", "reason", "observed_at"],
+      "required": ["root", "item_ref", "reason", "observed_at"],
       "properties": {
+        "root": {"$ref": "#/$defs/root"},
         "item_ref": {"$ref": "#/$defs/opaque_ref"},
         "reason": {"enum": ["deleted", "access_revoked"]},
         "observed_at": {"type": "string", "format": "date-time"}
