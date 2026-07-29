@@ -4,7 +4,10 @@
   const platformLabel = document.querySelector('#platform-label');
   const destination = document.querySelector('#install-destination');
   const mode = document.body.dataset.mode || 'preview';
+  const sessionToken = new URLSearchParams(window.location.search).get('session') || '';
   let runtime = false;
+  let simulation = false;
+  let planDigest = '';
   let verified = false;
   const platform = /Win/i.test(navigator.userAgent) ? 'Windows' : /Mac/i.test(navigator.userAgent) ? 'macOS' : 'seu dispositivo';
 
@@ -13,10 +16,12 @@
 
   function markChecks(status) {
     document.querySelectorAll('.check-item').forEach(item => {
-      item.querySelector('.check-icon').textContent = status === 'ready' ? '✓' : '◌';
-      item.querySelector('.check-icon').style.color = status === 'ready' ? 'var(--teal)' : '';
-      item.querySelector('strong').textContent = status === 'ready' ? 'pronto' : 'aguardando';
-      item.querySelector('strong').style.color = status === 'ready' ? 'var(--teal)' : '';
+      const isReady = status === 'ready';
+      const isSimulated = status === 'simulated';
+      item.querySelector('.check-icon').textContent = isReady ? '✓' : isSimulated ? '◇' : '◌';
+      item.querySelector('.check-icon').style.color = isReady ? 'var(--teal)' : isSimulated ? 'var(--gold)' : '';
+      item.querySelector('strong').textContent = isReady ? 'pronto' : isSimulated ? 'simulado' : 'aguardando';
+      item.querySelector('strong').style.color = isReady ? 'var(--teal)' : isSimulated ? 'var(--gold)' : '';
     });
   }
 
@@ -46,10 +51,30 @@
     if (text) text.textContent = label;
   }
 
+  function requestOptions(method, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['X-Maestro-Session'] = sessionToken;
+    return { method, headers, body: body ? JSON.stringify(body) : undefined };
+  }
+
+  function updateModeBanner(state) {
+    const banner = document.querySelector('#preview-banner');
+    if (!banner) return;
+    if (state?.mode === 'simulation') {
+      banner.hidden = false;
+      banner.querySelector('span').textContent = 'ENSAIO TÉCNICO';
+      banner.querySelector('p').textContent = 'Este fluxo simula a instalação em uma pasta isolada. Nenhum release assinado será declarado ou publicado.';
+      return;
+    }
+    banner.hidden = true;
+  }
+
   function updateFinishCopy() {
     const lead = document.querySelector('#finish-lead');
     if (!lead) return;
-    lead.textContent = runtime
+    lead.textContent = simulation
+      ? 'O ensaio técnico terminou em uma pasta isolada. Abra os dados para conferir o resultado; nenhum release assinado foi instalado.'
+      : runtime
       ? 'O Maestro foi instalado no seu perfil. Abra a pasta dele e escolha um workspace de teste quando estiver pronto.'
       : 'Esta é uma prévia visual. Nenhum arquivo foi instalado; no modo real, o Maestro ficará no seu perfil.';
   }
@@ -71,10 +96,10 @@
       window.setTimeout(() => {
         document.querySelectorAll('.check-item').forEach((item, index) => {
           window.setTimeout(() => {
-            item.querySelector('.check-icon').textContent = '✓';
-            item.querySelector('.check-icon').style.color = 'var(--teal)';
-            item.querySelector('strong').textContent = 'pronto';
-            item.querySelector('strong').style.color = 'var(--teal)';
+            item.querySelector('.check-icon').textContent = '◇';
+            item.querySelector('.check-icon').style.color = 'var(--gold)';
+            item.querySelector('strong').textContent = 'simulado';
+            item.querySelector('strong').style.color = 'var(--gold)';
           }, index * 320);
         });
       }, 180);
@@ -87,11 +112,13 @@
       if (!response.ok) return;
       const state = await response.json();
       runtime = true;
+      simulation = state.mode === 'simulation';
       document.body.dataset.mode = 'runtime';
+      updateModeBanner(state);
       updateFinishCopy();
       platformLabel.textContent = state.platform || platform;
       destination.textContent = state.managed_root || destination.textContent;
-      document.querySelector('.footer b').textContent = 'instalação conectada';
+      document.querySelector('.footer b').textContent = simulation ? 'ensaio técnico conectado' : 'instalação conectada';
     } catch (_) {
       // Opening index.html directly is a deliberate, non-mutating preview.
     }
@@ -109,11 +136,12 @@
     button.disabled = true;
     setButtonLabel(button, 'Conferindo…');
     try {
-      const response = await fetch('/api/verify', { method: 'POST' });
+      const response = await fetch('/api/verify', requestOptions('POST'));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível verificar este release.');
-      markChecks('ready');
+      markChecks(simulation ? 'simulated' : 'ready');
       verified = true;
+      planDigest = payload.plan_digest || '';
       show('install');
     } catch (error) {
       showError('check', error.message);
@@ -141,7 +169,7 @@
     button.disabled = true;
     setButtonLabel(button, 'Instalando…');
     try {
-      const response = await fetch('/api/install', { method: 'POST' });
+      const response = await fetch('/api/install', requestOptions('POST', { plan_digest: planDigest }));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'A instalação foi interrompida com segurança.');
       show('finish');
@@ -163,7 +191,7 @@
     const button = document.querySelector('[data-action="open-data"]');
     button.disabled = true;
     try {
-      const response = await fetch('/api/open-data', { method: 'POST' });
+      const response = await fetch('/api/open-data', requestOptions('POST'));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível abrir a pasta do Maestro.');
       showStatus(`Pasta aberta: ${payload.path}`);
@@ -186,7 +214,8 @@
     if (action === 'details') document.querySelector('#flow-modal').showModal();
     if (action === 'close-flow') {
       document.querySelector('#flow-modal').close();
-      document.querySelector('[data-next="check"]').focus();
+      show('check');
+      document.querySelector('[data-action="verify"]').focus();
     }
     if (action === 'verify') await verifyRelease();
     if (action === 'install') await installRelease();

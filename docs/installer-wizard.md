@@ -66,6 +66,8 @@ installation action. The user-facing copy remains operational and direct.
 
 Opening the static wizard proves only the UX layer. It is not evidence of a
 signed release, a corporate-device acceptance or pilot readiness. A connected
-installer runs the real verify/install transaction; the unsigned DMG preview
-does not claim that it installed anything. Those gates remain defined by
+installer runs the real verify/install transaction; `--simulate` runs the same
+user journey against an isolated rehearsal sandbox and labels its checks
+`simulado`. Neither mode claims that unsigned bytes were validated. Those gates
+remain defined by
 `specs/020-release-distribution.md` and `specs/022-guided-pilot-release.md`.
