@@ -73,6 +73,13 @@ amd64`, `darwin/amd64`, `darwin/arm64`). The rehearsal writes only beneath the
 explicit sandbox root; it never requests elevation or changes the global
 `PATH`.
 
+On macOS, the executable
+[`maestro-rehearsal-dmg.sh`](../dev/release/maestro-rehearsal-dmg.sh) creates a
+local-only DMG containing `Maestro Installer Rehearsal.app`. Double-clicking
+that app starts the same `--simulate` wizard flow; the DMG README repeats the
+three user actions and the no-administrator boundary. This artifact is still
+unsigned and is not a pilot release.
+
 ## External CI unblock
 
 The validation workflow is enabled and the PR jobs are configured for hosted

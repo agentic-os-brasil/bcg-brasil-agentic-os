@@ -67,8 +67,13 @@ cat > "$STAGING/README-REHEARSAL.md" <<EOF
 # Maestro Installer Rehearsal — unsigned
 
 This DMG runs a technical installation rehearsal for Maestro ${VERSION}.
-It launches --simulate, which creates an isolated sandbox and exercises the
-same verify -> install -> open flow without signed release inputs.
+Double-click `Maestro Installer Rehearsal.app` to open the visual wizard. It
+launches --simulate, which creates an isolated sandbox and exercises the same
+verify -> install -> open flow without signed release inputs.
+
+In the wizard, choose **Verificar release**, then **Instalar Maestro**. At the
+end, **Abrir pasta do Maestro** opens the rehearsal data directory. No
+administrator permission is requested.
 
 The rehearsal does not install the product, does not assert Ed25519,
 Authenticode or notarization, and does not change the global PATH.
