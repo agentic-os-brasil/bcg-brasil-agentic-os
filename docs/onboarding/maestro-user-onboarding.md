@@ -18,6 +18,11 @@ contribuidor descrito em [`windows-contributor-prompt.md`](windows-contributor-p
 > runtime local de ingestão ainda precisam de evidência própria. Se `doctor`
 > reportar `unavailable`, isso é um estado seguro e honesto — não uma falha a
 > ser contornada instalando Python, `pip`, chaves ou scripts externos.
+>
+> Para recuperar trabalhos anteriores em pastas SharePoint autorizadas, use o
+> [onboarding específico de prior-work](sharepoint-prior-work-onboarding.md).
+> A regra corporativa é explícita: Claude pode ser qualificado para coletar;
+> Codex não se conecta ao SharePoint e usa somente o índice local verificado.
 
 ## 1. A promessa em linguagem simples
 
@@ -82,6 +87,7 @@ como lixeira de documentos ou como cópia do repositório.
 | Runtime pack | Componentes pesados, como extração local e modelos aprovados. | Instale apenas pelo fluxo verificado do Maestro. |
 | Ledger | Estado de trabalho, checkpoints, evidências e receipts locais. | Consulte-o para retomar; não o trate como transcript completo. |
 | Atlas/wiki | Navegação derivada e governada sobre fontes autorizadas. | Não é um segundo depósito informal de memória. |
+| Wiki organizacional de prior-work | Catálogo separado para recuperar trabalhos anteriores após pedido explícito. | Não ativa em toda conversa e não concede SharePoint ao Codex. |
 
 Essa separação é o que permite vender continuidade sem prometer memória
 ilimitada, automação irrestrita ou compartilhamento invisível.
@@ -337,6 +343,8 @@ documentos, nomes de cliente ou conteúdo de prompt.
 - [ ] Responsável por suporte e incidente conhecido.
 
 ## 12. Documentos relacionados
+
+- [Onboarding completo de recuperação de trabalhos anteriores no SharePoint](sharepoint-prior-work-onboarding.md)
 
 - [README do Maestro](../../README.md)
 - [Roadmap técnico](../../ROADMAP.md)

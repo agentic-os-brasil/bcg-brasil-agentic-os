@@ -1,7 +1,9 @@
 # Spec 037 - SharePoint work-retrieval wiki
 
-Status: architecture accepted for implementation; Claude collection adapter,
-local catalog compiler, query surface and native evidence pending.
+Status: local contract, snapshot validator, catalog compiler, query/revocation
+surface and scheduler are implemented and locally validated. Native Claude
+collection, collector injection, signed release and pilot evidence remain
+pending; Codex collection remains prohibited by corporate policy.
 
 ## Objective
 
