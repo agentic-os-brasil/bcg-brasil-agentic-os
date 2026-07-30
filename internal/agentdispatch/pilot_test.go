@@ -749,6 +749,9 @@ func TestPilotRejectsMultipleErrandHelpersAndUnavailableTargetBeforeDispatch(t *
 func TestPilotResultStateIsExplicitlyProcessLocal(t *testing.T) {
 	now := time.Date(2026, 7, 25, 18, 0, 0, 0, time.UTC)
 	pilot := newTestPilot(t, "claude")
+	if recovery := pilot.Recovery(); recovery.State != RecoveryUnavailable || recovery.Reason != RecoveryReasonProcessLocal {
+		t.Fatalf("recovery capability was not fail-closed: %#v", recovery)
+	}
 	pilot.now = func() time.Time { return now }
 	pilot.dispatcher.now = pilot.now
 	dispatch, _, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Assess one source.", TTL: time.Hour})
