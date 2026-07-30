@@ -8,6 +8,38 @@ import (
 	"time"
 )
 
+// EnrollmentAuthoritySigningBody returns the canonical enrollment document
+// with the authority proof removed. The authority signs the bounded scope;
+// the proof is stored alongside it but is not part of the scope fingerprint.
+func EnrollmentAuthoritySigningBody(enrollment Enrollment) ([]byte, error) {
+	unsigned := enrollment
+	unsigned.AuthorityKeyID = ""
+	unsigned.AuthoritySignature = ""
+	canonical, err := canonicalEnrollment(unsigned)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(canonical)
+}
+
+func VerifyEnrollmentAuthority(enrollment Enrollment, expectedKeyID string, publicKey ed25519.PublicKey) error {
+	if expectedKeyID == "" || enrollment.AuthorityKeyID != expectedKeyID || len(publicKey) != ed25519.PublicKeySize {
+		return errors.New("prior-work enrollment authority is not trusted")
+	}
+	signature, err := base64.StdEncoding.Strict().DecodeString(enrollment.AuthoritySignature)
+	if err != nil || len(signature) != ed25519.SignatureSize {
+		return errors.New("prior-work enrollment authority signature is malformed")
+	}
+	body, err := EnrollmentAuthoritySigningBody(enrollment)
+	if err != nil {
+		return err
+	}
+	if !ed25519.Verify(publicKey, body, signature) {
+		return errors.New("prior-work enrollment authority authentication failed")
+	}
+	return nil
+}
+
 // BuildUnsignedImportReceipt returns the canonical body a trusted external
 // collector must sign. It never accepts, loads or stores a private key.
 func BuildUnsignedImportReceipt(

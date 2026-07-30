@@ -223,6 +223,8 @@ usar:
   "authorized_by": "actor-local-REPLACE_WITH_ACTOR_OUTPUT",
   "collector_key_id": "claude-sharepoint-collector-key-v1",
   "collector_public_key": "REPLACE_WITH_BASE64_ED25519_PUBLIC_KEY",
+  "authority_key_id": "REPLACE_WITH_APPROVED_AUTHORITY_KEY_ID",
+  "authority_signature": "REPLACE_WITH_AUTHORITY_SIGNATURE_BASE64",
   "enrolled_at": "2026-07-29T09:00:00-03:00",
   "authorization_expires_at": "2026-10-29T09:00:00-03:00",
   "scope_expansion_confirm_after": "2026-08-29T09:00:00-03:00",
@@ -248,6 +250,9 @@ Notas importantes:
 - refs são opacas; não use nome de cliente como ID técnico;
 - a chave pública Ed25519 codificada em base64 precisa ter o formato exigido
   pelo schema; o placeholder acima é intencionalmente inválido;
+- `authority_key_id` e `authority_signature` precisam ser emitidos por uma
+  autoridade aprovada e configurada em `BCGOS_PRIOR_WORK_AUTHORITY_*`; o
+  collector key sozinho nunca autoriza uma matrícula;
 - `authorization_expires_at` limita o direito de consulta;
 - `scope_expansion_confirm_after` registra a intenção de uma futura
   reconfirmação, mas o V1 ainda não implementa nem impõe expansão/rematrícula;

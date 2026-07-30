@@ -143,6 +143,11 @@ type Enrollment struct {
 	AllowedItemTypes           []string  `json:"allowed_item_types"`
 	AllowedOrigins             []string  `json:"allowed_origins"`
 	Roots                      []RootRef `json:"roots"`
+	// AuthorityKeyID and AuthoritySignature are issued by an approved
+	// enrollment authority. A locally supplied collector key is not itself an
+	// authorization to enroll a SharePoint scope.
+	AuthorityKeyID     string `json:"authority_key_id"`
+	AuthoritySignature string `json:"authority_signature"`
 }
 
 type Catalog struct {
@@ -447,6 +452,13 @@ func ValidateEnrollment(enrollment Enrollment) error {
 	publicKey, err := base64.StdEncoding.Strict().DecodeString(enrollment.CollectorPublicKey)
 	if err != nil || len(publicKey) != ed25519.PublicKeySize {
 		return errors.New("invalid prior-work collector public key")
+	}
+	if !opaqueRefPattern.MatchString(enrollment.AuthorityKeyID) {
+		return errors.New("invalid prior-work enrollment authority key id")
+	}
+	authoritySignature, err := base64.StdEncoding.Strict().DecodeString(enrollment.AuthoritySignature)
+	if err != nil || len(authoritySignature) != ed25519.SignatureSize {
+		return errors.New("invalid prior-work enrollment authority signature")
 	}
 	seen := map[string]bool{}
 	for _, root := range enrollment.Roots {

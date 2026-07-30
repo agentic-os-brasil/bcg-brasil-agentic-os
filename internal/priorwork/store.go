@@ -38,9 +38,11 @@ type AccessContext struct {
 }
 
 type Store struct {
-	Root    string
-	compile compileFunc
-	clock   func() time.Time
+	Root                     string
+	EnrollmentAuthorityKeyID string
+	EnrollmentAuthority      []byte
+	compile                  compileFunc
+	clock                    func() time.Time
 }
 
 func (store Store) now() time.Time {
@@ -60,6 +62,9 @@ func authorize(enrollment Enrollment, access AccessContext) error {
 
 func (store Store) Enroll(enrollment Enrollment) error {
 	if err := ValidateEnrollment(enrollment); err != nil {
+		return err
+	}
+	if err := VerifyEnrollmentAuthority(enrollment, store.EnrollmentAuthorityKeyID, store.EnrollmentAuthority); err != nil {
 		return err
 	}
 	var err error
@@ -896,6 +901,10 @@ func canonicalEnrollment(input Enrollment) (Enrollment, error) {
 }
 
 func fingerprintEnrollment(enrollment Enrollment) (string, error) {
+	// Authority proofs authenticate the enrollment but are deliberately
+	// excluded from the semantic fingerprint used to bind collector receipts.
+	enrollment.AuthorityKeyID = ""
+	enrollment.AuthoritySignature = ""
 	canonical, err := canonicalEnrollment(enrollment)
 	if err != nil {
 		return "", err
