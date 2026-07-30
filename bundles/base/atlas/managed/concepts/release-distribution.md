@@ -15,7 +15,7 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/release-distribution
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 79e719006e45e5213ba879c48f152c9294efe45c3895c78ffcf7673dc305591c
+x-bcgos-source-fingerprint: a567df20b01fde06f000d75359a79ba38f1fcf64c69d3d2129ed855d1e4f57cb
 x-bcgos-freshness: fresh
 x-bcgos-status: active
 x-bcgos-generator-version: bcgos-managed-wiki/0.1
@@ -92,19 +92,6 @@ go run ./dev/release verify --directory dist/release-candidate
 
 Verification rejects missing, extra, non-regular or digest-mismatched files.
 It proves candidate closure and integrity, not authenticity.
-
-## Assemble the macOS installer candidate
-
-The visual installer is packaged separately from the CLI candidate because it
-must carry the exact release directory, native bootstrapper and authority
-registry that the bridge will verify. Use
-`dev/release/build-macos-installer.sh` with explicit absolute paths to those
-inputs, the target-architecture bridge and the hash-approved `.icns`. The
-factory emits a DMG containing `Maestro Installer.app`, records tree/file
-digests and labels the result `unsigned-candidate`. It never creates keys,
-signs, notarizes or publishes the package. The protected release workflow must
-repeat the same packaging with approved inputs before the package can be
-called a signed release.
 
 ## Produce a local readiness report
 

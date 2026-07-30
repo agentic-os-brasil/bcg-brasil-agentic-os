@@ -12,12 +12,16 @@ consume:
 
 `dev/release/build-macos-installer.sh` packages those inputs into
 `Maestro Installer.app` and an unsigned DMG. It rejects missing or symlinked
-inputs, checks the requested architecture with `lipo`, records file/tree
-digests and passes explicit paths to the bridge. The bridge therefore keeps its
-normal per-user managed and owner-data roots without requiring administrator
-permission or changing the global `PATH`.
+inputs, checks the requested architecture with `lipo`, validates the release
+manifest identity against the requested version, re-hashes every staged
+bridge/registry/bootstrapper/icon input, records file/tree digests and passes
+explicit paths to the bridge. The bridge therefore keeps its normal per-user
+managed and owner-data roots without requiring administrator permission or
+changing the global `PATH`.
 
-The output is deliberately marked `unsigned-candidate`. The script does not
+The output is deliberately marked `unsigned-candidate`. Its provenance record
+also includes the release manifest and detached-signature digests. The script
+does not
 create keys, sign bytes, notarize the app, contact a provider or weaken the
 bridge's release verification. Developer ID, notarization, Ed25519 authority,
 provider publication and clean-device acceptance remain protected release

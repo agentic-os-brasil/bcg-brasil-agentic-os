@@ -65,6 +65,7 @@ not be used as evidence that a pending capability is already released.
 - [x] Wire the Session Context Packet into the Claude lifecycle adapter with bounded authorization and omission reporting.
 - [ ] Wire the complete Codex lifecycle and record qualifying native evidence for each supported runtime/platform.
 - [x] Implement idempotent `bcgos init` with data-preservation tests.
+- [x] Project a rich, bounded runtime orientation and real base skills during adapter installation, preserving user-authored files and failing closed on conflicts.
 - [x] Implement `bcgos profile show|set` with a user-local, runtime-neutral policy.
 - [x] Implement `bcgos owner init|status|interview` with inspectable professional facets and no silent sensitive-data use.
 - [x] Implement local refinement submission, policy enforcement, audit snapshots and explicit reversal for owner facets.
@@ -162,6 +163,16 @@ not be used as evidence that a pending capability is already released.
 - [x] Implement the first BCGOS managed-profile and OKF validator slice.
 - [ ] Implement the transactional outbox, source watermarks and atomic atlas manifest.
 - [x] Implement the deterministic managed product-atlas generator.
+- [x] Define the separate SharePoint organizational work-retrieval atlas,
+  Claude-only collection boundary and explicit-intent query contract.
+- [x] Implement the strict SharePoint snapshot validator, incremental local
+  catalog compiler, revocation barriers and active manifest.
+- [x] Implement `bcgos prior-work actor|enroll|status|import|find` and the explicit
+  `find-prior-work` product skill.
+- [x] Implement the interval scheduler, occurrence-bound signed receipt,
+  publication audit and fail-closed `sync-due` diagnostic surface.
+- [ ] Qualify one native Claude SharePoint test-root sync; keep Codex
+  collection `unavailable/corporate_policy`.
 - [x] Generate index, backlinks, orphan/broken-link diagnostics and a generation log.
 - [x] Add allowlist, provenance, determinism and boundary tests to CI.
 - [x] Add a bounded Darwin check/reconcile routine without automatic commits or pushes.

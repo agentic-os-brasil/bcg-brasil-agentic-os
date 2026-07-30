@@ -17,8 +17,9 @@ import (
 type Cadence string
 
 const (
-	Daily  Cadence = "daily"
-	Weekly Cadence = "weekly"
+	Daily    Cadence = "daily"
+	Weekly   Cadence = "weekly"
+	Interval Cadence = "interval"
 )
 
 type ReceiptState string
@@ -38,12 +39,13 @@ var (
 // Job describes cadence only. Native schedulers may wake the process, but this
 // runtime-neutral contract remains responsible for deciding what is due.
 type Job struct {
-	ID          string
-	Cadence     Cadence
-	Weekday     time.Weekday
-	LocalHour   int
-	LocalMinute int
-	MaxCatchUp  int
+	ID            string
+	Cadence       Cadence
+	Weekday       time.Weekday
+	LocalHour     int
+	LocalMinute   int
+	IntervalHours int
+	MaxCatchUp    int
 }
 
 type Occurrence struct {
@@ -159,8 +161,15 @@ func validateJob(job Job) error {
 	if !jobIDPattern.MatchString(job.ID) {
 		return fmt.Errorf("invalid scheduler job ID %q", job.ID)
 	}
-	if job.Cadence != Daily && job.Cadence != Weekly {
+	if job.Cadence != Daily && job.Cadence != Weekly && job.Cadence != Interval {
 		return fmt.Errorf("invalid cadence for job %q", job.ID)
+	}
+	if job.Cadence == Interval {
+		if job.IntervalHours <= 0 || job.IntervalHours > 8760 {
+			return fmt.Errorf("invalid interval for job %q", job.ID)
+		}
+	} else if job.IntervalHours != 0 {
+		return fmt.Errorf("calendar job %q cannot define an interval", job.ID)
 	}
 	if job.LocalHour < 0 || job.LocalHour > 23 || job.LocalMinute < 0 || job.LocalMinute > 59 {
 		return fmt.Errorf("invalid local schedule for job %q", job.ID)
@@ -175,6 +184,9 @@ func validateJob(job Job) error {
 }
 
 func nextOccurrence(job Job, after time.Time) time.Time {
+	if job.Cadence == Interval {
+		return after.Add(time.Duration(job.IntervalHours) * time.Hour)
+	}
 	location := after.Location()
 	candidate := time.Date(after.Year(), after.Month(), after.Day(), job.LocalHour, job.LocalMinute, 0, 0, location)
 	if job.Cadence == Weekly {

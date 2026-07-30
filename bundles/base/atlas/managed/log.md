@@ -1,6 +1,6 @@
 # Directory Update Log
 
-## 2026-07-28
+## 2026-07-29
 
-* **Reconcile**: compiled 5 allowlisted concepts with source watermark `79e719006e45e5213ba879c48f152c9294efe45c3895c78ffcf7673dc305591c`.
+* **Reconcile**: compiled 5 allowlisted concepts with source watermark `a567df20b01fde06f000d75359a79ba38f1fcf64c69d3d2129ed855d1e4f57cb`.
 * **Policy**: BCGOS managed scope, generator `bcgos-managed-wiki/0.1`, policy `managed-product/1`.
