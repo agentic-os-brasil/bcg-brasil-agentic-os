@@ -102,6 +102,22 @@ func TestReportKeepsUnwiredProductHooksExplicitlyUnavailable(t *testing.T) {
 	}
 }
 
+func TestReportDoesNotCallDetectedRuntimeReadyWhenRequiredCapabilityIsUnavailable(t *testing.T) {
+	manifest, err := baseruntime.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, runtime := range []string{"claude", "codex"} {
+		report, err := manifest.Report(runtime, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if report.State != "capabilities_unavailable" {
+			t.Fatalf("%s aggregate state = %q", runtime, report.State)
+		}
+	}
+}
+
 func TestSharePointCollectionBoundaryIsRuntimeHonest(t *testing.T) {
 	manifest, err := baseruntime.Manifest()
 	if err != nil {

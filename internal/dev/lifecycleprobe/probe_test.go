@@ -43,3 +43,13 @@ func TestProbeReportsMissingExecutableWithoutFailingTheAudit(t *testing.T) {
 		t.Fatalf("result = %#v, %v", result, err)
 	}
 }
+
+func TestParseRuntimeVersionIgnoresWarningsAndKeepsOnlySemanticVersion(t *testing.T) {
+	output := "WARNING: could not create PATH aliases\n\ncodex-cli 0.144.1\n"
+	if got := parseRuntimeVersion(output); got != "0.144.1" {
+		t.Fatalf("parsed version = %q", got)
+	}
+	if got := parseRuntimeVersion("warning only"); got != "" {
+		t.Fatalf("expected unparsable output to remain empty, got %q", got)
+	}
+}

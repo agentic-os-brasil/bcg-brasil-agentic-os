@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 )
 
 const ClaudeMinimumVersion = lifecycle.ClaudeMinimumVersion
+
+var versionLinePattern = regexp.MustCompile(`(?m)(?:^|\s)(?:claude|codex(?:-cli)?)?\s*v?([0-9]+\.[0-9]+\.[0-9]+)(?:\s|$)`)
 
 type Result struct {
 	SchemaVersion      int                 `json:"schema_version"`
@@ -50,7 +53,11 @@ func Probe(runtime string, lookPath func(string) (string, error), version func(s
 		result.Blocker = runtime + " version could not be read: " + err.Error()
 		return result, nil
 	}
-	result.RuntimeVersion = strings.TrimSpace(output)
+	result.RuntimeVersion = parseRuntimeVersion(output)
+	if result.RuntimeVersion == "" {
+		result.Blocker = runtime + " version output did not contain a parseable semantic version"
+		return result, nil
+	}
 	if runtime == "codex" {
 		result.State = "not_observed"
 		result.Blocker = "Codex lifecycle hooks are configured, but no fresh native-session observation has been captured"
@@ -71,7 +78,10 @@ func SystemProbe(runtime string) (Result, error) {
 	return Probe(runtime, exec.LookPath, func(executable string) (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		output, err := exec.CommandContext(ctx, executable, "--version").CombinedOutput()
+		// Keep stderr out of the evidence receipt. Several CLIs emit local
+		// warnings there; mixing it into runtime_version makes the probe
+		// non-deterministic and can hide the actual version.
+		output, err := exec.CommandContext(ctx, executable, "--version").Output()
 		if ctx.Err() != nil {
 			return "", fmt.Errorf("version command timed out")
 		}
@@ -80,6 +90,14 @@ func SystemProbe(runtime string) (Result, error) {
 		}
 		return string(output), nil
 	})
+}
+
+func parseRuntimeVersion(output string) string {
+	matches := versionLinePattern.FindStringSubmatch(output)
+	if len(matches) != 2 {
+		return ""
+	}
+	return matches[1]
 }
 
 func claudeSurfaces(defaultBlocker string) []lifecycle.Surface {

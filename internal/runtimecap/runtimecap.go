@@ -129,5 +129,13 @@ func (manifest Manifest) Report(runtime string, detected bool) (Report, error) {
 		}
 		report.Capabilities = append(report.Capabilities, entry)
 	}
+	if detected {
+		for _, capability := range report.Capabilities {
+			if capability.Criticality == "required" && capability.State != "native" {
+				report.State = "capabilities_unavailable"
+				break
+			}
+		}
+	}
 	return report, nil
 }
