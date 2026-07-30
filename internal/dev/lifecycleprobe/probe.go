@@ -16,7 +16,10 @@ import (
 
 const ClaudeMinimumVersion = lifecycle.ClaudeMinimumVersion
 
-var versionLinePattern = regexp.MustCompile(`(?m)(?:^|\s)(?:claude|codex(?:-cli)?)?\s*v?([0-9]+\.[0-9]+\.[0-9]+)(?:\s|$)`)
+var (
+	namedVersionPattern    = regexp.MustCompile(`(?im)(?:claude|codex(?:-cli)?)[^0-9]{0,16}v?([0-9]+\.[0-9]+\.[0-9]+)`)
+	semanticVersionPattern = regexp.MustCompile(`v?([0-9]+\.[0-9]+\.[0-9]+)`)
+)
 
 type Result struct {
 	SchemaVersion      int                 `json:"schema_version"`
@@ -93,11 +96,17 @@ func SystemProbe(runtime string) (Result, error) {
 }
 
 func parseRuntimeVersion(output string) string {
-	matches := versionLinePattern.FindStringSubmatch(output)
-	if len(matches) != 2 {
-		return ""
+	if matches := namedVersionPattern.FindStringSubmatch(output); len(matches) == 2 {
+		return matches[1]
 	}
-	return matches[1]
+	// Bare versions are accepted for runtimes that print only a number. If
+	// more than one semantic version appears (for example in a warning), do
+	// not guess which one belongs to the runtime.
+	matches := semanticVersionPattern.FindAllStringSubmatch(output, -1)
+	if len(matches) == 1 && len(matches[0]) == 2 {
+		return matches[0][1]
+	}
+	return ""
 }
 
 func claudeSurfaces(defaultBlocker string) []lifecycle.Surface {

@@ -52,4 +52,7 @@ func TestParseRuntimeVersionIgnoresWarningsAndKeepsOnlySemanticVersion(t *testin
 	if got := parseRuntimeVersion("warning only"); got != "" {
 		t.Fatalf("expected unparsable output to remain empty, got %q", got)
 	}
+	if got := parseRuntimeVersion("Node v18.1.0 warning\ncodex-cli 0.144.1\n"); got != "0.144.1" {
+		t.Fatalf("runtime-named version did not win over warning version: %q", got)
+	}
 }
