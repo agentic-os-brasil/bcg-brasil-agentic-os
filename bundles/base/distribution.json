@@ -54,6 +54,10 @@
       "path": "runtime/capabilities.json"
     },
     {
+      "source": "bundles/base/runtime/orientation.md.tmpl",
+      "path": "runtime/orientation.md.tmpl"
+    },
+    {
       "source": "bundles/base/runtime/maintenance.json",
       "path": "runtime/maintenance.json"
     },
@@ -66,12 +70,28 @@
       "path": "skills/catalog.json"
     },
     {
+      "source": "bundles/base/skills/agent-identity-setup/SKILL.md",
+      "path": "skills/agent-identity-setup/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/agent-identity-setup/agents/openai.yaml",
+      "path": "skills/agent-identity-setup/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/coverage-diagnose/SKILL.md",
       "path": "skills/coverage-diagnose/SKILL.md"
     },
     {
       "source": "bundles/base/skills/coverage-diagnose/agents/openai.yaml",
       "path": "skills/coverage-diagnose/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/deck-storyline/SKILL.md",
+      "path": "skills/deck-storyline/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/deck-storyline/agents/openai.yaml",
+      "path": "skills/deck-storyline/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/dream-memory/SKILL.md",
@@ -128,6 +148,22 @@
     {
       "source": "bundles/base/skills/qa-gate/agents/openai.yaml",
       "path": "skills/qa-gate/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/qualitative-analysis/SKILL.md",
+      "path": "skills/qualitative-analysis/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/qualitative-analysis/agents/openai.yaml",
+      "path": "skills/qualitative-analysis/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/quantitative-analysis/SKILL.md",
+      "path": "skills/quantitative-analysis/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/quantitative-analysis/agents/openai.yaml",
+      "path": "skills/quantitative-analysis/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/workspace-agent-setup/SKILL.md",

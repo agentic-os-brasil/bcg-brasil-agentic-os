@@ -40,6 +40,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimeprojection"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionhook"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionresolve"
@@ -2000,10 +2001,53 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 		return ExitUsage
 	}
 	path := optionalArg(flags.Args())
-	var (
-		status adaptercfg.Status
-		err    error
-	)
+	type adapterResult struct {
+		adaptercfg.Status
+		Projection runtimeprojection.Status `json:"projection"`
+	}
+	var result adapterResult
+	var err error
+	type fileSnapshot struct {
+		path   string
+		exists bool
+		mode   os.FileMode
+		body   []byte
+	}
+	snapshotFile := func(path string) (fileSnapshot, error) {
+		if path == "" {
+			return fileSnapshot{}, nil
+		}
+		info, statErr := os.Lstat(path)
+		if errors.Is(statErr, os.ErrNotExist) {
+			return fileSnapshot{path: path}, nil
+		}
+		if statErr != nil {
+			return fileSnapshot{}, statErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fileSnapshot{}, fmt.Errorf("refusing to snapshot adapter symlink %s", path)
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fileSnapshot{}, readErr
+		}
+		return fileSnapshot{path: path, exists: true, mode: info.Mode().Perm(), body: body}, nil
+	}
+	restoreFile := func(snapshot fileSnapshot) error {
+		if snapshot.path == "" {
+			return nil
+		}
+		if !snapshot.exists {
+			if err := os.Remove(snapshot.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			return nil
+		}
+		if err := os.WriteFile(snapshot.path, snapshot.body, snapshot.mode); err != nil {
+			return err
+		}
+		return nil
+	}
 	switch args[0] {
 	case "install":
 		resolvedExecutable := *executable
@@ -2013,16 +2057,106 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 				return reportError(errOut, fmt.Errorf("locate installed bcgos executable: %w", err))
 			}
 		}
-		status, err = adaptercfg.Install(*runtimeName, path, resolvedExecutable)
+		// Preflight both local surfaces before either one writes. This keeps a
+		// malformed/tracked hook config or a user-file projection conflict from
+		// producing a known half-installed state.
+		if err = adaptercfg.ValidateInstall(*runtimeName, path, resolvedExecutable); err != nil {
+			return reportError(errOut, err)
+		}
+		if err = runtimeprojection.ValidateInstall(*runtimeName, path); err != nil {
+			return reportError(errOut, err)
+		}
+		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)
+		if inspectErr != nil {
+			return reportError(errOut, inspectErr)
+		}
+		excludePath, excludeErr := adaptercfg.LocalConfigExcludePath(*runtimeName, path)
+		if excludeErr != nil {
+			return reportError(errOut, excludeErr)
+		}
+		snapshot, snapshotErr := snapshotFile(priorAdapter.Path)
+		if snapshotErr != nil {
+			return reportError(errOut, snapshotErr)
+		}
+		excludeSnapshot, snapshotErr := snapshotFile(excludePath)
+		if snapshotErr != nil {
+			return reportError(errOut, snapshotErr)
+		}
+		restoreAdapterState := func() error {
+			if restoreErr := restoreFile(snapshot); restoreErr != nil {
+				return restoreErr
+			}
+			return restoreFile(excludeSnapshot)
+		}
+		previousProjection, _ := runtimeprojection.Inspect(*runtimeName, path)
+		result.Status, err = adaptercfg.Install(*runtimeName, path, resolvedExecutable)
+		if err != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
+				return reportError(errOut, fmt.Errorf("adapter install failed and rollback failed: %w (original: %v)", restoreErr, err))
+			}
+			return reportError(errOut, err)
+		}
+		result.Projection, err = runtimeprojection.Install(*runtimeName, path)
+		if err != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
+				return reportError(errOut, fmt.Errorf("projection failed and adapter rollback failed: %w (original: %v)", restoreErr, err))
+			}
+			if previousProjection.State == "absent" {
+				_, _ = runtimeprojection.Uninstall(*runtimeName, path)
+			}
+		}
 	case "uninstall":
-		status, err = adaptercfg.Uninstall(*runtimeName, path)
+		if err = adaptercfg.ValidateUninstall(*runtimeName, path); err != nil {
+			return reportError(errOut, err)
+		}
+		if err = runtimeprojection.ValidateUninstall(*runtimeName, path); err != nil {
+			return reportError(errOut, err)
+		}
+		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)
+		if inspectErr != nil {
+			return reportError(errOut, inspectErr)
+		}
+		excludePath, excludeErr := adaptercfg.LocalConfigExcludePath(*runtimeName, path)
+		if excludeErr != nil {
+			return reportError(errOut, excludeErr)
+		}
+		snapshot, snapshotErr := snapshotFile(priorAdapter.Path)
+		if snapshotErr != nil {
+			return reportError(errOut, snapshotErr)
+		}
+		excludeSnapshot, snapshotErr := snapshotFile(excludePath)
+		if snapshotErr != nil {
+			return reportError(errOut, snapshotErr)
+		}
+		restoreAdapterState := func() error {
+			if restoreErr := restoreFile(snapshot); restoreErr != nil {
+				return restoreErr
+			}
+			return restoreFile(excludeSnapshot)
+		}
+		result.Status, err = adaptercfg.Uninstall(*runtimeName, path)
+		if err != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
+				return reportError(errOut, fmt.Errorf("adapter uninstall failed and rollback failed: %w (original: %v)", restoreErr, err))
+			}
+			return reportError(errOut, err)
+		}
+		result.Projection, err = runtimeprojection.Uninstall(*runtimeName, path)
+		if err != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
+				return reportError(errOut, fmt.Errorf("projection uninstall failed and adapter rollback failed: %w (original: %v)", restoreErr, err))
+			}
+		}
 	case "status":
-		status, err = adaptercfg.Inspect(*runtimeName, path)
+		result.Status, err = adaptercfg.Inspect(*runtimeName, path)
+		if err == nil {
+			result.Projection, err = runtimeprojection.Inspect(*runtimeName, path)
+		}
 	}
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	return writeJSON(out, status, errOut)
+	return writeJSON(out, result, errOut)
 }
 
 func resolveProfile(dataRoot, requested string, explicit bool) (profile.State, error) {
