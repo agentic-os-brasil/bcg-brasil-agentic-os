@@ -95,6 +95,18 @@ authority, GitHub governance, native signing and managed-device evidence are
 actually present for one real run. A failed CI start caused by billing is an
 external blocker, not a release-contract defect.
 
+### Beta ownership boundary
+
+The technical rehearsal gate is intentionally available before paid corporate
+signing is provisioned. Personal Apple or Windows signing credentials are
+prohibited, including for beta, which remains unsigned. Any beta Ed25519
+authority is test-only and must live in a separate test registry; it cannot sign
+new production artifacts. The production registry and workflow must reject its
+issuer/key ID (or mark it revoked), and a newly issued organization-controlled
+key plus custody record is required before the signed-release gate can be
+checked. Retained beta public keys are for archival verification only, never
+installer/update trust.
+
 ### Explicit status map (2026-07-27)
 
 | Class | Current finding | Evidence or owner |

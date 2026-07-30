@@ -24,6 +24,27 @@ identities, a read-only release-policy token and secret custody inputs. The
 repository does not contain those authorities, so the workflow fails closed
 until they are configured.
 
+## Technical beta boundary
+
+The beta can proceed as a local or controlled technical rehearsal without a
+paid personal signing account. Its artifacts must remain labeled
+`unsigned-candidate` or `technical rehearsal` and are engineering evidence only:
+they do not establish authenticity, publication, corporate-device trust or
+pilot readiness. A personal Apple Developer membership or Windows signing
+identity is prohibited, including for beta; technical beta remains unsigned. A
+production Ed25519 key must not be used as a bridge to the corporate release
+path.
+
+When the organization is ready to distribute, the release owner must provision
+organization-owned Apple Developer ID signing and notarization, Windows
+Authenticode, and a new organization-controlled Ed25519 production key with
+approved custody and registry seeding. A beta Ed25519 key, if needed for
+isolated testing, lives in a separate test registry and remains test-only. The
+production authority registry and workflow must exclude its issuer/key ID (or
+mark it revoked) and reject it for installer/update trust and all new production
+artifacts. Its public key may be retained only for read-only archival verification
+of beta artifacts, never as production trust during transition.
+
 ## Build an unsigned candidate
 
 From a clean source snapshot:
