@@ -53,12 +53,14 @@ sealed packet and the final evidence satisfies the contract.
 
 The runtime-neutral pilot enforces the handoff before any material result is
 presented as complete. Closed triggers are `material_recommendation`,
-`consequential_tradeoff` and `external_artifact`; `RequireWalterReview` rejects
-an incomplete producer, binds the source packet digest and scope, and opens
+`consequential_tradeoff` and `external_artifact`; the trigger is signed into
+the producer packet and a successful producer return becomes
+`pending_review`, never `completed`. `RequireWalterReview` accepts only that
+matching pending trigger, binds the source packet digest and scope, and opens
 only the registered Walter reviewer. `ReturnWalterReview` accepts only the
-typed verdict envelope, caps objections at three, and projects compact review
-state (`dispatched`, `approved`, `refine-and-return`, `missing-the-mark` or
-`unavailable`).
+typed verdict envelope, caps objections at three, and promotes the producer to
+`completed` only for `approved`; `refine-and-return`, `missing-the-mark` and
+`unavailable` leave the producer pending and project compact review state.
 
 ## Durability and replay
 

@@ -67,7 +67,8 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 
 			dispatch, sourceReceipt, err := pilot.Delegate(Intent{
 				WorkspaceID: "alpha", Objective: "Prepare the bounded pilot recommendation.",
-				Pointers: []string{"bcgos://workspace/alpha/dossier/recommendation.md"}, TTL: time.Hour,
+				ReviewTrigger: ReviewMaterialRecommendation,
+				Pointers:      []string{"bcgos://workspace/alpha/dossier/recommendation.md"}, TTL: time.Hour,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -81,8 +82,8 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := pilot.Return(envelope, result); err != nil {
-				t.Fatal(err)
+			if pending, err := pilot.Return(envelope, result); err != nil || pending.State != StatePendingReview {
+				t.Fatalf("material result bypassed pending review: %#v err=%v", pending, err)
 			}
 
 			reviewDispatch, reviewReceipt, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
@@ -119,6 +120,10 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 				completed.Review.State != ReviewApproved || completed.Review.ObjectionCount != 0 {
 				t.Fatalf("Walter verdict = %#v err=%v", completed, err)
 			}
+			producerReceipt, ok := pilot.Inspect(sourceReceipt.DelegationID)
+			if !ok || producerReceipt.State != StateCompleted || producerReceipt.Review == nil || producerReceipt.Review.State != ReviewApproved {
+				t.Fatalf("material producer was not completion-authorized by Walter: %#v", producerReceipt)
+			}
 			encoded, _ := json.Marshal(completed)
 			for _, forbidden := range []string{"Choose the bounded pilot scope.", "source refresh date", "case sponsor"} {
 				if strings.Contains(string(encoded), forbidden) {
@@ -134,7 +139,7 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	now := time.Date(2026, 7, 29, 18, 0, 0, 0, time.UTC)
 	pilot.now = func() time.Time { return now }
 	pilot.dispatcher.now = pilot.now
-	dispatch, sourceReceipt, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Prepare one recommendation.", TTL: time.Hour})
+	dispatch, sourceReceipt, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Prepare one recommendation.", ReviewTrigger: ReviewConsequentialTradeoff, TTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,8 +149,8 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pilot.Return(envelope, result); err != nil {
-		t.Fatal(err)
+	if pending, err := pilot.Return(envelope, result); err != nil || pending.State != StatePendingReview {
+		t.Fatalf("material result bypassed pending review: %#v err=%v", pending, err)
 	}
 	reviewDispatch, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
 		Trigger: ReviewConsequentialTradeoff, ReviewObjective: "Pressure-test the trade-off.",
@@ -169,6 +174,135 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	if receipt.Review.State == ReviewApproved {
 		t.Fatal("refinement was promoted to approval")
 	}
+	producerReceipt, ok := pilot.Inspect(sourceReceipt.DelegationID)
+	if !ok || producerReceipt.State != StatePendingReview {
+		t.Fatalf("refinement incorrectly completed producer: %#v", producerReceipt)
+	}
+	if _, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
+		Trigger: ReviewConsequentialTradeoff, ReviewObjective: "Review the same output again.",
+		Audience: "sponsor", Recommendation: "Approve without rework.",
+		DefinitionOfDone: "The original output is approved.", TTL: time.Hour,
+	}); err == nil {
+		t.Fatal("refined producer opened a second Walter review without rework")
+	}
+}
+
+func TestPilotReceiptReviewStateCannotAuthorizeReworkByMutation(t *testing.T) {
+	pilot := newTestPilot(t, "claude")
+	dispatch, sourceReceipt, err := pilot.Delegate(Intent{
+		WorkspaceID: "alpha", Objective: "Prepare one material recommendation.",
+		ReviewTrigger: ReviewMaterialRecommendation, TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer := newTestExecutor(t, "claude", "workspace-agent-alpha", "workspace-alpha-cap", time.Now())
+	result := ReturnBody{Summary: "Bounded recommendation."}
+	envelope, err := producer.SealReturn(dispatch, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pilot.Return(envelope, result); err != nil {
+		t.Fatal(err)
+	}
+	request := WalterReviewRequest{
+		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test the recommendation.",
+		Audience: "sponsor", Recommendation: "Use the recommendation.",
+		DefinitionOfDone: "The recommendation is bounded.", TTL: time.Hour,
+	}
+	if _, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, request); err != nil {
+		t.Fatal(err)
+	}
+	inspected, ok := pilot.Inspect(sourceReceipt.DelegationID)
+	if !ok || inspected.Review == nil || inspected.Review.State != ReviewDispatched {
+		t.Fatalf("producer review state = %#v", inspected)
+	}
+	inspected.Review.State = ReviewRefineReturn
+	if _, _, err := pilot.Rework(sourceReceipt.DelegationID, Intent{
+		WorkspaceID: "alpha", Objective: "Attempt an unauthorized rework.",
+		ReviewTrigger: ReviewMaterialRecommendation, TTL: time.Hour,
+	}); err == nil {
+		t.Fatal("mutating an inspected receipt authorized rework")
+	}
+}
+
+func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			pilot := newTestPilot(t, runtimeName)
+			trigger := ReviewMaterialRecommendation
+			dispatch, sourceReceipt, err := pilot.Delegate(Intent{
+				WorkspaceID: "alpha", Objective: "Prepare the first material recommendation.",
+				ReviewTrigger: trigger, TTL: time.Hour,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			producer := newTestExecutor(t, runtimeName, "workspace-agent-alpha", "workspace-alpha-cap", time.Now())
+			result := ReturnBody{Summary: "Initial recommendation requires counter-evidence."}
+			envelope, err := producer.SealReturn(dispatch, result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if receipt, err := pilot.Return(envelope, result); err != nil || receipt.State != StatePendingReview {
+				t.Fatalf("initial return = %#v err=%v", receipt, err)
+			}
+			reviewRequest := WalterReviewRequest{
+				Trigger: trigger, ReviewObjective: "Pressure-test the first recommendation.",
+				Audience: "sponsor", Recommendation: "Use the first recommendation.",
+				DefinitionOfDone: "Counter-evidence is addressed.", TTL: time.Hour,
+			}
+			reviewDispatch, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, reviewRequest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			walter := newTestExecutor(t, runtimeName, "walter", "walter-cap", time.Now())
+			refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, Objections: []WalterObjection{{
+				Code: "missing-counterevidence", Fix: "Add the counter-evidence.", ExitCondition: "The evidence pointer is reviewed.",
+			}}}
+			refinementEnvelope, err := walter.SealWalterReview(reviewDispatch, refinement)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pilot.ReturnWalterReview(refinementEnvelope, refinement); err != nil {
+				t.Fatal(err)
+			}
+
+			rework, reworkReceipt, err := pilot.Rework(sourceReceipt.DelegationID, Intent{
+				WorkspaceID: "alpha", Objective: "Prepare the revised material recommendation.",
+				ReviewTrigger: trigger, TTL: time.Hour,
+			})
+			if err != nil || reworkReceipt.State != StateDelegated || rework.Packet.ReworkOfPacketID != dispatch.Packet.PacketID {
+				t.Fatalf("rework = %#v receipt=%#v err=%v", rework, reworkReceipt, err)
+			}
+			producer = newTestExecutor(t, runtimeName, "workspace-agent-alpha", "workspace-alpha-cap", time.Now())
+			revised := ReturnBody{Summary: "Revised recommendation addresses the counter-evidence."}
+			revisedEnvelope, err := producer.SealReturn(rework, revised)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if receipt, err := pilot.Return(revisedEnvelope, revised); err != nil || receipt.State != StatePendingReview {
+				t.Fatalf("revised return = %#v err=%v", receipt, err)
+			}
+			reviewDispatch, _, err = pilot.RequireWalterReview(reworkReceipt.DelegationID, reviewRequest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			walter = newTestExecutor(t, runtimeName, "walter", "walter-cap", time.Now())
+			approved := WalterReviewBody{Verdict: WalterApproved}
+			approvedEnvelope, err := walter.SealWalterReview(reviewDispatch, approved)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pilot.ReturnWalterReview(approvedEnvelope, approved); err != nil {
+				t.Fatal(err)
+			}
+			final, ok := pilot.Inspect(reworkReceipt.DelegationID)
+			if !ok || final.State != StateCompleted || final.Review == nil || final.Review.State != ReviewApproved {
+				t.Fatalf("reworked producer was not approved: %#v", final)
+			}
+		})
+	}
 }
 
 func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
@@ -178,7 +312,7 @@ func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 		ParentAgentID: "maestro", Available: false,
 	}
 	dispatch, sourceReceipt, err := pilot.Delegate(Intent{
-		WorkspaceID: "alpha", Objective: "Prepare one material recommendation.", TTL: time.Hour,
+		WorkspaceID: "alpha", Objective: "Prepare one material recommendation.", ReviewTrigger: ReviewExternalArtifact, TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -189,8 +323,8 @@ func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pilot.Return(envelope, result); err != nil {
-		t.Fatal(err)
+	if pending, err := pilot.Return(envelope, result); err != nil || pending.State != StatePendingReview {
+		t.Fatalf("material result bypassed pending review: %#v err=%v", pending, err)
 	}
 	_, receipt, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
 		Trigger: ReviewExternalArtifact, ReviewObjective: "Check the artifact before sharing.",
@@ -205,6 +339,46 @@ func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 	encoded, _ := json.Marshal(receipt)
 	if strings.Contains(string(encoded), "Share the bounded artifact.") {
 		t.Fatalf("review prose leaked into unavailable receipt: %s", encoded)
+	}
+}
+
+func TestPilotProjectsWalterFailureToProducerWithoutApproval(t *testing.T) {
+	pilot := newTestPilot(t, "claude")
+	now := time.Date(2026, 7, 29, 18, 0, 0, 0, time.UTC)
+	pilot.now = func() time.Time { return now }
+	pilot.dispatcher.now = pilot.now
+	dispatch, source, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Prepare one material recommendation.", ReviewTrigger: ReviewMaterialRecommendation, TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer := newTestExecutor(t, "claude", "workspace-agent-alpha", "workspace-alpha-cap", now)
+	result := ReturnBody{Summary: "Bounded recommendation."}
+	envelope, err := producer.SealReturn(dispatch, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pilot.Return(envelope, result); err != nil {
+		t.Fatal(err)
+	}
+	reviewDispatch, _, err := pilot.RequireWalterReview(source.DelegationID, WalterReviewRequest{
+		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test.", Audience: "sponsor",
+		Recommendation: "Use the bounded recommendation.", DefinitionOfDone: "Sponsor can decide.", TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	walter := newTestExecutor(t, "claude", "walter", "walter-cap", now)
+	failure := FailureBody{Code: "runtime_unavailable", Detail: "reviewer stopped"}
+	failureEnvelope, err := walter.SealFailure(reviewDispatch, failure)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pilot.Fail(failureEnvelope, failure); err != nil {
+		t.Fatal(err)
+	}
+	producerReceipt, ok := pilot.Inspect(source.DelegationID)
+	if !ok || producerReceipt.State != StatePendingReview || producerReceipt.Review == nil || producerReceipt.Review.State != ReviewUnavailable {
+		t.Fatalf("producer review state after Walter failure = %#v", producerReceipt)
 	}
 }
 
