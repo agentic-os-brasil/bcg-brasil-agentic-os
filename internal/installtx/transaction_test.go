@@ -231,6 +231,60 @@ func TestActivateRejectsMutatedPreparedArtifacts(t *testing.T) {
 	}
 }
 
+func TestValidatePreparedRejectsStagedArtifactOutsideDataRoot(t *testing.T) {
+	managedRoot := filepath.Join(t.TempDir(), "managed")
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	planPath := stagedPlan(t, managedRoot, dataRoot, "", "0.3.0", "binary 0.3.0")
+	plan, err := ReadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	external := filepath.Join(t.TempDir(), "outside-cli")
+	writeTestFile(t, "", external, "binary 0.3.0")
+	plan.StagedCLI = external
+	if err := WritePlan(planPath, plan); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidatePrepared(planPath, verifiedForPlan(plan), optionsForPlan(plan)); err == nil {
+		t.Fatal("ValidatePrepared() accepted a staged artifact outside the owner-data root")
+	}
+}
+
+func TestRollbackRejectsStateBackupOutsideManagedRoot(t *testing.T) {
+	managedRoot := filepath.Join(t.TempDir(), "managed")
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	checker := func(path, version string) error { return nil }
+	if err := activateTestPlan(t, stagedPlan(t, managedRoot, dataRoot, "", "0.1.0", "binary 0.1.0"), checker); err != nil {
+		t.Fatal(err)
+	}
+	if err := activateTestPlan(t, stagedPlan(t, managedRoot, dataRoot, "0.1.0", "0.1.1", "binary 0.1.1"), checker); err != nil {
+		t.Fatal(err)
+	}
+	state, err := ReadState(dataRoot)
+	if err != nil || state.Previous == nil {
+		t.Fatalf("read active state: %#v err=%v", state, err)
+	}
+	state.Previous.CLIBackup = filepath.Join(t.TempDir(), "outside-cli")
+	if err := WriteState(dataRoot, state); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rollback(managedRoot, dataRoot, checker); err == nil {
+		t.Fatal("Rollback() accepted a backup path outside the managed root")
+	}
+}
+
+func TestNormalizedRootsRejectSymlinkedRoot(t *testing.T) {
+	parent := t.TempDir()
+	target := t.TempDir()
+	link := filepath.Join(parent, "managed")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, _, err := normalizedRoots(link, filepath.Join(t.TempDir(), "data")); err == nil {
+		t.Fatal("normalizedRoots() accepted a symlinked managed root")
+	}
+}
+
 func TestReconcileCompletesCrashAfterPayloadBeforeStateCommit(t *testing.T) {
 	const helperEnv = "MAESTRO_ACTIVATION_CRASH_HELPER"
 	const planEnv = "MAESTRO_ACTIVATION_CRASH_PLAN"

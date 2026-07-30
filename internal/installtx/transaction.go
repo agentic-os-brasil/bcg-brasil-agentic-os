@@ -266,6 +266,12 @@ func ValidatePrepared(
 		plan.BundleSize != bundleArtifact.Size {
 		return ActivationPlan{}, errors.New("activation plan does not match the verified release and install target")
 	}
+	if err := ensureSafePath(dataRoot, plan.StagedCLI); err != nil {
+		return ActivationPlan{}, fmt.Errorf("staged CLI path is outside the private data root: %w", err)
+	}
+	if err := ensureSafePath(dataRoot, plan.StagedBundleArchive); err != nil {
+		return ActivationPlan{}, fmt.Errorf("staged bundle path is outside the private data root: %w", err)
+	}
 	if err := verifyRegularFile(plan.StagedCLI, plan.CLISize, plan.CLISHA256); err != nil {
 		return ActivationPlan{}, fmt.Errorf("verify staged CLI: %w", err)
 	}
@@ -309,6 +315,12 @@ func Activate(
 
 	activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableName(plan.TargetOS))
 	bundleTarget := filepath.Join(plan.ManagedRoot, "bundles", plan.BundleVersion)
+	if err := ensureSafePath(plan.ManagedRoot, activeCLI); err != nil {
+		return err
+	}
+	if err := ensureSafePath(plan.ManagedRoot, bundleTarget); err != nil {
+		return err
+	}
 	if _, err := os.Stat(bundleTarget); err == nil {
 		return fmt.Errorf("bundle version already exists: %s", plan.BundleVersion)
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -362,11 +374,17 @@ func Activate(
 		return err
 	}
 	pendingCLI := activeCLI + ".pending-" + plan.TransactionID
+	if err := ensureSafePath(plan.ManagedRoot, pendingCLI); err != nil {
+		return err
+	}
 	if err := copyVerifiedRegular(plan.StagedCLI, pendingCLI, 0o755, plan.CLISize, plan.CLISHA256); err != nil {
 		return err
 	}
 	defer os.Remove(pendingCLI)
 	pendingBundle := filepath.Join(plan.ManagedRoot, "bundles", ".pending-"+plan.TransactionID)
+	if err := ensureSafePath(plan.ManagedRoot, pendingBundle); err != nil {
+		return err
+	}
 	if err := extractVerifiedBundleArchive(
 		plan.StagedBundleArchive,
 		pendingBundle,
@@ -461,6 +479,9 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 	if current.Previous == nil {
 		return errors.New("no previous Maestro installation is available")
 	}
+	if err := ensureSafePath(managedRoot, current.Previous.CLIBackup); err != nil {
+		return fmt.Errorf("previous CLI backup is outside the managed root: %w", err)
+	}
 	if checker == nil {
 		checker = commandSelfCheck
 	}
@@ -470,10 +491,16 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 	}
 	defer unlock()
 	activeCLI := filepath.Join(managedRoot, "bin", executableName(current.TargetOS))
+	if err := ensureSafePath(managedRoot, activeCLI); err != nil {
+		return err
+	}
 	if _, err := os.Lstat(current.Previous.CLIBackup); err != nil {
 		return fmt.Errorf("previous CLI backup unavailable: %w", err)
 	}
 	revertedBackup := filepath.Join(managedRoot, "recovery", "cli", current.CLIVersion+"-rollback-"+fmt.Sprint(time.Now().UnixNano()), executableName(current.TargetOS))
+	if err := ensureSafePath(managedRoot, revertedBackup); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(revertedBackup), 0o700); err != nil {
 		return err
 	}
@@ -1035,7 +1062,67 @@ func normalizedRoots(managedRoot, dataRoot string) (string, string, error) {
 	if within(managed, data) || within(data, managed) {
 		return "", "", errors.New("managed and owner-data roots must be separate")
 	}
+	if err := ensureSafePath(managed, managed); err != nil {
+		return "", "", fmt.Errorf("managed root is unsafe: %w", err)
+	}
+	if err := ensureSafePath(data, data); err != nil {
+		return "", "", fmt.Errorf("owner-data root is unsafe: %w", err)
+	}
 	return managed, data, nil
+}
+
+// ensureSafePath enforces the physical boundary of a trusted root. Lexical
+// containment alone is insufficient when a pre-existing symlink or junction
+// can redirect an install operation after validation.
+func ensureSafePath(root, candidate string) error {
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
+	candidate, err = filepath.Abs(candidate)
+	if err != nil {
+		return err
+	}
+	root, candidate = filepath.Clean(root), filepath.Clean(candidate)
+	if !within(root, candidate) {
+		return errors.New("path escapes its trusted root")
+	}
+	relative, err := filepath.Rel(root, candidate)
+	if err != nil {
+		return err
+	}
+	current := root
+	rootInfo, statErr := os.Lstat(current)
+	if statErr == nil {
+		if rootInfo.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("trusted root is a symlink or junction: %s", current)
+		}
+		if !rootInfo.IsDir() {
+			return fmt.Errorf("trusted root is not a directory: %s", current)
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return statErr
+	}
+	for _, part := range strings.Split(relative, string(filepath.Separator)) {
+		if part == "" || part == "." {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, statErr := os.Lstat(current)
+		if errors.Is(statErr, os.ErrNotExist) {
+			continue
+		}
+		if statErr != nil {
+			return statErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("path component is a symlink or junction: %s", current)
+		}
+		if current != candidate && !info.IsDir() {
+			return fmt.Errorf("path component is not a directory: %s", current)
+		}
+	}
+	return nil
 }
 
 func within(root, candidate string) bool {
