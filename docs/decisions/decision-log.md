@@ -555,3 +555,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The relationship is enforced by code and conformance tests rather than description alone, while no prompt, rationale, client body or response text enters durable state or receipts. Native Claude/Codex activation and signed runtime qualification remain unavailable until their adapters prove this wire in fresh sessions. No new agent or domain is introduced; the existing Maestro and Walter roles remain the only hub/reviewer pair.
 - Refs: specs/018-maestro-core-agents.md; specs/031-maestro-goal-orchestration.md; internal/agentdispatch; internal/agentorchestration; docs/agent-orchestration-assurance.md
 - Supersedes: none
+
+## BETA - Keep technical beta unsigned until corporate release authority exists
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A useful technical beta can proceed before the organizational signing accounts, certificates and custody controls are funded and provisioned. Using a personal platform identity as a bridge would create the wrong ownership boundary and could make an engineering rehearsal look like an approved corporate release.
+- Decision: Continue the beta with local or controlled `unsigned-candidate` and technical-rehearsal artifacts, explicitly labeled as engineering evidence only. Do not purchase or use a personal Apple Developer membership or personal Windows signing identity, including for beta; technical beta remains unsigned. Production distribution requires organization-owned Apple Developer ID and notarization, Windows Authenticode, and a new organization-controlled Ed25519 production key/custody process. A beta Ed25519 key, if needed for isolated testing, lives in a separate test registry and is never promoted; its public key may be retained only for read-only historical verification of beta artifacts.
+- Consequences: The repository may demonstrate deterministic packaging, installation simulation and local closure without claiming authenticity, publication or pilot readiness. Release operators must provision corporate authorities before signing or publishing. The production authority registry and workflow must exclude the beta issuer/key ID (or mark it revoked) and reject it for installer/update trust and all new production artifacts. Historical verification must remain an archival operation outside production trust. This keeps cost, ownership, revocation and audit boundaries explicit.
+- Refs: docs/releasing.md; docs/release-gates-checklist.md; docs/installer-package.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
+- Supersedes: none

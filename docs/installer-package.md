@@ -30,3 +30,11 @@ gates.
 The separate `dev/release/maestro-rehearsal-dmg.sh` remains the safe local
 technical rehearsal: it launches `--simulate` and contains no signed release
 inputs. Do not use the rehearsal artifact as a production installer.
+
+Personal Apple or Windows signing identities are prohibited, including for
+beta; technical beta remains unsigned. A beta Ed25519 key, if needed, belongs in
+a separate test registry and may verify only isolated beta artifacts. The
+production registry and workflow must reject its issuer/key ID; a retained beta
+public key is archival evidence, never installer/update trust. Production
+installers require the organization-owned authorities and custody described in
+[`docs/releasing.md`](releasing.md).
