@@ -722,7 +722,20 @@ func (pilot *Pilot) Fail(envelope ExecutionEnvelope, body FailureBody) (Receipt,
 		return pilot.rejectEnvelope(envelope, "completion_denied", fmt.Errorf("orchestration guard denied failure close: %s", decision.Code))
 	}
 	if record.packet.Review != nil {
-		return pilot.complete(record, envelope, normalized.Code, StateFailed, ReviewUnavailable), nil
+		receipt := pilot.complete(record, envelope, normalized.Code, StateFailed, ReviewUnavailable)
+		// A Walter branch may fail after dispatch. Project only the review
+		// availability state back to the producer; failure never approves it.
+		if sourceID := record.packet.Review.SourcePacketID; sourceID != "" {
+			for delegationID, producer := range pilot.records {
+				if producer.packet.PacketID != sourceID || producer.receipt.Review == nil {
+					continue
+				}
+				producer.receipt.Review.State = ReviewUnavailable
+				pilot.records[delegationID] = producer
+				break
+			}
+		}
+		return receipt, nil
 	}
 	return pilot.complete(record, envelope, normalized.Code, StateFailed), nil
 }

@@ -296,6 +296,46 @@ func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 	}
 }
 
+func TestPilotProjectsWalterFailureToProducerWithoutApproval(t *testing.T) {
+	pilot := newTestPilot(t, "claude")
+	now := time.Date(2026, 7, 29, 18, 0, 0, 0, time.UTC)
+	pilot.now = func() time.Time { return now }
+	pilot.dispatcher.now = pilot.now
+	dispatch, source, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Prepare one material recommendation.", ReviewTrigger: ReviewMaterialRecommendation, TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer := newTestExecutor(t, "claude", "workspace-agent-alpha", "workspace-alpha-cap", now)
+	result := ReturnBody{Summary: "Bounded recommendation."}
+	envelope, err := producer.SealReturn(dispatch, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pilot.Return(envelope, result); err != nil {
+		t.Fatal(err)
+	}
+	reviewDispatch, _, err := pilot.RequireWalterReview(source.DelegationID, WalterReviewRequest{
+		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test.", Audience: "sponsor",
+		Recommendation: "Use the bounded recommendation.", DefinitionOfDone: "Sponsor can decide.", TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	walter := newTestExecutor(t, "claude", "walter", "walter-cap", now)
+	failure := FailureBody{Code: "runtime_unavailable", Detail: "reviewer stopped"}
+	failureEnvelope, err := walter.SealFailure(reviewDispatch, failure)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pilot.Fail(failureEnvelope, failure); err != nil {
+		t.Fatal(err)
+	}
+	producerReceipt, ok := pilot.Inspect(source.DelegationID)
+	if !ok || producerReceipt.State != StatePendingReview || producerReceipt.Review == nil || producerReceipt.Review.State != ReviewUnavailable {
+		t.Fatalf("producer review state after Walter failure = %#v", producerReceipt)
+	}
+}
+
 func TestPilotRejectsForgedReplayedCrossRuntimeAndCrossScopeReturns(t *testing.T) {
 	now := time.Date(2026, 7, 25, 18, 0, 0, 0, time.UTC)
 	body := ReturnBody{Summary: "Bounded finding."}
