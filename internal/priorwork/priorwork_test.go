@@ -22,6 +22,8 @@ import (
 var testTime = time.Date(2023, 8, 15, 12, 0, 0, 0, time.UTC)
 var testCollectorPrivateKey = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x42}, ed25519.SeedSize))
 var testCollectorPublicKey = testCollectorPrivateKey.Public().(ed25519.PublicKey)
+var testEnrollmentAuthorityPrivateKey = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x24}, ed25519.SeedSize))
+var testEnrollmentAuthorityPublicKey = testEnrollmentAuthorityPrivateKey.Public().(ed25519.PublicKey)
 var testReceiptCounter atomic.Uint64
 
 func testRoot() RootRef {
@@ -29,7 +31,7 @@ func testRoot() RootRef {
 }
 
 func testEnrollment() Enrollment {
-	return Enrollment{
+	enrollment := Enrollment{
 		SchemaVersion:              1,
 		TenantRef:                  "tenant-br",
 		Purpose:                    "prior_work_retrieval",
@@ -49,6 +51,22 @@ func testEnrollment() Enrollment {
 		AllowedOrigins:             []string{"https://bcgbr.sharepoint.com"},
 		Roots:                      []RootRef{testRoot()},
 	}
+	body, err := EnrollmentAuthoritySigningBody(enrollment)
+	if err != nil {
+		panic(err)
+	}
+	enrollment.AuthorityKeyID = "admin-authority-v1"
+	enrollment.AuthoritySignature = base64.StdEncoding.EncodeToString(ed25519.Sign(testEnrollmentAuthorityPrivateKey, body))
+	return enrollment
+}
+
+func resignTestEnrollment(enrollment *Enrollment) {
+	body, err := EnrollmentAuthoritySigningBody(*enrollment)
+	if err != nil {
+		panic(err)
+	}
+	enrollment.AuthorityKeyID = "admin-authority-v1"
+	enrollment.AuthoritySignature = base64.StdEncoding.EncodeToString(ed25519.Sign(testEnrollmentAuthorityPrivateKey, body))
 }
 
 func suzanoDeck() Item {
@@ -160,8 +178,38 @@ func testAccess() AccessContext {
 
 func newTestStore(root string, now *time.Time) Store {
 	return Store{
-		Root:  root,
-		clock: func() time.Time { return *now },
+		Root:                     root,
+		EnrollmentAuthorityKeyID: "admin-authority-v1",
+		EnrollmentAuthority:      testEnrollmentAuthorityPublicKey,
+		clock:                    func() time.Time { return *now },
+	}
+}
+
+func TestEnrollmentRequiresIndependentAuthorityProof(t *testing.T) {
+	now := testTime
+	enrollment := testEnrollment()
+	withoutProof := enrollment
+	withoutProof.AuthoritySignature = ""
+	if err := ValidateEnrollment(withoutProof); err == nil {
+		t.Fatal("expected unsigned local enrollment to fail closed")
+	}
+
+	forged := enrollment
+	forged.AuthoritySignature = base64.StdEncoding.EncodeToString(ed25519.Sign(testCollectorPrivateKey, func() []byte {
+		body, err := EnrollmentAuthoritySigningBody(forged)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}()))
+	store := newTestStore(t.TempDir(), &now)
+	if err := store.Enroll(forged); err == nil {
+		t.Fatal("expected collector key to be rejected as enrollment authority")
+	}
+
+	validStore := newTestStore(t.TempDir(), &now)
+	if err := validStore.Enroll(enrollment); err != nil {
+		t.Fatalf("valid authority proof rejected: %v", err)
 	}
 }
 
@@ -502,6 +550,7 @@ func TestSnapshotLimitCountsItemsAndTombstones(t *testing.T) {
 	now := testTime.Add(time.Hour)
 	enrollment := testEnrollment()
 	enrollment.MaxSnapshotItems = 1
+	resignTestEnrollment(&enrollment)
 	store := newTestStore(t.TempDir(), &now)
 	if err := store.Enroll(enrollment); err != nil {
 		t.Fatal(err)
@@ -664,6 +713,7 @@ func TestEnrollmentCannotBeExpandedByOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	enrollment.Roots = append(enrollment.Roots, RootRef{SiteRef: "other", DriveRef: "other", FolderRef: "other"})
+	resignTestEnrollment(&enrollment)
 	if err := store.Enroll(enrollment); !errors.Is(err, ErrAlreadyEnrolled) {
 		t.Fatalf("expected overwrite to be blocked, got %v", err)
 	}
@@ -676,12 +726,34 @@ func TestEnrollmentCannotBeExpandedByOverwrite(t *testing.T) {
 	}
 }
 
+func TestTamperedEnrollmentIsRejectedOnEveryLoad(t *testing.T) {
+	now := testTime
+	store := newTestStore(t.TempDir(), &now)
+	enrollment := testEnrollment()
+	if err := store.Enroll(enrollment); err != nil {
+		t.Fatal(err)
+	}
+	tampered := enrollment
+	tampered.CollectorKeyID = "attacker-collector-key"
+	body, err := json.Marshal(tampered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store.Root, "enrollment.json"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Status(testAccess()); err == nil {
+		t.Fatal("tampered enrollment was accepted after initial enrollment")
+	}
+}
+
 func TestCompositeIdentityRevokesOnlyOneDriveItem(t *testing.T) {
 	now := testTime.Add(time.Hour)
 	enrollment := testEnrollment()
 	store := newTestStore(t.TempDir(), &now)
 	secondRoot := RootRef{SiteRef: "site-consulting", DriveRef: "drive-archive", FolderRef: "folder-enrolled"}
 	enrollment.Roots = append(enrollment.Roots, secondRoot)
+	resignTestEnrollment(&enrollment)
 	if err := store.Enroll(enrollment); err != nil {
 		t.Fatal(err)
 	}

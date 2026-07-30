@@ -95,12 +95,17 @@ references. The enrollment is strict JSON conforming to
 - an explicit IANA schedule timezone;
 - an opaque authorizing-actor reference bound at enrollment to the
   authenticated local operating-system principal, plus policy version;
+- an independent enrollment-authority key identifier and signature over the
+  bounded enrollment document. A locally supplied collector key is not a
+  trust anchor;
 - authorization expiry; and
 - the time after which a new scope expansion requires confirmation.
 
 The collector may enumerate only descendants of those roots. It does not edit,
 move, download, share, publish or change permissions on SharePoint items.
 Following a result link remains subject to SharePoint's current authorization.
+The local CLI remains unavailable unless its configured authority trust anchor
+verifies this proof; missing or forged authority material fails closed.
 
 ## Canonical catalog snapshot
 

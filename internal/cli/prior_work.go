@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -331,8 +333,16 @@ func priorWorkStore(dataRoot func() (string, error)) (priorwork.Store, error) {
 	if strings.TrimSpace(root) == "" {
 		return priorwork.Store{}, errors.New("BCGOS data root is unavailable")
 	}
+	keyID := strings.TrimSpace(os.Getenv("BCGOS_PRIOR_WORK_AUTHORITY_KEY_ID"))
+	encodedKey := strings.TrimSpace(os.Getenv("BCGOS_PRIOR_WORK_AUTHORITY_PUBLIC_KEY"))
+	publicKey, decodeErr := base64.StdEncoding.Strict().DecodeString(encodedKey)
+	if keyID == "" || decodeErr != nil || len(publicKey) != ed25519.PublicKeySize {
+		return priorwork.Store{}, errors.New("prior-work enrollment authority trust anchor is unavailable")
+	}
 	return priorwork.Store{
-		Root: filepath.Join(root, "atlases", "organization", "sharepoint-work"),
+		Root:                     filepath.Join(root, "atlases", "organization", "sharepoint-work"),
+		EnrollmentAuthorityKeyID: keyID,
+		EnrollmentAuthority:      publicKey,
 	}, nil
 }
 

@@ -15,9 +15,13 @@ import (
 )
 
 var cliCollectorPrivateKey = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x31}, ed25519.SeedSize))
+var cliEnrollmentAuthorityPrivateKey = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x13}, ed25519.SeedSize))
 
 func cliPriorWorkEnrollment(t *testing.T) string {
 	t.Helper()
+	publicAuthorityKey := cliEnrollmentAuthorityPrivateKey.Public().(ed25519.PublicKey)
+	t.Setenv("BCGOS_PRIOR_WORK_AUTHORITY_KEY_ID", "admin-authority-v1")
+	t.Setenv("BCGOS_PRIOR_WORK_AUTHORITY_PUBLIC_KEY", base64.StdEncoding.EncodeToString(publicAuthorityKey))
 	now := time.Now().UTC().Truncate(time.Second)
 	publicKey := cliCollectorPrivateKey.Public().(ed25519.PublicKey)
 	actor, err := localPriorWorkActorRef()
@@ -39,6 +43,12 @@ func cliPriorWorkEnrollment(t *testing.T) string {
 			SiteRef: "site-consulting", DriveRef: "drive-projects", FolderRef: "folder-enrolled",
 		}},
 	}
+	signingBody, err := priorwork.EnrollmentAuthoritySigningBody(enrollment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrollment.AuthorityKeyID = "admin-authority-v1"
+	enrollment.AuthoritySignature = base64.StdEncoding.EncodeToString(ed25519.Sign(cliEnrollmentAuthorityPrivateKey, signingBody))
 	body, err := json.Marshal(enrollment)
 	if err != nil {
 		t.Fatal(err)
@@ -194,6 +204,11 @@ func TestPriorWorkSyncDueCodexIsUnavailableAndRemainsDue(t *testing.T) {
 	enrollment.EnrolledAt = time.Now().UTC().Add(-48 * time.Hour).Truncate(time.Second)
 	enrollment.ScopeExpansionConfirmAfter = enrollment.EnrolledAt.AddDate(0, 6, 0)
 	enrollment.AuthorizationExpiresAt = enrollment.EnrolledAt.AddDate(2, 0, 0)
+	signingBody, err := priorwork.EnrollmentAuthoritySigningBody(enrollment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrollment.AuthoritySignature = base64.StdEncoding.EncodeToString(ed25519.Sign(cliEnrollmentAuthorityPrivateKey, signingBody))
 	body, err := json.Marshal(enrollment)
 	if err != nil {
 		t.Fatal(err)
