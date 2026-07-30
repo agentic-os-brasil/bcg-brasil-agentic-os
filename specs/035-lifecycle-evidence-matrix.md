@@ -54,6 +54,11 @@ go run ./dev/lifecycle-probe --runtime claude
 go run ./dev/lifecycle-probe --runtime codex
 ```
 
+The probe parses only a semantic version from stdout; stderr warnings are not
+part of `runtime_version`. A detected executable is not an aggregate readiness
+claim: the runtime capability report remains `capabilities_unavailable` until
+every required capability is natively qualified.
+
 It reads only the local executable path and `--version` under a two-second
 budget. It starts no model session, changes no runtime configuration, writes no
 receipt and cannot modify the capability manifest. It also reports each
