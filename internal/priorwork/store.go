@@ -574,6 +574,9 @@ func (store Store) loadEnrollment() (Enrollment, error) {
 	if err := ValidateEnrollment(enrollment); err != nil {
 		return Enrollment{}, err
 	}
+	if err := VerifyEnrollmentAuthority(enrollment, store.EnrollmentAuthorityKeyID, store.EnrollmentAuthority); err != nil {
+		return Enrollment{}, err
+	}
 	return enrollment, nil
 }
 

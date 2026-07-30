@@ -726,6 +726,27 @@ func TestEnrollmentCannotBeExpandedByOverwrite(t *testing.T) {
 	}
 }
 
+func TestTamperedEnrollmentIsRejectedOnEveryLoad(t *testing.T) {
+	now := testTime
+	store := newTestStore(t.TempDir(), &now)
+	enrollment := testEnrollment()
+	if err := store.Enroll(enrollment); err != nil {
+		t.Fatal(err)
+	}
+	tampered := enrollment
+	tampered.CollectorKeyID = "attacker-collector-key"
+	body, err := json.Marshal(tampered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store.Root, "enrollment.json"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Status(testAccess()); err == nil {
+		t.Fatal("tampered enrollment was accepted after initial enrollment")
+	}
+}
+
 func TestCompositeIdentityRevokesOnlyOneDriveItem(t *testing.T) {
 	now := testTime.Add(time.Hour)
 	enrollment := testEnrollment()
