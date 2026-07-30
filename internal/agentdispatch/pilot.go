@@ -40,6 +40,19 @@ type Pilot struct {
 	usedNonces map[string]bool
 }
 
+// RecoveryReport is the explicit boundary for restart recovery. The pilot
+// currently retains packets and nonce state only in process memory; callers
+// must not infer recoverability from a delegated receipt after restart.
+type RecoveryReport struct {
+	State  string `json:"state"`
+	Reason string `json:"reason"`
+}
+
+const (
+	RecoveryUnavailable        = "unavailable"
+	RecoveryReasonProcessLocal = "dispatch packets and nonce state are process-local; durable recovery protocol is not implemented"
+)
+
 type pilotRecord struct {
 	receipt     Receipt
 	packet      WorkPacket
@@ -368,6 +381,13 @@ func NewPilot(dispatcher *Dispatcher, instances []Instance) (*Pilot, error) {
 		dispatcher: dispatcher, runtime: dispatcher.gate.Runtime(), instances: registered,
 		now: time.Now, records: make(map[string]pilotRecord), usedNonces: make(map[string]bool),
 	}, nil
+}
+
+// Recovery reports the capability boundary without probing or simulating a
+// persistence layer. A future durable store must replace this explicit state
+// with authenticated metadata recovery before old packets can be completed.
+func (pilot *Pilot) Recovery() RecoveryReport {
+	return RecoveryReport{State: RecoveryUnavailable, Reason: RecoveryReasonProcessLocal}
 }
 
 // RequireWalterReview opens exactly one direct Walter branch for a producer
