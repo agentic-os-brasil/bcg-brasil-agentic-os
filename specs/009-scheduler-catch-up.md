@@ -48,10 +48,16 @@ The first job vocabulary is:
 - `memory-daily`: light L1 maintenance;
 - `memory-weekly`: deep L2/L3/lifetime consolidation;
 - `wiki-reconcile`: reconciliation of source watermarks, outbox receipts and atlas manifests.
+- `sharepoint-work-sync`: refresh of the explicitly enrolled organizational
+  work-retrieval catalog through the approved Claude SharePoint adapter.
 
 Job IDs and cadence are runtime-neutral. Daily and weekly local windows, timezone behavior, retry/backoff and maximum catch-up are configuration, not hard-coded adapter behavior.
 
 `memory-weekly` succeeds only after the complete memory commit is active. Wiki work triggered by that commit follows the outbox and publication boundary in Spec 008; a scheduler receipt cannot substitute for either durable commit.
+
+`sharepoint-work-sync` succeeds only after Spec 037 publishes a new or
+idempotently unchanged active catalog manifest. If SharePoint collection is
+forbidden or unavailable in the active runtime, the occurrence remains due.
 
 ## Presence recovery
 

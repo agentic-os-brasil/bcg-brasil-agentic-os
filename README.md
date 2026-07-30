@@ -21,6 +21,7 @@
   <a href="#pilot-boundaries">Pilot boundaries</a> ·
   <a href="#start-here">Start here</a> ·
   <a href="docs/onboarding/maestro-user-onboarding.md">Onboarding</a> ·
+  <a href="docs/onboarding/sharepoint-prior-work-onboarding.md">Prior-work retrieval</a> ·
   <a href="docs/roadmap/maestro-evolution-roadmap.md">Product evolution</a> ·
   <a href="ROADMAP.md">Engineering roadmap</a> ·
   <a href="LICENSE.md">Closed-source license</a>
@@ -64,6 +65,7 @@ can inspect.
 | Continuity | Resume a long-running work item from an explicit checkpoint and next safe action. |
 | Governed execution | Scope, identity, evidence and human review remain visible at the point of action. |
 | Local-first knowledge | Ingestion is designed around local Docling with approved deterministic fallbacks, never an implicit remote upload. |
+| Organizational prior-work | Retrieve an earlier deck from explicitly enrolled SharePoint folders through an explainable local catalog, without giving Codex a SharePoint connection. |
 | Runtime neutrality | Claude-first and Codex-compatible projections share product contracts and conformance language. |
 | Privacy-safe improvement | The canary can measure friction and reliability without collecting prompts, documents or client names. |
 
@@ -88,6 +90,7 @@ For the business-facing evolution path, read the [product evolution roadmap](doc
 | ✅ Darwin 🧬 operational surgeon | The same Darwin contract supports interactive and headless housekeeping with scoped `health/maestro-system` repairs and metadata-only receipts; native runtime invocation remains unavailable. |
 | 🛠️ Automatic maintenance contract | A base-bundle catalog prebuilds memory, wiki, runtime-health, self-observation and update jobs; each remains unavailable until its executor and native evidence are qualified. |
 | ✅ Local ingestion | Provider-neutral contract, Docling-first fallback selector, bounded MarkItDown adapter and fail-closed `bcgos ingest`; conversion remains unavailable until an approved managed runtime pack is verified. |
+| ✅ Governed prior-work retrieval | Enrollment, signed snapshot import, deterministic local indexing, explicit search, freshness, revocation and scheduling are implemented and locally validated. Native Claude collection remains unavailable pending a qualifying trial; Codex collection is prohibited by corporate policy. |
 
 > **Truth in labeling.** `v0.1.0` is the product target and contract/canary
 > baseline, not a claim that native runtime activation, telemetry, a signed
@@ -181,6 +184,11 @@ The detailed onboarding covers workspace choice, first value, pause/resume,
 ingestion, profiles, safe recovery and the boundary between an implemented
 contract and a released runtime.
 
+For the organizational retrieval journey — including the Claude/SharePoint and
+Codex boundary, enrollment, signed import, explicit search, scheduling,
+revocation and pilot acceptance — use the
+[prior-work onboarding](docs/onboarding/sharepoint-prior-work-onboarding.md).
+
 ### For a decision-maker
 
 The product roadmap explains the value unlocked by each evolution horizon,
@@ -197,6 +205,7 @@ ingestion and governance are intentionally sequenced.
 | [`dev/`](dev) | Contributor-only harness, governance and development skills | Active |
 | [`acceptance/`](acceptance) | Clean-device and pilot acceptance evidence | In progress |
 | [`bundles/`](bundles) | Versioned professional capability catalogs and optional tracks | Available for inspection; activation unavailable |
+| [`internal/priorwork/`](internal/priorwork) | Governed organizational prior-work catalog and explicit retrieval | Local core validated; native Claude collection pending; Codex collection prohibited |
 
 Lifecycle adapter evidence is intentionally separated into configuration,
 direct-contract tests, adapter-command receipts and native-session proof. See
@@ -213,6 +222,12 @@ bcgos skills index
 bcgos adapter install --runtime claude <workspace>
 bcgos adapter status --runtime claude <workspace>
 bcgos ingest --workspace <path> --source <local-file> --adapter markitdown
+bcgos prior-work actor
+bcgos prior-work enroll --stdin --confirm
+bcgos prior-work status
+bcgos prior-work import --snapshot <json> --receipt <json>
+bcgos prior-work find --explicit --stdin --limit 5
+bcgos prior-work sync-due --runtime <claude|codex>
 bcgos session packet [workspace]
 bcgos work create --workspace <path> --stdin
 bcgos work start --workspace <path> --item <id> --revision <n>

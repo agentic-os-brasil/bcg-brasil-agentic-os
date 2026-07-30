@@ -30,6 +30,13 @@
       "relative_path": "skills/dream-memory/SKILL.md"
     },
     {
+      "id": "find-prior-work",
+      "display_name": "Find Prior Work",
+      "trigger": "Recover an explicitly requested past deck or work artifact",
+      "default_prompt": "Use $find-prior-work to search my private prior-work index for this explicitly requested professional artifact.",
+      "relative_path": "skills/find-prior-work/SKILL.md"
+    },
+    {
       "id": "ingest-content",
       "display_name": "Ingest Content",
       "trigger": "Extract professional documents locally and safely",

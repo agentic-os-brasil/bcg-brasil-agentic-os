@@ -70,6 +70,8 @@ atlases/
   managed/                    # sanitized product knowledge
   owners/<owner-ref>/         # owner-global private knowledge
   workspaces/<workspace-ref>/ # one private workspace per root
+  organization/
+    sharepoint-work/          # explicit prior-work retrieval metadata
 ```
 
 These are logical paths; approved operating-system directories remain pending `bcgos init` decisions.
@@ -78,6 +80,9 @@ These are logical paths; approved operating-system directories remain pending `b
 - V1 concept documents contain no cross-bundle links.
 - Session composition may select concepts from multiple authorized bundles only after evaluating actor, tenant, owner, workspace, purpose and policy.
 - Client or workspace content cannot be promoted into managed or organizational bundles through the compiler.
+- The SharePoint work-retrieval bundle is governed separately by Spec 037. It
+  accepts only normalized metadata/facets from explicitly enrolled roots and is
+  never composed into general navigation without explicit retrieval intent.
 
 ## Update event contract
 
@@ -187,6 +192,11 @@ Last-known-good preservation never bypasses a denial barrier. If rebuilding fail
 - **Session Start:** read-only. It may report staleness and enqueue presence-based catch-up after startup, but never blocks startup on compilation or invokes a model to update the wiki.
 
 Spec 009 owns cadence recovery. A successful weekly memory commit emits the durable source event consumed here; a scheduler receipt neither activates memory nor publishes an atlas. `wiki-reconcile` may be woken by a native schedule or later presence and always compares authoritative watermarks before declaring success.
+
+`sharepoint-work-sync` is a separate provider-backed job. It may collect only
+through an authorized Claude SharePoint adapter. Codex leaves collection due
+and reports `unavailable`; it may still validate or query the last active local
+catalog. A scheduler receipt never substitutes for the active catalog manifest.
 
 ## Incremental update semantics
 

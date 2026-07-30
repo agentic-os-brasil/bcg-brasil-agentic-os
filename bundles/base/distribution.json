@@ -102,6 +102,14 @@
       "path": "skills/dream-memory/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/find-prior-work/SKILL.md",
+      "path": "skills/find-prior-work/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/find-prior-work/agents/openai.yaml",
+      "path": "skills/find-prior-work/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/ingest-content/SKILL.md",
       "path": "skills/ingest-content/SKILL.md"
     },
@@ -232,6 +240,18 @@
     {
       "source": "schemas/scheduler-state.schema.json",
       "path": "schemas/scheduler-state.schema.json"
+    },
+    {
+      "source": "schemas/sharepoint-work-catalog.schema.json",
+      "path": "schemas/sharepoint-work-catalog.schema.json"
+    },
+    {
+      "source": "schemas/sharepoint-work-enrollment.schema.json",
+      "path": "schemas/sharepoint-work-enrollment.schema.json"
+    },
+    {
+      "source": "schemas/sharepoint-work-import-receipt.schema.json",
+      "path": "schemas/sharepoint-work-import-receipt.schema.json"
     }
   ]
 }

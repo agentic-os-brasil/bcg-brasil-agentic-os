@@ -54,6 +54,20 @@ The private atlas navigates content authorized for one enrolled owner and, when 
 - Client content never becomes organizational knowledge implicitly.
 - Compilation, synchronization and provider use remain unavailable until privacy, storage and deletion contracts are approved.
 
+### Organizational work-retrieval atlas
+
+The SharePoint work-retrieval atlas defined by Spec 037 is a fourth, physically
+separate scope for authorized recovery of prior professional artifacts across
+explicitly enrolled organizational roots. It contains bounded metadata,
+facets and source pointers only. It is never part of the managed product
+bundle, owner memory or a client workspace atlas.
+
+This atlas is selected only for explicit prior-work retrieval. It is excluded
+from Session Start and general wiki routing. Claude is the V1 SharePoint
+collection adapter; Codex collection remains unavailable by corporate policy.
+Both runtimes may query an already compiled local index under the same actor,
+tenant and purpose policy.
+
 ## Memory navigation
 
 The private atlas is the navigation layer over memory rollups without becoming another memory store:
@@ -128,7 +142,7 @@ Navigation follows least-context disclosure:
 
 Session start receives only a compact navigation projection. It must not inject the complete wiki, traverse private scopes speculatively or treat a wiki summary as more authoritative than the source it references.
 
-Claude and Codex adapters consume the same scoped index and return equivalent provenance, omissions and failure states even when their native search or hook mechanics differ.
+Claude and Codex adapters consume the same scoped index and return equivalent provenance, omissions and failure states even when their native search or hook mechanics differ. Provider collection itself may remain asymmetrical when policy forbids one runtime; that runtime must report `unavailable` and may not emulate access.
 
 ## Generation, invalidation and health
 
