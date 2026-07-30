@@ -46,7 +46,7 @@ done
   echo "error: macOS installer packaging requires Darwin tooling." >&2
   exit 2
 }
-for command in hdiutil lipo shasum SetFile; do
+for command in hdiutil lipo shasum SetFile plutil; do
   command -v "$command" >/dev/null 2>&1 || {
     echo "error: missing required command: $command" >&2
     exit 2
@@ -87,6 +87,10 @@ regular_tree "$release_dir"
 regular_file "$authority_registry"
 regular_file "$bootstrapper"
 regular_file "$icon"
+release_manifest="$release_dir/release-manifest.json"
+release_signature="$release_dir/release-manifest.json.sig"
+regular_file "$release_manifest"
+regular_file "$release_signature"
 [ ! -e "$output" ] || {
   echo "error: output already exists: $output" >&2
   exit 1
@@ -95,6 +99,26 @@ regular_file "$icon"
 actual_icon_sha256="$(shasum -a 256 "$icon" | awk '{print $1}')"
 [ "$actual_icon_sha256" = "$icon_sha256" ] || {
   echo "error: icon SHA-256 does not match the approved input." >&2
+  exit 1
+}
+
+manifest_size="$(stat -f%z "$release_manifest")"
+[ "$manifest_size" -le 1048576 ] || {
+  echo "error: release manifest exceeds the 1 MiB packaging bound." >&2
+  exit 1
+}
+plutil -lint "$release_manifest" >/dev/null 2>&1 || {
+  echo "error: release manifest is not valid property-list/JSON data." >&2
+  exit 1
+}
+manifest_product="$(plutil -extract product raw -o - "$release_manifest" 2>/dev/null || true)"
+manifest_release="$(plutil -extract release raw -o - "$release_manifest" 2>/dev/null || true)"
+[ "$manifest_product" = "maestro" ] || {
+  echo "error: release manifest product must be maestro." >&2
+  exit 1
+}
+[ "$manifest_release" = "$version" ] || {
+  echo "error: release manifest version does not match --version $version." >&2
   exit 1
 }
 
@@ -127,6 +151,8 @@ tree_digest() {
 bridge_sha256="$(shasum -a 256 "$bridge" | awk '{print $1}')"
 registry_sha256="$(shasum -a 256 "$authority_registry" | awk '{print $1}')"
 bootstrapper_sha256="$(shasum -a 256 "$bootstrapper" | awk '{print $1}')"
+release_manifest_sha256="$(shasum -a 256 "$release_manifest" | awk '{print $1}')"
+release_signature_sha256="$(shasum -a 256 "$release_signature" | awk '{print $1}')"
 wizard_tree_sha256="$(tree_digest "$wizard_dir")"
 release_tree_sha256="$(tree_digest "$release_dir")"
 
@@ -189,12 +215,37 @@ chmod 755 "$app/Contents/MacOS/Maestro Installer"
 
 staged_wizard_sha256="$(tree_digest "$resources/wizard")"
 staged_release_sha256="$(tree_digest "$resources/release")"
+staged_bridge_sha256="$(shasum -a 256 "$resources/maestro-installer" | awk '{print $1}')"
+staged_registry_sha256="$(shasum -a 256 "$resources/authority-registry.json" | awk '{print $1}')"
+staged_bootstrapper_sha256="$(shasum -a 256 "$resources/$bootstrap_name" | awk '{print $1}')"
+staged_icon_sha256="$(shasum -a 256 "$resources/maestro.icns" | awk '{print $1}')"
+staged_volume_icon_sha256="$(shasum -a 256 "$staging/.VolumeIcon.icns" | awk '{print $1}')"
 [ "$staged_wizard_sha256" = "$wizard_tree_sha256" ] || {
   echo "error: wizard changed while packaging." >&2
   exit 1
 }
 [ "$staged_release_sha256" = "$release_tree_sha256" ] || {
   echo "error: release inputs changed while packaging." >&2
+  exit 1
+}
+[ "$staged_bridge_sha256" = "$bridge_sha256" ] || {
+  echo "error: bridge changed while packaging." >&2
+  exit 1
+}
+[ "$staged_registry_sha256" = "$registry_sha256" ] || {
+  echo "error: authority registry changed while packaging." >&2
+  exit 1
+}
+[ "$staged_bootstrapper_sha256" = "$bootstrapper_sha256" ] || {
+  echo "error: bootstrapper changed while packaging." >&2
+  exit 1
+}
+[ "$staged_icon_sha256" = "$actual_icon_sha256" ] || {
+  echo "error: app icon changed while packaging." >&2
+  exit 1
+}
+[ "$staged_volume_icon_sha256" = "$actual_icon_sha256" ] || {
+  echo "error: volume icon changed while packaging." >&2
   exit 1
 }
 
@@ -205,6 +256,8 @@ cat > "$staging/installer-provenance.json" <<EOF
   "target_os": "darwin",
   "target_arch": "$arch",
   "bridge_sha256": "$bridge_sha256",
+  "release_manifest_sha256": "$release_manifest_sha256",
+  "release_signature_sha256": "$release_signature_sha256",
   "wizard_tree_sha256": "$wizard_tree_sha256",
   "release_tree_sha256": "$release_tree_sha256",
   "authority_registry_sha256": "$registry_sha256",
