@@ -211,6 +211,28 @@ func TestDispatcherKeepsSkillSelectionWithTheVerticalOwner(t *testing.T) {
 	}
 }
 
+func TestDispatcherVerifyPreservesSignedWalterTrigger(t *testing.T) {
+	dispatcher := newTestDispatcher(t)
+	packet, decision, err := dispatcher.StartRoot(PacketRequest{
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Prepare a material recommendation.", ReviewTrigger: ReviewMaterialRecommendation, TTL: time.Hour,
+	})
+	if err != nil || !decision.Allowed {
+		t.Fatalf("material root dispatch failed: %#v %v", decision, err)
+	}
+	packet.ReviewTrigger = WalterReviewTrigger("forged-trigger")
+	packet.Signature, err = dispatcher.signature(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.Verify(packet); err == nil {
+		t.Fatal("Verify() accepted a re-signed packet with an invalid Walter trigger")
+	}
+	if decision := dispatcher.FinishRoot(packet); decision.Allowed {
+		t.Fatal("FinishRoot() closed a packet whose signed Walter trigger was invalid")
+	}
+}
+
 func TestDispatcherAcceptsLegacyChildOnlyForInFlightCompletion(t *testing.T) {
 	dispatcher := newTestDispatcher(t)
 	root, decision, err := dispatcher.StartRoot(PacketRequest{

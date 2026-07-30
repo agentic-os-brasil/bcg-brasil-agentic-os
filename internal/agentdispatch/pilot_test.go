@@ -180,6 +180,85 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	}
 }
 
+func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			pilot := newTestPilot(t, runtimeName)
+			trigger := ReviewMaterialRecommendation
+			dispatch, sourceReceipt, err := pilot.Delegate(Intent{
+				WorkspaceID: "alpha", Objective: "Prepare the first material recommendation.",
+				ReviewTrigger: trigger, TTL: time.Hour,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			producer := newTestExecutor(t, runtimeName, "workspace-agent-alpha", "workspace-alpha-cap", time.Now())
+			result := ReturnBody{Summary: "Initial recommendation requires counter-evidence."}
+			envelope, err := producer.SealReturn(dispatch, result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if receipt, err := pilot.Return(envelope, result); err != nil || receipt.State != StatePendingReview {
+				t.Fatalf("initial return = %#v err=%v", receipt, err)
+			}
+			reviewRequest := WalterReviewRequest{
+				Trigger: trigger, ReviewObjective: "Pressure-test the first recommendation.",
+				Audience: "sponsor", Recommendation: "Use the first recommendation.",
+				DefinitionOfDone: "Counter-evidence is addressed.", TTL: time.Hour,
+			}
+			reviewDispatch, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, reviewRequest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			walter := newTestExecutor(t, runtimeName, "walter", "walter-cap", time.Now())
+			refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, Objections: []WalterObjection{{
+				Code: "missing-counterevidence", Fix: "Add the counter-evidence.", ExitCondition: "The evidence pointer is reviewed.",
+			}}}
+			refinementEnvelope, err := walter.SealWalterReview(reviewDispatch, refinement)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pilot.ReturnWalterReview(refinementEnvelope, refinement); err != nil {
+				t.Fatal(err)
+			}
+
+			rework, reworkReceipt, err := pilot.Rework(sourceReceipt.DelegationID, Intent{
+				WorkspaceID: "alpha", Objective: "Prepare the revised material recommendation.",
+				ReviewTrigger: trigger, TTL: time.Hour,
+			})
+			if err != nil || reworkReceipt.State != StateDelegated || rework.Packet.ReworkOfPacketID != dispatch.Packet.PacketID {
+				t.Fatalf("rework = %#v receipt=%#v err=%v", rework, reworkReceipt, err)
+			}
+			producer = newTestExecutor(t, runtimeName, "workspace-agent-alpha", "workspace-alpha-cap", time.Now())
+			revised := ReturnBody{Summary: "Revised recommendation addresses the counter-evidence."}
+			revisedEnvelope, err := producer.SealReturn(rework, revised)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if receipt, err := pilot.Return(revisedEnvelope, revised); err != nil || receipt.State != StatePendingReview {
+				t.Fatalf("revised return = %#v err=%v", receipt, err)
+			}
+			reviewDispatch, _, err = pilot.RequireWalterReview(reworkReceipt.DelegationID, reviewRequest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			walter = newTestExecutor(t, runtimeName, "walter", "walter-cap", time.Now())
+			approved := WalterReviewBody{Verdict: WalterApproved}
+			approvedEnvelope, err := walter.SealWalterReview(reviewDispatch, approved)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pilot.ReturnWalterReview(approvedEnvelope, approved); err != nil {
+				t.Fatal(err)
+			}
+			final, ok := pilot.Inspect(reworkReceipt.DelegationID)
+			if !ok || final.State != StateCompleted || final.Review == nil || final.Review.State != ReviewApproved {
+				t.Fatalf("reworked producer was not approved: %#v", final)
+			}
+		})
+	}
+}
+
 func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 	pilot := newTestPilot(t, "codex")
 	pilot.instances["walter"] = Instance{

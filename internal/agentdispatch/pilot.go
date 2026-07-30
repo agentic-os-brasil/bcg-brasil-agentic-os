@@ -446,6 +446,39 @@ func (pilot *Pilot) Delegate(intent Intent) (Dispatch, Receipt, error) {
 	}, nil)
 }
 
+// Rework starts a new signed producer attempt only after Walter returned a
+// bounded refinement or missing-the-mark verdict. The new packet carries the
+// prior packet ID so the retry cannot be detached from the reviewed material.
+func (pilot *Pilot) Rework(sourceDelegationID string, intent Intent) (Dispatch, Receipt, error) {
+	pilot.mu.Lock()
+	defer pilot.mu.Unlock()
+
+	source, exists := pilot.records[sourceDelegationID]
+	if !exists || source.receipt.State != StatePendingReview || source.packet.ReviewTrigger == "" ||
+		source.receipt.Review == nil ||
+		(source.receipt.Review.State != ReviewRefineReturn && source.receipt.Review.State != ReviewMissingMark) {
+		receipt, err := pilot.recordFailure("workspace", "", intent.WorkspaceID, "rework_not_authorized", StateFailed)
+		return Dispatch{}, receipt, err
+	}
+	if !validWorkspaceIntent(intent) || intent.WorkspaceID != source.packet.ScopeID ||
+		intent.ReviewTrigger != source.packet.ReviewTrigger {
+		receipt, err := pilot.recordFailure("workspace", source.packet.TargetAgentID, source.packet.ScopeID, "rework_invalid", StateFailed)
+		return Dispatch{}, receipt, err
+	}
+	instance, exists := pilot.instances[source.packet.TargetAgentID]
+	if !exists || !instance.Available || instance.ParentAgentID != "maestro" ||
+		instance.ScopeKind != source.packet.ScopeKind || instance.ScopeID != source.packet.ScopeID {
+		receipt, err := pilot.recordFailure("workspace", source.packet.TargetAgentID, source.packet.ScopeID, "target_unavailable", StateUnavailable)
+		return Dispatch{}, receipt, err
+	}
+	return pilot.start(instance, PacketRequest{
+		TargetAgentID: source.packet.TargetAgentID, ScopeKind: source.packet.ScopeKind,
+		ScopeID: source.packet.ScopeID, Objective: intent.Objective, Pointers: intent.Pointers,
+		Constraints: intent.Constraints, ReviewTrigger: intent.ReviewTrigger,
+		ReworkOfPacketID: source.packet.PacketID, TTL: intent.TTL,
+	}, nil)
+}
+
 func (pilot *Pilot) DelegateErrand(intent ErrandIntent) (Dispatch, Receipt, error) {
 	pilot.mu.Lock()
 	defer pilot.mu.Unlock()
@@ -788,7 +821,9 @@ func (pilot *Pilot) complete(record pilotRecord, envelope ExecutionEnvelope, fai
 	receipt.State = state
 	receipt.ResultSHA256 = envelope.ResultSHA256
 	receipt.FailureCode = failureCode
-	receipt.CompletedAt = pilot.now().UTC()
+	if state != StatePendingReview {
+		receipt.CompletedAt = pilot.now().UTC()
+	}
 	if receipt.Review != nil && len(reviewState) > 0 && reviewState[0] != "" {
 		receipt.Review.State = reviewState[0]
 	}

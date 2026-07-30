@@ -38,27 +38,31 @@ type PacketRequest struct {
 	// ReviewTrigger is signed into the producer packet so materiality cannot
 	// be added only after the producer has already completed.
 	ReviewTrigger WalterReviewTrigger
-	Review        *ReviewPacket
-	TTL           time.Duration
+	// ReworkOfPacketID binds a new producer attempt to the prior material
+	// packet after Walter requests refinement.
+	ReworkOfPacketID string
+	Review           *ReviewPacket
+	TTL              time.Duration
 }
 
 type WorkPacket struct {
-	SchemaVersion  int                 `json:"schema_version"`
-	PacketID       string              `json:"packet_id"`
-	ParentPacketID string              `json:"parent_packet_id,omitempty"`
-	IssuerAgentID  string              `json:"issuer_agent_id"`
-	TargetAgentID  string              `json:"target_agent_id"`
-	ScopeKind      string              `json:"scope_kind"`
-	ScopeID        string              `json:"scope_id"`
-	Objective      string              `json:"objective"`
-	Pointers       []string            `json:"pointers,omitempty"`
-	Constraints    []string            `json:"constraints,omitempty"`
-	SkillID        string              `json:"skill_id,omitempty"`
-	ReviewTrigger  WalterReviewTrigger `json:"review_trigger,omitempty"`
-	Review         *ReviewPacket       `json:"review,omitempty"`
-	IssuedAt       time.Time           `json:"issued_at"`
-	ExpiresAt      time.Time           `json:"expires_at"`
-	Signature      string              `json:"signature"`
+	SchemaVersion    int                 `json:"schema_version"`
+	PacketID         string              `json:"packet_id"`
+	ParentPacketID   string              `json:"parent_packet_id,omitempty"`
+	IssuerAgentID    string              `json:"issuer_agent_id"`
+	TargetAgentID    string              `json:"target_agent_id"`
+	ScopeKind        string              `json:"scope_kind"`
+	ScopeID          string              `json:"scope_id"`
+	Objective        string              `json:"objective"`
+	Pointers         []string            `json:"pointers,omitempty"`
+	Constraints      []string            `json:"constraints,omitempty"`
+	SkillID          string              `json:"skill_id,omitempty"`
+	ReviewTrigger    WalterReviewTrigger `json:"review_trigger,omitempty"`
+	ReworkOfPacketID string              `json:"rework_of_packet_id,omitempty"`
+	Review           *ReviewPacket       `json:"review,omitempty"`
+	IssuedAt         time.Time           `json:"issued_at"`
+	ExpiresAt        time.Time           `json:"expires_at"`
+	Signature        string              `json:"signature"`
 }
 
 type Dispatcher struct {
@@ -223,9 +227,10 @@ func (dispatcher *Dispatcher) issue(issuer, parentID string, request PacketReque
 		ScopeKind: request.ScopeKind, ScopeID: request.ScopeID,
 		Objective: strings.TrimSpace(request.Objective), Pointers: pointers,
 		Constraints: append([]string(nil), request.Constraints...), SkillID: request.SkillID,
-		ReviewTrigger: request.ReviewTrigger,
-		Review:        cloneReviewPacket(request.Review),
-		IssuedAt:      now, ExpiresAt: now.Add(request.TTL),
+		ReviewTrigger:    request.ReviewTrigger,
+		ReworkOfPacketID: request.ReworkOfPacketID,
+		Review:           cloneReviewPacket(request.Review),
+		IssuedAt:         now, ExpiresAt: now.Add(request.TTL),
 	}
 	if err := validateReviewPacket(packet.Review, packet.PacketID, packet.Objective); err != nil {
 		return WorkPacket{}, err
@@ -247,6 +252,12 @@ func validateRequest(request PacketRequest, child bool) error {
 	}
 	if request.ReviewTrigger != "" && !request.ReviewTrigger.valid() {
 		return errors.New("work packet has an invalid Walter review trigger")
+	}
+	if request.ReworkOfPacketID != "" && (!validPacketID(request.ReworkOfPacketID) || child) {
+		return errors.New("work packet has an invalid rework binding")
+	}
+	if request.Review != nil && request.ReworkOfPacketID != "" {
+		return errors.New("Walter review packet cannot carry a rework binding")
 	}
 	if request.Review != nil && request.ReviewTrigger != "" {
 		return errors.New("Walter review packet cannot carry a producer review trigger")
@@ -312,7 +323,9 @@ func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
 	request := PacketRequest{
 		TargetAgentID: packet.TargetAgentID, ScopeKind: packet.ScopeKind,
 		ScopeID: packet.ScopeID, Objective: packet.Objective, Pointers: packet.Pointers,
-		Constraints: packet.Constraints, SkillID: packet.SkillID, Review: cloneReviewPacket(packet.Review), TTL: packet.ExpiresAt.Sub(packet.IssuedAt),
+		Constraints: packet.Constraints, SkillID: packet.SkillID, ReviewTrigger: packet.ReviewTrigger,
+		ReworkOfPacketID: packet.ReworkOfPacketID,
+		Review:           cloneReviewPacket(packet.Review), TTL: packet.ExpiresAt.Sub(packet.IssuedAt),
 	}
 	if packet.SchemaVersion == legacyPacketSchemaVersion {
 		if packet.SkillID != "" || validateLegacyRequest(request) != nil {
