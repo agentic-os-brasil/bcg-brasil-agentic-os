@@ -12,13 +12,14 @@ does not promote a product capability from `unavailable`.
 | One branch and one child are active at a time | Shared state and controller tests reject parallel branches and children | Adapter uses one durable shared state store across restarts/processes | unavailable |
 | Delegation state can recover safely | Snapshot restore validates policy, root, child and recovery capability; stale recovery is capability-gated | Durable atomic persistence plus restart/partition conformance | unavailable |
 
-The pilot exposes this boundary programmatically as `Pilot.Recovery()` with
-state `unavailable`; a `delegated` receipt is never a claim that its packet can
-be completed after process restart.
 | Packets and completion authority are bounded | Dispatcher and pilot tests verify signed packets, scope inheritance, target-authenticated execution envelopes, nonce replay rejection and finish authority | Adapter delivers only authenticated packets/envelopes without exposing capabilities | unavailable |
 | Material output cannot bypass Walter | A signed producer `review_trigger` moves the producer to `pending_review`; only a sealed, source-scoped Walter packet with an approved verdict promotes it to `completed`; generic Walter returns are rejected and typed verdicts are projected to compact state | Native adapter emits the sealed packet and observes Walter's typed verdict in the same governed session | unavailable |
 | Direct skill selection stays with the active owner | Dispatcher tests require a signed active root packet, matching agent capability and no active child | Native agent execution proves the same root/capability binding | unavailable |
 | Claude/Codex semantic parity | Shared controller fixtures execute both event vocabularies and denial cases | Native session conformance from installed Claude and Codex adapters | unavailable |
+
+The pilot exposes the restart boundary programmatically as `Pilot.Recovery()`
+with state `unavailable`; a `delegated` receipt is never a claim that its packet
+can be completed after process restart.
 
 ## Abuse cases covered locally
 
