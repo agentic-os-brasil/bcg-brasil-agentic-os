@@ -383,6 +383,16 @@ func (pilot *Pilot) RequireWalterReview(sourceDelegationID string, request Walte
 		receipt, err := pilot.recordReviewFailure(source, request, "source_not_complete", StateFailed)
 		return Dispatch{}, receipt, err
 	}
+	if source.receipt.Review != nil {
+		switch source.receipt.Review.State {
+		case ReviewDispatched:
+			receipt, err := pilot.recordReviewFailure(source, request, "review_already_active", StateFailed)
+			return Dispatch{}, receipt, err
+		case ReviewRefineReturn, ReviewMissingMark:
+			receipt, err := pilot.recordReviewFailure(source, request, "rework_required", StateFailed)
+			return Dispatch{}, receipt, err
+		}
+	}
 	if err := pilot.dispatcher.Verify(source.packet); err != nil {
 		receipt, failure := pilot.recordReviewFailure(source, request, "source_packet_invalid", StateFailed)
 		return Dispatch{}, receipt, failure
@@ -537,7 +547,7 @@ func (pilot *Pilot) start(instance Instance, request PacketRequest, errand *Erra
 	pilot.records[receipt.DelegationID] = pilotRecord{
 		receipt: receipt, packet: packet, errand: privateErrand,
 	}
-	return Dispatch{Runtime: pilot.runtime, Packet: packet, Errand: errand}, receipt, nil
+	return Dispatch{Runtime: pilot.runtime, Packet: packet, Errand: errand}, cloneReceipt(receipt), nil
 }
 
 // GuardErrandTool verifies a fresh target-authenticated native tool request
@@ -699,7 +709,7 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 			break
 		}
 	}
-	return receipt, nil
+	return cloneReceipt(receipt), nil
 }
 
 func (pilot *Pilot) Fail(envelope ExecutionEnvelope, body FailureBody) (Receipt, error) {
@@ -744,7 +754,7 @@ func (pilot *Pilot) Inspect(delegationID string) (Receipt, bool) {
 	pilot.mu.Lock()
 	defer pilot.mu.Unlock()
 	record, ok := pilot.records[delegationID]
-	return record.receipt, ok
+	return cloneReceipt(record.receipt), ok
 }
 
 func (pilot *Pilot) verifyEnvelope(envelope ExecutionEnvelope, outcome ExecutionOutcome, resultSHA256 string) (pilotRecord, error) {
@@ -842,7 +852,7 @@ func (pilot *Pilot) complete(record pilotRecord, envelope ExecutionEnvelope, fai
 	}
 	pilot.records[receipt.DelegationID] = pilotRecord{receipt: receipt, packet: record.packet}
 	pilot.usedNonces[envelope.Nonce] = true
-	return receipt
+	return cloneReceipt(receipt)
 }
 
 func (pilot *Pilot) rejectEnvelope(envelope ExecutionEnvelope, code string, cause error) (Receipt, error) {
@@ -850,7 +860,7 @@ func (pilot *Pilot) rejectEnvelope(envelope ExecutionEnvelope, code string, caus
 		receipt := record.receipt
 		receipt.State = StateFailed
 		receipt.FailureCode = code
-		return receipt, cause
+		return cloneReceipt(receipt), cause
 	}
 	return Receipt{
 		SchemaVersion: 1, OwnerAgentID: "maestro",
@@ -881,7 +891,7 @@ func (pilot *Pilot) recordFailure(scopeKind, targetID, scopeID, code string, sta
 		FailureCode: code, CompletedAt: pilot.now().UTC(),
 	}
 	pilot.records[id] = pilotRecord{receipt: receipt}
-	return receipt, errors.New(code)
+	return cloneReceipt(receipt), errors.New(code)
 }
 
 // recordReviewFailure keeps the unavailable/failed projection as useful as a
@@ -899,7 +909,15 @@ func (pilot *Pilot) recordReviewFailure(source pilotRecord, request WalterReview
 		record.receipt = receipt
 		pilot.records[receipt.DelegationID] = record
 	}
-	return receipt, err
+	return cloneReceipt(receipt), err
+}
+
+func cloneReceipt(receipt Receipt) Receipt {
+	if receipt.Review != nil {
+		review := *receipt.Review
+		receipt.Review = &review
+	}
+	return receipt
 }
 
 var (

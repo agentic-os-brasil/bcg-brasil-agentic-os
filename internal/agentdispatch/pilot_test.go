@@ -178,6 +178,52 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	if !ok || producerReceipt.State != StatePendingReview {
 		t.Fatalf("refinement incorrectly completed producer: %#v", producerReceipt)
 	}
+	if _, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
+		Trigger: ReviewConsequentialTradeoff, ReviewObjective: "Review the same output again.",
+		Audience: "sponsor", Recommendation: "Approve without rework.",
+		DefinitionOfDone: "The original output is approved.", TTL: time.Hour,
+	}); err == nil {
+		t.Fatal("refined producer opened a second Walter review without rework")
+	}
+}
+
+func TestPilotReceiptReviewStateCannotAuthorizeReworkByMutation(t *testing.T) {
+	pilot := newTestPilot(t, "claude")
+	dispatch, sourceReceipt, err := pilot.Delegate(Intent{
+		WorkspaceID: "alpha", Objective: "Prepare one material recommendation.",
+		ReviewTrigger: ReviewMaterialRecommendation, TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer := newTestExecutor(t, "claude", "workspace-agent-alpha", "workspace-alpha-cap", time.Now())
+	result := ReturnBody{Summary: "Bounded recommendation."}
+	envelope, err := producer.SealReturn(dispatch, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pilot.Return(envelope, result); err != nil {
+		t.Fatal(err)
+	}
+	request := WalterReviewRequest{
+		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test the recommendation.",
+		Audience: "sponsor", Recommendation: "Use the recommendation.",
+		DefinitionOfDone: "The recommendation is bounded.", TTL: time.Hour,
+	}
+	if _, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, request); err != nil {
+		t.Fatal(err)
+	}
+	inspected, ok := pilot.Inspect(sourceReceipt.DelegationID)
+	if !ok || inspected.Review == nil || inspected.Review.State != ReviewDispatched {
+		t.Fatalf("producer review state = %#v", inspected)
+	}
+	inspected.Review.State = ReviewRefineReturn
+	if _, _, err := pilot.Rework(sourceReceipt.DelegationID, Intent{
+		WorkspaceID: "alpha", Objective: "Attempt an unauthorized rework.",
+		ReviewTrigger: ReviewMaterialRecommendation, TTL: time.Hour,
+	}); err == nil {
+		t.Fatal("mutating an inspected receipt authorized rework")
+	}
 }
 
 func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *testing.T) {
