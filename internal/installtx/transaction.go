@@ -1087,6 +1087,30 @@ func ensureSafePath(root, candidate string) error {
 	if !within(root, candidate) {
 		return errors.New("path escapes its trusted root")
 	}
+	// A root may not exist yet. Walk to the nearest existing parent before
+	// validating the lexical components; otherwise a symlinked parent can make
+	// MkdirAll create the eventual root outside the physical boundary.
+	nearest := filepath.Dir(candidate)
+	for {
+		info, statErr := os.Lstat(nearest)
+		if statErr == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("path ancestor is a symlink or junction: %s", nearest)
+			}
+			if !info.IsDir() {
+				return fmt.Errorf("path ancestor is not a directory: %s", nearest)
+			}
+			break
+		}
+		if !errors.Is(statErr, os.ErrNotExist) {
+			return statErr
+		}
+		parent := filepath.Dir(nearest)
+		if parent == nearest {
+			return errors.New("path has no existing trusted ancestor")
+		}
+		nearest = parent
+	}
 	relative, err := filepath.Rel(root, candidate)
 	if err != nil {
 		return err

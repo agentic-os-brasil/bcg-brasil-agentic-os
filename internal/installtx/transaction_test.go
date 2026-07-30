@@ -285,6 +285,19 @@ func TestNormalizedRootsRejectSymlinkedRoot(t *testing.T) {
 	}
 }
 
+func TestNormalizedRootsRejectSymlinkedParentForMissingRoot(t *testing.T) {
+	parent := t.TempDir()
+	target := t.TempDir()
+	link := filepath.Join(parent, "managed-parent")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	missingRoot := filepath.Join(link, "new-managed-root")
+	if _, _, err := normalizedRoots(missingRoot, filepath.Join(t.TempDir(), "data")); err == nil {
+		t.Fatal("normalizedRoots() accepted a missing root under a symlinked parent")
+	}
+}
+
 func TestReconcileCompletesCrashAfterPayloadBeforeStateCommit(t *testing.T) {
 	const helperEnv = "MAESTRO_ACTIVATION_CRASH_HELPER"
 	const planEnv = "MAESTRO_ACTIVATION_CRASH_PLAN"
