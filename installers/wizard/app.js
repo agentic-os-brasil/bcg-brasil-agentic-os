@@ -3,10 +3,17 @@
   const steps = [...document.querySelectorAll('.step')];
   const platformLabel = document.querySelector('#platform-label');
   const destination = document.querySelector('#install-destination');
+  const connectionBadge = document.querySelector('#connection-badge');
+  const welcomeActionLabel = document.querySelector('#welcome-action-label');
+  const runtimeLabel = document.querySelector('#runtime-label');
+  const firstCommand = document.querySelector('#first-command');
+  const commandHint = document.querySelector('#command-hint');
+  const stageAnnouncement = document.querySelector('#stage-announcement');
   const mode = document.body.dataset.mode || 'preview';
   const sessionToken = new URLSearchParams(window.location.search).get('session') || '';
   let runtime = false;
   let simulation = false;
+  let runtimePlatform = '';
   let planDigest = '';
   let verified = false;
   const platform = /Win/i.test(navigator.userAgent) ? 'Windows' : /Mac/i.test(navigator.userAgent) ? 'macOS' : 'seu dispositivo';
@@ -51,6 +58,30 @@
     if (text) text.textContent = label;
   }
 
+  function commandForPath(path) {
+    const value = String(path || '').trim();
+    if (!value) return 'bcgos doctor';
+    if (/windows/i.test(runtimePlatform || platform)) {
+      return `& "${value.replace(/"/g, '\\"')}" doctor`;
+    }
+    return `"${value.replace(/"/g, '\\"')}" doctor`;
+  }
+
+  function setFirstCommand(path) {
+    if (!firstCommand) return;
+    firstCommand.textContent = commandForPath(path);
+    if (commandHint && path) {
+      commandHint.textContent = /windows/i.test(runtimePlatform || platform)
+        ? 'Windows · PowerShell · caminho exato do seu perfil · não altera o PATH global.'
+        : 'Caminho exato do seu perfil · não altera o PATH global.';
+    }
+  }
+
+  function setSimulationCommandHint() {
+    if (!commandHint) return;
+    commandHint.textContent = 'Ensaio técnico: nenhum executável de release foi instalado; o comando real aparece após um release conectado.';
+  }
+
   function setProgress(stage) {
     const order = ['verify', 'install', 'complete'];
     const current = order.indexOf(stage);
@@ -59,6 +90,8 @@
         const position = order.indexOf(step.dataset.progressStep);
         step.classList.toggle('is-active', position === current);
         step.classList.toggle('is-done', position < current);
+        if (position === current) step.setAttribute('aria-current', 'step');
+        else step.removeAttribute('aria-current');
       });
     });
   }
@@ -81,6 +114,22 @@
     banner.hidden = true;
   }
 
+  function updateConnectionChrome(state) {
+    const connectedMode = state?.mode || 'preview';
+    const copy = connectedMode === 'simulation'
+      ? { badge: 'ENSAIO TÉCNICO', action: 'Simular instalação', footer: 'ensaio técnico conectado' }
+      : connectedMode === 'runtime'
+      ? { badge: 'RELEASE CONECTADO', action: 'Instalar no meu perfil', footer: 'instalação conectada' }
+      : { badge: 'MODO NÃO CONECTADO', action: 'Abrir fluxo visual', footer: 'modo de apresentação' };
+    document.body.dataset.runtimeMode = connectedMode;
+    if (connectionBadge) {
+      connectionBadge.textContent = copy.badge;
+      connectionBadge.dataset.mode = connectedMode;
+    }
+    if (welcomeActionLabel) welcomeActionLabel.textContent = copy.action;
+    if (runtimeLabel) runtimeLabel.textContent = copy.footer;
+  }
+
   function updateFinishCopy() {
     const lead = document.querySelector('#finish-lead');
     if (!lead) return;
@@ -91,7 +140,7 @@
       : 'Esta é uma prévia visual. Nenhum arquivo foi instalado; no modo real, o Maestro ficará no seu perfil.';
   }
 
-  function show(name) {
+  function show(name, { focusHeading = true } = {}) {
     panels.forEach(panel => {
       const visible = panel.dataset.panel === name;
       panel.hidden = !visible;
@@ -103,7 +152,21 @@
       const active = position === index;
       step.classList.toggle('is-current', active);
       step.classList.toggle('is-done', position < index);
+      step.disabled = position > index;
+      if (active) step.setAttribute('aria-current', 'step');
+      else step.removeAttribute('aria-current');
     });
+    const announcements = {
+      welcome: 'Etapa 1 de 4: boas-vindas. Escolha instalar o Maestro no seu perfil.',
+      check: 'Etapa 2 de 4: verificação. Confira o release antes de qualquer mudança.',
+      install: 'Etapa 3 de 4: instalação. O Maestro ficará no seu espaço de usuário.',
+      finish: 'Etapa 4 de 4: pronto. O Maestro está preparado para o primeiro comando.'
+    };
+    if (stageAnnouncement) stageAnnouncement.textContent = announcements[name] || '';
+    if (focusHeading) {
+      const heading = document.querySelector(`[data-panel="${name}"] h1`);
+      if (heading) window.requestAnimationFrame(() => heading.focus());
+    }
     if (name === 'check') setProgress('verify');
     if (name === 'install') setProgress('install');
     if (name === 'finish') setProgress('complete');
@@ -122,6 +185,7 @@
   }
 
   async function discoverRuntime() {
+    updateConnectionChrome();
     try {
       const response = await fetch('/api/state');
       if (!response.ok) return;
@@ -129,11 +193,12 @@
       runtime = true;
       simulation = state.mode === 'simulation';
       document.body.dataset.mode = 'runtime';
+      updateConnectionChrome(state);
       updateModeBanner(state);
       updateFinishCopy();
+      runtimePlatform = state.platform || '';
       platformLabel.textContent = state.platform || platform;
       destination.textContent = state.managed_root || destination.textContent;
-      document.querySelector('.footer b').textContent = simulation ? 'ensaio técnico conectado' : 'instalação conectada';
     } catch (_) {
       // Opening index.html directly is a deliberate, non-mutating preview.
     }
@@ -190,6 +255,8 @@
       if (!response.ok) throw new Error(payload.error || 'A instalação foi interrompida com segurança.');
       setProgress('complete');
       show('finish');
+      if (simulation) setSimulationCommandHint();
+      else setFirstCommand(payload.cli_path);
       showStatus(simulation
         ? `Ensaio concluído. Sandbox de dados: ${payload.data_root}`
         : `Instalação concluída. Dados do usuário: ${payload.data_root}`);
@@ -222,6 +289,37 @@
     }
   }
 
+  async function closeInstaller() {
+    if (!runtime) {
+      showStatus('Esta é uma prévia visual: feche esta aba quando terminar.');
+      window.close();
+      return;
+    }
+    const button = document.querySelector('[data-action="close"]');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/close', requestOptions('POST'));
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível encerrar o instalador.');
+      showStatus('O instalador foi encerrado com segurança. Esta janela pode ser fechada.');
+      window.close();
+    } catch (error) {
+      showStatus(error.message);
+      button.disabled = false;
+    }
+  }
+
+  async function copyFirstCommand() {
+    const command = firstCommand?.textContent || 'bcgos doctor';
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(command);
+      showStatus(`Comando copiado: ${command}`);
+    } catch (_) {
+      showStatus('Não foi possível copiar automaticamente. Selecione o comando e copie manualmente.');
+    }
+  }
+
   document.addEventListener('click', async event => {
     const next = event.target.closest('[data-next]');
     const previous = event.target.closest('[data-prev]');
@@ -234,15 +332,15 @@
     if (action === 'details') document.querySelector('#flow-modal').showModal();
     if (action === 'close-flow') {
       document.querySelector('#flow-modal').close();
-      show('check');
+      show('check', { focusHeading: false });
       document.querySelector('[data-action="verify"]').focus();
     }
     if (action === 'verify') await verifyRelease();
     if (action === 'install') await installRelease();
     if (action === 'open-data') await openDataFolder();
     if (action === 'copy-path') navigator.clipboard?.writeText(destination.textContent);
-    if (action === 'copy-command') navigator.clipboard?.writeText('bcgos doctor');
-    if (action === 'close') window.close();
+    if (action === 'copy-command') await copyFirstCommand();
+    if (action === 'close') await closeInstaller();
   });
 
   discoverRuntime();

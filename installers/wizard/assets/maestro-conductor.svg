@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="title desc">
+  <title id="title">Maestro, o regente digital</title>
+  <desc id="desc">Um regente minimalista conduzindo uma frase musical com uma batuta luminosa.</desc>
+  <defs>
+    <linearGradient id="coat" x1="72" y1="152" x2="169" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#31E0B5"/>
+      <stop offset="1" stop-color="#17B995"/>
+    </linearGradient>
+    <linearGradient id="baton" x1="48" y1="201" x2="197" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#31E0B5"/>
+      <stop offset=".62" stop-color="#9BE8D1"/>
+      <stop offset="1" stop-color="#F2FFF9"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g fill="none" stroke="#31E0B5" stroke-opacity=".26" stroke-width="2">
+    <ellipse cx="120" cy="124" rx="101" ry="42" transform="rotate(-24 120 124)"/>
+    <ellipse cx="120" cy="124" rx="72" ry="24" transform="rotate(24 120 124)"/>
+  </g>
+  <g fill="#E5FFF5">
+    <circle cx="39" cy="92" r="3"/><circle cx="197" cy="158" r="3"/>
+  </g>
+  <path d="M71 231c4-47 22-75 49-75s45 28 49 75H71Z" fill="url(#coat)"/>
+  <path d="M91 159h58l14 72H77l14-72Z" fill="#31E0B5"/>
+  <path d="m120 163 14 17-14 18-14-18 14-17Z" fill="#06211D"/>
+  <path d="m94 161 26 29 26-29" fill="none" stroke="#F2FFF9" stroke-opacity=".9" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="120" cy="93" r="35" fill="#9BE8D1"/>
+  <path d="M87 95c1-28 17-45 37-45 18 0 31 13 34 34-13-7-25-9-37-8-12 1-23 7-34 19Z" fill="#31E0B5"/>
+  <path d="M96 100c8 7 16 10 24 10s16-3 24-10" fill="none" stroke="#0A4036" stroke-width="4" stroke-linecap="round"/>
+  <path d="M164 156c16-18 31-42 43-77" fill="none" stroke="url(#baton)" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="m204 72 10-13-3 17" fill="none" stroke="#F2FFF9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M178 48c7-10 17-13 26-8" fill="none" stroke="#9BE8D1" stroke-width="3" stroke-linecap="round"/>
+  <path d="M196 36c3-8 10-12 18-10-1 8-6 13-15 15" fill="#31E0B5"/>
+</svg>
