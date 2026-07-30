@@ -67,7 +67,8 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 
 			dispatch, sourceReceipt, err := pilot.Delegate(Intent{
 				WorkspaceID: "alpha", Objective: "Prepare the bounded pilot recommendation.",
-				Pointers: []string{"bcgos://workspace/alpha/dossier/recommendation.md"}, TTL: time.Hour,
+				ReviewTrigger: ReviewMaterialRecommendation,
+				Pointers:      []string{"bcgos://workspace/alpha/dossier/recommendation.md"}, TTL: time.Hour,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -81,8 +82,8 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := pilot.Return(envelope, result); err != nil {
-				t.Fatal(err)
+			if pending, err := pilot.Return(envelope, result); err != nil || pending.State != StatePendingReview {
+				t.Fatalf("material result bypassed pending review: %#v err=%v", pending, err)
 			}
 
 			reviewDispatch, reviewReceipt, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
@@ -119,6 +120,10 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 				completed.Review.State != ReviewApproved || completed.Review.ObjectionCount != 0 {
 				t.Fatalf("Walter verdict = %#v err=%v", completed, err)
 			}
+			producerReceipt, ok := pilot.Inspect(sourceReceipt.DelegationID)
+			if !ok || producerReceipt.State != StateCompleted || producerReceipt.Review == nil || producerReceipt.Review.State != ReviewApproved {
+				t.Fatalf("material producer was not completion-authorized by Walter: %#v", producerReceipt)
+			}
 			encoded, _ := json.Marshal(completed)
 			for _, forbidden := range []string{"Choose the bounded pilot scope.", "source refresh date", "case sponsor"} {
 				if strings.Contains(string(encoded), forbidden) {
@@ -134,7 +139,7 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	now := time.Date(2026, 7, 29, 18, 0, 0, 0, time.UTC)
 	pilot.now = func() time.Time { return now }
 	pilot.dispatcher.now = pilot.now
-	dispatch, sourceReceipt, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Prepare one recommendation.", TTL: time.Hour})
+	dispatch, sourceReceipt, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Prepare one recommendation.", ReviewTrigger: ReviewConsequentialTradeoff, TTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,8 +149,8 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pilot.Return(envelope, result); err != nil {
-		t.Fatal(err)
+	if pending, err := pilot.Return(envelope, result); err != nil || pending.State != StatePendingReview {
+		t.Fatalf("material result bypassed pending review: %#v err=%v", pending, err)
 	}
 	reviewDispatch, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
 		Trigger: ReviewConsequentialTradeoff, ReviewObjective: "Pressure-test the trade-off.",
@@ -169,6 +174,10 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	if receipt.Review.State == ReviewApproved {
 		t.Fatal("refinement was promoted to approval")
 	}
+	producerReceipt, ok := pilot.Inspect(sourceReceipt.DelegationID)
+	if !ok || producerReceipt.State != StatePendingReview {
+		t.Fatalf("refinement incorrectly completed producer: %#v", producerReceipt)
+	}
 }
 
 func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
@@ -178,7 +187,7 @@ func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 		ParentAgentID: "maestro", Available: false,
 	}
 	dispatch, sourceReceipt, err := pilot.Delegate(Intent{
-		WorkspaceID: "alpha", Objective: "Prepare one material recommendation.", TTL: time.Hour,
+		WorkspaceID: "alpha", Objective: "Prepare one material recommendation.", ReviewTrigger: ReviewExternalArtifact, TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -189,8 +198,8 @@ func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pilot.Return(envelope, result); err != nil {
-		t.Fatal(err)
+	if pending, err := pilot.Return(envelope, result); err != nil || pending.State != StatePendingReview {
+		t.Fatalf("material result bypassed pending review: %#v err=%v", pending, err)
 	}
 	_, receipt, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
 		Trigger: ReviewExternalArtifact, ReviewObjective: "Check the artifact before sharing.",
