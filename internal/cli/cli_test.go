@@ -875,7 +875,7 @@ func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 	}
 
 	request := activationpolicy.AdvisoryRequest{
-		SchemaVersion: 1, RequestID: "advisory-cli",
+		SchemaVersion: 1, RequestID: activationpolicy.OpaqueAdvisoryRequestID("advisory-cli"),
 		EpisodeSHA256: activationpolicy.SHA256Hex([]byte(plan.EpisodeID)),
 		PlanSHA256:    plan.PlanSHA256,
 		Expert: activationpolicy.PAExpert{
@@ -891,7 +891,7 @@ func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 		OutputSections: []string{"findings", "challenges"},
 		Attestation: activationpolicy.DeclassificationAttestation{
 			ExporterID: "maestro", NoClientIdentifiers: true,
-			NoStakeholderIdentifiers: true, NoRawExcerpts: true,
+			NoStakeholderIdentifiers: true, NoRawExcerpts: true, NoScopedPointers: true,
 		},
 	}
 	requestBody, _ := json.Marshal(activationAdvisoryInput{

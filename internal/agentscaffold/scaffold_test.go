@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -197,6 +198,35 @@ func TestPAExpertRejectsLegacyCanonNamespace(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("legacy PA Expert canon namespace was accepted")
+	}
+}
+
+func TestPAExpertRejectsCanonSymlinkOutsideRegistryRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink fixture requires non-Windows test privileges")
+	}
+	root := t.TempDir()
+	canonPath, canonSHA256 := preparePAExpertCanon(t, root, "pa-expert-fpa-pricing")
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	if err := os.WriteFile(outside, []byte("# outside canon\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(root, filepath.FromSlash(canonPath))); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, filepath.FromSlash(canonPath))); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Scaffold(root, Request{
+		AgentID: "pa-expert-fpa-pricing", Role: "pa_expert",
+		ScopeKind: "practice", ScopeID: "pricing",
+		ParentAgent: "maestro", ParentRole: "hub",
+		Owner: "pa-expert-curator", Mandate: "Advise with the maintained pricing canon.",
+		CanonPath: canonPath, CanonSHA256: canonSHA256,
+		ExpertKind: "FPA", ExpertVersion: "1.0.0", ExpertLifecycle: "draft",
+	})
+	if err == nil {
+		t.Fatal("PA Expert canon symlink escaped its registry root")
 	}
 }
 

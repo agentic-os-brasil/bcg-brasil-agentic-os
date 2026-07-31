@@ -567,6 +567,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: docs/releasing.md; docs/release-gates-checklist.md; docs/installer-package.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
 - Supersedes: none
 
+## PABN - Make the PA Expert boundary a declassified, receipt-boundary
+
+- Date: 2026-07-30
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Case and Client Account Agents need functional or industry advice without exporting client, stakeholder or workspace context into the centrally maintained PA Expert.
+- Decision: PA Expert is the sole canonical FPA/IPA advisory role. `internal/activationpolicy/advisory.go` is the single declassification and receipt contract: it binds the exact expert version and canon digest, accepts only closed public/internal codes and produces a bounded non-export-authorizing shadow receipt. `practice_agent` and `subject_specialist` remain rejected legacy identities; they are never scaffolded, authorized or delegated and require explicit PA Expert re-registration.
+- Consequences: Account stakeholder intelligence, case-local raw context and governed case-to-account promotion remain separate. Raw pointers, scoped identifiers, excerpts, duplicate fact codes, empty registry state and forged canon bindings fail closed. Native runtime activation remains unavailable until a qualified adapter proves the same contract.
+- Refs: specs/033-deterministic-agent-activation.md; specs/039-pa-expert-advisory-boundary.md; internal/activationpolicy/advisory.go
+- Supersedes: none
+
 ## CADN - Keep Darwin cadence bounded, proposal-only and non-blocking
 
 - Date: 2026-07-30

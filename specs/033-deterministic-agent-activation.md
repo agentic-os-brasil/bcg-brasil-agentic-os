@@ -96,6 +96,9 @@ dispatch.
 A PA expert is a centrally versioned advisory agent of kind `FPA` or `IPA`,
 maintained through the PA Expert registry. It contributes the best maintained
 functional or industry perspective but has no client or case scope.
+The executable declassification details are canonicalized in
+`specs/039-pa-expert-advisory-boundary.md`; no parallel practice-agent or
+PA-boundary runtime exists.
 
 The advisory request is a bounded shadow-assessment packet. It may contain only
 an opaque request ID, episode and route digests, exact expert identity/version/
