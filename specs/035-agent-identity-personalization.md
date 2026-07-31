@@ -49,7 +49,7 @@ fall back to a deterministic default identity without changing authority.
 This is an explicit identity-contract migration boundary. Existing signed
 manifests created before the identity fields existed require re-scaffolding;
 old CLI projections and old activation-policy versions require consumers to
-migrate to the canonical `case_agent`, `pae-v1` and PA expert vocabulary. No
+migrate to the canonical `case_agent`, `maestro-depth-v1` and PA expert vocabulary. No
 legacy signed artifact is silently reinterpreted.
 
 ## Deterministic interface

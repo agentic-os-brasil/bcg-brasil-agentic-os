@@ -566,3 +566,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The repository may demonstrate deterministic packaging, installation simulation and local closure without claiming authenticity, publication or pilot readiness. Release operators must provision corporate authorities before signing or publishing. The production authority registry and workflow must exclude the beta issuer/key ID (or mark it revoked) and reject it for installer/update trust and all new production artifacts. Historical verification must remain an archival operation outside production trust. This keeps cost, ownership, revocation and audit boundaries explicit.
 - Refs: docs/releasing.md; docs/release-gates-checklist.md; docs/installer-package.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
 - Supersedes: none
+
+## DEPH - Make Maestro depth a single calibrated policy
+
+- Date: 2026-07-30
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The first activation slice combined team composition, cognitive effort and governance in `direct|balanced|deliberative` postures and `D0|D1|D2` routes. That vocabulary is too complex for Maestro's operating model and makes calibration ambiguous.
+- Decision: Make Maestro the sole depth decider and add one deterministic, versioned `depth_profile` configuration with `shallow`, `balanced` and `loopy` profiles. Start with `balanced`. The resolved episode depth controls bounded effort; Maestro still selects the accountable agent, the single PA Expert role (FPA/IPA) and Walter, while mandatory safety and governance floors remain non-reducible. Keep the former posture and route fields only as compatibility projections during the shadow transition. Darwin may compare profiles and propose a new policy version, but may not mutate live routing or self-promote a profile.
+- Consequences: Each plan pins the profile, resolved depth, policy version and policy-config digest. Existing PA Expert scope, Walter assurance and fail-closed behavior remain intact. Calibration can compare shallower versus loopier behavior without presenting three coupled decisions to the user. Exact effort ceilings remain experimental configuration, not canonized thresholds.
+- Refs: specs/033-deterministic-agent-activation.md; internal/activationpolicy; internal/activationpolicy/policy_test.go; internal/activationpolicy/monitor_test.go
+- Supersedes: PAEX

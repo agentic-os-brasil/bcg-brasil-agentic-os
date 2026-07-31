@@ -14,23 +14,28 @@ const (
 )
 
 type Observation struct {
-	SchemaVersion   int            `json:"schema_version"`
-	WindowID        string         `json:"window_id"`
-	PlanSHA256      string         `json:"plan_sha256"`
-	PolicyVersion   string         `json:"policy_version"`
-	Posture         Posture        `json:"posture"`
-	Route           Route          `json:"route"`
-	Outcome         EpisodeOutcome `json:"outcome"`
-	DurationSeconds int            `json:"duration_seconds"`
-	BudgetExhausted bool           `json:"budget_exhausted"`
-	MissingReceipt  bool           `json:"missing_receipt"`
-	HumanOverride   bool           `json:"human_override"`
+	SchemaVersion     int            `json:"schema_version"`
+	WindowID          string         `json:"window_id"`
+	PlanSHA256        string         `json:"plan_sha256"`
+	PolicyVersion     string         `json:"policy_version"`
+	DepthPolicySHA256 string         `json:"depth_policy_sha256,omitempty"`
+	DepthProfile      DepthProfile   `json:"depth_profile,omitempty"`
+	Depth             DepthLevel     `json:"depth,omitempty"`
+	Posture           Posture        `json:"posture"`
+	Route             Route          `json:"route"`
+	Outcome           EpisodeOutcome `json:"outcome"`
+	DurationSeconds   int            `json:"duration_seconds"`
+	BudgetExhausted   bool           `json:"budget_exhausted"`
+	MissingReceipt    bool           `json:"missing_receipt"`
+	HumanOverride     bool           `json:"human_override"`
 }
 
 type DarwinReport struct {
 	SchemaVersion         int              `json:"schema_version"`
 	WindowID              string           `json:"window_id,omitempty"`
 	PolicyVersion         string           `json:"policy_version"`
+	DepthPolicySHA256     string           `json:"depth_policy_sha256"`
+	DepthProfile          DepthProfile     `json:"depth_profile"`
 	Posture               Posture          `json:"posture"`
 	Episodes              int              `json:"episodes"`
 	RouteCounts           map[Route]int    `json:"route_counts"`
@@ -48,14 +53,12 @@ type DarwinReport struct {
 func EvaluateObservations(observations []Observation) (DarwinReport, error) {
 	report := DarwinReport{
 		SchemaVersion: 1, PolicyVersion: PolicyVersion, Posture: Balanced,
-		RouteCounts:         map[Route]int{D0Direct: 0, D1Targeted: 0, D2Governed: 0, Blocked: 0},
-		RouteBasisPoints:    map[Route]int{D0Direct: 0, D1Targeted: 0, D2Governed: 0, Blocked: 0},
-		MeanDurationSeconds: map[Route]int{D0Direct: 0, D1Targeted: 0, D2Governed: 0, Blocked: 0},
-		HypothesisBasisPoints: map[Route]string{
-			D0Direct: "7000", D1Targeted: "2000-2500", D2Governed: "500-1000",
-		},
-		MayMutatePolicy:   false,
-		EvidenceAuthority: "caller_asserted_shadow",
+		RouteCounts:           map[Route]int{D0Direct: 0, D1Targeted: 0, D2Governed: 0, Blocked: 0},
+		RouteBasisPoints:      map[Route]int{D0Direct: 0, D1Targeted: 0, D2Governed: 0, Blocked: 0},
+		MeanDurationSeconds:   map[Route]int{D0Direct: 0, D1Targeted: 0, D2Governed: 0, Blocked: 0},
+		HypothesisBasisPoints: map[Route]string{},
+		MayMutatePolicy:       false,
+		EvidenceAuthority:     "caller_asserted_shadow",
 	}
 	if len(observations) == 0 {
 		report.RecommendationCodes = []string{"insufficient_sample"}
@@ -64,10 +67,18 @@ func EvaluateObservations(observations []Observation) (DarwinReport, error) {
 	durationTotals := map[Route]int{}
 	seenPlans := map[string]bool{}
 	for _, observation := range observations {
+		profile := observation.DepthProfile
+		if profile == "" {
+			var err error
+			profile, err = profileFromPosture(observation.Posture)
+			if err != nil {
+				return DarwinReport{}, errors.New("Darwin observation has an invalid depth profile")
+			}
+		}
 		if observation.SchemaVersion != 1 || !validID(observation.WindowID) ||
 			!validSHA256(observation.PlanSHA256) ||
 			observation.PolicyVersion != PolicyVersion ||
-			(observation.Posture != Direct && observation.Posture != Balanced && observation.Posture != Deliberative) ||
+			!validDepthProfile(profile) ||
 			(observation.Route != D0Direct && observation.Route != D1Targeted && observation.Route != D2Governed && observation.Route != Blocked) ||
 			(observation.Outcome != CompletedOutcome && observation.Outcome != FailedOutcome && observation.Outcome != BlockedOutcome) ||
 			observation.DurationSeconds < 0 || observation.DurationSeconds > 86400 {
@@ -76,13 +87,23 @@ func EvaluateObservations(observations []Observation) (DarwinReport, error) {
 		if observation.WindowID != observations[0].WindowID {
 			return DarwinReport{}, errors.New("Darwin report cannot mix calibration windows")
 		}
+		firstProfile := observations[0].DepthProfile
+		if firstProfile == "" {
+			firstProfile, _ = profileFromPosture(observations[0].Posture)
+		}
+		if profile != firstProfile {
+			return DarwinReport{}, errors.New("Darwin report cannot mix depth profiles")
+		}
+		if observation.DepthPolicySHA256 != "" && !validSHA256(observation.DepthPolicySHA256) {
+			return DarwinReport{}, errors.New("Darwin observation has an invalid depth policy digest")
+		}
+		if observations[0].DepthPolicySHA256 != "" && observation.DepthPolicySHA256 != observations[0].DepthPolicySHA256 {
+			return DarwinReport{}, errors.New("Darwin report cannot mix depth policy configurations")
+		}
 		if seenPlans[observation.PlanSHA256] {
 			return DarwinReport{}, errors.New("Darwin report rejects duplicate plan observations")
 		}
 		seenPlans[observation.PlanSHA256] = true
-		if observation.Posture != observations[0].Posture {
-			return DarwinReport{}, errors.New("Darwin report cannot mix activation postures")
-		}
 		report.RouteCounts[observation.Route]++
 		durationTotals[observation.Route] += observation.DurationSeconds
 		if observation.BudgetExhausted {
@@ -95,7 +116,12 @@ func EvaluateObservations(observations []Observation) (DarwinReport, error) {
 			report.HumanOverrides++
 		}
 	}
-	report.Posture = observations[0].Posture
+	report.DepthProfile = observations[0].DepthProfile
+	if report.DepthProfile == "" {
+		report.DepthProfile, _ = profileFromPosture(observations[0].Posture)
+	}
+	report.Posture = postureFromProfile(report.DepthProfile)
+	report.DepthPolicySHA256 = observations[0].DepthPolicySHA256
 	report.WindowID = observations[0].WindowID
 	report.Episodes = len(observations)
 	for route, count := range report.RouteCounts {

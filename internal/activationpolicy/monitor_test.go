@@ -43,3 +43,27 @@ func TestDarwinReportRejectsMixedPostures(t *testing.T) {
 		t.Fatal("mixed-posture calibration window was accepted")
 	}
 }
+
+func TestDarwinReportPinsDepthProfileAndConfiguration(t *testing.T) {
+	policyDigest := DefaultDepthPolicy().Digest()
+	report, err := EvaluateObservations([]Observation{
+		{
+			SchemaVersion: 1, WindowID: "window-depth", PlanSHA256: digest("depth-one"),
+			PolicyVersion: PolicyVersion, DepthPolicySHA256: policyDigest,
+			DepthProfile: ProfileLoopy, Depth: DepthLoopy, Route: D2Governed,
+			Outcome: CompletedOutcome,
+		},
+		{
+			SchemaVersion: 1, WindowID: "window-depth", PlanSHA256: digest("depth-two"),
+			PolicyVersion: PolicyVersion, DepthPolicySHA256: policyDigest,
+			DepthProfile: ProfileLoopy, Depth: DepthLoopy, Route: D2Governed,
+			Outcome: CompletedOutcome,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.DepthProfile != ProfileLoopy || report.DepthPolicySHA256 != policyDigest || report.MayMutatePolicy {
+		t.Fatalf("depth calibration metadata was not pinned safely: %#v", report)
+	}
+}

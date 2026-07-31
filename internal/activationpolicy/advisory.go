@@ -145,7 +145,8 @@ func ValidateResponse(response AdvisoryResponse, request AdvisoryRequest, receip
 
 func VerifyCompletion(plan RoutePlan, receipts []CompletionReceipt) error {
 	if plan.SchemaVersion != 1 || plan.PolicyVersion != PolicyVersion ||
-		plan.Route == Blocked || plan.PlanSHA256 == "" || PlanDigest(plan) != plan.PlanSHA256 {
+		plan.Route == Blocked || !validSHA256(plan.DepthPolicySHA256) ||
+		plan.PlanSHA256 == "" || PlanDigest(plan) != plan.PlanSHA256 {
 		return errors.New("route plan is invalid or blocked")
 	}
 	expected := map[string]CompletionReceipt{}

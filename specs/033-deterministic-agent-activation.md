@@ -7,29 +7,29 @@ unavailable until separately qualified.
 
 ## Purpose
 
-Maestro needs a repeatable way to decide whether a decision episode should go
-straight to its accountable agent, consult one PA expert, or run a
-governed multi-agent loop. The decision cannot depend only on prompt wording.
-Darwin must be able to observe the chosen route and later recommend calibration
-without changing policy during an episode.
+Maestro needs a repeatable way to decide whether a decision episode should use
+shallow, balanced or loopy bounded effort. The decision cannot depend only on
+prompt wording. Darwin must be able to compare calibration profiles without
+changing policy during an episode.
 
-The initial posture is `balanced`.
-An omitted posture normalizes to `balanced`; changing it is an explicit
-episode-level decision.
+Maestro owns the depth decision. The initial depth profile is `balanced`.
+The profile is an internal, versioned calibration configuration; it is not a
+user authority and cannot remove a safety or governance floor.
 
 ## Closed decision envelope
 
-Every route is computed from an `IntentEnvelope` with:
+Every depth decision is computed from an `IntentEnvelope` with:
 
 - one opaque episode ID;
 - accountable owner: `client_account_agent` or `case_agent`;
-- posture: `direct`, `balanced` or `deliberative`;
+- depth profile: `shallow`, `balanced` or `loopy`;
 - consequence: `low`, `medium` or `high`;
 - reversibility: `reversible`, `limited` or `irreversible`;
 - sensitivity: `public`, `internal`, `confidential` or `restricted`;
 - knowledge need: `none`, `functional`, `industry` or `both`;
 - boolean ambiguity, cross-scope, external-effect and privileged-action flags;
-- optional exact PA expert IDs proposed by planning.
+- optional exact PA expert IDs proposed by planning;
+- legacy `posture` input may be accepted only as a compatibility alias.
 
 Unknown fields and values fail closed. Narrative task text is deliberately not
 part of the authority-bearing envelope. A planner may propose exact expert IDs
@@ -40,9 +40,24 @@ compatible published expert or fail closed.
 
 ## Deterministic policy
 
-Policy version `pae-v1` produces exactly one shadow route. It is a breaking
-policy version: route plans stamped with the previous policy version must be
-replanned rather than accepted under the new contracts.
+Policy version `maestro-depth-v1` produces one resolved depth and a
+compatibility route projection. It is a breaking policy version: route plans
+stamped with the previous policy version must be replanned rather than
+accepted under the new contract.
+
+The deterministic depth policy is pinned by its version and configuration
+digest. Its initial profiles are:
+
+- `shallow`: practice need may require a targeted pass, but ordinary
+  uncertainty does not automatically add a loop;
+- `balanced`: practice need, ambiguity, limited reversibility or medium
+  consequence receive bounded additional effort;
+- `loopy`: the same signals receive the governed iterative depth.
+
+Maestro resolves the episode depth from the profile and closed episode facts.
+`depth` is canonical. The former `posture` and `D0|D1|D2` route are
+compatibility projections during shadow calibration, not the user-facing
+model.
 
 - `D0_DIRECT`: accountable agent only;
 - `D1_TARGETED`: accountable agent plus one exact PA expert when knowledge is
@@ -68,11 +83,11 @@ Hard policy:
 
 Candidate PA experts are filtered by required kind, sorted by immutable ID and
 selected deterministically. Exact proposed IDs are considered first only when
-published and compatible. The route records the policy version, normalized
-input digest, expert version and canon digest, reason codes, budgets and its own
-digest.
+published and compatible. The plan records the policy version, depth-profile
+configuration digest, normalized input digest, resolved depth, expert version
+and canon digest, reason codes, budgets and its own digest.
 
-Initial budgets:
+Initial budgets by resolved depth:
 
 | Route | PA experts | Calls | Token units | Duration |
 |---|---:|---:|---:|---:|
@@ -80,9 +95,8 @@ Initial budgets:
 | D1 | 1 | 3 | 10,000 | 20 min |
 | D2 | 2 max | 6 | 24,000 | 45 min |
 
-These are planned ceilings, not usage targets. The working hypotheses of
-70% D0, 20–25% D1 and 5–10% D2 are shadow-evaluation metadata only. They never
-alter a route and are not quotas.
+These are planned ceilings, not usage targets. Exact values remain calibration
+configuration and are not product thresholds or quotas.
 
 In this slice the envelope is caller-asserted and the plan reports
 `authority_state: caller_asserted_shadow` and
@@ -193,14 +207,14 @@ Only one branch is active. Raw context never transits between scopes.
 
 ## Darwin calibration
 
-Shadow evaluation records only closed routing metadata and content-free
-receipts. Darwin may compare route mix, latency, budget exhaustion, missing
-expert coverage and human overrides over a defined window. Darwin proposes a
-new versioned policy; it cannot mutate thresholds or posture directly.
+Shadow evaluation records only closed depth metadata and content-free receipts.
+Darwin may compare profile/depth mix, latency, budget exhaustion, missing expert
+coverage and human overrides over a defined window. Darwin proposes a new
+versioned policy; it cannot mutate thresholds or profiles directly.
 
 `bcgos agent monitor --stdin` produces a deterministic content-free report for
-one explicit calibration window, policy version and posture. It rejects mixed
-windows, mixed postures and duplicate plan observations, labels evidence
+one explicit calibration window, policy version and depth profile. It rejects
+mixed windows, mixed profiles and duplicate plan observations, labels evidence
 `caller_asserted_shadow`, publishes recommendation codes only and always
 reports `may_mutate_policy: false`.
 

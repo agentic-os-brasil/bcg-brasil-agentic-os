@@ -44,9 +44,103 @@ func TestOmittedPostureDefaultsToBalanced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.Posture != Balanced || plan.Route != D1Targeted ||
+	if plan.Posture != Balanced || plan.DepthProfile != ProfileBalanced ||
+		plan.Depth != DepthBalanced || plan.Route != D1Targeted ||
 		!plan.RequiresAssurance || plan.AssuranceAgentID != "walter" {
 		t.Fatalf("default posture is not the balanced governed default: %#v", plan)
+	}
+}
+
+func TestDepthProfileCalibratesResolvedDepthWithoutChangingHardFloors(t *testing.T) {
+	base := IntentEnvelope{
+		SchemaVersion: 1, EpisodeID: "episode-depth", Owner: OwnerCase,
+		Consequence: Medium, Reversibility: Reversible,
+		Sensitivity: Internal, KnowledgeNeed: None,
+	}
+	for _, test := range []struct {
+		profile DepthProfile
+		depth   DepthLevel
+		route   Route
+	}{
+		{ProfileShallow, DepthShallow, D0Direct},
+		{ProfileBalanced, DepthBalanced, D1Targeted},
+		{ProfileLoopy, DepthLoopy, D2Governed},
+	} {
+		input := base
+		input.EpisodeID = "episode-depth-" + string(test.profile)
+		input.DepthProfile = test.profile
+		plan, err := Plan(input, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan.Depth != test.depth || plan.Route != test.route || plan.DepthProfile != test.profile {
+			t.Fatalf("profile %s resolved to depth=%s route=%s: %#v", test.profile, plan.Depth, plan.Route, plan)
+		}
+	}
+
+	hard := base
+	hard.EpisodeID = "episode-depth-hard"
+	hard.DepthProfile = ProfileShallow
+	hard.ExternalEffect = true
+	plan, err := Plan(hard, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Depth != DepthLoopy || plan.Route != D2Governed {
+		t.Fatalf("shallow profile reduced hard floor: %#v", plan)
+	}
+}
+
+func TestDepthPolicyDigestPinsConfiguration(t *testing.T) {
+	input := IntentEnvelope{
+		SchemaVersion: 1, EpisodeID: "episode-policy-digest", Owner: OwnerCase,
+		DepthProfile: ProfileBalanced, Consequence: Low, Reversibility: Reversible,
+		Sensitivity: Internal, KnowledgeNeed: None,
+	}
+	first := DefaultDepthPolicy()
+	second := DefaultDepthPolicy()
+	second.Profiles[ProfileBalanced] = DepthProfileRules{
+		PracticeNeedDepth: DepthLoopy,
+		UncertaintyDepth:  DepthBalanced,
+	}
+	firstPlan, err := PlanWithPolicy(input, nil, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondPlan, err := PlanWithPolicy(input, nil, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstPlan.DepthPolicySHA256 == secondPlan.DepthPolicySHA256 || firstPlan.PlanSHA256 == secondPlan.PlanSHA256 {
+		t.Fatal("changing depth policy configuration did not change pinned digests")
+	}
+}
+
+func TestCustomDepthPolicyControlsItsDefaultProfile(t *testing.T) {
+	policy := DefaultDepthPolicy()
+	policy.DefaultProfile = ProfileLoopy
+	plan, err := PlanWithPolicy(IntentEnvelope{
+		SchemaVersion: 1, EpisodeID: "episode-custom-default", Owner: OwnerCase,
+		Consequence: Medium, Reversibility: Reversible,
+		Sensitivity: Internal, KnowledgeNeed: None,
+	}, nil, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.DepthProfile != ProfileLoopy || plan.Depth != DepthLoopy || plan.Route != D2Governed {
+		t.Fatalf("custom default profile was ignored: %#v", plan)
+	}
+}
+
+func TestDepthProfileAndLegacyPostureConflictFailsClosed(t *testing.T) {
+	_, err := Plan(IntentEnvelope{
+		SchemaVersion: 1, EpisodeID: "episode-depth-conflict", Owner: OwnerCase,
+		DepthProfile: ProfileLoopy, Posture: Direct,
+		Consequence: Low, Reversibility: Reversible,
+		Sensitivity: Internal, KnowledgeNeed: None,
+	}, nil)
+	if err == nil {
+		t.Fatal("conflicting depth profile and legacy posture were accepted")
 	}
 }
 

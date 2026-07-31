@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-const PolicyVersion = "pae-v1"
+const PolicyVersion = "maestro-depth-v1"
 
 type Posture string
 type ConsequenceLevel string
@@ -72,9 +72,12 @@ type PlannerProposal struct {
 }
 
 type IntentEnvelope struct {
-	SchemaVersion    int                `json:"schema_version"`
-	EpisodeID        string             `json:"episode_id"`
-	Owner            Owner              `json:"owner"`
+	SchemaVersion int          `json:"schema_version"`
+	EpisodeID     string       `json:"episode_id"`
+	Owner         Owner        `json:"owner"`
+	DepthProfile  DepthProfile `json:"depth_profile,omitempty"`
+	// Posture remains a compatibility input during the shadow transition. New
+	// callers should send depth_profile and let Maestro resolve depth.
 	Posture          Posture            `json:"posture"`
 	Consequence      ConsequenceLevel   `json:"consequence"`
 	Reversibility    ReversibilityLevel `json:"reversibility"`
@@ -113,9 +116,12 @@ type RoutePlan struct {
 	SchemaVersion             int                `json:"schema_version"`
 	EpisodeID                 string             `json:"episode_id"`
 	Owner                     Owner              `json:"owner"`
+	DepthProfile              DepthProfile       `json:"depth_profile"`
+	Depth                     DepthLevel         `json:"depth"`
 	Posture                   Posture            `json:"posture"`
 	Route                     Route              `json:"route"`
 	PolicyVersion             string             `json:"policy_version"`
+	DepthPolicySHA256         string             `json:"depth_policy_sha256"`
 	Shadow                    bool               `json:"shadow"`
 	AuthorityState            string             `json:"authority_state"`
 	MayAuthorizeDispatch      bool               `json:"may_authorize_dispatch"`
@@ -152,6 +158,16 @@ func DecodeStrict(body []byte, target any) error {
 }
 
 func Plan(envelope IntentEnvelope, registry []PAExpert) (RoutePlan, error) {
+	return PlanWithPolicy(envelope, registry, DefaultDepthPolicy())
+}
+
+func PlanWithPolicy(envelope IntentEnvelope, registry []PAExpert, policy DepthPolicyConfig) (RoutePlan, error) {
+	if err := policy.Validate(); err != nil {
+		return RoutePlan{}, err
+	}
+	if envelope.DepthProfile == "" && envelope.Posture == "" {
+		envelope.DepthProfile = policy.DefaultProfile
+	}
 	normalized, err := normalizeEnvelope(envelope)
 	if err != nil {
 		return RoutePlan{}, err
@@ -160,28 +176,34 @@ func Plan(envelope IntentEnvelope, registry []PAExpert) (RoutePlan, error) {
 	if err != nil {
 		return RoutePlan{}, err
 	}
-	route, reasons := decide(normalized)
+	depth, blocked, reasons := decideDepth(normalized, policy)
+	route := routeForDepth(depth)
+	if blocked {
+		route = Blocked
+	}
 	plan := RoutePlan{
 		SchemaVersion: 1, EpisodeID: normalized.EpisodeID, Owner: normalized.Owner,
-		Posture: normalized.Posture, Route: route,
-		PolicyVersion: PolicyVersion, Shadow: true,
+		DepthProfile: normalized.DepthProfile, Depth: depth, Posture: normalized.Posture,
+		Route: route, PolicyVersion: policy.Version, DepthPolicySHA256: policy.Digest(), Shadow: true,
 		AuthorityState: "caller_asserted_shadow", MayAuthorizeDispatch: false,
 		Experts: []SelectedPAExpert{}, ReasonCodes: reasons,
 		StopConditions: []string{"budget_exhausted", "digest_drift", "missing_receipt", "scope_violation"},
 		InputSHA256:    SHA256Hex(inputBody),
 	}
-	switch route {
-	case D0Direct:
-		plan.Budget = Budget{MaxCalls: 1, MaxExperts: 0, MaxTokenUnits: 4000, MaxDurationSec: 600}
-	case D1Targeted:
-		plan.Budget = Budget{MaxCalls: 3, MaxExperts: 1, MaxTokenUnits: 10000, MaxDurationSec: 1200}
-	case D2Governed:
-		plan.Budget = Budget{MaxCalls: 6, MaxExperts: 2, MaxTokenUnits: 24000, MaxDurationSec: 2700}
-	case Blocked:
+	if route != Blocked {
+		switch depth {
+		case DepthShallow:
+			plan.Budget = Budget{MaxCalls: 1, MaxExperts: 0, MaxTokenUnits: 4000, MaxDurationSec: 600}
+		case DepthBalanced:
+			plan.Budget = Budget{MaxCalls: 3, MaxExperts: 1, MaxTokenUnits: 10000, MaxDurationSec: 1200}
+		case DepthLoopy:
+			plan.Budget = Budget{MaxCalls: 6, MaxExperts: 2, MaxTokenUnits: 24000, MaxDurationSec: 2700}
+		default:
+			return RoutePlan{}, errors.New("activation policy produced an invalid depth")
+		}
+	} else {
 		plan.Budget = Budget{}
 		plan.RequiresHumanConfirmation = true
-	default:
-		return RoutePlan{}, errors.New("activation policy produced an invalid route")
 	}
 	if route != Blocked {
 		plan.Experts, err = selectExperts(normalized, registry, plan.Budget.MaxExperts)
@@ -204,12 +226,27 @@ func normalizeEnvelope(input IntentEnvelope) (IntentEnvelope, error) {
 	if input.Owner != OwnerAccount && input.Owner != OwnerCase {
 		return IntentEnvelope{}, errors.New("activation envelope owner is unsupported")
 	}
-	if input.Posture == "" {
-		input.Posture = Balanced
+	if input.DepthProfile == "" {
+		if input.Posture == "" {
+			input.DepthProfile = ProfileBalanced
+		} else {
+			profile, err := profileFromPosture(input.Posture)
+			if err != nil {
+				return IntentEnvelope{}, err
+			}
+			input.DepthProfile = profile
+		}
 	}
-	if input.Posture != Direct && input.Posture != Balanced && input.Posture != Deliberative {
-		return IntentEnvelope{}, errors.New("activation posture is unsupported")
+	if !validDepthProfile(input.DepthProfile) {
+		return IntentEnvelope{}, errors.New("activation depth profile is unsupported")
 	}
+	if input.Posture != "" {
+		legacyProfile, err := profileFromPosture(input.Posture)
+		if err != nil || legacyProfile != input.DepthProfile {
+			return IntentEnvelope{}, errors.New("activation depth profile conflicts with legacy posture")
+		}
+	}
+	input.Posture = postureFromProfile(input.DepthProfile)
 	if input.Consequence != Low && input.Consequence != Medium && input.Consequence != High {
 		return IntentEnvelope{}, errors.New("activation consequence is unsupported")
 	}
@@ -233,12 +270,12 @@ func normalizeEnvelope(input IntentEnvelope) (IntentEnvelope, error) {
 	return input, nil
 }
 
-func decide(input IntentEnvelope) (Route, []string) {
+func decideDepth(input IntentEnvelope, policy DepthPolicyConfig) (DepthLevel, bool, []string) {
 	if input.PrivilegedAction {
-		return Blocked, []string{"privileged_action_blocked"}
+		return DepthShallow, true, []string{"privileged_action_blocked"}
 	}
 	if input.Sensitivity == Restricted && input.ExternalEffect {
-		return Blocked, []string{"restricted_external_effect_blocked"}
+		return DepthShallow, true, []string{"restricted_external_effect_blocked"}
 	}
 	var reasons []string
 	hardD2 := false
@@ -264,29 +301,24 @@ func decide(input IntentEnvelope) (Route, []string) {
 	}
 	if hardD2 {
 		sort.Strings(reasons)
-		return D2Governed, reasons
+		return DepthLoopy, false, reasons
 	}
 	needsAdvice := input.KnowledgeNeed == Functional || input.KnowledgeNeed == Industry
-	switch input.Posture {
-	case Direct:
-		if needsAdvice {
-			return D1Targeted, []string{"explicit_practice_advice"}
-		}
-		return D0Direct, []string{"direct_posture_safe_path"}
-	case Deliberative:
-		if needsAdvice || input.Ambiguous || input.Consequence == Medium || input.Reversibility == Limited {
-			return D2Governed, []string{"deliberative_governed_loop"}
-		}
-		return D0Direct, []string{"deliberative_low_risk_direct"}
-	default:
-		if needsAdvice {
-			return D1Targeted, []string{"balanced_practice_advice"}
-		}
-		if input.Ambiguous || input.Consequence == Medium || input.Reversibility == Limited {
-			return D1Targeted, []string{"balanced_targeted_review"}
-		}
-		return D0Direct, []string{"balanced_low_risk_direct"}
+	rules := policy.Profiles[input.DepthProfile]
+	depth := DepthShallow
+	if needsAdvice {
+		depth = maxDepth(depth, rules.PracticeNeedDepth)
+		reasons = append(reasons, "practice_need")
 	}
+	if input.Ambiguous || input.Consequence == Medium || input.Reversibility == Limited {
+		depth = maxDepth(depth, rules.UncertaintyDepth)
+		reasons = append(reasons, "episode_uncertainty")
+	}
+	if len(reasons) == 0 {
+		reasons = append(reasons, "low_risk_direct")
+	}
+	sort.Strings(reasons)
+	return depth, false, reasons
 }
 
 func selectExperts(input IntentEnvelope, registry []PAExpert, limit int) ([]SelectedPAExpert, error) {

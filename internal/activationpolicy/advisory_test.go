@@ -33,7 +33,8 @@ func TestAdvisoryExportRejectsScopedOrConfidentialContent(t *testing.T) {
 func TestCompletionRequiresExactReceipts(t *testing.T) {
 	plan := RoutePlan{
 		SchemaVersion: 1, EpisodeID: "episode-06", Route: D1Targeted,
-		Owner: OwnerCase, PolicyVersion: PolicyVersion,
+		Owner: OwnerCase, DepthProfile: ProfileBalanced, Depth: DepthBalanced,
+		PolicyVersion: PolicyVersion, DepthPolicySHA256: DefaultDepthPolicy().Digest(),
 		InputSHA256: digest("input"),
 		Experts:     []SelectedPAExpert{{ID: "pa-expert-fpa-pricing", Kind: ExpertFPA, Version: "1.0.0", CanonSHA256: digest("canon")}},
 	}
