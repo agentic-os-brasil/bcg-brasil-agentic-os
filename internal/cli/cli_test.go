@@ -875,7 +875,7 @@ func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 	}
 
 	request := activationpolicy.AdvisoryRequest{
-		SchemaVersion: 1, RequestID: "advisory-cli",
+		SchemaVersion: 1, RequestID: activationpolicy.OpaqueAdvisoryRequestID("advisory-cli"),
 		EpisodeSHA256: activationpolicy.SHA256Hex([]byte(plan.EpisodeID)),
 		PlanSHA256:    plan.PlanSHA256,
 		Expert: activationpolicy.PAExpert{

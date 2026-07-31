@@ -573,9 +573,9 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Status: accepted
 - Owner: Daniel Scardini
 - Context: Case and Client Account Agents need functional or industry advice without exporting client, stakeholder or workspace context into the centrally maintained PA Expert.
-- Decision: PA Expert is the sole canonical FPA/IPA advisory role. A case/account boundary must construct a deterministic code-and-digest packet, bind the exact expert version and canon digest, and accept only a bounded non-export-authorizing advisory receipt. `practice_agent` is migration-only, cannot receive active runtime authorization or delegation, and must resolve to PA Expert before its managed expiry.
-- Consequences: Account stakeholder intelligence, case-local raw context and governed case-to-account promotion remain separate. Raw pointers, identifiers, excerpts, empty registry state and forged canon bindings fail closed. Native runtime activation remains unavailable until an adapter can prove the same packet and receipt contract.
-- Refs: specs/038-pa-expert-workspace-boundary.md; internal/paexpert; internal/agentcatalog; internal/agentorchestration
+- Decision: PA Expert is the sole canonical FPA/IPA advisory role. `internal/activationpolicy/advisory.go` is the single declassification and receipt contract: it binds the exact expert version and canon digest, accepts only closed public/internal codes and produces a bounded non-export-authorizing shadow receipt. `practice_agent` and `subject_specialist` remain rejected legacy identities; they are never scaffolded, authorized or delegated and require explicit PA Expert re-registration.
+- Consequences: Account stakeholder intelligence, case-local raw context and governed case-to-account promotion remain separate. Raw pointers, scoped identifiers, excerpts, duplicate fact codes, empty registry state and forged canon bindings fail closed. Native runtime activation remains unavailable until a qualified adapter proves the same contract.
+- Refs: specs/033-deterministic-agent-activation.md; specs/039-pa-expert-advisory-boundary.md; internal/activationpolicy/advisory.go
 - Supersedes: none
 
 ## CADN - Keep Darwin cadence bounded, proposal-only and non-blocking

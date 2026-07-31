@@ -30,13 +30,6 @@
     "practice-": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa-expert-{fpa|ipa}-{scope}"},
     "subject-": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa-expert-{fpa|ipa}-{scope}"}
   },
-  "legacy_migrations": {
-    "practice_agent": {
-      "replacement_role": "pa_expert",
-      "status": "migration_only",
-      "expires_at": "2026-12-31T00:00:00Z"
-    }
-  },
   "agents": [
     {
       "id": "darwin",

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -79,10 +80,13 @@ type CompletionReceipt struct {
 	EvidenceAuthority string      `json:"evidence_authority"`
 }
 
-var questionCode = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
+var (
+	questionCode      = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
+	advisoryRequestID = regexp.MustCompile(`^adv-[a-f0-9]{32}$`)
+)
 
 func Declassify(request AdvisoryRequest) (DeclassificationReceipt, error) {
-	if request.SchemaVersion != 1 || !validID(request.RequestID) ||
+	if request.SchemaVersion != 1 || !advisoryRequestID.MatchString(request.RequestID) ||
 		!validSHA256(request.EpisodeSHA256) || !validSHA256(request.PlanSHA256) ||
 		!validPAExpert(request.Expert) || !validAdvisoryCode(request.QuestionCode) ||
 		len(request.QuestionCode) > 80 {
@@ -91,7 +95,7 @@ func Declassify(request AdvisoryRequest) (DeclassificationReceipt, error) {
 	if request.Classification != Public && request.Classification != Internal {
 		return DeclassificationReceipt{}, errors.New("advisory request classification is not exportable")
 	}
-	if !validID(request.Attestation.ExporterID) ||
+	if request.Attestation.ExporterID != "maestro" ||
 		!request.Attestation.NoClientIdentifiers ||
 		!request.Attestation.NoStakeholderIdentifiers ||
 		!request.Attestation.NoRawExcerpts || !request.Attestation.NoScopedPointers {
@@ -100,11 +104,13 @@ func Declassify(request AdvisoryRequest) (DeclassificationReceipt, error) {
 	if len(request.Facts) > 12 || len(request.OutputSections) == 0 || len(request.OutputSections) > 6 {
 		return DeclassificationReceipt{}, errors.New("advisory request exceeds its bounded contract")
 	}
+	seenFacts := map[string]bool{}
 	for _, fact := range request.Facts {
 		if !validAdvisoryCode(fact.Code) || (fact.Classification != Public && fact.Classification != Internal) ||
-			!validAdvisoryCode(fact.ValueCode) || len(fact.ValueCode) > 80 {
+			!validAdvisoryCode(fact.ValueCode) || len(fact.ValueCode) > 80 || seenFacts[fact.Code] {
 			return DeclassificationReceipt{}, errors.New("advisory fact violates the declassified boundary")
 		}
+		seenFacts[fact.Code] = true
 	}
 	seen := map[string]bool{}
 	for _, section := range request.OutputSections {
@@ -113,7 +119,17 @@ func Declassify(request AdvisoryRequest) (DeclassificationReceipt, error) {
 		}
 		seen[section] = true
 	}
-	body, err := json.Marshal(request)
+	canonical := request
+	canonical.Facts = append([]AdvisoryFact(nil), request.Facts...)
+	sort.Slice(canonical.Facts, func(i, j int) bool {
+		if canonical.Facts[i].Code == canonical.Facts[j].Code {
+			return canonical.Facts[i].ValueCode < canonical.Facts[j].ValueCode
+		}
+		return canonical.Facts[i].Code < canonical.Facts[j].Code
+	})
+	canonical.OutputSections = append([]string(nil), request.OutputSections...)
+	sort.Strings(canonical.OutputSections)
+	body, err := json.Marshal(canonical)
 	if err != nil {
 		return DeclassificationReceipt{}, err
 	}
@@ -127,15 +143,16 @@ func Declassify(request AdvisoryRequest) (DeclassificationReceipt, error) {
 }
 
 func ValidateResponse(response AdvisoryResponse, request AdvisoryRequest, receipt DeclassificationReceipt) error {
-	if response.SchemaVersion != 1 ||
-		(receipt.Outcome != "export_authorized" && receipt.Outcome != "shadow_assessed_not_export_authorized") ||
-		(receipt.Outcome == "export_authorized") != receipt.MayExport ||
+	expectedReceipt, err := Declassify(request)
+	if err != nil {
+		return err
+	}
+	if response.SchemaVersion != 1 || receipt != expectedReceipt ||
+		receipt.Outcome != "shadow_assessed_not_export_authorized" || receipt.MayExport ||
 		response.RequestSHA256 != receipt.RequestSHA256 ||
-		receipt.ExpertID != request.Expert.ID || receipt.ExpertVersion != request.Expert.Version ||
-		receipt.CanonSHA256 != strings.ToLower(request.Expert.CanonSHA256) ||
 		response.ExpertID != request.Expert.ID ||
 		response.ExpertVersion != request.Expert.Version ||
-		response.CanonSHA256 != request.Expert.CanonSHA256 {
+		strings.ToLower(response.CanonSHA256) != strings.ToLower(request.Expert.CanonSHA256) {
 		return errors.New("advisory response does not match the declassified request and expert version")
 	}
 	total := len(response.Findings) + len(response.Assumptions) + len(response.Challenges) + len(response.Cautions)
@@ -144,12 +161,22 @@ func ValidateResponse(response AdvisoryResponse, request AdvisoryRequest, receip
 	}
 	for _, group := range [][]string{response.Findings, response.Assumptions, response.Challenges, response.Cautions} {
 		for _, value := range group {
-			if strings.TrimSpace(value) == "" || len([]byte(value)) > 500 || containsScopedPointer(value) {
+			if strings.TrimSpace(value) == "" || len([]byte(value)) > 500 ||
+				strings.ContainsAny(value, "\r\n") || containsScopedPointer(value) {
 				return errors.New("advisory response contains invalid or scoped content")
 			}
 		}
 	}
 	return nil
+}
+
+// OpaqueAdvisoryRequestID converts a local correlation label into the only
+// request identity allowed to cross the PA Expert boundary.
+func OpaqueAdvisoryRequestID(localID string) string {
+	if strings.TrimSpace(localID) == "" {
+		return ""
+	}
+	return "adv-" + SHA256Hex([]byte(localID))[:32]
 }
 
 func VerifyCompletion(plan RoutePlan, receipts []CompletionReceipt) error {
@@ -198,6 +225,7 @@ func containsScopedPointer(value string) bool {
 	for _, forbidden := range []string{
 		"bcgos://workspace/", "bcgos://account/", "bcgos://case/",
 		"workspace://", "account://", "case://", "file://",
+		"client id", "account id", "workspace id", "case id", "stakeholder id",
 	} {
 		if strings.Contains(lower, forbidden) {
 			return true
