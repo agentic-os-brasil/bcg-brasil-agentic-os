@@ -39,6 +39,10 @@ func TestStructuralApprovalCannotBeIssuedByDarwin(t *testing.T) {
 	if err := approval.Validate(proposal); err != nil {
 		t.Fatal(err)
 	}
+	approval.ApproverID = "random"
+	if err := approval.Validate(proposal); err == nil {
+		t.Fatal("unregistered approver was accepted")
+	}
 	approval.ProposalDigest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	if err := approval.Validate(proposal); err == nil {
 		t.Fatal("approval for a different proposal digest was accepted")

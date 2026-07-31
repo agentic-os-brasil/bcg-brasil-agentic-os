@@ -60,6 +60,13 @@ type IndependentApproval struct {
 
 var evolutionDigest = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
+// independentApproverIDs is the explicit authority registry for structural
+// evolution. It intentionally names the registered Walter reviewer rather
+// than accepting arbitrary non-Darwin strings as an approval authority.
+var independentApproverIDs = map[string]struct{}{
+	"walter": {},
+}
+
 func (proposal StructuralProposal) Validate() error {
 	if proposal.SchemaVersion != EvolutionSchemaVersion || !idPattern.MatchString(proposal.ProposalID) ||
 		proposal.PolicyVersion == "" || !idPattern.MatchString(proposal.EvidenceWindow) ||
@@ -89,8 +96,14 @@ func (approval IndependentApproval) Validate(proposal StructuralProposal) error 
 	}
 	if approval.SchemaVersion != EvolutionSchemaVersion || approval.ProposalID != proposal.ProposalID ||
 		approval.ProposalDigest != proposal.Digest() || approval.ApproverID == "" || approval.ApproverID == AgentID ||
+		!isIndependentApprover(approval.ApproverID) ||
 		(approval.Decision != "approved" && approval.Decision != "rejected") {
 		return fmt.Errorf("independent approval is invalid or self-issued")
 	}
 	return nil
+}
+
+func isIndependentApprover(id string) bool {
+	_, ok := independentApproverIDs[id]
+	return ok
 }

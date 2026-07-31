@@ -112,6 +112,18 @@ func TestAdaptersFailClosedOnCoreToolsParallelismAndRoleEscape(t *testing.T) {
 	}
 }
 
+func TestAdaptersRejectLegacyPracticeIDEvenWhenClaimingCanonicalRole(t *testing.T) {
+	catalog := loadCatalog(t)
+	grants := testAuthorizations()
+	grants = append(grants, Authorization{
+		AgentID: "practice-insurance", Role: "pa_expert", Scope: "insurance",
+		ScopeKind: "practice", Capability: "legacy-cap",
+	})
+	if _, err := NewAdapter("claude", catalog, grants, mustStore(t)); err == nil {
+		t.Fatal("legacy practice identity bypassed canonical PA Expert authorization")
+	}
+}
+
 func TestAdaptersRejectUnknownRuntimeEventAndMalformedState(t *testing.T) {
 	catalog := loadCatalog(t)
 	if _, err := NewAdapter("unknown", catalog, testAuthorizations(), mustStore(t)); err == nil {

@@ -337,8 +337,8 @@ func validateLegacyIDs(ids map[string]LegacyIDMigration) error {
 		return nil
 	}
 	wanted := map[string]LegacyIDMigration{
-		"practice-agent-": {CanonicalRole: "pa_expert", Status: "deprecated_rejected", Migration: "re-register as pa-expert-{fpa|ipa}-{scope}"},
-		"subject-":        {CanonicalRole: "pa_expert", Status: "deprecated_rejected", Migration: "re-register as pa-expert-{fpa|ipa}-{scope}"},
+		"practice-": {CanonicalRole: "pa_expert", Status: "deprecated_rejected", Migration: "re-register as pa-expert-{fpa|ipa}-{scope}"},
+		"subject-":  {CanonicalRole: "pa_expert", Status: "deprecated_rejected", Migration: "re-register as pa-expert-{fpa|ipa}-{scope}"},
 	}
 	if len(ids) != len(wanted) {
 		return errors.New("agent catalog must declare the complete legacy-ID migration map")

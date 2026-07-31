@@ -27,7 +27,7 @@
     "subject_specialist": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa_expert with expert_kind FPA or IPA"}
   },
   "legacy_ids": {
-    "practice-agent-": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa-expert-{fpa|ipa}-{scope}"},
+    "practice-": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa-expert-{fpa|ipa}-{scope}"},
     "subject-": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa-expert-{fpa|ipa}-{scope}"}
   },
   "agents": [
