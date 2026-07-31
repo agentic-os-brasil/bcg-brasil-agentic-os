@@ -206,6 +206,62 @@
       "path": "skills/xfail-bug-capture/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/case-kickoff/SKILL.md",
+      "path": "skills/case-kickoff/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/case-kickoff/agents/openai.yaml",
+      "path": "skills/case-kickoff/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/decision-log-entry/SKILL.md",
+      "path": "skills/decision-log-entry/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/decision-log-entry/agents/openai.yaml",
+      "path": "skills/decision-log-entry/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/deck-review/SKILL.md",
+      "path": "skills/deck-review/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/deck-review/agents/openai.yaml",
+      "path": "skills/deck-review/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/expert-interview-guide/SKILL.md",
+      "path": "skills/expert-interview-guide/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/expert-interview-guide/agents/openai.yaml",
+      "path": "skills/expert-interview-guide/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/meeting-close/SKILL.md",
+      "path": "skills/meeting-close/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/meeting-close/agents/openai.yaml",
+      "path": "skills/meeting-close/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/meeting-to-work-items/SKILL.md",
+      "path": "skills/meeting-to-work-items/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/meeting-to-work-items/agents/openai.yaml",
+      "path": "skills/meeting-to-work-items/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/slide-summary/SKILL.md",
+      "path": "skills/slide-summary/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/slide-summary/agents/openai.yaml",
+      "path": "skills/slide-summary/agents/openai.yaml"
+    },
+    {
       "source": "schemas/interaction-profile.schema.json",
       "path": "schemas/interaction-profile.schema.json"
     },

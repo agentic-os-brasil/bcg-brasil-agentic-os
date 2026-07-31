@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deck Review"
+  short_description: "Review supplied slide text for storyline and evidence risks"
+  default_prompt: "Use $deck-review to review the supplied slide text without editing or generating a deck."
