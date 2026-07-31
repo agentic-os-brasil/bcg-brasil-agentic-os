@@ -20,14 +20,27 @@ func TestCatalogRequiresUniversalMaintenancePlane(t *testing.T) {
 	if err := catalog.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Jobs) != 14 {
-		t.Fatalf("job count = %d, want 14", len(catalog.Jobs))
+	if len(catalog.Jobs) != 16 {
+		t.Fatalf("job count = %d, want 16", len(catalog.Jobs))
 	}
 	for _, job := range catalog.Jobs {
 		if job.Availability != Unavailable {
 			t.Fatalf("job %s was promoted from catalog-only state", job.ID)
 		}
 	}
+	monthly, found := findJob(catalog.Jobs, "darwin-structural-evolution-proposal")
+	if !found || monthly.Trigger != "monthly_or_presence" || monthly.DefaultEnabled || monthly.Unattended != "never" {
+		t.Fatalf("monthly Darwin proposal gained an unsafe default: %#v", monthly)
+	}
+}
+
+func findJob(jobs []Job, id string) (Job, bool) {
+	for _, job := range jobs {
+		if job.ID == id {
+			return job, true
+		}
+	}
+	return Job{}, false
 }
 
 func TestPresenceIncludesDailyAndWeeklyCatchUpButNotEventOnlyJobs(t *testing.T) {
@@ -43,7 +56,7 @@ func TestPresenceIncludesDailyAndWeeklyCatchUpButNotEventOnlyJobs(t *testing.T) 
 	for _, job := range jobs {
 		seen[job.ID] = true
 	}
-	if !seen["memory-daily"] || !seen["memory-weekly"] || !seen["wiki-reconcile"] {
+	if !seen["memory-daily"] || !seen["memory-weekly"] || !seen["wiki-reconcile"] || !seen["darwin-structural-evolution-proposal"] {
 		t.Fatalf("presence catch-up omitted core jobs: %#v", seen)
 	}
 	if seen["wiki-incremental-sync"] {

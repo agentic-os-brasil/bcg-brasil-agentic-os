@@ -14,7 +14,7 @@ import (
 // unavailable; a catalog or adapter presence is not evidence of execution.
 func runMaintenance(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(out, "usage: bcgos maintenance <catalog|status|wake> [--trigger presence|daily|weekly|event]")
+		fmt.Fprintln(out, "usage: bcgos maintenance <catalog|status|wake> [--trigger presence|daily|weekly|monthly|event]")
 		return ExitOK
 	}
 	catalog, err := baseruntime.Maintenance()
@@ -38,7 +38,7 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		flags := newFlagSet("maintenance wake", errOut)
 		trigger := flags.String("trigger", "presence", "wake trigger")
 		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) {
-			fmt.Fprintln(errOut, "usage: bcgos maintenance wake --trigger presence|daily|weekly|event")
+			fmt.Fprintln(errOut, "usage: bcgos maintenance wake --trigger presence|daily|weekly|monthly|event")
 			return ExitUsage
 		}
 		jobs, err := catalog.ForTrigger(strings.TrimSpace(*trigger))
@@ -47,7 +47,7 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		}
 		return writeUnavailableMaintenance(out, errOut, *trigger, jobs)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos maintenance <catalog|status|wake> [--trigger presence|daily|weekly|event]")
+		fmt.Fprintln(errOut, "usage: bcgos maintenance <catalog|status|wake> [--trigger presence|daily|weekly|monthly|event]")
 		return ExitUsage
 	}
 }

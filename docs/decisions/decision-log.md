@@ -566,3 +566,26 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The repository may demonstrate deterministic packaging, installation simulation and local closure without claiming authenticity, publication or pilot readiness. Release operators must provision corporate authorities before signing or publishing. The production authority registry and workflow must exclude the beta issuer/key ID (or mark it revoked) and reject it for installer/update trust and all new production artifacts. Historical verification must remain an archival operation outside production trust. This keeps cost, ownership, revocation and audit boundaries explicit.
 - Refs: docs/releasing.md; docs/release-gates-checklist.md; docs/installer-package.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
 - Supersedes: none
+
+## CADN - Keep Darwin cadence bounded, proposal-only and non-blocking
+
+- Date: 2026-07-30
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Darwin must improve Maestro continuously across event, daily, weekly and monthly windows without turning lifecycle hooks into workers or allowing unattended structural changes. The existing scheduler plans occurrences and the Darwin contract can execute scoped remediation, but they do not yet define a non-blocking event gate, reentrancy boundary or explicit timeout contract.
+- Decision: Add a runtime-neutral cadence gate and worker-owned lease for Darwin maintenance. Lifecycle hooks may emit bounded typed wake signals only; they never wait for a worker, acquire a worker lock, call a model or apply maintenance inline. Every worker command carries an explicit deadline, is authorized by a concrete runtime-qualified catalog/attendance policy, is bound to an exact scheduler occurrence and Darwin-owned job/trigger matrix, and produces a metadata-only attempt receipt. Event, daily and weekly work remains recoverable through enrollment and bounded catch-up. Monthly structural evolution emits reviewable proposals only after explicit activation and attended authority; approval and application are separate transactions. D0/D1/D2 remain experimental and no cadence or executor receives a silent default. Capabilities and native scheduler templates remain unavailable until qualifying runtime evidence exists.
+- Consequences: Claude, Codex, macOS and Windows share one cadence and receipt contract while retaining thin adapters. Reentrancy returns a bounded ephemeral busy/unavailable result rather than blocking; occurrence-keyed leases use unique fencing tokens and an OS guard spanning side effects plus terminal publication, so stale workers cannot overlap, release or overwrite successors. Terminal receipts carry an opaque occurrence digest and suppress retries across command IDs; failed attempts remain due. Darwin cannot mutate code, policy or release state from a scheduled run. The implementation adds typed command/receipt/lease schemas, authority, concurrency, path and timeout tests, lifecycle conformance fixtures and unavailable Darwin catalog entries without promoting any runtime capability.
+- Refs: DARN; SCHD; AUTO; LIFE; specs/009-scheduler-catch-up.md; specs/019-nonblocking-hook-execution.md; specs/030-claude-lifecycle-vertical.md; specs/036-maintenance-plane.md; internal/darwin; internal/scheduler
+
+- Supersedes: none
+
+## DEVO - Persist Darwin evolution as an append-only, policy-pinned evidence plane
+
+- Date: 2026-07-30
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Darwin's Wave 1 contract can emit proposal-only structural evolution and separate health receipts, but it does not yet survive restart or prove which policy and approved PA Expert portfolio were in force for each episode.
+- Decision: Add a local, versioned Darwin evolution store with immutable evidence windows, episode bindings, proposal artifacts and caller-asserted acceptance/rejection claims. Every episode pins an opaque policy ID and version plus an approved PA Expert portfolio snapshot and digest. Replay is idempotent for the same digest and rejects conflicting duplicates; recovery ignores incomplete projections and reports native persistence as unavailable until qualified. Decision claims are atomically fenced by proposal ID, remain `caller_asserted_shadow`, and cannot authorize or apply change. Health/housekeeping receipts remain in their existing store, and no evolution path may mutate live routing, the registry, canon or policy; only the existing signed reversible-repair scope may execute repairs.
+- Consequences: Darwin gains durable auditability without a second execution ledger or a context-bearing contract store. Local files remain metadata-only, native persistence and native runtime provenance remain unavailable, and a decision claim never promotes a proposal automatically or proves Walter identity. Future authoritative approval requires a separately qualified signed envelope and consumer contract; future policy changes require a new pinned episode and explicit human authority.
+- Refs: specs/038-darwin-durable-evolution.md; internal/darwin/evolution.go; internal/darwin/evolution_store.go; schemas/darwin-evolution-*.schema.json
+- Supersedes: none

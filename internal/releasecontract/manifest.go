@@ -66,11 +66,17 @@ type Artifact struct {
 }
 
 type Migration struct {
-	ID        string `json:"id"`
-	Component string `json:"component"`
-	From      string `json:"from"`
-	To        string `json:"to"`
-	Required  bool   `json:"required"`
+	ID                string `json:"id"`
+	Component         string `json:"component"`
+	From              string `json:"from"`
+	To                string `json:"to"`
+	Required          bool   `json:"required"`
+	FromRole          string `json:"from_role,omitempty"`
+	ToRole            string `json:"to_role,omitempty"`
+	AliasExpiresAfter string `json:"alias_expires_after,omitempty"`
+	BundleSHA256      string `json:"bundle_sha256,omitempty"`
+	CatalogSHA256     string `json:"catalog_sha256,omitempty"`
+	PolicySHA256      string `json:"policy_sha256,omitempty"`
 }
 
 type ReleaseNotes struct {
@@ -459,6 +465,26 @@ func validateMigrations(manifest Manifest) error {
 		}
 		if !migration.Required {
 			return fmt.Errorf("migration %s must explicitly be required", migration.ID)
+		}
+		if migration.ID == "practice-agent-to-pa-expert" {
+			if migration.Component != "bundle" || migration.From != ">=0.1.0 <0.2.0" || migration.To != manifest.Bundle.Version ||
+				migration.FromRole != "practice_agent" || migration.ToRole != "pa_expert" ||
+				migration.AliasExpiresAfter != "0.2.0" ||
+				!hashPattern.MatchString(migration.BundleSHA256) ||
+				!hashPattern.MatchString(migration.CatalogSHA256) ||
+				!hashPattern.MatchString(migration.PolicySHA256) {
+				return errors.New("practice-agent role migration must pin its source range, expiry and bundle/catalog/policy identities")
+			}
+			var bundleDigest string
+			for _, artifact := range manifest.Artifacts {
+				if artifact.Kind == "bundle" {
+					bundleDigest = artifact.SHA256
+					break
+				}
+			}
+			if bundleDigest == "" || migration.BundleSHA256 != bundleDigest {
+				return errors.New("practice-agent role migration bundle identity must match the release bundle artifact")
+			}
 		}
 	}
 	return nil

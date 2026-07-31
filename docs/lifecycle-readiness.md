@@ -54,3 +54,14 @@ writing a receipt or changing runtime configuration.
 
 Until then, readiness remains contract-validated only; neither runtime is
 pilot-ready for lifecycle activation.
+
+## Darwin cadence status
+
+Darwin's runtime-neutral worker contract now has explicit command deadlines, a
+concrete runtime-qualified catalog/attendance authority, exact occurrence
+binding, non-blocking occurrence-keyed fenced execution, immutable attempt
+receipts with occurrence-level idempotency, continuous/event gatekeeping and
+daily/weekly/monthly cadence fixtures. Busy is an ephemeral nonterminal result,
+and the shipped catalog-only/unavailable catalog cannot authorize execution.
+These are local contract evidence only. Claude and Codex remain `unavailable`;
+macOS and Windows scheduler templates remain disabled.

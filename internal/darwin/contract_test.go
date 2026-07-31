@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
@@ -169,8 +170,9 @@ func TestFilesystemInvokerIsScopedAndMetadataOnly(t *testing.T) {
 }
 
 func TestHeadlessExecutorUsesSameDarwinContractAndLeavesFailureRecoverable(t *testing.T) {
-	now := time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	store := Store{Root: t.TempDir()}
+	command := commandForTest(now, HousekeepingJobID, false)
 	executor := HousekeepingExecutor{
 		Build: HealthPacketBuilderFunc(func(context.Context, scheduler.Occurrence) (HealthPacket, error) {
 			return HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-5", Runtime: "claude", Observations: []Observation{{Code: ObservationStateStale, Severity: SeverityLow, Count: 1}}}, nil
@@ -180,9 +182,11 @@ func TestHeadlessExecutorUsesSameDarwinContractAndLeavesFailureRecoverable(t *te
 			t.Fatal("blocked housekeeping must not invoke a tool")
 			return ToolResult{}, nil
 		}),
-		Store: store, Now: func() time.Time { return now },
+		Store: store, CommandStore: maintenance.Store{Root: t.TempDir()},
+		Scheduler: scheduler.Store{Root: t.TempDir()}, Authority: authorityForTest(t, command),
+		Now: func() time.Time { return now },
 	}
-	err := executor.Execute(context.Background(), scheduler.Occurrence{JobID: HousekeepingJobID, ScheduledFor: now})
+	_, err := executor.ExecuteCommand(context.Background(), command)
 	if err == nil {
 		t.Fatal("blocked housekeeping must remain recoverable")
 	}
@@ -193,8 +197,9 @@ func TestHeadlessExecutorUsesSameDarwinContractAndLeavesFailureRecoverable(t *te
 }
 
 func TestHeadlessExecutorForcesHeadlessModeAndPersistsSuccess(t *testing.T) {
-	now := time.Date(2026, 7, 28, 13, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	store := Store{Root: t.TempDir()}
+	command := commandForTest(now, HousekeepingJobID, false)
 	executor := HousekeepingExecutor{
 		Build: HealthPacketBuilderFunc(func(context.Context, scheduler.Occurrence) (HealthPacket, error) {
 			return HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-6", Runtime: "codex", Mode: Interactive, Observations: []Observation{{Code: ObservationStateStale, Severity: SeverityLow, Count: 1}}}, nil
@@ -203,9 +208,11 @@ func TestHeadlessExecutorForcesHeadlessModeAndPersistsSuccess(t *testing.T) {
 		Invoker: InvokerFunc(func(context.Context, ToolCall, Artifact) (ToolResult, error) {
 			return ToolResult{Outcome: OutcomeSucceeded}, nil
 		}),
-		Store: store, Now: func() time.Time { return now },
+		Store: store, CommandStore: maintenance.Store{Root: t.TempDir()},
+		Scheduler: scheduler.Store{Root: t.TempDir()}, Authority: authorityForTest(t, command),
+		Now: func() time.Time { return now },
 	}
-	if err := executor.Execute(context.Background(), scheduler.Occurrence{JobID: HousekeepingJobID, ScheduledFor: now}); err != nil {
+	if _, err := executor.ExecuteCommand(context.Background(), command); err != nil {
 		t.Fatal(err)
 	}
 	receipts, err := store.Receipts()
