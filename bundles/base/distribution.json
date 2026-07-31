@@ -2,6 +2,10 @@
   "schema_version": 1,
   "files": [
     {
+      "source": "bundles/base/agents/catalog.json",
+      "path": "agents/catalog.json"
+    },
+    {
       "source": "bundles/base/atlas/managed/backlinks.json",
       "path": "atlas/managed/backlinks.json"
     },
@@ -68,6 +72,10 @@
     {
       "source": "bundles/base/skills/catalog.json",
       "path": "skills/catalog.json"
+    },
+    {
+      "source": "bundles/base/skills/agent-skill-policy.json",
+      "path": "skills/agent-skill-policy.json"
     },
     {
       "source": "bundles/base/skills/agent-identity-setup/SKILL.md",

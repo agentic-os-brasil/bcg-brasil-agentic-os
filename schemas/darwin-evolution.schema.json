@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:darwin-evolution:v1",
+  "title": "Maestro Darwin durable evolution records",
+  "oneOf": [
+    {"$ref": "#/$defs/episode"},
+    {"$ref": "#/$defs/episode_event"},
+    {"$ref": "#/$defs/evidence_window"},
+    {"$ref": "#/$defs/proposal"},
+    {"$ref": "#/$defs/decision_receipt"}
+  ],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy_id", "policy_version", "plan_sha256"],
+      "properties": {
+        "policy_id": {"$ref": "#/$defs/id"},
+        "policy_version": {"$ref": "#/$defs/id"},
+        "plan_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "portfolio_expert": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "version", "canon_sha256"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kind": {"enum": ["FPA", "IPA"]},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"},
+        "canon_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "portfolio": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "authority", "approved_by", "approval_ref_sha256", "experts", "snapshot_sha256"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "authority": {"$ref": "#/$defs/id"},
+        "approved_by": {"$ref": "#/$defs/id"},
+        "approval_ref_sha256": {"$ref": "#/$defs/sha256"},
+        "experts": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/portfolio_expert"}},
+        "snapshot_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "episode": {
+      "type": "object", "additionalProperties": false,
+      "required": ["record_type", "schema_version", "episode_id", "window_id", "policy", "portfolio", "state", "revision", "created_at", "updated_at"],
+      "properties": {
+        "record_type": {"const": "episode"},
+        "schema_version": {"const": 1},
+        "episode_id": {"$ref": "#/$defs/id"},
+        "window_id": {"$ref": "#/$defs/id"},
+        "policy": {"$ref": "#/$defs/policy"},
+        "portfolio": {"$ref": "#/$defs/portfolio"},
+        "state": {"enum": ["open", "interrupted", "resumed", "closed"]},
+        "revision": {"type": "integer", "minimum": 0},
+        "created_at": {"type": "string", "format": "date-time"},
+        "updated_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "episode_event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["record_type", "schema_version", "event_id", "episode_id", "revision", "state", "recorded_at", "event_sha256"],
+      "properties": {
+        "record_type": {"const": "episode_event"},
+        "schema_version": {"const": 1},
+        "event_id": {"$ref": "#/$defs/id"},
+        "episode_id": {"$ref": "#/$defs/id"},
+        "revision": {"type": "integer", "minimum": 1},
+        "state": {"enum": ["interrupted", "resumed", "closed"]},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "event_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "episode_id", "plan_sha256", "route", "outcome", "duration_seconds", "budget_exhausted", "missing_receipt", "human_override"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "episode_id": {"$ref": "#/$defs/id"},
+        "plan_sha256": {"$ref": "#/$defs/sha256"},
+        "route": {"enum": ["D0_DIRECT", "D1_TARGETED", "D2_GOVERNED", "BLOCKED"]},
+        "outcome": {"enum": ["completed", "failed", "blocked"]},
+        "duration_seconds": {"type": "integer", "minimum": 0, "maximum": 86400},
+        "budget_exhausted": {"type": "boolean"},
+        "missing_receipt": {"type": "boolean"},
+        "human_override": {"type": "boolean"}
+      }
+    },
+    "evidence_window": {
+      "type": "object", "additionalProperties": false,
+      "required": ["record_type", "schema_version", "window_id", "version", "policy", "portfolio", "observations", "window_sha256", "recorded_at"],
+      "properties": {
+        "record_type": {"const": "evidence_window"},
+        "schema_version": {"const": 1},
+        "window_id": {"$ref": "#/$defs/id"},
+        "version": {"type": "integer", "minimum": 1},
+        "policy": {"$ref": "#/$defs/policy"},
+        "portfolio": {"$ref": "#/$defs/portfolio"},
+        "observations": {"type": "array", "maxItems": 1000, "items": {"$ref": "#/$defs/observation"}},
+        "window_sha256": {"$ref": "#/$defs/sha256"},
+        "recorded_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "proposal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["record_type", "schema_version", "proposal", "policy", "portfolio", "evidence_window_id", "evidence_window_sha256", "proposal_sha256", "created_at"],
+      "properties": {
+        "record_type": {"const": "proposal"},
+        "schema_version": {"const": 1},
+        "proposal": {
+          "type": "object", "additionalProperties": false,
+          "required": ["schema_version", "proposal_id", "policy_version", "cadence", "target", "current_digest", "proposed_digest", "evidence_window", "approval_state", "may_mutate_route"],
+          "properties": {
+            "schema_version": {"const": 1},
+            "proposal_id": {"$ref": "#/$defs/id"},
+            "policy_version": {"type": "string", "minLength": 1, "maxLength": 128},
+            "cadence": {"enum": ["weekly", "monthly"]},
+            "target": {"enum": ["agent", "pa_expert", "skill", "policy"]},
+            "current_digest": {"$ref": "#/$defs/sha256"},
+            "proposed_digest": {"$ref": "#/$defs/sha256"},
+            "evidence_window": {"$ref": "#/$defs/id"},
+            "approval_state": {"const": "proposal_only"},
+            "evaluated_by": {"type": "string", "maxLength": 80},
+            "may_mutate_route": {"const": false}
+          }
+        },
+        "policy": {"$ref": "#/$defs/policy"},
+        "portfolio": {"$ref": "#/$defs/portfolio"},
+        "evidence_window_id": {"$ref": "#/$defs/id"},
+        "evidence_window_sha256": {"$ref": "#/$defs/sha256"},
+        "proposal_sha256": {"$ref": "#/$defs/sha256"},
+        "created_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "decision_receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["record_type", "schema_version", "receipt_id", "proposal_id", "proposal_sha256", "decision", "claimed_approver_id", "authority_state", "may_authorize", "recorded_at", "receipt_sha256"],
+      "properties": {
+        "record_type": {"const": "decision_receipt"},
+        "schema_version": {"const": 1},
+        "receipt_id": {"$ref": "#/$defs/id"},
+        "proposal_id": {"$ref": "#/$defs/id"},
+        "proposal_sha256": {"$ref": "#/$defs/sha256"},
+        "decision": {"enum": ["approved", "rejected"]},
+        "claimed_approver_id": {"const": "walter"},
+        "authority_state": {"const": "caller_asserted_shadow"},
+        "may_authorize": {"const": false},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

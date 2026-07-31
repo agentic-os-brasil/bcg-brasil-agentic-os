@@ -4,7 +4,8 @@
   "title": "BCG Brasil Agentic OS scheduler state",
   "oneOf": [
     {"$ref": "#/$defs/enrollment"},
-    {"$ref": "#/$defs/receipt"}
+    {"$ref": "#/$defs/receipt"},
+    {"$ref": "#/$defs/lease"}
   ],
   "$defs": {
     "workspace_id": {
@@ -45,6 +46,21 @@
           "else": {"required": ["error"]}
         }
       ]
+    },
+    "lease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "workspace_id", "job_id", "occurrence_key", "owner_id", "fence_token", "acquired_at", "expires_at"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "workspace_id": {"$ref": "#/$defs/workspace_id"},
+        "job_id": {"$ref": "#/$defs/job_id"},
+        "occurrence_key": {"type": "string", "minLength": 1, "maxLength": 256},
+        "owner_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "fence_token": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+        "acquired_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"}
+      }
     }
   }
 }

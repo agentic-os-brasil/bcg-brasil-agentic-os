@@ -25,6 +25,10 @@ flowchart LR
 | Same interactive/headless contract | `internal/darwin/runtime.go`, `contract_test.go`, conformance fixture | Native scheduler wake invoking Darwin | implemented / native unavailable |
 | Metadata-only repair receipt | `internal/darwin/store.go`, CLI test | Native session receipt | contract-tested / native unavailable |
 | Recoverable failed housekeeping | scheduler `RunDue` contract plus Darwin store receipt | Native scheduler retry evidence | implemented / native unavailable |
+| Bounded worker command and lease | `internal/maintenance`, `internal/scheduler/lease.go`, cadence fixture | Native wake invoking worker | contract-tested / native unavailable |
+| Daily, weekly and monthly cadence | scheduler cadence tests and maintenance catalog | Native scheduler execution | contract-tested / native unavailable |
+| Continuous event gate | maintenance command/gate tests; signal-only fixture | Native lifecycle event observation | contract-tested / native unavailable |
+| Monthly structural evolution | proposal-only command receipt; no tool invocation | Approved human application record | proposal-only / application unavailable |
 | Claude native invocation | adapter docs and lifecycle probe | qualifying Claude session | unavailable: native observation pending |
 | Codex native invocation | adapter docs and lifecycle probe | qualifying Codex session | unavailable: native observation pending |
 

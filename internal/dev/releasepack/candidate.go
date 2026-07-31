@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/rolemigration"
 )
 
 const (
@@ -223,6 +224,23 @@ func BuildCandidate(ctx context.Context, options CandidateOptions) (releasecontr
 		return releasecontract.Manifest{}, err
 	}
 	manifest.Artifacts = append(manifest.Artifacts, bundleArtifact)
+	if expired, _ := rolemigration.IsExpired(options.Version); expired {
+		catalogInfo, catalogSHA256, err := inspectFile(filepath.Join(options.Root, "bundles", "base", "agents", "catalog.json"))
+		if err != nil || catalogInfo.Size() == 0 {
+			return releasecontract.Manifest{}, fmt.Errorf("inspect role catalog identity: %w", err)
+		}
+		policyInfo, policySHA256, err := inspectFile(filepath.Join(options.Root, "bundles", "base", "skills", "agent-skill-policy.json"))
+		if err != nil || policyInfo.Size() == 0 {
+			return releasecontract.Manifest{}, fmt.Errorf("inspect role policy identity: %w", err)
+		}
+		manifest.Migrations = append(manifest.Migrations, releasecontract.Migration{
+			ID: rolemigration.MigrationID, Component: "bundle", From: rolemigration.SourceRange,
+			To: options.Version, Required: true,
+			FromRole: rolemigration.LegacyRole, ToRole: rolemigration.CanonicalRole,
+			AliasExpiresAfter: rolemigration.AliasExpiresAfter,
+			BundleSHA256:      bundleArtifact.SHA256, CatalogSHA256: catalogSHA256, PolicySHA256: policySHA256,
+		})
+	}
 
 	notesName := "release-notes-" + options.Version + ".md"
 	notesBody := []byte(fmt.Sprintf(
