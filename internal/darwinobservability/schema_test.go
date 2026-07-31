@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/activationpolicy"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
@@ -14,15 +16,26 @@ func TestSchemasCompileAndRejectContent(t *testing.T) {
 	root := filepath.Join("..", "..", "schemas")
 	evidence := compileObservabilitySchema(t, filepath.Join(root, "darwin-evidence.schema.json"))
 	scorecard := compileObservabilitySchema(t, filepath.Join(root, "darwin-scorecard.schema.json"))
-	valid := decodeObservabilityJSON(t, `{"schema_version":1,"kind":"proposal","evidence_id":"ev-1","window_id":"week-1","recorded_at":"2026-07-30T12:00:00Z","proposal":{"proposal_sha256":"`+strings.Repeat("a", 64)+`","proposal_kind":"policy_calibration","status":"draft","author_role":"darwin"}}`)
+	scope := strings.Repeat("f", 64)
+	windowID := OpaqueWindowID("week-1")
+	valid := decodeObservabilityJSON(t, `{"schema_version":1,"kind":"proposal","evidence_id":"ev-1","window_id":"`+windowID+`","scope_sha256":"`+scope+`","evidence_authority":"caller_asserted_shadow","recorded_at":"2026-07-30T12:00:00Z","proposal":{"proposal_sha256":"`+strings.Repeat("a", 64)+`","proposal_kind":"policy_calibration","status":"draft","author_role":"darwin"}}`)
 	if err := evidence.Validate(valid); err != nil {
 		t.Fatalf("valid evidence rejected: %v", err)
 	}
-	invalid := decodeObservabilityJSON(t, `{"schema_version":1,"kind":"proposal","evidence_id":"ev-1","window_id":"week-1","recorded_at":"2026-07-30T12:00:00Z","prompt":"secret","proposal":{"proposal_sha256":"`+strings.Repeat("a", 64)+`","proposal_kind":"policy_calibration","status":"draft","author_role":"darwin"}}`)
+	invalid := decodeObservabilityJSON(t, `{"schema_version":1,"kind":"proposal","evidence_id":"ev-1","window_id":"`+windowID+`","scope_sha256":"`+scope+`","evidence_authority":"caller_asserted_shadow","recorded_at":"2026-07-30T12:00:00Z","prompt":"secret","proposal":{"proposal_sha256":"`+strings.Repeat("a", 64)+`","proposal_kind":"policy_calibration","status":"draft","author_role":"darwin"}}`)
 	if err := evidence.Validate(invalid); err == nil {
 		t.Fatal("evidence schema accepted prompt content")
 	}
-	validReport := decodeObservabilityJSON(t, `{"schema_version":1,"report_kind":"weekly_operational","report_version":"weekly-v1","window":{"window_id":"week-1","start":"2026-07-27T00:00:00Z","end":"2026-08-03T00:00:00Z"},"input_sha256":"`+strings.Repeat("a", 64)+`","health":{"records":0,"current":0,"aging":0,"stale":0,"missed":0,"unavailable":0,"recovered":0,"recovery_failed":0,"recovery_blocked":0},"selection":{"records":0,"completed":0,"failed":0,"blocked":0,"routes":[],"missing_pa_coverage":0,"unavailable_pa_coverage":0,"capability_gap_count":0},"integrity":{"input_records":0,"accepted_records":0,"duplicate_records":0,"independence_violations":0},"recommendation_codes":["hold_current_posture"],"may_mutate_policy":false}`)
+	window := Window{ID: windowID, ScopeSHA256: scope, Start: time.Date(2026, 7, 27, 0, 0, 0, 0, time.UTC), End: time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)}
+	report, err := BuildWeekly([]Record{selectionRecord(t, "ev-schema", window.ID, activationpolicy.D0Direct)}, window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reportBody, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validReport := decodeObservabilityJSON(t, string(reportBody))
 	if err := scorecard.Validate(validReport); err != nil {
 		t.Fatalf("valid scorecard rejected: %v", err)
 	}

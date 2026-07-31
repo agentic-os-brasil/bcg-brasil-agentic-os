@@ -1,6 +1,8 @@
 package darwinobservability
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -10,13 +12,15 @@ import (
 )
 
 type Window struct {
-	ID    string    `json:"window_id"`
-	Start time.Time `json:"start"`
-	End   time.Time `json:"end"`
+	ID          string    `json:"window_id"`
+	ScopeSHA256 string    `json:"scope_sha256"`
+	Start       time.Time `json:"start"`
+	End         time.Time `json:"end"`
 }
 
 func (window Window) Validate() error {
-	if !identifierPattern.MatchString(window.ID) || window.Start.IsZero() || window.End.IsZero() || !window.End.After(window.Start) {
+	if !windowPattern.MatchString(window.ID) || !digestPattern.MatchString(window.ScopeSHA256) ||
+		window.Start.IsZero() || window.End.IsZero() || !window.End.After(window.Start) {
 		return errors.New("invalid report window")
 	}
 	return nil
@@ -68,6 +72,7 @@ type WeeklyReport struct {
 	ReportVersion       string             `json:"report_version"`
 	Window              Window             `json:"window"`
 	InputSHA256         string             `json:"input_sha256"`
+	EvidenceAuthority   EvidenceAuthority  `json:"evidence_authority"`
 	Health              HealthScorecard    `json:"health"`
 	Selection           SelectionScorecard `json:"selection"`
 	Integrity           IntegrityScorecard `json:"integrity"`
@@ -117,6 +122,7 @@ type MonthlyReport struct {
 	ReportVersion       string               `json:"report_version"`
 	Windows             []Window             `json:"windows"`
 	InputSHA256         string               `json:"input_sha256"`
+	EvidenceAuthority   EvidenceAuthority    `json:"evidence_authority"`
 	Alternatives        []AlternativeSummary `json:"alternatives"`
 	ProposalFunnel      ProposalFunnel       `json:"proposal_funnel"`
 	Evaluations         EvaluationSummary    `json:"evaluations"`
@@ -129,20 +135,24 @@ func BuildWeekly(records []Record, window Window) (WeeklyReport, error) {
 	if err := window.Validate(); err != nil {
 		return WeeklyReport{}, err
 	}
-	if len(records) == 0 {
+	if len(records) == 0 || len(records) > MaxInputRecords {
 		return WeeklyReport{}, errors.New("weekly report requires evidence")
 	}
-	digest, err := InputDigest(records)
+	digest, err := reportInputDigest(records, []Window{window})
 	if err != nil {
 		return WeeklyReport{}, err
 	}
-	report := WeeklyReport{SchemaVersion: SchemaVersion, ReportKind: "weekly_operational", ReportVersion: "weekly-v1", Window: window, InputSHA256: digest, MayMutatePolicy: false}
+	report := WeeklyReport{
+		SchemaVersion: SchemaVersion, ReportKind: "weekly_operational", ReportVersion: "weekly-v1",
+		Window: window, InputSHA256: digest, EvidenceAuthority: AuthorityCallerAssertedShadow, MayMutatePolicy: false,
+	}
 	var selection []Record
 	for _, record := range records {
-		if record.WindowID != window.ID {
-			return WeeklyReport{}, errors.New("weekly report cannot mix windows")
+		if record.WindowID != window.ID || record.ScopeSHA256 != window.ScopeSHA256 ||
+			record.Authority != AuthorityCallerAssertedShadow {
+			return WeeklyReport{}, errors.New("weekly report cannot mix windows, scopes or authorities")
 		}
-		if record.RecordedAt.Before(window.Start) || record.RecordedAt.After(window.End) {
+		if record.RecordedAt.Before(window.Start) || !record.RecordedAt.Before(window.End) {
 			return WeeklyReport{}, errors.New("evidence is outside report window")
 		}
 		switch record.Kind {
@@ -151,6 +161,7 @@ func BuildWeekly(records []Record, window Window) (WeeklyReport, error) {
 		case KindSelection:
 			selection = append(selection, record)
 		case KindProposal, KindAcceptance, KindEvaluation, KindAlternative:
+			return WeeklyReport{}, errors.New("weekly report accepts only health and selection evidence")
 		default:
 			return WeeklyReport{}, errors.New("unsupported evidence kind")
 		}
@@ -158,43 +169,82 @@ func BuildWeekly(records []Record, window Window) (WeeklyReport, error) {
 	report.Selection = aggregateSelection(selection)
 	report.Integrity = IntegrityScorecard{InputRecords: len(records), AcceptedRecords: len(records)}
 	report.RecommendationCodes = weeklyRecommendations(report)
-	return report, nil
+	return report, report.Validate()
 }
 
 func BuildMonthly(records []Record, windows []Window) (MonthlyReport, error) {
-	if len(windows) == 0 || len(records) == 0 {
+	if len(windows) == 0 || len(windows) > MaxWindows || len(records) == 0 || len(records) > MaxInputRecords {
 		return MonthlyReport{}, errors.New("monthly report requires windows and evidence")
 	}
-	for _, window := range windows {
-		if err := window.Validate(); err != nil {
-			return MonthlyReport{}, err
-		}
-	}
-	allowed := map[string]bool{}
-	for _, window := range windows {
-		allowed[window.ID] = true
-	}
-	digest, err := InputDigest(records)
+	normalizedWindows, windowByID, err := normalizeWindows(windows)
 	if err != nil {
 		return MonthlyReport{}, err
 	}
-	report := MonthlyReport{SchemaVersion: SchemaVersion, ReportKind: "monthly_structural", ReportVersion: "monthly-v1", Windows: append([]Window(nil), windows...), InputSHA256: digest, MayMutatePolicy: false}
+	digest, err := reportInputDigest(records, normalizedWindows)
+	if err != nil {
+		return MonthlyReport{}, err
+	}
+	report := MonthlyReport{
+		SchemaVersion: SchemaVersion, ReportKind: "monthly_structural", ReportVersion: "monthly-v1",
+		Windows: normalizedWindows, InputSHA256: digest, EvidenceAuthority: AuthorityCallerAssertedShadow, MayMutatePolicy: false,
+		RecommendationCodes: []string{"review_evidence_authority"},
+	}
 	alt := map[AlternativeID][]Record{}
+	alternativeCohorts := map[string]map[AlternativeID]bool{}
+	proposals := map[string]*ProposalEvidence{}
+	acceptances := map[string]*AcceptanceEvidence{}
+	evaluations := map[string]*EvaluationEvidence{}
 	for _, record := range records {
-		if !allowed[record.WindowID] {
-			return MonthlyReport{}, errors.New("monthly evidence references an unknown window")
+		window, ok := windowByID[record.WindowID]
+		if !ok || record.ScopeSHA256 != normalizedWindows[0].ScopeSHA256 ||
+			record.Authority != AuthorityCallerAssertedShadow {
+			return MonthlyReport{}, errors.New("monthly evidence references an unknown window, scope or authority")
+		}
+		if record.RecordedAt.Before(window.Start) || !record.RecordedAt.Before(window.End) {
+			return MonthlyReport{}, errors.New("monthly evidence is outside its referenced window")
 		}
 		switch record.Kind {
 		case KindAlternative:
+			cohort := record.Alternative.CohortSHA256
+			if alternativeCohorts[cohort] == nil {
+				alternativeCohorts[cohort] = map[AlternativeID]bool{}
+			}
+			if alternativeCohorts[cohort][record.Alternative.AlternativeID] {
+				return MonthlyReport{}, errors.New("duplicate alternative in comparison cohort")
+			}
+			alternativeCohorts[cohort][record.Alternative.AlternativeID] = true
 			alt[record.Alternative.AlternativeID] = append(alt[record.Alternative.AlternativeID], record)
 		case KindProposal:
+			if proposals[record.Proposal.ProposalSHA256] != nil {
+				return MonthlyReport{}, errors.New("duplicate proposal evidence")
+			}
+			proposals[record.Proposal.ProposalSHA256] = record.Proposal
 			report.ProposalFunnel.Authored++
 			addProposalStatus(&report.ProposalFunnel, record.Proposal.Status)
 		case KindAcceptance:
-			addDecision(&report.ProposalFunnel, record.Acceptance.Decision)
+			if acceptances[record.Acceptance.ProposalSHA256] != nil {
+				return MonthlyReport{}, errors.New("duplicate acceptance evidence")
+			}
+			acceptances[record.Acceptance.ProposalSHA256] = record.Acceptance
 		case KindEvaluation:
-			addEvaluation(&report.Evaluations, &report.Independence, record.Evaluation)
+			if record.WindowID != record.Evaluation.PostChangeWindowID {
+				return MonthlyReport{}, errors.New("evaluation record must belong to its post-change window")
+			}
+			if evaluations[record.Evaluation.ProposalSHA256] != nil {
+				return MonthlyReport{}, errors.New("duplicate evaluation evidence")
+			}
+			evaluations[record.Evaluation.ProposalSHA256] = record.Evaluation
+		case KindHealth, KindSelection:
+			return MonthlyReport{}, errors.New("monthly report accepts only structural evidence")
+		default:
+			return MonthlyReport{}, errors.New("unsupported monthly evidence kind")
 		}
+	}
+	if err := validateAlternativeCohorts(alternativeCohorts); err != nil {
+		return MonthlyReport{}, err
+	}
+	if err := aggregateProposalLifecycle(&report, proposals, acceptances, evaluations, windowByID); err != nil {
+		return MonthlyReport{}, err
 	}
 	for _, id := range []AlternativeID{AlternativeBaseline, AlternativeCandidateA, AlternativeCandidateB, AlternativeCandidateC} {
 		if recordsFor := alt[id]; len(recordsFor) > 0 {
@@ -210,11 +260,140 @@ func BuildMonthly(records []Record, windows []Window) (MonthlyReport, error) {
 	if len(report.Alternatives) < 2 {
 		report.RecommendationCodes = append(report.RecommendationCodes, "insufficient_alternatives")
 	}
-	if len(report.RecommendationCodes) == 0 {
-		report.RecommendationCodes = []string{"hold_current_posture"}
-	}
 	sort.Strings(report.RecommendationCodes)
-	return report, nil
+	return report, report.Validate()
+}
+
+func normalizeWindows(windows []Window) ([]Window, map[string]Window, error) {
+	normalized := append([]Window(nil), windows...)
+	sort.Slice(normalized, func(i, j int) bool {
+		if normalized[i].Start.Equal(normalized[j].Start) {
+			return normalized[i].ID < normalized[j].ID
+		}
+		return normalized[i].Start.Before(normalized[j].Start)
+	})
+	byID := make(map[string]Window, len(normalized))
+	var scope string
+	for i, window := range normalized {
+		if err := window.Validate(); err != nil {
+			return nil, nil, err
+		}
+		if _, exists := byID[window.ID]; exists {
+			return nil, nil, errors.New("duplicate report window")
+		}
+		if i == 0 {
+			scope = window.ScopeSHA256
+		} else {
+			if window.ScopeSHA256 != scope {
+				return nil, nil, errors.New("monthly report cannot mix scopes")
+			}
+			if window.Start.Before(normalized[i-1].End) {
+				return nil, nil, errors.New("monthly report windows cannot overlap")
+			}
+		}
+		byID[window.ID] = window
+	}
+	return normalized, byID, nil
+}
+
+func reportInputDigest(records []Record, windows []Window) (string, error) {
+	recordDigest, err := InputDigest(records)
+	if err != nil {
+		return "", err
+	}
+	windowBody, err := json.Marshal(windows)
+	if err != nil {
+		return "", err
+	}
+	return SHA256Hex(bytes.Join([][]byte{[]byte(recordDigest), windowBody}, []byte{'\n'})), nil
+}
+
+func validateAlternativeCohorts(cohorts map[string]map[AlternativeID]bool) error {
+	if len(cohorts) == 0 {
+		return nil
+	}
+	var expected map[AlternativeID]bool
+	for _, alternatives := range cohorts {
+		if !alternatives[AlternativeBaseline] || len(alternatives) < 2 {
+			return errors.New("alternative cohort requires baseline and candidate")
+		}
+		if expected == nil {
+			expected = alternatives
+			continue
+		}
+		if len(alternatives) != len(expected) {
+			return errors.New("alternative cohorts must contain the same candidates")
+		}
+		for id := range expected {
+			if !alternatives[id] {
+				return errors.New("alternative cohorts must contain the same candidates")
+			}
+		}
+	}
+	return nil
+}
+
+func aggregateProposalLifecycle(
+	report *MonthlyReport,
+	proposals map[string]*ProposalEvidence,
+	acceptances map[string]*AcceptanceEvidence,
+	evaluations map[string]*EvaluationEvidence,
+	windows map[string]Window,
+) error {
+	for proposalSHA, acceptance := range acceptances {
+		proposal := proposals[proposalSHA]
+		if proposal == nil {
+			return errors.New("acceptance references an unknown proposal")
+		}
+		if !proposalDecisionConsistent(proposal.Status, acceptance.Decision) {
+			return errors.New("proposal status and human decision are inconsistent")
+		}
+		addDecision(&report.ProposalFunnel, acceptance.Decision)
+	}
+	for proposalSHA, proposal := range proposals {
+		acceptance := acceptances[proposalSHA]
+		switch proposal.Status {
+		case ProposalAccepted, ProposalRejected, ProposalDeferred, ProposalImplemented, ProposalRolledBack:
+			if acceptance == nil {
+				return errors.New("proposal lifecycle state requires human acceptance evidence")
+			}
+		}
+		if (proposal.Status == ProposalImplemented || proposal.Status == ProposalRolledBack) &&
+			acceptance.Decision != DecisionAccepted {
+			return errors.New("implementation lifecycle requires an accepted proposal")
+		}
+	}
+	for proposalSHA, evaluation := range evaluations {
+		proposal := proposals[proposalSHA]
+		acceptance := acceptances[proposalSHA]
+		if proposal == nil || acceptance == nil || acceptance.Decision != DecisionAccepted ||
+			(proposal.Status != ProposalImplemented && proposal.Status != ProposalRolledBack) {
+			return errors.New("evaluation requires an accepted implemented proposal")
+		}
+		baseline, baselineOK := windows[evaluation.BaselineWindowID]
+		postChange, postChangeOK := windows[evaluation.PostChangeWindowID]
+		if !baselineOK || !postChangeOK || baseline.Start.After(postChange.Start) ||
+			baseline.ID == postChange.ID {
+			return errors.New("evaluation references invalid baseline or post-change windows")
+		}
+		addEvaluation(&report.Evaluations, &report.Independence, evaluation)
+	}
+	return nil
+}
+
+func proposalDecisionConsistent(status ProposalStatus, decision Decision) bool {
+	switch status {
+	case ProposalAccepted, ProposalImplemented, ProposalRolledBack:
+		return decision == DecisionAccepted
+	case ProposalRejected:
+		return decision == DecisionRejected
+	case ProposalDeferred:
+		return decision == DecisionDeferred
+	case ProposalDraft:
+		return false
+	default:
+		return false
+	}
 }
 
 func accumulateHealth(score *HealthScorecard, evidence HealthEvidence) {
@@ -291,7 +470,7 @@ func aggregateSelection(records []Record) SelectionScorecard {
 }
 
 func weeklyRecommendations(report WeeklyReport) []string {
-	var codes []string
+	codes := []string{"review_evidence_authority"}
 	if report.Selection.Records < 20 {
 		codes = append(codes, "insufficient_sample")
 	}
@@ -338,12 +517,6 @@ func summarizeAlternative(id AlternativeID, records []Record) AlternativeSummary
 
 func addProposalStatus(funnel *ProposalFunnel, status ProposalStatus) {
 	switch status {
-	case ProposalAccepted:
-		funnel.Accepted++
-	case ProposalRejected:
-		funnel.Rejected++
-	case ProposalDeferred:
-		funnel.Deferred++
 	case ProposalImplemented:
 		funnel.Implemented++
 	case ProposalRolledBack:
@@ -379,22 +552,170 @@ func addEvaluation(summary *EvaluationSummary, independence *IndependenceSummary
 }
 
 func (r WeeklyReport) Validate() error {
-	if r.SchemaVersion != SchemaVersion || r.ReportKind != "weekly_operational" || r.ReportVersion != "weekly-v1" || !digestPattern.MatchString(r.InputSHA256) || r.MayMutatePolicy {
+	if r.SchemaVersion != SchemaVersion || r.ReportKind != "weekly_operational" || r.ReportVersion != "weekly-v1" ||
+		!digestPattern.MatchString(r.InputSHA256) || r.EvidenceAuthority != AuthorityCallerAssertedShadow || r.MayMutatePolicy {
 		return errors.New("invalid weekly report")
 	}
-	return r.Window.Validate()
+	if err := r.Window.Validate(); err != nil {
+		return err
+	}
+	if err := validateRecommendations(r.RecommendationCodes); err != nil {
+		return err
+	}
+	if err := validateHealthScorecard(r.Health); err != nil {
+		return err
+	}
+	if err := validateSelectionScorecard(r.Selection); err != nil {
+		return err
+	}
+	if r.Integrity.InputRecords < 1 || r.Integrity.InputRecords > MaxInputRecords ||
+		r.Integrity.AcceptedRecords != r.Integrity.InputRecords || r.Integrity.DuplicateRecords != 0 ||
+		r.Integrity.IndependenceViolations != 0 ||
+		r.Health.Records+r.Selection.Records != r.Integrity.AcceptedRecords {
+		return errors.New("invalid weekly integrity scorecard")
+	}
+	return nil
 }
 
 func (r MonthlyReport) Validate() error {
-	if r.SchemaVersion != SchemaVersion || r.ReportKind != "monthly_structural" || r.ReportVersion != "monthly-v1" || !digestPattern.MatchString(r.InputSHA256) || r.MayMutatePolicy || len(r.Windows) == 0 {
+	if r.SchemaVersion != SchemaVersion || r.ReportKind != "monthly_structural" || r.ReportVersion != "monthly-v1" ||
+		!digestPattern.MatchString(r.InputSHA256) || r.EvidenceAuthority != AuthorityCallerAssertedShadow ||
+		r.MayMutatePolicy || len(r.Windows) == 0 || len(r.Windows) > MaxWindows {
 		return errors.New("invalid monthly report")
 	}
-	for _, window := range r.Windows {
-		if err := window.Validate(); err != nil {
-			return err
+	normalized, _, err := normalizeWindows(r.Windows)
+	if err != nil {
+		return err
+	}
+	if !windowsEqual(r.Windows, normalized) {
+		return errors.New("monthly report windows are not canonical")
+	}
+	if err := validateRecommendations(r.RecommendationCodes); err != nil {
+		return err
+	}
+	seenAlternatives := map[AlternativeID]bool{}
+	for i, alternative := range r.Alternatives {
+		if !validAlternative[alternative.AlternativeID] || alternative.Records < 1 ||
+			alternative.MeanDurationSec < 0 || alternative.BudgetExhausted < 0 ||
+			alternative.BudgetExhausted > alternative.Records || alternative.PAUnavailable < 0 ||
+			alternative.PAUnavailable > alternative.Records || seenAlternatives[alternative.AlternativeID] ||
+			(i > 0 && r.Alternatives[i-1].AlternativeID >= alternative.AlternativeID) {
+			return errors.New("invalid monthly alternative score")
+		}
+		seenAlternatives[alternative.AlternativeID] = true
+		totalOutcomes := 0
+		seenOutcomes := map[Outcome]bool{}
+		for _, outcome := range alternative.OutcomeCounts {
+			if !validOutcome[outcome.Outcome] || outcome.Count < 1 || seenOutcomes[outcome.Outcome] {
+				return errors.New("invalid monthly alternative outcome")
+			}
+			seenOutcomes[outcome.Outcome] = true
+			totalOutcomes += outcome.Count
+		}
+		if totalOutcomes != alternative.Records {
+			return errors.New("monthly alternative outcome count mismatch")
 		}
 	}
+	if !nonnegativeFunnel(r.ProposalFunnel) || !nonnegativeEvaluations(r.Evaluations) ||
+		r.Independence.Evaluations < 0 || r.Independence.SelfEvaluation != 0 || r.Independence.Violations != 0 ||
+		r.Independence.Evaluations != r.Evaluations.Improved+r.Evaluations.Neutral+r.Evaluations.Regressed+r.Evaluations.Insufficient {
+		return errors.New("invalid monthly lifecycle scorecard")
+	}
 	return nil
+}
+
+var validRecommendation = map[string]bool{
+	"insufficient_sample": true, "review_recovery": true, "review_pa_coverage": true,
+	"review_capability_gaps": true, "review_evaluator_independence": true,
+	"review_evidence_authority": true, "insufficient_alternatives": true, "hold_current_posture": true,
+}
+
+func validateRecommendations(codes []string) error {
+	if len(codes) == 0 || len(codes) > len(validRecommendation) {
+		return errors.New("invalid recommendation codes")
+	}
+	seen := map[string]bool{}
+	for i, code := range codes {
+		if !validRecommendation[code] || seen[code] || (i > 0 && codes[i-1] >= code) {
+			return errors.New("recommendation codes must be closed, unique and sorted")
+		}
+		seen[code] = true
+	}
+	return nil
+}
+
+func validateHealthScorecard(score HealthScorecard) error {
+	values := []int{score.Records, score.Current, score.Aging, score.Stale, score.Missed, score.Unavailable,
+		score.Recovered, score.RecoveryFailed, score.RecoveryBlocked}
+	for _, value := range values {
+		if value < 0 {
+			return errors.New("negative health score")
+		}
+	}
+	if score.Current+score.Aging+score.Stale+score.Missed+score.Unavailable != score.Records ||
+		score.Recovered+score.RecoveryFailed+score.RecoveryBlocked > score.Records {
+		return errors.New("health score totals are inconsistent")
+	}
+	return nil
+}
+
+func validateSelectionScorecard(score SelectionScorecard) error {
+	values := []int{score.Records, score.Completed, score.Failed, score.Blocked, score.MissingPACoverage,
+		score.UnavailablePA, score.CapabilityGapCount}
+	for _, value := range values {
+		if value < 0 {
+			return errors.New("negative selection score")
+		}
+	}
+	if len(score.Routes) != 4 || score.Completed+score.Failed+score.Blocked > score.Records ||
+		score.MissingPACoverage > score.Records || score.UnavailablePA > score.Records {
+		return errors.New("selection score totals are inconsistent")
+	}
+	expectedRoutes := []activationpolicy.Route{activationpolicy.D0Direct, activationpolicy.D1Targeted, activationpolicy.D2Governed, activationpolicy.Blocked}
+	totalRoutes := 0
+	for i, route := range score.Routes {
+		if route.Route != expectedRoutes[i] || route.Count < 0 || route.MeanDurationSec < 0 ||
+			route.BudgetExhausted < 0 || route.BudgetExhausted > route.Count ||
+			route.HumanOverrides < 0 || route.HumanOverrides > route.Count ||
+			route.PACovered < 0 || route.PACovered > route.Count {
+			return errors.New("invalid route score")
+		}
+		expectedBasisPoints := 0
+		if score.Records > 0 {
+			expectedBasisPoints = route.Count * 10000 / score.Records
+		}
+		if route.BasisPoints != expectedBasisPoints {
+			return errors.New("route basis points are inconsistent")
+		}
+		totalRoutes += route.Count
+	}
+	if totalRoutes != score.Records {
+		return errors.New("route counts do not match selection records")
+	}
+	return nil
+}
+
+func windowsEqual(left, right []Window) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func nonnegativeFunnel(funnel ProposalFunnel) bool {
+	return funnel.Authored >= 0 && funnel.Accepted >= 0 && funnel.Rejected >= 0 && funnel.Deferred >= 0 &&
+		funnel.Implemented >= 0 && funnel.RolledBack >= 0 &&
+		funnel.Accepted+funnel.Rejected+funnel.Deferred <= funnel.Authored &&
+		funnel.Implemented+funnel.RolledBack <= funnel.Accepted
+}
+
+func nonnegativeEvaluations(summary EvaluationSummary) bool {
+	return summary.Improved >= 0 && summary.Neutral >= 0 && summary.Regressed >= 0 && summary.Insufficient >= 0
 }
 
 func (r WeeklyReport) String() string { return fmt.Sprintf("%s/%s", r.ReportKind, r.Window.ID) }

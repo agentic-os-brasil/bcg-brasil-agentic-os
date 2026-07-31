@@ -1,7 +1,6 @@
 package darwinobservability
 
 import (
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -10,40 +9,55 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
+const (
+	currentLateness = 5 * time.Minute
+	agingLateness   = time.Hour
+)
+
 // FromDarwinReceipt projects the existing local Darwin receipt into a closed
 // health record. Action details and any runtime-specific content are omitted.
-func FromDarwinReceipt(receipt darwin.Receipt) (Record, error) {
-	if receipt.AgentID != darwin.AgentID || receipt.WindowID == "" || receipt.RecordedAt.IsZero() {
+// scheduledAt is explicit because a Darwin receipt does not carry its cadence
+// occurrence; inventing it from RecordedAt would make freshness meaningless.
+func FromDarwinReceipt(receipt darwin.Receipt, scheduledAt time.Time, scopeSHA256 string) (Record, error) {
+	if receipt.AgentID != darwin.AgentID || receipt.WindowID == "" || receipt.RecordedAt.IsZero() ||
+		scheduledAt.IsZero() || !digestPattern.MatchString(scopeSHA256) {
 		return Record{}, errors.New("invalid Darwin receipt for observability")
 	}
-	freshness, recovery, outcome := FreshnessCurrent, RecoveryNotNeeded, OutcomeSucceeded
+	outcome := OutcomeSucceeded
 	switch receipt.Outcome {
-	case darwin.OutcomeSucceeded, darwin.OutcomeNoAction:
+	case darwin.OutcomeSucceeded:
+	case darwin.OutcomeNoAction:
+		outcome = OutcomeNoAction
 	case darwin.OutcomePartial:
-		freshness, recovery, outcome = FreshnessAging, RecoveryRecovered, OutcomePartial
+		outcome = OutcomePartial
 	case darwin.OutcomeFailed:
-		freshness, recovery, outcome = FreshnessStale, RecoveryFailed, OutcomeFailed
+		outcome = OutcomeFailed
 	case darwin.OutcomeBlocked:
-		freshness, recovery, outcome = FreshnessUnavailable, RecoveryBlocked, OutcomeBlocked
+		outcome = OutcomeBlocked
 	default:
 		return Record{}, errors.New("unknown Darwin receipt outcome")
 	}
+	freshness := freshnessFor(scheduledAt, receipt.RecordedAt)
+	recovery := recoveryFor(freshness, outcome)
+	windowID := OpaqueWindowID(receipt.WindowID)
 	record := Record{
 		SchemaVersion: SchemaVersion, Kind: KindHealth,
-		EvidenceID: EvidenceID(KindHealth, receipt.WindowID, mustJSON(receipt.RecordedAt.UTC())),
-		WindowID:   receipt.WindowID, RecordedAt: receipt.RecordedAt.UTC(),
+		WindowID: windowID, ScopeSHA256: scopeSHA256, Authority: AuthorityCallerAssertedShadow,
+		RecordedAt: receipt.RecordedAt.UTC(),
 		Health: &HealthEvidence{
-			JobKind: JobDarwinHousekeeping, ScheduledAt: receipt.RecordedAt.UTC(), CapturedAt: receipt.RecordedAt.UTC(),
+			JobKind: JobDarwinHousekeeping, ScheduledAt: scheduledAt.UTC(), CapturedAt: receipt.RecordedAt.UTC(),
 			Freshness: freshness, Recovery: recovery, Outcome: outcome,
 		},
 	}
+	assignEvidenceID(&record)
 	return record, record.Validate()
 }
 
 // FromSchedulerReceipt deliberately ignores WorkspaceID and Error. The
 // scheduler's local diagnostic detail never crosses this boundary.
-func FromSchedulerReceipt(receipt scheduler.Receipt, windowID string) (Record, error) {
-	if windowID == "" || receipt.JobID == "" || receipt.ScheduledFor.IsZero() || receipt.AttemptedAt.IsZero() {
+func FromSchedulerReceipt(receipt scheduler.Receipt, localWindowID, scopeSHA256 string) (Record, error) {
+	if localWindowID == "" || !digestPattern.MatchString(scopeSHA256) || receipt.JobID == "" ||
+		receipt.ScheduledFor.IsZero() || receipt.AttemptedAt.IsZero() {
 		return Record{}, errors.New("invalid scheduler receipt for observability")
 	}
 	jobKind := JobKind(receipt.JobID)
@@ -57,31 +71,34 @@ func FromSchedulerReceipt(receipt scheduler.Receipt, windowID string) (Record, e
 	default:
 		return Record{}, errors.New("scheduler job is not observable")
 	}
-	freshness, recovery, outcome := FreshnessCurrent, RecoveryNotNeeded, OutcomeSucceeded
+	outcome := OutcomeSucceeded
 	switch receipt.State {
 	case scheduler.Succeeded:
 	case scheduler.Failed:
-		freshness, recovery, outcome = FreshnessStale, RecoveryFailed, OutcomeFailed
+		outcome = OutcomeFailed
 	case scheduler.Unavailable:
-		freshness, recovery, outcome = FreshnessUnavailable, RecoveryBlocked, OutcomeUnavailable
+		outcome = OutcomeUnavailable
 	default:
 		return Record{}, errors.New("unknown scheduler receipt state")
 	}
-	value, _ := json.Marshal([]any{receipt.JobID, receipt.ScheduledFor.UTC(), receipt.AttemptedAt.UTC(), receipt.State})
+	freshness := freshnessFor(receipt.ScheduledFor, receipt.AttemptedAt)
+	recovery := recoveryFor(freshness, outcome)
+	windowID := OpaqueWindowID(localWindowID)
 	record := Record{
 		SchemaVersion: SchemaVersion, Kind: KindHealth,
-		EvidenceID: EvidenceID(KindHealth, windowID, value), WindowID: windowID,
+		WindowID: windowID, ScopeSHA256: scopeSHA256, Authority: AuthorityCallerAssertedShadow,
 		RecordedAt: receipt.AttemptedAt.UTC(),
 		Health:     &HealthEvidence{JobKind: jobKind, ScheduledAt: receipt.ScheduledFor.UTC(), CapturedAt: receipt.AttemptedAt.UTC(), Freshness: freshness, Recovery: recovery, Outcome: outcome},
 	}
+	assignEvidenceID(&record)
 	return record, record.Validate()
 }
 
 // FromActivationObservation adapts the existing closed activation monitor
 // without duplicating route, posture or policy definitions.
-func FromActivationObservation(observation activationpolicy.Observation, recordedAt time.Time, paCoverage PACoverage, paExpertCount int, gaps []CapabilityGap) (Record, error) {
-	if recordedAt.IsZero() {
-		return Record{}, errors.New("recorded time is required")
+func FromActivationObservation(observation activationpolicy.Observation, recordedAt time.Time, scopeSHA256 string, paCoverage PACoverage, paExpertCount int, gaps []CapabilityGap) (Record, error) {
+	if observation.WindowID == "" || recordedAt.IsZero() || !digestPattern.MatchString(scopeSHA256) {
+		return Record{}, errors.New("window, recorded time and opaque scope are required")
 	}
 	outcome := OutcomeFailed
 	switch observation.Outcome {
@@ -94,28 +111,29 @@ func FromActivationObservation(observation activationpolicy.Observation, recorde
 	default:
 		return Record{}, errors.New("activation outcome is not observable")
 	}
-	value, _ := json.Marshal(observation)
+	gaps = append([]CapabilityGap(nil), gaps...)
+	if observation.MissingReceipt {
+		outcome = OutcomePartial
+		if !containsGap(gaps, GapReceiptCoverage) {
+			gaps = append(gaps, GapReceiptCoverage)
+		}
+	}
 	record := Record{
 		SchemaVersion: SchemaVersion, Kind: KindSelection,
-		EvidenceID: EvidenceID(KindSelection, observation.WindowID, value), WindowID: observation.WindowID, RecordedAt: recordedAt.UTC(),
+		WindowID: OpaqueWindowID(observation.WindowID), ScopeSHA256: scopeSHA256, Authority: AuthorityCallerAssertedShadow,
+		RecordedAt: recordedAt.UTC(),
 		Selection: &SelectionEvidence{
 			PlanSHA256: observation.PlanSHA256, PolicyVersion: observation.PolicyVersion, Posture: observation.Posture, Route: observation.Route,
 			Outcome: outcome, DurationSeconds: observation.DurationSeconds, BudgetExhausted: observation.BudgetExhausted,
 			HumanOverride: observation.HumanOverride, OverrideKind: overrideFor(observation.HumanOverride),
-			PACoverage: paCoverage, PAExpertCount: paExpertCount, CapabilityGaps: append([]CapabilityGap(nil), gaps...),
+			PACoverage: paCoverage, PAExpertCount: paExpertCount, CapabilityGaps: gaps,
 		},
 	}
 	// The activation observation predates usage counters. Preserve the planned
 	// fields as zero only when the route is blocked; callers with runtime
 	// counters should use WithUsage below.
-	switch record.Selection.Route {
-	case activationpolicy.D0Direct:
-		record.Selection.MaxCalls, record.Selection.MaxTokenUnits = 1, 4000
-	case activationpolicy.D1Targeted:
-		record.Selection.MaxCalls, record.Selection.MaxTokenUnits = 3, 10000
-	case activationpolicy.D2Governed:
-		record.Selection.MaxCalls, record.Selection.MaxTokenUnits = 6, 24000
-	}
+	record.Selection.MaxCalls, record.Selection.MaxTokenUnits = routeBudget(record.Selection.Route)
+	assignEvidenceID(&record)
 	return record, record.Validate()
 }
 
@@ -123,8 +141,13 @@ func WithUsage(record Record, maxCalls, callsUsed, maxTokenUnits, tokenUnitsUsed
 	if record.Kind != KindSelection || record.Selection == nil {
 		return Record{}, errors.New("usage requires selection evidence")
 	}
+	expectedCalls, expectedTokenUnits := routeBudget(record.Selection.Route)
+	if maxCalls != expectedCalls || maxTokenUnits != expectedTokenUnits {
+		return Record{}, errors.New("usage budget must match the route policy")
+	}
 	record.Selection.MaxCalls, record.Selection.CallsUsed = maxCalls, callsUsed
 	record.Selection.MaxTokenUnits, record.Selection.TokenUnitsUsed = maxTokenUnits, tokenUnitsUsed
+	assignEvidenceID(&record)
 	return record, record.Validate()
 }
 
@@ -135,4 +158,43 @@ func overrideFor(overridden bool) OverrideKind {
 	return OverrideNone
 }
 
-func mustJSON(value any) []byte { body, _ := json.Marshal(value); return body }
+func freshnessFor(scheduledAt, capturedAt time.Time) Freshness {
+	delay := capturedAt.Sub(scheduledAt)
+	switch {
+	case delay <= currentLateness:
+		return FreshnessCurrent
+	case delay <= agingLateness:
+		return FreshnessAging
+	default:
+		return FreshnessMissed
+	}
+}
+
+func recoveryFor(freshness Freshness, outcome Outcome) Recovery {
+	switch outcome {
+	case OutcomeFailed, OutcomePartial:
+		return RecoveryFailed
+	case OutcomeBlocked, OutcomeUnavailable:
+		return RecoveryBlocked
+	case OutcomeSucceeded, OutcomeNoAction:
+		if freshness == FreshnessMissed {
+			return RecoveryRecovered
+		}
+		return RecoveryNotNeeded
+	default:
+		return RecoveryFailed
+	}
+}
+
+func containsGap(gaps []CapabilityGap, target CapabilityGap) bool {
+	for _, gap := range gaps {
+		if gap == target {
+			return true
+		}
+	}
+	return false
+}
+
+func assignEvidenceID(record *Record) {
+	record.EvidenceID = canonicalEvidenceID(*record)
+}

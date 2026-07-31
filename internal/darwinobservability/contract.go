@@ -20,7 +20,22 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/activationpolicy"
 )
 
-const SchemaVersion = 1
+const (
+	SchemaVersion   = 1
+	MaxInputRecords = 10000
+	MaxWindows      = 64
+	MaxCalls        = 6
+	MaxTokenUnits   = 24000
+)
+
+type EvidenceAuthority string
+
+const (
+	// AuthorityCallerAssertedShadow is deliberately the only authority in this
+	// slice. Native provenance must be introduced by a separate qualified
+	// adapter and schema version.
+	AuthorityCallerAssertedShadow EvidenceAuthority = "caller_asserted_shadow"
+)
 
 type Kind string
 
@@ -155,6 +170,8 @@ type Record struct {
 	Kind          Kind                 `json:"kind"`
 	EvidenceID    string               `json:"evidence_id"`
 	WindowID      string               `json:"window_id"`
+	ScopeSHA256   string               `json:"scope_sha256"`
+	Authority     EvidenceAuthority    `json:"evidence_authority"`
 	RecordedAt    time.Time            `json:"recorded_at"`
 	Health        *HealthEvidence      `json:"health,omitempty"`
 	Selection     *SelectionEvidence   `json:"selection,omitempty"`
@@ -216,6 +233,7 @@ type EvaluationEvidence struct {
 }
 
 type AlternativeEvidence struct {
+	CohortSHA256       string                   `json:"cohort_sha256"`
 	AlternativeID      AlternativeID            `json:"alternative_id"`
 	PolicyVersion      string                   `json:"policy_version"`
 	Posture            activationpolicy.Posture `json:"posture"`
@@ -229,13 +247,15 @@ type AlternativeEvidence struct {
 
 var (
 	identifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]{0,63}$`)
+	windowPattern     = regexp.MustCompile(`^win-[a-f0-9]{32}$`)
 	digestPattern     = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	policyPattern     = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 )
 
 func (record Record) Validate() error {
 	if record.SchemaVersion != SchemaVersion || !identifierPattern.MatchString(record.EvidenceID) ||
-		!identifierPattern.MatchString(record.WindowID) || record.RecordedAt.IsZero() {
+		!windowPattern.MatchString(record.WindowID) || !digestPattern.MatchString(record.ScopeSHA256) ||
+		record.Authority != AuthorityCallerAssertedShadow || record.RecordedAt.IsZero() {
 		return errors.New("invalid Darwin evidence header")
 	}
 	count := 0
@@ -260,40 +280,51 @@ func (record Record) Validate() error {
 	if count != 1 {
 		return errors.New("Darwin evidence must contain exactly one payload")
 	}
+	var err error
 	switch record.Kind {
 	case KindHealth:
 		if record.Health == nil {
 			return errors.New("health evidence payload is missing")
 		}
-		return record.Health.validate()
+		err = record.Health.validate()
+		if err == nil && !record.RecordedAt.Equal(record.Health.CapturedAt) {
+			err = errors.New("health evidence time does not match capture time")
+		}
 	case KindSelection:
 		if record.Selection == nil {
 			return errors.New("selection evidence payload is missing")
 		}
-		return record.Selection.validate()
+		err = record.Selection.validate()
 	case KindProposal:
 		if record.Proposal == nil {
 			return errors.New("proposal evidence payload is missing")
 		}
-		return record.Proposal.validate()
+		err = record.Proposal.validate()
 	case KindAcceptance:
 		if record.Acceptance == nil {
 			return errors.New("acceptance evidence payload is missing")
 		}
-		return record.Acceptance.validate()
+		err = record.Acceptance.validate()
 	case KindEvaluation:
 		if record.Evaluation == nil {
 			return errors.New("evaluation evidence payload is missing")
 		}
-		return record.Evaluation.validate()
+		err = record.Evaluation.validate()
 	case KindAlternative:
 		if record.Alternative == nil {
 			return errors.New("alternative evidence payload is missing")
 		}
-		return record.Alternative.validate()
+		err = record.Alternative.validate()
 	default:
 		return errors.New("unknown Darwin evidence kind")
 	}
+	if err != nil {
+		return err
+	}
+	if record.EvidenceID != canonicalEvidenceID(record) {
+		return errors.New("Darwin evidence ID does not bind the complete record")
+	}
+	return nil
 }
 
 func (e HealthEvidence) validate() error {
@@ -301,8 +332,27 @@ func (e HealthEvidence) validate() error {
 		!validFreshness[e.Freshness] || !validRecovery[e.Recovery] || !validOutcome[e.Outcome] {
 		return errors.New("invalid health evidence")
 	}
-	if e.Recovery == RecoveryNotNeeded && e.Freshness == FreshnessMissed {
-		return errors.New("missed health evidence requires recovery")
+	if e.Freshness == FreshnessMissed && e.Recovery == RecoveryNotNeeded {
+		return errors.New("missed health evidence requires a recovery result")
+	}
+	switch e.Recovery {
+	case RecoveryNotNeeded:
+		if e.Freshness == FreshnessMissed || e.Outcome == OutcomeFailed || e.Outcome == OutcomeBlocked ||
+			e.Outcome == OutcomeUnavailable || e.Outcome == OutcomePartial {
+			return errors.New("health evidence incorrectly marks recovery as unnecessary")
+		}
+	case RecoveryRecovered:
+		if e.Freshness != FreshnessMissed || (e.Outcome != OutcomeSucceeded && e.Outcome != OutcomeNoAction) {
+			return errors.New("recovered health evidence requires a successful missed occurrence")
+		}
+	case RecoveryFailed:
+		if e.Outcome != OutcomeFailed && e.Outcome != OutcomePartial {
+			return errors.New("failed recovery is incompatible with health outcome")
+		}
+	case RecoveryBlocked:
+		if e.Outcome != OutcomeBlocked && e.Outcome != OutcomeUnavailable {
+			return errors.New("blocked recovery is incompatible with health outcome")
+		}
 	}
 	return nil
 }
@@ -310,8 +360,9 @@ func (e HealthEvidence) validate() error {
 func (e SelectionEvidence) validate() error {
 	if !digestPattern.MatchString(e.PlanSHA256) || !policyPattern.MatchString(e.PolicyVersion) ||
 		!validPosture[e.Posture] || !validRoute[e.Route] || !validOutcome[e.Outcome] ||
-		e.DurationSeconds < 0 || e.DurationSeconds > 86400 || e.MaxCalls < 0 || e.CallsUsed < 0 || e.CallsUsed > e.MaxCalls ||
-		e.MaxTokenUnits < 0 || e.TokenUnitsUsed < 0 || e.TokenUnitsUsed > e.MaxTokenUnits || e.PAExpertCount < 0 || e.PAExpertCount > 2 ||
+		e.DurationSeconds < 0 || e.DurationSeconds > 86400 || e.MaxCalls < 0 || e.MaxCalls > MaxCalls ||
+		e.CallsUsed < 0 || e.CallsUsed > e.MaxCalls || e.MaxTokenUnits < 0 || e.MaxTokenUnits > MaxTokenUnits ||
+		e.TokenUnitsUsed < 0 || e.TokenUnitsUsed > e.MaxTokenUnits || e.PAExpertCount < 0 || e.PAExpertCount > 2 ||
 		!validOverride[e.OverrideKind] || !validCoverage[e.PACoverage] || len(e.CapabilityGaps) > 8 {
 		return errors.New("invalid selection evidence")
 	}
@@ -328,8 +379,22 @@ func (e SelectionEvidence) validate() error {
 		}
 		seen[gap] = true
 	}
-	if e.PACoverage == PACoverageNotRequired && e.PAExpertCount != 0 {
+	if (e.PACoverage == PACoverageNotRequired || e.PACoverage == PACoverageMissing || e.PACoverage == PACoverageUnavailable) &&
+		e.PAExpertCount != 0 {
 		return errors.New("PA expert count is incompatible with coverage")
+	}
+	if e.PACoverage == PACoverageCovered && e.PAExpertCount == 0 {
+		return errors.New("covered PA evidence requires an expert")
+	}
+	if e.Route == activationpolicy.D0Direct && (e.PACoverage != PACoverageNotRequired || e.PAExpertCount != 0) {
+		return errors.New("direct route cannot claim PA expert coverage")
+	}
+	if e.Route == activationpolicy.D1Targeted && e.PAExpertCount > 1 {
+		return errors.New("targeted route cannot claim more than one PA expert")
+	}
+	expectedCalls, expectedTokens := routeBudget(e.Route)
+	if e.MaxCalls != expectedCalls || e.MaxTokenUnits != expectedTokens {
+		return errors.New("selection budget does not match the route policy")
 	}
 	return nil
 }
@@ -349,8 +414,8 @@ func (e AcceptanceEvidence) validate() error {
 }
 
 func (e EvaluationEvidence) validate() error {
-	if !digestPattern.MatchString(e.ProposalSHA256) || !identifierPattern.MatchString(e.BaselineWindowID) ||
-		!identifierPattern.MatchString(e.PostChangeWindowID) || !digestPattern.MatchString(e.ChangeSHA256) ||
+	if !digestPattern.MatchString(e.ProposalSHA256) || !windowPattern.MatchString(e.BaselineWindowID) ||
+		!windowPattern.MatchString(e.PostChangeWindowID) || !digestPattern.MatchString(e.ChangeSHA256) ||
 		e.EvaluatorRole != "independent_evaluator" || e.SelfEvaluation || !validEvaluation[e.Outcome] || e.BaselineWindowID == e.PostChangeWindowID {
 		return errors.New("invalid or non-independent evaluation evidence")
 	}
@@ -358,7 +423,8 @@ func (e EvaluationEvidence) validate() error {
 }
 
 func (e AlternativeEvidence) validate() error {
-	if !validAlternative[e.AlternativeID] || !policyPattern.MatchString(e.PolicyVersion) || !validPosture[e.Posture] ||
+	if !digestPattern.MatchString(e.CohortSHA256) || !validAlternative[e.AlternativeID] ||
+		!policyPattern.MatchString(e.PolicyVersion) || !validPosture[e.Posture] ||
 		!validRoute[e.Route] || !validOutcome[e.Outcome] || e.DurationSeconds < 0 || e.DurationSeconds > 86400 ||
 		!validCoverage[e.PACoverage] || e.CapabilityGapCount < 0 || e.CapabilityGapCount > 8 {
 		return errors.New("invalid alternative evidence")
@@ -467,12 +533,57 @@ func SHA256Hex(body []byte) string {
 	return hex.EncodeToString(digest[:])
 }
 
+// OpaqueWindowID converts a local window label into the only representation
+// permitted to cross the observability boundary.
+func OpaqueWindowID(localID string) string {
+	if strings.TrimSpace(localID) == "" {
+		return ""
+	}
+	digest := SHA256Hex([]byte(localID))
+	return "win-" + digest[:32]
+}
+
+func routeBudget(route activationpolicy.Route) (int, int) {
+	switch route {
+	case activationpolicy.D0Direct:
+		return 1, 4000
+	case activationpolicy.D1Targeted:
+		return 3, 10000
+	case activationpolicy.D2Governed:
+		return 6, 24000
+	case activationpolicy.Blocked:
+		return 0, 0
+	default:
+		return -1, -1
+	}
+}
+
 func EvidenceID(kind Kind, windowID string, value []byte) string {
 	digest := SHA256Hex(append([]byte(string(kind)+"\x00"+windowID+"\x00"), value...))
 	return "ev-" + digest[:32]
 }
 
+func canonicalEvidenceID(record Record) string {
+	copy := record
+	copy.EvidenceID = ""
+	body, _ := json.Marshal(copy)
+	return EvidenceID(record.Kind, record.WindowID, body)
+}
+
+// BindEvidenceID finalizes a caller-constructed closed record and rejects it
+// unless the complete content satisfies the contract.
+func BindEvidenceID(record Record) (Record, error) {
+	record.EvidenceID = canonicalEvidenceID(record)
+	if err := record.Validate(); err != nil {
+		return Record{}, err
+	}
+	return record, nil
+}
+
 func InputDigest(records []Record) (string, error) {
+	if len(records) == 0 || len(records) > MaxInputRecords {
+		return "", errors.New("evidence input is empty or exceeds the bounded limit")
+	}
 	canonical := make([][]byte, len(records))
 	seen := map[string]bool{}
 	for i, record := range records {
