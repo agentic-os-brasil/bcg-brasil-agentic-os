@@ -112,7 +112,13 @@
         "component": {"enum": ["cli", "bundle"]},
         "from": {"$ref": "#/$defs/range"},
         "to": {"$ref": "#/$defs/version"},
-        "required": {"const": true}
+        "required": {"const": true},
+        "from_role": {"$ref": "#/$defs/identifier"},
+        "to_role": {"$ref": "#/$defs/identifier"},
+        "alias_expires_after": {"$ref": "#/$defs/version"},
+        "bundle_sha256": {"$ref": "#/$defs/sha256"},
+        "catalog_sha256": {"$ref": "#/$defs/sha256"},
+        "policy_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
     "releaseNotes": {

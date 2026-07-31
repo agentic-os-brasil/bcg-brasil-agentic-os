@@ -79,6 +79,25 @@ go run ./dev/release verify --directory dist/release-candidate
 Verification rejects missing, extra, non-regular or digest-mismatched files.
 It proves candidate closure and integrity, not authenticity.
 
+## Role migration at the 0.2.0 release boundary
+
+Release `0.2.0` opens the migration boundary from the retired `practice_agent`
+authority to canonical `pa_expert`. Its signed manifest, and later releases
+that can still receive a pre-boundary installation, must carry the required
+`practice-agent-to-pa-expert` migration with the exact
+bundle artifact digest plus the SHA-256 identities of the shipped agent
+catalog and agent-skill policy. The source range is `>=0.1.0 <0.2.0`; after
+`0.2.0`, the legacy role and IDs are rejected and are never silently renamed.
+
+The update plan preserves those catalog/policy bindings. Activation records
+them in install state, and both normal planning and direct prepared activation
+enforce the same bounded source range. A retry is idempotent and a rollback
+after the boundary fails closed if it would reactivate an unbound legacy
+authority, even when a later canonical release no longer carries the original
+migration marker.
+Once no pre-boundary installation is in scope, a post-migration release may
+omit the migration record; it still cannot reintroduce the legacy authority.
+
 ## Assemble the macOS installer candidate
 
 The visual installer is packaged separately from the CLI candidate because it

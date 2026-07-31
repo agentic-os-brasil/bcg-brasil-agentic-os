@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/rolemigration"
 )
 
 type Plan struct {
@@ -33,6 +34,9 @@ type Plan struct {
 	Provider             string `json:"provider"`
 	ProviderReleaseID    int64  `json:"provider_release_id"`
 	ManifestSHA256       string `json:"manifest_sha256"`
+	RoleMigrationID      string `json:"role_migration_id,omitempty"`
+	CatalogSHA256        string `json:"catalog_sha256,omitempty"`
+	PolicySHA256         string `json:"policy_sha256,omitempty"`
 	ConfirmationRequired bool   `json:"confirmation_required"`
 }
 
@@ -76,6 +80,10 @@ func Build(
 	if compareVersion(nextVersion, currentVersion) <= 0 {
 		return Plan{}, errors.New("standard update plan must move to a newer release")
 	}
+	roleBinding, err := rolemigration.EnsureUpdateAllowed(current.Release, manifest.Release, manifest)
+	if err != nil {
+		return Plan{}, err
+	}
 	var cliName, bundleName string
 	for _, artifact := range manifest.Artifacts {
 		switch {
@@ -104,6 +112,8 @@ func Build(
 		TargetOS: targetOS, TargetArch: targetArch,
 		Provider: source.Provider, ProviderReleaseID: source.ProviderReleaseID,
 		ManifestSHA256: source.ManifestSHA256, ConfirmationRequired: true,
+		RoleMigrationID: roleBinding.ID, CatalogSHA256: roleBinding.CatalogSHA256,
+		PolicySHA256: roleBinding.PolicySHA256,
 	}
 	identifier, err := computePlanID(plan)
 	if err != nil {
@@ -151,6 +161,22 @@ func Validate(plan Plan) error {
 	}
 	if _, err := parseVersion(plan.BundleVersion); err != nil {
 		return fmt.Errorf("invalid update-plan target bundle: %w", err)
+	}
+	if plan.RoleMigrationID != "" {
+		if plan.RoleMigrationID != rolemigration.MigrationID ||
+			len(plan.CatalogSHA256) != 64 || strings.Trim(plan.CatalogSHA256, "0123456789abcdef") != "" ||
+			len(plan.PolicySHA256) != 64 || strings.Trim(plan.PolicySHA256, "0123456789abcdef") != "" {
+			return errors.New("update plan role migration binding is invalid")
+		}
+	} else if plan.CatalogSHA256 != "" || plan.PolicySHA256 != "" {
+		return errors.New("update plan contains orphan role migration digests")
+	}
+	required, err := rolemigration.RequiresMigration(plan.FromRelease, plan.ToRelease)
+	if err != nil {
+		return err
+	}
+	if required && plan.RoleMigrationID != rolemigration.MigrationID {
+		return errors.New("update plan crosses the practice-agent alias expiry without a migration binding")
 	}
 	expected, err := computePlanID(plan)
 	if err != nil {
