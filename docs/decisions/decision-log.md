@@ -566,3 +566,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The repository may demonstrate deterministic packaging, installation simulation and local closure without claiming authenticity, publication or pilot readiness. Release operators must provision corporate authorities before signing or publishing. The production authority registry and workflow must exclude the beta issuer/key ID (or mark it revoked) and reject it for installer/update trust and all new production artifacts. Historical verification must remain an archival operation outside production trust. This keeps cost, ownership, revocation and audit boundaries explicit.
 - Refs: docs/releasing.md; docs/release-gates-checklist.md; docs/installer-package.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
 - Supersedes: none
+
+## DEVO - Persist Darwin evolution as an append-only, policy-pinned evidence plane
+
+- Date: 2026-07-30
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Darwin's Wave 1 contract can emit proposal-only structural evolution and separate health receipts, but it does not yet survive restart or prove which policy and approved PA Expert portfolio were in force for each episode.
+- Decision: Add a local, versioned Darwin evolution store with immutable evidence windows, episode bindings, proposal artifacts and caller-asserted acceptance/rejection claims. Every episode pins an opaque policy ID and version plus an approved PA Expert portfolio snapshot and digest. Replay is idempotent for the same digest and rejects conflicting duplicates; recovery ignores incomplete projections and reports native persistence as unavailable until qualified. Decision claims are atomically fenced by proposal ID, remain `caller_asserted_shadow`, and cannot authorize or apply change. Health/housekeeping receipts remain in their existing store, and no evolution path may mutate live routing, the registry, canon or policy; only the existing signed reversible-repair scope may execute repairs.
+- Consequences: Darwin gains durable auditability without a second execution ledger or a context-bearing contract store. Local files remain metadata-only, native persistence and native runtime provenance remain unavailable, and a decision claim never promotes a proposal automatically or proves Walter identity. Future authoritative approval requires a separately qualified signed envelope and consumer contract; future policy changes require a new pinned episode and explicit human authority.
+- Refs: specs/038-darwin-durable-evolution.md; internal/darwin/evolution.go; internal/darwin/evolution_store.go; schemas/darwin-evolution-*.schema.json
+- Supersedes: none
