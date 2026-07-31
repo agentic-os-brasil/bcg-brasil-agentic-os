@@ -284,6 +284,10 @@ func Execute(ctx context.Context, packet HealthPacket, assessment Assessment, gu
 	}
 	receipt := Receipt{SchemaVersion: SchemaVersion, AgentID: AgentID, DisplayName: DisplayName, Emoji: Emoji, WindowID: packet.WindowID, Mode: packet.Mode, Outcome: OutcomeNoAction, RecordedAt: now().UTC()}
 	for _, proposal := range assessment.Proposals {
+		if err := ctx.Err(); err != nil {
+			receipt.Outcome = summarize(receipt.Actions)
+			return receipt, err
+		}
 		call := callFor(packet, proposal)
 		entry := ActionReceipt{ProposalID: proposal.ID, Action: proposal.Action, Tool: call.Tool, Operation: call.Operation, Resource: call.Resource, Outcome: OutcomeBlocked, Rollback: proposal.Rollback}
 		if !proposal.Reversible {
@@ -293,6 +297,11 @@ func Execute(ctx context.Context, packet HealthPacket, assessment Assessment, gu
 		if err := guard.Authorize(call); err != nil {
 			receipt.Actions = append(receipt.Actions, entry)
 			continue
+		}
+		if err := ctx.Err(); err != nil {
+			receipt.Actions = append(receipt.Actions, entry)
+			receipt.Outcome = summarize(receipt.Actions)
+			return receipt, err
 		}
 		result, err := invoker.Invoke(ctx, call, Artifact{SchemaVersion: SchemaVersion, AgentID: AgentID, WindowID: packet.WindowID, ProposalID: proposal.ID, Finding: proposal.Finding, Action: proposal.Action})
 		if err != nil || result.Outcome != OutcomeSucceeded {

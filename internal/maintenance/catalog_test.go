@@ -20,8 +20,8 @@ func TestCatalogRequiresUniversalMaintenancePlane(t *testing.T) {
 	if err := catalog.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Jobs) != 15 {
-		t.Fatalf("job count = %d, want 15", len(catalog.Jobs))
+	if len(catalog.Jobs) != 16 {
+		t.Fatalf("job count = %d, want 16", len(catalog.Jobs))
 	}
 	for _, job := range catalog.Jobs {
 		if job.Availability != Unavailable {

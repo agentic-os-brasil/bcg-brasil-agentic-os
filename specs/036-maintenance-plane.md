@@ -23,9 +23,15 @@ status`.
 
 Lifecycle hooks only emit bounded typed wake signals. They do not acquire a
 worker lease, wait for a command, call a model or apply maintenance inline.
-Workers own the lease and explicit timeout. The monthly Darwin structural job
-can emit a reviewable proposal receipt only; approval and application are
-separate operations.
+Workers require a concrete runtime-qualified catalog/policy authority and an
+exact scheduler-emitted occurrence; the shipped `catalog_only`/`unavailable`
+catalog fails closed. Workers own the occurrence-keyed fenced lease and
+explicit timeout, and the OS guard spans both side effects and terminal
+publication. The monthly Darwin structural job can emit a reviewable proposal
+receipt only after explicit activation plus attended qualification; approval
+and application are separate operations.
+The Darwin worker deliberately has no raw occurrence execution method, so
+`scheduler.RunDue` cannot bypass command authority and fencing.
 
 The jobs are deliberately split by success boundary:
 

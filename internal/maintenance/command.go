@@ -1,6 +1,8 @@
 package maintenance
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -47,22 +49,25 @@ const (
 )
 
 type Receipt struct {
-	SchemaVersion  int          `json:"schema_version"`
-	CommandID      string       `json:"command_id"`
-	JobID          string       `json:"job_id"`
-	WorkspaceID    string       `json:"workspace_id"`
-	Trigger        Trigger      `json:"trigger"`
-	State          ReceiptState `json:"state"`
-	RecordedAt     time.Time    `json:"recorded_at"`
-	Deadline       time.Time    `json:"deadline"`
-	ProposalOnly   bool         `json:"proposal_only"`
-	ProposalCount  int          `json:"proposal_count,omitempty"`
-	ProposalDigest string       `json:"proposal_digest,omitempty"`
-	Diagnostic     string       `json:"diagnostic,omitempty"`
+	SchemaVersion    int          `json:"schema_version"`
+	AttemptID        string       `json:"attempt_id"`
+	OccurrenceDigest string       `json:"occurrence_digest"`
+	CommandID        string       `json:"command_id"`
+	JobID            string       `json:"job_id"`
+	WorkspaceID      string       `json:"workspace_id"`
+	Trigger          Trigger      `json:"trigger"`
+	State            ReceiptState `json:"state"`
+	RecordedAt       time.Time    `json:"recorded_at"`
+	Deadline         time.Time    `json:"deadline"`
+	ProposalOnly     bool         `json:"proposal_only"`
+	ProposalCount    int          `json:"proposal_count,omitempty"`
+	ProposalDigest   string       `json:"proposal_digest,omitempty"`
+	Diagnostic       string       `json:"diagnostic,omitempty"`
 }
 
 var (
 	commandIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$`)
+	attemptIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 	digestPattern    = regexp.MustCompile(`^[a-f0-9]{64}$`)
 )
 
@@ -76,7 +81,7 @@ func (command Command) Validate(now time.Time) error {
 	if now.IsZero() {
 		now = command.RequestedAt
 	}
-	if command.RequestedAt.After(now.Add(time.Second)) || command.Deadline.Before(command.RequestedAt) || command.Deadline.Sub(command.RequestedAt) > 15*time.Minute || command.Deadline.Sub(now) > 15*time.Minute || !command.Deadline.After(now) {
+	if command.RequestedAt.After(now.Add(time.Second)) || command.ScheduledFor.After(now.Add(time.Second)) || command.Deadline.Before(command.RequestedAt) || command.Deadline.Sub(command.RequestedAt) > 15*time.Minute || command.Deadline.Sub(now) > 15*time.Minute || !command.Deadline.After(now) {
 		return errors.New("maintenance command deadline is missing, expired or unbounded")
 	}
 	if (command.Trigger == TriggerEvent || command.Trigger == TriggerContinuous) && !commandIDPattern.MatchString(command.EventID) {
@@ -89,7 +94,7 @@ func (command Command) Validate(now time.Time) error {
 }
 
 func (receipt Receipt) Validate() error {
-	if receipt.SchemaVersion != CommandSchemaVersion || !commandIDPattern.MatchString(receipt.CommandID) || !commandIDPattern.MatchString(receipt.JobID) || !commandIDPattern.MatchString(receipt.WorkspaceID) || !validTrigger(receipt.Trigger) || !validReceiptState(receipt.State) || receipt.RecordedAt.IsZero() || receipt.Deadline.IsZero() {
+	if receipt.SchemaVersion != CommandSchemaVersion || !attemptIDPattern.MatchString(receipt.AttemptID) || !digestPattern.MatchString(receipt.OccurrenceDigest) || !commandIDPattern.MatchString(receipt.CommandID) || !commandIDPattern.MatchString(receipt.JobID) || !commandIDPattern.MatchString(receipt.WorkspaceID) || !validTrigger(receipt.Trigger) || !validReceiptState(receipt.State) || receipt.RecordedAt.IsZero() || receipt.Deadline.IsZero() {
 		return errors.New("maintenance receipt is invalid")
 	}
 	if len([]byte(receipt.Diagnostic)) > 256 || strings.ContainsAny(receipt.Diagnostic, "\r\n") {
@@ -110,7 +115,22 @@ func (receipt Receipt) Validate() error {
 	if receipt.State == ReceiptProposalEmitted && receipt.ProposalCount > 0 && receipt.ProposalDigest == "" {
 		return errors.New("maintenance proposal receipt requires a digest")
 	}
+	if receipt.State != ReceiptProposalEmitted && (receipt.ProposalCount != 0 || receipt.ProposalDigest != "") {
+		return errors.New("non-proposal maintenance receipt cannot carry proposal evidence")
+	}
 	return nil
+}
+
+// OccurrenceKey identifies the work occurrence rather than a caller's command
+// attempt. Retries for the same scheduled/event work therefore contend on the
+// same lease even when they use different command IDs.
+func (command Command) OccurrenceKey() string {
+	return occurrenceKey(command.JobID, command.Trigger, command.EventID, command.ScheduledFor)
+}
+
+func (command Command) OccurrenceDigest() string {
+	digest := sha256.Sum256([]byte(command.OccurrenceKey()))
+	return hex.EncodeToString(digest[:])
 }
 
 type GateDecision struct {
@@ -134,6 +154,9 @@ func Gate(catalog Catalog, command Command, now time.Time) (GateDecision, error)
 	}
 	for _, job := range jobs {
 		if job.ID == command.JobID {
+			if job.Availability != Available || !job.DefaultEnabled || job.Unattended == "never" {
+				return GateDecision{State: "unavailable", Reason: fmt.Sprintf("job %q is not qualified and enabled for worker execution", command.JobID), EventID: command.EventID}, nil
+			}
 			return GateDecision{State: "accepted", EventID: command.EventID, PlannedJobs: []string{job.ID}}, nil
 		}
 	}

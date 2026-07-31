@@ -13,9 +13,14 @@
     {"name": "monthly", "catch_up": "bounded", "worker": "lease_owned"}
   ],
   "worker_contract": {
+    "authority": "runtime_qualified_catalog_attendance_and_exact_occurrence",
     "deadline_required": true,
     "max_deadline_minutes": 15,
     "reentrancy": "busy_without_wait",
+    "busy_receipt": "ephemeral_nonterminal",
+    "lease_key": "canonical_occurrence",
+    "lease_fencing": "unique_attempt_token_and_guarded_execution_plus_finalization",
+    "occurrence_idempotency": "terminal_occurrence_digest",
     "receipts": "metadata_only",
     "structural_evolution": "proposal_only",
     "capability_promotion": "native_evidence_only"

@@ -185,6 +185,19 @@
       "success_boundary": "a signed update plan is reported; activation still requires explicit confirmation"
     },
     {
+      "id": "darwin-housekeeping",
+      "category": "runtime",
+      "trigger": "lifecycle_cadence",
+      "executor": "local_adapter",
+      "scope": "managed",
+      "availability": "unavailable",
+      "availability_reason": "Darwin lifecycle authority, bounded worker and native scheduler evidence are not installed",
+      "default_enabled": true,
+      "unattended": "policy_gated",
+      "writes": ["local_diagnostics"],
+      "success_boundary": "a fenced Darwin health attempt is durably recorded without overlapping the same occurrence"
+    },
+    {
       "id": "darwin-structural-evolution-proposal",
       "category": "runtime",
       "trigger": "monthly_or_presence",

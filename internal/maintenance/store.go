@@ -20,17 +20,17 @@ func (store Store) AppendReceipt(receipt Receipt) error {
 	if err := receipt.Validate(); err != nil {
 		return err
 	}
+	if receipt.State == ReceiptAccepted || receipt.State == ReceiptBusy {
+		return errors.New("nonterminal maintenance receipt cannot be persisted")
+	}
 	if store.Root == "" {
 		return errors.New("maintenance receipt root is required")
 	}
-	root := filepath.Join(store.Root, "workspaces", receipt.WorkspaceID, "receipts", receipt.JobID)
-	if err := os.MkdirAll(root, 0o700); err != nil {
+	root, err := ensurePrivateTree(store.Root, "workspaces", receipt.WorkspaceID, "receipts", receipt.JobID)
+	if err != nil {
 		return err
 	}
-	if err := ensurePrivateDirectory(root); err != nil {
-		return err
-	}
-	path := filepath.Join(root, receipt.CommandID+".json")
+	path := filepath.Join(root, receipt.CommandID+"--"+receipt.AttemptID+".json")
 	if err := writeReceipt(path, receipt); errors.Is(err, os.ErrExist) {
 		existing, readErr := readReceipt(path)
 		if readErr != nil {
@@ -49,7 +49,10 @@ func (store Store) Receipts(workspaceID, jobID string) ([]Receipt, error) {
 	if store.Root == "" || !commandIDPattern.MatchString(workspaceID) || !commandIDPattern.MatchString(jobID) {
 		return nil, errors.New("invalid maintenance receipt lookup")
 	}
-	root := filepath.Join(store.Root, "workspaces", workspaceID, "receipts", jobID)
+	root, err := ensurePrivateTree(store.Root, "workspaces", workspaceID, "receipts", jobID)
+	if err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(root)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -79,7 +82,7 @@ func (store Store) Receipts(workspaceID, jobID string) ([]Receipt, error) {
 			}
 			return nil, err
 		}
-		if receipt.JobID != jobID || receipt.WorkspaceID != workspaceID || receipt.CommandID+".json" != entry.Name() {
+		if receipt.JobID != jobID || receipt.WorkspaceID != workspaceID || receipt.CommandID+"--"+receipt.AttemptID+".json" != entry.Name() {
 			return nil, errors.New("maintenance receipt identity mismatch")
 		}
 		if err := receipt.Validate(); err != nil {
@@ -95,24 +98,45 @@ func writeReceipt(path string, receipt Receipt) error {
 	if err != nil {
 		return err
 	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = file.Close()
+			_ = os.Remove(path)
+		}
+	}()
 	encoder := json.NewEncoder(file)
 	if err := encoder.Encode(receipt); err != nil {
-		_ = file.Close()
 		return err
 	}
 	if err := file.Sync(); err != nil {
-		_ = file.Close()
 		return err
 	}
-	return file.Close()
+	if err := file.Close(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
 func readReceipt(path string) (Receipt, error) {
-	body, err := os.ReadFile(path)
+	before, err := os.Lstat(path)
 	if err != nil {
 		return Receipt{}, err
 	}
-	decoder := json.NewDecoder(bytes.NewReader(body))
+	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
+		return Receipt{}, errors.New("maintenance receipt must be a regular file")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return Receipt{}, err
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil || !os.SameFile(before, opened) {
+		return Receipt{}, errors.New("maintenance receipt changed during secure open")
+	}
+	decoder := json.NewDecoder(file)
 	decoder.DisallowUnknownFields()
 	var receipt Receipt
 	if err := decoder.Decode(&receipt); err != nil {
@@ -129,18 +153,4 @@ func readReceipt(path string) (Receipt, error) {
 		return Receipt{}, err
 	}
 	return receipt, nil
-}
-
-func ensurePrivateDirectory(path string) error {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return errors.New("maintenance receipt root must be a private local directory")
-	}
-	if info.Mode().Perm() != 0o700 {
-		return os.Chmod(path, 0o700)
-	}
-	return nil
 }

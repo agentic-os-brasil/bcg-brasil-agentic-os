@@ -35,6 +35,7 @@ var (
 	ErrCapabilityUnavailable = errors.New("scheduler capability unavailable")
 	jobIDPattern             = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 	workspaceIDPattern       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
+	attemptTokenPattern      = regexp.MustCompile(`^[a-f0-9]{32}$`)
 )
 
 // Job describes cadence only. Native schedulers may wake the process, but this
@@ -144,6 +145,9 @@ func occurrenceKey(jobID string, scheduledFor time.Time) string {
 func RunDue(ctx context.Context, executor Executor, occurrences []Occurrence, attemptedAt time.Time) []Receipt {
 	receipts := make([]Receipt, 0, len(occurrences))
 	for _, occurrence := range occurrences {
+		if ctx.Err() != nil {
+			break
+		}
 		receipt := Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: attemptedAt, State: Succeeded}
 		err := executor.Execute(ctx, occurrence)
 		if err != nil {
@@ -237,7 +241,11 @@ func (store Store) EnsureEnrollment(workspaceID string, enrolledAt time.Time) (E
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return Enrollment{}, err
 	}
-	path := filepath.Join(store.workspaceRoot(workspaceID), "enrollment.json")
+	workspaceRoot, err := ensurePrivateTree(store.Root, "workspaces", workspaceID)
+	if err != nil {
+		return Enrollment{}, err
+	}
+	path := filepath.Join(workspaceRoot, "enrollment.json")
 	if enrollment, err := readEnrollment(path); err == nil {
 		return enrollment, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -245,9 +253,6 @@ func (store Store) EnsureEnrollment(workspaceID string, enrolledAt time.Time) (E
 	}
 	if enrolledAt.IsZero() {
 		return Enrollment{}, errors.New("enrollment time is required")
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return Enrollment{}, err
 	}
 	enrollment := Enrollment{SchemaVersion: 1, WorkspaceID: workspaceID, EnrolledAt: enrolledAt}
 	if err := writeNewJSON(path, enrollment); err != nil {
@@ -268,8 +273,8 @@ func (store Store) AppendReceipt(workspaceID string, receipt Receipt) error {
 	}
 	receipt.SchemaVersion = 1
 	receipt.WorkspaceID = workspaceID
-	directory := filepath.Join(store.workspaceRoot(workspaceID), "receipts", receipt.JobID)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
+	directory, err := ensurePrivateTree(store.Root, "workspaces", workspaceID, "receipts", receipt.JobID)
+	if err != nil {
 		return err
 	}
 	name := receipt.AttemptedAt.UTC().Format("20060102T150405.000000000Z") + "-" + receipt.ScheduledFor.UTC().Format("20060102T150405.000000000Z") + ".json"
@@ -280,11 +285,17 @@ func (store Store) Receipts(workspaceID string) ([]Receipt, error) {
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return nil, err
 	}
-	root := filepath.Join(store.workspaceRoot(workspaceID), "receipts")
+	root, err := ensurePrivateTree(store.Root, "workspaces", workspaceID, "receipts")
+	if err != nil {
+		return nil, err
+	}
 	var receipts []Receipt
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("scheduler receipt path must not be a symlink: %s", path)
 		}
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			return nil
@@ -356,11 +367,22 @@ func readEnrollment(path string) (Enrollment, error) {
 }
 
 func readStrictJSON(path string, target any) error {
+	before, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
+		return errors.New("scheduler JSON state must be a regular file")
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil || !os.SameFile(before, opened) {
+		return errors.New("scheduler JSON state changed during secure open")
+	}
 	decoder := json.NewDecoder(file)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
@@ -381,16 +403,25 @@ func writeNewJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = file.Close()
+			_ = os.Remove(path)
+		}
+	}()
 	encoder := json.NewEncoder(file)
 	if err := encoder.Encode(value); err != nil {
-		_ = file.Close()
 		return err
 	}
 	if err := file.Sync(); err != nil {
-		_ = file.Close()
 		return err
 	}
-	return file.Close()
+	if err := file.Close(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
 // ValidateSchemaFile keeps the published scheduler-state contract wired into

@@ -24,6 +24,7 @@
     "self-observation-capture",
     "self-refinement-proposal",
     "update-check",
+    "darwin-housekeeping",
     "darwin-structural-evolution-proposal"
   ]
 }
