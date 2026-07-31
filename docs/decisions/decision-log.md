@@ -566,3 +566,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The repository may demonstrate deterministic packaging, installation simulation and local closure without claiming authenticity, publication or pilot readiness. Release operators must provision corporate authorities before signing or publishing. The production authority registry and workflow must exclude the beta issuer/key ID (or mark it revoked) and reject it for installer/update trust and all new production artifacts. Historical verification must remain an archival operation outside production trust. This keeps cost, ownership, revocation and audit boundaries explicit.
 - Refs: docs/releasing.md; docs/release-gates-checklist.md; docs/installer-package.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
 - Supersedes: none
+
+## CADN - Keep Darwin cadence bounded, proposal-only and non-blocking
+
+- Date: 2026-07-30
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Darwin must improve Maestro continuously across event, daily, weekly and monthly windows without turning lifecycle hooks into workers or allowing unattended structural changes. The existing scheduler plans occurrences and the Darwin contract can execute scoped remediation, but they do not yet define a non-blocking event gate, reentrancy boundary or explicit timeout contract.
+- Decision: Add a runtime-neutral cadence gate and worker-owned lease for Darwin maintenance. Lifecycle hooks may emit bounded typed wake signals only; they never wait for a worker, acquire a worker lock, call a model or apply maintenance inline. Every worker command carries an explicit deadline and produces a metadata-only receipt. Event, daily and weekly work remains recoverable through enrollment and bounded catch-up. Monthly structural evolution emits reviewable proposals only; approval and application are separate transactions. D0/D1/D2 remain experimental and no cadence or executor receives a silent default. Capabilities and native scheduler templates remain unavailable until qualifying runtime evidence exists.
+- Consequences: Claude, Codex, macOS and Windows share one cadence and receipt contract while retaining thin adapters. Reentrancy returns a bounded busy/unavailable result rather than blocking, stale leases are recoverable, and failed work remains due. Darwin cannot mutate code, policy or release state from a scheduled run. The implementation adds typed command/receipt schemas, lease and timeout tests, lifecycle conformance fixtures and a monthly proposal catalog entry without promoting any runtime capability.
+- Refs: DARN; SCHD; AUTO; LIFE; specs/009-scheduler-catch-up.md; specs/019-nonblocking-hook-execution.md; specs/030-claude-lifecycle-vertical.md; specs/036-maintenance-plane.md; internal/darwin; internal/scheduler
+- Supersedes: none

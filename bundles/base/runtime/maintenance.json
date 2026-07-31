@@ -183,6 +183,19 @@
       "unattended": "never",
       "writes": ["local_diagnostics"],
       "success_boundary": "a signed update plan is reported; activation still requires explicit confirmation"
+    },
+    {
+      "id": "darwin-structural-evolution-proposal",
+      "category": "runtime",
+      "trigger": "monthly_or_presence",
+      "executor": "model_adapter",
+      "scope": "managed",
+      "availability": "unavailable",
+      "availability_reason": "Darwin structural proposal adapter and human approval boundary are not installed",
+      "default_enabled": false,
+      "unattended": "never",
+      "writes": ["local_diagnostics"],
+      "success_boundary": "a bounded structural proposal is staged for human review without applying code, policy or release changes"
     }
   ]
 }

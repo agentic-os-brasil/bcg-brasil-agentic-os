@@ -19,6 +19,7 @@ type Cadence string
 const (
 	Daily    Cadence = "daily"
 	Weekly   Cadence = "weekly"
+	Monthly  Cadence = "monthly"
 	Interval Cadence = "interval"
 )
 
@@ -42,6 +43,7 @@ type Job struct {
 	ID            string
 	Cadence       Cadence
 	Weekday       time.Weekday
+	DayOfMonth    int
 	LocalHour     int
 	LocalMinute   int
 	IntervalHours int
@@ -161,7 +163,7 @@ func validateJob(job Job) error {
 	if !jobIDPattern.MatchString(job.ID) {
 		return fmt.Errorf("invalid scheduler job ID %q", job.ID)
 	}
-	if job.Cadence != Daily && job.Cadence != Weekly && job.Cadence != Interval {
+	if job.Cadence != Daily && job.Cadence != Weekly && job.Cadence != Monthly && job.Cadence != Interval {
 		return fmt.Errorf("invalid cadence for job %q", job.ID)
 	}
 	if job.Cadence == Interval {
@@ -170,6 +172,13 @@ func validateJob(job Job) error {
 		}
 	} else if job.IntervalHours != 0 {
 		return fmt.Errorf("calendar job %q cannot define an interval", job.ID)
+	}
+	if job.Cadence == Monthly {
+		if job.DayOfMonth < 1 || job.DayOfMonth > 28 {
+			return fmt.Errorf("monthly job %q requires day of month between 1 and 28", job.ID)
+		}
+	} else if job.DayOfMonth != 0 {
+		return fmt.Errorf("non-monthly job %q cannot define a day of month", job.ID)
 	}
 	if job.LocalHour < 0 || job.LocalHour > 23 || job.LocalMinute < 0 || job.LocalMinute > 59 {
 		return fmt.Errorf("invalid local schedule for job %q", job.ID)
@@ -192,12 +201,17 @@ func nextOccurrence(job Job, after time.Time) time.Time {
 	if job.Cadence == Weekly {
 		days := (int(job.Weekday) - int(candidate.Weekday()) + 7) % 7
 		candidate = candidate.AddDate(0, 0, days)
+	} else if job.Cadence == Monthly {
+		candidate = time.Date(after.Year(), after.Month(), job.DayOfMonth, job.LocalHour, job.LocalMinute, 0, 0, location)
 	}
 	if !candidate.After(after) {
 		if job.Cadence == Daily {
 			candidate = candidate.AddDate(0, 0, 1)
-		} else {
+		} else if job.Cadence == Weekly {
 			candidate = candidate.AddDate(0, 0, 7)
+		} else {
+			candidate = candidate.AddDate(0, 1, 0)
+			candidate = time.Date(candidate.Year(), candidate.Month(), job.DayOfMonth, job.LocalHour, job.LocalMinute, 0, 0, location)
 		}
 	}
 	return candidate

@@ -1,7 +1,8 @@
 # Spec 036 - Universal maintenance plane
 
-Status: catalog and safe CLI surface implemented; owning executors and native
-scheduler installation remain unavailable pending runtime evidence.
+Status: catalog, bounded command/receipt surface and safe CLI are implemented;
+owning executors and native scheduler installation remain unavailable pending
+runtime evidence.
 
 ## Intent
 
@@ -20,6 +21,12 @@ runtime adapter establish executable evidence. The catalog is embedded in the
 base bundle and exposed by `bcgos maintenance catalog` and `bcgos maintenance
 status`.
 
+Lifecycle hooks only emit bounded typed wake signals. They do not acquire a
+worker lease, wait for a command, call a model or apply maintenance inline.
+Workers own the lease and explicit timeout. The monthly Darwin structural job
+can emit a reviewable proposal receipt only; approval and application are
+separate operations.
+
 The jobs are deliberately split by success boundary:
 
 - deterministic checks may eventually run unattended once their local contract
@@ -31,7 +38,7 @@ The jobs are deliberately split by success boundary:
 
 ## Wake and catch-up
 
-`bcgos maintenance wake --trigger presence|daily|weekly|event` is a bounded,
+`bcgos maintenance wake --trigger presence|daily|weekly|monthly|event` is a bounded,
 read-only probe today. It returns `state: unavailable` and emits no scheduler
 receipt when no executor is installed. This makes native adapters safe to
 install early: a wake-up cannot masquerade as completed memory or wiki work.

@@ -21,8 +21,8 @@ const (
 var (
 	validCategories = map[string]bool{"memory": true, "wiki": true, "runtime": true, "self": true, "update": true}
 	validTriggers   = map[string]bool{
-		"presence": true, "daily": true, "weekly": true, "event": true,
-		"daily_or_presence": true, "weekly_or_presence": true,
+		"continuous": true, "presence": true, "daily": true, "weekly": true, "monthly": true, "event": true,
+		"daily_or_presence": true, "weekly_or_presence": true, "monthly_or_presence": true,
 		"bundle_update_or_presence": true,
 	}
 	validExecutors  = map[string]bool{"deterministic": true, "local_adapter": true, "model_adapter": true}
@@ -129,7 +129,7 @@ func (catalog Catalog) Validate() error {
 		"memory-l1-capture", "memory-daily", "memory-weekly", "memory-retention-check",
 		"wiki-incremental-sync", "wiki-reconcile", "wiki-integrity-check", "skills-index-refresh",
 		"runtime-health-check", "capability-recheck", "runtime-drift-check", "self-observation-capture",
-		"self-refinement-proposal", "update-check",
+		"self-refinement-proposal", "update-check", "darwin-structural-evolution-proposal",
 	} {
 		if !seen[required] {
 			return fmt.Errorf("maintenance catalog is missing required universal job %q", required)
@@ -153,10 +153,13 @@ func (catalog Catalog) ForTrigger(trigger string) ([]Job, error) {
 }
 
 func triggerMatches(jobTrigger, trigger string) bool {
+	if trigger == "continuous" {
+		return jobTrigger == "event"
+	}
 	if jobTrigger == trigger || jobTrigger == trigger+"_or_presence" {
 		return true
 	}
-	return trigger == "presence" && (jobTrigger == "daily_or_presence" || jobTrigger == "weekly_or_presence" || jobTrigger == "bundle_update_or_presence")
+	return trigger == "presence" && (jobTrigger == "daily_or_presence" || jobTrigger == "weekly_or_presence" || jobTrigger == "monthly_or_presence" || jobTrigger == "bundle_update_or_presence")
 }
 
 func containsForbiddenWrite(writes []string) bool {

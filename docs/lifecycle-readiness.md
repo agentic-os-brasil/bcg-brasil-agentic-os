@@ -54,3 +54,10 @@ writing a receipt or changing runtime configuration.
 
 Until then, readiness remains contract-validated only; neither runtime is
 pilot-ready for lifecycle activation.
+
+## Darwin cadence status
+
+Darwin's runtime-neutral worker contract now has explicit command deadlines,
+non-blocking leases, continuous/event gatekeeping and daily/weekly/monthly
+cadence fixtures. These are local contract evidence only. Claude and Codex
+remain `unavailable`; macOS and Windows scheduler templates remain disabled.

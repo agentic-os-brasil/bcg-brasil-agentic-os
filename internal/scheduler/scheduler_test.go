@@ -48,6 +48,24 @@ func TestPlanDueWaitsForWeeklyWindow(t *testing.T) {
 	}
 }
 
+func TestPlanDueSupportsExplicitMonthlyCadence(t *testing.T) {
+	location := time.FixedZone("pilot", -3*60*60)
+	enrolledAt := time.Date(2026, 7, 1, 9, 0, 0, 0, location)
+	now := time.Date(2026, 9, 2, 9, 0, 0, 0, location)
+	job := Job{ID: "darwin-monthly", Cadence: Monthly, DayOfMonth: 1, LocalHour: 8, MaxCatchUp: 3}
+	due, err := PlanDue([]Job{job}, enrolledAt, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Occurrence{
+		{JobID: "darwin-monthly", ScheduledFor: time.Date(2026, 8, 1, 8, 0, 0, 0, location)},
+		{JobID: "darwin-monthly", ScheduledFor: time.Date(2026, 9, 1, 8, 0, 0, 0, location)},
+	}
+	if !reflect.DeepEqual(due, want) {
+		t.Fatalf("monthly due = %#v, want %#v", due, want)
+	}
+}
+
 func TestSuccessfulReceiptPreventsDuplicateExecution(t *testing.T) {
 	location := time.FixedZone("pilot", -3*60*60)
 	enrolledAt := time.Date(2026, 7, 20, 9, 0, 0, 0, location)
@@ -127,5 +145,28 @@ func TestSchedulerStorePersistsEnrollmentAndReceipts(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, []Receipt{receipt}) {
 		t.Fatalf("receipts = %#v", got)
+	}
+}
+
+func TestSchedulerLeaseIsNonBlockingAndReclaimsAfterExpiry(t *testing.T) {
+	root := t.TempDir()
+	store := Store{Root: root}
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	first, err := store.TryAcquireLease("case-a", "memory-daily", "memory-daily\x002026-07-30", "worker-a", now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TryAcquireLease("case-a", "memory-daily", "memory-daily\x002026-07-30", "worker-b", now.Add(10*time.Second), time.Minute); !errors.Is(err, ErrLeaseBusy) {
+		t.Fatalf("second worker err = %v, want ErrLeaseBusy", err)
+	}
+	if err := store.ReleaseLease("case-a", "memory-daily", "memory-daily\x002026-07-30", "worker-b"); !errors.Is(err, ErrLeaseBusy) {
+		t.Fatalf("wrong owner release err = %v, want ErrLeaseBusy", err)
+	}
+	second, err := store.TryAcquireLease("case-a", "memory-daily", "memory-daily\x002026-07-30", "worker-b", first.ExpiresAt.Add(time.Second), time.Minute)
+	if err != nil || second.OwnerID != "worker-b" {
+		t.Fatalf("expired lease reclaim = %#v, err=%v", second, err)
+	}
+	if err := store.ReleaseLease("case-a", "memory-daily", "memory-daily\x002026-07-30", "worker-b"); err != nil {
+		t.Fatal(err)
 	}
 }

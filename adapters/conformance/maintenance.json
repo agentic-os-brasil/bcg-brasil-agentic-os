@@ -23,6 +23,7 @@
     "runtime-drift-check",
     "self-observation-capture",
     "self-refinement-proposal",
-    "update-check"
+    "update-check",
+    "darwin-structural-evolution-proposal"
   ]
 }

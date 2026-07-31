@@ -50,10 +50,12 @@ The first job vocabulary is:
 - `wiki-reconcile`: reconciliation of source watermarks, outbox receipts and atlas manifests.
 - `sharepoint-work-sync`: refresh of the explicitly enrolled organizational
   work-retrieval catalog through the approved Claude SharePoint adapter.
+- `darwin-structural-evolution-proposal`: monthly, proposal-only review of
+  operational structure; it never applies code, policy or release changes.
 
 Job IDs and cadence are runtime-neutral. Daily and weekly local windows, timezone behavior, retry/backoff and maximum catch-up are configuration, not hard-coded adapter behavior.
 
-`memory-weekly` succeeds only after the complete memory commit is active. Wiki work triggered by that commit follows the outbox and publication boundary in Spec 008; a scheduler receipt cannot substitute for either durable commit.
+`memory-weekly` succeeds only after the complete memory commit is active. Wiki work triggered by that commit follows the outbox and publication boundary in Spec 008; a scheduler receipt cannot substitute for either durable commit. The monthly Darwin job emits a metadata-only proposal receipt and remains unavailable until a qualified executor exists.
 
 `sharepoint-work-sync` succeeds only after Spec 037 publishes a new or
 idempotently unchanged active catalog manifest. If SharePoint collection is
@@ -65,7 +67,9 @@ Session Start may perform one bounded, read-only status check. If work is due, t
 
 No lifecycle event may wait for a scheduler or worker lock. The eventual worker
 owns serialized execution; hooks read a last committed snapshot or emit a
-best-effort idempotent signal as defined in Spec 019.
+best-effort idempotent signal as defined in Spec 019. Signals carry a bounded
+typed command with an explicit deadline; a busy lease returns immediately and
+does not become an inline retry loop.
 
 If no approved model or eligibility adapter is available, the executor records `unavailable`; it never substitutes a provider or marks the occurrence successful. Deterministic jobs may run unattended only when their own policy permits it.
 
@@ -103,6 +107,9 @@ It deliberately does not install OS tasks, choose schedules, invoke memory dream
 - failed and unavailable attempts remain recoverable;
 - catch-up remains bounded and chronological;
 - invalid IDs, cadence and state fail closed;
+- event/continuous signals require an event identifier and bounded deadline;
+- monthly structural evolution remains proposal-only and unavailable without
+  native evidence;
 - workspace state remains isolated and contains metadata only;
 - Windows and macOS adapters pass the same conformance fixtures before pilot use.
 
