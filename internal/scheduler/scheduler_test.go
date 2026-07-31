@@ -3,7 +3,10 @@ package scheduler
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -45,6 +48,24 @@ func TestPlanDueWaitsForWeeklyWindow(t *testing.T) {
 	after := before.Add(time.Minute)
 	if due, err := PlanDue([]Job{job}, enrolledAt, nil, after); err != nil || len(due) != 1 || !due[0].ScheduledFor.Equal(after) {
 		t.Fatalf("after weekly window due = %#v, err = %v", due, err)
+	}
+}
+
+func TestPlanDueSupportsExplicitMonthlyCadence(t *testing.T) {
+	location := time.FixedZone("pilot", -3*60*60)
+	enrolledAt := time.Date(2026, 7, 1, 9, 0, 0, 0, location)
+	now := time.Date(2026, 9, 2, 9, 0, 0, 0, location)
+	job := Job{ID: "darwin-monthly", Cadence: Monthly, DayOfMonth: 1, LocalHour: 8, MaxCatchUp: 3}
+	due, err := PlanDue([]Job{job}, enrolledAt, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Occurrence{
+		{JobID: "darwin-monthly", ScheduledFor: time.Date(2026, 8, 1, 8, 0, 0, 0, location)},
+		{JobID: "darwin-monthly", ScheduledFor: time.Date(2026, 9, 1, 8, 0, 0, 0, location)},
+	}
+	if !reflect.DeepEqual(due, want) {
+		t.Fatalf("monthly due = %#v, want %#v", due, want)
 	}
 }
 
@@ -106,6 +127,25 @@ func TestRunDueLeavesFailedOccurrenceRecoverable(t *testing.T) {
 	}
 }
 
+func TestRunDueStopsWhenBoundedContextIsCancelled(t *testing.T) {
+	now := time.Date(2026, 7, 20, 18, 0, 0, 0, time.UTC)
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	executor := ExecutorFunc(func(context.Context, Occurrence) error {
+		calls++
+		cancel()
+		return nil
+	})
+	occurrences := []Occurrence{
+		{JobID: "memory-daily", ScheduledFor: now},
+		{JobID: "memory-daily", ScheduledFor: now.Add(24 * time.Hour)},
+	}
+	receipts := RunDue(ctx, executor, occurrences, now)
+	if calls != 1 || len(receipts) != 1 {
+		t.Fatalf("cancelled catch-up calls=%d receipts=%#v", calls, receipts)
+	}
+}
+
 func TestSchedulerStorePersistsEnrollmentAndReceipts(t *testing.T) {
 	root := t.TempDir()
 	store := Store{Root: root}
@@ -127,5 +167,96 @@ func TestSchedulerStorePersistsEnrollmentAndReceipts(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, []Receipt{receipt}) {
 		t.Fatalf("receipts = %#v", got)
+	}
+}
+
+func TestSchedulerLeaseIsNonBlockingAndReclaimsAfterExpiry(t *testing.T) {
+	root := t.TempDir()
+	store := Store{Root: root}
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	first, err := store.TryAcquireLease("case-a", "memory-daily", "memory-daily\x002026-07-30", "worker-a", now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TryAcquireLease("case-a", "memory-daily", "memory-daily\x002026-07-30", "worker-b", now.Add(10*time.Second), time.Minute); !errors.Is(err, ErrLeaseBusy) {
+		t.Fatalf("second worker err = %v, want ErrLeaseBusy", err)
+	}
+	wrongOwner := first
+	wrongOwner.OwnerID = "worker-b"
+	if err := store.ReleaseLease(wrongOwner); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("wrong owner release err = %v, want ErrLeaseLost", err)
+	}
+	second, err := store.TryAcquireLease("case-a", "memory-daily", "memory-daily\x002026-07-30", "worker-b", first.ExpiresAt.Add(time.Second), time.Minute)
+	if err != nil || second.OwnerID != "worker-b" {
+		t.Fatalf("expired lease reclaim = %#v, err=%v", second, err)
+	}
+	if err := store.ReleaseLease(first); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("stale worker release err=%v, want ErrLeaseLost", err)
+	}
+	if _, err := store.TryAcquireLease("case-a", "memory-daily", "memory-daily\x002026-07-30", "worker-c", second.AcquiredAt.Add(time.Second), time.Minute); !errors.Is(err, ErrLeaseBusy) {
+		t.Fatalf("stale release removed successor: %v", err)
+	}
+	if err := store.ReleaseLease(second); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLeaseNamesDoNotAliasSanitizedOccurrenceKeys(t *testing.T) {
+	if safeLeaseName("event/a") == safeLeaseName("event?a") {
+		t.Fatal("distinct occurrence keys produced the same lease name")
+	}
+}
+
+func TestLeaseRejectsPersistedIdentityAndTTLTampering(t *testing.T) {
+	root := t.TempDir()
+	store := Store{Root: root}
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	directory, err := ensurePrivateTree(root, "workspaces", "case-a", "leases", "memory-daily")
+	if err != nil {
+		t.Fatal(err)
+	}
+	occurrenceKey := "memory-daily\x002026-07-30"
+	path := filepath.Join(directory, safeLeaseName(occurrenceKey)+".json")
+	tampered := Lease{
+		SchemaVersion: 1, WorkspaceID: "case-a", JobID: "memory-daily",
+		OccurrenceKey: "different-occurrence", OwnerID: "worker-a",
+		FenceToken: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", AcquiredAt: now, ExpiresAt: now.Add(time.Minute),
+	}
+	if err := writeNewJSON(path, tampered); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TryAcquireLease("case-a", "memory-daily", occurrenceKey, "worker-b", now, time.Minute); err == nil || errors.Is(err, ErrLeaseBusy) {
+		t.Fatalf("tampered identity was not rejected: %v", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	tampered.OccurrenceKey = occurrenceKey
+	tampered.ExpiresAt = now.Add(16 * time.Minute)
+	if err := writeNewJSON(path, tampered); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TryAcquireLease("case-a", "memory-daily", occurrenceKey, "worker-b", now, time.Minute); err == nil || errors.Is(err, ErrLeaseBusy) {
+		t.Fatalf("unbounded persisted lease was not rejected: %v", err)
+	}
+}
+
+func TestSchedulerStoreRejectsSymlinkedWorkspaceAncestor(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink setup is host-dependent on Windows")
+	}
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, "workspaces")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	store := Store{Root: root}
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	if _, err := store.TryAcquireLease("case-a", "memory-daily", "occurrence", "worker", now, time.Minute); err == nil {
+		t.Fatal("scheduler followed a symlinked workspace ancestor")
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("scheduler wrote outside its root: entries=%#v err=%v", entries, err)
 	}
 }

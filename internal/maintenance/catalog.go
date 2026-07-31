@@ -13,17 +13,19 @@ import (
 )
 
 const (
-	SchemaVersion = 1
-	CatalogOnly   = "catalog_only"
-	Unavailable   = "unavailable"
+	SchemaVersion    = 1
+	CatalogOnly      = "catalog_only"
+	RuntimeQualified = "runtime_qualified"
+	Available        = "available"
+	Unavailable      = "unavailable"
 )
 
 var (
 	validCategories = map[string]bool{"memory": true, "wiki": true, "runtime": true, "self": true, "update": true}
 	validTriggers   = map[string]bool{
-		"presence": true, "daily": true, "weekly": true, "event": true,
-		"daily_or_presence": true, "weekly_or_presence": true,
-		"bundle_update_or_presence": true,
+		"continuous": true, "presence": true, "daily": true, "weekly": true, "monthly": true, "event": true,
+		"daily_or_presence": true, "weekly_or_presence": true, "monthly_or_presence": true,
+		"bundle_update_or_presence": true, "lifecycle_cadence": true,
 	}
 	validExecutors  = map[string]bool{"deterministic": true, "local_adapter": true, "model_adapter": true}
 	validScopes     = map[string]bool{"owner": true, "workspace": true, "managed": true}
@@ -41,17 +43,18 @@ type Catalog struct {
 }
 
 type Job struct {
-	ID                 string   `json:"id"`
-	Category           string   `json:"category"`
-	Trigger            string   `json:"trigger"`
-	Executor           string   `json:"executor"`
-	Scope              string   `json:"scope"`
-	Availability       string   `json:"availability"`
-	AvailabilityReason string   `json:"availability_reason"`
-	DefaultEnabled     bool     `json:"default_enabled"`
-	Unattended         string   `json:"unattended"`
-	Writes             []string `json:"writes"`
-	SuccessBoundary    string   `json:"success_boundary"`
+	ID                  string   `json:"id"`
+	Category            string   `json:"category"`
+	Trigger             string   `json:"trigger"`
+	Executor            string   `json:"executor"`
+	Scope               string   `json:"scope"`
+	Availability        string   `json:"availability"`
+	AvailabilityReason  string   `json:"availability_reason"`
+	DefaultEnabled      bool     `json:"default_enabled"`
+	Unattended          string   `json:"unattended"`
+	Writes              []string `json:"writes"`
+	SuccessBoundary     string   `json:"success_boundary"`
+	QualificationDigest string   `json:"qualification_digest,omitempty"`
 }
 
 func Parse(reader io.Reader) (Catalog, error) {
@@ -81,8 +84,8 @@ func LoadFile(path string) (Catalog, error) {
 }
 
 func (catalog Catalog) Validate() error {
-	if catalog.SchemaVersion != SchemaVersion || catalog.CatalogState != CatalogOnly {
-		return errors.New("maintenance catalog must remain schema version 1 and catalog_only")
+	if catalog.SchemaVersion != SchemaVersion || (catalog.CatalogState != CatalogOnly && catalog.CatalogState != RuntimeQualified) {
+		return errors.New("maintenance catalog has an invalid schema version or state")
 	}
 	if len(catalog.Jobs) == 0 {
 		return errors.New("maintenance catalog must contain jobs")
@@ -96,8 +99,23 @@ func (catalog Catalog) Validate() error {
 		if !validCategories[job.Category] || !validTriggers[job.Trigger] || !validExecutors[job.Executor] || !validScopes[job.Scope] {
 			return fmt.Errorf("maintenance job %q has an invalid category, trigger, executor or scope", job.ID)
 		}
-		if job.Availability != Unavailable || job.AvailabilityReason == "" || job.SuccessBoundary == "" {
-			return fmt.Errorf("maintenance job %q must remain explicitly unavailable with a reason and success boundary", job.ID)
+		if job.SuccessBoundary == "" {
+			return fmt.Errorf("maintenance job %q requires a success boundary", job.ID)
+		}
+		switch job.Availability {
+		case Unavailable:
+			if job.AvailabilityReason == "" || job.QualificationDigest != "" {
+				return fmt.Errorf("unavailable maintenance job %q requires a reason and no qualification", job.ID)
+			}
+		case Available:
+			if catalog.CatalogState != RuntimeQualified || job.AvailabilityReason != "" || !digestPattern.MatchString(job.QualificationDigest) {
+				return fmt.Errorf("available maintenance job %q requires runtime-qualified evidence", job.ID)
+			}
+		default:
+			return fmt.Errorf("maintenance job %q has invalid availability", job.ID)
+		}
+		if catalog.CatalogState == CatalogOnly && job.Availability != Unavailable {
+			return fmt.Errorf("catalog-only maintenance job %q cannot be available", job.ID)
 		}
 		if !validUnattended[job.Unattended] {
 			return fmt.Errorf("maintenance job %q has invalid unattended policy", job.ID)
@@ -129,7 +147,8 @@ func (catalog Catalog) Validate() error {
 		"memory-l1-capture", "memory-daily", "memory-weekly", "memory-retention-check",
 		"wiki-incremental-sync", "wiki-reconcile", "wiki-integrity-check", "skills-index-refresh",
 		"runtime-health-check", "capability-recheck", "runtime-drift-check", "self-observation-capture",
-		"self-refinement-proposal", "update-check",
+		"self-refinement-proposal", "update-check", "darwin-structural-evolution-proposal",
+		"darwin-housekeeping",
 	} {
 		if !seen[required] {
 			return fmt.Errorf("maintenance catalog is missing required universal job %q", required)
@@ -153,10 +172,16 @@ func (catalog Catalog) ForTrigger(trigger string) ([]Job, error) {
 }
 
 func triggerMatches(jobTrigger, trigger string) bool {
+	if jobTrigger == "lifecycle_cadence" {
+		return trigger == "continuous" || trigger == "event" || trigger == "daily" || trigger == "weekly" || trigger == "presence"
+	}
+	if trigger == "continuous" {
+		return jobTrigger == "event"
+	}
 	if jobTrigger == trigger || jobTrigger == trigger+"_or_presence" {
 		return true
 	}
-	return trigger == "presence" && (jobTrigger == "daily_or_presence" || jobTrigger == "weekly_or_presence" || jobTrigger == "bundle_update_or_presence")
+	return trigger == "presence" && (jobTrigger == "daily_or_presence" || jobTrigger == "weekly_or_presence" || jobTrigger == "monthly_or_presence" || jobTrigger == "bundle_update_or_presence")
 }
 
 func containsForbiddenWrite(writes []string) bool {
