@@ -406,8 +406,8 @@ func TestPilotRejectsForgedReplayedCrossRuntimeAndCrossScopeReturns(t *testing.T
 			name: "authorized different target",
 			mutate: func(t *testing.T, _ Dispatch, envelope *ExecutionEnvelope) {
 				t.Helper()
-				envelope.TargetAgentID = "practice-insurance"
-				resignEnvelopeForTest(t, envelope, "practice-insurance-cap")
+				envelope.TargetAgentID = "errand-helper"
+				resignEnvelopeForTest(t, envelope, "errand-helper-cap")
 			},
 		},
 		{
@@ -833,7 +833,6 @@ func newTestDispatcherForRuntime(t *testing.T, runtimeName string) *Dispatcher {
 			{Tool: errandTool, Operation: string(ErrandCreateEphemeralNote), ResourcePrefix: "bcgos://errand/pilot/"},
 			{Tool: errandTool, Operation: string(ErrandDeleteEphemeralNote), ResourcePrefix: "bcgos://errand/pilot/"},
 		}},
-		{AgentID: "practice-insurance", Role: "practice_agent", Scope: "insurance", ScopeKind: "practice", Capability: "practice-insurance-cap"},
 	}
 	adapter, err := agentorchestration.NewAdapter(runtimeName, catalog, grants, store)
 	if err != nil {
@@ -841,7 +840,7 @@ func newTestDispatcherForRuntime(t *testing.T, runtimeName string) *Dispatcher {
 	}
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
 		"maestro": "maestro-cap", "walter": "walter-cap", "workspace-agent-alpha": "workspace-alpha-cap",
-		"errand-helper": "errand-helper-cap", "practice-insurance": "practice-insurance-cap",
+		"errand-helper": "errand-helper-cap",
 	})
 	if err != nil {
 		t.Fatal(err)

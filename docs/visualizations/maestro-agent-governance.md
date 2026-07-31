@@ -27,15 +27,15 @@ flowchart TB
         Workspace["Workspace or account agent"] --> Capability["Capability specialist"]
     end
 
-    subgraph PracticeChain["Practice chain"]
-        Practice["Practice agent"] --> Subject["Subject specialist"]
+    subgraph PracticeChain["PA Expert advisory"]
+        PAExpert["PA Expert<br/>FPA or IPA · versioned leaf"]
     end
 
     Maestro --> Walter
     Maestro --> Darwin
     Maestro --> Errand
     Maestro --> Workspace
-    Maestro --> Practice
+    Maestro --> PAExpert
 ```
 
 The graph is a registration policy, not permission to run all branches. The
@@ -84,12 +84,12 @@ sequenceDiagram
     Maestro-->>User: final synthesis
 ```
 
-## How workspace and practice knowledge stay separate
+## How workspace and PA Expert knowledge stay separate
 
-Workspace agents can receive authorized workspace context. Practice agents own
-a professional subject canon and cannot read raw workspace context. If both
-chains contribute, Maestro mediates a minimum sanitized packet between their
-results; the agents never browse or message each other.
+Workspace agents can receive authorized workspace context. PA Experts use a
+versioned FPA/IPA canon and cannot read raw workspace context. If both chains
+contribute, Maestro mediates a minimum sanitized packet; the agents never
+browse or message each other.
 
 ```mermaid
 flowchart LR
@@ -101,12 +101,12 @@ flowchart LR
     Scoped --> Maestro["Maestro mediation"]
     Maestro --> Sanitized["Minimum sanitized packet"]
 
-    subgraph Managed["Managed practice boundary"]
-        Sanitized --> Practice["Practice agent"]
-        Canon["Bounded professional canon"] --> Practice
+    subgraph Managed["Managed PA Expert boundary"]
+        Sanitized --> PAExpert["PA Expert"]
+        Canon["Versioned FPA/IPA canon"] --> PAExpert
     end
 
-    Raw -.->|default deny| Practice
+    Raw -.->|default deny| PAExpert
 ```
 
 ## What is live and what remains gated

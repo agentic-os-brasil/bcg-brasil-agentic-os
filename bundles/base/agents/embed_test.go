@@ -6,7 +6,7 @@ import (
 )
 
 func TestManagedScaffoldTemplatesAreEmbeddedAndDataFree(t *testing.T) {
-	for _, role := range []string{"account_agent", "case_agent", "client_account_agent", "pa_expert", "practice_agent", "workspace_agent", "capability_specialist", "subject_specialist"} {
+	for _, role := range []string{"account_agent", "case_agent", "client_account_agent", "pa_expert", "workspace_agent", "capability_specialist"} {
 		body, err := Template(role)
 		if err != nil {
 			t.Fatalf("Template(%q): %v", role, err)
@@ -19,6 +19,11 @@ func TestManagedScaffoldTemplatesAreEmbeddedAndDataFree(t *testing.T) {
 	}
 	if _, err := Template("general_assistant"); err == nil {
 		t.Fatal("unsupported scaffold template was exposed")
+	}
+	for _, role := range []string{"practice_agent", "subject_specialist"} {
+		if _, err := Template(role); err == nil {
+			t.Fatalf("deprecated role %q was exposed as a scaffold template", role)
+		}
 	}
 }
 

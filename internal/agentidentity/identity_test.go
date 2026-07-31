@@ -59,6 +59,12 @@ func TestLegacyRolesResolveToCanonicalRoles(t *testing.T) {
 	if got := CanonicalRole("workspace_agent"); got != "case_agent" {
 		t.Fatalf("workspace alias = %q", got)
 	}
+	if IsCanonicalRole("practice_agent") || IsCanonicalRole("subject_specialist") {
+		t.Fatal("retired practice roles remain canonical identities")
+	}
+	if _, ok := Default("practice_agent"); ok {
+		t.Fatal("retired practice role still has a default identity")
+	}
 }
 
 func TestLoadRejectsTrailingJSON(t *testing.T) {

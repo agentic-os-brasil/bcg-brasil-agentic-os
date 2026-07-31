@@ -16,17 +16,19 @@
       },
       {
         "from_role": "hub",
-        "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer"]
-      },
-      {
-        "from_role": "practice_agent",
-        "to_roles": ["subject_specialist"]
+        "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"]
       }
     ]
   },
   "legacy_aliases": {
     "account_agent": {"canonical_role": "client_account_agent", "status": "compatibility_only"},
-    "workspace_agent": {"canonical_role": "case_agent", "status": "compatibility_only"}
+    "workspace_agent": {"canonical_role": "case_agent", "status": "compatibility_only"},
+    "practice_agent": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa_expert with expert_kind FPA or IPA"},
+    "subject_specialist": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa_expert with expert_kind FPA or IPA"}
+  },
+  "legacy_ids": {
+    "practice-": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa-expert-{fpa|ipa}-{scope}"},
+    "subject-": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa-expert-{fpa|ipa}-{scope}"}
   },
   "agents": [
     {

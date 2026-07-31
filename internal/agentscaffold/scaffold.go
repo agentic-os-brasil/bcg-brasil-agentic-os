@@ -114,11 +114,14 @@ func WorkspaceRequest(workspaceID string) Request {
 }
 
 func Scaffold(dataRoot string, request Request) (Status, error) {
-	if err := applyIdentity(dataRoot, &request); err != nil {
-		return Status{}, err
-	}
 	catalog, err := baseagents.Catalog()
 	if err != nil {
+		return Status{}, err
+	}
+	if err := catalog.RejectLegacyRegistration(request.AgentID, request.Role); err != nil {
+		return Status{}, err
+	}
+	if err := applyIdentity(dataRoot, &request); err != nil {
 		return Status{}, err
 	}
 	request.Role = catalog.CanonicalRole(request.Role)
@@ -405,6 +408,9 @@ func inspect(root *os.Root, agentID string, integrityKey []byte) (Status, error)
 }
 
 func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalog.RoleContract, error) {
+	if err := catalog.RejectLegacyRegistration(request.AgentID, request.Role); err != nil {
+		return agentcatalog.RoleContract{}, err
+	}
 	canonicalRole := catalog.CanonicalRole(request.Role)
 	if err := agentidentity.ValidateSelection(agentidentity.Selection{
 		Role: canonicalRole, AgentID: request.AgentID, DisplayName: request.DisplayName,
@@ -431,16 +437,6 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 		request.CanonPath != "" || request.CanonSHA256 != "" ||
 		request.ExpertKind != "" || request.ExpertVersion != "" || request.ExpertLifecycle != ""
 	switch canonicalRole {
-	case "practice_agent":
-		if request.AgentID != "practice-agent-"+request.ScopeID ||
-			request.ScopeKind != "practice" ||
-			request.ParentAgent != "maestro" || request.ParentRole != "hub" ||
-			!agentcatalog.ValidAgentID(request.Owner) ||
-			strings.TrimSpace(request.Mandate) == "" || len([]byte(strings.TrimSpace(request.Mandate))) > 500 ||
-			request.CanonPath == "" || !validSHA256(request.CanonSHA256) ||
-			!catalog.AllowsDelegation("hub", "practice_agent", 1) {
-			return agentcatalog.RoleContract{}, errors.New("practice agent scaffold requires an owner, bounded mandate, verified canon and exact Maestro-owned practice scope")
-		}
 	case "client_account_agent":
 		if request.AgentID != "client-account-agent-"+request.ScopeID && request.AgentID != "account-agent-"+request.ScopeID ||
 			request.ScopeKind != "account" ||
@@ -480,13 +476,6 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 			!catalog.AllowsDelegation(request.ParentRole, "capability_specialist", 2) {
 			return agentcatalog.RoleContract{}, errors.New("capability specialist scaffold has an invalid parent or scope")
 		}
-	case "subject_specialist":
-		if !strings.HasPrefix(request.AgentID, "subject-") ||
-			hasRootMetadata ||
-			request.ParentRole != "practice_agent" || request.ScopeKind != "practice" ||
-			!catalog.AllowsDelegation(request.ParentRole, request.Role, 2) {
-			return agentcatalog.RoleContract{}, errors.New("subject specialist scaffold has an invalid practice parent or scope")
-		}
 	default:
 		return agentcatalog.RoleContract{}, errors.New("agent role has no managed scaffold template")
 	}
@@ -511,13 +500,9 @@ func validateResolvedBindings(root *os.Root, integrityKey []byte, catalog agentc
 		}
 		return nil
 	}
-	if catalog.CanonicalRole(request.Role) == "practice_agent" ||
-		catalog.CanonicalRole(request.Role) == "client_account_agent" || catalog.CanonicalRole(request.Role) == "pa_expert" {
+	if catalog.CanonicalRole(request.Role) == "client_account_agent" || catalog.CanonicalRole(request.Role) == "pa_expert" {
 		if !managedAgentHasRole(catalog, request.ParentAgent, request.ParentRole) {
 			return errors.New("root agent parent is not the registered Maestro hub")
-		}
-		if request.Role == "practice_agent" {
-			return validatePracticeCanon(root, request.ScopeID, request.CanonPath, request.CanonSHA256)
 		}
 		if request.Role == "pa_expert" {
 			return validatePAExpertCanon(root, request.AgentID, request.CanonPath, request.CanonSHA256)
@@ -534,49 +519,10 @@ func validateResolvedBindings(root *os.Root, integrityKey []byte, catalog agentc
 		parent.Instance.ScopeID != request.ScopeID {
 		return errors.New("specialist scaffold parent does not share the declared role and immutable scope")
 	}
-	if parent.Instance.Role == "practice_agent" {
-		if err := validatePracticeCanon(root, parent.Instance.ScopeID, parent.Instance.CanonPath, parent.Instance.CanonSHA256); err != nil {
-			return err
-		}
-	}
 	if request.ScopeKind == "workspace" {
 		if err := validateWorkspaceScope(root, request.ScopeID); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func validatePracticeCanon(root *os.Root, practiceID, canonPath, expectedSHA256 string) error {
-	cleaned := filepath.Clean(canonPath)
-	slashed := filepath.ToSlash(cleaned)
-	prefix := "practices/" + practiceID + "/"
-	if filepath.IsAbs(cleaned) || slashed == "." || !strings.HasPrefix(slashed, prefix) ||
-		len(slashed) <= len(prefix) || !validSHA256(expectedSHA256) {
-		return errors.New("practice canon must be a specific artifact inside the registered practice scope")
-	}
-	practiceRoot, err := root.OpenRoot(filepath.Join("practices", practiceID))
-	if err != nil {
-		return errors.New("practice canon scope is unavailable")
-	}
-	defer practiceRoot.Close()
-	relative := strings.TrimPrefix(slashed, prefix)
-	file, err := practiceRoot.Open(filepath.FromSlash(relative))
-	if err != nil {
-		return errors.New("practice canon is unavailable")
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		return errors.New("practice canon must be a regular scoped artifact")
-	}
-	digest := sha256.New()
-	if _, err := io.Copy(digest, file); err != nil {
-		return err
-	}
-	actual := hex.EncodeToString(digest.Sum(nil))
-	if !hmac.Equal([]byte(actual), []byte(strings.ToLower(expectedSHA256))) {
-		return errors.New("practice canon hash does not match the registered artifact")
 	}
 	return nil
 }

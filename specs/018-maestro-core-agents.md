@@ -18,12 +18,11 @@ flowchart TB
     User["User"] <--> Maestro["Maestro<br/>hub · no tools"]
     Maestro --> Account["Client Account Agent"]
     Maestro --> Case["Case Agent"]
-    Maestro --> Practice["Practice agent"]
+    Maestro --> PAExpert["PA Expert<br/>FPA or IPA · leaf"]
     Maestro --> Errand["Errand helper<br/>basic · reversible"]
     Maestro --> Walter["Walter<br/>reviewer · leaf"]
     Maestro --> Darwin["Darwin<br/>governance analyst · leaf"]
     Case --> CapabilityW["Capability specialist · leaf"]
-    Practice --> Subject["Subject specialist · leaf"]
 ```
 
 Maestro is the only direct user interface. Multiple governed chain types may be
@@ -90,6 +89,10 @@ owner, a concrete fix and an exit condition.
 - has scoped tools, no delegation and no direct user channel;
 - interactive and `headless_housekeeping` are modes of the same Darwin
   identity, executor and metadata-only receipt contract;
+- owns the `survive and thrive` meta-harness mandate, including bounded
+  housekeeping/recovery and versioned weekly/monthly evolution proposals;
+- structural proposals are proposal-only and cannot self-approve, self-evaluate
+  or change live routing before an independent approval and activation seam;
 - returns proposals to Maestro; material proposals pass through Walter.
 
 ## Governed chain roles
@@ -97,11 +100,10 @@ owner, a concrete fix and an exit condition.
 - A `case_agent` may delegate to one `capability_specialist` at depth two.
 - A `client_account_agent` owns the partner-like account context and does not
   directly delegate children; Maestro mediates Case activation.
-- A `practice_agent` may delegate to one `subject_specialist` at depth two.
+- A `pa_expert` is a centrally versioned FPA or IPA advisory leaf. It cannot
+  delegate and never inherits client scope.
 - Walter (`reviewer`), Darwin (`governance_analyst`), `errand_helper`,
-  `capability_specialist` and `subject_specialist` are leaves.
-- A practice agent owns a persistent professional subject canon. It cannot read
-  raw workspace context or use workspace authorization.
+  `capability_specialist` and `pa_expert` are leaves.
 - Cross-chain exchange returns to Maestro as a minimum sanitized packet. Agents
   do not browse or message another chain directly.
 
@@ -111,8 +113,7 @@ sequenceDiagram
     participant Maestro
     participant Case as Case Agent
     participant Capability as Capability specialist
-    participant Practice as Practice agent
-    participant Subject as Subject specialist
+    participant PAExpert as PA Expert
     participant Walter
 
     User->>Maestro: professional request
@@ -120,19 +121,18 @@ sequenceDiagram
     Case->>Capability: one bounded child task
     Capability-->>Case: specialist result
     Case-->>Maestro: scoped result
-    Note over Maestro,Practice: first branch is closed before another opens
-    Maestro->>Practice: sanitized subject packet
-    Practice->>Subject: one bounded child task
-    Subject-->>Practice: subject result
-    Practice-->>Maestro: bounded recommendation
+    Note over Maestro,PAExpert: first branch is closed before another opens
+    Maestro->>PAExpert: sanitized FPA/IPA advisory packet
+    PAExpert-->>Maestro: bounded advisory receipt
     Maestro->>Walter: sealed ReviewPacket after producer closes
     Walter-->>Maestro: typed verdict and concrete fixes
     Maestro-->>User: accountable synthesis
 ```
 
-Practice agents are governed extensions, not empty generic personas. A concrete
-practice agent is registered only when it has an accountable owner, bounded
-canon and named professional mandate.
+PA Experts are governed extensions, not empty generic personas. A concrete
+PA Expert is registered only with an explicit FPA/IPA kind, versioned canon,
+registry authority and named professional mandate. Legacy practice roles and
+IDs are rejected rather than reinterpreted.
 
 ## Canonical catalog
 
@@ -149,12 +149,11 @@ contract so a new registration cannot silently broaden context:
 | `hub` | `session_context_packet` | none | yes |
 | `client_account_agent` | `bounded_client_account_packet` | scoped | no |
 | `case_agent` | `bounded_case_packet` | scoped | yes |
-| `practice_agent` | `bounded_practice_packet` | scoped | yes |
+| `pa_expert` | `bounded_advisory_packet` | none | no |
 | `reviewer` | `sealed_review_packet` | none | no |
 | `governance_analyst` | `bounded_health_packet` | scoped (`health/maestro-system`) | no |
 | `errand_helper` | `bounded_errand_packet` | scoped | no |
 | `capability_specialist` | `minimum_work_packet` | scoped | no |
-| `subject_specialist` | `bounded_subject_packet` | scoped | no |
 
 Agent IDs are path-safe lowercase slugs. Definitions must resolve below the
 managed `bundles/base/agents/` root.
@@ -182,8 +181,8 @@ fixtures prove:
 3. each agent can have at most one active child;
 4. delegation cannot exceed depth two or leave the allowed role graph;
 5. Walter, Darwin, errands and leaf specialists cannot delegate;
-6. workspace scopes remain default-deny and practice agents cannot read raw
-   workspace context;
+6. workspace scopes remain default-deny and PA Experts cannot read raw client
+   or workspace context;
 7. authenticated agent IDs, scope and resource grants cannot be forged;
 8. one shared state snapshot survives adapter replacement and has bounded,
    capability-gated stale recovery; and
@@ -236,8 +235,8 @@ stateDiagram-v2
 1. The canonical catalog identifies Maestro as the sole direct hub.
 2. The catalog rejects tool access for Maestro and Walter, and rejects any
    Darwin grant outside the bounded `health/maestro-system` scope.
-3. The catalog permits workspace-to-capability and practice-to-subject chains
-   at depth two.
+3. The catalog permits only the registered workspace-to-capability chain at
+   depth two; PA Experts are direct Maestro leaves.
 4. The catalog rejects parallel branches, multiple children, unauthorized role
    edges, depth above two or more than one errand helper.
 5. Walter points to a managed packet-only definition; Darwin points to a

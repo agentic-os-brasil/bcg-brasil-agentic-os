@@ -55,7 +55,7 @@ func Template(role string) ([]byte, error) {
 		role = "case_agent"
 	}
 	switch role {
-	case "case_agent", "client_account_agent", "pa_expert", "practice_agent", "capability_specialist", "subject_specialist":
+	case "case_agent", "client_account_agent", "pa_expert", "capability_specialist":
 	default:
 		return nil, fmt.Errorf("no managed scaffold template for role %q", role)
 	}

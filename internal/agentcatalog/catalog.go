@@ -13,11 +13,12 @@ import (
 )
 
 type Catalog struct {
-	SchemaVersion int                        `json:"schema_version"`
-	Hub           string                     `json:"hub"`
-	Delegation    DelegationPolicy           `json:"delegation"`
-	LegacyAliases map[string]LegacyRoleAlias `json:"legacy_aliases"`
-	Agents        []Agent                    `json:"agents"`
+	SchemaVersion int                          `json:"schema_version"`
+	Hub           string                       `json:"hub"`
+	Delegation    DelegationPolicy             `json:"delegation"`
+	LegacyAliases map[string]LegacyRoleAlias   `json:"legacy_aliases"`
+	LegacyIDs     map[string]LegacyIDMigration `json:"legacy_ids"`
+	Agents        []Agent                      `json:"agents"`
 }
 
 // LegacyRoleAlias keeps existing local registrations readable while ensuring
@@ -25,6 +26,15 @@ type Catalog struct {
 type LegacyRoleAlias struct {
 	CanonicalRole string `json:"canonical_role"`
 	Status        string `json:"status"`
+	Migration     string `json:"migration,omitempty"`
+}
+
+// LegacyIDMigration documents prefixes retained only to reject old
+// registrations deterministically. They never become a second identity.
+type LegacyIDMigration struct {
+	CanonicalRole string `json:"canonical_role"`
+	Status        string `json:"status"`
+	Migration     string `json:"migration"`
 }
 
 type DelegationPolicy struct {
@@ -76,10 +86,8 @@ var roleContracts = map[string]struct {
 	"errand_helper":         {false, "scoped", false, "bounded_errand_packet"},
 	"governance_analyst":    {false, "scoped", false, "bounded_health_packet"},
 	"hub":                   {true, "none", true, "session_context_packet"},
-	"practice_agent":        {false, "scoped", true, "bounded_practice_packet"},
 	"pa_expert":             {false, "none", false, "bounded_advisory_packet"},
 	"reviewer":              {false, "none", false, "sealed_review_packet"},
-	"subject_specialist":    {false, "scoped", false, "bounded_subject_packet"},
 	"workspace_agent":       {false, "scoped", true, "bounded_workspace_packet"}, // compatibility only
 }
 
@@ -115,9 +123,26 @@ func (catalog Catalog) ContractForRole(role string) (RoleContract, bool) {
 // still produce a precise validation error.
 func (catalog Catalog) CanonicalRole(role string) string {
 	if alias, ok := catalog.LegacyAliases[role]; ok {
-		return alias.CanonicalRole
+		if alias.Status == "compatibility_only" {
+			return alias.CanonicalRole
+		}
 	}
 	return role
+}
+
+// RejectLegacyRegistration is the single migration boundary for retired
+// roles and IDs. Compatibility aliases remain readable; deprecated practice
+// identities fail closed and require an explicit PA Expert kind.
+func (catalog Catalog) RejectLegacyRegistration(agentID, role string) error {
+	if alias, ok := catalog.LegacyAliases[role]; ok && strings.HasPrefix(alias.Status, "deprecated") {
+		return fmt.Errorf("legacy role %q is deprecated; %s", role, alias.Migration)
+	}
+	for prefix, migration := range catalog.LegacyIDs {
+		if strings.HasPrefix(agentID, prefix) && strings.HasPrefix(migration.Status, "deprecated") {
+			return fmt.Errorf("legacy agent ID %q is deprecated; %s", agentID, migration.Migration)
+		}
+	}
+	return nil
 }
 
 func Parse(reader io.Reader) (Catalog, error) {
@@ -157,6 +182,9 @@ func (catalog Catalog) Validate() error {
 		return fmt.Errorf("agent catalog hub must be maestro, got %q", catalog.Hub)
 	}
 	if err := validateLegacyAliases(catalog.LegacyAliases); err != nil {
+		return err
+	}
+	if err := validateLegacyIDs(catalog.LegacyIDs); err != nil {
 		return err
 	}
 	if catalog.Delegation.Mode != "role_gated_chains" || catalog.Delegation.RegisteredChains != "governed_unbounded" || catalog.Delegation.MaxActiveBranches != 1 || catalog.Delegation.MaxDepth != 2 || catalog.Delegation.MaxChildrenPerAgent != 1 || catalog.Delegation.MaxErrandHelpers != 1 || catalog.Delegation.ErrandScope != "basic_reversible" {
@@ -260,8 +288,7 @@ func (catalog Catalog) roleMayDelegate(role string) bool {
 func validateDelegationEdges(edges []DelegationEdge) error {
 	wanted := []DelegationEdge{
 		{FromRole: "case_agent", ToRoles: []string{"capability_specialist"}},
-		{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer"}},
-		{FromRole: "practice_agent", ToRoles: []string{"subject_specialist"}},
+		{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}},
 	}
 	if len(edges) != len(wanted) {
 		return errors.New("agent catalog has an incomplete or unauthorized delegation graph")
@@ -287,17 +314,38 @@ func validateLegacyAliases(aliases map[string]LegacyRoleAlias) error {
 		// compatibility tests focused on their stated contract.
 		return nil
 	}
-	wanted := map[string]string{
-		"account_agent":   "client_account_agent",
-		"workspace_agent": "case_agent",
+	wanted := map[string]LegacyRoleAlias{
+		"account_agent":      {CanonicalRole: "client_account_agent", Status: "compatibility_only"},
+		"workspace_agent":    {CanonicalRole: "case_agent", Status: "compatibility_only"},
+		"practice_agent":     {CanonicalRole: "pa_expert", Status: "deprecated_rejected", Migration: "re-register as pa_expert with expert_kind FPA or IPA"},
+		"subject_specialist": {CanonicalRole: "pa_expert", Status: "deprecated_rejected", Migration: "re-register as pa_expert with expert_kind FPA or IPA"},
 	}
 	if len(aliases) != len(wanted) {
 		return errors.New("agent catalog must declare the complete legacy-role migration map")
 	}
-	for legacy, canonical := range wanted {
+	for legacy, expected := range wanted {
 		alias, ok := aliases[legacy]
-		if !ok || alias.CanonicalRole != canonical || alias.Status != "compatibility_only" {
+		if !ok || alias != expected {
 			return errors.New("agent catalog legacy-role migration map is invalid")
+		}
+	}
+	return nil
+}
+
+func validateLegacyIDs(ids map[string]LegacyIDMigration) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	wanted := map[string]LegacyIDMigration{
+		"practice-": {CanonicalRole: "pa_expert", Status: "deprecated_rejected", Migration: "re-register as pa-expert-{fpa|ipa}-{scope}"},
+		"subject-":  {CanonicalRole: "pa_expert", Status: "deprecated_rejected", Migration: "re-register as pa-expert-{fpa|ipa}-{scope}"},
+	}
+	if len(ids) != len(wanted) {
+		return errors.New("agent catalog must declare the complete legacy-ID migration map")
+	}
+	for prefix, expected := range wanted {
+		if got, ok := ids[prefix]; !ok || got != expected {
+			return errors.New("agent catalog legacy-ID migration map is invalid")
 		}
 	}
 	return nil
@@ -322,7 +370,7 @@ func ValidateDir(root string) error {
 			return fmt.Errorf("managed agent %s has an empty definition", agent.ID)
 		}
 	}
-	for _, role := range []string{"capability_specialist", "case_agent", "client_account_agent", "pa_expert", "practice_agent", "subject_specialist"} {
+	for _, role := range []string{"capability_specialist", "case_agent", "client_account_agent", "pa_expert"} {
 		templatePath := filepath.Join(root, "templates", role, "AGENT.md")
 		body, err := os.ReadFile(templatePath)
 		if err != nil {
@@ -331,6 +379,13 @@ func ValidateDir(root string) error {
 		if len(body) == 0 || strings.Contains(string(body), "{{") ||
 			strings.Contains(string(body), "}}") {
 			return fmt.Errorf("managed %s scaffold template must be non-empty and data-free", role)
+		}
+	}
+	for _, role := range []string{"practice_agent", "subject_specialist"} {
+		templatePath := filepath.Join(root, "templates", role, "AGENT.md")
+		body, err := os.ReadFile(templatePath)
+		if err != nil || !strings.Contains(strings.ToLower(string(body)), "deprecated") || !strings.Contains(string(body), "pa_expert") {
+			return fmt.Errorf("legacy %s template must remain an explicit deprecation marker", role)
 		}
 	}
 	return nil

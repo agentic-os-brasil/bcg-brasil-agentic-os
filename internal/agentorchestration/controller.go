@@ -147,10 +147,8 @@ var roleScopeKinds = map[string]map[string]bool{
 	"errand_helper":         {"errand": true},
 	"governance_analyst":    {"health": true},
 	"hub":                   {"control": true},
-	"practice_agent":        {"practice": true},
 	"pa_expert":             {"practice": true},
 	"reviewer":              {"review": true},
-	"subject_specialist":    {"practice": true},
 }
 
 func NewAdapter(runtime string, catalog agentcatalog.Catalog, grants []Authorization, store *StateStore) (*Adapter, error) {
@@ -183,6 +181,9 @@ func NewAdapter(runtime string, catalog agentcatalog.Catalog, grants []Authoriza
 func validateAuthorizations(catalog agentcatalog.Catalog, grants []Authorization) (map[string]authorization, string, error) {
 	values := make(map[string]authorization, len(grants))
 	for _, grant := range grants {
+		if err := catalog.RejectLegacyRegistration(grant.AgentID, grant.Role); err != nil {
+			return nil, "", err
+		}
 		role := catalog.CanonicalRole(grant.Role)
 		grant.Role = role
 		contract, ok := catalog.ContractForRole(role)
