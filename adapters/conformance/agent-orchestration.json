@@ -72,7 +72,7 @@
       "scope": "alpha",
       "actor_id": "maestro",
       "actor_capability": "maestro-cap",
-      "target_id": "client-account-agent-alpha",
+      "target_id": "pa-expert-ipa-insurance",
       "expected_code": "edge_denied"
     },
     {

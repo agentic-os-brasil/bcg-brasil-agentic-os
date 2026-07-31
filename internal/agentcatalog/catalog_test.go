@@ -1,6 +1,9 @@
 package agentcatalog
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestCatalogAcceptsLeanMaestroCore(t *testing.T) {
 	catalog := Catalog{
@@ -67,6 +70,19 @@ func TestCatalogRejectsRetiredPracticeAuthority(t *testing.T) {
 	}
 	if catalog.AllowsDelegation("hub", "practice_agent", 1) || catalog.AllowsDelegation("practice_agent", "subject_specialist", 2) {
 		t.Fatal("deprecated practice graph remains routable")
+	}
+}
+
+func TestLegacyPracticeIdentityIsMigrationOnlyAndExpires(t *testing.T) {
+	catalog := mustTestCatalog(t)
+	if !catalog.IsLegacyOnlyRole("practice_agent") {
+		t.Fatal("practice_agent is not marked migration-only")
+	}
+	if got, err := catalog.ResolveLegacyRole("practice_agent", time.Date(2026, 12, 30, 23, 59, 0, 0, time.UTC)); err != nil || got != "pa_expert" {
+		t.Fatalf("legacy practice migration = %q, %v", got, err)
+	}
+	if _, err := catalog.ResolveLegacyRole("practice_agent", time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)); err == nil {
+		t.Fatal("expired practice identity migration remained usable")
 	}
 }
 

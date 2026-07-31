@@ -186,6 +186,9 @@ func validateAuthorizations(catalog agentcatalog.Catalog, grants []Authorization
 		}
 		role := catalog.CanonicalRole(grant.Role)
 		grant.Role = role
+		if catalog.IsLegacyOnlyRole(grant.Role) {
+			return nil, "", errors.New("legacy practice_agent identity cannot receive active runtime authorization; migrate to pa_expert")
+		}
 		contract, ok := catalog.ContractForRole(role)
 		if !agentcatalog.ValidAgentID(grant.AgentID) || !ok || grant.Capability == "" {
 			return nil, "", errors.New("agent authorization is incomplete or uses an unsupported role")

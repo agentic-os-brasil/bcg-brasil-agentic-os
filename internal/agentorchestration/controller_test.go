@@ -422,6 +422,7 @@ func testAuthorizations() []Authorization {
 		{AgentID: "capability-research", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-research-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/alpha/"}}},
 		{AgentID: "capability-research-project", Role: "capability_specialist", Scope: "client-alpha-project", ScopeKind: "workspace", Capability: "capability-research-project-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/client-alpha-project/"}}},
 		{AgentID: "capability-other", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-other-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/alpha/"}}},
+		{AgentID: "pa-expert-ipa-insurance", Role: "pa_expert", Scope: "insurance", ScopeKind: "practice", Capability: "pa-expert-ipa-insurance-cap"},
 		{AgentID: "darwin", Role: "governance_analyst", Scope: "maestro-system", ScopeKind: "health", Capability: "darwin-cap", Tools: []ToolGrant{
 			{Tool: "filesystem", Operation: "read", ResourcePrefix: "bcgos://health/maestro-system/"},
 			{Tool: "filesystem", Operation: "write", ResourcePrefix: "bcgos://health/maestro-system/"},

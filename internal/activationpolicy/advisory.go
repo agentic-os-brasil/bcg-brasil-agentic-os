@@ -19,6 +19,7 @@ type DeclassificationAttestation struct {
 	NoClientIdentifiers      bool   `json:"no_client_identifiers"`
 	NoStakeholderIdentifiers bool   `json:"no_stakeholder_identifiers"`
 	NoRawExcerpts            bool   `json:"no_raw_excerpts"`
+	NoScopedPointers         bool   `json:"no_scoped_pointers"`
 }
 
 type AdvisoryRequest struct {
@@ -40,6 +41,9 @@ type DeclassificationReceipt struct {
 	RequestSHA256 string `json:"request_sha256"`
 	PolicyVersion string `json:"policy_version"`
 	ExporterID    string `json:"exporter_id"`
+	ExpertID      string `json:"expert_id"`
+	ExpertVersion string `json:"expert_version"`
+	CanonSHA256   string `json:"canon_sha256"`
 	Outcome       string `json:"outcome"`
 	MayExport     bool   `json:"may_export"`
 }
@@ -80,7 +84,7 @@ var questionCode = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
 func Declassify(request AdvisoryRequest) (DeclassificationReceipt, error) {
 	if request.SchemaVersion != 1 || !validID(request.RequestID) ||
 		!validSHA256(request.EpisodeSHA256) || !validSHA256(request.PlanSHA256) ||
-		!validPAExpert(request.Expert) || !questionCode.MatchString(request.QuestionCode) ||
+		!validPAExpert(request.Expert) || !validAdvisoryCode(request.QuestionCode) ||
 		len(request.QuestionCode) > 80 {
 		return DeclassificationReceipt{}, errors.New("advisory request identity or expert binding is invalid")
 	}
@@ -90,15 +94,15 @@ func Declassify(request AdvisoryRequest) (DeclassificationReceipt, error) {
 	if !validID(request.Attestation.ExporterID) ||
 		!request.Attestation.NoClientIdentifiers ||
 		!request.Attestation.NoStakeholderIdentifiers ||
-		!request.Attestation.NoRawExcerpts {
+		!request.Attestation.NoRawExcerpts || !request.Attestation.NoScopedPointers {
 		return DeclassificationReceipt{}, errors.New("advisory request lacks the complete declassification attestation")
 	}
 	if len(request.Facts) > 12 || len(request.OutputSections) == 0 || len(request.OutputSections) > 6 {
 		return DeclassificationReceipt{}, errors.New("advisory request exceeds its bounded contract")
 	}
 	for _, fact := range request.Facts {
-		if !validID(fact.Code) || (fact.Classification != Public && fact.Classification != Internal) ||
-			!validID(fact.ValueCode) || len(fact.ValueCode) > 80 {
+		if !validAdvisoryCode(fact.Code) || (fact.Classification != Public && fact.Classification != Internal) ||
+			!validAdvisoryCode(fact.ValueCode) || len(fact.ValueCode) > 80 {
 			return DeclassificationReceipt{}, errors.New("advisory fact violates the declassified boundary")
 		}
 	}
@@ -116,14 +120,19 @@ func Declassify(request AdvisoryRequest) (DeclassificationReceipt, error) {
 	return DeclassificationReceipt{
 		SchemaVersion: 1, RequestID: request.RequestID,
 		RequestSHA256: SHA256Hex(body), PolicyVersion: PolicyVersion,
-		ExporterID: request.Attestation.ExporterID,
-		Outcome:    "shadow_assessed_not_export_authorized", MayExport: false,
+		ExporterID: request.Attestation.ExporterID, ExpertID: request.Expert.ID,
+		ExpertVersion: request.Expert.Version, CanonSHA256: strings.ToLower(request.Expert.CanonSHA256),
+		Outcome: "shadow_assessed_not_export_authorized", MayExport: false,
 	}, nil
 }
 
 func ValidateResponse(response AdvisoryResponse, request AdvisoryRequest, receipt DeclassificationReceipt) error {
-	if response.SchemaVersion != 1 || receipt.Outcome != "export_authorized" || !receipt.MayExport ||
+	if response.SchemaVersion != 1 ||
+		(receipt.Outcome != "export_authorized" && receipt.Outcome != "shadow_assessed_not_export_authorized") ||
+		(receipt.Outcome == "export_authorized") != receipt.MayExport ||
 		response.RequestSHA256 != receipt.RequestSHA256 ||
+		receipt.ExpertID != request.Expert.ID || receipt.ExpertVersion != request.Expert.Version ||
+		receipt.CanonSHA256 != strings.ToLower(request.Expert.CanonSHA256) ||
 		response.ExpertID != request.Expert.ID ||
 		response.ExpertVersion != request.Expert.Version ||
 		response.CanonSHA256 != request.Expert.CanonSHA256 {
@@ -204,4 +213,17 @@ func allowedSection(value string) bool {
 	default:
 		return false
 	}
+}
+
+func validAdvisoryCode(value string) bool {
+	if !questionCode.MatchString(value) || len(value) > 80 {
+		return false
+	}
+	lower := strings.ToLower(value)
+	for _, forbidden := range []string{"client", "account", "case", "workspace", "stakeholder", "person", "raw", "file"} {
+		if lower == forbidden || strings.HasPrefix(lower, forbidden+"-") || strings.Contains(lower, "-"+forbidden+"-") {
+			return false
+		}
+	}
+	return true
 }
