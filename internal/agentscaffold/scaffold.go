@@ -438,7 +438,7 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 			!agentcatalog.ValidAgentID(request.Owner) ||
 			strings.TrimSpace(request.Mandate) == "" || len([]byte(strings.TrimSpace(request.Mandate))) > 500 ||
 			request.CanonPath == "" || !validSHA256(request.CanonSHA256) ||
-			!catalog.AllowsDelegation("hub", "practice_agent", 1) {
+			!legacyPracticeMigrationOpen(catalog) {
 			return agentcatalog.RoleContract{}, errors.New("practice agent scaffold requires an owner, bounded mandate, verified canon and exact Maestro-owned practice scope")
 		}
 	case "client_account_agent":
@@ -484,13 +484,18 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 		if !strings.HasPrefix(request.AgentID, "subject-") ||
 			hasRootMetadata ||
 			request.ParentRole != "practice_agent" || request.ScopeKind != "practice" ||
-			!catalog.AllowsDelegation(request.ParentRole, request.Role, 2) {
+			!legacyPracticeMigrationOpen(catalog) {
 			return agentcatalog.RoleContract{}, errors.New("subject specialist scaffold has an invalid practice parent or scope")
 		}
 	default:
 		return agentcatalog.RoleContract{}, errors.New("agent role has no managed scaffold template")
 	}
 	return contract, nil
+}
+
+func legacyPracticeMigrationOpen(catalog agentcatalog.Catalog) bool {
+	_, err := catalog.ResolveLegacyRole("practice_agent", time.Now().UTC())
+	return err == nil
 }
 
 func validateResolvedBindings(root *os.Root, integrityKey []byte, catalog agentcatalog.Catalog, request Request) error {

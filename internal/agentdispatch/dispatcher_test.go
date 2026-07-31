@@ -36,7 +36,7 @@ func TestDispatcherIssuesSealedSequentialWorkspacePackets(t *testing.T) {
 	}
 
 	_, parallel, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "practice-insurance", ScopeKind: "practice", ScopeID: "insurance",
+		TargetAgentID: "pa-expert-ipa-insurance", ScopeKind: "practice", ScopeID: "insurance",
 		Objective: "Review insurance concepts.", TTL: time.Hour,
 	})
 	if err != nil {
@@ -134,7 +134,7 @@ func TestDispatcherRejectsTamperingExpiryAndCrossScopePointers(t *testing.T) {
 	dispatcher.now = func() time.Time { return now }
 
 	if _, _, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "practice-insurance", ScopeKind: "practice", ScopeID: "insurance",
+		TargetAgentID: "pa-expert-ipa-insurance", ScopeKind: "practice", ScopeID: "insurance",
 		Objective: "Review the subject canon.",
 		Pointers:  []string{"bcgos://workspace/insurance/raw-client.md"},
 		TTL:       time.Hour,
@@ -295,10 +295,10 @@ func TestDispatcherRejectsLegacyPacketAsNewDelegationParent(t *testing.T) {
 	}
 }
 
-func TestDispatcherPreservesGovernedSubjectDelegationWithoutTransversalSkill(t *testing.T) {
+func TestDispatcherDoesNotLetPAExpertDelegateIntoPracticeScope(t *testing.T) {
 	dispatcher := newTestDispatcher(t)
 	root, decision, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "practice-insurance", ScopeKind: "practice", ScopeID: "insurance",
+		TargetAgentID: "pa-expert-ipa-insurance", ScopeKind: "practice", ScopeID: "insurance",
 		Objective: "Review the approved insurance subject canon.", TTL: time.Hour,
 	})
 	if err != nil || !decision.Allowed {
@@ -308,17 +308,11 @@ func TestDispatcherPreservesGovernedSubjectDelegationWithoutTransversalSkill(t *
 		TargetAgentID: "subject-insurance", ScopeKind: "practice", ScopeID: "insurance",
 		Objective: "Pressure-test the subject canon.", TTL: time.Hour,
 	})
-	if err != nil || !childDecision.Allowed || child.SkillID != "" {
-		t.Fatalf("subject delegation failed: packet=%#v decision=%#v err=%v", child, childDecision, err)
-	}
-	if err := dispatcher.Verify(child); err != nil {
-		t.Fatal(err)
-	}
-	if decision := dispatcher.FinishChild(child); !decision.Allowed {
-		t.Fatalf("finish subject child = %#v", decision)
+	if err != nil || childDecision.Allowed || child.SchemaVersion != 0 {
+		t.Fatalf("PA Expert unexpectedly delegated to subject specialist: packet=%#v decision=%#v err=%v", child, childDecision, err)
 	}
 	if decision := dispatcher.FinishRoot(root); !decision.Allowed {
-		t.Fatalf("finish practice root = %#v", decision)
+		t.Fatalf("finish PA Expert root = %#v", decision)
 	}
 }
 
@@ -467,7 +461,7 @@ func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher 
 		{AgentID: "capability-account", Role: "capability_specialist", Scope: "account-alpha", ScopeKind: "account", Capability: "capability-account-cap"},
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-agent-alpha-cap"},
 		{AgentID: "capability-research", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-research-cap"},
-		{AgentID: "practice-insurance", Role: "practice_agent", Scope: "insurance", ScopeKind: "practice", Capability: "practice-insurance-cap"},
+		{AgentID: "pa-expert-ipa-insurance", Role: "pa_expert", Scope: "insurance", ScopeKind: "practice", Capability: "pa-expert-ipa-insurance-cap"},
 		{AgentID: "subject-insurance", Role: "subject_specialist", Scope: "insurance", ScopeKind: "practice", Capability: "subject-insurance-cap"},
 	}
 	adapter, err := agentorchestration.NewAdapter(runtime, catalog, grants, store)
@@ -477,7 +471,7 @@ func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher 
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
 		"maestro": "maestro-cap", "walter": "walter-cap", "client-account-agent-alpha": "client-account-agent-alpha-cap", "capability-account": "capability-account-cap",
 		"workspace-agent-alpha": "workspace-agent-alpha-cap", "capability-research": "capability-research-cap",
-		"practice-insurance": "practice-insurance-cap", "subject-insurance": "subject-insurance-cap",
+		"pa-expert-ipa-insurance": "pa-expert-ipa-insurance-cap", "subject-insurance": "subject-insurance-cap",
 	}, registry)
 	if err != nil {
 		t.Fatal(err)

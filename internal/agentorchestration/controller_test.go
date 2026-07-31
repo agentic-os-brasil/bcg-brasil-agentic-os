@@ -195,7 +195,7 @@ func TestSharedStateSurvivesAdapterReplacementAndRejectsParallelControllers(t *t
 	}))
 	assertDenied(t, codex.Handle(NativeEvent{
 		Name: nativeNames("codex").branchStart, BranchID: "run-beta",
-		Scope: "beta", ScopeKind: "practice", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance",
+		Scope: "insurance", ScopeKind: "practice", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "pa-expert-ipa-insurance",
 	}), "branch_active")
 
 	restored, err := RestoreStateStore(store.Snapshot(), "recovery-cap")
@@ -208,7 +208,7 @@ func TestSharedStateSurvivesAdapterReplacementAndRejectsParallelControllers(t *t
 	}
 	assertDenied(t, restarted.Handle(NativeEvent{
 		Name: nativeNames("codex").branchStart, BranchID: "run-beta",
-		Scope: "beta", ScopeKind: "practice", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance",
+		Scope: "beta", ScopeKind: "practice", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "pa-expert-ipa-insurance",
 	}), "branch_active")
 }
 
@@ -237,7 +237,7 @@ func TestLostStopRequiresExplicitAgeBoundedRecovery(t *testing.T) {
 	}
 	assertAllowed(t, adapter.Handle(NativeEvent{
 		Name: nativeNames("claude").branchStart, BranchID: "run-beta",
-		Scope: "beta", ScopeKind: "practice", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "practice-insurance",
+		Scope: "insurance", ScopeKind: "practice", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "pa-expert-ipa-insurance",
 	}))
 }
 
@@ -409,12 +409,27 @@ func testAuthorizations() []Authorization {
 		{AgentID: "capability-research", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-research-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/alpha/"}}},
 		{AgentID: "capability-research-project", Role: "capability_specialist", Scope: "client-alpha-project", ScopeKind: "workspace", Capability: "capability-research-project-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/client-alpha-project/"}}},
 		{AgentID: "capability-other", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-other-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/alpha/"}}},
-		{AgentID: "practice-insurance", Role: "practice_agent", Scope: "beta", ScopeKind: "practice", Capability: "practice-insurance-cap"},
+		{AgentID: "pa-expert-ipa-insurance", Role: "pa_expert", Scope: "insurance", ScopeKind: "practice", Capability: "pa-expert-ipa-insurance-cap"},
 		{AgentID: "subject-insurance", Role: "subject_specialist", Scope: "alpha", ScopeKind: "practice", Capability: "subject-insurance-cap"},
 		{AgentID: "darwin", Role: "governance_analyst", Scope: "maestro-system", ScopeKind: "health", Capability: "darwin-cap", Tools: []ToolGrant{
 			{Tool: "filesystem", Operation: "read", ResourcePrefix: "bcgos://health/maestro-system/"},
 			{Tool: "filesystem", Operation: "write", ResourcePrefix: "bcgos://health/maestro-system/"},
 		}},
+	}
+}
+
+func TestAdapterRejectsLegacyPracticeAgentAuthorization(t *testing.T) {
+	catalog := loadCatalog(t)
+	store, err := NewStateStore("recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = NewAdapter("claude", catalog, []Authorization{
+		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
+		{AgentID: "practice-insurance", Role: "practice_agent", Scope: "insurance", ScopeKind: "practice", Capability: "practice-cap"},
+	}, store)
+	if err == nil {
+		t.Fatal("legacy practice_agent received active runtime authorization")
 	}
 }
 

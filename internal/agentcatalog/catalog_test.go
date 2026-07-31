@@ -1,6 +1,9 @@
 package agentcatalog
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestCatalogAcceptsLeanMaestroCore(t *testing.T) {
 	catalog := Catalog{
@@ -12,8 +15,7 @@ func TestCatalogAcceptsLeanMaestroCore(t *testing.T) {
 			MaxErrandHelpers: 1, ErrandScope: "basic_reversible",
 			AllowedEdges: []DelegationEdge{
 				{FromRole: "case_agent", ToRoles: []string{"capability_specialist"}},
-				{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer"}},
-				{FromRole: "practice_agent", ToRoles: []string{"subject_specialist"}},
+				{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}},
 			},
 		},
 		Agents: []Agent{
@@ -43,8 +45,8 @@ func TestCatalogAllowsOnlyTheGovernedDepthTwoChains(t *testing.T) {
 		{"hub", "workspace_agent", 2, false},
 		{"workspace_agent", "capability_specialist", 2, true},
 		{"workspace_agent", "capability_specialist", 1, false},
-		{"hub", "practice_agent", 1, true},
-		{"practice_agent", "subject_specialist", 2, true},
+		{"hub", "practice_agent", 1, false},
+		{"practice_agent", "subject_specialist", 2, false},
 		{"practice_agent", "subject_specialist", 1, false},
 		{"account_agent", "capability_specialist", 1, false},
 		{"hub", "subject_specialist", 1, false},
@@ -68,7 +70,7 @@ func TestCatalogAcceptsARegisteredPracticeAgentWithOneBoundedChild(t *testing.T)
 	catalog := mustTestCatalog(t)
 	practice := Agent{
 		ID: "practice-insurance", Role: "practice_agent", DirectUserAccess: false,
-		ToolAccess: "scoped", MayDelegate: true, InputContract: "bounded_practice_packet",
+		ToolAccess: "scoped", MayDelegate: false, InputContract: "bounded_practice_packet",
 		RelativePath: "agents/practice-insurance/AGENT.md",
 	}
 	catalog.Agents = append(catalog.Agents, Agent{})
@@ -129,7 +131,7 @@ func TestCatalogRejectsUnsafeIDsAndRoleContractDrift(t *testing.T) {
 			copy(value.Agents[3:], value.Agents[2:])
 			value.Agents[2] = Agent{
 				ID: "practice-insurance", Role: "practice_agent",
-				ToolAccess: "none", MayDelegate: true,
+				ToolAccess: "none", MayDelegate: false,
 				InputContract: "raw_workspace_context",
 				RelativePath:  "agents/practice-insurance/AGENT.md",
 			}
@@ -162,4 +164,17 @@ func mustTestCatalog(t *testing.T) Catalog {
 		t.Fatal(err)
 	}
 	return catalog
+}
+
+func TestLegacyPracticeIdentityIsMigrationOnlyAndExpires(t *testing.T) {
+	catalog := mustTestCatalog(t)
+	if !catalog.IsLegacyOnlyRole("practice_agent") {
+		t.Fatal("practice_agent remains active instead of migration-only")
+	}
+	if got, err := catalog.ResolveLegacyRole("practice_agent", time.Date(2026, 12, 30, 23, 59, 0, 0, time.UTC)); err != nil || got != "pa_expert" {
+		t.Fatalf("legacy practice migration = %q, %v", got, err)
+	}
+	if _, err := catalog.ResolveLegacyRole("practice_agent", time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)); err == nil {
+		t.Fatal("expired practice identity migration remained usable")
+	}
 }

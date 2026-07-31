@@ -10,14 +10,16 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type Catalog struct {
-	SchemaVersion int                        `json:"schema_version"`
-	Hub           string                     `json:"hub"`
-	Delegation    DelegationPolicy           `json:"delegation"`
-	LegacyAliases map[string]LegacyRoleAlias `json:"legacy_aliases"`
-	Agents        []Agent                    `json:"agents"`
+	SchemaVersion    int                            `json:"schema_version"`
+	Hub              string                         `json:"hub"`
+	Delegation       DelegationPolicy               `json:"delegation"`
+	LegacyAliases    map[string]LegacyRoleAlias     `json:"legacy_aliases"`
+	LegacyMigrations map[string]LegacyRoleMigration `json:"legacy_migrations"`
+	Agents           []Agent                        `json:"agents"`
 }
 
 // LegacyRoleAlias keeps existing local registrations readable while ensuring
@@ -25,6 +27,15 @@ type Catalog struct {
 type LegacyRoleAlias struct {
 	CanonicalRole string `json:"canonical_role"`
 	Status        string `json:"status"`
+}
+
+// LegacyRoleMigration describes an old identity that may be read by an
+// explicit migration workflow but is not an active delegation role. The
+// expiry is part of the managed catalog so callers cannot extend it locally.
+type LegacyRoleMigration struct {
+	ReplacementRole string `json:"replacement_role"`
+	Status          string `json:"status"`
+	ExpiresAt       string `json:"expires_at"`
 }
 
 type DelegationPolicy struct {
@@ -76,7 +87,7 @@ var roleContracts = map[string]struct {
 	"errand_helper":         {false, "scoped", false, "bounded_errand_packet"},
 	"governance_analyst":    {false, "scoped", false, "bounded_health_packet"},
 	"hub":                   {true, "none", true, "session_context_packet"},
-	"practice_agent":        {false, "scoped", true, "bounded_practice_packet"},
+	"practice_agent":        {false, "scoped", false, "bounded_practice_packet"}, // migration-only; never active
 	"pa_expert":             {false, "none", false, "bounded_advisory_packet"},
 	"reviewer":              {false, "none", false, "sealed_review_packet"},
 	"subject_specialist":    {false, "scoped", false, "bounded_subject_packet"},
@@ -120,6 +131,26 @@ func (catalog Catalog) CanonicalRole(role string) string {
 	return role
 }
 
+func (catalog Catalog) IsLegacyOnlyRole(role string) bool {
+	migration, ok := catalog.LegacyMigrations[role]
+	return ok && migration.Status == "migration_only"
+}
+
+// ResolveLegacyRole is the only supported way to consume a legacy practice
+// identity. It is intentionally separate from CanonicalRole: old input must
+// never silently become an active PA Expert registration.
+func (catalog Catalog) ResolveLegacyRole(role string, now time.Time) (string, error) {
+	migration, ok := catalog.LegacyMigrations[role]
+	if !ok || migration.Status != "migration_only" || migration.ReplacementRole != "pa_expert" {
+		return "", errors.New("legacy agent identity has no governed migration")
+	}
+	expiresAt, err := time.Parse(time.RFC3339, migration.ExpiresAt)
+	if err != nil || !now.UTC().Before(expiresAt.UTC()) {
+		return "", errors.New("legacy agent identity migration has expired")
+	}
+	return migration.ReplacementRole, nil
+}
+
 func Parse(reader io.Reader) (Catalog, error) {
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
@@ -157,6 +188,9 @@ func (catalog Catalog) Validate() error {
 		return fmt.Errorf("agent catalog hub must be maestro, got %q", catalog.Hub)
 	}
 	if err := validateLegacyAliases(catalog.LegacyAliases); err != nil {
+		return err
+	}
+	if err := validateLegacyMigrations(catalog.LegacyMigrations); err != nil {
 		return err
 	}
 	if catalog.Delegation.Mode != "role_gated_chains" || catalog.Delegation.RegisteredChains != "governed_unbounded" || catalog.Delegation.MaxActiveBranches != 1 || catalog.Delegation.MaxDepth != 2 || catalog.Delegation.MaxChildrenPerAgent != 1 || catalog.Delegation.MaxErrandHelpers != 1 || catalog.Delegation.ErrandScope != "basic_reversible" {
@@ -226,6 +260,9 @@ func (catalog Catalog) Validate() error {
 }
 
 func (catalog Catalog) AllowsDelegation(fromRole, toRole string, depth int) bool {
+	if catalog.IsLegacyOnlyRole(fromRole) || catalog.IsLegacyOnlyRole(toRole) {
+		return false
+	}
 	if depth < 1 || depth > catalog.Delegation.MaxDepth {
 		return false
 	}
@@ -260,8 +297,7 @@ func (catalog Catalog) roleMayDelegate(role string) bool {
 func validateDelegationEdges(edges []DelegationEdge) error {
 	wanted := []DelegationEdge{
 		{FromRole: "case_agent", ToRoles: []string{"capability_specialist"}},
-		{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer"}},
-		{FromRole: "practice_agent", ToRoles: []string{"subject_specialist"}},
+		{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}},
 	}
 	if len(edges) != len(wanted) {
 		return errors.New("agent catalog has an incomplete or unauthorized delegation graph")
@@ -299,6 +335,24 @@ func validateLegacyAliases(aliases map[string]LegacyRoleAlias) error {
 		if !ok || alias.CanonicalRole != canonical || alias.Status != "compatibility_only" {
 			return errors.New("agent catalog legacy-role migration map is invalid")
 		}
+	}
+	return nil
+}
+
+func validateLegacyMigrations(migrations map[string]LegacyRoleMigration) error {
+	if len(migrations) == 0 {
+		// Older in-memory fixtures predate the explicit migration map. The
+		// checked-in managed catalog carries it; empty fixtures remain useful for
+		// focused graph tests.
+		return nil
+	}
+	migration, ok := migrations["practice_agent"]
+	if !ok || migration.ReplacementRole != "pa_expert" || migration.Status != "migration_only" {
+		return errors.New("agent catalog legacy practice migration is invalid")
+	}
+	expiresAt, err := time.Parse(time.RFC3339, migration.ExpiresAt)
+	if err != nil || expiresAt.IsZero() {
+		return errors.New("agent catalog legacy practice migration expiry is invalid")
 	}
 	return nil
 }

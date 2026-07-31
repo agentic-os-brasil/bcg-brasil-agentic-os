@@ -1,6 +1,6 @@
 # Spec 027 - Governed agent scaffolding
 
-Status: managed Client Account, Case, practice and specialist templates, atomic
+Status: managed Client Account, Case, PA Expert and specialist templates, atomic
 local instance scaffolding and CLI implemented. Native Claude and Codex
 registration, credentials and tool grants remain unavailable.
 
@@ -52,7 +52,7 @@ and are never overwritten.
 | --- | --- | --- | --- |
 | `case_agent` | canonical `maestro` / `hub` | exact case/project workspace | one capability specialist |
 | `client_account_agent` | canonical `maestro` / `hub` | exact client account | no direct child; Maestro mediates Case activation |
-| `practice_agent` | canonical `maestro` / `hub` | exact practice and verified canon | one subject specialist |
+| `pa_expert` | canonical `maestro` / `hub` | exact PA Expert version and verified canon | none |
 | `capability_specialist` | workspace or account agent | same workspace or account | none |
 | `subject_specialist` | practice agent | same practice | none |
 
@@ -144,4 +144,6 @@ Display names and emoji avatars are presentation data only. The signed agent
 registration still owns the role, scope, parent relation, tool contract and
 runtime state. `account_agent` and `workspace_agent` remain accepted only as
 input aliases for `client_account_agent` and `case_agent`; they are not nodes
-in the canonical graph.
+in the canonical graph. `practice_agent` is retained only as a time-bounded
+migration input and cannot receive active authorization or delegate; re-register
+it as `pa_expert` before expiry.

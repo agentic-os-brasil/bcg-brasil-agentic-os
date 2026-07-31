@@ -16,17 +16,20 @@
       },
       {
         "from_role": "hub",
-        "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer"]
-      },
-      {
-        "from_role": "practice_agent",
-        "to_roles": ["subject_specialist"]
+        "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"]
       }
     ]
   },
   "legacy_aliases": {
     "account_agent": {"canonical_role": "client_account_agent", "status": "compatibility_only"},
     "workspace_agent": {"canonical_role": "case_agent", "status": "compatibility_only"}
+  },
+  "legacy_migrations": {
+    "practice_agent": {
+      "replacement_role": "pa_expert",
+      "status": "migration_only",
+      "expires_at": "2026-12-31T00:00:00Z"
+    }
   },
   "agents": [
     {

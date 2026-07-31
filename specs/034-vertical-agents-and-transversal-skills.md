@@ -54,9 +54,9 @@ the parent may create one child WorkPacket. A packet for a
 `capability_specialist` names exactly one managed skill, its objective, exact
 pointers, constraints, expiry and expected return. The capability specialist
 receives no general context, no persistent access and no right to select
-additional skills. Existing `practice_agent` → `subject_specialist` dispatch
-remains a governed subject packet and does not acquire a transversal skill
-requirement in this slice. Each child returns evidence pointers, a concise
+additional skills. The legacy `practice_agent` → `subject_specialist` path is
+migration-only; active advisory work uses the non-delegating PA Expert registry.
+Each child returns evidence pointers, a concise
 result, assumptions, risks and an explicit failure state to its parent. The
 parent validates and integrates the result before returning to Maestro.
 

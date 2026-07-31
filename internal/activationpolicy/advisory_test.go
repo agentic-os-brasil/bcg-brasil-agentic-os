@@ -12,7 +12,7 @@ func TestAdvisoryExportRejectsScopedOrConfidentialContent(t *testing.T) {
 		OutputSections: []string{"findings", "challenges"},
 		Attestation: DeclassificationAttestation{
 			ExporterID: "maestro", NoClientIdentifiers: true,
-			NoStakeholderIdentifiers: true, NoRawExcerpts: true,
+			NoStakeholderIdentifiers: true, NoRawExcerpts: true, NoScopedPointers: true,
 		},
 	}
 	if _, err := Declassify(base); err != nil {

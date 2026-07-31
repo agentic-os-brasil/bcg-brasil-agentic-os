@@ -918,7 +918,7 @@ func TestAgentHirePlanDeclassifyAndVerifyCommands(t *testing.T) {
 		OutputSections: []string{"findings", "challenges"},
 		Attestation: activationpolicy.DeclassificationAttestation{
 			ExporterID: "maestro", NoClientIdentifiers: true,
-			NoStakeholderIdentifiers: true, NoRawExcerpts: true,
+			NoStakeholderIdentifiers: true, NoRawExcerpts: true, NoScopedPointers: true,
 		},
 	}
 	requestBody, _ := json.Marshal(activationAdvisoryInput{

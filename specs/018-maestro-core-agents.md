@@ -97,7 +97,8 @@ owner, a concrete fix and an exit condition.
 - A `case_agent` may delegate to one `capability_specialist` at depth two.
 - A `client_account_agent` owns the partner-like account context and does not
   directly delegate children; Maestro mediates Case activation.
-- A `practice_agent` may delegate to one `subject_specialist` at depth two.
+- The legacy `practice_agent` identity is migration-only; PA Expert advice is
+  centrally versioned and cannot delegate to a subject specialist.
 - Walter (`reviewer`), Darwin (`governance_analyst`), `errand_helper`,
   `capability_specialist` and `subject_specialist` are leaves.
 - A practice agent owns a persistent professional subject canon. It cannot read
@@ -149,7 +150,7 @@ contract so a new registration cannot silently broaden context:
 | `hub` | `session_context_packet` | none | yes |
 | `client_account_agent` | `bounded_client_account_packet` | scoped | no |
 | `case_agent` | `bounded_case_packet` | scoped | yes |
-| `practice_agent` | `bounded_practice_packet` | scoped | yes |
+| `pa_expert` | `bounded_advisory_packet` | none | no |
 | `reviewer` | `sealed_review_packet` | none | no |
 | `governance_analyst` | `bounded_health_packet` | scoped (`health/maestro-system`) | no |
 | `errand_helper` | `bounded_errand_packet` | scoped | no |

@@ -566,3 +566,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The repository may demonstrate deterministic packaging, installation simulation and local closure without claiming authenticity, publication or pilot readiness. Release operators must provision corporate authorities before signing or publishing. The production authority registry and workflow must exclude the beta issuer/key ID (or mark it revoked) and reject it for installer/update trust and all new production artifacts. Historical verification must remain an archival operation outside production trust. This keeps cost, ownership, revocation and audit boundaries explicit.
 - Refs: docs/releasing.md; docs/release-gates-checklist.md; docs/installer-package.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
 - Supersedes: none
+
+## PABN - Make the PA Expert boundary a declassified, receipt-boundary
+
+- Date: 2026-07-30
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Case and Client Account Agents need functional or industry advice without exporting client, stakeholder or workspace context into the centrally maintained PA Expert.
+- Decision: PA Expert is the sole canonical FPA/IPA advisory role. A case/account boundary must construct a deterministic code-and-digest packet, bind the exact expert version and canon digest, and accept only a bounded non-export-authorizing advisory receipt. `practice_agent` is migration-only, cannot receive active runtime authorization or delegation, and must resolve to PA Expert before its managed expiry.
+- Consequences: Account stakeholder intelligence, case-local raw context and governed case-to-account promotion remain separate. Raw pointers, identifiers, excerpts, empty registry state and forged canon bindings fail closed. Native runtime activation remains unavailable until an adapter can prove the same packet and receipt contract.
+- Refs: specs/038-pa-expert-workspace-boundary.md; internal/paexpert; internal/agentcatalog; internal/agentorchestration
+- Supersedes: none
