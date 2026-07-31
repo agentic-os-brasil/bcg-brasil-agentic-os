@@ -70,6 +70,9 @@ JSON Schema cannot express:
 - lowercase SHA-256 digests and detached `.sig` references;
 - migration targets that match the declared component version and are outside
   the source range.
+- the `practice-agent-to-pa-expert` migration, when present, pins its bounded
+  source/expiry versions and the exact bundle, agent-catalog and agent-policy
+  SHA-256 identities.
 
 Strict parsing rejects unknown fields, duplicate object keys, oversized input
 and trailing JSON values. CLI and bundle artifact names contain their component
@@ -132,3 +135,10 @@ confined to `installers/trial`.
 - Validation distinguishes candidate build, signed publication, local
   installation, operator-attested device evidence, approved corporate-device
   acceptance and pilot readiness.
+
+The `0.2.0` release opens the bounded role-migration boundary. An update from
+`0.1.x` must carry that signed migration evidence; releases that still accept
+such an installation carry it as well. After the boundary, legacy practice
+roles and IDs fail closed. Install state carries the migration identity and
+rollback refuses to reactivate a legacy authority without a canonical PA
+Expert binding.

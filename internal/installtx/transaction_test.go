@@ -12,9 +12,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/rolemigration"
 )
 
 func TestPrepareAndActivateKeepsManagedAndOwnerDataSeparate(t *testing.T) {
@@ -129,6 +131,29 @@ func TestRollbackReactivatesPreviousVerifiedVersion(t *testing.T) {
 	}
 	if state.Release != "0.1.0" || state.Previous == nil || state.Previous.Release != "0.1.1" {
 		t.Fatalf("unexpected rolled-back state: %#v", state)
+	}
+}
+
+func TestRollbackFailsClosedWhenMigrationWouldReactivateLegacyAuthority(t *testing.T) {
+	managedRoot := filepath.Join(t.TempDir(), "managed")
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	backup := filepath.Join(managedRoot, "recovery", "cli", "0.1.0-tx", executableName("darwin"))
+	writeTestFile(t, "", filepath.Join(managedRoot, "bin", executableName("darwin")), "binary 0.2.0")
+	writeTestFile(t, "", backup, "binary 0.1.0")
+	if err := WriteState(dataRoot, State{
+		SchemaVersion: 2, ManagedRoot: managedRoot, Release: "0.2.0", Channel: "canary",
+		CLIVersion: "0.2.0", BundleVersion: "0.2.0", TargetOS: "darwin", TargetArch: "arm64",
+		RoleAuthority: rolemigration.CanonicalRole, MigrationID: rolemigration.MigrationID,
+		CatalogSHA256: strings.Repeat("a", 64), PolicySHA256: strings.Repeat("b", 64),
+		ActivatedAt: time.Now().UTC(), Previous: &Snapshot{
+			Release: "0.1.0", Channel: "canary", CLIVersion: "0.1.0", BundleVersion: "0.1.0",
+			TargetOS: "darwin", TargetArch: "arm64", CLIBackup: backup,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rollback(managedRoot, dataRoot, func(_, _ string) error { return nil }); err == nil {
+		t.Fatal("Rollback() reactivated a legacy authority after alias expiry")
 	}
 }
 

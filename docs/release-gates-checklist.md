@@ -24,6 +24,9 @@ covered.
   matching runners and report the requested version.
 - [ ] `go run ./dev/release verify --directory <candidate>` passes.
 - [ ] Candidate bytes, manifest and notes have recorded SHA-256 digests.
+- [ ] For `0.2.0` or any update receiving a pre-boundary install, the manifest
+  carries `practice-agent-to-pa-expert` with exact bundle, catalog and policy
+  digests; the update plan and rollback tests preserve the same bindings.
 - [ ] Evidence is labeled `technical rehearsal` or `engineering evidence only`;
   no unsigned output is installed through the production path.
 

@@ -86,13 +86,23 @@ func testSourceBinding() SourceBinding {
 }
 
 func updateManifest(version string) releasecontract.Manifest {
-	return releasecontract.Manifest{
+	manifest := releasecontract.Manifest{
 		SchemaVersion: 1, Product: "maestro", Release: version, Channel: "canary",
 		CLI:    releasecontract.CLIComponent{Version: version},
 		Bundle: releasecontract.BundleComponent{Version: version},
 		Artifacts: []releasecontract.Artifact{
 			{Kind: "cli", OS: "darwin", Arch: "arm64", Name: "bcgos_" + version + "_darwin_arm64"},
-			{Kind: "bundle", OS: "any", Arch: "any", Name: "maestro-base_" + version + ".tar.gz"},
+			{Kind: "bundle", OS: "any", Arch: "any", Name: "maestro-base_" + version + ".tar.gz", SHA256: strings.Repeat("c", 64)},
 		},
 	}
+	if version >= "0.2.0" {
+		manifest.Migrations = []releasecontract.Migration{{
+			ID: "practice-agent-to-pa-expert", Component: "bundle", From: ">=0.1.0 <0.2.0", To: version, Required: true,
+			FromRole: "practice_agent", ToRole: "pa_expert", AliasExpiresAfter: "0.2.0",
+			BundleSHA256: strings.Repeat("c", 64), CatalogSHA256: strings.Repeat("d", 64), PolicySHA256: strings.Repeat("e", 64),
+		}}
+	} else {
+		manifest.Migrations = []releasecontract.Migration{}
+	}
+	return manifest
 }

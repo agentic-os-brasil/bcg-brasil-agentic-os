@@ -402,6 +402,13 @@ func pendingSignedRelease(
 			Size: int64(len(artifact.body)), SHA256: pendingDigest(artifact.body), SignatureRef: signatureName,
 		})
 	}
+	if version == "0.2.0" {
+		manifest.Migrations = []releasecontract.Migration{{
+			ID: "practice-agent-to-pa-expert", Component: "bundle", From: ">=0.1.0 <0.2.0", To: "0.2.0", Required: true,
+			FromRole: "practice_agent", ToRole: "pa_expert", AliasExpiresAfter: "0.2.0",
+			BundleSHA256: manifest.Artifacts[1].SHA256, CatalogSHA256: strings.Repeat("d", 64), PolicySHA256: strings.Repeat("e", 64),
+		}}
+	}
 	if err := os.WriteFile(filepath.Join(directory, "release-notes-"+version+".md"), notes, 0o600); err != nil {
 		t.Fatal(err)
 	}
