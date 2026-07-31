@@ -34,6 +34,10 @@ func TestSignCandidateProducesClosedVerifiedRelease(t *testing.T) {
 	if manifest.Issuer.ID != "maestro-release" || manifest.Issuer.KeyID != "pilot-2026" {
 		t.Fatalf("unexpected signed issuer: %#v", manifest.Issuer)
 	}
+	if len(manifest.Migrations) != 1 || manifest.Migrations[0].ID != "practice-agent-to-pa-expert" ||
+		manifest.Migrations[0].CatalogSHA256 == "" || manifest.Migrations[0].PolicySHA256 == "" {
+		t.Fatalf("role migration evidence was not preserved: %#v", manifest.Migrations)
+	}
 	notes, err := os.ReadFile(filepath.Join(output, manifest.ReleaseNotes.Name))
 	if err != nil {
 		t.Fatal(err)
@@ -126,6 +130,8 @@ func unsignedCandidateFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	writeFile(t, root, "bundles/base/runtime/capabilities.json", "{}\n")
+	writeFile(t, root, "bundles/base/agents/catalog.json", "{\"schema_version\":1}\n")
+	writeFile(t, root, "bundles/base/skills/agent-skill-policy.json", "{\"schema_version\":1}\n")
 	writeFile(
 		t,
 		root,

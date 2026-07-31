@@ -159,7 +159,7 @@ func TestCheckRemovesProvisionalDownloadWhenPlanCannotSupportTarget(t *testing.T
 }
 
 func updateManifest(version string) releasecontract.Manifest {
-	return releasecontract.Manifest{
+	manifest := releasecontract.Manifest{
 		SchemaVersion: 1, Product: "maestro", Release: version, Channel: "canary",
 		CLI:    releasecontract.CLIComponent{Version: version},
 		Bundle: releasecontract.BundleComponent{Version: version},
@@ -168,6 +168,17 @@ func updateManifest(version string) releasecontract.Manifest {
 			{Kind: "bundle", OS: "any", Arch: "any", Name: "maestro-base_" + version + ".tar.gz"},
 		},
 	}
+	if version >= "0.2.0" {
+		manifest.Artifacts[1].SHA256 = strings.Repeat("c", 64)
+		manifest.Migrations = []releasecontract.Migration{{
+			ID: "practice-agent-to-pa-expert", Component: "bundle", From: ">=0.1.0 <0.2.0", To: version, Required: true,
+			FromRole: "practice_agent", ToRole: "pa_expert", AliasExpiresAfter: "0.2.0",
+			BundleSHA256: strings.Repeat("c", 64), CatalogSHA256: strings.Repeat("d", 64), PolicySHA256: strings.Repeat("e", 64),
+		}}
+	} else {
+		manifest.Migrations = []releasecontract.Migration{}
+	}
+	return manifest
 }
 
 func checkCurrent(targetOS, targetArch string) installtx.State {
