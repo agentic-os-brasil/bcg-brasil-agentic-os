@@ -1,0 +1,496 @@
+// Package darwinobservability owns the local, metadata-only evidence contract
+// used to evaluate Darwin's operational health and selection calibration.
+// It deliberately has no network, federation, prompt, output or client-data
+// dependency.
+package darwinobservability
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/activationpolicy"
+)
+
+const SchemaVersion = 1
+
+type Kind string
+
+const (
+	KindHealth      Kind = "health"
+	KindSelection   Kind = "selection"
+	KindProposal    Kind = "proposal"
+	KindAcceptance  Kind = "acceptance"
+	KindEvaluation  Kind = "evaluation"
+	KindAlternative Kind = "alternative"
+)
+
+type JobKind string
+
+const (
+	JobDarwinHousekeeping JobKind = "darwin_housekeeping"
+	JobFederationWeekly   JobKind = "federation_weekly"
+	JobActivationMonitor  JobKind = "activation_monitor"
+)
+
+type Freshness string
+
+const (
+	FreshnessCurrent     Freshness = "current"
+	FreshnessAging       Freshness = "aging"
+	FreshnessStale       Freshness = "stale"
+	FreshnessMissed      Freshness = "missed"
+	FreshnessUnavailable Freshness = "unavailable"
+)
+
+type Recovery string
+
+const (
+	RecoveryNotNeeded Recovery = "not_needed"
+	RecoveryRecovered Recovery = "recovered"
+	RecoveryFailed    Recovery = "failed"
+	RecoveryBlocked   Recovery = "blocked"
+)
+
+type Outcome string
+
+const (
+	OutcomeSucceeded   Outcome = "succeeded"
+	OutcomeFailed      Outcome = "failed"
+	OutcomeBlocked     Outcome = "blocked"
+	OutcomeUnavailable Outcome = "unavailable"
+	OutcomeNoAction    Outcome = "no_action"
+	OutcomePartial     Outcome = "partial"
+)
+
+type OverrideKind string
+
+const (
+	OverrideNone     OverrideKind = "none"
+	OverrideRoute    OverrideKind = "route_change"
+	OverrideBudget   OverrideKind = "budget_extension"
+	OverrideResume   OverrideKind = "manual_resume"
+	OverrideRecovery OverrideKind = "release_recovery"
+)
+
+type PACoverage string
+
+const (
+	PACoverageNotRequired PACoverage = "not_required"
+	PACoverageCovered     PACoverage = "covered"
+	PACoverageMissing     PACoverage = "missing"
+	PACoverageUnavailable PACoverage = "unavailable"
+)
+
+type CapabilityGap string
+
+const (
+	GapNativeRuntime     CapabilityGap = "native_runtime"
+	GapReceiptCoverage   CapabilityGap = "receipt_coverage"
+	GapPAExpertCoverage  CapabilityGap = "pa_expert_coverage"
+	GapRecovery          CapabilityGap = "recovery"
+	GapBudget            CapabilityGap = "budget"
+	GapLatency           CapabilityGap = "latency"
+	GapHumanConfirmation CapabilityGap = "human_confirmation"
+)
+
+type ProposalKind string
+
+const (
+	ProposalPolicyCalibration ProposalKind = "policy_calibration"
+	ProposalCapability        ProposalKind = "capability_improvement"
+	ProposalReliability       ProposalKind = "reliability_fix"
+	ProposalSkillPattern      ProposalKind = "skill_pattern"
+)
+
+type ProposalStatus string
+
+const (
+	ProposalDraft       ProposalStatus = "draft"
+	ProposalAccepted    ProposalStatus = "accepted"
+	ProposalRejected    ProposalStatus = "rejected"
+	ProposalDeferred    ProposalStatus = "deferred"
+	ProposalImplemented ProposalStatus = "implemented"
+	ProposalRolledBack  ProposalStatus = "rolled_back"
+)
+
+type Decision string
+
+const (
+	DecisionAccepted Decision = "accepted"
+	DecisionRejected Decision = "rejected"
+	DecisionDeferred Decision = "deferred"
+)
+
+type EvaluationOutcome string
+
+const (
+	EvaluationImproved     EvaluationOutcome = "improved"
+	EvaluationNeutral      EvaluationOutcome = "neutral"
+	EvaluationRegressed    EvaluationOutcome = "regressed"
+	EvaluationInsufficient EvaluationOutcome = "insufficient"
+)
+
+type AlternativeID string
+
+const (
+	AlternativeBaseline   AlternativeID = "baseline"
+	AlternativeCandidateA AlternativeID = "candidate_a"
+	AlternativeCandidateB AlternativeID = "candidate_b"
+	AlternativeCandidateC AlternativeID = "candidate_c"
+)
+
+// Record is a closed union. Exactly one payload must be populated according
+// to Kind; incompatible payloads are rejected by Validate.
+type Record struct {
+	SchemaVersion int                  `json:"schema_version"`
+	Kind          Kind                 `json:"kind"`
+	EvidenceID    string               `json:"evidence_id"`
+	WindowID      string               `json:"window_id"`
+	RecordedAt    time.Time            `json:"recorded_at"`
+	Health        *HealthEvidence      `json:"health,omitempty"`
+	Selection     *SelectionEvidence   `json:"selection,omitempty"`
+	Proposal      *ProposalEvidence    `json:"proposal,omitempty"`
+	Acceptance    *AcceptanceEvidence  `json:"acceptance,omitempty"`
+	Evaluation    *EvaluationEvidence  `json:"evaluation,omitempty"`
+	Alternative   *AlternativeEvidence `json:"alternative,omitempty"`
+}
+
+type HealthEvidence struct {
+	JobKind     JobKind   `json:"job_kind"`
+	ScheduledAt time.Time `json:"scheduled_at"`
+	CapturedAt  time.Time `json:"captured_at"`
+	Freshness   Freshness `json:"freshness"`
+	Recovery    Recovery  `json:"recovery"`
+	Outcome     Outcome   `json:"outcome"`
+}
+
+type SelectionEvidence struct {
+	PlanSHA256      string                   `json:"plan_sha256"`
+	PolicyVersion   string                   `json:"policy_version"`
+	Posture         activationpolicy.Posture `json:"posture"`
+	Route           activationpolicy.Route   `json:"route"`
+	Outcome         Outcome                  `json:"outcome"`
+	DurationSeconds int                      `json:"duration_seconds"`
+	MaxCalls        int                      `json:"max_calls"`
+	CallsUsed       int                      `json:"calls_used"`
+	MaxTokenUnits   int                      `json:"max_token_units"`
+	TokenUnitsUsed  int                      `json:"token_units_used"`
+	BudgetExhausted bool                     `json:"budget_exhausted"`
+	HumanOverride   bool                     `json:"human_override"`
+	OverrideKind    OverrideKind             `json:"override_kind"`
+	PACoverage      PACoverage               `json:"pa_coverage"`
+	PAExpertCount   int                      `json:"pa_expert_count"`
+	CapabilityGaps  []CapabilityGap          `json:"capability_gaps"`
+}
+
+type ProposalEvidence struct {
+	ProposalSHA256 string         `json:"proposal_sha256"`
+	ProposalKind   ProposalKind   `json:"proposal_kind"`
+	Status         ProposalStatus `json:"status"`
+	AuthorRole     string         `json:"author_role"`
+}
+
+type AcceptanceEvidence struct {
+	ProposalSHA256 string   `json:"proposal_sha256"`
+	Decision       Decision `json:"decision"`
+	ActorRole      string   `json:"actor_role"`
+}
+
+type EvaluationEvidence struct {
+	ProposalSHA256     string            `json:"proposal_sha256"`
+	BaselineWindowID   string            `json:"baseline_window_id"`
+	PostChangeWindowID string            `json:"post_change_window_id"`
+	ChangeSHA256       string            `json:"change_sha256"`
+	EvaluatorRole      string            `json:"evaluator_role"`
+	Outcome            EvaluationOutcome `json:"outcome"`
+	SelfEvaluation     bool              `json:"self_evaluation"`
+}
+
+type AlternativeEvidence struct {
+	AlternativeID      AlternativeID            `json:"alternative_id"`
+	PolicyVersion      string                   `json:"policy_version"`
+	Posture            activationpolicy.Posture `json:"posture"`
+	Route              activationpolicy.Route   `json:"route"`
+	Outcome            Outcome                  `json:"outcome"`
+	DurationSeconds    int                      `json:"duration_seconds"`
+	BudgetExhausted    bool                     `json:"budget_exhausted"`
+	PACoverage         PACoverage               `json:"pa_coverage"`
+	CapabilityGapCount int                      `json:"capability_gap_count"`
+}
+
+var (
+	identifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]{0,63}$`)
+	digestPattern     = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	policyPattern     = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
+)
+
+func (record Record) Validate() error {
+	if record.SchemaVersion != SchemaVersion || !identifierPattern.MatchString(record.EvidenceID) ||
+		!identifierPattern.MatchString(record.WindowID) || record.RecordedAt.IsZero() {
+		return errors.New("invalid Darwin evidence header")
+	}
+	count := 0
+	if record.Health != nil {
+		count++
+	}
+	if record.Selection != nil {
+		count++
+	}
+	if record.Proposal != nil {
+		count++
+	}
+	if record.Acceptance != nil {
+		count++
+	}
+	if record.Evaluation != nil {
+		count++
+	}
+	if record.Alternative != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("Darwin evidence must contain exactly one payload")
+	}
+	switch record.Kind {
+	case KindHealth:
+		if record.Health == nil {
+			return errors.New("health evidence payload is missing")
+		}
+		return record.Health.validate()
+	case KindSelection:
+		if record.Selection == nil {
+			return errors.New("selection evidence payload is missing")
+		}
+		return record.Selection.validate()
+	case KindProposal:
+		if record.Proposal == nil {
+			return errors.New("proposal evidence payload is missing")
+		}
+		return record.Proposal.validate()
+	case KindAcceptance:
+		if record.Acceptance == nil {
+			return errors.New("acceptance evidence payload is missing")
+		}
+		return record.Acceptance.validate()
+	case KindEvaluation:
+		if record.Evaluation == nil {
+			return errors.New("evaluation evidence payload is missing")
+		}
+		return record.Evaluation.validate()
+	case KindAlternative:
+		if record.Alternative == nil {
+			return errors.New("alternative evidence payload is missing")
+		}
+		return record.Alternative.validate()
+	default:
+		return errors.New("unknown Darwin evidence kind")
+	}
+}
+
+func (e HealthEvidence) validate() error {
+	if !validJobKind[e.JobKind] || e.ScheduledAt.IsZero() || e.CapturedAt.IsZero() || e.CapturedAt.Before(e.ScheduledAt) ||
+		!validFreshness[e.Freshness] || !validRecovery[e.Recovery] || !validOutcome[e.Outcome] {
+		return errors.New("invalid health evidence")
+	}
+	if e.Recovery == RecoveryNotNeeded && e.Freshness == FreshnessMissed {
+		return errors.New("missed health evidence requires recovery")
+	}
+	return nil
+}
+
+func (e SelectionEvidence) validate() error {
+	if !digestPattern.MatchString(e.PlanSHA256) || !policyPattern.MatchString(e.PolicyVersion) ||
+		!validPosture[e.Posture] || !validRoute[e.Route] || !validOutcome[e.Outcome] ||
+		e.DurationSeconds < 0 || e.DurationSeconds > 86400 || e.MaxCalls < 0 || e.CallsUsed < 0 || e.CallsUsed > e.MaxCalls ||
+		e.MaxTokenUnits < 0 || e.TokenUnitsUsed < 0 || e.TokenUnitsUsed > e.MaxTokenUnits || e.PAExpertCount < 0 || e.PAExpertCount > 2 ||
+		!validOverride[e.OverrideKind] || !validCoverage[e.PACoverage] || len(e.CapabilityGaps) > 8 {
+		return errors.New("invalid selection evidence")
+	}
+	if !e.HumanOverride && e.OverrideKind != OverrideNone {
+		return errors.New("override kind requires a human override")
+	}
+	if e.HumanOverride && e.OverrideKind == OverrideNone {
+		return errors.New("human override requires an override kind")
+	}
+	seen := map[CapabilityGap]bool{}
+	for _, gap := range e.CapabilityGaps {
+		if !validGap[gap] || seen[gap] {
+			return errors.New("invalid or duplicate capability gap")
+		}
+		seen[gap] = true
+	}
+	if e.PACoverage == PACoverageNotRequired && e.PAExpertCount != 0 {
+		return errors.New("PA expert count is incompatible with coverage")
+	}
+	return nil
+}
+
+func (e ProposalEvidence) validate() error {
+	if !digestPattern.MatchString(e.ProposalSHA256) || !validProposalKind[e.ProposalKind] || !validProposalStatus[e.Status] || e.AuthorRole != "darwin" {
+		return errors.New("invalid proposal evidence")
+	}
+	return nil
+}
+
+func (e AcceptanceEvidence) validate() error {
+	if !digestPattern.MatchString(e.ProposalSHA256) || !validDecision[e.Decision] || e.ActorRole != "human_maintainer" {
+		return errors.New("invalid acceptance evidence")
+	}
+	return nil
+}
+
+func (e EvaluationEvidence) validate() error {
+	if !digestPattern.MatchString(e.ProposalSHA256) || !identifierPattern.MatchString(e.BaselineWindowID) ||
+		!identifierPattern.MatchString(e.PostChangeWindowID) || !digestPattern.MatchString(e.ChangeSHA256) ||
+		e.EvaluatorRole != "independent_evaluator" || e.SelfEvaluation || !validEvaluation[e.Outcome] || e.BaselineWindowID == e.PostChangeWindowID {
+		return errors.New("invalid or non-independent evaluation evidence")
+	}
+	return nil
+}
+
+func (e AlternativeEvidence) validate() error {
+	if !validAlternative[e.AlternativeID] || !policyPattern.MatchString(e.PolicyVersion) || !validPosture[e.Posture] ||
+		!validRoute[e.Route] || !validOutcome[e.Outcome] || e.DurationSeconds < 0 || e.DurationSeconds > 86400 ||
+		!validCoverage[e.PACoverage] || e.CapabilityGapCount < 0 || e.CapabilityGapCount > 8 {
+		return errors.New("invalid alternative evidence")
+	}
+	return nil
+}
+
+var (
+	validJobKind        = map[JobKind]bool{JobDarwinHousekeeping: true, JobFederationWeekly: true, JobActivationMonitor: true}
+	validFreshness      = map[Freshness]bool{FreshnessCurrent: true, FreshnessAging: true, FreshnessStale: true, FreshnessMissed: true, FreshnessUnavailable: true}
+	validRecovery       = map[Recovery]bool{RecoveryNotNeeded: true, RecoveryRecovered: true, RecoveryFailed: true, RecoveryBlocked: true}
+	validOutcome        = map[Outcome]bool{OutcomeSucceeded: true, OutcomeFailed: true, OutcomeBlocked: true, OutcomeUnavailable: true, OutcomeNoAction: true, OutcomePartial: true}
+	validPosture        = map[activationpolicy.Posture]bool{activationpolicy.Direct: true, activationpolicy.Balanced: true, activationpolicy.Deliberative: true}
+	validRoute          = map[activationpolicy.Route]bool{activationpolicy.D0Direct: true, activationpolicy.D1Targeted: true, activationpolicy.D2Governed: true, activationpolicy.Blocked: true}
+	validOverride       = map[OverrideKind]bool{OverrideNone: true, OverrideRoute: true, OverrideBudget: true, OverrideResume: true, OverrideRecovery: true}
+	validCoverage       = map[PACoverage]bool{PACoverageNotRequired: true, PACoverageCovered: true, PACoverageMissing: true, PACoverageUnavailable: true}
+	validGap            = map[CapabilityGap]bool{GapNativeRuntime: true, GapReceiptCoverage: true, GapPAExpertCoverage: true, GapRecovery: true, GapBudget: true, GapLatency: true, GapHumanConfirmation: true}
+	validProposalKind   = map[ProposalKind]bool{ProposalPolicyCalibration: true, ProposalCapability: true, ProposalReliability: true, ProposalSkillPattern: true}
+	validProposalStatus = map[ProposalStatus]bool{ProposalDraft: true, ProposalAccepted: true, ProposalRejected: true, ProposalDeferred: true, ProposalImplemented: true, ProposalRolledBack: true}
+	validDecision       = map[Decision]bool{DecisionAccepted: true, DecisionRejected: true, DecisionDeferred: true}
+	validEvaluation     = map[EvaluationOutcome]bool{EvaluationImproved: true, EvaluationNeutral: true, EvaluationRegressed: true, EvaluationInsufficient: true}
+	validAlternative    = map[AlternativeID]bool{AlternativeBaseline: true, AlternativeCandidateA: true, AlternativeCandidateB: true, AlternativeCandidateC: true}
+)
+
+// DecodeStrict rejects unknown fields, duplicate keys and trailing JSON.
+func DecodeStrict(body []byte, target any) error {
+	if err := rejectDuplicateKeys(body); err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+func rejectDuplicateKeys(body []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	var walk func(json.Token) error
+	walk = func(token json.Token) error {
+		delim, ok := token.(json.Delim)
+		if !ok {
+			return nil
+		}
+		if delim == '{' {
+			seen := map[string]bool{}
+			for decoder.More() {
+				keyToken, err := decoder.Token()
+				if err != nil {
+					return err
+				}
+				key, ok := keyToken.(string)
+				if !ok {
+					return errors.New("invalid JSON object key")
+				}
+				if seen[key] {
+					return fmt.Errorf("duplicate JSON object key %q", key)
+				}
+				seen[key] = true
+				value, err := decoder.Token()
+				if err != nil {
+					return err
+				}
+				if err := walk(value); err != nil {
+					return err
+				}
+			}
+			_, err := decoder.Token()
+			return err
+		}
+		if delim == '[' {
+			for decoder.More() {
+				value, err := decoder.Token()
+				if err != nil {
+					return err
+				}
+				if err := walk(value); err != nil {
+					return err
+				}
+			}
+			_, err := decoder.Token()
+			return err
+		}
+		return nil
+	}
+	first, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if err := walk(first); err != nil {
+		return err
+	}
+	return nil
+}
+
+func SHA256Hex(body []byte) string {
+	digest := sha256.Sum256(body)
+	return hex.EncodeToString(digest[:])
+}
+
+func EvidenceID(kind Kind, windowID string, value []byte) string {
+	digest := SHA256Hex(append([]byte(string(kind)+"\x00"+windowID+"\x00"), value...))
+	return "ev-" + digest[:32]
+}
+
+func InputDigest(records []Record) (string, error) {
+	canonical := make([][]byte, len(records))
+	seen := map[string]bool{}
+	for i, record := range records {
+		if err := record.Validate(); err != nil {
+			return "", err
+		}
+		if seen[record.EvidenceID] {
+			return "", errors.New("duplicate evidence ID")
+		}
+		seen[record.EvidenceID] = true
+		body, err := json.Marshal(record)
+		if err != nil {
+			return "", err
+		}
+		canonical[i] = body
+	}
+	sort.Slice(canonical, func(i, j int) bool { return string(canonical[i]) < string(canonical[j]) })
+	return SHA256Hex(bytes.Join(canonical, []byte{'\n'})), nil
+}
+
+func normalizeString(value string) string { return strings.ToLower(strings.TrimSpace(value)) }
