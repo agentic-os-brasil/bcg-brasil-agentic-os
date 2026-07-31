@@ -1,6 +1,6 @@
 # Spec 027 - Governed agent scaffolding
 
-Status: managed Client Account, Case, practice and specialist templates, atomic
+Status: managed Client Account, Case and PA Expert templates, atomic
 local instance scaffolding and CLI implemented. Native Claude and Codex
 registration, credentials and tool grants remain unavailable.
 
@@ -17,9 +17,8 @@ Managed templates live in:
 ```text
 bundles/base/agents/templates/case_agent/AGENT.md
 bundles/base/agents/templates/client_account_agent/AGENT.md
-bundles/base/agents/templates/practice_agent/AGENT.md
+bundles/base/agents/templates/pa_expert/AGENT.md
 bundles/base/agents/templates/capability_specialist/AGENT.md
-bundles/base/agents/templates/subject_specialist/AGENT.md
 ```
 
 They define role behavior only. They contain no workspace ID, account ID,
@@ -52,27 +51,26 @@ and are never overwritten.
 | --- | --- | --- | --- |
 | `case_agent` | canonical `maestro` / `hub` | exact case/project workspace | one capability specialist |
 | `client_account_agent` | canonical `maestro` / `hub` | exact client account | no direct child; Maestro mediates Case activation |
-| `practice_agent` | canonical `maestro` / `hub` | exact practice and verified canon | one subject specialist |
+| `pa_expert` | canonical `maestro` / `hub` | exact versioned FPA/IPA canon | none |
 | `capability_specialist` | workspace or account agent | same workspace or account | none |
-| `subject_specialist` | practice agent | same practice | none |
 
 Case agents created by the existing workspace-first CLI use the compatibility
 identity `workspace-agent-<workspace-id>` during migration; new explicit case
 roots use `case-agent-<case-id>`. Both persist the canonical role
-`case_agent`. Capability and subject specialists use the
-`capability-` and `subject-` prefixes. The managed catalog's closed role
+`case_agent`. Capability specialists use the `capability-` prefix. The managed catalog's closed role
 contracts and allowed edge at the correct depth are checked before any file is
 created. A workspace stub additionally requires the concrete workspace-agent
-registry produced by `bcgos init`. Account and practice roots require an
-accountable owner and bounded mandate; practice roots also verify the bytes and
-SHA-256 of a specific canon artifact through an OS-enforced practice root, so
+registry produced by `bcgos init`. Account roots and PA Expert roots require an
+accountable owner and bounded mandate; PA Experts also verify the bytes and
+SHA-256 of a specific versioned canon artifact through an OS-enforced registry
+root, so
 symlinks cannot escape that scope. A
 specialist's parent is resolved from a signed local instance, and its actual
 role, scope kind and scope ID must match; caller-declared parent metadata is
 never sufficient.
 
 `bcgos init` automatically scaffolds the owning Case Agent after creating its
-compact state and dossier. Client Account Agents, practice agents and leaf
+compact state and dossier. Client Account Agents, PA Experts and leaf
 specialists require an explicit command. A leaf always requires an already
 registered matching parent:
 
@@ -88,10 +86,11 @@ bcgos agent scaffold \
 bcgos agent status --id capability-research
 ```
 
-Practice roots additionally provide `--owner`, `--mandate`, `--canon` and
-`--canon-sha256`; account roots provide `--owner` and `--mandate`. Their managed
-prompts remain data-free: this bounded metadata stays only in the signed local
-instance manifest.
+PA Expert roots provide `--owner`, `--mandate`, `--canon`, `--canon-sha256`,
+`--expert-kind` and `--expert-version`; account roots provide `--owner` and
+`--mandate`. Their managed prompts remain data-free: this bounded metadata
+stays only in the signed local instance manifest. Legacy practice roles and ID
+prefixes are rejected with an explicit re-registration error.
 
 The identity and ownership fields are part of the signed instance contract. A
 manifest created before this contract was introduced is not silently upgraded:
@@ -123,9 +122,9 @@ Until then, `runtime_state` is `unavailable` and dispatch must fail closed.
 ## Acceptance criteria
 
 1. Every new workspace receives one idempotent concrete Case Agent stub.
-2. Client Account and practice roots require a named owner and mandate; practice canon
-   bytes must match the declared digest.
-3. Capability and subject specialist stubs can be created only on catalogued
+2. Client Account and PA Expert roots require a named owner and mandate; PA Expert
+   canon bytes must match the declared digest.
+3. Capability specialist stubs can be created only on catalogued
    role edges with a concrete registered parent in the exact same scope.
 4. Managed templates contain no instance or client data.
 5. Reusing an agent ID for another scope, parent or role is rejected.

@@ -6,7 +6,7 @@ delivery and recovery remain unavailable.
 
 ## Objective
 
-Let Maestro and an owning workspace, account or practice agent delegate one
+Let Maestro and an owning Case or Client Account Agent delegate one
 small task without copying a whole dossier, workspace or conversation into the
 next agent.
 
@@ -24,14 +24,14 @@ Every delegation uses a signed `WorkPacket` containing only:
 - an HMAC-SHA256 signature from the local dispatcher capability.
 
 Pointers may address only a specific artifact below the packet scope root or a
-specific `bcgos://public/...` artifact. A whole workspace, account, practice or
+specific `bcgos://public/...` artifact. A whole workspace, account or
 public root is too broad and is rejected. Pointers do not contain file bodies,
-prompt history, credentials or raw workspace context. Practice packets cannot
+prompt history, credentials or raw workspace context. PA Expert packets cannot
 point to workspace resources. A child packet inherits the root packet scope
 and names the parent packet.
 
 Byte and count limits are not semantic sanitization. The issuing Maestro,
-workspace, account or practice agent remains responsible for minimizing the
+Case or Client Account Agent remains responsible for minimizing the
 free-text objective and constraints; native adapters must not auto-copy source
 bodies or conversation history into those fields.
 

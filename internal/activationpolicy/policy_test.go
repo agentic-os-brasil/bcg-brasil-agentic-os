@@ -35,18 +35,14 @@ func TestBalancedPolicyRoutesDeterministically(t *testing.T) {
 	}
 }
 
-func TestOmittedPostureDefaultsToBalanced(t *testing.T) {
-	plan, err := Plan(IntentEnvelope{
+func TestOmittedPostureFailsClosed(t *testing.T) {
+	_, err := Plan(IntentEnvelope{
 		SchemaVersion: 1, EpisodeID: "episode-default", Owner: OwnerCase,
 		Consequence: Medium, Reversibility: Reversible,
 		Sensitivity: Internal, KnowledgeNeed: None,
 	}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if plan.Posture != Balanced || plan.Route != D1Targeted ||
-		!plan.RequiresAssurance || plan.AssuranceAgentID != "walter" {
-		t.Fatalf("default posture is not the balanced governed default: %#v", plan)
+	if err == nil {
+		t.Fatal("omitted posture silently selected an experimental route")
 	}
 }
 
@@ -55,6 +51,21 @@ func TestRequestedRouteIsOutsideTheClosedPlannerProposal(t *testing.T) {
 	body := []byte(`{"schema_version":1,"episode_id":"episode-02","owner":"client_account_agent","posture":"direct","consequence":"high","reversibility":"reversible","sensitivity":"confidential","knowledge_need":"none","external_effect":true,"planner_proposal":{"requested_route":"D0_DIRECT"}}`)
 	if err := DecodeStrict(body, &envelope); err == nil {
 		t.Fatal("non-canonical requested_route was accepted")
+	}
+}
+
+func TestLegacyPracticeExpertIDsCannotEnterThePAExpertRegistry(t *testing.T) {
+	input := IntentEnvelope{
+		SchemaVersion: 1, EpisodeID: "episode-legacy-id", Owner: OwnerCase,
+		Posture: Direct, Consequence: Low, Reversibility: Reversible,
+		Sensitivity: Internal, KnowledgeNeed: Functional,
+	}
+	_, err := Plan(input, []PAExpert{{
+		ID: "practice-agent-insurance", Kind: ExpertFPA, Version: "1.0.0",
+		CanonSHA256: digest("canon"), Lifecycle: Published,
+	}})
+	if err == nil {
+		t.Fatal("legacy practice ID was accepted by PA Expert registry selection")
 	}
 }
 

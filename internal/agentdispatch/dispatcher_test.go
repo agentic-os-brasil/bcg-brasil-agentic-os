@@ -36,7 +36,7 @@ func TestDispatcherIssuesSealedSequentialWorkspacePackets(t *testing.T) {
 	}
 
 	_, parallel, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "practice-insurance", ScopeKind: "practice", ScopeID: "insurance",
+		TargetAgentID: "client-account-agent-alpha", ScopeKind: "account", ScopeID: "account-alpha",
 		Objective: "Review insurance concepts.", TTL: time.Hour,
 	})
 	if err != nil {
@@ -134,8 +134,8 @@ func TestDispatcherRejectsTamperingExpiryAndCrossScopePointers(t *testing.T) {
 	dispatcher.now = func() time.Time { return now }
 
 	if _, _, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "practice-insurance", ScopeKind: "practice", ScopeID: "insurance",
-		Objective: "Review the subject canon.",
+		TargetAgentID: "client-account-agent-alpha", ScopeKind: "account", ScopeID: "account-alpha",
+		Objective: "Review the account context.",
 		Pointers:  []string{"bcgos://workspace/insurance/raw-client.md"},
 		TTL:       time.Hour,
 	}); err == nil {
@@ -295,30 +295,13 @@ func TestDispatcherRejectsLegacyPacketAsNewDelegationParent(t *testing.T) {
 	}
 }
 
-func TestDispatcherPreservesGovernedSubjectDelegationWithoutTransversalSkill(t *testing.T) {
+func TestDispatcherRejectsRetiredPracticeDelegation(t *testing.T) {
 	dispatcher := newTestDispatcher(t)
-	root, decision, err := dispatcher.StartRoot(PacketRequest{
-		TargetAgentID: "practice-insurance", ScopeKind: "practice", ScopeID: "insurance",
-		Objective: "Review the approved insurance subject canon.", TTL: time.Hour,
-	})
-	if err != nil || !decision.Allowed {
-		t.Fatalf("practice root dispatch failed: %#v %v", decision, err)
-	}
-	child, childDecision, err := dispatcher.StartChild(root, PacketRequest{
-		TargetAgentID: "subject-insurance", ScopeKind: "practice", ScopeID: "insurance",
-		Objective: "Pressure-test the subject canon.", TTL: time.Hour,
-	})
-	if err != nil || !childDecision.Allowed || child.SkillID != "" {
-		t.Fatalf("subject delegation failed: packet=%#v decision=%#v err=%v", child, childDecision, err)
-	}
-	if err := dispatcher.Verify(child); err != nil {
-		t.Fatal(err)
-	}
-	if decision := dispatcher.FinishChild(child); !decision.Allowed {
-		t.Fatalf("finish subject child = %#v", decision)
-	}
-	if decision := dispatcher.FinishRoot(root); !decision.Allowed {
-		t.Fatalf("finish practice root = %#v", decision)
+	if _, decision, err := dispatcher.StartRoot(PacketRequest{
+		TargetAgentID: "practice-agent-insurance", ScopeKind: "practice", ScopeID: "insurance",
+		Objective: "Attempt to revive the retired practice chain.", TTL: time.Hour,
+	}); err == nil || decision.Allowed {
+		t.Fatalf("retired practice dispatch was accepted: %#v %v", decision, err)
 	}
 }
 
@@ -467,8 +450,6 @@ func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher 
 		{AgentID: "capability-account", Role: "capability_specialist", Scope: "account-alpha", ScopeKind: "account", Capability: "capability-account-cap"},
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-agent-alpha-cap"},
 		{AgentID: "capability-research", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-research-cap"},
-		{AgentID: "practice-insurance", Role: "practice_agent", Scope: "insurance", ScopeKind: "practice", Capability: "practice-insurance-cap"},
-		{AgentID: "subject-insurance", Role: "subject_specialist", Scope: "insurance", ScopeKind: "practice", Capability: "subject-insurance-cap"},
 	}
 	adapter, err := agentorchestration.NewAdapter(runtime, catalog, grants, store)
 	if err != nil {
@@ -477,7 +458,6 @@ func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher 
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
 		"maestro": "maestro-cap", "walter": "walter-cap", "client-account-agent-alpha": "client-account-agent-alpha-cap", "capability-account": "capability-account-cap",
 		"workspace-agent-alpha": "workspace-agent-alpha-cap", "capability-research": "capability-research-cap",
-		"practice-insurance": "practice-insurance-cap", "subject-insurance": "subject-insurance-cap",
 	}, registry)
 	if err != nil {
 		t.Fatal(err)

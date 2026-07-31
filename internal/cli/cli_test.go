@@ -810,19 +810,9 @@ func TestAgentScaffoldCommandCreatesAndInspectsAWorkspaceSpecialist(t *testing.T
 	}
 }
 
-func TestAgentScaffoldCommandCreatesPracticeAndSubjectChain(t *testing.T) {
+func TestAgentScaffoldCommandRejectsRetiredPracticeChain(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")
-	canonRelative := filepath.Join("practices", "insurance", "canon.md")
-	canonPath := filepath.Join(dataRoot, canonRelative)
-	if err := os.MkdirAll(filepath.Dir(canonPath), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	canon := []byte("# Insurance canon\n")
-	if err := os.WriteFile(canonPath, canon, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	digest := sha256.Sum256(canon)
 	var output bytes.Buffer
 	code := runAgent([]string{
 		"scaffold",
@@ -832,26 +822,9 @@ func TestAgentScaffoldCommandCreatesPracticeAndSubjectChain(t *testing.T) {
 		"--scope", "insurance",
 		"--parent", "maestro",
 		"--parent-role", "hub",
-		"--owner", "practice-owner",
-		"--mandate", "Maintain the governed insurance canon.",
-		"--canon", filepath.ToSlash(canonRelative),
-		"--canon-sha256", hex.EncodeToString(digest[:]),
 	}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"role": "practice_agent"`) {
-		t.Fatalf("practice scaffold exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	code = runAgent([]string{
-		"scaffold",
-		"--id", "subject-insurance",
-		"--role", "subject_specialist",
-		"--scope-kind", "practice",
-		"--scope", "insurance",
-		"--parent", "practice-agent-insurance",
-		"--parent-role", "practice_agent",
-	}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"role": "subject_specialist"`) {
-		t.Fatalf("subject scaffold exit = %d, output = %s", code, output.String())
+	if code == ExitOK || !strings.Contains(strings.ToLower(output.String()), "deprecated") {
+		t.Fatalf("retired practice scaffold exit = %d, output = %s", code, output.String())
 	}
 }
 

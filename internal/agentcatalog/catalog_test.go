@@ -12,8 +12,7 @@ func TestCatalogAcceptsLeanMaestroCore(t *testing.T) {
 			MaxErrandHelpers: 1, ErrandScope: "basic_reversible",
 			AllowedEdges: []DelegationEdge{
 				{FromRole: "case_agent", ToRoles: []string{"capability_specialist"}},
-				{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer"}},
-				{FromRole: "practice_agent", ToRoles: []string{"subject_specialist"}},
+				{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}},
 			},
 		},
 		Agents: []Agent{
@@ -43,9 +42,6 @@ func TestCatalogAllowsOnlyTheGovernedDepthTwoChains(t *testing.T) {
 		{"hub", "workspace_agent", 2, false},
 		{"workspace_agent", "capability_specialist", 2, true},
 		{"workspace_agent", "capability_specialist", 1, false},
-		{"hub", "practice_agent", 1, true},
-		{"practice_agent", "subject_specialist", 2, true},
-		{"practice_agent", "subject_specialist", 1, false},
 		{"account_agent", "capability_specialist", 1, false},
 		{"hub", "subject_specialist", 1, false},
 		{"workspace_agent", "subject_specialist", 2, false},
@@ -64,18 +60,13 @@ func TestCatalogAllowsOnlyTheGovernedDepthTwoChains(t *testing.T) {
 	}
 }
 
-func TestCatalogAcceptsARegisteredPracticeAgentWithOneBoundedChild(t *testing.T) {
+func TestCatalogRejectsRetiredPracticeAuthority(t *testing.T) {
 	catalog := mustTestCatalog(t)
-	practice := Agent{
-		ID: "practice-insurance", Role: "practice_agent", DirectUserAccess: false,
-		ToolAccess: "scoped", MayDelegate: true, InputContract: "bounded_practice_packet",
-		RelativePath: "agents/practice-insurance/AGENT.md",
+	if err := catalog.RejectLegacyRegistration("practice-agent-insurance", "practice_agent"); err == nil {
+		t.Fatal("legacy practice role and ID were accepted")
 	}
-	catalog.Agents = append(catalog.Agents, Agent{})
-	copy(catalog.Agents[3:], catalog.Agents[2:])
-	catalog.Agents[2] = practice
-	if err := catalog.Validate(); err != nil {
-		t.Fatal(err)
+	if catalog.AllowsDelegation("hub", "practice_agent", 1) || catalog.AllowsDelegation("practice_agent", "subject_specialist", 2) {
+		t.Fatal("deprecated practice graph remains routable")
 	}
 }
 

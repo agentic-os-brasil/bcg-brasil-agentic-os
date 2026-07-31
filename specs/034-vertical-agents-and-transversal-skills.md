@@ -54,10 +54,13 @@ the parent may create one child WorkPacket. A packet for a
 `capability_specialist` names exactly one managed skill, its objective, exact
 pointers, constraints, expiry and expected return. The capability specialist
 receives no general context, no persistent access and no right to select
-additional skills. Existing `practice_agent` → `subject_specialist` dispatch
-remains a governed subject packet and does not acquire a transversal skill
-requirement in this slice. Each child returns evidence pointers, a concise
-result, assumptions, risks and an explicit failure state to its parent. The
+additional skills. The legacy `practice_agent` → `subject_specialist` graph is
+retired: FPA and IPA advice has one canonical `pa_expert` role, selected from
+the versioned PA Expert registry. Legacy roles and ID prefixes fail closed and
+require explicit re-registration, so they cannot create split-brain authority.
+PA Expert advisory packets remain registry-bound and are not child capability
+packets. Each child returns evidence pointers, a concise result, assumptions,
+risks and an explicit failure state to its parent. The
 parent validates and integrates the result before returning to Maestro.
 
 The current dispatcher remains intentionally sequential: one active branch and
@@ -96,8 +99,8 @@ that selection as part of the WorkPacket. Unknown, duplicate, missing or
 tampered skill IDs fail closed for capability specialists. New packets use
 schema version 2. A schema-version-1 child with no skill selection may only be
 verified and finished as an in-flight completion during rollout; it cannot
-express a new method choice or open a new delegation. Subject-specialist
-packets retain their existing governed contract and reject an unexpected skill
+express a new method choice or open a new delegation. PA Expert advisory
+packets are separate registry-bound contracts and reject an unexpected skill
 ID. Root packets issued by Maestro do not select a case skill: the receiving
 vertical agent remains responsible for method choice.
 

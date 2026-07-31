@@ -47,7 +47,7 @@ type DarwinReport struct {
 
 func EvaluateObservations(observations []Observation) (DarwinReport, error) {
 	report := DarwinReport{
-		SchemaVersion: 1, PolicyVersion: PolicyVersion, Posture: Balanced,
+		SchemaVersion: 1, PolicyVersion: PolicyVersion,
 		RouteCounts:         map[Route]int{D0Direct: 0, D1Targeted: 0, D2Governed: 0, Blocked: 0},
 		RouteBasisPoints:    map[Route]int{D0Direct: 0, D1Targeted: 0, D2Governed: 0, Blocked: 0},
 		MeanDurationSeconds: map[Route]int{D0Direct: 0, D1Targeted: 0, D2Governed: 0, Blocked: 0},

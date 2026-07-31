@@ -13,9 +13,9 @@ governed multi-agent loop. The decision cannot depend only on prompt wording.
 Darwin must be able to observe the chosen route and later recommend calibration
 without changing policy during an episode.
 
-The initial posture is `balanced`.
-An omitted posture normalizes to `balanced`; changing it is an explicit
-episode-level decision.
+The policy is explicitly experimental and has no implicit posture. Every
+episode must provide `direct`, `balanced` or `deliberative`; an omitted posture
+fails closed rather than silently selecting a depth.
 
 ## Closed decision envelope
 
@@ -40,7 +40,7 @@ compatible published expert or fail closed.
 
 ## Deterministic policy
 
-Policy version `pae-v1` produces exactly one shadow route. It is a breaking
+Policy version `pae-v1-experimental` produces exactly one shadow route. It is a breaking
 policy version: route plans stamped with the previous policy version must be
 replanned rather than accepted under the new contracts.
 
@@ -196,7 +196,10 @@ Only one branch is active. Raw context never transits between scopes.
 Shadow evaluation records only closed routing metadata and content-free
 receipts. Darwin may compare route mix, latency, budget exhaustion, missing
 expert coverage and human overrides over a defined window. Darwin proposes a
-new versioned policy; it cannot mutate thresholds or posture directly.
+new versioned policy through a proposal-only weekly or monthly evolution
+record; it cannot mutate thresholds or posture directly. Structural proposals
+require independent approval and a separate activation contract. Native
+evidence from one window is not proof of future version compatibility.
 
 `bcgos agent monitor --stdin` produces a deterministic content-free report for
 one explicit calibration window, policy version and posture. It rejects mixed
