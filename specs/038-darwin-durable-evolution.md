@@ -26,8 +26,11 @@ open episode -> append evidence window -> write proposal -> interrupt
 - Darwin can create proposal artifacts and observe metadata-only evidence. It
   cannot self-approve, self-evaluate, mutate live routing, change the agent or
   PA Expert registry, edit canon or change policy.
-- Acceptance and rejection are append-only receipts from an independent
-  authority. They do not apply a proposal.
+- Acceptance and rejection are append-only, caller-asserted shadow claims about
+  an independent review. They carry `authority_state:
+  caller_asserted_shadow`, cannot authorize or apply a proposal, and are not
+  authenticated Walter evidence. A future authoritative receipt requires a
+  separately qualified signed envelope and consumer contract.
 - Health and headless-housekeeping receipts remain owned by the existing Darwin
   health store. Evolution files use a separate namespace and schema.
 - Repairs continue through the signed `maestro-system` scope from the Darwin
@@ -44,13 +47,16 @@ The local store uses private, append-only files below an `evolution/` directory:
   episodes/<episode-id>/events/<revision>.json
   windows/<window-id>/v<version>.json
   proposals/<proposal-id>.json
-  decisions/<receipt-id>.json
+  decisions/<proposal-id>.json
 ```
 
-Writes are no-clobber. Replaying the same ID and digest is idempotent; a
+Writes are no-clobber. The decision path is fenced by proposal ID so concurrent
+approve/reject claims cannot both publish. Replaying the same ID and digest is idempotent; a
 different payload for an existing identity fails closed. Recovery reads only
 complete validated JSON, ignores temporary projections, requires contiguous
-episode revisions and never treats a regenerable projection as authority.
+episode revisions and canonical filenames, rejects symlinked store paths, and
+never treats a regenerable projection as authority. Publication syncs the file
+and its directory using a platform-specific no-clobber primitive.
 
 The local capability is explicit. A native persistence adapter returns
 `unavailable/native_persistence_not_qualified` until a separately qualified
@@ -68,7 +74,8 @@ experimental metadata outside this contract; V1 chooses no final defaults.
 1. A two-session test recovers an interrupted episode and resumes it without
    duplicating a window, proposal or receipt.
 2. Mixed policy versions, portfolio digests or window versions fail closed.
-3. Darwin and unknown actors cannot create an acceptance receipt.
+3. No caller-asserted decision claim can present itself as authenticated,
+   authorize dispatch or apply an accepted proposal.
 4. Health receipts and evolution records cannot be read through each other's
    store paths.
 5. Incomplete files and conflicting replays do not advance recovered state.

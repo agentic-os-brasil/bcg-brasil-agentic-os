@@ -16,8 +16,8 @@
       "type": "object", "additionalProperties": false,
       "required": ["policy_id", "policy_version", "plan_sha256"],
       "properties": {
-        "policy_id": {"type": "string", "minLength": 1, "maxLength": 128},
-        "policy_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "policy_id": {"$ref": "#/$defs/id"},
+        "policy_version": {"$ref": "#/$defs/id"},
         "plan_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
@@ -36,8 +36,8 @@
       "required": ["schema_version", "authority", "approved_by", "approval_ref_sha256", "experts", "snapshot_sha256"],
       "properties": {
         "schema_version": {"const": 1},
-        "authority": {"type": "string", "minLength": 1, "maxLength": 128},
-        "approved_by": {"type": "string", "minLength": 1, "maxLength": 80},
+        "authority": {"$ref": "#/$defs/id"},
+        "approved_by": {"$ref": "#/$defs/id"},
         "approval_ref_sha256": {"$ref": "#/$defs/sha256"},
         "experts": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/portfolio_expert"}},
         "snapshot_sha256": {"$ref": "#/$defs/sha256"}
@@ -136,7 +136,7 @@
     },
     "decision_receipt": {
       "type": "object", "additionalProperties": false,
-      "required": ["record_type", "schema_version", "receipt_id", "proposal_id", "proposal_sha256", "decision", "approver_id", "recorded_at", "receipt_sha256"],
+      "required": ["record_type", "schema_version", "receipt_id", "proposal_id", "proposal_sha256", "decision", "claimed_approver_id", "authority_state", "may_authorize", "recorded_at", "receipt_sha256"],
       "properties": {
         "record_type": {"const": "decision_receipt"},
         "schema_version": {"const": 1},
@@ -144,7 +144,9 @@
         "proposal_id": {"$ref": "#/$defs/id"},
         "proposal_sha256": {"$ref": "#/$defs/sha256"},
         "decision": {"enum": ["approved", "rejected"]},
-        "approver_id": {"const": "walter"},
+        "claimed_approver_id": {"const": "walter"},
+        "authority_state": {"const": "caller_asserted_shadow"},
+        "may_authorize": {"const": false},
         "recorded_at": {"type": "string", "format": "date-time"},
         "receipt_sha256": {"$ref": "#/$defs/sha256"}
       }

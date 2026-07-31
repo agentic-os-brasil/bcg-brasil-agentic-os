@@ -134,16 +134,20 @@ type EvolutionProposalArtifact struct {
 }
 
 type EvolutionDecisionReceipt struct {
-	RecordType     string    `json:"record_type"`
-	SchemaVersion  int       `json:"schema_version"`
-	ReceiptID      string    `json:"receipt_id"`
-	ProposalID     string    `json:"proposal_id"`
-	ProposalSHA256 string    `json:"proposal_sha256"`
-	Decision       string    `json:"decision"`
-	ApproverID     string    `json:"approver_id"`
-	RecordedAt     time.Time `json:"recorded_at"`
-	ReceiptSHA256  string    `json:"receipt_sha256"`
+	RecordType        string    `json:"record_type"`
+	SchemaVersion     int       `json:"schema_version"`
+	ReceiptID         string    `json:"receipt_id"`
+	ProposalID        string    `json:"proposal_id"`
+	ProposalSHA256    string    `json:"proposal_sha256"`
+	Decision          string    `json:"decision"`
+	ClaimedApproverID string    `json:"claimed_approver_id"`
+	AuthorityState    string    `json:"authority_state"`
+	MayAuthorize      bool      `json:"may_authorize"`
+	RecordedAt        time.Time `json:"recorded_at"`
+	ReceiptSHA256     string    `json:"receipt_sha256"`
 }
+
+const callerAssertedDecisionAuthority = "caller_asserted_shadow"
 
 type PersistenceCapabilityReport struct {
 	SchemaVersion int    `json:"schema_version"`
@@ -158,15 +162,15 @@ type EvolutionStore struct {
 }
 
 func (pin PolicyPin) Validate() error {
-	if !validEvolutionLabel(pin.PolicyID, 128) || !validEvolutionLabel(pin.PolicyVersion, 128) || !validEvolutionSHA(pin.PlanSHA256) {
+	if !validOpaqueEvolutionID(pin.PolicyID) || !validOpaqueEvolutionID(pin.PolicyVersion) || !validEvolutionSHA(pin.PlanSHA256) {
 		return errors.New("Darwin evolution policy pin is invalid")
 	}
 	return nil
 }
 
 func (portfolio PortfolioSnapshot) Validate() error {
-	if portfolio.SchemaVersion != EvolutionPersistenceSchemaVersion || !validEvolutionLabel(portfolio.Authority, 128) ||
-		!validEvolutionLabel(portfolio.ApprovedBy, 80) || strings.EqualFold(portfolio.ApprovedBy, AgentID) ||
+	if portfolio.SchemaVersion != EvolutionPersistenceSchemaVersion || !validOpaqueEvolutionID(portfolio.Authority) ||
+		!validOpaqueEvolutionID(portfolio.ApprovedBy) || strings.EqualFold(portfolio.ApprovedBy, AgentID) ||
 		!validEvolutionSHA(portfolio.ApprovalRefSHA256) || !validEvolutionSHA(portfolio.SnapshotSHA256) || len(portfolio.Experts) > 16 {
 		return errors.New("Darwin PA Expert portfolio snapshot is invalid")
 	}
@@ -190,7 +194,8 @@ func (portfolio PortfolioSnapshot) Validate() error {
 func (episode EvolutionEpisode) Validate() error {
 	if episode.RecordType != "episode" || episode.SchemaVersion != EvolutionPersistenceSchemaVersion ||
 		!idPattern.MatchString(episode.EpisodeID) || !idPattern.MatchString(episode.WindowID) ||
-		!validEpisodeState(episode.State) || episode.Revision < 0 || episode.CreatedAt.IsZero() || episode.UpdatedAt.IsZero() {
+		episode.State != EpisodeOpen || episode.Revision != 0 || episode.CreatedAt.IsZero() ||
+		!episode.UpdatedAt.Equal(episode.CreatedAt) {
 		return errors.New("Darwin evolution episode is invalid")
 	}
 	if err := episode.Policy.Validate(); err != nil {
@@ -241,7 +246,8 @@ func (window EvidenceWindow) Validate() error {
 	}
 	seen := map[string]bool{}
 	for _, observation := range window.Observations {
-		if err := observation.Validate(); err != nil || seen[observation.EpisodeID] {
+		if err := observation.Validate(); err != nil || seen[observation.EpisodeID] ||
+			observation.PlanSHA256 != window.Policy.PlanSHA256 {
 			return errors.New("Darwin evidence window contains an invalid or duplicate episode")
 		}
 		seen[observation.EpisodeID] = true
@@ -260,7 +266,8 @@ func (proposal EvolutionProposalArtifact) Validate() error {
 	if err := proposal.Policy.Validate(); err != nil {
 		return err
 	}
-	if proposal.Proposal.PolicyVersion != proposal.Policy.PolicyVersion {
+	if proposal.Proposal.PolicyVersion != proposal.Policy.PolicyVersion ||
+		proposal.Proposal.EvidenceWindow != proposal.EvidenceWindowID {
 		return errors.New("Darwin evolution proposal policy version is not pinned")
 	}
 	if err := proposal.Portfolio.Validate(); err != nil {
@@ -279,8 +286,9 @@ func (receipt EvolutionDecisionReceipt) Validate() error {
 		!idPattern.MatchString(receipt.ReceiptID) || !idPattern.MatchString(receipt.ProposalID) ||
 		!validEvolutionSHA(receipt.ProposalSHA256) || receipt.Decision == "" ||
 		(receipt.Decision != "approved" && receipt.Decision != "rejected") ||
-		receipt.ApproverID != "walter" || receipt.RecordedAt.IsZero() || !validEvolutionSHA(receipt.ReceiptSHA256) {
-		return errors.New("Darwin evolution decision receipt is invalid or independently unauthorised")
+		receipt.ClaimedApproverID != "walter" || receipt.AuthorityState != callerAssertedDecisionAuthority ||
+		receipt.MayAuthorize || receipt.RecordedAt.IsZero() || !validEvolutionSHA(receipt.ReceiptSHA256) {
+		return errors.New("Darwin evolution decision receipt is invalid or claims unavailable authority")
 	}
 	copyValue := receipt
 	copyValue.ReceiptSHA256 = ""
@@ -350,6 +358,9 @@ func (store EvolutionStore) RecoverEpisode(episodeID string) (EvolutionEpisode, 
 		return EvolutionEpisode{}, nil, errors.New("invalid Darwin evolution episode ID")
 	}
 	path := filepath.Join(store.episodeRoot(episodeID), "episode.json")
+	if err := validateEvolutionPath(store.Root, path); err != nil {
+		return EvolutionEpisode{}, nil, err
+	}
 	var episode EvolutionEpisode
 	if err := readEvolutionJSON(path, &episode); err != nil {
 		return EvolutionEpisode{}, nil, err
@@ -357,7 +368,11 @@ func (store EvolutionStore) RecoverEpisode(episodeID string) (EvolutionEpisode, 
 	if err := episode.Validate(); err != nil {
 		return EvolutionEpisode{}, nil, err
 	}
-	entries, err := os.ReadDir(filepath.Join(store.episodeRoot(episodeID), "events"))
+	eventsRoot := filepath.Join(store.episodeRoot(episodeID), "events")
+	if err := validateEvolutionPath(store.Root, eventsRoot); err != nil {
+		return EvolutionEpisode{}, nil, err
+	}
+	entries, err := os.ReadDir(eventsRoot)
 	if errors.Is(err, os.ErrNotExist) {
 		return episode, nil, nil
 	}
@@ -367,8 +382,15 @@ func (store EvolutionStore) RecoverEpisode(episodeID string) (EvolutionEpisode, 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	events := make([]EpisodeEvent, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || filepath.Ext(entry.Name()) != ".json" {
+		if entry.Type()&os.ModeSymlink != 0 {
+			return EvolutionEpisode{}, nil, errors.New("Darwin evolution episode recovery found a symlinked revision")
+		}
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
+		}
+		expectedName := fmt.Sprintf("%06d.json", len(events)+1)
+		if entry.Name() != expectedName {
+			return EvolutionEpisode{}, nil, errors.New("Darwin evolution episode recovery found a non-canonical revision filename")
 		}
 		var event EpisodeEvent
 		if err := readEvolutionJSON(filepath.Join(store.episodeRoot(episodeID), "events", entry.Name()), &event); err != nil {
@@ -400,6 +422,16 @@ func (store EvolutionStore) AppendWindow(window EvidenceWindow) error {
 	if err := window.Validate(); err != nil {
 		return err
 	}
+	for _, observation := range window.Observations {
+		episode, _, err := store.RecoverEpisode(observation.EpisodeID)
+		if err != nil {
+			return errors.New("Darwin evidence window references an unavailable or invalid episode")
+		}
+		if episode.WindowID != window.WindowID || episode.Policy != window.Policy ||
+			episode.Portfolio.SnapshotSHA256 != window.Portfolio.SnapshotSHA256 {
+			return errors.New("Darwin evidence window changed its episode policy, portfolio or window binding")
+		}
+	}
 	directory := filepath.Join(store.evolutionRoot(), "windows", window.WindowID)
 	path := filepath.Join(directory, fmt.Sprintf("v%06d.json", window.Version))
 	if _, err := os.Stat(path); err == nil {
@@ -407,15 +439,19 @@ func (store EvolutionStore) AppendWindow(window EvidenceWindow) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	versions, err := store.windowVersions(window.WindowID)
+	windows, err := store.RecoverWindow(window.WindowID)
 	if err != nil {
 		return err
 	}
-	if len(versions) > 0 && window.Version != versions[len(versions)-1]+1 {
+	if len(windows) > 0 && window.Version != windows[len(windows)-1].Version+1 {
 		return ErrEvolutionWindowVersionConflict
 	}
-	if len(versions) == 0 && window.Version != 1 {
+	if len(windows) == 0 && window.Version != 1 {
 		return ErrEvolutionWindowVersionConflict
+	}
+	if len(windows) > 0 && (window.Policy != windows[0].Policy ||
+		window.Portfolio.SnapshotSHA256 != windows[0].Portfolio.SnapshotSHA256) {
+		return errors.New("Darwin evidence window versions cannot change policy or portfolio pins")
 	}
 	return store.appendJSON(path, window)
 }
@@ -424,7 +460,11 @@ func (store EvolutionStore) RecoverWindow(windowID string) ([]EvidenceWindow, er
 	if !idPattern.MatchString(windowID) {
 		return nil, errors.New("invalid Darwin evidence window ID")
 	}
-	entries, err := os.ReadDir(filepath.Join(store.evolutionRoot(), "windows", windowID))
+	directory := filepath.Join(store.evolutionRoot(), "windows", windowID)
+	if err := validateEvolutionPath(store.Root, directory); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(directory)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -434,8 +474,15 @@ func (store EvolutionStore) RecoverWindow(windowID string) ([]EvidenceWindow, er
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	windows := make([]EvidenceWindow, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || filepath.Ext(entry.Name()) != ".json" {
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil, errors.New("Darwin evidence window recovery found a symlinked version")
+		}
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
+		}
+		expectedName := fmt.Sprintf("v%06d.json", len(windows)+1)
+		if entry.Name() != expectedName {
+			return nil, errors.New("Darwin evidence window recovery found a non-canonical version filename")
 		}
 		var window EvidenceWindow
 		if err := readEvolutionJSON(filepath.Join(store.evolutionRoot(), "windows", windowID, entry.Name()), &window); err != nil {
@@ -488,6 +535,9 @@ func (store EvolutionStore) AppendDecision(receipt EvolutionDecisionReceipt) err
 	if receipt.SchemaVersion == 0 {
 		receipt.SchemaVersion = EvolutionPersistenceSchemaVersion
 	}
+	if receipt.AuthorityState == "" {
+		receipt.AuthorityState = callerAssertedDecisionAuthority
+	}
 	if receipt.ReceiptSHA256 == "" {
 		copyValue := receipt
 		copyValue.ReceiptSHA256 = ""
@@ -497,40 +547,28 @@ func (store EvolutionStore) AppendDecision(receipt EvolutionDecisionReceipt) err
 		return err
 	}
 	proposalPath := filepath.Join(store.evolutionRoot(), "proposals", receipt.ProposalID+".json")
+	if err := validateEvolutionPath(store.Root, proposalPath); err != nil {
+		return err
+	}
 	var proposal EvolutionProposalArtifact
 	if err := readEvolutionJSON(proposalPath, &proposal); err != nil {
 		return errors.New("Darwin evolution decision references an unavailable proposal")
 	}
-	if err := proposal.Validate(); err != nil || proposal.ProposalSHA256 != receipt.ProposalSHA256 {
+	if err := proposal.Validate(); err != nil || proposal.ProposalSHA256 != receipt.ProposalSHA256 ||
+		proposal.Proposal.ProposalID != receipt.ProposalID {
 		return errors.New("Darwin evolution decision is not bound to the proposal digest")
 	}
-	decisions, err := os.ReadDir(filepath.Join(store.evolutionRoot(), "decisions"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	for _, entry := range decisions {
-		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-		var prior EvolutionDecisionReceipt
-		if err := readEvolutionJSON(filepath.Join(store.evolutionRoot(), "decisions", entry.Name()), &prior); err != nil {
-			return err
-		}
-		if err := prior.Validate(); err != nil {
-			return err
-		}
-		if prior.ProposalID == receipt.ProposalID && prior.ReceiptID != receipt.ReceiptID {
-			return ErrEvolutionReplayConflict
-		}
-	}
-	return store.appendJSON(filepath.Join(store.evolutionRoot(), "decisions", receipt.ReceiptID+".json"), receipt)
+	// The proposal ID, rather than the caller-selected receipt ID, is the
+	// no-clobber identity. This atomically fences concurrent approve/reject
+	// claims for the same proposal.
+	return store.appendJSON(filepath.Join(store.evolutionRoot(), "decisions", receipt.ProposalID+".json"), receipt)
 }
 
 func (store EvolutionStore) appendJSON(path string, value any) error {
 	if strings.TrimSpace(store.Root) == "" {
 		return errors.New("Darwin evolution store root is required")
 	}
-	if err := ensurePrivateDirectory(filepath.Dir(path)); err != nil {
+	if err := ensureEvolutionDirectory(store.Root, filepath.Dir(path)); err != nil {
 		return err
 	}
 	body, err := json.Marshal(value)
@@ -547,7 +585,7 @@ func (store EvolutionStore) appendJSON(path string, value any) error {
 			return readErr
 		}
 		if bytes.Equal(bytes.TrimSpace(existing), bytes.TrimSpace(body)) {
-			return nil
+			return syncEvolutionDirectory(filepath.Dir(path))
 		}
 		return ErrEvolutionReplayConflict
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -570,14 +608,11 @@ func (store EvolutionStore) appendJSON(path string, value any) error {
 	if err := temporary.Close(); err != nil {
 		return err
 	}
-	// Linking the fully-synced temporary file is an atomic no-clobber publish.
-	// Rename would replace a concurrent winner on Unix and would violate replay
-	// fencing.
-	if err := os.Link(temporaryPath, path); err != nil {
+	if err := publishEvolutionFile(temporaryPath, path); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			existing, readErr := os.ReadFile(path)
 			if readErr == nil && bytes.Equal(bytes.TrimSpace(existing), bytes.TrimSpace(body)) {
-				return nil
+				return syncEvolutionDirectory(filepath.Dir(path))
 			}
 			return ErrEvolutionReplayConflict
 		}
@@ -633,6 +668,166 @@ func readEvolutionJSON(path string, target any) error {
 	return readStrictJSON(path, target)
 }
 
+func ensureEvolutionDirectory(root, directory string) error {
+	rootAbs, directoryAbs, err := boundedEvolutionPaths(root, directory)
+	if err != nil {
+		return err
+	}
+	if err := rejectEvolutionSymlinkAncestors(filepath.Dir(rootAbs)); err != nil {
+		return err
+	}
+	_, rootStatErr := os.Lstat(rootAbs)
+	rootWasMissing := errors.Is(rootStatErr, os.ErrNotExist)
+	if rootStatErr != nil && !rootWasMissing {
+		return rootStatErr
+	}
+	if err := os.MkdirAll(rootAbs, 0o700); err != nil {
+		return err
+	}
+	if err := rejectEvolutionSymlinkAncestors(rootAbs); err != nil {
+		return err
+	}
+	if rootWasMissing {
+		if err := syncEvolutionDirectory(filepath.Dir(rootAbs)); err != nil {
+			return err
+		}
+	}
+	rootInfo, err := os.Lstat(rootAbs)
+	if err != nil {
+		return err
+	}
+	if rootInfo.Mode()&os.ModeSymlink != 0 || !rootInfo.IsDir() {
+		return errors.New("Darwin evolution store root cannot be a symlink or non-directory")
+	}
+	if rootInfo.Mode().Perm() != 0o700 {
+		if err := os.Chmod(rootAbs, 0o700); err != nil {
+			return err
+		}
+	}
+	relative, _ := filepath.Rel(rootAbs, directoryAbs)
+	current := rootAbs
+	for _, component := range strings.Split(relative, string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		created := false
+		if err := os.Mkdir(current, 0o700); err != nil {
+			if !errors.Is(err, os.ErrExist) {
+				return err
+			}
+		} else {
+			created = true
+		}
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return errors.New("Darwin evolution store path cannot traverse symlinks or non-directories")
+		}
+		if info.Mode().Perm() != 0o700 {
+			if err := os.Chmod(current, 0o700); err != nil {
+				return err
+			}
+		}
+		if created {
+			if err := syncEvolutionDirectory(filepath.Dir(current)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateEvolutionPath(root, target string) error {
+	rootAbs, targetAbs, err := boundedEvolutionPaths(root, target)
+	if err != nil {
+		return err
+	}
+	if err := rejectEvolutionSymlinkAncestors(targetAbs); err != nil {
+		return err
+	}
+	if _, err := os.Lstat(rootAbs); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	rootInfo, err := os.Lstat(rootAbs)
+	if err != nil {
+		return err
+	}
+	if rootInfo.Mode()&os.ModeSymlink != 0 || !rootInfo.IsDir() {
+		return errors.New("Darwin evolution store root cannot be a symlink or non-directory")
+	}
+	relative, _ := filepath.Rel(rootAbs, targetAbs)
+	current := rootAbs
+	for _, component := range strings.Split(relative, string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("Darwin evolution store path cannot traverse symlinks")
+		}
+	}
+	return nil
+}
+
+func boundedEvolutionPaths(root, target string) (string, string, error) {
+	if strings.TrimSpace(root) == "" {
+		return "", "", errors.New("Darwin evolution store root is required")
+	}
+	rootAbs, err := filepath.Abs(filepath.Clean(root))
+	if err != nil {
+		return "", "", err
+	}
+	targetAbs, err := filepath.Abs(filepath.Clean(target))
+	if err != nil {
+		return "", "", err
+	}
+	relative, err := filepath.Rel(rootAbs, targetAbs)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", "", errors.New("Darwin evolution path escapes its store root")
+	}
+	return rootAbs, targetAbs, nil
+}
+
+func rejectEvolutionSymlinkAncestors(path string) error {
+	absolute, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return err
+	}
+	volume := filepath.VolumeName(absolute)
+	remainder := strings.TrimPrefix(absolute, volume)
+	remainder = strings.TrimPrefix(remainder, string(filepath.Separator))
+	current := volume + string(filepath.Separator)
+	for _, component := range strings.Split(remainder, string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("Darwin evolution store path cannot traverse symlinked ancestors")
+		}
+	}
+	return nil
+}
+
 func digestJSON(value any) string {
 	body, err := json.Marshal(value)
 	if err != nil {
@@ -642,12 +837,9 @@ func digestJSON(value any) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func validEvolutionSHA(value string) bool { return evolutionDigest.MatchString(strings.ToLower(value)) }
+func validEvolutionSHA(value string) bool { return evolutionDigest.MatchString(value) }
 
-func validEvolutionLabel(value string, maximum int) bool {
-	trimmed := strings.TrimSpace(value)
-	return trimmed != "" && len([]byte(trimmed)) <= maximum && !strings.ContainsAny(trimmed, "\r\n")
-}
+func validOpaqueEvolutionID(value string) bool { return idPattern.MatchString(value) }
 
 func validEpisodeState(value EvolutionEpisodeState) bool {
 	return value == EpisodeOpen || value == EpisodeInterrupted || value == EpisodeResumed || value == EpisodeClosed

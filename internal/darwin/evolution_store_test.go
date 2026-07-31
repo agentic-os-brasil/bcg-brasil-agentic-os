@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +34,7 @@ func TestEvolutionEpisodePinsPolicyAndApprovedPortfolio(t *testing.T) {
 }
 
 func TestEvolutionStoreRecoversAndReplaysAcrossSessions(t *testing.T) {
-	root := t.TempDir()
+	root := testEvolutionRoot(t)
 	first := EvolutionStore{Root: root}
 	if err := first.AppendEpisode(testEvolutionEpisode()); err != nil {
 		t.Fatal(err)
@@ -69,7 +71,7 @@ func TestEvolutionStoreRecoversAndReplaysAcrossSessions(t *testing.T) {
 	if err := second.AppendEpisodeEvent(EpisodeEvent{EventID: "event-resumed", EpisodeID: "episode-1", Revision: 2, State: EventResumed, RecordedAt: testTime.Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
-	decision := EvolutionDecisionReceipt{ReceiptID: "decision-1", ProposalID: proposal.Proposal.ProposalID, ProposalSHA256: proposal.ProposalSHA256, Decision: "approved", ApproverID: "walter", RecordedAt: testTime}
+	decision := testEvolutionDecision(proposal, "decision-1", "approved")
 	if err := second.AppendDecision(decision); err != nil {
 		t.Fatal(err)
 	}
@@ -88,8 +90,205 @@ func TestEvolutionStoreRecoversAndReplaysAcrossSessions(t *testing.T) {
 	}
 }
 
+func TestEvolutionDecisionIsCallerAssertedAndFencedByProposal(t *testing.T) {
+	store, proposal := testEvolutionStoreWithProposal(t)
+	approved := testEvolutionDecision(proposal, "decision-approved", "approved")
+	rejected := testEvolutionDecision(proposal, "decision-rejected", "rejected")
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var wait sync.WaitGroup
+	for _, receipt := range []EvolutionDecisionReceipt{approved, rejected} {
+		wait.Add(1)
+		go func(candidate EvolutionDecisionReceipt) {
+			defer wait.Done()
+			<-start
+			results <- store.AppendDecision(candidate)
+		}(receipt)
+	}
+	close(start)
+	wait.Wait()
+	close(results)
+
+	successes := 0
+	conflicts := 0
+	for err := range results {
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, ErrEvolutionReplayConflict):
+			conflicts++
+		default:
+			t.Fatalf("unexpected concurrent decision error: %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("decision results: successes=%d conflicts=%d", successes, conflicts)
+	}
+
+	forgedAuthority := approved
+	forgedAuthority.ReceiptID = "decision-forged"
+	forgedAuthority.AuthorityState = "authenticated"
+	forgedAuthority.ReceiptSHA256 = ""
+	if err := store.AppendDecision(forgedAuthority); err == nil {
+		t.Fatal("caller-asserted decision claimed authenticated authority")
+	}
+	forgedAuthority = approved
+	forgedAuthority.ReceiptID = "decision-authorizing"
+	forgedAuthority.MayAuthorize = true
+	forgedAuthority.ReceiptSHA256 = ""
+	if err := store.AppendDecision(forgedAuthority); err == nil {
+		t.Fatal("caller-asserted decision gained authorization")
+	}
+}
+
+func TestEvolutionWindowAndProposalPinsFailClosed(t *testing.T) {
+	store := EvolutionStore{Root: testEvolutionRoot(t)}
+	if err := store.AppendEpisode(testEvolutionEpisode()); err != nil {
+		t.Fatal(err)
+	}
+	window := testEvidenceWindow()
+	window.Observations[0].PlanSHA256 = digestJSON("other-plan")
+	window.WindowSHA256 = ""
+	window.WindowSHA256 = digestJSON(window)
+	if err := store.AppendWindow(window); err == nil {
+		t.Fatal("window accepted observation from another route plan")
+	}
+
+	window = testEvidenceWindow()
+	if err := store.AppendWindow(window); err != nil {
+		t.Fatal(err)
+	}
+	next := window
+	next.Version = 2
+	next.Policy.PolicyVersion = "pae-v2"
+	next.WindowSHA256 = ""
+	next.WindowSHA256 = digestJSON(next)
+	if err := store.AppendWindow(next); err == nil {
+		t.Fatal("window version changed its policy pin")
+	}
+
+	proposal := testEvolutionProposal(window)
+	proposal.Proposal.EvidenceWindow = "other-window"
+	proposal.ProposalSHA256 = ""
+	proposal.ProposalSHA256 = digestJSON(proposal)
+	if err := store.AppendProposal(proposal); err == nil {
+		t.Fatal("proposal accepted divergent inner and outer evidence-window IDs")
+	}
+
+	otherRoot := testEvolutionRoot(t)
+	otherStore := EvolutionStore{Root: otherRoot}
+	episode := testEvolutionEpisode()
+	episode.Policy.PolicyVersion = "other-policy"
+	if err := otherStore.AppendEpisode(episode); err != nil {
+		t.Fatal(err)
+	}
+	if err := otherStore.AppendWindow(testEvidenceWindow()); err == nil {
+		t.Fatal("window accepted an episode from another policy")
+	}
+}
+
+func TestEvolutionRecoveryRejectsNonCanonicalOrCorruptHistory(t *testing.T) {
+	root := testEvolutionRoot(t)
+	store := EvolutionStore{Root: root}
+	if err := store.AppendEpisode(testEvolutionEpisode()); err != nil {
+		t.Fatal(err)
+	}
+	event := EpisodeEvent{EventID: "event-interrupted", EpisodeID: "episode-1", Revision: 1, State: EventInterrupted, RecordedAt: testTime}
+	if err := store.AppendEpisodeEvent(event); err != nil {
+		t.Fatal(err)
+	}
+	eventsRoot := filepath.Join(root, "evolution", "episodes", "episode-1", "events")
+	if err := os.Rename(filepath.Join(eventsRoot, "000001.json"), filepath.Join(eventsRoot, "arbitrary.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.RecoverEpisode("episode-1"); err == nil {
+		t.Fatal("recovery accepted non-canonical event filename")
+	}
+
+	root = testEvolutionRoot(t)
+	store = EvolutionStore{Root: root}
+	if err := store.AppendEpisode(testEvolutionEpisode()); err != nil {
+		t.Fatal(err)
+	}
+	window := testEvidenceWindow()
+	if err := store.AppendWindow(window); err != nil {
+		t.Fatal(err)
+	}
+	windowPath := filepath.Join(root, "evolution", "windows", "window-1", "v000001.json")
+	if err := os.WriteFile(windowPath, []byte(`{"truncated":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	next := testEvidenceWindow()
+	next.Version = 2
+	next.WindowSHA256 = ""
+	next.WindowSHA256 = digestJSON(next)
+	if err := store.AppendWindow(next); err == nil {
+		t.Fatal("append advanced a corrupt evidence-window history")
+	}
+}
+
+func TestEvolutionRecoveryRejectsSymlinkedNamespace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires platform-specific privileges on Windows")
+	}
+	root := testEvolutionRoot(t)
+	store := EvolutionStore{Root: root}
+	if err := store.AppendEpisode(testEvolutionEpisode()); err != nil {
+		t.Fatal(err)
+	}
+	events := filepath.Join(root, "evolution", "episodes", "episode-1", "events")
+	external := filepath.Join(testEvolutionRoot(t), "external-events")
+	if err := os.Mkdir(external, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, events); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.RecoverEpisode("episode-1"); err == nil {
+		t.Fatal("recovery traversed a symlinked events namespace")
+	}
+}
+
+func TestEvolutionStoreRejectsSymlinkedRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires platform-specific privileges on Windows")
+	}
+	parent := testEvolutionRoot(t)
+	actual := filepath.Join(parent, "actual")
+	if err := os.Mkdir(actual, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(parent, "redirected")
+	if err := os.Symlink(actual, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := (EvolutionStore{Root: link}).AppendEpisode(testEvolutionEpisode()); err == nil {
+		t.Fatal("store accepted a symlinked root")
+	}
+}
+
+func TestEvolutionStoreRejectsSymlinkedAncestorAboveRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires platform-specific privileges on Windows")
+	}
+	parent := testEvolutionRoot(t)
+	actual := filepath.Join(parent, "actual")
+	if err := os.Mkdir(actual, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(parent, "redirected-parent")
+	if err := os.Symlink(actual, link); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(link, "store")
+	if err := (EvolutionStore{Root: root}).AppendEpisode(testEvolutionEpisode()); err == nil {
+		t.Fatal("store accepted a symlinked ancestor above its root")
+	}
+}
+
 func TestEvolutionRecoveryIgnoresIncompleteTemporaryFiles(t *testing.T) {
-	root := t.TempDir()
+	root := testEvolutionRoot(t)
 	store := EvolutionStore{Root: root}
 	if err := store.AppendEpisode(testEvolutionEpisode()); err != nil {
 		t.Fatal(err)
@@ -107,7 +306,7 @@ func TestEvolutionRecoveryIgnoresIncompleteTemporaryFiles(t *testing.T) {
 }
 
 func TestEvolutionHealthReceiptsRemainSeparate(t *testing.T) {
-	root := t.TempDir()
+	root := testEvolutionRoot(t)
 	health := Store{Root: root}
 	if err := health.Append(Receipt{SchemaVersion: SchemaVersion, AgentID: AgentID, DisplayName: DisplayName, Emoji: Emoji, WindowID: "health-1", Mode: Interactive, Outcome: OutcomeNoAction, RecordedAt: testTime}); err != nil {
 		t.Fatal(err)
@@ -126,7 +325,7 @@ func TestEvolutionHealthReceiptsRemainSeparate(t *testing.T) {
 }
 
 func TestNativeEvolutionPersistenceIsExplicitlyUnavailable(t *testing.T) {
-	report := (EvolutionStore{Root: t.TempDir()}).Capability()
+	report := (EvolutionStore{Root: testEvolutionRoot(t)}).Capability()
 	if report.LocalState != "available" || report.NativeState != "unavailable" || report.NativeReason == "" {
 		t.Fatalf("capability report = %#v", report)
 	}
@@ -152,7 +351,7 @@ func TestEvolutionSchemaRejectsContextBearingFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	valid := decodeEvolutionJSON(t, `{"record_type":"decision_receipt","schema_version":1,"receipt_id":"receipt-1","proposal_id":"proposal-1","proposal_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","decision":"approved","approver_id":"walter","recorded_at":"2026-07-30T12:00:00Z","receipt_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`)
+	valid := decodeEvolutionJSON(t, `{"record_type":"decision_receipt","schema_version":1,"receipt_id":"receipt-1","proposal_id":"proposal-1","proposal_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","decision":"approved","claimed_approver_id":"walter","authority_state":"caller_asserted_shadow","may_authorize":false,"recorded_at":"2026-07-30T12:00:00Z","receipt_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`)
 	if err := schema.Validate(valid); err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +366,7 @@ func TestEvolutionSchemaRejectsContextBearingFields(t *testing.T) {
 	if err := schema.Validate(proposalValue); err != nil {
 		t.Fatalf("valid proposal rejected by schema: %v", err)
 	}
-	invalid := decodeEvolutionJSON(t, `{"record_type":"decision_receipt","schema_version":1,"receipt_id":"receipt-1","proposal_id":"proposal-1","proposal_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","decision":"approved","approver_id":"walter","recorded_at":"2026-07-30T12:00:00Z","receipt_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","prompt":"secret"}`)
+	invalid := decodeEvolutionJSON(t, `{"record_type":"decision_receipt","schema_version":1,"receipt_id":"receipt-1","proposal_id":"proposal-1","proposal_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","decision":"approved","claimed_approver_id":"walter","authority_state":"caller_asserted_shadow","may_authorize":false,"recorded_at":"2026-07-30T12:00:00Z","receipt_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","prompt":"secret"}`)
 	if err := schema.Validate(invalid); err == nil {
 		t.Fatal("schema accepted context-bearing prompt")
 	}
@@ -225,6 +424,45 @@ func testEvolutionProposal(window EvidenceWindow) EvolutionProposalArtifact {
 	}
 	proposal.ProposalSHA256 = digestJSON(proposal)
 	return proposal
+}
+
+func testEvolutionDecision(proposal EvolutionProposalArtifact, receiptID, decision string) EvolutionDecisionReceipt {
+	return EvolutionDecisionReceipt{
+		ReceiptID:         receiptID,
+		ProposalID:        proposal.Proposal.ProposalID,
+		ProposalSHA256:    proposal.ProposalSHA256,
+		Decision:          decision,
+		ClaimedApproverID: "walter",
+		AuthorityState:    callerAssertedDecisionAuthority,
+		RecordedAt:        testTime,
+	}
+}
+
+func testEvolutionStoreWithProposal(t *testing.T) (EvolutionStore, EvolutionProposalArtifact) {
+	t.Helper()
+	store := EvolutionStore{Root: testEvolutionRoot(t)}
+	if err := store.AppendEpisode(testEvolutionEpisode()); err != nil {
+		t.Fatal(err)
+	}
+	window := testEvidenceWindow()
+	if err := store.AppendWindow(window); err != nil {
+		t.Fatal(err)
+	}
+	proposal := testEvolutionProposal(window)
+	if err := store.AppendProposal(proposal); err != nil {
+		t.Fatal(err)
+	}
+	return store, proposal
+}
+
+func testEvolutionRoot(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	canonical, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return canonical
 }
 
 func decodeEvolutionJSON(t *testing.T, raw string) any {
