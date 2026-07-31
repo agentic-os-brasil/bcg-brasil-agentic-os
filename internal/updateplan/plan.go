@@ -168,6 +168,8 @@ func Validate(plan Plan) error {
 			len(plan.PolicySHA256) != 64 || strings.Trim(plan.PolicySHA256, "0123456789abcdef") != "" {
 			return errors.New("update plan role migration binding is invalid")
 		}
+	} else if plan.CatalogSHA256 != "" || plan.PolicySHA256 != "" {
+		return errors.New("update plan contains orphan role migration digests")
 	}
 	required, err := rolemigration.RequiresMigration(plan.FromRelease, plan.ToRelease)
 	if err != nil {

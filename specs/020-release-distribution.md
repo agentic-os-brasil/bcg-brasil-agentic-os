@@ -140,5 +140,6 @@ The `0.2.0` release opens the bounded role-migration boundary. An update from
 `0.1.x` must carry that signed migration evidence; releases that still accept
 such an installation carry it as well. After the boundary, legacy practice
 roles and IDs fail closed. Install state carries the migration identity and
-rollback refuses to reactivate a legacy authority without a canonical PA
-Expert binding.
+every preparation/activation path enforces the same source range. Rollback
+refuses to reactivate a legacy authority without a canonical PA Expert binding,
+including from later canonical states that legitimately omit the migration ID.

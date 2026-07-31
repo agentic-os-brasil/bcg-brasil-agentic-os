@@ -157,7 +157,125 @@ func TestRollbackFailsClosedWhenMigrationWouldReactivateLegacyAuthority(t *testi
 	}
 }
 
-func TestSchemaV1StateMigratesBeforeUpdateAndRollback(t *testing.T) {
+func TestRollbackFailsClosedAfterExpiryWithoutMigrationMarker(t *testing.T) {
+	managedRoot := filepath.Join(t.TempDir(), "managed")
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	backup := filepath.Join(managedRoot, "recovery", "cli", "0.1.0-tx", executableName("darwin"))
+	writeTestFile(t, "", filepath.Join(managedRoot, "bin", executableName("darwin")), "binary 0.3.0")
+	writeTestFile(t, "", backup, "binary 0.1.0")
+	if err := WriteState(dataRoot, State{
+		SchemaVersion: 2, ManagedRoot: managedRoot, Release: "0.3.0", Channel: "canary",
+		CLIVersion: "0.3.0", BundleVersion: "0.3.0", TargetOS: "darwin", TargetArch: "arm64",
+		RoleAuthority: rolemigration.CanonicalRole,
+		ActivatedAt:   time.Now().UTC(), Previous: &Snapshot{
+			Release: "0.1.0", Channel: "canary", CLIVersion: "0.1.0", BundleVersion: "0.1.0",
+			TargetOS: "darwin", TargetArch: "arm64", CLIBackup: backup,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rollback(managedRoot, dataRoot, func(_, _ string) error { return nil }); err == nil {
+		t.Fatal("Rollback() reactivated legacy authority from a marker-free post-expiry state")
+	}
+}
+
+func TestRollbackRejectsForgedCanonicalMarkerOnLegacySnapshot(t *testing.T) {
+	managedRoot := filepath.Join(t.TempDir(), "managed")
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	backup := filepath.Join(managedRoot, "recovery", "cli", "0.1.9-tx", executableName("darwin"))
+	writeTestFile(t, "", filepath.Join(managedRoot, "bin", executableName("darwin")), "binary 0.3.0")
+	writeTestFile(t, "", backup, "binary 0.1.9")
+	if err := WriteState(dataRoot, State{
+		SchemaVersion: 2, ManagedRoot: managedRoot, Release: "0.3.0", Channel: "canary",
+		CLIVersion: "0.3.0", BundleVersion: "0.3.0", TargetOS: "darwin", TargetArch: "arm64",
+		RoleAuthority: rolemigration.CanonicalRole,
+		ActivatedAt:   time.Now().UTC(), Previous: &Snapshot{
+			Release: "0.1.9", Channel: "canary", CLIVersion: "0.1.9", BundleVersion: "0.1.9",
+			TargetOS: "darwin", TargetArch: "arm64", RoleAuthority: rolemigration.CanonicalRole,
+			CLIBackup: backup,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rollback(managedRoot, dataRoot, func(_, _ string) error { return nil }); err == nil {
+		t.Fatal("Rollback() trusted a forged canonical marker on a legacy release")
+	}
+}
+
+func TestValidatePreparedRejectsDirectExpiryCrossingWithoutMigration(t *testing.T) {
+	managedRoot := filepath.Join(t.TempDir(), "managed")
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	planPath := stagedPlan(t, managedRoot, dataRoot, "0.1.0", "0.2.0", "binary 0.2.0")
+	plan, err := ReadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.RoleMigrationID = ""
+	plan.CatalogSHA256 = ""
+	plan.PolicySHA256 = ""
+	if err := WritePlan(planPath, plan); err != nil {
+		t.Fatal(err)
+	}
+	verified := verifiedForPlan(plan)
+	if _, err := ValidatePrepared(planPath, verified, optionsForPlan(plan)); err == nil {
+		t.Fatal("ValidatePrepared() bypassed the expiry migration boundary")
+	}
+}
+
+func TestValidatePreparedRejectsDirectDowngradeAcrossExpiry(t *testing.T) {
+	managedRoot := filepath.Join(t.TempDir(), "managed")
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	planPath := stagedPlan(t, managedRoot, dataRoot, "0.3.0", "0.1.9", "binary 0.1.9")
+	plan, err := ReadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidatePrepared(planPath, verifiedForPlan(plan), optionsForPlan(plan)); err == nil {
+		t.Fatal("ValidatePrepared() accepted a direct downgrade that bypasses rollback")
+	}
+}
+
+func TestRollbackRestoresFilesystemWhenStateCommitFails(t *testing.T) {
+	managedRoot := filepath.Join(t.TempDir(), "managed")
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	checker := func(path, version string) error {
+		body, err := os.ReadFile(path)
+		if err != nil || !strings.Contains(string(body), version) {
+			return os.ErrInvalid
+		}
+		return nil
+	}
+	if err := activateTestPlan(t, stagedPlan(t, managedRoot, dataRoot, "", "0.1.0", "binary 0.1.0"), checker); err != nil {
+		t.Fatal(err)
+	}
+	if err := activateTestPlan(t, stagedPlan(t, managedRoot, dataRoot, "0.1.0", "0.1.1", "binary 0.1.1"), checker); err != nil {
+		t.Fatal(err)
+	}
+	stateDirectory := filepath.Dir(statePath(dataRoot))
+	defer os.Chmod(stateDirectory, 0o700)
+	err := Rollback(managedRoot, dataRoot, func(path, version string) error {
+		if err := checker(path, version); err != nil {
+			return err
+		}
+		return os.Chmod(stateDirectory, 0o500)
+	})
+	if err == nil {
+		t.Fatal("Rollback() unexpectedly committed state in a read-only directory")
+	}
+	if err := os.Chmod(stateDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	active, readErr := os.ReadFile(filepath.Join(managedRoot, "bin", executableName("darwin")))
+	if readErr != nil || !strings.Contains(string(active), "0.1.1") {
+		t.Fatalf("rollback state failure did not restore current CLI: body=%q err=%v", active, readErr)
+	}
+	state, readErr := ReadState(dataRoot)
+	if readErr != nil || state.Release != "0.1.1" {
+		t.Fatalf("rollback state failure changed durable state: %#v err=%v", state, readErr)
+	}
+}
+
+func TestSchemaV1StateMigratesBeforeUpdateAndBlocksLegacyRollback(t *testing.T) {
 	managedRoot := filepath.Join(t.TempDir(), "managed")
 	dataRoot := filepath.Join(t.TempDir(), "data")
 	activeCLI := filepath.Join(managedRoot, "bin", executableName("darwin"))
@@ -201,15 +319,15 @@ func TestSchemaV1StateMigratesBeforeUpdateAndRollback(t *testing.T) {
 	if state.SchemaVersion != 2 || state.ManagedRoot != managedRoot || state.Previous == nil {
 		t.Fatalf("schema v1 state was not migrated canonically: %#v", state)
 	}
-	if err := Rollback(managedRoot, dataRoot, checker); err != nil {
-		t.Fatalf("Rollback() after schema migration error = %v", err)
+	if err := Rollback(managedRoot, dataRoot, checker); err == nil {
+		t.Fatal("Rollback() reactivated schema-v1 legacy authority after migration")
 	}
 	state, err = ReadState(dataRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.SchemaVersion != 2 || state.Release != "0.1.0" {
-		t.Fatalf("unexpected post-migration rollback state: %#v", state)
+	if state.SchemaVersion != 2 || state.Release != "0.2.0" {
+		t.Fatalf("blocked rollback changed migrated state: %#v", state)
 	}
 }
 
@@ -557,6 +675,15 @@ func stagedPlan(t *testing.T, managedRoot, dataRoot, fromVersion, version, cliBo
 		plan.FromChannel = "canary"
 		plan.FromCLIVersion = fromVersion
 		plan.FromBundleVersion = fromVersion
+		required, err := rolemigration.RequiresMigration(fromVersion, version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if required {
+			plan.RoleMigrationID = rolemigration.MigrationID
+			plan.CatalogSHA256 = strings.Repeat("c", 64)
+			plan.PolicySHA256 = strings.Repeat("d", 64)
+		}
 	}
 	path := filepath.Join(transaction, PlanName)
 	if err := WritePlan(path, plan); err != nil {
@@ -602,6 +729,15 @@ func verifiedForPlan(plan ActivationPlan) releaseverify.VerifiedRelease {
 	manifest.Artifacts[1].Name = plan.BundleArtifactName
 	manifest.Artifacts[1].Size = plan.BundleSize
 	manifest.Artifacts[1].SHA256 = plan.BundleSHA256
+	if plan.RoleMigrationID == rolemigration.MigrationID {
+		manifest.Migrations = []releasecontract.Migration{{
+			ID: rolemigration.MigrationID, Component: "bundle", From: rolemigration.SourceRange,
+			To: plan.BundleVersion, Required: true, FromRole: rolemigration.LegacyRole,
+			ToRole: rolemigration.CanonicalRole, AliasExpiresAfter: rolemigration.AliasExpiresAfter,
+			BundleSHA256: plan.BundleSHA256, CatalogSHA256: plan.CatalogSHA256,
+			PolicySHA256: plan.PolicySHA256,
+		}}
+	}
 	return releaseverify.VerifiedRelease{
 		Manifest: manifest, ManifestSHA256: plan.ManifestSHA256,
 	}

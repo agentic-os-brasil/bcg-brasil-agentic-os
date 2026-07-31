@@ -69,6 +69,23 @@ func TestBuildRejectsUnboundProviderSource(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsOrphanMigrationDigests(t *testing.T) {
+	plan, err := Build(installedState("0.1.0"), updateManifest("0.2.0"), "darwin", "arm64", testSourceBinding())
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.RoleMigrationID = ""
+	plan.CatalogSHA256 = strings.Repeat("d", 64)
+	plan.PolicySHA256 = ""
+	plan.ID, err = computePlanID(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(plan); err == nil {
+		t.Fatal("Validate() accepted orphan role migration digests")
+	}
+}
+
 func installedState(version string) installtx.State {
 	return installtx.State{
 		SchemaVersion: 2,

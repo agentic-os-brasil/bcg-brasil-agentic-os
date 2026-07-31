@@ -166,7 +166,7 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 	if err := validateTransitionOptions(options); err != nil {
 		return "", err
 	}
-	roleBinding, _, err := rolemigration.FromManifest(verified.Manifest)
+	roleBinding, err := roleBindingForTransition(options, verified.Manifest)
 	if err != nil {
 		return "", err
 	}
@@ -292,10 +292,11 @@ func ValidatePrepared(
 		plan.BundleSize != bundleArtifact.Size {
 		return ActivationPlan{}, errors.New("activation plan does not match the verified release and install target")
 	}
-	roleBinding, hasRoleMigration, err := rolemigration.FromManifest(verified.Manifest)
+	roleBinding, err := roleBindingForTransition(options, verified.Manifest)
 	if err != nil {
 		return ActivationPlan{}, err
 	}
+	hasRoleMigration := roleBinding.ID != ""
 	if (plan.RoleMigrationID != "") != hasRoleMigration {
 		return ActivationPlan{}, errors.New("activation plan role migration binding does not match the verified release")
 	}
@@ -521,7 +522,16 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 	if current.Previous == nil {
 		return errors.New("no previous Maestro installation is available")
 	}
-	if current.MigrationID == rolemigration.MigrationID && current.Previous.RoleAuthority != rolemigration.CanonicalRole {
+	currentExpired, err := rolemigration.IsExpired(current.Release)
+	if err != nil {
+		return fmt.Errorf("validate rollback release authority: %w", err)
+	}
+	previousExpired, err := rolemigration.IsExpired(current.Previous.Release)
+	if err != nil {
+		return fmt.Errorf("validate previous rollback release authority: %w", err)
+	}
+	if (currentExpired || current.RoleAuthority == rolemigration.CanonicalRole) &&
+		(!previousExpired || current.Previous.RoleAuthority != rolemigration.CanonicalRole) {
 		return errors.New("rollback would reactivate a legacy agent authority after alias expiry")
 	}
 	if err := ensureSafePath(managedRoot, current.Previous.CLIBackup); err != nil {
@@ -583,7 +593,29 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 			CLIBackup: revertedBackup,
 		},
 	}
-	return WriteState(dataRoot, next)
+	if err := WriteState(dataRoot, next); err != nil {
+		// The durable state is still current, so compensate the filesystem back
+		// to the current CLI rather than leaving role authority and bytes split.
+		backupErr := os.Rename(activeCLI, current.Previous.CLIBackup)
+		restoreErr := os.Rename(revertedBackup, activeCLI)
+		if backupErr != nil || restoreErr != nil {
+			return fmt.Errorf("commit rollback state: %w (filesystem compensation failed: backup=%v restore=%v)", err, backupErr, restoreErr)
+		}
+		return fmt.Errorf("commit rollback state: %w (filesystem restored)", err)
+	}
+	return nil
+}
+
+func roleBindingForTransition(options PrepareOptions, manifest releasecontract.Manifest) (rolemigration.Binding, error) {
+	if options.Transition == "update" {
+		return rolemigration.EnsureUpdateAllowed(options.FromRelease, manifest.Release, manifest)
+	}
+	// A fresh install validates any advertised migration but never applies or
+	// persists a legacy-source binding.
+	if _, _, err := rolemigration.FromManifest(manifest); err != nil {
+		return rolemigration.Binding{}, err
+	}
+	return rolemigration.Binding{}, nil
 }
 
 func WritePlan(path string, plan ActivationPlan) error {

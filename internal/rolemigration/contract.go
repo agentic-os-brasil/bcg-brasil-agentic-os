@@ -107,8 +107,16 @@ func RequiresMigration(fromRelease, toRelease string) (bool, error) {
 }
 
 func EnsureUpdateAllowed(fromRelease, toRelease string, manifest releasecontract.Manifest) (Binding, error) {
-	if _, err := RequiresMigration(fromRelease, toRelease); err != nil {
-		return Binding{}, err
+	from, err := parseVersion(fromRelease)
+	if err != nil {
+		return Binding{}, fmt.Errorf("invalid migration source release: %w", err)
+	}
+	to, err := parseVersion(toRelease)
+	if err != nil {
+		return Binding{}, fmt.Errorf("invalid migration target release: %w", err)
+	}
+	if to.compare(from) <= 0 {
+		return Binding{}, errors.New("role-bound update must move to a newer release")
 	}
 	binding, present, err := FromManifest(manifest)
 	if err != nil {
@@ -118,10 +126,33 @@ func EnsureUpdateAllowed(fromRelease, toRelease string, manifest releasecontract
 	if err != nil {
 		return Binding{}, err
 	}
+	eligible, err := sourceInMigrationRange(fromRelease)
+	if err != nil {
+		return Binding{}, err
+	}
+	if required && !eligible {
+		return Binding{}, errors.New("update source is outside the bounded practice-agent migration range")
+	}
 	if required && !present {
 		return Binding{}, errors.New("update crosses the practice-agent alias expiry without a signed role migration")
 	}
+	// A post-expiry installation may consume a release that still advertises
+	// compatibility for legacy 0.1.x clients, but must not reapply or persist
+	// that migration binding.
+	if !eligible {
+		return Binding{}, nil
+	}
 	return binding, nil
+}
+
+func sourceInMigrationRange(release string) (bool, error) {
+	value, err := parseVersion(release)
+	if err != nil {
+		return false, fmt.Errorf("invalid migration source release: %w", err)
+	}
+	minimum, _ := parseVersion("0.1.0")
+	expires, _ := parseVersion(AliasExpiresAfter)
+	return value.compare(minimum) >= 0 && value.compare(expires) < 0, nil
 }
 
 func IsExpired(release string) (bool, error) {
