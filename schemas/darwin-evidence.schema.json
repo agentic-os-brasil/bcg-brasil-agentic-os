@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil.example/schemas/darwin-evidence.schema.json",
+  "title": "Maestro Darwin metadata-only evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "evidence_id", "window_id", "scope_sha256", "evidence_authority", "recorded_at"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"enum": ["health", "selection", "proposal", "acceptance", "evaluation", "alternative"]},
+    "evidence_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,63}$"},
+    "window_id": {"type": "string", "pattern": "^win-[a-f0-9]{32}$"},
+    "scope_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evidence_authority": {"const": "caller_asserted_shadow"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "health": {"$ref": "#/$defs/health"},
+    "selection": {"$ref": "#/$defs/selection"},
+    "proposal": {"$ref": "#/$defs/proposal"},
+    "acceptance": {"$ref": "#/$defs/acceptance"},
+    "evaluation": {"$ref": "#/$defs/evaluation"},
+    "alternative": {"$ref": "#/$defs/alternative"}
+  },
+  "oneOf": [
+    {"required": ["health"], "properties": {"kind": {"const": "health"}}, "not": {"anyOf": [{"required": ["selection"]}, {"required": ["proposal"]}, {"required": ["acceptance"]}, {"required": ["evaluation"]}, {"required": ["alternative"]}]}},
+    {"required": ["selection"], "properties": {"kind": {"const": "selection"}}, "not": {"anyOf": [{"required": ["health"]}, {"required": ["proposal"]}, {"required": ["acceptance"]}, {"required": ["evaluation"]}, {"required": ["alternative"]}]}},
+    {"required": ["proposal"], "properties": {"kind": {"const": "proposal"}}, "not": {"anyOf": [{"required": ["health"]}, {"required": ["selection"]}, {"required": ["acceptance"]}, {"required": ["evaluation"]}, {"required": ["alternative"]}]}},
+    {"required": ["acceptance"], "properties": {"kind": {"const": "acceptance"}}, "not": {"anyOf": [{"required": ["health"]}, {"required": ["selection"]}, {"required": ["proposal"]}, {"required": ["evaluation"]}, {"required": ["alternative"]}]}},
+    {"required": ["evaluation"], "properties": {"kind": {"const": "evaluation"}}, "not": {"anyOf": [{"required": ["health"]}, {"required": ["selection"]}, {"required": ["proposal"]}, {"required": ["acceptance"]}, {"required": ["alternative"]}]}},
+    {"required": ["alternative"], "properties": {"kind": {"const": "alternative"}}, "not": {"anyOf": [{"required": ["health"]}, {"required": ["selection"]}, {"required": ["proposal"]}, {"required": ["acceptance"]}, {"required": ["evaluation"]}]}}
+  ],
+  "$defs": {
+    "health": {"type":"object","additionalProperties":false,"required":["job_kind","scheduled_at","captured_at","freshness","recovery","outcome"],"properties":{"job_kind":{"enum":["darwin_housekeeping","federation_weekly","activation_monitor"]},"scheduled_at":{"type":"string","format":"date-time"},"captured_at":{"type":"string","format":"date-time"},"freshness":{"enum":["current","aging","stale","missed","unavailable"]},"recovery":{"enum":["not_needed","recovered","failed","blocked"]},"outcome":{"enum":["succeeded","failed","blocked","unavailable","no_action","partial"]}}},
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan_sha256","policy_version","posture","route","outcome","duration_seconds","max_calls","calls_used","max_token_units","token_units_used","budget_exhausted","human_override","override_kind","pa_coverage","pa_expert_count","capability_gaps"],
+      "properties": {
+        "plan_sha256": {"type":"string","pattern":"^[a-f0-9]{64}$"},
+        "policy_version": {"type":"string","pattern":"^[a-z0-9][a-z0-9._-]{0,63}$"},
+        "posture": {"enum":["direct","balanced","deliberative"]},
+        "route": {"enum":["D0_DIRECT","D1_TARGETED","D2_GOVERNED","BLOCKED"]},
+        "outcome": {"enum":["succeeded","failed","blocked","unavailable","no_action","partial"]},
+        "duration_seconds": {"type":"integer","minimum":0,"maximum":86400},
+        "max_calls": {"type":"integer","minimum":0,"maximum":6},
+        "calls_used": {"type":"integer","minimum":0,"maximum":6},
+        "max_token_units": {"type":"integer","minimum":0,"maximum":24000},
+        "token_units_used": {"type":"integer","minimum":0,"maximum":24000},
+        "budget_exhausted": {"type":"boolean"},
+        "human_override": {"type":"boolean"},
+        "override_kind": {"enum":["none","route_change","budget_extension","manual_resume","release_recovery"]},
+        "pa_coverage": {"enum":["not_required","covered","missing","unavailable"]},
+        "pa_expert_count": {"type":"integer","minimum":0,"maximum":2},
+        "capability_gaps": {"type":"array","maxItems":8,"uniqueItems":true,"items":{"enum":["native_runtime","receipt_coverage","pa_expert_coverage","recovery","budget","latency","human_confirmation"]}}
+      },
+      "allOf": [
+        {"if":{"properties":{"route":{"const":"D0_DIRECT"}}},"then":{"properties":{"max_calls":{"const":1},"calls_used":{"maximum":1},"max_token_units":{"const":4000},"token_units_used":{"maximum":4000},"pa_coverage":{"const":"not_required"},"pa_expert_count":{"const":0}}}},
+        {"if":{"properties":{"route":{"const":"D1_TARGETED"}}},"then":{"properties":{"max_calls":{"const":3},"calls_used":{"maximum":3},"max_token_units":{"const":10000},"token_units_used":{"maximum":10000},"pa_expert_count":{"maximum":1}}}},
+        {"if":{"properties":{"route":{"const":"D2_GOVERNED"}}},"then":{"properties":{"max_calls":{"const":6},"calls_used":{"maximum":6},"max_token_units":{"const":24000},"token_units_used":{"maximum":24000}}}},
+        {"if":{"properties":{"route":{"const":"BLOCKED"}}},"then":{"properties":{"max_calls":{"const":0},"calls_used":{"const":0},"max_token_units":{"const":0},"token_units_used":{"const":0}}}},
+        {"if":{"properties":{"human_override":{"const":false}}},"then":{"properties":{"override_kind":{"const":"none"}}}},
+        {"if":{"properties":{"human_override":{"const":true}}},"then":{"not":{"properties":{"override_kind":{"const":"none"}}}}},
+        {"if":{"properties":{"pa_coverage":{"enum":["not_required","missing","unavailable"]}}},"then":{"properties":{"pa_expert_count":{"const":0}}}},
+        {"if":{"properties":{"pa_coverage":{"const":"covered"}}},"then":{"properties":{"pa_expert_count":{"minimum":1}}}}
+      ]
+    },
+    "proposal": {"type":"object","additionalProperties":false,"required":["proposal_sha256","proposal_kind","status","author_role"],"properties":{"proposal_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},"proposal_kind":{"enum":["policy_calibration","capability_improvement","reliability_fix","skill_pattern"]},"status":{"enum":["draft","accepted","rejected","deferred","implemented","rolled_back"]},"author_role":{"const":"darwin"}}},
+    "acceptance": {"type":"object","additionalProperties":false,"required":["proposal_sha256","decision","actor_role"],"properties":{"proposal_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},"decision":{"enum":["accepted","rejected","deferred"]},"actor_role":{"const":"human_maintainer"}}},
+    "evaluation": {"type":"object","additionalProperties":false,"required":["proposal_sha256","baseline_window_id","post_change_window_id","change_sha256","evaluator_role","outcome","self_evaluation"],"properties":{"proposal_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},"baseline_window_id":{"type":"string","pattern":"^win-[a-f0-9]{32}$"},"post_change_window_id":{"type":"string","pattern":"^win-[a-f0-9]{32}$"},"change_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},"evaluator_role":{"const":"independent_evaluator"},"outcome":{"enum":["improved","neutral","regressed","insufficient"]},"self_evaluation":{"const":false}}},
+    "alternative": {"type":"object","additionalProperties":false,"required":["cohort_sha256","alternative_id","policy_version","posture","route","outcome","duration_seconds","budget_exhausted","pa_coverage","capability_gap_count"],"properties":{"cohort_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},"alternative_id":{"enum":["baseline","candidate_a","candidate_b","candidate_c"]},"policy_version":{"type":"string","pattern":"^[a-z0-9][a-z0-9._-]{0,63}$"},"posture":{"enum":["direct","balanced","deliberative"]},"route":{"enum":["D0_DIRECT","D1_TARGETED","D2_GOVERNED","BLOCKED"]},"outcome":{"enum":["succeeded","failed","blocked","unavailable","no_action","partial"]},"duration_seconds":{"type":"integer","minimum":0,"maximum":86400},"budget_exhausted":{"type":"boolean"},"pa_coverage":{"enum":["not_required","covered","missing","unavailable"]},"capability_gap_count":{"type":"integer","minimum":0,"maximum":8}}}
+  }
+}
