@@ -171,7 +171,7 @@ func capabilities() map[string]Capability {
 		"cold_start_interview":   {State: "supported", Message: "guided questions are available for a runtime adapter"},
 		"assessment_ingestion":   {State: "unavailable", Message: "assessment extraction requires an approved local ingestion adapter and explicit consent"},
 		"refinement_application": {State: "supported", Message: "local proposals apply declared facet policies with audit and reversal"},
-		"observation_capture":    {State: "unavailable", Message: "a lifecycle adapter must provide authorized observations"},
+		"observation_capture":    {State: "supported", Message: "Maestro evaluates every interaction; only material authenticated owner signals persist locally"},
 		"refinement_synthesis":   {State: "unavailable", Message: "a future approved adapter must turn observations into a proposed change"},
 	}
 }

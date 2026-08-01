@@ -40,6 +40,7 @@ type RefinementReceipt struct {
 type proposal struct {
 	ID           string    `json:"id"`
 	Facet        string    `json:"facet"`
+	SourceSHA256 string    `json:"source_sha256"`
 	Evidence     string    `json:"evidence"`
 	ProposedBody string    `json:"proposed_body"`
 	Policy       string    `json:"policy"`
@@ -108,13 +109,17 @@ func SubmitRefinement(root string, input RefinementInput) (RefinementReceipt, er
 	if strings.TrimSpace(input.Evidence) == "" || strings.TrimSpace(input.ProposedBody) == "" {
 		return RefinementReceipt{}, errors.New("refinement evidence and proposed body are required")
 	}
+	current, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(definition.Path)))
+	if err != nil {
+		return RefinementReceipt{}, err
+	}
 	autoApproved, err := authorizedProducer(root, input.ProducerID, input.Capability)
 	if err != nil {
 		return RefinementReceipt{}, err
 	}
 	created := time.Now().UTC()
 	id := refinementID(input.Facet, input.Evidence, input.ProposedBody, created)
-	p := proposal{ID: id, Facet: input.Facet, Evidence: input.Evidence, ProposedBody: input.ProposedBody, Policy: definition.Refinement, ProducerID: input.ProducerID, AutoApproved: autoApproved, CreatedAt: created, State: "proposed"}
+	p := proposal{ID: id, Facet: input.Facet, SourceSHA256: digest(string(current)), Evidence: input.Evidence, ProposedBody: input.ProposedBody, Policy: definition.Refinement, ProducerID: input.ProducerID, AutoApproved: autoApproved, CreatedAt: created, State: "proposed"}
 	if err := writePrivateJSON(proposalPath(root, id), p); err != nil {
 		return RefinementReceipt{}, err
 	}
@@ -186,6 +191,9 @@ func apply(root string, p proposal, definition facetRecord, confirmed bool) (Ref
 	before, err := os.ReadFile(currentPath)
 	if err != nil {
 		return RefinementReceipt{}, err
+	}
+	if p.SourceSHA256 == "" || digest(string(before)) != p.SourceSHA256 {
+		return RefinementReceipt{}, ErrRevisionConflict
 	}
 	beforePath := filepath.ToSlash(filepath.Join("owner", "refinement", "versions", p.Facet, p.ID+".before.md"))
 	if err := writePrivateFile(filepath.Join(root, filepath.FromSlash(beforePath)), before); err != nil {

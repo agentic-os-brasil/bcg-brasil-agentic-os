@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil/schemas/interaction-observation.schema.json",
+  "title": "Metadata-only InteractionObservation",
+  "description": "A local, append-only owner signal contract. Claims are normalized codes, never transcripts, client documents or generated output.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "signal", "claim", "evidence_type", "source_event", "source_digest", "episode_id", "scope_kind", "scope_id", "confidence", "sensitivity", "expires_at", "authenticated_owner", "material", "owner_confirmed"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "signal": {"enum": ["explicit_instruction", "explicit_correction", "explicit_endorsement", "observed_pattern", "inferred_hypothesis"]},
+    "facet": {"type": "string"},
+    "claim": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$"},
+    "evidence_type": {"type": "string", "minLength": 1},
+    "source_event": {"type": "string", "minLength": 1},
+    "source_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "scope_kind": {"enum": ["global", "workspace", "account", "case"]},
+    "scope_id": {"type": "string", "minLength": 1},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "sensitivity": {"enum": ["professional", "sensitive", "restricted"]},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "authenticated_owner": {"type": "boolean"},
+    "material": {"type": "boolean"},
+    "owner_confirmed": {"type": "boolean"},
+    "declassified_global": {"type": "boolean"}
+  },
+  "$defs": {
+    "relevant_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state", "signal", "claim", "evidence_type", "source_digest", "scope_kind", "scope_id", "confidence", "expires_at"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "state": {"type": "string"},
+        "signal": {"type": "string"},
+        "claim": {"type": "string"},
+        "evidence_type": {"type": "string"},
+        "source_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "scope_kind": {"type": "string"},
+        "scope_id": {"type": "string"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "expires_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

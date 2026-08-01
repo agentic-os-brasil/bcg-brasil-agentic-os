@@ -36,6 +36,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest/markitdown"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
@@ -1445,7 +1446,7 @@ func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, err
 
 func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine|self>")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -1481,8 +1482,116 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		return writeJSON(out, status, errOut)
 	case "refine":
 		return runOwnerRefine(args[1:], in, out, errOut, root)
+	case "self":
+		return runOwnerSelf(args[1:], in, out, errOut, root)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine|self>")
+		return ExitUsage
+	}
+}
+
+func runOwnerSelf(args []string, in io.Reader, out, errOut io.Writer, root string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos owner self <snapshot|observations|observe|observation|reset>")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "snapshot":
+		if len(args) >= 2 && args[1] == "delete" {
+			if len(args) != 4 || args[3] != "--confirm" {
+				fmt.Fprintln(errOut, "usage: bcgos owner self snapshot delete <version> --confirm")
+				return ExitUsage
+			}
+			if err := ownerctx.DeleteSnapshot(root, args[2], true); err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, map[string]string{"deleted": args[2]}, errOut)
+		}
+		flags := newFlagSet("owner self snapshot", errOut)
+		export := flags.Bool("export", false, "include bounded facet content in this local export")
+		facets := flags.String("facets", "", "comma-separated facet IDs; defaults to all registered facets")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+			fmt.Fprintln(errOut, "usage: bcgos owner self snapshot [--facets id,id] [--export]")
+			return ExitUsage
+		}
+		var requested []string
+		if strings.TrimSpace(*facets) != "" {
+			requested = splitTracks(*facets)
+		}
+		snapshot, err := ownerctx.ProjectSnapshot(root, requested)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if err := ownerctx.PersistSnapshot(root, snapshot); err != nil {
+			return reportError(errOut, err)
+		}
+		if !*export {
+			for id, facet := range snapshot.Facets {
+				facet.Content = ""
+				snapshot.Facets[id] = facet
+			}
+		}
+		return writeJSON(out, snapshot, errOut)
+	case "observations":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner self observations")
+			return ExitUsage
+		}
+		observations, err := ownerctx.ListObservations(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, observations, errOut)
+	case "observe":
+		flags := newFlagSet("owner self observe", errOut)
+		stdin := flags.Bool("stdin", false, "read a metadata-only observation JSON object")
+		confirm := flags.Bool("confirm", false, "confirm that this is an authenticated owner signal")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || !*stdin || !*confirm {
+			fmt.Fprintln(errOut, "usage: bcgos owner self observe --stdin --confirm")
+			return ExitUsage
+		}
+		var input ownerctx.ObservationInput
+		decoder := json.NewDecoder(io.LimitReader(in, 16<<10))
+		if err := decoder.Decode(&input); err != nil {
+			return reportError(errOut, err)
+		}
+		input.AuthenticatedOwner = true
+		input.OwnerConfirmed = true
+		receipt, evaluation, err := ownerctx.AppendObservation(root, input)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, struct {
+			Receipt    ownerctx.ObservationReceipt    `json:"receipt"`
+			Evaluation ownerctx.InteractionEvaluation `json:"evaluation"`
+		}{receipt, evaluation}, errOut)
+	case "observation":
+		if len(args) < 3 {
+			fmt.Fprintln(errOut, "usage: bcgos owner self observation <reject|contradict|expire|redact> <id> --confirm")
+			return ExitUsage
+		}
+		stateByName := map[string]ownerctx.ObservationState{"reject": ownerctx.ObservationRejected, "contradict": ownerctx.ObservationContradicted, "expire": ownerctx.ObservationExpired, "redact": ownerctx.ObservationRedacted}
+		state, ok := stateByName[args[1]]
+		if !ok || args[2] == "" || len(args) != 4 || args[3] != "--confirm" {
+			fmt.Fprintln(errOut, "usage: bcgos owner self observation <reject|contradict|expire|redact> <id> --confirm")
+			return ExitUsage
+		}
+		receipt, err := ownerctx.RejectObservation(root, args[2], state, true)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	case "reset":
+		if len(args) != 2 || args[1] != "--confirm" {
+			fmt.Fprintln(errOut, "usage: bcgos owner self reset --confirm")
+			return ExitUsage
+		}
+		if err := ownerctx.ResetDerivedSelf(root, true); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]string{"reset": "derived_self"}, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos owner self <snapshot|observations|observe|observation|reset>")
 		return ExitUsage
 	}
 }
@@ -1817,6 +1926,9 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	if err := evaluateAdapterInteraction(root, *runtimeName, string(lifecycle.SessionStart), lifecycle.IdempotencyKey(*runtimeName, string(lifecycle.SessionStart), inspection.WorkspaceID), inspection.WorkspaceID); err != nil {
+		return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+	}
 	return writeJSON(out, output, errOut)
 }
 
@@ -1888,6 +2000,13 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if err != nil {
 			return reportError(errOut, err)
 		}
+		event := lifecycle.SessionStart
+		if action == "context-injection" {
+			event = lifecycle.ContextInject
+		}
+		if err := evaluateAdapterInteraction(root, "codex", event, lifecycle.IdempotencyKey("codex", event, inspection.WorkspaceID), inspection.WorkspaceID); err != nil {
+			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+		}
 		return writeJSON(out, response, errOut)
 	}
 	event := lifecycle.PostActionObserve
@@ -1900,6 +2019,9 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 	}
 	if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
 		return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
+	}
+	if err := evaluateAdapterInteraction(root, "codex", string(event), receipt.IdempotencyKey, inspection.WorkspaceID); err != nil {
+		return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
 	}
 	return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
 }
@@ -1978,6 +2100,13 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if err != nil {
 			return reportError(errOut, err)
 		}
+		event := lifecycle.SessionStart
+		if action == "context-injection" {
+			event = lifecycle.ContextInject
+		}
+		if err := evaluateAdapterInteraction(root, "claude", event, lifecycle.IdempotencyKey("claude", event, inspection.WorkspaceID), inspection.WorkspaceID); err != nil {
+			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+		}
 		return writeJSON(out, response, errOut)
 	case "post-action-receipt", "stop-finalization":
 		event := lifecycle.PostActionObserve
@@ -1991,9 +2120,35 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
 			return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
 		}
+		if err := evaluateAdapterInteraction(root, "claude", string(event), receipt.IdempotencyKey, inspection.WorkspaceID); err != nil {
+			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+		}
 		return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
 	}
 	panic("unreachable Claude hook action")
+}
+
+// evaluateAdapterInteraction is deliberately metadata-only. Adapter hooks
+// evaluate every observed interaction, but their unauthenticated/non-material
+// lifecycle signal cannot create a self observation. An attended owner command
+// is the separate path that may append an authenticated material signal.
+func evaluateAdapterInteraction(root, runtimeName, event, sourceEvent, workspaceID string) error {
+	_, _, err := ownerctx.AppendObservation(root, ownerctx.ObservationInput{
+		SchemaVersion: 1,
+		Signal:        ownerctx.SignalInferredHypothesis,
+		Claim:         "adapter_lifecycle_observed",
+		EvidenceType:  "adapter_receipt",
+		SourceEvent:   "adapter-" + event,
+		SourceDigest:  maestro.SHA256Hex(runtimeName + "\x00" + event + "\x00" + sourceEvent),
+		EpisodeID:     runtimeName + "-" + event,
+		ScopeKind:     "workspace",
+		ScopeID:       workspaceID,
+		Confidence:    0,
+		Sensitivity:   "professional",
+		ExpiresAt:     time.Now().UTC().Add(24 * time.Hour),
+		Material:      false,
+	})
+	return err
 }
 
 func runAdapter(args []string, out, errOut io.Writer) int {

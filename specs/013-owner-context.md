@@ -1,8 +1,9 @@
 # Spec 013 - Owner context
 
 Status: decision accepted; local facet registry, inspection surface,
-cold-start interview contract and policy-enforcing refinement core implemented.
-Assessment extraction and observation/synthesis adapters remain unavailable.
+cold-start interview contract, policy-enforcing refinement core and
+metadata-only interaction evaluator implemented. Assessment extraction and
+semantic observation synthesis remain unavailable.
 
 ## Objective
 
@@ -27,6 +28,10 @@ owner/
     psychological-profile.md
   operating/
     work-state.md
+  observations/
+    observations.jsonl
+  self/projections/
+    self-<canonical-digest-prefix>.json
   sources/
     assessments/
 ```
@@ -83,3 +88,34 @@ policy, and returns an opaque receipt. `apply --confirm <proposal-id>` and
 may read bounded content only after an adapter resolves purpose, owner and
 policy. Tasks remain an explicit unavailable pointer until a task system
 contract is accepted.
+
+### Self projection and evidence-bound learning
+
+The canonical facet files and registry are the one Owner Context authority.
+`UserSelfSnapshot` is a versioned, stale-checked projection for a bounded
+Walter packet, never a second database. Precedence is current explicit
+instruction, explicit correction, canon, relevant observations, then a Walter
+intent hypothesis. An explicit correction supersedes earlier claims and
+invalidates proposals whose canonical-source digest is stale.
+
+Maestro evaluates every interaction. It persists only a material,
+authenticated owner signal in the local append-only observation log; routine
+loops, hypotheses, client documents and generated output are not persisted as
+self evidence. Observation metadata carries signal class, minimal normalized
+claim, evidence type, provenance digest, independent episode, scope,
+confidence, sensitivity and expiry. Scope is one of global, workspace,
+account or case; promotion to global requires explicit owner declassification.
+The lifecycle is `captured -> eligible -> corroborated -> proposed -> promoted`,
+with `rejected`, `contradicted`, `expired` and `redacted` terminal paths.
+
+Communication style, voice and preferences may receive audited automatic
+promotion only after explicit confirmation. Professional role and decision
+rules remain proposal-only. Boundaries, psychological profile and claims about
+intrinsic user motivation require explicit confirmation. Repetition means
+independent episodes, not multiple messages in one chat. Darwin may report
+metadata-only duplicate, age, conflict and drift signals; it cannot write or
+replace canonical self content. Local controls expose snapshot inspection and
+export, observation rejection/redaction, facet revert and snapshot deletion.
+`bcgos owner self reset --confirm` redacts provisional observations through
+tombstones and removes derived projections; it refuses to hide promoted
+canonical facets, which must use the audited facet revert path.

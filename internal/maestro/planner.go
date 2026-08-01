@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 )
 
 type IntentClass string
@@ -444,6 +445,11 @@ type Receipt struct {
 	WalterRequired              bool   `json:"walter_required"`
 	WalterSkipped               bool   `json:"walter_skipped"`
 	PlanDigest                  string `json:"plan_digest"`
+	SelfSnapshotVersion         string `json:"self_snapshot_version,omitempty"`
+	SelfSnapshotDigest          string `json:"self_snapshot_digest,omitempty"`
+	PromptDigest                string `json:"prompt_digest,omitempty"`
+	OutputDigest                string `json:"output_digest,omitempty"`
+	IntentVerdict               string `json:"intent_verdict,omitempty"`
 }
 
 type Event struct {
@@ -451,6 +457,11 @@ type Event struct {
 	Decision      string
 	ContentDigest string
 	ReasonCode    string
+	// Interaction is evaluated on every supplied loop event. It is not
+	// persisted by Advance; only an explicit Maestro capture may append a
+	// material, authenticated owner observation to the local observation log.
+	Interaction   *ownerctx.ObservationInput
+	IntentReceipt *IntentReviewReceipt
 }
 
 func NewChain(plan Plan, policy LoopPolicy) (ChainState, error) {
@@ -501,6 +512,18 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 		AccountConsultationRequired: plan.AccountConsultationRequired,
 		WalterRequired:              plan.RequiresWalter, WalterSkipped: plan.SkipWalter,
 		PlanDigest: state.PlanDigest,
+	}
+	if event.IntentReceipt != nil {
+		receipt.SelfSnapshotVersion = event.IntentReceipt.SelfSnapshotVersion
+		receipt.SelfSnapshotDigest = event.IntentReceipt.SelfSnapshotDigest
+		receipt.PromptDigest = event.IntentReceipt.PromptDigest
+		receipt.OutputDigest = event.IntentReceipt.OutputDigest
+		receipt.IntentVerdict = string(event.IntentReceipt.Verdict)
+	}
+	if event.Interaction != nil {
+		if _, err := ownerctx.EvaluateInteraction(*event.Interaction); err != nil {
+			return state, Receipt{}, err
+		}
 	}
 	switch state.Stage {
 	case StageAccountFraming:

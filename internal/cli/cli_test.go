@@ -491,6 +491,39 @@ func TestOwnerRefineAppliesEligibleFacetFromStdinAndRequiresConfirmationToRevert
 	}
 }
 
+func TestOwnerSelfControlsProjectAndPersistOnlyConfirmedMetadata(t *testing.T) {
+	root := t.TempDir()
+	var output bytes.Buffer
+	dataRoot := func() (string, error) { return root, nil }
+	if code := runOwnerWithInput([]string{"init"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("owner init = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwnerWithInput([]string{"self", "snapshot"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("self snapshot = %d: %s", code, output.String())
+	}
+	var snapshot struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &snapshot); err != nil || snapshot.Version == "" {
+		t.Fatalf("snapshot = %s, err = %v", output.String(), err)
+	}
+	sum := sha256.Sum256([]byte("source"))
+	input := `{"schema_version":1,"signal":"explicit_correction","facet":"voice","claim":"concise","evidence_type":"owner_correction","source_event":"event-owner","source_digest":"` + hex.EncodeToString(sum[:]) + `","episode_id":"episode-owner","scope_kind":"global","scope_id":"owner","confidence":0.9,"sensitivity":"professional","expires_at":"` + time.Now().UTC().Add(time.Hour).Format(time.RFC3339) + `","material":true,"declassified_global":true}`
+	output.Reset()
+	if code := runOwnerWithInput([]string{"self", "observe", "--stdin", "--confirm"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"persisted": true`) {
+		t.Fatalf("self observe = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwnerWithInput([]string{"self", "observations"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"persisted": true`) {
+		t.Fatalf("self observations = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwnerWithInput([]string{"self", "snapshot", "delete", snapshot.Version, "--confirm"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("self snapshot delete = %d: %s", code, output.String())
+	}
+}
+
 func TestAtlasCommandsBootstrapOnlyPrivateOwnerAndWorkspaceRoots(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil/schemas/intent-review-packet.schema.json",
+  "title": "Maestro IntentReviewPacket",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "packet_version", "packet_id", "literal_request", "plan_digest", "draft_output", "self_snapshot_version", "self_snapshot_digest", "self_facets", "audience", "consequence", "reversibility", "packet_digest"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "packet_version": {"const": "intent-review-v1"},
+    "packet_id": {"type": "string", "minLength": 1},
+    "literal_request": {"type": "string", "minLength": 1},
+    "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "plan_route": {"type": "string"},
+    "draft_output": {"type": "string", "minLength": 1},
+    "relevant_context_refs": {"type": "array", "items": {"type": "string"}, "maxItems": 16},
+    "self_snapshot_version": {"type": "string", "minLength": 1},
+    "self_snapshot_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "self_facets": {"type": "object"},
+    "observations": {"type": "array", "maxItems": 32, "items": {"$ref": "interaction-observation.schema.json#/$defs/relevant_observation"}},
+    "audience": {"type": "string", "minLength": 1},
+    "consequence": {"type": "string", "minLength": 1},
+    "reversibility": {"type": "string", "minLength": 1},
+    "account_receipt_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "packet_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

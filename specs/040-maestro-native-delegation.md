@@ -19,6 +19,31 @@ The planner resolves two independent booleans:
 The invariants are `post_account_validation_required == pre_account_used` and
 `walter_invocation == resolved_walter_required`.
 
+For a Walter invocation, Maestro builds an ephemeral, versioned
+`IntentReviewPacket`. It binds the literal prompt, plan route, draft digest,
+audience, consequence, reversibility, the relevant minimum context,
+`UserSelfSnapshot` version/digest and applicable observation metadata. Walter
+returns a typed intrinsic-intent hypothesis, evidence references, confidence,
+purpose satisfaction, constructive refinement, unresolved uncertainty and an
+`approve|refine|clarify|hold_exceptional` verdict. Walter is a calm Senior
+Advisor & Refiner and proxy for the user's likely contextual self-review, not a
+mind-reader, red team or second authority. A low-confidence hypothesis never
+silently changes the requested route; at most Maestro asks a bounded question.
+
+The canonical Owner Context facets are the sole self authority.
+`UserSelfSnapshot` is a stale-checked projection. Maestro evaluates every
+interaction, but the local append-only observation log persists only material,
+authenticated owner signals. Claims are normalized metadata codes: prompts,
+transcripts, client documents and generated output are never self evidence.
+Explicit current instruction outranks correction, canon, observations and
+Walter hypotheses. Communication-style/voice/preferences may be promoted with
+audited explicit confirmation; role and decision rules require proposals;
+boundaries, psychological profile and intrinsic-intent claims require explicit
+confirmation. Darwin may deduplicate hashes and report drift/age/conflicts,
+but cannot semantically write the self. Local controls support inspection,
+export, owner-confirmed observation rejection/redaction, facet revert and
+snapshot deletion.
+
 | Path | Sequence |
 | --- | --- |
 | A | Maestro → Client Account framing → Maestro → Case → Maestro → Client Account validation → Maestro → Walter → Maestro → User |

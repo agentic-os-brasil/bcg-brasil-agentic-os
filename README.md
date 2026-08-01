@@ -92,6 +92,16 @@ an auditable low-leverage skip, before delivery. Claude and Codex share the
 same controller and durable installation-state contract; capability reporting
 distinguishes configured, adapter-observed and native-qualified evidence.
 
+Walter's review packet is an ephemeral, digest-bound `IntentReviewPacket`: it
+contains the literal request, selected route, bounded draft/context, audience,
+consequence, reversibility and a `UserSelfSnapshot` projection. Walter's
+intrinsic-intent assessment is a hypothesis with evidence and confidence, not
+mind-reading. Owner Context facets remain the sole self authority. Maestro
+evaluates every interaction, but persists only material, authenticated owner
+signals as normalized local metadata; prompts, client documents and generated
+output never become self evidence. The local CLI exposes inspection/export and
+owner-confirmed rejection/redaction, revert and deletion controls.
+
 ## What is ready
 
 ### 🏅 Toward the v0.1.0 pilot — contract layer validated

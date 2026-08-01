@@ -65,6 +65,14 @@ An LLM may compress, group and propose durable evidence, but it does not choose 
 - Raw prompts, credentials, client files, client-identifying examples and unsanitized artifacts are not valid shared-memory inputs.
 - Updates may migrate memory through versioned, reversible migrations but never replace it with bundle defaults.
 
+Owner self learning is a separate local surface, not an additional memory
+layer: canonical Owner Context facets remain authoritative, while a
+stale-checked `UserSelfSnapshot` is only a packet projection. Maestro evaluates
+every interaction and persists only material, authenticated owner signals as
+minimal metadata. Walter hypotheses, prompts, client documents and generated
+output cannot become canonical self evidence; explicit owner controls govern
+promotion, correction, inspection, export and deletion.
+
 The repository does not define the final Windows or macOS data path yet; that remains governed by `Q-007`.
 
 ## Runtime portability

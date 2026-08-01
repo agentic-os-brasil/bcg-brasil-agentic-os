@@ -53,3 +53,12 @@ budgets; exhaustion fails closed with a receipt.
 
 No agent-to-agent call, nesting or second active branch is valid. The native
 runtime may expose legacy event names only to return a deterministic denial.
+
+For high-leverage Walter review, Maestro seals an `IntentReviewPacket` with
+the prompt, route, draft, bounded context, audience, consequence,
+reversibility, self projection version/digest and relevant observation
+metadata. Walter returns a typed intrinsic-intent hypothesis and constructive
+advice with confidence; this is proxy review, not impersonation or a second
+self authority. Walter is read-only/tool-less and never writes the canonical
+Owner Context. Every loop is evaluated for a possible owner signal, but only
+material authenticated owner speech/action may be appended locally.

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestInitializeCreatesInspectablePointersWithoutOverwritingSelf(t *testing.T) {
@@ -158,4 +159,170 @@ func TestInitializeCreatesProfessionalFacetsAndInterviewWithoutSensitiveDefaultR
 			t.Fatal("psychological profile must not be a default cold-start question")
 		}
 	}
+}
+
+func TestSnapshotIsAStaleCheckedProjectionOfCanonicalFacets(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ProjectSnapshot(root, []string{"communication-style", "decision-rules"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.ProjectionOf != "ownerctx.facets.v2" || snapshot.Version == "" || len(snapshot.Facets) != 2 {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+	if err := PersistSnapshot(root, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSnapshot(root, snapshot.Version); err != nil {
+		t.Fatal(err)
+	}
+	facetPath := filepath.Join(root, "owner", "self", "communication-style.md")
+	if err := os.WriteFile(facetPath, []byte("# Updated\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSnapshot(root, snapshot.Version); !errors.Is(err, ErrSnapshotStale) {
+		t.Fatalf("stale snapshot error = %v", err)
+	}
+}
+
+func TestObservationEvaluatorDoesNotPersistEveryLoopOrInferSelfFacts(t *testing.T) {
+	input := observationInput(SignalObservedPattern, "concise", "episode-a", false, true)
+	receipt, evaluation, err := AppendObservation(t.TempDir(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !evaluation.Evaluated || evaluation.Persist || receipt.Persisted {
+		t.Fatalf("unauthenticated observation persisted: evaluation=%#v receipt=%#v", evaluation, receipt)
+	}
+	input = observationInput(SignalInferredHypothesis, "prefers_concise", "episode-a", true, true)
+	_, evaluation, err = AppendObservation(t.TempDir(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if evaluation.Persist || evaluation.Reason != "hypothesis_is_task_local" {
+		t.Fatalf("inferred hypothesis was persisted: %#v", evaluation)
+	}
+}
+
+func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	first := observationInput(SignalExplicitCorrection, "concise", "episode-a", true, true)
+	first.DeclassifiedGlobal = true
+	firstReceipt, _, err := AppendObservation(root, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationEligible, "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationCorroborated, "", true); err == nil {
+		t.Fatal("single episode was accepted as corroboration")
+	}
+	second := first
+	second.EpisodeID, second.SourceEvent = "episode-b", "event-b"
+	second.SourceDigest = digest("source-b")
+	second.DeclassifiedGlobal = true
+	if _, _, err := AppendObservation(root, second); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationCorroborated, "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationProposed, "", true); err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := canonicalDigestForFacet(root, "voice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationPromoted, digest("stale"), true); !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("stale promotion error = %v", err)
+	}
+	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationPromoted, canonical, true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRefinementProposalIsInvalidatedByCanonicalCorrection(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := SubmitRefinement(root, RefinementInput{Facet: "voice", Evidence: "owner correction", ProposedBody: "# Proposed\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "owner", "self", "voice.md"), []byte("# New canonical\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyRefinement(root, receipt.ID, true); !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("dependent proposal was not invalidated: %v", err)
+	}
+}
+
+func TestDarwinMetadataReportContainsNoSemanticSelfContent(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	first := observationInput(SignalExplicitCorrection, "concise", "episode-a", true, true)
+	first.DeclassifiedGlobal = true
+	if _, _, err := AppendObservation(root, first); err != nil {
+		t.Fatal(err)
+	}
+	second := first
+	second.SourceEvent, second.EpisodeID = "event-b", "episode-b"
+	second.SourceDigest = first.SourceDigest
+	if _, _, err := AppendObservation(root, second); err != nil {
+		t.Fatal(err)
+	}
+	report, err := AnalyzeObservationMetadata(root, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Total != 2 || report.DuplicateSourceDigests != 1 || report.ExpiringWithin != 2 || len(report.ReevaluateFacets) != 1 || report.ReevaluateFacets[0] != "voice" {
+		t.Fatalf("metadata report = %#v", report)
+	}
+}
+
+func TestResetDerivedSelfUsesTombstonesAndLeavesCanonicalFacetUntouched(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ProjectSnapshot(root, []string{"voice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := PersistSnapshot(root, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	input := observationInput(SignalExplicitInstruction, "concise", "episode-reset", true, true)
+	input.DeclassifiedGlobal = true
+	if _, _, err := AppendObservation(root, input); err != nil {
+		t.Fatal(err)
+	}
+	if err := ResetDerivedSelf(root, true); err != nil {
+		t.Fatal(err)
+	}
+	observations, err := ListObservations(root)
+	if err != nil || len(observations) != 1 || observations[0].State != ObservationRedacted {
+		t.Fatalf("reset observations = %#v, err = %v", observations, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "owner", "self", "projections", snapshot.Version+".json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("derived snapshot was not deleted: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "owner", "self", "voice.md")); err != nil {
+		t.Fatalf("canonical facet was removed: %v", err)
+	}
+}
+
+func observationInput(signal SignalClass, claim, episode string, authenticated, material bool) ObservationInput {
+	return ObservationInput{SchemaVersion: 1, Signal: signal, Facet: "voice", Claim: claim, EvidenceType: "owner_correction", SourceEvent: "event-" + episode, SourceDigest: digest("source-" + episode), EpisodeID: episode, ScopeKind: "global", ScopeID: "owner", Confidence: 0.9, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: authenticated, Material: material, OwnerConfirmed: authenticated}
 }
