@@ -13,7 +13,7 @@ does not promote a product capability from `unavailable`.
 | Delegation state can recover safely | Snapshot restore validates policy, root, child and recovery capability; stale recovery is capability-gated | Durable atomic persistence plus restart/partition conformance | unavailable |
 
 | Packets and completion authority are bounded | Dispatcher and pilot tests verify signed packets, scope inheritance, target-authenticated execution envelopes, nonce replay rejection and finish authority | Adapter delivers only authenticated packets/envelopes without exposing capabilities | unavailable |
-| Material output cannot bypass Walter | A signed producer `review_trigger` moves the producer to `pending_review`; only a sealed, source-scoped Walter packet with an approved verdict promotes it to `completed`; generic Walter returns are rejected and typed verdicts are projected to compact state | Native adapter emits the sealed packet and observes Walter's typed verdict in the same governed session | unavailable |
+| High-leverage output cannot bypass Walter, while low-leverage work may skip it explicitly | Maestro independently resolves `account_consultation_required` (client/stakeholder strategic lens) and `walter_required` (high leverage). Account-assisted chains prove Account framing → Case → Account validation; direct Case chains prove an execution-only/no-client-lens reason. Required Walter packets are source/digest-bound; only a calm typed `approved` verdict with authenticated installation-scoped custody can satisfy the execution ledger. `refine-and-return`/`hold` never approve, and low-leverage skips carry a Maestro reason/evidence receipt | Native adapter emits the sealed packet, invokes the same Claude/Codex core and observes the typed verdict in the same governed session; qualification must cover custody and stale/replay rejection | unavailable |
 | Direct skill selection stays with the active owner | Dispatcher tests require a signed active root packet, matching agent capability and no active child | Native agent execution proves the same root/capability binding | unavailable |
 | Claude/Codex semantic parity | Shared controller fixtures execute both event vocabularies and denial cases | Native session conformance from installed Claude and Codex adapters | unavailable |
 
@@ -37,10 +37,17 @@ can be completed after process restart.
 - schema-v1 root or child packet used as the parent of a new delegation.
 - material recommendation, consequential trade-off or external artifact returned
   as completed without a signed trigger, pending-review state and Walter handoff;
+- Account consultation omitted when client strategic-lens signals require it,
+  or post-Case validation omitted after Account framing;
+- direct Case routed through a fake Account edge, nested agent call or
+  Capability Specialist alias;
 - Walter packet opened before the producer closes, bound to a forged source
   digest/scope, or completed through the generic return path;
-- more than three objections, an approved verdict with objections, or a
-  missing-the-mark verdict without a concrete fix and exit condition;
+- more than three objections, a blocking cosmetic/nitpick objection, an empty
+  refine/hold verdict, or a blocking verdict without a concrete fix and exit
+  condition;
+- forged, stale, replayed, cross-item, cross-attempt or unavailable Walter
+  custody/receipt;
 - review prose, audience or uncertainty leaked into the durable receipt.
 
 ## Explicitly unavailable

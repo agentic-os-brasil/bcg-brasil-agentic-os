@@ -38,13 +38,15 @@ func walterKeypair(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 
 func walterExecutionInput(publicKey ed25519.PublicKey) CreateInput {
 	return CreateInput{
-		WorkspaceID:         testWorkspaceID,
-		Objective:           "Complete one durable Maestro goal.",
-		InitialNextStep:     "Produce the governed artifact.",
-		Criteria:            []Criterion{{ID: "artifact", Type: CriterionArtifactSnapshot, TargetRef: "bcgos://workspace/result.txt"}},
-		AllowedRefs:         []string{"bcgos://workspace/result.txt"},
-		RequireWalterReview: true,
-		WalterPublicKey:     base64.RawURLEncoding.EncodeToString(publicKey),
+		WorkspaceID:          testWorkspaceID,
+		Objective:            "Complete one durable Maestro goal.",
+		InitialNextStep:      "Produce the governed artifact.",
+		Criteria:             []Criterion{{ID: "artifact", Type: CriterionArtifactSnapshot, TargetRef: "bcgos://workspace/result.txt"}},
+		AllowedRefs:          []string{"bcgos://workspace/result.txt"},
+		RequireWalterReview:  true,
+		WalterPublicKey:      base64.RawURLEncoding.EncodeToString(publicKey),
+		WalterKeyID:          "walter-review-key",
+		WalterInstallationID: "install-alpha",
 	}
 }
 
@@ -57,6 +59,9 @@ func signedWalterEnvelope(t *testing.T, item Item, decision WalterReviewDecision
 		AttemptID:        item.State.ActiveAttemptID,
 		ReviewedRevision: item.State.StateRevision,
 		ContractSHA256:   item.State.ContractSHA256,
+		SignerKeyID:      item.Contract.WalterKeyID,
+		InstallationID:   item.Contract.WalterInstallationID,
+		CustodyScope:     "maestro/walter-review",
 		Decision:         decision,
 		Nonce:            "review-nonce",
 		IssuedAt:         time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC),
@@ -239,6 +244,8 @@ func TestWalterReviewRecoversFromProjectionCrash(t *testing.T) {
 func TestWalterContractRequiresOneValidBoundPublicKey(t *testing.T) {
 	input := testCreateInput()
 	input.RequireWalterReview = true
+	input.WalterKeyID = "walter-review-key"
+	input.WalterInstallationID = "install-alpha"
 	if _, err := walterReviewStore(t).Create(input); err == nil {
 		t.Fatal("review-gated contract without a public key was accepted")
 	}

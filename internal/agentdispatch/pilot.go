@@ -22,6 +22,7 @@ import (
 const (
 	maxExecutionEnvelopeAge = 5 * time.Minute
 	maxFailureCodeBytes     = 80
+	maxWalterReviewRounds   = 3
 	errandTool              = "errand_store"
 )
 
@@ -54,11 +55,12 @@ const (
 )
 
 type pilotRecord struct {
-	receipt     Receipt
-	packet      WorkPacket
-	errand      *ErrandContract
-	errandState errandState
-	pendingTool *ErrandToolEnvelope
+	receipt      Receipt
+	packet       WorkPacket
+	errand       *ErrandContract
+	errandState  errandState
+	pendingTool  *ErrandToolEnvelope
+	reviewRounds int
 }
 
 type Instance struct {
@@ -91,6 +93,7 @@ type Intent struct {
 	Pointers      []string
 	Constraints   []string
 	ReviewTrigger WalterReviewTrigger
+	WalterSkip    *WalterSkipDecision
 	TTL           time.Duration
 }
 
@@ -132,6 +135,7 @@ const (
 type ErrandToolEnvelope struct {
 	SchemaVersion int             `json:"schema_version"`
 	PacketID      string          `json:"packet_id"`
+	PacketSHA256  string          `json:"packet_sha256"`
 	TargetAgentID string          `json:"target_agent_id"`
 	Runtime       string          `json:"runtime"`
 	Tool          string          `json:"tool"`
@@ -217,6 +221,7 @@ const (
 type ExecutionEnvelope struct {
 	SchemaVersion int              `json:"schema_version"`
 	PacketID      string           `json:"packet_id"`
+	PacketSHA256  string           `json:"packet_sha256"`
 	TargetAgentID string           `json:"target_agent_id"`
 	Runtime       string           `json:"runtime"`
 	ScopeKind     string           `json:"scope_kind"`
@@ -342,7 +347,8 @@ func (executor *Executor) seal(dispatch Dispatch, outcome ExecutionOutcome, resu
 	envelope := ExecutionEnvelope{
 		SchemaVersion: 1,
 		PacketID:      dispatch.Packet.PacketID, TargetAgentID: executor.targetID,
-		Runtime: executor.runtime, ScopeKind: dispatch.Packet.ScopeKind, ScopeID: dispatch.Packet.ScopeID,
+		PacketSHA256: digestBody(dispatch.Packet),
+		Runtime:      executor.runtime, ScopeKind: dispatch.Packet.ScopeKind, ScopeID: dispatch.Packet.ScopeID,
 		Outcome: outcome, ResultSHA256: resultSHA256, Nonce: nonce, IssuedAt: executor.now().UTC(),
 	}
 	envelope.Signature, err = signExecutionEnvelope(envelope, executor.capability)
@@ -403,6 +409,10 @@ func (pilot *Pilot) RequireWalterReview(sourceDelegationID string, request Walte
 		receipt, err := pilot.recordReviewFailure(source, request, "source_not_complete", StateFailed)
 		return Dispatch{}, receipt, err
 	}
+	if source.reviewRounds >= maxWalterReviewRounds {
+		receipt, failure := pilot.recordReviewFailure(source, request, "review_budget_exhausted", StateFailed)
+		return Dispatch{}, receipt, failure
+	}
 	if source.receipt.Review != nil {
 		switch source.receipt.Review.State {
 		case ReviewDispatched:
@@ -421,15 +431,28 @@ func (pilot *Pilot) RequireWalterReview(sourceDelegationID string, request Walte
 		receipt, failure := pilot.recordReviewFailure(source, request, "review_invalid", StateFailed)
 		return Dispatch{}, receipt, failure
 	}
+	sourceInstance, sourceRegistered := pilot.instances[source.packet.TargetAgentID]
+	if !sourceRegistered {
+		receipt, failure := pilot.recordReviewFailure(source, request, "source_agent_unavailable", StateUnavailable)
+		return Dispatch{}, receipt, failure
+	}
+	if err := validateReviewChainForSource(request.Chain, source.packet, sourceInstance.Role); err != nil {
+		receipt, failure := pilot.recordReviewFailure(source, request, "review_chain_invalid", StateFailed)
+		return Dispatch{}, receipt, failure
+	}
 	review := ReviewPacket{
 		SourcePacketID: source.packet.PacketID, SourcePacketSHA256: digestBody(source.packet),
 		SourceScopeKind: source.packet.ScopeKind, SourceScopeID: source.packet.ScopeID,
 		Trigger: request.Trigger, Audience: strings.TrimSpace(request.Audience),
-		Recommendation:   strings.TrimSpace(request.Recommendation),
-		DefinitionOfDone: strings.TrimSpace(request.DefinitionOfDone),
-		ArtifactRefs:     append([]string(nil), request.ArtifactRefs...),
-		EvidenceRefs:     append([]string(nil), request.EvidenceRefs...),
-		Uncertainties:    append([]string(nil), request.Uncertainties...),
+		Recommendation:       strings.TrimSpace(request.Recommendation),
+		DefinitionOfDone:     strings.TrimSpace(request.DefinitionOfDone),
+		ArtifactRefs:         append([]string(nil), request.ArtifactRefs...),
+		EvidenceRefs:         append([]string(nil), request.EvidenceRefs...),
+		Uncertainties:        append([]string(nil), request.Uncertainties...),
+		ExecutionWorkspaceID: strings.TrimSpace(request.ExecutionWorkspaceID),
+		ExecutionItemID:      strings.TrimSpace(request.ExecutionItemID),
+		Posture:              WalterReviewPosture,
+		Chain:                request.Chain,
 	}
 	if err := validateReviewPacket(&review, "", request.ReviewObjective); err != nil {
 		receipt, failure := pilot.recordReviewFailure(source, request, "review_invalid", StateFailed)
@@ -448,6 +471,11 @@ func (pilot *Pilot) RequireWalterReview(sourceDelegationID string, request Walte
 	if err == nil {
 		producer := pilot.records[source.receipt.DelegationID]
 		producer.receipt.Review = reviewSummary(&review, ReviewDispatched)
+		if err := validateReviewChainForReceipt(*producer.receipt.Review); err != nil {
+			return Dispatch{}, Receipt{}, fmt.Errorf("Walter receipt provenance is invalid: %w", err)
+		}
+		pilot.records[source.receipt.DelegationID] = producer
+		producer.reviewRounds++
 		pilot.records[source.receipt.DelegationID] = producer
 	}
 	return dispatch, receipt, err
@@ -462,6 +490,10 @@ func (pilot *Pilot) Delegate(intent Intent) (Dispatch, Receipt, error) {
 		receipt, err := pilot.recordFailure("workspace", targetID, intent.WorkspaceID, "intent_invalid", StateFailed)
 		return Dispatch{}, receipt, err
 	}
+	if intent.ReviewTrigger == "" && intent.WalterSkip == nil {
+		receipt, err := pilot.recordFailure("workspace", targetID, intent.WorkspaceID, "walter_decision_missing", StateFailed)
+		return Dispatch{}, receipt, err
+	}
 	instance, exists := pilot.instances[targetID]
 	if !exists || !instance.Available || (instance.Role != "case_agent" && instance.Role != "workspace_agent") ||
 		instance.ScopeKind != "workspace" || instance.ScopeID != intent.WorkspaceID ||
@@ -472,8 +504,37 @@ func (pilot *Pilot) Delegate(intent Intent) (Dispatch, Receipt, error) {
 	return pilot.start(instance, PacketRequest{
 		TargetAgentID: targetID, ScopeKind: "workspace", ScopeID: intent.WorkspaceID,
 		Objective: intent.Objective, Pointers: intent.Pointers, Constraints: intent.Constraints,
-		ReviewTrigger: intent.ReviewTrigger, TTL: intent.TTL,
+		ReviewTrigger: intent.ReviewTrigger, WalterSkip: cloneWalterSkipDecision(intent.WalterSkip), TTL: intent.TTL,
 	}, nil)
+}
+
+// EscalateMateriality is a Maestro-only transition from an audited Walter skip
+// to a required review. It resigns the producer packet so a stale skip cannot
+// be reused, and fails closed when the producer already returned.
+func (pilot *Pilot) EscalateMateriality(delegationID string, trigger WalterReviewTrigger) (Dispatch, error) {
+	pilot.mu.Lock()
+	defer pilot.mu.Unlock()
+	if !trigger.valid() {
+		return Dispatch{}, errors.New("materiality escalation has an invalid Walter trigger")
+	}
+	record, ok := pilot.records[delegationID]
+	if !ok || record.packet.WalterSkip == nil {
+		return Dispatch{}, errors.New("materiality escalation requires an active audited Walter skip")
+	}
+	if record.receipt.State != StateDelegated {
+		return Dispatch{}, errors.New("materiality escalation cannot mutate a returned or stale skip")
+	}
+	record.packet.WalterSkip = nil
+	record.packet.ReviewTrigger = trigger
+	signature, err := pilot.dispatcher.signature(record.packet)
+	if err != nil {
+		return Dispatch{}, err
+	}
+	record.packet.Signature = signature
+	record.receipt.Review = nil
+	record.receipt.PacketSHA256 = digestBody(record.packet)
+	pilot.records[delegationID] = record
+	return Dispatch{Runtime: pilot.runtime, Packet: record.packet}, nil
 }
 
 // Rework starts a new signed producer attempt only after Walter returned a
@@ -501,12 +562,18 @@ func (pilot *Pilot) Rework(sourceDelegationID string, intent Intent) (Dispatch, 
 		receipt, err := pilot.recordFailure("workspace", source.packet.TargetAgentID, source.packet.ScopeID, "target_unavailable", StateUnavailable)
 		return Dispatch{}, receipt, err
 	}
-	return pilot.start(instance, PacketRequest{
+	dispatch, receipt, err := pilot.start(instance, PacketRequest{
 		TargetAgentID: source.packet.TargetAgentID, ScopeKind: source.packet.ScopeKind,
 		ScopeID: source.packet.ScopeID, Objective: intent.Objective, Pointers: intent.Pointers,
 		Constraints: intent.Constraints, ReviewTrigger: intent.ReviewTrigger,
 		ReworkOfPacketID: source.packet.PacketID, TTL: intent.TTL,
 	}, nil)
+	if err == nil {
+		reworked := pilot.records[dispatch.Packet.PacketID]
+		reworked.reviewRounds = source.reviewRounds
+		pilot.records[dispatch.Packet.PacketID] = reworked
+	}
+	return dispatch, receipt, err
 }
 
 func (pilot *Pilot) DelegateErrand(intent ErrandIntent) (Dispatch, Receipt, error) {
@@ -559,6 +626,9 @@ func (pilot *Pilot) start(instance Instance, request PacketRequest, errand *Erra
 		State: StateDelegated, PacketSHA256: packetSHA256, IssuedAt: packet.IssuedAt,
 	}
 	receipt.Review = reviewSummary(request.Review, ReviewDispatched)
+	if request.WalterSkip != nil {
+		receipt.Review = reviewSummaryForSkip(request.WalterSkip)
+	}
 	var privateErrand *ErrandContract
 	if errand != nil {
 		copy := *errand
@@ -707,6 +777,8 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 		state = ReviewApproved
 	case WalterRefineAndReturn:
 		state = ReviewRefineReturn
+	case WalterHold:
+		state = ReviewHold
 	}
 	receipt := pilot.complete(verified, envelope, "", StateCompleted, state)
 	if receipt.Review != nil {
@@ -730,6 +802,43 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 		}
 	}
 	return cloneReceipt(receipt), nil
+}
+
+// MarkWalterUnavailable closes an active Walter leaf as unavailable without
+// ever producing an approval. It is the fail-closed adapter path when native
+// runtime observation or installation custody is missing.
+func (pilot *Pilot) MarkWalterUnavailable(dispatch Dispatch, code string) (Receipt, error) {
+	pilot.mu.Lock()
+	defer pilot.mu.Unlock()
+	record, exists := pilot.records[dispatch.Packet.PacketID]
+	if !exists || record.receipt.State != StateDelegated || record.packet.Review == nil ||
+		dispatch.Runtime != pilot.runtime || record.packet.TargetAgentID != "walter" {
+		return Receipt{}, errors.New("Walter unavailable transition is not bound to an active review")
+	}
+	if decision := pilot.dispatcher.FinishRoot(record.packet); !decision.Allowed {
+		return Receipt{}, fmt.Errorf("Walter unavailable transition denied: %s", decision.Code)
+	}
+	receipt := record.receipt
+	receipt.State = StateUnavailable
+	receipt.FailureCode = strings.TrimSpace(code)
+	receipt.CompletedAt = pilot.now().UTC()
+	if receipt.Review != nil {
+		receipt.Review.State = ReviewUnavailable
+	}
+	pilot.records[receipt.DelegationID] = pilotRecord{
+		receipt: receipt, packet: record.packet, reviewRounds: record.reviewRounds,
+	}
+	if sourceID := record.packet.Review.SourcePacketID; sourceID != "" {
+		for delegationID, producer := range pilot.records {
+			if producer.packet.PacketID != sourceID || producer.receipt.Review == nil {
+				continue
+			}
+			producer.receipt.Review.State = ReviewUnavailable
+			pilot.records[delegationID] = producer
+			break
+		}
+	}
+	return cloneReceipt(receipt), errors.New(receipt.FailureCode)
 }
 
 func (pilot *Pilot) Fail(envelope ExecutionEnvelope, body FailureBody) (Receipt, error) {
@@ -790,6 +899,7 @@ func (pilot *Pilot) verifyEnvelope(envelope ExecutionEnvelope, outcome Execution
 	}
 	if envelope.SchemaVersion != 1 || !validPacketID(envelope.Nonce) ||
 		envelope.TargetAgentID != record.receipt.TargetAgentID ||
+		envelope.PacketSHA256 != record.receipt.PacketSHA256 ||
 		envelope.Runtime != record.receipt.Runtime || envelope.Runtime != pilot.runtime ||
 		envelope.ScopeKind != record.receipt.ScopeKind || envelope.ScopeID != record.receipt.ScopeID ||
 		envelope.Outcome != outcome || envelope.ResultSHA256 != resultSHA256 ||
@@ -815,7 +925,7 @@ func (pilot *Pilot) verifyEnvelope(envelope ExecutionEnvelope, outcome Execution
 	if err != nil || expectedErr != nil || subtle.ConstantTimeCompare(provided, expectedBytes) != 1 {
 		return pilotRecord{}, errEnvelopeDenied
 	}
-	if digestBody(record.packet) != record.receipt.PacketSHA256 {
+	if digestBody(record.packet) != record.receipt.PacketSHA256 || envelope.PacketSHA256 != digestBody(record.packet) {
 		return pilotRecord{}, errEnvelopeDenied
 	}
 	return record, nil
@@ -870,7 +980,9 @@ func (pilot *Pilot) complete(record pilotRecord, envelope ExecutionEnvelope, fai
 	if receipt.Review != nil && len(reviewState) > 0 && reviewState[0] != "" {
 		receipt.Review.State = reviewState[0]
 	}
-	pilot.records[receipt.DelegationID] = pilotRecord{receipt: receipt, packet: record.packet}
+	pilot.records[receipt.DelegationID] = pilotRecord{
+		receipt: receipt, packet: record.packet, reviewRounds: record.reviewRounds,
+	}
 	pilot.usedNonces[envelope.Nonce] = true
 	return cloneReceipt(receipt)
 }
@@ -935,6 +1047,7 @@ func (pilot *Pilot) recordReviewFailure(source pilotRecord, request WalterReview
 func cloneReceipt(receipt Receipt) Receipt {
 	if receipt.Review != nil {
 		review := *receipt.Review
+		review.SkipEvidenceSHA256 = append([]string(nil), receipt.Review.SkipEvidenceSHA256...)
 		receipt.Review = &review
 	}
 	return receipt

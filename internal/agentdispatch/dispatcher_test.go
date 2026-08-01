@@ -110,7 +110,20 @@ func TestDispatcherKeepsWalterAsAReviewLeaf(t *testing.T) {
 			SourceScopeKind: "workspace", SourceScopeID: "alpha",
 			Trigger: ReviewMaterialRecommendation, Audience: "case sponsor",
 			Recommendation: "Choose the bounded pilot scope.", DefinitionOfDone: "Sponsor can decide from the reviewed artifact.",
+			Posture:      WalterReviewPosture,
 			ArtifactRefs: []string{"bcgos://workspace/alpha/dossier/recommendation.md"},
+			Chain: ReviewChain{
+				Mode:                        ReviewChainAccountCaseAccount,
+				AccountConsultationRequired: true, PostAccountValidationRequired: true,
+				AccountConsultationReasonCode:   "client_strategic_lens_required",
+				AccountConsultationEvidenceRefs: []string{"bcgos://workspace/alpha/dossier/client-lens.json"},
+				Steps: []ReviewChainStep{
+					{Sequence: 1, AgentID: "client-account-alpha", Role: "client_account_agent", PacketID: strings.Repeat("c", 64), PacketSHA256: strings.Repeat("d", 64), IssuerAgentID: "maestro"},
+					{Sequence: 2, AgentID: "workspace-agent-alpha", Role: "case_agent", PacketID: strings.Repeat("a", 64), PacketSHA256: strings.Repeat("b", 64), IssuerAgentID: "maestro"},
+					{Sequence: 3, AgentID: "client-account-alpha", Role: "client_account_agent", PacketID: strings.Repeat("e", 64), PacketSHA256: strings.Repeat("f", 64), IssuerAgentID: "maestro"},
+				},
+				ValidatedPacketID: strings.Repeat("a", 64), ValidatedPacketSHA256: strings.Repeat("b", 64),
+			},
 		}, TTL: time.Hour,
 	})
 	if err != nil || !decision.Allowed {

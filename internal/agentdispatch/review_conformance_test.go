@@ -36,7 +36,7 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 			t.Fatalf("fixture trigger is not executable: %q", trigger)
 		}
 	}
-	expectedVerdicts := []WalterVerdict{WalterApproved, WalterRefineAndReturn, WalterMissingTheMark}
+	expectedVerdicts := []WalterVerdict{WalterApproved, WalterRefineAndReturn, WalterMissingTheMark, WalterHold}
 	if len(fixture.Verdicts) != len(expectedVerdicts) {
 		t.Fatalf("fixture verdict set drifted: %#v", fixture.Verdicts)
 	}
@@ -45,8 +45,8 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 			t.Fatalf("fixture verdict order/set drifted: %#v", fixture.Verdicts)
 		}
 		body := WalterReviewBody{Verdict: WalterVerdict(verdict)}
-		if verdict == string(WalterRefineAndReturn) || verdict == string(WalterMissingTheMark) {
-			body.Objections = []WalterObjection{{Code: "fixture", Fix: "Apply the named correction.", ExitCondition: "The correction is evidenced."}}
+		if verdict == string(WalterRefineAndReturn) || verdict == string(WalterMissingTheMark) || verdict == string(WalterHold) {
+			body.Objections = []WalterObjection{{Code: "fixture", Fix: "Apply the named correction.", ExitCondition: "The correction is evidenced.", Blocking: true}}
 		}
 		if err := validateWalterReviewBody(body, ReviewPacket{
 			SourcePacketID:     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -58,7 +58,7 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 			t.Fatalf("fixture verdict %q is not executable: %v", verdict, err)
 		}
 	}
-	expectedReceiptFields := []string{"trigger", "state", "source_packet_id", "source_packet_sha256", "objection_count"}
+	expectedReceiptFields := []string{"trigger", "state", "source_packet_id", "source_packet_sha256", "chain_mode", "chain_sha256", "account_consultation_required", "post_account_validation_required", "walter_required", "validated_packet_id", "validated_packet_sha256", "direct_case_reason_code", "objection_count"}
 	if len(fixture.ReceiptFields) != len(expectedReceiptFields) {
 		t.Fatalf("fixture receipt projection drifted: %#v", fixture.ReceiptFields)
 	}

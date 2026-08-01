@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bcgos.local/schemas/walter-review.schema.json",
+  "title": "BCGOS Walter review receipt",
+  "type": "object",
+  "required": ["trigger", "state", "source_packet_id", "source_packet_sha256", "chain_mode", "chain_sha256", "account_consultation_required", "post_account_validation_required", "walter_required"],
+  "properties": {
+    "trigger": {"enum": ["material_recommendation", "consequential_tradeoff", "external_artifact"]},
+    "state": {"enum": ["dispatched", "approved", "refine-and-return", "missing-the-mark", "hold", "unavailable"]},
+    "source_packet_id": {"$ref": "execution-state.schema.json#/$defs/id"},
+    "source_packet_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
+    "chain_mode": {"enum": ["account_case_account_validation", "direct_case"]},
+    "chain_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
+    "account_consultation_required": {"type": "boolean"},
+    "post_account_validation_required": {"type": "boolean"},
+    "walter_required": {"const": true},
+    "validated_packet_id": {"$ref": "execution-state.schema.json#/$defs/id"},
+    "validated_packet_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
+    "direct_case_reason_code": {"type": "string", "pattern": "^[a-z0-9_-]{1,48}$"},
+    "objection_count": {"type": "integer", "minimum": 0, "maximum": 3}
+  },
+  "allOf": [
+    {"if": {"properties": {"chain_mode": {"const": "account_case_account_validation"}}}, "then": {"properties": {"account_consultation_required": {"const": true}, "post_account_validation_required": {"const": true}}, "required": ["validated_packet_id", "validated_packet_sha256"]}},
+    {"if": {"properties": {"chain_mode": {"const": "direct_case"}}}, "then": {"properties": {"account_consultation_required": {"const": false}, "post_account_validation_required": {"const": false}}, "required": ["direct_case_reason_code"]}}
+  ]
+}

@@ -6,8 +6,17 @@ package codexadapter
 import (
 	"fmt"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentdispatch"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/reviewcustody"
 )
+
+// HandleWalterReview forwards the Codex event to the same runtime-neutral
+// Walter core used by Claude. Native Codex observation remains unavailable
+// until qualification.
+func HandleWalterReview(pilot *agentdispatch.Pilot, dispatch agentdispatch.Dispatch, body agentdispatch.WalterReviewBody, custody reviewcustody.Provider) (agentdispatch.Receipt, error) {
+	return agentdispatch.HandleWalterReview(pilot, dispatch, body, custody)
+}
 
 // Surfaces is the installed Codex topology for the current supported runtime.
 // Codex exposes all five canonical command-hook events; none is qualified by

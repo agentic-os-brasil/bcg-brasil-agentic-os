@@ -30,6 +30,25 @@ second adapter instance from opening a parallel branch. These are not active
 Claude agents yet: installed native event wiring and durable state persistence
 are still required before `agent_orchestration` can move from `unavailable`.
 
+Walter review wiring is shared with Codex through `internal/agentdispatch`:
+the Claude adapter only forwards a sealed Walter packet and typed verdict to
+that core. Walter is Maestro's internal Senior Advisor & Refiner: calm,
+precise and constructive, with at most three load-bearing objections. A
+blocking refinement must include a concrete fix and acceptance condition;
+cosmetic preferences cannot block. Walter has no tools, delegation or direct
+user channel. The execution-ledger bridge uses installation-scoped
+`maestro/walter-review` custody, distinct from release signing; missing,
+stale, replayed or cross-scope custody fails closed. Adapter-command receipts
+remain diagnostic until native evidence exists.
+
+Maestro resolves two independent decisions: `account_consultation_required`
+for client/stakeholder strategic lens, and `walter_required` for high-leverage
+output. Account-assisted work proves Account framing → Case → Account
+validation; direct Case work proves an execution-only/no-client-lens reason and
+does not call Account. Both routes return to Maestro, and only a required
+Walter approval—or an explicit low-leverage `walter_skipped` receipt—can reach
+the final response.
+
 ```mermaid
 flowchart LR
     Catalog["Implemented<br/>managed agent catalog"] --> Adapter["Implemented<br/>shared enforcement"]

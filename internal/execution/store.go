@@ -84,18 +84,20 @@ type Criterion struct {
 }
 
 type Contract struct {
-	SchemaVersion       int         `json:"schema_version"`
-	ContractVersion     int         `json:"contract_version"`
-	ItemID              string      `json:"item_id"`
-	WorkspaceID         string      `json:"workspace_id"`
-	AuthorityKind       string      `json:"authority_kind"`
-	Objective           string      `json:"objective"`
-	InitialNextStep     string      `json:"initial_next_step"`
-	Criteria            []Criterion `json:"criteria"`
-	AllowedRefs         []string    `json:"allowed_refs"`
-	RequireWalterReview bool        `json:"require_walter_review"`
-	WalterPublicKey     string      `json:"walter_public_key,omitempty"`
-	CreatedAt           time.Time   `json:"created_at"`
+	SchemaVersion        int         `json:"schema_version"`
+	ContractVersion      int         `json:"contract_version"`
+	ItemID               string      `json:"item_id"`
+	WorkspaceID          string      `json:"workspace_id"`
+	AuthorityKind        string      `json:"authority_kind"`
+	Objective            string      `json:"objective"`
+	InitialNextStep      string      `json:"initial_next_step"`
+	Criteria             []Criterion `json:"criteria"`
+	AllowedRefs          []string    `json:"allowed_refs"`
+	RequireWalterReview  bool        `json:"require_walter_review"`
+	WalterPublicKey      string      `json:"walter_public_key,omitempty"`
+	WalterKeyID          string      `json:"walter_key_id,omitempty"`
+	WalterInstallationID string      `json:"walter_installation_id,omitempty"`
+	CreatedAt            time.Time   `json:"created_at"`
 }
 
 type State struct {
@@ -162,13 +164,15 @@ type Revision struct {
 }
 
 type CreateInput struct {
-	WorkspaceID         string
-	Objective           string
-	InitialNextStep     string
-	Criteria            []Criterion
-	AllowedRefs         []string
-	RequireWalterReview bool
-	WalterPublicKey     string
+	WorkspaceID          string
+	Objective            string
+	InitialNextStep      string
+	Criteria             []Criterion
+	AllowedRefs          []string
+	RequireWalterReview  bool
+	WalterPublicKey      string
+	WalterKeyID          string
+	WalterInstallationID string
 }
 
 type CheckpointInput struct {
@@ -256,18 +260,20 @@ func (store Store) Create(input CreateInput) (Item, error) {
 	}
 	now := store.now()
 	contract := Contract{
-		SchemaVersion:       1,
-		ContractVersion:     1,
-		ItemID:              itemID,
-		WorkspaceID:         input.WorkspaceID,
-		AuthorityKind:       AuthorityLocalExecution,
-		Objective:           strings.TrimSpace(input.Objective),
-		InitialNextStep:     strings.TrimSpace(input.InitialNextStep),
-		Criteria:            append([]Criterion(nil), input.Criteria...),
-		AllowedRefs:         append([]string(nil), input.AllowedRefs...),
-		RequireWalterReview: input.RequireWalterReview,
-		WalterPublicKey:     strings.TrimSpace(input.WalterPublicKey),
-		CreatedAt:           now,
+		SchemaVersion:        1,
+		ContractVersion:      1,
+		ItemID:               itemID,
+		WorkspaceID:          input.WorkspaceID,
+		AuthorityKind:        AuthorityLocalExecution,
+		Objective:            strings.TrimSpace(input.Objective),
+		InitialNextStep:      strings.TrimSpace(input.InitialNextStep),
+		Criteria:             append([]Criterion(nil), input.Criteria...),
+		AllowedRefs:          append([]string(nil), input.AllowedRefs...),
+		RequireWalterReview:  input.RequireWalterReview,
+		WalterPublicKey:      strings.TrimSpace(input.WalterPublicKey),
+		WalterKeyID:          strings.TrimSpace(input.WalterKeyID),
+		WalterInstallationID: strings.TrimSpace(input.WalterInstallationID),
+		CreatedAt:            now,
 	}
 	digest, err := contractDigest(contract)
 	if err != nil {
@@ -959,7 +965,7 @@ func validateCreateInput(input CreateInput) error {
 	if err := validateID("workspace", input.WorkspaceID); err != nil {
 		return err
 	}
-	if err := validateWalterContractSettings(input.RequireWalterReview, input.WalterPublicKey); err != nil {
+	if err := validateWalterContractSettings(input.RequireWalterReview, input.WalterPublicKey, input.WalterKeyID, input.WalterInstallationID); err != nil {
 		return err
 	}
 	objective := strings.TrimSpace(input.Objective)
@@ -1053,9 +1059,11 @@ func validateContract(contract Contract) error {
 	return validateCreateInput(CreateInput{
 		WorkspaceID: contract.WorkspaceID, Objective: contract.Objective,
 		InitialNextStep: contract.InitialNextStep, Criteria: contract.Criteria,
-		AllowedRefs:         contract.AllowedRefs,
-		RequireWalterReview: contract.RequireWalterReview,
-		WalterPublicKey:     contract.WalterPublicKey,
+		AllowedRefs:          contract.AllowedRefs,
+		RequireWalterReview:  contract.RequireWalterReview,
+		WalterPublicKey:      contract.WalterPublicKey,
+		WalterKeyID:          contract.WalterKeyID,
+		WalterInstallationID: contract.WalterInstallationID,
 	})
 }
 

@@ -9,13 +9,22 @@
   "verdicts": [
     "approved",
     "refine-and-return",
-    "missing-the-mark"
+    "missing-the-mark",
+    "hold"
   ],
   "receipt_fields": [
     "trigger",
     "state",
     "source_packet_id",
     "source_packet_sha256",
+    "chain_mode",
+    "chain_sha256",
+    "account_consultation_required",
+    "post_account_validation_required",
+    "walter_required",
+    "validated_packet_id",
+    "validated_packet_sha256",
+    "direct_case_reason_code",
     "objection_count"
   ]
 }
