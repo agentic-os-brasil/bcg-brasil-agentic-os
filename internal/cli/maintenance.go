@@ -65,16 +65,20 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 			_ = writeJSON(out, map[string]any{"schema_version": 1, "state": maintenance.Unavailable, "agent_id": "darwin", "scope": "health/maestro-system", "trigger": *trigger, "native_schedulers": "disabled", "reason": err.Error() + "; no receipt was emitted"}, errOut)
 			return ExitUnavailable
 		}
-		code := writeJSON(out, map[string]any{"trigger": *trigger, "native_schedulers": "disabled_until_explicit_install_and_qualification", "worker": report}, errOut)
-		if code != ExitOK {
-			return code
+		wakeState, wakeReason, exitCode := report.State, "", ExitOK
+		if len(worker.Handlers) == 0 {
+			wakeState, wakeReason, exitCode = maintenance.Unavailable, "no qualified local handlers are enrolled; no receipt was emitted by this wake", ExitUnavailable
 		}
 		for _, receipt := range report.Receipts {
 			if receipt.State == maintenance.ReceiptUnavailable {
-				return ExitUnavailable
+				exitCode, wakeState, wakeReason = ExitUnavailable, maintenance.Unavailable, "unavailable work remains due; its receipt is not scheduler success"
 			}
 		}
-		return ExitOK
+		code := writeJSON(out, map[string]any{"state": wakeState, "reason": wakeReason, "trigger": *trigger, "native_schedulers": "disabled_until_explicit_install_and_qualification", "worker": report}, errOut)
+		if code != ExitOK {
+			return code
+		}
+		return exitCode
 	case "canary":
 		flags := newFlagSet("maintenance canary", errOut)
 		installMacOS := flags.Bool("install-macos", false, "explicitly install the per-user LaunchAgent adapter")
