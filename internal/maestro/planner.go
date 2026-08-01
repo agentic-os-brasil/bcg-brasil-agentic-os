@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 )
 
 type IntentClass string
@@ -532,9 +531,13 @@ type Stage string
 
 const (
 	StageAccountFraming  Stage = "account_framing"
+	StageAccountAdvisory Stage = "account_advisory"
 	StageCaseExecution   Stage = "case_execution"
 	StageAccountValidate Stage = "account_validation"
+	StagePAExpert        Stage = "pa_expert_advisory"
 	StageWalterReview    Stage = "walter_review"
+	StageDarwinHealth    Stage = "darwin_health"
+	StageErrandExecution Stage = "errand_execution"
 	StageFinal           Stage = "final"
 	StageFailed          Stage = "failed_closed"
 )
@@ -583,12 +586,7 @@ type Event struct {
 	Decision      string
 	ContentDigest string
 	ReasonCode    string
-	// Interaction is evaluated on every supplied loop event. When an
-	// ObservationRoot is supplied, only the evaluator-approved material,
-	// owner-attested signal is appended under the owner-local observation lock.
-	Interaction     *ownerctx.ObservationInput
-	ObservationRoot string
-	IntentReceipt   *IntentReviewReceipt
+	IntentReceipt *IntentReviewReceipt
 }
 
 func NewChain(plan Plan, policy LoopPolicy) (ChainState, error) {
@@ -603,11 +601,27 @@ func NewChain(plan Plan, policy LoopPolicy) (ChainState, error) {
 		state.Stage, state.ActiveAgentID = StageCaseExecution, bindingID(plan, "case_agent")
 		return state, nil
 	}
-	if plan.RequiresAccountFraming {
+	if plan.CaseEntry == CaseEntryAccountFirst && plan.RequiresAccountFraming {
 		state.Stage, state.ActiveAgentID = StageAccountFraming, bindingID(plan, "client_account_agent")
 		return state, nil
 	}
-	state.Stage, state.ActiveAgentID = StageCaseExecution, bindingID(plan, "case_agent")
+	switch plan.Action {
+	case ActionDirect:
+		state.Stage = StageFinal
+		state.Receipts = append(state.Receipts, Receipt{Sequence: 1, Stage: StageFinal, Decision: "direct_no_branch", ReasonCode: plan.ReasonCode, PlanDigest: plan.PlanDigest})
+	case ActionAccount:
+		state.Stage, state.ActiveAgentID = StageAccountAdvisory, bindingID(plan, "client_account_agent")
+	case ActionPAExpert:
+		state.Stage, state.ActiveAgentID = StagePAExpert, bindingID(plan, "pa_expert")
+	case ActionWalter:
+		state.Stage, state.ActiveAgentID = StageWalterReview, bindingID(plan, "reviewer")
+	case ActionDarwin:
+		state.Stage, state.ActiveAgentID = StageDarwinHealth, bindingID(plan, "governance_analyst")
+	case ActionErrand:
+		state.Stage, state.ActiveAgentID = StageErrandExecution, bindingID(plan, "errand_helper")
+	default:
+		return ChainState{}, errors.New("Maestro plan has no executable chain route")
+	}
 	return state, nil
 }
 
@@ -647,17 +661,21 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 		receipt.OutputDigest = event.IntentReceipt.OutputDigest
 		receipt.IntentVerdict = string(event.IntentReceipt.Verdict)
 	}
-	if event.Interaction != nil {
-		if _, err := ownerctx.EvaluateInteraction(*event.Interaction); err != nil {
-			return state, Receipt{}, err
-		}
-	}
 	switch state.Stage {
 	case StageAccountFraming:
 		if event.Decision != "approve" && event.Decision != "refine" {
 			return state, Receipt{}, errors.New("account framing decision must be approve or refine")
 		}
 		state.Stage, state.ActiveAgentID = StageCaseExecution, bindingID(plan, "case_agent")
+	case StageAccountAdvisory, StagePAExpert, StageDarwinHealth, StageErrandExecution:
+		if event.Decision != "approve" && event.Decision != "return" {
+			return state, Receipt{}, errors.New("advisory action must approve or return")
+		}
+		if event.Decision == "return" && !validDigest(event.ContentDigest) {
+			return state, Receipt{}, errors.New("advisory action must return a content digest")
+		}
+		state.ContentDigest = event.ContentDigest
+		state.Stage, state.ActiveAgentID = StageFinal, ""
 	case StageCaseExecution:
 		if event.Decision != "return" || !validDigest(event.ContentDigest) {
 			return state, Receipt{}, errors.New("Case must return a content digest")
@@ -696,6 +714,17 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 		state.ContentDigest, state.AccountApprovalDigest, state.WalterApprovalDigest = "", "", ""
 		state.Stage, state.ActiveAgentID = StageCaseExecution, bindingID(plan, "case_agent")
 	case StageWalterReview:
+		if plan.CaseEntry == "" && plan.Action == ActionWalter {
+			if event.Decision != "approve" && event.Decision != "return" {
+				return state, Receipt{}, errors.New("standalone Walter review must approve or return")
+			}
+			if event.Decision == "return" && !validDigest(event.ContentDigest) {
+				return state, Receipt{}, errors.New("standalone Walter review must return a content digest")
+			}
+			state.ContentDigest = event.ContentDigest
+			state.Stage, state.ActiveAgentID = StageFinal, ""
+			break
+		}
 		if event.Decision != "approve" && event.Decision != "refine" {
 			return state, Receipt{}, errors.New("Walter decision must be approve or refine")
 		}
@@ -718,11 +747,6 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 		state.Stage, state.ActiveAgentID = StageCaseExecution, bindingID(plan, "case_agent")
 	default:
 		return state, Receipt{}, errors.New("quality-loop stage is not executable")
-	}
-	if event.Interaction != nil && event.ObservationRoot != "" {
-		if _, _, err := ownerctx.AppendObservation(event.ObservationRoot, *event.Interaction); err != nil {
-			return state, Receipt{}, err
-		}
 	}
 	state.Receipts = append(state.Receipts, receipt)
 	return state, receipt, nil

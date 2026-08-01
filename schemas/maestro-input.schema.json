@@ -29,24 +29,9 @@
     "external_artifact": {"type": "boolean"},
     "reputational_risk": {"type": "boolean"},
     "hard_to_reverse": {"type": "boolean"},
-    "self_signal": {"$ref": "#/$defs/self_signal", "description": "Optional explicit owner self signal for the dispatch envelope; ordinary task activity is not self evidence."},
     "available_registered_agents": {"type": "array", "items": {"$ref": "#/$defs/agent"}}
   },
   "$defs": {
-    "self_signal": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["signal", "facet", "claim", "evidence_type", "confidence", "sensitivity", "owner_confirmed"],
-      "properties": {
-        "signal": {"enum": ["explicit_instruction", "explicit_correction", "explicit_endorsement"]},
-        "facet": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$"},
-        "claim": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$"},
-        "evidence_type": {"enum": ["owner_instruction", "owner_correction", "owner_endorsement", "owner_preference_confirmation"]},
-        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        "sensitivity": {"enum": ["professional", "sensitive", "restricted"]},
-        "owner_confirmed": {"const": true}
-      }
-    },
     "agent": {
       "type": "object",
       "additionalProperties": false,

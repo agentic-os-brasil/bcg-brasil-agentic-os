@@ -81,9 +81,8 @@ signals, generic `ok`, and unknown facets fail closed. A global observation may
 be captured provisionally, but promotion still requires explicit owner
 declassification and canonical-source CAS; the dispatch attestation itself
 does not grant that authority. The envelope is defined in
-`schemas/maestro-dispatch-input.schema.json`, with the shared signal shape
-also referenced by `schemas/maestro-input.schema.json` and the conformance
-fixture.
+`schemas/maestro-dispatch-input.schema.json`; planner input remains a separate
+closed contract, and the conformance fixture checks both ingress boundaries.
 
 | Path | Sequence |
 | --- | --- |

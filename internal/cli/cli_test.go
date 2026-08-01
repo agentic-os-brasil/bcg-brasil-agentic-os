@@ -749,7 +749,11 @@ func TestMaestroWalterActivityDoesNotInventSelfEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := maestroDispatchRequest{AuthenticatedOwner: true, OwnerID: "owner", DispatchID: "dispatch-self-negative", Plan: input}
-	receipt, evaluation, err := ownerctx.AppendObservation(root, maestroDispatchObservation(request, plan, packet, time.Now().UTC()))
+	scopeKind, scopeID, err := mapPlannerObservationScope(request.Plan.ScopeKind, request.Plan.ScopeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, evaluation, err := ownerctx.AppendObservation(root, maestroDispatchObservation(request, plan, packet, scopeKind, scopeID, time.Now().UTC()))
 	if err != nil || !evaluation.Evaluated || evaluation.Persist || receipt.Persisted {
 		t.Fatalf("Walter activity was treated as self evidence: evaluation=%#v receipt=%#v err=%v", evaluation, receipt, err)
 	}
@@ -789,6 +793,26 @@ func TestMaestroSelfSignalContractRejectsUnsafeSemanticVariants(t *testing.T) {
 	}
 }
 
+func TestMaestroDispatchRejectsGenericEndorsementBeforeAnyMutation(t *testing.T) {
+	root := t.TempDir()
+	request := maestroDispatchRequest{
+		AuthenticatedOwner: true, OwnerID: "owner", DispatchID: "generic-endorsement", Prompt: "answer directly", Language: "en-US", Source: "cli", SessionID: "generic-session",
+		SelfSignal: &maestroSelfSignal{Signal: ownerctx.SignalExplicitEndorsement, Facet: "communication-style", Claim: "okay", EvidenceType: "owner_endorsement", Confidence: 1, Sensitivity: "professional", OwnerConfirmed: true},
+		Plan:       maestro.Input{SchemaVersion: 1, IntentClass: maestro.IntentDirectAnswer, ScopeKind: "workspace", ScopeID: "workspace-a", Sensitivity: maestro.SensitivityInternal, Materiality: maestro.MaterialityNone, HealthIntent: maestro.HealthNone},
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, bytes.NewReader(body), &output, &output, func() (string, error) { return root, nil }); code == ExitOK {
+		t.Fatalf("generic endorsement was accepted: %s", output.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "owner")); !os.IsNotExist(err) {
+		t.Fatalf("generic endorsement mutated owner state: %v", err)
+	}
+}
+
 func TestMaestroDispatchKeepsEarlierSameSessionHistoryAndCurrentIsNotDuplicated(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := func() (string, error) { return root, nil }
@@ -803,6 +827,68 @@ func TestMaestroDispatchKeepsEarlierSameSessionHistoryAndCurrentIsNotDuplicated(
 	var output bytes.Buffer
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"history_count": 1`) {
 		t.Fatalf("earlier same-session prompt was suppressed or current duplicated: code=%d output=%s", code, output.String())
+	}
+}
+
+func TestMaestroDispatchActionRoutesUseExplicitOwnerObservationScopeMapping(t *testing.T) {
+	digest := func(seed string) string { return maestro.SHA256Hex(seed) }
+	agent := func(id, role, kind, scope string) maestro.RegisteredAgent {
+		return maestro.RegisteredAgent{ID: id, Role: role, ScopeKind: kind, ScopeID: scope, AuthorizationDigest: digest(id + "-authorization"), CapabilityDigest: digest(id + "-capability"), StateSnapshotDigest: digest(id + "-state"), Available: true}
+	}
+	tests := []struct {
+		name  string
+		input maestro.Input
+		stage maestro.Stage
+	}{
+		{name: "direct answer", input: maestro.Input{SchemaVersion: 1, IntentClass: maestro.IntentDirectAnswer, ScopeKind: "workspace", ScopeID: "workspace-a", Sensitivity: maestro.SensitivityInternal, Materiality: maestro.MaterialityNone, HealthIntent: maestro.HealthNone}, stage: maestro.StageFinal},
+		{name: "account", input: maestro.Input{SchemaVersion: 1, IntentClass: maestro.IntentAccount, ScopeKind: "account", ScopeID: "client-alpha", Sensitivity: maestro.SensitivityInternal, Materiality: maestro.MaterialityNone, HealthIntent: maestro.HealthNone, AvailableAgents: []maestro.RegisteredAgent{agent("account-agent", "client_account_agent", "account", "client-alpha")}}, stage: maestro.StageAccountAdvisory},
+		{name: "PA", input: maestro.Input{SchemaVersion: 1, IntentClass: maestro.IntentAdvisory, ScopeKind: "practice", ScopeID: "fpa", Sensitivity: maestro.SensitivityInternal, Materiality: maestro.MaterialityNone, HealthIntent: maestro.HealthNone, AvailableAgents: []maestro.RegisteredAgent{agent("pa-expert", "pa_expert", "practice", "fpa")}}, stage: maestro.StagePAExpert},
+		{name: "Walter", input: maestro.Input{SchemaVersion: 1, IntentClass: maestro.IntentReview, ScopeKind: "review", ScopeID: "review", Sensitivity: maestro.SensitivityInternal, Materiality: maestro.MaterialityNone, HealthIntent: maestro.HealthNone, AvailableAgents: []maestro.RegisteredAgent{agent("walter", "reviewer", "review", "review")}}, stage: maestro.StageWalterReview},
+		{name: "Darwin", input: maestro.Input{SchemaVersion: 1, IntentClass: maestro.IntentHealth, ScopeKind: "health", ScopeID: "system", Sensitivity: maestro.SensitivityInternal, Materiality: maestro.MaterialityNone, HealthIntent: maestro.HealthSystem, AvailableAgents: []maestro.RegisteredAgent{agent("darwin", "governance_analyst", "health", "system")}}, stage: maestro.StageDarwinHealth},
+		{name: "errand", input: maestro.Input{SchemaVersion: 1, IntentClass: maestro.IntentErrand, ScopeKind: "errand", ScopeID: "errand-a", Sensitivity: maestro.SensitivityInternal, Materiality: maestro.MaterialityNone, HealthIntent: maestro.HealthNone, SimpleReversible: true, ExecutionOnly: true, AvailableAgents: []maestro.RegisteredAgent{agent("errand", "errand_helper", "errand", "errand-a")}}, stage: maestro.StageErrandExecution},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			root := t.TempDir()
+			request := maestroDispatchRequest{AuthenticatedOwner: true, OwnerID: "owner", DispatchID: "route-" + strings.ToLower(strings.ReplaceAll(testCase.name, " ", "-")), Prompt: "route " + testCase.name, Language: "en-US", Source: "cli", SessionID: "route-session", Plan: testCase.input}
+			body, err := json.Marshal(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, bytes.NewReader(body), &output, &output, func() (string, error) { return root, nil }); code != ExitOK {
+				t.Fatalf("dispatch exit=%d output=%s", code, output.String())
+			}
+			var receipt maestro.DispatchBoundaryReceipt
+			if err := json.Unmarshal(output.Bytes(), &receipt); err != nil {
+				t.Fatalf("receipt=%q err=%v", output.String(), err)
+			}
+			if receipt.State != testCase.stage {
+				t.Fatalf("receipt state=%s want=%s", receipt.State, testCase.stage)
+			}
+			observations, err := ownerctx.ListObservations(root)
+			if err != nil || len(observations) != 0 {
+				t.Fatalf("default route activity became self evidence: %#v err=%v", observations, err)
+			}
+		})
+	}
+}
+
+func TestPlannerObservationScopeMappingIsClosedAndNonAuthoritative(t *testing.T) {
+	for _, scope := range []string{"control", "workspace", "case", "account", "practice", "review", "health", "errand"} {
+		kind, id, err := mapPlannerObservationScope(scope, "scope-a")
+		if err != nil || id == "" {
+			t.Fatalf("scope %q mapping = %q/%q err=%v", scope, kind, id, err)
+		}
+		if scope == "case" && kind != ownerctx.PromptScopeCase || scope == "account" && kind != ownerctx.PromptScopeAccount || scope == "workspace" && kind != ownerctx.PromptScopeWorkspace {
+			t.Fatalf("native owner scope mapping changed for %q: %q/%q", scope, kind, id)
+		}
+		if scope != "case" && scope != "account" && scope != "workspace" && kind != ownerctx.PromptScopeWorkspace {
+			t.Fatalf("planner-only scope %q did not project to workspace metadata scope: %q/%q", scope, kind, id)
+		}
+	}
+	if _, _, err := mapPlannerObservationScope("unknown", "scope-a"); err == nil {
+		t.Fatal("unknown planner scope was projected into owner scope")
 	}
 }
 

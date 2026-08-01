@@ -9,7 +9,7 @@
   "properties": {
     "schema_version": {"const": 1},
     "signal": {"enum": ["explicit_instruction", "explicit_correction", "explicit_endorsement", "observed_pattern", "inferred_hypothesis"]},
-    "facet": {"type": "string"},
+    "facet": {"enum": ["professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"]},
     "claim": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$"},
     "evidence_type": {"type": "string", "minLength": 1},
     "source_event": {"type": "string", "minLength": 1},

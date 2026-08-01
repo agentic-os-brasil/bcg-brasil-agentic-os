@@ -1495,6 +1495,9 @@ func validateMaestroSelfSignal(signal *maestroSelfSignal) error {
 	if signal.Confidence < 0 || signal.Confidence > 1 || signal.Sensitivity != "professional" && signal.Sensitivity != "sensitive" && signal.Sensitivity != "restricted" || !signal.OwnerConfirmed {
 		return errors.New("self_signal confidence, sensitivity or confirmation is invalid")
 	}
+	if signal.Signal == ownerctx.SignalExplicitEndorsement && (strings.EqualFold(signal.Claim, "ok") || strings.EqualFold(signal.Claim, "okay")) {
+		return errors.New("generic acknowledgement is not an explicit self endorsement")
+	}
 	return nil
 }
 
@@ -1535,7 +1538,27 @@ func finalizeDurableDispatchFence(root, ownerID, sessionID, dispatchID, promptDi
 	return (maestro.DispatchBoundaryInput{Root: root, OwnerID: ownerID, SessionID: sessionID, DispatchID: dispatchID, PromptDigest: promptDigest, PacketDigest: packetDigest, DraftDigest: draftDigest, Plan: plan, Chain: chain}).FinalizeDispatchBoundary(prepared)
 }
 
-func maestroDispatchObservation(request maestroDispatchRequest, plan maestro.Plan, packet maestro.IntentReviewPacket, now time.Time) ownerctx.ObservationInput {
+func mapPlannerObservationScope(scopeKind, scopeID string) (ownerctx.PromptScopeKind, string, error) {
+	if scopeID == "" {
+		return "", "", errors.New("planner observation scope ID is required")
+	}
+	switch scopeKind {
+	case string(ownerctx.PromptScopeCase):
+		return ownerctx.PromptScopeCase, scopeID, nil
+	case string(ownerctx.PromptScopeAccount):
+		return ownerctx.PromptScopeAccount, scopeID, nil
+	case string(ownerctx.PromptScopeWorkspace):
+		return ownerctx.PromptScopeWorkspace, scopeID, nil
+	case "control", "practice", "review", "health", "errand":
+		// These planner scopes are not owner self scopes. Project them into a
+		// deterministic workspace metadata scope without granting authority.
+		return ownerctx.PromptScopeWorkspace, "planner-" + maestro.SHA256Hex(scopeKind + "\x00" + scopeID)[:32], nil
+	default:
+		return "", "", fmt.Errorf("planner scope %q cannot be projected to an owner observation scope", scopeKind)
+	}
+}
+
+func maestroDispatchObservation(request maestroDispatchRequest, plan maestro.Plan, packet maestro.IntentReviewPacket, scopeKind ownerctx.PromptScopeKind, scopeID string, now time.Time) ownerctx.ObservationInput {
 	sensitivity := "professional"
 	if request.Plan.Sensitivity == maestro.SensitivityConfidential {
 		sensitivity = "sensitive"
@@ -1545,7 +1568,7 @@ func maestroDispatchObservation(request maestroDispatchRequest, plan maestro.Pla
 	input := ownerctx.ObservationInput{
 		SchemaVersion: 1, Signal: ownerctx.SignalObservedPattern, Claim: "task_activity", EvidenceType: "interaction_metadata",
 		SourceEvent: request.DispatchID, SourceDigest: maestro.SHA256Hex(packet.LiteralRequest), EpisodeID: request.DispatchID,
-		ScopeKind: string(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, Confidence: 1, Sensitivity: sensitivity,
+		ScopeKind: string(scopeKind), ScopeID: scopeID, Confidence: 1, Sensitivity: sensitivity,
 		ExpiresAt: now.UTC().Add(30 * 24 * time.Hour), AuthenticatedOwner: request.AuthenticatedOwner,
 		Material: false, OwnerConfirmed: false,
 	}
@@ -1653,6 +1676,10 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 	if err := validateMaestroSelfSignal(request.SelfSignal); err != nil {
 		return reportError(errOut, err)
 	}
+	observationScopeKind, observationScopeID, err := mapPlannerObservationScope(request.Plan.ScopeKind, request.Plan.ScopeID)
+	if err != nil {
+		return reportError(errOut, err)
+	}
 	chain, err := maestro.NewChain(plan, maestro.DefaultLoopPolicy)
 	if err != nil {
 		return reportError(errOut, err)
@@ -1675,7 +1702,7 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	packet, err := maestro.BuildIntentReviewPacketWithPromptHistory(request.Prompt, plan, request.DraftOutput, nil, snapshot, nil, request.Audience, request.Consequence, request.Reversibility, "", root, ownerctx.PromptHistorySelectionLimits{OwnerID: request.OwnerID, ExcludeOccurrenceID: excludeOccurrenceID, MaxCount: 8, MaxBytes: 32 << 10, MaxAge: 30 * 24 * time.Hour, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, CurrentPrompt: request.Prompt, RelevanceKeys: request.RelevanceKeys, CurrentLanguage: request.CurrentLanguage}, request.WorkingLanguage, nil, time.Now().UTC())
+	packet, err := maestro.BuildIntentReviewPacketWithPromptHistory(request.Prompt, plan, request.DraftOutput, nil, snapshot, nil, request.Audience, request.Consequence, request.Reversibility, "", root, ownerctx.PromptHistorySelectionLimits{OwnerID: request.OwnerID, ExcludeOccurrenceID: excludeOccurrenceID, MaxCount: 8, MaxBytes: 32 << 10, MaxAge: 30 * 24 * time.Hour, ScopeKind: observationScopeKind, ScopeID: observationScopeID, CurrentPrompt: request.Prompt, RelevanceKeys: request.RelevanceKeys, CurrentLanguage: request.CurrentLanguage}, request.WorkingLanguage, nil, time.Now().UTC())
 	if err != nil {
 		return reportError(errOut, err)
 	}
@@ -1697,14 +1724,14 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 		}
 		return reportError(errOut, err)
 	}
-	promptReceipt, err := recordUserPromptFunc(root, ownerctx.PromptHistoryInput{OwnerID: request.OwnerID, OccurrenceID: request.DispatchID, Prompt: request.Prompt, Language: request.Language, Source: request.Source, SessionID: request.SessionID, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, ContentKind: "user_prompt"})
+	promptReceipt, err := recordUserPromptFunc(root, ownerctx.PromptHistoryInput{OwnerID: request.OwnerID, OccurrenceID: request.DispatchID, Prompt: request.Prompt, Language: request.Language, Source: request.Source, SessionID: request.SessionID, ScopeKind: observationScopeKind, ScopeID: observationScopeID, ContentKind: "user_prompt"})
 	if err != nil {
 		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, "", "prompt commit failed"); rollbackErr != nil {
 			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
 		}
 		return reportError(errOut, err)
 	}
-	observationReceipt, _, err := ownerctx.AppendObservation(root, maestroDispatchObservation(request, plan, packet, durableState.StartedAt))
+	observationReceipt, _, err := ownerctx.AppendObservation(root, maestroDispatchObservation(request, plan, packet, observationScopeKind, observationScopeID, durableState.StartedAt))
 	if err != nil {
 		promptID := ""
 		if !occurrenceAlreadyRecorded {
@@ -1969,16 +1996,21 @@ func runOwnerSelf(args []string, in io.Reader, out, errOut io.Writer, root strin
 		}{receipt, evaluation}, errOut)
 	case "observation":
 		if len(args) < 3 {
-			fmt.Fprintln(errOut, "usage: bcgos owner self observation <reject|contradict|expire|redact> <id> --confirm")
+			fmt.Fprintln(errOut, "usage: bcgos owner self observation <reject|contradict|expire|redact> <id> --transition-id ID --expected-state STATE --expected-revision DIGEST --confirm")
 			return ExitUsage
 		}
 		stateByName := map[string]ownerctx.ObservationState{"reject": ownerctx.ObservationRejected, "contradict": ownerctx.ObservationContradicted, "expire": ownerctx.ObservationExpired, "redact": ownerctx.ObservationRedacted}
 		state, ok := stateByName[args[1]]
-		if !ok || args[2] == "" || len(args) != 4 || args[3] != "--confirm" {
-			fmt.Fprintln(errOut, "usage: bcgos owner self observation <reject|contradict|expire|redact> <id> --confirm")
+		flags := newFlagSet("owner self observation", errOut)
+		transitionID := flags.String("transition-id", "", "caller-generated transition occurrence")
+		expectedState := flags.String("expected-state", "", "current observation state")
+		expectedRevision := flags.String("expected-revision", "", "current observation revision")
+		confirm := flags.Bool("confirm", false, "confirm owner action")
+		if !ok || args[2] == "" || len(args) < 4 || flags.Parse(args[3:]) != nil || rejectPositionals(flags, errOut) || *transitionID == "" || *expectedState == "" || *expectedRevision == "" || !*confirm {
+			fmt.Fprintln(errOut, "usage: bcgos owner self observation <reject|contradict|expire|redact> <id> --transition-id ID --expected-state STATE --expected-revision DIGEST --confirm")
 			return ExitUsage
 		}
-		receipt, err := ownerctx.RejectObservation(root, args[2], state, true)
+		receipt, err := ownerctx.RejectObservation(root, ownerctx.ObservationTransitionInput{ObservationID: args[2], TransitionID: *transitionID, Next: state, ExpectedState: ownerctx.ObservationState(*expectedState), ExpectedRevision: *expectedRevision, OwnerAction: true})
 		if err != nil {
 			return reportError(errOut, err)
 		}

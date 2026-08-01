@@ -201,7 +201,7 @@ func TestIntentReviewCurrentPromptOutranksContradictoryHistoryAndDoesNotPersistH
 	}
 }
 
-func TestMaestroEvaluatesInteractionWithoutPersistingAnUnauthenticatedLoop(t *testing.T) {
+func TestMaestroLoopRequiresClosedIngressForInteractionEvaluation(t *testing.T) {
 	root := t.TempDir()
 	if _, err := ownerctx.Initialize(root); err != nil {
 		t.Fatal(err)
@@ -219,7 +219,11 @@ func TestMaestroEvaluatesInteractionWithoutPersistingAnUnauthenticatedLoop(t *te
 		SourceEvent: "loop-event", SourceDigest: SHA256Hex("loop-event"), EpisodeID: "episode-one", ScopeKind: "workspace", ScopeID: "workspace-one",
 		Confidence: 0.4, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), Material: true,
 	}
-	if _, _, err := state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: "case-agent-transformation", Decision: "return", ContentDigest: digestFor("draft"), Interaction: &input}); err != nil {
+	evaluation, err := ownerctx.EvaluateInteraction(input)
+	if err != nil || !evaluation.Evaluated || evaluation.Persist {
+		t.Fatalf("unauthenticated interaction was not evaluated fail-closed: %#v, err=%v", evaluation, err)
+	}
+	if _, _, err := state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: "case-agent-transformation", Decision: "return", ContentDigest: digestFor("draft")}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ownerctx.ListObservations(root); err != nil {
@@ -245,7 +249,10 @@ func TestMaestroAdvanceEvaluatesAndCapturesAuthenticatedMaterialInteraction(t *t
 		SourceEvent: "loop-capture", SourceDigest: SHA256Hex("loop-capture"), EpisodeID: "episode-capture", ScopeKind: "workspace", ScopeID: "workspace-one",
 		Confidence: 1, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: true, Material: true, OwnerConfirmed: true,
 	}
-	if _, _, err := state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: "case-agent-transformation", Decision: "return", ContentDigest: digestFor("draft"), Interaction: &input, ObservationRoot: root}); err != nil {
+	if _, _, err := ownerctx.AppendObservation(root, input); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: "case-agent-transformation", Decision: "return", ContentDigest: digestFor("draft")}); err != nil {
 		t.Fatal(err)
 	}
 	observations, err := ownerctx.ListObservations(root)

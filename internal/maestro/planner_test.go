@@ -39,6 +39,63 @@ func TestPlannerAccountAssistedMaterialPath(t *testing.T) {
 	}
 }
 
+func TestPlannerBuildsActionSpecificChainsForEveryNonCaseRoute(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      Input
+		stage      Stage
+		activeRole string
+		direct     bool
+	}{
+		{name: "direct answer", input: Input{SchemaVersion: 1, IntentClass: IntentDirectAnswer, ScopeKind: "workspace", ScopeID: "workspace-a", Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone}, stage: StageFinal, direct: true},
+		{name: "account advisory", input: routeInput(IntentAccount, "account", "client-alpha", RegisteredAgent{ID: "account-agent", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-alpha"}), stage: StageAccountAdvisory, activeRole: "client_account_agent"},
+		{name: "PA advisory", input: routeInput(IntentAdvisory, "practice", "fpa", RegisteredAgent{ID: "pa-expert", Role: "pa_expert", ScopeKind: "practice", ScopeID: "fpa"}), stage: StagePAExpert, activeRole: "pa_expert"},
+		{name: "Walter review", input: routeInput(IntentReview, "review", "review", RegisteredAgent{ID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review"}), stage: StageWalterReview, activeRole: "reviewer"},
+		{name: "Darwin health", input: func() Input {
+			input := routeInput(IntentHealth, "health", "system", RegisteredAgent{ID: "darwin", Role: "governance_analyst", ScopeKind: "health", ScopeID: "system"})
+			input.HealthIntent = HealthSystem
+			return input
+		}(), stage: StageDarwinHealth, activeRole: "governance_analyst"},
+		{name: "bounded errand", input: routeInput(IntentErrand, "errand", "errand-a", RegisteredAgent{ID: "errand", Role: "errand_helper", ScopeKind: "errand", ScopeID: "errand-a"}), stage: StageErrandExecution, activeRole: "errand_helper"},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			plan, err := PlanFor(testCase.input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err := NewChain(plan, DefaultLoopPolicy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.Stage != testCase.stage {
+				t.Fatalf("initial stage = %s, want %s", state.Stage, testCase.stage)
+			}
+			if testCase.direct {
+				if len(state.Receipts) != 1 || state.Receipts[0].Decision != "direct_no_branch" {
+					t.Fatalf("direct route receipt = %#v", state.Receipts)
+				}
+				return
+			}
+			if state.ActiveAgentID != bindingID(plan, testCase.activeRole) {
+				t.Fatalf("active spoke = %q, want %q", state.ActiveAgentID, bindingID(plan, testCase.activeRole))
+			}
+			state, _, err = state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: state.ActiveAgentID, Decision: "return", ContentDigest: digestFor(testCase.name)})
+			if err != nil || state.Stage != StageFinal {
+				t.Fatalf("route did not finish: state=%#v err=%v", state, err)
+			}
+		})
+	}
+}
+
+func routeInput(intent IntentClass, scopeKind, scopeID string, agent RegisteredAgent) Input {
+	agent.Available = true
+	agent.AuthorizationDigest = digestFor(agent.ID + "-authorization")
+	agent.CapabilityDigest = digestFor(agent.ID + "-capability")
+	agent.StateSnapshotDigest = digestFor(agent.ID + "-state")
+	return Input{SchemaVersion: 1, IntentClass: intent, ScopeKind: scopeKind, ScopeID: scopeID, Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone, SimpleReversible: intent == IntentErrand, ExecutionOnly: intent == IntentErrand, AvailableAgents: []RegisteredAgent{agent}}
+}
+
 func TestPlanValidateAcceptsAllFourCaseRoutes(t *testing.T) {
 	cases := []struct {
 		name    string

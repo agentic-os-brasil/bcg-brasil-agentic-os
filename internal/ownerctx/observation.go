@@ -83,6 +83,8 @@ type ObservationReceipt struct {
 	Persisted       bool             `json:"persisted"`
 	Reason          string           `json:"reason,omitempty"`
 	CanonicalDigest string           `json:"canonical_digest,omitempty"`
+	Revision        string           `json:"revision"`
+	TransitionID    string           `json:"transition_id,omitempty"`
 }
 
 // ObservationMetadataReport is the only observation surface exposed to a
@@ -99,12 +101,30 @@ type ObservationMetadataReport struct {
 
 type observationRecord struct {
 	ObservationInput
-	ID              string           `json:"id"`
-	State           ObservationState `json:"state"`
-	RecordedAt      time.Time        `json:"recorded_at"`
-	StateChangedAt  time.Time        `json:"state_changed_at"`
-	CanonicalDigest string           `json:"canonical_digest,omitempty"`
-	Tombstone       bool             `json:"tombstone,omitempty"`
+	ID                      string           `json:"id"`
+	State                   ObservationState `json:"state"`
+	RecordedAt              time.Time        `json:"recorded_at"`
+	StateChangedAt          time.Time        `json:"state_changed_at"`
+	CanonicalDigest         string           `json:"canonical_digest,omitempty"`
+	TransitionID            string           `json:"transition_id,omitempty"`
+	ExpectedState           ObservationState `json:"expected_state,omitempty"`
+	ExpectedRevision        string           `json:"expected_revision,omitempty"`
+	ExpectedCanonicalDigest string           `json:"expected_canonical_digest,omitempty"`
+	Tombstone               bool             `json:"tombstone,omitempty"`
+}
+
+// ObservationTransitionInput is the closed CAS contract for every lifecycle
+// transition. TransitionID is the caller's stable occurrence key: retries of
+// the same transition are idempotent, while a stale or conflicting transition
+// fails closed under the cross-process observation lock.
+type ObservationTransitionInput struct {
+	ObservationID           string
+	TransitionID            string
+	Next                    ObservationState
+	ExpectedState           ObservationState
+	ExpectedRevision        string
+	ExpectedCanonicalDigest string
+	OwnerAction             bool
 }
 
 // EvaluateInteraction runs for every interaction. Only an authenticated,
@@ -125,6 +145,10 @@ func EvaluateInteraction(input ObservationInput) (InteractionEvaluation, error) 
 	}
 	if input.Signal == SignalInferredHypothesis {
 		evaluation.Reason = "hypothesis_is_task_local"
+		return evaluation, nil
+	}
+	if (input.Signal == SignalExplicitInstruction || input.Signal == SignalExplicitCorrection) && !input.OwnerConfirmed {
+		evaluation.Reason = "explicit_owner_confirmation_missing"
 		return evaluation, nil
 	}
 	if input.Signal == SignalExplicitEndorsement && (input.Claim == "ok" || input.Claim == "okay" || !input.OwnerConfirmed) {
@@ -169,6 +193,23 @@ func ListObservations(root string) ([]ObservationReceipt, error) {
 	return result, nil
 }
 
+// GetObservation returns the current metadata-only receipt for one observation.
+func GetObservation(root, id string) (ObservationReceipt, error) {
+	if !observationIdentifier.MatchString(id) {
+		return ObservationReceipt{}, errors.New("observation ID is invalid")
+	}
+	receipts, err := ListObservations(root)
+	if err != nil {
+		return ObservationReceipt{}, err
+	}
+	for _, receipt := range receipts {
+		if receipt.ID == id {
+			return receipt, nil
+		}
+	}
+	return ObservationReceipt{}, os.ErrNotExist
+}
+
 // AnalyzeObservationMetadata gives Darwin enough signal to propose review of
 // an observation facet without giving it semantic authority over the self.
 func AnalyzeObservationMetadata(root string, now time.Time) (ObservationMetadataReport, error) {
@@ -210,23 +251,40 @@ func AnalyzeObservationMetadata(root string, now time.Time) (ObservationMetadata
 }
 
 // TransitionObservation appends a new state record and never rewrites the
-// previous event. expectedCanonicalDigest is the CAS token for promotion.
-func TransitionObservation(root, id string, next ObservationState, expectedCanonicalDigest string, ownerAction bool) (ObservationReceipt, error) {
+// previous event. The full read, validation, CAS and append sequence is held
+// under one cross-process lock.
+func TransitionObservation(root string, input ObservationTransitionInput) (ObservationReceipt, error) {
 	var receipt ObservationReceipt
 	err := withObservationLock(root, func(path string) error {
+		if !observationIdentifier.MatchString(input.ObservationID) || !observationIdentifier.MatchString(input.TransitionID) || input.ExpectedState == "" || !validDigest(input.ExpectedRevision) {
+			return errors.New("observation transition CAS identity is invalid")
+		}
 		records, err := readObservationRecords(root)
 		if err != nil {
 			return err
 		}
-		current, ok := latestObservations(records)[id]
+		for _, existing := range records {
+			if existing.TransitionID != input.TransitionID {
+				continue
+			}
+			if existing.ID != input.ObservationID || existing.State != input.Next || existing.ExpectedState != input.ExpectedState || existing.ExpectedRevision != input.ExpectedRevision || existing.ExpectedCanonicalDigest != input.ExpectedCanonicalDigest {
+				return errors.New("observation transition occurrence was reused with different content")
+			}
+			receipt = observationReceipt(existing, "state_transition_idempotent")
+			return nil
+		}
+		current, ok := latestObservations(records)[input.ObservationID]
 		if !ok {
 			return os.ErrNotExist
 		}
-		if err := validateTransition(current, next, records); err != nil {
+		if current.State != input.ExpectedState || observationRevision(current) != input.ExpectedRevision {
+			return ErrRevisionConflict
+		}
+		if err := validateTransition(current, input.Next, records); err != nil {
 			return err
 		}
-		if next == ObservationPromoted {
-			if !ownerAction || !current.OwnerConfirmed {
+		if input.Next == ObservationPromoted {
+			if !input.OwnerAction || !current.OwnerConfirmed {
 				return errors.New("self promotion requires explicit owner action")
 			}
 			definition, err := facetDefinition(root, current.Facet)
@@ -243,13 +301,17 @@ func TransitionObservation(root, id string, next ObservationState, expectedCanon
 			if err != nil {
 				return err
 			}
-			if expectedCanonicalDigest == "" || canonical != expectedCanonicalDigest {
+			if input.ExpectedCanonicalDigest == "" || canonical != input.ExpectedCanonicalDigest {
 				return ErrRevisionConflict
 			}
 			current.CanonicalDigest = canonical
 		}
-		current.State = next
-		current.Tombstone = next == ObservationRedacted
+		current.State = input.Next
+		current.TransitionID = input.TransitionID
+		current.ExpectedState = input.ExpectedState
+		current.ExpectedRevision = input.ExpectedRevision
+		current.ExpectedCanonicalDigest = input.ExpectedCanonicalDigest
+		current.Tombstone = input.Next == ObservationRedacted
 		current.StateChangedAt = time.Now().UTC()
 		if err := appendObservationRecord(path, current); err != nil {
 			return err
@@ -260,11 +322,11 @@ func TransitionObservation(root, id string, next ObservationState, expectedCanon
 	return receipt, err
 }
 
-func RejectObservation(root, id string, state ObservationState, ownerAction bool) (ObservationReceipt, error) {
-	if state != ObservationRejected && state != ObservationContradicted && state != ObservationExpired && state != ObservationRedacted {
+func RejectObservation(root string, input ObservationTransitionInput) (ObservationReceipt, error) {
+	if input.Next != ObservationRejected && input.Next != ObservationContradicted && input.Next != ObservationExpired && input.Next != ObservationRedacted {
 		return ObservationReceipt{}, errors.New("invalid observation terminal state")
 	}
-	return TransitionObservation(root, id, state, "", ownerAction)
+	return TransitionObservation(root, input)
 }
 
 // ResetDerivedSelf redacts provisional observations through append-only
@@ -288,7 +350,12 @@ func ResetDerivedSelf(root string, confirmed bool) error {
 			if record.State == ObservationRejected || record.State == ObservationContradicted || record.State == ObservationExpired || record.State == ObservationRedacted {
 				continue
 			}
+			expectedState := record.State
+			expectedRevision := observationRevision(record)
 			record.State = ObservationRedacted
+			record.TransitionID = "reset-" + digest(record.ID + "\x00reset")[:32]
+			record.ExpectedState = expectedState
+			record.ExpectedRevision = expectedRevision
 			record.Tombstone = true
 			record.StateChangedAt = time.Now().UTC()
 			if err := appendObservationRecord(path, record); err != nil {
@@ -324,7 +391,7 @@ func validateObservationInput(input ObservationInput) error {
 	if input.SchemaVersion != 1 || !validSignal(input.Signal) || !observationClaim.MatchString(input.Claim) || !observationIdentifier.MatchString(input.SourceEvent) || !observationIdentifier.MatchString(input.EpisodeID) {
 		return errors.New("self observation identity or signal is invalid")
 	}
-	if input.Facet != "" && !observationIdentifier.MatchString(input.Facet) {
+	if input.Facet != "" && (!observationIdentifier.MatchString(input.Facet) || !validObservationFacet(input.Facet)) {
 		return errors.New("self observation facet is invalid")
 	}
 	if !validDigest(input.SourceDigest) || input.Confidence < 0 || input.Confidence > 1 || input.ExpiresAt.IsZero() {
@@ -336,13 +403,22 @@ func validateObservationInput(input ObservationInput) error {
 	if input.Sensitivity != "professional" && input.Sensitivity != "sensitive" && input.Sensitivity != "restricted" {
 		return errors.New("self observation sensitivity is invalid")
 	}
-	if input.Signal == SignalExplicitEndorsement && strings.EqualFold(input.Claim, "ok") {
+	if input.Signal == SignalExplicitEndorsement && (strings.EqualFold(input.Claim, "ok") || strings.EqualFold(input.Claim, "okay")) {
 		return errors.New("silence or generic acceptance is not explicit endorsement")
 	}
 	if input.EvidenceType == "generated_output" || input.EvidenceType == "client_document" || input.EvidenceType == "agent_output" {
 		return errors.New("generated or client content cannot evidence the self")
 	}
 	return nil
+}
+
+func validObservationFacet(facet string) bool {
+	switch facet {
+	case "professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries":
+		return true
+	default:
+		return false
+	}
 }
 
 func validSignal(signal SignalClass) bool {
@@ -530,7 +606,12 @@ func latestObservations(records []observationRecord) map[string]observationRecor
 }
 
 func observationReceipt(record observationRecord, reason string) ObservationReceipt {
-	return ObservationReceipt{ID: record.ID, State: record.State, Signal: record.Signal, Facet: record.Facet, ScopeKind: record.ScopeKind, ScopeID: record.ScopeID, Confidence: record.Confidence, Persisted: true, Reason: reason, CanonicalDigest: record.CanonicalDigest}
+	return ObservationReceipt{ID: record.ID, State: record.State, Signal: record.Signal, Facet: record.Facet, ScopeKind: record.ScopeKind, ScopeID: record.ScopeID, Confidence: record.Confidence, Persisted: true, Reason: reason, CanonicalDigest: record.CanonicalDigest, Revision: observationRevision(record), TransitionID: record.TransitionID}
+}
+
+func observationRevision(record observationRecord) string {
+	body, _ := json.Marshal(record)
+	return digest(string(body))
 }
 
 func validDigest(value string) bool {

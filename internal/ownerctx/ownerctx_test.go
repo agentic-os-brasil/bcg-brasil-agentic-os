@@ -319,10 +319,10 @@ func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationEligible, "", true); err != nil {
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationEligible, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationCorroborated, "", true); err == nil {
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationCorroborated, ""); err == nil {
 		t.Fatal("single episode was accepted as corroboration")
 	}
 	sameEpisode := first
@@ -331,7 +331,7 @@ func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testi
 	if _, _, err := AppendObservation(root, sameEpisode); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationCorroborated, "", true); err == nil {
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationCorroborated, ""); err == nil {
 		t.Fatal("two digests from one episode were accepted as independent corroboration")
 	}
 	second := first
@@ -341,20 +341,20 @@ func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testi
 	if _, _, err := AppendObservation(root, second); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationCorroborated, "", true); err != nil {
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationCorroborated, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationProposed, "", true); err != nil {
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationProposed, ""); err != nil {
 		t.Fatal(err)
 	}
 	canonical, err := canonicalDigestForFacet(root, "voice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationPromoted, digest("stale"), true); !errors.Is(err, ErrRevisionConflict) {
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationPromoted, digest("stale")); !errors.Is(err, ErrRevisionConflict) {
 		t.Fatalf("stale promotion error = %v", err)
 	}
-	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationPromoted, canonical, true); err != nil {
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationPromoted, canonical); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -402,17 +402,17 @@ func TestGlobalObservationNeedsExplicitDeclassificationForPromotion(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := TransitionObservation(root, receipt.ID, ObservationEligible, "", true); err != nil {
+	if _, err := transitionObservation(t, root, receipt.ID, ObservationEligible, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := TransitionObservation(root, receipt.ID, ObservationProposed, "", true); err != nil {
+	if _, err := transitionObservation(t, root, receipt.ID, ObservationProposed, ""); err != nil {
 		t.Fatal(err)
 	}
 	canonical, err := canonicalDigestForFacet(root, "voice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := TransitionObservation(root, receipt.ID, ObservationPromoted, canonical, true); err == nil {
+	if _, err := transitionObservation(t, root, receipt.ID, ObservationPromoted, canonical); err == nil {
 		t.Fatal("global observation was promoted without explicit declassification")
 	}
 }
@@ -431,11 +431,16 @@ func TestObservationTransitionsSerializeReadValidateCASAndAppend(t *testing.T) {
 	var wait sync.WaitGroup
 	for i := 0; i < 2; i++ {
 		wait.Add(1)
-		go func() {
+		go func(index int) {
 			defer wait.Done()
-			_, err := TransitionObservation(root, receipt.ID, ObservationEligible, "", true)
+			current, currentErr := GetObservation(root, receipt.ID)
+			if currentErr != nil {
+				results <- currentErr
+				return
+			}
+			_, err := TransitionObservation(root, ObservationTransitionInput{ObservationID: receipt.ID, TransitionID: "competing-" + string(rune('a'+index)), Next: ObservationEligible, ExpectedState: current.State, ExpectedRevision: current.Revision, OwnerAction: true})
 			results <- err
-		}()
+		}(i)
 	}
 	wait.Wait()
 	close(results)
@@ -450,6 +455,42 @@ func TestObservationTransitionsSerializeReadValidateCASAndAppend(t *testing.T) {
 	}
 	if successes != 1 || failures != 1 {
 		t.Fatalf("competing transitions were not serialized: successes=%d failures=%d", successes, failures)
+	}
+}
+
+func TestObservationTransitionRetryIsIdempotentAndStaleCASFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	input := observationInput(SignalExplicitCorrection, "retryable", "episode-retry", true, true)
+	receipt, _, err := AppendObservation(root, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transition := ObservationTransitionInput{ObservationID: receipt.ID, TransitionID: "transition-retry", Next: ObservationEligible, ExpectedState: receipt.State, ExpectedRevision: receipt.Revision, OwnerAction: true}
+	first, err := TransitionObservation(root, transition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retry, err := TransitionObservation(root, transition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retry.ID != first.ID || retry.Revision != first.Revision || retry.TransitionID != first.TransitionID {
+		t.Fatalf("retry did not return the original transition receipt: first=%#v retry=%#v", first, retry)
+	}
+	if _, err := TransitionObservation(root, ObservationTransitionInput{ObservationID: receipt.ID, TransitionID: "transition-stale", Next: ObservationProposed, ExpectedState: receipt.State, ExpectedRevision: receipt.Revision, OwnerAction: true}); !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("stale competing transition error = %v", err)
+	}
+}
+
+func TestObservationEvaluatorRequiresOwnerConfirmationForExplicitSelfSignals(t *testing.T) {
+	input := observationInput(SignalExplicitCorrection, "unconfirmed", "episode-unconfirmed", true, true)
+	input.OwnerConfirmed = false
+	evaluation, err := EvaluateInteraction(input)
+	if err != nil || evaluation.Persist || evaluation.Reason != "explicit_owner_confirmation_missing" {
+		t.Fatalf("unconfirmed explicit signal evaluation = %#v err=%v", evaluation, err)
 	}
 }
 
@@ -529,4 +570,13 @@ func TestResetDerivedSelfUsesTombstonesAndLeavesCanonicalFacetUntouched(t *testi
 
 func observationInput(signal SignalClass, claim, episode string, authenticated, material bool) ObservationInput {
 	return ObservationInput{SchemaVersion: 1, Signal: signal, Facet: "voice", Claim: claim, EvidenceType: "owner_correction", SourceEvent: "event-" + episode, SourceDigest: digest("source-" + episode), EpisodeID: episode, ScopeKind: "global", ScopeID: "owner", Confidence: 0.9, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: authenticated, Material: material, OwnerConfirmed: authenticated}
+}
+
+func transitionObservation(t *testing.T, root, id string, next ObservationState, canonical string) (ObservationReceipt, error) {
+	t.Helper()
+	current, err := GetObservation(root, id)
+	if err != nil {
+		return ObservationReceipt{}, err
+	}
+	return TransitionObservation(root, ObservationTransitionInput{ObservationID: id, TransitionID: "transition-" + digest(id + "\x00" + string(next) + "\x00" + current.Revision)[:32], Next: next, ExpectedState: current.State, ExpectedRevision: current.Revision, ExpectedCanonicalDigest: canonical, OwnerAction: true})
 }
