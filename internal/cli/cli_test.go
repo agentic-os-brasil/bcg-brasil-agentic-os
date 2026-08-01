@@ -511,7 +511,7 @@ func TestOwnerSelfControlsProjectAndPersistOnlyConfirmedMetadata(t *testing.T) {
 		t.Fatalf("snapshot = %s, err = %v", output.String(), err)
 	}
 	sum := sha256.Sum256([]byte("source"))
-	input := `{"schema_version":1,"signal":"explicit_correction","facet":"voice","claim":"concise","evidence_type":"owner_correction","source_event":"event-owner","source_digest":"` + hex.EncodeToString(sum[:]) + `","episode_id":"episode-owner","scope_kind":"global","scope_id":"owner","confidence":0.9,"sensitivity":"professional","expires_at":"` + time.Now().UTC().Add(time.Hour).Format(time.RFC3339) + `","material":true,"declassified_global":true}`
+	input := `{"schema_version":1,"signal":"explicit_correction","facet":"voice","claim":"concise","evidence_type":"owner_correction","source_event":"interaction.completed","source_digest":"` + hex.EncodeToString(sum[:]) + `","episode_id":"episode-owner","scope_kind":"global","scope_id":"owner","confidence":0.9,"sensitivity":"professional","expires_at":"` + time.Now().UTC().Add(time.Hour).Format(time.RFC3339) + `","material":true,"declassified_global":true}`
 	output.Reset()
 	if code := runOwnerWithInput([]string{"self", "observe", "--stdin", "--confirm"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"persisted": true`) {
 		t.Fatalf("self observe = %d: %s", code, output.String())
@@ -787,7 +787,7 @@ func TestMaestroSelfSignalContractRejectsUnsafeSemanticVariants(t *testing.T) {
 			}
 		})
 	}
-	generic := ownerctx.ObservationInput{SchemaVersion: 1, Signal: ownerctx.SignalExplicitEndorsement, Facet: "communication-style", Claim: "ok", EvidenceType: "owner_endorsement", SourceEvent: "self-signal-generic", SourceDigest: maestro.SHA256Hex("self-signal-generic"), EpisodeID: "self-signal-generic", ScopeKind: "case", ScopeID: "case-self-negative", Confidence: 1, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: true, Material: true, OwnerConfirmed: true}
+	generic := ownerctx.ObservationInput{SchemaVersion: 1, Signal: ownerctx.SignalExplicitEndorsement, Facet: "communication-style", Claim: "ok", EvidenceType: "owner_endorsement", SourceEvent: "interaction.completed", SourceDigest: maestro.SHA256Hex("self-signal-generic"), EpisodeID: "self-signal-generic", ScopeKind: "case", ScopeID: "case-self-negative", Confidence: 1, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: true, Material: true, OwnerConfirmed: true}
 	if _, err := ownerctx.EvaluateInteraction(generic); err == nil {
 		t.Fatal("generic OK endorsement was accepted")
 	}

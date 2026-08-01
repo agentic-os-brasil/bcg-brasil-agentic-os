@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -77,15 +78,39 @@ type ObservationReceipt struct {
 	State           ObservationState `json:"state"`
 	Signal          SignalClass      `json:"signal"`
 	Facet           string           `json:"facet,omitempty"`
+	Claim           string           `json:"claim"`
+	EvidenceType    string           `json:"evidence_type"`
+	SourceEvent     string           `json:"source_event"`
+	SourceDigest    string           `json:"source_digest"`
+	EpisodeID       string           `json:"episode_id"`
 	ScopeKind       string           `json:"scope_kind"`
 	ScopeID         string           `json:"scope_id"`
 	Confidence      float64          `json:"confidence"`
+	Sensitivity     string           `json:"sensitivity"`
+	OwnerConfirmed  bool             `json:"owner_confirmed"`
 	Persisted       bool             `json:"persisted"`
 	Reason          string           `json:"reason,omitempty"`
 	CanonicalDigest string           `json:"canonical_digest,omitempty"`
 	Revision        string           `json:"revision"`
 	TransitionID    string           `json:"transition_id,omitempty"`
 	OwnerAction     bool             `json:"owner_action"`
+}
+
+// IsWalterWeeklyEligible is the single ownerctx predicate for weekly Walter
+// evidence. Weekly self evolution is explicit-signal-first: corroboration
+// alone, observed patterns and inferred hypotheses never qualify.
+func IsWalterWeeklyEligible(observation ObservationReceipt) bool {
+	if observation.State != ObservationCorroborated || !observation.OwnerConfirmed {
+		return false
+	}
+	switch observation.Signal {
+	case SignalExplicitInstruction, SignalExplicitCorrection:
+		return true
+	case SignalExplicitEndorsement:
+		return !isGenericEndorsementClaim(observation.Claim)
+	default:
+		return false
+	}
 }
 
 // ObservationMetadataReport is the only observation surface exposed to a
@@ -153,7 +178,7 @@ func EvaluateInteraction(input ObservationInput) (InteractionEvaluation, error) 
 		evaluation.Reason = "explicit_owner_confirmation_missing"
 		return evaluation, nil
 	}
-	if input.Signal == SignalExplicitEndorsement && (input.Claim == "ok" || input.Claim == "okay" || !input.OwnerConfirmed) {
+	if input.Signal == SignalExplicitEndorsement && (isGenericEndorsementClaim(input.Claim) || !input.OwnerConfirmed) {
 		evaluation.Reason = "generic_acknowledgement_is_not_endorsement"
 		return evaluation, nil
 	}
@@ -391,7 +416,7 @@ func observationID(input ObservationInput) string {
 }
 
 func validateObservationInput(input ObservationInput) error {
-	if input.SchemaVersion != 1 || !validSignal(input.Signal) || !observationClaim.MatchString(input.Claim) || !observationIdentifier.MatchString(input.SourceEvent) || !observationIdentifier.MatchString(input.EpisodeID) {
+	if input.SchemaVersion != 1 || !validSignal(input.Signal) || !observationClaim.MatchString(input.Claim) || !validSourceEvent(input.SourceEvent) || !observationIdentifier.MatchString(input.EpisodeID) {
 		return errors.New("self observation identity or signal is invalid")
 	}
 	if input.Facet != "" && (!observationIdentifier.MatchString(input.Facet) || !validObservationFacet(input.Facet)) {
@@ -406,7 +431,7 @@ func validateObservationInput(input ObservationInput) error {
 	if input.Sensitivity != "professional" && input.Sensitivity != "sensitive" && input.Sensitivity != "restricted" {
 		return errors.New("self observation sensitivity is invalid")
 	}
-	if input.Signal == SignalExplicitEndorsement && (strings.EqualFold(input.Claim, "ok") || strings.EqualFold(input.Claim, "okay")) {
+	if input.Signal == SignalExplicitEndorsement && isGenericEndorsementClaim(input.Claim) {
 		return errors.New("silence or generic acceptance is not explicit endorsement")
 	}
 	if input.EvidenceType == "generated_output" || input.EvidenceType == "client_document" || input.EvidenceType == "agent_output" {
@@ -418,6 +443,24 @@ func validateObservationInput(input ObservationInput) error {
 func validObservationFacet(facet string) bool {
 	switch facet {
 	case "professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries":
+		return true
+	default:
+		return false
+	}
+}
+
+func isGenericEndorsementClaim(claim string) bool {
+	switch strings.ToLower(strings.TrimSpace(claim)) {
+	case "ok", "okay":
+		return true
+	default:
+		return false
+	}
+}
+
+func validSourceEvent(value string) bool {
+	switch value {
+	case "interaction.completed", "owner.explicit_instruction", "owner.explicit_correction", "owner.explicit_endorsement", "maestro.loop_completed", "maestro.feedback":
 		return true
 	default:
 		return false
@@ -462,12 +505,12 @@ func validateTransition(current observationRecord, next ObservationState, record
 			return errors.New("corroboration requires an independent episode")
 		}
 	case ObservationProposed:
-		if current.State != ObservationCorroborated && !(current.Signal == SignalExplicitInstruction || current.Signal == SignalExplicitCorrection || current.Signal == SignalExplicitEndorsement) {
-			return errors.New("observation is not eligible for promotion proposal")
+		if current.State != ObservationCorroborated {
+			return errors.New("observation requires independent corroboration before proposal")
 		}
 	case ObservationPromoted:
-		if current.State != ObservationProposed && current.State != ObservationCorroborated {
-			return errors.New("observation is not ready for promotion")
+		if current.State != ObservationProposed {
+			return errors.New("observation must be proposed before promotion")
 		}
 	case ObservationRejected, ObservationContradicted, ObservationExpired, ObservationRedacted:
 		if current.State == ObservationPromoted || current.State == ObservationRedacted {
@@ -590,6 +633,9 @@ func readObservationRecords(root string) ([]observationRecord, error) {
 		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
 			return nil, err
 		}
+		if err := validateObservationInput(record.ObservationInput); err != nil {
+			return nil, fmt.Errorf("owner observation log contains invalid metadata: %w", err)
+		}
 		record.SourceDigest = strings.ToLower(record.SourceDigest)
 		record.ID = strings.TrimSpace(record.ID)
 		records = append(records, record)
@@ -609,7 +655,7 @@ func latestObservations(records []observationRecord) map[string]observationRecor
 }
 
 func observationReceipt(record observationRecord, reason string) ObservationReceipt {
-	return ObservationReceipt{ID: record.ID, State: record.State, Signal: record.Signal, Facet: record.Facet, ScopeKind: record.ScopeKind, ScopeID: record.ScopeID, Confidence: record.Confidence, Persisted: true, Reason: reason, CanonicalDigest: record.CanonicalDigest, Revision: observationRevision(record), TransitionID: record.TransitionID, OwnerAction: record.OwnerAction}
+	return ObservationReceipt{ID: record.ID, State: record.State, Signal: record.Signal, Facet: record.Facet, Claim: record.Claim, EvidenceType: record.EvidenceType, SourceEvent: record.SourceEvent, SourceDigest: record.SourceDigest, EpisodeID: record.EpisodeID, ScopeKind: record.ScopeKind, ScopeID: record.ScopeID, Confidence: record.Confidence, Sensitivity: record.Sensitivity, OwnerConfirmed: record.OwnerConfirmed, Persisted: true, Reason: reason, CanonicalDigest: record.CanonicalDigest, Revision: observationRevision(record), TransitionID: record.TransitionID, OwnerAction: record.OwnerAction}
 }
 
 func observationRevision(record observationRecord) string {

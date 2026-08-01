@@ -39,6 +39,50 @@ func TestInitializeCreatesInspectablePointersWithoutOverwritingSelf(t *testing.T
 	}
 }
 
+func TestOccurrenceBoundRefinementIsIdempotent(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	input := RefinementInput{Facet: "voice", Evidence: "weekly-occurrence-evidence", ProposedBody: "# Voice\n\nConcise.\n", OccurrenceID: "occurrence-digest-1"}
+	first, err := SubmitRefinement(root, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := SubmitRefinement(root, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID == "" || first.ID != second.ID || first.ProposalSHA256 == "" || first.ProposalSHA256 != second.ProposalSHA256 {
+		t.Fatalf("idempotent receipts differ: first=%+v second=%+v", first, second)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "owner", "refinement", "proposals"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("proposal retry created %d proposal files", len(entries))
+	}
+}
+
+func TestOccurrenceBoundRefinementRejectsDivergentWriterWithoutOverwrite(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	first, err := SubmitRefinement(root, RefinementInput{Facet: "voice", Evidence: "same-occurrence", ProposedBody: "# First\n", OccurrenceID: "occurrence-divergent"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SubmitRefinement(root, RefinementInput{Facet: "preferences", Evidence: "same-occurrence", ProposedBody: "# Divergent\n", OccurrenceID: "occurrence-divergent"}); err == nil {
+		t.Fatal("divergent occurrence writer replaced the existing proposal")
+	}
+	body, err := os.ReadFile(filepath.Join(root, "owner", "refinement", "proposals", first.ID+".json"))
+	if err != nil || !strings.Contains(string(body), "# First") || strings.Contains(string(body), "# Divergent") {
+		t.Fatalf("existing proposal was overwritten: body=%q err=%v", body, err)
+	}
+}
+
 func TestAutomaticRefinementAppliesVoiceWithAuditAndCanRevert(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {
@@ -326,7 +370,7 @@ func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testi
 		t.Fatal("single episode was accepted as corroboration")
 	}
 	sameEpisode := first
-	sameEpisode.SourceEvent = "event-episode-a-second"
+	sameEpisode.SourceEvent = "interaction.completed"
 	sameEpisode.SourceDigest = digest("source-episode-a-second")
 	if _, _, err := AppendObservation(root, sameEpisode); err != nil {
 		t.Fatal(err)
@@ -335,7 +379,7 @@ func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testi
 		t.Fatal("two digests from one episode were accepted as independent corroboration")
 	}
 	second := first
-	second.EpisodeID, second.SourceEvent = "episode-b", "event-b"
+	second.EpisodeID, second.SourceEvent = "episode-b", "interaction.completed"
 	second.SourceDigest = digest("source-b")
 	second.DeclassifiedGlobal = true
 	if _, _, err := AppendObservation(root, second); err != nil {
@@ -344,11 +388,14 @@ func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testi
 	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationCorroborated, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationProposed, ""); err != nil {
-		t.Fatal(err)
-	}
 	canonical, err := canonicalDigestForFacet(root, "voice")
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationPromoted, canonical); err == nil {
+		t.Fatal("corroborated observation bypassed the proposed state")
+	}
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationProposed, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationPromoted, digest("stale")); !errors.Is(err, ErrRevisionConflict) {
@@ -356,6 +403,14 @@ func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testi
 	}
 	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationPromoted, canonical); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestObservationSourceEventIsAllowlistedMetadataOnly(t *testing.T) {
+	input := observationInput(SignalExplicitCorrection, "concise", "episode-source", true, true)
+	input.SourceEvent = "raw user prompt or client body"
+	if _, err := EvaluateInteraction(input); err == nil {
+		t.Fatal("arbitrary source event text was accepted")
 	}
 }
 
@@ -405,6 +460,15 @@ func TestGlobalObservationNeedsExplicitDeclassificationForPromotion(t *testing.T
 	if _, err := transitionObservation(t, root, receipt.ID, ObservationEligible, ""); err != nil {
 		t.Fatal(err)
 	}
+	second := input
+	second.EpisodeID = "episode-global-independent"
+	second.SourceDigest = digest("global-source-independent")
+	if _, _, err := AppendObservation(root, second); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transitionObservation(t, root, receipt.ID, ObservationCorroborated, ""); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := transitionObservation(t, root, receipt.ID, ObservationProposed, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -414,6 +478,31 @@ func TestGlobalObservationNeedsExplicitDeclassificationForPromotion(t *testing.T
 	}
 	if _, err := transitionObservation(t, root, receipt.ID, ObservationPromoted, canonical); err == nil {
 		t.Fatal("global observation was promoted without explicit declassification")
+	}
+}
+
+func TestExplicitSignalsCannotJumpToProposalBeforeCorroboration(t *testing.T) {
+	for _, signal := range []SignalClass{SignalExplicitInstruction, SignalExplicitCorrection, SignalExplicitEndorsement} {
+		t.Run(string(signal), func(t *testing.T) {
+			root := t.TempDir()
+			if _, err := Initialize(root); err != nil {
+				t.Fatal(err)
+			}
+			input := observationInput(signal, "no_direct_jump", "episode-direct-jump", true, true)
+			receipt, _, err := AppendObservation(root, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := transitionObservation(t, root, receipt.ID, ObservationProposed, ""); err == nil {
+				t.Fatal("explicit signal jumped from captured to proposed")
+			}
+			if _, err := transitionObservation(t, root, receipt.ID, ObservationEligible, ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := transitionObservation(t, root, receipt.ID, ObservationProposed, ""); err == nil {
+				t.Fatal("explicit signal jumped from eligible to proposed")
+			}
+		})
 	}
 }
 
@@ -528,7 +617,7 @@ func TestDarwinMetadataReportContainsNoSemanticSelfContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := first
-	second.SourceEvent, second.EpisodeID = "event-b", "episode-b"
+	second.SourceEvent, second.EpisodeID = "interaction.completed", "episode-b"
 	second.SourceDigest = first.SourceDigest
 	if _, _, err := AppendObservation(root, second); err != nil {
 		t.Fatal(err)
@@ -575,7 +664,7 @@ func TestResetDerivedSelfUsesTombstonesAndLeavesCanonicalFacetUntouched(t *testi
 }
 
 func observationInput(signal SignalClass, claim, episode string, authenticated, material bool) ObservationInput {
-	return ObservationInput{SchemaVersion: 1, Signal: signal, Facet: "voice", Claim: claim, EvidenceType: "owner_correction", SourceEvent: "event-" + episode, SourceDigest: digest("source-" + episode), EpisodeID: episode, ScopeKind: "global", ScopeID: "owner", Confidence: 0.9, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: authenticated, Material: material, OwnerConfirmed: authenticated}
+	return ObservationInput{SchemaVersion: 1, Signal: signal, Facet: "voice", Claim: claim, EvidenceType: "owner_correction", SourceEvent: "interaction.completed", SourceDigest: digest("source-" + episode), EpisodeID: episode, ScopeKind: "global", ScopeID: "owner", Confidence: 0.9, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: authenticated, Material: material, OwnerConfirmed: authenticated}
 }
 
 func transitionObservation(t *testing.T, root, id string, next ObservationState, canonical string) (ObservationReceipt, error) {

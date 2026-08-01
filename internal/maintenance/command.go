@@ -87,7 +87,7 @@ func (command Command) Validate(now time.Time) error {
 	if (command.Trigger == TriggerEvent || command.Trigger == TriggerContinuous) && !commandIDPattern.MatchString(command.EventID) {
 		return errors.New("event maintenance command requires a bounded event ID")
 	}
-	if command.ProposalOnly != (command.JobID == "darwin-structural-evolution-proposal") {
+	if command.ProposalOnly != isProposalOnlyJob(command.JobID) {
 		return errors.New("proposal-only flag does not match the maintenance job")
 	}
 	return nil
@@ -100,7 +100,7 @@ func (receipt Receipt) Validate() error {
 	if len([]byte(receipt.Diagnostic)) > 256 || strings.ContainsAny(receipt.Diagnostic, "\r\n") {
 		return errors.New("maintenance receipt diagnostic is not bounded")
 	}
-	if receipt.ProposalOnly != (receipt.JobID == "darwin-structural-evolution-proposal") {
+	if receipt.ProposalOnly != isProposalOnlyJob(receipt.JobID) {
 		return errors.New("maintenance receipt proposal flag does not match the job")
 	}
 	if receipt.ProposalOnly && receipt.State == ReceiptSucceeded {
@@ -179,4 +179,8 @@ func validReceiptState(state ReceiptState) bool {
 	default:
 		return false
 	}
+}
+
+func isProposalOnlyJob(jobID string) bool {
+	return jobID == "darwin-structural-evolution-proposal" || jobID == "walter-self-review-weekly"
 }

@@ -1567,7 +1567,7 @@ func maestroDispatchObservation(request maestroDispatchRequest, plan maestro.Pla
 	}
 	input := ownerctx.ObservationInput{
 		SchemaVersion: 1, Signal: ownerctx.SignalObservedPattern, Claim: "task_activity", EvidenceType: "interaction_metadata",
-		SourceEvent: request.DispatchID, SourceDigest: maestro.SHA256Hex(packet.LiteralRequest), EpisodeID: request.DispatchID,
+		SourceEvent: "maestro.loop_completed", SourceDigest: maestro.SHA256Hex(packet.LiteralRequest), EpisodeID: request.DispatchID,
 		ScopeKind: string(scopeKind), ScopeID: scopeID, Confidence: 1, Sensitivity: sensitivity,
 		ExpiresAt: now.UTC().Add(30 * 24 * time.Hour), AuthenticatedOwner: request.AuthenticatedOwner,
 		Material: false, OwnerConfirmed: false,
@@ -2572,7 +2572,7 @@ func evaluateAdapterInteraction(root, runtimeName, event, sourceEvent, workspace
 		Signal:        ownerctx.SignalInferredHypothesis,
 		Claim:         "adapter_lifecycle_observed",
 		EvidenceType:  "adapter_receipt",
-		SourceEvent:   "adapter-" + event,
+		SourceEvent:   "interaction.completed",
 		SourceDigest:  maestro.SHA256Hex(runtimeName + "\x00" + event + "\x00" + sourceEvent),
 		EpisodeID:     runtimeName + "-" + event,
 		ScopeKind:     "workspace",

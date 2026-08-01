@@ -103,6 +103,18 @@ func TestWalterIntentReviewFixturePinsSelfAndIntentContract(t *testing.T) {
 	if fixture.SchemaVersion != 1 || fixture.Identity != "owner_self_proxy_inside_maestro_loop" || fixture.PacketVersion != "intent-review-v1" || fixture.Role != "senior_advisor_refiner" {
 		t.Fatalf("Walter intent fixture header drifted: %#v", fixture)
 	}
+	var semantics struct {
+		CentralQuestion       string   `json:"central_question"`
+		ForbiddenRoles        []string `json:"forbidden_roles"`
+		SelfEvolutionPipeline []string `json:"self_evolution_pipeline"`
+		SelfEvolutionRules    []string `json:"self_evolution_rules"`
+	}
+	if err := json.Unmarshal(body, &semantics); err != nil {
+		t.Fatal(err)
+	}
+	if semantics.CentralQuestion == "" || !contains(semantics.ForbiddenRoles, "naysayer") || !contains(semantics.ForbiddenRoles, "mind_reader") || !contains(semantics.SelfEvolutionPipeline, "owner_attested_cas_promotion") || !contains(semantics.SelfEvolutionRules, "not_every_loop_persists") || !contains(semantics.SelfEvolutionRules, "darwin_observes_only") {
+		t.Fatalf("Walter self-proxy/evolution semantics drifted: %#v", semantics)
+	}
 	for _, required := range []string{"self_snapshot_version", "self_snapshot_digest", "draft_output", "observations"} {
 		if !contains(fixture.Bindings, required) {
 			t.Fatalf("Walter intent packet missing %q: %#v", required, fixture.Bindings)

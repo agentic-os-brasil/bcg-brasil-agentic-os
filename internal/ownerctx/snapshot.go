@@ -12,6 +12,17 @@ import (
 
 var ErrSnapshotStale = errors.New("UserSelfSnapshot is stale relative to canonical owner facets")
 
+// FacetPolicy is the canonical policy projected with a self facet. Consumers
+// must compare their proposed policy to this value; adapters are not policy
+// authorities.
+type FacetPolicy struct {
+	Facet                   string
+	Sensitivity             string
+	Readers                 []string
+	Refinement              string
+	ConfirmationRequirement string
+}
+
 // UserSelfSnapshot is a read-only projection of owner facets. It is never an
 // authority: every load recomputes the source digest and rejects stale data.
 type UserSelfSnapshot struct {
@@ -35,6 +46,22 @@ type SnapshotFacet struct {
 
 func (snapshot UserSelfSnapshot) Validate() error {
 	return validateSnapshot(snapshot)
+}
+
+func (snapshot UserSelfSnapshot) Policy(facet string) (FacetPolicy, error) {
+	value, ok := snapshot.Facets[facet]
+	if !ok {
+		return FacetPolicy{}, errors.New("requested self facet is not in the canonical snapshot")
+	}
+	confirmation := map[string]string{
+		"automatic_with_audit":  "automatic_with_audit",
+		"proposal_only":         "proposal_only",
+		"confirmation_required": "confirmation_required",
+	}[value.Refinement]
+	if confirmation == "" {
+		return FacetPolicy{}, errors.New("canonical self facet has an unknown refinement policy")
+	}
+	return FacetPolicy{Facet: facet, Sensitivity: value.Sensitivity, Readers: append([]string(nil), value.Readers...), Refinement: value.Refinement, ConfirmationRequirement: confirmation}, nil
 }
 
 // ProjectSnapshot reads canonical facet files and returns a deterministic,

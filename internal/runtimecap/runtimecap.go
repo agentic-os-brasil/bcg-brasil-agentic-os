@@ -13,7 +13,7 @@ var (
 	validStates        = map[string]bool{"native": true, "emulated": true, "degraded": true, "unavailable": true}
 	validCriticality   = map[string]bool{"required": true, "optional": true}
 	validRuntime       = map[string]bool{"claude": true, "codex": true}
-	validSemanticEvent = map[string]bool{"": true, "session_start": true, "pre_action_guard": true, "post_action_observe": true, "stop_finalize": true, "context_inject": true}
+	validSemanticEvent = map[string]bool{"": true, "session_start": true, "pre_action_guard": true, "post_action_observe": true, "stop_finalize": true, "context_inject": true, "agent_review": true}
 )
 
 type Manifest struct {

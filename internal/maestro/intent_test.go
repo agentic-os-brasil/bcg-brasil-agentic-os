@@ -216,7 +216,7 @@ func TestMaestroLoopRequiresClosedIngressForInteractionEvaluation(t *testing.T) 
 	}
 	input := ownerctx.ObservationInput{
 		SchemaVersion: 1, Signal: ownerctx.SignalObservedPattern, Facet: "voice", Claim: "concise", EvidenceType: "adapter_receipt",
-		SourceEvent: "loop-event", SourceDigest: SHA256Hex("loop-event"), EpisodeID: "episode-one", ScopeKind: "workspace", ScopeID: "workspace-one",
+		SourceEvent: "interaction.completed", SourceDigest: SHA256Hex("loop-event"), EpisodeID: "episode-one", ScopeKind: "workspace", ScopeID: "workspace-one",
 		Confidence: 0.4, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), Material: true,
 	}
 	evaluation, err := ownerctx.EvaluateInteraction(input)
@@ -246,7 +246,7 @@ func TestMaestroAdvanceEvaluatesAndCapturesAuthenticatedMaterialInteraction(t *t
 	}
 	input := ownerctx.ObservationInput{
 		SchemaVersion: 1, Signal: ownerctx.SignalExplicitInstruction, Facet: "voice", Claim: "maestro_capture", EvidenceType: "owner_prompt_metadata",
-		SourceEvent: "loop-capture", SourceDigest: SHA256Hex("loop-capture"), EpisodeID: "episode-capture", ScopeKind: "workspace", ScopeID: "workspace-one",
+		SourceEvent: "interaction.completed", SourceDigest: SHA256Hex("loop-capture"), EpisodeID: "episode-capture", ScopeKind: "workspace", ScopeID: "workspace-one",
 		Confidence: 1, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: true, Material: true, OwnerConfirmed: true,
 	}
 	if _, _, err := ownerctx.AppendObservation(root, input); err != nil {
