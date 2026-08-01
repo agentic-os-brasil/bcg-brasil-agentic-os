@@ -412,9 +412,9 @@ func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 	}
 }
 
-func TestBundlesPlanKeepsDataBundlesUnavailable(t *testing.T) {
+func TestBundlesPlanMarksDataPracticeOptional(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "unavailable"`) || !strings.Contains(output.String(), `"id": "engineering-core"`) || !strings.Contains(output.String(), "qualified runtime") {
+	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "optional"`) || !strings.Contains(output.String(), `"id": "engineering-core"`) || !strings.Contains(output.String(), `"id": "data-practice"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
 	}
 }
@@ -776,15 +776,24 @@ func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
 	}
 }
 
-func TestInterviewSelectionFailsClosedForUnavailableDataBundle(t *testing.T) {
+func TestInterviewSelectionActivatesDataProjection(t *testing.T) {
+	root := t.TempDir()
 	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	if err := os.MkdirAll(workspacePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	var output bytes.Buffer
 	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"capability_tracks":["data-science"],"selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"daniel","ownership_scope":"system"}]}`
-	if code := runAgentWithInput([]string{"personalize", "--stdin"}, strings.NewReader(profile), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitFailure || !strings.Contains(output.String(), "qualified runtime") {
-		t.Fatalf("unavailable personalize = %d %s", code, output.String())
+	if code := runAgentWithInput([]string{"personalize", "--stdin"}, strings.NewReader(profile), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("data personalize = %d %s", code, output.String())
 	}
-	if _, err := os.Stat(filepath.Join(dataRoot, "agents", "personalization.json")); !os.IsNotExist(err) {
-		t.Fatalf("unavailable selection persisted: %v", err)
+	output.Reset()
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 29`) {
+		t.Fatalf("data adapter install = %d %s", code, output.String())
+	}
+	if _, err := os.Stat(filepath.Join(workspacePath, ".codex", "skills", "data-science-evaluation", "SKILL.md")); err != nil {
+		t.Fatalf("data skill was not projected: %v", err)
 	}
 }
 

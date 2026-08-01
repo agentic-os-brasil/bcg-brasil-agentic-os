@@ -106,6 +106,38 @@
       "path": "bundles/engineering-core/skills/test-and-evidence/agents/openai.yaml"
     },
     {
+      "source": "bundles/data-practice/skills/INDEX.md",
+      "path": "bundles/data-practice/skills/INDEX.md"
+    },
+    {
+      "source": "bundles/data-practice/skills/catalog.json",
+      "path": "bundles/data-practice/skills/catalog.json"
+    },
+    {
+      "source": "bundles/data-practice/skills/data-pipeline-quality/SKILL.md",
+      "path": "bundles/data-practice/skills/data-pipeline-quality/SKILL.md"
+    },
+    {
+      "source": "bundles/data-practice/skills/data-pipeline-quality/agents/openai.yaml",
+      "path": "bundles/data-practice/skills/data-pipeline-quality/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/data-practice/skills/data-science-evaluation/SKILL.md",
+      "path": "bundles/data-practice/skills/data-science-evaluation/SKILL.md"
+    },
+    {
+      "source": "bundles/data-practice/skills/data-science-evaluation/agents/openai.yaml",
+      "path": "bundles/data-practice/skills/data-science-evaluation/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/data-practice/skills/reproducible-data-run/SKILL.md",
+      "path": "bundles/data-practice/skills/reproducible-data-run/SKILL.md"
+    },
+    {
+      "source": "bundles/data-practice/skills/reproducible-data-run/agents/openai.yaml",
+      "path": "bundles/data-practice/skills/reproducible-data-run/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/agent-skill-policy.json",
       "path": "skills/agent-skill-policy.json"
     },

@@ -28,7 +28,6 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/capabilitybundle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/codexadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/darwin"
@@ -542,12 +541,9 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 			if catalogErr != nil {
 				return reportError(errOut, catalogErr)
 			}
-			plan, planErr := catalog.PlanForTracks(input.CapabilityTracks)
+			_, planErr := catalog.PlanForTracks(input.CapabilityTracks)
 			if planErr != nil {
 				return reportError(errOut, planErr)
-			}
-			if plan.State == capabilitybundle.Unavailable {
-				return reportError(errOut, errors.New(plan.Reason))
 			}
 		}
 		input.UpdatedAt = time.Now().UTC()

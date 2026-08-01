@@ -601,6 +601,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/038-darwin-durable-evolution.md; internal/darwin/evolution.go; internal/darwin/evolution_store.go; schemas/darwin-evolution-*.schema.json
 - Supersedes: none
 
+## OPTS - Make all Canary professional bundles interview-selectable
+
+- Date: 2026-07-31
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The Canary's engineering and data practice content is already embedded, sanitized and runtime-neutral. Leaving `data-practice` as `unavailable` made the interview offer a choice that could not be fulfilled even though its three methodological skills require no external provider or file-generation capability.
+- Decision: Remove `unavailable` from the professional capability-bundle surface. `engineering-core` and `data-practice` are both `optional`, appear as selectable tracks in the canonical interview, and are projected together with their dependencies after confirmed local selection. Keep `unavailable` for unrelated native/runtime capabilities whose evidence or authority is not present.
+- Consequences: A user can select software, data or both practices during onboarding; the active projection remains deterministic and tool-neutral. The base catalog remains unchanged until selection, and no track grants tools, data scope, provider access, publication or agent authority.
+- Refs: USER; specs/035-professional-capability-bundles.md; bundles/catalog/catalog.json; internal/agentidentity; internal/runtimeprojection
+- Supersedes: BSEL
+
 ## BSEL - Activate optional engineering skills from confirmed interview selection
 
 - Date: 2026-07-31

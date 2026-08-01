@@ -2,8 +2,8 @@
 
 Status: source topology and skill catalogs implemented. The neutral engineering
 quality methods are included in the base bundle; the first specialized
-engineering bundle is optional and can be activated through confirmed interview
-selection. Data bundles remain unavailable until their runtime contract exists.
+engineering and data bundles are optional and can be activated through confirmed
+interview selection.
 
 ## Objective
 
@@ -39,7 +39,7 @@ The source inventory is `bundles/catalog/catalog.json`:
 | --- | --- | --- | --- |
 | `base` | Yes | `consulting` (plus transversal quality methods) | none |
 | `engineering-core` | Optional — activated by confirmed interview selection | `technical-explorer`, `software-engineering` | `base` |
-| `data-practice` | No — explicitly unavailable | `data-science`, `data-engineering` | `engineering-core` |
+| `data-practice` | Optional — activated by confirmed interview selection | `data-science`, `data-engineering` | `engineering-core` |
 
 The base bundle contains six neutral engineering quality methods: coverage
 diagnosis, focused unit-test waves, strict expected-failure capture, QA gates,
@@ -66,16 +66,16 @@ without changing local state. `bcgos agent interview` exposes the same tracks;
 adapter installation projects the selected optional skills.
 
 For `consulting`, the result is `base_only` and its active skills index includes
-the neutral quality methods. Plans that require `engineering-core` return
+the neutral quality methods. Plans that require either optional bundle return
 `optional` and explain that the selection must be confirmed in the interview.
-Plans that require `data-practice` remain `unavailable`. The plan command must
-never write a selection, install a package, modify a workspace, contact a
-provider or grant authority.
+The plan command must never write a selection, install a package, modify a
+workspace, contact a provider or grant authority.
 
 The existing `bcgos skills index` remains the index of the active base bundle.
 It lists the six explicitly included quality methods by default. After a
-confirmed engineering-track selection, the adapter projection adds the three
-engineering-core methods without changing the base catalog or granting tools.
+confirmed selection, the adapter projection adds the selected engineering-core
+and/or data-practice methods without changing the base catalog or granting
+tools.
 
 ## Future activation contract
 
@@ -91,10 +91,10 @@ all of the following before remote or separately downloaded packs are allowed:
 5. Session Start catalog composition, authorization and bounded injection;
 6. Windows and macOS clean-device acceptance evidence.
 
-The release manifest v1 intentionally excludes remote optional packs. Until the
-relevant artifact and compatibility checks exist, the track remains
-`unavailable`; a conversational skill cannot emulate activation from source
-files or a Git clone.
+The release manifest v1 intentionally excludes remote optional packs. The
+Canary's two optional bundles are embedded in the verified local distribution;
+a conversational skill cannot emulate activation from source files or a Git
+clone.
 
 ## Safety invariants
 
@@ -107,9 +107,9 @@ files or a Git clone.
   data, models, code or releases.
 - Every product skill resolves the canonical `interaction-profile`; it may not
   define a second novice/expert taxonomy.
-- A runtime reports a selected bundle as unavailable when its artifact or
-  compatibility contract is missing rather than emulating an install from
-  source files or a Git clone.
+- A runtime activates only selected bundles embedded in the verified local
+  distribution; it does not emulate remote installation from source files or a
+  Git clone.
 
 ## Acceptance evidence
 
@@ -119,8 +119,8 @@ files or a Git clone.
 - Track planning resolves `software-engineering` through `base` and
   `engineering-core`, and reports it as optional.
 - Track planning resolves `data-science` through `base`, `engineering-core`
-  and `data-practice`, but reports it as unavailable.
+  and `data-practice`, and reports it as optional.
 - Track planning resolves `consulting` to the base bundle only.
 - The full harness validates all declared bundle skill directories and generated
   indexes; the distribution allowlist contains the six explicit quality methods
-  and the signed Canary engineering-core content, but no data-practice content.
+  and the signed Canary engineering-core and data-practice content.

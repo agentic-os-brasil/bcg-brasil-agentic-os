@@ -17,8 +17,8 @@ import (
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	bundlecatalog "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/catalog"
+	datapracticeskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/data-practice/skills"
 	engineeringcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/engineering-core/skills"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/capabilitybundle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
@@ -400,16 +400,19 @@ func catalogForTracks(tracks []string) (skillsindex.Catalog, error) {
 	if err != nil {
 		return skillsindex.Catalog{}, err
 	}
-	if plan.State == capabilitybundle.Unavailable {
-		return skillsindex.Catalog{}, errors.New(plan.Reason)
-	}
 	for _, bundle := range plan.Bundles {
-		if bundle.ID != "engineering-core" {
+		var optional skillsindex.Catalog
+		var loadErr error
+		switch bundle.ID {
+		case "engineering-core":
+			optional, loadErr = engineeringcoreskills.Catalog()
+		case "data-practice":
+			optional, loadErr = datapracticeskills.Catalog()
+		default:
 			continue
 		}
-		optional, loadErr := engineeringcoreskills.Catalog()
 		if loadErr != nil {
-			return skillsindex.Catalog{}, fmt.Errorf("load engineering-core skills catalog: %w", loadErr)
+			return skillsindex.Catalog{}, fmt.Errorf("load %s skills catalog: %w", bundle.ID, loadErr)
 		}
 		base.Skills = append(base.Skills, optional.Skills...)
 	}
@@ -424,7 +427,10 @@ func skillBody(id string) ([]byte, error) {
 	if body, err := baseskills.Skill(id); err == nil {
 		return body, nil
 	}
-	return engineeringcoreskills.Skill(id)
+	if body, err := engineeringcoreskills.Skill(id); err == nil {
+		return body, nil
+	}
+	return datapracticeskills.Skill(id)
 }
 
 func renderOrientation(layout runtimeLayout, catalog skillsindex.Catalog) (string, error) {

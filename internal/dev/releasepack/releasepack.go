@@ -160,7 +160,7 @@ func validateAllowlist(allowlist Allowlist) error {
 		if !safeRelative(entry.Source) || !safeRelative(entry.Path) {
 			return fmt.Errorf("unsafe distribution path %q -> %q", entry.Source, entry.Path)
 		}
-		if !strings.HasPrefix(entry.Source, "bundles/base/") && !strings.HasPrefix(entry.Source, "bundles/engineering-core/") && !strings.HasPrefix(entry.Source, "schemas/") {
+		if !strings.HasPrefix(entry.Source, "bundles/base/") && !strings.HasPrefix(entry.Source, "bundles/engineering-core/") && !strings.HasPrefix(entry.Source, "bundles/data-practice/") && !strings.HasPrefix(entry.Source, "schemas/") {
 			return fmt.Errorf("distribution source is outside approved roots: %s", entry.Source)
 		}
 		if strings.HasSuffix(entry.Source, ".go") || entry.Source == "bundles/base/.gitkeep" {

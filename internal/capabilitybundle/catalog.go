@@ -12,10 +12,7 @@ import (
 	"strings"
 )
 
-const (
-	Optional    = "optional"
-	Unavailable = "unavailable"
-)
+const Optional = "optional"
 
 type Catalog struct {
 	SchemaVersion int      `json:"schema_version"`
@@ -82,8 +79,8 @@ func (catalog Catalog) Validate() error {
 			if bundle.Availability != "included" || len(bundle.DependsOn) != 0 {
 				return errors.New("base capability bundle must be included and have no dependencies")
 			}
-		} else if (bundle.Availability != Optional && bundle.Availability != Unavailable) || strings.TrimSpace(bundle.AvailabilityReason) == "" {
-			return fmt.Errorf("optional capability bundle %q must be optional or unavailable with a reason", bundle.ID)
+		} else if bundle.Availability != Optional || strings.TrimSpace(bundle.AvailabilityReason) == "" {
+			return fmt.Errorf("optional capability bundle %q must be optional with a reason", bundle.ID)
 		}
 		for _, track := range bundle.Tracks {
 			if !validID(track) {
@@ -193,17 +190,13 @@ func (catalog Catalog) PlanForTracks(tracks []string) (Plan, error) {
 	for _, bundle := range catalog.Bundles {
 		if selected[bundle.ID] {
 			plan.Bundles = append(plan.Bundles, bundle)
-			if bundle.Availability == Unavailable {
-				plan.State = Unavailable
-			} else if bundle.Availability == Optional && plan.State == "base_only" {
+			if bundle.Availability == Optional && plan.State == "base_only" {
 				plan.State = Optional
 			}
 		}
 	}
 	sort.Slice(plan.Bundles, func(left, right int) bool { return plan.Bundles[left].ID < plan.Bundles[right].ID })
-	if plan.State == Unavailable {
-		plan.Reason = "one or more selected capability bundles remain unavailable because their qualified runtime or release artifact is missing"
-	} else if plan.State == Optional {
+	if plan.State == Optional {
 		plan.Reason = "selected optional bundle activates only after explicit confirmed interview selection; it does not grant tools, data scope or authority"
 	}
 	return plan, nil
