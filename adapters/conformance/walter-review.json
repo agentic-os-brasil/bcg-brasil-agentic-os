@@ -9,13 +9,17 @@
   "verdicts": [
     "approved",
     "refine-and-return",
-    "missing-the-mark"
+    "missing-the-mark",
+    "hold"
   ],
   "receipt_fields": [
     "trigger",
+    "leverage_decision",
+    "posture",
     "state",
     "source_packet_id",
     "source_packet_sha256",
-    "objection_count"
+    "objection_count",
+    "preserves_intent"
   ]
 }

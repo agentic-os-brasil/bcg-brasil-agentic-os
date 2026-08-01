@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil/schemas/maestro-input.schema.json",
+  "title": "Maestro closed planner input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "intent_class", "scope_kind", "scope_id", "sensitivity", "materiality", "review_trigger", "health_governance_intent", "requested_capability", "client_implication", "stakeholder_implication", "strategic_implication", "promotion_implication", "cross_case_context", "execution_only", "simple_reversible", "high_leverage", "consequential_decision", "external_artifact", "reputational_risk", "hard_to_reverse", "available_registered_agents"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "intent_class": {"enum": ["direct_answer", "case_execution", "account_context", "practice_advisory", "material_review", "health_governance", "bounded_errand"]},
+    "scope_kind": {"enum": ["control", "workspace", "case", "account", "practice", "review", "health", "errand"]},
+    "scope_id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
+    "sensitivity": {"enum": ["public", "internal", "confidential", "restricted"]},
+    "materiality": {"enum": ["none", "review"]},
+    "review_trigger": {"enum": ["", "material_recommendation", "consequential_tradeoff", "external_artifact", "reputational_risk", "hard_to_reverse", "materiality_review"]},
+    "health_governance_intent": {"enum": ["none", "system_health", "governance"]},
+    "requested_capability": {"type": "string"},
+    "caller_role": {"type": "string", "maxLength": 128},
+    "client_implication": {"type": "boolean"},
+    "stakeholder_implication": {"type": "boolean"},
+    "strategic_implication": {"type": "boolean"},
+    "promotion_implication": {"type": "boolean"},
+    "cross_case_context": {"type": "boolean"},
+    "execution_only": {"type": "boolean"},
+    "simple_reversible": {"type": "boolean"},
+    "high_leverage": {"type": "boolean"},
+    "consequential_decision": {"type": "boolean"},
+    "external_artifact": {"type": "boolean"},
+    "reputational_risk": {"type": "boolean"},
+    "hard_to_reverse": {"type": "boolean"},
+    "available_registered_agents": {"type": "array", "items": {"$ref": "#/$defs/agent"}}
+  },
+  "$defs": {
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "scope_kind", "scope_id", "authorization_digest", "state_snapshot_digest", "available"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
+        "role": {"enum": ["case_agent", "client_account_agent", "pa_expert", "reviewer", "governance_analyst", "errand_helper"]},
+        "scope_kind": {"enum": ["control", "workspace", "case", "account", "practice", "review", "health", "errand"]},
+        "scope_id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
+        "authorization_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "state_snapshot_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "available": {"type": "boolean"}
+      }
+    }
+  }
+}

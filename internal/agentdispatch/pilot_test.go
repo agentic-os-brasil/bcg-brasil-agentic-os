@@ -108,8 +108,9 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 				t.Fatal("Walter generic return bypassed the typed verdict contract")
 			}
 			verdict := WalterReviewBody{
-				Verdict:      WalterApproved,
-				EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/evidence.md"},
+				PreservesIntent: true,
+				Verdict:         WalterApproved,
+				EvidenceRefs:    []string{"bcgos://workspace/alpha/dossier/evidence.md"},
 			}
 			reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, verdict)
 			if err != nil {
@@ -160,7 +161,7 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 		t.Fatal(err)
 	}
 	walter := newTestExecutor(t, "claude", "walter", "walter-cap", now)
-	refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, Objections: []WalterObjection{{
+	refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, PreservesIntent: true, Objections: []WalterObjection{{
 		Code: "missing-counterevidence", Fix: "Add the counter-evidence to the recommendation.", ExitCondition: "The evidence pointer is present and reviewed.",
 	}}}
 	reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, refinement)
@@ -257,7 +258,7 @@ func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *t
 				t.Fatal(err)
 			}
 			walter := newTestExecutor(t, runtimeName, "walter", "walter-cap", time.Now())
-			refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, Objections: []WalterObjection{{
+			refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, PreservesIntent: true, Objections: []WalterObjection{{
 				Code: "missing-counterevidence", Fix: "Add the counter-evidence.", ExitCondition: "The evidence pointer is reviewed.",
 			}}}
 			refinementEnvelope, err := walter.SealWalterReview(reviewDispatch, refinement)
@@ -289,7 +290,7 @@ func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *t
 				t.Fatal(err)
 			}
 			walter = newTestExecutor(t, runtimeName, "walter", "walter-cap", time.Now())
-			approved := WalterReviewBody{Verdict: WalterApproved}
+			approved := WalterReviewBody{Verdict: WalterApproved, PreservesIntent: true}
 			approvedEnvelope, err := walter.SealWalterReview(reviewDispatch, approved)
 			if err != nil {
 				t.Fatal(err)

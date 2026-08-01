@@ -600,3 +600,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Darwin gains durable auditability without a second execution ledger or a context-bearing contract store. Local files remain metadata-only, native persistence and native runtime provenance remain unavailable, and a decision claim never promotes a proposal automatically or proves Walter identity. Future authoritative approval requires a separately qualified signed envelope and consumer contract; future policy changes require a new pinned episode and explicit human authority.
 - Refs: specs/038-darwin-durable-evolution.md; internal/darwin/evolution.go; internal/darwin/evolution_store.go; schemas/darwin-evolution-*.schema.json
 - Supersedes: none
+
+## MAST - Make Maestro native delegation and high-leverage review explicit
+
+- Date: 2026-07-31
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs a deterministic topology that keeps Client Account consultation focused on client strategic lens and stakeholder pressure-testing, while Walter remains a calm Senior Advisor & Refiner for genuinely high-leverage output. Configuration and caller role strings must not silently create authority or inflate review loops.
+- Decision: Use a typed Maestro planner with independent `account_consultation_required` and `walter_required` decisions. Account consultation is selected by closed client-strategy, stakeholder, relationship, narrative, cross-case and promotion signals; explicit execution-only work may use direct Case, while insufficient routing evidence fails safe to Client Account. Walter is selected by consequence, leverage, external/reputational exposure, hard-to-reverse decisions, materiality or a closed review trigger. Ordinary low-leverage work may carry an auditable Walter skip. The runtime keeps one active spoke, depth one, zero children, durable Claude/Codex state fencing, and constructive Walter verdicts with actionable refinements and exceptional holds.
+- Consequences: Account framing and return validation are paired; direct Case never invokes Client Account. Walter approval is not a routine veto: cosmetic observations remain non-blocking, load-bearing gaps require proposed refinements and acceptance criteria, and hold is exceptional. Content or risk mutation invalidates stale decisions and re-enters the bounded loop. Native qualification remains unavailable until fresh runtime evidence exists.
+- Refs: specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; specs/023-sequential-agent-dispatch.md; specs/034-vertical-agents-and-transversal-skills.md; specs/040-maestro-native-delegation.md; schemas/maestro-plan.schema.json; internal/maestro; internal/agentdispatch/review.go; internal/agentorchestration
+- Supersedes: none

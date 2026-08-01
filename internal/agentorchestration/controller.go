@@ -6,9 +6,13 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -29,6 +33,7 @@ type NativeEvent struct {
 	Tool            string
 	Operation       string
 	Resource        string
+	FenceEpoch      uint64
 }
 
 type Decision struct {
@@ -68,12 +73,15 @@ type StateSnapshot struct {
 	ChildID         string    `json:"child_id,omitempty"`
 	ChildDispatchID string    `json:"child_dispatch_id,omitempty"`
 	Updated         time.Time `json:"updated"`
+	FenceEpoch      uint64    `json:"fence_epoch"`
 }
 
 type StateStore struct {
 	mu             sync.Mutex
 	state          StateSnapshot
 	recoverySHA256 [sha256.Size]byte
+	persistPath    string
+	persistMu      sync.Mutex
 }
 
 func NewStateStore(recoveryCapability string) (*StateStore, error) {
@@ -83,19 +91,97 @@ func NewStateStore(recoveryCapability string) (*StateStore, error) {
 	return &StateStore{recoverySHA256: sha256.Sum256([]byte(recoveryCapability))}, nil
 }
 
+// NewDurableStateStore opens the single installation state used by all
+// runtime adapters. The file contains only policy/branch metadata and is
+// atomically replaced after each accepted transition.
+func NewDurableStateStore(path, recoveryCapability string) (*StateStore, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, errors.New("durable orchestration state path is required")
+	}
+	if recoveryCapability == "" {
+		return nil, errors.New("orchestration state store requires a recovery capability")
+	}
+	store := &StateStore{persistPath: path, recoverySHA256: sha256.Sum256([]byte(recoveryCapability))}
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return store, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read durable orchestration state: %w", err)
+	}
+	if len(data) == 0 {
+		return store, nil
+	}
+	if err := json.Unmarshal(data, &store.state); err != nil {
+		return nil, fmt.Errorf("decode durable orchestration state: %w", err)
+	}
+	if err := validateSnapshot(store.state); err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
 func RestoreStateStore(snapshot StateSnapshot, recoveryCapability string) (*StateStore, error) {
 	if recoveryCapability == "" {
 		return nil, errors.New("orchestration state store requires a recovery capability")
 	}
+	if err := validateSnapshot(snapshot); err != nil {
+		return nil, err
+	}
+	return &StateStore{state: snapshot, recoverySHA256: sha256.Sum256([]byte(recoveryCapability))}, nil
+}
+
+func validateSnapshot(snapshot StateSnapshot) error {
 	if (snapshot.BranchID == "") != (snapshot.RootID == "") ||
 		(snapshot.BranchID == "") != (snapshot.ScopeID == "") ||
 		(snapshot.BranchID == "") != (snapshot.ScopeKind == "") {
-		return nil, errors.New("orchestration snapshot has incomplete branch identity")
+		return errors.New("orchestration snapshot has incomplete branch identity")
 	}
 	if (snapshot.ChildID == "") != (snapshot.ChildDispatchID == "") || (snapshot.ChildID != "" && snapshot.RootID == "") {
-		return nil, errors.New("orchestration snapshot has a child without a root")
+		return errors.New("orchestration snapshot has a child without a root")
 	}
-	return &StateStore{state: snapshot, recoverySHA256: sha256.Sum256([]byte(recoveryCapability))}, nil
+	return nil
+}
+
+func (store *StateStore) persistLocked() error {
+	if store.persistPath == "" {
+		return nil
+	}
+	if err := validateSnapshot(store.state); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(store.state, "", "  ")
+	if err != nil {
+		return err
+	}
+	directory := filepath.Dir(store.persistPath)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return err
+	}
+	store.persistMu.Lock()
+	defer store.persistMu.Unlock()
+	temporary, err := os.CreateTemp(directory, ".maestro-state-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(0o600); err != nil {
+		temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(append(data, '\n')); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, store.persistPath)
 }
 
 func (store *StateStore) Snapshot() StateSnapshot {
@@ -141,14 +227,13 @@ var adapterEvents = map[string]map[string]string{
 }
 
 var roleScopeKinds = map[string]map[string]bool{
-	"capability_specialist": {"account": true, "workspace": true},
-	"case_agent":            {"case": true, "workspace": true},
-	"client_account_agent":  {"account": true},
-	"errand_helper":         {"errand": true},
-	"governance_analyst":    {"health": true},
-	"hub":                   {"control": true},
-	"pa_expert":             {"practice": true},
-	"reviewer":              {"review": true},
+	"case_agent":           {"case": true, "workspace": true},
+	"client_account_agent": {"account": true},
+	"errand_helper":        {"errand": true},
+	"governance_analyst":   {"health": true},
+	"hub":                  {"control": true},
+	"pa_expert":            {"practice": true},
+	"reviewer":             {"review": true},
 }
 
 func NewAdapter(runtime string, catalog agentcatalog.Catalog, grants []Authorization, store *StateStore) (*Adapter, error) {
@@ -302,7 +387,7 @@ func (adapter *Adapter) bindPolicy(policySHA256 string) error {
 	defer adapter.store.mu.Unlock()
 	if adapter.store.state.PolicySHA256 == "" {
 		adapter.store.state.PolicySHA256 = policySHA256
-		return nil
+		return adapter.store.persistLocked()
 	}
 	if adapter.store.state.PolicySHA256 != policySHA256 {
 		return errors.New("orchestration state store authorization policy changed")
@@ -317,16 +402,12 @@ func (adapter *Adapter) validateStoreState() error {
 	if state.BranchID == "" {
 		return nil
 	}
+	if state.ChildID != "" || state.ChildDispatchID != "" {
+		return errors.New("orchestration state contains a forbidden nested child")
+	}
 	root, ok := adapter.authorizations[state.RootID]
 	if !ok || root.scope != state.ScopeID || root.scopeKind != state.ScopeKind || !adapter.catalog.AllowsDelegation("hub", root.role, 1) || state.Updated.IsZero() {
 		return errors.New("orchestration state references an unauthorized root")
-	}
-	if state.ChildID == "" {
-		return nil
-	}
-	child, ok := adapter.authorizations[state.ChildID]
-	if !ok || child.scope != state.ScopeID || child.scopeKind != state.ScopeKind || !adapter.catalog.AllowsDelegation(root.role, child.role, 2) {
-		return errors.New("orchestration state references an unauthorized child")
 	}
 	return nil
 }
@@ -343,6 +424,10 @@ func (adapter *Adapter) Handle(event NativeEvent) Decision {
 
 	adapter.store.mu.Lock()
 	defer adapter.store.mu.Unlock()
+	previous := adapter.store.state
+	if semanticEvent != "branch_start" && event.FenceEpoch != 0 && event.FenceEpoch != adapter.store.state.FenceEpoch {
+		return denied("fence_epoch_mismatch")
+	}
 
 	var decision Decision
 	switch semanticEvent {
@@ -361,6 +446,10 @@ func (adapter *Adapter) Handle(event NativeEvent) Decision {
 	}
 	if decision.Allowed {
 		adapter.store.state.Updated = adapter.now().UTC()
+		if err := adapter.store.persistLocked(); err != nil {
+			adapter.store.state = previous
+			return denied("state_persist_failed")
+		}
 	}
 	return decision
 }
@@ -378,6 +467,7 @@ func (adapter *Adapter) StartChild(actorID, capability, targetID, branchID, disp
 		Name:    adapter.nativeEvent("child_start"),
 		ActorID: actorID, ActorCapability: capability, TargetID: targetID,
 		BranchID: branchID, DispatchID: dispatchID, Scope: scopeID, ScopeKind: scopeKind,
+		FenceEpoch: adapter.store.Snapshot().FenceEpoch,
 	})
 }
 
@@ -385,14 +475,14 @@ func (adapter *Adapter) FinishChild(actorID, capability, branchID, dispatchID st
 	return adapter.Handle(NativeEvent{
 		Name:    adapter.nativeEvent("child_finish"),
 		ActorID: actorID, ActorCapability: capability, BranchID: branchID,
-		DispatchID: dispatchID,
+		DispatchID: dispatchID, FenceEpoch: adapter.store.Snapshot().FenceEpoch,
 	})
 }
 
 func (adapter *Adapter) FinishBranch(actorID, capability, branchID string) Decision {
 	return adapter.Handle(NativeEvent{
 		Name:    adapter.nativeEvent("branch_finish"),
-		ActorID: actorID, ActorCapability: capability, BranchID: branchID,
+		ActorID: actorID, ActorCapability: capability, BranchID: branchID, FenceEpoch: adapter.store.Snapshot().FenceEpoch,
 	})
 }
 
@@ -402,7 +492,8 @@ func (adapter *Adapter) GuardTool(actorID, capability, branchID, dispatchID, sco
 		ActorID: actorID, ActorCapability: capability,
 		BranchID: branchID, DispatchID: dispatchID,
 		Scope: scopeID, ScopeKind: scopeKind,
-		Tool: tool, Operation: operation, Resource: resource,
+		FenceEpoch: adapter.store.Snapshot().FenceEpoch,
+		Tool:       tool, Operation: operation, Resource: resource,
 	})
 }
 
@@ -451,7 +542,11 @@ func (adapter *Adapter) RecoverStale(maxAge time.Duration, recoveryCapability st
 	if state.BranchID == "" || state.Updated.IsZero() || adapter.now().UTC().Sub(state.Updated) <= maxAge {
 		return false
 	}
-	adapter.store.state = StateSnapshot{PolicySHA256: state.PolicySHA256}
+	adapter.store.state = StateSnapshot{PolicySHA256: state.PolicySHA256, FenceEpoch: state.FenceEpoch}
+	if err := adapter.store.persistLocked(); err != nil {
+		adapter.store.state = state
+		return false
+	}
 	return true
 }
 
@@ -492,32 +587,18 @@ func (adapter *Adapter) startBranch(event NativeEvent, actor authorization) Deci
 	adapter.store.state = StateSnapshot{
 		PolicySHA256: adapter.store.state.PolicySHA256, BranchID: event.BranchID,
 		ScopeID: event.Scope, ScopeKind: target.scopeKind, RootID: event.TargetID,
+		FenceEpoch: adapter.store.state.FenceEpoch + 1,
 	}
 	return allowed()
 }
 
 func (adapter *Adapter) startChild(event NativeEvent, actor authorization) Decision {
-	state := adapter.store.state
-	if state.BranchID == "" {
-		return denied("branch_missing")
-	}
-	if state.ChildID != "" {
-		return denied("child_active")
-	}
-	target, ok := adapter.authorizations[event.TargetID]
-	if !ok {
-		return denied("target_denied")
-	}
-	if event.BranchID != state.BranchID || event.DispatchID == "" || event.ActorID != state.RootID ||
-		event.Scope != state.ScopeID || actor.scope != state.ScopeID || target.scope != state.ScopeID ||
-		actor.scopeKind != state.ScopeKind || target.scopeKind != state.ScopeKind ||
-		event.ScopeKind != state.ScopeKind ||
-		!adapter.catalog.AllowsDelegation(actor.role, target.role, 2) {
-		return denied("edge_denied")
-	}
-	adapter.store.state.ChildID = event.TargetID
-	adapter.store.state.ChildDispatchID = event.DispatchID
-	return allowed()
+	// Depth one is a hard product invariant. The native event names remain
+	// understood only so an installed legacy adapter receives a deterministic
+	// denial instead of accidentally creating a nested branch.
+	_ = event
+	_ = actor
+	return denied("depth_one_no_children")
 }
 
 func (adapter *Adapter) guardTool(event NativeEvent, actor authorization) Decision {
@@ -578,7 +659,7 @@ func (adapter *Adapter) finishBranch(event NativeEvent) Decision {
 	if event.BranchID != state.BranchID || event.ActorID != state.RootID {
 		return denied("actor_denied")
 	}
-	adapter.store.state = StateSnapshot{PolicySHA256: state.PolicySHA256}
+	adapter.store.state = StateSnapshot{PolicySHA256: state.PolicySHA256, FenceEpoch: state.FenceEpoch}
 	return allowed()
 }
 

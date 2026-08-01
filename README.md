@@ -72,6 +72,26 @@ can inspect.
 For the full user journey, read the [Maestro user onboarding](docs/onboarding/maestro-user-onboarding.md).
 For the business-facing evolution path, read the [product evolution roadmap](docs/roadmap/maestro-evolution-roadmap.md).
 
+### Maestro's bounded routing topology
+
+Maestro is the only user-facing hub. Its typed planner makes two independent
+decisions before a Case runs: whether the work needs a Client Account's
+strategic/stakeholder lens, and whether the resulting work is high-leverage
+enough for Walter's calm Senior Advisor & Refiner review. The first decision is
+based on client strategy, relationship, stakeholder pressure-testing, client
+narrative, cross-case context or promotion signals—not technical size. The
+second is based on consequence, leverage, reversibility, external exposure and
+reputational risk.
+
+The runtime keeps one active spoke at a time, depth one and zero children. An
+account-assisted Case uses `Maestro → Client Account → Maestro → Case →
+Maestro → Client Account validation → Maestro`; a direct execution-only Case
+omits only the pre-brief and converges at `Maestro`. Both paths then invoke
+Walter only when the independent high-leverage decision requires it, or record
+an auditable low-leverage skip, before delivery. Claude and Codex share the
+same controller and durable installation-state contract; capability reporting
+distinguishes configured, adapter-observed and native-qualified evidence.
+
 ## What is ready
 
 ### 🏅 Toward the v0.1.0 pilot — contract layer validated

@@ -1778,10 +1778,12 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	flags := newFlagSet("hook session-start", errOut)
 	runtimeName := flags.String("runtime", "", "target runtime: claude or codex")
 	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	orchestrationState := flags.String("orchestration-state", "", "shared Maestro orchestration state path")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
 		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]")
 		return ExitUsage
 	}
+	_ = orchestrationState
 	root, err := dataRoot()
 	if err != nil {
 		return reportError(errOut, err)
@@ -1827,10 +1829,12 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 	action := args[0]
 	flags := newFlagSet("hook codex "+action, errOut)
 	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	orchestrationState := flags.String("orchestration-state", "", "shared Maestro orchestration state path")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
 		fmt.Fprintln(errOut, usage)
 		return ExitUsage
 	}
+	_ = orchestrationState
 	switch action {
 	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
 	default:
@@ -1909,10 +1913,12 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 	action := args[0]
 	flags := newFlagSet("hook claude "+action, errOut)
 	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	orchestrationState := flags.String("orchestration-state", "", "shared Maestro orchestration state path")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
 		fmt.Fprintln(errOut, usage)
 		return ExitUsage
 	}
+	_ = orchestrationState
 	switch action {
 	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
 	default:

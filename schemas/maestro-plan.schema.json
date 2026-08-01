@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil/schemas/maestro-plan.schema.json",
+  "title": "Maestro typed routing plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "planner_version", "action", "reason_code", "skip_pre_account", "skip_walter", "account_consultation_required", "requires_account_framing", "requires_account_validation", "requires_walter", "scope_kind", "scope_id", "bindings", "plan_digest"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "planner_version": {"const": "maestro-native-v2"},
+    "action": {"enum": ["direct", "open_case", "open_client_account", "request_pa_expert", "invoke_walter", "invoke_darwin", "bounded_errand"]},
+    "reason_code": {"type": "string", "minLength": 1},
+    "case_entry": {"enum": ["account_first", "direct_case"]},
+    "skip_pre_account": {"type": "boolean"},
+    "skip_reason_codes": {"type": "array", "maxItems": 1, "items": {"type": "string", "minLength": 1}},
+    "skip_walter": {"type": "boolean"},
+    "account_consultation_required": {"type": "boolean"},
+    "walter_skip_reason_code": {"type": "string", "minLength": 1},
+    "walter_skip_evidence": {"type": "string", "minLength": 1},
+    "walter_reason_code": {"type": "string", "minLength": 1},
+    "requires_account_framing": {"type": "boolean"},
+    "requires_account_validation": {"type": "boolean"},
+    "requires_walter": {"type": "boolean"},
+    "scope_kind": {"type": "string", "minLength": 1},
+    "scope_id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
+    "requested_capability": {"type": "string"},
+    "bindings": {"type": "array", "items": {"$ref": "#/$defs/binding"}},
+    "plan_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {"if": {"properties": {"case_entry": {"const": "account_first"}}}, "then": {"properties": {"requires_account_framing": {"const": true}, "requires_account_validation": {"const": true}, "skip_pre_account": {"const": false}}}},
+    {"if": {"properties": {"case_entry": {"const": "direct_case"}}}, "then": {"properties": {"requires_account_framing": {"const": false}, "requires_account_validation": {"const": false}, "skip_pre_account": {"const": true}}}},
+    {"if": {"properties": {"requires_walter": {"const": true}}}, "then": {"properties": {"skip_walter": {"const": false}}}},
+    {"if": {"properties": {"requires_walter": {"const": false}}}, "then": {"properties": {"skip_walter": {"const": true}, "walter_skip_reason_code": {"type": "string", "minLength": 1}, "walter_skip_evidence": {"type": "string", "minLength": 1}}}}
+  ],
+  "$defs": {
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "scope_kind", "scope_id", "authorization_digest", "state_snapshot_digest"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
+        "role": {"enum": ["case_agent", "client_account_agent", "pa_expert", "reviewer", "governance_analyst", "errand_helper"]},
+        "scope_kind": {"type": "string", "minLength": 1},
+        "scope_id": {"type": "string", "minLength": 1},
+        "authorization_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "state_snapshot_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}
