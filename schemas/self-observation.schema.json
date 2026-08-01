@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bcgos.local/schemas/self-observation.schema.json",
+  "title": "Local owner self observation metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "observation_id", "signal", "lifecycle", "source_event_sha256", "scope_kind", "scope_id", "claim_sha256", "evidence_type", "provenance_sha256", "confidence", "sensitivity", "materiality", "owner_authenticated"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "observation_id": {"type": "string"},
+    "signal": {"enum": ["explicit_instruction", "explicit_correction", "explicit_endorsement", "observed_pattern", "inferred_hypothesis"]},
+    "lifecycle": {"enum": ["captured", "eligible", "corroborated", "proposed", "promoted", "rejected", "contradicted", "expired", "redacted"]},
+    "source_event_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
+    "scope_kind": {"enum": ["global", "workspace", "account", "case"]},
+    "scope_id": {"type": "string"},
+    "claim_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
+    "evidence_type": {"type": "string"},
+    "provenance_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
+    "confidence": {"enum": ["low", "medium", "high"]},
+    "sensitivity": {"type": "string"},
+    "materiality": {"enum": ["low", "medium", "high"]},
+    "owner_authenticated": {"const": true},
+    "supersedes_observation_id": {"type": "string"}
+  }
+}

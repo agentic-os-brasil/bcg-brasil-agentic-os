@@ -111,6 +111,7 @@ func TestDispatcherKeepsWalterAsAReviewLeaf(t *testing.T) {
 			Trigger: ReviewMaterialRecommendation, Audience: "case sponsor",
 			Recommendation: "Choose the bounded pilot scope.", DefinitionOfDone: "Sponsor can decide from the reviewed artifact.",
 			Posture:      WalterReviewPosture,
+			Intent:       testIntentPacket("case sponsor", "Pressure-test the material recommendation before completion.", "Choose the bounded pilot scope."),
 			ArtifactRefs: []string{"bcgos://workspace/alpha/dossier/recommendation.md"},
 			Chain: ReviewChain{
 				Mode:                        ReviewChainAccountCaseAccount,

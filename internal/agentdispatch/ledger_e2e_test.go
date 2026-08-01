@@ -68,6 +68,7 @@ func TestCaseDirectWalterApprovedCompletesExecutionLedger(t *testing.T) {
 		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Improve the recommendation where a load-bearing gap exists.",
 		Audience: "sponsor", Recommendation: "Preserve the central thesis.",
 		DefinitionOfDone:     "The sponsor can act on the recommendation.",
+		Intent:               testIntentPacket("sponsor", "Improve the recommendation where a load-bearing gap exists.", "Preserve the central thesis."),
 		ExecutionWorkspaceID: workspaceID, ExecutionItemID: created.State.ItemID,
 		Chain: directCaseReviewChain(source), TTL: time.Hour,
 	})
@@ -102,22 +103,23 @@ func TestCaseDirectWalterApprovedCompletesExecutionLedger(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pilot.RecordApprovedWalterReview(store, wrongCustody, source.DelegationID, WalterReviewBody{Verdict: WalterApproved}, LedgerApprovalInput{
+	approvedBody := testIntentBodyForPacket(t, reviewDispatch.Packet.Review, WalterApproved)
+	if _, err := pilot.RecordApprovedWalterReview(store, wrongCustody, source.DelegationID, approvedBody, LedgerApprovalInput{
 		WorkspaceID: workspaceID, ItemID: created.State.ItemID,
 		ExpectedRevision: evidenced.Item.State.StateRevision, AttemptID: evidenced.Item.State.ActiveAttemptID,
 	}); err == nil {
 		t.Fatal("forged Walter custody signer was accepted")
 	}
-	if _, err := pilot.RecordApprovedWalterReview(store, custody, source.DelegationID, WalterReviewBody{Verdict: WalterApproved}, LedgerApprovalInput{
+	if _, err := pilot.RecordApprovedWalterReview(store, custody, source.DelegationID, approvedBody, LedgerApprovalInput{
 		WorkspaceID: workspaceID, ItemID: "different-item",
 		ExpectedRevision: evidenced.Item.State.StateRevision, AttemptID: evidenced.Item.State.ActiveAttemptID,
 	}); err == nil {
 		t.Fatal("cross-item Walter approval was accepted")
 	}
-	if _, err := HandleWalterReview(pilot, reviewDispatch, WalterReviewBody{Verdict: WalterApproved}, custody); err != nil {
+	if _, err := HandleWalterReview(pilot, reviewDispatch, approvedBody, custody); err != nil {
 		t.Fatal(err)
 	}
-	reviewed, err := pilot.RecordApprovedWalterReview(store, custody, source.DelegationID, WalterReviewBody{Verdict: WalterApproved}, LedgerApprovalInput{
+	reviewed, err := pilot.RecordApprovedWalterReview(store, custody, source.DelegationID, approvedBody, LedgerApprovalInput{
 		WorkspaceID: workspaceID, ItemID: created.State.ItemID,
 		ExpectedRevision: evidenced.Item.State.StateRevision, AttemptID: evidenced.Item.State.ActiveAttemptID,
 	})

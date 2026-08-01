@@ -72,26 +72,31 @@ func TestWalterIsConstructiveAndLoadBearingOnly(t *testing.T) {
 		SourcePacketID: strings.Repeat("a", 64), SourcePacketSHA256: strings.Repeat("b", 64),
 		SourceScopeKind: "workspace", SourceScopeID: "alpha", Trigger: ReviewMaterialRecommendation,
 		Audience: "sponsor", Recommendation: "Preserve the central thesis.", DefinitionOfDone: "The decision is usable.",
+		Intent: testIntentPacket("sponsor", "Review the material recommendation.", "Preserve the central thesis."),
 	}
 	if err := validateWalterReviewBody(WalterReviewBody{
 		Verdict:    WalterApproved,
+		Intent:     testIntentBodyForPacket(t, &review, WalterApproved).Intent,
 		Objections: []WalterObjection{{Code: "polish", Fix: "Tighten one sentence if useful.", ExitCondition: "Meaning remains unchanged."}},
 	}, review); err != nil {
 		t.Fatalf("non-blocking polish should accompany approval: %v", err)
 	}
 	if err := validateWalterReviewBody(WalterReviewBody{
 		Verdict:    WalterRefineAndReturn,
+		Intent:     testIntentBodyForPacket(t, &review, WalterRefineAndReturn).Intent,
 		Objections: []WalterObjection{{Code: "nitpick", Fix: "Change a preferred word.", ExitCondition: "The word changes."}},
 	}, review); err == nil {
 		t.Fatal("cosmetic critique was allowed to block")
 	}
 	if err := validateWalterReviewBody(WalterReviewBody{
 		Verdict:    WalterRefineAndReturn,
+		Intent:     testIntentBodyForPacket(t, &review, WalterRefineAndReturn).Intent,
 		Objections: []WalterObjection{{Code: "missing-evidence", Fix: "Add the evidence supporting the consequential claim.", ExitCondition: "The evidence is linked and supports the claim.", Blocking: true}},
 	}, review); err != nil {
 		t.Fatalf("load-bearing constructive refinement was rejected: %v", err)
 	}
-	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterHold}, review); err == nil {
+	hold := testIntentBodyForPacket(t, &review, WalterHold)
+	if err := validateWalterReviewBody(hold, review); err == nil {
 		t.Fatal("empty exceptional hold was accepted")
 	}
 }

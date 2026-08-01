@@ -46,6 +46,12 @@ func (pilot *Pilot) RecordApprovedWalterReview(store execution.Store, custody re
 	if receipt.Review.AccountConsultationRequired != receipt.Review.PostAccountValidationRequired {
 		return execution.WalterReviewResult{}, errors.New("Walter approval has an invalid Account consultation invariant")
 	}
+	if body.Intent.IntentPacketSHA256 == "" || body.Intent.IntentPacketSHA256 != receipt.Review.IntentPacketSHA256 {
+		return execution.WalterReviewResult{}, errors.New("Walter approval is bound to a different intent packet")
+	}
+	if receipt.Review.VerdictSHA256 == "" || receipt.Review.VerdictSHA256 != digestBody(normalizeWalterReviewBody(body)) {
+		return execution.WalterReviewResult{}, errors.New("Walter approval verdict does not match the authenticated review receipt")
+	}
 	if receipt.Review.AccountConsultationRequired && (receipt.Review.ValidatedPacketID == "" || receipt.Review.ValidatedPacketSHA256 == "") {
 		return execution.WalterReviewResult{}, errors.New("Walter approval is missing Account validation provenance")
 	}

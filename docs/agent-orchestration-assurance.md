@@ -13,7 +13,7 @@ does not promote a product capability from `unavailable`.
 | Delegation state can recover safely | Snapshot restore validates policy, root, child and recovery capability; stale recovery is capability-gated | Durable atomic persistence plus restart/partition conformance | unavailable |
 
 | Packets and completion authority are bounded | Dispatcher and pilot tests verify signed packets, scope inheritance, target-authenticated execution envelopes, nonce replay rejection and finish authority | Adapter delivers only authenticated packets/envelopes without exposing capabilities | unavailable |
-| High-leverage output cannot bypass Walter, while low-leverage work may skip it explicitly | Maestro independently resolves `account_consultation_required` (client/stakeholder strategic lens) and `walter_required` (high leverage). Account-assisted chains prove Account framing → Case → Account validation; direct Case chains prove an execution-only/no-client-lens reason. Required Walter packets are source/digest-bound; only a calm typed `approved` verdict with authenticated installation-scoped custody can satisfy the execution ledger. `refine-and-return`/`hold` never approve, and low-leverage skips carry a Maestro reason/evidence receipt | Native adapter emits the sealed packet, invokes the same Claude/Codex core and observes the typed verdict in the same governed session; qualification must cover custody and stale/replay rejection | unavailable |
+| High-leverage output cannot bypass Walter, while low-leverage work may skip it explicitly | Maestro independently resolves `account_consultation_required` (client/stakeholder strategic lens) and `walter_required` (high leverage). Account-assisted chains prove Account framing → Case → Account validation; direct Case chains prove an execution-only/no-client-lens reason. Required Walter packets are source/digest-bound and carry a versioned Owner Context self projection plus relevant observation references; the typed intent verdict separates literal compliance from an ephemeral purpose hypothesis. Only a calm typed `approved` verdict with authenticated installation-scoped custody can satisfy the execution ledger. `refine-and-return`/`clarify`/`hold` never approve, and low-leverage skips carry a Maestro reason/evidence receipt | Native adapter emits the sealed packet, invokes the same Claude/Codex core and observes the typed verdict in the same governed session; qualification must cover custody, self/prompt/output digest binding, low-confidence clarification and stale/replay rejection | unavailable |
 | Direct skill selection stays with the active owner | Dispatcher tests require a signed active root packet, matching agent capability and no active child | Native agent execution proves the same root/capability binding | unavailable |
 | Claude/Codex semantic parity | Shared controller fixtures execute both event vocabularies and denial cases | Native session conformance from installed Claude and Codex adapters | unavailable |
 
@@ -49,6 +49,11 @@ can be completed after process restart.
 - forged, stale, replayed, cross-item, cross-attempt or unavailable Walter
   custody/receipt;
 - review prose, audience or uncertainty leaked into the durable receipt.
+- self facet bodies, raw prompts, transcripts, client text or generated output
+  leaked into self observations or Walter receipts;
+- isolated inferred hypotheses or a false `ok`/silence endorsement promoted to
+  canonical self, stale snapshot CAS accepted, or Darwin/Walter writing the
+  Owner Context.
 
 ## Explicitly unavailable
 

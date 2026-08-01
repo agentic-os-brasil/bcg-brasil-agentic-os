@@ -34,6 +34,13 @@ user channel. The execution-ledger bridge uses installation-scoped
 stale, replayed or cross-scope custody fails closed. Adapter-command receipts
 remain diagnostic until native evidence exists.
 
+The packet also carries a digest-bound IntentReviewPacket: literal prompt,
+Maestro route, bounded draft, Owner Context snapshot version/digest and
+relevant metadata-only observation references. Walter returns a typed purpose
+hypothesis with evidence and confidence; low confidence at high consequence
+returns `clarify`. Neither adapter may persist a hypothesis or write Owner
+Context; both call the same core.
+
 Maestro resolves two independent decisions: `account_consultation_required`
 for client/stakeholder strategic lens, and `walter_required` for high-leverage
 output. Account-assisted work proves Account framing → Case → Account

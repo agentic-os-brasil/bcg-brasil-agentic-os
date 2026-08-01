@@ -65,6 +65,7 @@ func TestAccountConsultationPathRequiresFramingAndPostValidation(t *testing.T) {
 		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Review the account-validated recommendation.",
 		Audience: "sponsor", Recommendation: "Preserve the client-relevant thesis.",
 		DefinitionOfDone: "The sponsor can decide with the account lens applied.",
+		Intent:           testIntentPacket("sponsor", "Review the account-validated recommendation.", "Preserve the client-relevant thesis."),
 		Chain:            accountAssistedReviewChain(source), TTL: time.Hour,
 	})
 	if err != nil {
@@ -156,14 +157,15 @@ func TestWalterReviewBudgetExhaustionStopsInfiniteRefinement(t *testing.T) {
 	if _, err := pilot.Return(envelope, result); err != nil {
 		t.Fatal(err)
 	}
-	request := WalterReviewRequest{Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test.", Audience: "sponsor", Recommendation: "Use it.", DefinitionOfDone: "Sponsor can decide.", Chain: directCaseReviewChain(source), TTL: time.Hour}
+	request := WalterReviewRequest{Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test.", Audience: "sponsor", Recommendation: "Use it.", DefinitionOfDone: "Sponsor can decide.", Intent: testIntentPacket("sponsor", "Pressure-test.", "Use it."), Chain: directCaseReviewChain(source), TTL: time.Hour}
 	for round := 1; round <= maxWalterReviewRounds; round++ {
 		reviewDispatch, _, err := pilot.RequireWalterReview(source.DelegationID, request)
 		if err != nil {
 			t.Fatalf("round %d opening review: %v", round, err)
 		}
 		walter := newTestExecutor(t, "claude", "walter", "walter-cap", time.Now())
-		body := WalterReviewBody{Verdict: WalterRefineAndReturn, Objections: []WalterObjection{{Code: "fix", Fix: "Apply the correction.", ExitCondition: "The correction is evidenced.", Blocking: true}}}
+		body := testIntentBodyForPacket(t, reviewDispatch.Packet.Review, WalterRefineAndReturn)
+		body.Objections = []WalterObjection{{Code: "fix", Fix: "Apply the correction.", ExitCondition: "The correction is evidenced.", Blocking: true}}
 		reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, body)
 		if err != nil {
 			t.Fatal(err)

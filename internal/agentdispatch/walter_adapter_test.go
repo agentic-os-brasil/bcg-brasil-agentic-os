@@ -24,7 +24,8 @@ func materialWalterDispatch(t *testing.T) (*Pilot, Dispatch) {
 	reviewDispatch, _, err := pilot.RequireWalterReview(source.DelegationID, WalterReviewRequest{
 		Trigger: ReviewConsequentialTradeoff, ReviewObjective: "Check the consequential trade-off.",
 		Audience: "sponsor", Recommendation: "Keep the defensible option.", DefinitionOfDone: "The trade-off is explicit.",
-		Chain: directCaseReviewChain(source), TTL: time.Hour,
+		Intent: testIntentPacket("sponsor", "Check the consequential trade-off.", "Keep the defensible option."),
+		Chain:  directCaseReviewChain(source), TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +35,7 @@ func materialWalterDispatch(t *testing.T) (*Pilot, Dispatch) {
 
 func TestWalterAdapterFailsClosedWhenRuntimeCustodyIsUnavailable(t *testing.T) {
 	pilot, reviewDispatch := materialWalterDispatch(t)
-	receipt, err := HandleWalterReview(pilot, reviewDispatch, WalterReviewBody{Verdict: WalterApproved}, nil)
+	receipt, err := HandleWalterReview(pilot, reviewDispatch, testIntentBodyForPacket(t, reviewDispatch.Packet.Review, WalterApproved), nil)
 	if err == nil || receipt.State != StateUnavailable || receipt.FailureCode != "review_custody_unavailable" {
 		t.Fatalf("unavailable Walter custody = %#v err=%v", receipt, err)
 	}

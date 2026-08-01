@@ -2,7 +2,10 @@
 
 Status: decision accepted; local facet registry, inspection surface,
 cold-start interview contract and policy-enforcing refinement core implemented.
-Assessment extraction and observation/synthesis adapters remain unavailable.
+Walter consumes only a versioned digest projection of these facets. The
+interaction evaluator and metadata-only provisional log are contract-tested,
+but native observation and synthesis adapters remain unavailable; no Walter
+invocation promotes or writes the canonical self.
 
 ## Objective
 
@@ -70,6 +73,16 @@ checks that the facet has not changed since that audit, journals its own event,
 and refuses to erase newer work. The core does not observe work or synthesize a
 proposal itself: lifecycle and model adapters remain separate producers and are
 reported as unavailable.
+
+The public runtime contract keeps Owner Context as the single authority.
+`UserSelfSnapshot` is only a versioned digest projection. Observation records
+contain minimized claim/provenance digests, evidence type, scope, confidence,
+sensitivity and expiry/recheck metadata; they do not contain transcript,
+prompt, client or generated-artifact bodies. Explicit instruction/correction
+may become eligible under the facet policy, while an isolated pattern or
+intent hypothesis remains a proposal. Promotion must compare-and-swap against
+the current canonical snapshot digest and is never authored by Darwin or
+Walter.
 
 ## Runtime behavior
 

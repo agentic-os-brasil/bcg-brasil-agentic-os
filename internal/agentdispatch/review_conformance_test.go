@@ -44,21 +44,23 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 		if verdict != string(expectedVerdicts[index]) {
 			t.Fatalf("fixture verdict order/set drifted: %#v", fixture.Verdicts)
 		}
-		body := WalterReviewBody{Verdict: WalterVerdict(verdict)}
-		if verdict == string(WalterRefineAndReturn) || verdict == string(WalterMissingTheMark) || verdict == string(WalterHold) {
-			body.Objections = []WalterObjection{{Code: "fixture", Fix: "Apply the named correction.", ExitCondition: "The correction is evidenced.", Blocking: true}}
-		}
-		if err := validateWalterReviewBody(body, ReviewPacket{
+		review := ReviewPacket{
 			SourcePacketID:     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			SourcePacketSHA256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 			SourceScopeKind:    "workspace", SourceScopeID: "alpha",
 			Trigger: ReviewMaterialRecommendation, Audience: "sponsor",
 			Recommendation: "Choose the bounded option.", DefinitionOfDone: "The sponsor can decide.",
-		}); err != nil {
+			Intent: testIntentPacket("sponsor", "Review the bounded option.", "Choose the bounded option."),
+		}
+		body := testIntentBodyForPacket(t, &review, WalterVerdict(verdict))
+		if verdict == string(WalterRefineAndReturn) || verdict == string(WalterMissingTheMark) || verdict == string(WalterHold) {
+			body.Objections = []WalterObjection{{Code: "fixture", Fix: "Apply the named correction.", ExitCondition: "The correction is evidenced.", Blocking: true}}
+		}
+		if err := validateWalterReviewBody(body, review); err != nil {
 			t.Fatalf("fixture verdict %q is not executable: %v", verdict, err)
 		}
 	}
-	expectedReceiptFields := []string{"trigger", "state", "source_packet_id", "source_packet_sha256", "chain_mode", "chain_sha256", "account_consultation_required", "post_account_validation_required", "walter_required", "validated_packet_id", "validated_packet_sha256", "direct_case_reason_code", "objection_count"}
+	expectedReceiptFields := []string{"trigger", "state", "source_packet_id", "source_packet_sha256", "chain_mode", "chain_sha256", "account_consultation_required", "post_account_validation_required", "walter_required", "validated_packet_id", "validated_packet_sha256", "direct_case_reason_code", "objection_count", "intent_packet_sha256", "self_snapshot_version", "self_snapshot_sha256", "prompt_sha256", "output_sha256"}
 	if len(fixture.ReceiptFields) != len(expectedReceiptFields) {
 		t.Fatalf("fixture receipt projection drifted: %#v", fixture.ReceiptFields)
 	}

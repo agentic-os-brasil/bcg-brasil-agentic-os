@@ -25,6 +25,11 @@
     "validated_packet_id",
     "validated_packet_sha256",
     "direct_case_reason_code",
-    "objection_count"
+    "objection_count",
+    "intent_packet_sha256",
+    "self_snapshot_version",
+    "self_snapshot_sha256",
+    "prompt_sha256",
+    "output_sha256"
   ]
 }

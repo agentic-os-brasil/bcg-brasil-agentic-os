@@ -452,6 +452,7 @@ func (pilot *Pilot) RequireWalterReview(sourceDelegationID string, request Walte
 		ExecutionWorkspaceID: strings.TrimSpace(request.ExecutionWorkspaceID),
 		ExecutionItemID:      strings.TrimSpace(request.ExecutionItemID),
 		Posture:              WalterReviewPosture,
+		Intent:               request.Intent,
 		Chain:                request.Chain,
 	}
 	if err := validateReviewPacket(&review, "", request.ReviewObjective); err != nil {
@@ -783,6 +784,7 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 	receipt := pilot.complete(verified, envelope, "", StateCompleted, state)
 	if receipt.Review != nil {
 		receipt.Review.ObjectionCount = len(normalized.Objections)
+		receipt.Review.VerdictSHA256 = digestBody(normalized)
 	}
 	updated := pilot.records[receipt.DelegationID]
 	updated.receipt = receipt
@@ -793,6 +795,7 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 				continue
 			}
 			producer.receipt.Review = reviewSummary(verified.packet.Review, state)
+			producer.receipt.Review.VerdictSHA256 = digestBody(normalized)
 			if normalized.Verdict == WalterApproved {
 				producer.receipt.State = StateCompleted
 				producer.receipt.CompletedAt = pilot.now().UTC()

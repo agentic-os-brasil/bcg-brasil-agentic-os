@@ -105,6 +105,7 @@ type ReviewPacket struct {
 	ExecutionWorkspaceID string              `json:"execution_workspace_id,omitempty"`
 	ExecutionItemID      string              `json:"execution_item_id,omitempty"`
 	Posture              string              `json:"posture"`
+	Intent               IntentReviewPacket  `json:"intent_review_packet"`
 	Chain                ReviewChain         `json:"review_chain"`
 }
 
@@ -122,6 +123,7 @@ type WalterReviewRequest struct {
 	Uncertainties        []string
 	ExecutionWorkspaceID string
 	ExecutionItemID      string
+	Intent               IntentReviewPacket
 	Chain                ReviewChain
 	TTL                  time.Duration
 }
@@ -211,6 +213,7 @@ type WalterReviewBody struct {
 	Objections   []WalterObjection `json:"objections,omitempty"`
 	EvidenceRefs []string          `json:"evidence_refs,omitempty"`
 	Uncertainty  string            `json:"uncertainty,omitempty"`
+	Intent       IntentReviewBody  `json:"intent_review"`
 }
 
 type ReviewSummary struct {
@@ -232,6 +235,12 @@ type ReviewSummary struct {
 	ExecutionWorkspaceID          string              `json:"execution_workspace_id,omitempty"`
 	ExecutionItemID               string              `json:"execution_item_id,omitempty"`
 	ObjectionCount                int                 `json:"objection_count,omitempty"`
+	IntentPacketSHA256            string              `json:"intent_packet_sha256"`
+	SelfSnapshotVersion           int                 `json:"self_snapshot_version"`
+	SelfSnapshotSHA256            string              `json:"self_snapshot_sha256"`
+	PromptSHA256                  string              `json:"prompt_sha256"`
+	OutputSHA256                  string              `json:"output_sha256"`
+	VerdictSHA256                 string              `json:"verdict_sha256,omitempty"`
 }
 
 // WalterSkipDecision is the Maestro-owned, auditable low-materiality gate.
@@ -281,6 +290,12 @@ func validateReviewPacket(review *ReviewPacket, packetID, objective string) erro
 	if len(review.ArtifactRefs)+len(review.EvidenceRefs) > maxPointers || len(review.Uncertainties) > maxConstraints {
 		return errors.New("Walter review packet exceeds its bounded item budget")
 	}
+	if err := ValidateIntentReviewPacket(review.Intent); err != nil {
+		return err
+	}
+	if review.Intent.Audience != review.Audience {
+		return errors.New("Walter intent packet audience does not match review packet")
+	}
 	seen := make(map[string]bool, len(review.ArtifactRefs)+len(review.EvidenceRefs))
 	for _, ref := range append(append([]string(nil), review.ArtifactRefs...), review.EvidenceRefs...) {
 		normalized, valid := agentorchestration.NormalizeResource(ref)
@@ -315,6 +330,12 @@ func validateReviewRequest(request WalterReviewRequest) error {
 	}
 	if validateReviewChain(request.Chain) != nil {
 		return errors.New("Walter review request has an invalid Account/Case provenance chain")
+	}
+	if err := ValidateIntentReviewPacket(request.Intent); err != nil {
+		return err
+	}
+	if strings.TrimSpace(request.Audience) != request.Intent.Audience {
+		return errors.New("Walter request intent audience does not match review audience")
 	}
 	if request.ExecutionWorkspaceID != "" && !agentcatalog.ValidAgentID(request.ExecutionWorkspaceID) {
 		return errors.New("Walter review request execution workspace is invalid")
@@ -476,6 +497,9 @@ func validateWalterReviewBody(body WalterReviewBody, review ReviewPacket) error 
 	if body.Verdict != WalterApproved && body.Verdict != WalterRefineAndReturn && body.Verdict != WalterMissingTheMark && body.Verdict != WalterHold {
 		return errors.New("Walter review verdict is invalid")
 	}
+	if err := ValidateIntentReviewBody(body.Intent, review.Intent); err != nil {
+		return err
+	}
 	if len(body.Objections) > maxWalterObjections ||
 		((body.Verdict == WalterRefineAndReturn || body.Verdict == WalterMissingTheMark || body.Verdict == WalterHold) && len(body.Objections) == 0) {
 		return errors.New("Walter review objection count does not match the verdict")
@@ -502,6 +526,11 @@ func validateWalterReviewBody(body WalterReviewBody, review ReviewPacket) error 
 			return errors.New("Walter review evidence is outside the source scope")
 		}
 	}
+	for _, ref := range body.Intent.EvidenceRefs {
+		if !reviewResourceWithinSource(ref, review.SourceScopeKind, review.SourceScopeID) {
+			return errors.New("Walter intent evidence is outside the source scope")
+		}
+	}
 	if len([]byte(strings.TrimSpace(body.Uncertainty))) > maxConstraintBytes {
 		return errors.New("Walter review uncertainty is oversized")
 	}
@@ -512,6 +541,8 @@ func normalizeWalterReviewBody(body WalterReviewBody) WalterReviewBody {
 	body.Uncertainty = strings.TrimSpace(body.Uncertainty)
 	body.EvidenceRefs = append([]string(nil), body.EvidenceRefs...)
 	sort.Strings(body.EvidenceRefs)
+	body.Intent.EvidenceRefs = append([]string(nil), body.Intent.EvidenceRefs...)
+	sort.Strings(body.Intent.EvidenceRefs)
 	return body
 }
 
@@ -523,6 +554,9 @@ func cloneReviewPacket(review *ReviewPacket) *ReviewPacket {
 	copy.ArtifactRefs = append([]string(nil), review.ArtifactRefs...)
 	copy.EvidenceRefs = append([]string(nil), review.EvidenceRefs...)
 	copy.Uncertainties = append([]string(nil), review.Uncertainties...)
+	copy.Intent.RelevantContextRefs = append([]string(nil), review.Intent.RelevantContextRefs...)
+	copy.Intent.RecentObservations = append([]SelfObservationRef(nil), review.Intent.RecentObservations...)
+	copy.Intent.UserSelfSnapshot.FacetDigests = cloneStringMap(review.Intent.UserSelfSnapshot.FacetDigests)
 	copy.Chain.Steps = append([]ReviewChainStep(nil), review.Chain.Steps...)
 	copy.Chain.AccountConsultationEvidenceRefs = append([]string(nil), review.Chain.AccountConsultationEvidenceRefs...)
 	if review.Chain.DirectCaseException != nil {
@@ -531,6 +565,17 @@ func cloneReviewPacket(review *ReviewPacket) *ReviewPacket {
 		copy.Chain.DirectCaseException = &exception
 	}
 	return &copy
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	if source == nil {
+		return nil
+	}
+	copy := make(map[string]string, len(source))
+	for key, value := range source {
+		copy[key] = value
+	}
+	return copy
 }
 
 func cloneWalterSkipDecision(skip *WalterSkipDecision) *WalterSkipDecision {
@@ -556,6 +601,11 @@ func reviewSummary(review *ReviewPacket, state ReviewState) *ReviewSummary {
 		WalterRequired:                true,
 		AccountConsultationReasonCode: review.Chain.AccountConsultationReasonCode,
 		ExecutionWorkspaceID:          review.ExecutionWorkspaceID, ExecutionItemID: review.ExecutionItemID,
+		IntentPacketSHA256:  IntentPacketDigest(review.Intent),
+		SelfSnapshotVersion: review.Intent.UserSelfSnapshot.Version,
+		SelfSnapshotSHA256:  review.Intent.UserSelfSnapshot.Digest,
+		PromptSHA256:        review.Intent.LiteralPromptSHA256,
+		OutputSHA256:        review.Intent.DraftOutputSHA256,
 	}
 	if review.Chain.DirectCaseException != nil {
 		summary.DirectCaseReasonCode = review.Chain.DirectCaseException.ReasonCode
@@ -619,6 +669,10 @@ func validateReviewChainForReceipt(summary ReviewSummary) error {
 	}
 	if !validSHA256(summary.ChainSHA256) || !validPacketID(summary.SourcePacketID) || !validSHA256(summary.SourcePacketSHA256) {
 		return fmt.Errorf("Walter receipt is missing provenance digests")
+	}
+	if summary.SelfSnapshotVersion < 1 || !validSHA256(summary.IntentPacketSHA256) || !validSHA256(summary.SelfSnapshotSHA256) ||
+		!validSHA256(summary.PromptSHA256) || !validSHA256(summary.OutputSHA256) {
+		return fmt.Errorf("Walter receipt is missing intent/self digest binding")
 	}
 	if summary.ChainMode == ReviewChainAccountCaseAccount &&
 		(!validPacketID(summary.ValidatedPacketID) || !validSHA256(summary.ValidatedPacketSHA256) || !validAccountConsultationReason(summary.AccountConsultationReasonCode)) {
