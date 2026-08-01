@@ -36,8 +36,8 @@ func TestMaintenanceConformanceFixtureCoversCatalogAndKeepsAdaptersUnqualified(t
 			t.Fatalf("%s adapter must remain unavailable", platform)
 		}
 	}
-	if fixture.Adapters["macos"].State != "template_only" || fixture.Adapters["windows"].State != "template_only" {
-		t.Fatal("native scheduler adapters must remain template_only")
+	if fixture.Adapters["macos"].State != "adapter_installed" || fixture.Adapters["windows"].State != "unavailable" {
+		t.Fatal("native scheduler adapter states are not evidence-based")
 	}
 	if len(fixture.Jobs) != len(catalog.Jobs) {
 		t.Fatalf("fixture jobs = %d, catalog jobs = %d", len(fixture.Jobs), len(catalog.Jobs))
@@ -110,7 +110,7 @@ func TestDarwinCadenceFixtureKeepsHooksNonBlockingAndPromotionUnavailable(t *tes
 		t.Fatalf("worker cadence contract = %#v", fixture)
 	}
 	for _, state := range fixture.Native {
-		if state != "unavailable" && state != "template_only" {
+		if state != "unavailable" && state != "template_only" && state != "adapter_installed_native_qualification_pending" && state != "unavailable_native_qualification_pending" {
 			t.Fatalf("native state was promoted: %#v", fixture.Native)
 		}
 	}

@@ -1,0 +1,270 @@
+// Package macosadapter owns the filesystem-only LaunchAgent contract. It does
+// not call launchctl; native qualification is a separate attended probe.
+package macosadapter
+
+import (
+	"bytes"
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+var labelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]{0,127}$`)
+var ErrOptInRequired = errors.New("LaunchAgent installation requires explicit Canary opt-in")
+
+type Spec struct {
+	Label           string
+	Program         string
+	Arguments       []string
+	StartInterval   int
+	RunAtLoad       bool
+	Disabled        bool
+	StandardOutPath string
+	StandardErrPath string
+}
+
+type Status struct {
+	State    string `json:"state"`
+	Path     string `json:"path"`
+	Label    string `json:"label"`
+	Disabled bool   `json:"disabled"`
+}
+
+func UserLaunchAgentsPath(home string) (string, error) {
+	if strings.TrimSpace(home) == "" || !filepath.IsAbs(home) {
+		return "", errors.New("absolute user home is required")
+	}
+	return filepath.Join(filepath.Clean(home), "Library", "LaunchAgents"), nil
+}
+
+func Render(spec Spec) ([]byte, error) {
+	if err := validateSpec(spec); err != nil {
+		return nil, err
+	}
+	var body bytes.Buffer
+	body.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict>\n")
+	writeString(&body, "Label", spec.Label)
+	writeBool(&body, "Disabled", spec.Disabled)
+	body.WriteString("<key>ProgramArguments</key><array>\n")
+	writeStringValue(&body, spec.Program)
+	for _, argument := range spec.Arguments {
+		writeStringValue(&body, argument)
+	}
+	body.WriteString("</array>\n")
+	writeBool(&body, "RunAtLoad", spec.RunAtLoad)
+	body.WriteString("<key>StartInterval</key><integer>" + strconv.Itoa(spec.StartInterval) + "</integer>\n")
+	if spec.StandardOutPath != "" {
+		writeString(&body, "StandardOutPath", spec.StandardOutPath)
+	}
+	if spec.StandardErrPath != "" {
+		writeString(&body, "StandardErrorPath", spec.StandardErrPath)
+	}
+	body.WriteString("</dict></plist>\n")
+	if err := Parse(body.Bytes()); err != nil {
+		return nil, err
+	}
+	return body.Bytes(), nil
+}
+
+func Parse(body []byte) error {
+	decoder := xml.NewDecoder(bytes.NewReader(body))
+	keys := map[string]bool{}
+	root := false
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("invalid LaunchAgent plist: %w", err)
+		}
+		switch value := token.(type) {
+		case xml.StartElement:
+			if value.Name.Local == "plist" {
+				root = true
+			}
+			if value.Name.Local == "key" {
+				var key string
+				if err := decoder.DecodeElement(&key, &value); err != nil {
+					return err
+				}
+				keys[key] = true
+			}
+		}
+	}
+	if !root || !keys["Label"] || !keys["ProgramArguments"] || !keys["StartInterval"] {
+		return errors.New("LaunchAgent plist is missing required keys")
+	}
+	return nil
+}
+
+func validateSpec(spec Spec) error {
+	if !labelPattern.MatchString(spec.Label) || !filepath.IsAbs(spec.Program) || strings.Contains(spec.Program, "\x00") || spec.StartInterval <= 0 || spec.StartInterval > 86400 {
+		return errors.New("invalid LaunchAgent identity or interval")
+	}
+	values := append(append([]string{spec.Program}, spec.Arguments...), spec.StandardOutPath, spec.StandardErrPath)
+	for _, value := range values {
+		if strings.Contains(value, "\x00") || strings.Contains(value, "{{") || strings.Contains(value, "}}") {
+			return errors.New("LaunchAgent values must be concrete and interpolation-free")
+		}
+	}
+	for _, value := range []string{spec.StandardOutPath, spec.StandardErrPath} {
+		if value != "" && !filepath.IsAbs(value) {
+			return errors.New("LaunchAgent diagnostics paths must be absolute")
+		}
+	}
+	return nil
+}
+
+func writeString(buffer *bytes.Buffer, key, value string) {
+	buffer.WriteString("<key>" + key + "</key>")
+	writeStringValue(buffer, value)
+}
+func writeStringValue(buffer *bytes.Buffer, value string) {
+	buffer.WriteString("<string>")
+	_ = xml.EscapeText(buffer, []byte(value))
+	buffer.WriteString("</string>\n")
+}
+func writeBool(buffer *bytes.Buffer, key string, value bool) {
+	state := "false"
+	if value {
+		state = "true"
+	}
+	buffer.WriteString("<key>" + key + "</key><" + state + "/>\n")
+}
+
+func Install(home string, spec Spec, optIn bool) (Status, error) {
+	if !optIn {
+		return Status{}, ErrOptInRequired
+	}
+	directory, err := UserLaunchAgentsPath(home)
+	if err != nil {
+		return Status{}, err
+	}
+	body, err := Render(spec)
+	if err != nil {
+		return Status{}, err
+	}
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return Status{}, err
+	}
+	for _, path := range []string{home, filepath.Dir(directory), directory} {
+		info, statErr := os.Lstat(path)
+		if statErr != nil {
+			return Status{}, statErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return Status{}, errors.New("LaunchAgent path contains a symlink or non-directory")
+		}
+	}
+	path := filepath.Join(directory, spec.Label+".plist")
+	temporary, err := os.CreateTemp(directory, "."+spec.Label+".plist.tmp-")
+	if err != nil {
+		return Status{}, err
+	}
+	temporaryName := temporary.Name()
+	defer os.Remove(temporaryName)
+	if err := temporary.Chmod(0o600); err == nil {
+		_, err = temporary.Write(body)
+	}
+	if err == nil {
+		err = temporary.Sync()
+	}
+	if closeErr := temporary.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return Status{}, err
+	}
+	if err := os.Rename(temporaryName, path); err != nil {
+		return Status{}, err
+	}
+	return Status{State: "adapter_installed_native_qualification_pending", Path: path, Label: spec.Label, Disabled: spec.Disabled}, nil
+}
+
+func ReadStatus(home, label string) (Status, error) {
+	directory, err := UserLaunchAgentsPath(home)
+	if err != nil {
+		return Status{}, err
+	}
+	if !labelPattern.MatchString(label) {
+		return Status{}, errors.New("invalid LaunchAgent label")
+	}
+	path := filepath.Join(directory, label+".plist")
+	body, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return Status{State: "not_installed", Path: path, Label: label}, nil
+	}
+	if err != nil {
+		return Status{}, err
+	}
+	if err := Parse(body); err != nil {
+		return Status{}, err
+	}
+	return Status{State: "adapter_installed_native_qualification_pending", Path: path, Label: label, Disabled: bytes.Contains(body, []byte("<key>Disabled</key><true/>"))}, nil
+}
+
+func Pause(home, label string) (Status, error)  { return setDisabled(home, label, true) }
+func Resume(home, label string) (Status, error) { return setDisabled(home, label, false) }
+
+func Uninstall(home, label string) error {
+	status, err := ReadStatus(home, label)
+	if err != nil {
+		return err
+	}
+	if status.State == "not_installed" {
+		return nil
+	}
+	return os.Remove(status.Path)
+}
+
+func setDisabled(home, label string, disabled bool) (Status, error) {
+	directory, err := UserLaunchAgentsPath(home)
+	if err != nil {
+		return Status{}, err
+	}
+	path := filepath.Join(directory, label+".plist")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return Status{}, err
+	}
+	if err := Parse(body); err != nil {
+		return Status{}, err
+	}
+	old, next := []byte("<key>Disabled</key><true/>"), []byte("<key>Disabled</key><false/>")
+	if !disabled {
+		body = bytes.Replace(body, old, next, 1)
+	} else if bytes.Contains(body, next) {
+		body = bytes.Replace(body, next, old, 1)
+	} else {
+		return Status{}, errors.New("LaunchAgent plist has no Disabled key")
+	}
+	temporary, err := os.CreateTemp(directory, "."+label+".pause.tmp-")
+	if err != nil {
+		return Status{}, err
+	}
+	temporaryName := temporary.Name()
+	defer os.Remove(temporaryName)
+	if err := temporary.Chmod(0o600); err == nil {
+		_, err = temporary.Write(body)
+	}
+	if err == nil {
+		err = temporary.Sync()
+	}
+	if closeErr := temporary.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return Status{}, err
+	}
+	if err := os.Rename(temporaryName, path); err != nil {
+		return Status{}, err
+	}
+	return ReadStatus(home, label)
+}

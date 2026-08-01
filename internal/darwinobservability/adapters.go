@@ -63,7 +63,7 @@ func FromSchedulerReceipt(receipt scheduler.Receipt, localWindowID, scopeSHA256 
 	}
 	jobKind := JobKind(receipt.JobID)
 	switch receipt.JobID {
-	case "darwin-housekeeping":
+	case "darwin-housekeeping-daily", "darwin-deep-weekly":
 		jobKind = JobDarwinHousekeeping
 	case "federation-weekly":
 		jobKind = JobFederationWeekly

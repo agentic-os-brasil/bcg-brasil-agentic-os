@@ -51,7 +51,9 @@ The first job vocabulary is:
 - `wiki-reconcile`: reconciliation of source watermarks, outbox receipts and atlas manifests.
 - `sharepoint-work-sync`: refresh of the explicitly enrolled organizational
   work-retrieval catalog through the approved Claude SharePoint adapter.
-- `darwin-housekeeping`: policy-gated event/daily/weekly/presence health work;
+- `darwin-housekeeping-daily`: policy-gated daily/presence health work;
+- `darwin-deep-weekly`: policy-gated weekly health/evolution review;
+- `walter-self-review-weekly`: weekly runtime-neutral Walter proposal seam;
 - `darwin-structural-evolution-proposal`: monthly, proposal-only review of
   operational structure; it never applies code, policy or release changes.
 

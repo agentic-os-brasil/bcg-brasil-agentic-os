@@ -13,7 +13,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
-const HousekeepingJobID = "darwin-housekeeping"
+const HousekeepingJobID = "darwin-housekeeping-daily"
 
 // HealthPacketBuilder is the only runtime-specific input seam. Claude and
 // Codex build the same closed packet; neither runtime gets a second Darwin

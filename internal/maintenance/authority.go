@@ -23,11 +23,12 @@ type OccurrenceAuthorization struct {
 // grant. Its fields are private so a worker cannot substitute a permissive
 // callback for unavailable/default-disabled/attended policy.
 type ExecutionAuthority struct {
-	catalog     Catalog
-	occurrences map[string]OccurrenceAuthorization
-	activated   map[string]bool
-	attended    bool
-	ready       bool
+	catalog        Catalog
+	occurrences    map[string]OccurrenceAuthorization
+	activated      map[string]bool
+	localQualified map[string]string
+	attended       bool
+	ready          bool
 }
 
 func NewExecutionAuthority(catalog Catalog, occurrences []OccurrenceAuthorization, activatedJobs []string, attended bool) (ExecutionAuthority, error) {
@@ -46,19 +47,59 @@ func NewExecutionAuthority(catalog Catalog, occurrences []OccurrenceAuthorizatio
 		authority.activated[jobID] = true
 	}
 	for _, occurrence := range occurrences {
-		if !commandIDPattern.MatchString(occurrence.WorkspaceID) || !commandIDPattern.MatchString(occurrence.JobID) || !validTrigger(occurrence.Trigger) || occurrence.ScheduledFor.IsZero() {
-			return ExecutionAuthority{}, errors.New("maintenance occurrence authorization is invalid")
+		if err := authority.addOccurrence(occurrence); err != nil {
+			return ExecutionAuthority{}, err
 		}
-		if (occurrence.Trigger == TriggerEvent || occurrence.Trigger == TriggerContinuous) != commandIDPattern.MatchString(occurrence.EventID) {
-			return ExecutionAuthority{}, errors.New("maintenance event occurrence authorization is invalid")
-		}
-		key := authorityOccurrenceKey(occurrence.WorkspaceID, occurrence.JobID, occurrence.Trigger, occurrence.EventID, occurrence.ScheduledFor)
-		if _, duplicate := authority.occurrences[key]; duplicate {
-			return ExecutionAuthority{}, errors.New("duplicate maintenance occurrence authorization")
-		}
-		authority.occurrences[key] = occurrence
 	}
 	return authority, nil
+}
+
+// NewLocalExecutionAuthority grants a narrowly scoped, explicit Canary
+// qualification without changing the shipped catalog state. The digest is
+// evidence for this local enrollment only; it never promotes a catalog job.
+func NewLocalExecutionAuthority(catalog Catalog, occurrences []OccurrenceAuthorization, localQualification map[string]string, activatedJobs []string, attended bool) (ExecutionAuthority, error) {
+	if err := catalog.Validate(); err != nil {
+		return ExecutionAuthority{}, err
+	}
+	authority := ExecutionAuthority{catalog: catalog, occurrences: make(map[string]OccurrenceAuthorization, len(occurrences)), activated: make(map[string]bool, len(activatedJobs)), localQualified: make(map[string]string, len(localQualification)), attended: attended, ready: true}
+	for jobID, digest := range localQualification {
+		job, found := findCatalogJob(catalog, jobID)
+		if !found || !digestPattern.MatchString(digest) || (job.Availability != Unavailable && job.Availability != Available) {
+			return ExecutionAuthority{}, fmt.Errorf("local qualification references an invalid job %q", jobID)
+		}
+		if job.Availability == Available && digest != job.QualificationDigest {
+			return ExecutionAuthority{}, fmt.Errorf("local qualification does not bind the catalog evidence for %q", jobID)
+		}
+		authority.localQualified[jobID] = digest
+	}
+	for _, jobID := range activatedJobs {
+		job, found := findCatalogJob(catalog, jobID)
+		if !found || (job.Availability != Available && authority.localQualified[jobID] == "") {
+			return ExecutionAuthority{}, fmt.Errorf("maintenance activation references an unqualified job %q", jobID)
+		}
+		authority.activated[jobID] = true
+	}
+	for _, occurrence := range occurrences {
+		if err := authority.addOccurrence(occurrence); err != nil {
+			return ExecutionAuthority{}, err
+		}
+	}
+	return authority, nil
+}
+
+func (authority *ExecutionAuthority) addOccurrence(occurrence OccurrenceAuthorization) error {
+	if !commandIDPattern.MatchString(occurrence.WorkspaceID) || !commandIDPattern.MatchString(occurrence.JobID) || !validTrigger(occurrence.Trigger) || occurrence.ScheduledFor.IsZero() {
+		return errors.New("maintenance occurrence authorization is invalid")
+	}
+	if (occurrence.Trigger == TriggerEvent || occurrence.Trigger == TriggerContinuous) != commandIDPattern.MatchString(occurrence.EventID) {
+		return errors.New("maintenance event occurrence authorization is invalid")
+	}
+	key := authorityOccurrenceKey(occurrence.WorkspaceID, occurrence.JobID, occurrence.Trigger, occurrence.EventID, occurrence.ScheduledFor)
+	if _, duplicate := authority.occurrences[key]; duplicate {
+		return errors.New("duplicate maintenance occurrence authorization")
+	}
+	authority.occurrences[key] = occurrence
+	return nil
 }
 
 func (authority ExecutionAuthority) Ready() bool {
@@ -76,7 +117,8 @@ func (authority ExecutionAuthority) Authorize(command Command, now time.Time) (s
 	if !found || !triggerMatches(job.Trigger, string(command.Trigger)) {
 		return scheduler.Occurrence{}, errors.New("maintenance command is outside the qualified catalog trigger")
 	}
-	if job.Availability != Available || (!job.DefaultEnabled && !authority.activated[job.ID]) {
+	locallyQualified := authority.localQualified[job.ID] != ""
+	if (job.Availability != Available && !locallyQualified) || (!job.DefaultEnabled && !authority.activated[job.ID]) {
 		return scheduler.Occurrence{}, errors.New("maintenance command job is unavailable or disabled")
 	}
 	if (job.Unattended == "policy_gated" || job.Unattended == "never") && !authority.attended {
