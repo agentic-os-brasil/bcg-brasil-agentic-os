@@ -47,30 +47,30 @@ type HousekeepingExecutor struct {
 func (executor HousekeepingExecutor) ExecuteCommand(ctx context.Context, command maintenance.Command) (maintenance.Receipt, error) {
 	now := executor.currentTime()
 	attemptID, attemptErr := newAttemptID()
-	base := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: maintenance.ReceiptAccepted, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly}
+	base := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: maintenance.ReceiptAccepted, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, ReasonCode: maintenance.ReasonHandlerFailure}
 	if attemptErr != nil {
 		base.State = maintenance.ReceiptUnavailable
-		base.Diagnostic = "secure attempt identity is unavailable"
+		base.ReasonCode = maintenance.ReasonHandlerUnavailable
 		return base, attemptErr
 	}
 	if err := command.Validate(now); err != nil {
 		base.State = maintenance.ReceiptUnavailable
-		base.Diagnostic = "command rejected by bounded validation"
+		base.ReasonCode = maintenance.ReasonOccurrenceRejected
 		return base, err
 	}
 	if executor.Build == nil || executor.Store.Root == "" || executor.Scheduler.Root == "" || executor.CommandStore.Root == "" || !executor.Authority.Ready() {
 		base.State = maintenance.ReceiptUnavailable
-		base.Diagnostic = "Darwin worker dependencies are unavailable"
+		base.ReasonCode = maintenance.ReasonHandlerUnavailable
 		return base, errors.New("Darwin command executor is not fully configured")
 	}
 	if err := validateDarwinCommand(command); err != nil {
 		base.State = maintenance.ReceiptUnavailable
-		base.Diagnostic = "command is outside Darwin worker authority"
+		base.ReasonCode = maintenance.ReasonAuthorityRejected
 		return base, err
 	}
 	if !command.ProposalOnly && (executor.Guard == nil || executor.Invoker == nil) {
 		base.State = maintenance.ReceiptUnavailable
-		base.Diagnostic = "Darwin repair authority is unavailable"
+		base.ReasonCode = maintenance.ReasonAuthorityRejected
 		return base, errors.New("Darwin housekeeping guard and invoker are required")
 	}
 	if existing, readErr := executor.CommandStore.Receipts(command.WorkspaceID, command.JobID); readErr == nil && len(existing) > 0 {
@@ -85,19 +85,19 @@ func (executor HousekeepingExecutor) ExecuteCommand(ctx context.Context, command
 	occurrence, err := executor.Authority.Authorize(command, now)
 	if err != nil {
 		base.State = maintenance.ReceiptUnavailable
-		base.Diagnostic = "command was not emitted by the authoritative scheduler"
+		base.ReasonCode = maintenance.ReasonAuthorityRejected
 		return base, err
 	}
 	if occurrence.JobID != command.JobID || !occurrence.ScheduledFor.Equal(command.ScheduledFor) {
 		base.State = maintenance.ReceiptUnavailable
-		base.Diagnostic = "authorized occurrence does not match the command"
+		base.ReasonCode = maintenance.ReasonOccurrenceRejected
 		return base, errors.New("Darwin command occurrence authority mismatch")
 	}
 	lease, err := executor.Scheduler.TryAcquireLease(command.WorkspaceID, command.JobID, command.OccurrenceKey(), attemptID, now, command.Deadline.Sub(now))
 	if err != nil {
 		if errors.Is(err, scheduler.ErrLeaseBusy) {
 			base.State = maintenance.ReceiptBusy
-			base.Diagnostic = "another bounded worker already owns this command"
+			base.ReasonCode = maintenance.ReasonLeaseBusy
 		}
 		return base, err
 	}
@@ -128,7 +128,7 @@ func (executor HousekeepingExecutor) executeLeasedCommand(ctx context.Context, c
 		packet, buildErr := executor.Build.Build(workerCtx, occurrence)
 		if buildErr != nil {
 			base.State = maintenance.ReceiptFailed
-			base.Diagnostic = "Darwin proposal packet was not built"
+			base.ReasonCode = maintenance.ReasonHandlerFailure
 			base.RecordedAt = executor.currentTime()
 			if persistErr := executor.CommandStore.AppendReceipt(base); persistErr != nil {
 				return base, persistErr
@@ -139,7 +139,7 @@ func (executor HousekeepingExecutor) executeLeasedCommand(ctx context.Context, c
 		assessment, planErr := Plan(packet)
 		if planErr != nil {
 			base.State = maintenance.ReceiptFailed
-			base.Diagnostic = "Darwin proposal plan was rejected"
+			base.ReasonCode = maintenance.ReasonHandlerFailure
 			base.RecordedAt = executor.currentTime()
 			if persistErr := executor.CommandStore.AppendReceipt(base); persistErr != nil {
 				return base, persistErr
@@ -149,7 +149,7 @@ func (executor HousekeepingExecutor) executeLeasedCommand(ctx context.Context, c
 		base.State = maintenance.ReceiptProposalEmitted
 		base.ProposalCount = len(assessment.Proposals)
 		base.ProposalDigest = proposalDigest(command.CommandID, assessment)
-		base.Diagnostic = "proposal emitted; approval and application remain separate"
+		base.ReasonCode = maintenance.ReasonProposalEmitted
 		base.RecordedAt = executor.currentTime()
 		if err := executor.CommandStore.AppendReceipt(base); err != nil {
 			return base, err
@@ -160,7 +160,7 @@ func (executor HousekeepingExecutor) executeLeasedCommand(ctx context.Context, c
 	packet, buildErr := executor.Build.Build(workerCtx, occurrence)
 	if buildErr != nil {
 		base.State = maintenance.ReceiptFailed
-		base.Diagnostic = "Darwin housekeeping packet was not built"
+		base.ReasonCode = maintenance.ReasonHandlerFailure
 		base.RecordedAt = executor.currentTime()
 		if persistErr := executor.CommandStore.AppendReceipt(base); persistErr != nil {
 			return base, persistErr
@@ -171,7 +171,7 @@ func (executor HousekeepingExecutor) executeLeasedCommand(ctx context.Context, c
 	assessment, planErr := Plan(packet)
 	if planErr != nil {
 		base.State = maintenance.ReceiptFailed
-		base.Diagnostic = "Darwin housekeeping plan was rejected"
+		base.ReasonCode = maintenance.ReasonHandlerFailure
 		base.RecordedAt = executor.currentTime()
 		if persistErr := executor.CommandStore.AppendReceipt(base); persistErr != nil {
 			return base, persistErr
@@ -179,27 +179,27 @@ func (executor HousekeepingExecutor) executeLeasedCommand(ctx context.Context, c
 		return base, planErr
 	}
 	receipt, executeErr := Execute(workerCtx, packet, assessment, executor.Guard, executor.Invoker, func() time.Time { return startedAt })
-	if storeErr := executor.Store.Append(receipt); storeErr != nil {
-		base.State = maintenance.ReceiptFailed
-		base.Diagnostic = "Darwin health receipt was not durably recorded"
-		base.RecordedAt = executor.currentTime()
-		if persistErr := executor.CommandStore.AppendReceipt(base); persistErr != nil {
-			return base, persistErr
-		}
-		return base, storeErr
-	}
 	if errors.Is(workerCtx.Err(), context.DeadlineExceeded) {
 		base.State = maintenance.ReceiptTimedOut
-		base.Diagnostic = "Darwin housekeeping exceeded its explicit deadline"
+		base.ReasonCode = maintenance.ReasonDeadlineExceeded
 		base.RecordedAt = executor.currentTime()
 		if persistErr := executor.CommandStore.AppendReceipt(base); persistErr != nil {
 			return base, persistErr
 		}
 		return base, context.DeadlineExceeded
 	}
+	if storeErr := executor.Store.Append(receipt); storeErr != nil {
+		base.State = maintenance.ReceiptFailed
+		base.ReasonCode = maintenance.ReasonHandlerFailure
+		base.RecordedAt = executor.currentTime()
+		if persistErr := executor.CommandStore.AppendReceipt(base); persistErr != nil {
+			return base, persistErr
+		}
+		return base, storeErr
+	}
 	if executeErr != nil || receipt.Outcome == OutcomeBlocked || receipt.Outcome == OutcomeFailed {
 		base.State = maintenance.ReceiptFailed
-		base.Diagnostic = "Darwin housekeeping completed without a successful repair boundary"
+		base.ReasonCode = maintenance.ReasonHandlerFailure
 		base.RecordedAt = executor.currentTime()
 		if persistErr := executor.CommandStore.AppendReceipt(base); persistErr != nil {
 			return base, persistErr
@@ -210,7 +210,7 @@ func (executor HousekeepingExecutor) executeLeasedCommand(ctx context.Context, c
 		return base, fmt.Errorf("Darwin housekeeping %s", receipt.Outcome)
 	}
 	base.State = maintenance.ReceiptSucceeded
-	base.Diagnostic = "Darwin housekeeping completed within its explicit deadline"
+	base.ReasonCode = maintenance.ReasonCompleted
 	base.RecordedAt = executor.currentTime()
 	if err := executor.CommandStore.AppendReceipt(base); err != nil {
 		return base, err

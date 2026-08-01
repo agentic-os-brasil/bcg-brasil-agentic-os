@@ -34,9 +34,14 @@ flowchart LR
 
 The attended local Canary is explicit and uses the same `darwin` identity and
 `health/maestro-system` scope for health and housekeeping. `bcgos maintenance
-canary` reports that activation surface without invoking a model inline.
-Platform schedulers remain disabled until installation, occurrence fencing and
-native qualification evidence are observed.
+canary install-macos --confirm` persists the validated IANA timezone and exact
+activated job digests, then reports filesystem and native lifecycle state
+separately. The daily deterministic and weekly proposal handlers are
+contract-tested and locally executable after enrollment; Walter and monthly
+structural work remain due/unavailable. A current-user macOS install can be
+adapter-installed and native-qualified only when `launchctl` confirms it; a
+fixture install is filesystem-only. Windows remains
+`unavailable_native_qualification_pending`.
 
 No row is promoted by configuration, unit tests or an adapter-command receipt
 alone. Native qualification requires an observed session in the target runtime.

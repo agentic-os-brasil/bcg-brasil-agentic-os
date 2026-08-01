@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -62,7 +61,7 @@ type Receipt struct {
 	ProposalOnly     bool         `json:"proposal_only"`
 	ProposalCount    int          `json:"proposal_count,omitempty"`
 	ProposalDigest   string       `json:"proposal_digest,omitempty"`
-	Diagnostic       string       `json:"diagnostic,omitempty"`
+	ReasonCode       ReasonCode   `json:"reason_code"`
 }
 
 var (
@@ -97,8 +96,8 @@ func (receipt Receipt) Validate() error {
 	if receipt.SchemaVersion != CommandSchemaVersion || !attemptIDPattern.MatchString(receipt.AttemptID) || !digestPattern.MatchString(receipt.OccurrenceDigest) || !commandIDPattern.MatchString(receipt.CommandID) || !commandIDPattern.MatchString(receipt.JobID) || !commandIDPattern.MatchString(receipt.WorkspaceID) || !validTrigger(receipt.Trigger) || !validReceiptState(receipt.State) || receipt.RecordedAt.IsZero() || receipt.Deadline.IsZero() {
 		return errors.New("maintenance receipt is invalid")
 	}
-	if len([]byte(receipt.Diagnostic)) > 256 || strings.ContainsAny(receipt.Diagnostic, "\r\n") {
-		return errors.New("maintenance receipt diagnostic is not bounded")
+	if !validReasonCode(receipt.ReasonCode) {
+		return errors.New("maintenance receipt reason code is not allowlisted")
 	}
 	if receipt.ProposalOnly != (receipt.JobID == "darwin-structural-evolution-proposal") {
 		return errors.New("maintenance receipt proposal flag does not match the job")

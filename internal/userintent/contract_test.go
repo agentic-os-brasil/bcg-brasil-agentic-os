@@ -133,3 +133,30 @@ func TestEveryInteractionIsEvaluatedButOnlyAuthenticatedOwnerSignalsPersist(t *t
 		t.Fatalf("owner evaluation = %#v", decision)
 	}
 }
+
+func TestMaintenanceReevaluationProposalsRemainFacetBound(t *testing.T) {
+	log := AbsorptionLog{}
+	communication := testObservation("obs-communication", strings.Repeat("7", 64), ExplicitInstruction, SectionCommunication, ScopeGlobal, strings.Repeat("8", 64))
+	preferences := testObservation("obs-preferences", strings.Repeat("9", 64), ExplicitInstruction, SectionPreferences, ScopeGlobal, strings.Repeat("0", 64))
+	communication.RecheckAt = testIntentTime.Add(-time.Hour)
+	preferences.RecheckAt = testIntentTime.Add(-time.Hour)
+	if _, err := log.Append(communication); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(preferences); err != nil {
+		t.Fatal(err)
+	}
+	report, err := log.Analyze(testSnapshot(), testIntentTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facets := map[SelfSection]bool{}
+	for _, receipt := range report.ProposalReceipts {
+		if receipt.Kind == "reevaluate_facet" && len(receipt.EvidenceObservationIDs) == 1 {
+			facets[receipt.Facet] = true
+		}
+	}
+	if !facets[SectionCommunication] || !facets[SectionPreferences] {
+		t.Fatalf("facet-bound proposals = %#v", report.ProposalReceipts)
+	}
+}

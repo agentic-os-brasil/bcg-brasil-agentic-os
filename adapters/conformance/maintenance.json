@@ -2,7 +2,7 @@
   "schema_version": 1,
   "catalog_state": "catalog_only",
   "native_evidence": "pending",
-  "activation_gate": "executor_state == available and owning-subsystem receipt contract qualified",
+  "activation_gate": "persisted local Canary enrollment plus exact handler qualification; catalog-only jobs remain due/unavailable",
   "adapters": {
     "claude": {"state": "unavailable", "reason": "maintenance executor and scheduler installation are not qualified"},
     "codex": {"state": "unavailable", "reason": "maintenance executor and scheduler installation are not qualified"},

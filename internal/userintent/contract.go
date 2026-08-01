@@ -609,16 +609,18 @@ func (log AbsorptionLog) Analyze(snapshot UserSelfSnapshot, now time.Time) (Main
 		}
 	}
 	for _, kind := range []string{"recheck", "confidence_decay"} {
-		ids := []string{}
+		idsByFacet := map[SelfSection][]string{}
 		for _, observation := range log.Observations {
 			include := kind == "recheck" && !now.Before(observation.RecheckAt)
 			include = include || kind == "confidence_decay" && EffectiveConfidence(observation, now) < observation.ConfidenceBasisPts
 			if include {
-				ids = append(ids, observation.ObservationID)
+				idsByFacet[observation.Facet] = append(idsByFacet[observation.Facet], observation.ObservationID)
 			}
 		}
-		if len(ids) > 0 {
-			result.ProposalReceipts = append(result.ProposalReceipts, proposal("reevaluate_facet", log.Observations[0].Facet, ids, kind+snapshot.Digest, snapshot, now))
+		for facet, ids := range idsByFacet {
+			if len(ids) > 0 {
+				result.ProposalReceipts = append(result.ProposalReceipts, proposal("reevaluate_facet", facet, ids, kind+string(facet)+snapshot.Digest, snapshot, now))
+			}
 		}
 	}
 	result.ReevaluationProposals = len(result.ProposalReceipts)

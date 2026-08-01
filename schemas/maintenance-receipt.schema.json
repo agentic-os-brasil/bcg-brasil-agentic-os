@@ -4,7 +4,7 @@
   "title": "BCG Brasil Agentic OS metadata-only maintenance receipt",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "attempt_id", "occurrence_digest", "command_id", "job_id", "workspace_id", "trigger", "state", "recorded_at", "deadline", "proposal_only"],
+  "required": ["schema_version", "attempt_id", "occurrence_digest", "command_id", "job_id", "workspace_id", "trigger", "state", "recorded_at", "deadline", "proposal_only", "reason_code"],
   "properties": {
     "schema_version": {"const": 1},
     "attempt_id": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
@@ -19,7 +19,7 @@
     "proposal_only": {"type": "boolean"},
     "proposal_count": {"type": "integer", "minimum": 0},
     "proposal_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "diagnostic": {"type": "string", "maxLength": 256, "pattern": "^[^\\r\\n]*$"}
+    "reason_code": {"enum": ["completed", "proposal_emitted", "lease_busy", "handler_unavailable", "handler_failure", "deadline_exceeded", "catalog_unavailable", "authority_rejected", "occurrence_rejected", "receipt_persisted"]}
   },
   "allOf": [
     {
