@@ -644,3 +644,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Historical prompt bodies remain local and never enter receipts or errors. Stale or ambiguous routing, translation, ownership, evidence, locking or tampering fails closed. Native model execution remains unavailable until qualifying evidence exists.
 - Refs: specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; schemas/maestro-input.schema.json; internal/ownerctx; internal/maestro; internal/agentorchestration
 - Supersedes: none
+
+## QL2D - Bind intent, fencing and dispatch commit recovery
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Follow-up pressure testing found that bounded context must cover translated representations as well as originals, stale durable state must not authorize a branch, and dispatch persistence cannot rely on an unverified best-effort rollback.
+- Decision: Bind Walter's intrinsic-intent string exactly to the evidence-bound hypothesis, require independent per-representation and combined packet ceilings, reject oversized owner facets instead of truncating authority, and seal the packet before recording the current prompt. The Maestro dispatch boundary must drive an authenticated adapter start/finish transition through the shared durable store when a spoke is selected. Chain persistence uses an expiring private lease with bounded recovery; prompt/chain commit failures compensate both sides and write a metadata-only recovery marker if compensation itself fails. Recovery markers are serialized, idempotent for the same incident and reject silent replacement of an unresolved incident.
+- Consequences: Earlier same-session or repeated prompts remain eligible history while the current occurrence cannot self-duplicate. Durable fence epochs are real transition evidence rather than an opened-store snapshot. Raw prompt, client or generated content never enters recovery markers, receipts or errors. Low-confidence intrinsic-intent hypotheses remain task-local and can clarify through Maestro; they never update canonical self state.
+- Refs: specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; internal/maestro; internal/ownerctx; internal/agentorchestration; internal/cli
+- Supersedes: none

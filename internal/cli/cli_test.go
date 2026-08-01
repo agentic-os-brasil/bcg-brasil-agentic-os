@@ -18,6 +18,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
@@ -553,12 +554,56 @@ func TestMaestroDispatchBoundaryRecordsPromptPlansAndPersistsMetadataOnlyChain(t
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK {
 		t.Fatalf("Maestro dispatch = %d: %s", code, output.String())
 	}
-	if strings.Contains(output.String(), "prepare case alpha") || !strings.Contains(output.String(), "dispatch_boundary_model_unavailable") {
+	if strings.Contains(output.String(), "prepare case alpha") || !strings.Contains(output.String(), "dispatch_boundary_model_unavailable") || !strings.Contains(output.String(), `"durable_fence_epoch": 1`) {
 		t.Fatalf("dispatch boundary leaked body or missed unavailable result: %s", output.String())
 	}
 	chains, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "chains", "*.json"))
 	if err != nil || len(chains) != 1 {
 		t.Fatalf("persisted chain files = %v, err=%v", chains, err)
+	}
+}
+
+func TestMaestroDispatchValidatesBeforeRecordingPromptOrChain(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	invalid := `{"authenticated_owner":true,"owner_id":"owner","prompt":"should not persist"}`
+	var output bytes.Buffer
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(invalid), &output, &output, dataRoot); code == ExitOK {
+		t.Fatal("invalid plan unexpectedly dispatched")
+	}
+	if _, err := os.Stat(filepath.Join(root, "owner", "prompt-history", "entries.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("invalid plan left prompt history: %v", err)
+	}
+	if chains, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "chains", "*.json")); err != nil || len(chains) != 0 {
+		t.Fatalf("invalid plan left chains: %v, err=%v", chains, err)
+	}
+
+	output.Reset()
+	valid := `{"authenticated_owner":true,"owner_id":"owner","prompt":"translate current","language":"en-US","source":"cli","session_id":"translation-failure","working_language":"pt-BR","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(valid), &output, &output, dataRoot); code == ExitOK {
+		t.Fatal("translation failure unexpectedly dispatched")
+	}
+	if entries, err := ownerctx.InspectPromptHistory(root); err == nil && len(entries) != 0 {
+		t.Fatalf("translation failure recorded prompt: %#v", entries)
+	}
+	if chains, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "chains", "*.json")); err != nil || len(chains) != 0 {
+		t.Fatalf("translation failure left chains: %v, err=%v", chains, err)
+	}
+}
+
+func TestMaestroDispatchKeepsEarlierSameSessionHistoryAndCurrentIsNotDuplicated(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: "owner", Prompt: "prepare case alpha", Language: "en-US", Source: "cli", SessionID: "session-dispatch", ScopeKind: ownerctx.PromptScopeCase, ScopeID: "case-alpha", ContentKind: "user_prompt"}); err != nil {
+		t.Fatal(err)
+	}
+	input := `{"authenticated_owner":true,"owner_id":"owner","prompt":"prepare case alpha","language":"en-US","source":"cli","session_id":"session-dispatch","working_language":"en-US","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
+	var output bytes.Buffer
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"history_count": 1`) {
+		t.Fatalf("earlier same-session prompt was suppressed or current duplicated: code=%d output=%s", code, output.String())
 	}
 }
 

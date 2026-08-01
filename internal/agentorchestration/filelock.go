@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -64,15 +65,38 @@ func acquireStateFileLock(statePath string) (func() error, error) {
 
 func validateStateParents(path string) error {
 	directory := filepath.Dir(path)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return err
-	}
-	info, err := os.Lstat(directory)
+	abs, err := filepath.Abs(directory)
 	if err != nil {
 		return err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return errors.New("orchestration state parent is not a private directory")
+	parts := []string{}
+	for current := abs; current != "." && current != string(filepath.Separator); current = filepath.Dir(current) {
+		parts = append([]string{filepath.Base(current)}, parts...)
+	}
+	current := string(filepath.Separator)
+	for _, part := range parts {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			if err := os.Mkdir(current, 0o700); err != nil {
+				return err
+			}
+			info, err = os.Lstat(current)
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			// macOS exposes the writable temporary tree through these system
+			// compatibility links; product-owned links below them are rejected.
+			if runtime.GOOS == "darwin" && (current == "/var" || current == "/tmp") {
+				continue
+			}
+			return errors.New("orchestration state parent is not a private directory")
+		}
+		if !info.IsDir() {
+			return errors.New("orchestration state parent is not a private directory")
+		}
 	}
 	return nil
 }

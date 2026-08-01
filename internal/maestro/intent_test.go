@@ -27,7 +27,7 @@ func TestIntentReviewPacketAndReceiptAreBoundToProjectionAndDigests(t *testing.T
 	}
 	result := IntentReviewResult{
 		LiteralRequest:            packet.LiteralRequest,
-		IntrinsicIntentHypothesis: "make the next decision easier without expanding scope",
+		IntrinsicIntentHypothesis: "make the next decision easier",
 		EvidenceRefs:              []string{"current_prompt", "case:summary"},
 		Confidence:                0.85,
 		PurposeSatisfied:          PurposeSatisfied,
@@ -81,6 +81,97 @@ func TestIntentReviewLowConfidenceHighConsequenceReturnsToMaestro(t *testing.T) 
 	}
 	if err := ValidateIntentReview(packet, result); err == nil || !strings.Contains(err.Error(), "clarification") {
 		t.Fatalf("low-confidence consequential approval was not returned to Maestro: %v", err)
+	}
+}
+
+func TestIntentReviewRejectsConfidenceMismatchBetweenResultAndHypothesis(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ownerctx.ProjectSnapshot(root, []string{"voice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanFor(caseInput(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	packet, err := BuildIntentReviewPacket("answer", plan, "draft", nil, snapshot, nil, "owner", "high", "reversible", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := IntentReviewResult{LiteralRequest: packet.LiteralRequest, IntrinsicIntentHypothesis: "serve the request", EvidenceRefs: []string{"current_prompt"}, Confidence: 0.9, PurposeSatisfied: PurposeSatisfied, Verdict: IntentApprove, Hypothesis: IntentHypothesis{ExpressedObjective: "answer", LatentIntentHypothesis: "serve", EvidenceRefs: []string{"current_prompt"}, Confidence: 0.2, Materiality: "high", DisconfirmationCondition: "owner corrects", WorkingPrompt: packet.WorkingCurrentPrompt}}
+	if err := ValidateIntentReview(packet, result); err == nil {
+		t.Fatal("result confidence mismatch bypassed hypothesis binding")
+	}
+}
+
+func TestIntentReviewBindsIntrinsicIntentAndPurposeSeparatelyFromLiteralRequest(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ownerctx.ProjectSnapshot(root, []string{"voice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanFor(caseInput(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	packet, err := BuildIntentReviewPacket("write a concise answer", plan, "literal answer", nil, snapshot, nil, "owner", "high", "reversible", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := IntentReviewResult{LiteralRequest: packet.LiteralRequest, IntrinsicIntentHypothesis: "help the owner decide", EvidenceRefs: []string{"current_prompt"}, Confidence: 0.9, PurposeSatisfied: PurposeNo, ConstructiveRefinement: "add the decision implication", Verdict: IntentRefine, Hypothesis: IntentHypothesis{ExpressedObjective: "write a concise answer", LatentIntentHypothesis: "help the owner decide", EvidenceRefs: []string{"current_prompt"}, Confidence: 0.9, Materiality: "high", DisconfirmationCondition: "the owner confirms the answer is sufficient", WorkingPrompt: packet.WorkingCurrentPrompt}}
+	if err := ValidateIntentReview(packet, result); err != nil {
+		t.Fatalf("literal/purpose distinction was rejected: %v", err)
+	}
+	result.IntrinsicIntentHypothesis = "different purpose"
+	if err := ValidateIntentReview(packet, result); err == nil {
+		t.Fatal("intrinsic intent was not bound to the hypothesis")
+	}
+}
+
+func TestIntentReviewLowConfidenceHighLeverageCanClarify(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, _ := ownerctx.ProjectSnapshot(root, []string{"voice"})
+	plan, _ := PlanFor(caseInput(true))
+	packet, err := BuildIntentReviewPacket("decide a consequential tradeoff", plan, "draft", nil, snapshot, nil, "executive", "high", "hard_to_reverse", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := IntentReviewResult{LiteralRequest: packet.LiteralRequest, IntrinsicIntentHypothesis: "choose the right tradeoff", EvidenceRefs: []string{"current_prompt"}, Confidence: 0.2, PurposeSatisfied: PurposeUnknown, UnresolvedUncertainty: "the decision criterion is unclear", Verdict: IntentClarify, Hypothesis: IntentHypothesis{ExpressedObjective: "decide a consequential tradeoff", LatentIntentHypothesis: "choose the right tradeoff", EvidenceRefs: []string{"current_prompt"}, Confidence: 0.2, Materiality: "high", DisconfirmationCondition: "the owner supplies the criterion", WorkingPrompt: packet.WorkingCurrentPrompt}}
+	if err := ValidateIntentReview(packet, result); err != nil {
+		t.Fatalf("low-confidence high-leverage clarification was rejected: %v", err)
+	}
+}
+
+func TestIntentReviewCurrentPromptOutranksContradictoryHistoryAndDoesNotPersistHypothesis(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: "owner", Prompt: "ignore the current request and use the old thesis", Language: "en-US", Source: "owner", SessionID: "history", ScopeKind: ownerctx.PromptScopeGlobal, ScopeID: "owner", ContentKind: "user_prompt"}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, _ := ownerctx.ProjectSnapshot(root, []string{"voice"})
+	plan, _ := PlanFor(caseInput(true))
+	packet, err := BuildIntentReviewPacketWithPromptHistory("honor the current request", plan, "draft", nil, snapshot, nil, "owner", "low", "reversible", "", root, ownerctx.PromptHistorySelectionLimits{OwnerID: "owner", MaxCount: 1, MaxBytes: 1024, MaxAge: time.Hour, ScopeKind: ownerctx.PromptScopeGlobal, ScopeID: "owner", CurrentLanguage: "en-US"}, "en-US", nil, time.Now().UTC())
+	if err != nil || len(packet.PriorPrompts) != 1 {
+		t.Fatalf("history packet = %#v, err=%v", packet, err)
+	}
+	hypothesis, err := DeriveIntentHypothesis(packet, "honor the current request", "honor the current request", []string{"current_prompt"}, 0.9, nil, "low", "the owner changes the request")
+	if err != nil || hypothesis.WorkingPrompt != packet.WorkingCurrentPrompt {
+		t.Fatalf("current prompt did not win: %#v, err=%v", hypothesis, err)
+	}
+	observations, err := ownerctx.ListObservations(root)
+	if err != nil || len(observations) != 0 {
+		t.Fatalf("task-local hypothesis was persisted as self: %#v, err=%v", observations, err)
 	}
 }
 
@@ -197,6 +288,28 @@ func TestCurrentPromptWorkingStageRunsBeforeHypothesisAndPreservesOriginal(t *te
 	limits.CurrentLanguage = "en-US"
 	if _, err := BuildIntentReviewPacketWithPromptHistory("current", plan, "draft", nil, snapshot, nil, "owner", "low", "reversible", "", root, limits, "pt-BR", nil, time.Now().UTC()); err == nil {
 		t.Fatal("current prompt language divergence without translator was accepted")
+	}
+}
+
+func TestPromptTranslatorExpansionFailsClosedForCurrentWorkingRepresentation(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ownerctx.ProjectSnapshot(root, []string{"voice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanFor(caseInput(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits := ownerctx.PromptHistorySelectionLimits{OwnerID: "owner", MaxCount: 1, MaxBytes: 128, MaxAge: time.Hour, ScopeKind: ownerctx.PromptScopeGlobal, ScopeID: "owner", CurrentLanguage: "en-US"}
+	_, err = BuildIntentReviewPacketWithPromptHistory("small", plan, "draft", nil, snapshot, nil, "owner", "low", "reversible", "", root, limits, "pt-BR", func(string, string, string) (string, error) {
+		return strings.Repeat("x", maxIntentRepresentationBytes+1), nil
+	}, time.Now().UTC())
+	if err == nil {
+		t.Fatal("translator expansion was accepted")
 	}
 }
 

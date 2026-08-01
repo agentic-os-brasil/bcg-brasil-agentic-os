@@ -63,12 +63,13 @@ func ProjectSnapshot(root string, requested []string) (UserSelfSnapshot, error) 
 		if err != nil {
 			return UserSelfSnapshot{}, err
 		}
-		// The projection is local-only. Bound the packet-facing body while
-		// retaining the canonical source as the authoritative freshness check.
-		content := string(body)
-		if len(content) > maximumOwnerProjectionBytes {
-			content = content[:maximumOwnerProjectionBytes]
+		// Never truncate the authority. A facet larger than the projection
+		// budget fails closed so mutations after a retained prefix cannot evade
+		// freshness checks.
+		if len(body) > maximumOwnerProjectionBytes {
+			return UserSelfSnapshot{}, errors.New("owner self facet exceeds projection bound")
 		}
+		content := string(body)
 		readers := append([]string(nil), definition.Readers...)
 		sort.Strings(readers)
 		facet := SnapshotFacet{Facet: id, SourcePath: definition.Path, Sensitivity: definition.Sensitivity, Readers: readers, Refinement: definition.Refinement, Content: content}

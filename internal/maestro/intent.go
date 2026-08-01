@@ -14,6 +14,13 @@ import (
 
 const IntentReviewSchemaVersion = 1
 
+const (
+	maxIntentRepresentationBytes = 32 << 10
+	maxIntentPriorPrompts        = 8
+	maxIntentEvidenceRefs        = 8
+	maxIntentAlternatives        = 8
+)
+
 type PurposeSatisfaction string
 
 const (
@@ -204,7 +211,7 @@ func attachPromptHistory(packet IntentReviewPacket, entries []ownerctx.PromptHis
 	if err := packet.Validate(); err != nil {
 		return IntentReviewPacket{}, err
 	}
-	if strings.TrimSpace(workingLanguage) == "" || len(entries) > 8 || len(entries) > limits.MaxCount || limits.MaxCount < 1 || limits.MaxCount > 8 || limits.MaxBytes < 1 || limits.MaxBytes > 32<<10 {
+	if strings.TrimSpace(workingLanguage) == "" || len(entries) > maxIntentPriorPrompts || len(entries) > limits.MaxCount || limits.MaxCount < 1 || limits.MaxCount > maxIntentPriorPrompts || limits.MaxBytes < 1 || limits.MaxBytes > maxIntentRepresentationBytes {
 		return IntentReviewPacket{}, errors.New("prompt history packet limits or working language are invalid")
 	}
 	if workingLanguage != "und" && strings.TrimSpace(limits.CurrentLanguage) == "" {
@@ -225,12 +232,15 @@ func attachPromptHistory(packet IntentReviewPacket, entries []ownerctx.PromptHis
 	prior := make([]HistoricalPrompt, 0, len(entries))
 	bytes := 0
 	for index, entry := range entries {
-		if bytes+len([]byte(entry.Prompt)) > limits.MaxBytes {
+		if len([]byte(entry.Prompt)) > maxIntentRepresentationBytes || bytes+len([]byte(entry.Prompt)) > limits.MaxBytes {
 			return IntentReviewPacket{}, errors.New("selected prompt history exceeds packet byte limit")
 		}
 		normalized, err := normalizePrompt(entry.Prompt, entry.Language, workingLanguage, translator)
 		if err != nil {
 			return IntentReviewPacket{}, err
+		}
+		if len([]byte(normalized)) > maxIntentRepresentationBytes {
+			return IntentReviewPacket{}, errors.New("translated prompt history exceeds representation bound")
 		}
 		historical := HistoricalPrompt{ID: entry.ID, OriginalText: entry.Prompt, NormalizedText: normalized, SourceLanguage: entry.Language, WorkingLanguage: workingLanguage, RecordedAt: entry.RecordedAt, ScopeKind: string(entry.ScopeKind), ScopeID: entry.ScopeID, SHA256: entry.SHA256, QuotedData: true}
 		if index < len(selected) {
@@ -247,8 +257,15 @@ func attachPromptHistory(packet IntentReviewPacket, entries []ownerctx.PromptHis
 }
 
 func normalizePrompt(original, sourceLanguage, workingLanguage string, translator PromptTranslator) (string, error) {
+	if len([]byte(original)) > maxIntentRepresentationBytes {
+		return "", errors.New("prompt exceeds representation bound")
+	}
 	if strings.EqualFold(sourceLanguage, workingLanguage) {
-		return strings.TrimSpace(original), nil
+		normalized := strings.TrimSpace(original)
+		if len([]byte(normalized)) > maxIntentRepresentationBytes {
+			return "", errors.New("normalized prompt exceeds representation bound")
+		}
+		return normalized, nil
 	}
 	if translator == nil {
 		return "", errors.New("prompt history translation requires a configured translator")
@@ -260,14 +277,18 @@ func normalizePrompt(original, sourceLanguage, workingLanguage string, translato
 		}
 		return "", errors.New("prompt history translation returned empty text")
 	}
-	return strings.TrimSpace(translated), nil
+	working := strings.TrimSpace(translated)
+	if len([]byte(working)) > maxIntentRepresentationBytes {
+		return "", errors.New("translated prompt exceeds representation bound")
+	}
+	return working, nil
 }
 
 func DeriveIntentHypothesis(packet IntentReviewPacket, expressedObjective, latentIntent string, evidenceRefs []string, confidence float64, alternatives []string, materiality, disconfirmation string) (IntentHypothesis, error) {
 	if err := packet.Validate(); err != nil {
 		return IntentHypothesis{}, err
 	}
-	if strings.TrimSpace(expressedObjective) == "" || strings.TrimSpace(latentIntent) == "" || strings.TrimSpace(disconfirmation) == "" || confidence < 0 || confidence > 1 {
+	if strings.TrimSpace(expressedObjective) == "" || strings.TrimSpace(latentIntent) == "" || strings.TrimSpace(disconfirmation) == "" || confidence < 0 || confidence > 1 || !validMateriality(materiality) || !validAlternatives(alternatives) {
 		return IntentHypothesis{}, errors.New("intent hypothesis is incomplete")
 	}
 	if !validEvidenceRefs(packet, evidenceRefs, true) {
@@ -309,20 +330,23 @@ func (packet IntentReviewPacket) Validate() error {
 			return errors.New("intent review packet contains an invalid self observation")
 		}
 	}
-	if packet.PromptHistory.MaxCount < 1 || packet.PromptHistory.MaxCount > 8 || packet.PromptHistory.MaxBytes < 1 || packet.PromptHistory.MaxBytes > 32<<10 || len(packet.PriorPrompts) > packet.PromptHistory.MaxCount && len(packet.PriorPrompts) > 0 {
+	if packet.PromptHistory.MaxCount < 1 || packet.PromptHistory.MaxCount > maxIntentPriorPrompts || packet.PromptHistory.MaxBytes < 1 || packet.PromptHistory.MaxBytes > maxIntentRepresentationBytes || len(packet.PriorPrompts) > packet.PromptHistory.MaxCount && len(packet.PriorPrompts) > 0 {
 		return errors.New("intent review packet contains too many prior prompts")
 	}
 	if len(packet.PriorPrompts) > 0 && packet.PromptHistory.OwnerID == "" {
 		return errors.New("intent review packet history is missing owner binding")
 	}
-	bytes := 0
+	bytes := len([]byte(packet.LiteralRequest)) + len([]byte(packet.WorkingCurrentPrompt))
+	if len([]byte(packet.LiteralRequest)) > maxIntentRepresentationBytes || len([]byte(packet.CurrentPrompt)) > maxIntentRepresentationBytes || len([]byte(packet.WorkingCurrentPrompt)) > maxIntentRepresentationBytes || bytes > maxIntentRepresentationBytes {
+		return errors.New("intent review packet exceeds current prompt representation bound")
+	}
 	for _, prompt := range packet.PriorPrompts {
-		if prompt.ID == "" || strings.TrimSpace(prompt.OriginalText) == "" || strings.TrimSpace(prompt.NormalizedText) == "" || !prompt.QuotedData || prompt.SHA256 != SHA256Hex(prompt.OriginalText) || prompt.WorkingLanguage != packet.PromptHistory.WorkingLanguage || len(prompt.RelevanceReasons) > 8 {
+		if prompt.ID == "" || strings.TrimSpace(prompt.OriginalText) == "" || strings.TrimSpace(prompt.NormalizedText) == "" || !prompt.QuotedData || prompt.SHA256 != SHA256Hex(prompt.OriginalText) || prompt.WorkingLanguage != packet.PromptHistory.WorkingLanguage || len(prompt.RelevanceReasons) > maxIntentEvidenceRefs || len([]byte(prompt.OriginalText)) > maxIntentRepresentationBytes || len([]byte(prompt.NormalizedText)) > maxIntentRepresentationBytes || !validAlternatives(prompt.RelevanceReasons) {
 			return errors.New("intent review packet contains an invalid prior prompt")
 		}
-		bytes += len([]byte(prompt.OriginalText))
+		bytes += len([]byte(prompt.OriginalText)) + len([]byte(prompt.NormalizedText))
 	}
-	if len(packet.PriorPrompts) > 0 && (packet.PromptHistory.MaxBytes < 1 || bytes > packet.PromptHistory.MaxBytes) {
+	if len(packet.PriorPrompts) > 0 && (packet.PromptHistory.MaxBytes < 1 || bytes > maxIntentRepresentationBytes || sumOriginalPromptBytes(packet.PriorPrompts) > packet.PromptHistory.MaxBytes) {
 		return errors.New("intent review packet exceeds its prior prompt byte limit")
 	}
 	return nil
@@ -335,7 +359,7 @@ func ValidateIntentReview(packet IntentReviewPacket, result IntentReviewResult) 
 	if result.LiteralRequest != packet.LiteralRequest || strings.TrimSpace(result.IntrinsicIntentHypothesis) == "" || result.Confidence < 0 || result.Confidence > 1 || !validPurpose(result.PurposeSatisfied) || !validIntentVerdict(result.Verdict) {
 		return errors.New("intent review result is incomplete or invalid")
 	}
-	if len(result.EvidenceRefs) > 8 || strings.TrimSpace(result.Hypothesis.ExpressedObjective) == "" || strings.TrimSpace(result.Hypothesis.LatentIntentHypothesis) == "" || strings.TrimSpace(result.Hypothesis.DisconfirmationCondition) == "" || result.Hypothesis.WorkingPrompt != packet.WorkingCurrentPrompt || !validEvidenceRefs(packet, result.EvidenceRefs, true) || !validEvidenceRefs(packet, result.Hypothesis.EvidenceRefs, true) || !sameEvidenceRefs(result.EvidenceRefs, result.Hypothesis.EvidenceRefs) {
+	if result.Confidence != result.Hypothesis.Confidence || strings.TrimSpace(result.IntrinsicIntentHypothesis) != strings.TrimSpace(result.Hypothesis.LatentIntentHypothesis) || len(result.EvidenceRefs) > maxIntentEvidenceRefs || strings.TrimSpace(result.Hypothesis.ExpressedObjective) == "" || strings.TrimSpace(result.Hypothesis.LatentIntentHypothesis) == "" || strings.TrimSpace(result.Hypothesis.DisconfirmationCondition) == "" || result.Hypothesis.WorkingPrompt != packet.WorkingCurrentPrompt || !validMateriality(result.Hypothesis.Materiality) || !validAlternatives(result.Hypothesis.Alternatives) || !validEvidenceRefs(packet, result.EvidenceRefs, true) || !validEvidenceRefs(packet, result.Hypothesis.EvidenceRefs, true) || !sameEvidenceRefs(result.EvidenceRefs, result.Hypothesis.EvidenceRefs) {
 		return errors.New("intent hypothesis requires bounded evidence and disconfirmation")
 	}
 	if result.Verdict == IntentRefine && strings.TrimSpace(result.ConstructiveRefinement) == "" {
@@ -354,7 +378,7 @@ func ValidateIntentReview(packet IntentReviewPacket, result IntentReviewResult) 
 }
 
 func validEvidenceRefs(packet IntentReviewPacket, refs []string, requireCurrent bool) bool {
-	if len(refs) > 8 {
+	if len(refs) > maxIntentEvidenceRefs {
 		return false
 	}
 	allowed := map[string]bool{"current_prompt": true}
@@ -372,6 +396,38 @@ func validEvidenceRefs(packet IntentReviewPacket, refs []string, requireCurrent 
 		seen[ref] = true
 	}
 	return !requireCurrent || seen["current_prompt"]
+}
+
+func sumOriginalPromptBytes(prompts []HistoricalPrompt) int {
+	total := 0
+	for _, prompt := range prompts {
+		total += len([]byte(prompt.OriginalText))
+	}
+	return total
+}
+
+func validMateriality(value string) bool {
+	switch value {
+	case "none", "low", "medium", "high":
+		return true
+	default:
+		return false
+	}
+}
+
+func validAlternatives(values []string) bool {
+	if len(values) > maxIntentAlternatives {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || len([]byte(value)) > 512 || seen[value] {
+			return false
+		}
+		seen[value] = true
+	}
+	return true
 }
 
 func sameEvidenceRefs(left, right []string) bool {

@@ -140,7 +140,11 @@ Maestro first places the current prompt before history, preserves its original
 as source of truth, creates a digest-bound working representation, then
 translates or normalizes selected history into the configured working language
 and marks it as quoted data. Packet ceilings are eight prompts and 32 KiB even
-when store retention is larger. Prompt bodies exist only in the ephemeral
+when store retention is larger. Each original and working representation is
+independently capped at 32 KiB, and the combined current plus selected
+original/working bytes must also fit the 32 KiB packet ceiling. Translator
+expansion fails closed, and a facet larger than the snapshot projection bound
+is rejected rather than truncated. Prompt bodies exist only in the ephemeral
 sealed review packet. A translation adapter is required when languages differ;
 absence fails closed for that normalization stage without changing the user
 request.

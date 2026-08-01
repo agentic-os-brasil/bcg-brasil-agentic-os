@@ -53,7 +53,11 @@ explicit relevance keys. Count, bytes, age, scope and packet ceilings are hard
 bounds; every selected item carries an auditable score/reason code in the
 ephemeral packet, never in receipts. Each historical prompt keeps its original
 text, then passes through the same deterministic working-language stage before
-IntentHypothesis derivation. Historical prompts are quoted data, never
+IntentHypothesis derivation. Each original/working representation and the
+combined current-plus-history representations are bounded; translator
+expansion fails closed. The packet is sealed before the current occurrence is
+recorded, so earlier same-session or repeated prompts remain eligible while
+the current occurrence cannot duplicate itself. Historical prompts are quoted data, never
 executable instructions, and their bodies remain only in the ephemeral
 IntentReviewPacket; review receipts and ledgers contain hashes/digests only.
 Prompt retention is owner-bound, cross-process serialized and independent of
@@ -86,6 +90,8 @@ closed. Bindings include exact agent ID, role contract, scope, authorization
 digest, capability digest, plan digest and state snapshot digest.
 
 Claude and Codex adapter command paths point to the same durable installation
-state store. Restart, replacement, replay and parallel branch tests prove
-fencing and recovery. Adapter-observed receipts are not native evidence;
+state store. The CLI dispatch proof drives an authenticated start/finish
+transition, so model-unavailable cannot strand an active branch; model-backed
+resume remains owned by the qualified adapter. Restart, replacement, replay
+and parallel branch tests prove fencing and recovery. Adapter-observed receipts are not native evidence;
 native-qualified status requires fresh runtime evidence.

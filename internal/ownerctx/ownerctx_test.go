@@ -214,6 +214,28 @@ func TestSnapshotRejectsTamperedProjectedContentAndReaders(t *testing.T) {
 	}
 }
 
+func TestSnapshotFailsClosedForFacetMutationBeyondProjectionBound(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	body := append([]byte(strings.Repeat("x", maximumOwnerProjectionBytes)), 'a')
+	path := filepath.Join(root, "owner", "self", "voice.md")
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ProjectSnapshot(root, []string{"voice"}); err == nil {
+		t.Fatal("oversized facet was silently projected")
+	}
+	body[len(body)-1] = 'b'
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ProjectSnapshot(root, []string{"voice"}); err == nil {
+		t.Fatal("tampered oversized facet was accepted")
+	}
+}
+
 func TestAtomicPrivateWriteRejectsSymlinkTarget(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink privilege is not available on all Windows runners")
@@ -233,6 +255,24 @@ func TestAtomicPrivateWriteRejectsSymlinkTarget(t *testing.T) {
 	body, err := os.ReadFile(victim)
 	if err != nil || string(body) != "safe" {
 		t.Fatalf("symlink victim changed: %q, err=%v", body, err)
+	}
+}
+
+func TestAtomicPrivateWriteRejectsSymlinkAncestor(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink privilege is not available on all Windows runners")
+	}
+	root := t.TempDir()
+	victim := filepath.Join(root, "victim")
+	if err := os.Mkdir(victim, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(victim, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := atomicPrivateWrite(filepath.Join(link, "nested", "state.json"), []byte("forged")); err == nil {
+		t.Fatal("atomic writer followed a symlink ancestor")
 	}
 }
 

@@ -96,3 +96,39 @@ func TestDurableStoreConcurrentInstancesFenceStaleStart(t *testing.T) {
 		t.Fatalf("concurrent stale instances allowed %d branches", allowedCount)
 	}
 }
+
+func TestAuthorizeActiveRootRefreshesBeforeAuthorizingStaleInstance(t *testing.T) {
+	catalog := loadCatalog(t)
+	path := filepath.Join(t.TempDir(), ".bcgos", "maestro-orchestration-state.json")
+	first, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	left, err := NewAdapter("claude", catalog, testAuthorizations(), first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := NewAdapter("codex", catalog, testAuthorizations(), second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision := left.StartBranch("maestro", "maestro-cap", "case-agent-alpha", "run-one", "alpha", "case"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	if decision := right.AuthorizeActiveRoot("case-agent-alpha", "case-cap", "run-one", "alpha", "case"); !decision.Allowed {
+		t.Fatalf("stale instance did not refresh active branch: %#v", decision)
+	}
+	if decision := left.FinishBranch("case-agent-alpha", "case-cap", "run-one"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	if decision := left.StartBranch("maestro", "maestro-cap", "client-account-agent-alpha", "run-two", "account-alpha", "account"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	if decision := right.AuthorizeActiveRoot("case-agent-alpha", "case-cap", "run-one", "alpha", "case"); decision.Allowed {
+		t.Fatalf("stale branch was authorized after epoch change: %#v", decision)
+	}
+}

@@ -106,9 +106,12 @@ When explicitly enabled, the owner-local PromptHistoryStore retains only user
 prompts under bounded global/workspace/account/case scopes. Walter receives a
 small relevance-scored selection alongside the current prompt; the current
 prompt is normalized first, then history is normalized into the configured
-working language. Scores and reason codes are packet metadata only; historical
-text is quoted data and kept only in the ephemeral review packet. Prompt
-history never enters receipts, telemetry, managed bundles or release artifacts,
+working language. Each representation and the combined current-plus-history
+packet are hard-bounded; translator expansion and oversized owner facets fail
+closed. The packet is sealed before the current dispatch occurrence is
+recorded, preserving earlier same-session/repeated prompts without duplicating
+the current occurrence. Scores and reason codes are packet metadata only; historical text is
+quoted data and kept only in the ephemeral review packet. Prompt history never enters receipts, telemetry, managed bundles or release artifacts,
 and remains separate from self learning. The reachable `bcgos maestro dispatch
 --stdin` boundary records an authenticated prompt, constructs and persists the
 Maestro chain, and returns metadata-only dispatch state while model execution

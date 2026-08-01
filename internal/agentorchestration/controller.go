@@ -579,8 +579,20 @@ func (adapter *Adapter) AuthorizeActiveRoot(actorID, capability, branchID, scope
 	if !ok {
 		return denied("actor_denied")
 	}
+	unlock := func() error { return nil }
+	if adapter.store.persistPath != "" {
+		var err error
+		unlock, err = acquireStateFileLock(adapter.store.persistPath)
+		if err != nil {
+			return denied("state_lock_unavailable")
+		}
+	}
+	defer func() { _ = unlock() }()
 	adapter.store.mu.Lock()
 	defer adapter.store.mu.Unlock()
+	if err := adapter.store.refreshLocked(); err != nil {
+		return denied("state_refresh_failed")
+	}
 	state := adapter.store.state
 	if state.BranchID == "" {
 		return denied("branch_missing")

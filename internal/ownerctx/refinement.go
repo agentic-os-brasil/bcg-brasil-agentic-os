@@ -373,12 +373,33 @@ func atomicPrivateWrite(path string, body []byte) error {
 }
 
 func validatePrivateParents(directory string) error {
-	info, err := os.Lstat(directory)
+	abs, err := filepath.Abs(directory)
 	if err != nil {
 		return err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return fmt.Errorf("private parent is not a directory: %s", directory)
+	parts := []string{}
+	for current := abs; current != "." && current != string(filepath.Separator); current = filepath.Dir(current) {
+		parts = append([]string{filepath.Base(current)}, parts...)
+	}
+	current := string(filepath.Separator)
+	for _, part := range parts {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			// macOS uses these compatibility links for the system temporary
+			// tree. They are outside the owner-private boundary; links below
+			// them are still rejected by this walk.
+			if runtime.GOOS == "darwin" && (current == "/var" || current == "/tmp") {
+				continue
+			}
+			return fmt.Errorf("private parent is a symlink: %s", current)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("private parent is not a directory: %s", current)
+		}
 	}
 	return nil
 }
