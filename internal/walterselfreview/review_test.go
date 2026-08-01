@@ -114,7 +114,7 @@ func TestTranslationReceiptAndQuotedHistoryAreRequired(t *testing.T) {
 
 func TestIntentHypothesisBindingIsIffAndBounded(t *testing.T) {
 	request := testRequest(t)
-	hypothesis := &maestro.IntentHypothesis{ExpressedObjective: "answer the request", LatentIntentHypothesis: "preserve the user's decision purpose", EvidenceRefs: []string{"prompt-1"}, Confidence: .8, Alternatives: []string{"literal-only"}, Materiality: "low", DisconfirmationCondition: "current instruction contradicts it", WorkingPrompt: request.CurrentNormalized}
+	hypothesis := &maestro.IntentHypothesis{ExpressedObjective: "answer the request", LatentIntentHypothesis: "preserve the user's decision purpose", EvidenceRefs: []string{"current_prompt"}, Confidence: .8, Alternatives: []string{"literal-only"}, Materiality: "low", DisconfirmationCondition: "current instruction contradicts it", WorkingPrompt: request.CurrentNormalized}
 	request.IntentHypothesis = hypothesis
 	request.IntentHypothesisSHA256 = DigestJSON(hypothesis)
 	if err := ValidateRequest(request); err != nil {
@@ -124,6 +124,13 @@ func TestIntentHypothesisBindingIsIffAndBounded(t *testing.T) {
 	proposal.IntentHypothesisSHA256 = request.IntentHypothesisSHA256
 	if err := ValidateProposal(request, proposal); err != nil {
 		t.Fatal(err)
+	}
+	for _, refs := range [][]string{nil, {"prompt-1"}, {"observation-1"}} {
+		request.IntentHypothesis.EvidenceRefs = refs
+		request.IntentHypothesisSHA256 = DigestJSON(request.IntentHypothesis)
+		if err := ValidateRequest(request); err == nil {
+			t.Fatalf("hypothesis evidence refs without canonical current prompt were accepted: %#v", refs)
+		}
 	}
 	request.IntentHypothesis.EvidenceRefs = []string{"current_prompt", "prompt-1"}
 	request.IntentHypothesisSHA256 = DigestJSON(request.IntentHypothesis)

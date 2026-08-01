@@ -995,7 +995,7 @@ func validateContextBounds(request Request) error {
 
 func validateIntentHypothesis(request Request) error {
 	hypothesis := request.IntentHypothesis
-	if hypothesis == nil || strings.TrimSpace(hypothesis.ExpressedObjective) == "" || strings.TrimSpace(hypothesis.LatentIntentHypothesis) == "" || strings.TrimSpace(hypothesis.Materiality) == "" || strings.TrimSpace(hypothesis.DisconfirmationCondition) == "" || strings.TrimSpace(hypothesis.WorkingPrompt) == "" || hypothesis.WorkingPrompt != request.CurrentNormalized || !validConfidence(hypothesis.Confidence) || len(hypothesis.EvidenceRefs) > MaxObservations || len(hypothesis.Alternatives) > MaxObservations {
+	if hypothesis == nil || strings.TrimSpace(hypothesis.ExpressedObjective) == "" || strings.TrimSpace(hypothesis.LatentIntentHypothesis) == "" || strings.TrimSpace(hypothesis.Materiality) == "" || strings.TrimSpace(hypothesis.DisconfirmationCondition) == "" || strings.TrimSpace(hypothesis.WorkingPrompt) == "" || hypothesis.WorkingPrompt != request.CurrentNormalized || !validConfidence(hypothesis.Confidence) || len(hypothesis.EvidenceRefs) == 0 || len(hypothesis.EvidenceRefs) > MaxObservations || len(hypothesis.Alternatives) > MaxObservations {
 		return errors.New("Walter intent hypothesis is incomplete")
 	}
 	for _, value := range []string{hypothesis.ExpressedObjective, hypothesis.LatentIntentHypothesis, hypothesis.Materiality, hypothesis.DisconfirmationCondition, hypothesis.WorkingPrompt} {
@@ -1019,6 +1019,9 @@ func validateIntentHypothesis(request Request) error {
 			return errors.New("Walter intent hypothesis evidence reference is invalid or outside the request")
 		}
 		seen[value] = true
+	}
+	if !seen["current_prompt"] {
+		return errors.New("Walter intent hypothesis must include the canonical current prompt evidence reference")
 	}
 	for _, value := range hypothesis.Alternatives {
 		if strings.TrimSpace(value) == "" || len([]byte(value)) > MaxContextBytes {
