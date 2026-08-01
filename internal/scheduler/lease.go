@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,10 +54,7 @@ func (store Store) TryAcquireLease(workspaceID, jobID, occurrenceKey, ownerID st
 	}
 	defer guard.release()
 	marker := quarantinePath(path)
-	if info, markerErr := os.Lstat(marker); markerErr == nil {
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return Lease{}, errors.New("invalid scheduler quarantine marker")
-		}
+	if _, markerErr := secureReadFile(marker); markerErr == nil {
 		return Lease{}, ErrLeaseBusy
 	} else if !errors.Is(markerErr, os.ErrNotExist) {
 		return Lease{}, markerErr
@@ -70,7 +66,7 @@ func (store Store) TryAcquireLease(workspaceID, jobID, occurrenceKey, ownerID st
 		if existing.ExpiresAt.After(now) {
 			return Lease{}, ErrLeaseBusy
 		}
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := secureRemoveFile(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return Lease{}, err
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -122,7 +118,7 @@ func (store Store) ReleaseLease(lease Lease) error {
 	if err := removeQuarantineMarker(path, lease); err != nil {
 		return err
 	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := secureRemoveFile(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	return nil
@@ -130,17 +126,10 @@ func (store Store) ReleaseLease(lease Lease) error {
 
 func removeQuarantineMarker(leasePath string, lease Lease) error {
 	marker := quarantinePath(leasePath)
-	info, err := os.Lstat(marker)
+	body, err := secureReadFile(marker)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
-	if err != nil {
-		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return errors.New("invalid scheduler quarantine marker")
-	}
-	body, err := os.ReadFile(marker)
 	if err != nil {
 		return err
 	}
@@ -150,7 +139,7 @@ func removeQuarantineMarker(leasePath string, lease Lease) error {
 	if err := json.Unmarshal(body, &markerData); err != nil || markerData.FenceToken != lease.FenceToken {
 		return ErrLeaseLost
 	}
-	return os.Remove(marker)
+	return secureRemoveFile(marker)
 }
 
 // ArmLease installs an active execution fence before handler side effects.
@@ -196,14 +185,7 @@ func (store Store) writeFenceMarker(lease Lease, state string) error {
 		return ErrLeaseLost
 	}
 	marker := quarantinePath(path)
-	if info, markerErr := os.Lstat(marker); markerErr == nil {
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return errors.New("invalid scheduler quarantine marker")
-		}
-		body, readErr := os.ReadFile(marker)
-		if readErr != nil {
-			return readErr
-		}
+	if body, markerErr := secureReadFile(marker); markerErr == nil {
 		var existing struct {
 			FenceToken string `json:"fence_token"`
 			State      string `json:"state"`
@@ -221,7 +203,7 @@ func (store Store) writeFenceMarker(lease Lease, state string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(marker, append(body, '\n'), 0o600)
+		return secureWriteFile(marker, append(body, '\n'))
 	} else if !errors.Is(markerErr, os.ErrNotExist) {
 		return markerErr
 	}
@@ -245,7 +227,7 @@ func (store Store) QuarantinedLeases(workspaceID string) ([]Lease, error) {
 	if rootErr != nil {
 		return nil, rootErr
 	}
-	entries, err := os.ReadDir(root)
+	entries, err := secureReadDir(root)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -261,7 +243,7 @@ func (store Store) QuarantinedLeases(workspaceID string) ([]Lease, error) {
 			continue
 		}
 		jobRoot := filepath.Join(root, jobEntry.Name())
-		markers, readErr := os.ReadDir(jobRoot)
+		markers, readErr := secureReadDir(jobRoot)
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -280,7 +262,7 @@ func (store Store) QuarantinedLeases(workspaceID string) ([]Lease, error) {
 			if lease.WorkspaceID != workspaceID {
 				return nil, errors.New("scheduler quarantine workspace mismatch")
 			}
-			markerBody, readErr := os.ReadFile(filepath.Join(jobRoot, marker.Name()))
+			markerBody, readErr := secureReadFile(filepath.Join(jobRoot, marker.Name()))
 			if readErr != nil {
 				return nil, readErr
 			}
@@ -318,12 +300,8 @@ func (store Store) RecoverQuarantinedLease(lease Lease, now time.Time) error {
 	}
 	path := filepath.Join(directory, safeLeaseName(lease.OccurrenceKey)+".json")
 	marker := quarantinePath(path)
-	info, err := os.Lstat(marker)
-	if err != nil {
+	if _, err := secureReadFile(marker); err != nil {
 		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return errors.New("invalid scheduler quarantine marker")
 	}
 	return store.ReleaseLease(lease)
 }
@@ -382,33 +360,8 @@ func ScheduledOccurrenceKey(jobID string, scheduledFor time.Time) string {
 }
 
 func readLease(path string) (Lease, error) {
-	before, err := os.Lstat(path)
-	if err != nil {
-		return Lease{}, err
-	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
-		return Lease{}, fmt.Errorf("invalid scheduler lease %s", path)
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return Lease{}, err
-	}
-	defer file.Close()
-	opened, err := file.Stat()
-	if err != nil || !os.SameFile(before, opened) {
-		return Lease{}, fmt.Errorf("scheduler lease changed during secure open: %s", path)
-	}
-	decoder := json.NewDecoder(file)
-	decoder.DisallowUnknownFields()
 	var lease Lease
-	if err := decoder.Decode(&lease); err != nil {
-		return Lease{}, err
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return Lease{}, fmt.Errorf("scheduler lease contains multiple JSON values: %s", path)
-		}
+	if err := readStrictJSON(path, &lease); err != nil {
 		return Lease{}, err
 	}
 	if err := validateLeaseIdentity(lease); err != nil || !lease.ExpiresAt.After(lease.AcquiredAt) || lease.ExpiresAt.Sub(lease.AcquiredAt) > 15*time.Minute {

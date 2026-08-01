@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -304,36 +305,46 @@ func (store Store) Receipts(workspaceID string) ([]Receipt, error) {
 		return nil, err
 	}
 	var receipts []Receipt
-	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("scheduler receipt path must not be a symlink: %s", path)
-		}
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			return nil
-		}
-		var receipt Receipt
-		if err := readStrictJSON(path, &receipt); err != nil {
-			return err
-		}
-		if receipt.SchemaVersion != 1 || receipt.WorkspaceID != workspaceID {
-			return fmt.Errorf("invalid scheduler receipt %s", path)
-		}
-		if err := validateReceipt(receipt); err != nil {
-			return err
-		}
-		receipt.SchemaVersion = 0
-		receipt.WorkspaceID = ""
-		receipts = append(receipts, receipt)
-		return nil
-	})
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
+	entries, err := secureReadDir(root)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
 		return nil, err
+	}
+	for _, jobEntry := range entries {
+		if jobEntry.Type()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("scheduler receipt path must not be a symlink: %s", jobEntry.Name())
+		}
+		if !jobEntry.IsDir() {
+			continue
+		}
+		jobRoot := filepath.Join(root, jobEntry.Name())
+		files, readErr := secureReadDir(jobRoot)
+		if readErr != nil {
+			return nil, readErr
+		}
+		for _, entry := range files {
+			if entry.Type()&os.ModeSymlink != 0 {
+				return nil, fmt.Errorf("scheduler receipt path must not be a symlink: %s", entry.Name())
+			}
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+				continue
+			}
+			var receipt Receipt
+			if err := readStrictJSON(filepath.Join(jobRoot, entry.Name()), &receipt); err != nil {
+				return nil, err
+			}
+			if receipt.SchemaVersion != 1 || receipt.WorkspaceID != workspaceID || receipt.JobID != jobEntry.Name() {
+				return nil, fmt.Errorf("invalid scheduler receipt %s", entry.Name())
+			}
+			if err := validateReceipt(receipt); err != nil {
+				return nil, err
+			}
+			receipt.SchemaVersion = 0
+			receipt.WorkspaceID = ""
+			receipts = append(receipts, receipt)
+		}
 	}
 	sort.Slice(receipts, func(left, right int) bool { return receipts[left].AttemptedAt.Before(receipts[right].AttemptedAt) })
 	return receipts, nil
@@ -381,23 +392,11 @@ func readEnrollment(path string) (Enrollment, error) {
 }
 
 func readStrictJSON(path string, target any) error {
-	before, err := os.Lstat(path)
+	body, err := secureReadFile(path)
 	if err != nil {
 		return err
 	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
-		return errors.New("scheduler JSON state must be a regular file")
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	opened, err := file.Stat()
-	if err != nil || !os.SameFile(before, opened) {
-		return errors.New("scheduler JSON state changed during secure open")
-	}
-	decoder := json.NewDecoder(file)
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
@@ -413,29 +412,12 @@ func readStrictJSON(path string, target any) error {
 }
 
 func writeNewJSON(path string, value any) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	body, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = file.Close()
-			_ = os.Remove(path)
-		}
-	}()
-	encoder := json.NewEncoder(file)
-	if err := encoder.Encode(value); err != nil {
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+	body = append(body, '\n')
+	return secureWriteNewFile(path, body)
 }
 
 // ValidateSchemaFile keeps the published scheduler-state contract wired into

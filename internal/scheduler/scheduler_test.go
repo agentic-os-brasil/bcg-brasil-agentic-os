@@ -366,3 +366,116 @@ func TestSecurePathWalkSurvivesAncestorRenameToSymlink(t *testing.T) {
 		t.Fatalf("path walk followed renamed symlink: entries=%#v err=%v", entries, err)
 	}
 }
+
+func TestSecureLeafIOSurvivesAncestorSwapForEnrollmentReceiptAndLease(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix adversarial swap uses descriptor-relative test fixtures")
+	}
+	cases := []struct {
+		name string
+		rel  []string
+		file string
+	}{
+		{name: "enrollment", rel: []string{"workspaces", "case-a"}, file: "enrollment.json"},
+		{name: "receipt", rel: []string{"workspaces", "case-a", "receipts", "memory-daily"}, file: "receipt.json"},
+		{name: "lease", rel: []string{"workspaces", "case-a", "leases", "memory-daily"}, file: "lease.json"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			root, outside := t.TempDir(), t.TempDir()
+			parent, err := ensurePrivateTree(root, testCase.rel...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			workspaces := filepath.Join(root, "workspaces")
+			moved := filepath.Join(root, "workspaces-original")
+			fired := false
+			previous := secureLeafStepHook
+			t.Cleanup(func() { secureLeafStepHook = previous })
+			secureLeafStepHook = func(string) {
+				if fired {
+					return
+				}
+				fired = true
+				if err := os.Rename(workspaces, moved); err != nil {
+					t.Fatalf("rename ancestor: %v", err)
+				}
+				if err := os.Symlink(outside, workspaces); err != nil {
+					t.Fatalf("replace ancestor with symlink: %v", err)
+				}
+			}
+			path := filepath.Join(parent, testCase.file)
+			if err := secureWriteNewFile(path, []byte("metadata-only\n")); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(filepath.Join(moved, filepath.Join(append(testCase.rel[1:], testCase.file)...))); err != nil {
+				t.Fatalf("secure leaf write did not stay on opened ancestor: %v", err)
+			}
+			entries, err := os.ReadDir(outside)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("secure leaf write followed swapped ancestor: entries=%#v err=%v", entries, err)
+			}
+		})
+	}
+}
+
+func TestSecureLeafReadAndRemoveSurviveAncestorSwap(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix adversarial swap uses descriptor-relative test fixtures")
+	}
+	root, outside := t.TempDir(), t.TempDir()
+	parent, err := ensurePrivateTree(root, "workspaces", "case-a", "receipts", "memory-daily")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(parent, "receipt.json")
+	if err := secureWriteNewFile(path, []byte("original\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	swap := func(fired *bool) func(string) {
+		return func(string) {
+			if *fired {
+				return
+			}
+			*fired = true
+			workspaces := filepath.Join(root, "workspaces")
+			moved := filepath.Join(root, "workspaces-original")
+			if err := os.Rename(workspaces, moved); err != nil {
+				t.Fatalf("rename ancestor: %v", err)
+			}
+			if err := os.Symlink(outside, workspaces); err != nil {
+				t.Fatalf("replace ancestor with symlink: %v", err)
+			}
+		}
+	}
+
+	previous := secureLeafStepHook
+	t.Cleanup(func() { secureLeafStepHook = previous })
+	fired := false
+	secureLeafStepHook = swap(&fired)
+	body, err := secureReadFile(path)
+	if err != nil || string(body) != "original\n" {
+		t.Fatalf("secure leaf read followed swapped ancestor: body=%q err=%v", body, err)
+	}
+
+	// Recreate the lexical ancestor only after the read assertion; the opened
+	// descriptor still identifies the moved tree, while the path now points out.
+	if err := os.Remove(filepath.Join(root, "workspaces")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(root, "workspaces-original"), filepath.Join(root, "workspaces")); err != nil {
+		t.Fatal(err)
+	}
+	fired = false
+	secureLeafStepHook = swap(&fired)
+	if err := secureRemoveFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "workspaces-original", "case-a", "receipts", "memory-daily", "receipt.json")); !os.IsNotExist(err) {
+		t.Fatalf("secure leaf remove did not remove original file: %v", err)
+	}
+	if entries, err := os.ReadDir(outside); err != nil || len(entries) != 0 {
+		t.Fatalf("secure leaf remove followed swapped ancestor: entries=%#v err=%v", entries, err)
+	}
+}
