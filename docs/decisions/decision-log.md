@@ -655,3 +655,25 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Earlier same-session or repeated prompts remain eligible history while the current occurrence cannot self-duplicate. Durable fence epochs are real transition evidence rather than an opened-store snapshot. Raw prompt, client or generated content never enters recovery markers, receipts or errors. Low-confidence intrinsic-intent hypotheses remain task-local and can clarify through Maestro; they never update canonical self state.
 - Refs: specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; internal/maestro; internal/ownerctx; internal/agentorchestration; internal/cli
 - Supersedes: none
+
+## BSEL - Activate optional engineering skills from confirmed interview selection
+
+- Date: 2026-07-31
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The Canary already ships professional engineering skills as source content, but the bundle catalog marked them unavailable and the initial interview had no capability-track selection. That made the useful code methods invisible at runtime and conflated missing data/runtime packs with an optional local capability.
+- Decision: Mark `engineering-core` as `optional`, expose `technical-explorer` and `software-engineering` in the canonical agent interview, persist confirmed `capability_tracks` with the local personalization profile, and have the adapter project the embedded engineering skills only for a valid selected plan. Keep `data-practice` unavailable until its runtime and release contract are qualified. Capability selection remains independent from interaction profile, tools, data scope, provider access and authority.
+- Consequences: A user can opt into code-oriented methods during onboarding and receive them in Claude/Codex projection without a new agent or implicit grant. Selection is validated against the catalog and fails closed before persistence or workspace writes when a required bundle is unavailable. Remote/downloaded optional packs, migrations, signatures and separate runtime authorities remain future work.
+- Refs: USER; specs/035-professional-capability-bundles.md; bundles/catalog/catalog.json; internal/agentidentity; internal/capabilitybundle; internal/runtimeprojection
+- Supersedes: CAPS
+
+## OPTS - Make all Canary professional bundles interview-selectable
+
+- Date: 2026-07-31
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The Canary's engineering and data practice content is already embedded, sanitized and runtime-neutral. Leaving `data-practice` as `unavailable` made the interview offer a choice that could not be fulfilled even though its three methodological skills require no external provider or file-generation capability.
+- Decision: Remove `unavailable` from the professional capability-bundle surface. `engineering-core` and `data-practice` are both `optional`, appear as selectable tracks in the canonical interview, and every skill in the selected bundle is projected together with its dependencies after confirmed local selection. Compose and project a manifest-owned, selection-scoped agent-skill policy so only the confirmed methods and dependencies become selectable by the Case Agent. Keep `unavailable` for unrelated native/runtime capabilities whose evidence or authority is not present.
+- Consequences: A user can select software, data or both practices during onboarding; the active projection and dispatcher policy remain deterministic, hash-bound and tool-neutral. Embedded methods from unselected bundles remain denied, and a modified or unmanaged policy path fails closed. The base catalog remains unchanged until selection, and no track grants tools, data scope, provider access, publication or agent authority.
+- Refs: USER; specs/035-professional-capability-bundles.md; bundles/catalog/catalog.json; internal/agentidentity; internal/runtimeprojection
+- Supersedes: BSEL

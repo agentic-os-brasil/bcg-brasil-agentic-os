@@ -108,7 +108,7 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "hook":
 		return runHookWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "adapter":
-		return runAdapter(args[1:], out, errOut)
+		return runAdapterWithDataRoot(args[1:], out, errOut, defaultDataRoot)
 	case "skills":
 		return runSkills(args[1:], out, errOut)
 	case "bundles":
@@ -538,6 +538,16 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		var input agentidentity.Profile
 		if err := agentidentity.DecodeStrict(body, &input); err != nil {
 			return reportError(errOut, err)
+		}
+		if len(input.CapabilityTracks) > 0 {
+			catalog, catalogErr := bundlecatalog.Catalog()
+			if catalogErr != nil {
+				return reportError(errOut, catalogErr)
+			}
+			_, planErr := catalog.PlanForTracks(input.CapabilityTracks)
+			if planErr != nil {
+				return reportError(errOut, planErr)
+			}
 		}
 		input.UpdatedAt = time.Now().UTC()
 		if err := agentidentity.Save(root, input); err != nil {
@@ -2599,6 +2609,10 @@ func evaluateAdapterInteraction(root, runtimeName, event, sourceEvent, workspace
 }
 
 func runAdapter(args []string, out, errOut io.Writer) int {
+	return runAdapterWithDataRoot(args, out, errOut, defaultDataRoot)
+}
+
+func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 || (args[0] != "install" && args[0] != "uninstall" && args[0] != "status") {
 		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status> --runtime claude|codex [workspace-path]")
 		return ExitUsage
@@ -2611,6 +2625,16 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 		return ExitUsage
 	}
 	path := optionalArg(flags.Args())
+	root, rootErr := dataRoot()
+	if rootErr != nil {
+		return reportError(errOut, rootErr)
+	}
+	tracks := []string(nil)
+	if profile, loadErr := agentidentity.Load(root); loadErr == nil {
+		tracks = profile.CapabilityTracks
+	} else if !errors.Is(loadErr, os.ErrNotExist) {
+		return reportError(errOut, loadErr)
+	}
 	type adapterResult struct {
 		adaptercfg.Status
 		Projection runtimeprojection.Status `json:"projection"`
@@ -2673,7 +2697,7 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 		if err = adaptercfg.ValidateInstall(*runtimeName, path, resolvedExecutable); err != nil {
 			return reportError(errOut, err)
 		}
-		if err = runtimeprojection.ValidateInstall(*runtimeName, path); err != nil {
+		if err = runtimeprojection.ValidateInstallForTracks(*runtimeName, path, tracks); err != nil {
 			return reportError(errOut, err)
 		}
 		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)
@@ -2706,7 +2730,7 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 			}
 			return reportError(errOut, err)
 		}
-		result.Projection, err = runtimeprojection.Install(*runtimeName, path)
+		result.Projection, err = runtimeprojection.InstallForTracks(*runtimeName, path, tracks)
 		if err != nil {
 			if restoreErr := restoreAdapterState(); restoreErr != nil {
 				return reportError(errOut, fmt.Errorf("projection failed and adapter rollback failed: %w (original: %v)", restoreErr, err))

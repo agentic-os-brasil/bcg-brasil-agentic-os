@@ -1,4 +1,4 @@
-package baseskills
+package datapracticeskills
 
 import (
 	"bytes"
@@ -11,18 +11,11 @@ import (
 //go:embed catalog.json
 var catalogJSON []byte
 
-//go:embed agent-skill-policy.json
-var agentSkillPolicyJSON []byte
-
 //go:embed */SKILL.md
 var skillFiles embed.FS
 
 func Catalog() (skillsindex.Catalog, error) {
 	return skillsindex.Parse(bytes.NewReader(catalogJSON))
-}
-
-func AgentSkillPolicy() []byte {
-	return append([]byte(nil), agentSkillPolicyJSON...)
 }
 
 func Skill(id string) ([]byte, error) {
@@ -31,7 +24,7 @@ func Skill(id string) ([]byte, error) {
 	}
 	body, err := skillFiles.ReadFile(id + "/SKILL.md")
 	if err != nil {
-		return nil, fmt.Errorf("read embedded skill %s: %w", id, err)
+		return nil, fmt.Errorf("read embedded data skill %s: %w", id, err)
 	}
 	return append([]byte(nil), body...), nil
 }

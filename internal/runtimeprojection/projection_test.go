@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
 )
 
 func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
@@ -38,6 +40,9 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(workspace, ManifestRelativePath)); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(filepath.Join(workspace, PolicyRelativePath)); err != nil {
+		t.Fatal(err)
+	}
 
 	second, err := Install("claude", workspace)
 	if err != nil || second.State != "installed" {
@@ -46,6 +51,69 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 	updated, err := os.ReadFile(filepath.Join(workspace, "CLAUDE.md"))
 	if err != nil || strings.Count(string(updated), OrientationBegin) != 1 || strings.Count(string(updated), OrientationEnd) != 1 {
 		t.Fatalf("orientation markers after reinstall = %q, %v", updated, err)
+	}
+}
+
+func TestInstallProjectsSelectionScopedPolicyAndPreservesModifiedPolicy(t *testing.T) {
+	workspace := t.TempDir()
+	status, err := InstallForTracks("codex", workspace, []string{"data-science"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := skillpolicy.ParseFile(status.PolicyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, skillID := range []string{"data-science-evaluation", "test-and-evidence", "deck-storyline"} {
+		if !policy.AllowsDirect("case_agent", skillID) {
+			t.Fatalf("selected or dependency skill %q is not active", skillID)
+		}
+	}
+
+	mutated := append([]byte("\n"), []byte("user-owned-policy\n")...)
+	if err := os.WriteFile(status.PolicyPath, mutated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inspected, err := Inspect("codex", workspace)
+	if err != nil || inspected.State != "conflict" || len(inspected.Conflicts) != 1 || inspected.Conflicts[0] != status.PolicyPath {
+		t.Fatalf("modified policy was not detected: %+v, %v", inspected, err)
+	}
+	failed, err := InstallForTracks("codex", workspace, []string{"data-science"})
+	if err == nil || failed.State != "conflict" {
+		t.Fatalf("modified policy did not fail install closed: %+v, %v", failed, err)
+	}
+	if _, err := Uninstall("codex", workspace); err == nil {
+		t.Fatal("modified policy did not fail uninstall closed")
+	}
+	body, err := os.ReadFile(status.PolicyPath)
+	if err != nil || string(body) != string(mutated) {
+		t.Fatalf("modified policy was not preserved: %q, %v", body, err)
+	}
+}
+
+func TestInstallUpgradesLegacyManifestOnlyWhenPolicyPathIsFree(t *testing.T) {
+	workspace := t.TempDir()
+	if _, err := Install("codex", workspace); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(workspace, ManifestRelativePath)
+	current, err := readManifest(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current.PolicyPath, current.PolicyHash = "", ""
+	if err := writeJSON(manifestPath, current); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(workspace, PolicyRelativePath)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install("codex", workspace); err != nil {
+		t.Fatalf("legacy projection was not upgraded: %v", err)
+	}
+	upgraded, err := readManifest(manifestPath)
+	if err != nil || upgraded.PolicyPath != PolicyRelativePath || upgraded.PolicyHash == "" {
+		t.Fatalf("policy ownership was not recorded: %+v, %v", upgraded, err)
 	}
 }
 
@@ -160,5 +228,8 @@ func TestCodexProjectionAndUninstallPreserveUserContent(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(workspace, ".codex", "skills")); !os.IsNotExist(err) {
 		t.Fatalf("managed skills directory remains: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, PolicyRelativePath)); !os.IsNotExist(err) {
+		t.Fatalf("managed policy remains: %v", err)
 	}
 }
