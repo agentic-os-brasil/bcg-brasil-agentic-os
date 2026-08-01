@@ -585,6 +585,27 @@ func TestMaestroDispatchBoundaryRecordsPromptPlansAndPersistsMetadataOnlyChain(t
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(distinctOccurrence), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"durable_dispatch_epoch": 2`) {
 		t.Fatalf("distinct occurrence did not advance the durable epoch: code=%d output=%s", code, output.String())
 	}
+
+	selfRoot := t.TempDir()
+	selfDataRoot := func() (string, error) { return selfRoot, nil }
+	selfInput := strings.Replace(input, `"prompt":"prepare case alpha"`, `"self_signal":{"signal":"explicit_correction","facet":"communication-style","claim":"prefers_concise","evidence_type":"owner_correction","confidence":1,"sensitivity":"professional","owner_confirmed":true},"prompt":"prepare case alpha"`, 1)
+	output.Reset()
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(selfInput), &output, &output, selfDataRoot); code != ExitOK {
+		t.Fatalf("self-signal dispatch = %d: %s", code, output.String())
+	}
+	firstObservations, err := ownerctx.ListObservations(selfRoot)
+	if err != nil || len(firstObservations) != 1 {
+		t.Fatalf("first self-signal observation = %#v, err=%v", firstObservations, err)
+	}
+	firstObservationID := firstObservations[0].ID
+	output.Reset()
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(selfInput), &output, &output, selfDataRoot); code != ExitOK {
+		t.Fatalf("self-signal retry = %d: %s", code, output.String())
+	}
+	secondObservations, err := ownerctx.ListObservations(selfRoot)
+	if err != nil || len(secondObservations) != 1 || secondObservations[0].ID != firstObservationID {
+		t.Fatalf("self-signal retry was not idempotent: %#v, err=%v", secondObservations, err)
+	}
 }
 
 func TestMaestroDispatchPromptFailureLeavesPreparedBoundaryForRecovery(t *testing.T) {

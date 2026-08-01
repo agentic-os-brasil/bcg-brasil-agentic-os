@@ -89,6 +89,26 @@ type DispatchBoundaryInput struct {
 var syncChainDirectoryFunc = syncChainDirectory
 var syncDispatchDirectoryFunc = syncChainDirectory
 
+type dispatchBoundaryStateUnknownError struct {
+	err error
+}
+
+func (err *dispatchBoundaryStateUnknownError) Error() string {
+	return err.err.Error()
+}
+
+func (err *dispatchBoundaryStateUnknownError) Unwrap() error {
+	return err.err
+}
+
+// DispatchBoundaryStateUnknown reports that a receipt replacement crossed
+// the rename boundary but neither the new nor prepared bytes could be made
+// durable. Callers must preserve prompt/chain artifacts for recovery.
+func DispatchBoundaryStateUnknown(err error) bool {
+	var unknown *dispatchBoundaryStateUnknownError
+	return errors.As(err, &unknown)
+}
+
 func (input DispatchBoundaryInput) PersistDispatchBoundary() (DispatchBoundaryState, error) {
 	if err := input.Plan.Validate(); err != nil {
 		return DispatchBoundaryState{}, err
@@ -254,6 +274,13 @@ func (input DispatchBoundaryInput) FinalizeDispatchBoundary(prepared DispatchBou
 		return DispatchBoundaryState{}, err
 	}
 	if err := replaceDispatchReceipt(receiptsDirectory, receiptPath, finished, previousBody); err != nil {
+		if DispatchBoundaryStateUnknown(err) {
+			markerErr := PersistDispatchRecoveryMarker(input.Root, DispatchRecoveryMarker{SchemaVersion: 1, PlanDigest: finished.PlanDigest, DispatchID: finished.DispatchID, ArtifactKind: RecoveryArtifactDispatchReceipt, TargetRef: receiptPath, Reason: "dispatch finalization receipt state is unknown"})
+			if markerErr != nil {
+				return DispatchBoundaryState{}, fmt.Errorf("dispatch finalization state is unknown: %w; recovery marker failed: %v", err, markerErr)
+			}
+			return DispatchBoundaryState{}, fmt.Errorf("dispatch finalization state is unknown; recovery marker recorded: %w", err)
+		}
 		return DispatchBoundaryState{}, err
 	}
 	return finished, nil
@@ -573,7 +600,7 @@ func replaceDispatchReceipt(directory, path string, state DispatchBoundaryState,
 			restoreErr = syncDispatchDirectoryFunc(directory)
 		}
 		if restoreErr != nil {
-			return fmt.Errorf("dispatch receipt finalization durability failed and prepared receipt restore failed: %w", restoreErr)
+			return &dispatchBoundaryStateUnknownError{err: fmt.Errorf("dispatch receipt finalization durability failed and prepared receipt restore failed: %w", restoreErr)}
 		}
 		return fmt.Errorf("dispatch receipt finalization durability failed; prepared receipt restored: %w", err)
 	}

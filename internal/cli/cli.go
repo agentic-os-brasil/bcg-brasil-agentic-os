@@ -1704,7 +1704,7 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 		}
 		return reportError(errOut, err)
 	}
-	observationReceipt, _, err := ownerctx.AppendObservation(root, maestroDispatchObservation(request, plan, packet, time.Now().UTC()))
+	observationReceipt, _, err := ownerctx.AppendObservation(root, maestroDispatchObservation(request, plan, packet, durableState.StartedAt))
 	if err != nil {
 		promptID := ""
 		if !occurrenceAlreadyRecorded {
@@ -1718,6 +1718,9 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 	_ = observationReceipt
 	durableState, err = finalizeDurableDispatchFence(root, request.OwnerID, request.SessionID, request.DispatchID, promptDigest, packet.PacketDigest, draftDigest, plan, chain, durableState)
 	if err != nil {
+		if maestro.DispatchBoundaryStateUnknown(err) {
+			return reportError(errOut, err)
+		}
 		promptID := ""
 		if !occurrenceAlreadyRecorded {
 			promptID = promptReceipt.ID

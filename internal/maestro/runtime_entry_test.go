@@ -234,6 +234,39 @@ func TestDispatchBoundaryFinalizationRestoresPreparedReceiptAfterFsyncFailure(t 
 	}
 }
 
+func TestDispatchBoundaryUnknownFinalizationStateRecordsOccurrenceRecoveryMarker(t *testing.T) {
+	root := t.TempDir()
+	plan, err := PlanFor(caseInput(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, err := NewChain(plan, DefaultLoopPolicy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := DispatchBoundaryInput{Root: root, OwnerID: "owner-a", SessionID: "session-a", DispatchID: "dispatch-unknown-finalization", PromptDigest: SHA256Hex("prompt"), PacketDigest: SHA256Hex("packet"), DraftDigest: SHA256Hex("draft"), Plan: plan, Chain: chain}
+	prepared, err := input.PersistDispatchBoundary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalSync := syncDispatchDirectoryFunc
+	defer func() { syncDispatchDirectoryFunc = originalSync }()
+	syncDispatchDirectoryFunc = func(directory string) error {
+		return errors.New("injected finalization and prepared-restore fsync failure")
+	}
+	if _, err := input.FinalizeDispatchBoundary(prepared); err == nil || !DispatchBoundaryStateUnknown(err) {
+		t.Fatalf("unknown finalization state was not surfaced: %v", err)
+	}
+	markers, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "recovery", plan.PlanDigest+"-*.json"))
+	if err != nil || len(markers) != 1 {
+		t.Fatalf("occurrence-specific dispatch recovery marker missing: %v, err=%v", markers, err)
+	}
+	markerBody, err := os.ReadFile(markers[0])
+	if err != nil || !strings.Contains(string(markerBody), "dispatch-unknown-finalization") || !strings.Contains(string(markerBody), RecoveryArtifactDispatchReceipt) {
+		t.Fatalf("dispatch recovery marker is not occurrence-bound: %q, err=%v", markerBody, err)
+	}
+}
+
 func TestDispatchBoundaryPointerFailurePreservesPreviousCurrentReceipt(t *testing.T) {
 	root := t.TempDir()
 	plan, err := PlanFor(caseInput(false))
