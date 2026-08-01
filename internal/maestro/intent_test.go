@@ -108,3 +108,58 @@ func TestMaestroEvaluatesInteractionWithoutPersistingAnUnauthenticatedLoop(t *te
 		t.Fatal(err)
 	}
 }
+
+func TestPromptHistoryIsSelectedNormalizedAndQuotedInEphemeralWalterPacket(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: "owner", Prompt: "  historico  ", Language: "pt-BR", Source: "owner", SessionID: "session-a", ScopeKind: ownerctx.PromptScopeCase, ScopeID: "case-a", RecordedAt: time.Now().UTC(), ContentKind: "user_prompt"}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ownerctx.ProjectSnapshot(root, []string{"voice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanFor(caseInput(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	packet, err := BuildIntentReviewPacketWithPromptHistory("current user prompt", plan, "draft", nil, snapshot, nil, "owner", "low", "reversible", "", root, ownerctx.PromptHistorySelectionLimits{MaxCount: 4, MaxBytes: 1024, MaxAge: time.Hour, ScopeKind: ownerctx.PromptScopeCase, ScopeID: "case-a"}, "pt-BR", nil, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if packet.CurrentPrompt != "current user prompt" || len(packet.PriorPrompts) != 1 || packet.PriorPrompts[0].OriginalText != "  historico  " || packet.PriorPrompts[0].NormalizedText != "historico" || !packet.PriorPrompts[0].QuotedData {
+		t.Fatalf("prompt packet = %#v", packet)
+	}
+	hypothesis, err := DeriveIntentHypothesis(packet, "answer current request", "maintain continuity without losing current intent", []string{"current_prompt", packet.PriorPrompts[0].ID}, 0.8, []string{"history is irrelevant"}, "medium", "the owner rejects the continuity assumption")
+	if err != nil || hypothesis.Confidence != 0.8 {
+		t.Fatalf("hypothesis = %#v, err = %v", hypothesis, err)
+	}
+}
+
+func TestPromptHistoryTranslationStageFailsClosedWithoutTranslator(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: "owner", Prompt: "prior", Language: "en-US", Source: "owner", SessionID: "session-a", ScopeKind: ownerctx.PromptScopeGlobal, ScopeID: "owner", RecordedAt: time.Now().UTC(), ContentKind: "user_prompt"}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ownerctx.ProjectSnapshot(root, []string{"voice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanFor(caseInput(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits := ownerctx.PromptHistorySelectionLimits{MaxCount: 1, MaxBytes: 100, MaxAge: time.Hour, ScopeKind: ownerctx.PromptScopeGlobal, ScopeID: "owner"}
+	if _, err := BuildIntentReviewPacketWithPromptHistory("current", plan, "draft", nil, snapshot, nil, "owner", "low", "reversible", "", root, limits, "pt-BR", nil, time.Now().UTC()); err == nil {
+		t.Fatal("missing translator was accepted")
+	}
+	packet, err := BuildIntentReviewPacketWithPromptHistory("current", plan, "draft", nil, snapshot, nil, "owner", "low", "reversible", "", root, limits, "pt-BR", func(original, source, target string) (string, error) { return "traduzido", nil }, time.Now().UTC())
+	if err != nil || len(packet.PriorPrompts) != 1 || packet.PriorPrompts[0].OriginalText != "prior" || packet.PriorPrompts[0].NormalizedText != "traduzido" {
+		t.Fatalf("translated packet = %#v, err = %v", packet, err)
+	}
+}

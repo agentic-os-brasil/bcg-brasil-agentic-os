@@ -45,6 +45,31 @@ type RelevantObservation struct {
 	ExpiresAt    time.Time                 `json:"expires_at"`
 }
 
+type HistoricalPrompt struct {
+	ID              string    `json:"id"`
+	OriginalText    string    `json:"original_text"`
+	NormalizedText  string    `json:"normalized_text"`
+	SourceLanguage  string    `json:"source_language"`
+	WorkingLanguage string    `json:"working_language"`
+	RecordedAt      time.Time `json:"recorded_at"`
+	ScopeKind       string    `json:"scope_kind"`
+	ScopeID         string    `json:"scope_id"`
+	SHA256          string    `json:"sha256"`
+	QuotedData      bool      `json:"quoted_data"`
+}
+
+type PromptHistoryPolicy struct {
+	MaxCount              int    `json:"max_count"`
+	MaxBytes              int    `json:"max_bytes"`
+	MaxAgeSeconds         int64  `json:"max_age_seconds"`
+	ScopeKind             string `json:"scope_kind"`
+	ScopeID               string `json:"scope_id"`
+	WorkingLanguage       string `json:"working_language"`
+	CurrentPromptPrecedes bool   `json:"current_prompt_precedes"`
+}
+
+type PromptTranslator func(original, sourceLanguage, workingLanguage string) (string, error)
+
 // IntentReviewPacket is ephemeral and sealed by Maestro. Literal request and
 // draft are available to Walter for review, but receipts retain only digests.
 type IntentReviewPacket struct {
@@ -52,6 +77,7 @@ type IntentReviewPacket struct {
 	PacketVersion        string                            `json:"packet_version"`
 	PacketID             string                            `json:"packet_id"`
 	LiteralRequest       string                            `json:"literal_request"`
+	CurrentPrompt        string                            `json:"current_prompt"`
 	PlanDigest           string                            `json:"plan_digest"`
 	PlanRoute            string                            `json:"plan_route"`
 	DraftOutput          string                            `json:"draft_output"`
@@ -60,6 +86,8 @@ type IntentReviewPacket struct {
 	SelfSnapshotDigest   string                            `json:"self_snapshot_digest"`
 	SelfFacets           map[string]ownerctx.SnapshotFacet `json:"self_facets"`
 	Observations         []RelevantObservation             `json:"observations,omitempty"`
+	PriorPrompts         []HistoricalPrompt                `json:"prior_prompts,omitempty"`
+	PromptHistory        PromptHistoryPolicy               `json:"prompt_history"`
 	Audience             string                            `json:"audience"`
 	Consequence          string                            `json:"consequence"`
 	Reversibility        string                            `json:"reversibility"`
@@ -116,21 +144,100 @@ func BuildIntentReviewPacket(prompt string, plan Plan, draft string, contextRefs
 	packet := IntentReviewPacket{
 		SchemaVersion: IntentReviewSchemaVersion, PacketVersion: "intent-review-v1",
 		PacketID: packetID(plan.PlanDigest, prompt, draft), LiteralRequest: prompt,
-		PlanDigest: plan.PlanDigest, PlanRoute: string(plan.CaseEntry), DraftOutput: draft,
+		CurrentPrompt: prompt,
+		PlanDigest:    plan.PlanDigest, PlanRoute: string(plan.CaseEntry), DraftOutput: draft,
 		RelevantContextRefs: append([]string(nil), contextRefs...), SelfSnapshotVersion: snapshot.Version,
 		SelfSnapshotDigest: snapshot.CanonicalSourceDigest, SelfFacets: snapshot.Facets,
 		Observations: append([]RelevantObservation(nil), observations...), Audience: audience,
 		Consequence: consequence, Reversibility: reversibility, AccountReceiptDigest: accountReceiptDigest,
+		PromptHistory: PromptHistoryPolicy{MaxCount: 8, MaxBytes: 32 << 10, MaxAgeSeconds: int64((30 * 24 * time.Hour) / time.Second), ScopeKind: "global", ScopeID: "owner", WorkingLanguage: "und", CurrentPromptPrecedes: true},
 	}
 	packet.PacketDigest = digestIntentPacket(packet)
 	return packet, nil
+}
+
+// BuildIntentReviewPacketWithPromptHistory keeps history selection and
+// translation before the Walter review stage. The prompt bodies remain only
+// in the ephemeral packet; all durable receipts retain digests only.
+func BuildIntentReviewPacketWithPromptHistory(prompt string, plan Plan, draft string, contextRefs []string, snapshot ownerctx.UserSelfSnapshot, observations []RelevantObservation, audience, consequence, reversibility, accountReceiptDigest, historyRoot string, limits ownerctx.PromptHistorySelectionLimits, workingLanguage string, translator PromptTranslator, now time.Time) (IntentReviewPacket, error) {
+	packet, err := BuildIntentReviewPacket(prompt, plan, draft, contextRefs, snapshot, observations, audience, consequence, reversibility, accountReceiptDigest)
+	if err != nil {
+		return IntentReviewPacket{}, err
+	}
+	entries, err := ownerctx.SelectPromptHistory(historyRoot, limits, now)
+	if err != nil {
+		return IntentReviewPacket{}, err
+	}
+	return AttachPromptHistory(packet, entries, limits, workingLanguage, translator)
+}
+
+func AttachPromptHistory(packet IntentReviewPacket, entries []ownerctx.PromptHistoryEntry, limits ownerctx.PromptHistorySelectionLimits, workingLanguage string, translator PromptTranslator) (IntentReviewPacket, error) {
+	if err := packet.Validate(); err != nil {
+		return IntentReviewPacket{}, err
+	}
+	if strings.TrimSpace(workingLanguage) == "" || len(entries) > limits.MaxCount || limits.MaxCount < 1 || limits.MaxBytes < 1 {
+		return IntentReviewPacket{}, errors.New("prompt history packet limits or working language are invalid")
+	}
+	prior := make([]HistoricalPrompt, 0, len(entries))
+	bytes := 0
+	for _, entry := range entries {
+		if bytes+len([]byte(entry.Prompt)) > limits.MaxBytes {
+			return IntentReviewPacket{}, errors.New("selected prompt history exceeds packet byte limit")
+		}
+		normalized, err := normalizePrompt(entry.Prompt, entry.Language, workingLanguage, translator)
+		if err != nil {
+			return IntentReviewPacket{}, err
+		}
+		prior = append(prior, HistoricalPrompt{ID: entry.ID, OriginalText: entry.Prompt, NormalizedText: normalized, SourceLanguage: entry.Language, WorkingLanguage: workingLanguage, RecordedAt: entry.RecordedAt, ScopeKind: string(entry.ScopeKind), ScopeID: entry.ScopeID, SHA256: entry.SHA256, QuotedData: true})
+		bytes += len([]byte(entry.Prompt))
+	}
+	packet.PriorPrompts = prior
+	packet.PromptHistory = PromptHistoryPolicy{MaxCount: limits.MaxCount, MaxBytes: limits.MaxBytes, MaxAgeSeconds: int64(limits.MaxAge / time.Second), ScopeKind: string(limits.ScopeKind), ScopeID: limits.ScopeID, WorkingLanguage: workingLanguage, CurrentPromptPrecedes: true}
+	packet.PacketDigest = digestIntentPacket(packet)
+	return packet, nil
+}
+
+func normalizePrompt(original, sourceLanguage, workingLanguage string, translator PromptTranslator) (string, error) {
+	if strings.EqualFold(sourceLanguage, workingLanguage) {
+		return strings.TrimSpace(original), nil
+	}
+	if translator == nil {
+		return "", errors.New("prompt history translation requires a configured translator")
+	}
+	translated, err := translator(original, sourceLanguage, workingLanguage)
+	if err != nil || strings.TrimSpace(translated) == "" {
+		if err != nil {
+			return "", err
+		}
+		return "", errors.New("prompt history translation returned empty text")
+	}
+	return strings.TrimSpace(translated), nil
+}
+
+func DeriveIntentHypothesis(packet IntentReviewPacket, expressedObjective, latentIntent string, evidenceRefs []string, confidence float64, alternatives []string, materiality, disconfirmation string) (IntentHypothesis, error) {
+	if err := packet.Validate(); err != nil {
+		return IntentHypothesis{}, err
+	}
+	if strings.TrimSpace(expressedObjective) == "" || strings.TrimSpace(latentIntent) == "" || strings.TrimSpace(disconfirmation) == "" || confidence < 0 || confidence > 1 {
+		return IntentHypothesis{}, errors.New("intent hypothesis is incomplete")
+	}
+	allowed := map[string]bool{"current_prompt": true}
+	for _, prompt := range packet.PriorPrompts {
+		allowed[prompt.ID] = true
+	}
+	for _, ref := range evidenceRefs {
+		if !allowed[ref] {
+			return IntentHypothesis{}, errors.New("intent hypothesis evidence is not bound to the packet")
+		}
+	}
+	return IntentHypothesis{ExpressedObjective: expressedObjective, LatentIntentHypothesis: latentIntent, EvidenceRefs: append([]string(nil), evidenceRefs...), Confidence: confidence, Alternatives: append([]string(nil), alternatives...), Materiality: materiality, DisconfirmationCondition: disconfirmation}, nil
 }
 
 func (packet IntentReviewPacket) Validate() error {
 	if packet.SchemaVersion != IntentReviewSchemaVersion || packet.PacketVersion != "intent-review-v1" || packet.PacketID == "" || packet.PacketDigest == "" || packet.PacketDigest != digestIntentPacket(packet) {
 		return errors.New("intent review packet integrity is invalid")
 	}
-	if strings.TrimSpace(packet.LiteralRequest) == "" || strings.TrimSpace(packet.DraftOutput) == "" || strings.TrimSpace(packet.Audience) == "" || strings.TrimSpace(packet.Consequence) == "" || strings.TrimSpace(packet.Reversibility) == "" {
+	if strings.TrimSpace(packet.LiteralRequest) == "" || packet.CurrentPrompt != packet.LiteralRequest || !packet.PromptHistory.CurrentPromptPrecedes || strings.TrimSpace(packet.DraftOutput) == "" || strings.TrimSpace(packet.Audience) == "" || strings.TrimSpace(packet.Consequence) == "" || strings.TrimSpace(packet.Reversibility) == "" {
 		return errors.New("intent review packet is incomplete")
 	}
 	if len(packet.SelfFacets) == 0 || packet.SelfSnapshotVersion == "" || !validSHA256(packet.SelfSnapshotDigest) || packet.PlanDigest == "" {
@@ -152,6 +259,19 @@ func (packet IntentReviewPacket) Validate() error {
 		if observation.EvidenceType == "generated_output" || observation.EvidenceType == "client_document" || observation.EvidenceType == "agent_output" || observation.Claim == "" || !validSHA256(observation.SourceDigest) {
 			return errors.New("intent review packet contains an invalid self observation")
 		}
+	}
+	if len(packet.PriorPrompts) > packet.PromptHistory.MaxCount && len(packet.PriorPrompts) > 0 {
+		return errors.New("intent review packet contains too many prior prompts")
+	}
+	bytes := 0
+	for _, prompt := range packet.PriorPrompts {
+		if prompt.ID == "" || strings.TrimSpace(prompt.OriginalText) == "" || strings.TrimSpace(prompt.NormalizedText) == "" || !prompt.QuotedData || prompt.SHA256 != SHA256Hex(prompt.OriginalText) || prompt.WorkingLanguage != packet.PromptHistory.WorkingLanguage {
+			return errors.New("intent review packet contains an invalid prior prompt")
+		}
+		bytes += len([]byte(prompt.OriginalText))
+	}
+	if len(packet.PriorPrompts) > 0 && (packet.PromptHistory.MaxBytes < 1 || bytes > packet.PromptHistory.MaxBytes) {
+		return errors.New("intent review packet exceeds its prior prompt byte limit")
 	}
 	return nil
 }

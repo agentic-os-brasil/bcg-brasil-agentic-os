@@ -119,3 +119,22 @@ export, observation rejection/redaction, facet revert and snapshot deletion.
 `bcgos owner self reset --confirm` redacts provisional observations through
 tombstones and removes derived projections; it refuses to hide promoted
 canonical facets, which must use the audited facet revert path.
+
+### Owner-local prompt history
+
+Prompt retention is a separate product surface from self learning. When the
+owner enables it, `owner/prompt-history/entries.jsonl` stores only raw user
+prompts. Each entry binds owner identity, timestamp, language, source/session,
+SHA-256 and one of the global, workspace, account or case scopes. The store is
+private, symlink-checked and bounded by configurable entry count, bytes and
+age. It is never copied to managed bundles, telemetry, receipts, ledgers,
+federation or release artifacts.
+
+`bcgos owner prompt-history` exposes configuration, metadata inspection,
+explicit export, per-entry deletion and confirmed reset. Walter selection is
+bounded by count, bytes, age and relevant scope. Maestro always places the
+current prompt before history, preserves each selected original, translates or
+normalizes it into the configured working language, and marks it as quoted
+data. Prompt bodies exist only in the ephemeral sealed review packet. A
+translation adapter is required when languages differ; absence fails closed
+for that normalization stage without changing the user request.

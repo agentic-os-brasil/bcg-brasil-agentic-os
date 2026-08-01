@@ -102,6 +102,13 @@ signals as normalized local metadata; prompts, client documents and generated
 output never become self evidence. The local CLI exposes inspection/export and
 owner-confirmed rejection/redaction, revert and deletion controls.
 
+When explicitly enabled, the owner-local PromptHistoryStore retains only user
+prompts under bounded global/workspace/account/case scopes. Walter receives a
+small relevant selection alongside the current prompt; history is normalized
+into the configured working language, treated as quoted data and kept only in
+the ephemeral review packet. Prompt history never enters receipts, telemetry,
+managed bundles or release artifacts, and remains separate from self learning.
+
 ## What is ready
 
 ### 🏅 Toward the v0.1.0 pilot — contract layer validated

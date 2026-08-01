@@ -524,6 +524,27 @@ func TestOwnerSelfControlsProjectAndPersistOnlyConfirmedMetadata(t *testing.T) {
 	}
 }
 
+func TestOwnerPromptHistoryControlsKeepBodiesOutOfInspectReceipts(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	var output bytes.Buffer
+	if code := runOwnerWithInput([]string{"init"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("owner init = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwnerWithInput([]string{"prompt-history", "add", "--scope-kind", "case", "--scope-id", "case-a", "--language", "pt-BR", "--session-id", "session-a", "--stdin", "--confirm"}, strings.NewReader("user-only prompt"), &output, &output, dataRoot); code != ExitOK || strings.Contains(output.String(), "user-only prompt") {
+		t.Fatalf("prompt history add = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwnerWithInput([]string{"prompt-history", "inspect"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK || strings.Contains(output.String(), "user-only prompt") {
+		t.Fatalf("prompt history inspect = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwnerWithInput([]string{"prompt-history", "export", "--confirm"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), "user-only prompt") {
+		t.Fatalf("prompt history export = %d: %s", code, output.String())
+	}
+}
+
 func TestAtlasCommandsBootstrapOnlyPrivateOwnerAndWorkspaceRoots(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

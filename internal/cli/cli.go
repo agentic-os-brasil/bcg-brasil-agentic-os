@@ -1446,7 +1446,7 @@ func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, err
 
 func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine|self>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine|self|prompt-history>")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -1484,8 +1484,115 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		return runOwnerRefine(args[1:], in, out, errOut, root)
 	case "self":
 		return runOwnerSelf(args[1:], in, out, errOut, root)
+	case "prompt-history":
+		return runOwnerPromptHistory(args[1:], in, out, errOut, root)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine|self>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine|self|prompt-history>")
+		return ExitUsage
+	}
+}
+
+func runOwnerPromptHistory(args []string, in io.Reader, out, errOut io.Writer, root string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos owner prompt-history <config|add|inspect|export|delete|reset>")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "config":
+		flags := newFlagSet("owner prompt-history config", errOut)
+		maxEntries := flags.Int("max-entries", 0, "maximum retained user prompts")
+		maxBytes := flags.Int("max-bytes", 0, "maximum retained prompt bytes")
+		maxAgeDays := flags.Int("max-age-days", 0, "maximum prompt age in days")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history config [--max-entries N --max-bytes N --max-age-days N]")
+			return ExitUsage
+		}
+		config, err := ownerctx.LoadPromptHistoryConfig(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if *maxEntries != 0 {
+			config.MaxEntries = *maxEntries
+		}
+		if *maxBytes != 0 {
+			config.MaxBytes = *maxBytes
+		}
+		if *maxAgeDays != 0 {
+			config.MaxAgeSeconds = int64(*maxAgeDays) * 24 * 60 * 60
+		}
+		if *maxEntries != 0 || *maxBytes != 0 || *maxAgeDays != 0 {
+			if err := ownerctx.ConfigurePromptHistory(root, config); err != nil {
+				return reportError(errOut, err)
+			}
+		}
+		return writeJSON(out, config, errOut)
+	case "add":
+		flags := newFlagSet("owner prompt-history add", errOut)
+		ownerID := flags.String("owner-id", "owner", "owner identity")
+		scopeKind := flags.String("scope-kind", "", "global, workspace, account or case")
+		scopeID := flags.String("scope-id", "", "opaque scope ID")
+		language := flags.String("language", "", "prompt language, for example pt-BR")
+		source := flags.String("source", "owner", "claude, codex, cli or owner")
+		sessionID := flags.String("session-id", "", "opaque source session ID")
+		stdin := flags.Bool("stdin", false, "read only the user prompt body from stdin")
+		confirm := flags.Bool("confirm", false, "confirm local user-prompt retention")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || !*stdin || !*confirm || *scopeKind == "" || *scopeID == "" || *language == "" || *sessionID == "" {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history add --scope-kind K --scope-id ID --language LANG --session-id ID --stdin --confirm")
+			return ExitUsage
+		}
+		body, err := io.ReadAll(io.LimitReader(in, 64<<10+1))
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if len(body) > 64<<10 {
+			fmt.Fprintln(errOut, "user prompt exceeds 64 KiB")
+			return ExitUsage
+		}
+		receipt, err := ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: *ownerID, Prompt: string(body), Language: *language, Source: *source, SessionID: *sessionID, ScopeKind: ownerctx.PromptScopeKind(*scopeKind), ScopeID: *scopeID, ContentKind: "user_prompt"})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	case "inspect":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history inspect")
+			return ExitUsage
+		}
+		value, err := ownerctx.InspectPromptHistory(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, value, errOut)
+	case "export":
+		if len(args) != 2 || args[1] != "--confirm" {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history export --confirm")
+			return ExitUsage
+		}
+		value, err := ownerctx.ExportPromptHistory(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, value, errOut)
+	case "delete":
+		if len(args) != 3 || args[2] != "--confirm" {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history delete ID --confirm")
+			return ExitUsage
+		}
+		if err := ownerctx.DeletePromptHistory(root, args[1], true); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]string{"deleted": args[1]}, errOut)
+	case "reset":
+		if len(args) != 2 || args[1] != "--confirm" {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history reset --confirm")
+			return ExitUsage
+		}
+		if err := ownerctx.ResetPromptHistory(root, true); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]string{"reset": "prompt_history"}, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos owner prompt-history <config|add|inspect|export|delete|reset>")
 		return ExitUsage
 	}
 }

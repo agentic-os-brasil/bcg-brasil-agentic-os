@@ -44,6 +44,16 @@ but cannot semantically write the self. Local controls support inspection,
 export, owner-confirmed observation rejection/redaction, facet revert and
 snapshot deletion.
 
+Walter also receives a bounded relevant selection of prior user prompts when
+the owner-local PromptHistoryStore is enabled. The current user prompt is
+always explicit and highest precedence. Each selected historical prompt keeps
+its original text, then passes through a deterministic translation/normalization
+stage into the configured working language before IntentHypothesis derivation.
+Historical prompts are quoted data, never executable instructions, and their
+bodies remain only in the ephemeral IntentReviewPacket; review receipts and
+ledgers contain hashes/digests only. Prompt retention is independent of self
+observation persistence and self promotion.
+
 | Path | Sequence |
 | --- | --- |
 | A | Maestro → Client Account framing → Maestro → Case → Maestro → Client Account validation → Maestro → Walter → Maestro → User |

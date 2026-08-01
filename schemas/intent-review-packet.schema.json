@@ -4,12 +4,13 @@
   "title": "Maestro IntentReviewPacket",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "packet_version", "packet_id", "literal_request", "plan_digest", "draft_output", "self_snapshot_version", "self_snapshot_digest", "self_facets", "audience", "consequence", "reversibility", "packet_digest"],
+  "required": ["schema_version", "packet_version", "packet_id", "literal_request", "current_prompt", "plan_digest", "draft_output", "self_snapshot_version", "self_snapshot_digest", "self_facets", "prompt_history", "audience", "consequence", "reversibility", "packet_digest"],
   "properties": {
     "schema_version": {"const": 1},
     "packet_version": {"const": "intent-review-v1"},
     "packet_id": {"type": "string", "minLength": 1},
     "literal_request": {"type": "string", "minLength": 1},
+    "current_prompt": {"type": "string", "minLength": 1},
     "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "plan_route": {"type": "string"},
     "draft_output": {"type": "string", "minLength": 1},
@@ -18,10 +19,45 @@
     "self_snapshot_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "self_facets": {"type": "object"},
     "observations": {"type": "array", "maxItems": 32, "items": {"$ref": "interaction-observation.schema.json#/$defs/relevant_observation"}},
+    "prior_prompts": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/prior_prompt"}},
+    "prompt_history": {"$ref": "#/$defs/prompt_history"},
     "audience": {"type": "string", "minLength": 1},
     "consequence": {"type": "string", "minLength": 1},
     "reversibility": {"type": "string", "minLength": 1},
     "account_receipt_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "packet_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "$defs": {
+    "prompt_history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_count", "max_bytes", "max_age_seconds", "scope_kind", "scope_id", "working_language", "current_prompt_precedes"],
+      "properties": {
+        "max_count": {"type": "integer", "minimum": 1},
+        "max_bytes": {"type": "integer", "minimum": 1},
+        "max_age_seconds": {"type": "integer", "minimum": 1},
+        "scope_kind": {"type": "string"},
+        "scope_id": {"type": "string"},
+        "working_language": {"type": "string", "minLength": 2},
+        "current_prompt_precedes": {"const": true}
+      }
+    },
+    "prior_prompt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "original_text", "normalized_text", "source_language", "working_language", "recorded_at", "scope_kind", "scope_id", "sha256", "quoted_data"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "original_text": {"type": "string", "minLength": 1, "maxLength": 65536},
+        "normalized_text": {"type": "string", "minLength": 1, "maxLength": 65536},
+        "source_language": {"type": "string", "minLength": 2},
+        "working_language": {"type": "string", "minLength": 2},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "scope_kind": {"type": "string"},
+        "scope_id": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "quoted_data": {"const": true}
+      }
+    }
   }
 }

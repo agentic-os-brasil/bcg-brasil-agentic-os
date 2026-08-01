@@ -622,3 +622,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Walter is a proxy of likely user review, never an impersonation or mind-reading claim. Low-confidence/high-consequence intent returns to Maestro for a user clarification. Walter receipts pin self version plus prompt/output digests without storing raw content. Darwin may deduplicate, detect drift, measure utility and propose promotion/decay, but cannot silently mutate canonical self. Self changes never rewrite historical receipts; raw client content and personal data remain outside the public repository.
 - Refs: specs/006-memory-persistence.md; specs/002-data-boundaries.md; specs/004-runtime-portability.md; specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; schemas/user-self-snapshot.schema.json; internal/maestro; internal/ownerctx
 - Supersedes: SELF
+
+## PHST - Keep bounded owner prompt history separate from self learning
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Walter needs relevant dense context from prior user prompts without turning the runtime into an unbounded transcript or mixing prompt retention with self promotion.
+- Decision: Add a private PromptHistoryStore containing only explicitly retained user prompts, each bound to owner, timestamp, language, source/session, scope and SHA-256. Enforce bounded count, bytes, age and scope selection with secure local paths plus inspect, export, delete and reset controls. Maestro preserves the current prompt as highest precedence, selects bounded history, then normalizes/translates selected entries into the configured working language before deriving the typed IntentHypothesis. Historical bodies exist only in the ephemeral sealed Walter packet; receipts and ledgers keep digests only. Prompt retention remains independent from material authenticated self observation and canonical self promotion.
+- Consequences: Owner prompts may remain locally raw by explicit policy, but never enter managed bundles, telemetry, receipts, federation or release artifacts. Historical prompts are quoted data and not executable instructions. Missing translation evidence fails closed for the pre-review normalization stage; low-confidence high-consequence intent returns to Maestro for clarification.
+- Refs: specs/006-memory-persistence.md; specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/prompt-history.schema.json; schemas/intent-review-packet.schema.json; internal/ownerctx/prompt_history.go; internal/maestro/intent.go
+- Supersedes: none

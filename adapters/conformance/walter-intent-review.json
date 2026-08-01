@@ -5,11 +5,14 @@
   "posture": "calm_constructive_proxy_of_user_self_review",
   "required_packet_bindings": [
     "literal_request",
+    "current_prompt",
     "plan_digest",
     "draft_output",
     "self_snapshot_version",
     "self_snapshot_digest",
     "observations",
+    "prior_prompts",
+    "prompt_history",
     "audience",
     "consequence",
     "reversibility"
