@@ -645,7 +645,7 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; schemas/maestro-input.schema.json; internal/ownerctx; internal/maestro; internal/agentorchestration
 - Supersedes: none
 
-## QL2D - Bind intent, fencing and dispatch commit recovery
+## QLDR - Bind intent, fencing and dispatch commit recovery
 
 - Date: 2026-08-01
 - Status: accepted
