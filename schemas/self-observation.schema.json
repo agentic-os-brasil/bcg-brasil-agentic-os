@@ -4,7 +4,7 @@
   "title": "Local owner self observation metadata",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "observation_id", "signal", "lifecycle", "source_event_sha256", "scope_kind", "scope_id", "claim_sha256", "evidence_type", "provenance_sha256", "confidence", "sensitivity", "materiality", "owner_authenticated"],
+  "required": ["schema_version", "observation_id", "signal", "lifecycle", "source_event_sha256", "scope_kind", "scope_id", "claim_sha256", "evidence_type", "provenance_sha256", "confidence", "sensitivity", "materiality", "owner_authenticated", "explicit_owner_confirmation"],
   "properties": {
     "schema_version": {"const": 1},
     "observation_id": {"type": "string"},
@@ -20,6 +20,7 @@
     "sensitivity": {"type": "string"},
     "materiality": {"enum": ["low", "medium", "high"]},
     "owner_authenticated": {"const": true},
+    "explicit_owner_confirmation": {"type": "boolean"},
     "supersedes_observation_id": {"type": "string"}
   }
 }

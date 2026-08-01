@@ -124,3 +124,20 @@ func TestSelfSignalPrecedenceKeepsHypothesisBelowOwnerAndCanon(t *testing.T) {
 		t.Fatal("self signal precedence does not preserve owner/canon/observation ordering")
 	}
 }
+
+func TestEndorsementRequiresExplicitOwnerConfirmation(t *testing.T) {
+	input := InteractionInput{
+		ObservationID: "endorsement-1", Signal: ExplicitEndorsement, SourceEvent: "owner-feedback",
+		SourceEventSHA256: Digest("event"), OccurredAt: time.Now().UTC(), ScopeKind: "global",
+		ScopeID: OwnerScope, ClaimSHA256: Digest("claim"), EvidenceType: "owner_endorsement",
+		ProvenanceSHA256: Digest("provenance"), Confidence: ConfidenceHigh,
+		Sensitivity: "communication", Materiality: MaterialityHigh, OwnerAuthenticated: true,
+	}
+	if _, _, err := EvaluateInteraction(input); err == nil {
+		t.Fatal("endorsement without explicit owner confirmation must be rejected")
+	}
+	input.ExplicitOwnerConfirmation = true
+	if _, persist, err := EvaluateInteraction(input); err != nil || !persist {
+		t.Fatalf("explicitly confirmed endorsement should persist: persist=%v err=%v", persist, err)
+	}
+}

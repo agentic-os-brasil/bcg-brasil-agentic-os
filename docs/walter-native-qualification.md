@@ -4,6 +4,13 @@ The repository contains the runtime-neutral Walter wiring, but the capability
 remains `unavailable` until a native Claude and Codex session proves the same
 contract. Adapter-command receipts are diagnostic only.
 
+The weekly self-review contract in this PR is intentionally limited to
+Walter custody, bounded prompt/self inputs, proposal validation and the
+unavailable-by-default handler. It does not add scheduler or launchd catalog
+entries. Its orchestration dependency is PR
+[#148](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/pull/148);
+after that PR lands, orchestration may rebase and trim this seam as needed.
+
 Run the qualification in an attended, fresh session for each runtime:
 
 1. Install the exact adapter bindings and record runtime/platform identity.

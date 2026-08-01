@@ -508,7 +508,7 @@ type activationAdvisoryInput struct {
 
 func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|hire|scaffold|status|plan|declassify|verify|monitor|darwin> [options]")
+		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|hire|scaffold|status|plan|declassify|verify|monitor|darwin|walter> [options]")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -518,6 +518,8 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 	switch args[0] {
 	case "darwin":
 		return runDarwin(args[1:], in, out, errOut, root)
+	case "walter":
+		return runWalterSelfReview(args[1:], in, out, errOut)
 	case "interview":
 		if len(args) != 1 {
 			fmt.Fprintln(errOut, "usage: bcgos agent interview")
@@ -705,7 +707,7 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		}
 		return writeJSON(out, report, errOut)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|identity|hire|scaffold|status|plan|declassify|verify|monitor|darwin> [options]")
+		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|identity|hire|scaffold|status|plan|declassify|verify|monitor|darwin|walter> [options]")
 		return ExitUsage
 	}
 }

@@ -131,6 +131,7 @@ type Observation struct {
 	DisconfirmationSHA256        string      `json:"disconfirmation_sha256,omitempty"`
 	Materiality                  Materiality `json:"materiality"`
 	OwnerAuthenticated           bool        `json:"owner_authenticated"`
+	ExplicitOwnerConfirmation    bool        `json:"explicit_owner_confirmation"`
 	SupersedesObservationID      string      `json:"supersedes_observation_id,omitempty"`
 }
 
@@ -159,6 +160,7 @@ type InteractionInput struct {
 	DisconfirmationSHA256        string
 	Materiality                  Materiality
 	OwnerAuthenticated           bool
+	ExplicitOwnerConfirmation    bool
 	SupersedesObservationID      string
 }
 
@@ -178,8 +180,9 @@ func EvaluateInteraction(input InteractionInput) (Observation, bool, error) {
 		LatentIntentHypothesisSHA256: input.LatentIntentHypothesisSHA256,
 		AlternativeDigests:           append([]string(nil), input.AlternativeDigests...),
 		DisconfirmationSHA256:        input.DisconfirmationSHA256, Materiality: input.Materiality,
-		OwnerAuthenticated:      input.OwnerAuthenticated,
-		SupersedesObservationID: input.SupersedesObservationID,
+		OwnerAuthenticated:        input.OwnerAuthenticated,
+		ExplicitOwnerConfirmation: input.ExplicitOwnerConfirmation,
+		SupersedesObservationID:   input.SupersedesObservationID,
 	}
 	if !input.OwnerAuthenticated {
 		return observation, false, nil
@@ -217,6 +220,9 @@ func ValidateObservation(observation Observation) error {
 	}
 	if observation.SupersedesObservationID != "" && !validID(observation.SupersedesObservationID) {
 		return errors.New("self observation supersession reference is invalid")
+	}
+	if observation.Signal == ExplicitEndorsement && !observation.ExplicitOwnerConfirmation {
+		return errors.New("silence, ok or artifact acceptance is not an explicit owner endorsement")
 	}
 	for _, ref := range observation.EvidenceRefs {
 		if strings.TrimSpace(ref) == "" || len([]byte(ref)) > maxIDBytes {
