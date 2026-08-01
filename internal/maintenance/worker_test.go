@@ -164,6 +164,35 @@ func TestWorkerDeadlineReturnsFromNonCooperativeHandlerAndNeverMarksSuccess(t *t
 	}
 }
 
+func TestWorkerQuarantinesOccurrenceWhileLateHandlerCanStillSideEffect(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	schedulerRoot, receiptRoot := t.TempDir(), t.TempDir()
+	if _, err := (scheduler.Store{Root: schedulerRoot}).EnsureEnrollment("maestro-system", now.Add(-24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	release := make(chan struct{})
+	makeWorker := func(owner string) Worker {
+		return Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: schedulerRoot}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: (now.Hour() + 23) % 24, MaxCatchUp: 1}}, Handlers: map[string]Handler{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+			<-release
+			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
+		})}, LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")}, ActivatedJobs: []string{"darwin-housekeeping-daily"}, Deadline: 10 * time.Millisecond, Now: func() time.Time { return now }}
+	}
+	first, err := makeWorker("late-owner").Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "late-owner", Now: now, Attended: true})
+	if err != nil || len(first.Receipts) != 1 || first.Receipts[0].State != ReceiptTimedOut {
+		t.Fatalf("first report=%#v err=%v", first, err)
+	}
+	second, err := makeWorker("successor").Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "successor", Now: now.Add(2 * time.Minute), Attended: true})
+	if err != nil || len(second.Receipts) != 1 || second.Receipts[0].State != ReceiptBusy {
+		t.Fatalf("successor was allowed past TTL: report=%#v err=%v", second, err)
+	}
+	close(release)
+	time.Sleep(20 * time.Millisecond)
+}
+
 func TestWorkerNeverPersistsHandlerErrorOrSecret(t *testing.T) {
 	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
 	if err != nil {

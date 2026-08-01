@@ -161,6 +161,20 @@ func TestExecutionAuthorityEnforcesCatalogQualificationAndAttendance(t *testing.
 	if got, err := attended.Authorize(command, now); err != nil || got.JobID != command.JobID || !got.ScheduledFor.Equal(command.ScheduledFor) {
 		t.Fatalf("qualified authority occurrence=%#v err=%v", got, err)
 	}
+	qualificationDigest := ""
+	for _, job := range qualified.Jobs {
+		if job.ID == command.JobID {
+			qualificationDigest = job.QualificationDigest
+			break
+		}
+	}
+	preauthorized, err := NewPreauthorizedLocalExecutionAuthority(qualified, []OccurrenceAuthorization{occurrence}, map[string]string{command.JobID: qualificationDigest}, []string{command.JobID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := preauthorized.Authorize(command, now); err != nil || got.JobID != command.JobID {
+		t.Fatalf("preauthorized authority occurrence=%#v err=%v", got, err)
+	}
 	otherWorkspace := command
 	otherWorkspace.WorkspaceID = "workspace-2"
 	if _, err := attended.Authorize(otherWorkspace, now); err == nil {
@@ -195,7 +209,7 @@ func qualifiedCatalogForTest(t *testing.T, jobIDs ...string) Catalog {
 
 func TestProposalReceiptCannotClaimApplication(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
-	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-monthly-1", JobID: "darwin-structural-evolution-proposal", WorkspaceID: "workspace-1", Trigger: TriggerMonthly, State: ReceiptProposalEmitted, RecordedAt: now, Deadline: now.Add(time.Minute), ProposalOnly: true, ProposalCount: 2, ProposalDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ReasonCode: ReasonProposalEmitted}
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-monthly-1", JobID: "darwin-structural-evolution-proposal", WorkspaceID: "workspace-1", Trigger: TriggerMonthly, State: ReceiptProposalEmitted, RecordedAt: now, Deadline: now.Add(time.Minute), ProposalOnly: true, ProposalCount: 2, ProposalDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ProposalArtifactID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ReasonCode: ReasonProposalEmitted}
 	if err := receipt.Validate(); err != nil {
 		t.Fatal(err)
 	}

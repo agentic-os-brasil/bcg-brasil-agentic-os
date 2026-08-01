@@ -112,6 +112,22 @@ func (lifecycle Lifecycle) Install(ctx context.Context, home string, spec Spec, 
 	if lifecycle.Timeout <= 0 || lifecycle.Timeout > time.Minute {
 		lifecycle.Timeout = 15 * time.Second
 	}
+	// Reconcile an already loaded service before replacing its plist. This
+	// makes reinstall idempotent and avoids bootstrapping a second instance.
+	if lifecycle.Native && lifecycle.Runner != nil {
+		existing, statusErr := lifecycle.Status(ctx, home, spec.Label)
+		if statusErr != nil {
+			return existing, statusErr
+		}
+		if existing.FilePresent && existing.Loaded {
+			if err := lifecycle.run(ctx, []string{"disable", "gui/" + lifecycle.UID + "/" + spec.Label}); err != nil {
+				return existing, err
+			}
+			if err := lifecycle.run(ctx, []string{"bootout", "gui/" + lifecycle.UID + "/" + spec.Label}); err != nil {
+				return existing, err
+			}
+		}
+	}
 	filesystemStatus, err := Install(home, spec, true)
 	if err != nil {
 		return LaunchAgentStatus{State: "partial_file_error", Path: filesystemStatus.Path, Label: spec.Label}, err
@@ -159,7 +175,7 @@ func (lifecycle Lifecycle) Status(ctx context.Context, home, label string) (Laun
 	disabledResult, disabledErr := lifecycle.runResult(ctx, []string{"print-disabled", "gui/" + lifecycle.UID})
 	status.Enabled = status.Loaded && !status.Disabled
 	if disabledErr == nil {
-		status.Enabled = status.Loaded && !strings.Contains(disabledResult.Output, label+" => true")
+		status.Enabled = status.Loaded && !disabledLabel(disabledResult.Output, label)
 	}
 	status.NativeQualified = status.Loaded
 	if status.Loaded && status.Enabled {
@@ -180,17 +196,14 @@ func (lifecycle Lifecycle) Pause(ctx context.Context, home, label string) (Launc
 	if fileStatus.State == "not_installed" {
 		return LaunchAgentStatus{State: "not_present", Path: fileStatus.Path, Label: label}, nil
 	}
-	if fileStatus.Disabled {
-		return LaunchAgentStatus{State: "file_present_disabled", Path: fileStatus.Path, Label: label, FilePresent: true, Disabled: true}, nil
-	}
 	status, err := lifecycle.Status(ctx, home, label)
 	if err != nil || !status.FilePresent {
 		return status, err
 	}
-	if status.Disabled {
+	if fileStatus.Disabled && (!lifecycle.Native || !status.Loaded) {
 		return status, nil
 	}
-	if lifecycle.Native {
+	if lifecycle.Native && status.Loaded {
 		if err := lifecycle.run(ctx, []string{"disable", "gui/" + lifecycle.UID + "/" + label}); err != nil {
 			return status, err
 		}
@@ -198,8 +211,10 @@ func (lifecycle Lifecycle) Pause(ctx context.Context, home, label string) (Launc
 			return status, err
 		}
 	}
-	if _, err := setDisabled(home, label, true); err != nil {
-		return status, err
+	if !fileStatus.Disabled {
+		if _, err := setDisabled(home, label, true); err != nil {
+			return status, err
+		}
 	}
 	return lifecycle.Status(ctx, home, label)
 }
@@ -235,15 +250,23 @@ func (lifecycle Lifecycle) Resume(ctx context.Context, home, label string) (Laun
 
 func (lifecycle Lifecycle) Uninstall(ctx context.Context, home, label string) error {
 	status, err := lifecycle.Status(ctx, home, label)
-	if err != nil || !status.FilePresent {
+	if err != nil {
 		return err
 	}
+	if !status.FilePresent {
+		// Removing an already absent plist is idempotent. Native status is
+		// deliberately not guessed here: without a file there is no qualified
+		// service identity to mutate.
+		return nil
+	}
 	if lifecycle.Native && status.Loaded {
+		if err := lifecycle.run(ctx, []string{"disable", "gui/" + lifecycle.UID + "/" + label}); err != nil {
+			return err
+		}
 		if err := lifecycle.run(ctx, []string{"bootout", "gui/" + lifecycle.UID + "/" + label}); err != nil {
 			return err
 		}
-	}
-	if lifecycle.Native {
+	} else if lifecycle.Native {
 		if err := lifecycle.run(ctx, []string{"disable", "gui/" + lifecycle.UID + "/" + label}); err != nil {
 			return err
 		}
@@ -273,6 +296,24 @@ func (lifecycle Lifecycle) runResult(ctx context.Context, args []string) (Comman
 		return result, errors.New("launchctl returned a non-zero status")
 	}
 	return result, err
+}
+
+func disabledLabel(output, label string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "=>", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		name := strings.Trim(strings.TrimSpace(parts[0]), "\"")
+		if name == label && strings.EqualFold(strings.TrimSpace(parts[1]), "true") {
+			return true
+		}
+	}
+	return false
 }
 func samePath(left, right string) bool {
 	left, _ = filepath.Abs(left)

@@ -27,10 +27,11 @@ func (function HandlerFunc) Execute(ctx context.Context, command Command) (Handl
 }
 
 type HandlerResult struct {
-	State          ReceiptState
-	ProposalCount  int
-	ProposalDigest string
-	ReasonCode     ReasonCode
+	State              ReceiptState
+	ProposalCount      int
+	ProposalDigest     string
+	ProposalArtifactID string
+	ReasonCode         ReasonCode
 }
 
 type WakeRequest struct {
@@ -38,7 +39,10 @@ type WakeRequest struct {
 	Now         time.Time
 	Timezone    string
 	Attended    bool
-	OwnerID     string
+	// Preauthorized is persisted local enrollment authority. It is distinct
+	// from Attended, which represents consent for this individual wake.
+	Preauthorized bool
+	OwnerID       string
 }
 
 type WakeReport struct {
@@ -48,6 +52,11 @@ type WakeReport struct {
 	Due           []scheduler.Occurrence `json:"due,omitempty"`
 	Receipts      []Receipt              `json:"receipts,omitempty"`
 	Reason        string                 `json:"reason,omitempty"`
+}
+
+type handlerOutcome struct {
+	result HandlerResult
+	err    error
 }
 
 // Worker is the local, bounded executor behind a presence wake. A wake only
@@ -107,7 +116,12 @@ func (worker Worker) Run(ctx context.Context, request WakeRequest) (WakeReport, 
 	for _, occurrence := range due {
 		authorizations = append(authorizations, OccurrenceAuthorization{WorkspaceID: request.WorkspaceID, JobID: occurrence.JobID, Trigger: triggerForCadence(worker.Jobs, occurrence.JobID), ScheduledFor: occurrence.ScheduledFor})
 	}
-	authority, err := NewLocalExecutionAuthority(worker.Catalog, authorizations, worker.LocalQualification, worker.ActivatedJobs, request.Attended)
+	var authority ExecutionAuthority
+	if request.Preauthorized {
+		authority, err = NewPreauthorizedLocalExecutionAuthority(worker.Catalog, authorizations, worker.LocalQualification, worker.ActivatedJobs)
+	} else {
+		authority, err = NewLocalExecutionAuthority(worker.Catalog, authorizations, worker.LocalQualification, worker.ActivatedJobs, request.Attended)
+	}
 	if err != nil {
 		return WakeReport{}, err
 	}
@@ -161,10 +175,6 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, State: ReceiptFailed, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, ReasonCode: ReasonHandlerFailure}
 	workerCtx, cancel := context.WithDeadline(ctx, command.Deadline)
 	defer cancel()
-	type handlerOutcome struct {
-		result HandlerResult
-		err    error
-	}
 	outcomeChannel := make(chan handlerOutcome, 1)
 	go func() {
 		result, handlerErr := handler.Execute(workerCtx, command)
@@ -191,7 +201,7 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 					result.ReasonCode = ReasonProposalEmitted
 				}
 			}
-			base.State, base.ProposalCount, base.ProposalDigest, base.ReasonCode = result.State, result.ProposalCount, result.ProposalDigest, result.ReasonCode
+			base.State, base.ProposalCount, base.ProposalDigest, base.ProposalArtifactID, base.ReasonCode = result.State, result.ProposalCount, result.ProposalDigest, result.ProposalArtifactID, result.ReasonCode
 			if base.State == "" {
 				base.State = ReceiptSucceeded
 			}
@@ -199,11 +209,17 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	case <-workerCtx.Done():
 		executeErr = workerCtx.Err()
 		base.State, base.ReasonCode = ReceiptTimedOut, ReasonDeadlineExceeded
+		// Fencing must survive the normal lease TTL while the late handler is
+		// still capable of side effects. A successor remains denied until the
+		// original handler exits and releases this quarantine marker.
+		if quarantineErr := worker.Scheduler.QuarantineLease(lease); quarantineErr != nil {
+			return base, quarantineErr
+		}
 		if err := worker.publishOccurrence(request.WorkspaceID, occurrence, now, lease, base); err != nil {
-			go func() { <-outcomeChannel; _ = worker.Scheduler.ReleaseLease(lease) }()
+			worker.boundLateHandler(outcomeChannel, lease)
 			return base, err
 		}
-		go func() { <-outcomeChannel; _ = worker.Scheduler.ReleaseLease(lease) }()
+		worker.boundLateHandler(outcomeChannel, lease)
 		return base, executeErr
 	}
 	if err := worker.publishOccurrence(request.WorkspaceID, occurrence, now, lease, base); err != nil {
@@ -212,6 +228,30 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	}
 	_ = worker.Scheduler.ReleaseLease(lease)
 	return base, executeErr
+}
+
+// boundLateHandler prevents an uncooperative handler from creating an
+// unbounded cleanup goroutine. Quarantine keeps the occurrence fenced beyond
+// lease TTL; a late result is never published by this goroutine. If the
+// handler exits within the bounded cleanup window, releasing the lease is
+// safe and allows prompt retry. If it never exits, manual recovery is required
+// after the original process is gone.
+func (worker Worker) boundLateHandler(outcomeChannel <-chan handlerOutcome, lease scheduler.Lease) {
+	cleanup := worker.Deadline
+	if cleanup <= 0 || cleanup > 15*time.Minute {
+		cleanup = 2 * time.Minute
+	}
+	go func() {
+		timer := time.NewTimer(cleanup)
+		defer timer.Stop()
+		select {
+		case <-outcomeChannel:
+			_ = worker.Scheduler.ReleaseLease(lease)
+		case <-timer.C:
+			// Quarantine deliberately survives lease expiry. A stuck handler
+			// requires explicit operator recovery after its process is gone.
+		}
+	}()
 }
 
 func (worker Worker) publishOccurrence(workspaceID string, occurrence scheduler.Occurrence, now time.Time, lease scheduler.Lease, receipt Receipt) error {

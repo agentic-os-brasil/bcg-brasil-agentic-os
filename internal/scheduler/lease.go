@@ -54,6 +54,15 @@ func (store Store) TryAcquireLease(workspaceID, jobID, occurrenceKey, ownerID st
 		return Lease{}, err
 	}
 	defer guard.release()
+	marker := quarantinePath(path)
+	if info, markerErr := os.Lstat(marker); markerErr == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return Lease{}, errors.New("invalid scheduler quarantine marker")
+		}
+		return Lease{}, ErrLeaseBusy
+	} else if !errors.Is(markerErr, os.ErrNotExist) {
+		return Lease{}, markerErr
+	}
 	if existing, err := readLease(path); err == nil {
 		if existing.WorkspaceID != workspaceID || existing.JobID != jobID || existing.OccurrenceKey != occurrenceKey {
 			return Lease{}, errors.New("scheduler lease identity mismatch")
@@ -102,6 +111,7 @@ func (store Store) ReleaseLease(lease Lease) error {
 	defer guard.release()
 	current, err := readLease(path)
 	if errors.Is(err, os.ErrNotExist) {
+		_ = os.Remove(quarantinePath(path))
 		return nil
 	}
 	if err != nil {
@@ -110,7 +120,143 @@ func (store Store) ReleaseLease(lease Lease) error {
 	if !sameLeaseIdentity(current, lease) {
 		return ErrLeaseLost
 	}
-	return os.Remove(path)
+	if err := os.Remove(quarantinePath(path)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// QuarantineLease fences a timed-out occurrence beyond its normal TTL. The
+// marker is removed only by the original fence owner when its late handler
+// exits and ReleaseLease succeeds; a successor can therefore never reclaim a
+// live, non-cooperative execution.
+func (store Store) QuarantineLease(lease Lease) error {
+	if err := validateStoreInput(store.Root, lease.WorkspaceID); err != nil {
+		return err
+	}
+	if err := validateLeaseIdentity(lease); err != nil {
+		return err
+	}
+	directory, err := ensurePrivateTree(store.Root, "workspaces", lease.WorkspaceID, "leases", lease.JobID)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(directory, safeLeaseName(lease.OccurrenceKey)+".json")
+	guard, err := acquireLeaseGuard(filepath.Join(directory, safeLeaseName(lease.OccurrenceKey)+".guard"))
+	if err != nil {
+		if errors.Is(err, errLeaseGuardBusy) {
+			return ErrLeaseBusy
+		}
+		return err
+	}
+	defer guard.release()
+	current, err := readLease(path)
+	if err != nil {
+		return err
+	}
+	if !sameLeaseIdentity(current, lease) {
+		return ErrLeaseLost
+	}
+	marker := quarantinePath(path)
+	if info, markerErr := os.Lstat(marker); markerErr == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return errors.New("invalid scheduler quarantine marker")
+		}
+		return nil
+	} else if !errors.Is(markerErr, os.ErrNotExist) {
+		return markerErr
+	}
+	return writeNewJSON(marker, map[string]string{"fence_token": lease.FenceToken})
+}
+
+// QuarantinedLeases lists live fence records whose late handler has prevented
+// normal TTL reclamation. It is intentionally metadata-only.
+func (store Store) QuarantinedLeases(workspaceID string) ([]Lease, error) {
+	if err := validateStoreInput(store.Root, workspaceID); err != nil {
+		return nil, err
+	}
+	root := filepath.Join(store.Root, "workspaces", workspaceID, "leases")
+	rootInfo, rootErr := os.Lstat(root)
+	if errors.Is(rootErr, os.ErrNotExist) {
+		return nil, nil
+	}
+	if rootErr != nil {
+		return nil, rootErr
+	}
+	if rootInfo.Mode()&os.ModeSymlink != 0 || !rootInfo.IsDir() {
+		return nil, errors.New("scheduler quarantine root must be a private local directory")
+	}
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var leases []Lease
+	for _, jobEntry := range entries {
+		if jobEntry.Type()&os.ModeSymlink != 0 {
+			return nil, errors.New("scheduler quarantine job path cannot be a symlink")
+		}
+		if !jobEntry.IsDir() {
+			continue
+		}
+		jobRoot := filepath.Join(root, jobEntry.Name())
+		markers, readErr := os.ReadDir(jobRoot)
+		if readErr != nil {
+			return nil, readErr
+		}
+		for _, marker := range markers {
+			if marker.Type()&os.ModeSymlink != 0 {
+				return nil, errors.New("scheduler quarantine marker cannot be a symlink")
+			}
+			if marker.IsDir() || !strings.HasSuffix(marker.Name(), ".json.quarantine") {
+				continue
+			}
+			leasePath := filepath.Join(jobRoot, strings.TrimSuffix(marker.Name(), ".quarantine"))
+			lease, leaseErr := readLease(leasePath)
+			if leaseErr != nil {
+				return nil, leaseErr
+			}
+			if lease.WorkspaceID != workspaceID {
+				return nil, errors.New("scheduler quarantine workspace mismatch")
+			}
+			leases = append(leases, lease)
+		}
+	}
+	return leases, nil
+}
+
+// RecoverQuarantinedLease is an explicit operator recovery boundary. It
+// refuses to clear a quarantine while the original lease is still live; the
+// caller must separately attest that the process has exited or been restarted.
+func (store Store) RecoverQuarantinedLease(lease Lease, now time.Time) error {
+	if now.IsZero() || !lease.ExpiresAt.Before(now.UTC()) {
+		return ErrLeaseBusy
+	}
+	if err := validateStoreInput(store.Root, lease.WorkspaceID); err != nil {
+		return err
+	}
+	if err := validateLeaseIdentity(lease); err != nil {
+		return err
+	}
+	directory, err := ensurePrivateTree(store.Root, "workspaces", lease.WorkspaceID, "leases", lease.JobID)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(directory, safeLeaseName(lease.OccurrenceKey)+".json")
+	marker := quarantinePath(path)
+	info, err := os.Lstat(marker)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return errors.New("invalid scheduler quarantine marker")
+	}
+	return store.ReleaseLease(lease)
 }
 
 // LeaseCurrent is the side-effect/finalization fence. A worker must still own
@@ -158,6 +304,12 @@ func (store Store) WithCurrentLease(lease Lease, now time.Time, publish func() e
 func safeLeaseName(value string) string {
 	digest := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(digest[:])
+}
+
+func quarantinePath(leasePath string) string { return leasePath + ".quarantine" }
+
+func ScheduledOccurrenceKey(jobID string, scheduledFor time.Time) string {
+	return jobID + "\x00scheduled\x00" + scheduledFor.UTC().Format(time.RFC3339Nano)
 }
 
 func readLease(path string) (Lease, error) {

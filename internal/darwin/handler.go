@@ -64,14 +64,24 @@ func (builder LocalProductHealthBuilder) Build(ctx context.Context, occurrence s
 }
 
 type DeepReviewHandler struct {
-	Build        HealthPacketBuilder
-	CommandStore maintenance.Store
-	Now          func() time.Time
+	Build         HealthPacketBuilder
+	CommandStore  maintenance.Store
+	ProposalStore ProposalStore
+	Now           func() time.Time
 }
 
 func (handler DeepReviewHandler) Execute(ctx context.Context, command maintenance.Command) (maintenance.HandlerResult, error) {
 	if command.JobID != "darwin-deep-weekly" || handler.Build == nil || handler.CommandStore.Root == "" {
 		return maintenance.HandlerResult{}, errors.New("Darwin deep review handler is not configured")
+	}
+	if existing, readErr := handler.CommandStore.Receipts(command.WorkspaceID, command.JobID); readErr != nil {
+		return maintenance.HandlerResult{}, readErr
+	} else {
+		for _, receipt := range existing {
+			if receipt.OccurrenceDigest == command.OccurrenceDigest() && (receipt.State == maintenance.ReceiptSucceeded || receipt.State == maintenance.ReceiptProposalEmitted) {
+				return maintenance.HandlerResult{State: receipt.State, ProposalCount: receipt.ProposalCount, ProposalDigest: receipt.ProposalDigest, ProposalArtifactID: receipt.ProposalArtifactID, ReasonCode: receipt.ReasonCode}, nil
+			}
+		}
 	}
 	attempt, err := newAttemptID()
 	if err != nil {
@@ -96,14 +106,31 @@ func (handler DeepReviewHandler) Execute(ctx context.Context, command maintenanc
 	if err := ctx.Err(); err != nil {
 		return maintenance.HandlerResult{}, err
 	}
-	base := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: maintenance.ReceiptProposalEmitted, RecordedAt: now, Deadline: command.Deadline, ProposalCount: len(assessment.Proposals), ReasonCode: maintenance.ReasonProposalEmitted}
+	state := maintenance.ReceiptProposalEmitted
+	reason := maintenance.ReasonProposalEmitted
+	if len(assessment.Proposals) == 0 {
+		// No structural change is a successful no-change review, not an empty
+		// proposal receipt that could falsely look like durable evidence.
+		state = maintenance.ReceiptSucceeded
+		reason = maintenance.ReasonCompleted
+	}
+	base := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: state, RecordedAt: now, Deadline: command.Deadline, ProposalCount: len(assessment.Proposals), ReasonCode: reason}
 	if len(assessment.Proposals) > 0 {
-		base.ProposalDigest = proposalDigest(command.CommandID, assessment)
+		base.ProposalDigest = proposalDigest(command.OccurrenceDigest(), assessment)
+		proposalStore := handler.ProposalStore
+		if proposalStore.Root == "" {
+			proposalStore = ProposalStore{Root: handler.CommandStore.Root}
+		}
+		artifact := AssessmentProposalArtifact{SchemaVersion: proposalArtifactSchemaVersion, RecordType: "assessment", AgentID: AgentID, JobID: command.JobID, OccurrenceDigest: command.OccurrenceDigest(), WindowID: assessment.WindowID, ProposalDigest: base.ProposalDigest, Assessment: assessment, ScheduledFor: command.ScheduledFor.UTC(), RecordedAt: command.ScheduledFor.UTC()}
+		if err := proposalStore.Append(artifact); err != nil {
+			return maintenance.HandlerResult{}, err
+		}
+		base.ProposalArtifactID = base.ProposalDigest
 	}
 	if err := handler.CommandStore.AppendReceipt(base); err != nil {
 		return maintenance.HandlerResult{}, err
 	}
-	return maintenance.HandlerResult{State: base.State, ProposalCount: base.ProposalCount, ProposalDigest: base.ProposalDigest, ReasonCode: maintenance.ReasonProposalEmitted}, nil
+	return maintenance.HandlerResult{State: base.State, ProposalCount: base.ProposalCount, ProposalDigest: base.ProposalDigest, ProposalArtifactID: base.ProposalArtifactID, ReasonCode: reason}, nil
 }
 
 func HandlerResultUnavailable(err error) (maintenance.HandlerResult, error) {

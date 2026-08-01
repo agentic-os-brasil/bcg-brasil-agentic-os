@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 const CommandSchemaVersion = 1
@@ -48,20 +50,21 @@ const (
 )
 
 type Receipt struct {
-	SchemaVersion    int          `json:"schema_version"`
-	AttemptID        string       `json:"attempt_id"`
-	OccurrenceDigest string       `json:"occurrence_digest"`
-	CommandID        string       `json:"command_id"`
-	JobID            string       `json:"job_id"`
-	WorkspaceID      string       `json:"workspace_id"`
-	Trigger          Trigger      `json:"trigger"`
-	State            ReceiptState `json:"state"`
-	RecordedAt       time.Time    `json:"recorded_at"`
-	Deadline         time.Time    `json:"deadline"`
-	ProposalOnly     bool         `json:"proposal_only"`
-	ProposalCount    int          `json:"proposal_count,omitempty"`
-	ProposalDigest   string       `json:"proposal_digest,omitempty"`
-	ReasonCode       ReasonCode   `json:"reason_code"`
+	SchemaVersion      int          `json:"schema_version"`
+	AttemptID          string       `json:"attempt_id"`
+	OccurrenceDigest   string       `json:"occurrence_digest"`
+	CommandID          string       `json:"command_id"`
+	JobID              string       `json:"job_id"`
+	WorkspaceID        string       `json:"workspace_id"`
+	Trigger            Trigger      `json:"trigger"`
+	State              ReceiptState `json:"state"`
+	RecordedAt         time.Time    `json:"recorded_at"`
+	Deadline           time.Time    `json:"deadline"`
+	ProposalOnly       bool         `json:"proposal_only"`
+	ProposalCount      int          `json:"proposal_count,omitempty"`
+	ProposalDigest     string       `json:"proposal_digest,omitempty"`
+	ProposalArtifactID string       `json:"proposal_artifact_id,omitempty"`
+	ReasonCode         ReasonCode   `json:"reason_code"`
 }
 
 var (
@@ -114,8 +117,17 @@ func (receipt Receipt) Validate() error {
 	if receipt.State == ReceiptProposalEmitted && receipt.ProposalCount > 0 && receipt.ProposalDigest == "" {
 		return errors.New("maintenance proposal receipt requires a digest")
 	}
+	if receipt.ProposalArtifactID != "" && !digestPattern.MatchString(receipt.ProposalArtifactID) {
+		return errors.New("maintenance proposal artifact ID is invalid")
+	}
+	if receipt.State == ReceiptProposalEmitted && receipt.ProposalCount > 0 && receipt.ProposalArtifactID != receipt.ProposalDigest {
+		return errors.New("maintenance proposal receipt must bind its artifact ID to its digest")
+	}
 	if receipt.State != ReceiptProposalEmitted && (receipt.ProposalCount != 0 || receipt.ProposalDigest != "") {
 		return errors.New("non-proposal maintenance receipt cannot carry proposal evidence")
+	}
+	if receipt.State != ReceiptProposalEmitted && receipt.ProposalArtifactID != "" {
+		return errors.New("non-proposal maintenance receipt cannot carry a proposal artifact ID")
 	}
 	return nil
 }
@@ -137,6 +149,17 @@ type GateDecision struct {
 	Reason      string   `json:"reason,omitempty"`
 	EventID     string   `json:"event_id,omitempty"`
 	PlannedJobs []string `json:"planned_jobs,omitempty"`
+}
+
+// NewRecoveryReceipt records an operator-attested quarantine recovery without
+// claiming scheduler success. The reason is an allowlisted code, never free
+// text from a shell or process.
+func NewRecoveryReceipt(workspaceID, jobID string, trigger Trigger, scheduledFor, now time.Time) (Receipt, error) {
+	attempt, err := attemptID()
+	if err != nil {
+		return Receipt{}, err
+	}
+	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: digest(scheduler.ScheduledOccurrenceKey(jobID, scheduledFor)), CommandID: "recovery-" + digestPrefix(jobID+scheduledFor.UTC().Format(time.RFC3339Nano)), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ReasonCode: ReasonReceiptPersisted}, nil
 }
 
 func Gate(catalog Catalog, command Command, now time.Time) (GateDecision, error) {

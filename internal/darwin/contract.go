@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -361,11 +362,11 @@ func (invoker FilesystemInvoker) Invoke(ctx context.Context, call ToolCall, arti
 		return ToolResult{}, errors.New("Darwin filesystem resource is invalid")
 	}
 	const scopePrefix = "/maestro-system/"
-	if !strings.HasPrefix(parsed.Path, scopePrefix) || strings.Contains(parsed.Path, "..") || filepath.Clean(parsed.Path) != parsed.Path {
+	if !strings.HasPrefix(parsed.Path, scopePrefix) || strings.Contains(parsed.Path, "..") || pathpkg.Clean(parsed.Path) != parsed.Path {
 		return ToolResult{}, errors.New("Darwin filesystem resource escapes the maintenance scope")
 	}
 	relative := strings.TrimPrefix(parsed.Path, scopePrefix)
-	if relative == "" || !idPattern.MatchString(filepath.Base(relative)) {
+	if relative == "" || !idPattern.MatchString(pathpkg.Base(relative)) {
 		return ToolResult{}, errors.New("Darwin filesystem resource has an unsafe artifact name")
 	}
 	if artifact.SchemaVersion != SchemaVersion || artifact.AgentID != AgentID || artifact.WindowID == "" || artifact.ProposalID == "" {
@@ -419,7 +420,7 @@ func rejectSymlinkPath(root, relative string) error {
 		return errors.New("Darwin filesystem root must not be a symlink")
 	}
 	current := root
-	for _, part := range strings.Split(filepath.Clean(relative), string(filepath.Separator)) {
+	for _, part := range strings.Split(pathpkg.Clean(relative), "/") {
 		if part == "." || part == "" {
 			continue
 		}

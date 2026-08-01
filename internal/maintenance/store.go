@@ -30,6 +30,18 @@ func (store Store) AppendReceipt(receipt Receipt) error {
 	if err != nil {
 		return err
 	}
+	if existing, readErr := store.Receipts(receipt.WorkspaceID, receipt.JobID); readErr != nil {
+		return readErr
+	} else {
+		for _, prior := range existing {
+			if prior.OccurrenceDigest == receipt.OccurrenceDigest && (prior.State == ReceiptSucceeded || prior.State == ReceiptProposalEmitted) {
+				if prior.State != receipt.State || prior.ProposalDigest != receipt.ProposalDigest || prior.ProposalArtifactID != receipt.ProposalArtifactID {
+					return errors.New("maintenance receipt occurrence has conflicting terminal evidence")
+				}
+				return nil
+			}
+		}
+	}
 	path := filepath.Join(root, receipt.CommandID+"--"+receipt.AttemptID+".json")
 	if err := writeReceipt(path, receipt); errors.Is(err, os.ErrExist) {
 		existing, readErr := readReceipt(path)

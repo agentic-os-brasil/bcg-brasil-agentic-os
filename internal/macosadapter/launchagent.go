@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -105,7 +106,9 @@ func Parse(body []byte) error {
 }
 
 func validateSpec(spec Spec) error {
-	if !labelPattern.MatchString(spec.Label) || !filepath.IsAbs(spec.Program) || strings.Contains(spec.Program, "\x00") || spec.StartInterval <= 0 || spec.StartInterval > 86400 {
+	// ProgramArguments are a Darwin contract and therefore use POSIX path
+	// semantics even when this package is compiled by a Windows CI worker.
+	if !labelPattern.MatchString(spec.Label) || !pathpkg.IsAbs(strings.ReplaceAll(spec.Program, `\`, "/")) || strings.Contains(spec.Program, "\x00") || spec.StartInterval <= 0 || spec.StartInterval > 86400 {
 		return errors.New("invalid LaunchAgent identity or interval")
 	}
 	values := append(append([]string{spec.Program}, spec.Arguments...), spec.StandardOutPath, spec.StandardErrPath)
@@ -115,7 +118,9 @@ func validateSpec(spec Spec) error {
 		}
 	}
 	for _, value := range []string{spec.StandardOutPath, spec.StandardErrPath} {
-		if value != "" && !filepath.IsAbs(value) {
+		// Diagnostic paths point at the host fixture filesystem in adapter
+		// tests, while native Darwin paths remain POSIX absolute paths.
+		if value != "" && !filepath.IsAbs(value) && !pathpkg.IsAbs(strings.ReplaceAll(value, `\`, "/")) {
 			return errors.New("LaunchAgent diagnostics paths must be absolute")
 		}
 	}

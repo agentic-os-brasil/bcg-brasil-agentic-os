@@ -201,6 +201,35 @@ func TestSchedulerLeaseIsNonBlockingAndReclaimsAfterExpiry(t *testing.T) {
 	}
 }
 
+func TestQuarantinedLeaseRequiresExplicitRecoveryAfterExpiry(t *testing.T) {
+	root := t.TempDir()
+	store := Store{Root: root}
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	lease, err := store.TryAcquireLease("case-a", "memory-daily", ScheduledOccurrenceKey("memory-daily", now), "worker-a", now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.QuarantineLease(lease); err != nil {
+		t.Fatal(err)
+	}
+	quarantined, err := store.QuarantinedLeases("case-a")
+	if err != nil || len(quarantined) != 1 || quarantined[0].FenceToken != lease.FenceToken {
+		t.Fatalf("quarantine listing=%#v err=%v", quarantined, err)
+	}
+	if err := store.RecoverQuarantinedLease(lease, now.Add(30*time.Second)); !errors.Is(err, ErrLeaseBusy) {
+		t.Fatalf("live quarantine recovery err=%v, want ErrLeaseBusy", err)
+	}
+	if _, err := store.TryAcquireLease("case-a", "memory-daily", lease.OccurrenceKey, "worker-b", now.Add(2*time.Minute), time.Minute); !errors.Is(err, ErrLeaseBusy) {
+		t.Fatalf("quarantined occurrence was reclaimed: %v", err)
+	}
+	if err := store.RecoverQuarantinedLease(lease, now.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TryAcquireLease("case-a", "memory-daily", lease.OccurrenceKey, "worker-b", now.Add(2*time.Minute), time.Minute); err != nil {
+		t.Fatalf("recovered occurrence was not available: %v", err)
+	}
+}
+
 func TestLeaseNamesDoNotAliasSanitizedOccurrenceKeys(t *testing.T) {
 	if safeLeaseName("event/a") == safeLeaseName("event?a") {
 		t.Fatal("distinct occurrence keys produced the same lease name")

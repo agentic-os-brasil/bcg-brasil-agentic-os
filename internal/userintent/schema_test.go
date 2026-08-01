@@ -2,6 +2,7 @@ package userintent
 
 import (
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +22,11 @@ func TestUserIntentSchemaCompilesAndRejectsRawObservationContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	compiler := jsonschema.NewCompiler()
-	resource := "file://" + filepath.Clean(path)
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resource := (&url.URL{Scheme: "file", Path: filepath.ToSlash(absolutePath)}).String()
 	if err := compiler.AddResource(resource, document); err != nil {
 		t.Fatal(err)
 	}

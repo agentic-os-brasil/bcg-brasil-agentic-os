@@ -177,8 +177,14 @@ uses only persisted Canary enrollment and qualified local handlers. Install the
 attended macOS presence surface explicitly with
 `bcgos maintenance canary install-macos --confirm`; status distinguishes the
 plist, native loaded/enabled state, local timezone, due work and unavailable
-jobs. Windows remains fail-closed until native qualification. A wake-up never
-counts as a successful memory commit or wiki publication.
+jobs. Enrollment is persisted as preauthorized local authority, not as
+per-wake attended consent. Windows remains fail-closed until native
+qualification. A wake-up never counts as a successful memory commit or wiki
+publication. If a timed-out handler is quarantined, status exposes the
+occurrence; recovery requires an exact, confirmed
+`canary recover-quarantine --job-id ... --scheduled-for ... --reason
+operator_confirmed_process_gone --confirm` operation and never auto-clears a
+live fence.
 
 ### For a pilot user
 

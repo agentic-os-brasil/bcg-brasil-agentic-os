@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -125,7 +126,7 @@ func validResource(resource string) bool {
 	if err != nil || parsed.Scheme != "bcgos" || parsed.Host != "health" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil || parsed.Opaque != "" || parsed.RawPath != "" {
 		return false
 	}
-	return strings.HasPrefix(parsed.Path, "/maestro-system/") && !strings.Contains(parsed.Path, "..") && filepath.Clean(parsed.Path) == parsed.Path && idPattern.MatchString(filepath.Base(parsed.Path))
+	return strings.HasPrefix(parsed.Path, "/maestro-system/") && !strings.Contains(parsed.Path, "..") && pathpkg.Clean(parsed.Path) == parsed.Path && idPattern.MatchString(pathpkg.Base(parsed.Path))
 }
 
 func validToolOperation(tool, operation string) bool {

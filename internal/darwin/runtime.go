@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -32,14 +33,15 @@ func (function HealthPacketBuilderFunc) Build(ctx context.Context, occurrence sc
 // does not implement scheduler.Executor: raw occurrences cannot bypass the
 // catalog authority, command deadline or occurrence lease.
 type HousekeepingExecutor struct {
-	Build        HealthPacketBuilder
-	Guard        ToolGuard
-	Invoker      ToolInvoker
-	Store        Store
-	CommandStore maintenance.Store
-	Scheduler    scheduler.Store
-	Authority    maintenance.ExecutionAuthority
-	Now          func() time.Time
+	Build         HealthPacketBuilder
+	Guard         ToolGuard
+	Invoker       ToolInvoker
+	Store         Store
+	CommandStore  maintenance.Store
+	ProposalStore ProposalStore
+	Scheduler     scheduler.Store
+	Authority     maintenance.ExecutionAuthority
+	Now           func() time.Time
 }
 
 // ExecuteCommand is the worker-owned Darwin entrypoint. Hooks may construct a
@@ -148,7 +150,27 @@ func (executor HousekeepingExecutor) executeLeasedCommand(ctx context.Context, c
 		}
 		base.State = maintenance.ReceiptProposalEmitted
 		base.ProposalCount = len(assessment.Proposals)
-		base.ProposalDigest = proposalDigest(command.CommandID, assessment)
+		base.ProposalDigest = proposalDigest(command.OccurrenceDigest(), assessment)
+		proposalStore := executor.ProposalStore
+		if proposalStore.Root == "" {
+			proposalStore = ProposalStore{Root: executor.CommandStore.Root}
+		}
+		if len(assessment.Proposals) > 0 {
+			artifact := AssessmentProposalArtifact{SchemaVersion: proposalArtifactSchemaVersion, RecordType: "assessment", AgentID: AgentID, JobID: command.JobID, OccurrenceDigest: command.OccurrenceDigest(), WindowID: assessment.WindowID, ProposalDigest: base.ProposalDigest, Assessment: assessment, ScheduledFor: command.ScheduledFor.UTC(), RecordedAt: command.ScheduledFor.UTC()}
+			if err := proposalStore.Append(artifact); err != nil {
+				return base, err
+			}
+			base.ProposalArtifactID = base.ProposalDigest
+		} else {
+			base.State = maintenance.ReceiptUnavailable
+			base.ProposalDigest = ""
+			base.ReasonCode = maintenance.ReasonHandlerFailure
+			base.RecordedAt = executor.currentTime()
+			if err := executor.CommandStore.AppendReceipt(base); err != nil {
+				return base, err
+			}
+			return base, errors.New("Darwin structural review produced no proposal")
+		}
 		base.ReasonCode = maintenance.ReasonProposalEmitted
 		base.RecordedAt = executor.currentTime()
 		if err := executor.CommandStore.AppendReceipt(base); err != nil {
@@ -255,11 +277,11 @@ func newAttemptID() (string, error) {
 	return hex.EncodeToString(value[:]), nil
 }
 
-func proposalDigest(commandID string, assessment Assessment) string {
-	material := commandID
-	for _, proposal := range assessment.Proposals {
-		material += "\x00" + proposal.ID + "\x00" + string(proposal.Action)
-	}
-	digest := sha256.Sum256([]byte(material))
+func proposalDigest(occurrenceDigest string, assessment Assessment) string {
+	body, _ := json.Marshal(struct {
+		CommandID  string
+		Assessment Assessment
+	}{CommandID: occurrenceDigest, Assessment: assessment})
+	digest := sha256.Sum256(body)
 	return hex.EncodeToString(digest[:])
 }

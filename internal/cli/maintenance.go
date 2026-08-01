@@ -17,6 +17,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/macosadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 // runMaintenance exposes the platform-neutral maintenance contract to native
@@ -68,7 +69,7 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		if enrollmentErr == nil {
 			timezone = enrollment.Timezone
 		}
-		report, err := worker.Run(context.Background(), maintenance.WakeRequest{WorkspaceID: strings.TrimSpace(*workspace), Timezone: timezone, OwnerID: "bcgos-presence", Now: time.Now(), Attended: *attended || enrollmentErr == nil})
+		report, err := worker.Run(context.Background(), maintenance.WakeRequest{WorkspaceID: strings.TrimSpace(*workspace), Timezone: timezone, OwnerID: "bcgos-presence", Now: time.Now(), Attended: *attended, Preauthorized: enrollmentErr == nil})
 		if err != nil {
 			_ = writeJSON(out, map[string]any{"schema_version": 1, "state": maintenance.Unavailable, "agent_id": "darwin", "scope": "health/maestro-system", "trigger": *trigger, "native_schedulers": "disabled", "reason": err.Error() + "; no receipt was emitted"}, errOut)
 			return ExitUnavailable
@@ -116,32 +117,32 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 		}
 		return nil
 	})
+	proposalStore := darwin.ProposalStore{Root: filepath.Join(root, "maintenance", "darwin-proposals")}
 	handlers[darwin.HousekeepingJobID] = darwin.HousekeepingHandler{Build: builder, Guard: guard, Invoker: darwin.FilesystemInvoker{Root: filepath.Join(root, "maintenance", "darwin")}, Store: darwin.Store{Root: filepath.Join(root, "maintenance", "darwin")}, CommandStore: commandStore}
-	handlers["darwin-deep-weekly"] = darwin.DeepReviewHandler{Build: builder, CommandStore: commandStore}
+	handlers["darwin-deep-weekly"] = darwin.DeepReviewHandler{Build: builder, CommandStore: commandStore, ProposalStore: proposalStore}
 	handlers["walter-self-review-weekly"] = maintenance.WalterWeeklyAdapter{}
 	return handlers, qualification, activated
 }
 
 func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintenance.Catalog) int {
 	action := args[0]
-	if action != "install-macos" && action != "status" && action != "pause" && action != "resume" && action != "uninstall" {
-		fmt.Fprintln(errOut, "usage: bcgos maintenance canary <install-macos|status|pause|resume|uninstall> [--confirm] [--home PATH] [--workspace ID]")
+	if action != "install-macos" && action != "status" && action != "pause" && action != "resume" && action != "uninstall" && action != "recover-quarantine" {
+		fmt.Fprintln(errOut, "usage: bcgos maintenance canary <install-macos|status|pause|resume|uninstall|recover-quarantine> [--confirm] [--home PATH] [--workspace ID]")
 		return ExitUsage
 	}
 	flags := newFlagSet("maintenance canary "+action, errOut)
 	confirm := flags.Bool("confirm", false, "explicitly confirm the requested lifecycle mutation")
 	home := flags.String("home", "", "current user home or isolated filesystem-only fixture")
 	workspace := flags.String("workspace", "maestro-system", "bounded maintenance workspace")
+	jobID := flags.String("job-id", "", "exact quarantined job to recover")
+	scheduledFor := flags.String("scheduled-for", "", "exact scheduled occurrence in RFC3339 format")
+	reason := flags.String("reason", "", "operator recovery reason code")
 	if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) {
 		return ExitUsage
 	}
 	mutating := action != "status"
 	if mutating && !*confirm {
 		return reportError(errOut, errors.New("Canary lifecycle mutation requires --confirm"))
-	}
-	root, err := defaultDataRoot()
-	if err != nil {
-		return reportError(errOut, err)
 	}
 	currentHome, err := os.UserHomeDir()
 	if err != nil {
@@ -151,18 +152,77 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 	if !homeProvided {
 		*home = currentHome
 	}
+	root, err := canaryDataRoot(*home, currentHome)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if action == "recover-quarantine" {
+		if strings.TrimSpace(*jobID) == "" || strings.TrimSpace(*scheduledFor) == "" || *reason != "operator_confirmed_process_gone" {
+			return reportError(errOut, errors.New("quarantine recovery requires --job-id, --scheduled-for, --reason operator_confirmed_process_gone and --confirm"))
+		}
+		when, parseErr := time.Parse(time.RFC3339Nano, *scheduledFor)
+		if parseErr != nil {
+			return reportError(errOut, errors.New("scheduled-for must be RFC3339"))
+		}
+		store := scheduler.Store{Root: filepath.Join(root, "maintenance", "scheduler")}
+		leases, listErr := store.QuarantinedLeases(strings.TrimSpace(*workspace))
+		if listErr != nil {
+			return reportError(errOut, listErr)
+		}
+		key := scheduler.ScheduledOccurrenceKey(strings.TrimSpace(*jobID), when)
+		var target scheduler.Lease
+		for _, lease := range leases {
+			if lease.JobID == strings.TrimSpace(*jobID) && lease.OccurrenceKey == key {
+				target = lease
+				break
+			}
+		}
+		if target.FenceToken == "" {
+			return reportError(errOut, errors.New("quarantined occurrence was not found"))
+		}
+		now := time.Now().UTC()
+		trigger := maintenance.TriggerDaily
+		for _, job := range schedulerJobsForTrigger("default") {
+			if job.ID == target.JobID {
+				switch job.Cadence {
+				case scheduler.Weekly:
+					trigger = maintenance.TriggerWeekly
+				case scheduler.Monthly:
+					trigger = maintenance.TriggerMonthly
+				}
+			}
+		}
+		audit, auditErr := maintenance.NewRecoveryReceipt(strings.TrimSpace(*workspace), target.JobID, trigger, when, now)
+		if auditErr != nil {
+			return reportError(errOut, auditErr)
+		}
+		if auditErr = (maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}).AppendReceipt(audit); auditErr != nil {
+			return reportError(errOut, auditErr)
+		}
+		if auditErr = store.AppendReceipt(strings.TrimSpace(*workspace), scheduler.Receipt{JobID: target.JobID, ScheduledFor: when, AttemptedAt: now, State: scheduler.Unavailable, Error: "quarantine_recovery_attested"}); auditErr != nil {
+			return reportError(errOut, auditErr)
+		}
+		if recoveryErr := store.RecoverQuarantinedLease(target, now); recoveryErr != nil {
+			return reportError(errOut, recoveryErr)
+		}
+		return writeJSON(out, map[string]any{"state": "quarantine_recovered", "job_id": target.JobID, "scheduled_for": when.UTC(), "reason": "operator_confirmed_process_gone", "audit_receipt": audit}, errOut)
+	}
 	uid, uidErr := macosadapter.CurrentUID()
 	if uidErr != nil {
 		return reportError(errOut, uidErr)
 	}
 	lifecycle := macosadapter.Lifecycle{Runner: macosadapter.ExecCommandRunner{}, UID: uid, CurrentHome: currentHome, Timeout: 15 * time.Second, Native: samePathCLI(*home, currentHome) && runtime.GOOS == "darwin"}
 	if action == "install-macos" {
-		executable, execErr := os.Executable()
-		if execErr != nil {
-			return reportError(errOut, execErr)
+		program := "/usr/local/bin/bcgos"
+		if runtime.GOOS == "darwin" {
+			executable, execErr := os.Executable()
+			if execErr != nil {
+				return reportError(errOut, execErr)
+			}
+			program = executable
 		}
 		logRoot := filepath.Join(*home, "Library", "Logs")
-		status, installErr := lifecycle.Install(context.Background(), *home, macosadapter.Spec{Label: "com.bcg.maestro.maintenance", Program: executable, Arguments: []string{"maintenance", "wake", "--trigger", "presence"}, StartInterval: 900, RunAtLoad: true, StandardOutPath: filepath.Join(logRoot, "bcgos-maintenance.stdout.log"), StandardErrPath: filepath.Join(logRoot, "bcgos-maintenance.stderr.log")}, true)
+		status, installErr := lifecycle.Install(context.Background(), *home, macosadapter.Spec{Label: "com.bcg.maestro.maintenance", Program: program, Arguments: []string{"maintenance", "wake", "--trigger", "presence"}, StartInterval: 900, RunAtLoad: true, StandardOutPath: filepath.Join(logRoot, "bcgos-maintenance.stdout.log"), StandardErrPath: filepath.Join(logRoot, "bcgos-maintenance.stderr.log")}, true)
 		if installErr != nil {
 			return reportError(errOut, installErr)
 		}
@@ -211,6 +271,18 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 	return writeJSON(out, result, errOut)
 }
 
+func canaryDataRoot(home, currentHome string) (string, error) {
+	if samePathCLI(home, currentHome) {
+		return defaultDataRoot()
+	}
+	// A non-current --home is always an isolated fixture. Never use the
+	// process user's LOCALAPPDATA/XDG state for it, including on Windows.
+	if runtime.GOOS == "windows" {
+		return filepath.Join(home, "AppData", "Local", "BCGOS"), nil
+	}
+	return workspace.DefaultDataRoot(runtime.GOOS, home, "", "")
+}
+
 func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollment maintenance.CanaryEnrollment) map[string]any {
 	store := scheduler.Store{Root: filepath.Join(root, "maintenance", "scheduler")}
 	_, activated := maintenance.ActivationMaps(enrollment)
@@ -229,6 +301,17 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 		}
 	}
 	result := map[string]any{"due_count": 0, "unavailable_count": 0, "unavailable_jobs": unavailableJobs, "last_receipt": nil}
+	quarantined, quarantineErr := store.QuarantinedLeases(enrollment.WorkspaceID)
+	result["quarantined_count"] = len(quarantined)
+	if quarantineErr == nil {
+		metadata := make([]map[string]any, 0, len(quarantined))
+		for _, lease := range quarantined {
+			metadata = append(metadata, map[string]any{"job_id": lease.JobID, "occurrence_key": lease.OccurrenceKey, "owner_id": lease.OwnerID, "expires_at": lease.ExpiresAt.UTC()})
+		}
+		result["quarantined"] = metadata
+	} else {
+		result["quarantine_state"] = "unavailable"
+	}
 	receipts, err := store.Receipts(enrollment.WorkspaceID)
 	if err != nil {
 		return result

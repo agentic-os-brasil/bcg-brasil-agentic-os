@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -28,5 +30,28 @@ func TestMaintenanceWakeFailsClosedWithoutReceipt(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), `"state": "unavailable"`) || !strings.Contains(output.String(), "no receipt") {
 		t.Fatalf("unexpected wake output: %s", output.String())
+	}
+}
+
+func TestCanaryFixtureUsesIsolatedDataRoot(t *testing.T) {
+	currentHome, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := filepath.Join(t.TempDir(), "home")
+	root, err := canaryDataRoot(fixture, currentHome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relative, err := filepath.Rel(fixture, root)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		t.Fatalf("fixture root escaped isolation: root=%q home=%q", root, fixture)
+	}
+	production, err := defaultDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if samePathCLI(root, production) {
+		t.Fatalf("fixture root reused production root: %q", root)
 	}
 }

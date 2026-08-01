@@ -9,7 +9,7 @@ import (
 func testSpec(t *testing.T) Spec {
 	t.Helper()
 	home := t.TempDir()
-	return Spec{Label: "com.bcg.maestro.maintenance", Program: "/opt/bcgos", Arguments: []string{"maintenance", "wake", "--trigger", "presence"}, StartInterval: 900, RunAtLoad: true, StandardOutPath: filepath.Join(home, "Library", "Logs", "stdout.log"), StandardErrPath: filepath.Join(home, "Library", "Logs", "stderr.log")}
+	return Spec{Label: "com.bcg.maestro.maintenance", Program: "/usr/local/bin/bcgos", Arguments: []string{"maintenance", "wake", "--trigger", "presence"}, StartInterval: 900, RunAtLoad: true, StandardOutPath: filepath.Join(home, "Library", "Logs", "stdout.log"), StandardErrPath: filepath.Join(home, "Library", "Logs", "stderr.log")}
 }
 
 func TestLaunchAgentRenderIsConcreteAndParseable(t *testing.T) {

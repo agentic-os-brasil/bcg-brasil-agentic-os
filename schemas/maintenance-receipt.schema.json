@@ -19,6 +19,7 @@
     "proposal_only": {"type": "boolean"},
     "proposal_count": {"type": "integer", "minimum": 0},
     "proposal_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "proposal_artifact_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "reason_code": {"enum": ["completed", "proposal_emitted", "lease_busy", "handler_unavailable", "handler_failure", "deadline_exceeded", "catalog_unavailable", "authority_rejected", "occurrence_rejected", "receipt_persisted"]}
   },
   "allOf": [
@@ -37,12 +38,13 @@
     },
     {
       "if": {"properties": {"state": {"const": "proposal_emitted"}}},
-      "then": {"required": ["proposal_count", "proposal_digest"]},
+      "then": {"required": ["proposal_count", "proposal_digest", "proposal_artifact_id"]},
       "else": {
         "not": {
           "anyOf": [
             {"required": ["proposal_count"]},
-            {"required": ["proposal_digest"]}
+            {"required": ["proposal_digest"]},
+            {"required": ["proposal_artifact_id"]}
           ]
         }
       }

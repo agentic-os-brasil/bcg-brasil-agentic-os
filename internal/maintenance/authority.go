@@ -28,6 +28,7 @@ type ExecutionAuthority struct {
 	activated      map[string]bool
 	localQualified map[string]string
 	attended       bool
+	preauthorized  bool
 	ready          bool
 }
 
@@ -58,10 +59,21 @@ func NewExecutionAuthority(catalog Catalog, occurrences []OccurrenceAuthorizatio
 // qualification without changing the shipped catalog state. The digest is
 // evidence for this local enrollment only; it never promotes a catalog job.
 func NewLocalExecutionAuthority(catalog Catalog, occurrences []OccurrenceAuthorization, localQualification map[string]string, activatedJobs []string, attended bool) (ExecutionAuthority, error) {
+	return newLocalExecutionAuthority(catalog, occurrences, localQualification, activatedJobs, attended, false)
+}
+
+// NewPreauthorizedLocalExecutionAuthority represents a previously enrolled
+// local Canary authority. It is intentionally not Attended=true: enrollment
+// authorizes only the exact activated jobs and does not imply fresh consent.
+func NewPreauthorizedLocalExecutionAuthority(catalog Catalog, occurrences []OccurrenceAuthorization, localQualification map[string]string, activatedJobs []string) (ExecutionAuthority, error) {
+	return newLocalExecutionAuthority(catalog, occurrences, localQualification, activatedJobs, false, true)
+}
+
+func newLocalExecutionAuthority(catalog Catalog, occurrences []OccurrenceAuthorization, localQualification map[string]string, activatedJobs []string, attended, preauthorized bool) (ExecutionAuthority, error) {
 	if err := catalog.Validate(); err != nil {
 		return ExecutionAuthority{}, err
 	}
-	authority := ExecutionAuthority{catalog: catalog, occurrences: make(map[string]OccurrenceAuthorization, len(occurrences)), activated: make(map[string]bool, len(activatedJobs)), localQualified: make(map[string]string, len(localQualification)), attended: attended, ready: true}
+	authority := ExecutionAuthority{catalog: catalog, occurrences: make(map[string]OccurrenceAuthorization, len(occurrences)), activated: make(map[string]bool, len(activatedJobs)), localQualified: make(map[string]string, len(localQualification)), attended: attended, preauthorized: preauthorized, ready: true}
 	for jobID, digest := range localQualification {
 		job, found := findCatalogJob(catalog, jobID)
 		if !found || !digestPattern.MatchString(digest) || (job.Availability != Unavailable && job.Availability != Available) {
@@ -121,7 +133,7 @@ func (authority ExecutionAuthority) Authorize(command Command, now time.Time) (s
 	if (job.Availability != Available && !locallyQualified) || (!job.DefaultEnabled && !authority.activated[job.ID]) {
 		return scheduler.Occurrence{}, errors.New("maintenance command job is unavailable or disabled")
 	}
-	if (job.Unattended == "policy_gated" || job.Unattended == "never") && !authority.attended {
+	if (job.Unattended == "policy_gated" || job.Unattended == "never") && !authority.attended && !authority.preauthorized {
 		return scheduler.Occurrence{}, errors.New("maintenance command requires attended authority")
 	}
 	key := authorityOccurrenceKey(command.WorkspaceID, command.JobID, command.Trigger, command.EventID, command.ScheduledFor)
