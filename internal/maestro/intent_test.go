@@ -1,12 +1,38 @@
 package maestro
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 )
+
+func TestIntentReviewPacketWholeUTF8BudgetIncludesFacetsAndDraft(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "owner", "self", "professional-role.md"), []byte(strings.Repeat("r", 12000)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "owner", "self", "communication-style.md"), []byte(strings.Repeat("c", 12000)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ownerctx.ProjectSnapshot(root, []string{"professional-role", "communication-style"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanFor(caseInput(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildIntentReviewPacket("answer", plan, strings.Repeat("d", 12000), nil, snapshot, nil, "owner", "low", "reversible", ""); err == nil {
+		t.Fatal("whole packet UTF-8 budget did not include facet and draft bodies")
+	}
+}
 
 func TestIntentReviewPacketAndReceiptAreBoundToProjectionAndDigests(t *testing.T) {
 	root := t.TempDir()

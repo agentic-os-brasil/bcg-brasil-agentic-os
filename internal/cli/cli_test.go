@@ -18,6 +18,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -550,6 +551,7 @@ func TestMaestroDispatchBoundaryRecordsPromptPlansAndPersistsMetadataOnlyChain(t
 	root := t.TempDir()
 	dataRoot := func() (string, error) { return root, nil }
 	input := `{"authenticated_owner":true,"owner_id":"owner","dispatch_id":"dispatch-cli-1","prompt":"prepare case alpha","language":"en-US","source":"cli","session_id":"session-dispatch","working_language":"en-US","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
+	input = addTestCapabilityDigests(input)
 	var output bytes.Buffer
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK {
 		t.Fatalf("Maestro dispatch = %d: %s", code, output.String())
@@ -565,11 +567,28 @@ func TestMaestroDispatchBoundaryRecordsPromptPlansAndPersistsMetadataOnlyChain(t
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"durable_dispatch_epoch": 1`) {
 		t.Fatalf("same occurrence was not idempotent: code=%d output=%s", code, output.String())
 	}
+	history, err := ownerctx.InspectPromptHistory(root)
+	if err != nil || len(history) != 1 {
+		t.Fatalf("same JSON retry duplicated prompt history: entries=%d err=%v", len(history), err)
+	}
+	changedPrompt := strings.Replace(input, `"prompt":"prepare case alpha"`, `"prompt":"changed prompt"`, 1)
+	output.Reset()
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(changedPrompt), &output, &output, dataRoot); code == ExitOK {
+		t.Fatal("same dispatch occurrence accepted changed prompt")
+	}
+	history, err = ownerctx.InspectPromptHistory(root)
+	if err != nil || len(history) != 1 || history[0].SHA256 != maestro.SHA256Hex("prepare case alpha") {
+		t.Fatalf("changed occurrence mutated prompt history: entries=%#v err=%v", history, err)
+	}
 	distinctOccurrence := strings.Replace(input, `"dispatch_id":"dispatch-cli-1"`, `"dispatch_id":"dispatch-cli-2"`, 1)
 	output.Reset()
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(distinctOccurrence), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"durable_dispatch_epoch": 2`) {
 		t.Fatalf("distinct occurrence did not advance the durable epoch: code=%d output=%s", code, output.String())
 	}
+}
+
+func addTestCapabilityDigests(input string) string {
+	return strings.ReplaceAll(input, `"state_snapshot_digest":"`, `"capability_digest":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","state_snapshot_digest":"`)
 }
 
 func TestMaestroDispatchValidatesBeforeRecordingPromptOrChain(t *testing.T) {
@@ -589,6 +608,7 @@ func TestMaestroDispatchValidatesBeforeRecordingPromptOrChain(t *testing.T) {
 
 	output.Reset()
 	valid := `{"authenticated_owner":true,"owner_id":"owner","dispatch_id":"dispatch-translation-failure","prompt":"translate current","language":"en-US","source":"cli","session_id":"translation-failure","working_language":"pt-BR","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
+	valid = addTestCapabilityDigests(valid)
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(valid), &output, &output, dataRoot); code == ExitOK {
 		t.Fatal("translation failure unexpectedly dispatched")
 	}
@@ -597,6 +617,47 @@ func TestMaestroDispatchValidatesBeforeRecordingPromptOrChain(t *testing.T) {
 	}
 	if chains, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "chains", "*.json")); err != nil || len(chains) != 0 {
 		t.Fatalf("translation failure left chains: %v, err=%v", chains, err)
+	}
+}
+
+func TestMaestroDispatchRejectsUnknownAuthorityLookingFieldsBeforeMutation(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	input := `{"authenticated_owner":true,"owner_id":"owner","dispatch_id":"dispatch-unknown","prompt":"should not persist","authority_grant":"case_agent"}`
+	var output bytes.Buffer
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code == ExitOK {
+		t.Fatal("unknown authority-looking field was accepted")
+	}
+	if entries, err := ownerctx.InspectPromptHistory(root); err == nil && len(entries) != 0 {
+		t.Fatalf("unknown field left prompt history: %#v", entries)
+	}
+	if chains, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "chains", "*.json")); err != nil || len(chains) != 0 {
+		t.Fatalf("unknown field left chains: %v, err=%v", chains, err)
+	}
+	if receipts, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "dispatch", "receipts", "*.json")); err != nil || len(receipts) != 0 {
+		t.Fatalf("unknown field left dispatch receipts: %v, err=%v", receipts, err)
+	}
+}
+
+func TestMaestroWalterDefaultFacetAllowlistExcludesPsychologicalProfile(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "owner", "self", "psychological-profile.md"), []byte("sensitive owner profile"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ownerctx.ProjectSnapshot(root, append([]string(nil), maestroWalterFacetAllowlist...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := snapshot.Facets["psychological-profile"]; ok {
+		t.Fatal("ordinary Maestro Walter context included psychological profile")
+	}
+	for _, facet := range maestroWalterFacetAllowlist {
+		if _, ok := snapshot.Facets[facet]; !ok {
+			t.Fatalf("Walter allowlist omitted expected facet %q", facet)
+		}
 	}
 }
 
@@ -610,6 +671,7 @@ func TestMaestroDispatchKeepsEarlierSameSessionHistoryAndCurrentIsNotDuplicated(
 		t.Fatal(err)
 	}
 	input := `{"authenticated_owner":true,"owner_id":"owner","dispatch_id":"dispatch-cli-2","prompt":"prepare case alpha","language":"en-US","source":"cli","session_id":"session-dispatch","working_language":"en-US","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
+	input = addTestCapabilityDigests(input)
 	var output bytes.Buffer
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"history_count": 1`) {
 		t.Fatalf("earlier same-session prompt was suppressed or current duplicated: code=%d output=%s", code, output.String())

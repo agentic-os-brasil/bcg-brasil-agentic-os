@@ -99,7 +99,7 @@ intent hypothesis. An explicit correction supersedes earlier claims and
 invalidates proposals whose canonical-source digest is stale.
 
 Maestro evaluates every interaction. It persists only a material,
-authenticated owner signal in the local append-only observation log; routine
+owner-attested signal under the local owner boundary in the append-only observation log; routine
 loops, hypotheses, client documents and generated output are not persisted as
 self evidence. Observation metadata carries signal class, minimal normalized
 claim, evidence type, provenance digest, independent episode, scope,

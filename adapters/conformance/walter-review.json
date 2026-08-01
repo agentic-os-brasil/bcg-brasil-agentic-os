@@ -1,5 +1,7 @@
 {
   "schema_version": 1,
+  "identity": "owner_self_proxy_inside_maestro_loop",
+  "role": "senior_advisor_refiner",
   "max_objections": 3,
   "triggers": [
     "material_recommendation",

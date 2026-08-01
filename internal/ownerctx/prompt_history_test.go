@@ -188,3 +188,27 @@ func TestPromptHistoryOwnerBindingAndConcurrentWriters(t *testing.T) {
 		t.Fatalf("lost concurrent updates: got %d entries, want %d", len(entries), writers+1)
 	}
 }
+
+func TestPromptHistoryOccurrenceIsIdempotentAndContentBound(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	input := PromptHistoryInput{OwnerID: "owner", OccurrenceID: "dispatch-a", Prompt: "same prompt", Language: "en-US", Source: "cli", SessionID: "session-a", ScopeKind: PromptScopeCase, ScopeID: "case-a", ContentKind: "user_prompt"}
+	first, err := RecordUserPrompt(root, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := RecordUserPrompt(root, input)
+	if err != nil || first.ID != second.ID {
+		t.Fatalf("same occurrence was not idempotent: first=%#v second=%#v err=%v", first, second, err)
+	}
+	entries, err := ExportPromptHistory(root)
+	if err != nil || len(entries) != 1 || entries[0].OccurrenceID != "dispatch-a" {
+		t.Fatalf("occurrence history = %#v, err=%v", entries, err)
+	}
+	input.Prompt = "mutated prompt"
+	if _, err := RecordUserPrompt(root, input); err == nil {
+		t.Fatal("occurrence reuse with different prompt was accepted")
+	}
+}

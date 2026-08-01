@@ -295,6 +295,18 @@ func TestObservationEvaluatorDoesNotPersistEveryLoopOrInferSelfFacts(t *testing.
 	}
 }
 
+func TestObservationEvaluatorDoesNotTreatGenericAcknowledgementAsEndorsement(t *testing.T) {
+	input := observationInput(SignalExplicitEndorsement, "ok", "episode-ack", true, true)
+	if _, err := EvaluateInteraction(input); err == nil {
+		t.Fatal("generic acknowledgement was accepted as an explicit endorsement")
+	}
+	input.Claim = "endorses_concise_style"
+	evaluation, err := EvaluateInteraction(input)
+	if err != nil || !evaluation.Persist {
+		t.Fatalf("explicit endorsement was not retained: %#v, err=%v", evaluation, err)
+	}
+}
+
 func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {

@@ -33,14 +33,17 @@ silently changes the requested route; at most Maestro asks a bounded question.
 The canonical Owner Context facets are the sole self authority.
 `UserSelfSnapshot` is a stale-checked projection. Maestro evaluates every
 interaction, but the local append-only observation log persists only material,
-authenticated owner signals. Claims are normalized metadata codes: prompts,
+owner-attested signals under the local owner boundary. Claims are normalized metadata codes: prompts,
 transcripts, client documents and generated output are never self evidence.
 Explicit current instruction outranks correction, canon, observations and
-Walter hypotheses. Communication-style/voice/preferences may be promoted with
-audited explicit confirmation; role and decision rules require proposals;
-boundaries, psychological profile and intrinsic-intent claims require explicit
-confirmation. Darwin may deduplicate hashes and report drift/age/conflicts,
-but cannot semantically write the self. Local controls support inspection,
+Walter hypotheses. The deterministic self lifecycle is
+`captured -> eligible -> corroborated -> proposed -> promoted`, with rejected,
+contradicted, expired and redacted side states. Communication-style/voice/preferences
+may be promoted with audited explicit confirmation; role and decision rules
+require proposals; boundaries, psychological profile and intrinsic-intent
+claims require explicit confirmation. Darwin may deduplicate hashes and report
+drift/age/conflicts or propose re-review, but cannot author or promote the self.
+Local controls support inspection,
 export, owner-confirmed observation rejection/redaction, facet revert and
 snapshot deletion.
 
@@ -62,9 +65,10 @@ executable instructions, and their bodies remain only in the ephemeral
 IntentReviewPacket; review receipts and ledgers contain hashes/digests only.
 Prompt retention is owner-bound, cross-process serialized and independent of
 self observation persistence and self promotion. The product boundary
-`bcgos maestro dispatch --stdin` records an authenticated user prompt, builds
-and persists a chain, and exposes only metadata at the model-unavailable
-dispatch boundary.
+`bcgos maestro dispatch --stdin` records a fresh owner attestation under the
+OS-user-local data-root boundary, builds and persists a chain, and exposes only
+metadata at the model-unavailable dispatch boundary. The boolean attestation
+is not cryptographic principal authentication.
 
 | Path | Sequence |
 | --- | --- |

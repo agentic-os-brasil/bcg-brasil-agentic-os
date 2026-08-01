@@ -97,7 +97,7 @@ contains the literal request, selected route, bounded draft/context, audience,
 consequence, reversibility and a `UserSelfSnapshot` projection. Walter's
 intrinsic-intent assessment is a hypothesis with evidence and confidence, not
 mind-reading. Owner Context facets remain the sole self authority. Maestro
-evaluates every interaction, but persists only material, authenticated owner
+evaluates every interaction, but persists only material, owner-attested
 signals as normalized local metadata; prompts, client documents and generated
 output never become self evidence. The local CLI exposes inspection/export and
 owner-confirmed rejection/redaction, revert and deletion controls.
@@ -113,9 +113,10 @@ recorded, preserving earlier same-session/repeated prompts without duplicating
 the current occurrence. Scores and reason codes are packet metadata only; historical text is
 quoted data and kept only in the ephemeral review packet. Prompt history never enters receipts, telemetry, managed bundles or release artifacts,
 and remains separate from self learning. The reachable `bcgos maestro dispatch
---stdin` boundary records an authenticated prompt, constructs and persists the
-Maestro chain, and returns metadata-only dispatch state while model execution
-is unavailable.
+--stdin` boundary records a fresh owner attestation under the OS-user-local
+data-root boundary, constructs and persists the Maestro chain, and returns
+metadata-only dispatch state while model execution is unavailable. The boolean
+attestation is not cryptographic principal authentication.
 
 ## What is ready
 

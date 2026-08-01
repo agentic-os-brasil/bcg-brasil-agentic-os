@@ -16,6 +16,7 @@ const IntentReviewSchemaVersion = 1
 
 const (
 	maxIntentRepresentationBytes = 32 << 10
+	maxIntentPacketBytes         = 32 << 10
 	maxIntentPriorPrompts        = 8
 	maxIntentEvidenceRefs        = 8
 	maxIntentAlternatives        = 8
@@ -173,6 +174,9 @@ func BuildIntentReviewPacket(prompt string, plan Plan, draft string, contextRefs
 		PromptHistory: PromptHistoryPolicy{MaxCount: 8, MaxBytes: 32 << 10, MaxAgeSeconds: int64((30 * 24 * time.Hour) / time.Second), ScopeKind: "global", ScopeID: "owner", WorkingLanguage: "und", RelevanceScoring: "lexical-v1", RelevanceQuerySHA256: SHA256Hex(prompt), CurrentPromptPrecedes: true},
 	}
 	packet.PacketDigest = digestIntentPacket(packet)
+	if err := packet.Validate(); err != nil {
+		return IntentReviewPacket{}, err
+	}
 	return packet, nil
 }
 
@@ -187,7 +191,7 @@ func BuildIntentReviewPacketWithPromptHistory(prompt string, plan Plan, draft st
 	selected, err := ownerctx.SelectRelevantPromptHistory(historyRoot, ownerctx.PromptHistorySelectionLimits{
 		OwnerID: limits.OwnerID, MaxCount: limits.MaxCount, MaxBytes: limits.MaxBytes, MaxAge: limits.MaxAge,
 		ScopeKind: limits.ScopeKind, ScopeID: limits.ScopeID, CurrentPrompt: prompt,
-		RelevanceKeys: append([]string(nil), limits.RelevanceKeys...), CurrentLanguage: limits.CurrentLanguage,
+		RelevanceKeys: append([]string(nil), limits.RelevanceKeys...), CurrentLanguage: limits.CurrentLanguage, ExcludeOccurrenceID: limits.ExcludeOccurrenceID,
 	}, now)
 	if err != nil {
 		return IntentReviewPacket{}, err
@@ -253,6 +257,9 @@ func attachPromptHistory(packet IntentReviewPacket, entries []ownerctx.PromptHis
 	packet.PriorPrompts = prior
 	packet.PromptHistory = PromptHistoryPolicy{MaxCount: limits.MaxCount, MaxBytes: limits.MaxBytes, MaxAgeSeconds: int64(limits.MaxAge / time.Second), ScopeKind: string(limits.ScopeKind), ScopeID: limits.ScopeID, OwnerID: limits.OwnerID, WorkingLanguage: workingLanguage, RelevanceScoring: "lexical-v1", RelevanceQuerySHA256: SHA256Hex(packet.LiteralRequest), CurrentPromptPrecedes: true}
 	packet.PacketDigest = digestIntentPacket(packet)
+	if err := packet.Validate(); err != nil {
+		return IntentReviewPacket{}, err
+	}
 	return packet, nil
 }
 
@@ -348,6 +355,10 @@ func (packet IntentReviewPacket) Validate() error {
 	}
 	if len(packet.PriorPrompts) > 0 && (packet.PromptHistory.MaxBytes < 1 || bytes > maxIntentRepresentationBytes || sumOriginalPromptBytes(packet.PriorPrompts) > packet.PromptHistory.MaxBytes) {
 		return errors.New("intent review packet exceeds its prior prompt byte limit")
+	}
+	serialized, err := json.Marshal(packet)
+	if err != nil || len(serialized) > maxIntentPacketBytes {
+		return errors.New("intent review packet exceeds its whole-packet UTF-8 byte limit")
 	}
 	return nil
 }

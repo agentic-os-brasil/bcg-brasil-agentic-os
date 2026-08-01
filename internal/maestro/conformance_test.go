@@ -57,6 +57,7 @@ func TestWalterIntentReviewFixturePinsSelfAndIntentContract(t *testing.T) {
 	}
 	var fixture struct {
 		SchemaVersion int      `json:"schema_version"`
+		Identity      string   `json:"identity"`
 		PacketVersion string   `json:"packet_version"`
 		Role          string   `json:"role"`
 		Bindings      []string `json:"required_packet_bindings"`
@@ -66,7 +67,7 @@ func TestWalterIntentReviewFixturePinsSelfAndIntentContract(t *testing.T) {
 	if err := json.Unmarshal(body, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.SchemaVersion != 1 || fixture.PacketVersion != "intent-review-v1" || fixture.Role != "senior_advisor_refiner" {
+	if fixture.SchemaVersion != 1 || fixture.Identity != "owner_self_proxy_inside_maestro_loop" || fixture.PacketVersion != "intent-review-v1" || fixture.Role != "senior_advisor_refiner" {
 		t.Fatalf("Walter intent fixture header drifted: %#v", fixture)
 	}
 	for _, required := range []string{"self_snapshot_version", "self_snapshot_digest", "draft_output", "observations"} {

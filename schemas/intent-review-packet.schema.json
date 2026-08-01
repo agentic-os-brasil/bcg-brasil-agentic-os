@@ -2,6 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentic-os-brasil/schemas/intent-review-packet.schema.json",
   "title": "Maestro IntentReviewPacket",
+  "description": "Structural JSON validation only. Every ingress must also call internal/maestro.IntentReviewPacket.Validate for semantic and aggregate UTF-8 enforcement.",
+  "x-bcgos-structural-only": true,
   "x-bcgos-max-total-utf8-bytes": 32768,
   "x-bcgos-runtime-validator": "internal/maestro.IntentReviewPacket.Validate",
   "type": "object",

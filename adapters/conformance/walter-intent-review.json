@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "packet_version": "intent-review-v1",
+  "identity": "owner_self_proxy_inside_maestro_loop",
   "role": "senior_advisor_refiner",
   "posture": "calm_constructive_proxy_of_user_self_review",
   "required_packet_bindings": [

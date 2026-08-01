@@ -31,11 +31,17 @@ type DispatchBoundaryReceipt struct {
 type DispatchRecoveryMarker struct {
 	SchemaVersion int       `json:"schema_version"`
 	PlanDigest    string    `json:"plan_digest"`
-	PromptID      string    `json:"prompt_id,omitempty"`
-	ChainPath     string    `json:"chain_path,omitempty"`
+	DispatchID    string    `json:"dispatch_id,omitempty"`
+	ArtifactKind  string    `json:"artifact_kind"`
+	TargetRef     string    `json:"target_ref"`
 	Reason        string    `json:"reason"`
 	RecordedAt    time.Time `json:"recorded_at"`
 }
+
+const (
+	RecoveryArtifactChainState      = "chain_state"
+	RecoveryArtifactDispatchReceipt = "dispatch_receipt"
+)
 
 // DispatchBoundaryState is a metadata-only local CAS record. It proves that
 // Maestro prepared and closed one dispatch boundary; it is not native-agent
@@ -47,6 +53,9 @@ type DispatchBoundaryState struct {
 	OwnerDigest        string    `json:"owner_digest"`
 	SessionDigest      string    `json:"session_digest"`
 	ReceiptName        string    `json:"receipt_name"`
+	PromptDigest       string    `json:"prompt_digest"`
+	PacketDigest       string    `json:"packet_digest"`
+	DraftDigest        string    `json:"draft_digest"`
 	Epoch              uint64    `json:"epoch"`
 	PlanDigest         string    `json:"plan_digest"`
 	ChainDigest        string    `json:"chain_digest"`
@@ -65,26 +74,41 @@ type dispatchCurrentPointer struct {
 	PointerDigest string `json:"pointer_digest"`
 }
 
+type DispatchBoundaryInput struct {
+	Root         string
+	OwnerID      string
+	SessionID    string
+	DispatchID   string
+	PromptDigest string
+	PacketDigest string
+	DraftDigest  string
+	Plan         Plan
+	Chain        ChainState
+}
+
 var syncChainDirectoryFunc = syncChainDirectory
 var syncDispatchDirectoryFunc = syncChainDirectory
 
-func PersistDispatchBoundary(root, ownerID, sessionID, dispatchID string, plan Plan, chain ChainState) (DispatchBoundaryState, error) {
-	if err := plan.Validate(); err != nil {
+func (input DispatchBoundaryInput) PersistDispatchBoundary() (DispatchBoundaryState, error) {
+	if err := input.Plan.Validate(); err != nil {
 		return DispatchBoundaryState{}, err
 	}
-	if chain.PlanDigest != plan.PlanDigest {
+	if input.Chain.PlanDigest != input.Plan.PlanDigest {
 		return DispatchBoundaryState{}, errors.New("dispatch boundary chain is not bound to plan")
 	}
-	if err := validateDispatchIdentity(ownerID, sessionID, dispatchID); err != nil {
+	if err := validateDispatchIdentity(input.OwnerID, input.SessionID, input.DispatchID); err != nil {
 		return DispatchBoundaryState{}, err
 	}
-	bindingDigest := orderedBindingDigest(plan)
-	directory := filepath.Join(root, "owner", "maestro", "dispatch")
+	if !validLowerDigest(input.PromptDigest) || !validLowerDigest(input.PacketDigest) || !validLowerDigest(input.DraftDigest) {
+		return DispatchBoundaryState{}, errors.New("dispatch occurrence content digests are invalid")
+	}
+	bindingDigest := orderedBindingDigest(input.Plan)
+	directory := filepath.Join(input.Root, "owner", "maestro", "dispatch")
 	receiptsDirectory := filepath.Join(directory, "receipts")
-	if err := ensurePrivateChainTree(root, directory); err != nil {
+	if err := ensurePrivateChainTree(input.Root, directory); err != nil {
 		return DispatchBoundaryState{}, err
 	}
-	if err := ensurePrivateChainTree(root, receiptsDirectory); err != nil {
+	if err := ensurePrivateChainTree(input.Root, receiptsDirectory); err != nil {
 		return DispatchBoundaryState{}, err
 	}
 	unlock, err := acquireChainLock(directory)
@@ -92,20 +116,30 @@ func PersistDispatchBoundary(root, ownerID, sessionID, dispatchID string, plan P
 		return DispatchBoundaryState{}, err
 	}
 	defer func() { _ = unlock() }()
-	chainDigestValue := chainDigest(chain)
-	ownerDigest := SHA256Hex(ownerID)
-	sessionDigest := SHA256Hex(sessionID)
+	chainDigestValue := chainDigest(input.Chain)
+	ownerDigest := SHA256Hex(input.OwnerID)
+	sessionDigest := SHA256Hex(input.SessionID)
+	receipts, maxEpoch, err := scanDispatchReceipts(receiptsDirectory)
+	if err != nil {
+		return DispatchBoundaryState{}, err
+	}
 	priorPointer, priorPointerBody, err := readDispatchCurrentPointer(directory, receiptsDirectory)
 	if err != nil {
 		return DispatchBoundaryState{}, err
 	}
-	if prior, err := findDispatchReceipt(receiptsDirectory, dispatchID); err != nil {
-		return DispatchBoundaryState{}, err
-	} else if prior != nil {
-		if prior.InstallationDigest != installationDigest(root) || prior.OwnerDigest != ownerDigest || prior.SessionDigest != sessionDigest {
+	var prior *DispatchBoundaryState
+	for index := range receipts {
+		if receipts[index].DispatchID == input.DispatchID {
+			candidate := receipts[index]
+			prior = &candidate
+			break
+		}
+	}
+	if prior != nil {
+		if prior.InstallationDigest != installationDigest(input.Root) || prior.OwnerDigest != ownerDigest || prior.SessionDigest != sessionDigest {
 			return DispatchBoundaryState{}, errors.New("dispatch occurrence is bound to another owner or session")
 		}
-		if prior.PlanDigest != plan.PlanDigest || prior.ChainDigest != chainDigestValue || prior.BindingChainDigest != bindingDigest || prior.Status != "finished" {
+		if prior.PlanDigest != input.Plan.PlanDigest || prior.ChainDigest != chainDigestValue || prior.BindingChainDigest != bindingDigest || prior.PromptDigest != input.PromptDigest || prior.PacketDigest != input.PacketDigest || prior.DraftDigest != input.DraftDigest || prior.Status != "finished" {
 			return DispatchBoundaryState{}, errors.New("dispatch occurrence was reused with different content")
 		}
 		if priorPointer == nil || priorPointer.Epoch < prior.Epoch {
@@ -119,24 +153,28 @@ func PersistDispatchBoundary(root, ownerID, sessionID, dispatchID string, plan P
 		return *prior, nil
 	}
 	epoch := uint64(1)
+	if maxEpoch > 0 {
+		epoch = maxEpoch + 1
+	}
 	if priorPointer != nil {
 		priorState, err := readDispatchReceipt(receiptsDirectory, priorPointer.ReceiptName)
 		if err != nil {
 			return DispatchBoundaryState{}, err
 		}
-		if priorState.InstallationDigest != installationDigest(root) || priorState.ActiveSpokeCount != 0 || priorState.Status != "finished" {
+		if priorState.InstallationDigest != installationDigest(input.Root) || priorState.ActiveSpokeCount != 0 || priorState.Status != "finished" {
 			return DispatchBoundaryState{}, errors.New("durable dispatch current receipt is invalid")
 		}
-		epoch = priorPointer.Epoch + 1
 	}
-	state := newDispatchBoundaryState(root, ownerID, sessionID, dispatchID, epoch, plan, chain, bindingDigest)
+	state := newDispatchBoundaryState(input.Root, input.OwnerID, input.SessionID, input.DispatchID, input.PromptDigest, input.PacketDigest, input.DraftDigest, epoch, input.Plan, input.Chain, bindingDigest)
 	receiptPath := filepath.Join(receiptsDirectory, state.ReceiptName)
 	if err := persistDispatchReceipt(receiptsDirectory, receiptPath, state); err != nil {
 		return DispatchBoundaryState{}, err
 	}
 	pointer := newDispatchCurrentPointer(state)
 	if err := persistDispatchCurrentPointer(directory, filepath.Join(directory, "current.json"), pointer, priorPointerBody); err != nil {
-		_ = PersistDispatchRecoveryMarker(root, DispatchRecoveryMarker{SchemaVersion: 1, PlanDigest: state.PlanDigest, ChainPath: receiptPath, Reason: "dispatch current pointer durability failure"})
+		if markerErr := PersistDispatchRecoveryMarker(input.Root, DispatchRecoveryMarker{SchemaVersion: 1, PlanDigest: state.PlanDigest, DispatchID: input.DispatchID, ArtifactKind: RecoveryArtifactDispatchReceipt, TargetRef: receiptPath, Reason: "dispatch occurrence pointer durability failure"}); markerErr != nil {
+			return DispatchBoundaryState{}, fmt.Errorf("dispatch pointer durability failed: %w; occurrence recovery marker failed: %v", err, markerErr)
+		}
 		return DispatchBoundaryState{}, err
 	}
 	return state, nil
@@ -185,7 +223,40 @@ func validLowerDigest(value string) bool {
 }
 
 func orderedBindingDigest(plan Plan) string {
-	body, _ := json.Marshal(plan.Bindings)
+	type invocationStep struct {
+		Phase   string       `json:"phase"`
+		Binding AgentBinding `json:"binding"`
+	}
+	steps := make([]invocationStep, 0, len(plan.Bindings)+2)
+	appendBinding := func(phase, role, scopeKind, scopeID string) {
+		for _, binding := range plan.Bindings {
+			if binding.Role == role && binding.ScopeKind == scopeKind && binding.ScopeID == scopeID {
+				steps = append(steps, invocationStep{Phase: phase, Binding: binding})
+				return
+			}
+		}
+	}
+	if plan.CaseEntry == CaseEntryAccountFirst {
+		appendBinding("account_framing", "client_account_agent", "account", plan.AccountScopeID)
+	}
+	if plan.ScopeKind != "" {
+		appendBinding("case_execution", "case_agent", plan.ScopeKind, plan.ScopeID)
+	}
+	if plan.CaseEntry == CaseEntryAccountFirst && plan.RequiresAccountValidation {
+		appendBinding("account_validation", "client_account_agent", "account", plan.AccountScopeID)
+	}
+	if plan.RequiresWalter {
+		appendBinding("walter_review", "reviewer", "review", "review")
+	}
+	if len(steps) == 0 {
+		for _, binding := range plan.Bindings {
+			steps = append(steps, invocationStep{Phase: "selected", Binding: binding})
+		}
+	}
+	body, _ := json.Marshal(struct {
+		PlanDigest string           `json:"plan_digest"`
+		Steps      []invocationStep `json:"steps"`
+	}{PlanDigest: plan.PlanDigest, Steps: steps})
 	return SHA256Hex(string(body))
 }
 
@@ -199,15 +270,15 @@ func installationDigest(root string) string {
 	return SHA256Hex(abs)
 }
 
-func newDispatchBoundaryState(root, ownerID, sessionID, dispatchID string, epoch uint64, plan Plan, chain ChainState, bindingDigest string) DispatchBoundaryState {
+func newDispatchBoundaryState(root, ownerID, sessionID, dispatchID, promptDigest, packetDigest, draftDigest string, epoch uint64, plan Plan, chain ChainState, bindingDigest string) DispatchBoundaryState {
 	now := time.Now().UTC()
-	state := DispatchBoundaryState{SchemaVersion: 1, InstallationDigest: installationDigest(root), DispatchID: dispatchID, OwnerDigest: SHA256Hex(ownerID), SessionDigest: SHA256Hex(sessionID), ReceiptName: fmt.Sprintf("%020d-%s.json", epoch, dispatchID), Epoch: epoch, PlanDigest: plan.PlanDigest, ChainDigest: chainDigest(chain), BindingChainDigest: bindingDigest, Status: "finished", ActiveSpokeCount: 0, StartedAt: now, FinishedAt: now}
+	state := DispatchBoundaryState{SchemaVersion: 1, InstallationDigest: installationDigest(root), DispatchID: dispatchID, OwnerDigest: SHA256Hex(ownerID), SessionDigest: SHA256Hex(sessionID), ReceiptName: fmt.Sprintf("%020d-%s.json", epoch, dispatchID), PromptDigest: promptDigest, PacketDigest: packetDigest, DraftDigest: draftDigest, Epoch: epoch, PlanDigest: plan.PlanDigest, ChainDigest: chainDigest(chain), BindingChainDigest: bindingDigest, Status: "finished", ActiveSpokeCount: 0, StartedAt: now, FinishedAt: now}
 	state.StateDigest = dispatchBoundaryStateDigest(state)
 	return state
 }
 
 func validDispatchBoundaryState(state DispatchBoundaryState) bool {
-	return state.SchemaVersion == 1 && state.Epoch > 0 && state.DispatchID != "" && safeReceiptName(state.ReceiptName) && validLowerDigest(state.InstallationDigest) && validLowerDigest(state.OwnerDigest) && validLowerDigest(state.SessionDigest) && validLowerDigest(state.PlanDigest) && validLowerDigest(state.ChainDigest) && validLowerDigest(state.BindingChainDigest) && state.Status == "finished" && state.ActiveSpokeCount == 0 && !state.StartedAt.IsZero() && !state.FinishedAt.IsZero() && state.StateDigest == dispatchBoundaryStateDigest(state)
+	return state.SchemaVersion == 1 && state.Epoch > 0 && validClosedDispatchID(state.DispatchID) && state.ReceiptName == canonicalDispatchReceiptName(state.Epoch, state.DispatchID) && safeReceiptName(state.ReceiptName) && validLowerDigest(state.InstallationDigest) && validLowerDigest(state.OwnerDigest) && validLowerDigest(state.SessionDigest) && validLowerDigest(state.PromptDigest) && validLowerDigest(state.PacketDigest) && validLowerDigest(state.DraftDigest) && validLowerDigest(state.PlanDigest) && validLowerDigest(state.ChainDigest) && validLowerDigest(state.BindingChainDigest) && state.Status == "finished" && state.ActiveSpokeCount == 0 && !state.StartedAt.IsZero() && !state.FinishedAt.IsZero() && state.StateDigest == dispatchBoundaryStateDigest(state)
 }
 
 func dispatchBoundaryStateDigest(state DispatchBoundaryState) string {
@@ -234,6 +305,10 @@ func dispatchCurrentPointerDigest(pointer dispatchCurrentPointer) string {
 
 func validDispatchCurrentPointer(pointer dispatchCurrentPointer) bool {
 	return pointer.SchemaVersion == 1 && pointer.Epoch > 0 && safeReceiptName(pointer.ReceiptName) && pointer.PointerDigest == dispatchCurrentPointerDigest(pointer)
+}
+
+func canonicalDispatchReceiptName(epoch uint64, dispatchID string) string {
+	return fmt.Sprintf("%020d-%s.json", epoch, dispatchID)
 }
 
 func safeReceiptName(name string) bool {
@@ -268,8 +343,12 @@ func readDispatchCurrentPointer(directory, receiptsDirectory string) (*dispatchC
 	if err := json.Unmarshal(body, &pointer); err != nil || !validDispatchCurrentPointer(pointer) {
 		return nil, nil, errors.New("durable dispatch current pointer is invalid")
 	}
-	if _, err := readDispatchReceipt(receiptsDirectory, pointer.ReceiptName); err != nil {
+	receipt, err := readDispatchReceipt(receiptsDirectory, pointer.ReceiptName)
+	if err != nil {
 		return nil, nil, err
+	}
+	if pointer.Epoch != receipt.Epoch || pointer.ReceiptName != canonicalDispatchReceiptName(receipt.Epoch, receipt.DispatchID) {
+		return nil, nil, errors.New("durable dispatch current pointer is not bound to its receipt")
 	}
 	return &pointer, append([]byte(nil), body...), nil
 }
@@ -291,30 +370,43 @@ func readDispatchReceipt(directory, name string) (DispatchBoundaryState, error) 
 		return DispatchBoundaryState{}, err
 	}
 	var state DispatchBoundaryState
-	if json.Unmarshal(body, &state) != nil || !validDispatchBoundaryState(state) || state.ReceiptName != name {
+	if json.Unmarshal(body, &state) != nil || !validDispatchBoundaryState(state) || state.ReceiptName != name || name != canonicalDispatchReceiptName(state.Epoch, state.DispatchID) {
 		return DispatchBoundaryState{}, errors.New("durable dispatch receipt is invalid")
 	}
 	return state, nil
 }
 
-func findDispatchReceipt(directory, dispatchID string) (*DispatchBoundaryState, error) {
+func scanDispatchReceipts(directory string) ([]DispatchBoundaryState, uint64, error) {
 	entries, err := os.ReadDir(directory)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	receipts := make([]DispatchBoundaryState, 0, len(entries))
+	var maxEpoch uint64
+	seenEpoch := make(map[uint64]struct{}, len(entries))
+	seenDispatch := make(map[string]struct{}, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() || !safeReceiptName(entry.Name()) {
-			continue
+			return nil, 0, errors.New("durable dispatch receipts directory contains an unexpected entry")
 		}
 		state, err := readDispatchReceipt(directory, entry.Name())
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		if state.DispatchID == dispatchID {
-			return &state, nil
+		if _, exists := seenEpoch[state.Epoch]; exists {
+			return nil, 0, errors.New("durable dispatch receipts contain a duplicate epoch")
 		}
+		if _, exists := seenDispatch[state.DispatchID]; exists {
+			return nil, 0, errors.New("durable dispatch receipts contain a duplicate dispatch occurrence")
+		}
+		seenEpoch[state.Epoch] = struct{}{}
+		seenDispatch[state.DispatchID] = struct{}{}
+		if state.Epoch > maxEpoch {
+			maxEpoch = state.Epoch
+		}
+		receipts = append(receipts, state)
 	}
-	return nil, nil
+	return receipts, maxEpoch, nil
 }
 
 func persistDispatchReceipt(directory, path string, state DispatchBoundaryState) error {
@@ -322,19 +414,36 @@ func persistDispatchReceipt(directory, path string, state DispatchBoundaryState)
 	if err != nil {
 		return err
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return errors.New("durable dispatch receipt target is not a regular private file")
+		}
+		return errors.New("durable dispatch receipt already exists")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	temporary, err := os.CreateTemp(directory, ".dispatch-receipt-*")
 	if err != nil {
 		return err
 	}
-	if _, err := file.Write(append(body, '\n')); err != nil {
-		_ = file.Close()
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(0o600); err != nil {
+		_ = temporary.Close()
 		return err
 	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
+	if _, err := temporary.Write(append(body, '\n')); err != nil {
+		_ = temporary.Close()
 		return err
 	}
-	if err := file.Close(); err != nil {
+	if err := temporary.Sync(); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
 		return err
 	}
 	return syncDispatchDirectoryFunc(directory)
@@ -452,7 +561,7 @@ func PersistChainState(root string, state ChainState) (string, error) {
 			cleanupErr = syncChainDirectoryFunc(directory)
 		}
 		if cleanupErr != nil {
-			markerErr := PersistDispatchRecoveryMarker(root, DispatchRecoveryMarker{SchemaVersion: 1, PlanDigest: state.PlanDigest, ChainPath: path, Reason: "chain post-rename durability failure"})
+			markerErr := PersistDispatchRecoveryMarker(root, DispatchRecoveryMarker{SchemaVersion: 1, PlanDigest: state.PlanDigest, ArtifactKind: RecoveryArtifactChainState, TargetRef: path, Reason: "chain post-rename durability failure"})
 			if markerErr != nil {
 				return "", fmt.Errorf("chain durability failed: %v; cleanup failed: %v; recovery marker failed: %w", err, cleanupErr, markerErr)
 			}
@@ -494,8 +603,20 @@ func RemoveChainState(root string, state ChainState) error {
 }
 
 func PersistDispatchRecoveryMarker(root string, marker DispatchRecoveryMarker) error {
-	if !validLowerDigest(marker.PlanDigest) || marker.Reason == "" {
+	if !validLowerDigest(marker.PlanDigest) || marker.Reason == "" || marker.TargetRef == "" {
 		return errors.New("dispatch recovery marker is incomplete")
+	}
+	switch marker.ArtifactKind {
+	case RecoveryArtifactChainState:
+		if marker.DispatchID != "" {
+			return errors.New("chain recovery marker cannot carry a dispatch occurrence")
+		}
+	case RecoveryArtifactDispatchReceipt:
+		if !validClosedDispatchID(marker.DispatchID) {
+			return errors.New("dispatch recovery marker has an invalid occurrence")
+		}
+	default:
+		return errors.New("dispatch recovery marker has an invalid artifact kind")
 	}
 	directory := filepath.Join(root, "owner", "maestro", "recovery")
 	if err := ensurePrivateChainTree(root, directory); err != nil {
@@ -508,7 +629,11 @@ func PersistDispatchRecoveryMarker(root string, marker DispatchRecoveryMarker) e
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(directory, marker.PlanDigest+".json")
+	markerName := marker.PlanDigest + ".json"
+	if marker.ArtifactKind == RecoveryArtifactDispatchReceipt {
+		markerName = marker.PlanDigest + "-" + SHA256Hex(marker.ArtifactKind + "\x00" + marker.PlanDigest + "\x00" + marker.DispatchID)[:32] + ".json"
+	}
+	path := filepath.Join(directory, markerName)
 	unlock, err := acquireChainLock(directory)
 	if err != nil {
 		return err
@@ -523,7 +648,7 @@ func PersistDispatchRecoveryMarker(root string, marker DispatchRecoveryMarker) e
 			return err
 		}
 		var prior DispatchRecoveryMarker
-		if json.Unmarshal(existing, &prior) == nil && prior.PlanDigest == marker.PlanDigest && prior.PromptID == marker.PromptID && prior.ChainPath == marker.ChainPath && prior.Reason == marker.Reason {
+		if json.Unmarshal(existing, &prior) == nil && prior.SchemaVersion == marker.SchemaVersion && prior.PlanDigest == marker.PlanDigest && prior.DispatchID == marker.DispatchID && prior.ArtifactKind == marker.ArtifactKind && prior.TargetRef == marker.TargetRef && prior.Reason == marker.Reason {
 			return nil
 		}
 		return errors.New("unresolved dispatch recovery marker already exists")
@@ -562,6 +687,9 @@ func ensurePrivateChainTree(root, directory string) error {
 	if err != nil {
 		return err
 	}
+	if err := validatePrivateRootAncestors(root); err != nil {
+		return err
+	}
 	rootInfo, err := os.Lstat(root)
 	if err != nil {
 		return err
@@ -591,6 +719,31 @@ func ensurePrivateChainTree(root, directory string) error {
 		}
 	}
 	return nil
+}
+
+func validatePrivateRootAncestors(root string) error {
+	current := filepath.Dir(root)
+	for {
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			resolved, err := filepath.EvalSymlinks(current)
+			if err != nil {
+				return err
+			}
+			approvedDarwinSystemLink := runtime.GOOS == "darwin" && resolved == filepath.Join(string(filepath.Separator), "private", strings.TrimPrefix(current, string(filepath.Separator)))
+			if !approvedDarwinSystemLink {
+				return errors.New("chain state root has an unapproved symlinked ancestor")
+			}
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return nil
+		}
+		current = parent
+	}
 }
 
 func splitRelativePath(value string) []string {

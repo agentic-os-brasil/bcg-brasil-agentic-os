@@ -42,15 +42,16 @@ type PromptHistoryConfig struct {
 }
 
 type PromptHistoryInput struct {
-	OwnerID     string
-	Prompt      string
-	Language    string
-	Source      string
-	SessionID   string
-	ScopeKind   PromptScopeKind
-	ScopeID     string
-	RecordedAt  time.Time
-	ContentKind string
+	OwnerID      string
+	OccurrenceID string
+	Prompt       string
+	Language     string
+	Source       string
+	SessionID    string
+	ScopeKind    PromptScopeKind
+	ScopeID      string
+	RecordedAt   time.Time
+	ContentKind  string
 }
 
 // PromptHistoryEntry is local private data. It is never embedded in a
@@ -59,6 +60,7 @@ type PromptHistoryInput struct {
 type PromptHistoryEntry struct {
 	SchemaVersion int             `json:"schema_version"`
 	ID            string          `json:"id"`
+	OccurrenceID  string          `json:"occurrence_id,omitempty"`
 	OwnerID       string          `json:"owner_id"`
 	RecordedAt    time.Time       `json:"recorded_at"`
 	Language      string          `json:"language"`
@@ -85,15 +87,16 @@ type PromptHistoryReceipt struct {
 }
 
 type PromptHistorySelectionLimits struct {
-	OwnerID         string
-	MaxCount        int
-	MaxBytes        int
-	MaxAge          time.Duration
-	ScopeKind       PromptScopeKind
-	ScopeID         string
-	CurrentPrompt   string
-	RelevanceKeys   []string
-	CurrentLanguage string
+	OwnerID             string
+	ExcludeOccurrenceID string
+	MaxCount            int
+	MaxBytes            int
+	MaxAge              time.Duration
+	ScopeKind           PromptScopeKind
+	ScopeID             string
+	CurrentPrompt       string
+	RelevanceKeys       []string
+	CurrentLanguage     string
 }
 
 type PromptHistorySelection struct {
@@ -194,6 +197,9 @@ func validatePromptHistoryInput(input PromptHistoryInput) error {
 	}
 	if input.ContentKind != "" && input.ContentKind != "user_prompt" {
 		return errors.New("prompt history accepts user prompts only")
+	}
+	if input.OccurrenceID != "" && !observationIdentifier.MatchString(input.OccurrenceID) {
+		return errors.New("prompt history occurrence ID is invalid")
 	}
 	if !validPromptScope(input.ScopeKind, input.ScopeID) {
 		return errors.New("prompt history scope is invalid")
@@ -324,12 +330,24 @@ func RecordUserPrompt(root string, input PromptHistoryInput) (PromptHistoryRecei
 		}
 		entry := PromptHistoryEntry{
 			SchemaVersion: PromptHistorySchemaVersion,
+			OccurrenceID:  input.OccurrenceID,
 			OwnerID:       input.OwnerID, RecordedAt: input.RecordedAt.UTC(), Language: input.Language,
 			Source: input.Source, SessionID: input.SessionID, ScopeKind: input.ScopeKind,
 			ScopeID: input.ScopeID, SHA256: digest(input.Prompt), ContentKind: "user_prompt", Prompt: input.Prompt,
 		}
-		entry.ID = "prompt-" + digest(entry.OwnerID + "\x00" + entry.SessionID + "\x00" + entry.RecordedAt.Format(time.RFC3339Nano) + "\x00" + entry.SHA256)[:24]
+		identity := entry.RecordedAt.Format(time.RFC3339Nano)
+		if input.OccurrenceID != "" {
+			identity = input.OccurrenceID
+		}
+		entry.ID = "prompt-" + digest(entry.OwnerID + "\x00" + entry.SessionID + "\x00" + identity + "\x00" + entry.SHA256)[:24]
 		for _, existing := range entries {
+			if input.OccurrenceID != "" && existing.OccurrenceID == input.OccurrenceID {
+				if !samePromptOccurrence(existing, entry) {
+					return errors.New("prompt history occurrence was reused with different content")
+				}
+				receipt = promptHistoryReceipt(existing)
+				return nil
+			}
 			if existing.ID == entry.ID {
 				receipt = promptHistoryReceipt(existing)
 				return nil
@@ -468,7 +486,7 @@ func SelectRelevantPromptHistory(root string, limits PromptHistorySelectionLimit
 	}
 	candidates := make([]PromptHistorySelection, 0, len(entries))
 	for _, entry := range entries {
-		if entry.OwnerID != limits.OwnerID || now.Sub(entry.RecordedAt) > limits.MaxAge || !promptScopeMatches(entry, limits.ScopeKind, limits.ScopeID) {
+		if entry.OwnerID != limits.OwnerID || (limits.ExcludeOccurrenceID != "" && entry.OccurrenceID == limits.ExcludeOccurrenceID) || now.Sub(entry.RecordedAt) > limits.MaxAge || !promptScopeMatches(entry, limits.ScopeKind, limits.ScopeID) {
 			continue
 		}
 		score, reasons := promptRelevance(entry.Prompt, limits.CurrentPrompt, limits.RelevanceKeys)
@@ -613,13 +631,17 @@ func validatePromptHistoryEntry(entry PromptHistoryEntry) error {
 	if entry.SchemaVersion != PromptHistorySchemaVersion || !observationIdentifier.MatchString(entry.ID) || entry.ContentKind != "user_prompt" {
 		return errors.New("prompt history entry is not a user prompt")
 	}
-	if err := validatePromptHistoryInput(PromptHistoryInput{OwnerID: entry.OwnerID, Prompt: entry.Prompt, Language: entry.Language, Source: entry.Source, SessionID: entry.SessionID, ScopeKind: entry.ScopeKind, ScopeID: entry.ScopeID, RecordedAt: entry.RecordedAt, ContentKind: entry.ContentKind}); err != nil {
+	if err := validatePromptHistoryInput(PromptHistoryInput{OwnerID: entry.OwnerID, OccurrenceID: entry.OccurrenceID, Prompt: entry.Prompt, Language: entry.Language, Source: entry.Source, SessionID: entry.SessionID, ScopeKind: entry.ScopeKind, ScopeID: entry.ScopeID, RecordedAt: entry.RecordedAt, ContentKind: entry.ContentKind}); err != nil {
 		return err
 	}
 	if len(entry.SHA256) != 64 || entry.SHA256 != digest(entry.Prompt) {
 		return errors.New("prompt history hash does not match the body")
 	}
 	return nil
+}
+
+func samePromptOccurrence(left, right PromptHistoryEntry) bool {
+	return left.OccurrenceID != "" && left.OccurrenceID == right.OccurrenceID && left.OwnerID == right.OwnerID && left.Prompt == right.Prompt && left.Language == right.Language && left.Source == right.Source && left.SessionID == right.SessionID && left.ScopeKind == right.ScopeKind && left.ScopeID == right.ScopeID && left.SHA256 == right.SHA256 && left.ContentKind == right.ContentKind
 }
 
 func promptHistoryReceipt(entry PromptHistoryEntry) PromptHistoryReceipt {

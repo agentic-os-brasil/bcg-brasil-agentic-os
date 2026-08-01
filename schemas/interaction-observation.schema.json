@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentic-os-brasil/schemas/interaction-observation.schema.json",
   "title": "Metadata-only InteractionObservation",
-  "description": "A local, append-only owner signal contract. Claims are normalized codes, never transcripts, client documents or generated output.",
+  "description": "A local, append-only owner signal contract. Every loop may be evaluated, but only a material owner-attested signal persists. Claims are normalized codes, never transcripts, client documents or generated output. Explicit instruction, correction and non-generic endorsement are high-grade signals; generic OK or silence is not endorsement. Corroboration requires independent episodes and promotion requires owner action plus a canonical-source CAS.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "signal", "claim", "evidence_type", "source_event", "source_digest", "episode_id", "scope_kind", "scope_id", "confidence", "sensitivity", "expires_at", "authenticated_owner", "material", "owner_confirmed"],

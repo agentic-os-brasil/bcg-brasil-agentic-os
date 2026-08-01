@@ -88,6 +88,7 @@ type RegisteredAgent struct {
 	ParentScopeKind     string `json:"parent_scope_kind,omitempty"`
 	ParentScopeID       string `json:"parent_scope_id,omitempty"`
 	AuthorizationDigest string `json:"authorization_digest"`
+	CapabilityDigest    string `json:"capability_digest"`
 	StateSnapshotDigest string `json:"state_snapshot_digest"`
 	Available           bool   `json:"available"`
 }
@@ -127,6 +128,7 @@ type AgentBinding struct {
 	ParentScopeKind     string `json:"parent_scope_kind,omitempty"`
 	ParentScopeID       string `json:"parent_scope_id,omitempty"`
 	AuthorizationDigest string `json:"authorization_digest"`
+	CapabilityDigest    string `json:"capability_digest"`
 	StateSnapshotDigest string `json:"state_snapshot_digest"`
 }
 
@@ -273,7 +275,7 @@ func PlanFor(input Input) (Plan, error) {
 		return Plan{}, fmt.Errorf("unknown Maestro intent class %q", input.IntentClass)
 	}
 	for _, agent := range selected {
-		plan.Bindings = append(plan.Bindings, AgentBinding{ID: agent.ID, Role: agent.Role, ScopeKind: agent.ScopeKind, ScopeID: agent.ScopeID, ParentScopeKind: agent.ParentScopeKind, ParentScopeID: agent.ParentScopeID, AuthorizationDigest: agent.AuthorizationDigest, StateSnapshotDigest: agent.StateSnapshotDigest})
+		plan.Bindings = append(plan.Bindings, AgentBinding{ID: agent.ID, Role: agent.Role, ScopeKind: agent.ScopeKind, ScopeID: agent.ScopeID, ParentScopeKind: agent.ParentScopeKind, ParentScopeID: agent.ParentScopeID, AuthorizationDigest: agent.AuthorizationDigest, CapabilityDigest: agent.CapabilityDigest, StateSnapshotDigest: agent.StateSnapshotDigest})
 	}
 	plan.PlanDigest = digestPlan(plan)
 	return plan, nil
@@ -330,7 +332,7 @@ func validateInput(input Input) error {
 	}
 	seen := map[string]bool{}
 	for _, agent := range input.AvailableAgents {
-		if !agentcatalog.ValidAgentID(agent.ID) || seen[agent.ID] || !validRole(agent.Role) || !validScopeKind(agent.ScopeKind) || agent.ScopeID == "" || !agentcatalog.ValidAgentID(agent.ScopeID) || (agent.ParentScopeKind != "" && (!validScopeKind(agent.ParentScopeKind) || !agentcatalog.ValidAgentID(agent.ParentScopeID))) || !validDigest(agent.AuthorizationDigest) || !validDigest(agent.StateSnapshotDigest) {
+		if !agentcatalog.ValidAgentID(agent.ID) || seen[agent.ID] || !validRole(agent.Role) || !validScopeKind(agent.ScopeKind) || agent.ScopeID == "" || !agentcatalog.ValidAgentID(agent.ScopeID) || (agent.ParentScopeKind != "" && (agent.ParentScopeID == "" || !validScopeKind(agent.ParentScopeKind) || !agentcatalog.ValidAgentID(agent.ParentScopeID))) || (agent.ParentScopeKind == "" && agent.ParentScopeID != "") || !validDigest(agent.AuthorizationDigest) || !validDigest(agent.CapabilityDigest) || !validDigest(agent.StateSnapshotDigest) {
 			return errors.New("available agent registry is incomplete, ambiguous or unbound")
 		}
 		seen[agent.ID] = true
@@ -360,8 +362,12 @@ func validDigest(value string) bool {
 	if len(value) != 64 {
 		return false
 	}
-	_, err := hex.DecodeString(value)
-	return err == nil
+	for _, char := range value {
+		if !(char >= '0' && char <= '9' || char >= 'a' && char <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func digestPlan(plan Plan) string {
@@ -376,6 +382,9 @@ func (plan Plan) Validate() error {
 		return errors.New("Maestro plan integrity is invalid")
 	}
 	if err := validateInput(Input{SchemaVersion: 1, IntentClass: IntentCase, ScopeKind: plan.ScopeKind, ScopeID: plan.ScopeID, Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone, RequestedCapability: plan.RequestedCapability}); err != nil {
+		return err
+	}
+	if err := validatePlanBindings(plan); err != nil {
 		return err
 	}
 	if plan.CaseEntry == CaseEntryAccountFirst {
@@ -439,6 +448,86 @@ func (plan Plan) Validate() error {
 	return nil
 }
 
+func validatePlanBindings(plan Plan) error {
+	seenIDs := make(map[string]bool, len(plan.Bindings))
+	seenRoles := make(map[string]bool, len(plan.Bindings))
+	for _, binding := range plan.Bindings {
+		if !agentcatalog.ValidAgentID(binding.ID) || seenIDs[binding.ID] || !validRole(binding.Role) || seenRoles[binding.Role] || !validScopeKind(binding.ScopeKind) || !agentcatalog.ValidAgentID(binding.ScopeID) || !validDigest(binding.AuthorizationDigest) || !validDigest(binding.CapabilityDigest) || !validDigest(binding.StateSnapshotDigest) {
+			return errors.New("Maestro plan contains an invalid, duplicate or unbound agent binding")
+		}
+		if (binding.ParentScopeKind == "") != (binding.ParentScopeID == "") || (binding.ParentScopeKind != "" && (!validScopeKind(binding.ParentScopeKind) || !agentcatalog.ValidAgentID(binding.ParentScopeID))) {
+			return errors.New("Maestro plan binding parent scope is incomplete or invalid")
+		}
+		seenIDs[binding.ID] = true
+		seenRoles[binding.Role] = true
+	}
+	allowed := map[string]bool{}
+	if plan.CaseEntry != "" {
+		allowed["case_agent"] = true
+		if plan.RequiresAccountFraming {
+			allowed["client_account_agent"] = true
+		}
+		if plan.RequiresWalter {
+			allowed["reviewer"] = true
+		}
+	} else {
+		switch plan.Action {
+		case ActionDirect:
+		case ActionCase:
+			allowed["case_agent"] = true
+			if plan.RequiresWalter {
+				allowed["reviewer"] = true
+			}
+		case ActionAccount:
+			allowed["client_account_agent"] = true
+		case ActionPAExpert:
+			allowed["pa_expert"] = true
+		case ActionWalter:
+			allowed["reviewer"] = true
+		case ActionDarwin:
+			allowed["governance_analyst"] = true
+		case ActionErrand:
+			allowed["errand_helper"] = true
+		}
+	}
+	for _, binding := range plan.Bindings {
+		if !allowed[binding.Role] {
+			return errors.New("Maestro plan contains an unreferenced agent binding")
+		}
+	}
+	if plan.CaseEntry != "" {
+		var caseBinding, accountBinding, walterBinding *AgentBinding
+		for index := range plan.Bindings {
+			binding := &plan.Bindings[index]
+			switch binding.Role {
+			case "case_agent":
+				caseBinding = binding
+			case "client_account_agent":
+				accountBinding = binding
+			case "reviewer":
+				walterBinding = binding
+			}
+		}
+		if caseBinding == nil || caseBinding.ScopeKind != plan.ScopeKind || caseBinding.ScopeID != plan.ScopeID {
+			return errors.New("Case route binding does not match the active Case scope")
+		}
+		if plan.CaseEntry == CaseEntryAccountFirst {
+			if accountBinding == nil || accountBinding.ScopeKind != "account" || accountBinding.ScopeID != plan.AccountScopeID || caseBinding.ParentScopeKind != "account" || caseBinding.ParentScopeID != plan.AccountScopeID {
+				return errors.New("account-assisted Case route bindings are not parent-bound")
+			}
+		} else if plan.CaseEntry == CaseEntryDirect && plan.AccountScopeID != "" && (caseBinding.ParentScopeKind != "account" || caseBinding.ParentScopeID != plan.AccountScopeID) {
+			return errors.New("direct Case binding does not match its declared account scope")
+		}
+		if plan.RequiresWalter && (walterBinding == nil || walterBinding.ScopeKind != "review" || walterBinding.ScopeID != "review") {
+			return errors.New("Walter route binding does not match the review scope")
+		}
+	}
+	if plan.Action == ActionDirect && len(plan.Bindings) != 0 {
+		return errors.New("direct Maestro plan cannot contain agent bindings")
+	}
+	return nil
+}
+
 type Stage string
 
 const (
@@ -496,7 +585,7 @@ type Event struct {
 	ReasonCode    string
 	// Interaction is evaluated on every supplied loop event. It is not
 	// persisted by Advance; only an explicit Maestro capture may append a
-	// material, authenticated owner observation to the local observation log.
+	// material, owner-attested observation to the local observation log.
 	Interaction   *ownerctx.ObservationInput
 	IntentReceipt *IntentReviewReceipt
 }

@@ -116,7 +116,7 @@ func EvaluateInteraction(input ObservationInput) (InteractionEvaluation, error) 
 	}
 	evaluation := InteractionEvaluation{Evaluated: true, State: ObservationCaptured}
 	if !input.AuthenticatedOwner {
-		evaluation.Reason = "owner_authentication_missing"
+		evaluation.Reason = "owner_attestation_missing"
 		return evaluation, nil
 	}
 	if !input.Material {
@@ -127,8 +127,12 @@ func EvaluateInteraction(input ObservationInput) (InteractionEvaluation, error) 
 		evaluation.Reason = "hypothesis_is_task_local"
 		return evaluation, nil
 	}
+	if input.Signal == SignalExplicitEndorsement && (input.Claim == "ok" || input.Claim == "okay" || !input.OwnerConfirmed) {
+		evaluation.Reason = "generic_acknowledgement_is_not_endorsement"
+		return evaluation, nil
+	}
 	evaluation.Persist = true
-	evaluation.Reason = "material_authenticated_owner_signal"
+	evaluation.Reason = "material_owner_attested_signal"
 	return evaluation, nil
 }
 

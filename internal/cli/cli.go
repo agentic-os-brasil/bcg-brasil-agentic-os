@@ -1461,8 +1461,10 @@ type maestroDispatchRequest struct {
 	Plan               maestro.Input `json:"plan"`
 }
 
-func durableDispatchFence(root, ownerID, sessionID, dispatchID string, plan maestro.Plan, chain maestro.ChainState) (maestro.DispatchBoundaryState, error) {
-	state, err := maestro.PersistDispatchBoundary(root, ownerID, sessionID, dispatchID, plan, chain)
+var maestroWalterFacetAllowlist = []string{"professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"}
+
+func durableDispatchFence(root, ownerID, sessionID, dispatchID, promptDigest, packetDigest, draftDigest string, plan maestro.Plan, chain maestro.ChainState) (maestro.DispatchBoundaryState, error) {
+	state, err := (maestro.DispatchBoundaryInput{Root: root, OwnerID: ownerID, SessionID: sessionID, DispatchID: dispatchID, PromptDigest: promptDigest, PacketDigest: packetDigest, DraftDigest: draftDigest, Plan: plan, Chain: chain}).PersistDispatchBoundary()
 	if err != nil {
 		return maestro.DispatchBoundaryState{}, err
 	}
@@ -1484,7 +1486,7 @@ func rollbackDispatch(root string, chain maestro.ChainState, chainCreated bool, 
 	if rollbackErr == nil {
 		return nil
 	}
-	markerErr := maestro.PersistDispatchRecoveryMarker(root, maestro.DispatchRecoveryMarker{SchemaVersion: 1, PlanDigest: chain.PlanDigest, PromptID: promptID, Reason: reason + ": " + rollbackErr.Error()})
+	markerErr := maestro.PersistDispatchRecoveryMarker(root, maestro.DispatchRecoveryMarker{SchemaVersion: 1, PlanDigest: chain.PlanDigest, ArtifactKind: maestro.RecoveryArtifactChainState, TargetRef: filepath.Join(root, "owner", "maestro", "chains", chain.PlanDigest+".json"), Reason: reason + ": " + rollbackErr.Error()})
 	if markerErr != nil {
 		return fmt.Errorf("dispatch rollback failed: %v; recovery marker failed: %w", rollbackErr, markerErr)
 	}
@@ -1505,8 +1507,17 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 		return reportError(errOut, errors.New("Maestro dispatch request exceeds 32 KiB limit"))
 	}
 	var request maestroDispatchRequest
-	if err := json.Unmarshal(body, &request); err != nil || !request.AuthenticatedOwner || strings.TrimSpace(request.OwnerID) == "" || strings.TrimSpace(request.Prompt) == "" {
-		return reportError(errOut, errors.New("Maestro dispatch requires an authenticated owner and prompt"))
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
+		return reportError(errOut, errors.New("Maestro dispatch request is not a closed JSON contract"))
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return reportError(errOut, errors.New("Maestro dispatch request must contain exactly one JSON value"))
+	}
+	if !request.AuthenticatedOwner || strings.TrimSpace(request.OwnerID) == "" || strings.TrimSpace(request.Prompt) == "" {
+		return reportError(errOut, errors.New("Maestro dispatch requires a fresh owner attestation and prompt"))
 	}
 	if request.DispatchID != "" && request.OccurrenceID != "" && request.DispatchID != request.OccurrenceID {
 		return reportError(errOut, errors.New("dispatch_id and occurrence_id must match when both are supplied"))
@@ -1558,11 +1569,11 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 	if _, err := ownerctx.Initialize(root); err != nil {
 		return reportError(errOut, err)
 	}
-	snapshot, err := ownerctx.ProjectSnapshot(root, nil)
+	snapshot, err := ownerctx.ProjectSnapshot(root, append([]string(nil), maestroWalterFacetAllowlist...))
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	packet, err := maestro.BuildIntentReviewPacketWithPromptHistory(request.Prompt, plan, request.DraftOutput, nil, snapshot, nil, request.Audience, request.Consequence, request.Reversibility, "", root, ownerctx.PromptHistorySelectionLimits{OwnerID: request.OwnerID, MaxCount: 8, MaxBytes: 32 << 10, MaxAge: 30 * 24 * time.Hour, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, CurrentPrompt: request.Prompt, RelevanceKeys: request.RelevanceKeys, CurrentLanguage: request.CurrentLanguage}, request.WorkingLanguage, nil, time.Now().UTC())
+	packet, err := maestro.BuildIntentReviewPacketWithPromptHistory(request.Prompt, plan, request.DraftOutput, nil, snapshot, nil, request.Audience, request.Consequence, request.Reversibility, "", root, ownerctx.PromptHistorySelectionLimits{OwnerID: request.OwnerID, ExcludeOccurrenceID: request.DispatchID, MaxCount: 8, MaxBytes: 32 << 10, MaxAge: 30 * 24 * time.Hour, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, CurrentPrompt: request.Prompt, RelevanceKeys: request.RelevanceKeys, CurrentLanguage: request.CurrentLanguage}, request.WorkingLanguage, nil, time.Now().UTC())
 	if err != nil {
 		return reportError(errOut, err)
 	}
@@ -1575,16 +1586,16 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 	if _, err := maestro.PersistChainState(root, chain); err != nil {
 		return reportError(errOut, err)
 	}
-	recorded, err := ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: request.OwnerID, Prompt: request.Prompt, Language: request.Language, Source: request.Source, SessionID: request.SessionID, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, ContentKind: "user_prompt"})
+	durableState, err := durableDispatchFence(root, request.OwnerID, request.SessionID, request.DispatchID, maestro.SHA256Hex(packet.LiteralRequest), packet.PacketDigest, maestro.SHA256Hex(packet.DraftOutput), plan, chain)
 	if err != nil {
-		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, "", "prompt commit failed"); rollbackErr != nil {
+		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, "", "durable dispatch fence failed"); rollbackErr != nil {
 			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
 		}
 		return reportError(errOut, err)
 	}
-	durableState, err := durableDispatchFence(root, request.OwnerID, request.SessionID, request.DispatchID, plan, chain)
+	_, err = ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: request.OwnerID, OccurrenceID: request.DispatchID, Prompt: request.Prompt, Language: request.Language, Source: request.Source, SessionID: request.SessionID, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, ContentKind: "user_prompt"})
 	if err != nil {
-		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, recorded.ID, "durable dispatch fence failed"); rollbackErr != nil {
+		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, "", "prompt commit failed"); rollbackErr != nil {
 			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
 		}
 		return reportError(errOut, err)
@@ -1806,7 +1817,7 @@ func runOwnerSelf(args []string, in io.Reader, out, errOut io.Writer, root strin
 	case "observe":
 		flags := newFlagSet("owner self observe", errOut)
 		stdin := flags.Bool("stdin", false, "read a metadata-only observation JSON object")
-		confirm := flags.Bool("confirm", false, "confirm that this is an authenticated owner signal")
+		confirm := flags.Bool("confirm", false, "confirm that this is an owner-attested signal under the local data-root boundary")
 		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || !*stdin || !*confirm {
 			fmt.Fprintln(errOut, "usage: bcgos owner self observe --stdin --confirm")
 			return ExitUsage

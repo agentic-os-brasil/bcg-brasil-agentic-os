@@ -39,10 +39,63 @@ func TestPlannerAccountAssistedMaterialPath(t *testing.T) {
 	}
 }
 
+func TestPlanValidateAcceptsAllFourCaseRoutes(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   Input
+		entry   CaseEntry
+		account bool
+		walter  bool
+	}{
+		{name: "account-assisted-walter", input: func() Input { input := caseInput(false); input.Materiality = MaterialityReview; return input }(), entry: CaseEntryAccountFirst, account: true, walter: true},
+		{name: "account-assisted-no-walter", input: caseInput(false), entry: CaseEntryAccountFirst, account: true, walter: false},
+		{name: "direct-walter", input: func() Input { input := caseInput(true); input.Materiality = MaterialityReview; return input }(), entry: CaseEntryDirect, account: false, walter: true},
+		{name: "direct-no-walter", input: caseInput(true), entry: CaseEntryDirect, account: false, walter: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			plan, err := PlanFor(testCase.input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.CaseEntry != testCase.entry || plan.RequiresAccountValidation != testCase.account || plan.RequiresWalter != testCase.walter {
+				t.Fatalf("unexpected route: %#v", plan)
+			}
+			if err := plan.Validate(); err != nil {
+				t.Fatalf("valid route rejected: %v", err)
+			}
+		})
+	}
+}
+
+func TestPlanValidateRejectsExtraBindingsForCaseRouteSemantics(t *testing.T) {
+	tests := []struct {
+		name  string
+		input Input
+		extra AgentBinding
+	}{
+		{name: "direct-case-account-extra", input: caseInput(true), extra: AgentBinding{ID: "account-agent-client-alpha", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-alpha", AuthorizationDigest: digestFor("extra-account-auth"), CapabilityDigest: digestFor("extra-account-capability"), StateSnapshotDigest: digestFor("extra-account-state")}},
+		{name: "account-first-walter-extra", input: caseInput(false), extra: AgentBinding{ID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review", AuthorizationDigest: digestFor("extra-walter-auth"), CapabilityDigest: digestFor("extra-walter-capability"), StateSnapshotDigest: digestFor("extra-walter-state")}},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			plan, err := PlanFor(testCase.input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan.Bindings = append(plan.Bindings, testCase.extra)
+			plan.PlanDigest = digestPlan(plan)
+			if err := plan.Validate(); err == nil {
+				t.Fatal("extra route binding was accepted")
+			}
+		})
+	}
+}
+
 func TestPlannerRequiresExplicitCaseAccountBindingAndDoesNotUseRegistryOrder(t *testing.T) {
 	input := caseInput(false)
 	input.AccountScopeID = "client-alpha"
-	input.AvailableAgents = append(input.AvailableAgents, RegisteredAgent{ID: "account-agent-client-beta", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-beta", AuthorizationDigest: digestFor("account-beta"), StateSnapshotDigest: digestFor("state-beta"), Available: true})
+	input.AvailableAgents = append(input.AvailableAgents, RegisteredAgent{ID: "account-agent-client-beta", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-beta", AuthorizationDigest: digestFor("account-beta"), CapabilityDigest: digestFor("capability-beta"), StateSnapshotDigest: digestFor("state-beta"), Available: true})
 	input.AvailableAgents[0], input.AvailableAgents[3] = input.AvailableAgents[3], input.AvailableAgents[0]
 	plan, err := PlanFor(input)
 	if err != nil || len(plan.Bindings) < 2 || plan.Bindings[0].ScopeID != "client-alpha" {
@@ -321,9 +374,9 @@ func TestPlannerBudgetsFailClosedAndMaterialityCannotSkipWalter(t *testing.T) {
 
 func caseInput(simple bool) Input {
 	return Input{SchemaVersion: 1, IntentClass: IntentCase, ScopeKind: "case", ScopeID: "transformation", AccountScopeID: "client-alpha", Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone, SimpleReversible: simple, ExecutionOnly: simple, AvailableAgents: []RegisteredAgent{
-		{ID: "account-agent-client-alpha", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-alpha", AuthorizationDigest: digestFor("account-auth"), StateSnapshotDigest: digestFor("account-state"), Available: true},
-		{ID: "case-agent-transformation", Role: "case_agent", ScopeKind: "case", ScopeID: "transformation", ParentScopeKind: "account", ParentScopeID: "client-alpha", AuthorizationDigest: digestFor("case-auth"), StateSnapshotDigest: digestFor("case-state"), Available: true},
-		{ID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review", AuthorizationDigest: digestFor("walter-auth"), StateSnapshotDigest: digestFor("walter-state"), Available: true},
+		{ID: "account-agent-client-alpha", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-alpha", AuthorizationDigest: digestFor("account-auth"), CapabilityDigest: digestFor("account-capability"), StateSnapshotDigest: digestFor("account-state"), Available: true},
+		{ID: "case-agent-transformation", Role: "case_agent", ScopeKind: "case", ScopeID: "transformation", ParentScopeKind: "account", ParentScopeID: "client-alpha", AuthorizationDigest: digestFor("case-auth"), CapabilityDigest: digestFor("case-capability"), StateSnapshotDigest: digestFor("case-state"), Available: true},
+		{ID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review", AuthorizationDigest: digestFor("walter-auth"), CapabilityDigest: digestFor("walter-capability"), StateSnapshotDigest: digestFor("walter-state"), Available: true},
 	}}
 }
 
