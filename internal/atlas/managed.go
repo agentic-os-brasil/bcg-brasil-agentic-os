@@ -587,6 +587,9 @@ func directorySnapshot(root string) (string, error) {
 		if err != nil {
 			return err
 		}
+		// A Windows checkout may materialize tracked Markdown as CRLF while
+		// reconciliation writes LF. Compare semantic bytes, not checkout EOL.
+		body = bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
 		builder.WriteString(filepath.ToSlash(relative))
 		builder.WriteByte('\n')
 		builder.Write(body)
