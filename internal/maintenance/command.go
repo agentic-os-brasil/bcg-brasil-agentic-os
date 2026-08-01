@@ -110,23 +110,23 @@ func (receipt Receipt) Validate() error {
 	if receipt.ProposalOnly != (receipt.JobID == "darwin-structural-evolution-proposal") {
 		return errors.New("maintenance receipt proposal flag does not match the job")
 	}
-	if receipt.ProposalOnly && (receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange) {
+	if receipt.ProposalOnly && receipt.State == ReceiptSucceeded {
 		return errors.New("proposal-only maintenance cannot report an applied success")
 	}
-	if receipt.State == ReceiptProposalEmitted && receipt.ProposalCount < 0 {
-		return errors.New("maintenance proposal count is invalid")
+	if receipt.State == ReceiptProposalEmitted && receipt.ProposalCount < 1 {
+		return errors.New("proposal-emitted maintenance receipt requires at least one proposal")
 	}
 	if receipt.ProposalDigest != "" && !digestPattern.MatchString(receipt.ProposalDigest) {
 		return errors.New("maintenance proposal digest is invalid")
 	}
-	if receipt.State == ReceiptProposalEmitted && receipt.ProposalCount > 0 && receipt.ProposalDigest == "" {
+	if receipt.State == ReceiptProposalEmitted && receipt.ProposalDigest == "" {
 		return errors.New("maintenance proposal receipt requires a digest")
 	}
 	if receipt.ProposalArtifactID != "" && !digestPattern.MatchString(receipt.ProposalArtifactID) {
 		return errors.New("maintenance proposal artifact ID is invalid")
 	}
-	if receipt.State == ReceiptProposalEmitted && receipt.ProposalCount > 0 && receipt.ProposalArtifactID != receipt.ProposalDigest {
-		return errors.New("maintenance proposal receipt must bind its artifact ID to its digest")
+	if receipt.State == ReceiptProposalEmitted && receipt.ProposalArtifactID == "" {
+		return errors.New("maintenance proposal receipt requires a durable artifact ID")
 	}
 	if receipt.State != ReceiptProposalEmitted && (receipt.ProposalCount != 0 || receipt.ProposalDigest != "") {
 		return errors.New("non-proposal maintenance receipt cannot carry proposal evidence")
@@ -184,7 +184,7 @@ func NewRecoveryReceipt(workspaceID, jobID string, trigger Trigger, scheduledFor
 	if err != nil {
 		return Receipt{}, err
 	}
-	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: digest(scheduler.ScheduledOccurrenceKey(jobID, scheduledFor)), CommandID: "recovery-" + digestPrefix(jobID+scheduledFor.UTC().Format(time.RFC3339Nano)), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ReasonCode: ReasonReceiptPersisted}, nil
+	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: digest(scheduler.ScheduledOccurrenceKey(jobID, scheduledFor)), CommandID: "recovery-" + digestPrefix(jobID+scheduledFor.UTC().Format(time.RFC3339Nano)), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ProposalOnly: jobID == "darwin-structural-evolution-proposal", ReasonCode: ReasonReceiptPersisted}, nil
 }
 
 func NewRecoveryIntentReceipt(workspaceID, jobID string, trigger Trigger, scheduledFor, now time.Time, fenceToken string) (Receipt, error) {
@@ -195,7 +195,7 @@ func NewRecoveryIntentReceipt(workspaceID, jobID string, trigger Trigger, schedu
 	occurrence := digest(scheduler.ScheduledOccurrenceKey(jobID, scheduledFor))
 	fenceDigest := digest(fenceToken)
 	intentDigest := digest(workspaceID + "\x00" + jobID + "\x00" + occurrence + "\x00" + fenceDigest)
-	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: occurrence, CommandID: "recovery-intent-" + digestPrefix(intentDigest), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), RecoveryPhase: "intent", RecoveryIntentDigest: intentDigest, FenceTokenDigest: fenceDigest, ReasonCode: ReasonRecoveryIntent}, nil
+	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: occurrence, CommandID: "recovery-intent-" + digestPrefix(intentDigest), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ProposalOnly: jobID == "darwin-structural-evolution-proposal", RecoveryPhase: "intent", RecoveryIntentDigest: intentDigest, FenceTokenDigest: fenceDigest, ReasonCode: ReasonRecoveryIntent}, nil
 }
 
 func NewRecoveryOutcomeReceipt(intent Receipt, now time.Time, phase string, reason ReasonCode) (Receipt, error) {
@@ -206,7 +206,7 @@ func NewRecoveryOutcomeReceipt(intent Receipt, now time.Time, phase string, reas
 	if err != nil {
 		return Receipt{}, err
 	}
-	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: intent.OccurrenceDigest, CommandID: "recovery-" + phase + "-" + digestPrefix(intent.RecoveryIntentDigest), JobID: intent.JobID, WorkspaceID: intent.WorkspaceID, Trigger: intent.Trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), RecoveryPhase: phase, RecoveryIntentDigest: intent.RecoveryIntentDigest, FenceTokenDigest: intent.FenceTokenDigest, ReasonCode: reason}, nil
+	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: intent.OccurrenceDigest, CommandID: "recovery-" + phase + "-" + digestPrefix(intent.RecoveryIntentDigest), JobID: intent.JobID, WorkspaceID: intent.WorkspaceID, Trigger: intent.Trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ProposalOnly: intent.ProposalOnly, RecoveryPhase: phase, RecoveryIntentDigest: intent.RecoveryIntentDigest, FenceTokenDigest: intent.FenceTokenDigest, ReasonCode: reason}, nil
 }
 
 func Gate(catalog Catalog, command Command, now time.Time) (GateDecision, error) {

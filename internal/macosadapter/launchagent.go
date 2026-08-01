@@ -109,10 +109,95 @@ func Parse(body []byte) error {
 	return nil
 }
 
+// launchAgentProgram reads only the bounded identity field used to bind a
+// native launchctl record to the managed plist. It deliberately does not
+// expose arbitrary plist values to the lifecycle layer.
+func launchAgentProgram(home, label string) (string, error) {
+	status, err := ReadStatus(home, label)
+	if err != nil {
+		return "", err
+	}
+	if status.State == "not_installed" {
+		return "", os.ErrNotExist
+	}
+	info, err := os.Lstat(status.Path)
+	if err != nil {
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return "", errors.New("LaunchAgent plist must be a regular file")
+	}
+	body, err := readLaunchAgentBody(status.Path)
+	if err != nil {
+		return "", err
+	}
+	return parseProgramArgumentIdentity(body)
+}
+
+func parseProgramArgumentIdentity(body []byte) (string, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(body))
+	currentKey := ""
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return "", errors.New("LaunchAgent identity plist is invalid")
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		switch start.Name.Local {
+		case "key":
+			var key string
+			if err := decoder.DecodeElement(&key, &start); err != nil {
+				return "", errors.New("LaunchAgent identity key is invalid")
+			}
+			currentKey = key
+		case "array":
+			if currentKey != "ProgramArguments" {
+				continue
+			}
+			var first string
+			stringCount := 0
+			for {
+				arrayToken, arrayErr := decoder.Token()
+				if arrayErr != nil {
+					return "", errors.New("LaunchAgent ProgramArguments array is invalid")
+				}
+				switch value := arrayToken.(type) {
+				case xml.StartElement:
+					if value.Name.Local != "string" {
+						return "", errors.New("LaunchAgent ProgramArguments identity is invalid")
+					}
+					var argument string
+					if err := decoder.DecodeElement(&argument, &value); err != nil {
+						return "", errors.New("LaunchAgent ProgramArguments identity is invalid")
+					}
+					stringCount++
+					if stringCount == 1 {
+						first = argument
+					}
+				case xml.EndElement:
+					if value.Name.Local == "array" {
+						if first == "" || strings.Contains(first, `\`) || !pathpkg.IsAbs(first) {
+							return "", errors.New("LaunchAgent ProgramArguments identity is not a Darwin path")
+						}
+						return first, nil
+					}
+				}
+			}
+		}
+	}
+	return "", errors.New("LaunchAgent plist has no ProgramArguments identity")
+}
+
 func validateSpec(spec Spec) error {
 	// ProgramArguments are a Darwin contract and therefore use POSIX path
 	// semantics even when this package is compiled by a Windows CI worker.
-	if !labelPattern.MatchString(spec.Label) || !pathpkg.IsAbs(strings.ReplaceAll(spec.Program, `\`, "/")) || strings.Contains(spec.Program, "\x00") || spec.StartInterval <= 0 || spec.StartInterval > 86400 {
+	if !labelPattern.MatchString(spec.Label) || strings.Contains(spec.Program, `\`) || !pathpkg.IsAbs(spec.Program) || strings.Contains(spec.Program, "\x00") || spec.StartInterval <= 0 || spec.StartInterval > 86400 {
 		return errors.New("invalid LaunchAgent identity or interval")
 	}
 	values := append(append([]string{spec.Program}, spec.Arguments...), spec.StandardOutPath, spec.StandardErrPath)
@@ -219,7 +304,7 @@ func ReadStatus(home, label string) (Status, error) {
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return Status{}, statErr
 	}
-	body, err := os.ReadFile(path)
+	body, err := readLaunchAgentBody(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return Status{State: "not_installed", Path: path, Label: label}, nil
 	}

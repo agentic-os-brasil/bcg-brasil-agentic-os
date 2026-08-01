@@ -21,7 +21,7 @@ func testAssessmentArtifact(t *testing.T) AssessmentProposalArtifact {
 	}
 	occurrenceDigest := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	scheduledFor := time.Unix(10, 0).UTC()
-	return AssessmentProposalArtifact{SchemaVersion: proposalArtifactSchemaVersion, RecordType: "assessment", AgentID: AgentID, JobID: "darwin-deep-weekly", OccurrenceDigest: occurrenceDigest, WindowID: assessment.WindowID, ProposalDigest: proposalDigest(occurrenceDigest, assessment), Assessment: assessment, ScheduledFor: scheduledFor, RecordedAt: scheduledFor}
+	return AssessmentProposalArtifact{SchemaVersion: proposalArtifactSchemaVersion, RecordType: "assessment", AgentID: AgentID, JobID: "darwin-deep-weekly", OccurrenceDigest: occurrenceDigest, ArtifactID: assessmentArtifactID("darwin-deep-weekly", occurrenceDigest), WindowID: assessment.WindowID, ProposalDigest: proposalDigest(occurrenceDigest, assessment), Assessment: assessment, ScheduledFor: scheduledFor, RecordedAt: scheduledFor}
 }
 
 func TestProposalStoreIsIdempotentAndBindsExactAssessment(t *testing.T) {
@@ -34,7 +34,7 @@ func TestProposalStoreIsIdempotentAndBindsExactAssessment(t *testing.T) {
 	if err := store.Append(artifact); err != nil {
 		t.Fatalf("idempotent append failed: %v", err)
 	}
-	read, err := store.Read(artifact.ProposalDigest)
+	read, err := store.Read(artifact.ArtifactID)
 	if err != nil || read.ProposalDigest != artifact.ProposalDigest || len(read.Assessment.Proposals) != 1 {
 		t.Fatalf("read artifact=%#v err=%v", read, err)
 	}
@@ -46,7 +46,7 @@ func TestProposalStoreIsIdempotentAndBindsExactAssessment(t *testing.T) {
 		t.Fatalf("collision error=%v, want replay conflict", err)
 	}
 
-	path := filepath.Join(root, "proposals", artifact.ProposalDigest+".json")
+	path := filepath.Join(root, "proposals", artifact.ArtifactID+".json")
 	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +58,7 @@ func TestProposalStoreIsIdempotentAndBindsExactAssessment(t *testing.T) {
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Read(artifact.ProposalDigest); err == nil {
+	if _, err := store.Read(artifact.ArtifactID); err == nil {
 		t.Fatal("tampered artifact was accepted")
 	}
 }
@@ -70,7 +70,7 @@ func TestProposalStoreRejectsSymlinkedArtifact(t *testing.T) {
 	if err := store.Append(artifact); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(root, "proposals", artifact.ProposalDigest+".json")
+	path := filepath.Join(root, "proposals", artifact.ArtifactID+".json")
 	backup := filepath.Join(root, "original.json")
 	if err := os.Rename(path, backup); err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestProposalStoreRejectsSymlinkedArtifact(t *testing.T) {
 	if err := os.Symlink(backup, path); err != nil {
 		t.Skipf("symlink capability unavailable: %v", err)
 	}
-	if _, err := store.Read(artifact.ProposalDigest); err == nil {
+	if _, err := store.Read(artifact.ArtifactID); err == nil {
 		t.Fatal("symlinked proposal artifact was accepted")
 	}
 }
@@ -117,7 +117,11 @@ func TestDeepReviewRetryAfterArtifactOnlyCrashIsSingleReceipt(t *testing.T) {
 	builds := 0
 	handler := DeepReviewHandler{Build: HealthPacketBuilderFunc(func(context.Context, scheduler.Occurrence) (HealthPacket, error) {
 		builds++
-		return HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-retry", Runtime: "runtime-neutral", Mode: DeepReview, Observations: []Observation{{Code: ObservationContractDrift, Severity: SeverityHigh, Count: 1}}}, nil
+		code := ObservationContractDrift
+		if builds > 1 {
+			code = ObservationStateStale
+		}
+		return HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-retry", Runtime: "runtime-neutral", Mode: DeepReview, Observations: []Observation{{Code: code, Severity: SeverityHigh, Count: 1}}}, nil
 	}), CommandStore: commandStore, ProposalStore: proposalStore, Now: func() time.Time { return time.Unix(20, 0).UTC() }}
 	base := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "wake-first", JobID: "darwin-deep-weekly", WorkspaceID: "maestro-system", Trigger: maintenance.TriggerWeekly, ScheduledFor: time.Unix(10, 0).UTC(), RequestedAt: time.Unix(10, 0).UTC(), Deadline: time.Unix(30, 0).UTC()}
 	first, err := handler.Execute(context.Background(), base)
@@ -138,8 +142,12 @@ func TestDeepReviewRetryAfterArtifactOnlyCrashIsSingleReceipt(t *testing.T) {
 	retry.CommandID = "wake-retry"
 	handler.Now = func() time.Time { return time.Unix(120, 0).UTC() }
 	second, err := handler.Execute(context.Background(), retry)
-	if err != nil || second.ProposalDigest != first.ProposalDigest || builds != 2 {
+	if err != nil || second.ProposalDigest != first.ProposalDigest || second.ProposalArtifactID != first.ProposalArtifactID || builds != 1 {
 		t.Fatalf("retry proposal=%#v err=%v builds=%d", second, err, builds)
+	}
+	artifact, err := proposalStore.Read(first.ProposalArtifactID)
+	if err != nil || len(artifact.Assessment.Proposals) != 1 || artifact.Assessment.Proposals[0].Finding != ObservationContractDrift {
+		t.Fatalf("retry did not recover original artifact=%#v err=%v", artifact, err)
 	}
 	receipts, err = commandStore.Receipts(base.WorkspaceID, base.JobID)
 	if err != nil || len(receipts) != 1 {

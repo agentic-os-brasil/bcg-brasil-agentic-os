@@ -130,6 +130,30 @@ func TestExecuteCommandEmitsProposalWithoutInvokingTools(t *testing.T) {
 	}
 }
 
+func TestExecuteCommandMonthlyProposalReviewWithNoChangesIsSuccessfulNoChange(t *testing.T) {
+	now := time.Now().UTC()
+	command := commandForTest(now, "darwin-structural-evolution-proposal", true)
+	command.Trigger = maintenance.TriggerMonthly
+	executor := HousekeepingExecutor{
+		Build: HealthPacketBuilderFunc(func(context.Context, scheduler.Occurrence) (HealthPacket, error) {
+			return HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-monthly-no-change", Runtime: "runtime-neutral"}, nil
+		}),
+		Store:        Store{Root: t.TempDir()},
+		CommandStore: maintenance.Store{Root: t.TempDir()},
+		Scheduler:    scheduler.Store{Root: t.TempDir()},
+		Authority:    authorityForTest(t, command),
+		Now:          func() time.Time { return now },
+	}
+	receipt, err := executor.ExecuteCommand(context.Background(), command)
+	if err != nil || receipt.State != maintenance.ReceiptReviewedNoChange || receipt.ProposalCount != 0 || receipt.ProposalDigest != "" {
+		t.Fatalf("monthly no-change receipt=%#v err=%v", receipt, err)
+	}
+	stored, err := executor.CommandStore.Receipts(command.WorkspaceID, command.JobID)
+	if err != nil || len(stored) != 1 || stored[0].State != maintenance.ReceiptReviewedNoChange {
+		t.Fatalf("monthly no-change receipt was not persisted=%#v err=%v", stored, err)
+	}
+}
+
 func TestExecuteCommandReturnsBusyWithoutWaiting(t *testing.T) {
 	now := time.Now().UTC()
 	schedulerRoot := t.TempDir()

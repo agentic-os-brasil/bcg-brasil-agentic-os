@@ -1,11 +1,14 @@
 package macosadapter
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os/exec"
 	"os/user"
+	pathpkg "path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -112,6 +115,11 @@ func (lifecycle Lifecycle) Install(ctx context.Context, home string, spec Spec, 
 	if lifecycle.Timeout <= 0 || lifecycle.Timeout > time.Minute {
 		lifecycle.Timeout = 15 * time.Second
 	}
+	if lifecycle.Native {
+		if err := validateNativeLabel(spec.Label); err != nil {
+			return LaunchAgentStatus{State: "native_label_rejected", Label: spec.Label}, err
+		}
+	}
 	// Reconcile an already loaded service before replacing its plist. This
 	// makes reinstall idempotent and avoids bootstrapping a second instance.
 	if lifecycle.Native && lifecycle.Runner != nil {
@@ -119,11 +127,11 @@ func (lifecycle Lifecycle) Install(ctx context.Context, home string, spec Spec, 
 		if statusErr != nil {
 			return existing, statusErr
 		}
-		if existing.FilePresent && existing.Loaded {
-			if err := lifecycle.run(ctx, []string{"disable", "gui/" + lifecycle.UID + "/" + spec.Label}); err != nil {
-				return existing, err
+		if existing.Loaded {
+			if existing.State == "loaded_identity_mismatch" {
+				return existing, errors.New("managed LaunchAgent label has a mismatched native identity")
 			}
-			if err := lifecycle.run(ctx, []string{"bootout", "gui/" + lifecycle.UID + "/" + spec.Label}); err != nil {
+			if err := lifecycle.removeNative(ctx, spec.Label); err != nil {
 				return existing, err
 			}
 		}
@@ -162,11 +170,11 @@ func (lifecycle Lifecycle) Status(ctx context.Context, home, label string) (Laun
 		return LaunchAgentStatus{}, err
 	}
 	status := LaunchAgentStatus{State: "file_present", Path: fileStatus.Path, Label: label, FilePresent: fileStatus.State != "not_installed", Disabled: fileStatus.Disabled}
-	if !status.FilePresent {
-		status.State = "not_present"
-		return status, nil
-	}
 	if !lifecycle.Native || lifecycle.Runner == nil {
+		if !status.FilePresent {
+			status.State = "not_present"
+			return status, nil
+		}
 		status.State = "file_present_native_qualification_pending"
 		return status, nil
 	}
@@ -177,7 +185,32 @@ func (lifecycle Lifecycle) Status(ctx context.Context, home, label string) (Laun
 	if disabledErr == nil {
 		status.Enabled = status.Loaded && !disabledLabel(disabledResult.Output, label)
 	}
-	status.NativeQualified = status.Loaded
+	if !status.Loaded {
+		if !status.FilePresent {
+			status.State = "not_present"
+		} else {
+			status.State = "file_present_not_loaded"
+		}
+		return status, nil
+	}
+	if !status.FilePresent {
+		status.State = "orphan_loaded"
+		status.Diagnostic = "loaded managed label has no managed plist"
+		return status, nil
+	}
+	expectedProgram, identityErr := launchAgentProgram(home, label)
+	if identityErr != nil || strings.TrimSpace(printResult.Output) == "" {
+		status.State = "loaded_identity_mismatch"
+		status.Diagnostic = "loaded LaunchAgent identity could not be bound"
+		return status, nil
+	}
+	nativeProgram, nativePath, parseErr := parseLaunchctlIdentity(printResult.Output, label)
+	if parseErr != nil || nativeProgram != expectedProgram || !samePath(nativePath, status.Path) {
+		status.State = "loaded_identity_mismatch"
+		status.Diagnostic = "loaded LaunchAgent identity does not match managed plist"
+		return status, nil
+	}
+	status.NativeQualified = true
 	if status.Loaded && status.Enabled {
 		status.State = "active_loaded_enabled"
 	} else if status.Loaded {
@@ -189,25 +222,33 @@ func (lifecycle Lifecycle) Status(ctx context.Context, home, label string) (Laun
 }
 
 func (lifecycle Lifecycle) Pause(ctx context.Context, home, label string) (LaunchAgentStatus, error) {
-	fileStatus, fileErr := ReadStatus(home, label)
-	if fileErr != nil {
-		return LaunchAgentStatus{}, fileErr
-	}
-	if fileStatus.State == "not_installed" {
-		return LaunchAgentStatus{State: "not_present", Path: fileStatus.Path, Label: label}, nil
-	}
 	status, err := lifecycle.Status(ctx, home, label)
-	if err != nil || !status.FilePresent {
+	if err != nil {
 		return status, err
 	}
+	if status.State == "orphan_loaded" {
+		if err := lifecycle.removeNative(ctx, label); err != nil {
+			return status, err
+		}
+		return lifecycle.Status(ctx, home, label)
+	}
+	if status.State == "loaded_identity_mismatch" {
+		return status, errors.New("refusing to mutate a mismatched loaded LaunchAgent")
+	}
+	if !status.FilePresent {
+		return status, nil
+	}
+	if lifecycle.Native {
+		if err := validateNativeLabel(label); err != nil {
+			return status, err
+		}
+	}
+	fileStatus := status
 	if fileStatus.Disabled && (!lifecycle.Native || !status.Loaded) {
 		return status, nil
 	}
 	if lifecycle.Native && status.Loaded {
-		if err := lifecycle.run(ctx, []string{"disable", "gui/" + lifecycle.UID + "/" + label}); err != nil {
-			return status, err
-		}
-		if err := lifecycle.run(ctx, []string{"bootout", "gui/" + lifecycle.UID + "/" + label}); err != nil {
+		if err := lifecycle.removeNative(ctx, label); err != nil {
 			return status, err
 		}
 	}
@@ -221,8 +262,19 @@ func (lifecycle Lifecycle) Pause(ctx context.Context, home, label string) (Launc
 
 func (lifecycle Lifecycle) Resume(ctx context.Context, home, label string) (LaunchAgentStatus, error) {
 	status, err := lifecycle.Status(ctx, home, label)
-	if err != nil || !status.FilePresent {
+	if err != nil {
 		return status, err
+	}
+	if status.State == "orphan_loaded" || status.State == "loaded_identity_mismatch" {
+		return status, errors.New("cannot resume an unbound LaunchAgent identity")
+	}
+	if !status.FilePresent {
+		return status, nil
+	}
+	if lifecycle.Native {
+		if err := validateNativeLabel(label); err != nil {
+			return status, err
+		}
 	}
 	if !status.Disabled && (!lifecycle.Native || (status.Loaded && status.Enabled)) {
 		return status, nil
@@ -253,17 +305,25 @@ func (lifecycle Lifecycle) Uninstall(ctx context.Context, home, label string) er
 	if err != nil {
 		return err
 	}
-	if !status.FilePresent {
-		// Removing an already absent plist is idempotent. Native status is
-		// deliberately not guessed here: without a file there is no qualified
-		// service identity to mutate.
-		return nil
-	}
-	if lifecycle.Native && status.Loaded {
-		if err := lifecycle.run(ctx, []string{"disable", "gui/" + lifecycle.UID + "/" + label}); err != nil {
+	if status.State == "orphan_loaded" {
+		if err := lifecycle.removeNative(ctx, label); err != nil {
 			return err
 		}
-		if err := lifecycle.run(ctx, []string{"bootout", "gui/" + lifecycle.UID + "/" + label}); err != nil {
+		return nil
+	}
+	if status.State == "loaded_identity_mismatch" {
+		return errors.New("refusing to uninstall a mismatched loaded LaunchAgent")
+	}
+	if !status.FilePresent {
+		return nil
+	}
+	if lifecycle.Native {
+		if err := validateNativeLabel(label); err != nil {
+			return err
+		}
+	}
+	if lifecycle.Native && status.Loaded {
+		if err := lifecycle.removeNative(ctx, label); err != nil {
 			return err
 		}
 	} else if lifecycle.Native {
@@ -272,6 +332,23 @@ func (lifecycle Lifecycle) Uninstall(ctx context.Context, home, label string) er
 		}
 	}
 	return Uninstall(home, label)
+}
+
+func (lifecycle Lifecycle) removeNative(ctx context.Context, label string) error {
+	if err := validateNativeLabel(label); err != nil {
+		return err
+	}
+	if err := lifecycle.run(ctx, []string{"disable", "gui/" + lifecycle.UID + "/" + label}); err != nil {
+		return err
+	}
+	return lifecycle.run(ctx, []string{"bootout", "gui/" + lifecycle.UID + "/" + label})
+}
+
+func validateNativeLabel(label string) error {
+	if label != "com.bcg.maestro.maintenance" {
+		return errors.New("refusing native mutation for an unknown managed label")
+	}
+	return nil
 }
 
 func (lifecycle Lifecycle) fileStatus(home, label, state string) (LaunchAgentStatus, error) {
@@ -314,6 +391,45 @@ func disabledLabel(output, label string) bool {
 		}
 	}
 	return false
+}
+
+func parseLaunchctlIdentity(output, expectedLabel string) (program, path string, err error) {
+	values := map[string]string{}
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	scanner.Buffer(make([]byte, 256), maxRunnerOutput)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		if key != "program" && key != "path" && key != "label" {
+			continue
+		}
+		value := strings.TrimSpace(parts[1])
+		value = strings.Trim(value, "\"")
+		if value == "" || len(value) > 1024 || strings.ContainsRune(value, '\x00') {
+			return "", "", errors.New("launchctl identity field is invalid")
+		}
+		if _, duplicate := values[key]; duplicate {
+			return "", "", errors.New("launchctl identity field is duplicated")
+		}
+		values[key] = value
+	}
+	if err := scanner.Err(); err != nil {
+		return "", "", err
+	}
+	if label, present := values["label"]; present && label != expectedLabel {
+		return "", "", fmt.Errorf("launchctl identity label mismatch")
+	}
+	if values["program"] == "" || values["path"] == "" || !pathpkg.IsAbs(values["program"]) || !filepath.IsAbs(values["path"]) || strings.Contains(values["program"], `\`) {
+		return "", "", errors.New("launchctl identity is incomplete")
+	}
+	return values["program"], values["path"], nil
 }
 func samePath(left, right string) bool {
 	left, _ = filepath.Abs(left)

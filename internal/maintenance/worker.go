@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -98,6 +99,27 @@ func (worker Worker) Run(ctx context.Context, request WakeRequest) (WakeReport, 
 	}
 	if err := worker.Catalog.Validate(); err != nil {
 		return WakeReport{}, err
+	}
+	// Enrollment is a durable scheduling boundary, not an authorization
+	// probe. Read it without creating directories first; an unconsented wake
+	// must leave no enrollment, receipts, lease or no-backfill state behind.
+	if !request.Attended && !request.Preauthorized {
+		return WakeReport{}, errors.New("maintenance wake requires attended or preauthorized local authority before enrollment")
+	}
+	_, enrollmentErr := worker.Scheduler.LoadEnrollment(request.WorkspaceID)
+	if enrollmentErr != nil && !errors.Is(enrollmentErr, os.ErrNotExist) {
+		return WakeReport{}, enrollmentErr
+	}
+	if request.Attended || request.Preauthorized {
+		var authorityErr error
+		if request.Preauthorized {
+			_, authorityErr = NewPreauthorizedLocalExecutionAuthority(worker.Catalog, nil, worker.LocalQualification, worker.ActivatedJobs)
+		} else {
+			_, authorityErr = NewLocalExecutionAuthority(worker.Catalog, nil, worker.LocalQualification, worker.ActivatedJobs, true)
+		}
+		if authorityErr != nil {
+			return WakeReport{}, authorityErr
+		}
 	}
 	enrollment, err := worker.Scheduler.EnsureEnrollment(request.WorkspaceID, planningNow)
 	if err != nil {
@@ -368,7 +390,7 @@ func attemptID() (string, error) {
 	return hex.EncodeToString(value[:]), nil
 }
 func schedulerError(receipt Receipt) string {
-	if receipt.State == ReceiptSucceeded || receipt.State == ReceiptProposalEmitted {
+	if receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange || receipt.State == ReceiptProposalEmitted {
 		return ""
 	}
 	return string(receipt.ReasonCode)

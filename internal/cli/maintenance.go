@@ -340,9 +340,13 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 		return result
 	}
 	last := map[string]any{}
+	schedulerAuditIncomplete := 0
 	for _, receipt := range receipts {
 		if receipt.State == scheduler.Unavailable {
 			result["unavailable_count"] = result["unavailable_count"].(int) + 1
+		}
+		if receipt.Error == "recovery_committed_audit_incomplete" {
+			schedulerAuditIncomplete++
 		}
 		if receipt.AttemptedAt.After(time.Time{}) {
 			last = map[string]any{"job_id": receipt.JobID, "state": receipt.State, "scheduled_for": receipt.ScheduledFor.UTC(), "attempted_at": receipt.AttemptedAt.UTC()}
@@ -352,7 +356,7 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 		result["last_receipt"] = last
 	}
 	maintenanceStore := maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}
-	recoveryRequired, auditIncomplete, recoveryIntents := 0, 0, 0
+	recoveryRequired, auditIncomplete, recoveryIntents := 0, 0, schedulerAuditIncomplete
 	for _, job := range schedulerJobsForTrigger("presence") {
 		maintenanceReceipts, readErr := maintenanceStore.Receipts(enrollment.WorkspaceID, job.ID)
 		if readErr != nil {

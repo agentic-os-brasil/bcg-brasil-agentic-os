@@ -30,7 +30,7 @@
       "if": {"properties": {"proposal_only": {"const": true}}},
       "then": {
         "properties": {"job_id": {"const": "darwin-structural-evolution-proposal"}},
-        "not": {"anyOf": [{"properties": {"state": {"const": "succeeded"}}, "required": ["state"]}, {"properties": {"state": {"const": "reviewed_no_change"}}, "required": ["state"]}]}
+        "not": {"properties": {"state": {"const": "succeeded"}}, "required": ["state"]}
       },
       "else": {
         "not": {
@@ -41,7 +41,10 @@
     },
     {
       "if": {"properties": {"state": {"const": "proposal_emitted"}}},
-      "then": {"required": ["proposal_count", "proposal_digest", "proposal_artifact_id"]},
+      "then": {
+        "required": ["proposal_count", "proposal_digest", "proposal_artifact_id"],
+        "properties": {"proposal_count": {"type": "integer", "minimum": 1}}
+      },
       "else": {
         "not": {
           "anyOf": [
@@ -50,6 +53,43 @@
             {"required": ["proposal_artifact_id"]}
           ]
         }
+      }
+    },
+    {
+      "if": {"properties": {"recovery_phase": {"const": "intent"}}, "required": ["recovery_phase"]},
+      "then": {
+        "required": ["recovery_intent_digest", "fence_token_digest"],
+        "properties": {"reason_code": {"const": "recovery_intent"}}
+      }
+    },
+    {
+      "if": {"properties": {"recovery_phase": {"const": "completed"}}, "required": ["recovery_phase"]},
+      "then": {
+        "required": ["recovery_intent_digest", "fence_token_digest"],
+        "properties": {"reason_code": {"const": "recovery_completed"}}
+      }
+    },
+    {
+      "if": {"properties": {"recovery_phase": {"const": "failed"}}, "required": ["recovery_phase"]},
+      "then": {
+        "required": ["recovery_intent_digest", "fence_token_digest"],
+        "properties": {"reason_code": {"const": "recovery_failed"}}
+      }
+    },
+    {
+      "if": {"properties": {"recovery_phase": {"const": "audit_incomplete"}}, "required": ["recovery_phase"]},
+      "then": {
+        "required": ["recovery_intent_digest", "fence_token_digest"],
+        "properties": {"reason_code": {"const": "recovery_committed_audit_incomplete"}}
+      }
+    },
+    {
+      "if": {"not": {"required": ["recovery_phase"]}},
+      "then": {
+        "not": {"anyOf": [
+          {"required": ["recovery_intent_digest"]},
+          {"required": ["fence_token_digest"]}
+        ]}
       }
     }
   ]

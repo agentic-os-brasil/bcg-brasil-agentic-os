@@ -5,11 +5,31 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
+
+func TestWorkerUnauthorizedWakeDoesNotCreateEnrollmentOrReceipts(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schedulerRoot, receiptRoot := t.TempDir(), t.TempDir()
+	worker := Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: schedulerRoot}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 3, MaxCatchUp: 1}}, ActivatedJobs: []string{"darwin-housekeeping-daily"}, LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")}}
+	_, err = worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "unauthorized", Now: time.Now().UTC()})
+	if err == nil {
+		t.Fatal("unauthorized wake was accepted")
+	}
+	if _, err := (scheduler.Store{Root: schedulerRoot}).LoadEnrollment("maestro-system"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unauthorized wake changed enrollment: %v", err)
+	}
+	if entries, readErr := os.ReadDir(receiptRoot); readErr == nil && len(entries) != 0 {
+		t.Fatalf("unauthorized wake created receipt state: %v", entries)
+	}
+}
 
 func TestWorkerRunsQualifiedDueOccurrenceAndFencesSuccess(t *testing.T) {
 	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
@@ -117,11 +137,11 @@ func TestWorkerLeavesUnavailableModelJobDue(t *testing.T) {
 		t.Fatal(err)
 	}
 	worker := Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: root}, Receipts: Store{Root: t.TempDir()}, Jobs: []scheduler.Job{{ID: "walter-self-review-weekly", Cadence: scheduler.Weekly, Weekday: time.Saturday, LocalHour: 9, MaxCatchUp: 1}}, Deadline: time.Minute}
-	report, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "worker-1", Now: now})
+	report, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "worker-1", Now: now, Preauthorized: true})
 	if err != nil || len(report.Receipts) != 1 || report.Receipts[0].State != ReceiptUnavailable {
 		t.Fatalf("report=%#v err=%v", report, err)
 	}
-	second, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "worker-1", Now: now.Add(time.Minute)})
+	second, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "worker-1", Now: now.Add(time.Minute), Preauthorized: true})
 	if err != nil || len(second.Due) != 1 {
 		t.Fatalf("unavailable work was incorrectly completed: report=%#v err=%v", second, err)
 	}

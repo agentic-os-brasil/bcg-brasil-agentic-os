@@ -17,6 +17,24 @@ func TestPublishedSchedulerStateSchemaIsRecognized(t *testing.T) {
 	}
 }
 
+func TestSchedulerRejectsSymlinkedRootAncestorBeforeMkdir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink setup is host-dependent on Windows")
+	}
+	parent, outside := t.TempDir(), t.TempDir()
+	alias := filepath.Join(parent, "alias")
+	if err := os.Symlink(outside, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	root := filepath.Join(alias, "scheduler")
+	if _, err := (Store{Root: root}).EnsureEnrollment("workspace-1", time.Now().UTC()); err == nil {
+		t.Fatal("scheduler created state through a symlinked root ancestor")
+	}
+	if entries, err := os.ReadDir(outside); err != nil || len(entries) != 0 {
+		t.Fatalf("scheduler modified symlink target: entries=%v err=%v", entries, err)
+	}
+}
+
 func TestPlanDueRecoversMissedDailyOccurrences(t *testing.T) {
 	location := time.FixedZone("pilot", -3*60*60)
 	enrolledAt := time.Date(2026, 7, 20, 19, 0, 0, 0, location)

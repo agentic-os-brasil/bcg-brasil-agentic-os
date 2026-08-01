@@ -43,6 +43,38 @@ func TestReceiptStoreKeepsRetriesAsSeparateAttempts(t *testing.T) {
 	}
 }
 
+func TestReceiptStoreAllowsRecoveryAfterPublishedSuccess(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	store := Store{Root: t.TempDir()}
+	success := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-release-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptSucceeded, RecordedAt: now, Deadline: now.Add(time.Minute), ReasonCode: ReasonCompleted}
+	recovery := success
+	recovery.AttemptID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	recovery.State = ReceiptRecoveryRequired
+	recovery.ReasonCode = ReasonRecoveryRequired
+	if err := store.AppendReceipt(success); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendReceipt(recovery); err != nil {
+		t.Fatalf("recovery after success was rejected: %v", err)
+	}
+	receipts, err := store.Receipts("workspace-1", "memory-daily")
+	if err != nil || len(receipts) != 2 {
+		t.Fatalf("recovery chain receipts=%#v err=%v", receipts, err)
+	}
+}
+
+func TestMonthlyRecoveryReceiptsRetainProposalOnlyBinding(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	intent, err := NewRecoveryIntentReceipt("workspace-1", "darwin-structural-evolution-proposal", TriggerMonthly, now, now, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err != nil || !intent.ProposalOnly || intent.Validate() != nil {
+		t.Fatalf("monthly recovery intent=%#v err=%v validate=%v", intent, err, intent.Validate())
+	}
+	completed, err := NewRecoveryOutcomeReceipt(intent, now, "completed", ReasonRecoveryCompleted)
+	if err != nil || !completed.ProposalOnly || completed.Validate() != nil {
+		t.Fatalf("monthly recovery outcome=%#v err=%v validate=%v", completed, err, completed.Validate())
+	}
+}
+
 func TestReceiptStoreRejectsEphemeralBusyResult(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
 	store := Store{Root: t.TempDir()}

@@ -26,7 +26,7 @@ func (adapter WalterWeeklyAdapter) Execute(ctx context.Context, command Command)
 	if err != nil {
 		return result, err
 	}
-	if result.State != ReceiptProposalEmitted || result.ProposalCount < 1 || result.ProposalDigest == "" || result.ProposalArtifactID != result.ProposalDigest {
+	if result.State != ReceiptProposalEmitted || result.ProposalCount < 1 || result.ProposalDigest == "" || result.ProposalArtifactID == "" {
 		return HandlerResult{}, errors.New("Walter weekly handler must return a non-empty proposal receipt")
 	}
 	return result, nil

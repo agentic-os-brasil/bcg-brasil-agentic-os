@@ -264,6 +264,20 @@ func (store Store) EnsureEnrollment(workspaceID string, enrolledAt time.Time) (E
 	return enrollment, nil
 }
 
+// LoadEnrollment is a read-only authority preflight. It never creates the
+// enrollment boundary; callers must validate local attendance or persisted
+// preauthorization before invoking EnsureEnrollment.
+func (store Store) LoadEnrollment(workspaceID string) (Enrollment, error) {
+	if store.Root == "" || !workspaceIDPattern.MatchString(workspaceID) {
+		return Enrollment{}, errors.New("invalid scheduler enrollment lookup")
+	}
+	root, err := lookupPrivateTree(store.Root, "workspaces", workspaceID)
+	if err != nil {
+		return Enrollment{}, err
+	}
+	return readEnrollment(filepath.Join(root, "enrollment.json"))
+}
+
 func (store Store) AppendReceipt(workspaceID string, receipt Receipt) error {
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return err

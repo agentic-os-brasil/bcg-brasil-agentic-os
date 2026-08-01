@@ -66,4 +66,9 @@ func TestLaunchAgentRejectsRelativeOrInterpolatedValues(t *testing.T) {
 	if _, err := Render(spec); err == nil {
 		t.Fatal("interpolated argument accepted")
 	}
+	spec = testSpec(t)
+	spec.Program = `\usr\local\bin\bcgos`
+	if _, err := Render(spec); err == nil {
+		t.Fatal("Windows-rooted Darwin program accepted")
+	}
 }

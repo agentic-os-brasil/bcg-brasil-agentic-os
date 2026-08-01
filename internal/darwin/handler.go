@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
@@ -74,16 +75,37 @@ func (handler DeepReviewHandler) Execute(ctx context.Context, command maintenanc
 	if command.JobID != "darwin-deep-weekly" || handler.Build == nil || handler.CommandStore.Root == "" {
 		return maintenance.HandlerResult{}, errors.New("Darwin deep review handler is not configured")
 	}
+	proposalStore := handler.ProposalStore
+	if proposalStore.Root == "" {
+		proposalStore = ProposalStore{Root: handler.CommandStore.Root}
+	}
+	// The artifact is the durable owner boundary. Recover it before consulting
+	// receipts or rebuilding health: a crash can occur after artifact publish
+	// and before receipt append, and a changed health surface must not create a
+	// second assessment for the same occurrence.
+	if artifact, artifactErr := proposalStore.ReadOccurrence(command.JobID, command.OccurrenceDigest()); artifactErr == nil {
+		attempt, err := newAttemptID()
+		if err != nil {
+			return maintenance.HandlerResult{}, err
+		}
+		now := time.Now().UTC()
+		if handler.Now != nil {
+			now = handler.Now().UTC()
+		}
+		recovered := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: maintenance.ReceiptProposalEmitted, RecordedAt: now, Deadline: command.Deadline, ProposalCount: len(artifact.Assessment.Proposals), ProposalDigest: artifact.ProposalDigest, ProposalArtifactID: artifact.ArtifactID, ReasonCode: maintenance.ReasonProposalEmitted}
+		if err := handler.CommandStore.AppendReceipt(recovered); err != nil {
+			return maintenance.HandlerResult{}, err
+		}
+		return maintenance.HandlerResult{State: recovered.State, ProposalCount: recovered.ProposalCount, ProposalDigest: recovered.ProposalDigest, ProposalArtifactID: recovered.ProposalArtifactID, ReasonCode: recovered.ReasonCode}, nil
+	} else if !errors.Is(artifactErr, os.ErrNotExist) {
+		return maintenance.HandlerResult{}, artifactErr
+	}
 	if existing, readErr := handler.CommandStore.Receipts(command.WorkspaceID, command.JobID); readErr != nil {
 		return maintenance.HandlerResult{}, readErr
 	} else {
 		for _, receipt := range existing {
 			if receipt.OccurrenceDigest == command.OccurrenceDigest() && (receipt.State == maintenance.ReceiptSucceeded || receipt.State == maintenance.ReceiptReviewedNoChange || receipt.State == maintenance.ReceiptProposalEmitted) {
 				if receipt.State == maintenance.ReceiptProposalEmitted {
-					proposalStore := handler.ProposalStore
-					if proposalStore.Root == "" {
-						proposalStore = ProposalStore{Root: handler.CommandStore.Root}
-					}
 					if err := proposalStore.ValidateReceipt(receipt); err != nil {
 						return maintenance.HandlerResult{}, err
 					}
@@ -126,15 +148,11 @@ func (handler DeepReviewHandler) Execute(ctx context.Context, command maintenanc
 	base := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: state, RecordedAt: now, Deadline: command.Deadline, ProposalCount: len(assessment.Proposals), ReasonCode: reason}
 	if len(assessment.Proposals) > 0 {
 		base.ProposalDigest = proposalDigest(command.OccurrenceDigest(), assessment)
-		proposalStore := handler.ProposalStore
-		if proposalStore.Root == "" {
-			proposalStore = ProposalStore{Root: handler.CommandStore.Root}
-		}
-		artifact := AssessmentProposalArtifact{SchemaVersion: proposalArtifactSchemaVersion, RecordType: "assessment", AgentID: AgentID, JobID: command.JobID, OccurrenceDigest: command.OccurrenceDigest(), WindowID: assessment.WindowID, ProposalDigest: base.ProposalDigest, Assessment: assessment, ScheduledFor: command.ScheduledFor.UTC(), RecordedAt: command.ScheduledFor.UTC()}
+		artifact := AssessmentProposalArtifact{SchemaVersion: proposalArtifactSchemaVersion, RecordType: "assessment", AgentID: AgentID, JobID: command.JobID, OccurrenceDigest: command.OccurrenceDigest(), ArtifactID: assessmentArtifactID(command.JobID, command.OccurrenceDigest()), WindowID: assessment.WindowID, ProposalDigest: base.ProposalDigest, Assessment: assessment, ScheduledFor: command.ScheduledFor.UTC(), RecordedAt: command.ScheduledFor.UTC()}
 		if err := proposalStore.Append(artifact); err != nil {
 			return maintenance.HandlerResult{}, err
 		}
-		base.ProposalArtifactID = base.ProposalDigest
+		base.ProposalArtifactID = artifact.ArtifactID
 	}
 	if err := handler.CommandStore.AppendReceipt(base); err != nil {
 		return maintenance.HandlerResult{}, err

@@ -11,6 +11,8 @@ import (
 type fakeLaunchctl struct {
 	calls            [][]string
 	loaded, disabled bool
+	printPath        string
+	printProgram     string
 }
 
 func (fake *fakeLaunchctl) Run(_ context.Context, name string, args []string) (CommandResult, error) {
@@ -24,6 +26,9 @@ func (fake *fakeLaunchctl) Run(_ context.Context, name string, args []string) (C
 	switch args[0] {
 	case "bootstrap":
 		fake.loaded = true
+		if len(args) > 2 {
+			fake.printPath = args[2]
+		}
 	case "bootout":
 		fake.loaded = false
 	case "enable":
@@ -35,7 +40,11 @@ func (fake *fakeLaunchctl) Run(_ context.Context, name string, args []string) (C
 		if !fake.loaded {
 			return CommandResult{ExitCode: 1}, errors.New("not loaded")
 		}
-		return CommandResult{}, nil
+		program := fake.printProgram
+		if program == "" {
+			program = "/usr/local/bin/bcgos"
+		}
+		return CommandResult{Output: fmt.Sprintf("path = %s\nprogram = %s\nlabel = \"com.bcg.maestro.maintenance\"", fake.printPath, program)}, nil
 	case "print-disabled":
 		state := "false"
 		if fake.disabled {
@@ -55,7 +64,14 @@ func TestLaunchAgentLifecycleUsesStructuredLaunchctlAndConfirmsLoaded(t *testing
 	if err != nil || status.State != "active_loaded_enabled" || !status.FilePresent || !status.Loaded || !status.Enabled || !status.NativeQualified {
 		t.Fatalf("install status=%#v err=%v", status, err)
 	}
-	if len(fake.calls) < 4 || fake.calls[0][0] != "launchctl" || fake.calls[0][1] != "bootstrap" || strings.Contains(strings.Join(fake.calls[0], " "), "sh -c") {
+	bootstrapIndex := -1
+	for index, call := range fake.calls {
+		if len(call) > 1 && call[0] == "launchctl" && call[1] == "bootstrap" {
+			bootstrapIndex = index
+			break
+		}
+	}
+	if bootstrapIndex < 0 || strings.Contains(strings.Join(fake.calls[bootstrapIndex], " "), "sh -c") {
 		t.Fatalf("launchctl calls=%#v", fake.calls)
 	}
 	paused, err := lifecycle.Pause(context.Background(), home, spec.Label)
@@ -121,6 +137,54 @@ func TestLaunchAgentPauseReconcilesDisabledFileWithLoadedService(t *testing.T) {
 	status, err := lifecycle.Pause(context.Background(), home, spec.Label)
 	if err != nil || !status.Disabled || status.Loaded {
 		t.Fatalf("pause status=%#v err=%v", status, err)
+	}
+}
+
+func TestLaunchAgentStatusReconcilesLoadedOrphanAndUninstallIsIdempotent(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeLaunchctl{loaded: true, printPath: "/Users/example/Library/LaunchAgents/com.bcg.maestro.maintenance.plist"}
+	lifecycle := Lifecycle{Runner: fake, UID: "501", CurrentHome: home, Native: true}
+	status, err := lifecycle.Status(context.Background(), home, "com.bcg.maestro.maintenance")
+	if err != nil || status.State != "orphan_loaded" || !status.Loaded || status.NativeQualified {
+		t.Fatalf("orphan status=%#v err=%v", status, err)
+	}
+	installed, err := lifecycle.Install(context.Background(), home, Spec{Label: "com.bcg.maestro.maintenance", Program: "/usr/local/bin/bcgos", StartInterval: 900}, true)
+	if err != nil || installed.State != "active_loaded_enabled" {
+		t.Fatalf("orphan reinstall status=%#v err=%v", installed, err)
+	}
+	if err := lifecycle.Uninstall(context.Background(), home, "com.bcg.maestro.maintenance"); err != nil {
+		t.Fatal(err)
+	}
+	if err := lifecycle.Uninstall(context.Background(), home, "com.bcg.maestro.maintenance"); err != nil {
+		t.Fatal(err)
+	}
+	status, err = lifecycle.Status(context.Background(), home, "com.bcg.maestro.maintenance")
+	if err != nil || status.State != "not_present" || status.Loaded {
+		t.Fatalf("cleaned orphan status=%#v err=%v", status, err)
+	}
+}
+
+func TestLaunchAgentStatusFailsClosedOnMismatchedLoadedIdentity(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeLaunchctl{printProgram: "/usr/bin/other", printPath: "/wrong/managed.plist"}
+	lifecycle := Lifecycle{Runner: fake, UID: "501", CurrentHome: home, Native: true}
+	spec := Spec{Label: "com.bcg.maestro.maintenance", Program: "/usr/local/bin/bcgos", StartInterval: 900}
+	if _, err := Install(home, spec, true); err != nil {
+		t.Fatal(err)
+	}
+	fake.loaded = true
+	status, err := lifecycle.Status(context.Background(), home, spec.Label)
+	if err != nil || status.State != "loaded_identity_mismatch" || status.NativeQualified {
+		t.Fatalf("mismatch status=%#v err=%v", status, err)
+	}
+	callCount := len(fake.calls)
+	if err := lifecycle.Uninstall(context.Background(), home, spec.Label); err == nil {
+		t.Fatal("mismatched loaded identity was mutated")
+	}
+	if len(fake.calls) != callCount+2 {
+		// Status performs print and print-disabled; Uninstall must not add a
+		// disable/bootout pair after that probe.
+		t.Fatalf("unexpected mutation calls=%#v", fake.calls)
 	}
 }
 

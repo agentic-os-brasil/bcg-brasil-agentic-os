@@ -189,28 +189,28 @@ func (executor HousekeepingExecutor) executeLeasedCommand(ctx context.Context, c
 			}
 			return base, planErr
 		}
-		base.State = maintenance.ReceiptProposalEmitted
 		base.ProposalCount = len(assessment.Proposals)
-		base.ProposalDigest = proposalDigest(command.OccurrenceDigest(), assessment)
 		proposalStore := executor.ProposalStore
 		if proposalStore.Root == "" {
 			proposalStore = ProposalStore{Root: executor.CommandStore.Root}
 		}
 		if len(assessment.Proposals) > 0 {
-			artifact := AssessmentProposalArtifact{SchemaVersion: proposalArtifactSchemaVersion, RecordType: "assessment", AgentID: AgentID, JobID: command.JobID, OccurrenceDigest: command.OccurrenceDigest(), WindowID: assessment.WindowID, ProposalDigest: base.ProposalDigest, Assessment: assessment, ScheduledFor: command.ScheduledFor.UTC(), RecordedAt: command.ScheduledFor.UTC()}
+			base.State = maintenance.ReceiptProposalEmitted
+			base.ProposalDigest = proposalDigest(command.OccurrenceDigest(), assessment)
+			artifact := AssessmentProposalArtifact{SchemaVersion: proposalArtifactSchemaVersion, RecordType: "assessment", AgentID: AgentID, JobID: command.JobID, OccurrenceDigest: command.OccurrenceDigest(), ArtifactID: assessmentArtifactID(command.JobID, command.OccurrenceDigest()), WindowID: assessment.WindowID, ProposalDigest: base.ProposalDigest, Assessment: assessment, ScheduledFor: command.ScheduledFor.UTC(), RecordedAt: command.ScheduledFor.UTC()}
 			if err := proposalStore.Append(artifact); err != nil {
 				return base, err
 			}
-			base.ProposalArtifactID = base.ProposalDigest
+			base.ProposalArtifactID = artifact.ArtifactID
 		} else {
-			base.State = maintenance.ReceiptUnavailable
+			base.State = maintenance.ReceiptReviewedNoChange
 			base.ProposalDigest = ""
-			base.ReasonCode = maintenance.ReasonHandlerFailure
+			base.ReasonCode = maintenance.ReasonReviewedNoChange
 			base.RecordedAt = executor.currentTime()
 			if err := executor.CommandStore.AppendReceipt(base); err != nil {
 				return base, err
 			}
-			return base, errors.New("Darwin structural review produced no proposal")
+			return base, nil
 		}
 		base.ReasonCode = maintenance.ReasonProposalEmitted
 		base.RecordedAt = executor.currentTime()
