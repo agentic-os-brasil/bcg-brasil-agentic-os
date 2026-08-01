@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil/schemas/intent-review-packet.schema.json",
+  "title": "Maestro IntentReviewPacket",
+  "description": "Structural JSON validation only. Every ingress must also call internal/maestro.IntentReviewPacket.Validate for semantic and aggregate UTF-8 enforcement.",
+  "x-bcgos-structural-only": true,
+  "x-bcgos-max-total-utf8-bytes": 32768,
+  "x-bcgos-runtime-validator": "internal/maestro.IntentReviewPacket.Validate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "packet_version", "packet_id", "literal_request", "current_prompt", "current_prompt_language", "current_prompt_original_sha256", "working_current_prompt", "working_current_prompt_sha256", "plan_digest", "draft_output", "self_snapshot_version", "self_snapshot_digest", "self_facets", "prompt_history", "audience", "consequence", "reversibility", "packet_digest"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "packet_version": {"const": "intent-review-v1"},
+    "packet_id": {"type": "string", "minLength": 1},
+    "literal_request": {"type": "string", "minLength": 1, "maxLength": 32768},
+    "current_prompt": {"type": "string", "minLength": 1, "maxLength": 32768},
+    "current_prompt_language": {"type": "string", "minLength": 2},
+    "current_prompt_original_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "working_current_prompt": {"type": "string", "minLength": 1, "maxLength": 32768},
+    "working_current_prompt_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "plan_route": {"type": "string"},
+    "draft_output": {"type": "string", "minLength": 1},
+    "relevant_context_refs": {"type": "array", "items": {"type": "string"}, "maxItems": 16},
+    "self_snapshot_version": {"type": "string", "minLength": 1},
+    "self_snapshot_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "self_facets": {"type": "object"},
+    "observations": {"type": "array", "maxItems": 32, "items": {"$ref": "interaction-observation.schema.json#/$defs/relevant_observation"}},
+    "prior_prompts": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/prior_prompt"}},
+    "prompt_history": {"$ref": "#/$defs/prompt_history"},
+    "audience": {"type": "string", "minLength": 1},
+    "consequence": {"type": "string", "minLength": 1},
+    "reversibility": {"type": "string", "minLength": 1},
+    "account_receipt_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "packet_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "$defs": {
+    "prompt_history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_count", "max_bytes", "max_age_seconds", "scope_kind", "scope_id", "working_language", "relevance_scoring", "relevance_query_sha256", "current_prompt_precedes"],
+      "properties": {
+        "max_count": {"type": "integer", "minimum": 1, "maximum": 8},
+        "max_bytes": {"type": "integer", "minimum": 1, "maximum": 32768},
+        "max_age_seconds": {"type": "integer", "minimum": 1},
+        "scope_kind": {"type": "string"},
+        "scope_id": {"type": "string"},
+        "owner_id": {"type": "string", "minLength": 1},
+        "working_language": {"type": "string", "minLength": 2},
+        "relevance_scoring": {"const": "lexical-v1"},
+        "relevance_query_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "current_prompt_precedes": {"const": true}
+      }
+    },
+    "prior_prompt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "original_text", "normalized_text", "source_language", "working_language", "recorded_at", "scope_kind", "scope_id", "sha256", "quoted_data", "relevance_score", "relevance_reasons"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "original_text": {"type": "string", "minLength": 1, "maxLength": 32768},
+        "normalized_text": {"type": "string", "minLength": 1, "maxLength": 32768},
+        "source_language": {"type": "string", "minLength": 2},
+        "working_language": {"type": "string", "minLength": 2},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "scope_kind": {"type": "string"},
+        "scope_id": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "quoted_data": {"const": true},
+        "relevance_score": {"type": "integer", "minimum": 0},
+        "relevance_reasons": {"type": "array", "items": {"type": "string"}, "maxItems": 8}
+      }
+    }
+  }
+}

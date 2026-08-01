@@ -470,12 +470,6 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 			!catalog.AllowsDelegation("hub", "pa_expert", 1) {
 			return agentcatalog.RoleContract{}, errors.New("PA expert scaffold requires a PA Expert curator, FPA/IPA kind, semantic version, bounded mandate and verified canon")
 		}
-	case "capability_specialist":
-		validParent := (catalog.CanonicalRole(request.ParentRole) == "case_agent" && request.ScopeKind == "workspace")
-		if !strings.HasPrefix(request.AgentID, "capability-") || hasRootMetadata || !validParent ||
-			!catalog.AllowsDelegation(request.ParentRole, "capability_specialist", 2) {
-			return agentcatalog.RoleContract{}, errors.New("capability specialist scaffold has an invalid parent or scope")
-		}
 	default:
 		return agentcatalog.RoleContract{}, errors.New("agent role has no managed scaffold template")
 	}

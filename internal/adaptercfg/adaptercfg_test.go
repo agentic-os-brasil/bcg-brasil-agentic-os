@@ -277,7 +277,7 @@ func TestInstalledCommandPassesTheOwnedMarkerToItsExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "hook\nsession-start\n--runtime\ncodex\n--adapter-source\nmaestro\n"
+	want := "hook\nsession-start\n--runtime\ncodex\n--adapter-source\nmaestro\n--orchestration-state\n.bcgos/maestro-orchestration-state.json\n"
 	if string(got) != want {
 		t.Fatalf("arguments = %q, want %q", got, want)
 	}

@@ -116,32 +116,7 @@ func (dispatcher *Dispatcher) StartRoot(request PacketRequest) (WorkPacket, agen
 }
 
 func (dispatcher *Dispatcher) StartChild(parent WorkPacket, request PacketRequest) (WorkPacket, agentorchestration.Decision, error) {
-	if err := dispatcher.Verify(parent); err != nil {
-		return WorkPacket{}, packetDenied(), err
-	}
-	if parent.SchemaVersion != packetSchemaVersion {
-		return WorkPacket{}, packetDenied(), errors.New("legacy work packet is completion-only")
-	}
-	if request.ScopeID != parent.ScopeID || request.ScopeKind != parent.ScopeKind {
-		return WorkPacket{}, packetDenied(), errors.New("child packet must inherit the parent scope root")
-	}
-	issuer := parent.TargetAgentID
-	capability := dispatcher.credentials[issuer]
-	if capability == "" || dispatcher.credentials[request.TargetAgentID] == "" {
-		return WorkPacket{}, packetDenied(), errors.New("child packet issuer or target is not authorized")
-	}
-	packet, err := dispatcher.issue(issuer, parent.PacketID, request)
-	if err != nil {
-		return WorkPacket{}, packetDenied(), err
-	}
-	decision := dispatcher.gate.StartChild(
-		issuer, capability, request.TargetAgentID, parent.PacketID,
-		packet.PacketID, request.ScopeID, request.ScopeKind,
-	)
-	if !decision.Allowed {
-		return WorkPacket{}, decision, nil
-	}
-	return packet, decision, nil
+	return WorkPacket{}, agentorchestration.Decision{Allowed: false, Code: "depth_one_no_children"}, errors.New("Maestro depth one does not permit child packets")
 }
 
 // SelectDirectSkill verifies that a vertical agent's role may select a managed
@@ -201,9 +176,6 @@ func (dispatcher *Dispatcher) guardRootTool(packet WorkPacket, tool, operation, 
 func (dispatcher *Dispatcher) issue(issuer, parentID string, request PacketRequest) (WorkPacket, error) {
 	child := parentID != ""
 	if err := validateRequest(request, child); err != nil {
-		return WorkPacket{}, err
-	}
-	if err := dispatcher.validateSkillSelection(issuer, request.TargetAgentID, request.SkillID, child); err != nil {
 		return WorkPacket{}, err
 	}
 	packetID, err := randomID()
@@ -268,35 +240,16 @@ func validateRequest(request PacketRequest, child bool) error {
 	if child && request.ReviewTrigger != "" {
 		return errors.New("child packet cannot define a material review trigger")
 	}
-	if !child && request.SkillID != "" {
+	if child {
+		return errors.New("Maestro depth one does not permit child packets")
+	}
+	if request.SkillID != "" {
 		return errors.New("work packet has an invalid skill selection boundary")
 	}
 	for _, constraint := range request.Constraints {
 		if strings.TrimSpace(constraint) == "" || len([]byte(constraint)) > maxConstraintBytes {
 			return errors.New("work packet constraint is empty or oversized")
 		}
-	}
-	return nil
-}
-
-func (dispatcher *Dispatcher) validateSkillSelection(issuer, target, skillID string, child bool) error {
-	if !child {
-		return nil
-	}
-	_, issuerOK := dispatcher.gate.RoleForAgent(issuer)
-	targetRole, targetOK := dispatcher.gate.RoleForAgent(target)
-	if !issuerOK || !targetOK {
-		return errors.New("delegated skill selection is not allowed for these agent roles")
-	}
-	if targetRole != "capability_specialist" {
-		if skillID != "" {
-			return errors.New("skill selection is only available to capability specialists")
-		}
-		return nil
-	}
-	issuerRole, _ := dispatcher.gate.RoleForAgent(issuer)
-	if skillID == "" || !dispatcher.skills.AllowsDelegated(issuerRole, targetRole, skillID) {
-		return errors.New("capability specialist delegation requires an authorized managed skill")
 	}
 	return nil
 }
@@ -337,10 +290,8 @@ func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
 	if err := validateReviewPacket(packet.Review, packet.PacketID, packet.Objective); err != nil {
 		return err
 	}
-	if packet.SchemaVersion == packetSchemaVersion {
-		if err := dispatcher.validateSkillSelection(packet.IssuerAgentID, packet.TargetAgentID, packet.SkillID, child); err != nil {
-			return err
-		}
+	if child {
+		return errors.New("Maestro depth one does not permit child packets")
 	}
 	seen := make(map[string]bool, len(packet.Pointers))
 	for _, pointer := range packet.Pointers {

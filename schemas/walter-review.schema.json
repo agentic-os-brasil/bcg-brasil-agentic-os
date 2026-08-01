@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil/schemas/walter-review.schema.json",
+  "title": "Walter Senior Advisor and Refiner review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "preserves_intent"],
+  "properties": {
+    "verdict": {"enum": ["approved", "refine-and-return", "missing-the-mark", "hold"]},
+    "preserves_intent": {"type": "boolean"},
+    "objections": {"type": "array", "maxItems": 3, "items": {"$ref": "#/$defs/objection"}},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}},
+    "uncertainty": {"type": "string"}
+  },
+  "allOf": [
+    {"if": {"properties": {"verdict": {"enum": ["refine-and-return", "missing-the-mark", "hold"]}}}, "then": {"required": ["objections"]}},
+    {"if": {"properties": {"verdict": {"const": "hold"}}}, "then": {"properties": {"objections": {"minItems": 1}}}}
+  ],
+  "$defs": {
+    "objection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "fix", "exit_condition", "blocking"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "fix": {"type": "string", "minLength": 1},
+        "proposed_refinement": {"type": "string"},
+        "exit_condition": {"type": "string", "minLength": 1},
+        "blocking": {"type": "boolean"}
+      }
+    }
+  }
+}

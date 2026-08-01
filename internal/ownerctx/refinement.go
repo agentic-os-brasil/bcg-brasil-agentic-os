@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -40,6 +41,7 @@ type RefinementReceipt struct {
 type proposal struct {
 	ID           string    `json:"id"`
 	Facet        string    `json:"facet"`
+	SourceSHA256 string    `json:"source_sha256"`
 	Evidence     string    `json:"evidence"`
 	ProposedBody string    `json:"proposed_body"`
 	Policy       string    `json:"policy"`
@@ -108,13 +110,17 @@ func SubmitRefinement(root string, input RefinementInput) (RefinementReceipt, er
 	if strings.TrimSpace(input.Evidence) == "" || strings.TrimSpace(input.ProposedBody) == "" {
 		return RefinementReceipt{}, errors.New("refinement evidence and proposed body are required")
 	}
+	current, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(definition.Path)))
+	if err != nil {
+		return RefinementReceipt{}, err
+	}
 	autoApproved, err := authorizedProducer(root, input.ProducerID, input.Capability)
 	if err != nil {
 		return RefinementReceipt{}, err
 	}
 	created := time.Now().UTC()
 	id := refinementID(input.Facet, input.Evidence, input.ProposedBody, created)
-	p := proposal{ID: id, Facet: input.Facet, Evidence: input.Evidence, ProposedBody: input.ProposedBody, Policy: definition.Refinement, ProducerID: input.ProducerID, AutoApproved: autoApproved, CreatedAt: created, State: "proposed"}
+	p := proposal{ID: id, Facet: input.Facet, SourceSHA256: digest(string(current)), Evidence: input.Evidence, ProposedBody: input.ProposedBody, Policy: definition.Refinement, ProducerID: input.ProducerID, AutoApproved: autoApproved, CreatedAt: created, State: "proposed"}
 	if err := writePrivateJSON(proposalPath(root, id), p); err != nil {
 		return RefinementReceipt{}, err
 	}
@@ -186,6 +192,9 @@ func apply(root string, p proposal, definition facetRecord, confirmed bool) (Ref
 	before, err := os.ReadFile(currentPath)
 	if err != nil {
 		return RefinementReceipt{}, err
+	}
+	if p.SourceSHA256 == "" || digest(string(before)) != p.SourceSHA256 {
+		return RefinementReceipt{}, ErrRevisionConflict
 	}
 	beforePath := filepath.ToSlash(filepath.Join("owner", "refinement", "versions", p.Facet, p.ID+".before.md"))
 	if err := writePrivateFile(filepath.Join(root, filepath.FromSlash(beforePath)), before); err != nil {
@@ -322,12 +331,87 @@ func writePrivateFile(path string, body []byte) error {
 }
 
 func atomicPrivateWrite(path string, body []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
-	temporary := path + ".next"
-	if err := os.WriteFile(temporary, body, 0o600); err != nil {
+	if err := validatePrivateParents(directory); err != nil {
 		return err
 	}
-	return os.Rename(temporary, path)
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return fmt.Errorf("private target is not a regular file: %s", path)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	temporary, err := os.CreateTemp(directory, ".private-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(0o600); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(body); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return err
+	}
+	return syncPrivateDirectory(directory)
+}
+
+func validatePrivateParents(directory string) error {
+	abs, err := filepath.Abs(directory)
+	if err != nil {
+		return err
+	}
+	parts := []string{}
+	for current := abs; current != "." && current != string(filepath.Separator); current = filepath.Dir(current) {
+		parts = append([]string{filepath.Base(current)}, parts...)
+	}
+	current := string(filepath.Separator)
+	for _, part := range parts {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			// macOS uses these compatibility links for the system temporary
+			// tree. They are outside the owner-private boundary; links below
+			// them are still rejected by this walk.
+			if runtime.GOOS == "darwin" && (current == "/var" || current == "/tmp") {
+				continue
+			}
+			return fmt.Errorf("private parent is a symlink: %s", current)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("private parent is not a directory: %s", current)
+		}
+	}
+	return nil
+}
+
+func syncPrivateDirectory(directory string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	directoryFile, err := os.Open(directory)
+	if err != nil {
+		return err
+	}
+	defer directoryFile.Close()
+	return directoryFile.Sync()
 }

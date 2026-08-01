@@ -14,6 +14,7 @@ import (
 )
 
 const adapterSourceMarker = "--adapter-source maestro"
+const orchestrationStateMarker = "--orchestration-state .bcgos/maestro-orchestration-state.json"
 
 type Status struct {
 	Runtime string `json:"runtime"`
@@ -275,22 +276,23 @@ func bindingsFor(runtimeName, executable string) ([]binding, error) {
 		return nil, fmt.Errorf("resolve adapter executable: %w", err)
 	}
 	prefix := quoteCommandPath(abs) + " hook "
+	markers := adapterSourceMarker + " " + orchestrationStateMarker
 	switch runtimeName {
 	case "codex":
 		return []binding{
-			{NativeEvent: "SessionStart", Command: prefix + "session-start --runtime codex " + adapterSourceMarker},
-			{NativeEvent: "UserPromptSubmit", Command: prefix + "codex context-injection " + adapterSourceMarker},
-			{NativeEvent: "PreToolUse", Command: prefix + "codex pre-action-guard " + adapterSourceMarker},
-			{NativeEvent: "PostToolUse", Command: prefix + "codex post-action-receipt " + adapterSourceMarker},
-			{NativeEvent: "Stop", Command: prefix + "codex stop-finalization " + adapterSourceMarker},
+			{NativeEvent: "SessionStart", Command: prefix + "session-start --runtime codex " + markers},
+			{NativeEvent: "UserPromptSubmit", Command: prefix + "codex context-injection " + markers},
+			{NativeEvent: "PreToolUse", Command: prefix + "codex pre-action-guard " + markers},
+			{NativeEvent: "PostToolUse", Command: prefix + "codex post-action-receipt " + markers},
+			{NativeEvent: "Stop", Command: prefix + "codex stop-finalization " + markers},
 		}, nil
 	case "claude":
 		return []binding{
-			{NativeEvent: "SessionStart", Command: prefix + "claude session-start " + adapterSourceMarker},
-			{NativeEvent: "UserPromptSubmit", Command: prefix + "claude context-injection " + adapterSourceMarker},
-			{NativeEvent: "PreToolUse", Command: prefix + "claude pre-action-guard " + adapterSourceMarker},
-			{NativeEvent: "PostToolUse", Command: prefix + "claude post-action-receipt " + adapterSourceMarker, Async: true},
-			{NativeEvent: "Stop", Command: prefix + "claude stop-finalization " + adapterSourceMarker, Async: true},
+			{NativeEvent: "SessionStart", Command: prefix + "claude session-start " + markers},
+			{NativeEvent: "UserPromptSubmit", Command: prefix + "claude context-injection " + markers},
+			{NativeEvent: "PreToolUse", Command: prefix + "claude pre-action-guard " + markers},
+			{NativeEvent: "PostToolUse", Command: prefix + "claude post-action-receipt " + markers, Async: true},
+			{NativeEvent: "Stop", Command: prefix + "claude stop-finalization " + markers, Async: true},
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported runtime %q", runtimeName)
@@ -557,7 +559,8 @@ func isOwnedEventCommand(runtimeName, event string, value any) bool {
 		if !exists {
 			return false
 		}
-		return strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker) ||
+		return strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker+" "+orchestrationStateMarker) ||
+			strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker) ||
 			command == "bcgos hook "+suffix
 	}
 	if runtimeName != "claude" {
@@ -575,11 +578,13 @@ func isOwnedEventCommand(runtimeName, event string, value any) bool {
 		return false
 	}
 	if event == "SessionStart" &&
-		(strings.HasSuffix(command, " hook session-start --runtime claude "+adapterSourceMarker) ||
+		(strings.HasSuffix(command, " hook session-start --runtime claude "+adapterSourceMarker+" "+orchestrationStateMarker) ||
+			strings.HasSuffix(command, " hook session-start --runtime claude "+adapterSourceMarker) ||
 			command == "bcgos hook session-start --runtime claude") {
 		return true
 	}
-	return strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker) ||
+	return strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker+" "+orchestrationStateMarker) ||
+		strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker) ||
 		command == "bcgos hook "+suffix
 }
 

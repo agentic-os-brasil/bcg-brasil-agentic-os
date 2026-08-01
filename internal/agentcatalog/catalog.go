@@ -79,16 +79,15 @@ var roleContracts = map[string]struct {
 	mayDelegate   bool
 	inputContract string
 }{
-	"account_agent":         {false, "scoped", false, "bounded_account_packet"}, // compatibility only
-	"capability_specialist": {false, "scoped", false, "minimum_work_packet"},
-	"case_agent":            {false, "scoped", true, "bounded_case_packet"},
-	"client_account_agent":  {false, "scoped", false, "bounded_client_account_packet"},
-	"errand_helper":         {false, "scoped", false, "bounded_errand_packet"},
-	"governance_analyst":    {false, "scoped", false, "bounded_health_packet"},
-	"hub":                   {true, "none", true, "session_context_packet"},
-	"pa_expert":             {false, "none", false, "bounded_advisory_packet"},
-	"reviewer":              {false, "none", false, "sealed_review_packet"},
-	"workspace_agent":       {false, "scoped", true, "bounded_workspace_packet"}, // compatibility only
+	"account_agent":        {false, "scoped", false, "bounded_account_packet"}, // compatibility only
+	"case_agent":           {false, "scoped", false, "bounded_case_packet"},
+	"client_account_agent": {false, "scoped", false, "bounded_client_account_packet"},
+	"errand_helper":        {false, "scoped", false, "bounded_errand_packet"},
+	"governance_analyst":   {false, "scoped", false, "bounded_health_packet"},
+	"hub":                  {true, "none", true, "session_context_packet"},
+	"pa_expert":            {false, "none", false, "bounded_advisory_packet"},
+	"reviewer":             {false, "none", false, "sealed_review_packet"},
+	"workspace_agent":      {false, "scoped", false, "bounded_workspace_packet"}, // compatibility only
 }
 
 type RoleContract struct {
@@ -187,8 +186,8 @@ func (catalog Catalog) Validate() error {
 	if err := validateLegacyIDs(catalog.LegacyIDs); err != nil {
 		return err
 	}
-	if catalog.Delegation.Mode != "role_gated_chains" || catalog.Delegation.RegisteredChains != "governed_unbounded" || catalog.Delegation.MaxActiveBranches != 1 || catalog.Delegation.MaxDepth != 2 || catalog.Delegation.MaxChildrenPerAgent != 1 || catalog.Delegation.MaxErrandHelpers != 1 || catalog.Delegation.ErrandScope != "basic_reversible" {
-		return errors.New("agent catalog must enforce governed chains, one active branch, one child and role-gated depth two")
+	if catalog.Delegation.Mode != "maestro_planner" || catalog.Delegation.RegisteredChains != "bounded_sequential" || catalog.Delegation.MaxActiveBranches != 1 || catalog.Delegation.MaxDepth != 1 || catalog.Delegation.MaxChildrenPerAgent != 0 || catalog.Delegation.MaxErrandHelpers != 1 || catalog.Delegation.ErrandScope != "basic_reversible" {
+		return errors.New("agent catalog must enforce Maestro planning, one active spoke and depth one")
 	}
 	if err := validateDelegationEdges(catalog.Delegation.AllowedEdges); err != nil {
 		return err
@@ -237,9 +236,12 @@ func (catalog Catalog) Validate() error {
 		mayDelegate   bool
 		inputContract string
 	}{
-		"maestro": {"hub", true, "none", true, "session_context_packet"},
-		"walter":  {"reviewer", false, "none", false, "sealed_review_packet"},
-		"darwin":  {"governance_analyst", false, "scoped", false, "bounded_health_packet"},
+		"maestro":              {"hub", true, "none", true, "session_context_packet"},
+		"walter":               {"reviewer", false, "none", false, "sealed_review_packet"},
+		"darwin":               {"governance_analyst", false, "scoped", false, "bounded_health_packet"},
+		"case-agent":           {"case_agent", false, "scoped", false, "bounded_case_packet"},
+		"client-account-agent": {"client_account_agent", false, "scoped", false, "bounded_client_account_packet"},
+		"pa-expert":            {"pa_expert", false, "none", false, "bounded_advisory_packet"},
 	}
 	for id, contract := range wanted {
 		agent, ok := seen[id]
@@ -259,7 +261,7 @@ func (catalog Catalog) AllowsDelegation(fromRole, toRole string, depth int) bool
 	}
 	fromRole = catalog.CanonicalRole(fromRole)
 	toRole = catalog.CanonicalRole(toRole)
-	if (fromRole == "hub" && depth != 1) || (fromRole != "hub" && depth != 2) {
+	if fromRole != "hub" || depth != 1 {
 		return false
 	}
 	for _, edge := range catalog.Delegation.AllowedEdges {
@@ -286,10 +288,7 @@ func (catalog Catalog) roleMayDelegate(role string) bool {
 }
 
 func validateDelegationEdges(edges []DelegationEdge) error {
-	wanted := []DelegationEdge{
-		{FromRole: "case_agent", ToRoles: []string{"capability_specialist"}},
-		{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}},
-	}
+	wanted := []DelegationEdge{{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}}}
 	if len(edges) != len(wanted) {
 		return errors.New("agent catalog has an incomplete or unauthorized delegation graph")
 	}
@@ -370,7 +369,7 @@ func ValidateDir(root string) error {
 			return fmt.Errorf("managed agent %s has an empty definition", agent.ID)
 		}
 	}
-	for _, role := range []string{"capability_specialist", "case_agent", "client_account_agent", "pa_expert"} {
+	for _, role := range []string{"case_agent", "client_account_agent", "pa_expert"} {
 		templatePath := filepath.Join(root, "templates", role, "AGENT.md")
 		body, err := os.ReadFile(templatePath)
 		if err != nil {

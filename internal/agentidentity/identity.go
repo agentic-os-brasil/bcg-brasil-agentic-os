@@ -99,7 +99,7 @@ func CanonicalRole(role string) string {
 
 func IsCanonicalRole(role string) bool {
 	switch role {
-	case "maestro", "client_account_agent", "case_agent", "walter", "darwin", "pa_expert", "capability_specialist", "errand_helper":
+	case "maestro", "client_account_agent", "case_agent", "walter", "darwin", "pa_expert", "errand_helper":
 		return true
 	default:
 		return false
@@ -191,8 +191,6 @@ func validOwnershipScope(role, scope string) bool {
 		return scope == "governance"
 	case "pa_expert":
 		return scope == "pa_expert_registry"
-	case "capability_specialist":
-		return scope == "execution" || scope == "workspace" || scope == "case" || scope == "account" || scope == "practice"
 	case "errand_helper":
 		return scope == "system"
 	default:
@@ -328,10 +326,6 @@ func Default(role string) (Selection, bool) {
 		return Selection{}, false
 	}
 	scope := "system"
-	switch role {
-	case "capability_specialist":
-		scope = "execution"
-	}
 	return Selection{Role: role, DisplayName: strings.ReplaceAll(role, "_", " "), Emoji: "🔹", OwnerID: "system", OwnershipScope: scope}, true
 }
 

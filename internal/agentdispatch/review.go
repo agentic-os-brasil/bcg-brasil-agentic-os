@@ -31,6 +31,7 @@ const (
 	ReviewApproved     ReviewState = "approved"
 	ReviewRefineReturn ReviewState = "refine-and-return"
 	ReviewMissingMark  ReviewState = "missing-the-mark"
+	ReviewHold         ReviewState = "hold"
 	ReviewUnavailable  ReviewState = "unavailable"
 )
 
@@ -73,19 +74,23 @@ const (
 	WalterApproved        WalterVerdict = "approved"
 	WalterRefineAndReturn WalterVerdict = "refine-and-return"
 	WalterMissingTheMark  WalterVerdict = "missing-the-mark"
+	WalterHold            WalterVerdict = "hold"
 )
 
 type WalterObjection struct {
-	Code          string `json:"code"`
-	Fix           string `json:"fix"`
-	ExitCondition string `json:"exit_condition"`
+	Code               string `json:"code"`
+	Fix                string `json:"fix"`
+	ExitCondition      string `json:"exit_condition"`
+	ProposedRefinement string `json:"proposed_refinement,omitempty"`
+	Blocking           bool   `json:"blocking"`
 }
 
 type WalterReviewBody struct {
-	Verdict      WalterVerdict     `json:"verdict"`
-	Objections   []WalterObjection `json:"objections,omitempty"`
-	EvidenceRefs []string          `json:"evidence_refs,omitempty"`
-	Uncertainty  string            `json:"uncertainty,omitempty"`
+	Verdict         WalterVerdict     `json:"verdict"`
+	Objections      []WalterObjection `json:"objections,omitempty"`
+	EvidenceRefs    []string          `json:"evidence_refs,omitempty"`
+	Uncertainty     string            `json:"uncertainty,omitempty"`
+	PreservesIntent bool              `json:"preserves_intent"`
 }
 
 type ReviewSummary struct {
@@ -94,6 +99,8 @@ type ReviewSummary struct {
 	SourcePacketID     string              `json:"source_packet_id"`
 	SourcePacketSHA256 string              `json:"source_packet_sha256"`
 	ObjectionCount     int                 `json:"objection_count,omitempty"`
+	LeverageDecision   string              `json:"leverage_decision"`
+	Posture            string              `json:"posture"`
 }
 
 const (
@@ -164,11 +171,14 @@ func validateReviewRequest(request WalterReviewRequest) error {
 }
 
 func validateWalterReviewBody(body WalterReviewBody, review ReviewPacket) error {
-	if body.Verdict != WalterApproved && body.Verdict != WalterRefineAndReturn && body.Verdict != WalterMissingTheMark {
+	if body.Verdict != WalterApproved && body.Verdict != WalterRefineAndReturn && body.Verdict != WalterMissingTheMark && body.Verdict != WalterHold {
 		return errors.New("Walter review verdict is invalid")
 	}
-	if len(body.Objections) > maxWalterObjections || (body.Verdict == WalterApproved && len(body.Objections) != 0) ||
-		(body.Verdict == WalterMissingTheMark && len(body.Objections) == 0) {
+	if !body.PreservesIntent {
+		return errors.New("Walter review must preserve the user's defensible intent")
+	}
+	if len(body.Objections) > maxWalterObjections ||
+		((body.Verdict == WalterMissingTheMark || body.Verdict == WalterHold || body.Verdict == WalterRefineAndReturn) && len(body.Objections) == 0) {
 		return errors.New("Walter review objection count does not match the verdict")
 	}
 	seen := make(map[string]bool, len(body.Objections))
@@ -178,6 +188,15 @@ func validateWalterReviewBody(body WalterReviewBody, review ReviewPacket) error 
 			len([]byte(strings.TrimSpace(objection.Fix))) > maxConstraintBytes ||
 			len([]byte(strings.TrimSpace(objection.ExitCondition))) > maxConstraintBytes {
 			return errors.New("Walter objection requires a unique code, concrete fix and exit condition")
+		}
+		if objection.ProposedRefinement != "" && len([]byte(strings.TrimSpace(objection.ProposedRefinement))) > maxConstraintBytes {
+			return errors.New("Walter proposed refinement is oversized")
+		}
+		if body.Verdict == WalterApproved && objection.Blocking {
+			return errors.New("approved Walter review cannot contain a blocking objection")
+		}
+		if body.Verdict == WalterHold && !objection.Blocking {
+			return errors.New("Walter hold requires a material blocking objection")
 		}
 		seen[objection.Code] = true
 	}
@@ -221,6 +240,7 @@ func reviewSummary(review *ReviewPacket, state ReviewState) *ReviewSummary {
 	return &ReviewSummary{
 		Trigger: review.Trigger, State: state,
 		SourcePacketID: review.SourcePacketID, SourcePacketSHA256: review.SourcePacketSHA256,
+		LeverageDecision: "high_leverage_trigger", Posture: "calm_constructive_advisory",
 	}
 }
 
