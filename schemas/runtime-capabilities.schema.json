@@ -41,6 +41,9 @@
         "state": {"enum": ["native", "emulated", "degraded", "unavailable"]},
         "mechanism": {"type": "string", "minLength": 1},
         "reason": {"type": "string"}
+        ,"configured": {"type": "boolean"}
+        ,"adapter_observed": {"type": "boolean"}
+        ,"native_qualified": {"type": "boolean"}
       }
     }
   }

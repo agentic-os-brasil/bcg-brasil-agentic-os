@@ -10,18 +10,17 @@ Codex runtime; this does not prove that Codex trusted or invoked them. Native
 observation is still pending, and Codex must not inherit Claude-specific
 development hooks as a product capability.
 
-The managed Maestro, Walter and Darwin definitions live in
+The managed Maestro, Case, Client Account, PA Expert, Walter and Darwin definitions live in
 `bundles/base/agents/`. `internal/agentorchestration` now provides the shared
 fail-closed controller, and the Codex envelope maps
-`collaboration_branch_start`, `collaboration_child_start`, `tool_call_guard`,
+`collaboration_branch_start`, `collaboration_child_start` (legacy denial only), `tool_call_guard`,
 `collaboration_child_stop` and `collaboration_branch_stop` to its semantic
 events. The shared conformance fixture proves equivalent decisions with
 Claude, including forged identities, scopes and unregistered targets. Events
 require capability-bound agent identities and exact tool/resource grants. A
-shared recoverable state snapshot prevents a second adapter instance from
-opening a parallel branch. These are not active Codex agents yet:
-agent-orchestration event wiring and durable state persistence are still
-required before `agent_orchestration` can move from `unavailable`.
+shared durable Maestro state store prevents a second adapter instance from
+opening a parallel branch and is shared with Claude. Native qualification still
+requires fresh session evidence.
 
 Walter review wiring is shared with Claude through `internal/agentdispatch`:
 the Codex adapter only forwards a sealed Walter packet and typed verdict to

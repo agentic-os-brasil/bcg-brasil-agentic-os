@@ -11,15 +11,5 @@
       ]
     }
   ],
-  "delegated": [
-    {
-      "from_role": "case_agent",
-      "to_role": "capability_specialist",
-      "skill_ids": [
-        "deck-storyline",
-        "qualitative-analysis",
-        "quantitative-analysis"
-      ]
-    }
-  ]
+  "delegated": []
 }

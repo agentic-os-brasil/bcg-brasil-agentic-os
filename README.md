@@ -72,6 +72,52 @@ can inspect.
 For the full user journey, read the [Maestro user onboarding](docs/onboarding/maestro-user-onboarding.md).
 For the business-facing evolution path, read the [product evolution roadmap](docs/roadmap/maestro-evolution-roadmap.md).
 
+### Maestro's bounded routing topology
+
+Maestro is the only user-facing hub. Its typed planner makes two independent
+decisions before a Case runs: whether the work needs a Client Account's
+strategic/stakeholder lens, and whether the resulting work is high-leverage
+enough for Walter's calm Senior Advisor & Refiner review. The first decision is
+based on client strategy, relationship, stakeholder pressure-testing, client
+narrative, cross-case context or promotion signals—not technical size. The
+second is based on consequence, leverage, reversibility, external exposure and
+reputational risk.
+
+The runtime keeps one active spoke at a time, depth one and zero children. An
+account-assisted Case uses `Maestro → Client Account → Maestro → Case →
+Maestro → Client Account validation → Maestro`; a direct execution-only Case
+omits only the pre-brief and converges at `Maestro`. Both paths then invoke
+Walter only when the independent high-leverage decision requires it, or record
+an auditable low-leverage skip, before delivery. Claude and Codex share the
+same controller and durable installation-state contract; capability reporting
+distinguishes configured, adapter-observed and native-qualified evidence.
+
+Walter's review packet is an ephemeral, digest-bound `IntentReviewPacket`: it
+contains the literal request, selected route, bounded draft/context, audience,
+consequence, reversibility and a `UserSelfSnapshot` projection. Walter's
+intrinsic-intent assessment is a hypothesis with evidence and confidence, not
+mind-reading. Owner Context facets remain the sole self authority. Maestro
+evaluates every interaction, but persists only material, owner-attested
+signals as normalized local metadata; prompts, client documents and generated
+output never become self evidence. The local CLI exposes inspection/export and
+owner-confirmed rejection/redaction, revert and deletion controls.
+
+When explicitly enabled, the owner-local PromptHistoryStore retains only user
+prompts under bounded global/workspace/account/case scopes. Walter receives a
+small relevance-scored selection alongside the current prompt; the current
+prompt is normalized first, then history is normalized into the configured
+working language. Each representation and the combined current-plus-history
+packet are hard-bounded; translator expansion and oversized owner facets fail
+closed. The packet is sealed before the current dispatch occurrence is
+recorded, preserving earlier same-session/repeated prompts without duplicating
+the current occurrence. Scores and reason codes are packet metadata only; historical text is
+quoted data and kept only in the ephemeral review packet. Prompt history never enters receipts, telemetry, managed bundles or release artifacts,
+and remains separate from self learning. The reachable `bcgos maestro dispatch
+--stdin` boundary records a fresh owner attestation under the OS-user-local
+data-root boundary, constructs and persists the Maestro chain, and returns
+metadata-only dispatch state while model execution is unavailable. The boolean
+attestation is not cryptographic principal authentication.
+
 ## What is ready
 
 ### 🏅 Toward the v0.1.0 pilot — contract layer validated

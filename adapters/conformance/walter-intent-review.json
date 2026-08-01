@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "packet_version": "intent-review-v1",
+  "identity": "owner_self_proxy_inside_maestro_loop",
+  "role": "senior_advisor_refiner",
+  "posture": "calm_constructive_proxy_of_user_self_review",
+  "required_packet_bindings": [
+    "literal_request",
+    "current_prompt",
+    "plan_digest",
+    "draft_output",
+    "self_snapshot_version",
+    "self_snapshot_digest",
+    "observations",
+    "prior_prompts",
+    "prompt_history",
+    "audience",
+    "consequence",
+    "reversibility"
+  ],
+  "result_fields": [
+    "literal_request",
+    "intrinsic_intent_hypothesis",
+    "evidence_refs",
+    "confidence",
+    "purpose_satisfied",
+    "constructive_refinement",
+    "unresolved_uncertainty",
+    "verdict"
+  ],
+  "verdicts": ["approve", "refine", "clarify", "hold_exceptional"],
+  "receipt_fields": [
+    "self_snapshot_version",
+    "self_snapshot_digest",
+    "prompt_digest",
+    "output_digest",
+    "verdict"
+  ],
+  "forbidden_self_evidence": ["prompt_transcript", "client_document", "generated_output", "agent_output"]
+}

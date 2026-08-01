@@ -24,8 +24,8 @@ func TestPilotAcceptsOnlyAuthenticatedTargetReturnForBothRuntimes(t *testing.T) 
 				WorkspaceID: "alpha",
 				Objective:   "Assess the approved research before the steering discussion.",
 				Pointers:    []string{"bcgos://workspace/alpha/dossier/research.md"},
-				Constraints: []string{"Return evidence and uncertainty."}, TTL: time.Hour,
-				WalterSkip: &WalterSkipDecision{ReasonCode: "low_materiality", EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/research.md"}, LowMateriality: true, ResolvedBy: "maestro"},
+				Constraints: []string{"Return evidence and uncertainty."},
+				TTL:         time.Hour,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -93,8 +93,6 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 				ArtifactRefs:     []string{"bcgos://workspace/alpha/dossier/recommendation.md"},
 				EvidenceRefs:     []string{"bcgos://workspace/alpha/dossier/evidence.md"},
 				Uncertainties:    []string{"The source refresh date should be reconfirmed before publication."}, TTL: time.Hour,
-				Intent: testIntentPacket("case sponsor", "Pressure-test the recommendation before escalation.", "Choose the bounded pilot scope."),
-				Chain:  directCaseReviewChain(sourceReceipt),
 			})
 			if err != nil || reviewReceipt.State != StateDelegated || reviewReceipt.Review == nil ||
 				reviewReceipt.Review.State != ReviewDispatched || reviewDispatch.Packet.TargetAgentID != "walter" {
@@ -109,8 +107,11 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 			if _, err := walter.SealReturn(reviewDispatch, ReturnBody{Summary: "bypass"}); err == nil {
 				t.Fatal("Walter generic return bypassed the typed verdict contract")
 			}
-			verdict := testIntentBodyForPacket(t, reviewDispatch.Packet.Review, WalterApproved)
-			verdict.EvidenceRefs = []string{"bcgos://workspace/alpha/dossier/evidence.md"}
+			verdict := WalterReviewBody{
+				PreservesIntent: true,
+				Verdict:         WalterApproved,
+				EvidenceRefs:    []string{"bcgos://workspace/alpha/dossier/evidence.md"},
+			}
 			reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, verdict)
 			if err != nil {
 				t.Fatal(err)
@@ -155,17 +156,14 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	reviewDispatch, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
 		Trigger: ReviewConsequentialTradeoff, ReviewObjective: "Pressure-test the trade-off.",
 		Audience: "sponsor", Recommendation: "Choose option A.", DefinitionOfDone: "The trade-off is explicit.", TTL: time.Hour,
-		Intent: testIntentPacket("sponsor", "Pressure-test the trade-off.", "Choose option A."),
-		Chain:  directCaseReviewChain(sourceReceipt),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	walter := newTestExecutor(t, "claude", "walter", "walter-cap", now)
-	refinement := testIntentBodyForPacket(t, reviewDispatch.Packet.Review, WalterRefineAndReturn)
-	refinement.Objections = []WalterObjection{{
-		Code: "missing-counterevidence", Fix: "Add the counter-evidence to the recommendation.", ExitCondition: "The evidence pointer is present and reviewed.", Blocking: true,
-	}}
+	refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, PreservesIntent: true, Objections: []WalterObjection{{
+		Code: "missing-counterevidence", Fix: "Add the counter-evidence to the recommendation.", ExitCondition: "The evidence pointer is present and reviewed.",
+	}}}
 	reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, refinement)
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +182,7 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	if _, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
 		Trigger: ReviewConsequentialTradeoff, ReviewObjective: "Review the same output again.",
 		Audience: "sponsor", Recommendation: "Approve without rework.",
-		DefinitionOfDone: "The original output is approved.", Chain: directCaseReviewChain(sourceReceipt), TTL: time.Hour,
+		DefinitionOfDone: "The original output is approved.", TTL: time.Hour,
 	}); err == nil {
 		t.Fatal("refined producer opened a second Walter review without rework")
 	}
@@ -211,8 +209,7 @@ func TestPilotReceiptReviewStateCannotAuthorizeReworkByMutation(t *testing.T) {
 	request := WalterReviewRequest{
 		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test the recommendation.",
 		Audience: "sponsor", Recommendation: "Use the recommendation.",
-		DefinitionOfDone: "The recommendation is bounded.", Chain: directCaseReviewChain(sourceReceipt), TTL: time.Hour,
-		Intent: testIntentPacket("sponsor", "Pressure-test the recommendation.", "Use the recommendation."),
+		DefinitionOfDone: "The recommendation is bounded.", TTL: time.Hour,
 	}
 	if _, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, request); err != nil {
 		t.Fatal(err)
@@ -254,18 +251,16 @@ func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *t
 			reviewRequest := WalterReviewRequest{
 				Trigger: trigger, ReviewObjective: "Pressure-test the first recommendation.",
 				Audience: "sponsor", Recommendation: "Use the first recommendation.",
-				DefinitionOfDone: "Counter-evidence is addressed.", Chain: directCaseReviewChain(sourceReceipt), TTL: time.Hour,
-				Intent: testIntentPacket("sponsor", "Pressure-test the first recommendation.", "Use the first recommendation."),
+				DefinitionOfDone: "Counter-evidence is addressed.", TTL: time.Hour,
 			}
 			reviewDispatch, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, reviewRequest)
 			if err != nil {
 				t.Fatal(err)
 			}
 			walter := newTestExecutor(t, runtimeName, "walter", "walter-cap", time.Now())
-			refinement := testIntentBodyForPacket(t, reviewDispatch.Packet.Review, WalterRefineAndReturn)
-			refinement.Objections = []WalterObjection{{
-				Code: "missing-counterevidence", Fix: "Add the counter-evidence.", ExitCondition: "The evidence pointer is reviewed.", Blocking: true,
-			}}
+			refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, PreservesIntent: true, Objections: []WalterObjection{{
+				Code: "missing-counterevidence", Fix: "Add the counter-evidence.", ExitCondition: "The evidence pointer is reviewed.",
+			}}}
 			refinementEnvelope, err := walter.SealWalterReview(reviewDispatch, refinement)
 			if err != nil {
 				t.Fatal(err)
@@ -290,13 +285,12 @@ func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *t
 			if receipt, err := pilot.Return(revisedEnvelope, revised); err != nil || receipt.State != StatePendingReview {
 				t.Fatalf("revised return = %#v err=%v", receipt, err)
 			}
-			reviewRequest.Chain = directCaseReviewChain(reworkReceipt)
 			reviewDispatch, _, err = pilot.RequireWalterReview(reworkReceipt.DelegationID, reviewRequest)
 			if err != nil {
 				t.Fatal(err)
 			}
 			walter = newTestExecutor(t, runtimeName, "walter", "walter-cap", time.Now())
-			approved := testIntentBodyForPacket(t, reviewDispatch.Packet.Review, WalterApproved)
+			approved := WalterReviewBody{Verdict: WalterApproved, PreservesIntent: true}
 			approvedEnvelope, err := walter.SealWalterReview(reviewDispatch, approved)
 			if err != nil {
 				t.Fatal(err)
@@ -336,8 +330,7 @@ func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 	_, receipt, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
 		Trigger: ReviewExternalArtifact, ReviewObjective: "Check the artifact before sharing.",
 		Audience: "sponsor", Recommendation: "Share the bounded artifact.",
-		DefinitionOfDone: "The sponsor can inspect the artifact.", Chain: directCaseReviewChain(sourceReceipt), TTL: time.Hour,
-		Intent: testIntentPacket("sponsor", "Check the artifact before sharing.", "Share the bounded artifact."),
+		DefinitionOfDone: "The sponsor can inspect the artifact.", TTL: time.Hour,
 	})
 	if err == nil || receipt.State != StateUnavailable || receipt.FailureCode != "target_unavailable" ||
 		receipt.Review == nil || receipt.Review.State != ReviewUnavailable ||
@@ -370,8 +363,7 @@ func TestPilotProjectsWalterFailureToProducerWithoutApproval(t *testing.T) {
 	}
 	reviewDispatch, _, err := pilot.RequireWalterReview(source.DelegationID, WalterReviewRequest{
 		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test.", Audience: "sponsor",
-		Recommendation: "Use the bounded recommendation.", DefinitionOfDone: "Sponsor can decide.", Chain: directCaseReviewChain(source), TTL: time.Hour,
-		Intent: testIntentPacket("sponsor", "Pressure-test.", "Use the bounded recommendation."),
+		Recommendation: "Use the bounded recommendation.", DefinitionOfDone: "Sponsor can decide.", TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -452,7 +444,6 @@ func TestPilotRejectsForgedReplayedCrossRuntimeAndCrossScopeReturns(t *testing.T
 			pilot.dispatcher.now = pilot.now
 			dispatch, receipt, err := pilot.Delegate(Intent{
 				WorkspaceID: "alpha", Objective: "Assess one bounded source.", TTL: time.Hour,
-				WalterSkip: &WalterSkipDecision{ReasonCode: "low_materiality", EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/source.json"}, LowMateriality: true, ResolvedBy: "maestro"},
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -479,7 +470,7 @@ func TestPilotRejectsForgedReplayedCrossRuntimeAndCrossScopeReturns(t *testing.T
 		pilot := newTestPilot(t, "claude")
 		pilot.now = func() time.Time { return now }
 		pilot.dispatcher.now = pilot.now
-		dispatch, _, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Assess one bounded source.", TTL: time.Hour, WalterSkip: &WalterSkipDecision{ReasonCode: "low_materiality", EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/source.json"}, LowMateriality: true, ResolvedBy: "maestro"}})
+		dispatch, _, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Assess one bounded source.", TTL: time.Hour})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -503,7 +494,7 @@ func TestPilotAuthenticatesFailureEnvelopeWithoutPublishingFailureProse(t *testi
 	pilot := newTestPilot(t, "claude")
 	pilot.now = func() time.Time { return now }
 	pilot.dispatcher.now = pilot.now
-	dispatch, _, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Assess one source.", TTL: time.Hour, WalterSkip: &WalterSkipDecision{ReasonCode: "low_materiality", EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/source.json"}, LowMateriality: true, ResolvedBy: "maestro"}})
+	dispatch, _, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Assess one source.", TTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -535,7 +526,6 @@ func TestPilotPublicReceiptsAreMetadataOnly(t *testing.T) {
 	dispatch, receipt, err := pilot.Delegate(Intent{
 		WorkspaceID: "alpha", Objective: objective, Pointers: []string{pointer},
 		Constraints: []string{constraint}, TTL: time.Hour,
-		WalterSkip: &WalterSkipDecision{ReasonCode: "low_materiality", EvidenceRefs: []string{pointer}, LowMateriality: true, ResolvedBy: "maestro"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -710,7 +700,6 @@ func TestPilotRejectsStaleExecutionEnvelopeBeforeCompletion(t *testing.T) {
 	pilot.dispatcher.now = func() time.Time { return packetIssuedAt }
 	dispatch, receipt, err := pilot.Delegate(Intent{
 		WorkspaceID: "alpha", Objective: "Assess one source.", TTL: time.Hour,
-		WalterSkip: &WalterSkipDecision{ReasonCode: "low_materiality", EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/source.json"}, LowMateriality: true, ResolvedBy: "maestro"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -749,7 +738,6 @@ func TestPilotRejectsMultipleErrandHelpersAndUnavailableTargetBeforeDispatch(t *
 	}
 	_, receipt, err := pilot.Delegate(Intent{
 		WorkspaceID: "alpha", Objective: "Assess one source.", TTL: time.Hour,
-		WalterSkip: &WalterSkipDecision{ReasonCode: "low_materiality", EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/source.json"}, LowMateriality: true, ResolvedBy: "maestro"},
 	})
 	if err == nil || receipt.State != StateUnavailable || receipt.FailureCode != "target_unavailable" {
 		t.Fatalf("unavailable target = %#v, %v", receipt, err)
@@ -767,7 +755,7 @@ func TestPilotResultStateIsExplicitlyProcessLocal(t *testing.T) {
 	}
 	pilot.now = func() time.Time { return now }
 	pilot.dispatcher.now = pilot.now
-	dispatch, _, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Assess one source.", TTL: time.Hour, WalterSkip: &WalterSkipDecision{ReasonCode: "low_materiality", EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/source.json"}, LowMateriality: true, ResolvedBy: "maestro"}})
+	dispatch, _, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Assess one source.", TTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -805,7 +793,6 @@ func TestPilotSelectsRegisteredWorkspaceAgentInstance(t *testing.T) {
 	_, receipt, err := pilot.Delegate(Intent{
 		WorkspaceID: "alpha", Objective: "Assess one bounded source.",
 		Pointers: []string{"bcgos://workspace/alpha/dossier/brief.json"}, TTL: time.Hour,
-		WalterSkip: &WalterSkipDecision{ReasonCode: "low_materiality", EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/brief.json"}, LowMateriality: true, ResolvedBy: "maestro"},
 	})
 	if err != nil || receipt.TargetAgentID != instance.AgentID || receipt.State != StateDelegated {
 		t.Fatalf("registered workspace delegation = %#v, %v", receipt, err)
@@ -826,19 +813,6 @@ func testInstances() []Instance {
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", ScopeKind: "workspace", ScopeID: "alpha", ParentAgentID: "maestro", Available: true},
 		{AgentID: "errand-helper", Role: "errand_helper", ScopeKind: "errand", ScopeID: "pilot", ParentAgentID: "maestro", Available: true},
 		{AgentID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review", ParentAgentID: "maestro", Available: true},
-	}
-}
-
-func directCaseReviewChain(source Receipt) ReviewChain {
-	return ReviewChain{
-		Mode:                        ReviewChainDirectCase,
-		AccountConsultationRequired: false, PostAccountValidationRequired: false,
-		Steps: []ReviewChainStep{
-			{Sequence: 1, AgentID: source.TargetAgentID, Role: "case_agent", PacketID: source.DelegationID, PacketSHA256: source.PacketSHA256, IssuerAgentID: "maestro"},
-		},
-		DirectCaseException: &DirectCaseException{
-			ReasonCode: string(DirectCaseReasonSimpleBounded), EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/evidence.md"}, Reversible: true,
-		},
 	}
 }
 

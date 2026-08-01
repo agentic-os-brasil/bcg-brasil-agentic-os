@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	pathpkg "path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -45,8 +46,8 @@ func DefaultPaths(platform, home, localAppData string) (Paths, error) {
 		base := strings.TrimRight(localAppData, `\\/`)
 		return Paths{ManagedRoot: base + `\Maestro`, DataRoot: dataRoot}, nil
 	case "darwin":
-		base := filepath.Join(home, "Library", "Application Support")
-		return Paths{ManagedRoot: filepath.Join(base, "Maestro"), DataRoot: dataRoot}, nil
+		base := pathpkg.Join(home, "Library", "Application Support")
+		return Paths{ManagedRoot: pathpkg.Join(base, "Maestro"), DataRoot: dataRoot}, nil
 	default:
 		return Paths{}, fmt.Errorf("installer does not support %q", platform)
 	}

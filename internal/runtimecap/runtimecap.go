@@ -30,9 +30,12 @@ type Capability struct {
 }
 
 type RuntimeCapability struct {
-	State     string `json:"state"`
-	Mechanism string `json:"mechanism"`
-	Reason    string `json:"reason"`
+	State           string `json:"state"`
+	Mechanism       string `json:"mechanism"`
+	Reason          string `json:"reason"`
+	Configured      bool   `json:"configured"`
+	AdapterObserved bool   `json:"adapter_observed"`
+	NativeQualified bool   `json:"native_qualified"`
 }
 
 type Report struct {
@@ -43,12 +46,15 @@ type Report struct {
 }
 
 type CapabilityReport struct {
-	ID            string `json:"id"`
-	Criticality   string `json:"criticality"`
-	SemanticEvent string `json:"semantic_event,omitempty"`
-	State         string `json:"state"`
-	Mechanism     string `json:"mechanism"`
-	Reason        string `json:"reason,omitempty"`
+	ID              string `json:"id"`
+	Criticality     string `json:"criticality"`
+	SemanticEvent   string `json:"semantic_event,omitempty"`
+	State           string `json:"state"`
+	Mechanism       string `json:"mechanism"`
+	Reason          string `json:"reason,omitempty"`
+	Configured      bool   `json:"configured"`
+	AdapterObserved bool   `json:"adapter_observed"`
+	NativeQualified bool   `json:"native_qualified"`
 }
 
 func Parse(reader io.Reader) (Manifest, error) {
@@ -104,6 +110,12 @@ func (manifest Manifest) Validate() error {
 			if (value.State == "unavailable" || value.State == "degraded") && value.Reason == "" {
 				return fmt.Errorf("capability %s requires a reason for %s on %s", capability.ID, value.State, runtime)
 			}
+			if value.AdapterObserved && !value.Configured {
+				return fmt.Errorf("capability %s cannot be adapter-observed before configuration on %s", capability.ID, runtime)
+			}
+			if value.NativeQualified && value.State != "native" {
+				return fmt.Errorf("capability %s cannot be native-qualified while state is %s on %s", capability.ID, value.State, runtime)
+			}
 		}
 	}
 	return nil
@@ -122,6 +134,7 @@ func (manifest Manifest) Report(runtime string, detected bool) (Report, error) {
 		entry := CapabilityReport{
 			ID: capability.ID, Criticality: capability.Criticality, SemanticEvent: capability.SemanticEvent,
 			State: contract.State, Mechanism: contract.Mechanism, Reason: contract.Reason,
+			Configured: contract.Configured, AdapterObserved: contract.AdapterObserved, NativeQualified: contract.NativeQualified,
 		}
 		if !detected {
 			entry.State = "unavailable"

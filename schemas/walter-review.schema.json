@@ -1,32 +1,33 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bcgos.local/schemas/walter-review.schema.json",
-  "title": "BCGOS Walter review receipt",
+  "$id": "https://agentic-os-brasil/schemas/walter-review.schema.json",
+  "title": "Walter Senior Advisor and Refiner review",
   "type": "object",
-  "required": ["trigger", "state", "source_packet_id", "source_packet_sha256", "chain_mode", "chain_sha256", "account_consultation_required", "post_account_validation_required", "walter_required", "intent_packet_sha256", "self_snapshot_version", "self_snapshot_sha256", "prompt_sha256", "output_sha256"],
+  "additionalProperties": false,
+  "required": ["verdict", "preserves_intent"],
   "properties": {
-    "trigger": {"enum": ["material_recommendation", "consequential_tradeoff", "external_artifact"]},
-    "state": {"enum": ["dispatched", "approved", "refine-and-return", "missing-the-mark", "hold", "unavailable"]},
-    "source_packet_id": {"$ref": "execution-state.schema.json#/$defs/id"},
-    "source_packet_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
-    "chain_mode": {"enum": ["account_case_account_validation", "direct_case"]},
-    "chain_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
-    "account_consultation_required": {"type": "boolean"},
-    "post_account_validation_required": {"type": "boolean"},
-    "walter_required": {"const": true},
-    "intent_packet_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
-    "self_snapshot_version": {"type": "integer", "minimum": 1},
-    "self_snapshot_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
-    "prompt_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
-    "output_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
-    "verdict_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
-    "validated_packet_id": {"$ref": "execution-state.schema.json#/$defs/id"},
-    "validated_packet_sha256": {"$ref": "execution-state.schema.json#/$defs/sha256"},
-    "direct_case_reason_code": {"type": "string", "pattern": "^[a-z0-9_-]{1,48}$"},
-    "objection_count": {"type": "integer", "minimum": 0, "maximum": 3}
+    "verdict": {"enum": ["approved", "refine-and-return", "missing-the-mark", "hold"]},
+    "preserves_intent": {"type": "boolean"},
+    "objections": {"type": "array", "maxItems": 3, "items": {"$ref": "#/$defs/objection"}},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}},
+    "uncertainty": {"type": "string"}
   },
   "allOf": [
-    {"if": {"properties": {"chain_mode": {"const": "account_case_account_validation"}}}, "then": {"properties": {"account_consultation_required": {"const": true}, "post_account_validation_required": {"const": true}}, "required": ["validated_packet_id", "validated_packet_sha256"]}},
-    {"if": {"properties": {"chain_mode": {"const": "direct_case"}}}, "then": {"properties": {"account_consultation_required": {"const": false}, "post_account_validation_required": {"const": false}}, "required": ["direct_case_reason_code"]}}
-  ]
+    {"if": {"properties": {"verdict": {"enum": ["refine-and-return", "missing-the-mark", "hold"]}}}, "then": {"required": ["objections"]}},
+    {"if": {"properties": {"verdict": {"const": "hold"}}}, "then": {"properties": {"objections": {"minItems": 1}}}}
+  ],
+  "$defs": {
+    "objection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "fix", "exit_condition", "blocking"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "fix": {"type": "string", "minLength": 1},
+        "proposed_refinement": {"type": "string"},
+        "exit_condition": {"type": "string", "minLength": 1},
+        "blocking": {"type": "boolean"}
+      }
+    }
+  }
 }

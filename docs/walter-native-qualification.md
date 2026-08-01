@@ -5,11 +5,22 @@ remains `unavailable` until a native Claude and Codex session proves the same
 contract. Adapter-command receipts are diagnostic only.
 
 The weekly self-review contract in this PR is intentionally limited to
-Walter custody, bounded prompt/self inputs, proposal validation and the
-unavailable-by-default handler. It does not add scheduler or launchd catalog
-entries. Its orchestration dependency is PR
+Walter custody, canonical `ownerctx` observations/snapshots and
+`PromptHistoryStore` selection, proposal validation, fenced metadata receipts
+and the unavailable-by-default maintenance handler. It does not add scheduler
+or launchd catalog entries. Its orchestration dependency is PR
 [#148](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/pull/148);
 after that PR lands, orchestration may rebase and trim this seam as needed.
+
+The weekly occurrence is reserved before any model call. The current prompt is
+kept separate and wins over history; selected history is translated through a
+caller-supplied translator whose identity/version and receipt digest are
+bound into the ephemeral input. Historical entries are explicitly quoted
+non-instructional evidence. Walter may emit only a facet-bound proposal:
+`communication-style`, `voice` and `preferences` use the declared low-risk
+policy, `professional-role` and `decision-rules` remain proposal-only, and
+boundaries/profile require explicit owner confirmation. Intrinsic-purpose
+hypotheses remain task-local and cannot become self facets.
 
 Run the qualification in an attended, fresh session for each runtime:
 
@@ -41,7 +52,8 @@ Run the qualification in an attended, fresh session for each runtime:
 8. After a loop with and without Walter, verify Maestro's interaction evaluator
    runs in both cases. Persist only authenticated, material owner signals;
    keep hypotheses provisional, keep raw prompt/client/artifact text out of the
-   self log, and reject stale promotion CAS or Darwin-authored canonical edits.
+   self log, allow only registered source-event codes plus source digests, and
+   reject stale promotion CAS or Darwin-authored canonical edits.
 9. Prove the negative cases: missing evidence is a finding, unavailable
    custody fails closed, and forged, stale, replayed, cross-item,
    cross-attempt, wrong-installation and wrong-scope signatures are rejected.

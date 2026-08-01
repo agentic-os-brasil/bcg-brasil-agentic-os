@@ -12,9 +12,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentdispatch"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/reviewcustody"
 )
 
 const MaximumNativeInputBytes = 64 << 10
@@ -64,12 +62,6 @@ func ParseReader(input io.Reader) (NativeInput, error) {
 		return NativeInput{}, fmt.Errorf("read Claude hook input: %w", err)
 	}
 	return Parse(body)
-}
-
-// HandleWalterReview forwards the Claude event to the runtime-neutral Walter
-// core. Native Claude observation remains unavailable until qualification.
-func HandleWalterReview(pilot *agentdispatch.Pilot, dispatch agentdispatch.Dispatch, body agentdispatch.WalterReviewBody, custody reviewcustody.Provider) (agentdispatch.Receipt, error) {
-	return agentdispatch.HandleWalterReview(pilot, dispatch, body, custody)
 }
 
 // Guard makes no allow decision: allowing implicitly would bypass Claude's own
