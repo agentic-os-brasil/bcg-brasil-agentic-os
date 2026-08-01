@@ -55,7 +55,8 @@ func TestMaintenanceConformanceFixtureCoversCatalogAndKeepsAdaptersUnqualified(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(macTemplate), "<key>Disabled</key>\n  <true/>") {
+	macTemplateText := strings.ReplaceAll(string(macTemplate), "\r\n", "\n")
+	if !strings.Contains(macTemplateText, "<key>Disabled</key>\n  <true/>") {
 		t.Fatal("macOS template must be disabled until executor qualification")
 	}
 	windowsTemplate, err := os.ReadFile(filepath.Join("../../adapters/windows/task-scheduler", "BCGOS-Maestro-Maintenance.xml.tmpl"))
