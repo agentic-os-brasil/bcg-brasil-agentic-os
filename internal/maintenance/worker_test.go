@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -95,6 +96,85 @@ func TestWorkerReleaseFailureReturnsRecoveryRequired(t *testing.T) {
 	}
 	if err != nil || len(stored) != 2 || !foundRecovery {
 		t.Fatalf("release failure receipts=%#v err=%v", stored, err)
+	}
+}
+
+func TestWorkerArmFailureAndReleaseFailurePersistRecoveryEvidence(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	schedulerRoot, receiptRoot := t.TempDir(), t.TempDir()
+	schedulerStore := scheduler.Store{Root: schedulerRoot}
+	if _, err := schedulerStore.EnsureEnrollment("maestro-system", now.Add(-24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	worker := Worker{
+		Catalog: catalog, Scheduler: schedulerStore, Receipts: Store{Root: receiptRoot},
+		Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 1}},
+		Handlers: map[string]Handler{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
+		})},
+		LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")},
+		ActivatedJobs:      []string{"darwin-housekeeping-daily"}, Deadline: time.Minute,
+		ArmLease:     func(scheduler.Lease) error { return errors.New("injected arm failure") },
+		ReleaseLease: func(scheduler.Lease) error { return errors.New("injected arm cleanup failure") },
+	}
+	report, runErr := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "arm-cleanup", Now: now, Attended: true})
+	if runErr != nil || report.State != "completed_with_failures" || len(report.Receipts) != 1 || report.Receipts[0].State != ReceiptRecoveryRequired {
+		t.Fatalf("arm cleanup report=%#v err=%v", report, runErr)
+	}
+	stored, err := (Store{Root: receiptRoot}).Receipts("maestro-system", "darwin-housekeeping-daily")
+	if err != nil || len(stored) != 1 || stored[0].State != ReceiptRecoveryRequired {
+		t.Fatalf("arm cleanup receipts=%#v err=%v", stored, err)
+	}
+}
+
+func TestWorkerPublishCleanupFailurePersistsRecoveryEvidence(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	schedulerRoot, receiptRoot := t.TempDir(), t.TempDir()
+	schedulerStore := scheduler.Store{Root: schedulerRoot}
+	if _, err := schedulerStore.EnsureEnrollment("maestro-system", now.Add(-24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	worker := Worker{
+		Catalog: catalog, Scheduler: schedulerStore, Receipts: Store{Root: receiptRoot},
+		Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 1}},
+		Handlers: map[string]Handler{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+			receiptsPath := filepath.Join(schedulerRoot, "workspaces", "maestro-system", "receipts")
+			if err := os.Remove(receiptsPath); err != nil {
+				return HandlerResult{}, err
+			}
+			if err := os.Symlink(outside, receiptsPath); err != nil {
+				return HandlerResult{}, err
+			}
+			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
+		})},
+		LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")}, ActivatedJobs: []string{"darwin-housekeeping-daily"}, Deadline: time.Minute,
+		ReleaseLease: func(scheduler.Lease) error { return errors.New("injected publish cleanup failure") },
+	}
+	report, runErr := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "publish-cleanup", Now: now, Attended: true})
+	if runErr != nil || report.State != "completed_with_failures" || len(report.Receipts) != 1 || report.Receipts[0].State != ReceiptRecoveryRequired {
+		t.Fatalf("publish cleanup report=%#v err=%v", report, runErr)
+	}
+	stored, err := (Store{Root: receiptRoot}).Receipts("maestro-system", "darwin-housekeeping-daily")
+	if err != nil || len(stored) != 2 {
+		t.Fatalf("publish cleanup durable receipts=%#v err=%v", stored, err)
+	}
+	foundRecovery := false
+	for _, receipt := range stored {
+		if receipt.State == ReceiptRecoveryRequired {
+			foundRecovery = true
+		}
+	}
+	if !foundRecovery {
+		t.Fatalf("publish cleanup omitted recovery receipt: %#v", stored)
 	}
 }
 

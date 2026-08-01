@@ -63,6 +63,26 @@ func TestReceiptStoreAllowsRecoveryAfterPublishedSuccess(t *testing.T) {
 	}
 }
 
+func TestReceiptStoreAllowsRecoveryIntentAfterPublishedSuccess(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	intent, err := NewRecoveryIntentReceipt("workspace-1", "memory-daily", TriggerDaily, now, now, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := Store{Root: t.TempDir()}
+	success := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: intent.OccurrenceDigest, CommandID: "cmd-intent-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptSucceeded, RecordedAt: now, Deadline: now.Add(time.Minute), ReasonCode: ReasonCompleted}
+	if err := store.AppendReceipt(success); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendReceipt(intent); err != nil {
+		t.Fatalf("recovery intent after success was rejected: %v", err)
+	}
+	receipts, err := store.Receipts("workspace-1", "memory-daily")
+	if err != nil || len(receipts) != 2 {
+		t.Fatalf("recovery intent chain receipts=%#v err=%v", receipts, err)
+	}
+}
+
 func TestMonthlyRecoveryReceiptsRetainProposalOnlyBinding(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
 	intent, err := NewRecoveryIntentReceipt("workspace-1", "darwin-structural-evolution-proposal", TriggerMonthly, now, now, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")

@@ -356,7 +356,7 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 		result["last_receipt"] = last
 	}
 	maintenanceStore := maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}
-	recoveryRequired, auditIncomplete, recoveryIntents := 0, 0, schedulerAuditIncomplete
+	recoveryRequired, auditIncomplete, recoveryIntents := 0, schedulerAuditIncomplete, 0
 	for _, job := range schedulerJobsForTrigger("presence") {
 		maintenanceReceipts, readErr := maintenanceStore.Receipts(enrollment.WorkspaceID, job.ID)
 		if readErr != nil {

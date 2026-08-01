@@ -73,6 +73,7 @@ type Worker struct {
 	ActivatedJobs      []string
 	Deadline           time.Duration
 	Now                func() time.Time
+	ArmLease           func(scheduler.Lease) error
 	ReleaseLease       func(scheduler.Lease) error
 }
 
@@ -210,8 +211,10 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	// expiry-to-quarantine race entirely: a crashed or stalled worker leaves an
 	// explicit operator-recoverable fence instead of an ordinary reclaimable
 	// lease.
-	if err := worker.Scheduler.ArmLease(lease); err != nil {
-		_ = worker.releaseLease(lease)
+	if err := worker.armLease(lease); err != nil {
+		if releaseErr := worker.releaseLease(lease); releaseErr != nil {
+			return worker.recordReleaseRecovery(request, occurrence, base, releaseErr)
+		}
 		return base, err
 	}
 	workerCtx, cancel := context.WithDeadline(ctx, command.Deadline)
@@ -259,21 +262,20 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 			return base, quarantineErr
 		}
 		if err := worker.publishOccurrence(request.WorkspaceID, occurrence, now, lease, base); err != nil {
-			worker.boundLateHandler(outcomeChannel, lease, base)
+			worker.boundLateHandler(outcomeChannel, lease, base, request, occurrence)
 			return base, err
 		}
-		worker.boundLateHandler(outcomeChannel, lease, base)
+		worker.boundLateHandler(outcomeChannel, lease, base, request, occurrence)
 		return base, executeErr
 	}
 	if err := worker.publishOccurrence(request.WorkspaceID, occurrence, now, lease, base); err != nil {
-		_ = worker.releaseLease(lease)
+		if releaseErr := worker.releaseLease(lease); releaseErr != nil {
+			return worker.recordReleaseRecovery(request, occurrence, base, releaseErr)
+		}
 		return base, err
 	}
 	if err := worker.releaseLease(lease); err != nil {
-		recovery := worker.recoveryReceipt(base, now)
-		_ = worker.Receipts.AppendReceipt(recovery)
-		_ = worker.Scheduler.AppendReceipt(request.WorkspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now.UTC(), State: scheduler.Failed, Error: string(ReasonRecoveryRequired)})
-		return recovery, err
+		return worker.recordReleaseRecovery(request, occurrence, base, err)
 	}
 	return base, executeErr
 }
@@ -284,7 +286,7 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 // handler exits within the bounded cleanup window, releasing the lease is
 // safe and allows prompt retry. If it never exits, manual recovery is required
 // after the original process is gone.
-func (worker Worker) boundLateHandler(outcomeChannel <-chan handlerOutcome, lease scheduler.Lease, base Receipt) {
+func (worker Worker) boundLateHandler(outcomeChannel <-chan handlerOutcome, lease scheduler.Lease, base Receipt, request WakeRequest, occurrence scheduler.Occurrence) {
 	cleanup := worker.Deadline
 	if cleanup <= 0 || cleanup > 15*time.Minute {
 		cleanup = 2 * time.Minute
@@ -295,7 +297,7 @@ func (worker Worker) boundLateHandler(outcomeChannel <-chan handlerOutcome, leas
 		select {
 		case <-outcomeChannel:
 			if err := worker.releaseLease(lease); err != nil {
-				_ = worker.Receipts.AppendReceipt(worker.recoveryReceipt(base, worker.currentTime()))
+				_, _ = worker.recordReleaseRecovery(request, occurrence, base, err)
 			}
 		case <-timer.C:
 			// Quarantine deliberately survives lease expiry. A stuck handler
@@ -304,11 +306,28 @@ func (worker Worker) boundLateHandler(outcomeChannel <-chan handlerOutcome, leas
 	}()
 }
 
+func (worker Worker) recordReleaseRecovery(request WakeRequest, occurrence scheduler.Occurrence, base Receipt, releaseErr error) (Receipt, error) {
+	recovery := worker.recoveryReceipt(base, worker.currentTime())
+	appendErr := worker.Receipts.AppendReceipt(recovery)
+	schedulerErr := worker.Scheduler.AppendReceipt(request.WorkspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: worker.currentTime(), State: scheduler.Failed, Error: string(ReasonRecoveryRequired)})
+	if appendErr != nil || schedulerErr != nil {
+		return recovery, errors.Join(releaseErr, appendErr, schedulerErr)
+	}
+	return recovery, releaseErr
+}
+
 func (worker Worker) releaseLease(lease scheduler.Lease) error {
 	if worker.ReleaseLease != nil {
 		return worker.ReleaseLease(lease)
 	}
 	return worker.Scheduler.ReleaseLease(lease)
+}
+
+func (worker Worker) armLease(lease scheduler.Lease) error {
+	if worker.ArmLease != nil {
+		return worker.ArmLease(lease)
+	}
+	return worker.Scheduler.ArmLease(lease)
 }
 
 func (worker Worker) currentTime() time.Time {

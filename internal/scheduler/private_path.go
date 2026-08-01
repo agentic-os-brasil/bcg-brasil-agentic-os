@@ -21,13 +21,7 @@ func ensurePrivateTree(root string, relative ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := rejectPrivateAncestors(root); err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(root, 0o700); err != nil {
-		return "", err
-	}
-	if err := validatePrivateDirectory(root); err != nil {
+	if err := ensurePrivateDirectoryPath(root); err != nil {
 		return "", err
 	}
 	current := filepath.Clean(root)
@@ -36,26 +30,79 @@ func ensurePrivateTree(root string, relative ...string) (string, error) {
 			return "", errors.New("invalid scheduler storage component")
 		}
 		current = filepath.Join(current, component)
-		info, err := os.Lstat(current)
-		if errors.Is(err, os.ErrNotExist) {
-			if err := os.Mkdir(current, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-				return "", err
-			}
-			info, err = os.Lstat(current)
-		}
-		if err != nil {
+		if err := ensurePrivateComponent(current); err != nil {
 			return "", err
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-			return "", fmt.Errorf("scheduler storage component is not a private directory: %s", current)
-		}
-		if info.Mode().Perm() != 0o700 {
-			if err := os.Chmod(current, 0o700); err != nil {
-				return "", err
-			}
 		}
 	}
 	return current, nil
+}
+
+// ensurePrivateDirectoryPath creates the configured root one component at a
+// time. This closes the check-then-MkdirAll race where a missing ancestor
+// could be replaced by a symlink between validation and recursive creation.
+func ensurePrivateDirectoryPath(path string) error {
+	absolute, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return err
+	}
+	volume := filepath.VolumeName(absolute)
+	remainder := strings.TrimPrefix(absolute, volume)
+	remainder = strings.TrimPrefix(remainder, string(filepath.Separator))
+	current := volume + string(filepath.Separator)
+	for _, component := range strings.Split(remainder, string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		created := false
+		if errors.Is(err, os.ErrNotExist) {
+			if err := os.Mkdir(current, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+				return err
+			}
+			info, err = os.Lstat(current)
+			created = err == nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return fmt.Errorf("scheduler storage component is not a private directory: %s", current)
+		}
+		// Existing system ancestors (for example /private on macOS) are
+		// trusted boundaries, not scheduler-owned directories. Only the
+		// configured root and newly-created descendants may be chmodded.
+		if created || filepath.Clean(current) == filepath.Clean(absolute) {
+			if info.Mode().Perm() != 0o700 {
+				if err := os.Chmod(current, 0o700); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func ensurePrivateComponent(path string) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.Mkdir(path, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		info, err = os.Lstat(path)
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("scheduler storage component is not a private directory: %s", path)
+	}
+	if info.Mode().Perm() != 0o700 {
+		if err := os.Chmod(path, 0o700); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func rejectPrivateAncestors(path string) error {
@@ -97,6 +144,9 @@ func lookupPrivateTree(root string, relative ...string) (string, error) {
 	}
 	canonical, err := canonicalSchedulerRoot(root)
 	if err != nil {
+		return "", err
+	}
+	if err := rejectPrivateAncestors(canonical); err != nil {
 		return "", err
 	}
 	current := filepath.Clean(canonical)

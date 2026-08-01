@@ -34,7 +34,25 @@ func (store Store) AppendReceipt(receipt Receipt) error {
 		return readErr
 	} else {
 		for _, prior := range existing {
-			if prior.OccurrenceDigest == receipt.OccurrenceDigest && (prior.State == ReceiptSucceeded || prior.State == ReceiptReviewedNoChange || prior.State == ReceiptProposalEmitted || prior.State == ReceiptRecoveryRequired) {
+			if prior.OccurrenceDigest != receipt.OccurrenceDigest {
+				continue
+			}
+			if receipt.RecoveryPhase != "" && prior.RecoveryPhase != "" {
+				if prior.RecoveryPhase == receipt.RecoveryPhase {
+					if prior.RecoveryIntentDigest == receipt.RecoveryIntentDigest && prior.FenceTokenDigest == receipt.FenceTokenDigest {
+						return nil
+					}
+					return errors.New("maintenance recovery audit conflicts with an existing phase")
+				}
+				continue
+			}
+			if prior.State == ReceiptSucceeded || prior.State == ReceiptReviewedNoChange || prior.State == ReceiptProposalEmitted || prior.State == ReceiptRecoveryRequired {
+				// Recovery intent/outcome records are a separate immutable audit
+				// chain. They must remain appendable after the operation's success
+				// receipt; otherwise a release failure cannot be recorded.
+				if receipt.RecoveryPhase != "" {
+					continue
+				}
 				if receipt.State == ReceiptRecoveryRequired && prior.State != ReceiptRecoveryRequired {
 					continue
 				}

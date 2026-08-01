@@ -208,8 +208,12 @@ func validateSpec(spec Spec) error {
 	}
 	for _, value := range []string{spec.StandardOutPath, spec.StandardErrPath} {
 		// Diagnostic paths point at the host fixture filesystem in adapter
-		// tests, while native Darwin paths remain POSIX absolute paths.
-		if value != "" && !filepath.IsAbs(value) && !pathpkg.IsAbs(strings.ReplaceAll(value, `\`, "/")) {
+		// tests, while native Darwin paths remain POSIX absolute paths. Raw
+		// Windows separators are never normalized into a Darwin plist.
+		if strings.Contains(value, `\`) {
+			return errors.New("LaunchAgent diagnostic paths must use Darwin POSIX separators")
+		}
+		if value != "" && !filepath.IsAbs(value) && !pathpkg.IsAbs(value) {
 			return errors.New("LaunchAgent diagnostics paths must be absolute")
 		}
 	}

@@ -238,16 +238,12 @@ func (store Store) QuarantinedLeases(workspaceID string) ([]Lease, error) {
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return nil, err
 	}
-	root := filepath.Join(store.Root, "workspaces", workspaceID, "leases")
-	rootInfo, rootErr := os.Lstat(root)
+	root, rootErr := lookupPrivateTree(store.Root, "workspaces", workspaceID, "leases")
 	if errors.Is(rootErr, os.ErrNotExist) {
 		return nil, nil
 	}
 	if rootErr != nil {
 		return nil, rootErr
-	}
-	if rootInfo.Mode()&os.ModeSymlink != 0 || !rootInfo.IsDir() {
-		return nil, errors.New("scheduler quarantine root must be a private local directory")
 	}
 	entries, err := os.ReadDir(root)
 	if errors.Is(err, os.ErrNotExist) {

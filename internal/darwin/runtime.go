@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
@@ -76,6 +77,13 @@ func (executor HousekeepingExecutor) ExecuteCommand(ctx context.Context, command
 		base.ReasonCode = maintenance.ReasonAuthorityRejected
 		return base, errors.New("Darwin housekeeping guard and invoker are required")
 	}
+	if command.ProposalOnly {
+		if recovered, found, recoveryErr := executor.recoverProposalArtifact(command, base); recoveryErr != nil {
+			return base, recoveryErr
+		} else if found {
+			return recovered, nil
+		}
+	}
 	if existing, readErr := executor.CommandStore.Receipts(command.WorkspaceID, command.JobID); readErr == nil && len(existing) > 0 {
 		for _, receipt := range existing {
 			if receipt.OccurrenceDigest == command.OccurrenceDigest() && (receipt.State == maintenance.ReceiptSucceeded || receipt.State == maintenance.ReceiptReviewedNoChange || receipt.State == maintenance.ReceiptProposalEmitted) {
@@ -137,6 +145,45 @@ func (executor HousekeepingExecutor) ExecuteCommand(ctx context.Context, command
 		return recovery, releaseErr
 	}
 	return result, executionErr
+}
+
+// recoverProposalArtifact closes the monthly crash window where the
+// occurrence artifact was published before the command receipt. It runs
+// before health construction, so changed health cannot create a second
+// structural assessment for the same occurrence.
+func (executor HousekeepingExecutor) recoverProposalArtifact(command maintenance.Command, base maintenance.Receipt) (maintenance.Receipt, bool, error) {
+	proposalStore := executor.ProposalStore
+	if proposalStore.Root == "" {
+		proposalStore = ProposalStore{Root: executor.CommandStore.Root}
+	}
+	artifact, err := proposalStore.ReadOccurrence(command.JobID, command.OccurrenceDigest())
+	if errors.Is(err, os.ErrNotExist) {
+		return maintenance.Receipt{}, false, nil
+	}
+	if err != nil {
+		return maintenance.Receipt{}, false, err
+	}
+	if existing, readErr := executor.CommandStore.Receipts(command.WorkspaceID, command.JobID); readErr != nil {
+		return maintenance.Receipt{}, false, readErr
+	} else {
+		for _, receipt := range existing {
+			if receipt.OccurrenceDigest == command.OccurrenceDigest() && receipt.State == maintenance.ReceiptProposalEmitted {
+				if err := proposalStore.ValidateReceipt(receipt); err != nil {
+					return maintenance.Receipt{}, false, err
+				}
+				return receipt, true, nil
+			}
+		}
+	}
+	attempt, err := newAttemptID()
+	if err != nil {
+		return maintenance.Receipt{}, false, err
+	}
+	recovered := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: maintenance.ReceiptProposalEmitted, RecordedAt: executor.currentTime(), Deadline: command.Deadline, ProposalOnly: true, ProposalCount: len(artifact.Assessment.Proposals), ProposalDigest: artifact.ProposalDigest, ProposalArtifactID: artifact.ArtifactID, ReasonCode: maintenance.ReasonProposalEmitted}
+	if err := executor.CommandStore.AppendReceipt(recovered); err != nil {
+		return maintenance.Receipt{}, false, err
+	}
+	return recovered, true, nil
 }
 
 func (executor HousekeepingExecutor) releaseLease(lease scheduler.Lease) error {

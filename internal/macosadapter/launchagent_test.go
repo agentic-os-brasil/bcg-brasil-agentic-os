@@ -8,8 +8,7 @@ import (
 
 func testSpec(t *testing.T) Spec {
 	t.Helper()
-	home := t.TempDir()
-	return Spec{Label: "com.bcg.maestro.maintenance", Program: "/usr/local/bin/bcgos", Arguments: []string{"maintenance", "wake", "--trigger", "presence"}, StartInterval: 900, RunAtLoad: true, StandardOutPath: filepath.Join(home, "Library", "Logs", "stdout.log"), StandardErrPath: filepath.Join(home, "Library", "Logs", "stderr.log")}
+	return Spec{Label: "com.bcg.maestro.maintenance", Program: "/usr/local/bin/bcgos", Arguments: []string{"maintenance", "wake", "--trigger", "presence"}, StartInterval: 900, RunAtLoad: true, StandardOutPath: "/Users/test/Library/Logs/stdout.log", StandardErrPath: "/Users/test/Library/Logs/stderr.log"}
 }
 
 func TestLaunchAgentRenderIsConcreteAndParseable(t *testing.T) {
@@ -70,5 +69,10 @@ func TestLaunchAgentRejectsRelativeOrInterpolatedValues(t *testing.T) {
 	spec.Program = `\usr\local\bin\bcgos`
 	if _, err := Render(spec); err == nil {
 		t.Fatal("Windows-rooted Darwin program accepted")
+	}
+	spec = testSpec(t)
+	spec.StandardOutPath = `\Users\test\Library\Logs\stdout.log`
+	if _, err := Render(spec); err == nil {
+		t.Fatal("Windows-rooted Darwin diagnostic path accepted")
 	}
 }

@@ -154,6 +154,37 @@ func TestExecuteCommandMonthlyProposalReviewWithNoChangesIsSuccessfulNoChange(t 
 	}
 }
 
+func TestExecuteCommandMonthlyProposalRecoversArtifactBeforeRebuilding(t *testing.T) {
+	now := time.Now().UTC()
+	command := commandForTest(now, "darwin-structural-evolution-proposal", true)
+	command.Trigger = maintenance.TriggerMonthly
+	proposalRoot := t.TempDir()
+	assessment, err := Plan(HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-monthly-crash", Runtime: "runtime-neutral", Mode: DeepReview, Observations: []Observation{{Code: ObservationContractDrift, Severity: SeverityHigh, Count: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact := AssessmentProposalArtifact{SchemaVersion: proposalArtifactSchemaVersion, RecordType: "assessment", AgentID: AgentID, JobID: command.JobID, OccurrenceDigest: command.OccurrenceDigest(), ArtifactID: assessmentArtifactID(command.JobID, command.OccurrenceDigest()), WindowID: assessment.WindowID, ProposalDigest: proposalDigest(command.OccurrenceDigest(), assessment), Assessment: assessment, ScheduledFor: command.ScheduledFor.UTC(), RecordedAt: command.ScheduledFor.UTC()}
+	if err := (ProposalStore{Root: proposalRoot}).Append(artifact); err != nil {
+		t.Fatal(err)
+	}
+	builds := 0
+	executor := HousekeepingExecutor{
+		Build: HealthPacketBuilderFunc(func(context.Context, scheduler.Occurrence) (HealthPacket, error) {
+			builds++
+			return HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-changed-after-crash", Runtime: "runtime-neutral", Mode: DeepReview, Observations: []Observation{{Code: ObservationStateStale, Severity: SeverityHigh, Count: 1}}}, nil
+		}),
+		CommandStore: maintenance.Store{Root: t.TempDir()}, ProposalStore: ProposalStore{Root: proposalRoot}, Scheduler: scheduler.Store{Root: t.TempDir()}, Store: Store{Root: t.TempDir()}, Authority: authorityForTest(t, command), Now: func() time.Time { return now },
+	}
+	receipt, err := executor.ExecuteCommand(context.Background(), command)
+	if err != nil || receipt.State != maintenance.ReceiptProposalEmitted || receipt.ProposalArtifactID != artifact.ArtifactID || receipt.ProposalDigest != artifact.ProposalDigest || builds != 0 {
+		t.Fatalf("monthly artifact recovery receipt=%#v err=%v builds=%d", receipt, err, builds)
+	}
+	stored, err := executor.CommandStore.Receipts(command.WorkspaceID, command.JobID)
+	if err != nil || len(stored) != 1 {
+		t.Fatalf("monthly artifact recovery receipts=%#v err=%v", stored, err)
+	}
+}
+
 func TestExecuteCommandReturnsBusyWithoutWaiting(t *testing.T) {
 	now := time.Now().UTC()
 	schedulerRoot := t.TempDir()
