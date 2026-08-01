@@ -47,6 +47,7 @@ const (
 	KindEvaluation  Kind = "evaluation"
 	KindAlternative Kind = "alternative"
 	KindFlow        Kind = "maestro_flow"
+	KindSelf        Kind = "self_loop"
 )
 
 type JobKind string
@@ -181,6 +182,7 @@ type Record struct {
 	Evaluation    *EvaluationEvidence  `json:"evaluation,omitempty"`
 	Alternative   *AlternativeEvidence `json:"alternative,omitempty"`
 	Flow          *FlowEvidence        `json:"flow,omitempty"`
+	Self          *SelfEvidence        `json:"self,omitempty"`
 }
 
 type HealthEvidence struct {
@@ -284,6 +286,22 @@ type FlowEvidence struct {
 	MaterialDelivered                 bool     `json:"material_delivered"`
 }
 
+// SelfEvidence is the metadata-only Darwin projection of owner-context self
+// maintenance. It contains no claim, transcript, prompt, client or artifact
+// body and records zero canonical mutation by contract.
+type SelfEvidence struct {
+	SnapshotVersion       int    `json:"snapshot_version"`
+	SnapshotSHA256        string `json:"snapshot_sha256"`
+	ObservationCount      int    `json:"observation_count"`
+	DuplicateCount        int    `json:"duplicate_count"`
+	ContradictionCount    int    `json:"contradiction_count"`
+	RecheckDue            int    `json:"recheck_due"`
+	DecayCandidates       int    `json:"decay_candidates"`
+	OwnerConfirmedSignals int    `json:"owner_confirmed_signals"`
+	ReevaluationProposals int    `json:"reevaluation_proposals"`
+	CanonicalMutations    int    `json:"canonical_mutations"`
+}
+
 var (
 	identifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]{0,63}$`)
 	windowPattern     = regexp.MustCompile(`^win-[a-f0-9]{32}$`)
@@ -317,6 +335,9 @@ func (record Record) Validate() error {
 		count++
 	}
 	if record.Flow != nil {
+		count++
+	}
+	if record.Self != nil {
 		count++
 	}
 	if count != 1 {
@@ -362,6 +383,11 @@ func (record Record) Validate() error {
 			return errors.New("Maestro flow evidence payload is missing")
 		}
 		err = record.Flow.validate()
+	case KindSelf:
+		if record.Self == nil {
+			return errors.New("self loop evidence payload is missing")
+		}
+		err = record.Self.validate()
 	default:
 		return errors.New("unknown Darwin evidence kind")
 	}
@@ -515,6 +541,19 @@ func (e FlowEvidence) validate() error {
 	}
 	if e.MaterialFinishWithoutWalter > 0 && (e.WalterRequired || !e.WalterSkipped) {
 		return errors.New("material finish without Walter is inconsistent")
+	}
+	return nil
+}
+
+func (e SelfEvidence) validate() error {
+	values := []int{e.SnapshotVersion, e.ObservationCount, e.DuplicateCount, e.ContradictionCount, e.RecheckDue, e.DecayCandidates, e.OwnerConfirmedSignals, e.ReevaluationProposals, e.CanonicalMutations}
+	for _, value := range values {
+		if value < 0 {
+			return errors.New("invalid self loop evidence count")
+		}
+	}
+	if e.SnapshotVersion < 1 || !digestPattern.MatchString(e.SnapshotSHA256) || e.CanonicalMutations != 0 {
+		return errors.New("self loop evidence exceeds Darwin authority")
 	}
 	return nil
 }

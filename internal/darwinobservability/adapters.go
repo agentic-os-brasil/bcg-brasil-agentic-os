@@ -129,6 +129,28 @@ func FromMaestroFlowReceipt(receipt maestroflow.Receipt, windowID, scopeSHA256 s
 	return record, record.Validate()
 }
 
+// FromDarwinSelfMaintenanceReceipt projects owner-context self maintenance
+// without allowing claim or canonical-self content across the observability
+// boundary.
+func FromDarwinSelfMaintenanceReceipt(receipt darwin.SelfMaintenanceReceipt, windowID, scopeSHA256 string) (Record, error) {
+	if err := receipt.Validate(); err != nil || !windowPattern.MatchString(windowID) || !digestPattern.MatchString(scopeSHA256) {
+		return Record{}, errors.New("invalid Darwin self maintenance receipt for observability")
+	}
+	record := Record{
+		SchemaVersion: SchemaVersion, Kind: KindSelf, WindowID: windowID, ScopeSHA256: scopeSHA256,
+		Authority: AuthorityCallerAssertedShadow, RecordedAt: receipt.RecordedAt.UTC(),
+		Self: &SelfEvidence{
+			SnapshotVersion: receipt.SnapshotVersion, SnapshotSHA256: receipt.SnapshotSHA256,
+			ObservationCount: receipt.ObservationCount, DuplicateCount: receipt.DuplicateCount,
+			ContradictionCount: receipt.ContradictionCount, RecheckDue: receipt.RecheckDue,
+			DecayCandidates: receipt.DecayCandidates, OwnerConfirmedSignals: receipt.OwnerConfirmedSignals,
+			ReevaluationProposals: receipt.ReevaluationProposals, CanonicalMutations: receipt.CanonicalMutations,
+		},
+	}
+	assignEvidenceID(&record)
+	return record, record.Validate()
+}
+
 // FromActivationObservation adapts the existing closed activation monitor
 // without duplicating route, posture or policy definitions.
 func FromActivationObservation(observation activationpolicy.Observation, recordedAt time.Time, scopeSHA256 string, paCoverage PACoverage, paExpertCount int, gaps []CapabilityGap) (Record, error) {

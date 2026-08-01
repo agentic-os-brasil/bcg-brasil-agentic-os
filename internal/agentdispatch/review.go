@@ -8,6 +8,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/userintent"
 )
 
 // WalterReviewTrigger is the closed set of material situations that enter
@@ -37,17 +38,18 @@ const (
 // ReviewPacket is the sealed, bounded input Walter receives. Content remains
 // in the ephemeral dispatch body; durable receipts retain only its digests.
 type ReviewPacket struct {
-	SourcePacketID     string              `json:"source_packet_id"`
-	SourcePacketSHA256 string              `json:"source_packet_sha256"`
-	SourceScopeKind    string              `json:"source_scope_kind"`
-	SourceScopeID      string              `json:"source_scope_id"`
-	Trigger            WalterReviewTrigger `json:"trigger"`
-	Audience           string              `json:"audience"`
-	Recommendation     string              `json:"recommendation"`
-	DefinitionOfDone   string              `json:"definition_of_done"`
-	ArtifactRefs       []string            `json:"artifact_refs,omitempty"`
-	EvidenceRefs       []string            `json:"evidence_refs,omitempty"`
-	Uncertainties      []string            `json:"uncertainties,omitempty"`
+	SourcePacketID     string                       `json:"source_packet_id"`
+	SourcePacketSHA256 string                       `json:"source_packet_sha256"`
+	SourceScopeKind    string                       `json:"source_scope_kind"`
+	SourceScopeID      string                       `json:"source_scope_id"`
+	Trigger            WalterReviewTrigger          `json:"trigger"`
+	Audience           string                       `json:"audience"`
+	Recommendation     string                       `json:"recommendation"`
+	DefinitionOfDone   string                       `json:"definition_of_done"`
+	ArtifactRefs       []string                     `json:"artifact_refs,omitempty"`
+	EvidenceRefs       []string                     `json:"evidence_refs,omitempty"`
+	Uncertainties      []string                     `json:"uncertainties,omitempty"`
+	SelfReview         *userintent.SelfReviewPacket `json:"self_review,omitempty"`
 }
 
 // WalterReviewRequest is assembled by Maestro after the producing branch has
@@ -82,10 +84,11 @@ type WalterObjection struct {
 }
 
 type WalterReviewBody struct {
-	Verdict      WalterVerdict     `json:"verdict"`
-	Objections   []WalterObjection `json:"objections,omitempty"`
-	EvidenceRefs []string          `json:"evidence_refs,omitempty"`
-	Uncertainty  string            `json:"uncertainty,omitempty"`
+	Verdict      WalterVerdict            `json:"verdict"`
+	Objections   []WalterObjection        `json:"objections,omitempty"`
+	EvidenceRefs []string                 `json:"evidence_refs,omitempty"`
+	Uncertainty  string                   `json:"uncertainty,omitempty"`
+	IntentReview *userintent.IntentReview `json:"intent_review,omitempty"`
 }
 
 type ReviewSummary struct {
@@ -117,6 +120,11 @@ func RequiresWalterReview(trigger WalterReviewTrigger) bool {
 func validateReviewPacket(review *ReviewPacket, packetID, objective string) error {
 	if review == nil {
 		return nil
+	}
+	if review.SelfReview != nil {
+		if err := review.SelfReview.Validate(); err != nil {
+			return errors.New("Walter self review packet is invalid")
+		}
 	}
 	if !validPacketID(review.SourcePacketID) || (packetID != "" && review.SourcePacketID == packetID) ||
 		!validSHA256(review.SourcePacketSHA256) || !validReviewScope(review.SourceScopeKind, review.SourceScopeID) ||
@@ -192,6 +200,14 @@ func validateWalterReviewBody(body WalterReviewBody, review ReviewPacket) error 
 	}
 	if len([]byte(strings.TrimSpace(body.Uncertainty))) > maxConstraintBytes {
 		return errors.New("Walter review uncertainty is oversized")
+	}
+	if body.IntentReview != nil {
+		if review.SelfReview == nil {
+			return errors.New("Walter intent review has no bound self review packet")
+		}
+		if err := body.IntentReview.Validate(*review.SelfReview); err != nil {
+			return errors.New("Walter intent review is invalid")
+		}
 	}
 	return nil
 }

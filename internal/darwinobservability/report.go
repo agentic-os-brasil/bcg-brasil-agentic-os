@@ -87,6 +87,18 @@ type FlowScorecard struct {
 	WalterSkipReasons           []FlowReasonCount `json:"walter_skip_reasons"`
 }
 
+type SelfScorecard struct {
+	Records               int `json:"records"`
+	Observations          int `json:"observations"`
+	Duplicates            int `json:"duplicates"`
+	Contradictions        int `json:"contradictions"`
+	RecheckDue            int `json:"recheck_due"`
+	DecayCandidates       int `json:"decay_candidates"`
+	OwnerConfirmedSignals int `json:"owner_confirmed_signals"`
+	ReevaluationProposals int `json:"reevaluation_proposals"`
+	CanonicalMutations    int `json:"canonical_mutations"`
+}
+
 type IntegrityScorecard struct {
 	InputRecords           int `json:"input_records"`
 	AcceptedRecords        int `json:"accepted_records"`
@@ -104,6 +116,7 @@ type WeeklyReport struct {
 	Health              HealthScorecard    `json:"health"`
 	Selection           SelectionScorecard `json:"selection"`
 	Flow                FlowScorecard      `json:"maestro_flow"`
+	Self                SelfScorecard      `json:"self_loop"`
 	Integrity           IntegrityScorecard `json:"integrity"`
 	RecommendationCodes []string           `json:"recommendation_codes"`
 	MayMutatePolicy     bool               `json:"may_mutate_policy"`
@@ -177,6 +190,7 @@ func BuildWeekly(records []Record, window Window) (WeeklyReport, error) {
 	}
 	var selection []Record
 	var flow []Record
+	var self []Record
 	for _, record := range records {
 		if record.WindowID != window.ID || record.ScopeSHA256 != window.ScopeSHA256 ||
 			record.Authority != AuthorityCallerAssertedShadow {
@@ -192,6 +206,8 @@ func BuildWeekly(records []Record, window Window) (WeeklyReport, error) {
 			selection = append(selection, record)
 		case KindFlow:
 			flow = append(flow, record)
+		case KindSelf:
+			self = append(self, record)
 		case KindProposal, KindAcceptance, KindEvaluation, KindAlternative:
 			return WeeklyReport{}, errors.New("weekly report accepts only health and selection evidence")
 		default:
@@ -200,6 +216,7 @@ func BuildWeekly(records []Record, window Window) (WeeklyReport, error) {
 	}
 	report.Selection = aggregateSelection(selection)
 	report.Flow = aggregateFlow(flow)
+	report.Self = aggregateSelf(self)
 	report.Integrity = IntegrityScorecard{InputRecords: len(records), AcceptedRecords: len(records)}
 	report.RecommendationCodes = weeklyRecommendations(report)
 	return report, report.Validate()
@@ -555,6 +572,22 @@ func aggregateFlow(records []Record) FlowScorecard {
 	return score
 }
 
+func aggregateSelf(records []Record) SelfScorecard {
+	score := SelfScorecard{Records: len(records)}
+	for _, record := range records {
+		e := record.Self
+		score.Observations += e.ObservationCount
+		score.Duplicates += e.DuplicateCount
+		score.Contradictions += e.ContradictionCount
+		score.RecheckDue += e.RecheckDue
+		score.DecayCandidates += e.DecayCandidates
+		score.OwnerConfirmedSignals += e.OwnerConfirmedSignals
+		score.ReevaluationProposals += e.ReevaluationProposals
+		score.CanonicalMutations += e.CanonicalMutations
+	}
+	return score
+}
+
 func weeklyRecommendations(report WeeklyReport) []string {
 	codes := []string{"review_evidence_authority"}
 	if report.Selection.Records < 20 {
@@ -657,10 +690,13 @@ func (r WeeklyReport) Validate() error {
 	if err := validateFlowScorecard(r.Flow); err != nil {
 		return err
 	}
+	if err := validateSelfScorecard(r.Self); err != nil {
+		return err
+	}
 	if r.Integrity.InputRecords < 1 || r.Integrity.InputRecords > MaxInputRecords ||
 		r.Integrity.AcceptedRecords != r.Integrity.InputRecords || r.Integrity.DuplicateRecords != 0 ||
 		r.Integrity.IndependenceViolations != 0 ||
-		r.Health.Records+r.Selection.Records+r.Flow.Records != r.Integrity.AcceptedRecords {
+		r.Health.Records+r.Selection.Records+r.Flow.Records+r.Self.Records != r.Integrity.AcceptedRecords {
 		return errors.New("invalid weekly integrity scorecard")
 	}
 	return nil
@@ -800,6 +836,18 @@ func validateFlowScorecard(score FlowScorecard) error {
 			return errors.New("invalid Walter skip reason score")
 		}
 		seen[reason.Reason] = true
+	}
+	return nil
+}
+
+func validateSelfScorecard(score SelfScorecard) error {
+	for _, value := range []int{score.Records, score.Observations, score.Duplicates, score.Contradictions, score.RecheckDue, score.DecayCandidates, score.OwnerConfirmedSignals, score.ReevaluationProposals, score.CanonicalMutations} {
+		if value < 0 {
+			return errors.New("negative self loop score")
+		}
+	}
+	if score.CanonicalMutations != 0 {
+		return errors.New("self scorecard records a Darwin canonical mutation")
 	}
 	return nil
 }

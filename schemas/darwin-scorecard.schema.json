@@ -61,6 +61,11 @@
         "walter_skip_reasons": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["reason", "count"], "properties": {"reason": {"const": "low_leverage_ordinary_reversible_no_external_artifact"}, "count": {"type": "integer", "minimum": 1}}}}
       }
     },
+    "self": {
+      "type": "object", "additionalProperties": false,
+      "required": ["records", "observations", "duplicates", "contradictions", "recheck_due", "decay_candidates", "owner_confirmed_signals", "reevaluation_proposals", "canonical_mutations"],
+      "properties": {"records":{"type":"integer","minimum":0},"observations":{"type":"integer","minimum":0},"duplicates":{"type":"integer","minimum":0},"contradictions":{"type":"integer","minimum":0},"recheck_due":{"type":"integer","minimum":0},"decay_candidates":{"type":"integer","minimum":0},"owner_confirmed_signals":{"type":"integer","minimum":0},"reevaluation_proposals":{"type":"integer","minimum":0},"canonical_mutations":{"const":0}}
+    },
     "integrity": {
       "type": "object", "additionalProperties": false,
       "required": ["input_records", "accepted_records", "duplicate_records", "independence_violations"],
@@ -72,12 +77,12 @@
     "codes": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"enum": ["insufficient_sample", "review_recovery", "review_pa_coverage", "review_capability_gaps", "review_evaluator_independence", "review_evidence_authority", "insufficient_alternatives", "hold_current_posture"]}},
     "weekly": {
       "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "report_kind", "report_version", "window", "input_sha256", "evidence_authority", "health", "selection", "maestro_flow", "integrity", "recommendation_codes", "may_mutate_policy"],
+      "required": ["schema_version", "report_kind", "report_version", "window", "input_sha256", "evidence_authority", "health", "selection", "maestro_flow", "self_loop", "integrity", "recommendation_codes", "may_mutate_policy"],
       "properties": {
         "schema_version": {"const": 1}, "report_kind": {"const": "weekly_operational"}, "report_version": {"const": "weekly-v1"},
         "window": {"$ref": "#/$defs/window"}, "input_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "evidence_authority": {"const": "caller_asserted_shadow"},
-        "health": {"$ref": "#/$defs/health"}, "selection": {"$ref": "#/$defs/selection"}, "maestro_flow": {"$ref": "#/$defs/flow"}, "integrity": {"$ref": "#/$defs/integrity"},
+        "health": {"$ref": "#/$defs/health"}, "selection": {"$ref": "#/$defs/selection"}, "maestro_flow": {"$ref": "#/$defs/flow"}, "self_loop": {"$ref": "#/$defs/self"}, "integrity": {"$ref": "#/$defs/integrity"},
         "recommendation_codes": {"$ref": "#/$defs/codes"}, "may_mutate_policy": {"const": false}
       }
     },
