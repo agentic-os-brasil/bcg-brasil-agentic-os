@@ -13,6 +13,11 @@ import (
 
 const CommandSchemaVersion = 1
 
+const (
+	DarwinStructuralProposalJobID = "darwin-structural-evolution-proposal"
+	WalterSelfReviewWeeklyJobID   = "walter-self-review-weekly"
+)
+
 type Trigger string
 
 const (
@@ -184,7 +189,7 @@ func NewRecoveryReceipt(workspaceID, jobID string, trigger Trigger, scheduledFor
 	if err != nil {
 		return Receipt{}, err
 	}
-	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: digest(scheduler.ScheduledOccurrenceKey(jobID, scheduledFor)), CommandID: "recovery-" + digestPrefix(jobID+scheduledFor.UTC().Format(time.RFC3339Nano)), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ProposalOnly: jobID == "darwin-structural-evolution-proposal", ReasonCode: ReasonReceiptPersisted}, nil
+	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: digest(scheduler.ScheduledOccurrenceKey(jobID, scheduledFor)), CommandID: "recovery-" + digestPrefix(jobID+scheduledFor.UTC().Format(time.RFC3339Nano)), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ProposalOnly: IsProposalOnlyJob(jobID), ReasonCode: ReasonReceiptPersisted}, nil
 }
 
 func NewRecoveryIntentReceipt(workspaceID, jobID string, trigger Trigger, scheduledFor, now time.Time, fenceToken string) (Receipt, error) {
@@ -195,7 +200,7 @@ func NewRecoveryIntentReceipt(workspaceID, jobID string, trigger Trigger, schedu
 	occurrence := digest(scheduler.ScheduledOccurrenceKey(jobID, scheduledFor))
 	fenceDigest := digest(fenceToken)
 	intentDigest := digest(workspaceID + "\x00" + jobID + "\x00" + occurrence + "\x00" + fenceDigest)
-	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: occurrence, CommandID: "recovery-intent-" + digestPrefix(intentDigest), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ProposalOnly: jobID == "darwin-structural-evolution-proposal", RecoveryPhase: "intent", RecoveryIntentDigest: intentDigest, FenceTokenDigest: fenceDigest, ReasonCode: ReasonRecoveryIntent}, nil
+	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: occurrence, CommandID: "recovery-intent-" + digestPrefix(intentDigest), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ProposalOnly: IsProposalOnlyJob(jobID), RecoveryPhase: "intent", RecoveryIntentDigest: intentDigest, FenceTokenDigest: fenceDigest, ReasonCode: ReasonRecoveryIntent}, nil
 }
 
 func NewRecoveryOutcomeReceipt(intent Receipt, now time.Time, phase string, reason ReasonCode) (Receipt, error) {
@@ -250,6 +255,10 @@ func validReceiptState(state ReceiptState) bool {
 	}
 }
 
+func IsProposalOnlyJob(jobID string) bool {
+	return jobID == DarwinStructuralProposalJobID || jobID == WalterSelfReviewWeeklyJobID
+}
+
 func isProposalOnlyJob(jobID string) bool {
-	return jobID == "darwin-structural-evolution-proposal" || jobID == "walter-self-review-weekly"
+	return IsProposalOnlyJob(jobID)
 }

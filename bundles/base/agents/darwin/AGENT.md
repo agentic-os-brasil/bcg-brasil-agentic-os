@@ -71,12 +71,6 @@ packet is insufficient.
   does not execute or repair review content.
 - Darwin observes, repairs bounded system state and proposes evolution. Darwin
   never becomes a second hub, reviewer or domain agent.
-- Darwin may maintain only the metadata-only owner-context self loop: dedupe
-  provenance hashes, detect contradictions and drift, measure confidence decay
-  and recheck age, and emit CAS-bound `reevaluate_facet` proposal receipts.
-  `UserSelfSnapshot` is a projection of the single Owner Context authority;
-  Darwin's canonical mutation count is always zero. Darwin never writes,
-  promotes, redacts, deletes or semantically rewrites self facets.
 
 Weekly proposals focus on reliability, recovery and drift. Monthly proposals
 may compare agent/PA Expert/skill/policy versions, but remain inert until

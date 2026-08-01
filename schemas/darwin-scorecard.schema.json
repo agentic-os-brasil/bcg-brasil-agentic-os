@@ -49,23 +49,6 @@
         "capability_gap_count": {"type": "integer", "minimum": 0}
       }
     },
-    "flow": {
-      "type": "object", "additionalProperties": false,
-      "required": ["records", "account_first", "direct_case", "strategic_signal_records", "execution_only_records", "account_selection_mismatches", "account_under_routing", "account_over_routing", "walter_required", "walter_skipped", "budget_exhausted", "invalidations_after_mutation", "materiality_escalations", "material_finish_without_walter", "walter_useful_refinements", "walter_nitpick_blocks", "one_active_spoke_violations", "nesting_violations", "direct_agent_calls", "walter_skip_reasons"],
-      "properties": {
-        "records": {"type": "integer", "minimum": 0}, "account_first": {"type": "integer", "minimum": 0}, "direct_case": {"type": "integer", "minimum": 0}, "strategic_signal_records": {"type": "integer", "minimum": 0}, "execution_only_records": {"type": "integer", "minimum": 0}, "account_selection_mismatches": {"type": "integer", "minimum": 0}, "account_under_routing": {"type": "integer", "minimum": 0}, "account_over_routing": {"type": "integer", "minimum": 0},
-        "walter_required": {"type": "integer", "minimum": 0}, "walter_skipped": {"type": "integer", "minimum": 0}, "budget_exhausted": {"type": "integer", "minimum": 0},
-        "invalidations_after_mutation": {"type": "integer", "minimum": 0}, "materiality_escalations": {"type": "integer", "minimum": 0},
-        "material_finish_without_walter": {"type": "integer", "minimum": 0}, "walter_useful_refinements": {"type": "integer", "minimum": 0}, "walter_nitpick_blocks": {"type": "integer", "minimum": 0}, "one_active_spoke_violations": {"type": "integer", "minimum": 0},
-        "nesting_violations": {"type": "integer", "minimum": 0}, "direct_agent_calls": {"type": "integer", "minimum": 0},
-        "walter_skip_reasons": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["reason", "count"], "properties": {"reason": {"const": "low_leverage_ordinary_reversible_no_external_artifact"}, "count": {"type": "integer", "minimum": 1}}}}
-      }
-    },
-    "self": {
-      "type": "object", "additionalProperties": false,
-      "required": ["records", "observations", "duplicates", "contradictions", "recheck_due", "decay_candidates", "owner_confirmed_signals", "reevaluation_proposals", "canonical_mutations"],
-      "properties": {"records":{"type":"integer","minimum":0},"observations":{"type":"integer","minimum":0},"duplicates":{"type":"integer","minimum":0},"contradictions":{"type":"integer","minimum":0},"recheck_due":{"type":"integer","minimum":0},"decay_candidates":{"type":"integer","minimum":0},"owner_confirmed_signals":{"type":"integer","minimum":0},"reevaluation_proposals":{"type":"integer","minimum":0},"canonical_mutations":{"const":0}}
-    },
     "integrity": {
       "type": "object", "additionalProperties": false,
       "required": ["input_records", "accepted_records", "duplicate_records", "independence_violations"],
@@ -77,12 +60,12 @@
     "codes": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"enum": ["insufficient_sample", "review_recovery", "review_pa_coverage", "review_capability_gaps", "review_evaluator_independence", "review_evidence_authority", "insufficient_alternatives", "hold_current_posture"]}},
     "weekly": {
       "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "report_kind", "report_version", "window", "input_sha256", "evidence_authority", "health", "selection", "maestro_flow", "self_loop", "integrity", "recommendation_codes", "may_mutate_policy"],
+      "required": ["schema_version", "report_kind", "report_version", "window", "input_sha256", "evidence_authority", "health", "selection", "integrity", "recommendation_codes", "may_mutate_policy"],
       "properties": {
         "schema_version": {"const": 1}, "report_kind": {"const": "weekly_operational"}, "report_version": {"const": "weekly-v1"},
         "window": {"$ref": "#/$defs/window"}, "input_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "evidence_authority": {"const": "caller_asserted_shadow"},
-        "health": {"$ref": "#/$defs/health"}, "selection": {"$ref": "#/$defs/selection"}, "maestro_flow": {"$ref": "#/$defs/flow"}, "self_loop": {"$ref": "#/$defs/self"}, "integrity": {"$ref": "#/$defs/integrity"},
+        "health": {"$ref": "#/$defs/health"}, "selection": {"$ref": "#/$defs/selection"}, "integrity": {"$ref": "#/$defs/integrity"},
         "recommendation_codes": {"$ref": "#/$defs/codes"}, "may_mutate_policy": {"const": false}
       }
     },

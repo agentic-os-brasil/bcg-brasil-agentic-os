@@ -23,7 +23,7 @@ import (
 
 const (
 	SchemaVersion           = 1
-	WeeklyJobID             = "walter-self-review-weekly"
+	WeeklyJobID             = maintenance.WalterSelfReviewWeeklyJobID
 	MaxPromptEntries        = 8
 	MaxPromptBytes          = 32 << 10
 	MaxContextBytes         = 32 << 10
@@ -673,7 +673,32 @@ type Handler struct {
 
 var _ maintenance.Handler = Handler{}
 
+func (handler Handler) Execute(ctx context.Context, command maintenance.Command) (maintenance.HandlerResult, error) {
+	receipt, err := handler.execute(ctx, command)
+	return maintenance.HandlerResult{
+		State:              receipt.State,
+		ProposalCount:      receipt.ProposalCount,
+		ProposalDigest:     receipt.ProposalDigest,
+		ProposalArtifactID: receipt.ProposalArtifactID,
+		ReasonCode:         receipt.ReasonCode,
+	}, err
+}
+
 func (handler Handler) Handle(ctx context.Context, command maintenance.Command) (maintenance.Receipt, error) {
+	receipt, err := handler.execute(ctx, command)
+	if receipt.SchemaVersion == 0 {
+		return receipt, err
+	}
+	if appendErr := handler.MaintenanceStore.AppendReceipt(receipt); appendErr != nil {
+		return receipt, appendErr
+	}
+	return receipt, err
+}
+
+// execute is the publication-free Walter seam. The Worker owns the outer
+// occurrence lease and the single terminal maintenance receipt; Handle keeps
+// direct callers deterministic by publishing through the dedicated store.
+func (handler Handler) execute(ctx context.Context, command maintenance.Command) (maintenance.Receipt, error) {
 	now := time.Now().UTC()
 	if handler.Now != nil {
 		now = handler.Now().UTC()
@@ -689,9 +714,6 @@ func (handler Handler) Handle(ctx context.Context, command maintenance.Command) 
 	defer cancel()
 	_, receipt, reviewErr := Review(executionCtx, request, handler.Adapter, handler.Authority, handler.Store, now)
 	maintenanceReceipt := handler.toMaintenanceReceipt(command, receipt, reviewErr, now)
-	if appendErr := handler.MaintenanceStore.AppendReceipt(maintenanceReceipt); appendErr != nil {
-		return maintenanceReceipt, appendErr
-	}
 	if reviewErr != nil {
 		return maintenanceReceipt, reviewErr
 	}

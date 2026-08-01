@@ -78,9 +78,3 @@ Darwin maintenance signals use `darwin_maintenance_wake` and map to the same
 `darwin` identity over `health/maestro-system`. The signal is signal-only: the
 qualified local worker owns command validation, occurrence fencing and receipt
 publication. Native scheduler installation remains disabled pending evidence.
-
-Walter intent review uses the same runtime-neutral `SelfReviewPacket` fixture
-as Claude. Codex may transport the bounded packet, but cannot write the
-owner-context self or treat an intrinsic-intent hypothesis as fact. The
-self-learning evaluator runs after every interaction; only authenticated,
-material owner speech/action may enter the local provisional log.

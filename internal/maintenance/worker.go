@@ -170,7 +170,7 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonCatalogUnavailable)
 	}
 	trigger := triggerForCadence(worker.Jobs, occurrence.JobID)
-	command := Command{SchemaVersion: CommandSchemaVersion, CommandID: "wake-" + digestPrefix(occurrence.JobID+occurrence.ScheduledFor.UTC().Format(time.RFC3339Nano)+now.UTC().Format(time.RFC3339Nano)), JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, ScheduledFor: occurrence.ScheduledFor, RequestedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: occurrence.JobID == "darwin-structural-evolution-proposal"}
+	command := Command{SchemaVersion: CommandSchemaVersion, CommandID: "wake-" + digestPrefix(occurrence.JobID+occurrence.ScheduledFor.UTC().Format(time.RFC3339Nano)+now.UTC().Format(time.RFC3339Nano)), JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, ScheduledFor: occurrence.ScheduledFor, RequestedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID)}
 	if err := command.Validate(now); err != nil {
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonOccurrenceRejected)
 	}
@@ -370,7 +370,7 @@ func (worker Worker) unavailableReceipt(workspaceID string, occurrence scheduler
 	if !validReasonCode(reason) {
 		reason = ReasonHandlerUnavailable
 	}
-	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: id, OccurrenceDigest: digestOccurrence(occurrence), CommandID: "unavailable-" + digestPrefix(occurrence.JobID+occurrence.ScheduledFor.String()), JobID: occurrence.JobID, WorkspaceID: workspaceID, Trigger: triggerForCadence(worker.Jobs, occurrence.JobID), State: ReceiptUnavailable, RecordedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: occurrence.JobID == "darwin-structural-evolution-proposal", ReasonCode: reason}
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: id, OccurrenceDigest: digestOccurrence(occurrence), CommandID: "unavailable-" + digestPrefix(occurrence.JobID+occurrence.ScheduledFor.String()), JobID: occurrence.JobID, WorkspaceID: workspaceID, Trigger: triggerForCadence(worker.Jobs, occurrence.JobID), State: ReceiptUnavailable, RecordedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID), ReasonCode: reason}
 	return receipt, worker.Receipts.AppendReceipt(receipt)
 }
 

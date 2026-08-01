@@ -14,6 +14,8 @@ type WalterWeeklyProposalHandler interface {
 	ProposeWeekly(context.Context, Command) (HandlerResult, error)
 }
 
+const WalterWeeklyJobID = WalterSelfReviewWeeklyJobID
+
 type WalterWeeklyAdapter struct {
 	Handler WalterWeeklyProposalHandler
 }
