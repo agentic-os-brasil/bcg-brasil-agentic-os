@@ -46,5 +46,7 @@ with the same metadata-only and fail-closed principles.
 - `go run ./dev/harness skills-index` produces a catalog and Markdown index that
   include exactly the six new skills in sorted order.
 - The base distribution allowlist names both files for each included skill.
-- `go run ./dev/harness validate --full` passes while specialized data bundle entries
-  remain unavailable.
+- `go run ./dev/harness validate --full` passes with `data-practice` embedded as
+  optional: a confirmed data selection projects its three data skills together
+  with the three required engineering skills, without granting tools or
+  authority.

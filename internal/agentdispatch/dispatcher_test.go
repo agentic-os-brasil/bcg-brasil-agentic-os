@@ -7,6 +7,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimeprojection"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
@@ -51,6 +52,28 @@ func TestDispatcherKeepsDirectSkillsInsideCaseAgent(t *testing.T) {
 	}
 	if decision := dispatcher.FinishRoot(root); !decision.Allowed {
 		t.Fatalf("root did not finish: %#v", decision)
+	}
+}
+
+func TestDispatcherEnforcesConfirmedTrackSelection(t *testing.T) {
+	dataDispatcher := newTrackDispatcher(t, []string{"data-science"})
+	root, decision, err := dataDispatcher.StartRoot(PacketRequest{TargetAgentID: "case-agent-alpha", ScopeKind: "case", ScopeID: "alpha", Objective: "Evaluate the bounded data-science result.", TTL: time.Hour})
+	if err != nil || !decision.Allowed {
+		t.Fatalf("data root dispatch failed: %#v %v", decision, err)
+	}
+	for _, skillID := range []string{"data-science-evaluation", "test-and-evidence"} {
+		if err := dataDispatcher.SelectDirectSkill(root, "case-agent-alpha", "case-cap", skillID); err != nil {
+			t.Fatalf("selected or dependency skill %q was denied: %v", skillID, err)
+		}
+	}
+
+	engineeringDispatcher := newTrackDispatcher(t, []string{"software-engineering"})
+	root, decision, err = engineeringDispatcher.StartRoot(PacketRequest{TargetAgentID: "case-agent-alpha", ScopeKind: "case", ScopeID: "alpha", Objective: "Implement the bounded software change.", TTL: time.Hour})
+	if err != nil || !decision.Allowed {
+		t.Fatalf("engineering root dispatch failed: %#v %v", decision, err)
+	}
+	if err := engineeringDispatcher.SelectDirectSkill(root, "case-agent-alpha", "case-cap", "data-science-evaluation"); err == nil {
+		t.Fatal("unselected data skill was allowed")
 	}
 }
 
@@ -113,6 +136,35 @@ func newTestDispatcher(t *testing.T) *Dispatcher {
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
 		{AgentID: "case-agent-alpha", Role: "case_agent", Scope: "alpha", ScopeKind: "case", Capability: "case-cap"},
 		{AgentID: "walter", Role: "reviewer", Scope: "review", ScopeKind: "review", Capability: "walter-cap"},
+	}
+	adapter, err := agentorchestration.NewAdapter("claude", catalog, grants, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mustNew(adapter, registry, t)
+}
+
+func newTrackDispatcher(t *testing.T, tracks []string) *Dispatcher {
+	t.Helper()
+	catalog, err := agentcatalog.ParseFile("../../bundles/base/agents/catalog.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, skills, err := runtimeprojection.PolicyForTracks(tracks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := skillpolicy.Compile(policy, skills, catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := agentorchestration.NewStateStore("recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	grants := []agentorchestration.Authorization{
+		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
+		{AgentID: "case-agent-alpha", Role: "case_agent", Scope: "alpha", ScopeKind: "case", Capability: "case-cap"},
 	}
 	adapter, err := agentorchestration.NewAdapter("claude", catalog, grants, store)
 	if err != nil {

@@ -39,6 +39,42 @@ type Registry struct {
 	policy Policy
 }
 
+// ActivateDirect returns a selection-scoped policy. It extends one governed
+// direct role with skill IDs that were activated by a confirmed bundle plan;
+// it does not grant tools, data scope, persistence or delegation authority.
+func ActivateDirect(policy Policy, role string, skillIDs []string) (Policy, error) {
+	role = canonicalRole(role)
+	if !directRole(role) {
+		return Policy{}, errors.New("optional skills may only be activated for a governed direct role")
+	}
+	result := policy
+	result.Direct = make([]DirectRule, len(policy.Direct))
+	found := false
+	for index, rule := range policy.Direct {
+		result.Direct[index] = DirectRule{Role: rule.Role, SkillIDs: append([]string(nil), rule.SkillIDs...)}
+		if canonicalRole(rule.Role) != role {
+			continue
+		}
+		found = true
+		merged := append(append([]string(nil), rule.SkillIDs...), skillIDs...)
+		sort.Strings(merged)
+		unique := merged[:0]
+		for _, skillID := range merged {
+			if skillID == "" {
+				return Policy{}, errors.New("activated skill ID is required")
+			}
+			if len(unique) == 0 || unique[len(unique)-1] != skillID {
+				unique = append(unique, skillID)
+			}
+		}
+		result.Direct[index].SkillIDs = unique
+	}
+	if !found {
+		return Policy{}, errors.New("governed direct role is absent from the base policy")
+	}
+	return result, nil
+}
+
 func ParseFile(path string) (Policy, error) {
 	file, err := os.Open(path)
 	if err != nil {

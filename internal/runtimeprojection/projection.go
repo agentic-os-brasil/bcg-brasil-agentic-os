@@ -4,6 +4,7 @@
 package runtimeprojection
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,11 +15,13 @@ import (
 	"sort"
 	"strings"
 
+	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	bundlecatalog "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/catalog"
 	datapracticeskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/data-practice/skills"
 	engineeringcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/engineering-core/skills"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
@@ -27,6 +30,7 @@ const (
 	OrientationBegin     = "<!-- BCGOS:MAESTRO-ORIENTATION:BEGIN -->"
 	OrientationEnd       = "<!-- BCGOS:MAESTRO-ORIENTATION:END -->"
 	ManifestRelativePath = ".bcgos/runtime-projection.json"
+	PolicyRelativePath   = ".bcgos/agent-skill-policy.json"
 )
 
 type Status struct {
@@ -35,6 +39,7 @@ type Status struct {
 	OrientationPath string   `json:"orientation_path"`
 	SkillsRoot      string   `json:"skills_root"`
 	ManifestPath    string   `json:"manifest_path"`
+	PolicyPath      string   `json:"policy_path"`
 	SkillCount      int      `json:"skill_count"`
 	Conflicts       []string `json:"conflicts,omitempty"`
 	Reason          string   `json:"reason,omitempty"`
@@ -46,6 +51,8 @@ type manifest struct {
 	OrientationPath string            `json:"orientation_path"`
 	OrientationHash string            `json:"orientation_hash"`
 	SkillHashes     map[string]string `json:"skill_hashes"`
+	PolicyPath      string            `json:"policy_path,omitempty"`
+	PolicyHash      string            `json:"policy_hash,omitempty"`
 }
 
 type fileSnapshot struct {
@@ -72,7 +79,7 @@ func ValidateInstallForTracks(runtimeName, workspace string, tracks []string) er
 	if err != nil {
 		return err
 	}
-	for _, relative := range []string{layout.orientation, layout.root, ManifestRelativePath} {
+	for _, relative := range []string{layout.orientation, layout.root, ManifestRelativePath, PolicyRelativePath} {
 		if err := rejectSymlinkComponents(workspace, relative); err != nil {
 			return err
 		}
@@ -85,6 +92,10 @@ func ValidateInstallForTracks(runtimeName, workspace string, tracks []string) er
 	if err != nil {
 		return err
 	}
+	policyBody, err := policyBodyForTracks(tracks)
+	if err != nil {
+		return err
+	}
 	old, err := readManifest(filepath.Join(workspace, ManifestRelativePath))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -92,7 +103,7 @@ func ValidateInstallForTracks(runtimeName, workspace string, tracks []string) er
 	if old.Runtime != "" && old.Runtime != runtimeName {
 		return fmt.Errorf("workspace already has a %s runtime projection", old.Runtime)
 	}
-	if conflicts := preflight(workspace, layout, contents, hashes, old); len(conflicts) > 0 {
+	if conflicts := preflight(workspace, layout, contents, hashes, digest(policyBody), old); len(conflicts) > 0 {
 		return fmt.Errorf("runtime projection has conflicts: %s", strings.Join(conflicts, ", "))
 	}
 	return nil
@@ -119,7 +130,7 @@ func InstallForTracks(runtimeName, workspace string, tracks []string) (Status, e
 	if err != nil {
 		return Status{}, err
 	}
-	for _, relative := range []string{layout.orientation, layout.root, ManifestRelativePath} {
+	for _, relative := range []string{layout.orientation, layout.root, ManifestRelativePath, PolicyRelativePath} {
 		if err := rejectSymlinkComponents(workspace, relative); err != nil {
 			return Status{}, err
 		}
@@ -132,6 +143,11 @@ func InstallForTracks(runtimeName, workspace string, tracks []string) (Status, e
 	if err != nil {
 		return Status{}, err
 	}
+	policyBody, err := policyBodyForTracks(tracks)
+	if err != nil {
+		return Status{}, err
+	}
+	policyHash := digest(policyBody)
 	orientation, err := renderOrientation(layout, catalog)
 	if err != nil {
 		return Status{}, err
@@ -143,10 +159,10 @@ func InstallForTracks(runtimeName, workspace string, tracks []string) (Status, e
 	if old.Runtime != "" && old.Runtime != runtimeName {
 		return Status{}, fmt.Errorf("workspace already has a %s runtime projection", old.Runtime)
 	}
-	if conflicts := preflight(workspace, layout, contents, hashes, old); len(conflicts) > 0 {
-		return Status{Runtime: runtimeName, State: "conflict", OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: filepath.Join(workspace, ManifestRelativePath), SkillCount: len(contents), Conflicts: conflicts, Reason: "existing user files were preserved; no projection files were changed"}, fmt.Errorf("runtime projection has conflicts: %s", strings.Join(conflicts, ", "))
+	if conflicts := preflight(workspace, layout, contents, hashes, policyHash, old); len(conflicts) > 0 {
+		return Status{Runtime: runtimeName, State: "conflict", OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: filepath.Join(workspace, ManifestRelativePath), PolicyPath: filepath.Join(workspace, PolicyRelativePath), SkillCount: len(contents), Conflicts: conflicts, Reason: "existing user files were preserved; no projection files were changed"}, fmt.Errorf("runtime projection has conflicts: %s", strings.Join(conflicts, ", "))
 	}
-	paths := []string{filepath.Join(workspace, layout.orientation), filepath.Join(workspace, ManifestRelativePath)}
+	paths := []string{filepath.Join(workspace, layout.orientation), filepath.Join(workspace, ManifestRelativePath), filepath.Join(workspace, PolicyRelativePath)}
 	for id := range contents {
 		paths = append(paths, filepath.Join(workspace, layout.root, id, "SKILL.md"))
 	}
@@ -173,6 +189,9 @@ func InstallForTracks(runtimeName, workspace string, tracks []string) (Status, e
 			return Status{}, rollback(fmt.Errorf("write installed skill %s: %w", id, err))
 		}
 	}
+	if err := writeManagedFile(filepath.Join(workspace, PolicyRelativePath), policyBody); err != nil {
+		return Status{}, rollback(fmt.Errorf("write selection-scoped skill policy: %w", err))
+	}
 	for id, expected := range old.SkillHashes {
 		if _, current := contents[id]; current {
 			continue
@@ -186,11 +205,11 @@ func InstallForTracks(runtimeName, workspace string, tracks []string) (Status, e
 			_ = os.Remove(filepath.Dir(path))
 		}
 	}
-	newManifest := manifest{SchemaVersion: SchemaVersion, Runtime: runtimeName, OrientationPath: layout.orientation, OrientationHash: orientationDigest(orientation), SkillHashes: hashes}
+	newManifest := manifest{SchemaVersion: SchemaVersion, Runtime: runtimeName, OrientationPath: layout.orientation, OrientationHash: orientationDigest(orientation), SkillHashes: hashes, PolicyPath: PolicyRelativePath, PolicyHash: policyHash}
 	if err := writeJSON(filepath.Join(workspace, ManifestRelativePath), newManifest); err != nil {
 		return Status{}, rollback(fmt.Errorf("write runtime projection manifest: %w", err))
 	}
-	return Status{Runtime: runtimeName, State: "installed", OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: filepath.Join(workspace, ManifestRelativePath), SkillCount: len(contents)}, nil
+	return Status{Runtime: runtimeName, State: "installed", OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: filepath.Join(workspace, ManifestRelativePath), PolicyPath: filepath.Join(workspace, PolicyRelativePath), SkillCount: len(contents)}, nil
 }
 
 func Inspect(runtimeName, workspace string) (Status, error) {
@@ -198,7 +217,7 @@ func Inspect(runtimeName, workspace string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	for _, relative := range []string{layout.orientation, layout.root, ManifestRelativePath} {
+	for _, relative := range []string{layout.orientation, layout.root, ManifestRelativePath, PolicyRelativePath} {
 		if err := rejectSymlinkComponents(workspace, relative); err != nil {
 			return Status{}, err
 		}
@@ -232,12 +251,18 @@ func Inspect(runtimeName, workspace string) (Status, error) {
 			conflicts = append(conflicts, relative)
 		}
 	}
+	policyPath := filepath.Join(workspace, PolicyRelativePath)
+	if current.PolicyPath != PolicyRelativePath || current.PolicyHash == "" {
+		conflicts = append(conflicts, policyPath)
+	} else if body, readErr := os.ReadFile(policyPath); readErr != nil || digest(body) != current.PolicyHash {
+		conflicts = append(conflicts, policyPath)
+	}
 	sort.Strings(conflicts)
 	state := "installed"
 	if len(conflicts) > 0 {
 		state = "conflict"
 	}
-	return Status{Runtime: runtimeName, State: state, OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: path, SkillCount: len(current.SkillHashes), Conflicts: conflicts}, nil
+	return Status{Runtime: runtimeName, State: state, OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: path, PolicyPath: policyPath, SkillCount: len(current.SkillHashes), Conflicts: conflicts}, nil
 }
 
 func Uninstall(runtimeName, workspace string) (Status, error) {
@@ -245,7 +270,7 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	for _, relative := range []string{layout.orientation, layout.root, ManifestRelativePath} {
+	for _, relative := range []string{layout.orientation, layout.root, ManifestRelativePath, PolicyRelativePath} {
 		if err := rejectSymlinkComponents(workspace, relative); err != nil {
 			return Status{}, err
 		}
@@ -267,7 +292,8 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 		}
 	}
 	orientationPath := filepath.Join(workspace, layout.orientation)
-	paths := []string{orientationPath, manifestPath}
+	policyPath := filepath.Join(workspace, PolicyRelativePath)
+	paths := []string{orientationPath, manifestPath, policyPath}
 	for id := range current.SkillHashes {
 		paths = append(paths, filepath.Join(workspace, layout.root, id, "SKILL.md"))
 	}
@@ -296,6 +322,11 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 			conflicts = append(conflicts, path)
 		}
 	}
+	if current.PolicyPath != PolicyRelativePath || current.PolicyHash == "" {
+		conflicts = append(conflicts, policyPath)
+	} else if body, readErr := os.ReadFile(policyPath); readErr != nil || digest(body) != current.PolicyHash {
+		conflicts = append(conflicts, policyPath)
+	}
 	if len(conflicts) > 0 {
 		sort.Strings(conflicts)
 		return Status{Runtime: runtimeName, State: "conflict", OrientationPath: orientationPath, SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: manifestPath, SkillCount: len(current.SkillHashes), Conflicts: conflicts, Reason: "modified skill files were preserved"}, errors.New("modified managed skill files were preserved")
@@ -319,10 +350,13 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 		_ = os.Remove(filepath.Dir(path))
 	}
 	_ = os.Remove(filepath.Join(workspace, layout.root))
+	if err := os.Remove(policyPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return Status{}, rollback(err)
+	}
 	if err := os.Remove(manifestPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return Status{}, rollback(err)
 	}
-	return Status{Runtime: runtimeName, State: "removed", OrientationPath: orientationPath, SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: manifestPath, SkillCount: len(current.SkillHashes)}, nil
+	return Status{Runtime: runtimeName, State: "removed", OrientationPath: orientationPath, SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: manifestPath, PolicyPath: policyPath, SkillCount: len(current.SkillHashes)}, nil
 }
 
 func layout(runtimeName, workspace string) (runtimeLayout, error) {
@@ -423,6 +457,59 @@ func catalogForTracks(tracks []string) (skillsindex.Catalog, error) {
 	return base, nil
 }
 
+// PolicyForTracks composes the immutable base policy with exactly the optional
+// methods activated by the confirmed track plan. The returned policy compiles
+// only against the corresponding active catalog, so unselected bundle methods
+// remain denied even if their source is embedded in the release.
+func PolicyForTracks(tracks []string) (skillpolicy.Policy, skillsindex.Catalog, error) {
+	active, err := catalogForTracks(tracks)
+	if err != nil {
+		return skillpolicy.Policy{}, skillsindex.Catalog{}, err
+	}
+	base, err := baseskills.Catalog()
+	if err != nil {
+		return skillpolicy.Policy{}, skillsindex.Catalog{}, err
+	}
+	policy, err := skillpolicy.Parse(bytes.NewReader(baseskills.AgentSkillPolicy()))
+	if err != nil {
+		return skillpolicy.Policy{}, skillsindex.Catalog{}, fmt.Errorf("parse base agent skill policy: %w", err)
+	}
+	baseIDs := make(map[string]bool, len(base.Skills))
+	for _, skill := range base.Skills {
+		baseIDs[skill.ID] = true
+	}
+	optionalIDs := make([]string, 0, len(active.Skills)-len(base.Skills))
+	for _, skill := range active.Skills {
+		if !baseIDs[skill.ID] {
+			optionalIDs = append(optionalIDs, skill.ID)
+		}
+	}
+	policy, err = skillpolicy.ActivateDirect(policy, "case_agent", optionalIDs)
+	if err != nil {
+		return skillpolicy.Policy{}, skillsindex.Catalog{}, err
+	}
+	agents, err := baseagents.Catalog()
+	if err != nil {
+		return skillpolicy.Policy{}, skillsindex.Catalog{}, err
+	}
+	if _, err := skillpolicy.Compile(policy, active, agents); err != nil {
+		return skillpolicy.Policy{}, skillsindex.Catalog{}, fmt.Errorf("compile selection-scoped agent skill policy: %w", err)
+	}
+	return policy, active, nil
+}
+
+func policyBodyForTracks(tracks []string) ([]byte, error) {
+	policy, _, err := PolicyForTracks(tracks)
+	if err != nil {
+		return nil, err
+	}
+	body, err := json.MarshalIndent(policy, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(body, '\n'), nil
+}
+
 func skillBody(id string) ([]byte, error) {
 	if body, err := baseskills.Skill(id); err == nil {
 		return body, nil
@@ -457,7 +544,7 @@ func runtimeID(layout runtimeLayout) string {
 	return "codex"
 }
 
-func preflight(workspace string, layout runtimeLayout, contents map[string][]byte, hashes map[string]string, old manifest) []string {
+func preflight(workspace string, layout runtimeLayout, contents map[string][]byte, hashes map[string]string, policyHash string, old manifest) []string {
 	var conflicts []string
 	orientationPath := filepath.Join(workspace, layout.orientation)
 	currentOrientation, orientationErr := os.ReadFile(orientationPath)
@@ -507,6 +594,23 @@ func preflight(workspace string, layout runtimeLayout, contents map[string][]byt
 			conflicts = append(conflicts, path)
 		}
 	}
+	policyPath := filepath.Join(workspace, PolicyRelativePath)
+	policyBody, policyErr := os.ReadFile(policyPath)
+	if old.Runtime == "" || old.PolicyHash == "" {
+		// A legacy projection without policy ownership may be upgraded only when
+		// the policy path is absent. An existing file belongs to the user.
+		if policyErr == nil || !errors.Is(policyErr, os.ErrNotExist) {
+			conflicts = append(conflicts, policyPath)
+		}
+	} else if old.PolicyPath != PolicyRelativePath || policyErr != nil {
+		conflicts = append(conflicts, policyPath)
+	} else {
+		currentHash := digest(policyBody)
+		if currentHash != policyHash && currentHash != old.PolicyHash {
+			conflicts = append(conflicts, policyPath)
+		}
+	}
+	sort.Strings(conflicts)
 	return conflicts
 }
 
@@ -594,6 +698,17 @@ func readManifest(path string) (manifest, error) {
 	for id := range value.SkillHashes {
 		if filepath.Clean(id) != id || id == "." || id == ".." || strings.ContainsAny(id, `/\\`) {
 			return manifest{}, fmt.Errorf("runtime projection manifest contains unsafe skill ID %q", id)
+		}
+	}
+	if (value.PolicyPath == "") != (value.PolicyHash == "") {
+		return manifest{}, errors.New("runtime projection manifest has an incomplete skill policy identity")
+	}
+	if value.PolicyPath != "" {
+		if value.PolicyPath != PolicyRelativePath || len(value.PolicyHash) != sha256.Size*2 {
+			return manifest{}, errors.New("runtime projection manifest has an invalid skill policy identity")
+		}
+		if _, err := hex.DecodeString(value.PolicyHash); err != nil || strings.ToLower(value.PolicyHash) != value.PolicyHash {
+			return manifest{}, errors.New("runtime projection manifest has an invalid skill policy digest")
 		}
 	}
 	return value, nil

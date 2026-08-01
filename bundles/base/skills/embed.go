@@ -11,11 +11,18 @@ import (
 //go:embed catalog.json
 var catalogJSON []byte
 
+//go:embed agent-skill-policy.json
+var agentSkillPolicyJSON []byte
+
 //go:embed */SKILL.md
 var skillFiles embed.FS
 
 func Catalog() (skillsindex.Catalog, error) {
 	return skillsindex.Parse(bytes.NewReader(catalogJSON))
+}
+
+func AgentSkillPolicy() []byte {
+	return append([]byte(nil), agentSkillPolicyJSON...)
 }
 
 func Skill(id string) ([]byte, error) {

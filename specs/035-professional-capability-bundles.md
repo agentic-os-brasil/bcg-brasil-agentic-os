@@ -63,7 +63,11 @@ its skill metadata, its interaction-profile reference and generated catalog.
 plan --track <track[,track...]>` resolves the selected bundles and dependencies
 without changing local state. `bcgos agent interview` exposes the same tracks;
 `bcgos agent personalize --stdin` persists a confirmed selection, and the next
-adapter installation projects the selected optional skills.
+adapter installation projects the selected optional skills and a managed,
+selection-scoped policy at `.bcgos/agent-skill-policy.json`. The policy admits
+the selected methods and their dependencies for the Case Agent; methods from
+unselected bundles remain denied even though their source is embedded in the
+verified local distribution.
 
 For `consulting`, the result is `base_only` and its active skills index includes
 the neutral quality methods. Plans that require either optional bundle return
@@ -110,6 +114,9 @@ clone.
 - A runtime activates only selected bundles embedded in the verified local
   distribution; it does not emulate remote installation from source files or a
   Git clone.
+- Projection, inspection and removal hash the selection-scoped policy in the
+  runtime manifest. A missing, modified, symlinked or unmanaged policy path
+  fails closed and preserves the existing file.
 
 ## Acceptance evidence
 
@@ -123,6 +130,9 @@ clone.
   and `data-practice`, and projection activates all six selected/dependency
   skills.
 - Track planning resolves `consulting` to the base bundle only.
+- The dispatcher's direct-skill gate admits selected and dependency methods for
+  the active Case Agent and rejects an embedded method from an unselected
+  bundle.
 - The full harness validates all declared bundle skill directories and generated
   indexes; the distribution allowlist contains the six explicit quality methods
   and the signed Canary engineering-core and data-practice content.
