@@ -1445,6 +1445,8 @@ func splitTracks(value string) []string {
 type maestroDispatchRequest struct {
 	AuthenticatedOwner bool          `json:"authenticated_owner"`
 	OwnerID            string        `json:"owner_id"`
+	DispatchID         string        `json:"dispatch_id"`
+	OccurrenceID       string        `json:"occurrence_id"`
 	Prompt             string        `json:"prompt"`
 	Language           string        `json:"language"`
 	Source             string        `json:"source"`
@@ -1459,38 +1461,12 @@ type maestroDispatchRequest struct {
 	Plan               maestro.Input `json:"plan"`
 }
 
-func durableDispatchFence(plan maestro.Plan, path string) (uint64, error) {
-	store, err := agentorchestration.NewDurableStateStore(path, "maestro-dispatch-recovery")
+func durableDispatchFence(root, ownerID, sessionID, dispatchID string, plan maestro.Plan, chain maestro.ChainState) (maestro.DispatchBoundaryState, error) {
+	state, err := maestro.PersistDispatchBoundary(root, ownerID, sessionID, dispatchID, plan, chain)
 	if err != nil {
-		return 0, err
+		return maestro.DispatchBoundaryState{}, err
 	}
-	if len(plan.Bindings) == 0 {
-		// Direct answers deliberately have no spoke branch; the durable store
-		// remains the shared installation authority for later mediated work.
-		return store.Snapshot().FenceEpoch, nil
-	}
-	catalog, err := baseagents.Catalog()
-	if err != nil {
-		return 0, err
-	}
-	grants := []agentorchestration.Authorization{{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-dispatch-cap"}}
-	for _, binding := range plan.Bindings {
-		grants = append(grants, agentorchestration.Authorization{AgentID: binding.ID, Role: binding.Role, Scope: binding.ScopeID, ScopeKind: binding.ScopeKind, Capability: "dispatch-" + binding.ID})
-	}
-	adapter, err := agentorchestration.NewAdapter("codex", catalog, grants, store)
-	if err != nil {
-		return 0, err
-	}
-	target := plan.Bindings[0]
-	decision := adapter.StartBranch("maestro", "maestro-dispatch-cap", target.ID, plan.PlanDigest, target.ScopeID, target.ScopeKind)
-	if !decision.Allowed {
-		return 0, errors.New("Maestro dispatch lifecycle transition denied: " + decision.Code)
-	}
-	decision = adapter.FinishBranch(target.ID, "dispatch-"+target.ID, plan.PlanDigest)
-	if !decision.Allowed {
-		return 0, errors.New("Maestro dispatch lifecycle close denied: " + decision.Code)
-	}
-	return adapter.Snapshot().FenceEpoch, nil
+	return state, nil
 }
 
 func rollbackDispatch(root string, chain maestro.ChainState, chainCreated bool, promptID, reason string) error {
@@ -1531,6 +1507,15 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 	var request maestroDispatchRequest
 	if err := json.Unmarshal(body, &request); err != nil || !request.AuthenticatedOwner || strings.TrimSpace(request.OwnerID) == "" || strings.TrimSpace(request.Prompt) == "" {
 		return reportError(errOut, errors.New("Maestro dispatch requires an authenticated owner and prompt"))
+	}
+	if request.DispatchID != "" && request.OccurrenceID != "" && request.DispatchID != request.OccurrenceID {
+		return reportError(errOut, errors.New("dispatch_id and occurrence_id must match when both are supplied"))
+	}
+	if request.DispatchID == "" {
+		request.DispatchID = request.OccurrenceID
+	}
+	if request.DispatchID == "" {
+		return reportError(errOut, errors.New("Maestro dispatch requires a caller-generated dispatch_id"))
 	}
 	if request.Language == "" {
 		request.Language = "en"
@@ -1597,8 +1582,7 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 		}
 		return reportError(errOut, err)
 	}
-	durablePath := filepath.Join(root, "owner", "maestro", "orchestration-state.json")
-	durableFenceEpoch, err := durableDispatchFence(plan, durablePath)
+	durableState, err := durableDispatchFence(root, request.OwnerID, request.SessionID, request.DispatchID, plan, chain)
 	if err != nil {
 		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, recorded.ID, "durable dispatch fence failed"); rollbackErr != nil {
 			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
@@ -1606,7 +1590,7 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 		return reportError(errOut, err)
 	}
 	chainBody, _ := json.Marshal(chain)
-	receipt := maestro.DispatchBoundaryReceipt{SchemaVersion: 1, PlanDigest: plan.PlanDigest, ChainDigest: maestro.SHA256Hex(string(chainBody)), PacketDigest: packet.PacketDigest, PromptDigest: maestro.SHA256Hex(packet.LiteralRequest), DraftDigest: maestro.SHA256Hex(packet.DraftOutput), AccountConsultation: plan.AccountConsultationRequired, WalterRequired: plan.RequiresWalter, HistoryCount: len(packet.PriorPrompts), DurableFenceEpoch: durableFenceEpoch, State: chain.Stage, Outcome: "dispatch_boundary_model_unavailable"}
+	receipt := maestro.DispatchBoundaryReceipt{SchemaVersion: 1, PlanDigest: plan.PlanDigest, ChainDigest: maestro.SHA256Hex(string(chainBody)), PacketDigest: packet.PacketDigest, PromptDigest: maestro.SHA256Hex(packet.LiteralRequest), DraftDigest: maestro.SHA256Hex(packet.DraftOutput), AccountConsultation: plan.AccountConsultationRequired, WalterRequired: plan.RequiresWalter, HistoryCount: len(packet.PriorPrompts), DispatchID: durableState.DispatchID, DurableDispatchEpoch: durableState.Epoch, BindingChainDigest: durableState.BindingChainDigest, State: chain.Stage, Outcome: "dispatch_boundary_model_unavailable"}
 	return writeJSON(out, receipt, errOut)
 }
 

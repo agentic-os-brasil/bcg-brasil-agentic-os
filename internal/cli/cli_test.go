@@ -549,24 +549,33 @@ func TestOwnerPromptHistoryControlsKeepBodiesOutOfInspectReceipts(t *testing.T) 
 func TestMaestroDispatchBoundaryRecordsPromptPlansAndPersistsMetadataOnlyChain(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := func() (string, error) { return root, nil }
-	input := `{"authenticated_owner":true,"owner_id":"owner","prompt":"prepare case alpha","language":"en-US","source":"cli","session_id":"session-dispatch","working_language":"en-US","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
+	input := `{"authenticated_owner":true,"owner_id":"owner","dispatch_id":"dispatch-cli-1","prompt":"prepare case alpha","language":"en-US","source":"cli","session_id":"session-dispatch","working_language":"en-US","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
 	var output bytes.Buffer
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK {
 		t.Fatalf("Maestro dispatch = %d: %s", code, output.String())
 	}
-	if strings.Contains(output.String(), "prepare case alpha") || !strings.Contains(output.String(), "dispatch_boundary_model_unavailable") || !strings.Contains(output.String(), `"durable_fence_epoch": 1`) {
+	if strings.Contains(output.String(), "prepare case alpha") || !strings.Contains(output.String(), "dispatch_boundary_model_unavailable") || !strings.Contains(output.String(), `"durable_dispatch_epoch": 1`) {
 		t.Fatalf("dispatch boundary leaked body or missed unavailable result: %s", output.String())
 	}
 	chains, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "chains", "*.json"))
 	if err != nil || len(chains) != 1 {
 		t.Fatalf("persisted chain files = %v, err=%v", chains, err)
 	}
+	output.Reset()
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"durable_dispatch_epoch": 1`) {
+		t.Fatalf("same occurrence was not idempotent: code=%d output=%s", code, output.String())
+	}
+	distinctOccurrence := strings.Replace(input, `"dispatch_id":"dispatch-cli-1"`, `"dispatch_id":"dispatch-cli-2"`, 1)
+	output.Reset()
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(distinctOccurrence), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"durable_dispatch_epoch": 2`) {
+		t.Fatalf("distinct occurrence did not advance the durable epoch: code=%d output=%s", code, output.String())
+	}
 }
 
 func TestMaestroDispatchValidatesBeforeRecordingPromptOrChain(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := func() (string, error) { return root, nil }
-	invalid := `{"authenticated_owner":true,"owner_id":"owner","prompt":"should not persist"}`
+	invalid := `{"authenticated_owner":true,"owner_id":"owner","dispatch_id":"dispatch-invalid","prompt":"should not persist"}`
 	var output bytes.Buffer
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(invalid), &output, &output, dataRoot); code == ExitOK {
 		t.Fatal("invalid plan unexpectedly dispatched")
@@ -579,7 +588,7 @@ func TestMaestroDispatchValidatesBeforeRecordingPromptOrChain(t *testing.T) {
 	}
 
 	output.Reset()
-	valid := `{"authenticated_owner":true,"owner_id":"owner","prompt":"translate current","language":"en-US","source":"cli","session_id":"translation-failure","working_language":"pt-BR","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
+	valid := `{"authenticated_owner":true,"owner_id":"owner","dispatch_id":"dispatch-translation-failure","prompt":"translate current","language":"en-US","source":"cli","session_id":"translation-failure","working_language":"pt-BR","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(valid), &output, &output, dataRoot); code == ExitOK {
 		t.Fatal("translation failure unexpectedly dispatched")
 	}
@@ -600,7 +609,7 @@ func TestMaestroDispatchKeepsEarlierSameSessionHistoryAndCurrentIsNotDuplicated(
 	if _, err := ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: "owner", Prompt: "prepare case alpha", Language: "en-US", Source: "cli", SessionID: "session-dispatch", ScopeKind: ownerctx.PromptScopeCase, ScopeID: "case-alpha", ContentKind: "user_prompt"}); err != nil {
 		t.Fatal(err)
 	}
-	input := `{"authenticated_owner":true,"owner_id":"owner","prompt":"prepare case alpha","language":"en-US","source":"cli","session_id":"session-dispatch","working_language":"en-US","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
+	input := `{"authenticated_owner":true,"owner_id":"owner","dispatch_id":"dispatch-cli-2","prompt":"prepare case alpha","language":"en-US","source":"cli","session_id":"session-dispatch","working_language":"en-US","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
 	var output bytes.Buffer
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"history_count": 1`) {
 		t.Fatalf("earlier same-session prompt was suppressed or current duplicated: code=%d output=%s", code, output.String())

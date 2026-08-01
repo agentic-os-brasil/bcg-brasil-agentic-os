@@ -2,6 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentic-os-brasil/schemas/intent-review-packet.schema.json",
   "title": "Maestro IntentReviewPacket",
+  "x-bcgos-max-total-utf8-bytes": 32768,
+  "x-bcgos-runtime-validator": "internal/maestro.IntentReviewPacket.Validate",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "packet_version", "packet_id", "literal_request", "current_prompt", "current_prompt_language", "current_prompt_original_sha256", "working_current_prompt", "working_current_prompt_sha256", "plan_digest", "draft_output", "self_snapshot_version", "self_snapshot_digest", "self_facets", "prompt_history", "audience", "consequence", "reversibility", "packet_digest"],

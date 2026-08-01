@@ -89,9 +89,12 @@ attempts have deterministic budgets and append receipts; exhaustion fails
 closed. Bindings include exact agent ID, role contract, scope, authorization
 digest, capability digest, plan digest and state snapshot digest.
 
-Claude and Codex adapter command paths point to the same durable installation
-state store. The CLI dispatch proof drives an authenticated start/finish
-transition, so model-unavailable cannot strand an active branch; model-backed
-resume remains owned by the qualified adapter. Restart, replacement, replay
-and parallel branch tests prove fencing and recovery. Adapter-observed receipts are not native evidence;
+Claude and Codex adapter command paths point to the same owner-local durable
+dispatch CAS/receipt store. The CLI boundary proof is metadata-only: it records
+an occurrence-bound ordered-chain digest and a finished local epoch, but does
+not authenticate an installed native agent or fabricate adapter credentials.
+Model execution remains unavailable until a qualified runtime supplies fresh
+native evidence. Append-only receipts and an atomic current pointer preserve
+history and recover safely across restart, replacement, replay and parallel
+dispatch attempts. Adapter-observed receipts are not native evidence;
 native-qualified status requires fresh runtime evidence.
