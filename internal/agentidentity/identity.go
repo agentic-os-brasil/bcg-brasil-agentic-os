@@ -127,7 +127,7 @@ func InitialInterview() Interview {
 			{Field: "agent_names", Question: "Que nomes você quer usar para Maestro, Client Account, Case, Walter, Darwin e PA experts?", Explanation: "Você pode escolher individualmente ou aceitar as sugestões abaixo; conta e case serão vinculados ao agent_id concreto."},
 			{Field: "agent_emojis", Question: "Que emoji-avatar deve acompanhar cada agent?", Explanation: "O emoji é visual e personalizável; a definição técnica continua versionada no catálogo."},
 			{Field: "ownership_scope", Question: "Esta personalização é global, de uma conta, de um case ou do PA Expert registry?", Explanation: "O scope limita onde o nome e o avatar podem ser usados."},
-			{Field: "capability_tracks", Question: "Quais trilhas profissionais você quer ativar no Canary?", Explanation: "A seleção é opcional, explícita e independente do interaction-profile. Cada trilha selecionada adiciona apenas suas skills metodológicas."},
+			{Field: "capability_tracks", Question: "Quais trilhas profissionais você quer ativar no Canary?", Explanation: "A seleção é opcional, explícita e independente do interaction-profile. Cada trilha selecionada ativa todas as skills metodológicas do bundle correspondente e de suas dependências."},
 			{Field: "confirmation", Question: "Confirma os nomes, emojis, ownership e trilhas antes de salvar?", Explanation: "Nada é persistido ou ativado sem esta confirmação explícita."},
 		},
 		Agents: []RoleDescriptor{

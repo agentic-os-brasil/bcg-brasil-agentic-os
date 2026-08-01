@@ -771,8 +771,10 @@ func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
 	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 26`) {
 		t.Fatalf("optional adapter install = %d %s", code, output.String())
 	}
-	if _, err := os.Stat(filepath.Join(workspacePath, ".codex", "skills", "spec-driven-delivery", "SKILL.md")); err != nil {
-		t.Fatalf("engineering skill was not projected: %v", err)
+	for _, skillID := range []string{"review-explain-change", "spec-driven-delivery", "test-and-evidence"} {
+		if _, err := os.Stat(filepath.Join(workspacePath, ".codex", "skills", skillID, "SKILL.md")); err != nil {
+			t.Fatalf("engineering skill %s was not projected: %v", skillID, err)
+		}
 	}
 }
 
@@ -792,8 +794,10 @@ func TestInterviewSelectionActivatesDataProjection(t *testing.T) {
 	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 29`) {
 		t.Fatalf("data adapter install = %d %s", code, output.String())
 	}
-	if _, err := os.Stat(filepath.Join(workspacePath, ".codex", "skills", "data-science-evaluation", "SKILL.md")); err != nil {
-		t.Fatalf("data skill was not projected: %v", err)
+	for _, skillID := range []string{"review-explain-change", "spec-driven-delivery", "test-and-evidence", "data-pipeline-quality", "data-science-evaluation", "reproducible-data-run"} {
+		if _, err := os.Stat(filepath.Join(workspacePath, ".codex", "skills", skillID, "SKILL.md")); err != nil {
+			t.Fatalf("data selection did not project all skills; missing %s: %v", skillID, err)
+		}
 	}
 }
 

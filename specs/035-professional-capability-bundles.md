@@ -2,8 +2,8 @@
 
 Status: source topology and skill catalogs implemented. The neutral engineering
 quality methods are included in the base bundle; the first specialized
-engineering and data bundles are optional and can be activated through confirmed
-interview selection.
+engineering and data bundles are optional and every skill in a selected bundle
+and its dependencies is activated through confirmed interview selection.
 
 ## Objective
 
@@ -73,9 +73,9 @@ workspace, contact a provider or grant authority.
 
 The existing `bcgos skills index` remains the index of the active base bundle.
 It lists the six explicitly included quality methods by default. After a
-confirmed selection, the adapter projection adds the selected engineering-core
-and/or data-practice methods without changing the base catalog or granting
-tools.
+confirmed selection, the adapter projection adds every selected
+engineering-core and/or data-practice method, including dependencies, without
+changing the base catalog or granting tools.
 
 ## Future activation contract
 
@@ -117,9 +117,11 @@ clone.
   tracks across the entire catalog and dependency cycles, and an
   optional bundle with an invalid availability state.
 - Track planning resolves `software-engineering` through `base` and
-  `engineering-core`, and reports it as optional.
+  `engineering-core`, and projection activates all three engineering-core
+  skills.
 - Track planning resolves `data-science` through `base`, `engineering-core`
-  and `data-practice`, and reports it as optional.
+  and `data-practice`, and projection activates all six selected/dependency
+  skills.
 - Track planning resolves `consulting` to the base bundle only.
 - The full harness validates all declared bundle skill directories and generated
   indexes; the distribution allowlist contains the six explicit quality methods
