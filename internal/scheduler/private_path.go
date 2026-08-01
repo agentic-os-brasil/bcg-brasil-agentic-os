@@ -12,25 +12,37 @@ import (
 // Platform implementations walk the directory tree relative to an opened
 // no-follow descriptor on Unix, with a bounded reparse-point check on Windows.
 func ensurePrivateTree(root string, relative ...string) (string, error) {
+	directory, path, err := openPrivateTree(root, true, relative...)
+	if err != nil {
+		return "", err
+	}
+	if err := directory.close(); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func openPrivateTree(root string, create bool, relative ...string) (*secureDirectory, string, error) {
 	if strings.TrimSpace(root) == "" {
-		return "", errors.New("scheduler root is required")
+		return nil, "", errors.New("scheduler root is required")
 	}
 	var err error
 	root, err = canonicalSchedulerRoot(root)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 	current := filepath.Clean(root)
 	for _, component := range relative {
 		if component == "" || component == "." || component == ".." || filepath.Base(component) != component {
-			return "", errors.New("invalid scheduler storage component")
+			return nil, "", errors.New("invalid scheduler storage component")
 		}
 		current = filepath.Join(current, component)
 	}
-	if err := secureEnsurePrivatePath(current); err != nil {
-		return "", err
+	directory, err := openSecureDirectory(current, create)
+	if err != nil {
+		return nil, "", err
 	}
-	return current, nil
+	return directory, current, nil
 }
 
 // lookupPrivateTree is the non-mutating sibling used by authority preflight.
@@ -74,4 +86,11 @@ func canonicalSchedulerRoot(root string) (string, error) {
 		return filepath.Join(physicalTemporary, relative), nil
 	}
 	return absolute, nil
+}
+
+func validateSecureLeaf(name string) error {
+	if name == "" || name == "." || name == ".." || filepath.Base(name) != name || strings.ContainsRune(name, 0) {
+		return errors.New("invalid scheduler secure file leaf")
+	}
+	return nil
 }

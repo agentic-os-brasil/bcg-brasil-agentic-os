@@ -17,86 +17,64 @@ import (
 var securePathStepHook func(string)
 var secureLeafStepHook func(string)
 
-const secureWindowsDirectoryAccess = windows.FILE_GENERIC_READ | windows.FILE_GENERIC_WRITE | windows.DELETE
+type secureDirectory struct {
+	handle windows.Handle
+	path   string
+}
+
+const (
+	secureWindowsDirectoryTraverse = windows.FILE_LIST_DIRECTORY | windows.FILE_READ_ATTRIBUTES | windows.FILE_TRAVERSE | windows.SYNCHRONIZE
+	// x/sys/windows does not expose FILE_ADD_SUBDIRECTORY on every supported
+	// version, but it is a stable Windows directory access mask.
+	secureWindowsDirectoryCreate = secureWindowsDirectoryTraverse | 0x0004
+)
 
 // Windows uses the native NT RootDirectory handle and OBJ_DONT_REPARSE for
 // every component. This avoids the path-based Lstat/Mkdir/Chmod sequence and
 // keeps the protected filesystem capability honest on reparse-point volumes.
 func secureEnsurePrivatePath(path string) error {
-	handle, err := walkWindowsDirectory(path, true, securePathStepHook)
+	directory, err := openSecureDirectory(path, true)
 	if err != nil {
 		return err
 	}
-	return windows.CloseHandle(handle)
+	return directory.close()
 }
 
 func secureLookupPrivatePath(path string) error {
-	handle, err := walkWindowsDirectory(path, false, nil)
+	directory, err := openSecureDirectory(path, false)
 	if err != nil {
 		return err
 	}
-	return windows.CloseHandle(handle)
+	return directory.close()
 }
 
-func walkWindowsDirectory(path string, create bool, stepHook func(string)) (windows.Handle, error) {
-	components, root, err := windowsPathParts(path)
-	if err != nil {
-		return windows.InvalidHandle, err
+func openSecureDirectory(path string, create bool) (*secureDirectory, error) {
+	stepHook := securePathStepHook
+	if !create {
+		stepHook = nil
 	}
-	handle, err := ntOpenRelative(windows.InvalidHandle, `\??\`+root, secureWindowsDirectoryAccess, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
-	if err != nil {
-		return windows.InvalidHandle, err
-	}
-	for _, component := range components {
-		disposition := uint32(windows.FILE_OPEN)
-		if create {
-			disposition = windows.FILE_OPEN_IF
-		}
-		child, openErr := ntOpenRelative(handle, component, secureWindowsDirectoryAccess, disposition, windows.FILE_DIRECTORY_FILE)
-		if openErr != nil {
-			_ = windows.CloseHandle(handle)
-			return windows.InvalidHandle, openErr
-		}
-		_ = windows.CloseHandle(handle)
-		handle = child
-		if stepHook != nil {
-			stepHook(component)
-		}
-	}
-	return handle, nil
-}
-
-func ntOpenRelative(root windows.Handle, name string, access, disposition, options uint32) (windows.Handle, error) {
-	objectName, err := windows.NewNTUnicodeString(name)
-	if err != nil {
-		return windows.InvalidHandle, err
-	}
-	oa := &windows.OBJECT_ATTRIBUTES{ObjectName: objectName, RootDirectory: root, Attributes: windows.OBJ_CASE_INSENSITIVE | windows.OBJ_DONT_REPARSE}
-	oa.Length = uint32(unsafe.Sizeof(*oa))
-	var iosb windows.IO_STATUS_BLOCK
-	var allocationSize int64
-	var handle windows.Handle
-	err = windows.NtCreateFile(&handle, access, oa, &iosb, &allocationSize, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, disposition, options, 0, 0)
-	if err != nil {
-		if status, ok := err.(windows.NTStatus); ok {
-			err = status.Errno()
-		}
-		return windows.InvalidHandle, err
-	}
-	return handle, nil
-}
-
-func secureOpenFile(path string, flags int, perm os.FileMode) (*os.File, error) {
-	parent, name, err := windowsFileParent(path)
+	handle, err := walkWindowsDirectory(path, create, stepHook)
 	if err != nil {
 		return nil, err
 	}
-	parentHandle, err := walkWindowsDirectory(parent, false, nil)
-	if err != nil {
+	return &secureDirectory{handle: handle, path: path}, nil
+}
+
+func (directory *secureDirectory) close() error {
+	if directory == nil || directory.handle == windows.InvalidHandle {
+		return nil
+	}
+	err := windows.CloseHandle(directory.handle)
+	directory.handle = windows.InvalidHandle
+	return err
+}
+
+func (directory *secureDirectory) openFile(name string, flags int, perm os.FileMode) (*os.File, error) {
+	if err := validateSecureLeaf(name); err != nil {
 		return nil, err
 	}
 	if secureLeafStepHook != nil {
-		secureLeafStepHook(path)
+		secureLeafStepHook(filepath.Join(directory.path, name))
 	}
 	access := uint32(windows.FILE_GENERIC_READ | windows.FILE_READ_ATTRIBUTES)
 	if flags&os.O_RDWR != 0 {
@@ -116,12 +94,11 @@ func secureOpenFile(path string, flags int, perm os.FileMode) (*os.File, error) 
 	} else if flags&os.O_TRUNC != 0 {
 		disposition = windows.FILE_OVERWRITE
 	}
-	handle, err := ntOpenRelative(parentHandle, name, access, disposition, windows.FILE_NON_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT)
-	_ = windows.CloseHandle(parentHandle)
+	handle, err := ntOpenRelative(directory.handle, name, access, disposition, windows.FILE_NON_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT)
 	if err != nil {
-		return nil, &os.PathError{Op: "NtCreateFile", Path: path, Err: err}
+		return nil, &os.PathError{Op: "NtCreateFile", Path: filepath.Join(directory.path, name), Err: err}
 	}
-	file := os.NewFile(uintptr(handle), path)
+	file := os.NewFile(uintptr(handle), filepath.Join(directory.path, name))
 	if file == nil {
 		_ = windows.CloseHandle(handle)
 		return nil, errors.New("scheduler secure file handle creation failed")
@@ -137,12 +114,8 @@ func secureOpenFile(path string, flags int, perm os.FileMode) (*os.File, error) 
 	return file, nil
 }
 
-func secureOpenLock(path string) (*os.File, error) {
-	return secureOpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
-}
-
-func secureReadFile(path string) ([]byte, error) {
-	file, err := secureOpenFile(path, os.O_RDONLY, 0)
+func (directory *secureDirectory) readFile(name string) ([]byte, error) {
+	file, err := directory.openFile(name, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -157,8 +130,8 @@ func secureReadFile(path string) ([]byte, error) {
 	return body, nil
 }
 
-func secureWriteNewFile(path string, body []byte) error {
-	file, err := secureOpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+func (directory *secureDirectory) writeNewFile(name string, body []byte) error {
+	file, err := directory.openFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
@@ -166,7 +139,7 @@ func secureWriteNewFile(path string, body []byte) error {
 	defer func() {
 		if !committed {
 			_ = file.Close()
-			_ = secureRemoveFile(path)
+			_ = directory.removeFile(name)
 		}
 	}()
 	if _, err := file.Write(body); err != nil {
@@ -182,8 +155,8 @@ func secureWriteNewFile(path string, body []byte) error {
 	return nil
 }
 
-func secureWriteFile(path string, body []byte) error {
-	file, err := secureOpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+func (directory *secureDirectory) writeFile(name string, body []byte) error {
+	file, err := directory.openFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -194,22 +167,16 @@ func secureWriteFile(path string, body []byte) error {
 	return file.Sync()
 }
 
-func secureRemoveFile(path string) error {
-	parent, name, err := windowsFileParent(path)
-	if err != nil {
-		return err
-	}
-	parentHandle, err := walkWindowsDirectory(parent, false, nil)
-	if err != nil {
+func (directory *secureDirectory) removeFile(name string) error {
+	if err := validateSecureLeaf(name); err != nil {
 		return err
 	}
 	if secureLeafStepHook != nil {
-		secureLeafStepHook(path)
+		secureLeafStepHook(filepath.Join(directory.path, name))
 	}
-	handle, err := ntOpenRelative(parentHandle, name, windows.DELETE|windows.FILE_GENERIC_READ, windows.FILE_OPEN, windows.FILE_NON_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT)
-	_ = windows.CloseHandle(parentHandle)
+	handle, err := ntOpenRelative(directory.handle, name, windows.DELETE|windows.FILE_READ_ATTRIBUTES|windows.SYNCHRONIZE, windows.FILE_OPEN, windows.FILE_NON_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT)
 	if err != nil {
-		return &os.PathError{Op: "NtCreateFile", Path: path, Err: err}
+		return &os.PathError{Op: "NtCreateFile", Path: filepath.Join(directory.path, name), Err: err}
 	}
 	defer windows.CloseHandle(handle)
 	disposition := [1]byte{1}
@@ -220,18 +187,150 @@ func secureRemoveFile(path string) error {
 	return nil
 }
 
-func secureReadDir(path string) ([]os.DirEntry, error) {
-	handle, err := walkWindowsDirectory(path, false, nil)
+func (directory *secureDirectory) readDir() ([]os.DirEntry, error) {
+	file := os.NewFile(uintptr(directory.handle), directory.path)
+	if file == nil {
+		return nil, errors.New("scheduler secure directory handle creation failed")
+	}
+	directory.handle = windows.InvalidHandle
+	defer file.Close()
+	return file.ReadDir(-1)
+}
+
+func walkWindowsDirectory(path string, create bool, stepHook func(string)) (windows.Handle, error) {
+	components, root, err := windowsPathParts(path)
+	if err != nil {
+		return windows.InvalidHandle, err
+	}
+	handle, err := ntOpenRelative(windows.InvalidHandle, `\??\`+root, secureWindowsDirectoryTraverse, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
+	if err != nil {
+		return windows.InvalidHandle, err
+	}
+	for _, component := range components {
+		child, openErr := ntOpenRelative(handle, component, secureWindowsDirectoryTraverse, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
+		if create && isWindowsNotExist(openErr) {
+			writableParent, parentErr := ntOpenRelative(handle, ".", secureWindowsDirectoryCreate, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
+			if parentErr == nil {
+				child, openErr = ntOpenRelative(writableParent, component, secureWindowsDirectoryTraverse, windows.FILE_OPEN_IF, windows.FILE_DIRECTORY_FILE)
+				_ = windows.CloseHandle(writableParent)
+			}
+		}
+		if openErr != nil {
+			_ = windows.CloseHandle(handle)
+			return windows.InvalidHandle, openErr
+		}
+		_ = windows.CloseHandle(handle)
+		handle = child
+		if stepHook != nil {
+			stepHook(component)
+		}
+	}
+	return handle, nil
+}
+
+func ntOpenRelative(root windows.Handle, name string, access, disposition, options uint32) (windows.Handle, error) {
+	objectName, err := windows.NewNTUnicodeString(name)
+	if err != nil {
+		return windows.InvalidHandle, err
+	}
+	rootDirectory := root
+	if root == windows.InvalidHandle {
+		rootDirectory = 0
+	}
+	oa := &windows.OBJECT_ATTRIBUTES{ObjectName: objectName, RootDirectory: rootDirectory, Attributes: windows.OBJ_CASE_INSENSITIVE | windows.OBJ_DONT_REPARSE}
+	oa.Length = uint32(unsafe.Sizeof(*oa))
+	var iosb windows.IO_STATUS_BLOCK
+	var allocationSize int64
+	var handle windows.Handle
+	err = windows.NtCreateFile(&handle, access, oa, &iosb, &allocationSize, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, disposition, options, 0, 0)
+	if err != nil {
+		if status, ok := err.(windows.NTStatus); ok {
+			err = status.Errno()
+		}
+		return windows.InvalidHandle, err
+	}
+	return handle, nil
+}
+
+func secureOpenFile(path string, flags int, perm os.FileMode) (*os.File, error) {
+	parent, name, err := windowsFileParent(path)
 	if err != nil {
 		return nil, err
 	}
-	file := os.NewFile(uintptr(handle), path)
-	if file == nil {
-		_ = windows.CloseHandle(handle)
-		return nil, errors.New("scheduler secure directory handle creation failed")
+	directory, err := openSecureDirectory(parent, false)
+	if err != nil {
+		return nil, err
 	}
-	defer file.Close()
-	return file.ReadDir(-1)
+	defer directory.close()
+	return directory.openFile(name, flags, perm)
+}
+
+func secureOpenLock(path string) (*os.File, error) {
+	return secureOpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+}
+
+func secureReadFile(path string) ([]byte, error) {
+	parent, name, err := windowsFileParent(path)
+	if err != nil {
+		return nil, err
+	}
+	directory, err := openSecureDirectory(parent, false)
+	if err != nil {
+		return nil, err
+	}
+	defer directory.close()
+	return directory.readFile(name)
+}
+
+func secureWriteNewFile(path string, body []byte) error {
+	parent, name, err := windowsFileParent(path)
+	if err != nil {
+		return err
+	}
+	directory, err := openSecureDirectory(parent, false)
+	if err != nil {
+		return err
+	}
+	defer directory.close()
+	return directory.writeNewFile(name, body)
+}
+
+func secureWriteFile(path string, body []byte) error {
+	parent, name, err := windowsFileParent(path)
+	if err != nil {
+		return err
+	}
+	directory, err := openSecureDirectory(parent, false)
+	if err != nil {
+		return err
+	}
+	defer directory.close()
+	return directory.writeFile(name, body)
+}
+
+func secureRemoveFile(path string) error {
+	parent, name, err := windowsFileParent(path)
+	if err != nil {
+		return err
+	}
+	directory, err := openSecureDirectory(parent, false)
+	if err != nil {
+		return err
+	}
+	defer directory.close()
+	return directory.removeFile(name)
+}
+
+func secureReadDir(path string) ([]os.DirEntry, error) {
+	directory, err := openSecureDirectory(path, false)
+	if err != nil {
+		return nil, err
+	}
+	return directory.readDir()
+}
+
+func isWindowsNotExist(err error) bool {
+	return errors.Is(err, os.ErrNotExist) || errors.Is(err, windows.ERROR_FILE_NOT_FOUND) || errors.Is(err, windows.ERROR_PATH_NOT_FOUND)
 }
 
 func windowsPathParts(path string) ([]string, string, error) {

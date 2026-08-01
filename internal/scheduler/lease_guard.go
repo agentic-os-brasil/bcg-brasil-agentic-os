@@ -9,8 +9,8 @@ type leaseGuard struct {
 	file *os.File
 }
 
-func acquireLeaseGuard(path string) (*leaseGuard, error) {
-	file, err := secureOpenLock(path)
+func acquireLeaseGuard(directory *secureDirectory, name string) (*leaseGuard, error) {
+	file, err := directory.openFile(name, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		if errors.Is(err, errLeaseGuardBusy) {
 			return nil, errLeaseGuardBusy

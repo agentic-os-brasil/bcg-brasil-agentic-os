@@ -479,3 +479,54 @@ func TestSecureLeafReadAndRemoveSurviveAncestorSwap(t *testing.T) {
 		t.Fatalf("secure leaf remove followed swapped ancestor: entries=%#v err=%v", entries, err)
 	}
 }
+
+func TestLeaseTransactionPinsGuardAndStateToOneDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("real-directory replacement fixture uses Unix rename semantics")
+	}
+	root := t.TempDir()
+	store := Store{Root: root}
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	lease, err := store.TryAcquireLease("case-a", "memory-daily", "occurrence", "worker-a", now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _, err := store.openLeaseDirectory("case-a", "memory-daily")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.close()
+	second, _, err := store.openLeaseDirectory("case-a", "memory-daily")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.close()
+	name := safeLeaseName(lease.OccurrenceKey)
+	guard, err := acquireLeaseGuard(first, name+".guard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer guard.release()
+	if _, err := acquireLeaseGuard(second, name+".guard"); !errors.Is(err, errLeaseGuardBusy) {
+		t.Fatalf("second pinned worker acquired the shared guard: %v", err)
+	}
+
+	workspaces := filepath.Join(root, "workspaces")
+	moved := filepath.Join(root, "workspaces-original")
+	if err := os.Rename(workspaces, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(workspaces, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	current, err := readLeaseInDirectory(first, name+".json", "pinned")
+	if err != nil || !sameLeaseIdentity(current, lease) {
+		t.Fatalf("pinned guard/state transaction followed replacement: lease=%#v err=%v", current, err)
+	}
+	if _, err := os.Stat(filepath.Join(moved, "case-a", "leases", "memory-daily", name+".json")); err != nil {
+		t.Fatalf("original pinned state was not retained: %v", err)
+	}
+	if entries, err := os.ReadDir(workspaces); err != nil || len(entries) != 0 {
+		t.Fatalf("replacement directory received state: entries=%#v err=%v", entries, err)
+	}
+}

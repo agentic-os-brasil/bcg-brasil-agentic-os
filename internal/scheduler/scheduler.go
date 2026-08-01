@@ -396,6 +396,18 @@ func readStrictJSON(path string, target any) error {
 	if err != nil {
 		return err
 	}
+	return decodeStrictJSON(body, target)
+}
+
+func readStrictJSONInDirectory(directory *secureDirectory, name string, target any) error {
+	body, err := directory.readFile(name)
+	if err != nil {
+		return err
+	}
+	return decodeStrictJSON(body, target)
+}
+
+func decodeStrictJSON(body []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
@@ -418,6 +430,15 @@ func writeNewJSON(path string, value any) error {
 	}
 	body = append(body, '\n')
 	return secureWriteNewFile(path, body)
+}
+
+func writeNewJSONInDirectory(directory *secureDirectory, name string, value any) error {
+	body, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	body = append(body, '\n')
+	return directory.writeNewFile(name, body)
 }
 
 // ValidateSchemaFile keeps the published scheduler-state contract wired into
