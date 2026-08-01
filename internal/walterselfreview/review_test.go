@@ -21,6 +21,23 @@ type fakeAdapter struct {
 	proposal SelfRefinementProposal
 }
 
+type blockingAdapter struct {
+	started  chan struct{}
+	release  chan struct{}
+	proposal SelfRefinementProposal
+}
+
+func (adapter *blockingAdapter) ID() string { return "blocking-walter" }
+func (adapter *blockingAdapter) Review(ctx context.Context, _ ModelInput) (SelfRefinementProposal, error) {
+	close(adapter.started)
+	select {
+	case <-adapter.release:
+		return adapter.proposal, nil
+	case <-ctx.Done():
+		return SelfRefinementProposal{}, ctx.Err()
+	}
+}
+
 func (adapter *fakeAdapter) ID() string { return "test-walter" }
 func (adapter *fakeAdapter) Review(_ context.Context, _ ModelInput) (SelfRefinementProposal, error) {
 	adapter.mu.Lock()
@@ -69,6 +86,50 @@ func TestTranslationReceiptAndQuotedHistoryAreRequired(t *testing.T) {
 	request.Translation.TranslatorVersion = "tampered"
 	if err := ValidateRequest(request); err == nil {
 		t.Fatal("stale translator receipt was accepted")
+	}
+}
+
+func TestIntentHypothesisBindingIsIffAndBounded(t *testing.T) {
+	request := testRequest(t)
+	hypothesis := &maestro.IntentHypothesis{ExpressedObjective: "answer the request", LatentIntentHypothesis: "preserve the user's decision purpose", EvidenceRefs: []string{"prompt-1"}, Confidence: .8, Alternatives: []string{"literal-only"}, Materiality: "low", DisconfirmationCondition: "current instruction contradicts it", WorkingPrompt: request.CurrentNormalized}
+	request.IntentHypothesis = hypothesis
+	request.IntentHypothesisSHA256 = DigestJSON(hypothesis)
+	if err := ValidateRequest(request); err != nil {
+		t.Fatal(err)
+	}
+	proposal := testProposal(request)
+	proposal.IntentHypothesisSHA256 = request.IntentHypothesisSHA256
+	if err := ValidateProposal(request, proposal); err != nil {
+		t.Fatal(err)
+	}
+	proposal.IntentHypothesisSHA256 = ""
+	if err := ValidateProposal(request, proposal); err == nil {
+		t.Fatal("proposal omitted required hypothesis binding")
+	}
+	request = testRequest(t)
+	proposal = testProposal(request)
+	proposal.IntentHypothesisSHA256 = Digest("unexpected")
+	if err := ValidateProposal(request, proposal); err == nil {
+		t.Fatal("proposal added an unexpected hypothesis binding")
+	}
+	request = testRequest(t)
+	request.IntentHypothesis = &maestro.IntentHypothesis{ExpressedObjective: strings.Repeat("x", MaxContextBytes+1), LatentIntentHypothesis: "purpose", Confidence: .5, Materiality: "low", DisconfirmationCondition: "never", WorkingPrompt: "request"}
+	request.IntentHypothesisSHA256 = DigestJSON(request.IntentHypothesis)
+	if err := ValidateRequest(request); err == nil {
+		t.Fatal("oversized intent hypothesis was accepted")
+	}
+}
+
+func TestChangedIntentHypothesisCannotReplayOccurrence(t *testing.T) {
+	request := testRequest(t)
+	store := ReceiptStore{Root: t.TempDir()}
+	if _, err := store.Reserve(request, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	request.IntentHypothesis = &maestro.IntentHypothesis{ExpressedObjective: "changed", LatentIntentHypothesis: "changed purpose", Confidence: .6, Materiality: "low", DisconfirmationCondition: "new evidence", WorkingPrompt: request.CurrentNormalized}
+	request.IntentHypothesisSHA256 = DigestJSON(request.IntentHypothesis)
+	if _, err := store.Reserve(request, time.Now().UTC()); err == nil {
+		t.Fatal("changed intent hypothesis replayed the same occurrence")
 	}
 }
 
@@ -195,27 +256,39 @@ func TestWeeklyReviewReservesBeforeConcurrentModelCall(t *testing.T) {
 
 func TestWeeklyReviewResumesAfterProposalCommitCrash(t *testing.T) {
 	request := testRequest(t)
+	request.CanonicalSnapshot, _ = ownerctx.ProjectSnapshot(request.OwnerContextRoot, []string{"preferences", "voice"})
+	request.ReviewFacets = []string{"preferences", "voice"}
 	proposal := testProposal(request)
 	now := time.Now().UTC().Truncate(time.Second)
 	store := ReceiptStore{Root: t.TempDir(), LeaseDuration: time.Second}
-	_, err := store.Reserve(request, now)
+	reservation, err := store.Reserve(request, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ownerReceipt, err := ownerctx.SubmitRefinement(request.OwnerContextRoot, ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "walter-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID})
+	ownerReceipt, err := ownerctx.SubmitRefinement(request.OwnerContextRoot, ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "walter-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, WalterReviewRequestSHA256: RequestDigest(request), WalterReviewProposalID: proposal.ProposalID, WalterReviewProposalSHA256: DigestJSON(proposal), WalterReviewSensitivity: proposal.Sensitivity, WalterReviewReaders: proposal.Readers, WalterReviewRefinement: proposal.Refinement, WalterReviewConfirmation: string(proposal.ConfirmationRequirement), WalterReviewAdapterID: "test-walter", WalterReviewAuthorityID: "test-authority", WalterReviewFencingToken: reservation.Receipt.FencingToken})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ownerReceipt.ID == "" {
 		t.Fatal("crash simulation did not commit ownerctx proposal")
 	}
-	adapter := &fakeAdapter{proposal: proposal}
+	changed := proposal
+	changed.ProposalID = "different-proposal"
+	changed.Facet = "preferences"
+	changed.ProposedRefinement = "A different body returned after restart."
+	adapter := &fakeAdapter{proposal: changed}
 	result, receipt, err := Review(context.Background(), request, adapter, fakeAuthority(true), store, now.Add(2*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ProposalID == "" || receipt.State != ReceiptProposal || receipt.OwnerctxProposalID != ownerReceipt.ID || receipt.OwnerctxProposalSHA256 != ownerReceipt.ProposalSHA256 {
+	if result.ProposalID != proposal.ProposalID || receipt.State != ReceiptProposal || receipt.OwnerctxProposalID != ownerReceipt.ID || receipt.OwnerctxProposalSHA256 != ownerReceipt.ProposalSHA256 || receipt.ProposalSHA256 != DigestJSON(proposal) {
 		t.Fatalf("recovery did not bind actual ownerctx proposal: result=%+v receipt=%+v owner=%+v", result, receipt, ownerReceipt)
+	}
+	adapter.mu.Lock()
+	called := adapter.called
+	adapter.mu.Unlock()
+	if called != 0 {
+		t.Fatalf("resume invoked variable-output model %d times", called)
 	}
 	body, err := os.ReadFile(filepath.Join(store.Root, "weekly-receipts.jsonl"))
 	if err != nil {
@@ -227,6 +300,69 @@ func TestWeeklyReviewResumesAfterProposalCommitCrash(t *testing.T) {
 	entries, err := os.ReadDir(filepath.Join(request.OwnerContextRoot, "owner", "refinement", "proposals"))
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("expected exactly one ownerctx proposal after recovery: entries=%d err=%v", len(entries), err)
+	}
+}
+
+func TestSlowModelLeaseRenewsAndStaleWorkerCannotBeTakenOver(t *testing.T) {
+	request := testRequest(t)
+	store := ReceiptStore{Root: t.TempDir(), LeaseDuration: 60 * time.Millisecond, LockWait: 40 * time.Millisecond}
+	adapter := &blockingAdapter{started: make(chan struct{}), release: make(chan struct{}), proposal: testProposal(request)}
+	resultCh := make(chan error, 1)
+	go func() {
+		_, _, err := Review(context.Background(), request, adapter, fakeAuthority(true), store, time.Now().UTC())
+		resultCh <- err
+	}()
+	<-adapter.started
+	time.Sleep(180 * time.Millisecond)
+	if _, err := store.Reserve(request, time.Now().UTC()); !errors.Is(err, ErrOccurrenceBusy) {
+		t.Fatalf("slow model lease was not renewed; reserve err=%v", err)
+	}
+	close(adapter.release)
+	if err := <-resultCh; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAdvisoryLockDoesNotDeleteSuccessorLockOnTimeout(t *testing.T) {
+	store := ReceiptStore{Root: t.TempDir(), LockWait: 40 * time.Millisecond}
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- store.withLock(func(string) error {
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	<-entered
+	if err := store.withLock(func(string) error { return nil }); !errors.Is(err, ErrOccurrenceBusy) {
+		t.Fatalf("second worker unexpectedly acquired advisory lock: %v", err)
+	}
+	close(release)
+	if err := <-firstDone; err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(store.Root, "weekly-receipts.lock"))
+	if err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("advisory lock path was removed or replaced: info=%v err=%v", info, err)
+	}
+}
+
+func TestOversizedCurrentPromptNeverCallsTranslator(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "oversized-command", JobID: WeeklyJobID, WorkspaceID: "workspace-1", Trigger: maintenance.TriggerWeekly, ScheduledFor: now, RequestedAt: now, Deadline: now.Add(time.Minute), ProposalOnly: true}
+	called := 0
+	handler := Handler{Root: root, OwnerID: "owner", CurrentPrompt: strings.Repeat("x", MaxContextBytes+1), CurrentLanguage: "en-US", WorkingLanguage: "en-US", TranslatorID: "translator", TranslatorVersion: "v1", ReviewFacets: []string{"voice"}, Translator: func(string, string, string) (string, error) { called++; return "translated", nil }}
+	if _, err := handler.BuildRequest(command, now); err == nil {
+		t.Fatal("oversized prompt was accepted")
+	}
+	if called != 0 {
+		t.Fatalf("translator was called %d times for oversized raw input", called)
 	}
 }
 

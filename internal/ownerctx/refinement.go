@@ -28,38 +28,68 @@ type RefinementInput struct {
 	Capability   string
 	// OccurrenceID binds a periodic proposal to one execution occurrence. When
 	// present, retries return the same proposal instead of creating another.
-	OccurrenceID string
+	OccurrenceID               string
+	WalterReviewRequestSHA256  string
+	WalterReviewProposalID     string
+	WalterReviewProposalSHA256 string
+	WalterReviewSensitivity    string
+	WalterReviewReaders        []string
+	WalterReviewRefinement     string
+	WalterReviewConfirmation   string
+	WalterReviewAdapterID      string
+	WalterReviewAuthorityID    string
+	WalterReviewFencingToken   string
 }
 
 // RefinementReceipt is safe to expose in CLI output: it deliberately omits the
 // proposed text and evidence body.
 type RefinementReceipt struct {
-	ID             string   `json:"id"`
-	Facet          string   `json:"facet"`
-	State          string   `json:"state"`
-	Policy         string   `json:"policy"`
-	Sensitivity    string   `json:"sensitivity"`
-	Readers        []string `json:"readers"`
-	ProposalSHA256 string   `json:"proposal_sha256"`
-	OccurrenceID   string   `json:"occurrence_id,omitempty"`
-	AuditID        string   `json:"audit_id,omitempty"`
+	ID                   string   `json:"id"`
+	Facet                string   `json:"facet"`
+	State                string   `json:"state"`
+	Policy               string   `json:"policy"`
+	Sensitivity          string   `json:"sensitivity"`
+	Readers              []string `json:"readers"`
+	ProposalSHA256       string   `json:"proposal_sha256"`
+	OccurrenceID         string   `json:"occurrence_id,omitempty"`
+	WalterRequestSHA256  string   `json:"walter_request_sha256,omitempty"`
+	WalterProposalID     string   `json:"walter_proposal_id,omitempty"`
+	WalterProposalSHA256 string   `json:"walter_proposal_sha256,omitempty"`
+	WalterSensitivity    string   `json:"walter_sensitivity,omitempty"`
+	WalterReaders        []string `json:"walter_readers,omitempty"`
+	WalterRefinement     string   `json:"walter_refinement,omitempty"`
+	WalterConfirmation   string   `json:"walter_confirmation,omitempty"`
+	WalterAdapterID      string   `json:"walter_adapter_id,omitempty"`
+	WalterAuthorityID    string   `json:"walter_authority_id,omitempty"`
+	WalterFencingToken   string   `json:"walter_fencing_token,omitempty"`
+	AuditID              string   `json:"audit_id,omitempty"`
 }
 
 type proposal struct {
-	ID           string    `json:"id"`
-	Facet        string    `json:"facet"`
-	Sensitivity  string    `json:"sensitivity"`
-	Readers      []string  `json:"readers"`
-	SourceSHA256 string    `json:"source_sha256"`
-	Evidence     string    `json:"evidence"`
-	ProposedBody string    `json:"proposed_body"`
-	Policy       string    `json:"policy"`
-	ProducerID   string    `json:"producer_id"`
-	AutoApproved bool      `json:"auto_approved"`
-	OccurrenceID string    `json:"occurrence_id,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	State        string    `json:"state"`
-	AuditID      string    `json:"audit_id,omitempty"`
+	ID                   string    `json:"id"`
+	Facet                string    `json:"facet"`
+	Sensitivity          string    `json:"sensitivity"`
+	Readers              []string  `json:"readers"`
+	SourceSHA256         string    `json:"source_sha256"`
+	Evidence             string    `json:"evidence"`
+	ProposedBody         string    `json:"proposed_body"`
+	Policy               string    `json:"policy"`
+	ProducerID           string    `json:"producer_id"`
+	AutoApproved         bool      `json:"auto_approved"`
+	OccurrenceID         string    `json:"occurrence_id,omitempty"`
+	WalterRequestSHA256  string    `json:"walter_request_sha256,omitempty"`
+	WalterProposalID     string    `json:"walter_proposal_id,omitempty"`
+	WalterProposalSHA256 string    `json:"walter_proposal_sha256,omitempty"`
+	WalterSensitivity    string    `json:"walter_sensitivity,omitempty"`
+	WalterReaders        []string  `json:"walter_readers,omitempty"`
+	WalterRefinement     string    `json:"walter_refinement,omitempty"`
+	WalterConfirmation   string    `json:"walter_confirmation,omitempty"`
+	WalterAdapterID      string    `json:"walter_adapter_id,omitempty"`
+	WalterAuthorityID    string    `json:"walter_authority_id,omitempty"`
+	WalterFencingToken   string    `json:"walter_fencing_token,omitempty"`
+	CreatedAt            time.Time `json:"created_at"`
+	State                string    `json:"state"`
+	AuditID              string    `json:"audit_id,omitempty"`
 }
 
 type audit struct {
@@ -131,15 +161,15 @@ func SubmitRefinement(root string, input RefinementInput) (RefinementReceipt, er
 	created := time.Now().UTC()
 	id := refinementID(input.Facet, input.Evidence, input.ProposedBody, created)
 	if strings.TrimSpace(input.OccurrenceID) != "" {
-		id = "proposal-" + digest(input.Facet + "\x00" + input.OccurrenceID)[:40]
+		id = "proposal-walter-weekly-" + digest("walter-self-review-weekly\x00" + input.OccurrenceID)[:32]
 		// The occurrence identity, not wall-clock time, is the durable retry
 		// identity. This keeps the ownerctx proposal digest stable if a process
 		// crashes between proposal commit and receipt finalization.
 		created = time.Unix(0, 0).UTC()
 	}
-	p := proposal{ID: id, Facet: input.Facet, Sensitivity: definition.Sensitivity, Readers: append([]string(nil), definition.Readers...), SourceSHA256: digest(string(current)), Evidence: input.Evidence, ProposedBody: input.ProposedBody, Policy: definition.Refinement, ProducerID: input.ProducerID, AutoApproved: autoApproved, OccurrenceID: input.OccurrenceID, CreatedAt: created, State: "proposed"}
+	p := proposal{ID: id, Facet: input.Facet, Sensitivity: definition.Sensitivity, Readers: append([]string(nil), definition.Readers...), SourceSHA256: digest(string(current)), Evidence: input.Evidence, ProposedBody: input.ProposedBody, Policy: definition.Refinement, ProducerID: input.ProducerID, AutoApproved: autoApproved, OccurrenceID: input.OccurrenceID, WalterRequestSHA256: input.WalterReviewRequestSHA256, WalterProposalID: input.WalterReviewProposalID, WalterProposalSHA256: input.WalterReviewProposalSHA256, WalterSensitivity: input.WalterReviewSensitivity, WalterReaders: append([]string(nil), input.WalterReviewReaders...), WalterRefinement: input.WalterReviewRefinement, WalterConfirmation: input.WalterReviewConfirmation, WalterAdapterID: input.WalterReviewAdapterID, WalterAuthorityID: input.WalterReviewAuthorityID, WalterFencingToken: input.WalterReviewFencingToken, CreatedAt: created, State: "proposed"}
 	if existing, readErr := readProposal(root, id); readErr == nil {
-		if existing.Facet != p.Facet || existing.Sensitivity != p.Sensitivity || !sameStrings(existing.Readers, p.Readers) || existing.SourceSHA256 != p.SourceSHA256 || existing.Evidence != p.Evidence || existing.ProposedBody != p.ProposedBody || existing.Policy != p.Policy || existing.OccurrenceID != p.OccurrenceID {
+		if existing.Facet != p.Facet || existing.Sensitivity != p.Sensitivity || !sameStrings(existing.Readers, p.Readers) || existing.SourceSHA256 != p.SourceSHA256 || existing.Evidence != p.Evidence || existing.ProposedBody != p.ProposedBody || existing.Policy != p.Policy || existing.OccurrenceID != p.OccurrenceID || existing.WalterRequestSHA256 != p.WalterRequestSHA256 || existing.WalterProposalID != p.WalterProposalID || existing.WalterProposalSHA256 != p.WalterProposalSHA256 || existing.WalterSensitivity != p.WalterSensitivity || !sameStrings(existing.WalterReaders, p.WalterReaders) || existing.WalterRefinement != p.WalterRefinement || existing.WalterConfirmation != p.WalterConfirmation || existing.WalterAdapterID != p.WalterAdapterID || existing.WalterAuthorityID != p.WalterAuthorityID || existing.WalterFencingToken != p.WalterFencingToken {
 			return RefinementReceipt{}, errors.New("owner refinement occurrence is already bound to different content")
 		}
 		return receipt(existing), nil
@@ -300,7 +330,27 @@ func readAudit(root, id string) (audit, error) {
 }
 
 func receipt(p proposal) RefinementReceipt {
-	return RefinementReceipt{ID: p.ID, Facet: p.Facet, State: p.State, Policy: p.Policy, Sensitivity: p.Sensitivity, Readers: append([]string(nil), p.Readers...), ProposalSHA256: digestJSON(p), OccurrenceID: p.OccurrenceID, AuditID: p.AuditID}
+	return RefinementReceipt{ID: p.ID, Facet: p.Facet, State: p.State, Policy: p.Policy, Sensitivity: p.Sensitivity, Readers: append([]string(nil), p.Readers...), ProposalSHA256: digestJSON(p), OccurrenceID: p.OccurrenceID, WalterRequestSHA256: p.WalterRequestSHA256, WalterProposalID: p.WalterProposalID, WalterProposalSHA256: p.WalterProposalSHA256, WalterSensitivity: p.WalterSensitivity, WalterReaders: append([]string(nil), p.WalterReaders...), WalterRefinement: p.WalterRefinement, WalterConfirmation: p.WalterConfirmation, WalterAdapterID: p.WalterAdapterID, WalterAuthorityID: p.WalterAuthorityID, WalterFencingToken: p.WalterFencingToken, AuditID: p.AuditID}
+}
+
+// FindOccurrenceRefinement discovers the deterministic Walter artifact without
+// invoking a model. It is the recovery seam after ownerctx commit.
+func FindOccurrenceRefinement(root, occurrenceID string) (RefinementReceipt, bool, error) {
+	if strings.TrimSpace(occurrenceID) == "" {
+		return RefinementReceipt{}, false, errors.New("occurrence id is required")
+	}
+	id := "proposal-walter-weekly-" + digest("walter-self-review-weekly\x00" + occurrenceID)[:32]
+	p, err := readProposal(root, id)
+	if errors.Is(err, os.ErrNotExist) {
+		return RefinementReceipt{}, false, nil
+	}
+	if err != nil {
+		return RefinementReceipt{}, false, err
+	}
+	if p.OccurrenceID != occurrenceID {
+		return RefinementReceipt{}, false, errors.New("ownerctx occurrence artifact binding is invalid")
+	}
+	return receipt(p), true, nil
 }
 
 func digestJSON(value any) string {

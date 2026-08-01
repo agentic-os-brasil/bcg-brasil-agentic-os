@@ -12,10 +12,12 @@ or launchd catalog entries. Its orchestration dependency is PR
 [#148](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/pull/148);
 after that PR lands, orchestration may rebase and trim this seam as needed.
 
-The weekly occurrence is keyed by the command's stable occurrence digest, not
-its retry command ID, and is reserved before any model call. A recoverable,
-cross-platform advisory lease fences concurrent workers and allows an expired
-reservation to resume after a crash. The current prompt is kept separate and
+The weekly occurrence is keyed by the command's stable occurrence digest plus
+the bounded IntentHypothesis digest when a self-proxy hypothesis is present,
+never by its retry command ID, and is reserved before any model call. A recoverable,
+cross-platform OS advisory lock plus a renewable, deadline-bound occurrence
+lease fences concurrent workers and allows an expired reservation to resume
+after a crash. The current prompt is kept separate and
 wins over history; selected history is translated through a caller-supplied
 translator whose identity/version and receipt digest are bound into the
 ephemeral input. Per-field and combined UTF-8 bounds plus translation
@@ -33,7 +35,24 @@ are derived from the canonical `ownerctx` snapshot and compared exactly with
 the adapter result. After a model call, the actual ownerctx proposal ID,
 proposal digest and canonical policy are bound into the terminal weekly
 receipt. Re-running a crashed occurrence returns the same ownerctx proposal
-and emits one terminal receipt; it never creates a second proposal.
+and emits one terminal receipt without invoking the model again; it never
+creates a second proposal. If a self-proxy hypothesis is present, both the
+request and proposal must carry its exact digest; absent hypotheses cannot be
+silently added by an adapter.
+
+Walter is the user's alter ego/self proxy inside Maestro's loop. Its central
+question is: “If the user saw this output now for the first time, would they
+approve it as-is or request a specific adjustment?” It uses canonical
+Owner Context plus bounded prompt history to test intrinsic purpose, while
+remaining a calm, attention-saving Senior Advisor & Refiner: not a red team,
+naysayer, mind-reader or second authority. Good output is approved quickly;
+gaps return a concrete load-bearing refinement to Maestro, never a direct user
+message. Current explicit prompt/correction dominates history. Self evolution
+is a governed track—explicit signal, bounded candidate, independent episodes,
+periodic Walter proposal, facet policy, owner-attested CAS promotion and
+versioned rollback—and silence, generic OK, isolated inference and ordinary
+loops do not rewrite canonical self. Darwin observes health, drift, conflict
+and age only; it never authors or promotes self.
 
 Run the qualification in an attended, fresh session for each runtime:
 

@@ -100,6 +100,7 @@ type Request struct {
 	ReviewFacets             []string                      `json:"review_facets"`
 	SensitivePurposeSHA256   string                        `json:"sensitive_purpose_sha256,omitempty"`
 	SensitiveOwnerAuthorized bool                          `json:"sensitive_owner_authorized,omitempty"`
+	IntentHypothesisSHA256   string                        `json:"intent_hypothesis_sha256,omitempty"`
 	IntentHypothesis         *maestro.IntentHypothesis     `json:"-"`
 	OwnerContextRoot         string                        `json:"-"`
 }
@@ -185,6 +186,7 @@ type Reservation struct {
 type ReceiptStore struct {
 	Root          string
 	LeaseDuration time.Duration
+	LockWait      time.Duration
 }
 
 func (store ReceiptStore) Reserve(request Request, now time.Time) (Reservation, error) {
@@ -249,6 +251,9 @@ func (store ReceiptStore) Finalize(reservation Reservation, state ReceiptState, 
 	if state == ReceiptProposal {
 		final.ProposalID = proposal.ProposalID
 		final.ProposalSHA256 = DigestJSON(proposal)
+		if ownerReceipt.WalterProposalSHA256 != "" {
+			final.ProposalSHA256 = ownerReceipt.WalterProposalSHA256
+		}
 		final.OwnerctxProposalID = ownerReceipt.ID
 		final.OwnerctxProposalSHA256 = ownerReceipt.ProposalSHA256
 		final.OwnerctxPolicy = ownerReceipt.Policy
@@ -294,61 +299,102 @@ func latestReceipt(receipts []Receipt, occurrenceID string) (Receipt, bool) {
 	return Receipt{}, false
 }
 
+func (store ReceiptStore) Renew(reservation Reservation, now time.Time) error {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	return store.withLock(func(path string) error {
+		receipts, err := store.read(path)
+		if err != nil {
+			return err
+		}
+		existing, found := latestReceipt(receipts, reservation.Receipt.OccurrenceID)
+		if !found || existing.State != ReceiptReserved || existing.FencingToken != reservation.Receipt.FencingToken || existing.LeaseOwner != reservation.LeaseOwner || !existing.LeaseUntil.After(now.UTC()) {
+			return errors.New("weekly occurrence lease cannot be renewed")
+		}
+		existing.LeaseUntil = now.UTC().Add(store.leaseDuration())
+		existing.RecordedAt = now.UTC()
+		return store.append(path, existing)
+	})
+}
+
+func (store ReceiptStore) AssertLease(reservation Reservation, now time.Time) error {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	return store.withLock(func(path string) error {
+		receipts, err := store.read(path)
+		if err != nil {
+			return err
+		}
+		existing, found := latestReceipt(receipts, reservation.Receipt.OccurrenceID)
+		if !found || existing.State != ReceiptReserved || existing.FencingToken != reservation.Receipt.FencingToken || existing.LeaseOwner != reservation.LeaseOwner || !existing.LeaseUntil.After(now.UTC()) {
+			return errors.New("weekly occurrence lease is stale or fenced")
+		}
+		return nil
+	})
+}
+
+func (store ReceiptStore) renewLoop(ctx context.Context, reservation Reservation, failures chan<- error) {
+	interval := store.leaseDuration() / 3
+	if interval < 10*time.Millisecond {
+		interval = 10 * time.Millisecond
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			if err := store.Renew(reservation, now.UTC()); err != nil {
+				select {
+				case failures <- err:
+				default:
+				}
+				return
+			}
+		}
+	}
+}
+
 func (store ReceiptStore) withLock(operation func(string) error) error {
 	root, err := ensurePrivateRoot(store.Root)
 	if err != nil {
 		return err
 	}
 	lockPath := filepath.Join(root, "weekly-receipts.lock")
-	token := randomToken()
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(store.lockWait())
 	for {
 		if info, statErr := os.Lstat(lockPath); statErr == nil {
 			if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 				return errors.New("weekly receipt lock is not a regular file")
 			}
-			body, readErr := os.ReadFile(lockPath)
-			var lease lockRecord
-			if readErr != nil || json.Unmarshal(body, &lease) != nil || lease.Token == "" || lease.ExpiresAt.IsZero() {
-				return errors.New("weekly receipt lock is invalid")
-			}
-			if !lease.ExpiresAt.After(time.Now().UTC()) {
-				if removeErr := os.Remove(lockPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-					return removeErr
-				}
-				continue
-			}
 		} else if !errors.Is(statErr, os.ErrNotExist) {
 			return statErr
 		}
-		file, createErr := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if createErr == nil {
-			lease := lockRecord{Token: token, ExpiresAt: time.Now().UTC().Add(15 * time.Second)}
-			var body []byte
-			if body, createErr = json.Marshal(lease); createErr == nil {
-				_, createErr = file.Write(body)
-			}
-			if createErr == nil {
-				createErr = file.Sync()
-			}
-			closeErr := file.Close()
-			if createErr != nil {
-				_ = os.Remove(lockPath)
-				return createErr
-			}
-			if closeErr != nil {
-				_ = os.Remove(lockPath)
+		file, openErr := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+		if openErr == nil {
+			lockErr := tryLockWeeklyReceiptFile(file)
+			if lockErr == nil {
+				err := operation(filepath.Join(root, "weekly-receipts.jsonl"))
+				unlockErr := unlockWeeklyReceiptFile(file)
+				closeErr := file.Close()
+				if err != nil {
+					return err
+				}
+				if unlockErr != nil {
+					return unlockErr
+				}
 				return closeErr
 			}
-			err := operation(filepath.Join(root, "weekly-receipts.jsonl"))
-			releaseErr := releaseLock(lockPath, token)
-			if err != nil {
-				return err
+			_ = file.Close()
+			if !errors.Is(lockErr, errWeeklyReceiptLockBusy) {
+				return lockErr
 			}
-			return releaseErr
 		}
-		if !errors.Is(createErr, os.ErrExist) {
-			return createErr
+		if openErr != nil && !errors.Is(openErr, os.ErrNotExist) {
+			return openErr
 		}
 		if time.Now().After(deadline) {
 			return ErrOccurrenceBusy
@@ -357,9 +403,11 @@ func (store ReceiptStore) withLock(operation func(string) error) error {
 	}
 }
 
-type lockRecord struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+func (store ReceiptStore) lockWait() time.Duration {
+	if store.LockWait <= 0 {
+		return 3 * time.Second
+	}
+	return store.LockWait
 }
 
 func (store ReceiptStore) read(path string) ([]Receipt, error) {
@@ -447,6 +495,27 @@ func Review(ctx context.Context, request Request, adapter ModelAdapter, authorit
 		}
 		return SelfRefinementProposal{}, receipt, err
 	}
+	if reservation.Resumed {
+		ownerReceipt, found, findErr := ownerctx.FindOccurrenceRefinement(request.OwnerContextRoot, request.OccurrenceID)
+		if findErr != nil {
+			return SelfRefinementProposal{}, Receipt{}, findErr
+		}
+		if found {
+			if ownerReceipt.WalterRequestSHA256 != RequestDigest(request) || ownerReceipt.WalterFencingToken != reservation.Receipt.FencingToken || ownerReceipt.WalterProposalID == "" || ownerReceipt.WalterProposalSHA256 == "" {
+				return SelfRefinementProposal{}, Receipt{}, errors.New("Walter occurrence artifact is bound to a different request")
+			}
+			policy, policyErr := request.CanonicalSnapshot.Policy(ownerReceipt.Facet)
+			if policyErr != nil || !contains(request.ReviewFacets, ownerReceipt.Facet) || ownerReceipt.WalterSensitivity != policy.Sensitivity || !sameStrings(ownerReceipt.WalterReaders, policy.Readers) || ownerReceipt.WalterRefinement != policy.Refinement || ownerReceipt.WalterConfirmation != policy.ConfirmationRequirement {
+				return SelfRefinementProposal{}, Receipt{}, errors.New("Walter occurrence artifact policy is stale")
+			}
+			resumedProposal := SelfRefinementProposal{SchemaVersion: SchemaVersion, ProposalID: ownerReceipt.WalterProposalID, State: "proposed", WeekID: request.WeekID, Facet: ownerReceipt.Facet, Sensitivity: ownerReceipt.WalterSensitivity, Readers: append([]string(nil), ownerReceipt.WalterReaders...), Refinement: ownerReceipt.WalterRefinement, ConfirmationRequirement: ConfirmationRequirement(ownerReceipt.WalterConfirmation), CanonicalSnapshotVersion: request.CanonicalSnapshot.Version, CanonicalSnapshotSHA256: request.CanonicalSnapshot.CanonicalSourceDigest, PromptHistorySHA256: PromptHistoryDigest(request.PromptHistory), TranslationReceiptSHA256: request.Translation.ReceiptSHA256, IntentHypothesisSHA256: request.IntentHypothesisSHA256}
+			terminal, finalizeErr := store.Finalize(reservation, ReceiptProposal, resumedProposal, ownerReceipt, ownerReceipt.WalterAdapterID, ownerReceipt.WalterAuthorityID, "proposal_resumed_without_model", now)
+			if finalizeErr != nil {
+				return SelfRefinementProposal{}, terminal, finalizeErr
+			}
+			return resumedProposal, terminal, nil
+		}
+	}
 	if adapter == nil || authority == nil || !authority.Approved("walter/self-review-weekly") {
 		receipt, finalizeErr := store.Finalize(reservation, ReceiptUnavailable, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, "", "", "approved_model_adapter_or_authority_unavailable", now)
 		if finalizeErr != nil {
@@ -454,7 +523,11 @@ func Review(ctx context.Context, request Request, adapter ModelAdapter, authorit
 		}
 		return SelfRefinementProposal{}, receipt, ErrUnavailable
 	}
-	proposal, err := adapter.Review(ctx, ModelInput{CurrentOriginal: request.CurrentOriginal, CurrentNormalized: request.CurrentNormalized, History: append([]PromptEvidence(nil), request.PromptHistory...), Translation: request.Translation, Observations: append([]ownerctx.ObservationReceipt(nil), request.Observations...), CanonicalSnapshot: request.CanonicalSnapshot, IntentHypothesis: request.IntentHypothesis})
+	renewCtx, cancelRenew := context.WithCancel(ctx)
+	defer cancelRenew()
+	renewFailures := make(chan error, 1)
+	go store.renewLoop(renewCtx, reservation, renewFailures)
+	proposal, err := adapter.Review(renewCtx, ModelInput{CurrentOriginal: request.CurrentOriginal, CurrentNormalized: request.CurrentNormalized, History: append([]PromptEvidence(nil), request.PromptHistory...), Translation: request.Translation, Observations: append([]ownerctx.ObservationReceipt(nil), request.Observations...), CanonicalSnapshot: request.CanonicalSnapshot, IntentHypothesis: request.IntentHypothesis})
 	if err != nil {
 		receipt, finalizeErr := store.Finalize(reservation, ReceiptFailed, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, adapter.ID(), authority.ID(), "model_adapter_error", now)
 		if finalizeErr != nil {
@@ -476,13 +549,24 @@ func Review(ctx context.Context, request Request, adapter ModelAdapter, authorit
 		}
 		return SelfRefinementProposal{}, receipt, err
 	}
-	ownerReceipt, err := ownerctx.SubmitRefinement(request.OwnerContextRoot, ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "walter-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID})
+	select {
+	case renewErr := <-renewFailures:
+		return SelfRefinementProposal{}, Receipt{}, renewErr
+	default:
+	}
+	if err := store.AssertLease(reservation, time.Now().UTC()); err != nil {
+		return SelfRefinementProposal{}, Receipt{}, err
+	}
+	ownerReceipt, err := ownerctx.SubmitRefinement(request.OwnerContextRoot, ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "walter-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, WalterReviewRequestSHA256: RequestDigest(request), WalterReviewProposalID: proposal.ProposalID, WalterReviewProposalSHA256: DigestJSON(proposal), WalterReviewSensitivity: proposal.Sensitivity, WalterReviewReaders: proposal.Readers, WalterReviewRefinement: proposal.Refinement, WalterReviewConfirmation: string(proposal.ConfirmationRequirement), WalterReviewAdapterID: adapter.ID(), WalterReviewAuthorityID: authority.ID(), WalterReviewFencingToken: reservation.Receipt.FencingToken})
 	if err != nil {
 		receipt, finalizeErr := store.Finalize(reservation, ReceiptFailed, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, adapter.ID(), authority.ID(), "ownerctx_proposal_failed", now)
 		if finalizeErr != nil {
 			return SelfRefinementProposal{}, receipt, finalizeErr
 		}
 		return SelfRefinementProposal{}, receipt, err
+	}
+	if err := store.AssertLease(reservation, time.Now().UTC()); err != nil {
+		return SelfRefinementProposal{}, Receipt{}, err
 	}
 	policy, policyErr := request.CanonicalSnapshot.Policy(proposal.Facet)
 	if policyErr != nil || ownerReceipt.ID == "" || ownerReceipt.ProposalSHA256 == "" || ownerReceipt.Policy != policy.Refinement || ownerReceipt.Sensitivity != policy.Sensitivity || !sameStrings(ownerReceipt.Readers, policy.Readers) {
@@ -514,6 +598,7 @@ type Handler struct {
 	ReviewFacets      []string
 	SensitivePurpose  string
 	OwnerAuthorized   bool
+	IntentHypothesis  *maestro.IntentHypothesis
 	TranslatorID      string
 	TranslatorVersion string
 	Translator        maestro.PromptTranslator
@@ -584,6 +669,9 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 	if err != nil {
 		return Request{}, err
 	}
+	if err := validateRawRequestInputs(handler.CurrentPrompt, selected, snapshot, handler.IntentHypothesis); err != nil {
+		return Request{}, err
+	}
 	currentNormalized, err := handler.Translator(handler.CurrentPrompt, handler.CurrentLanguage, handler.WorkingLanguage)
 	if err != nil || strings.TrimSpace(currentNormalized) == "" {
 		return Request{}, errors.New("Walter current prompt translation is unavailable")
@@ -603,7 +691,11 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 	sort.Strings(historyDigests)
 	translation := TranslationReceipt{TranslatorID: handler.TranslatorID, TranslatorVersion: handler.TranslatorVersion, SourceLanguage: handler.CurrentLanguage, WorkingLanguage: handler.WorkingLanguage, OriginalSHA256: maestro.SHA256Hex(handler.CurrentPrompt), WorkingSHA256: maestro.SHA256Hex(currentNormalized), HistorySHA256: Digest(strings.Join(historyDigests, "\n"))}
 	translation.ReceiptSHA256 = DigestJSON(translation)
-	request := Request{SchemaVersion: SchemaVersion, WeekID: weekID(now), OccurrenceID: command.OccurrenceDigest(), OwnerID: handler.OwnerID, ScopeKind: handler.ScopeKind, ScopeID: handler.ScopeID, CurrentOriginal: handler.CurrentPrompt, CurrentNormalized: currentNormalized, PromptHistory: history, Translation: translation, Observations: filtered, CanonicalSnapshot: snapshot, ReviewFacets: facets, SensitiveOwnerAuthorized: handler.OwnerAuthorized, OwnerContextRoot: handler.Root}
+	intentDigest := ""
+	if handler.IntentHypothesis != nil {
+		intentDigest = DigestJSON(handler.IntentHypothesis)
+	}
+	request := Request{SchemaVersion: SchemaVersion, WeekID: weekID(now), OccurrenceID: occurrenceID(command, intentDigest), OwnerID: handler.OwnerID, ScopeKind: handler.ScopeKind, ScopeID: handler.ScopeID, CurrentOriginal: handler.CurrentPrompt, CurrentNormalized: currentNormalized, PromptHistory: history, Translation: translation, Observations: filtered, CanonicalSnapshot: snapshot, ReviewFacets: facets, SensitiveOwnerAuthorized: handler.OwnerAuthorized, IntentHypothesis: handler.IntentHypothesis, IntentHypothesisSHA256: intentDigest, OwnerContextRoot: handler.Root}
 	if strings.TrimSpace(handler.SensitivePurpose) != "" {
 		request.SensitivePurposeSHA256 = maestro.SHA256Hex(handler.SensitivePurpose)
 	}
@@ -611,6 +703,13 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 		return Request{}, err
 	}
 	return request, nil
+}
+
+func occurrenceID(command maintenance.Command, intentDigest string) string {
+	if intentDigest == "" {
+		return command.OccurrenceDigest()
+	}
+	return Digest(command.OccurrenceDigest() + ":" + intentDigest)
 }
 
 func (handler Handler) toMaintenanceReceipt(command maintenance.Command, receipt Receipt, reviewErr error, now time.Time) maintenance.Receipt {
@@ -639,6 +738,16 @@ func ValidateRequest(request Request) error {
 	}
 	if err := request.CanonicalSnapshot.Validate(); err != nil {
 		return err
+	}
+	hypothesisDigest := ""
+	if request.IntentHypothesis != nil {
+		if err := validateIntentHypothesis(*request.IntentHypothesis); err != nil {
+			return err
+		}
+		hypothesisDigest = DigestJSON(request.IntentHypothesis)
+	}
+	if request.IntentHypothesisSHA256 != hypothesisDigest {
+		return errors.New("Walter intent hypothesis digest is missing or stale")
 	}
 	if err := validateReviewFacets(request); err != nil {
 		return err
@@ -681,7 +790,7 @@ func ValidateProposal(request Request, proposal SelfRefinementProposal) error {
 	if proposal.SchemaVersion != SchemaVersion || proposal.State != "proposed" || strings.TrimSpace(proposal.ProposalID) == "" || !validFacet(proposal.Facet) || !contains(request.ReviewFacets, proposal.Facet) || strings.TrimSpace(proposal.PriorClaim) == "" || strings.TrimSpace(proposal.ProposedRefinement) == "" || len([]byte(proposal.PriorClaim)) > MaxProposalBytes || len([]byte(proposal.ProposedRefinement)) > MaxProposalBytes || proposal.WeekID != request.WeekID || proposal.CanonicalSnapshotVersion != request.CanonicalSnapshot.Version || proposal.CanonicalSnapshotSHA256 != request.CanonicalSnapshot.CanonicalSourceDigest || proposal.PromptHistorySHA256 != DigestJSON(request.PromptHistory) || proposal.TranslationReceiptSHA256 != request.Translation.ReceiptSHA256 || !validConfidence(proposal.Confidence) || strings.TrimSpace(proposal.Sensitivity) == "" || len(proposal.EvidenceObservationIDs) == 0 || len(proposal.EvidenceObservationIDs) > MaxObservations || !validConfirmation(proposal.ConfirmationRequirement) || strings.TrimSpace(proposal.Refinement) == "" || len(proposal.Readers) == 0 {
 		return errors.New("Walter self-refinement proposal is incomplete or stale")
 	}
-	if proposal.IntentHypothesisSHA256 != "" && proposal.IntentHypothesisSHA256 != DigestJSON(request.IntentHypothesis) {
+	if proposal.IntentHypothesisSHA256 != request.IntentHypothesisSHA256 {
 		return errors.New("Walter intrinsic-purpose hypothesis binding is stale")
 	}
 	available := map[string]ownerctx.ObservationReceipt{}
@@ -809,6 +918,77 @@ func validateContextBounds(request Request) error {
 	for _, facet := range request.CanonicalSnapshot.Facets {
 		if err := add(facet.Content); err != nil {
 			return err
+		}
+	}
+	if request.IntentHypothesis != nil {
+		hypothesis := request.IntentHypothesis
+		for _, value := range []string{hypothesis.ExpressedObjective, hypothesis.LatentIntentHypothesis, hypothesis.Materiality, hypothesis.DisconfirmationCondition, hypothesis.WorkingPrompt} {
+			if err := add(value); err != nil {
+				return err
+			}
+		}
+		for _, value := range append(append([]string(nil), hypothesis.EvidenceRefs...), hypothesis.Alternatives...) {
+			if err := add(value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateIntentHypothesis(hypothesis maestro.IntentHypothesis) error {
+	if strings.TrimSpace(hypothesis.ExpressedObjective) == "" || strings.TrimSpace(hypothesis.LatentIntentHypothesis) == "" || strings.TrimSpace(hypothesis.Materiality) == "" || strings.TrimSpace(hypothesis.DisconfirmationCondition) == "" || strings.TrimSpace(hypothesis.WorkingPrompt) == "" || !validConfidence(hypothesis.Confidence) || len(hypothesis.EvidenceRefs) > MaxObservations || len(hypothesis.Alternatives) > MaxObservations {
+		return errors.New("Walter intent hypothesis is incomplete")
+	}
+	for _, value := range []string{hypothesis.ExpressedObjective, hypothesis.LatentIntentHypothesis, hypothesis.Materiality, hypothesis.DisconfirmationCondition, hypothesis.WorkingPrompt} {
+		if len([]byte(value)) > MaxContextBytes {
+			return errors.New("Walter intent hypothesis exceeds its UTF-8 bound")
+		}
+	}
+	for _, value := range append(append([]string(nil), hypothesis.EvidenceRefs...), hypothesis.Alternatives...) {
+		if strings.TrimSpace(value) == "" || len([]byte(value)) > MaxContextBytes {
+			return errors.New("Walter intent hypothesis metadata is invalid")
+		}
+	}
+	return nil
+}
+
+func validateRawRequestInputs(current string, selected []ownerctx.PromptHistorySelection, snapshot ownerctx.UserSelfSnapshot, hypothesis *maestro.IntentHypothesis) error {
+	total := 0
+	add := func(value string) error {
+		bytes := len([]byte(value))
+		if bytes > MaxContextBytes {
+			return errors.New("Walter raw model input field exceeds its UTF-8 bound")
+		}
+		total += bytes
+		if total > MaxContextBytes {
+			return errors.New("Walter raw model input exceeds its combined UTF-8 bound")
+		}
+		return nil
+	}
+	if err := add(current); err != nil {
+		return err
+	}
+	for _, item := range selected {
+		if err := add(item.Entry.Prompt); err != nil {
+			return err
+		}
+	}
+	for _, facet := range snapshot.Facets {
+		if err := add(facet.Content); err != nil {
+			return err
+		}
+	}
+	if hypothesis != nil {
+		for _, value := range []string{hypothesis.ExpressedObjective, hypothesis.LatentIntentHypothesis, hypothesis.Materiality, hypothesis.DisconfirmationCondition, hypothesis.WorkingPrompt} {
+			if err := add(value); err != nil {
+				return err
+			}
+		}
+		for _, value := range append(append([]string(nil), hypothesis.EvidenceRefs...), hypothesis.Alternatives...) {
+			if err := add(value); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -948,23 +1128,4 @@ func ensurePrivateRoot(path string) (string, error) {
 		}
 	}
 	return abs, nil
-}
-
-func releaseLock(path, token string) error {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return errors.New("weekly receipt lock changed")
-	}
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	var lease lockRecord
-	if json.Unmarshal(body, &lease) != nil || lease.Token != token {
-		return errors.New("weekly receipt lock ownership changed")
-	}
-	return os.Remove(path)
 }
