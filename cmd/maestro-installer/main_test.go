@@ -215,15 +215,15 @@ func TestResolveSimulationDefaultsUsesIsolatedRoots(t *testing.T) {
 
 func TestResolveDefaultsUsesUserSpaceRootsWhenPackageIsComplete(t *testing.T) {
 	root := t.TempDir()
-	bootstrapper := filepath.Join(root, "bcgos-bootstrap_0.1.0_"+runtime.GOOS+"_"+runtime.GOARCH)
-	if runtime.GOOS == "windows" {
-		bootstrapper += ".exe"
-	}
+	// Use a supported target explicitly so the package-default contract is
+	// exercised consistently on Linux CI as well as the pilot platforms.
+	platform := "darwin"
+	bootstrapper := filepath.Join(root, "bcgos-bootstrap_0.1.0_"+platform+"_"+runtime.GOARCH)
 	if err := os.WriteFile(bootstrapper, []byte("seed"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	options := options{}
-	if err := resolveDefaultsAt(&options, root, runtime.GOOS, runtime.GOARCH, "/Users/pilot", ""); err != nil {
+	if err := resolveDefaultsAt(&options, root, platform, runtime.GOARCH, "/Users/pilot", ""); err != nil {
 		t.Fatal(err)
 	}
 	if options.bootstrapper != bootstrapper || options.wizardDir != filepath.Join(root, "wizard") || options.releaseDir != filepath.Join(root, "release") || options.authorityRegistry != filepath.Join(root, "authority-registry.json") {
