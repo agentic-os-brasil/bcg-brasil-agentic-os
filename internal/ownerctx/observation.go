@@ -96,6 +96,23 @@ type ObservationReceipt struct {
 	OwnerAction     bool             `json:"owner_action"`
 }
 
+// IsWalterWeeklyEligible is the single ownerctx predicate for weekly Walter
+// evidence. Weekly self evolution is explicit-signal-first: corroboration
+// alone, observed patterns and inferred hypotheses never qualify.
+func IsWalterWeeklyEligible(observation ObservationReceipt) bool {
+	if observation.State != ObservationCorroborated || !observation.OwnerConfirmed {
+		return false
+	}
+	switch observation.Signal {
+	case SignalExplicitInstruction, SignalExplicitCorrection:
+		return true
+	case SignalExplicitEndorsement:
+		return !isGenericEndorsementClaim(observation.Claim)
+	default:
+		return false
+	}
+}
+
 // ObservationMetadataReport is the only observation surface exposed to a
 // metadata-only Darwin analysis. It contains counts, digests and facet IDs,
 // never claim text or source content.
@@ -161,7 +178,7 @@ func EvaluateInteraction(input ObservationInput) (InteractionEvaluation, error) 
 		evaluation.Reason = "explicit_owner_confirmation_missing"
 		return evaluation, nil
 	}
-	if input.Signal == SignalExplicitEndorsement && (input.Claim == "ok" || input.Claim == "okay" || !input.OwnerConfirmed) {
+	if input.Signal == SignalExplicitEndorsement && (isGenericEndorsementClaim(input.Claim) || !input.OwnerConfirmed) {
 		evaluation.Reason = "generic_acknowledgement_is_not_endorsement"
 		return evaluation, nil
 	}
@@ -414,7 +431,7 @@ func validateObservationInput(input ObservationInput) error {
 	if input.Sensitivity != "professional" && input.Sensitivity != "sensitive" && input.Sensitivity != "restricted" {
 		return errors.New("self observation sensitivity is invalid")
 	}
-	if input.Signal == SignalExplicitEndorsement && (strings.EqualFold(input.Claim, "ok") || strings.EqualFold(input.Claim, "okay")) {
+	if input.Signal == SignalExplicitEndorsement && isGenericEndorsementClaim(input.Claim) {
 		return errors.New("silence or generic acceptance is not explicit endorsement")
 	}
 	if input.EvidenceType == "generated_output" || input.EvidenceType == "client_document" || input.EvidenceType == "agent_output" {
@@ -426,6 +443,15 @@ func validateObservationInput(input ObservationInput) error {
 func validObservationFacet(facet string) bool {
 	switch facet {
 	case "professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries":
+		return true
+	default:
+		return false
+	}
+}
+
+func isGenericEndorsementClaim(claim string) bool {
+	switch strings.ToLower(strings.TrimSpace(claim)) {
+	case "ok", "okay":
 		return true
 	default:
 		return false
@@ -483,8 +509,8 @@ func validateTransition(current observationRecord, next ObservationState, record
 			return errors.New("observation requires independent corroboration before proposal")
 		}
 	case ObservationPromoted:
-		if current.State != ObservationProposed && current.State != ObservationCorroborated {
-			return errors.New("observation is not ready for promotion")
+		if current.State != ObservationProposed {
+			return errors.New("observation must be proposed before promotion")
 		}
 	case ObservationRejected, ObservationContradicted, ObservationExpired, ObservationRedacted:
 		if current.State == ObservationPromoted || current.State == ObservationRedacted {

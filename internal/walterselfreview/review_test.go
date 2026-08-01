@@ -227,6 +227,80 @@ func TestWeeklyProposalRequiresCorroboratedObservationState(t *testing.T) {
 	}
 }
 
+func TestWalterWeeklyEligibilityRequiresExplicitOwnerSignals(t *testing.T) {
+	base := testRequest(t)
+	cases := []struct {
+		name      string
+		signal    ownerctx.SignalClass
+		claim     string
+		confirmed bool
+		eligible  bool
+	}{
+		{name: "explicit instruction", signal: ownerctx.SignalExplicitInstruction, claim: "preserve_intent", confirmed: true, eligible: true},
+		{name: "explicit correction", signal: ownerctx.SignalExplicitCorrection, claim: "preserve_intent", confirmed: true, eligible: true},
+		{name: "specific endorsement", signal: ownerctx.SignalExplicitEndorsement, claim: "endorses_concise_style", confirmed: true, eligible: true},
+		{name: "generic endorsement", signal: ownerctx.SignalExplicitEndorsement, claim: "ok", confirmed: true, eligible: false},
+		{name: "observed pattern", signal: ownerctx.SignalObservedPattern, claim: "preserve_intent", confirmed: true, eligible: false},
+		{name: "inferred hypothesis", signal: ownerctx.SignalInferredHypothesis, claim: "preserve_intent", confirmed: true, eligible: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := base
+			observation := base.Observations[0]
+			observation.Signal, observation.Claim, observation.OwnerConfirmed = tc.signal, tc.claim, tc.confirmed
+			request.Observations = []ownerctx.ObservationReceipt{observation}
+			if got := ownerctx.IsWalterWeeklyEligible(observation); got != tc.eligible {
+				t.Fatalf("weekly eligibility = %v, want %v", got, tc.eligible)
+			}
+			proposal := testProposal(request)
+			err := ValidateProposal(request, proposal)
+			if tc.eligible && err != nil {
+				t.Fatalf("eligible explicit evidence was rejected: %v", err)
+			}
+			if !tc.eligible && err == nil {
+				t.Fatal("ineligible evidence was accepted by ValidateProposal")
+			}
+		})
+	}
+}
+
+func TestBuildRequestExcludesCorroboratedObservedPattern(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	input := ownerctx.ObservationInput{SchemaVersion: 1, Signal: ownerctx.SignalObservedPattern, Facet: "voice", Claim: "preserve_intent", EvidenceType: "observed_pattern", SourceEvent: "interaction.completed", SourceDigest: Digest("observed-a"), EpisodeID: "episode-observed-a", ScopeKind: "global", ScopeID: "owner", Confidence: .9, Sensitivity: "professional", ExpiresAt: now.Add(time.Hour), AuthenticatedOwner: true, Material: true}
+	first, evaluation, err := ownerctx.AppendObservation(root, input)
+	if err != nil || !evaluation.Persist {
+		t.Fatalf("observed pattern was not persisted for the selection test: receipt=%+v evaluation=%+v err=%v", first, evaluation, err)
+	}
+	eligible, err := ownerctx.TransitionObservation(root, ownerctx.ObservationTransitionInput{ObservationID: first.ID, TransitionID: "observed-eligible", Next: ownerctx.ObservationEligible, ExpectedState: first.State, ExpectedRevision: first.Revision, OwnerAction: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.EpisodeID, input.SourceDigest = "episode-observed-b", Digest("observed-b")
+	if _, _, err := ownerctx.AppendObservation(root, input); err != nil {
+		t.Fatal(err)
+	}
+	corroborated, err := ownerctx.TransitionObservation(root, ownerctx.ObservationTransitionInput{ObservationID: first.ID, TransitionID: "observed-corroborated", Next: ownerctx.ObservationCorroborated, ExpectedState: eligible.State, ExpectedRevision: eligible.Revision, OwnerAction: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if corroborated.State != ownerctx.ObservationCorroborated {
+		t.Fatalf("observation did not reach corroborated state: %+v", corroborated)
+	}
+	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "observed-pattern-command", JobID: WeeklyJobID, WorkspaceID: "workspace-1", Trigger: maintenance.TriggerWeekly, ScheduledFor: now, RequestedAt: now, Deadline: now.Add(time.Minute), ProposalOnly: true}
+	handler := Handler{Root: root, OwnerID: "owner", ScopeKind: ownerctx.PromptScopeGlobal, ScopeID: "owner", CurrentPrompt: "Current request", CurrentLanguage: "en-US", WorkingLanguage: "en-US", TranslatorID: "translator", TranslatorVersion: "v1", ReviewFacets: []string{"voice"}, Translator: func(original, _, _ string) (string, error) { return original, nil }}
+	request, err := handler.BuildRequest(command, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(request.Observations) != 0 {
+		t.Fatalf("observed-pattern evidence entered the weekly request: %+v", request.Observations)
+	}
+}
+
 func TestRequestBoundsAndTranslationExpansionFailClosed(t *testing.T) {
 	request := testRequest(t)
 	request.CurrentOriginal = strings.Repeat("x", MaxContextBytes+1)

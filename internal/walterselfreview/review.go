@@ -722,7 +722,7 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 	}
 	filtered := make([]ownerctx.ObservationReceipt, 0, len(observations))
 	for _, observation := range observations {
-		if contains(facets, observation.Facet) && observation.State == ownerctx.ObservationCorroborated {
+		if contains(facets, observation.Facet) && ownerctx.IsWalterWeeklyEligible(observation) {
 			filtered = append(filtered, observation)
 		}
 	}
@@ -857,7 +857,7 @@ func ValidateProposal(request Request, proposal SelfRefinementProposal) error {
 	seen := map[string]bool{}
 	for _, id := range proposal.EvidenceObservationIDs {
 		observation, ok := available[id]
-		if !ok || seen[id] || observation.State != ownerctx.ObservationCorroborated {
+		if !ok || seen[id] || !ownerctx.IsWalterWeeklyEligible(observation) {
 			return errors.New("Walter proposal evidence requires independent corroboration")
 		}
 		if observation.Facet != proposal.Facet {

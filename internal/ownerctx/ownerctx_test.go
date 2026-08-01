@@ -388,11 +388,14 @@ func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testi
 	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationCorroborated, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationProposed, ""); err != nil {
-		t.Fatal(err)
-	}
 	canonical, err := canonicalDigestForFacet(root, "voice")
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationPromoted, canonical); err == nil {
+		t.Fatal("corroborated observation bypassed the proposed state")
+	}
+	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationProposed, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := transitionObservation(t, root, firstReceipt.ID, ObservationPromoted, digest("stale")); !errors.Is(err, ErrRevisionConflict) {

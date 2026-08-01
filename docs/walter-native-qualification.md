@@ -32,11 +32,12 @@ boundaries/profile require explicit owner confirmation. Intrinsic-purpose
 hypotheses remain task-local and cannot become self facets.
 
 Weekly proposal evidence is accepted only from observations in the
-`corroborated` state, which requires independent episodes. An explicit
-instruction or correction is high-grade eligibility evidence but cannot jump
-from `captured` or `eligible` directly to a proposal. The maintenance command's
-deadline bounds the adapter context and lease renewal; once it expires, no
-ownerctx proposal may be written.
+`corroborated` state with a specific, owner-confirmed explicit instruction,
+correction or endorsement. Observed patterns and inferred hypotheses never
+enter weekly Walter proposals. Independent episodes are still required, and
+an explicit signal cannot jump from `captured` or `eligible` directly to a
+proposal. The maintenance command's deadline bounds the adapter context and
+lease renewal; once it expires, no ownerctx proposal may be written.
 
 The facet sensitivity, readers, refinement mode and confirmation requirement
 are derived from the canonical `ownerctx` snapshot and compared exactly with
