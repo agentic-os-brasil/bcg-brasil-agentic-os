@@ -480,6 +480,12 @@ func TestObservationTransitionRetryIsIdempotentAndStaleCASFailsClosed(t *testing
 	if retry.ID != first.ID || retry.Revision != first.Revision || retry.TransitionID != first.TransitionID {
 		t.Fatalf("retry did not return the original transition receipt: first=%#v retry=%#v", first, retry)
 	}
+	if !retry.OwnerAction {
+		t.Fatalf("transition receipt lost explicit owner action: %#v", retry)
+	}
+	if _, err := TransitionObservation(root, ObservationTransitionInput{ObservationID: receipt.ID, TransitionID: transition.TransitionID, Next: transition.Next, ExpectedState: transition.ExpectedState, ExpectedRevision: transition.ExpectedRevision, OwnerAction: false}); err == nil {
+		t.Fatal("transition replay changed owner authority and was accepted")
+	}
 	if _, err := TransitionObservation(root, ObservationTransitionInput{ObservationID: receipt.ID, TransitionID: "transition-stale", Next: ObservationProposed, ExpectedState: receipt.State, ExpectedRevision: receipt.Revision, OwnerAction: true}); !errors.Is(err, ErrRevisionConflict) {
 		t.Fatalf("stale competing transition error = %v", err)
 	}

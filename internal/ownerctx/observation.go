@@ -85,6 +85,7 @@ type ObservationReceipt struct {
 	CanonicalDigest string           `json:"canonical_digest,omitempty"`
 	Revision        string           `json:"revision"`
 	TransitionID    string           `json:"transition_id,omitempty"`
+	OwnerAction     bool             `json:"owner_action"`
 }
 
 // ObservationMetadataReport is the only observation surface exposed to a
@@ -110,6 +111,7 @@ type observationRecord struct {
 	ExpectedState           ObservationState `json:"expected_state,omitempty"`
 	ExpectedRevision        string           `json:"expected_revision,omitempty"`
 	ExpectedCanonicalDigest string           `json:"expected_canonical_digest,omitempty"`
+	OwnerAction             bool             `json:"owner_action"`
 	Tombstone               bool             `json:"tombstone,omitempty"`
 }
 
@@ -267,7 +269,7 @@ func TransitionObservation(root string, input ObservationTransitionInput) (Obser
 			if existing.TransitionID != input.TransitionID {
 				continue
 			}
-			if existing.ID != input.ObservationID || existing.State != input.Next || existing.ExpectedState != input.ExpectedState || existing.ExpectedRevision != input.ExpectedRevision || existing.ExpectedCanonicalDigest != input.ExpectedCanonicalDigest {
+			if existing.ID != input.ObservationID || existing.State != input.Next || existing.ExpectedState != input.ExpectedState || existing.ExpectedRevision != input.ExpectedRevision || existing.ExpectedCanonicalDigest != input.ExpectedCanonicalDigest || existing.OwnerAction != input.OwnerAction {
 				return errors.New("observation transition occurrence was reused with different content")
 			}
 			receipt = observationReceipt(existing, "state_transition_idempotent")
@@ -311,6 +313,7 @@ func TransitionObservation(root string, input ObservationTransitionInput) (Obser
 		current.ExpectedState = input.ExpectedState
 		current.ExpectedRevision = input.ExpectedRevision
 		current.ExpectedCanonicalDigest = input.ExpectedCanonicalDigest
+		current.OwnerAction = input.OwnerAction
 		current.Tombstone = input.Next == ObservationRedacted
 		current.StateChangedAt = time.Now().UTC()
 		if err := appendObservationRecord(path, current); err != nil {
@@ -606,7 +609,7 @@ func latestObservations(records []observationRecord) map[string]observationRecor
 }
 
 func observationReceipt(record observationRecord, reason string) ObservationReceipt {
-	return ObservationReceipt{ID: record.ID, State: record.State, Signal: record.Signal, Facet: record.Facet, ScopeKind: record.ScopeKind, ScopeID: record.ScopeID, Confidence: record.Confidence, Persisted: true, Reason: reason, CanonicalDigest: record.CanonicalDigest, Revision: observationRevision(record), TransitionID: record.TransitionID}
+	return ObservationReceipt{ID: record.ID, State: record.State, Signal: record.Signal, Facet: record.Facet, ScopeKind: record.ScopeKind, ScopeID: record.ScopeID, Confidence: record.Confidence, Persisted: true, Reason: reason, CanonicalDigest: record.CanonicalDigest, Revision: observationRevision(record), TransitionID: record.TransitionID, OwnerAction: record.OwnerAction}
 }
 
 func observationRevision(record observationRecord) string {
