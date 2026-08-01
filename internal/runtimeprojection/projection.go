@@ -16,6 +16,9 @@ import (
 
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
+	bundlecatalog "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/catalog"
+	engineeringcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/engineering-core/skills"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/capabilitybundle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
@@ -61,6 +64,10 @@ type runtimeLayout struct {
 // ValidateInstall performs the projection preflight without writing files.
 // It is used by the CLI to coordinate projection and adapter configuration.
 func ValidateInstall(runtimeName, workspace string) error {
+	return ValidateInstallForTracks(runtimeName, workspace, nil)
+}
+
+func ValidateInstallForTracks(runtimeName, workspace string, tracks []string) error {
 	layout, err := layout(runtimeName, workspace)
 	if err != nil {
 		return err
@@ -70,7 +77,7 @@ func ValidateInstall(runtimeName, workspace string) error {
 			return err
 		}
 	}
-	catalog, err := baseskills.Catalog()
+	catalog, err := catalogForTracks(tracks)
 	if err != nil {
 		return fmt.Errorf("load managed skills catalog: %w", err)
 	}
@@ -104,6 +111,10 @@ func ValidateUninstall(runtimeName, workspace string) error {
 }
 
 func Install(runtimeName, workspace string) (Status, error) {
+	return InstallForTracks(runtimeName, workspace, nil)
+}
+
+func InstallForTracks(runtimeName, workspace string, tracks []string) (Status, error) {
 	layout, err := layout(runtimeName, workspace)
 	if err != nil {
 		return Status{}, err
@@ -113,7 +124,7 @@ func Install(runtimeName, workspace string) (Status, error) {
 			return Status{}, err
 		}
 	}
-	catalog, err := baseskills.Catalog()
+	catalog, err := catalogForTracks(tracks)
 	if err != nil {
 		return Status{}, fmt.Errorf("load managed skills catalog: %w", err)
 	}
@@ -363,7 +374,7 @@ func skillContents(catalog skillsindex.Catalog) (map[string][]byte, map[string]s
 	contents := make(map[string][]byte, len(catalog.Skills))
 	hashes := make(map[string]string, len(catalog.Skills))
 	for _, skill := range catalog.Skills {
-		body, err := baseskills.Skill(skill.ID)
+		body, err := skillBody(skill.ID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -371,6 +382,49 @@ func skillContents(catalog skillsindex.Catalog) (map[string][]byte, map[string]s
 		hashes[skill.ID] = digest(body)
 	}
 	return contents, hashes, nil
+}
+
+func catalogForTracks(tracks []string) (skillsindex.Catalog, error) {
+	base, err := baseskills.Catalog()
+	if err != nil {
+		return skillsindex.Catalog{}, fmt.Errorf("load managed skills catalog: %w", err)
+	}
+	if len(tracks) == 0 {
+		return base, nil
+	}
+	catalog, err := bundlecatalog.Catalog()
+	if err != nil {
+		return skillsindex.Catalog{}, err
+	}
+	plan, err := catalog.PlanForTracks(tracks)
+	if err != nil {
+		return skillsindex.Catalog{}, err
+	}
+	if plan.State == capabilitybundle.Unavailable {
+		return skillsindex.Catalog{}, errors.New(plan.Reason)
+	}
+	for _, bundle := range plan.Bundles {
+		if bundle.ID != "engineering-core" {
+			continue
+		}
+		optional, loadErr := engineeringcoreskills.Catalog()
+		if loadErr != nil {
+			return skillsindex.Catalog{}, fmt.Errorf("load engineering-core skills catalog: %w", loadErr)
+		}
+		base.Skills = append(base.Skills, optional.Skills...)
+	}
+	sort.Slice(base.Skills, func(left, right int) bool { return base.Skills[left].ID < base.Skills[right].ID })
+	if err := base.Validate(); err != nil {
+		return skillsindex.Catalog{}, fmt.Errorf("validate activated skills catalog: %w", err)
+	}
+	return base, nil
+}
+
+func skillBody(id string) ([]byte, error) {
+	if body, err := baseskills.Skill(id); err == nil {
+		return body, nil
+	}
+	return engineeringcoreskills.Skill(id)
 }
 
 func renderOrientation(layout runtimeLayout, catalog skillsindex.Catalog) (string, error) {

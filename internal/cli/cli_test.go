@@ -412,9 +412,16 @@ func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 	}
 }
 
-func TestBundlesPlanExplainsThatDataBundlesAreNotActivated(t *testing.T) {
+func TestBundlesPlanKeepsDataBundlesUnavailable(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "unavailable"`) || !strings.Contains(output.String(), `"id": "engineering-core"`) || !strings.Contains(output.String(), "not implemented") {
+	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "unavailable"`) || !strings.Contains(output.String(), `"id": "engineering-core"`) || !strings.Contains(output.String(), "qualified runtime") {
+		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestBundlesPlanMarksEngineeringCoreOptional(t *testing.T) {
+	var output bytes.Buffer
+	if code := Run([]string{"bundles", "plan", "--track", "software-engineering"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "optional"`) || !strings.Contains(output.String(), `"id": "engineering-core"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
 	}
 }
@@ -737,7 +744,7 @@ func TestAgentIdentityInterviewAndPersonalizationAreExplicit(t *testing.T) {
 		!strings.Contains(output.String(), `"client_account_agent"`) {
 		t.Fatalf("identity interview = %d, output = %s", code, output.String())
 	}
-	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"updated_at":"2026-07-28T00:00:00Z","selections":[{"role":"client_account_agent","agent_id":"client-account-agent-acme","display_name":"Compass","emoji":"🧭","owner_id":"daniel","ownership_scope":"account"},{"role":"case_agent","agent_id":"case-agent-pricing","display_name":"Forge","emoji":"⚙️","owner_id":"daniel","ownership_scope":"case"}]}`
+	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"updated_at":"2026-07-28T00:00:00Z","capability_tracks":["software-engineering"],"selections":[{"role":"client_account_agent","agent_id":"client-account-agent-acme","display_name":"Compass","emoji":"🧭","owner_id":"daniel","ownership_scope":"account"},{"role":"case_agent","agent_id":"case-agent-pricing","display_name":"Forge","emoji":"⚙️","owner_id":"daniel","ownership_scope":"case"}]}`
 	output.Reset()
 	if code := runAgentWithInput([]string{"personalize", "--stdin"}, strings.NewReader(profile), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"display_name": "Compass"`) {
 		t.Fatalf("identity personalize = %d, output = %s", code, output.String())
@@ -745,6 +752,39 @@ func TestAgentIdentityInterviewAndPersonalizationAreExplicit(t *testing.T) {
 	output.Reset()
 	if code := runAgentWithInput([]string{"identity"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"ownership_scope": "case"`) {
 		t.Fatalf("identity status = %d, output = %s", code, output.String())
+	}
+}
+
+func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	if err := os.MkdirAll(workspacePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"capability_tracks":["software-engineering"],"selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"daniel","ownership_scope":"system"}]}`
+	if code := runAgentWithInput([]string{"personalize", "--stdin"}, strings.NewReader(profile), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("personalize = %d %s", code, output.String())
+	}
+	output.Reset()
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 26`) {
+		t.Fatalf("optional adapter install = %d %s", code, output.String())
+	}
+	if _, err := os.Stat(filepath.Join(workspacePath, ".codex", "skills", "spec-driven-delivery", "SKILL.md")); err != nil {
+		t.Fatalf("engineering skill was not projected: %v", err)
+	}
+}
+
+func TestInterviewSelectionFailsClosedForUnavailableDataBundle(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	var output bytes.Buffer
+	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"capability_tracks":["data-science"],"selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"daniel","ownership_scope":"system"}]}`
+	if code := runAgentWithInput([]string{"personalize", "--stdin"}, strings.NewReader(profile), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitFailure || !strings.Contains(output.String(), "qualified runtime") {
+		t.Fatalf("unavailable personalize = %d %s", code, output.String())
+	}
+	if _, err := os.Stat(filepath.Join(dataRoot, "agents", "personalization.json")); !os.IsNotExist(err) {
+		t.Fatalf("unavailable selection persisted: %v", err)
 	}
 }
 

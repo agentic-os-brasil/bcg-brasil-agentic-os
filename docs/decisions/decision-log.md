@@ -600,3 +600,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Darwin gains durable auditability without a second execution ledger or a context-bearing contract store. Local files remain metadata-only, native persistence and native runtime provenance remain unavailable, and a decision claim never promotes a proposal automatically or proves Walter identity. Future authoritative approval requires a separately qualified signed envelope and consumer contract; future policy changes require a new pinned episode and explicit human authority.
 - Refs: specs/038-darwin-durable-evolution.md; internal/darwin/evolution.go; internal/darwin/evolution_store.go; schemas/darwin-evolution-*.schema.json
 - Supersedes: none
+
+## BSEL - Activate optional engineering skills from confirmed interview selection
+
+- Date: 2026-07-31
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The Canary already ships professional engineering skills as source content, but the bundle catalog marked them unavailable and the initial interview had no capability-track selection. That made the useful code methods invisible at runtime and conflated missing data/runtime packs with an optional local capability.
+- Decision: Mark `engineering-core` as `optional`, expose `technical-explorer` and `software-engineering` in the canonical agent interview, persist confirmed `capability_tracks` with the local personalization profile, and have the adapter project the embedded engineering skills only for a valid selected plan. Keep `data-practice` unavailable until its runtime and release contract are qualified. Capability selection remains independent from interaction profile, tools, data scope, provider access and authority.
+- Consequences: A user can opt into code-oriented methods during onboarding and receive them in Claude/Codex projection without a new agent or implicit grant. Selection is validated against the catalog and fails closed before persistence or workspace writes when a required bundle is unavailable. Remote/downloaded optional packs, migrations, signatures and separate runtime authorities remain future work.
+- Refs: USER; specs/035-professional-capability-bundles.md; bundles/catalog/catalog.json; internal/agentidentity; internal/capabilitybundle; internal/runtimeprojection
+- Supersedes: CAPS

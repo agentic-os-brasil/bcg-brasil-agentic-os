@@ -1,6 +1,5 @@
-// Package capabilitybundle validates the source inventory for optional
-// professional capability bundles. It does not install, activate or authorize
-// a bundle; those are separate release and local-transaction concerns.
+// Package capabilitybundle validates the source inventory for professional
+// capability bundles and computes the explicit local selection plan.
 package capabilitybundle
 
 import (
@@ -13,7 +12,10 @@ import (
 	"strings"
 )
 
-const Unavailable = "unavailable"
+const (
+	Optional    = "optional"
+	Unavailable = "unavailable"
+)
 
 type Catalog struct {
 	SchemaVersion int      `json:"schema_version"`
@@ -80,8 +82,8 @@ func (catalog Catalog) Validate() error {
 			if bundle.Availability != "included" || len(bundle.DependsOn) != 0 {
 				return errors.New("base capability bundle must be included and have no dependencies")
 			}
-		} else if bundle.Availability != Unavailable || strings.TrimSpace(bundle.AvailabilityReason) == "" {
-			return fmt.Errorf("optional capability bundle %q must remain explicitly unavailable until release activation exists", bundle.ID)
+		} else if (bundle.Availability != Optional && bundle.Availability != Unavailable) || strings.TrimSpace(bundle.AvailabilityReason) == "" {
+			return fmt.Errorf("optional capability bundle %q must be optional or unavailable with a reason", bundle.ID)
 		}
 		for _, track := range bundle.Tracks {
 			if !validID(track) {
@@ -193,12 +195,16 @@ func (catalog Catalog) PlanForTracks(tracks []string) (Plan, error) {
 			plan.Bundles = append(plan.Bundles, bundle)
 			if bundle.Availability == Unavailable {
 				plan.State = Unavailable
+			} else if bundle.Availability == Optional && plan.State == "base_only" {
+				plan.State = Optional
 			}
 		}
 	}
 	sort.Slice(plan.Bundles, func(left, right int) bool { return plan.Bundles[left].ID < plan.Bundles[right].ID })
 	if plan.State == Unavailable {
-		plan.Reason = "capability selection is inspectable, but optional bundle release identity, compatibility and local activation are not implemented"
+		plan.Reason = "one or more selected capability bundles remain unavailable because their qualified runtime or release artifact is missing"
+	} else if plan.State == Optional {
+		plan.Reason = "selected optional bundle activates only after explicit confirmed interview selection; it does not grant tools, data scope or authority"
 	}
 	return plan, nil
 }

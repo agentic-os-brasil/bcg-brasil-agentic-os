@@ -74,6 +74,38 @@
       "path": "skills/catalog.json"
     },
     {
+      "source": "bundles/engineering-core/skills/INDEX.md",
+      "path": "bundles/engineering-core/skills/INDEX.md"
+    },
+    {
+      "source": "bundles/engineering-core/skills/catalog.json",
+      "path": "bundles/engineering-core/skills/catalog.json"
+    },
+    {
+      "source": "bundles/engineering-core/skills/review-explain-change/SKILL.md",
+      "path": "bundles/engineering-core/skills/review-explain-change/SKILL.md"
+    },
+    {
+      "source": "bundles/engineering-core/skills/review-explain-change/agents/openai.yaml",
+      "path": "bundles/engineering-core/skills/review-explain-change/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/engineering-core/skills/spec-driven-delivery/SKILL.md",
+      "path": "bundles/engineering-core/skills/spec-driven-delivery/SKILL.md"
+    },
+    {
+      "source": "bundles/engineering-core/skills/spec-driven-delivery/agents/openai.yaml",
+      "path": "bundles/engineering-core/skills/spec-driven-delivery/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/engineering-core/skills/test-and-evidence/SKILL.md",
+      "path": "bundles/engineering-core/skills/test-and-evidence/SKILL.md"
+    },
+    {
+      "source": "bundles/engineering-core/skills/test-and-evidence/agents/openai.yaml",
+      "path": "bundles/engineering-core/skills/test-and-evidence/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/agent-skill-policy.json",
       "path": "skills/agent-skill-policy.json"
     },

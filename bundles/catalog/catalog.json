@@ -15,8 +15,8 @@
     {
       "id": "engineering-core",
       "display_name": "Fundamentos de engenharia",
-      "availability": "unavailable",
-      "availability_reason": "A identidade de release, a compatibilidade e a ativação local de bundles opcionais ainda não foram implementadas.",
+      "availability": "optional",
+      "availability_reason": "Disponível no Canary; a ativação local exige seleção confirmada na entrevista.",
       "depends_on": [
         "base"
       ],
@@ -30,7 +30,7 @@
       "id": "data-practice",
       "display_name": "Prática de dados",
       "availability": "unavailable",
-      "availability_reason": "A identidade de release, a compatibilidade e a ativação local de bundles opcionais ainda não foram implementadas.",
+      "availability_reason": "O runtime e o artefato qualificado para práticas de dados ainda não estão disponíveis no Canary.",
       "depends_on": [
         "engineering-core"
       ],
