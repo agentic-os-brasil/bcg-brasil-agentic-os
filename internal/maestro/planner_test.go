@@ -39,6 +39,25 @@ func TestPlannerAccountAssistedMaterialPath(t *testing.T) {
 	}
 }
 
+func TestPlannerRequiresExplicitCaseAccountBindingAndDoesNotUseRegistryOrder(t *testing.T) {
+	input := caseInput(false)
+	input.AccountScopeID = "client-alpha"
+	input.AvailableAgents = append(input.AvailableAgents, RegisteredAgent{ID: "account-agent-client-beta", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-beta", AuthorizationDigest: digestFor("account-beta"), StateSnapshotDigest: digestFor("state-beta"), Available: true})
+	input.AvailableAgents[0], input.AvailableAgents[3] = input.AvailableAgents[3], input.AvailableAgents[0]
+	plan, err := PlanFor(input)
+	if err != nil || len(plan.Bindings) < 2 || plan.Bindings[0].ScopeID != "client-alpha" {
+		t.Fatalf("explicit account binding was not selected: %#v %v", plan, err)
+	}
+	input.AccountScopeID = "client-beta"
+	if _, err := PlanFor(input); err == nil {
+		t.Fatal("Case crossed into an account without a matching parent binding")
+	}
+	input.AccountScopeID = ""
+	if _, err := PlanFor(input); err == nil {
+		t.Fatal("missing Case-to-Account binding was accepted")
+	}
+}
+
 func TestPlannerAccountAssistedLowMaterialitySkipsOnlyWalter(t *testing.T) {
 	plan, err := PlanFor(caseInput(false))
 	if err != nil {
@@ -301,9 +320,9 @@ func TestPlannerBudgetsFailClosedAndMaterialityCannotSkipWalter(t *testing.T) {
 }
 
 func caseInput(simple bool) Input {
-	return Input{SchemaVersion: 1, IntentClass: IntentCase, ScopeKind: "case", ScopeID: "transformation", Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone, SimpleReversible: simple, ExecutionOnly: simple, AvailableAgents: []RegisteredAgent{
+	return Input{SchemaVersion: 1, IntentClass: IntentCase, ScopeKind: "case", ScopeID: "transformation", AccountScopeID: "client-alpha", Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone, SimpleReversible: simple, ExecutionOnly: simple, AvailableAgents: []RegisteredAgent{
 		{ID: "account-agent-client-alpha", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-alpha", AuthorizationDigest: digestFor("account-auth"), StateSnapshotDigest: digestFor("account-state"), Available: true},
-		{ID: "case-agent-transformation", Role: "case_agent", ScopeKind: "case", ScopeID: "transformation", AuthorizationDigest: digestFor("case-auth"), StateSnapshotDigest: digestFor("case-state"), Available: true},
+		{ID: "case-agent-transformation", Role: "case_agent", ScopeKind: "case", ScopeID: "transformation", ParentScopeKind: "account", ParentScopeID: "client-alpha", AuthorizationDigest: digestFor("case-auth"), StateSnapshotDigest: digestFor("case-state"), Available: true},
 		{ID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review", AuthorizationDigest: digestFor("walter-auth"), StateSnapshotDigest: digestFor("walter-state"), Available: true},
 	}}
 }

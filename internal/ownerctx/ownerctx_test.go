@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -185,6 +186,53 @@ func TestSnapshotIsAStaleCheckedProjectionOfCanonicalFacets(t *testing.T) {
 	}
 	if _, err := LoadSnapshot(root, snapshot.Version); !errors.Is(err, ErrSnapshotStale) {
 		t.Fatalf("stale snapshot error = %v", err)
+	}
+}
+
+func TestSnapshotRejectsTamperedProjectedContentAndReaders(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ProjectSnapshot(root, []string{"voice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := snapshot
+	facet := tampered.Facets["voice"]
+	facet.Content = "forged content"
+	tampered.Facets["voice"] = facet
+	if err := tampered.Validate(); err == nil {
+		t.Fatal("tampered projected content passed validation")
+	}
+	tampered = snapshot
+	facet = tampered.Facets["voice"]
+	facet.Readers = []string{"attacker"}
+	tampered.Facets["voice"] = facet
+	if err := tampered.Validate(); err == nil {
+		t.Fatal("tampered projected readers passed validation")
+	}
+}
+
+func TestAtomicPrivateWriteRejectsSymlinkTarget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink privilege is not available on all Windows runners")
+	}
+	root := t.TempDir()
+	victim := filepath.Join(root, "victim")
+	if err := os.WriteFile(victim, []byte("safe"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "target")
+	if err := os.Symlink(victim, target); err != nil {
+		t.Fatal(err)
+	}
+	if err := atomicPrivateWrite(target, []byte("forged")); err == nil {
+		t.Fatal("atomic writer followed a symlink target")
+	}
+	body, err := os.ReadFile(victim)
+	if err != nil || string(body) != "safe" {
+		t.Fatalf("symlink victim changed: %q, err=%v", body, err)
 	}
 }
 

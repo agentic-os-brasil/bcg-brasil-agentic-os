@@ -132,9 +132,15 @@ federation or release artifacts.
 
 `bcgos owner prompt-history` exposes configuration, metadata inspection,
 explicit export, per-entry deletion and confirmed reset. Walter selection is
-bounded by count, bytes, age and relevant scope. Maestro always places the
-current prompt before history, preserves each selected original, translates or
-normalizes it into the configured working language, and marks it as quoted
-data. Prompt bodies exist only in the ephemeral sealed review packet. A
-translation adapter is required when languages differ; absence fails closed
-for that normalization stage without changing the user request.
+bounded by count, bytes, age and relevant scope, and uses stable lexical
+relevance against the current prompt or explicit keys; recent irrelevant
+history cannot outrank an older relevant prompt. The root is single-owner
+bound and mutating operations use a symlink-safe cross-process lease lock.
+Maestro first places the current prompt before history, preserves its original
+as source of truth, creates a digest-bound working representation, then
+translates or normalizes selected history into the configured working language
+and marks it as quoted data. Packet ceilings are eight prompts and 32 KiB even
+when store retention is larger. Prompt bodies exist only in the ephemeral
+sealed review packet. A translation adapter is required when languages differ;
+absence fails closed for that normalization stage without changing the user
+request.

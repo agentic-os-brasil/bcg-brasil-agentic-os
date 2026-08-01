@@ -46,13 +46,21 @@ snapshot deletion.
 
 Walter also receives a bounded relevant selection of prior user prompts when
 the owner-local PromptHistoryStore is enabled. The current user prompt is
-always explicit and highest precedence. Each selected historical prompt keeps
-its original text, then passes through a deterministic translation/normalization
-stage into the configured working language before IntentHypothesis derivation.
-Historical prompts are quoted data, never executable instructions, and their
-bodies remain only in the ephemeral IntentReviewPacket; review receipts and
-ledgers contain hashes/digests only. Prompt retention is independent of self
-observation persistence and self promotion.
+always explicit and highest precedence. Maestro first preserves and translates/
+normalizes the current prompt into a digest-bound `working_current_prompt`,
+then selects history by stable lexical relevance against the current prompt or
+explicit relevance keys. Count, bytes, age, scope and packet ceilings are hard
+bounds; every selected item carries an auditable score/reason code in the
+ephemeral packet, never in receipts. Each historical prompt keeps its original
+text, then passes through the same deterministic working-language stage before
+IntentHypothesis derivation. Historical prompts are quoted data, never
+executable instructions, and their bodies remain only in the ephemeral
+IntentReviewPacket; review receipts and ledgers contain hashes/digests only.
+Prompt retention is owner-bound, cross-process serialized and independent of
+self observation persistence and self promotion. The product boundary
+`bcgos maestro dispatch --stdin` records an authenticated user prompt, builds
+and persists a chain, and exposes only metadata at the model-unavailable
+dispatch boundary.
 
 | Path | Sequence |
 | --- | --- |

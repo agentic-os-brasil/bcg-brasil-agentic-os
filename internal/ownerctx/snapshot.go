@@ -63,19 +63,20 @@ func ProjectSnapshot(root string, requested []string) (UserSelfSnapshot, error) 
 		if err != nil {
 			return UserSelfSnapshot{}, err
 		}
-		contentDigest := digest(string(body))
 		// The projection is local-only. Bound the packet-facing body while
-		// retaining the source digest as the authoritative freshness check.
+		// retaining the canonical source as the authoritative freshness check.
 		content := string(body)
 		if len(content) > maximumOwnerProjectionBytes {
 			content = content[:maximumOwnerProjectionBytes]
 		}
 		readers := append([]string(nil), definition.Readers...)
 		sort.Strings(readers)
-		facets[id] = SnapshotFacet{Facet: id, SourcePath: definition.Path, ContentDigest: contentDigest, Sensitivity: definition.Sensitivity, Readers: readers, Refinement: definition.Refinement, Content: content}
+		facet := SnapshotFacet{Facet: id, SourcePath: definition.Path, Sensitivity: definition.Sensitivity, Readers: readers, Refinement: definition.Refinement, Content: content}
+		facet.ContentDigest = snapshotFacetDigest(facet)
+		facets[id] = facet
 		source.WriteString(id)
 		source.WriteByte('\x00')
-		source.WriteString(contentDigest)
+		source.WriteString(facet.ContentDigest)
 		source.WriteByte('\x00')
 	}
 	canonical := digest(source.String())
@@ -150,7 +151,7 @@ func validateSnapshot(snapshot UserSelfSnapshot) error {
 		return errors.New("UserSelfSnapshot source digest is invalid")
 	}
 	for id, facet := range snapshot.Facets {
-		if id == "" || facet.Facet != id || facet.SourcePath == "" || !validDigest(facet.ContentDigest) {
+		if id == "" || facet.Facet != id || facet.SourcePath == "" || !validDigest(facet.ContentDigest) || facet.ContentDigest != snapshotFacetDigest(facet) {
 			return errors.New("UserSelfSnapshot facet binding is invalid")
 		}
 	}
@@ -163,7 +164,31 @@ func sameSnapshotBinding(current, stored UserSelfSnapshot) bool {
 	}
 	for id, facet := range current.Facets {
 		other, ok := stored.Facets[id]
-		if !ok || facet.SourcePath != other.SourcePath || facet.ContentDigest != other.ContentDigest || facet.Sensitivity != other.Sensitivity || facet.Refinement != other.Refinement {
+		if !ok || facet.SourcePath != other.SourcePath || facet.ContentDigest != other.ContentDigest || facet.Sensitivity != other.Sensitivity || facet.Refinement != other.Refinement || facet.Content != other.Content || !sameStrings(facet.Readers, other.Readers) {
+			return false
+		}
+	}
+	return true
+}
+
+func snapshotFacetDigest(facet SnapshotFacet) string {
+	body, _ := json.Marshal(struct {
+		Facet       string   `json:"facet"`
+		SourcePath  string   `json:"source_path"`
+		Sensitivity string   `json:"sensitivity"`
+		Readers     []string `json:"readers"`
+		Refinement  string   `json:"refinement"`
+		Content     string   `json:"content"`
+	}{facet.Facet, facet.SourcePath, facet.Sensitivity, append([]string(nil), facet.Readers...), facet.Refinement, facet.Content})
+	return digest(string(body))
+}
+
+func sameStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
 			return false
 		}
 	}

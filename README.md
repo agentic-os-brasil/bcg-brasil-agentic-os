@@ -104,10 +104,15 @@ owner-confirmed rejection/redaction, revert and deletion controls.
 
 When explicitly enabled, the owner-local PromptHistoryStore retains only user
 prompts under bounded global/workspace/account/case scopes. Walter receives a
-small relevant selection alongside the current prompt; history is normalized
-into the configured working language, treated as quoted data and kept only in
-the ephemeral review packet. Prompt history never enters receipts, telemetry,
-managed bundles or release artifacts, and remains separate from self learning.
+small relevance-scored selection alongside the current prompt; the current
+prompt is normalized first, then history is normalized into the configured
+working language. Scores and reason codes are packet metadata only; historical
+text is quoted data and kept only in the ephemeral review packet. Prompt
+history never enters receipts, telemetry, managed bundles or release artifacts,
+and remains separate from self learning. The reachable `bcgos maestro dispatch
+--stdin` boundary records an authenticated prompt, constructs and persists the
+Maestro chain, and returns metadata-only dispatch state while model execution
+is unavailable.
 
 ## What is ready
 

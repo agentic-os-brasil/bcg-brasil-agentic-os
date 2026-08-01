@@ -85,6 +85,8 @@ type RegisteredAgent struct {
 	Role                string `json:"role"`
 	ScopeKind           string `json:"scope_kind"`
 	ScopeID             string `json:"scope_id"`
+	ParentScopeKind     string `json:"parent_scope_kind,omitempty"`
+	ParentScopeID       string `json:"parent_scope_id,omitempty"`
 	AuthorizationDigest string `json:"authorization_digest"`
 	StateSnapshotDigest string `json:"state_snapshot_digest"`
 	Available           bool   `json:"available"`
@@ -95,6 +97,7 @@ type Input struct {
 	IntentClass            IntentClass       `json:"intent_class"`
 	ScopeKind              string            `json:"scope_kind"`
 	ScopeID                string            `json:"scope_id"`
+	AccountScopeID         string            `json:"account_scope_id,omitempty"`
 	Sensitivity            Sensitivity       `json:"sensitivity"`
 	Materiality            Materiality       `json:"materiality"`
 	ReviewTrigger          string            `json:"review_trigger"`
@@ -121,6 +124,8 @@ type AgentBinding struct {
 	Role                string `json:"role"`
 	ScopeKind           string `json:"scope_kind"`
 	ScopeID             string `json:"scope_id"`
+	ParentScopeKind     string `json:"parent_scope_kind,omitempty"`
+	ParentScopeID       string `json:"parent_scope_id,omitempty"`
 	AuthorizationDigest string `json:"authorization_digest"`
 	StateSnapshotDigest string `json:"state_snapshot_digest"`
 }
@@ -142,6 +147,7 @@ type Plan struct {
 	RequiresWalter              bool           `json:"requires_walter"`
 	ScopeKind                   string         `json:"scope_kind"`
 	ScopeID                     string         `json:"scope_id"`
+	AccountScopeID              string         `json:"account_scope_id,omitempty"`
 	RequestedCapability         string         `json:"requested_capability,omitempty"`
 	AccountConsultationRequired bool           `json:"account_consultation_required"`
 	Bindings                    []AgentBinding `json:"bindings,omitempty"`
@@ -164,7 +170,7 @@ func PlanFor(input Input) (Plan, error) {
 		}
 		return RegisteredAgent{}, false
 	}
-	plan := Plan{SchemaVersion: 1, PlannerVersion: PlannerVersion, ScopeKind: input.ScopeKind, ScopeID: input.ScopeID, RequestedCapability: input.RequestedCapability}
+	plan := Plan{SchemaVersion: 1, PlannerVersion: PlannerVersion, ScopeKind: input.ScopeKind, ScopeID: input.ScopeID, AccountScopeID: input.AccountScopeID, RequestedCapability: input.RequestedCapability}
 	var selected []RegisteredAgent
 	add := func(agent RegisteredAgent) { selected = append(selected, agent) }
 	clientLensSignal := input.ClientImplication || input.StakeholderImplication || input.StrategicImplication || input.PromotionImplication || input.CrossCaseContext
@@ -236,9 +242,16 @@ func PlanFor(input Input) (Plan, error) {
 			}
 			break
 		}
-		account, ok := find("client_account_agent", "account", accountScopeID(input))
+		accountScopeID, err := accountScopeID(input)
+		if err != nil {
+			return Plan{}, err
+		}
+		account, ok := find("client_account_agent", "account", accountScopeID)
 		if !ok {
 			return Plan{}, errors.New("account-first Case routing requires a registered Client Account Agent")
+		}
+		if !caseHasAccountBinding(input, accountScopeID) {
+			return Plan{}, errors.New("account-first Case routing requires an explicit Case-to-Account binding")
 		}
 		plan.Action, plan.ReasonCode = ActionAccount, "client_strategic_lens_required"
 		plan.CaseEntry = CaseEntryAccountFirst
@@ -260,22 +273,29 @@ func PlanFor(input Input) (Plan, error) {
 		return Plan{}, fmt.Errorf("unknown Maestro intent class %q", input.IntentClass)
 	}
 	for _, agent := range selected {
-		plan.Bindings = append(plan.Bindings, AgentBinding{ID: agent.ID, Role: agent.Role, ScopeKind: agent.ScopeKind, ScopeID: agent.ScopeID, AuthorizationDigest: agent.AuthorizationDigest, StateSnapshotDigest: agent.StateSnapshotDigest})
+		plan.Bindings = append(plan.Bindings, AgentBinding{ID: agent.ID, Role: agent.Role, ScopeKind: agent.ScopeKind, ScopeID: agent.ScopeID, ParentScopeKind: agent.ParentScopeKind, ParentScopeID: agent.ParentScopeID, AuthorizationDigest: agent.AuthorizationDigest, StateSnapshotDigest: agent.StateSnapshotDigest})
 	}
 	plan.PlanDigest = digestPlan(plan)
 	return plan, nil
 }
 
-func accountScopeID(input Input) string {
+func accountScopeID(input Input) (string, error) {
 	if input.ScopeKind == "account" {
-		return input.ScopeID
+		return input.ScopeID, nil
 	}
+	if input.AccountScopeID == "" {
+		return "", errors.New("Case routing requires an explicit account scope binding")
+	}
+	return input.AccountScopeID, nil
+}
+
+func caseHasAccountBinding(input Input, accountScopeID string) bool {
 	for _, agent := range input.AvailableAgents {
-		if agent.Role == "client_account_agent" && agent.ScopeKind == "account" && agent.Available {
-			return agent.ScopeID
+		if agent.Role == "case_agent" && agent.ScopeKind == "case" && agent.ScopeID == input.ScopeID && agent.ParentScopeKind == "account" && agent.ParentScopeID == accountScopeID {
+			return true
 		}
 	}
-	return input.ScopeID
+	return false
 }
 
 func validateInput(input Input) error {
@@ -310,7 +330,7 @@ func validateInput(input Input) error {
 	}
 	seen := map[string]bool{}
 	for _, agent := range input.AvailableAgents {
-		if !agentcatalog.ValidAgentID(agent.ID) || seen[agent.ID] || !validRole(agent.Role) || !validScopeKind(agent.ScopeKind) || agent.ScopeID == "" || !agentcatalog.ValidAgentID(agent.ScopeID) || !validDigest(agent.AuthorizationDigest) || !validDigest(agent.StateSnapshotDigest) {
+		if !agentcatalog.ValidAgentID(agent.ID) || seen[agent.ID] || !validRole(agent.Role) || !validScopeKind(agent.ScopeKind) || agent.ScopeID == "" || !agentcatalog.ValidAgentID(agent.ScopeID) || (agent.ParentScopeKind != "" && (!validScopeKind(agent.ParentScopeKind) || !agentcatalog.ValidAgentID(agent.ParentScopeID))) || !validDigest(agent.AuthorizationDigest) || !validDigest(agent.StateSnapshotDigest) {
 			return errors.New("available agent registry is incomplete, ambiguous or unbound")
 		}
 		seen[agent.ID] = true
@@ -357,6 +377,23 @@ func (plan Plan) Validate() error {
 	}
 	if err := validateInput(Input{SchemaVersion: 1, IntentClass: IntentCase, ScopeKind: plan.ScopeKind, ScopeID: plan.ScopeID, Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone, RequestedCapability: plan.RequestedCapability}); err != nil {
 		return err
+	}
+	if plan.CaseEntry == CaseEntryAccountFirst {
+		if plan.AccountScopeID == "" || !plan.RequiresAccountFraming || !plan.RequiresAccountValidation {
+			return errors.New("account-first plan is missing its account binding")
+		}
+		accountBound, caseBound := false, false
+		for _, binding := range plan.Bindings {
+			if binding.Role == "client_account_agent" && binding.ScopeKind == "account" && binding.ScopeID == plan.AccountScopeID {
+				accountBound = true
+			}
+			if binding.Role == "case_agent" && binding.ScopeKind == "case" && binding.ScopeID == plan.ScopeID && binding.ParentScopeKind == "account" && binding.ParentScopeID == plan.AccountScopeID {
+				caseBound = true
+			}
+		}
+		if !accountBound || !caseBound {
+			return errors.New("account-first plan has no valid Case-to-Account parent binding")
+		}
 	}
 	if plan.CaseEntry == CaseEntryDirect && (!plan.SkipPreAccount || plan.RequiresAccountValidation || len(plan.SkipReasonCodes) != 1 || plan.SkipReasonCodes[0] != "skip_pre_account_execution_only") {
 		return errors.New("trivial Case may skip only the pre-brief")

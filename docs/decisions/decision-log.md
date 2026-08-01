@@ -633,3 +633,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Owner prompts may remain locally raw by explicit policy, but never enter managed bundles, telemetry, receipts, federation or release artifacts. Historical prompts are quoted data and not executable instructions. Missing translation evidence fails closed for the pre-review normalization stage; low-confidence high-consequence intent returns to Maestro for clarification.
 - Refs: specs/006-memory-persistence.md; specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/prompt-history.schema.json; schemas/intent-review-packet.schema.json; internal/ownerctx/prompt_history.go; internal/maestro/intent.go
 - Supersedes: none
+
+## QLHD - Harden prompt context and durable orchestration boundaries
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The first PromptHistoryStore slice normalized only prior prompts, selected history by recency and scope, and serialized mutations only within one process. Independent review also found unbound Case-to-Account routing, tamperable snapshot projections, incomplete intent evidence validation, and stale durable adapter instances.
+- Decision: Normalize the current prompt first into a digest-bound working representation while retaining the original as authority. Select history with deterministic lexical relevance plus explicit keys under hard scope/age/count/bytes and eight-prompt/32 KiB packet ceilings, exposing score/reason metadata only in the ephemeral packet. Bind each history root to one owner and serialize mutating operations with a symlink-safe cross-process lock. Require explicit Case-to-Account parent binding, validate snapshot facet content/readers/policy/path digests, require current-prompt evidence in both intent hypothesis and Walter result, and make the Maestro CLI dispatch boundary record the authenticated prompt, persist chain metadata and stop at a metadata-only model-unavailable boundary. Durable Claude/Codex state refreshes under a cross-process lock before CAS/fenced mutations.
+- Consequences: Historical prompt bodies remain local and never enter receipts or errors. Stale or ambiguous routing, translation, ownership, evidence, locking or tampering fails closed. Native model execution remains unavailable until qualifying evidence exists.
+- Refs: specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; schemas/maestro-input.schema.json; internal/ownerctx; internal/maestro; internal/agentorchestration
+- Supersedes: none

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -155,7 +156,14 @@ func (store *StateStore) persistLocked() error {
 		return err
 	}
 	directory := filepath.Dir(store.persistPath)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
+	if err := validateStateParents(store.persistPath); err != nil {
+		return err
+	}
+	if info, err := os.Lstat(store.persistPath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return errors.New("orchestration state target is not a regular file")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	store.persistMu.Lock()
@@ -181,12 +189,52 @@ func (store *StateStore) persistLocked() error {
 	if err := temporary.Close(); err != nil {
 		return err
 	}
-	return os.Rename(temporaryPath, store.persistPath)
+	if err := os.Rename(temporaryPath, store.persistPath); err != nil {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	directoryFile, err := os.Open(directory)
+	if err != nil {
+		return err
+	}
+	defer directoryFile.Close()
+	return directoryFile.Sync()
+}
+
+func (store *StateStore) refreshLocked() error {
+	if store.persistPath == "" {
+		return nil
+	}
+	data, err := os.ReadFile(store.persistPath)
+	if errors.Is(err, os.ErrNotExist) {
+		if store.state.BranchID != "" {
+			return errors.New("durable orchestration state disappeared")
+		}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	var state StateSnapshot
+	if err := json.Unmarshal(data, &state); err != nil {
+		return err
+	}
+	if err := validateSnapshot(state); err != nil {
+		return err
+	}
+	store.state = state
+	return nil
 }
 
 func (store *StateStore) Snapshot() StateSnapshot {
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	_ = store.refreshLocked()
 	return store.state
 }
 
@@ -383,8 +431,21 @@ func authorizationFingerprint(values map[string]authorization) string {
 }
 
 func (adapter *Adapter) bindPolicy(policySHA256 string) error {
+	unlock, err := func() (func() error, error) {
+		if adapter.store.persistPath == "" {
+			return func() error { return nil }, nil
+		}
+		return acquireStateFileLock(adapter.store.persistPath)
+	}()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	adapter.store.mu.Lock()
 	defer adapter.store.mu.Unlock()
+	if err := adapter.store.refreshLocked(); err != nil {
+		return err
+	}
 	if adapter.store.state.PolicySHA256 == "" {
 		adapter.store.state.PolicySHA256 = policySHA256
 		return adapter.store.persistLocked()
@@ -421,9 +482,22 @@ func (adapter *Adapter) Handle(event NativeEvent) Decision {
 	if !ok {
 		return denied("actor_denied")
 	}
+	unlock, err := func() (func() error, error) {
+		if adapter.store.persistPath == "" {
+			return func() error { return nil }, nil
+		}
+		return acquireStateFileLock(adapter.store.persistPath)
+	}()
+	if err != nil {
+		return denied("state_lock_unavailable")
+	}
+	defer unlock()
 
 	adapter.store.mu.Lock()
 	defer adapter.store.mu.Unlock()
+	if err := adapter.store.refreshLocked(); err != nil {
+		return denied("state_refresh_failed")
+	}
 	previous := adapter.store.state
 	if semanticEvent != "branch_start" && event.FenceEpoch != 0 && event.FenceEpoch != adapter.store.state.FenceEpoch {
 		return denied("fence_epoch_mismatch")
@@ -536,8 +610,21 @@ func (adapter *Adapter) RecoverStale(maxAge time.Duration, recoveryCapability st
 	if maxAge <= 0 || subtle.ConstantTimeCompare(adapter.store.recoverySHA256[:], digest[:]) != 1 {
 		return false
 	}
+	unlock, err := func() (func() error, error) {
+		if adapter.store.persistPath == "" {
+			return func() error { return nil }, nil
+		}
+		return acquireStateFileLock(adapter.store.persistPath)
+	}()
+	if err != nil {
+		return false
+	}
+	defer unlock()
 	adapter.store.mu.Lock()
 	defer adapter.store.mu.Unlock()
+	if err := adapter.store.refreshLocked(); err != nil {
+		return false
+	}
 	state := adapter.store.state
 	if state.BranchID == "" || state.Updated.IsZero() || adapter.now().UTC().Sub(state.Updated) <= maxAge {
 		return false

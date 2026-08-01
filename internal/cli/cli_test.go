@@ -545,6 +545,23 @@ func TestOwnerPromptHistoryControlsKeepBodiesOutOfInspectReceipts(t *testing.T) 
 	}
 }
 
+func TestMaestroDispatchBoundaryRecordsPromptPlansAndPersistsMetadataOnlyChain(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	input := `{"authenticated_owner":true,"owner_id":"owner","prompt":"prepare case alpha","language":"en-US","source":"cli","session_id":"session-dispatch","working_language":"en-US","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
+	var output bytes.Buffer
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("Maestro dispatch = %d: %s", code, output.String())
+	}
+	if strings.Contains(output.String(), "prepare case alpha") || !strings.Contains(output.String(), "dispatch_boundary_model_unavailable") {
+		t.Fatalf("dispatch boundary leaked body or missed unavailable result: %s", output.String())
+	}
+	chains, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "chains", "*.json"))
+	if err != nil || len(chains) != 1 {
+		t.Fatalf("persisted chain files = %v, err=%v", chains, err)
+	}
+}
+
 func TestAtlasCommandsBootstrapOnlyPrivateOwnerAndWorkspaceRoots(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

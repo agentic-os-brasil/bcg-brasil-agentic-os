@@ -69,12 +69,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -93,6 +93,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
 	case "owner":
 		return runOwnerWithInput(args[1:], in, out, errOut, defaultDataRoot)
+	case "maestro":
+		return runMaestroWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "agent":
 		return runAgentWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "workspace-agent":
@@ -1438,6 +1440,97 @@ func splitTracks(value string) []string {
 		parts[index] = strings.TrimSpace(parts[index])
 	}
 	return parts
+}
+
+type maestroDispatchRequest struct {
+	AuthenticatedOwner bool          `json:"authenticated_owner"`
+	OwnerID            string        `json:"owner_id"`
+	Prompt             string        `json:"prompt"`
+	Language           string        `json:"language"`
+	Source             string        `json:"source"`
+	SessionID          string        `json:"session_id"`
+	WorkingLanguage    string        `json:"working_language"`
+	CurrentLanguage    string        `json:"current_language"`
+	DraftOutput        string        `json:"draft_output"`
+	Audience           string        `json:"audience"`
+	Consequence        string        `json:"consequence"`
+	Reversibility      string        `json:"reversibility"`
+	RelevanceKeys      []string      `json:"relevance_keys"`
+	Plan               maestro.Input `json:"plan"`
+}
+
+func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) != 2 || args[0] != "dispatch" || args[1] != "--stdin" {
+		fmt.Fprintln(errOut, "usage: bcgos maestro dispatch --stdin")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	body, err := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
+	if err != nil || len(body) > maximumWorkContractBytes {
+		return reportError(errOut, errors.New("Maestro dispatch request exceeds 32 KiB limit"))
+	}
+	var request maestroDispatchRequest
+	if err := json.Unmarshal(body, &request); err != nil || !request.AuthenticatedOwner || strings.TrimSpace(request.OwnerID) == "" || strings.TrimSpace(request.Prompt) == "" {
+		return reportError(errOut, errors.New("Maestro dispatch requires an authenticated owner and prompt"))
+	}
+	if request.Language == "" {
+		request.Language = "en"
+	}
+	if request.Source == "" {
+		request.Source = "cli"
+	}
+	if request.SessionID == "" {
+		request.SessionID = "maestro-dispatch"
+	}
+	if request.WorkingLanguage == "" {
+		request.WorkingLanguage = request.Language
+	}
+	if request.CurrentLanguage == "" {
+		request.CurrentLanguage = request.Language
+	}
+	if request.DraftOutput == "" {
+		request.DraftOutput = "model_execution_unavailable"
+	}
+	if request.Audience == "" {
+		request.Audience = "owner"
+	}
+	if request.Consequence == "" {
+		request.Consequence = "low"
+	}
+	if request.Reversibility == "" {
+		request.Reversibility = "reversible"
+	}
+	if _, err := ownerctx.Initialize(root); err != nil {
+		return reportError(errOut, err)
+	}
+	if _, err := ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: request.OwnerID, Prompt: request.Prompt, Language: request.Language, Source: request.Source, SessionID: request.SessionID, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, ContentKind: "user_prompt"}); err != nil {
+		return reportError(errOut, err)
+	}
+	plan, err := maestro.PlanFor(request.Plan)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	chain, err := maestro.NewChain(plan, maestro.DefaultLoopPolicy)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if _, err := maestro.PersistChainState(root, chain); err != nil {
+		return reportError(errOut, err)
+	}
+	snapshot, err := ownerctx.ProjectSnapshot(root, nil)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	packet, err := maestro.BuildIntentReviewPacketWithPromptHistory(request.Prompt, plan, request.DraftOutput, nil, snapshot, nil, request.Audience, request.Consequence, request.Reversibility, "", root, ownerctx.PromptHistorySelectionLimits{OwnerID: request.OwnerID, MaxCount: 8, MaxBytes: 32 << 10, MaxAge: 30 * 24 * time.Hour, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, CurrentPrompt: request.Prompt, RelevanceKeys: request.RelevanceKeys, CurrentLanguage: request.CurrentLanguage}, request.WorkingLanguage, nil, time.Now().UTC())
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	chainBody, _ := json.Marshal(chain)
+	receipt := maestro.DispatchBoundaryReceipt{SchemaVersion: 1, PlanDigest: plan.PlanDigest, ChainDigest: maestro.SHA256Hex(string(chainBody)), PacketDigest: packet.PacketDigest, PromptDigest: maestro.SHA256Hex(packet.LiteralRequest), DraftDigest: maestro.SHA256Hex(packet.DraftOutput), AccountConsultation: plan.AccountConsultationRequired, WalterRequired: plan.RequiresWalter, HistoryCount: len(packet.PriorPrompts), State: chain.Stage, Outcome: "dispatch_boundary_model_unavailable"}
+	return writeJSON(out, receipt, errOut)
 }
 
 func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {

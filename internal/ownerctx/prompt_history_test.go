@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -100,11 +101,11 @@ func TestPromptHistoryBoundsScopesAgeAndCurrentSelection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	selected, err := SelectPromptHistory(root, PromptHistorySelectionLimits{MaxCount: 2, MaxBytes: 64, MaxAge: 24 * time.Hour, ScopeKind: PromptScopeCase, ScopeID: "case-a"}, now)
+	selected, err := SelectPromptHistory(root, PromptHistorySelectionLimits{OwnerID: "owner", MaxCount: 2, MaxBytes: 64, MaxAge: 24 * time.Hour, ScopeKind: PromptScopeCase, ScopeID: "case-a", CurrentPrompt: "case alpha decision"}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(selected) != 2 || selected[0].Prompt != "global context" || selected[1].Prompt != "case context" {
+	if len(selected) != 2 || selected[0].Prompt != "case context" || selected[1].Prompt != "global context" {
 		t.Fatalf("bounded relevant selection = %#v", selected)
 	}
 }
@@ -126,5 +127,64 @@ func TestPromptHistoryDeleteResetRequireConfirmation(t *testing.T) {
 	}
 	if err := ResetPromptHistory(root, false); !errors.Is(err, ErrConfirmationRequired) {
 		t.Fatal("reset without confirmation succeeded")
+	}
+}
+
+func TestPromptHistoryRelevanceRanksOlderRelevantPromptAboveRecentNoise(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if _, err := RecordUserPrompt(root, promptInput("unrelated vacation logistics", PromptScopeGlobal, "owner", now.Add(-time.Minute))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RecordUserPrompt(root, promptInput("case alpha decision tradeoff", PromptScopeGlobal, "owner", now.Add(-2*time.Hour))); err != nil {
+		t.Fatal(err)
+	}
+	selected, err := SelectRelevantPromptHistory(root, PromptHistorySelectionLimits{OwnerID: "owner", MaxCount: 2, MaxBytes: 1024, MaxAge: 24 * time.Hour, ScopeKind: PromptScopeGlobal, ScopeID: "owner", CurrentPrompt: "case alpha decision"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected) != 2 || selected[0].Entry.Prompt != "case alpha decision tradeoff" || selected[0].Score <= selected[1].Score || len(selected[0].Reasons) == 0 {
+		t.Fatalf("relevance selection = %#v", selected)
+	}
+}
+
+func TestPromptHistoryOwnerBindingAndConcurrentWriters(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RecordUserPrompt(root, promptInput("owner one", PromptScopeGlobal, "owner", time.Now().UTC())); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RecordUserPrompt(root, PromptHistoryInput{OwnerID: "owner-two", Prompt: "cross owner", Language: "pt-BR", Source: "owner", SessionID: "session-b", ScopeKind: PromptScopeGlobal, ScopeID: "owner-two", RecordedAt: time.Now().UTC(), ContentKind: "user_prompt"}); err == nil {
+		t.Fatal("mixed-owner prompt was accepted")
+	}
+	const writers = 12
+	errs := make(chan error, writers)
+	var wait sync.WaitGroup
+	for index := 0; index < writers; index++ {
+		wait.Add(1)
+		go func(index int) {
+			defer wait.Done()
+			_, err := RecordUserPrompt(root, promptInput("concurrent-"+string(rune('a'+index)), PromptScopeGlobal, "owner", time.Now().UTC().Add(time.Duration(index)*time.Millisecond)))
+			errs <- err
+		}(index)
+	}
+	wait.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent writer failed: %v", err)
+		}
+	}
+	entries, err := ExportPromptHistory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != writers+1 {
+		t.Fatalf("lost concurrent updates: got %d entries, want %d", len(entries), writers+1)
 	}
 }

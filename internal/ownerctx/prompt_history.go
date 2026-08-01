@@ -20,6 +20,8 @@ const (
 	maximumPromptBytes         = 64 << 10
 	maximumPromptEntries       = 10000
 	maximumPromptStoreBytes    = 8 << 20
+	maximumPromptPacketCount   = 8
+	maximumPromptPacketBytes   = 32 << 10
 )
 
 type PromptScopeKind string
@@ -32,10 +34,11 @@ const (
 )
 
 type PromptHistoryConfig struct {
-	SchemaVersion int   `json:"schema_version"`
-	MaxEntries    int   `json:"max_entries"`
-	MaxBytes      int   `json:"max_bytes"`
-	MaxAgeSeconds int64 `json:"max_age_seconds"`
+	SchemaVersion int    `json:"schema_version"`
+	OwnerID       string `json:"owner_id,omitempty"`
+	MaxEntries    int    `json:"max_entries"`
+	MaxBytes      int    `json:"max_bytes"`
+	MaxAgeSeconds int64  `json:"max_age_seconds"`
 }
 
 type PromptHistoryInput struct {
@@ -82,11 +85,21 @@ type PromptHistoryReceipt struct {
 }
 
 type PromptHistorySelectionLimits struct {
-	MaxCount  int
-	MaxBytes  int
-	MaxAge    time.Duration
-	ScopeKind PromptScopeKind
-	ScopeID   string
+	OwnerID         string
+	MaxCount        int
+	MaxBytes        int
+	MaxAge          time.Duration
+	ScopeKind       PromptScopeKind
+	ScopeID         string
+	CurrentPrompt   string
+	RelevanceKeys   []string
+	CurrentLanguage string
+}
+
+type PromptHistorySelection struct {
+	Entry   PromptHistoryEntry
+	Score   int
+	Reasons []string
 }
 
 var promptLanguagePattern = regexp.MustCompile(`^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{2,8})?$`)
@@ -99,19 +112,37 @@ func ConfigurePromptHistory(root string, config PromptHistoryConfig) error {
 	if err := validatePromptHistoryConfig(config); err != nil {
 		return err
 	}
-	entriesPath, configPath, err := ensurePromptHistoryStore(root)
-	if err != nil {
-		return err
-	}
-	entries, err := readPromptHistoryEntries(entriesPath)
-	if err != nil {
-		return err
-	}
-	entries = retainPromptHistory(entries, config, time.Now().UTC())
-	if err := writePromptHistoryEntries(entriesPath, entries); err != nil {
-		return err
-	}
-	return writePrivateJSON(configPath, config)
+	return withPromptHistoryLock(root, func(entriesPath, configPath string) error {
+		existingConfig, err := loadPromptHistoryConfig(configPath)
+		if err != nil {
+			return err
+		}
+		if existingConfig.OwnerID != "" {
+			if config.OwnerID != "" && config.OwnerID != existingConfig.OwnerID {
+				return errors.New("prompt history owner binding cannot be changed")
+			}
+			config.OwnerID = existingConfig.OwnerID
+		}
+		entries, err := readPromptHistoryEntries(entriesPath)
+		if err != nil {
+			return err
+		}
+		if config.OwnerID == "" && len(entries) > 0 {
+			config.OwnerID = entries[0].OwnerID
+		}
+		if config.OwnerID != "" {
+			for _, entry := range entries {
+				if entry.OwnerID != config.OwnerID {
+					return errors.New("prompt history owner binding is inconsistent")
+				}
+			}
+		}
+		entries = retainPromptHistory(entries, config, time.Now().UTC())
+		if err := writePromptHistoryEntries(entriesPath, entries); err != nil {
+			return err
+		}
+		return writePrivateJSON(configPath, config)
+	})
 }
 
 func LoadPromptHistoryConfig(root string) (PromptHistoryConfig, error) {
@@ -119,6 +150,10 @@ func LoadPromptHistoryConfig(root string) (PromptHistoryConfig, error) {
 	if err != nil {
 		return PromptHistoryConfig{}, err
 	}
+	return loadPromptHistoryConfig(configPath)
+}
+
+func loadPromptHistoryConfig(configPath string) (PromptHistoryConfig, error) {
 	body, err := os.ReadFile(configPath)
 	if err != nil {
 		return PromptHistoryConfig{}, err
@@ -138,7 +173,7 @@ func PromptHistoryEntriesPath(root string) string {
 }
 
 func validatePromptHistoryConfig(config PromptHistoryConfig) error {
-	if config.SchemaVersion != PromptHistorySchemaVersion || config.MaxEntries < 1 || config.MaxEntries > maximumPromptEntries || config.MaxBytes < 1 || config.MaxBytes > maximumPromptStoreBytes || config.MaxAgeSeconds < int64(time.Hour/time.Second) || config.MaxAgeSeconds > int64((10*365*24*time.Hour)/time.Second) {
+	if config.SchemaVersion != PromptHistorySchemaVersion || (config.OwnerID != "" && !observationIdentifier.MatchString(config.OwnerID)) || config.MaxEntries < 1 || config.MaxEntries > maximumPromptEntries || config.MaxBytes < 1 || config.MaxBytes > maximumPromptStoreBytes || config.MaxAgeSeconds < int64(time.Hour/time.Second) || config.MaxAgeSeconds > int64((10*365*24*time.Hour)/time.Second) {
 		return errors.New("prompt history configuration is invalid")
 	}
 	return nil
@@ -252,59 +287,73 @@ func ensurePromptFile(path string) error {
 }
 
 func RecordUserPrompt(root string, input PromptHistoryInput) (PromptHistoryReceipt, error) {
-	entriesPath, _, err := ensurePromptHistoryStore(root)
-	if err != nil {
-		return PromptHistoryReceipt{}, err
-	}
-	config, err := LoadPromptHistoryConfig(root)
-	if err != nil {
-		return PromptHistoryReceipt{}, err
-	}
 	if err := validatePromptHistoryInput(input); err != nil {
 		return PromptHistoryReceipt{}, err
 	}
-	now := time.Now().UTC()
-	if input.RecordedAt.IsZero() {
-		input.RecordedAt = now
-	}
-	if input.RecordedAt.After(now.Add(5 * time.Minute)) {
-		return PromptHistoryReceipt{}, errors.New("prompt history timestamp is too far in the future")
-	}
-	if now.Sub(input.RecordedAt) > time.Duration(config.MaxAgeSeconds)*time.Second {
-		return PromptHistoryReceipt{}, errors.New("prompt is outside configured history retention")
-	}
-	entry := PromptHistoryEntry{
-		SchemaVersion: PromptHistorySchemaVersion,
-		OwnerID:       input.OwnerID, RecordedAt: input.RecordedAt.UTC(), Language: input.Language,
-		Source: input.Source, SessionID: input.SessionID, ScopeKind: input.ScopeKind,
-		ScopeID: input.ScopeID, SHA256: digest(input.Prompt), ContentKind: "user_prompt", Prompt: input.Prompt,
-	}
-	entry.ID = "prompt-" + digest(entry.OwnerID + "\x00" + entry.SessionID + "\x00" + entry.RecordedAt.Format(time.RFC3339Nano) + "\x00" + entry.SHA256)[:24]
-	entries, err := readPromptHistoryEntries(entriesPath)
-	if err != nil {
-		return PromptHistoryReceipt{}, err
-	}
-	for _, existing := range entries {
-		if existing.ID == entry.ID {
-			return promptHistoryReceipt(existing), nil
+	var receipt PromptHistoryReceipt
+	err := withPromptHistoryLock(root, func(entriesPath, configPath string) error {
+		config, err := loadPromptHistoryConfig(configPath)
+		if err != nil {
+			return err
 		}
-	}
-	entries = append(entries, entry)
-	entries = retainPromptHistory(entries, config, now)
-	found := false
-	for _, retained := range entries {
-		if retained.ID == entry.ID {
-			found = true
-			break
+		entries, err := readPromptHistoryEntries(entriesPath)
+		if err != nil {
+			return err
 		}
-	}
-	if !found {
-		return PromptHistoryReceipt{}, errors.New("prompt was excluded by configured history retention")
-	}
-	if err := writePromptHistoryEntries(entriesPath, entries); err != nil {
-		return PromptHistoryReceipt{}, err
-	}
-	return promptHistoryReceipt(entry), nil
+		if config.OwnerID == "" && len(entries) > 0 {
+			config.OwnerID = entries[0].OwnerID
+		}
+		if config.OwnerID != "" && config.OwnerID != input.OwnerID {
+			return errors.New("prompt history owner does not match this store")
+		}
+		if config.OwnerID == "" {
+			config.OwnerID = input.OwnerID
+			if err := writePrivateJSON(configPath, config); err != nil {
+				return err
+			}
+		}
+		now := time.Now().UTC()
+		if input.RecordedAt.IsZero() {
+			input.RecordedAt = now
+		}
+		if input.RecordedAt.After(now.Add(5 * time.Minute)) {
+			return errors.New("prompt history timestamp is too far in the future")
+		}
+		if now.Sub(input.RecordedAt) > time.Duration(config.MaxAgeSeconds)*time.Second {
+			return errors.New("prompt is outside configured history retention")
+		}
+		entry := PromptHistoryEntry{
+			SchemaVersion: PromptHistorySchemaVersion,
+			OwnerID:       input.OwnerID, RecordedAt: input.RecordedAt.UTC(), Language: input.Language,
+			Source: input.Source, SessionID: input.SessionID, ScopeKind: input.ScopeKind,
+			ScopeID: input.ScopeID, SHA256: digest(input.Prompt), ContentKind: "user_prompt", Prompt: input.Prompt,
+		}
+		entry.ID = "prompt-" + digest(entry.OwnerID + "\x00" + entry.SessionID + "\x00" + entry.RecordedAt.Format(time.RFC3339Nano) + "\x00" + entry.SHA256)[:24]
+		for _, existing := range entries {
+			if existing.ID == entry.ID {
+				receipt = promptHistoryReceipt(existing)
+				return nil
+			}
+		}
+		entries = append(entries, entry)
+		entries = retainPromptHistory(entries, config, now)
+		found := false
+		for _, retained := range entries {
+			if retained.ID == entry.ID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return errors.New("prompt was excluded by configured history retention")
+		}
+		if err := writePromptHistoryEntries(entriesPath, entries); err != nil {
+			return err
+		}
+		receipt = promptHistoryReceipt(entry)
+		return nil
+	})
+	return receipt, err
 }
 
 func InspectPromptHistory(root string) ([]PromptHistoryReceipt, error) {
@@ -341,41 +390,49 @@ func DeletePromptHistory(root, id string, confirmed bool) error {
 	if !confirmed {
 		return ErrConfirmationRequired
 	}
-	entriesPath, _, err := ensurePromptHistoryStore(root)
-	if err != nil {
-		return err
-	}
-	entries, err := readPromptHistoryEntries(entriesPath)
-	if err != nil {
-		return err
-	}
-	filtered := entries[:0]
-	found := false
-	for _, entry := range entries {
-		if entry.ID == id {
-			found = true
-			continue
+	return withPromptHistoryLock(root, func(entriesPath, _ string) error {
+		entries, err := readPromptHistoryEntries(entriesPath)
+		if err != nil {
+			return err
 		}
-		filtered = append(filtered, entry)
-	}
-	if !found {
-		return os.ErrNotExist
-	}
-	return writePromptHistoryEntries(entriesPath, filtered)
+		filtered := entries[:0]
+		found := false
+		for _, entry := range entries {
+			if entry.ID == id {
+				found = true
+				continue
+			}
+			filtered = append(filtered, entry)
+		}
+		if !found {
+			return os.ErrNotExist
+		}
+		return writePromptHistoryEntries(entriesPath, filtered)
+	})
 }
 
 func ResetPromptHistory(root string, confirmed bool) error {
 	if !confirmed {
 		return ErrConfirmationRequired
 	}
-	entriesPath, _, err := ensurePromptHistoryStore(root)
-	if err != nil {
-		return err
-	}
-	return writePromptHistoryEntries(entriesPath, nil)
+	return withPromptHistoryLock(root, func(entriesPath, _ string) error {
+		return writePromptHistoryEntries(entriesPath, nil)
+	})
 }
 
 func SelectPromptHistory(root string, limits PromptHistorySelectionLimits, now time.Time) ([]PromptHistoryEntry, error) {
+	selected, err := SelectRelevantPromptHistory(root, limits, now)
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]PromptHistoryEntry, 0, len(selected))
+	for _, item := range selected {
+		entries = append(entries, item.Entry)
+	}
+	return entries, nil
+}
+
+func SelectRelevantPromptHistory(root string, limits PromptHistorySelectionLimits, now time.Time) ([]PromptHistorySelection, error) {
 	entriesPath, _, err := ensurePromptHistoryStore(root)
 	if err != nil {
 		return nil, err
@@ -387,11 +444,11 @@ func SelectPromptHistory(root string, limits PromptHistorySelectionLimits, now t
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	if limits.MaxCount <= 0 || limits.MaxCount > config.MaxEntries {
-		limits.MaxCount = minInt(config.MaxEntries, 8)
+	if limits.MaxCount <= 0 || limits.MaxCount > config.MaxEntries || limits.MaxCount > maximumPromptPacketCount {
+		limits.MaxCount = minInt(config.MaxEntries, maximumPromptPacketCount)
 	}
-	if limits.MaxBytes <= 0 || limits.MaxBytes > config.MaxBytes {
-		limits.MaxBytes = minInt(config.MaxBytes, 32<<10)
+	if limits.MaxBytes <= 0 || limits.MaxBytes > config.MaxBytes || limits.MaxBytes > maximumPromptPacketBytes {
+		limits.MaxBytes = minInt(config.MaxBytes, maximumPromptPacketBytes)
 	}
 	if limits.MaxAge <= 0 || limits.MaxAge > time.Duration(config.MaxAgeSeconds)*time.Second {
 		limits.MaxAge = time.Duration(config.MaxAgeSeconds) * time.Second
@@ -399,29 +456,88 @@ func SelectPromptHistory(root string, limits PromptHistorySelectionLimits, now t
 	if !validPromptScope(limits.ScopeKind, limits.ScopeID) {
 		return nil, errors.New("prompt history selection scope is invalid")
 	}
+	if !observationIdentifier.MatchString(limits.OwnerID) {
+		return nil, errors.New("prompt history selection owner is invalid")
+	}
 	entries, err := readPromptHistoryEntries(entriesPath)
 	if err != nil {
 		return nil, err
 	}
-	sort.SliceStable(entries, func(i, j int) bool {
-		if entries[i].RecordedAt.Equal(entries[j].RecordedAt) {
-			return entries[i].ID > entries[j].ID
-		}
-		return entries[i].RecordedAt.After(entries[j].RecordedAt)
-	})
-	selected := make([]PromptHistoryEntry, 0, limits.MaxCount)
-	bytes := 0
+	if config.OwnerID != "" && config.OwnerID != limits.OwnerID {
+		return nil, errors.New("prompt history selection owner does not match this store")
+	}
+	candidates := make([]PromptHistorySelection, 0, len(entries))
 	for _, entry := range entries {
-		if now.Sub(entry.RecordedAt) > limits.MaxAge || !promptScopeMatches(entry, limits.ScopeKind, limits.ScopeID) {
+		if entry.OwnerID != limits.OwnerID || now.Sub(entry.RecordedAt) > limits.MaxAge || !promptScopeMatches(entry, limits.ScopeKind, limits.ScopeID) {
 			continue
 		}
-		if len(selected) >= limits.MaxCount || bytes+len(entry.Prompt) > limits.MaxBytes {
+		score, reasons := promptRelevance(entry.Prompt, limits.CurrentPrompt, limits.RelevanceKeys)
+		candidates = append(candidates, PromptHistorySelection{Entry: entry, Score: score, Reasons: reasons})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].Score != candidates[j].Score {
+			return candidates[i].Score > candidates[j].Score
+		}
+		if candidates[i].Entry.RecordedAt.Equal(candidates[j].Entry.RecordedAt) {
+			return candidates[i].Entry.ID > candidates[j].Entry.ID
+		}
+		return candidates[i].Entry.RecordedAt.After(candidates[j].Entry.RecordedAt)
+	})
+	selected := make([]PromptHistorySelection, 0, limits.MaxCount)
+	bytes := 0
+	for _, candidate := range candidates {
+		if len(selected) >= limits.MaxCount || bytes+len(candidate.Entry.Prompt) > limits.MaxBytes {
 			continue
 		}
-		selected = append(selected, entry)
-		bytes += len(entry.Prompt)
+		selected = append(selected, candidate)
+		bytes += len(candidate.Entry.Prompt)
 	}
 	return selected, nil
+}
+
+func promptRelevance(prompt, current string, keys []string) (int, []string) {
+	promptTokens := tokenSet(prompt)
+	currentTokens := tokenSet(current)
+	score := 0
+	reasons := []string{}
+	for token := range currentTokens {
+		if promptTokens[token] {
+			score += 10
+		}
+	}
+	if score > 0 {
+		reasons = append(reasons, "current_token_overlap")
+	}
+	for _, key := range keys {
+		keyTokens := tokenSet(key)
+		matched := false
+		for token := range keyTokens {
+			if promptTokens[token] {
+				score += 100
+				matched = true
+			}
+		}
+		if matched {
+			reasons = append(reasons, "explicit_key_overlap:"+key)
+		}
+	}
+	if len(reasons) == 0 {
+		reasons = []string{"recent_fallback"}
+	}
+	sort.Strings(reasons)
+	return score, reasons
+}
+
+func tokenSet(value string) map[string]bool {
+	set := map[string]bool{}
+	for _, token := range strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
+		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9')
+	}) {
+		if len(token) >= 3 {
+			set[token] = true
+		}
+	}
+	return set
 }
 
 func promptScopeMatches(entry PromptHistoryEntry, kind PromptScopeKind, id string) bool {
@@ -455,6 +571,7 @@ func readPromptHistoryEntries(path string) ([]PromptHistoryEntry, error) {
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 4096), maximumPromptBytes+4096)
 	entries := []PromptHistoryEntry{}
+	ownerID := ""
 	for scanner.Scan() {
 		var entry PromptHistoryEntry
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
@@ -462,6 +579,11 @@ func readPromptHistoryEntries(path string) ([]PromptHistoryEntry, error) {
 		}
 		if err := validatePromptHistoryEntry(entry); err != nil {
 			return nil, err
+		}
+		if ownerID == "" {
+			ownerID = entry.OwnerID
+		} else if ownerID != entry.OwnerID {
+			return nil, errors.New("prompt history contains multiple owners")
 		}
 		entries = append(entries, entry)
 	}

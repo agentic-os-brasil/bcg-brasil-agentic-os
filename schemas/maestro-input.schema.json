@@ -10,6 +10,7 @@
     "intent_class": {"enum": ["direct_answer", "case_execution", "account_context", "practice_advisory", "material_review", "health_governance", "bounded_errand"]},
     "scope_kind": {"enum": ["control", "workspace", "case", "account", "practice", "review", "health", "errand"]},
     "scope_id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
+    "account_scope_id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
     "sensitivity": {"enum": ["public", "internal", "confidential", "restricted"]},
     "materiality": {"enum": ["none", "review"]},
     "review_trigger": {"enum": ["", "material_recommendation", "consequential_tradeoff", "external_artifact", "reputational_risk", "hard_to_reverse", "materiality_review"]},
@@ -40,6 +41,8 @@
         "role": {"enum": ["case_agent", "client_account_agent", "pa_expert", "reviewer", "governance_analyst", "errand_helper"]},
         "scope_kind": {"enum": ["control", "workspace", "case", "account", "practice", "review", "health", "errand"]},
         "scope_id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
+        "parent_scope_kind": {"type": "string"},
+        "parent_scope_id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
         "authorization_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "state_snapshot_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "available": {"type": "boolean"}
