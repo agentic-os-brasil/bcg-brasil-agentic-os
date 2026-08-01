@@ -169,15 +169,25 @@ func SubmitRefinement(root string, input RefinementInput) (RefinementReceipt, er
 	}
 	p := proposal{ID: id, Facet: input.Facet, Sensitivity: definition.Sensitivity, Readers: append([]string(nil), definition.Readers...), SourceSHA256: digest(string(current)), Evidence: input.Evidence, ProposedBody: input.ProposedBody, Policy: definition.Refinement, ProducerID: input.ProducerID, AutoApproved: autoApproved, OccurrenceID: input.OccurrenceID, WalterRequestSHA256: input.WalterReviewRequestSHA256, WalterProposalID: input.WalterReviewProposalID, WalterProposalSHA256: input.WalterReviewProposalSHA256, WalterSensitivity: input.WalterReviewSensitivity, WalterReaders: append([]string(nil), input.WalterReviewReaders...), WalterRefinement: input.WalterReviewRefinement, WalterConfirmation: input.WalterReviewConfirmation, WalterAdapterID: input.WalterReviewAdapterID, WalterAuthorityID: input.WalterReviewAuthorityID, WalterFencingToken: input.WalterReviewFencingToken, CreatedAt: created, State: "proposed"}
 	if existing, readErr := readProposal(root, id); readErr == nil {
-		if existing.Facet != p.Facet || existing.Sensitivity != p.Sensitivity || !sameStrings(existing.Readers, p.Readers) || existing.SourceSHA256 != p.SourceSHA256 || existing.Evidence != p.Evidence || existing.ProposedBody != p.ProposedBody || existing.Policy != p.Policy || existing.OccurrenceID != p.OccurrenceID || existing.WalterRequestSHA256 != p.WalterRequestSHA256 || existing.WalterProposalID != p.WalterProposalID || existing.WalterProposalSHA256 != p.WalterProposalSHA256 || existing.WalterSensitivity != p.WalterSensitivity || !sameStrings(existing.WalterReaders, p.WalterReaders) || existing.WalterRefinement != p.WalterRefinement || existing.WalterConfirmation != p.WalterConfirmation || existing.WalterAdapterID != p.WalterAdapterID || existing.WalterAuthorityID != p.WalterAuthorityID || existing.WalterFencingToken != p.WalterFencingToken {
+		if !sameProposalBinding(existing, p) {
 			return RefinementReceipt{}, errors.New("owner refinement occurrence is already bound to different content")
 		}
 		return receipt(existing), nil
 	} else if !errors.Is(readErr, os.ErrNotExist) {
 		return RefinementReceipt{}, readErr
 	}
-	if err := writePrivateJSON(proposalPath(root, id), p); err != nil {
-		return RefinementReceipt{}, err
+	if err := writePrivateJSONIfAbsent(proposalPath(root, id), p); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			return RefinementReceipt{}, err
+		}
+		existing, readErr := readProposal(root, id)
+		if readErr != nil {
+			return RefinementReceipt{}, readErr
+		}
+		if !sameProposalBinding(existing, p) {
+			return RefinementReceipt{}, errors.New("owner refinement occurrence is already bound to different content")
+		}
+		return receipt(existing), nil
 	}
 	if definition.Refinement == "automatic_with_audit" && p.AutoApproved {
 		return apply(root, p, definition, true)
@@ -333,6 +343,10 @@ func receipt(p proposal) RefinementReceipt {
 	return RefinementReceipt{ID: p.ID, Facet: p.Facet, State: p.State, Policy: p.Policy, Sensitivity: p.Sensitivity, Readers: append([]string(nil), p.Readers...), ProposalSHA256: digestJSON(p), OccurrenceID: p.OccurrenceID, WalterRequestSHA256: p.WalterRequestSHA256, WalterProposalID: p.WalterProposalID, WalterProposalSHA256: p.WalterProposalSHA256, WalterSensitivity: p.WalterSensitivity, WalterReaders: append([]string(nil), p.WalterReaders...), WalterRefinement: p.WalterRefinement, WalterConfirmation: p.WalterConfirmation, WalterAdapterID: p.WalterAdapterID, WalterAuthorityID: p.WalterAuthorityID, WalterFencingToken: p.WalterFencingToken, AuditID: p.AuditID}
 }
 
+func sameProposalBinding(left, right proposal) bool {
+	return left.Facet == right.Facet && left.Sensitivity == right.Sensitivity && sameStrings(left.Readers, right.Readers) && left.SourceSHA256 == right.SourceSHA256 && left.Evidence == right.Evidence && left.ProposedBody == right.ProposedBody && left.Policy == right.Policy && left.OccurrenceID == right.OccurrenceID && left.WalterRequestSHA256 == right.WalterRequestSHA256 && left.WalterProposalID == right.WalterProposalID && left.WalterProposalSHA256 == right.WalterProposalSHA256 && left.WalterSensitivity == right.WalterSensitivity && sameStrings(left.WalterReaders, right.WalterReaders) && left.WalterRefinement == right.WalterRefinement && left.WalterConfirmation == right.WalterConfirmation && left.WalterAdapterID == right.WalterAdapterID && left.WalterAuthorityID == right.WalterAuthorityID && left.WalterFencingToken == right.WalterFencingToken
+}
+
 // FindOccurrenceRefinement discovers the deterministic Walter artifact without
 // invoking a model. It is the recovery seam after ownerctx commit.
 func FindOccurrenceRefinement(root, occurrenceID string) (RefinementReceipt, bool, error) {
@@ -393,6 +407,36 @@ func writePrivateJSON(path string, value any) error {
 		return err
 	}
 	return atomicPrivateWrite(path, append(body, '\n'))
+}
+
+func writePrivateJSONIfAbsent(path string, value any) error {
+	body, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return err
+	}
+	if err := validatePrivateParents(directory); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(append(body, '\n')); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return syncPrivateDirectory(directory)
 }
 
 func readPrivateJSON(path string, target any) error {

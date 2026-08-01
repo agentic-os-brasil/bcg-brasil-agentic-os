@@ -65,6 +65,24 @@ func TestOccurrenceBoundRefinementIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestOccurrenceBoundRefinementRejectsDivergentWriterWithoutOverwrite(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	first, err := SubmitRefinement(root, RefinementInput{Facet: "voice", Evidence: "same-occurrence", ProposedBody: "# First\n", OccurrenceID: "occurrence-divergent"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SubmitRefinement(root, RefinementInput{Facet: "preferences", Evidence: "same-occurrence", ProposedBody: "# Divergent\n", OccurrenceID: "occurrence-divergent"}); err == nil {
+		t.Fatal("divergent occurrence writer replaced the existing proposal")
+	}
+	body, err := os.ReadFile(filepath.Join(root, "owner", "refinement", "proposals", first.ID+".json"))
+	if err != nil || !strings.Contains(string(body), "# First") || strings.Contains(string(body), "# Divergent") {
+		t.Fatalf("existing proposal was overwritten: body=%q err=%v", body, err)
+	}
+}
+
 func TestAutomaticRefinementAppliesVoiceWithAuditAndCanRevert(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {
@@ -439,6 +457,15 @@ func TestGlobalObservationNeedsExplicitDeclassificationForPromotion(t *testing.T
 	if _, err := transitionObservation(t, root, receipt.ID, ObservationEligible, ""); err != nil {
 		t.Fatal(err)
 	}
+	second := input
+	second.EpisodeID = "episode-global-independent"
+	second.SourceDigest = digest("global-source-independent")
+	if _, _, err := AppendObservation(root, second); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transitionObservation(t, root, receipt.ID, ObservationCorroborated, ""); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := transitionObservation(t, root, receipt.ID, ObservationProposed, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -448,6 +475,31 @@ func TestGlobalObservationNeedsExplicitDeclassificationForPromotion(t *testing.T
 	}
 	if _, err := transitionObservation(t, root, receipt.ID, ObservationPromoted, canonical); err == nil {
 		t.Fatal("global observation was promoted without explicit declassification")
+	}
+}
+
+func TestExplicitSignalsCannotJumpToProposalBeforeCorroboration(t *testing.T) {
+	for _, signal := range []SignalClass{SignalExplicitInstruction, SignalExplicitCorrection, SignalExplicitEndorsement} {
+		t.Run(string(signal), func(t *testing.T) {
+			root := t.TempDir()
+			if _, err := Initialize(root); err != nil {
+				t.Fatal(err)
+			}
+			input := observationInput(signal, "no_direct_jump", "episode-direct-jump", true, true)
+			receipt, _, err := AppendObservation(root, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := transitionObservation(t, root, receipt.ID, ObservationProposed, ""); err == nil {
+				t.Fatal("explicit signal jumped from captured to proposed")
+			}
+			if _, err := transitionObservation(t, root, receipt.ID, ObservationEligible, ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := transitionObservation(t, root, receipt.ID, ObservationProposed, ""); err == nil {
+				t.Fatal("explicit signal jumped from eligible to proposed")
+			}
+		})
 	}
 }
 

@@ -12,9 +12,10 @@ or launchd catalog entries. Its orchestration dependency is PR
 [#148](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/pull/148);
 after that PR lands, orchestration may rebase and trim this seam as needed.
 
-The weekly occurrence is keyed by the command's stable occurrence digest plus
-the bounded IntentHypothesis digest when a self-proxy hypothesis is present,
-never by its retry command ID, and is reserved before any model call. A recoverable,
+The weekly occurrence is always keyed by the command's stable occurrence
+digest, never by its retry command ID; a bounded IntentHypothesis digest is
+bound into the request digest, not substituted into occurrence identity, and
+is reserved before any model call. A recoverable,
 cross-platform OS advisory lock plus a renewable, deadline-bound occurrence
 lease fences concurrent workers and allows an expired reservation to resume
 after a crash. The current prompt is kept separate and
@@ -29,6 +30,13 @@ purpose and owner authorization. Walter may emit only a facet-bound proposal:
 policy, `professional-role` and `decision-rules` remain proposal-only, and
 boundaries/profile require explicit owner confirmation. Intrinsic-purpose
 hypotheses remain task-local and cannot become self facets.
+
+Weekly proposal evidence is accepted only from observations in the
+`corroborated` state, which requires independent episodes. An explicit
+instruction or correction is high-grade eligibility evidence but cannot jump
+from `captured` or `eligible` directly to a proposal. The maintenance command's
+deadline bounds the adapter context and lease renewal; once it expires, no
+ownerctx proposal may be written.
 
 The facet sensitivity, readers, refinement mode and confirmation requirement
 are derived from the canonical `ownerctx` snapshot and compared exactly with

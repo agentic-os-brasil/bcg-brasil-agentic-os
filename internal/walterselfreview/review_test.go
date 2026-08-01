@@ -27,6 +27,29 @@ type blockingAdapter struct {
 	proposal SelfRefinementProposal
 }
 
+type deadlineAdapter struct {
+	canceled chan struct{}
+}
+
+type hungAdapter struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (adapter *deadlineAdapter) ID() string { return "deadline-walter" }
+func (adapter *deadlineAdapter) Review(ctx context.Context, _ ModelInput) (SelfRefinementProposal, error) {
+	<-ctx.Done()
+	close(adapter.canceled)
+	return SelfRefinementProposal{}, ctx.Err()
+}
+
+func (adapter *hungAdapter) ID() string { return "hung-walter" }
+func (adapter *hungAdapter) Review(_ context.Context, _ ModelInput) (SelfRefinementProposal, error) {
+	close(adapter.started)
+	<-adapter.release
+	return SelfRefinementProposal{}, errors.New("released after deadline")
+}
+
 func (adapter *blockingAdapter) ID() string { return "blocking-walter" }
 func (adapter *blockingAdapter) Review(ctx context.Context, _ ModelInput) (SelfRefinementProposal, error) {
 	close(adapter.started)
@@ -102,6 +125,27 @@ func TestIntentHypothesisBindingIsIffAndBounded(t *testing.T) {
 	if err := ValidateProposal(request, proposal); err != nil {
 		t.Fatal(err)
 	}
+	request.IntentHypothesis.EvidenceRefs = []string{"current_prompt", "prompt-1"}
+	request.IntentHypothesisSHA256 = DigestJSON(request.IntentHypothesis)
+	if err := ValidateRequest(request); err != nil {
+		t.Fatal("valid current/history hypothesis references were rejected:", err)
+	}
+	request.IntentHypothesis.EvidenceRefs = []string{"forged-ref"}
+	request.IntentHypothesisSHA256 = DigestJSON(request.IntentHypothesis)
+	if err := ValidateRequest(request); err == nil {
+		t.Fatal("arbitrary hypothesis evidence reference was accepted")
+	}
+	request.IntentHypothesis.EvidenceRefs = []string{"prompt-1", "prompt-1"}
+	request.IntentHypothesisSHA256 = DigestJSON(request.IntentHypothesis)
+	if err := ValidateRequest(request); err == nil {
+		t.Fatal("duplicate hypothesis evidence reference was accepted")
+	}
+	request.IntentHypothesis.EvidenceRefs = []string{"prompt-1"}
+	request.IntentHypothesis.WorkingPrompt = "different working prompt"
+	request.IntentHypothesisSHA256 = DigestJSON(request.IntentHypothesis)
+	if err := ValidateRequest(request); err == nil {
+		t.Fatal("hypothesis working prompt was not bound to current normalized prompt")
+	}
 	proposal.IntentHypothesisSHA256 = ""
 	if err := ValidateProposal(request, proposal); err == nil {
 		t.Fatal("proposal omitted required hypothesis binding")
@@ -130,6 +174,49 @@ func TestChangedIntentHypothesisCannotReplayOccurrence(t *testing.T) {
 	request.IntentHypothesisSHA256 = DigestJSON(request.IntentHypothesis)
 	if _, err := store.Reserve(request, time.Now().UTC()); err == nil {
 		t.Fatal("changed intent hypothesis replayed the same occurrence")
+	}
+}
+
+func TestCommandOccurrenceIsStableWhileHypothesisChanges(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "hypothesis-command", JobID: WeeklyJobID, WorkspaceID: "workspace-1", Trigger: maintenance.TriggerWeekly, ScheduledFor: now, RequestedAt: now, Deadline: now.Add(time.Minute), ProposalOnly: true}
+	makeHypothesis := func(value string) *maestro.IntentHypothesis {
+		return &maestro.IntentHypothesis{ExpressedObjective: value, LatentIntentHypothesis: "serve the current purpose", EvidenceRefs: []string{"current_prompt"}, Confidence: .7, Materiality: "low", DisconfirmationCondition: "owner correction", WorkingPrompt: "Current request"}
+	}
+	handler := Handler{Root: root, OwnerID: "owner", CurrentPrompt: "Current request", CurrentLanguage: "en-US", WorkingLanguage: "en-US", TranslatorID: "translator", TranslatorVersion: "v1", ReviewFacets: []string{"voice"}, Translator: func(original, _, _ string) (string, error) { return original, nil }, IntentHypothesis: makeHypothesis("first")}
+	first, err := handler.BuildRequest(command, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler.IntentHypothesis = makeHypothesis("second")
+	second, err := handler.BuildRequest(command, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.OccurrenceID != command.OccurrenceDigest() || second.OccurrenceID != command.OccurrenceDigest() || RequestDigest(first) == RequestDigest(second) {
+		t.Fatalf("hypothesis changed occurrence identity or request digest: first=%q second=%q", first.OccurrenceID, second.OccurrenceID)
+	}
+	store := ReceiptStore{Root: t.TempDir()}
+	if _, err := store.Reserve(first, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Reserve(second, now); err == nil {
+		t.Fatal("changed hypothesis was accepted against an existing occurrence reservation")
+	}
+}
+
+func TestWeeklyProposalRequiresCorroboratedObservationState(t *testing.T) {
+	request := testRequest(t)
+	proposal := testProposal(request)
+	for _, state := range []ownerctx.ObservationState{ownerctx.ObservationCaptured, ownerctx.ObservationEligible, ownerctx.ObservationProposed} {
+		request.Observations[0].State = state
+		if err := ValidateProposal(request, proposal); err == nil {
+			t.Fatalf("weekly proposal accepted observation state %q without corroboration", state)
+		}
 	}
 }
 
@@ -320,6 +407,92 @@ func TestSlowModelLeaseRenewsAndStaleWorkerCannotBeTakenOver(t *testing.T) {
 	close(adapter.release)
 	if err := <-resultCh; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOldWorkerCannotCommitAfterFenceTakeover(t *testing.T) {
+	request := testRequest(t)
+	store := ReceiptStore{Root: t.TempDir(), LeaseDuration: 10 * time.Millisecond}
+	now := time.Now().UTC()
+	oldReservation, err := store.Reserve(request, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newReservation, err := store.Reserve(request, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oldReservation.Receipt.FencingToken == newReservation.Receipt.FencingToken {
+		t.Fatal("lease takeover did not rotate fencing token")
+	}
+	proposal := testProposal(request)
+	input := ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "walter-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, WalterReviewRequestSHA256: RequestDigest(request), WalterReviewProposalID: proposal.ProposalID, WalterReviewProposalSHA256: DigestJSON(proposal), WalterReviewSensitivity: proposal.Sensitivity, WalterReviewReaders: proposal.Readers, WalterReviewRefinement: proposal.Refinement, WalterReviewConfirmation: string(proposal.ConfirmationRequirement)}
+	if _, err := store.CommitOwnerctxProposal(oldReservation, request.OwnerContextRoot, input, time.Now().UTC()); err == nil {
+		t.Fatal("stale worker committed after fencing takeover")
+	}
+	entries, err := os.ReadDir(filepath.Join(request.OwnerContextRoot, "owner", "refinement", "proposals"))
+	if (err != nil && !errors.Is(err, os.ErrNotExist)) || len(entries) != 0 {
+		t.Fatalf("stale worker wrote an ownerctx proposal: entries=%d err=%v", len(entries), err)
+	}
+	if _, err := store.CommitOwnerctxProposal(newReservation, request.OwnerContextRoot, input, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerDeadlineCancelsAdapterAndPreventsOwnerctxWrite(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "deadline-command", JobID: WeeklyJobID, WorkspaceID: "workspace-1", Trigger: maintenance.TriggerWeekly, ScheduledFor: now, RequestedAt: now, Deadline: now.Add(40 * time.Millisecond), ProposalOnly: true}
+	adapter := &deadlineAdapter{canceled: make(chan struct{})}
+	handler := Handler{Root: root, OwnerID: "owner", CurrentPrompt: "Current request", CurrentLanguage: "en-US", WorkingLanguage: "en-US", TranslatorID: "translator", TranslatorVersion: "v1", ReviewFacets: []string{"voice"}, Translator: func(original, _, _ string) (string, error) { return original, nil }, Adapter: adapter, Authority: fakeAuthority(true), Store: ReceiptStore{Root: t.TempDir()}, MaintenanceStore: maintenance.Store{Root: t.TempDir()}, Now: func() time.Time { return now }}
+	if _, err := handler.Handle(context.Background(), command); err == nil {
+		t.Fatal("deadline cancellation was not surfaced")
+	}
+	select {
+	case <-adapter.canceled:
+	case <-time.After(time.Second):
+		t.Fatal("adapter was not canceled by command deadline")
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "owner", "refinement", "proposals"))
+	if (err != nil && !errors.Is(err, os.ErrNotExist)) || len(entries) != 0 {
+		t.Fatalf("deadline path wrote ownerctx proposal: entries=%d err=%v", len(entries), err)
+	}
+}
+
+func TestHandlerDeadlineBoundsHungAdapterAndPreventsLateOwnerctxWrite(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "hung-deadline-command", JobID: WeeklyJobID, WorkspaceID: "workspace-1", Trigger: maintenance.TriggerWeekly, ScheduledFor: now, RequestedAt: now, Deadline: now.Add(35 * time.Millisecond), ProposalOnly: true}
+	adapter := &hungAdapter{started: make(chan struct{}), release: make(chan struct{})}
+	handler := Handler{Root: root, OwnerID: "owner", CurrentPrompt: "Current request", CurrentLanguage: "en-US", WorkingLanguage: "en-US", TranslatorID: "translator", TranslatorVersion: "v1", ReviewFacets: []string{"voice"}, Translator: func(original, _, _ string) (string, error) { return original, nil }, Adapter: adapter, Authority: fakeAuthority(true), Store: ReceiptStore{Root: t.TempDir()}, MaintenanceStore: maintenance.Store{Root: t.TempDir()}, Now: func() time.Time { return now }}
+	startedAt := time.Now()
+	resultCh := make(chan error, 1)
+	go func() {
+		_, err := handler.Handle(context.Background(), command)
+		resultCh <- err
+	}()
+	<-adapter.started
+	select {
+	case err := <-resultCh:
+		if err == nil {
+			t.Fatal("hung adapter unexpectedly succeeded")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("handler waited past command deadline for hung adapter")
+	}
+	if elapsed := time.Since(startedAt); elapsed > 450*time.Millisecond {
+		t.Fatalf("handler exceeded deadline bound: %s", elapsed)
+	}
+	close(adapter.release)
+	entries, err := os.ReadDir(filepath.Join(root, "owner", "refinement", "proposals"))
+	if (err != nil && !errors.Is(err, os.ErrNotExist)) || len(entries) != 0 {
+		t.Fatalf("late hung adapter path wrote ownerctx proposal: entries=%d err=%v", len(entries), err)
 	}
 }
 

@@ -215,6 +215,7 @@ func (store ReceiptStore) Reserve(request Request, now time.Time) (Reservation, 
 				return ErrOccurrenceBusy
 			}
 			leaseOwner := randomToken()
+			receipt.FencingToken = randomToken()
 			receipt.LeaseOwner = leaseOwner
 			receipt.LeaseUntil = now.UTC().Add(store.leaseDuration())
 			receipt.RecordedAt = now.UTC()
@@ -333,6 +334,37 @@ func (store ReceiptStore) AssertLease(reservation Reservation, now time.Time) er
 		}
 		return nil
 	})
+}
+
+// CommitOwnerctxProposal is the Walter commit seam. The receipt advisory lock
+// remains held while the current reserved lease/fence is reloaded and the
+// occurrence-bound ownerctx proposal is created with create-if-absent/CAS
+// semantics. A stale worker can therefore never write after takeover.
+func (store ReceiptStore) CommitOwnerctxProposal(reservation Reservation, root string, input ownerctx.RefinementInput, now time.Time) (ownerctx.RefinementReceipt, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	var result ownerctx.RefinementReceipt
+	err := store.withLock(func(path string) error {
+		receipts, err := store.read(path)
+		if err != nil {
+			return err
+		}
+		existing, found := latestReceipt(receipts, reservation.Receipt.OccurrenceID)
+		if !found || existing.State != ReceiptReserved || existing.FencingToken != reservation.Receipt.FencingToken || existing.LeaseOwner != reservation.LeaseOwner || !existing.LeaseUntil.After(now.UTC()) {
+			return errors.New("weekly occurrence lease is stale or fenced before ownerctx commit")
+		}
+		input.WalterReviewFencingToken = reservation.Receipt.FencingToken
+		result, err = ownerctx.SubmitRefinement(root, input)
+		if err != nil {
+			return err
+		}
+		if !existing.LeaseUntil.After(time.Now().UTC()) {
+			return errors.New("weekly occurrence lease expired during ownerctx commit")
+		}
+		return nil
+	})
+	return result, err
 }
 
 func (store ReceiptStore) renewLoop(ctx context.Context, reservation Reservation, failures chan<- error) {
@@ -501,7 +533,10 @@ func Review(ctx context.Context, request Request, adapter ModelAdapter, authorit
 			return SelfRefinementProposal{}, Receipt{}, findErr
 		}
 		if found {
-			if ownerReceipt.WalterRequestSHA256 != RequestDigest(request) || ownerReceipt.WalterFencingToken != reservation.Receipt.FencingToken || ownerReceipt.WalterProposalID == "" || ownerReceipt.WalterProposalSHA256 == "" {
+			// Recovery is bound to the immutable occurrence and request, not the
+			// lease fence held by the worker that may have crashed after the
+			// ownerctx commit. A takeover rotates the fence by design.
+			if ownerReceipt.WalterRequestSHA256 != RequestDigest(request) || ownerReceipt.WalterProposalID == "" || ownerReceipt.WalterProposalSHA256 == "" {
 				return SelfRefinementProposal{}, Receipt{}, errors.New("Walter occurrence artifact is bound to a different request")
 			}
 			policy, policyErr := request.CanonicalSnapshot.Policy(ownerReceipt.Facet)
@@ -527,13 +562,39 @@ func Review(ctx context.Context, request Request, adapter ModelAdapter, authorit
 	defer cancelRenew()
 	renewFailures := make(chan error, 1)
 	go store.renewLoop(renewCtx, reservation, renewFailures)
-	proposal, err := adapter.Review(renewCtx, ModelInput{CurrentOriginal: request.CurrentOriginal, CurrentNormalized: request.CurrentNormalized, History: append([]PromptEvidence(nil), request.PromptHistory...), Translation: request.Translation, Observations: append([]ownerctx.ObservationReceipt(nil), request.Observations...), CanonicalSnapshot: request.CanonicalSnapshot, IntentHypothesis: request.IntentHypothesis})
+	type modelResult struct {
+		proposal SelfRefinementProposal
+		err      error
+	}
+	modelResults := make(chan modelResult, 1)
+	go func() {
+		proposal, err := adapter.Review(renewCtx, ModelInput{CurrentOriginal: request.CurrentOriginal, CurrentNormalized: request.CurrentNormalized, History: append([]PromptEvidence(nil), request.PromptHistory...), Translation: request.Translation, Observations: append([]ownerctx.ObservationReceipt(nil), request.Observations...), CanonicalSnapshot: request.CanonicalSnapshot, IntentHypothesis: request.IntentHypothesis})
+		modelResults <- modelResult{proposal: proposal, err: err}
+	}()
+	var result modelResult
+	select {
+	case result = <-modelResults:
+	case <-renewCtx.Done():
+		receipt, finalizeErr := store.Finalize(reservation, ReceiptFailed, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, adapter.ID(), authority.ID(), "execution_deadline_exceeded", time.Now().UTC())
+		if finalizeErr != nil {
+			return SelfRefinementProposal{}, receipt, finalizeErr
+		}
+		return SelfRefinementProposal{}, receipt, renewCtx.Err()
+	}
+	proposal, err := result.proposal, result.err
 	if err != nil {
 		receipt, finalizeErr := store.Finalize(reservation, ReceiptFailed, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, adapter.ID(), authority.ID(), "model_adapter_error", now)
 		if finalizeErr != nil {
 			return SelfRefinementProposal{}, receipt, finalizeErr
 		}
 		return SelfRefinementProposal{}, receipt, err
+	}
+	if ctxErr := renewCtx.Err(); ctxErr != nil {
+		receipt, finalizeErr := store.Finalize(reservation, ReceiptFailed, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, adapter.ID(), authority.ID(), "execution_deadline_exceeded", time.Now().UTC())
+		if finalizeErr != nil {
+			return SelfRefinementProposal{}, receipt, finalizeErr
+		}
+		return SelfRefinementProposal{}, receipt, ctxErr
 	}
 	if err := ValidateProposal(request, proposal); err != nil {
 		receipt, finalizeErr := store.Finalize(reservation, ReceiptFailed, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, adapter.ID(), authority.ID(), "proposal_invalid_or_stale", now)
@@ -554,19 +615,20 @@ func Review(ctx context.Context, request Request, adapter ModelAdapter, authorit
 		return SelfRefinementProposal{}, Receipt{}, renewErr
 	default:
 	}
-	if err := store.AssertLease(reservation, time.Now().UTC()); err != nil {
-		return SelfRefinementProposal{}, Receipt{}, err
+	if ctxErr := renewCtx.Err(); ctxErr != nil {
+		receipt, finalizeErr := store.Finalize(reservation, ReceiptFailed, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, adapter.ID(), authority.ID(), "execution_deadline_exceeded", time.Now().UTC())
+		if finalizeErr != nil {
+			return SelfRefinementProposal{}, receipt, finalizeErr
+		}
+		return SelfRefinementProposal{}, receipt, ctxErr
 	}
-	ownerReceipt, err := ownerctx.SubmitRefinement(request.OwnerContextRoot, ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "walter-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, WalterReviewRequestSHA256: RequestDigest(request), WalterReviewProposalID: proposal.ProposalID, WalterReviewProposalSHA256: DigestJSON(proposal), WalterReviewSensitivity: proposal.Sensitivity, WalterReviewReaders: proposal.Readers, WalterReviewRefinement: proposal.Refinement, WalterReviewConfirmation: string(proposal.ConfirmationRequirement), WalterReviewAdapterID: adapter.ID(), WalterReviewAuthorityID: authority.ID(), WalterReviewFencingToken: reservation.Receipt.FencingToken})
+	ownerReceipt, err := store.CommitOwnerctxProposal(reservation, request.OwnerContextRoot, ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "walter-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, WalterReviewRequestSHA256: RequestDigest(request), WalterReviewProposalID: proposal.ProposalID, WalterReviewProposalSHA256: DigestJSON(proposal), WalterReviewSensitivity: proposal.Sensitivity, WalterReviewReaders: proposal.Readers, WalterReviewRefinement: proposal.Refinement, WalterReviewConfirmation: string(proposal.ConfirmationRequirement), WalterReviewAdapterID: adapter.ID(), WalterReviewAuthorityID: authority.ID()}, time.Now().UTC())
 	if err != nil {
 		receipt, finalizeErr := store.Finalize(reservation, ReceiptFailed, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, adapter.ID(), authority.ID(), "ownerctx_proposal_failed", now)
 		if finalizeErr != nil {
 			return SelfRefinementProposal{}, receipt, finalizeErr
 		}
 		return SelfRefinementProposal{}, receipt, err
-	}
-	if err := store.AssertLease(reservation, time.Now().UTC()); err != nil {
-		return SelfRefinementProposal{}, Receipt{}, err
 	}
 	policy, policyErr := request.CanonicalSnapshot.Policy(proposal.Facet)
 	if policyErr != nil || ownerReceipt.ID == "" || ownerReceipt.ProposalSHA256 == "" || ownerReceipt.Policy != policy.Refinement || ownerReceipt.Sensitivity != policy.Sensitivity || !sameStrings(ownerReceipt.Readers, policy.Readers) {
@@ -623,7 +685,9 @@ func (handler Handler) Handle(ctx context.Context, command maintenance.Command) 
 	if err != nil {
 		return maintenance.Receipt{}, err
 	}
-	_, receipt, reviewErr := Review(ctx, request, handler.Adapter, handler.Authority, handler.Store, now)
+	executionCtx, cancel := context.WithDeadline(ctx, command.Deadline)
+	defer cancel()
+	_, receipt, reviewErr := Review(executionCtx, request, handler.Adapter, handler.Authority, handler.Store, now)
 	maintenanceReceipt := handler.toMaintenanceReceipt(command, receipt, reviewErr, now)
 	if appendErr := handler.MaintenanceStore.AppendReceipt(maintenanceReceipt); appendErr != nil {
 		return maintenanceReceipt, appendErr
@@ -658,7 +722,7 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 	}
 	filtered := make([]ownerctx.ObservationReceipt, 0, len(observations))
 	for _, observation := range observations {
-		if contains(facets, observation.Facet) && (observation.State == ownerctx.ObservationCorroborated || observation.Signal == ownerctx.SignalExplicitInstruction || observation.Signal == ownerctx.SignalExplicitCorrection || (observation.Signal == ownerctx.SignalExplicitEndorsement && observation.OwnerConfirmed)) {
+		if contains(facets, observation.Facet) && observation.State == ownerctx.ObservationCorroborated {
 			filtered = append(filtered, observation)
 		}
 	}
@@ -695,7 +759,7 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 	if handler.IntentHypothesis != nil {
 		intentDigest = DigestJSON(handler.IntentHypothesis)
 	}
-	request := Request{SchemaVersion: SchemaVersion, WeekID: weekID(now), OccurrenceID: occurrenceID(command, intentDigest), OwnerID: handler.OwnerID, ScopeKind: handler.ScopeKind, ScopeID: handler.ScopeID, CurrentOriginal: handler.CurrentPrompt, CurrentNormalized: currentNormalized, PromptHistory: history, Translation: translation, Observations: filtered, CanonicalSnapshot: snapshot, ReviewFacets: facets, SensitiveOwnerAuthorized: handler.OwnerAuthorized, IntentHypothesis: handler.IntentHypothesis, IntentHypothesisSHA256: intentDigest, OwnerContextRoot: handler.Root}
+	request := Request{SchemaVersion: SchemaVersion, WeekID: weekID(now), OccurrenceID: command.OccurrenceDigest(), OwnerID: handler.OwnerID, ScopeKind: handler.ScopeKind, ScopeID: handler.ScopeID, CurrentNormalized: currentNormalized, CurrentOriginal: handler.CurrentPrompt, PromptHistory: history, Translation: translation, Observations: filtered, CanonicalSnapshot: snapshot, ReviewFacets: facets, SensitiveOwnerAuthorized: handler.OwnerAuthorized, IntentHypothesis: handler.IntentHypothesis, IntentHypothesisSHA256: intentDigest, OwnerContextRoot: handler.Root}
 	if strings.TrimSpace(handler.SensitivePurpose) != "" {
 		request.SensitivePurposeSHA256 = maestro.SHA256Hex(handler.SensitivePurpose)
 	}
@@ -703,13 +767,6 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 		return Request{}, err
 	}
 	return request, nil
-}
-
-func occurrenceID(command maintenance.Command, intentDigest string) string {
-	if intentDigest == "" {
-		return command.OccurrenceDigest()
-	}
-	return Digest(command.OccurrenceDigest() + ":" + intentDigest)
 }
 
 func (handler Handler) toMaintenanceReceipt(command maintenance.Command, receipt Receipt, reviewErr error, now time.Time) maintenance.Receipt {
@@ -741,7 +798,7 @@ func ValidateRequest(request Request) error {
 	}
 	hypothesisDigest := ""
 	if request.IntentHypothesis != nil {
-		if err := validateIntentHypothesis(*request.IntentHypothesis); err != nil {
+		if err := validateIntentHypothesis(request); err != nil {
 			return err
 		}
 		hypothesisDigest = DigestJSON(request.IntentHypothesis)
@@ -800,8 +857,8 @@ func ValidateProposal(request Request, proposal SelfRefinementProposal) error {
 	seen := map[string]bool{}
 	for _, id := range proposal.EvidenceObservationIDs {
 		observation, ok := available[id]
-		if !ok || seen[id] || !(observation.State == ownerctx.ObservationCorroborated || observation.Signal == ownerctx.SignalExplicitInstruction || observation.Signal == ownerctx.SignalExplicitCorrection || (observation.Signal == ownerctx.SignalExplicitEndorsement && observation.OwnerConfirmed)) {
-			return errors.New("Walter proposal evidence is not independently corroborated or explicitly owner-attested")
+		if !ok || seen[id] || observation.State != ownerctx.ObservationCorroborated {
+			return errors.New("Walter proposal evidence requires independent corroboration")
 		}
 		if observation.Facet != proposal.Facet {
 			return errors.New("Walter proposal evidence facet does not match the proposed facet")
@@ -936,8 +993,9 @@ func validateContextBounds(request Request) error {
 	return nil
 }
 
-func validateIntentHypothesis(hypothesis maestro.IntentHypothesis) error {
-	if strings.TrimSpace(hypothesis.ExpressedObjective) == "" || strings.TrimSpace(hypothesis.LatentIntentHypothesis) == "" || strings.TrimSpace(hypothesis.Materiality) == "" || strings.TrimSpace(hypothesis.DisconfirmationCondition) == "" || strings.TrimSpace(hypothesis.WorkingPrompt) == "" || !validConfidence(hypothesis.Confidence) || len(hypothesis.EvidenceRefs) > MaxObservations || len(hypothesis.Alternatives) > MaxObservations {
+func validateIntentHypothesis(request Request) error {
+	hypothesis := request.IntentHypothesis
+	if hypothesis == nil || strings.TrimSpace(hypothesis.ExpressedObjective) == "" || strings.TrimSpace(hypothesis.LatentIntentHypothesis) == "" || strings.TrimSpace(hypothesis.Materiality) == "" || strings.TrimSpace(hypothesis.DisconfirmationCondition) == "" || strings.TrimSpace(hypothesis.WorkingPrompt) == "" || hypothesis.WorkingPrompt != request.CurrentNormalized || !validConfidence(hypothesis.Confidence) || len(hypothesis.EvidenceRefs) > MaxObservations || len(hypothesis.Alternatives) > MaxObservations {
 		return errors.New("Walter intent hypothesis is incomplete")
 	}
 	for _, value := range []string{hypothesis.ExpressedObjective, hypothesis.LatentIntentHypothesis, hypothesis.Materiality, hypothesis.DisconfirmationCondition, hypothesis.WorkingPrompt} {
@@ -945,7 +1003,24 @@ func validateIntentHypothesis(hypothesis maestro.IntentHypothesis) error {
 			return errors.New("Walter intent hypothesis exceeds its UTF-8 bound")
 		}
 	}
-	for _, value := range append(append([]string(nil), hypothesis.EvidenceRefs...), hypothesis.Alternatives...) {
+	seen := make(map[string]bool, len(hypothesis.EvidenceRefs))
+	allowed := map[string]bool{"current_prompt": true, maestro.SHA256Hex(request.CurrentOriginal): true, "current_prompt:" + maestro.SHA256Hex(request.CurrentOriginal): true}
+	for _, prompt := range request.PromptHistory {
+		for _, value := range []string{prompt.ID, prompt.OriginalSHA256, prompt.NormalizedSHA256, "prompt_history:" + prompt.ID, "prompt_history:" + prompt.OriginalSHA256, "prompt_history:" + prompt.NormalizedSHA256} {
+			allowed[value] = true
+		}
+	}
+	for _, observation := range request.Observations {
+		allowed[observation.ID] = true
+		allowed["observation:"+observation.ID] = true
+	}
+	for _, value := range hypothesis.EvidenceRefs {
+		if strings.TrimSpace(value) == "" || len([]byte(value)) > MaxContextBytes || seen[value] || !allowed[value] {
+			return errors.New("Walter intent hypothesis evidence reference is invalid or outside the request")
+		}
+		seen[value] = true
+	}
+	for _, value := range hypothesis.Alternatives {
 		if strings.TrimSpace(value) == "" || len([]byte(value)) > MaxContextBytes {
 			return errors.New("Walter intent hypothesis metadata is invalid")
 		}

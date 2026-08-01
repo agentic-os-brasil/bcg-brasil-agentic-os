@@ -479,8 +479,8 @@ func validateTransition(current observationRecord, next ObservationState, record
 			return errors.New("corroboration requires an independent episode")
 		}
 	case ObservationProposed:
-		if current.State != ObservationCorroborated && !(current.Signal == SignalExplicitInstruction || current.Signal == SignalExplicitCorrection || current.Signal == SignalExplicitEndorsement) {
-			return errors.New("observation is not eligible for promotion proposal")
+		if current.State != ObservationCorroborated {
+			return errors.New("observation requires independent corroboration before proposal")
 		}
 	case ObservationPromoted:
 		if current.State != ObservationProposed && current.State != ObservationCorroborated {
