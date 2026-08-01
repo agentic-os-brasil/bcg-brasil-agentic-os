@@ -769,22 +769,25 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 	return request, nil
 }
 
-func (handler Handler) toMaintenanceReceipt(command maintenance.Command, receipt Receipt, reviewErr error, now time.Time) maintenance.Receipt {
+func (handler Handler) toMaintenanceReceipt(command maintenance.Command, receipt Receipt, _ error, now time.Time) maintenance.Receipt {
 	state := maintenance.ReceiptFailed
+	reasonCode := maintenance.ReasonHandlerFailure
 	if receipt.State == ReceiptUnavailable {
 		state = maintenance.ReceiptUnavailable
+		reasonCode = maintenance.ReasonHandlerUnavailable
 	}
 	if receipt.State == ReceiptProposal {
 		state = maintenance.ReceiptProposalEmitted
+		reasonCode = maintenance.ReasonProposalEmitted
 	}
-	diagnostic := receipt.ReasonCode
-	if reviewErr != nil && diagnostic == "" {
-		diagnostic = "walter_self_review_unavailable_or_failed"
-	}
-	value := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: Digest(command.OccurrenceDigest() + receipt.FencingToken)[:32], OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: state, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: true, Diagnostic: diagnostic}
+	value := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: Digest(command.OccurrenceDigest() + receipt.FencingToken)[:32], OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: state, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: true, ReasonCode: reasonCode}
 	if state == maintenance.ReceiptProposalEmitted {
 		value.ProposalCount = 1
 		value.ProposalDigest = receipt.ProposalSHA256
+		value.ProposalArtifactID = receipt.OwnerctxProposalSHA256
+		if value.ProposalArtifactID == "" {
+			value.ProposalArtifactID = receipt.ProposalSHA256
+		}
 	}
 	return value
 }

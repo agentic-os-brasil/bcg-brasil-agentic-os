@@ -108,8 +108,8 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 	}
 }
 
-func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEnrollment, enrolled bool) (map[string]maintenance.Handler, map[string]string, []string) {
-	handlers := map[string]maintenance.Handler{}
+func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEnrollment, enrolled bool) (map[string]any, map[string]string, []string) {
+	handlers := map[string]any{}
 	qualification, activated := map[string]string{}, []string{}
 	if !enrolled {
 		return handlers, qualification, activated

@@ -14,13 +14,6 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
-// Handler is the typed runtime-neutral seam for a governed job. Walter/self
-// implementations register here after their own PR is integrated; this
-// package never reimplements their semantics.
-type Handler interface {
-	Execute(context.Context, Command) (HandlerResult, error)
-}
-
 type HandlerFunc func(context.Context, Command) (HandlerResult, error)
 
 func (function HandlerFunc) Execute(ctx context.Context, command Command) (HandlerResult, error) {
@@ -64,11 +57,14 @@ type handlerOutcome struct {
 // derives due work; only a qualified handler, occurrence lease and terminal
 // receipt can make scheduler work complete.
 type Worker struct {
-	Catalog            Catalog
-	Scheduler          scheduler.Store
-	Receipts           Store
-	Jobs               []scheduler.Job
-	Handlers           map[string]Handler
+	Catalog   Catalog
+	Scheduler scheduler.Store
+	Receipts  Store
+	Jobs      []scheduler.Job
+	// Handlers accepts both the Darwin Execute seam and the canonical Walter
+	// Handle seam. The worker converts either result into its bounded receipt;
+	// it does not duplicate Walter/self logic.
+	Handlers           map[string]any
 	LocalQualification map[string]string
 	ActivatedJobs      []string
 	Deadline           time.Duration
@@ -179,7 +175,8 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonOccurrenceRejected)
 	}
 	handler, handlerFound := worker.Handlers[occurrence.JobID]
-	if !handlerFound || (worker.LocalQualification[occurrence.JobID] == "" && job.Availability != Available) {
+	execute, executable := handlerExecutor(handler)
+	if !handlerFound || !executable || (worker.LocalQualification[occurrence.JobID] == "" && job.Availability != Available) {
 		receipt, err := worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonCatalogUnavailable)
 		if appendErr := worker.Scheduler.AppendReceipt(request.WorkspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now, State: scheduler.Unavailable, Error: "qualified local handler is not enrolled"}); appendErr != nil && err == nil {
 			err = appendErr
@@ -221,7 +218,7 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	defer cancel()
 	outcomeChannel := make(chan handlerOutcome, 1)
 	go func() {
-		result, handlerErr := handler.Execute(workerCtx, command)
+		result, handlerErr := execute(workerCtx, command)
 		outcomeChannel <- handlerOutcome{result: result, err: handlerErr}
 	}()
 	var executeErr error
