@@ -391,6 +391,30 @@ func InspectPromptHistory(root string) ([]PromptHistoryReceipt, error) {
 	return result, nil
 }
 
+// PromptHistoryOccurrenceExists is a metadata-only lookup used to reconstruct
+// an idempotent dispatch packet. It identifies only the exact owner/occurrence
+// entry; it never returns prompt text.
+func PromptHistoryOccurrenceExists(root, ownerID, occurrenceID string) (bool, error) {
+	if !observationIdentifier.MatchString(ownerID) || !observationIdentifier.MatchString(occurrenceID) {
+		return false, errors.New("prompt history occurrence identity is invalid")
+	}
+	found := false
+	err := withPromptHistoryLock(root, func(entriesPath, _ string) error {
+		entries, err := readPromptHistoryEntries(entriesPath)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if entry.OwnerID == ownerID && entry.OccurrenceID == occurrenceID {
+				found = true
+				break
+			}
+		}
+		return nil
+	})
+	return found, err
+}
+
 func ExportPromptHistory(root string) ([]PromptHistoryEntry, error) {
 	entriesPath, _, err := ensurePromptHistoryStore(root)
 	if err != nil {

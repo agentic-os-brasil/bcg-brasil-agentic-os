@@ -583,11 +583,12 @@ type Event struct {
 	Decision      string
 	ContentDigest string
 	ReasonCode    string
-	// Interaction is evaluated on every supplied loop event. It is not
-	// persisted by Advance; only an explicit Maestro capture may append a
-	// material, owner-attested observation to the local observation log.
-	Interaction   *ownerctx.ObservationInput
-	IntentReceipt *IntentReviewReceipt
+	// Interaction is evaluated on every supplied loop event. When an
+	// ObservationRoot is supplied, only the evaluator-approved material,
+	// owner-attested signal is appended under the owner-local observation lock.
+	Interaction     *ownerctx.ObservationInput
+	ObservationRoot string
+	IntentReceipt   *IntentReviewReceipt
 }
 
 func NewChain(plan Plan, policy LoopPolicy) (ChainState, error) {
@@ -717,6 +718,11 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 		state.Stage, state.ActiveAgentID = StageCaseExecution, bindingID(plan, "case_agent")
 	default:
 		return state, Receipt{}, errors.New("quality-loop stage is not executable")
+	}
+	if event.Interaction != nil && event.ObservationRoot != "" {
+		if _, _, err := ownerctx.AppendObservation(event.ObservationRoot, *event.Interaction); err != nil {
+			return state, Receipt{}, err
+		}
 	}
 	state.Receipts = append(state.Receipts, receipt)
 	return state, receipt, nil

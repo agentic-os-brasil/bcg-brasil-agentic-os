@@ -587,6 +587,49 @@ func TestMaestroDispatchBoundaryRecordsPromptPlansAndPersistsMetadataOnlyChain(t
 	}
 }
 
+func TestMaestroDispatchPromptFailureLeavesPreparedBoundaryForRecovery(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	input := `{"authenticated_owner":true,"owner_id":"owner","dispatch_id":"dispatch-prompt-failure","prompt":"prepare case alpha","language":"en-US","source":"cli","session_id":"session-prompt-failure","working_language":"en-US","current_language":"en-US","plan":{"schema_version":1,"intent_class":"case_execution","scope_kind":"case","scope_id":"case-alpha","account_scope_id":"account-alpha","sensitivity":"internal","materiality":"none","health_governance_intent":"none","available_registered_agents":[{"id":"account-agent-alpha","role":"client_account_agent","scope_kind":"account","scope_id":"account-alpha","authorization_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state_snapshot_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","available":true},{"id":"case-agent-alpha","role":"case_agent","scope_kind":"case","scope_id":"case-alpha","parent_scope_kind":"account","parent_scope_id":"account-alpha","authorization_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state_snapshot_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","available":true}]}}`
+	input = addTestCapabilityDigests(input)
+	original := recordUserPromptFunc
+	recordUserPromptFunc = func(string, ownerctx.PromptHistoryInput) (ownerctx.PromptHistoryReceipt, error) {
+		return ownerctx.PromptHistoryReceipt{}, errors.New("injected prompt failure")
+	}
+	defer func() { recordUserPromptFunc = original }()
+	var output bytes.Buffer
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code == ExitOK {
+		t.Fatal("injected prompt failure was accepted")
+	}
+	receipts, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "dispatch", "receipts", "*.json"))
+	if err != nil || len(receipts) != 1 {
+		t.Fatalf("prepared dispatch receipt count = %v, err=%v", receipts, err)
+	}
+	body, err := os.ReadFile(receipts[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state maestro.DispatchBoundaryState
+	if err := json.Unmarshal(body, &state); err != nil || state.Status != "prepared" || !state.FinishedAt.IsZero() {
+		t.Fatalf("prompt failure left false-finished boundary: %#v, err=%v", state, err)
+	}
+	if entries, err := ownerctx.InspectPromptHistory(root); err != nil || len(entries) != 0 {
+		t.Fatalf("prompt failure mutated history: %#v, err=%v", entries, err)
+	}
+	chainFiles, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "chains", "*.json"))
+	if err != nil || len(chainFiles) != 0 {
+		t.Fatalf("prompt failure left chain state: %v, err=%v", chainFiles, err)
+	}
+	recordUserPromptFunc = original
+	output.Reset()
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), `"durable_dispatch_epoch": 1`) {
+		t.Fatalf("prepared occurrence did not recover: code=%d output=%s", code, output.String())
+	}
+	if entries, err := ownerctx.InspectPromptHistory(root); err != nil || len(entries) != 1 {
+		t.Fatalf("recovery prompt count = %#v, err=%v", entries, err)
+	}
+}
+
 func addTestCapabilityDigests(input string) string {
 	return strings.ReplaceAll(input, `"state_snapshot_digest":"`, `"capability_digest":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","state_snapshot_digest":"`)
 }
@@ -658,6 +701,70 @@ func TestMaestroWalterDefaultFacetAllowlistExcludesPsychologicalProfile(t *testi
 		if _, ok := snapshot.Facets[facet]; !ok {
 			t.Fatalf("Walter allowlist omitted expected facet %q", facet)
 		}
+	}
+}
+
+func TestMaestroWalterActivityDoesNotInventSelfEvidence(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	input := maestro.Input{SchemaVersion: 1, IntentClass: maestro.IntentCase, ScopeKind: "case", ScopeID: "case-self-negative", AccountScopeID: "account-self-negative", Sensitivity: maestro.SensitivityInternal, Materiality: maestro.MaterialityReview, HealthIntent: maestro.HealthNone, AvailableAgents: []maestro.RegisteredAgent{
+		{ID: "account-self-negative", Role: "client_account_agent", ScopeKind: "account", ScopeID: "account-self-negative", AuthorizationDigest: strings.Repeat("a", 64), CapabilityDigest: strings.Repeat("b", 64), StateSnapshotDigest: strings.Repeat("c", 64), Available: true},
+		{ID: "case-self-negative", Role: "case_agent", ScopeKind: "case", ScopeID: "case-self-negative", ParentScopeKind: "account", ParentScopeID: "account-self-negative", AuthorizationDigest: strings.Repeat("d", 64), CapabilityDigest: strings.Repeat("e", 64), StateSnapshotDigest: strings.Repeat("f", 64), Available: true},
+		{ID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review", AuthorizationDigest: strings.Repeat("1", 64), CapabilityDigest: strings.Repeat("2", 64), StateSnapshotDigest: strings.Repeat("3", 64), Available: true},
+	}}
+	input.Materiality = maestro.MaterialityReview
+	plan, err := maestro.PlanFor(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ownerctx.ProjectSnapshot(root, append([]string(nil), maestroWalterFacetAllowlist...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	packet, err := maestro.BuildIntentReviewPacket("make the high leverage recommendation", plan, "draft", nil, snapshot, nil, "executive", "high", "hard_to_reverse", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := maestroDispatchRequest{AuthenticatedOwner: true, OwnerID: "owner", DispatchID: "dispatch-self-negative", Plan: input}
+	receipt, evaluation, err := ownerctx.AppendObservation(root, maestroDispatchObservation(request, plan, packet, time.Now().UTC()))
+	if err != nil || !evaluation.Evaluated || evaluation.Persist || receipt.Persisted {
+		t.Fatalf("Walter activity was treated as self evidence: evaluation=%#v receipt=%#v err=%v", evaluation, receipt, err)
+	}
+	observations, err := ownerctx.ListObservations(root)
+	if err != nil || len(observations) != 0 {
+		t.Fatalf("Walter activity persisted a self observation: %#v, err=%v", observations, err)
+	}
+}
+
+func TestMaestroSelfSignalContractRejectsUnsafeSemanticVariants(t *testing.T) {
+	valid := &maestroSelfSignal{Signal: ownerctx.SignalExplicitCorrection, Facet: "communication-style", Claim: "prefers_concise", EvidenceType: "owner_correction", Confidence: 1, Sensitivity: "professional", OwnerConfirmed: true}
+	if err := validateMaestroSelfSignal(valid); err != nil {
+		t.Fatal(err)
+	}
+	variants := []struct {
+		name string
+		edit func(*maestroSelfSignal)
+	}{
+		{name: "unsupported signal", edit: func(signal *maestroSelfSignal) { signal.Signal = ownerctx.SignalObservedPattern }},
+		{name: "unknown facet", edit: func(signal *maestroSelfSignal) { signal.Facet = "unsupported-facet" }},
+		{name: "generated evidence", edit: func(signal *maestroSelfSignal) { signal.EvidenceType = "generated_output" }},
+		{name: "client evidence", edit: func(signal *maestroSelfSignal) { signal.EvidenceType = "client_document" }},
+		{name: "unconfirmed", edit: func(signal *maestroSelfSignal) { signal.OwnerConfirmed = false }},
+	}
+	for _, variant := range variants {
+		t.Run(variant.name, func(t *testing.T) {
+			candidate := *valid
+			variant.edit(&candidate)
+			if err := validateMaestroSelfSignal(&candidate); err == nil {
+				t.Fatal("unsafe self signal was accepted")
+			}
+		})
+	}
+	generic := ownerctx.ObservationInput{SchemaVersion: 1, Signal: ownerctx.SignalExplicitEndorsement, Facet: "communication-style", Claim: "ok", EvidenceType: "owner_endorsement", SourceEvent: "self-signal-generic", SourceDigest: maestro.SHA256Hex("self-signal-generic"), EpisodeID: "self-signal-generic", ScopeKind: "case", ScopeID: "case-self-negative", Confidence: 1, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: true, Material: true, OwnerConfirmed: true}
+	if _, err := ownerctx.EvaluateInteraction(generic); err == nil {
+		t.Fatal("generic OK endorsement was accepted")
 	}
 }
 

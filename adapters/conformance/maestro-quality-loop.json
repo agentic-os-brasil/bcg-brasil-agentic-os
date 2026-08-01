@@ -6,5 +6,25 @@
     {"name": "direct_material", "execution_only": true, "materiality": "review", "case_entry": "direct_case", "account_validation": false, "walter_required": true},
     {"name": "direct_low", "execution_only": true, "materiality": "none", "case_entry": "direct_case", "account_validation": false, "walter_required": false},
     {"name": "direct_answer", "intent_class": "direct_answer", "case_entry": "", "account_validation": false, "walter_required": false}
-  ]
+  ],
+  "self_signal_contract": {
+    "ordinary_walter_activity": {"evaluated": true, "persisted": false, "observation_count": 0},
+    "valid_explicit_correction": {
+      "signal": "explicit_correction",
+      "facet": "communication-style",
+      "claim": "prefers_concise",
+      "evidence_type": "owner_correction",
+      "confidence": 1,
+      "sensitivity": "professional",
+      "owner_confirmed": true
+    },
+    "rejections": [
+      "unknown_self_signal_field",
+      "unsupported_signal",
+      "empty_or_unknown_facet",
+      "generic_ok_endorsement",
+      "generated_or_client_evidence"
+    ],
+    "global_promotion_requires": "owner_declassification_and_canonical_cas"
+  }
 }

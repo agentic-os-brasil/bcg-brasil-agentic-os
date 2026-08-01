@@ -70,6 +70,21 @@ OS-user-local data-root boundary, builds and persists a chain, and exposes only
 metadata at the model-unavailable dispatch boundary. The boolean attestation
 is not cryptographic principal authentication.
 
+The optional dispatch `self_signal` is a closed, explicit owner-signal
+contract. It accepts only `explicit_instruction`, `explicit_correction` or
+non-generic `explicit_endorsement`, a real facet ID, a normalized claim, one of
+the owner evidence classes, bounded confidence/sensitivity and
+`owner_confirmed: true`. Ordinary prompts, Walter invocation, task activity
+and intrinsic-intent hypotheses produce an evaluation receipt but no self
+observation. Generated output, client content, unknown fields, unsupported
+signals, generic `ok`, and unknown facets fail closed. A global observation may
+be captured provisionally, but promotion still requires explicit owner
+declassification and canonical-source CAS; the dispatch attestation itself
+does not grant that authority. The envelope is defined in
+`schemas/maestro-dispatch-input.schema.json`, with the shared signal shape
+also referenced by `schemas/maestro-input.schema.json` and the conformance
+fixture.
+
 | Path | Sequence |
 | --- | --- |
 | A | Maestro → Client Account framing → Maestro → Case → Maestro → Client Account validation → Maestro → Walter → Maestro → User |

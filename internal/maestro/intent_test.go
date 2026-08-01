@@ -127,7 +127,7 @@ func TestIntentReviewRejectsConfidenceMismatchBetweenResultAndHypothesis(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := IntentReviewResult{LiteralRequest: packet.LiteralRequest, IntrinsicIntentHypothesis: "serve the request", EvidenceRefs: []string{"current_prompt"}, Confidence: 0.9, PurposeSatisfied: PurposeSatisfied, Verdict: IntentApprove, Hypothesis: IntentHypothesis{ExpressedObjective: "answer", LatentIntentHypothesis: "serve", EvidenceRefs: []string{"current_prompt"}, Confidence: 0.2, Materiality: "high", DisconfirmationCondition: "owner corrects", WorkingPrompt: packet.WorkingCurrentPrompt}}
+	result := IntentReviewResult{LiteralRequest: packet.LiteralRequest, IntrinsicIntentHypothesis: "serve the request", EvidenceRefs: []string{"current_prompt"}, Confidence: 0.9, PurposeSatisfied: PurposeSatisfied, Verdict: IntentApprove, Hypothesis: IntentHypothesis{ExpressedObjective: "answer", LatentIntentHypothesis: "serve the request", EvidenceRefs: []string{"current_prompt"}, Confidence: 0.2, Materiality: "high", DisconfirmationCondition: "owner corrects", WorkingPrompt: packet.WorkingCurrentPrompt}}
 	if err := ValidateIntentReview(packet, result); err == nil {
 		t.Fatal("result confidence mismatch bypassed hypothesis binding")
 	}
@@ -224,6 +224,33 @@ func TestMaestroEvaluatesInteractionWithoutPersistingAnUnauthenticatedLoop(t *te
 	}
 	if _, err := ownerctx.ListObservations(root); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMaestroAdvanceEvaluatesAndCapturesAuthenticatedMaterialInteraction(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanFor(caseInput(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := NewChain(plan, DefaultLoopPolicy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := ownerctx.ObservationInput{
+		SchemaVersion: 1, Signal: ownerctx.SignalExplicitInstruction, Facet: "voice", Claim: "maestro_capture", EvidenceType: "owner_prompt_metadata",
+		SourceEvent: "loop-capture", SourceDigest: SHA256Hex("loop-capture"), EpisodeID: "episode-capture", ScopeKind: "workspace", ScopeID: "workspace-one",
+		Confidence: 1, Sensitivity: "professional", ExpiresAt: time.Now().UTC().Add(time.Hour), AuthenticatedOwner: true, Material: true, OwnerConfirmed: true,
+	}
+	if _, _, err := state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: "case-agent-transformation", Decision: "return", ContentDigest: digestFor("draft"), Interaction: &input, ObservationRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	observations, err := ownerctx.ListObservations(root)
+	if err != nil || len(observations) != 1 || !observations[0].Persisted {
+		t.Fatalf("authenticated material loop was not captured: %#v, err=%v", observations, err)
 	}
 }
 

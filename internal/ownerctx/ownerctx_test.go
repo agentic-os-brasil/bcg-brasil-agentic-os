@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -324,6 +325,15 @@ func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testi
 	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationCorroborated, "", true); err == nil {
 		t.Fatal("single episode was accepted as corroboration")
 	}
+	sameEpisode := first
+	sameEpisode.SourceEvent = "event-episode-a-second"
+	sameEpisode.SourceDigest = digest("source-episode-a-second")
+	if _, _, err := AppendObservation(root, sameEpisode); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationCorroborated, "", true); err == nil {
+		t.Fatal("two digests from one episode were accepted as independent corroboration")
+	}
 	second := first
 	second.EpisodeID, second.SourceEvent = "episode-b", "event-b"
 	second.SourceDigest = digest("source-b")
@@ -346,6 +356,100 @@ func TestObservationPromotionRequiresIndependentEpisodesAndCanonicalCAS(t *testi
 	}
 	if _, err := TransitionObservation(root, firstReceipt.ID, ObservationPromoted, canonical, true); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestObservationAppendIsStableAndConcurrentIdempotent(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	input := observationInput(SignalExplicitCorrection, "concurrent", "episode-concurrent", true, true)
+	const attempts = 12
+	errorsCh := make(chan error, attempts)
+	var wait sync.WaitGroup
+	for i := 0; i < attempts; i++ {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			_, _, err := AppendObservation(root, input)
+			errorsCh <- err
+		}()
+	}
+	wait.Wait()
+	close(errorsCh)
+	for err := range errorsCh {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := AppendObservation(root, input); err != nil {
+		t.Fatal(err)
+	}
+	observations, err := ListObservations(root)
+	if err != nil || len(observations) != 1 {
+		t.Fatalf("concurrent retry was not idempotent: %#v, err=%v", observations, err)
+	}
+}
+
+func TestGlobalObservationNeedsExplicitDeclassificationForPromotion(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	input := observationInput(SignalExplicitCorrection, "global_claim", "episode-global", true, true)
+	receipt, _, err := AppendObservation(root, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TransitionObservation(root, receipt.ID, ObservationEligible, "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TransitionObservation(root, receipt.ID, ObservationProposed, "", true); err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := canonicalDigestForFacet(root, "voice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TransitionObservation(root, receipt.ID, ObservationPromoted, canonical, true); err == nil {
+		t.Fatal("global observation was promoted without explicit declassification")
+	}
+}
+
+func TestObservationTransitionsSerializeReadValidateCASAndAppend(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	input := observationInput(SignalExplicitCorrection, "transition_once", "episode-transition", true, true)
+	receipt, _, err := AppendObservation(root, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := make(chan error, 2)
+	var wait sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			_, err := TransitionObservation(root, receipt.ID, ObservationEligible, "", true)
+			results <- err
+		}()
+	}
+	wait.Wait()
+	close(results)
+	successes := 0
+	failures := 0
+	for err := range results {
+		if err == nil {
+			successes++
+		} else {
+			failures++
+		}
+	}
+	if successes != 1 || failures != 1 {
+		t.Fatalf("competing transitions were not serialized: successes=%d failures=%d", successes, failures)
 	}
 }
 

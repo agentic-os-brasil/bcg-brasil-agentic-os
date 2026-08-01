@@ -11,7 +11,12 @@ import (
 )
 
 func persistTestDispatchBoundary(root, ownerID, sessionID, dispatchID string, plan Plan, chain ChainState) (DispatchBoundaryState, error) {
-	return (DispatchBoundaryInput{Root: root, OwnerID: ownerID, SessionID: sessionID, DispatchID: dispatchID, PromptDigest: SHA256Hex(plan.PlanDigest), PacketDigest: SHA256Hex(chainDigest(chain)), DraftDigest: SHA256Hex("test-draft"), Plan: plan, Chain: chain}).PersistDispatchBoundary()
+	input := DispatchBoundaryInput{Root: root, OwnerID: ownerID, SessionID: sessionID, DispatchID: dispatchID, PromptDigest: SHA256Hex(plan.PlanDigest), PacketDigest: SHA256Hex(chainDigest(chain)), DraftDigest: SHA256Hex("test-draft"), Plan: plan, Chain: chain}
+	prepared, err := input.PersistDispatchBoundary()
+	if err != nil {
+		return DispatchBoundaryState{}, err
+	}
+	return input.FinalizeDispatchBoundary(prepared)
 }
 
 func TestPersistChainStateRecoversExpiredLease(t *testing.T) {
@@ -187,6 +192,45 @@ func TestDispatchBoundaryStoreAcceptsDistinctPlansAndBindsOrderedChain(t *testin
 	receipts, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "dispatch", "receipts", "*.json"))
 	if err != nil || len(receipts) != 3 {
 		t.Fatalf("append-only dispatch receipts = %v, err=%v", receipts, err)
+	}
+}
+
+func TestDispatchBoundaryFinalizationRestoresPreparedReceiptAfterFsyncFailure(t *testing.T) {
+	root := t.TempDir()
+	plan, err := PlanFor(caseInput(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, err := NewChain(plan, DefaultLoopPolicy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := DispatchBoundaryInput{Root: root, OwnerID: "owner-a", SessionID: "session-a", DispatchID: "dispatch-finalize", PromptDigest: SHA256Hex("prompt"), PacketDigest: SHA256Hex("packet"), DraftDigest: SHA256Hex("draft"), Plan: plan, Chain: chain}
+	prepared, err := input.PersistDispatchBoundary()
+	if err != nil || prepared.Status != "prepared" || !prepared.FinishedAt.IsZero() {
+		t.Fatalf("prepared boundary = %#v, err=%v", prepared, err)
+	}
+	originalSync := syncDispatchDirectoryFunc
+	defer func() { syncDispatchDirectoryFunc = originalSync }()
+	calls := 0
+	syncDispatchDirectoryFunc = func(directory string) error {
+		calls++
+		if calls == 1 {
+			return errors.New("injected finalization fsync failure")
+		}
+		return originalSync(directory)
+	}
+	if _, err := input.FinalizeDispatchBoundary(prepared); err == nil {
+		t.Fatal("finalization fsync failure was accepted")
+	}
+	receipts, _, err := scanDispatchReceipts(filepath.Join(root, "owner", "maestro", "dispatch", "receipts"))
+	if err != nil || len(receipts) != 1 || receipts[0].Status != "prepared" {
+		t.Fatalf("failed finalization did not restore prepared receipt: %#v, err=%v", receipts, err)
+	}
+	syncDispatchDirectoryFunc = originalSync
+	finished, err := input.FinalizeDispatchBoundary(prepared)
+	if err != nil || finished.Status != "finished" || finished.FinishedAt.IsZero() {
+		t.Fatalf("prepared boundary did not recover: %#v, err=%v", finished, err)
 	}
 }
 

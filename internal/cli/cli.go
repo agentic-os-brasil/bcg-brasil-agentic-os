@@ -1443,25 +1443,85 @@ func splitTracks(value string) []string {
 }
 
 type maestroDispatchRequest struct {
-	AuthenticatedOwner bool          `json:"authenticated_owner"`
-	OwnerID            string        `json:"owner_id"`
-	DispatchID         string        `json:"dispatch_id"`
-	OccurrenceID       string        `json:"occurrence_id"`
-	Prompt             string        `json:"prompt"`
-	Language           string        `json:"language"`
-	Source             string        `json:"source"`
-	SessionID          string        `json:"session_id"`
-	WorkingLanguage    string        `json:"working_language"`
-	CurrentLanguage    string        `json:"current_language"`
-	DraftOutput        string        `json:"draft_output"`
-	Audience           string        `json:"audience"`
-	Consequence        string        `json:"consequence"`
-	Reversibility      string        `json:"reversibility"`
-	RelevanceKeys      []string      `json:"relevance_keys"`
-	Plan               maestro.Input `json:"plan"`
+	AuthenticatedOwner bool               `json:"authenticated_owner"`
+	OwnerID            string             `json:"owner_id"`
+	DispatchID         string             `json:"dispatch_id"`
+	OccurrenceID       string             `json:"occurrence_id"`
+	Prompt             string             `json:"prompt"`
+	Language           string             `json:"language"`
+	Source             string             `json:"source"`
+	SessionID          string             `json:"session_id"`
+	WorkingLanguage    string             `json:"working_language"`
+	CurrentLanguage    string             `json:"current_language"`
+	DraftOutput        string             `json:"draft_output"`
+	Audience           string             `json:"audience"`
+	Consequence        string             `json:"consequence"`
+	Reversibility      string             `json:"reversibility"`
+	RelevanceKeys      []string           `json:"relevance_keys"`
+	SelfSignal         *maestroSelfSignal `json:"self_signal,omitempty"`
+	Plan               maestro.Input      `json:"plan"`
+}
+
+// maestroSelfSignal is optional and deliberately narrow. A prompt or a
+// Walter invocation is not evidence about the owner's self; only this closed
+// explicit signal can request a material observation.
+type maestroSelfSignal struct {
+	Signal         ownerctx.SignalClass `json:"signal"`
+	Facet          string               `json:"facet"`
+	Claim          string               `json:"claim"`
+	EvidenceType   string               `json:"evidence_type"`
+	Confidence     float64              `json:"confidence"`
+	Sensitivity    string               `json:"sensitivity"`
+	OwnerConfirmed bool                 `json:"owner_confirmed"`
+}
+
+func validateMaestroSelfSignal(signal *maestroSelfSignal) error {
+	if signal == nil {
+		return nil
+	}
+	switch signal.Signal {
+	case ownerctx.SignalExplicitInstruction, ownerctx.SignalExplicitCorrection, ownerctx.SignalExplicitEndorsement:
+	default:
+		return errors.New("self_signal must be an explicit instruction, correction or endorsement")
+	}
+	if !validOwnerSelfFacet(signal.Facet) || !closedSelfSignalToken(signal.Claim) || len(signal.EvidenceType) < 1 || len(signal.EvidenceType) > 64 {
+		return errors.New("self_signal facet, claim or evidence is invalid")
+	}
+	switch signal.EvidenceType {
+	case "owner_instruction", "owner_correction", "owner_endorsement", "owner_preference_confirmation":
+	default:
+		return errors.New("self_signal evidence class is not allowed")
+	}
+	if signal.Confidence < 0 || signal.Confidence > 1 || signal.Sensitivity != "professional" && signal.Sensitivity != "sensitive" && signal.Sensitivity != "restricted" || !signal.OwnerConfirmed {
+		return errors.New("self_signal confidence, sensitivity or confirmation is invalid")
+	}
+	return nil
+}
+
+func validOwnerSelfFacet(facet string) bool {
+	switch facet {
+	case "professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries":
+		return true
+	default:
+		return false
+	}
+}
+
+func closedSelfSignalToken(value string) bool {
+	if len(value) < 1 || len(value) > 128 {
+		return false
+	}
+	for index := 0; index < len(value); index++ {
+		char := value[index]
+		if !(char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '_' || char == '.' || char == ':' || char == '-') || index == 0 && char == '.' {
+			return false
+		}
+	}
+	return true
 }
 
 var maestroWalterFacetAllowlist = []string{"professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"}
+var recordUserPromptFunc = ownerctx.RecordUserPrompt
 
 func durableDispatchFence(root, ownerID, sessionID, dispatchID, promptDigest, packetDigest, draftDigest string, plan maestro.Plan, chain maestro.ChainState) (maestro.DispatchBoundaryState, error) {
 	state, err := (maestro.DispatchBoundaryInput{Root: root, OwnerID: ownerID, SessionID: sessionID, DispatchID: dispatchID, PromptDigest: promptDigest, PacketDigest: packetDigest, DraftDigest: draftDigest, Plan: plan, Chain: chain}).PersistDispatchBoundary()
@@ -1469,6 +1529,37 @@ func durableDispatchFence(root, ownerID, sessionID, dispatchID, promptDigest, pa
 		return maestro.DispatchBoundaryState{}, err
 	}
 	return state, nil
+}
+
+func finalizeDurableDispatchFence(root, ownerID, sessionID, dispatchID, promptDigest, packetDigest, draftDigest string, plan maestro.Plan, chain maestro.ChainState, prepared maestro.DispatchBoundaryState) (maestro.DispatchBoundaryState, error) {
+	return (maestro.DispatchBoundaryInput{Root: root, OwnerID: ownerID, SessionID: sessionID, DispatchID: dispatchID, PromptDigest: promptDigest, PacketDigest: packetDigest, DraftDigest: draftDigest, Plan: plan, Chain: chain}).FinalizeDispatchBoundary(prepared)
+}
+
+func maestroDispatchObservation(request maestroDispatchRequest, plan maestro.Plan, packet maestro.IntentReviewPacket, now time.Time) ownerctx.ObservationInput {
+	sensitivity := "professional"
+	if request.Plan.Sensitivity == maestro.SensitivityConfidential {
+		sensitivity = "sensitive"
+	} else if request.Plan.Sensitivity == maestro.SensitivityRestricted {
+		sensitivity = "restricted"
+	}
+	input := ownerctx.ObservationInput{
+		SchemaVersion: 1, Signal: ownerctx.SignalObservedPattern, Claim: "task_activity", EvidenceType: "interaction_metadata",
+		SourceEvent: request.DispatchID, SourceDigest: maestro.SHA256Hex(packet.LiteralRequest), EpisodeID: request.DispatchID,
+		ScopeKind: string(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, Confidence: 1, Sensitivity: sensitivity,
+		ExpiresAt: now.UTC().Add(30 * 24 * time.Hour), AuthenticatedOwner: request.AuthenticatedOwner,
+		Material: false, OwnerConfirmed: false,
+	}
+	if request.SelfSignal != nil {
+		input.Signal = request.SelfSignal.Signal
+		input.Facet = request.SelfSignal.Facet
+		input.Claim = request.SelfSignal.Claim
+		input.EvidenceType = request.SelfSignal.EvidenceType
+		input.Confidence = request.SelfSignal.Confidence
+		input.Sensitivity = request.SelfSignal.Sensitivity
+		input.Material = true
+		input.OwnerConfirmed = request.SelfSignal.OwnerConfirmed
+	}
+	return input
 }
 
 func rollbackDispatch(root string, chain maestro.ChainState, chainCreated bool, promptID, reason string) error {
@@ -1559,6 +1650,9 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	if err := validateMaestroSelfSignal(request.SelfSignal); err != nil {
+		return reportError(errOut, err)
+	}
 	chain, err := maestro.NewChain(plan, maestro.DefaultLoopPolicy)
 	if err != nil {
 		return reportError(errOut, err)
@@ -1569,11 +1663,19 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 	if _, err := ownerctx.Initialize(root); err != nil {
 		return reportError(errOut, err)
 	}
+	occurrenceAlreadyRecorded, err := ownerctx.PromptHistoryOccurrenceExists(root, request.OwnerID, request.DispatchID)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	excludeOccurrenceID := ""
+	if occurrenceAlreadyRecorded {
+		excludeOccurrenceID = request.DispatchID
+	}
 	snapshot, err := ownerctx.ProjectSnapshot(root, append([]string(nil), maestroWalterFacetAllowlist...))
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	packet, err := maestro.BuildIntentReviewPacketWithPromptHistory(request.Prompt, plan, request.DraftOutput, nil, snapshot, nil, request.Audience, request.Consequence, request.Reversibility, "", root, ownerctx.PromptHistorySelectionLimits{OwnerID: request.OwnerID, ExcludeOccurrenceID: request.DispatchID, MaxCount: 8, MaxBytes: 32 << 10, MaxAge: 30 * 24 * time.Hour, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, CurrentPrompt: request.Prompt, RelevanceKeys: request.RelevanceKeys, CurrentLanguage: request.CurrentLanguage}, request.WorkingLanguage, nil, time.Now().UTC())
+	packet, err := maestro.BuildIntentReviewPacketWithPromptHistory(request.Prompt, plan, request.DraftOutput, nil, snapshot, nil, request.Audience, request.Consequence, request.Reversibility, "", root, ownerctx.PromptHistorySelectionLimits{OwnerID: request.OwnerID, ExcludeOccurrenceID: excludeOccurrenceID, MaxCount: 8, MaxBytes: 32 << 10, MaxAge: 30 * 24 * time.Hour, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, CurrentPrompt: request.Prompt, RelevanceKeys: request.RelevanceKeys, CurrentLanguage: request.CurrentLanguage}, request.WorkingLanguage, nil, time.Now().UTC())
 	if err != nil {
 		return reportError(errOut, err)
 	}
@@ -1586,22 +1688,47 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 	if _, err := maestro.PersistChainState(root, chain); err != nil {
 		return reportError(errOut, err)
 	}
-	durableState, err := durableDispatchFence(root, request.OwnerID, request.SessionID, request.DispatchID, maestro.SHA256Hex(packet.LiteralRequest), packet.PacketDigest, maestro.SHA256Hex(packet.DraftOutput), plan, chain)
+	promptDigest := maestro.SHA256Hex(packet.LiteralRequest)
+	draftDigest := maestro.SHA256Hex(packet.DraftOutput)
+	durableState, err := durableDispatchFence(root, request.OwnerID, request.SessionID, request.DispatchID, promptDigest, packet.PacketDigest, draftDigest, plan, chain)
 	if err != nil {
 		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, "", "durable dispatch fence failed"); rollbackErr != nil {
 			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
 		}
 		return reportError(errOut, err)
 	}
-	_, err = ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: request.OwnerID, OccurrenceID: request.DispatchID, Prompt: request.Prompt, Language: request.Language, Source: request.Source, SessionID: request.SessionID, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, ContentKind: "user_prompt"})
+	promptReceipt, err := recordUserPromptFunc(root, ownerctx.PromptHistoryInput{OwnerID: request.OwnerID, OccurrenceID: request.DispatchID, Prompt: request.Prompt, Language: request.Language, Source: request.Source, SessionID: request.SessionID, ScopeKind: ownerctx.PromptScopeKind(request.Plan.ScopeKind), ScopeID: request.Plan.ScopeID, ContentKind: "user_prompt"})
 	if err != nil {
 		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, "", "prompt commit failed"); rollbackErr != nil {
 			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
 		}
 		return reportError(errOut, err)
 	}
+	observationReceipt, _, err := ownerctx.AppendObservation(root, maestroDispatchObservation(request, plan, packet, time.Now().UTC()))
+	if err != nil {
+		promptID := ""
+		if !occurrenceAlreadyRecorded {
+			promptID = promptReceipt.ID
+		}
+		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, promptID, "interaction observation commit failed"); rollbackErr != nil {
+			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
+		}
+		return reportError(errOut, err)
+	}
+	_ = observationReceipt
+	durableState, err = finalizeDurableDispatchFence(root, request.OwnerID, request.SessionID, request.DispatchID, promptDigest, packet.PacketDigest, draftDigest, plan, chain, durableState)
+	if err != nil {
+		promptID := ""
+		if !occurrenceAlreadyRecorded {
+			promptID = promptReceipt.ID
+		}
+		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, promptID, "dispatch finalization failed"); rollbackErr != nil {
+			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
+		}
+		return reportError(errOut, err)
+	}
 	chainBody, _ := json.Marshal(chain)
-	receipt := maestro.DispatchBoundaryReceipt{SchemaVersion: 1, PlanDigest: plan.PlanDigest, ChainDigest: maestro.SHA256Hex(string(chainBody)), PacketDigest: packet.PacketDigest, PromptDigest: maestro.SHA256Hex(packet.LiteralRequest), DraftDigest: maestro.SHA256Hex(packet.DraftOutput), AccountConsultation: plan.AccountConsultationRequired, WalterRequired: plan.RequiresWalter, HistoryCount: len(packet.PriorPrompts), DispatchID: durableState.DispatchID, DurableDispatchEpoch: durableState.Epoch, BindingChainDigest: durableState.BindingChainDigest, State: chain.Stage, Outcome: "dispatch_boundary_model_unavailable"}
+	receipt := maestro.DispatchBoundaryReceipt{SchemaVersion: 1, PlanDigest: plan.PlanDigest, ChainDigest: maestro.SHA256Hex(string(chainBody)), PacketDigest: packet.PacketDigest, PromptDigest: promptDigest, DraftDigest: draftDigest, AccountConsultation: plan.AccountConsultationRequired, WalterRequired: plan.RequiresWalter, HistoryCount: len(packet.PriorPrompts), DispatchID: durableState.DispatchID, DurableDispatchEpoch: durableState.Epoch, BindingChainDigest: durableState.BindingChainDigest, State: chain.Stage, Outcome: "dispatch_boundary_model_unavailable"}
 	return writeJSON(out, receipt, errOut)
 }
 

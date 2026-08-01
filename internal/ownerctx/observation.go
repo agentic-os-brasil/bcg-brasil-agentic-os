@@ -148,7 +148,7 @@ func AppendObservation(root string, input ObservationInput) (ObservationReceipt,
 		return ObservationReceipt{State: evaluation.State, Signal: input.Signal, Facet: input.Facet, ScopeKind: input.ScopeKind, ScopeID: input.ScopeID, Confidence: input.Confidence, Persisted: false, Reason: evaluation.Reason}, evaluation, nil
 	}
 	now := time.Now().UTC()
-	record := observationRecord{ObservationInput: input, ID: observationID(input, now), State: ObservationCaptured, RecordedAt: now, StateChangedAt: now}
+	record := observationRecord{ObservationInput: input, ID: observationID(input), State: ObservationCaptured, RecordedAt: now, StateChangedAt: now}
 	if err := appendObservation(root, record); err != nil {
 		return ObservationReceipt{}, evaluation, err
 	}
@@ -212,48 +212,52 @@ func AnalyzeObservationMetadata(root string, now time.Time) (ObservationMetadata
 // TransitionObservation appends a new state record and never rewrites the
 // previous event. expectedCanonicalDigest is the CAS token for promotion.
 func TransitionObservation(root, id string, next ObservationState, expectedCanonicalDigest string, ownerAction bool) (ObservationReceipt, error) {
-	records, err := readObservationRecords(root)
-	if err != nil {
-		return ObservationReceipt{}, err
-	}
-	current, ok := latestObservations(records)[id]
-	if !ok {
-		return ObservationReceipt{}, os.ErrNotExist
-	}
-	if err := validateTransition(current, next, records); err != nil {
-		return ObservationReceipt{}, err
-	}
-	if next == ObservationPromoted {
-		if !ownerAction || !current.OwnerConfirmed {
-			return ObservationReceipt{}, errors.New("self promotion requires explicit owner action")
-		}
-		definition, err := facetDefinition(root, current.Facet)
+	var receipt ObservationReceipt
+	err := withObservationLock(root, func(path string) error {
+		records, err := readObservationRecords(root)
 		if err != nil {
-			return ObservationReceipt{}, err
+			return err
 		}
-		if definition.Refinement == "proposal_only" {
-			return ObservationReceipt{}, errors.New("this self facet is proposal-only and requires an explicit facet proposal")
+		current, ok := latestObservations(records)[id]
+		if !ok {
+			return os.ErrNotExist
 		}
-		if current.ScopeKind == "global" && !current.DeclassifiedGlobal {
-			return ObservationReceipt{}, errors.New("global self promotion requires explicit declassification")
+		if err := validateTransition(current, next, records); err != nil {
+			return err
 		}
-		canonical, err := canonicalDigestForFacet(root, current.Facet)
-		if err != nil {
-			return ObservationReceipt{}, err
+		if next == ObservationPromoted {
+			if !ownerAction || !current.OwnerConfirmed {
+				return errors.New("self promotion requires explicit owner action")
+			}
+			definition, err := facetDefinition(root, current.Facet)
+			if err != nil {
+				return err
+			}
+			if definition.Refinement == "proposal_only" {
+				return errors.New("this self facet is proposal-only and requires an explicit facet proposal")
+			}
+			if current.ScopeKind == "global" && !current.DeclassifiedGlobal {
+				return errors.New("global self promotion requires explicit declassification")
+			}
+			canonical, err := canonicalDigestForFacet(root, current.Facet)
+			if err != nil {
+				return err
+			}
+			if expectedCanonicalDigest == "" || canonical != expectedCanonicalDigest {
+				return ErrRevisionConflict
+			}
+			current.CanonicalDigest = canonical
 		}
-		if expectedCanonicalDigest == "" || canonical != expectedCanonicalDigest {
-			return ObservationReceipt{}, ErrRevisionConflict
+		current.State = next
+		current.Tombstone = next == ObservationRedacted
+		current.StateChangedAt = time.Now().UTC()
+		if err := appendObservationRecord(path, current); err != nil {
+			return err
 		}
-		current.CanonicalDigest = canonical
-	}
-	now := time.Now().UTC()
-	current.State = next
-	current.Tombstone = next == ObservationRedacted
-	current.StateChangedAt = now
-	if err := appendObservation(root, current); err != nil {
-		return ObservationReceipt{}, err
-	}
-	return observationReceipt(current, "state_transition"), nil
+		receipt = observationReceipt(current, "state_transition")
+		return nil
+	})
+	return receipt, err
 }
 
 func RejectObservation(root, id string, state ObservationState, ownerAction bool) (ObservationReceipt, error) {
@@ -270,41 +274,50 @@ func ResetDerivedSelf(root string, confirmed bool) error {
 	if !confirmed {
 		return ErrConfirmationRequired
 	}
-	records, err := readObservationRecords(root)
-	if err != nil {
-		return err
-	}
-	for id, record := range latestObservations(records) {
-		if record.State == ObservationPromoted {
-			return errors.New("reset requires reverting promoted canonical facets first")
+	return withObservationLock(root, func(path string) error {
+		records, err := readObservationRecords(root)
+		if err != nil {
+			return err
 		}
-		if record.State != ObservationRejected && record.State != ObservationContradicted && record.State != ObservationExpired && record.State != ObservationRedacted {
-			if _, err := RejectObservation(root, id, ObservationRedacted, true); err != nil {
+		for _, record := range latestObservations(records) {
+			if record.State == ObservationPromoted {
+				return errors.New("reset requires reverting promoted canonical facets first")
+			}
+		}
+		for _, record := range latestObservations(records) {
+			if record.State == ObservationRejected || record.State == ObservationContradicted || record.State == ObservationExpired || record.State == ObservationRedacted {
+				continue
+			}
+			record.State = ObservationRedacted
+			record.Tombstone = true
+			record.StateChangedAt = time.Now().UTC()
+			if err := appendObservationRecord(path, record); err != nil {
 				return err
 			}
 		}
-	}
-	projectionRoot := filepath.Join(root, "owner", "self", "projections")
-	entries, err := os.ReadDir(projectionRoot)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
+		projectionRoot := filepath.Join(root, "owner", "self", "projections")
+		entries, err := os.ReadDir(projectionRoot)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
 		}
-		if err := os.Remove(filepath.Join(projectionRoot, entry.Name())); err != nil {
+		if err != nil {
 			return err
 		}
-	}
-	return nil
+		for _, entry := range entries {
+			if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !strings.HasSuffix(entry.Name(), ".json") {
+				continue
+			}
+			if err := os.Remove(filepath.Join(projectionRoot, entry.Name())); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
-func observationID(input ObservationInput, now time.Time) string {
-	return now.Format("20060102T150405.000000000Z") + "-" + input.SourceDigest[:12] + "-" + input.Claim
+func observationID(input ObservationInput) string {
+	body, _ := json.Marshal(input)
+	return "observation-" + digest(string(body))[:40]
 }
 
 func validateObservationInput(input ObservationInput) error {
@@ -362,7 +375,7 @@ func validateTransition(current observationRecord, next ObservationState, record
 		}
 		episodes := map[string]bool{}
 		for _, record := range records {
-			if record.ID != current.ID && record.Facet == current.Facet && record.Claim == current.Claim && record.SourceDigest != current.SourceDigest && record.State != ObservationRejected && record.State != ObservationRedacted && record.State != ObservationContradicted {
+			if record.ID != current.ID && record.EpisodeID != current.EpisodeID && record.Facet == current.Facet && record.Claim == current.Claim && record.SourceDigest != current.SourceDigest && record.State != ObservationRejected && record.State != ObservationRedacted && record.State != ObservationContradicted {
 				episodes[record.EpisodeID] = true
 			}
 		}
@@ -399,24 +412,86 @@ func canonicalDigestForFacet(root, facet string) (string, error) {
 	return digest(string(body)), nil
 }
 
-func appendObservation(root string, record observationRecord) error {
-	path := filepath.Join(root, "owner", "observations", "observations.jsonl")
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+func withObservationLock(root string, operation func(path string) error) error {
+	rootPath, err := filepath.Abs(root)
+	if err != nil {
 		return err
 	}
+	if err := ensurePromptDirectory(rootPath, false); err != nil {
+		return err
+	}
+	ownerPath := filepath.Join(rootPath, "owner")
+	if err := ensurePromptDirectory(ownerPath, true); err != nil {
+		return err
+	}
+	directory := filepath.Join(ownerPath, "observations")
+	if err := ensurePromptDirectory(directory, true); err != nil {
+		return err
+	}
+	lock, err := acquirePromptHistoryLock(filepath.Join(directory, promptHistoryLockName))
+	if err != nil {
+		return err
+	}
+	operationErr := operation(filepath.Join(directory, "observations.jsonl"))
+	unlockErr := lock()
+	if operationErr != nil {
+		return operationErr
+	}
+	return unlockErr
+}
+
+func appendObservation(root string, record observationRecord) error {
+	return appendObservationWithMode(root, record, true)
+}
+
+func appendObservationTransition(root string, record observationRecord) error {
+	return appendObservationWithMode(root, record, false)
+}
+
+func appendObservationWithMode(root string, record observationRecord, idempotent bool) error {
+	return withObservationLock(root, func(path string) error {
+		records, err := readObservationRecords(root)
+		if err != nil {
+			return err
+		}
+		for _, existing := range records {
+			if existing.ID != record.ID {
+				continue
+			}
+			if idempotent {
+				if sameObservationInput(existing.ObservationInput, record.ObservationInput) {
+					return nil
+				}
+				return errors.New("observation occurrence was reused with different content")
+			}
+		}
+		return appendObservationRecord(path, record)
+	})
+}
+
+func appendObservationRecord(path string, record observationRecord) error {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 	body, err := json.Marshal(record)
 	if err != nil {
+		_ = file.Close()
 		return err
 	}
 	if _, err := file.Write(append(body, '\n')); err != nil {
+		_ = file.Close()
 		return err
 	}
-	return file.Sync()
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
+func sameObservationInput(left, right ObservationInput) bool {
+	return left.SchemaVersion == right.SchemaVersion && left.Signal == right.Signal && left.Facet == right.Facet && left.Claim == right.Claim && left.EvidenceType == right.EvidenceType && left.SourceEvent == right.SourceEvent && left.SourceDigest == right.SourceDigest && left.EpisodeID == right.EpisodeID && left.ScopeKind == right.ScopeKind && left.ScopeID == right.ScopeID && left.Confidence == right.Confidence && left.Sensitivity == right.Sensitivity && left.ExpiresAt.Equal(right.ExpiresAt) && left.AuthenticatedOwner == right.AuthenticatedOwner && left.Material == right.Material && left.OwnerConfirmed == right.OwnerConfirmed && left.DeclassifiedGlobal == right.DeclassifiedGlobal
 }
 
 func readObservationRecords(root string) ([]observationRecord, error) {

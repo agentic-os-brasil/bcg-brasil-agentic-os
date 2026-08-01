@@ -139,8 +139,11 @@ func (input DispatchBoundaryInput) PersistDispatchBoundary() (DispatchBoundarySt
 		if prior.InstallationDigest != installationDigest(input.Root) || prior.OwnerDigest != ownerDigest || prior.SessionDigest != sessionDigest {
 			return DispatchBoundaryState{}, errors.New("dispatch occurrence is bound to another owner or session")
 		}
-		if prior.PlanDigest != input.Plan.PlanDigest || prior.ChainDigest != chainDigestValue || prior.BindingChainDigest != bindingDigest || prior.PromptDigest != input.PromptDigest || prior.PacketDigest != input.PacketDigest || prior.DraftDigest != input.DraftDigest || prior.Status != "finished" {
+		if prior.PlanDigest != input.Plan.PlanDigest || prior.ChainDigest != chainDigestValue || prior.BindingChainDigest != bindingDigest || prior.PromptDigest != input.PromptDigest || prior.PacketDigest != input.PacketDigest || prior.DraftDigest != input.DraftDigest {
 			return DispatchBoundaryState{}, errors.New("dispatch occurrence was reused with different content")
+		}
+		if prior.Status != "prepared" && prior.Status != "finished" {
+			return DispatchBoundaryState{}, errors.New("dispatch occurrence has an invalid lifecycle state")
 		}
 		if priorPointer == nil || priorPointer.Epoch < prior.Epoch {
 			repairedPointer := newDispatchCurrentPointer(*prior)
@@ -178,6 +181,82 @@ func (input DispatchBoundaryInput) PersistDispatchBoundary() (DispatchBoundarySt
 		return DispatchBoundaryState{}, err
 	}
 	return state, nil
+}
+
+// FinalizeDispatchBoundary closes a previously prepared occurrence only after
+// the caller has committed the corresponding owner-local prompt/observation
+// side effects. A failed replacement restores the prepared receipt, so a
+// caller can retry without manufacturing a finished occurrence.
+func (input DispatchBoundaryInput) FinalizeDispatchBoundary(prepared DispatchBoundaryState) (DispatchBoundaryState, error) {
+	if err := input.Plan.Validate(); err != nil {
+		return DispatchBoundaryState{}, err
+	}
+	if input.Chain.PlanDigest != input.Plan.PlanDigest || prepared.PlanDigest != input.Plan.PlanDigest {
+		return DispatchBoundaryState{}, errors.New("dispatch finalization chain is not bound to plan")
+	}
+	if err := validateDispatchIdentity(input.OwnerID, input.SessionID, input.DispatchID); err != nil {
+		return DispatchBoundaryState{}, err
+	}
+	if !validLowerDigest(input.PromptDigest) || !validLowerDigest(input.PacketDigest) || !validLowerDigest(input.DraftDigest) {
+		return DispatchBoundaryState{}, errors.New("dispatch occurrence content digests are invalid")
+	}
+	directory := filepath.Join(input.Root, "owner", "maestro", "dispatch")
+	receiptsDirectory := filepath.Join(directory, "receipts")
+	if err := ensurePrivateChainTree(input.Root, directory); err != nil {
+		return DispatchBoundaryState{}, err
+	}
+	if err := ensurePrivateChainTree(input.Root, receiptsDirectory); err != nil {
+		return DispatchBoundaryState{}, err
+	}
+	unlock, err := acquireChainLock(directory)
+	if err != nil {
+		return DispatchBoundaryState{}, err
+	}
+	defer func() { _ = unlock() }()
+	receipts, _, err := scanDispatchReceipts(receiptsDirectory)
+	if err != nil {
+		return DispatchBoundaryState{}, err
+	}
+	current, _, err := readDispatchCurrentPointer(directory, receiptsDirectory)
+	if err != nil || current == nil {
+		if err == nil {
+			err = errors.New("prepared dispatch has no current pointer")
+		}
+		return DispatchBoundaryState{}, err
+	}
+	var existing *DispatchBoundaryState
+	for index := range receipts {
+		if receipts[index].DispatchID == input.DispatchID {
+			candidate := receipts[index]
+			existing = &candidate
+			break
+		}
+	}
+	if existing == nil || existing.Epoch != prepared.Epoch || existing.ReceiptName != prepared.ReceiptName || existing.StateDigest != prepared.StateDigest {
+		return DispatchBoundaryState{}, errors.New("prepared dispatch receipt is stale or missing")
+	}
+	if existing.InstallationDigest != installationDigest(input.Root) || existing.OwnerDigest != SHA256Hex(input.OwnerID) || existing.SessionDigest != SHA256Hex(input.SessionID) || existing.PromptDigest != input.PromptDigest || existing.PacketDigest != input.PacketDigest || existing.DraftDigest != input.DraftDigest || existing.ChainDigest != chainDigest(input.Chain) || existing.BindingChainDigest != orderedBindingDigest(input.Plan) {
+		return DispatchBoundaryState{}, errors.New("prepared dispatch receipt content binding is invalid")
+	}
+	if existing.Status == "finished" {
+		return *existing, nil
+	}
+	if existing.Status != "prepared" || current.Epoch < existing.Epoch || (current.Epoch == existing.Epoch && current.ReceiptName != existing.ReceiptName) {
+		return DispatchBoundaryState{}, errors.New("prepared dispatch is not the current fenced occurrence")
+	}
+	finished := *existing
+	finished.Status = "finished"
+	finished.FinishedAt = time.Now().UTC()
+	finished.StateDigest = dispatchBoundaryStateDigest(finished)
+	receiptPath := filepath.Join(receiptsDirectory, finished.ReceiptName)
+	previousBody, err := os.ReadFile(receiptPath)
+	if err != nil {
+		return DispatchBoundaryState{}, err
+	}
+	if err := replaceDispatchReceipt(receiptsDirectory, receiptPath, finished, previousBody); err != nil {
+		return DispatchBoundaryState{}, err
+	}
+	return finished, nil
 }
 
 func validateDispatchIdentity(ownerID, sessionID, dispatchID string) error {
@@ -272,13 +351,15 @@ func installationDigest(root string) string {
 
 func newDispatchBoundaryState(root, ownerID, sessionID, dispatchID, promptDigest, packetDigest, draftDigest string, epoch uint64, plan Plan, chain ChainState, bindingDigest string) DispatchBoundaryState {
 	now := time.Now().UTC()
-	state := DispatchBoundaryState{SchemaVersion: 1, InstallationDigest: installationDigest(root), DispatchID: dispatchID, OwnerDigest: SHA256Hex(ownerID), SessionDigest: SHA256Hex(sessionID), ReceiptName: fmt.Sprintf("%020d-%s.json", epoch, dispatchID), PromptDigest: promptDigest, PacketDigest: packetDigest, DraftDigest: draftDigest, Epoch: epoch, PlanDigest: plan.PlanDigest, ChainDigest: chainDigest(chain), BindingChainDigest: bindingDigest, Status: "finished", ActiveSpokeCount: 0, StartedAt: now, FinishedAt: now}
+	state := DispatchBoundaryState{SchemaVersion: 1, InstallationDigest: installationDigest(root), DispatchID: dispatchID, OwnerDigest: SHA256Hex(ownerID), SessionDigest: SHA256Hex(sessionID), ReceiptName: fmt.Sprintf("%020d-%s.json", epoch, dispatchID), PromptDigest: promptDigest, PacketDigest: packetDigest, DraftDigest: draftDigest, Epoch: epoch, PlanDigest: plan.PlanDigest, ChainDigest: chainDigest(chain), BindingChainDigest: bindingDigest, Status: "prepared", ActiveSpokeCount: 0, StartedAt: now}
 	state.StateDigest = dispatchBoundaryStateDigest(state)
 	return state
 }
 
 func validDispatchBoundaryState(state DispatchBoundaryState) bool {
-	return state.SchemaVersion == 1 && state.Epoch > 0 && validClosedDispatchID(state.DispatchID) && state.ReceiptName == canonicalDispatchReceiptName(state.Epoch, state.DispatchID) && safeReceiptName(state.ReceiptName) && validLowerDigest(state.InstallationDigest) && validLowerDigest(state.OwnerDigest) && validLowerDigest(state.SessionDigest) && validLowerDigest(state.PromptDigest) && validLowerDigest(state.PacketDigest) && validLowerDigest(state.DraftDigest) && validLowerDigest(state.PlanDigest) && validLowerDigest(state.ChainDigest) && validLowerDigest(state.BindingChainDigest) && state.Status == "finished" && state.ActiveSpokeCount == 0 && !state.StartedAt.IsZero() && !state.FinishedAt.IsZero() && state.StateDigest == dispatchBoundaryStateDigest(state)
+	statusValid := state.Status == "prepared" || state.Status == "finished"
+	finishedAtValid := (state.Status == "prepared" && state.FinishedAt.IsZero()) || (state.Status == "finished" && !state.FinishedAt.IsZero())
+	return state.SchemaVersion == 1 && state.Epoch > 0 && validClosedDispatchID(state.DispatchID) && state.ReceiptName == canonicalDispatchReceiptName(state.Epoch, state.DispatchID) && safeReceiptName(state.ReceiptName) && validLowerDigest(state.InstallationDigest) && validLowerDigest(state.OwnerDigest) && validLowerDigest(state.SessionDigest) && validLowerDigest(state.PromptDigest) && validLowerDigest(state.PacketDigest) && validLowerDigest(state.DraftDigest) && validLowerDigest(state.PlanDigest) && validLowerDigest(state.ChainDigest) && validLowerDigest(state.BindingChainDigest) && statusValid && state.ActiveSpokeCount == 0 && !state.StartedAt.IsZero() && finishedAtValid && state.StateDigest == dispatchBoundaryStateDigest(state)
 }
 
 func dispatchBoundaryStateDigest(state DispatchBoundaryState) string {
@@ -447,6 +528,60 @@ func persistDispatchReceipt(directory, path string, state DispatchBoundaryState)
 		return err
 	}
 	return syncDispatchDirectoryFunc(directory)
+}
+
+func replaceDispatchReceipt(directory, path string, state DispatchBoundaryState, previous []byte) error {
+	body, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	if info, err := os.Lstat(path); err != nil {
+		return err
+	} else if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return errors.New("durable dispatch receipt target is not a regular private file")
+	}
+	write := func(contents []byte) error {
+		temporary, err := os.CreateTemp(directory, ".dispatch-receipt-replace-*")
+		if err != nil {
+			return err
+		}
+		temporaryPath := temporary.Name()
+		defer os.Remove(temporaryPath)
+		if err := temporary.Chmod(0o600); err != nil {
+			_ = temporary.Close()
+			return err
+		}
+		if _, err := temporary.Write(append(contents, '\n')); err != nil {
+			_ = temporary.Close()
+			return err
+		}
+		if err := temporary.Sync(); err != nil {
+			_ = temporary.Close()
+			return err
+		}
+		if err := temporary.Close(); err != nil {
+			return err
+		}
+		return os.Rename(temporaryPath, path)
+	}
+	if err := write(body); err != nil {
+		return err
+	}
+	if err := syncDispatchDirectoryFunc(directory); err != nil {
+		restoreErr := write(bytesTrimTrailingNewline(previous))
+		if restoreErr == nil {
+			restoreErr = syncDispatchDirectoryFunc(directory)
+		}
+		if restoreErr != nil {
+			return fmt.Errorf("dispatch receipt finalization durability failed and prepared receipt restore failed: %w", restoreErr)
+		}
+		return fmt.Errorf("dispatch receipt finalization durability failed; prepared receipt restored: %w", err)
+	}
+	return nil
+}
+
+func bytesTrimTrailingNewline(body []byte) []byte {
+	return []byte(strings.TrimSuffix(string(body), "\n"))
 }
 
 func persistDispatchCurrentPointer(directory, path string, pointer dispatchCurrentPointer, previous []byte) error {
