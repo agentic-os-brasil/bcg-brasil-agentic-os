@@ -6,7 +6,7 @@ import (
 )
 
 func TestManagedScaffoldTemplatesAreEmbeddedAndDataFree(t *testing.T) {
-	for _, role := range []string{"account_agent", "case_agent", "client_account_agent", "pa_expert", "workspace_agent", "capability_specialist"} {
+	for _, role := range []string{"account_agent", "case_agent", "client_account_agent", "pa_expert", "workspace_agent"} {
 		body, err := Template(role)
 		if err != nil {
 			t.Fatalf("Template(%q): %v", role, err)
@@ -16,6 +16,9 @@ func TestManagedScaffoldTemplatesAreEmbeddedAndDataFree(t *testing.T) {
 			bytes.Contains(body, []byte("ws-alpha")) {
 			t.Fatalf("Template(%q) is empty or contains instance data", role)
 		}
+	}
+	if _, err := Template("capability_specialist"); err == nil {
+		t.Fatal("Capability Specialist scaffold template was exposed")
 	}
 	if _, err := Template("general_assistant"); err == nil {
 		t.Fatal("unsupported scaffold template was exposed")

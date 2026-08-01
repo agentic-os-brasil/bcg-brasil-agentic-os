@@ -46,6 +46,7 @@ const (
 	KindAcceptance  Kind = "acceptance"
 	KindEvaluation  Kind = "evaluation"
 	KindAlternative Kind = "alternative"
+	KindFlow        Kind = "maestro_flow"
 )
 
 type JobKind string
@@ -179,6 +180,7 @@ type Record struct {
 	Acceptance    *AcceptanceEvidence  `json:"acceptance,omitempty"`
 	Evaluation    *EvaluationEvidence  `json:"evaluation,omitempty"`
 	Alternative   *AlternativeEvidence `json:"alternative,omitempty"`
+	Flow          *FlowEvidence        `json:"flow,omitempty"`
 }
 
 type HealthEvidence struct {
@@ -245,6 +247,43 @@ type AlternativeEvidence struct {
 	CapabilityGapCount int                      `json:"capability_gap_count"`
 }
 
+// FlowEvidence is the metadata-only Darwin view of one canonical Maestro
+// attempt. It contains decisions, digests, counters and violations only.
+type FlowEvidence struct {
+	AttemptID                         string   `json:"attempt_id"`
+	AttemptSHA256                     string   `json:"attempt_sha256"`
+	EntryPath                         string   `json:"entry_path"`
+	PreAccountUsed                    bool     `json:"pre_account_used"`
+	AccountConsultationRequired       bool     `json:"account_consultation_required"`
+	AccountSignals                    []string `json:"account_signals,omitempty"`
+	PostAccountValidationRequired     bool     `json:"post_account_validation_required"`
+	PostAccountValidated              bool     `json:"post_account_validated"`
+	WalterRequired                    bool     `json:"walter_required"`
+	WalterGate                        bool     `json:"walter_gate"`
+	WalterSkipped                     bool     `json:"walter_skipped"`
+	WalterSkipReason                  string   `json:"walter_skip_reason,omitempty"`
+	WalterSkipEvidenceSHA256          string   `json:"walter_skip_evidence_sha256,omitempty"`
+	RefinementLoadBearing             bool     `json:"refinement_load_bearing"`
+	RefinementActionable              bool     `json:"refinement_actionable"`
+	RefinementKind                    string   `json:"refinement_kind,omitempty"`
+	AccountVerdict                    string   `json:"account_verdict,omitempty"`
+	WalterVerdict                     string   `json:"walter_verdict,omitempty"`
+	AccountValidationCount            int      `json:"account_validation_count"`
+	WalterReviewCount                 int      `json:"walter_review_count"`
+	Cycles                            int      `json:"cycles"`
+	BudgetExhausted                   bool     `json:"budget_exhausted"`
+	MaterialityEscalations            int      `json:"materiality_escalations"`
+	InvalidationsAfterMutation        int      `json:"invalidations_after_mutation"`
+	ReturnToWalterWithoutAccountCheck int      `json:"return_to_walter_without_account_validation"`
+	MaterialFinishWithoutWalter       int      `json:"material_finish_without_walter"`
+	WalterUsefulRefinements           int      `json:"walter_useful_refinements"`
+	WalterNitpickBlocks               int      `json:"walter_nitpick_blocks"`
+	OneActiveSpokeViolations          int      `json:"one_active_spoke_violations"`
+	NestingViolations                 int      `json:"nesting_violations"`
+	DirectAgentCalls                  int      `json:"direct_agent_calls"`
+	MaterialDelivered                 bool     `json:"material_delivered"`
+}
+
 var (
 	identifierPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]{0,63}$`)
 	windowPattern     = regexp.MustCompile(`^win-[a-f0-9]{32}$`)
@@ -275,6 +314,9 @@ func (record Record) Validate() error {
 		count++
 	}
 	if record.Alternative != nil {
+		count++
+	}
+	if record.Flow != nil {
 		count++
 	}
 	if count != 1 {
@@ -315,6 +357,11 @@ func (record Record) Validate() error {
 			return errors.New("alternative evidence payload is missing")
 		}
 		err = record.Alternative.validate()
+	case KindFlow:
+		if record.Flow == nil {
+			return errors.New("Maestro flow evidence payload is missing")
+		}
+		err = record.Flow.validate()
 	default:
 		return errors.New("unknown Darwin evidence kind")
 	}
@@ -428,6 +475,46 @@ func (e AlternativeEvidence) validate() error {
 		!validRoute[e.Route] || !validOutcome[e.Outcome] || e.DurationSeconds < 0 || e.DurationSeconds > 86400 ||
 		!validCoverage[e.PACoverage] || e.CapabilityGapCount < 0 || e.CapabilityGapCount > 8 {
 		return errors.New("invalid alternative evidence")
+	}
+	return nil
+}
+
+func (e FlowEvidence) validate() error {
+	if !identifierPattern.MatchString(e.AttemptID) || !digestPattern.MatchString(e.AttemptSHA256) ||
+		(e.EntryPath != "account_first" && e.EntryPath != "case_direct") ||
+		e.PostAccountValidationRequired != e.PreAccountUsed || e.AccountValidationCount < 0 ||
+		e.WalterReviewCount < 0 || e.Cycles < 0 || e.MaterialityEscalations < 0 ||
+		e.InvalidationsAfterMutation < 0 || e.ReturnToWalterWithoutAccountCheck < 0 ||
+		e.MaterialFinishWithoutWalter < 0 || e.OneActiveSpokeViolations < 0 ||
+		e.NestingViolations < 0 || e.DirectAgentCalls < 0 || e.WalterUsefulRefinements < 0 || e.WalterNitpickBlocks < 0 {
+		return errors.New("invalid Maestro flow evidence")
+	}
+	if e.AccountConsultationRequired != e.PreAccountUsed {
+		return errors.New("flow evidence account consultation is asymmetric with entry")
+	}
+	for _, signal := range e.AccountSignals {
+		switch signal {
+		case "client_strategy", "relationship_positioning", "stakeholder_pressure_test", "client_material", "cross_case_context", "promotion_candidate", "execution_only":
+		default:
+			return errors.New("invalid account consultation signal")
+		}
+	}
+	if e.PostAccountValidated && (!e.PostAccountValidationRequired || e.AccountValidationCount == 0) {
+		return errors.New("flow evidence has an account validation without framing")
+	}
+	if e.WalterSkipped {
+		if e.WalterRequired || e.WalterGate || e.WalterSkipReason != "low_leverage_ordinary_reversible_no_external_artifact" || !digestPattern.MatchString(e.WalterSkipEvidenceSHA256) {
+			return errors.New("flow evidence contains an invalid Walter skip")
+		}
+	}
+	if e.WalterRequired && e.WalterSkipped {
+		return errors.New("Walter-required flow cannot be skipped")
+	}
+	if e.MaterialDelivered && ((e.PostAccountValidationRequired && !e.PostAccountValidated) || (e.WalterRequired && !e.WalterGate) || (!e.WalterRequired && !e.WalterSkipped)) {
+		return errors.New("material delivery is missing an applicable gate")
+	}
+	if e.MaterialFinishWithoutWalter > 0 && (e.WalterRequired || !e.WalterSkipped) {
+		return errors.New("material finish without Walter is inconsistent")
 	}
 	return nil
 }

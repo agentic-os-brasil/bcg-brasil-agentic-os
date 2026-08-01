@@ -145,7 +145,7 @@ func validateDelegated(rules []DelegatedRule, known map[string]bool, agents agen
 		from, fromOK := (agentcatalog.Catalog{}).ContractForRole(fromRole)
 		to, toOK := (agentcatalog.Catalog{}).ContractForRole(toRole)
 		key := fromRole + "\x00" + toRole
-		if !fromOK || !toOK || !from.MayDelegate || to.MayDelegate || !agents.AllowsDelegation(fromRole, toRole, 2) || key <= previous || len(rule.SkillIDs) == 0 {
+		if !fromOK || !toOK || !from.MayDelegate || to.MayDelegate || !agents.AllowsDelegation(fromRole, toRole, 1) || key <= previous || len(rule.SkillIDs) == 0 {
 			return errors.New("agent skill delegated rules are invalid or unsorted")
 		}
 		if err := validateSkills(rule.SkillIDs, known); err != nil {

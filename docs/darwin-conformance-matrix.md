@@ -32,6 +32,12 @@ flowchart LR
 | Claude native invocation | adapter docs and lifecycle probe | qualifying Claude session | unavailable: native observation pending |
 | Codex native invocation | adapter docs and lifecycle probe | qualifying Codex session | unavailable: native observation pending |
 
+The attended local Canary is explicit and uses the same `darwin` identity and
+`health/maestro-system` scope for health and housekeeping. `bcgos maintenance
+canary` reports that activation surface without invoking a model inline.
+Platform schedulers remain disabled until installation, occurrence fencing and
+native qualification evidence are observed.
+
 No row is promoted by configuration, unit tests or an adapter-command receipt
 alone. Native qualification requires an observed session in the target runtime.
 

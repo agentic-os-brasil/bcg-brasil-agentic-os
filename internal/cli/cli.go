@@ -712,10 +712,23 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 
 func runDarwin(args []string, in io.Reader, out, errOut io.Writer, root string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos agent darwin <assess|housekeeping> --stdin")
+		fmt.Fprintln(errOut, "usage: bcgos agent darwin <request|assess|housekeeping> --stdin")
 		return ExitUsage
 	}
 	switch args[0] {
+	case "request":
+		if err := requireAgentStdin(args[1:], errOut); err != nil {
+			return ExitUsage
+		}
+		var request darwin.HealthRequest
+		if err := decodeActivationJSON(in, &request); err != nil {
+			return reportError(errOut, err)
+		}
+		assessment, err := darwin.AssessHealth(context.Background(), request)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, assessment, errOut)
 	case "assess":
 		if err := requireAgentStdin(args[1:], errOut); err != nil {
 			return ExitUsage
@@ -795,7 +808,7 @@ func runDarwin(args []string, in io.Reader, out, errOut io.Writer, root string) 
 		}
 		return writeJSON(out, receipt, errOut)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos agent darwin <assess|housekeeping> --stdin")
+		fmt.Fprintln(errOut, "usage: bcgos agent darwin <request|assess|housekeeping> --stdin")
 		return ExitUsage
 	}
 }

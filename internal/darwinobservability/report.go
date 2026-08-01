@@ -59,6 +59,34 @@ type SelectionScorecard struct {
 	CapabilityGapCount int          `json:"capability_gap_count"`
 }
 
+type FlowReasonCount struct {
+	Reason string `json:"reason"`
+	Count  int    `json:"count"`
+}
+
+type FlowScorecard struct {
+	Records                     int               `json:"records"`
+	AccountFirst                int               `json:"account_first"`
+	DirectCase                  int               `json:"direct_case"`
+	StrategicSignalRecords      int               `json:"strategic_signal_records"`
+	ExecutionOnlyRecords        int               `json:"execution_only_records"`
+	AccountSelectionMismatches  int               `json:"account_selection_mismatches"`
+	AccountUnderRouting         int               `json:"account_under_routing"`
+	AccountOverRouting          int               `json:"account_over_routing"`
+	WalterRequired              int               `json:"walter_required"`
+	WalterSkipped               int               `json:"walter_skipped"`
+	BudgetExhausted             int               `json:"budget_exhausted"`
+	InvalidationsAfterMutation  int               `json:"invalidations_after_mutation"`
+	MaterialityEscalations      int               `json:"materiality_escalations"`
+	MaterialFinishWithoutWalter int               `json:"material_finish_without_walter"`
+	WalterUsefulRefinements     int               `json:"walter_useful_refinements"`
+	WalterNitpickBlocks         int               `json:"walter_nitpick_blocks"`
+	OneActiveSpokeViolations    int               `json:"one_active_spoke_violations"`
+	NestingViolations           int               `json:"nesting_violations"`
+	DirectAgentCalls            int               `json:"direct_agent_calls"`
+	WalterSkipReasons           []FlowReasonCount `json:"walter_skip_reasons"`
+}
+
 type IntegrityScorecard struct {
 	InputRecords           int `json:"input_records"`
 	AcceptedRecords        int `json:"accepted_records"`
@@ -75,6 +103,7 @@ type WeeklyReport struct {
 	EvidenceAuthority   EvidenceAuthority  `json:"evidence_authority"`
 	Health              HealthScorecard    `json:"health"`
 	Selection           SelectionScorecard `json:"selection"`
+	Flow                FlowScorecard      `json:"maestro_flow"`
 	Integrity           IntegrityScorecard `json:"integrity"`
 	RecommendationCodes []string           `json:"recommendation_codes"`
 	MayMutatePolicy     bool               `json:"may_mutate_policy"`
@@ -147,6 +176,7 @@ func BuildWeekly(records []Record, window Window) (WeeklyReport, error) {
 		Window: window, InputSHA256: digest, EvidenceAuthority: AuthorityCallerAssertedShadow, MayMutatePolicy: false,
 	}
 	var selection []Record
+	var flow []Record
 	for _, record := range records {
 		if record.WindowID != window.ID || record.ScopeSHA256 != window.ScopeSHA256 ||
 			record.Authority != AuthorityCallerAssertedShadow {
@@ -160,6 +190,8 @@ func BuildWeekly(records []Record, window Window) (WeeklyReport, error) {
 			accumulateHealth(&report.Health, *record.Health)
 		case KindSelection:
 			selection = append(selection, record)
+		case KindFlow:
+			flow = append(flow, record)
 		case KindProposal, KindAcceptance, KindEvaluation, KindAlternative:
 			return WeeklyReport{}, errors.New("weekly report accepts only health and selection evidence")
 		default:
@@ -167,6 +199,7 @@ func BuildWeekly(records []Record, window Window) (WeeklyReport, error) {
 		}
 	}
 	report.Selection = aggregateSelection(selection)
+	report.Flow = aggregateFlow(flow)
 	report.Integrity = IntegrityScorecard{InputRecords: len(records), AcceptedRecords: len(records)}
 	report.RecommendationCodes = weeklyRecommendations(report)
 	return report, report.Validate()
@@ -469,6 +502,59 @@ func aggregateSelection(records []Record) SelectionScorecard {
 	return score
 }
 
+func aggregateFlow(records []Record) FlowScorecard {
+	score := FlowScorecard{Records: len(records), WalterSkipReasons: []FlowReasonCount{}}
+	reasons := map[string]int{}
+	for _, record := range records {
+		e := record.Flow
+		if e.PreAccountUsed {
+			score.AccountFirst++
+		} else {
+			score.DirectCase++
+		}
+		expectedAccount := len(e.AccountSignals) == 0
+		for _, signal := range e.AccountSignals {
+			if signal == "execution_only" {
+				score.ExecutionOnlyRecords++
+			} else {
+				score.StrategicSignalRecords++
+				expectedAccount = true
+			}
+		}
+		if expectedAccount != e.PreAccountUsed {
+			score.AccountSelectionMismatches++
+			if expectedAccount {
+				score.AccountUnderRouting++
+			} else {
+				score.AccountOverRouting++
+			}
+		}
+		if e.WalterRequired {
+			score.WalterRequired++
+		}
+		if e.WalterSkipped {
+			score.WalterSkipped++
+			reasons[e.WalterSkipReason]++
+		}
+		if e.BudgetExhausted {
+			score.BudgetExhausted++
+		}
+		score.InvalidationsAfterMutation += e.InvalidationsAfterMutation
+		score.MaterialityEscalations += e.MaterialityEscalations
+		score.MaterialFinishWithoutWalter += e.MaterialFinishWithoutWalter
+		score.WalterUsefulRefinements += e.WalterUsefulRefinements
+		score.WalterNitpickBlocks += e.WalterNitpickBlocks
+		score.OneActiveSpokeViolations += e.OneActiveSpokeViolations
+		score.NestingViolations += e.NestingViolations
+		score.DirectAgentCalls += e.DirectAgentCalls
+	}
+	for reason, count := range reasons {
+		score.WalterSkipReasons = append(score.WalterSkipReasons, FlowReasonCount{Reason: reason, Count: count})
+	}
+	sort.Slice(score.WalterSkipReasons, func(i, j int) bool { return score.WalterSkipReasons[i].Reason < score.WalterSkipReasons[j].Reason })
+	return score
+}
+
 func weeklyRecommendations(report WeeklyReport) []string {
 	codes := []string{"review_evidence_authority"}
 	if report.Selection.Records < 20 {
@@ -568,10 +654,13 @@ func (r WeeklyReport) Validate() error {
 	if err := validateSelectionScorecard(r.Selection); err != nil {
 		return err
 	}
+	if err := validateFlowScorecard(r.Flow); err != nil {
+		return err
+	}
 	if r.Integrity.InputRecords < 1 || r.Integrity.InputRecords > MaxInputRecords ||
 		r.Integrity.AcceptedRecords != r.Integrity.InputRecords || r.Integrity.DuplicateRecords != 0 ||
 		r.Integrity.IndependenceViolations != 0 ||
-		r.Health.Records+r.Selection.Records != r.Integrity.AcceptedRecords {
+		r.Health.Records+r.Selection.Records+r.Flow.Records != r.Integrity.AcceptedRecords {
 		return errors.New("invalid weekly integrity scorecard")
 	}
 	return nil
@@ -691,6 +780,26 @@ func validateSelectionScorecard(score SelectionScorecard) error {
 	}
 	if totalRoutes != score.Records {
 		return errors.New("route counts do not match selection records")
+	}
+	return nil
+}
+
+func validateFlowScorecard(score FlowScorecard) error {
+	values := []int{score.Records, score.AccountFirst, score.DirectCase, score.StrategicSignalRecords, score.ExecutionOnlyRecords, score.AccountSelectionMismatches, score.AccountUnderRouting, score.AccountOverRouting, score.WalterRequired, score.WalterSkipped, score.BudgetExhausted, score.InvalidationsAfterMutation, score.MaterialityEscalations, score.MaterialFinishWithoutWalter, score.WalterUsefulRefinements, score.WalterNitpickBlocks, score.OneActiveSpokeViolations, score.NestingViolations, score.DirectAgentCalls}
+	for _, value := range values {
+		if value < 0 {
+			return errors.New("negative flow score")
+		}
+	}
+	if score.AccountFirst+score.DirectCase != score.Records || score.WalterSkipped > score.Records || score.WalterRequired+score.WalterSkipped > score.Records {
+		return errors.New("flow score totals are inconsistent")
+	}
+	seen := map[string]bool{}
+	for _, reason := range score.WalterSkipReasons {
+		if reason.Reason != "low_leverage_ordinary_reversible_no_external_artifact" || reason.Count < 1 || seen[reason.Reason] {
+			return errors.New("invalid Walter skip reason score")
+		}
+		seen[reason.Reason] = true
 	}
 	return nil
 }

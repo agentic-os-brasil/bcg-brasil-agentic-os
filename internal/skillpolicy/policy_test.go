@@ -34,11 +34,11 @@ func TestPolicyKeepsSkillsAsMethodsWithoutCreatingAuthority(t *testing.T) {
 	if registry.AllowsDirect("capability_specialist", "deck-storyline") {
 		t.Fatal("capability specialist gained direct method selection")
 	}
-	if !registry.AllowsDelegated("workspace_agent", "capability_specialist", "qualitative-analysis") {
-		t.Fatal("workspace agent cannot assign the bounded qualitative skill")
+	if registry.AllowsDelegated("workspace_agent", "capability_specialist", "qualitative-analysis") {
+		t.Fatal("Capability Specialist is not a delegable role")
 	}
-	if registry.AllowsDelegated("workspace_agent", "capability_specialist", "unknown-method") {
-		t.Fatal("unknown skill was delegable")
+	if registry.AllowsDelegated("case_agent", "case_agent", "unknown-method") {
+		t.Fatal("nested case delegation was accepted")
 	}
 }
 

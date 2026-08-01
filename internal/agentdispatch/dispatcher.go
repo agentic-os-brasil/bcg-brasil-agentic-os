@@ -116,32 +116,7 @@ func (dispatcher *Dispatcher) StartRoot(request PacketRequest) (WorkPacket, agen
 }
 
 func (dispatcher *Dispatcher) StartChild(parent WorkPacket, request PacketRequest) (WorkPacket, agentorchestration.Decision, error) {
-	if err := dispatcher.Verify(parent); err != nil {
-		return WorkPacket{}, packetDenied(), err
-	}
-	if parent.SchemaVersion != packetSchemaVersion {
-		return WorkPacket{}, packetDenied(), errors.New("legacy work packet is completion-only")
-	}
-	if request.ScopeID != parent.ScopeID || request.ScopeKind != parent.ScopeKind {
-		return WorkPacket{}, packetDenied(), errors.New("child packet must inherit the parent scope root")
-	}
-	issuer := parent.TargetAgentID
-	capability := dispatcher.credentials[issuer]
-	if capability == "" || dispatcher.credentials[request.TargetAgentID] == "" {
-		return WorkPacket{}, packetDenied(), errors.New("child packet issuer or target is not authorized")
-	}
-	packet, err := dispatcher.issue(issuer, parent.PacketID, request)
-	if err != nil {
-		return WorkPacket{}, packetDenied(), err
-	}
-	decision := dispatcher.gate.StartChild(
-		issuer, capability, request.TargetAgentID, parent.PacketID,
-		packet.PacketID, request.ScopeID, request.ScopeKind,
-	)
-	if !decision.Allowed {
-		return WorkPacket{}, decision, nil
-	}
-	return packet, decision, nil
+	return WorkPacket{}, agentorchestration.Decision{Allowed: false, Code: "nesting_denied"}, errors.New("Maestro delegation is sequential and does not permit nested spokes")
 }
 
 // SelectDirectSkill verifies that a vertical agent's role may select a managed
@@ -284,19 +259,12 @@ func (dispatcher *Dispatcher) validateSkillSelection(issuer, target, skillID str
 		return nil
 	}
 	_, issuerOK := dispatcher.gate.RoleForAgent(issuer)
-	targetRole, targetOK := dispatcher.gate.RoleForAgent(target)
+	_, targetOK := dispatcher.gate.RoleForAgent(target)
 	if !issuerOK || !targetOK {
 		return errors.New("delegated skill selection is not allowed for these agent roles")
 	}
-	if targetRole != "capability_specialist" {
-		if skillID != "" {
-			return errors.New("skill selection is only available to capability specialists")
-		}
-		return nil
-	}
-	issuerRole, _ := dispatcher.gate.RoleForAgent(issuer)
-	if skillID == "" || !dispatcher.skills.AllowsDelegated(issuerRole, targetRole, skillID) {
-		return errors.New("capability specialist delegation requires an authorized managed skill")
+	if skillID != "" {
+		return errors.New("nested skill selection is unavailable because spokes cannot delegate")
 	}
 	return nil
 }

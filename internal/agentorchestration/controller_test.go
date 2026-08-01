@@ -100,14 +100,10 @@ func TestAdaptersFailClosedOnCoreToolsParallelismAndRoleEscape(t *testing.T) {
 			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, ActorID: "maestro", ActorCapability: "maestro-cap", Scope: "anything"}), "tool_denied")
 			assertAllowed(t, adapter.Handle(NativeEvent{Name: names.branchStart, BranchID: "run-alpha", Scope: "alpha", ScopeKind: "workspace", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "workspace-alpha"}))
 			assertDenied(t, adapter.Handle(NativeEvent{Name: names.branchStart, BranchID: "run-beta", Scope: "account-alpha", ScopeKind: "account", ActorID: "maestro", ActorCapability: "maestro-cap", TargetID: "client-account-agent-alpha"}), "branch_active")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "run-alpha", DispatchID: "child-1", Scope: "alpha", ScopeKind: "workspace", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", TargetID: "client-account-agent-alpha"}), "edge_denied")
-			assertAllowed(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "run-alpha", DispatchID: "child-1", Scope: "alpha", ScopeKind: "workspace", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", TargetID: "capability-research"}))
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "run-alpha", DispatchID: "child-2", Scope: "alpha", ScopeKind: "workspace", ActorID: "capability-research", ActorCapability: "capability-research-cap", TargetID: "capability-other"}), "child_active")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", DispatchID: "child-1", ActorID: "capability-research", ActorCapability: "capability-research-cap", Scope: "beta", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/file.md"}), "scope_denied")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", DispatchID: "child-1", ActorID: "capability-other", ActorCapability: "capability-other-cap", Scope: "alpha", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/file.md"}), "actor_denied")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", DispatchID: "child-1", ActorID: "capability-research", ActorCapability: "wrong", Scope: "alpha"}), "actor_denied")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", DispatchID: "child-1", ActorID: "capability-research", ActorCapability: "capability-research-cap", Scope: "alpha", Tool: "shell", Operation: "exec", Resource: "bcgos://workspace/alpha/file.md"}), "resource_denied")
-			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", DispatchID: "child-1", ActorID: "capability-research", ActorCapability: "capability-research-cap", Scope: "alpha", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/%2e%2e/beta.md"}), "resource_denied")
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "run-alpha", DispatchID: "child-1", Scope: "alpha", ScopeKind: "workspace", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", TargetID: "client-account-agent-alpha"}), "nesting_denied")
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.childStart, BranchID: "run-alpha", DispatchID: "child-1", Scope: "alpha", ScopeKind: "workspace", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", TargetID: "capability-research"}), "nesting_denied")
+			assertAllowed(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", Scope: "alpha", ScopeKind: "workspace", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/file.md"}))
+			assertDenied(t, adapter.Handle(NativeEvent{Name: names.tool, BranchID: "run-alpha", ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", Scope: "beta", ScopeKind: "workspace", Tool: "workspace_reader", Operation: "read", Resource: "bcgos://workspace/alpha/file.md"}), "scope_denied")
 		})
 	}
 }
@@ -149,28 +145,18 @@ func TestChildToolRequestsBindTheActiveDispatchID(t *testing.T) {
 	assertAllowed(t, adapter.StartBranch(
 		"maestro", "maestro-cap", "workspace-alpha", "run-alpha", "alpha", "workspace",
 	))
-	assertAllowed(t, adapter.StartChild(
-		"workspace-alpha", "workspace-alpha-cap", "capability-research",
+	assertDenied(t, adapter.StartChild(
+		"workspace-alpha", "workspace-alpha-cap", "client-account-agent-alpha",
 		"run-alpha", "child-1", "alpha", "workspace",
-	))
+	), "nesting_denied")
 	toolEvent := NativeEvent{
 		Name: nativeNames("claude").tool, BranchID: "run-alpha",
-		DispatchID: "child-1", ActorID: "capability-research",
-		ActorCapability: "capability-research-cap", Scope: "alpha",
+		ActorID: "workspace-alpha", ActorCapability: "workspace-alpha-cap", Scope: "alpha", ScopeKind: "workspace",
 		Tool: "workspace_reader", Operation: "read",
 		Resource: "bcgos://workspace/alpha/file.md",
 	}
 	assertAllowed(t, adapter.Handle(toolEvent))
-	assertAllowed(t, adapter.FinishChild(
-		"capability-research", "capability-research-cap", "run-alpha", "child-1",
-	))
-	assertAllowed(t, adapter.StartChild(
-		"workspace-alpha", "workspace-alpha-cap", "capability-research",
-		"run-alpha", "child-2", "alpha", "workspace",
-	))
-	assertDenied(t, adapter.Handle(toolEvent), "dispatch_denied")
-	toolEvent.DispatchID = "child-2"
-	assertAllowed(t, adapter.Handle(toolEvent))
+	assertAllowed(t, adapter.FinishBranch("workspace-alpha", "workspace-alpha-cap", "run-alpha"))
 }
 
 func TestDarwinScopedMaintenanceGrantIsEquivalentAndFailClosed(t *testing.T) {
@@ -268,15 +254,15 @@ func TestAdapterRejectsUnsafeAuthorizationsAndRestoredState(t *testing.T) {
 			return values
 		}},
 		{"cross scope resource", func(values []Authorization) []Authorization {
-			values[4].Tools[0].ResourcePrefix = "bcgos://workspace/beta/"
+			values[1].Tools[0].ResourcePrefix = "bcgos://workspace/beta/"
 			return values
 		}},
 		{"darwin reads workspace", func(values []Authorization) []Authorization {
-			values[7].Tools = []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/beta/"}}
+			values[5].Tools = []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/beta/"}}
 			return values
 		}},
 		{"encoded traversal resource", func(values []Authorization) []Authorization {
-			values[4].Tools[0].ResourcePrefix = "bcgos://workspace/alpha/%2e%2e/"
+			values[1].Tools[0].ResourcePrefix = "bcgos://workspace/alpha/%2e%2e/"
 			return values
 		}},
 		{"tool grant on maestro", func(values []Authorization) []Authorization {
@@ -416,12 +402,9 @@ func governedSequence(t *testing.T, runtime string) []NativeEvent {
 func testAuthorizations() []Authorization {
 	return []Authorization{
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
-		{AgentID: "workspace-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-alpha-cap"},
-		{AgentID: "workspace-alpha-project", Role: "workspace_agent", Scope: "client-alpha-project", ScopeKind: "workspace", Capability: "workspace-alpha-project-cap"},
+		{AgentID: "workspace-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-alpha-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/alpha/"}}},
+		{AgentID: "workspace-alpha-project", Role: "workspace_agent", Scope: "client-alpha-project", ScopeKind: "workspace", Capability: "workspace-alpha-project-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/client-alpha-project/"}}},
 		{AgentID: "client-account-agent-alpha", Role: "client_account_agent", Scope: "account-alpha", ScopeKind: "account", Capability: "client-account-agent-alpha-cap"},
-		{AgentID: "capability-research", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-research-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/alpha/"}}},
-		{AgentID: "capability-research-project", Role: "capability_specialist", Scope: "client-alpha-project", ScopeKind: "workspace", Capability: "capability-research-project-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/client-alpha-project/"}}},
-		{AgentID: "capability-other", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-other-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://workspace/alpha/"}}},
 		{AgentID: "pa-expert-ipa-insurance", Role: "pa_expert", Scope: "insurance", ScopeKind: "practice", Capability: "pa-expert-ipa-insurance-cap"},
 		{AgentID: "darwin", Role: "governance_analyst", Scope: "maestro-system", ScopeKind: "health", Capability: "darwin-cap", Tools: []ToolGrant{
 			{Tool: "filesystem", Operation: "read", ResourcePrefix: "bcgos://health/maestro-system/"},

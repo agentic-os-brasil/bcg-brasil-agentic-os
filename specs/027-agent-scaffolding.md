@@ -18,7 +18,6 @@ Managed templates live in:
 bundles/base/agents/templates/case_agent/AGENT.md
 bundles/base/agents/templates/client_account_agent/AGENT.md
 bundles/base/agents/templates/pa_expert/AGENT.md
-bundles/base/agents/templates/capability_specialist/AGENT.md
 ```
 
 They define role behavior only. They contain no workspace ID, account ID,
@@ -49,16 +48,15 @@ and are never overwritten.
 
 | Scaffold role | Required parent | Scope | Delegation |
 | --- | --- | --- | --- |
-| `case_agent` | canonical `maestro` / `hub` | exact case/project workspace | one capability specialist |
+| `case_agent` | canonical `maestro` / `hub` | exact case/project workspace | no direct delegation; Maestro mediates |
 | `client_account_agent` | canonical `maestro` / `hub` | exact client account | no direct child; Maestro mediates Case activation |
 | `pa_expert` | canonical `maestro` / `hub` | exact versioned FPA/IPA canon | none |
-| `capability_specialist` | workspace or account agent | same workspace or account | none |
 
 Case agents created by the existing workspace-first CLI use the compatibility
 identity `workspace-agent-<workspace-id>` during migration; new explicit case
 roots use `case-agent-<case-id>`. Both persist the canonical role
-`case_agent`. Capability specialists use the `capability-` prefix. The managed catalog's closed role
-contracts and allowed edge at the correct depth are checked before any file is
+`case_agent`. The managed catalog's closed role contracts and Maestro-mediated
+direct-spoke boundary are checked before any file is
 created. A workspace stub additionally requires the concrete workspace-agent
 registry produced by `bcgos init`. Account roots and PA Expert roots require an
 accountable owner and bounded mandate; PA Experts also verify the bytes and
@@ -70,21 +68,9 @@ role, scope kind and scope ID must match; caller-declared parent metadata is
 never sufficient.
 
 `bcgos init` automatically scaffolds the owning Case Agent after creating its
-compact state and dossier. Client Account Agents, PA Experts and leaf
-specialists require an explicit command. A leaf always requires an already
-registered matching parent:
-
-```text
-bcgos agent scaffold \
-  --id capability-research \
-  --role capability_specialist \
-  --scope-kind workspace \
-  --scope <workspace-id> \
-  --parent workspace-agent-<workspace-id> \
-  --parent-role workspace_agent
-
-bcgos agent status --id capability-research
-```
+compact state and dossier. Client Account Agents and PA Experts require an
+explicit command. Nested specialist scaffolding is rejected; Maestro is the
+only delegation mediator.
 
 PA Expert roots provide `--owner`, `--mandate`, `--canon`, `--canon-sha256`,
 `--expert-kind` and `--expert-version`; account roots provide `--owner` and
@@ -124,8 +110,8 @@ Until then, `runtime_state` is `unavailable` and dispatch must fail closed.
 1. Every new workspace receives one idempotent concrete Case Agent stub.
 2. Client Account and PA Expert roots require a named owner and mandate; PA Expert
    canon bytes must match the declared digest.
-3. Capability specialist stubs can be created only on catalogued
-   role edges with a concrete registered parent in the exact same scope.
+3. Nested or direct agent-to-agent specialist stubs are rejected; Maestro is
+   the only delegation mediator.
 4. Managed templates contain no instance or client data.
 5. Reusing an agent ID for another scope, parent or role is rejected.
 6. Definition tampering is detected and never silently repaired.

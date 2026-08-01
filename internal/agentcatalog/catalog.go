@@ -79,16 +79,15 @@ var roleContracts = map[string]struct {
 	mayDelegate   bool
 	inputContract string
 }{
-	"account_agent":         {false, "scoped", false, "bounded_account_packet"}, // compatibility only
-	"capability_specialist": {false, "scoped", false, "minimum_work_packet"},
-	"case_agent":            {false, "scoped", true, "bounded_case_packet"},
-	"client_account_agent":  {false, "scoped", false, "bounded_client_account_packet"},
-	"errand_helper":         {false, "scoped", false, "bounded_errand_packet"},
-	"governance_analyst":    {false, "scoped", false, "bounded_health_packet"},
-	"hub":                   {true, "none", true, "session_context_packet"},
-	"pa_expert":             {false, "none", false, "bounded_advisory_packet"},
-	"reviewer":              {false, "none", false, "sealed_review_packet"},
-	"workspace_agent":       {false, "scoped", true, "bounded_workspace_packet"}, // compatibility only
+	"account_agent":        {false, "scoped", false, "bounded_account_packet"}, // compatibility only
+	"case_agent":           {false, "scoped", false, "bounded_case_packet"},
+	"client_account_agent": {false, "scoped", false, "bounded_client_account_packet"},
+	"errand_helper":        {false, "scoped", false, "bounded_errand_packet"},
+	"governance_analyst":   {false, "scoped", false, "bounded_health_packet"},
+	"hub":                  {true, "none", true, "session_context_packet"},
+	"pa_expert":            {false, "none", false, "bounded_advisory_packet"},
+	"reviewer":             {false, "none", false, "sealed_review_packet"},
+	"workspace_agent":      {false, "scoped", true, "bounded_workspace_packet"}, // compatibility only
 }
 
 type RoleContract struct {
@@ -134,6 +133,9 @@ func (catalog Catalog) CanonicalRole(role string) string {
 // roles and IDs. Compatibility aliases remain readable; deprecated practice
 // identities fail closed and require an explicit PA Expert kind.
 func (catalog Catalog) RejectLegacyRegistration(agentID, role string) error {
+	if role == "capability_specialist" {
+		return errors.New("Capability Specialist is not a canonical or compatibility role")
+	}
 	if alias, ok := catalog.LegacyAliases[role]; ok && strings.HasPrefix(alias.Status, "deprecated") {
 		return fmt.Errorf("legacy role %q is deprecated; %s", role, alias.Migration)
 	}
@@ -187,8 +189,8 @@ func (catalog Catalog) Validate() error {
 	if err := validateLegacyIDs(catalog.LegacyIDs); err != nil {
 		return err
 	}
-	if catalog.Delegation.Mode != "role_gated_chains" || catalog.Delegation.RegisteredChains != "governed_unbounded" || catalog.Delegation.MaxActiveBranches != 1 || catalog.Delegation.MaxDepth != 2 || catalog.Delegation.MaxChildrenPerAgent != 1 || catalog.Delegation.MaxErrandHelpers != 1 || catalog.Delegation.ErrandScope != "basic_reversible" {
-		return errors.New("agent catalog must enforce governed chains, one active branch, one child and role-gated depth two")
+	if catalog.Delegation.Mode != "role_gated_chains" || catalog.Delegation.RegisteredChains != "sequential_direct_spokes" || catalog.Delegation.MaxActiveBranches != 1 || catalog.Delegation.MaxDepth != 1 || catalog.Delegation.MaxChildrenPerAgent != 1 || catalog.Delegation.MaxErrandHelpers != 1 || catalog.Delegation.ErrandScope != "basic_reversible" {
+		return errors.New("agent catalog must enforce sequential direct spokes, one active branch and no nesting")
 	}
 	if err := validateDelegationEdges(catalog.Delegation.AllowedEdges); err != nil {
 		return err
@@ -287,7 +289,6 @@ func (catalog Catalog) roleMayDelegate(role string) bool {
 
 func validateDelegationEdges(edges []DelegationEdge) error {
 	wanted := []DelegationEdge{
-		{FromRole: "case_agent", ToRoles: []string{"capability_specialist"}},
 		{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}},
 	}
 	if len(edges) != len(wanted) {
@@ -370,7 +371,7 @@ func ValidateDir(root string) error {
 			return fmt.Errorf("managed agent %s has an empty definition", agent.ID)
 		}
 	}
-	for _, role := range []string{"capability_specialist", "case_agent", "client_account_agent", "pa_expert"} {
+	for _, role := range []string{"case_agent", "client_account_agent", "pa_expert"} {
 		templatePath := filepath.Join(root, "templates", role, "AGENT.md")
 		body, err := os.ReadFile(templatePath)
 		if err != nil {

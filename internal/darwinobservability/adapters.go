@@ -6,6 +6,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/activationpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/darwin"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestroflow"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
@@ -90,6 +91,40 @@ func FromSchedulerReceipt(receipt scheduler.Receipt, localWindowID, scopeSHA256 
 		RecordedAt: receipt.AttemptedAt.UTC(),
 		Health:     &HealthEvidence{JobKind: jobKind, ScheduledAt: receipt.ScheduledFor.UTC(), CapturedAt: receipt.AttemptedAt.UTC(), Freshness: freshness, Recovery: recovery, Outcome: outcome},
 	}
+	assignEvidenceID(&record)
+	return record, record.Validate()
+}
+
+// FromMaestroFlowReceipt projects one canonical Maestro attempt into
+// metadata-only Darwin evidence. It never accepts client/workspace content.
+func FromMaestroFlowReceipt(receipt maestroflow.Receipt, windowID, scopeSHA256 string) (Record, error) {
+	if err := receipt.Validate(); err != nil || !windowPattern.MatchString(windowID) || !digestPattern.MatchString(scopeSHA256) {
+		return Record{}, errors.New("invalid Maestro flow receipt for observability")
+	}
+	evidence := &FlowEvidence{
+		AttemptID: receipt.AttemptID, AttemptSHA256: receipt.AttemptSHA256, EntryPath: "",
+		PreAccountUsed: receipt.PreAccountUsed, AccountConsultationRequired: receipt.AccountConsultationRequired, PostAccountValidationRequired: receipt.PostAccountValidationRequired,
+		AccountSignals:       make([]string, 0, len(receipt.AccountSignals)),
+		PostAccountValidated: receipt.PostAccountValidated, WalterRequired: receipt.WalterRequired,
+		WalterGate: receipt.WalterGate, WalterSkipped: receipt.WalterSkipped,
+		WalterSkipReason: receipt.WalterSkipReason, WalterSkipEvidenceSHA256: receipt.WalterSkipEvidenceSHA256,
+		RefinementLoadBearing: receipt.RefinementLoadBearing, RefinementActionable: receipt.RefinementActionable, RefinementKind: receipt.RefinementKind,
+		AccountVerdict: string(receipt.AccountVerdict), WalterVerdict: string(receipt.WalterVerdict),
+		Cycles: receipt.Cycle, BudgetExhausted: receipt.BudgetExhausted,
+		MaterialDelivered: receipt.Event == "material_delivered",
+	}
+	for _, signal := range receipt.AccountSignals {
+		evidence.AccountSignals = append(evidence.AccountSignals, string(signal))
+	}
+	if receipt.PreAccountUsed {
+		evidence.EntryPath = "account_first"
+	} else {
+		evidence.EntryPath = "case_direct"
+	}
+	if receipt.Event == "account_refine" || receipt.Event == "walter_refine" || receipt.Invalidated {
+		evidence.InvalidationsAfterMutation = 1
+	}
+	record := Record{SchemaVersion: SchemaVersion, Kind: KindFlow, WindowID: windowID, ScopeSHA256: scopeSHA256, Authority: AuthorityCallerAssertedShadow, RecordedAt: receipt.At.UTC(), Flow: evidence}
 	assignEvidenceID(&record)
 	return record, record.Validate()
 }

@@ -25,9 +25,6 @@ flowchart TD
     M["Maestro\ncontrol plane; no tools"] --> A["Client Account Agent\nreviewed longitudinal account context"]
     M --> C["Case Agent\nauthoritative lifecycle and workspace context"]
     C -. "selects directly" .-> S["Managed transversal skills\ndeck · quali · quant"]
-    C -. "one bounded child when justified" .-> W["Capability specialist\none skill + minimum WorkPacket"]
-    W --> R["Result + evidence + limits"]
-    R --> C
     C --> P["Reviewed promotion only"]
     P --> A
 ```
@@ -49,26 +46,16 @@ signed root packet, authenticated by the root agent capability, and is denied
 while a child is active. It is not a transfer of ownership, a tool grant or a
 lifecycle event.
 
-When the work is sufficiently bounded and benefits from independent execution,
-the parent may create one child WorkPacket. A packet for a
-`capability_specialist` names exactly one managed skill, its objective, exact
-pointers, constraints, expiry and expected return. The capability specialist
-receives no general context, no persistent access and no right to select
-additional skills. The legacy `practice_agent` → `subject_specialist` graph is
-retired: FPA and IPA advice has one canonical `pa_expert` role, selected from
-the versioned PA Expert registry. Legacy roles and ID prefixes fail closed and
-require explicit re-registration, so they cannot create split-brain authority.
-PA Expert advisory packets remain registry-bound and are not child capability
-packets. Each child returns evidence pointers, a concise result, assumptions,
-risks and an explicit failure state to its parent. The
-parent validates and integrates the result before returning to Maestro.
+Every skill selection remains local to the active Case root. No child
+WorkPacket is created: if another spoke is needed, Case returns to Maestro and
+Maestro starts the next direct spoke sequentially. The legacy
+`practice_agent` → `subject_specialist` graph is retired: FPA and IPA advice
+has one canonical `pa_expert` role, selected from the versioned PA Expert
+registry.
 
-The current dispatcher remains intentionally sequential: one active branch and
-one active child. Qualitative and quantitative work may be delegated in
-separate bounded turns today. Parallel fan-out requires a future contract for
-child identities, deterministic join, partial failure, result ordering,
-timeouts, cancellation and durable recovery; it must not be enabled by merely
-raising a catalog limit.
+The current dispatcher remains intentionally sequential: one active branch,
+with no nesting or direct agent-to-agent delegation. Parallel fan-out requires
+a future contract and is not enabled by raising a catalog limit.
 
 ## Boundaries
 
@@ -78,8 +65,6 @@ raising a catalog limit.
   Agent does not broaden its existing workspace boundary.
 - A skill is not a tool grant. Tool-operation-resource authorization remains
   governed by Spec 018 and the shared enforcement controller.
-- A capability specialist is a temporary execution leaf, not a transversal
-  persona or a second case owner.
 - Walter reviews a sealed packet independently; Challenger and final-review
   are review modes, not separate agents.
 - Darwin observes operating-model health and drift and may perform only

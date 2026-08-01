@@ -765,6 +765,15 @@ func TestDarwinHeadlessHousekeepingUsesTheScopedAgentContract(t *testing.T) {
 	}
 }
 
+func TestDarwinRequestBuildsBoundedPacketAndPlan(t *testing.T) {
+	request := `{"schema_version":1,"window_id":"cli-health-request","runtime":"codex","mode":"interactive","surfaces":{"doctor":{"state":"healthy","count":1},"capability":{"state":"unavailable","count":1},"validation":{"state":"healthy","count":1},"scheduler":{"state":"healthy","count":1},"managed_state":{"state":"healthy","count":1},"friction_codes":["native_unqualified"]}}`
+	var output bytes.Buffer
+	code := runAgentWithInput([]string{"darwin", "request", "--stdin"}, strings.NewReader(request), &output, &output, func() (string, error) { return t.TempDir(), nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"packet"`) || !strings.Contains(output.String(), `"assessment"`) || !strings.Contains(output.String(), `"packet_sha256"`) {
+		t.Fatalf("exit=%d output=%s", code, output.String())
+	}
+}
+
 func TestDarwinHeadlessHousekeepingRequiresExplicitCapabilities(t *testing.T) {
 	t.Setenv("BCGOS_MAESTRO_CAPABILITY", "")
 	t.Setenv("BCGOS_DARWIN_CAPABILITY", "")
@@ -776,7 +785,7 @@ func TestDarwinHeadlessHousekeepingRequiresExplicitCapabilities(t *testing.T) {
 	}
 }
 
-func TestAgentScaffoldCommandCreatesAndInspectsAWorkspaceSpecialist(t *testing.T) {
+func TestAgentScaffoldCommandRejectsCapabilitySpecialist(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")
 	workspacePath := filepath.Join(root, "workspace")
@@ -799,14 +808,8 @@ func TestAgentScaffoldCommandCreatesAndInspectsAWorkspaceSpecialist(t *testing.T
 		"--parent", parent,
 		"--parent-role", "workspace_agent",
 	}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"agent_id": "capability-research"`) ||
-		!strings.Contains(output.String(), `"input_contract": "minimum_work_packet"`) ||
-		!strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
-		t.Fatalf("agent scaffold exit = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	if code := runAgent([]string{"status", "--id", "capability-research"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"available": true`) {
-		t.Fatalf("agent status exit = %d, output = %s", code, output.String())
+	if code == ExitOK || !strings.Contains(output.String(), "Capability Specialist") {
+		t.Fatalf("capability specialist scaffold exit = %d, output = %s", code, output.String())
 	}
 }
 

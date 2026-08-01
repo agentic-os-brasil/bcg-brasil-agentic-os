@@ -14,7 +14,7 @@ import (
 // unavailable; a catalog or adapter presence is not evidence of execution.
 func runMaintenance(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(out, "usage: bcgos maintenance <catalog|status|wake> [--trigger presence|daily|weekly|monthly|event]")
+		fmt.Fprintln(out, "usage: bcgos maintenance <catalog|status|wake|canary> [--trigger presence|daily|weekly|monthly|event]")
 		return ExitOK
 	}
 	catalog, err := baseruntime.Maintenance()
@@ -46,31 +46,49 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 			return reportError(errOut, err)
 		}
 		return writeUnavailableMaintenance(out, errOut, *trigger, jobs)
+	case "canary":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos maintenance canary")
+			return ExitUsage
+		}
+		return writeJSON(out, map[string]any{
+			"schema_version": 1, "state": "attended_local_only", "agent_id": "darwin", "scope": "health/maestro-system",
+			"interactive_and_housekeeping_identity": "darwin", "native_schedulers": "disabled",
+			"worker_invocation": "qualified_housekeeping_executor", "model_inline": false,
+		}, errOut)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos maintenance <catalog|status|wake> [--trigger presence|daily|weekly|monthly|event]")
+		fmt.Fprintln(errOut, "usage: bcgos maintenance <catalog|status|wake|canary> [--trigger presence|daily|weekly|monthly|event]")
 		return ExitUsage
 	}
 }
 
 func maintenanceStatus(catalog maintenance.Catalog) map[string]any {
 	return map[string]any{
-		"schema_version":        catalog.SchemaVersion,
-		"catalog_state":         catalog.CatalogState,
-		"executor_state":        maintenance.Unavailable,
-		"native_adapters":       maintenance.Unavailable,
-		"automatic_maintenance": "prebuilt_contract_only",
-		"job_count":             len(catalog.Jobs),
-		"reason":                "owning maintenance executors and native scheduler installation are not yet qualified",
+		"schema_version":                        catalog.SchemaVersion,
+		"catalog_state":                         catalog.CatalogState,
+		"executor_state":                        maintenance.Unavailable,
+		"native_adapters":                       maintenance.Unavailable,
+		"automatic_maintenance":                 "prebuilt_contract_only",
+		"darwin_agent_id":                       "darwin",
+		"darwin_scope":                          "health/maestro-system",
+		"interactive_and_housekeeping_identity": "darwin",
+		"canary_activation":                     "attended_local_only",
+		"native_schedulers":                     "disabled_until_explicit_install_and_qualification",
+		"job_count":                             len(catalog.Jobs),
+		"reason":                                "owning maintenance executors and native scheduler installation are not yet qualified",
 	}
 }
 
 func writeUnavailableMaintenance(out, errOut io.Writer, trigger string, jobs []maintenance.Job) int {
 	code := writeJSON(out, map[string]any{
-		"schema_version": 1,
-		"state":          maintenance.Unavailable,
-		"trigger":        trigger,
-		"planned_jobs":   jobs,
-		"reason":         "native maintenance executor is not installed; no work was run and no receipt was emitted",
+		"schema_version":    1,
+		"state":             maintenance.Unavailable,
+		"agent_id":          "darwin",
+		"scope":             "health/maestro-system",
+		"native_schedulers": "disabled",
+		"trigger":           trigger,
+		"planned_jobs":      jobs,
+		"reason":            "native maintenance executor is not installed; no work was run and no receipt was emitted",
 	}, errOut)
 	if code != ExitOK {
 		return code

@@ -3,17 +3,13 @@
   "hub": "maestro",
   "delegation": {
     "mode": "role_gated_chains",
-    "registered_chains": "governed_unbounded",
+    "registered_chains": "sequential_direct_spokes",
     "max_active_branches": 1,
-    "max_depth": 2,
+    "max_depth": 1,
     "max_children_per_agent": 1,
     "max_errand_helpers": 1,
     "errand_scope": "basic_reversible",
     "allowed_edges": [
-      {
-        "from_role": "case_agent",
-        "to_roles": ["capability_specialist"]
-      },
       {
         "from_role": "hub",
         "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"]

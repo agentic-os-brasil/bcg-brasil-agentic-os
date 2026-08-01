@@ -141,14 +141,13 @@ var adapterEvents = map[string]map[string]string{
 }
 
 var roleScopeKinds = map[string]map[string]bool{
-	"capability_specialist": {"account": true, "workspace": true},
-	"case_agent":            {"case": true, "workspace": true},
-	"client_account_agent":  {"account": true},
-	"errand_helper":         {"errand": true},
-	"governance_analyst":    {"health": true},
-	"hub":                   {"control": true},
-	"pa_expert":             {"practice": true},
-	"reviewer":              {"review": true},
+	"case_agent":           {"case": true, "workspace": true},
+	"client_account_agent": {"account": true},
+	"errand_helper":        {"errand": true},
+	"governance_analyst":   {"health": true},
+	"hub":                  {"control": true},
+	"pa_expert":            {"practice": true},
+	"reviewer":             {"review": true},
 }
 
 func NewAdapter(runtime string, catalog agentcatalog.Catalog, grants []Authorization, store *StateStore) (*Adapter, error) {
@@ -497,27 +496,10 @@ func (adapter *Adapter) startBranch(event NativeEvent, actor authorization) Deci
 }
 
 func (adapter *Adapter) startChild(event NativeEvent, actor authorization) Decision {
-	state := adapter.store.state
-	if state.BranchID == "" {
+	if adapter.store.state.BranchID == "" {
 		return denied("branch_missing")
 	}
-	if state.ChildID != "" {
-		return denied("child_active")
-	}
-	target, ok := adapter.authorizations[event.TargetID]
-	if !ok {
-		return denied("target_denied")
-	}
-	if event.BranchID != state.BranchID || event.DispatchID == "" || event.ActorID != state.RootID ||
-		event.Scope != state.ScopeID || actor.scope != state.ScopeID || target.scope != state.ScopeID ||
-		actor.scopeKind != state.ScopeKind || target.scopeKind != state.ScopeKind ||
-		event.ScopeKind != state.ScopeKind ||
-		!adapter.catalog.AllowsDelegation(actor.role, target.role, 2) {
-		return denied("edge_denied")
-	}
-	adapter.store.state.ChildID = event.TargetID
-	adapter.store.state.ChildDispatchID = event.DispatchID
-	return allowed()
+	return denied("nesting_denied")
 }
 
 func (adapter *Adapter) guardTool(event NativeEvent, actor authorization) Decision {

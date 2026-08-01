@@ -46,37 +46,11 @@ func TestDispatcherIssuesSealedSequentialWorkspacePackets(t *testing.T) {
 		t.Fatalf("parallel dispatch = %#v", parallel)
 	}
 
-	child, childDecision, err := dispatcher.StartChild(root, PacketRequest{
-		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
-		Objective: "Pressure-test source freshness and provenance.",
-		Pointers:  []string{"bcgos://workspace/alpha/dossier/research.md"},
-		SkillID:   "qualitative-analysis",
-		TTL:       time.Hour,
-	})
-	if err != nil || !childDecision.Allowed {
-		t.Fatalf("child dispatch failed: packet=%#v decision=%#v err=%v", child, childDecision, err)
-	}
-	if child.ParentPacketID != root.PacketID || child.IssuerAgentID != "workspace-agent-alpha" {
-		t.Fatalf("unexpected child packet: %#v", child)
-	}
-	if decision := dispatcher.FinishChild(child); !decision.Allowed {
-		t.Fatalf("finish child = %#v", decision)
-	}
-	secondChild, secondDecision, err := dispatcher.StartChild(root, PacketRequest{
-		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
-		Objective: "Check a second bounded question.",
-		Pointers:  []string{"bcgos://workspace/alpha/dossier/research.md"},
-		SkillID:   "quantitative-analysis",
-		TTL:       time.Hour,
-	})
-	if err != nil || !secondDecision.Allowed {
-		t.Fatalf("second child dispatch failed: %#v %v", secondDecision, err)
-	}
-	if replay := dispatcher.FinishChild(child); replay.Allowed {
-		t.Fatalf("old child packet replayed against a new dispatch: %#v", replay)
-	}
-	if decision := dispatcher.FinishChild(secondChild); !decision.Allowed {
-		t.Fatalf("finish second child = %#v", decision)
+	if _, childDecision, err := dispatcher.StartChild(root, PacketRequest{
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Nested delegation must fail closed.", TTL: time.Hour,
+	}); err == nil || childDecision.Allowed || childDecision.Code != "nesting_denied" {
+		t.Fatalf("nested dispatch was not denied: %#v %v", childDecision, err)
 	}
 	if decision := dispatcher.FinishRoot(root); !decision.Allowed {
 		t.Fatalf("finish root = %#v", decision)
@@ -194,20 +168,11 @@ func TestDispatcherKeepsSkillSelectionWithTheVerticalOwner(t *testing.T) {
 	}); err == nil {
 		t.Fatal("child delegation without an atomic skill was accepted")
 	}
-	child, childDecision, err := dispatcher.StartChild(root, PacketRequest{
-		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
-		Objective: "Synthesize qualitative evidence.", SkillID: "qualitative-analysis", TTL: time.Hour,
-	})
-	if err != nil || !childDecision.Allowed || child.SkillID != "qualitative-analysis" {
-		t.Fatalf("bounded skill delegation failed: %#v %#v %v", child, childDecision, err)
-	}
-	if err := dispatcher.SelectDirectSkill(root, "workspace-agent-alpha", "workspace-agent-alpha-cap", "deck-storyline"); err == nil {
-		t.Fatal("root selected a direct skill while its child was active")
-	}
-	tampered := child
-	tampered.SkillID = "quantitative-analysis"
-	if err := dispatcher.Verify(tampered); err == nil {
-		t.Fatal("tampered skill selection verified")
+	if _, childDecision, err := dispatcher.StartChild(root, PacketRequest{
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Nested skill delegation is forbidden.", SkillID: "qualitative-analysis", TTL: time.Hour,
+	}); err == nil || childDecision.Allowed || childDecision.Code != "nesting_denied" {
+		t.Fatalf("nested skill delegation was not denied: %#v %v", childDecision, err)
 	}
 }
 
@@ -233,7 +198,7 @@ func TestDispatcherVerifyPreservesSignedWalterTrigger(t *testing.T) {
 	}
 }
 
-func TestDispatcherAcceptsLegacyChildOnlyForInFlightCompletion(t *testing.T) {
+func TestDispatcherRejectsLegacyChildDelegation(t *testing.T) {
 	dispatcher := newTestDispatcher(t)
 	root, decision, err := dispatcher.StartRoot(PacketRequest{
 		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
@@ -242,33 +207,11 @@ func TestDispatcherAcceptsLegacyChildOnlyForInFlightCompletion(t *testing.T) {
 	if err != nil || !decision.Allowed {
 		t.Fatalf("root dispatch failed: %#v %v", decision, err)
 	}
-	child, decision, err := dispatcher.StartChild(root, PacketRequest{
-		TargetAgentID: "capability-research", ScopeKind: "workspace", ScopeID: "alpha",
-		Objective: "Complete a bounded work item.", SkillID: "qualitative-analysis", TTL: time.Hour,
-	})
-	if err != nil || !decision.Allowed {
-		t.Fatalf("child dispatch failed: %#v %v", decision, err)
-	}
-	legacy := child
-	legacy.SchemaVersion = 1
-	legacy.SkillID = ""
-	legacy.Signature, err = dispatcher.signature(legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := dispatcher.Verify(legacy); err != nil {
-		t.Fatalf("in-flight v1 child was not verifiable: %v", err)
-	}
-	if decision := dispatcher.FinishChild(legacy); !decision.Allowed {
-		t.Fatalf("in-flight v1 child was not finishable: %#v", decision)
-	}
-	legacy.SkillID = "qualitative-analysis"
-	legacy.Signature, err = dispatcher.signature(legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := dispatcher.Verify(legacy); err == nil {
-		t.Fatal("legacy packet carrying a new skill selection verified")
+	if _, decision, err := dispatcher.StartChild(root, PacketRequest{
+		TargetAgentID: "workspace-agent-alpha", ScopeKind: "workspace", ScopeID: "alpha",
+		Objective: "Legacy nested delegation must remain denied.", SkillID: "qualitative-analysis", TTL: time.Hour,
+	}); err == nil || decision.Allowed || decision.Code != "nesting_denied" {
+		t.Fatalf("legacy child delegation was not denied: %#v %v", decision, err)
 	}
 }
 
@@ -373,7 +316,7 @@ func TestVerticalSkillDelegationConformanceAcrossRuntimes(t *testing.T) {
 				ScopeID: fixture.Delegated.Scope, Objective: "Run named method.",
 				SkillID: fixture.Delegated.SkillID, TTL: time.Hour,
 			})
-			if err != nil || decision.Allowed != fixture.Delegated.Allowed {
+			if (err == nil) != fixture.Delegated.Allowed || decision.Allowed != fixture.Delegated.Allowed {
 				t.Fatalf("delegated selection = %#v %v", decision, err)
 			}
 			for _, denial := range fixture.Denials {
@@ -447,17 +390,15 @@ func newSkillTestDispatcherForRuntime(t *testing.T, runtime string) *Dispatcher 
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
 		{AgentID: "walter", Role: "reviewer", Scope: "review-episode", ScopeKind: "review", Capability: "walter-cap"},
 		{AgentID: "client-account-agent-alpha", Role: "client_account_agent", Scope: "account-alpha", ScopeKind: "account", Capability: "client-account-agent-alpha-cap"},
-		{AgentID: "capability-account", Role: "capability_specialist", Scope: "account-alpha", ScopeKind: "account", Capability: "capability-account-cap"},
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-agent-alpha-cap"},
-		{AgentID: "capability-research", Role: "capability_specialist", Scope: "alpha", ScopeKind: "workspace", Capability: "capability-research-cap"},
 	}
 	adapter, err := agentorchestration.NewAdapter(runtime, catalog, grants, store)
 	if err != nil {
 		t.Fatal(err)
 	}
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
-		"maestro": "maestro-cap", "walter": "walter-cap", "client-account-agent-alpha": "client-account-agent-alpha-cap", "capability-account": "capability-account-cap",
-		"workspace-agent-alpha": "workspace-agent-alpha-cap", "capability-research": "capability-research-cap",
+		"maestro": "maestro-cap", "walter": "walter-cap", "client-account-agent-alpha": "client-account-agent-alpha-cap",
+		"workspace-agent-alpha": "workspace-agent-alpha-cap",
 	}, registry)
 	if err != nil {
 		t.Fatal(err)

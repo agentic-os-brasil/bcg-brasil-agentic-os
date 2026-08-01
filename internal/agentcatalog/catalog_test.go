@@ -7,11 +7,10 @@ func TestCatalogAcceptsLeanMaestroCore(t *testing.T) {
 		SchemaVersion: 1,
 		Hub:           "maestro",
 		Delegation: DelegationPolicy{
-			Mode: "role_gated_chains", RegisteredChains: "governed_unbounded",
-			MaxActiveBranches: 1, MaxDepth: 2, MaxChildrenPerAgent: 1,
+			Mode: "role_gated_chains", RegisteredChains: "sequential_direct_spokes",
+			MaxActiveBranches: 1, MaxDepth: 1, MaxChildrenPerAgent: 1,
 			MaxErrandHelpers: 1, ErrandScope: "basic_reversible",
 			AllowedEdges: []DelegationEdge{
-				{FromRole: "case_agent", ToRoles: []string{"capability_specialist"}},
 				{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}},
 			},
 		},
@@ -31,7 +30,7 @@ func TestCatalogAcceptsLeanMaestroCore(t *testing.T) {
 	}
 }
 
-func TestCatalogAllowsOnlyTheGovernedDepthTwoChains(t *testing.T) {
+func TestCatalogAllowsOnlySequentialDirectSpokes(t *testing.T) {
 	catalog := mustTestCatalog(t)
 	tests := []struct {
 		from, to string
@@ -40,18 +39,17 @@ func TestCatalogAllowsOnlyTheGovernedDepthTwoChains(t *testing.T) {
 	}{
 		{"hub", "workspace_agent", 1, true},
 		{"hub", "workspace_agent", 2, false},
-		{"workspace_agent", "capability_specialist", 2, true},
 		{"workspace_agent", "capability_specialist", 1, false},
 		{"account_agent", "capability_specialist", 1, false},
 		{"hub", "subject_specialist", 1, false},
-		{"workspace_agent", "subject_specialist", 2, false},
-		{"reviewer", "capability_specialist", 2, false},
-		{"practice_agent", "subject_specialist", 3, false},
+		{"workspace_agent", "subject_specialist", 1, false},
+		{"reviewer", "capability_specialist", 1, false},
+		{"practice_agent", "subject_specialist", 1, false},
 		{"hub", "client_account_agent", 1, true},
 		{"hub", "case_agent", 1, true},
-		{"client_account_agent", "case_agent", 2, false},
+		{"client_account_agent", "case_agent", 1, false},
 		{"hub", "pa_expert", 1, true},
-		{"case_agent", "pa_expert", 2, false},
+		{"case_agent", "pa_expert", 1, false},
 	}
 	for _, test := range tests {
 		if got := catalog.AllowsDelegation(test.from, test.to, test.depth); got != test.want {
@@ -80,12 +78,12 @@ func TestCatalogRejectsToolsParallelismAndUngovernedChains(t *testing.T) {
 		{"maestro tools", func(value *Catalog) { value.Agents[1].ToolAccess = "scoped" }},
 		{"walter tools", func(value *Catalog) { value.Agents[2].ToolAccess = "read" }},
 		{"parallel branches", func(value *Catalog) { value.Delegation.MaxActiveBranches = 2 }},
-		{"excess depth", func(value *Catalog) { value.Delegation.MaxDepth = 3 }},
+		{"excess depth", func(value *Catalog) { value.Delegation.MaxDepth = 2 }},
 		{"multiple children", func(value *Catalog) { value.Delegation.MaxChildrenPerAgent = 2 }},
 		{"multiple errands", func(value *Catalog) { value.Delegation.MaxErrandHelpers = 2 }},
 		{"darwin delegates", func(value *Catalog) { value.Agents[0].MayDelegate = true }},
 		{"reviewer edge", func(value *Catalog) {
-			value.Delegation.AllowedEdges = append(value.Delegation.AllowedEdges, DelegationEdge{FromRole: "reviewer", ToRoles: []string{"capability_specialist"}})
+			value.Delegation.AllowedEdges = append(value.Delegation.AllowedEdges, DelegationEdge{FromRole: "reviewer", ToRoles: []string{"case_agent"}})
 		}},
 	}
 	for _, test := range tests {

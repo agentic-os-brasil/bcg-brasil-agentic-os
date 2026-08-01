@@ -221,8 +221,8 @@ func (packet HealthPacket) Validate() error {
 	if packet.SchemaVersion != SchemaVersion || !idPattern.MatchString(packet.WindowID) || !validRuntimes[packet.Runtime] || !validMode(packet.Mode) {
 		return errors.New("Darwin health packet header is invalid")
 	}
-	if len(packet.Observations) == 0 || len(packet.Observations) > maxObservations {
-		return errors.New("Darwin health packet observations are missing or oversized")
+	if len(packet.Observations) > maxObservations {
+		return errors.New("Darwin health packet observations are oversized")
 	}
 	seen := map[ObservationCode]bool{}
 	for _, observation := range packet.Observations {

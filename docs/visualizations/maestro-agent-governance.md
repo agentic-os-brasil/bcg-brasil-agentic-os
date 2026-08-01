@@ -11,7 +11,8 @@ The user has one conversational surface. Maestro can select one governed branch
 at a time, but has no filesystem, shell, web, messaging or external-system
 tools. Darwin 🧬 is the one governance exception: a non-user-facing surgeon
 with signed, reversible maintenance grants limited to `health/maestro-system`.
-The catalog allows depth two only through named role edges.
+The catalog allows only Maestro-mediated sequential direct spokes; nesting is
+denied.
 
 ```mermaid
 flowchart TB
@@ -23,8 +24,9 @@ flowchart TB
         Errand["Errand helper<br/>basic · reversible"]
     end
 
-    subgraph WorkspaceChain["Workspace or account chain"]
-        Workspace["Workspace or account agent"] --> Capability["Capability specialist"]
+    subgraph WorkspaceChain["Case and account spokes"]
+        Workspace["Case Agent"]
+        Account["Client Account Agent"]
     end
 
     subgraph PracticeChain["PA Expert advisory"]
@@ -39,8 +41,8 @@ flowchart TB
 ```
 
 The graph is a registration policy, not permission to run all branches. The
-runtime contract remains one active branch, one active child per agent and
-maximum depth two.
+runtime contract remains one active direct spoke, with no nesting or direct
+agent-to-agent calls.
 
 Headless housekeeping is not a new agent or a parallel taxonomy. The scheduler
 invokes the same Darwin contract with `mode=headless_housekeeping`, the same

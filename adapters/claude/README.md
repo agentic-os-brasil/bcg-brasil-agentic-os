@@ -52,3 +52,7 @@ interactive and `headless_housekeeping` modes, applies only the signed
 `health/maestro-system` grants and persists metadata-only receipts. Claude
 native invocation of that seam remains unavailable until a qualifying native
 session observes it.
+Darwin maintenance signals use `darwin.maintenance.wake` and map to the same
+`darwin` identity over `health/maestro-system`. The signal is signal-only: the
+qualified local worker owns command validation, occurrence fencing and receipt
+publication. Native scheduler installation remains disabled pending evidence.

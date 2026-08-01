@@ -22,14 +22,13 @@ flowchart TB
     Maestro --> Errand["Errand helper<br/>basic · reversible"]
     Maestro --> Walter["Walter<br/>reviewer · leaf"]
     Maestro --> Darwin["Darwin<br/>governance analyst · leaf"]
-    Case --> CapabilityW["Capability specialist · leaf"]
 ```
 
-Maestro is the only direct user interface. Multiple governed chain types may be
-registered, but only one branch is active by default. Delegation is sequential,
-each agent may have at most one active child and maximum depth is two. A
-workflow may complete one chain and then call Walter; it may not keep both
-branches active concurrently.
+Maestro is the only direct user interface. Direct spokes are selected
+sequentially, one active at a time, with no nesting or agent-to-agent
+delegation. Account consultation is chosen by client strategic-lens and
+stakeholder-pressure signals; Walter review is chosen independently by
+high-leverage signals.
 
 Material output has one deterministic review seam: after the producing root is
 completed, Maestro seals a bounded `ReviewPacket` with the source packet ID and
@@ -43,8 +42,8 @@ packet, and a review verdict cannot grant execution-ledger completion authority.
 The adapter-owned delegation channel is control-plane orchestration, not
 general tool access. Maestro may select and dispatch an allowed direct spoke
 through that channel while remaining unable to call filesystem, shell, web,
-messaging or external-system tools. A spoke may dispatch one child only when
-the catalog explicitly allows its role edge at depth two.
+messaging or external-system tools. A spoke may not dispatch a child; every
+transition returns to Maestro.
 
 Basic reversible errands may use at most one bounded helper. An errand helper
 does not receive broad workspace access, persistent memory or permission to
@@ -97,13 +96,13 @@ owner, a concrete fix and an exit condition.
 
 ## Governed chain roles
 
-- A `case_agent` may delegate to one `capability_specialist` at depth two.
+- A `case_agent` never delegates; Maestro mediates every subsequent spoke.
 - A `client_account_agent` owns the partner-like account context and does not
   directly delegate children; Maestro mediates Case activation.
 - A `pa_expert` is a centrally versioned FPA or IPA advisory leaf. It cannot
   delegate and never inherits client scope.
-- Walter (`reviewer`), Darwin (`governance_analyst`), `errand_helper`,
-  `capability_specialist` and `pa_expert` are leaves.
+- Walter (`reviewer`), Darwin (`governance_analyst`), `errand_helper` and
+  `pa_expert` are leaves.
 - Cross-chain exchange returns to Maestro as a minimum sanitized packet. Agents
   do not browse or message another chain directly.
 
@@ -112,14 +111,11 @@ sequenceDiagram
     actor User
     participant Maestro
     participant Case as Case Agent
-    participant Capability as Capability specialist
     participant PAExpert as PA Expert
     participant Walter
 
     User->>Maestro: professional request
     Maestro->>Case: minimum case packet
-    Case->>Capability: one bounded child task
-    Capability-->>Case: specialist result
     Case-->>Maestro: scoped result
     Note over Maestro,PAExpert: first branch is closed before another opens
     Maestro->>PAExpert: sanitized FPA/IPA advisory packet
@@ -148,12 +144,11 @@ contract so a new registration cannot silently broaden context:
 | --- | --- | --- | --- |
 | `hub` | `session_context_packet` | none | yes |
 | `client_account_agent` | `bounded_client_account_packet` | scoped | no |
-| `case_agent` | `bounded_case_packet` | scoped | yes |
+| `case_agent` | `bounded_case_packet` | scoped | no |
 | `pa_expert` | `bounded_advisory_packet` | none | no |
 | `reviewer` | `sealed_review_packet` | none | no |
 | `governance_analyst` | `bounded_health_packet` | scoped (`health/maestro-system`) | no |
 | `errand_helper` | `bounded_errand_packet` | scoped | no |
-| `capability_specialist` | `minimum_work_packet` | scoped | no |
 
 Agent IDs are path-safe lowercase slugs. Definitions must resolve below the
 managed `bundles/base/agents/` root.
@@ -177,9 +172,9 @@ available only after its installed event wiring invokes that controller and the
 fixtures prove:
 
 1. Maestro cannot call tools directly;
-2. only one branch can be active at a time;
-3. each agent can have at most one active child;
-4. delegation cannot exceed depth two or leave the allowed role graph;
+2. only one direct spoke can be active at a time;
+3. nesting and direct agent-to-agent delegation are denied;
+4. the allowed role graph is mediated by Maestro;
 5. Walter, Darwin, errands and leaf specialists cannot delegate;
 6. workspace scopes remain default-deny and PA Experts cannot read raw client
    or workspace context;
@@ -235,10 +230,10 @@ stateDiagram-v2
 1. The canonical catalog identifies Maestro as the sole direct hub.
 2. The catalog rejects tool access for Maestro and Walter, and rejects any
    Darwin grant outside the bounded `health/maestro-system` scope.
-3. The catalog permits only the registered workspace-to-capability chain at
-   depth two; PA Experts are direct Maestro leaves.
-4. The catalog rejects parallel branches, multiple children, unauthorized role
-   edges, depth above two or more than one errand helper.
+3. The catalog permits only Maestro-mediated direct spokes; PA Experts are
+   direct Maestro leaves.
+4. The catalog rejects parallel branches, nesting, unauthorized role edges and
+   more than one errand helper.
 5. Walter points to a managed packet-only definition; Darwin points to a
    managed packet-and-receipt definition with scoped maintenance authority.
 6. The Session Context Packet exposes the catalog pointer without prompt bodies.
