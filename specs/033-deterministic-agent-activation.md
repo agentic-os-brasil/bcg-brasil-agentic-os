@@ -7,6 +7,11 @@ unavailable until separately qualified.
 
 ## Purpose
 
+This spec does not canonize PR #139 or a generic depth-profile policy. The
+current Maestro flow resolves `account_consultation_required` from client
+strategic-lens/stakeholder signals and `walter_required` independently from
+high-leverage signals; see Spec 040.
+
 Maestro needs a repeatable way to decide whether a decision episode should go
 straight to its accountable agent, consult one PA expert, or run a
 governed multi-agent loop. The decision cannot depend only on prompt wording.

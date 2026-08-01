@@ -1,6 +1,8 @@
 # Spec 009 - Scheduler and presence-based catch-up
 
-Status: runtime-neutral core implemented; product configuration, executors and native adapters pending.
+Status: runtime-neutral core and Darwin bounded worker implemented; macOS
+LaunchAgent lifecycle is explicit-Canary-only, while Windows native task
+creation remains unavailable until qualified.
 
 ## Objective
 
@@ -51,7 +53,9 @@ The first job vocabulary is:
 - `wiki-reconcile`: reconciliation of source watermarks, outbox receipts and atlas manifests.
 - `sharepoint-work-sync`: refresh of the explicitly enrolled organizational
   work-retrieval catalog through the approved Claude SharePoint adapter.
-- `darwin-housekeeping`: policy-gated event/daily/weekly/presence health work;
+- `darwin-housekeeping-daily`: policy-gated daily/presence health work;
+- `darwin-deep-weekly`: policy-gated weekly health/evolution review;
+- `walter-self-review-weekly`: weekly runtime-neutral Walter proposal seam;
 - `darwin-structural-evolution-proposal`: monthly, proposal-only review of
   operational structure; it never applies code, policy or release changes.
 
@@ -90,7 +94,11 @@ If no approved model or eligibility adapter is available, the executor records `
 - Both adapters invoke the same core and expose equivalent status, pause and manual-run semantics.
 - Security denial and revocation work is never paused behind an ordinary enrichment schedule.
 
-Native adapters remain unimplemented until product initialization owns data directories and schedule configuration.
+The macOS adapter owns only the attended per-user lifecycle and a periodic
+presence wake. Enrollment persists the validated IANA timezone, workspace and
+activated job digests; fixture homes remain filesystem-only. Windows continues
+to fail closed rather than claim native parity. Neither adapter decides whether
+an occurrence succeeded.
 
 ## Executable core
 

@@ -148,7 +148,7 @@ func (catalog Catalog) Validate() error {
 		"wiki-incremental-sync", "wiki-reconcile", "wiki-integrity-check", "skills-index-refresh",
 		"runtime-health-check", "capability-recheck", "runtime-drift-check", "self-observation-capture",
 		"self-refinement-proposal", "update-check", "darwin-structural-evolution-proposal",
-		"darwin-housekeeping",
+		"darwin-housekeeping-daily", "darwin-deep-weekly", "walter-self-review-weekly",
 	} {
 		if !seen[required] {
 			return fmt.Errorf("maintenance catalog is missing required universal job %q", required)

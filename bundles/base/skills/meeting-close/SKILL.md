@@ -49,6 +49,6 @@ available. `persistence_status` is always `not_attempted` for this skill.
 - No Notion, CRM, email, calendar, browser, file write or memory commit.
 - No client/account promotion and no stakeholder update from participant names.
 - No hidden child-agent call: Maestro remains the hub; Case Agent owns the
-  context; a Capability Specialist would require an explicit bounded packet.
+  context; a PA Expert consultation requires an explicit bounded packet.
 - If an integration is unavailable, preserve the reviewable packet and report
   the capability as `unavailable` rather than emulating it.

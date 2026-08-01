@@ -51,6 +51,6 @@ Return `learning_objectives`, `external_guide`, `internal_prep_notes`,
   or persistence.
 - Never expose internal hypotheses, client context or unapproved evidence in
   `external_guide`.
-- Do not invent a PA Expert, Capability Specialist or source consultation.
+- Do not invent a PA Expert or source consultation.
 - A required research or document capability remains `unavailable` until its
   adapter is qualified; the guide may still be returned as a method packet.

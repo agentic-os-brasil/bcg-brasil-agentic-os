@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil/schemas/maestro-dispatch-input.schema.json",
+  "title": "Closed Maestro dispatch envelope",
+  "description": "CLI ingress under an OS-user-local data-root boundary. authenticated_owner is a fresh local owner attestation, not cryptographic principal authentication.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["authenticated_owner", "owner_id", "prompt", "plan"],
+  "anyOf": [{"required": ["dispatch_id"]}, {"required": ["occurrence_id"]}],
+  "properties": {
+    "authenticated_owner": {"type": "boolean", "const": true},
+    "owner_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"},
+    "dispatch_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "occurrence_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "prompt": {"type": "string", "minLength": 1, "maxLength": 32768},
+    "language": {"type": "string", "minLength": 2, "maxLength": 32},
+    "source": {"enum": ["claude", "codex", "cli", "owner"]},
+    "session_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"},
+    "working_language": {"type": "string", "minLength": 2, "maxLength": 32},
+    "current_language": {"type": "string", "minLength": 2, "maxLength": 32},
+    "draft_output": {"type": "string", "maxLength": 32768},
+    "audience": {"type": "string", "maxLength": 128},
+    "consequence": {"type": "string", "maxLength": 64},
+    "reversibility": {"type": "string", "maxLength": 64},
+    "relevance_keys": {"type": "array", "maxItems": 16, "items": {"type": "string", "maxLength": 128}},
+    "self_signal": {"$ref": "#/$defs/self_signal"},
+    "plan": {"$ref": "maestro-input.schema.json"}
+  },
+  "$defs": {
+    "self_signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signal", "facet", "claim", "evidence_type", "confidence", "sensitivity", "owner_confirmed"],
+      "properties": {
+        "signal": {"enum": ["explicit_instruction", "explicit_correction", "explicit_endorsement"]},
+        "facet": {"enum": ["professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"]},
+        "claim": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$", "not": {"enum": ["ok", "okay"]}},
+        "evidence_type": {"enum": ["owner_instruction", "owner_correction", "owner_endorsement", "owner_preference_confirmation"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "sensitivity": {"enum": ["professional", "sensitive", "restricted"]},
+        "owner_confirmed": {"const": true}
+      }
+    }
+  }
+}

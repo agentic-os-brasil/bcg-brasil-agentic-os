@@ -6,6 +6,30 @@
       "path": "agents/catalog.json"
     },
     {
+      "source": "bundles/base/agents/case-agent/AGENT.md",
+      "path": "agents/case-agent/AGENT.md"
+    },
+    {
+      "source": "bundles/base/agents/client-account-agent/AGENT.md",
+      "path": "agents/client-account-agent/AGENT.md"
+    },
+    {
+      "source": "bundles/base/agents/darwin/AGENT.md",
+      "path": "agents/darwin/AGENT.md"
+    },
+    {
+      "source": "bundles/base/agents/maestro/AGENT.md",
+      "path": "agents/maestro/AGENT.md"
+    },
+    {
+      "source": "bundles/base/agents/pa-expert/AGENT.md",
+      "path": "agents/pa-expert/AGENT.md"
+    },
+    {
+      "source": "bundles/base/agents/walter/AGENT.md",
+      "path": "agents/walter/AGENT.md"
+    },
+    {
       "source": "bundles/base/atlas/managed/backlinks.json",
       "path": "atlas/managed/backlinks.json"
     },

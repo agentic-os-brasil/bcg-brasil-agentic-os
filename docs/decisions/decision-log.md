@@ -601,6 +601,61 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/038-darwin-durable-evolution.md; internal/darwin/evolution.go; internal/darwin/evolution_store.go; schemas/darwin-evolution-*.schema.json
 - Supersedes: none
 
+## MAST - Make Maestro native delegation and high-leverage review explicit
+
+- Date: 2026-07-31
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs a deterministic topology that keeps Client Account consultation focused on client strategic lens and stakeholder pressure-testing, while Walter remains a calm Senior Advisor & Refiner for genuinely high-leverage output. Configuration and caller role strings must not silently create authority or inflate review loops.
+- Decision: Use a typed Maestro planner with independent `account_consultation_required` and `walter_required` decisions. Account consultation is selected by closed client-strategy, stakeholder, relationship, narrative, cross-case and promotion signals; explicit execution-only work may use direct Case, while insufficient routing evidence fails safe to Client Account. Walter is selected by consequence, leverage, external/reputational exposure, hard-to-reverse decisions, materiality or a closed review trigger. Ordinary low-leverage work may carry an auditable Walter skip. The runtime keeps one active spoke, depth one, zero children, durable Claude/Codex state fencing, and constructive Walter verdicts with actionable refinements and exceptional holds.
+- Consequences: Account framing and return validation are paired; direct Case never invokes Client Account. Walter approval is not a routine veto: cosmetic observations remain non-blocking, load-bearing gaps require proposed refinements and acceptance criteria, and hold is exceptional. Content or risk mutation invalidates stale decisions and re-enters the bounded loop. Native qualification remains unavailable until fresh runtime evidence exists.
+- Refs: specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; specs/023-sequential-agent-dispatch.md; specs/034-vertical-agents-and-transversal-skills.md; specs/040-maestro-native-delegation.md; schemas/maestro-plan.schema.json; internal/maestro; internal/agentdispatch/review.go; internal/agentorchestration
+- Supersedes: none
+
+## INTN - Make Walter an intent proxy and keep self learning evidence-bound
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Walter's high-leverage review needs to approximate the user's calm, context-rich self-review without impersonating the user or turning a selective reviewer into the only learning path. The product also needs longitudinal learning when Walter is skipped, while keeping private self material local and auditable.
+- Decision: Maestro captures a typed, metadata-only `InteractionObservation` after every interaction and stores it in an append-only provisional log with source event/hash, timestamp, scope, confidence, sensitivity and expiry/recheck. The canonical Owner Context facets remain the sole authority; a versioned `UserSelfSnapshot` is only a stale-checked projection of those confirmed professional preferences, principles, decision rules, communication style, motivations and boundaries. Walter receives a versioned, digest-bound `IntentReviewPacket` containing the literal request, chosen plan, draft/output, minimum relevant context, self snapshot version/digest, applicable provisional observations and audience/consequence/reversibility. Walter returns a typed intent hypothesis with evidence references, confidence, purpose satisfaction, constructive refinement, unresolved uncertainty and `approve`, `refine`, `clarify` or exceptional `hold`. Explicit instruction/correction can deterministically update canon; endorsement reinforces an existing rule; isolated inference remains provisional. Repeated independent evidence or explicit confirmation is required for promotion. Contradictions create a versioned superseding record, and the user can inspect, edit, reject, reset, export or delete self data.
+- Consequences: Walter is a proxy of likely user review, never an impersonation or mind-reading claim. Low-confidence/high-consequence intent returns to Maestro for a user clarification. Walter receipts pin self version plus prompt/output digests without storing raw content. Darwin may deduplicate, detect drift, measure utility and propose promotion/decay, but cannot silently mutate canonical self. Self changes never rewrite historical receipts; raw client content and personal data remain outside the public repository.
+- Refs: specs/006-memory-persistence.md; specs/002-data-boundaries.md; specs/004-runtime-portability.md; specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; schemas/user-self-snapshot.schema.json; internal/maestro; internal/ownerctx
+- Supersedes: SELF
+
+## PHST - Keep bounded owner prompt history separate from self learning
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Walter needs relevant dense context from prior user prompts without turning the runtime into an unbounded transcript or mixing prompt retention with self promotion.
+- Decision: Add a private PromptHistoryStore containing only explicitly retained user prompts, each bound to owner, timestamp, language, source/session, scope and SHA-256. Enforce bounded count, bytes, age and scope selection with secure local paths plus inspect, export, delete and reset controls. Maestro preserves the current prompt as highest precedence, selects bounded history, then normalizes/translates selected entries into the configured working language before deriving the typed IntentHypothesis. Historical bodies exist only in the ephemeral sealed Walter packet; receipts and ledgers keep digests only. Prompt retention remains independent from material authenticated self observation and canonical self promotion.
+- Consequences: Owner prompts may remain locally raw by explicit policy, but never enter managed bundles, telemetry, receipts, federation or release artifacts. Historical prompts are quoted data and not executable instructions. Missing translation evidence fails closed for the pre-review normalization stage; low-confidence high-consequence intent returns to Maestro for clarification.
+- Refs: specs/006-memory-persistence.md; specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/prompt-history.schema.json; schemas/intent-review-packet.schema.json; internal/ownerctx/prompt_history.go; internal/maestro/intent.go
+- Supersedes: none
+
+## QLHD - Harden prompt context and durable orchestration boundaries
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The first PromptHistoryStore slice normalized only prior prompts, selected history by recency and scope, and serialized mutations only within one process. Independent review also found unbound Case-to-Account routing, tamperable snapshot projections, incomplete intent evidence validation, and stale durable adapter instances.
+- Decision: Normalize the current prompt first into a digest-bound working representation while retaining the original as authority. Select history with deterministic lexical relevance plus explicit keys under hard scope/age/count/bytes and eight-prompt/32 KiB packet ceilings, exposing score/reason metadata only in the ephemeral packet. Bind each history root to one owner and serialize mutating operations with a symlink-safe cross-process lock. Require explicit Case-to-Account parent binding, validate snapshot facet content/readers/policy/path digests, require current-prompt evidence in both intent hypothesis and Walter result, and make the Maestro CLI dispatch boundary record a fresh owner attestation under the OS-user-local data-root boundary, persist chain metadata and stop at a metadata-only model-unavailable boundary. The attestation is not cryptographic principal authentication. Durable Claude/Codex state refreshes under a cross-process lock before CAS/fenced mutations.
+- Consequences: Historical prompt bodies remain local and never enter receipts or errors. Stale or ambiguous routing, translation, ownership, evidence, locking or tampering fails closed. Native model execution remains unavailable until qualifying evidence exists.
+- Refs: specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; schemas/maestro-input.schema.json; internal/ownerctx; internal/maestro; internal/agentorchestration
+- Supersedes: none
+
+## QLDR - Bind intent, fencing and dispatch commit recovery
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Follow-up pressure testing found that bounded context must cover translated representations as well as originals, stale durable state must not authorize a branch, and dispatch persistence cannot rely on an unverified best-effort rollback.
+- Decision: Bind Walter's intrinsic-intent string exactly to the evidence-bound hypothesis, require independent per-representation and combined packet ceilings, reject oversized owner facets instead of truncating authority, and seal the packet before recording the current prompt. The Maestro dispatch boundary uses an occurrence-bound metadata-only CAS/receipt store with append-only epochs and an atomic current pointer; it does not authenticate a native adapter or fabricate credentials. Chain persistence uses the repository's cross-platform advisory lock; prompt/chain commit failures compensate both sides and write a metadata-only recovery marker if compensation itself fails. Recovery markers are serialized, idempotent for the same incident and reject silent replacement of an unresolved incident.
+- Consequences: Earlier same-session or repeated prompts remain eligible history while the current occurrence cannot self-duplicate. Durable fence epochs are real transition evidence rather than an opened-store snapshot. Raw prompt, client or generated content never enters recovery markers, receipts or errors. Low-confidence intrinsic-intent hypotheses remain task-local and can clarify through Maestro; they never update canonical self state.
+- Refs: specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; internal/maestro; internal/ownerctx; internal/agentorchestration; internal/cli
+- Supersedes: none
+
 ## OPTS - Make all Canary professional bundles interview-selectable
 
 - Date: 2026-07-31

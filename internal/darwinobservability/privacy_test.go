@@ -13,7 +13,7 @@ import (
 
 func TestSchedulerAdapterDropsWorkspaceAndError(t *testing.T) {
 	record, err := FromSchedulerReceipt(scheduler.Receipt{
-		SchemaVersion: 1, WorkspaceID: "client-workspace-123", JobID: "darwin-housekeeping",
+		SchemaVersion: 1, WorkspaceID: "client-workspace-123", JobID: "darwin-housekeeping-daily",
 		ScheduledFor: time.Date(2026, 7, 29, 9, 0, 0, 0, time.UTC), AttemptedAt: time.Date(2026, 7, 30, 9, 0, 0, 0, time.UTC),
 		State: scheduler.Failed, Error: "customer prompt and path must never leave local state",
 	}, "week-1", strings.Repeat("f", 64))

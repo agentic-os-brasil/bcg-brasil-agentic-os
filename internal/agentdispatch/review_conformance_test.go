@@ -36,7 +36,7 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 			t.Fatalf("fixture trigger is not executable: %q", trigger)
 		}
 	}
-	expectedVerdicts := []WalterVerdict{WalterApproved, WalterRefineAndReturn, WalterMissingTheMark}
+	expectedVerdicts := []WalterVerdict{WalterApproved, WalterRefineAndReturn, WalterMissingTheMark, WalterHold}
 	if len(fixture.Verdicts) != len(expectedVerdicts) {
 		t.Fatalf("fixture verdict set drifted: %#v", fixture.Verdicts)
 	}
@@ -44,9 +44,9 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 		if verdict != string(expectedVerdicts[index]) {
 			t.Fatalf("fixture verdict order/set drifted: %#v", fixture.Verdicts)
 		}
-		body := WalterReviewBody{Verdict: WalterVerdict(verdict)}
-		if verdict == string(WalterRefineAndReturn) || verdict == string(WalterMissingTheMark) {
-			body.Objections = []WalterObjection{{Code: "fixture", Fix: "Apply the named correction.", ExitCondition: "The correction is evidenced."}}
+		body := WalterReviewBody{Verdict: WalterVerdict(verdict), PreservesIntent: true}
+		if verdict == string(WalterRefineAndReturn) || verdict == string(WalterMissingTheMark) || verdict == string(WalterHold) {
+			body.Objections = []WalterObjection{{Code: "fixture", Fix: "Apply the named correction.", ProposedRefinement: "Preserve the thesis while applying the concrete correction.", ExitCondition: "The correction is evidenced.", Blocking: verdict == string(WalterHold)}}
 		}
 		if err := validateWalterReviewBody(body, ReviewPacket{
 			SourcePacketID:     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -58,7 +58,7 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 			t.Fatalf("fixture verdict %q is not executable: %v", verdict, err)
 		}
 	}
-	expectedReceiptFields := []string{"trigger", "state", "source_packet_id", "source_packet_sha256", "objection_count"}
+	expectedReceiptFields := []string{"trigger", "leverage_decision", "posture", "state", "source_packet_id", "source_packet_sha256", "objection_count", "preserves_intent"}
 	if len(fixture.ReceiptFields) != len(expectedReceiptFields) {
 		t.Fatalf("fixture receipt projection drifted: %#v", fixture.ReceiptFields)
 	}
@@ -66,5 +66,28 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 		if field != expectedReceiptFields[index] {
 			t.Fatalf("fixture receipt projection drifted: %#v", fixture.ReceiptFields)
 		}
+	}
+}
+
+func TestWalterReviewIsConstructiveAndProportional(t *testing.T) {
+	review := ReviewPacket{SourcePacketID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", SourcePacketSHA256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", SourceScopeKind: "workspace", SourceScopeID: "alpha", Trigger: ReviewMaterialRecommendation, Audience: "sponsor", Recommendation: "Choose the bounded option.", DefinitionOfDone: "The sponsor can decide."}
+	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterApproved, PreservesIntent: true, Objections: []WalterObjection{{Code: "polish", Fix: "Tighten one sentence.", ProposedRefinement: "Keep the thesis and improve clarity.", ExitCondition: "The sentence is clearer.", Blocking: false}}}, review); err != nil {
+		t.Fatalf("cosmetic polish blocked approval: %v", err)
+	}
+	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterRefineAndReturn, PreservesIntent: true, Objections: []WalterObjection{{Code: "evidence_gap", Fix: "Add the missing decision evidence.", ProposedRefinement: "Retain the recommendation and add the cited evidence.", ExitCondition: "The evidence pointer supports the claim.", Blocking: true}}}, review); err != nil {
+		t.Fatalf("load-bearing refinement rejected: %v", err)
+	}
+	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterHold, PreservesIntent: true, Objections: []WalterObjection{{Code: "material_risk", Fix: "Resolve the material safety issue before delivery.", ExitCondition: "The safety owner confirms the mitigation.", Blocking: true}}}, review); err != nil {
+		t.Fatalf("material hold rejected: %v", err)
+	}
+	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterApproved, PreservesIntent: true, Objections: []WalterObjection{{Code: "cosmetic_block", Fix: "Change the color.", ExitCondition: "The color changes.", Blocking: true}}}, review); err == nil {
+		t.Fatal("cosmetic blocking objection bypassed calm approval rule")
+	}
+}
+
+func TestWalterReviewRequiresIntentPreservation(t *testing.T) {
+	review := ReviewPacket{SourcePacketID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", SourcePacketSHA256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", SourceScopeKind: "workspace", SourceScopeID: "alpha", Trigger: ReviewMaterialRecommendation, Audience: "sponsor", Recommendation: "Choose the bounded option.", DefinitionOfDone: "The sponsor can decide."}
+	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterApproved}, review); err == nil {
+		t.Fatal("Walter accepted a verdict without an explicit intent-preservation assertion")
 	}
 }

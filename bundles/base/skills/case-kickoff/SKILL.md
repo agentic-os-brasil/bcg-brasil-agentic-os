@@ -51,7 +51,7 @@ Return a structured packet with `objective`, `scope_boundary`, `phases`,
 - Do not create DOCX, slides, tasks, calendar events or messages.
 - Do not browse, ingest or open a source unless an authorized capability and
   explicit source pointer are supplied by the owning agent.
-- Do not claim that a Case Agent, Capability Specialist, PA Expert, Walter or
+- Do not claim that a Case Agent, PA Expert, Walter or
   Darwin was invoked; this skill only produces a method packet.
 - A missing required capability remains `unavailable`; do not emulate it with
   an external provider or hidden persistence.

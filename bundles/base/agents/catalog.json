@@ -2,18 +2,14 @@
   "schema_version": 1,
   "hub": "maestro",
   "delegation": {
-    "mode": "role_gated_chains",
-    "registered_chains": "governed_unbounded",
+    "mode": "maestro_planner",
+    "registered_chains": "bounded_sequential",
     "max_active_branches": 1,
-    "max_depth": 2,
-    "max_children_per_agent": 1,
+    "max_depth": 1,
+    "max_children_per_agent": 0,
     "max_errand_helpers": 1,
     "errand_scope": "basic_reversible",
     "allowed_edges": [
-      {
-        "from_role": "case_agent",
-        "to_roles": ["capability_specialist"]
-      },
       {
         "from_role": "hub",
         "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"]
@@ -31,6 +27,32 @@
     "subject-": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa-expert-{fpa|ipa}-{scope}"}
   },
   "agents": [
+    {
+      "id": "case-agent",
+      "role": "case_agent",
+      "direct_user_access": false,
+      "tool_access": "scoped",
+      "may_delegate": false,
+      "input_contract": "bounded_case_packet",
+      "relative_path": "agents/case-agent/AGENT.md",
+      "display_name": "Case Agent",
+      "default_emoji": "⚙️",
+      "ownership_scope": "case",
+      "customizable": true
+    },
+    {
+      "id": "client-account-agent",
+      "role": "client_account_agent",
+      "direct_user_access": false,
+      "tool_access": "scoped",
+      "may_delegate": false,
+      "input_contract": "bounded_client_account_packet",
+      "relative_path": "agents/client-account-agent/AGENT.md",
+      "display_name": "Client Account Agent",
+      "default_emoji": "🤝",
+      "ownership_scope": "account",
+      "customizable": true
+    },
     {
       "id": "darwin",
       "role": "governance_analyst",
@@ -55,6 +77,19 @@
       "display_name": "Maestro",
       "default_emoji": "🎼",
       "ownership_scope": "system",
+      "customizable": true
+    },
+    {
+      "id": "pa-expert",
+      "role": "pa_expert",
+      "direct_user_access": false,
+      "tool_access": "none",
+      "may_delegate": false,
+      "input_contract": "bounded_advisory_packet",
+      "relative_path": "agents/pa-expert/AGENT.md",
+      "display_name": "PA Expert",
+      "default_emoji": "🧠",
+      "ownership_scope": "pa_expert_registry",
       "customizable": true
     },
     {

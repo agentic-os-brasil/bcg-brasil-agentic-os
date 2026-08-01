@@ -1,8 +1,9 @@
 # Spec 036 - Universal maintenance plane
 
-Status: catalog, bounded command/receipt surface and safe CLI are implemented;
-owning executors and native scheduler installation remain unavailable pending
-runtime evidence.
+Status: catalog, bounded command/receipt surface, Darwin deterministic worker and
+explicit Canary lifecycle are implemented; Walter/model-backed work and native
+Windows task creation remain unavailable pending runtime evidence. macOS native
+qualification is environment-dependent and is never inferred from a plist.
 
 ## Intent
 
@@ -44,17 +45,19 @@ The jobs are deliberately split by success boundary:
 
 ## Wake and catch-up
 
-`bcgos maintenance wake --trigger presence|daily|weekly|monthly|event` is a bounded,
-read-only probe today. It returns `state: unavailable` and emits no scheduler
-receipt when no executor is installed. This makes native adapters safe to
-install early: a wake-up cannot masquerade as completed memory or wiki work.
+`bcgos maintenance wake --trigger presence|daily|weekly|monthly|event` is a
+bounded worker invocation. Without persisted Canary enrollment it fails closed
+and emits no receipt. With enrollment, the daily deterministic Darwin handler
+and weekly deep proposal handler may execute only when their exact activation,
+qualification digest, lease, deadline and occurrence fence are valid. Walter
+and monthly structural work remain due/unavailable and never become successful
+from a wake receipt alone.
 
-macOS and Windows templates live under `adapters/` and are intentionally not
-part of the immutable base distribution. They are disabled reference artifacts,
-not installable automation. A future installer may render and enable one only
-after the owning executor, enrollment and receipt contract are qualified. A
-launch agent or Task Scheduler task is never the source of truth; the owning
-subsystem's durable commit/manifest is.
+macOS and Windows surfaces live under `adapters/` and are not part of the
+immutable base distribution. macOS has an explicit per-user Canary installer
+and attended LaunchAgent lifecycle; Windows remains an honest unavailable
+native adapter in this PR. A launch agent or Task Scheduler task is never the
+source of truth; the owning subsystem's durable commit/manifest is.
 
 ## Automatic improvement scope
 

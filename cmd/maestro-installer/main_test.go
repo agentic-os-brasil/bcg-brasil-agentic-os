@@ -215,21 +215,33 @@ func TestResolveSimulationDefaultsUsesIsolatedRoots(t *testing.T) {
 
 func TestResolveDefaultsUsesUserSpaceRootsWhenPackageIsComplete(t *testing.T) {
 	root := t.TempDir()
-	// Use a supported target explicitly so the package-default contract is
-	// exercised consistently on Linux CI as well as the pilot platforms.
-	platform := "darwin"
-	bootstrapper := filepath.Join(root, "bcgos-bootstrap_0.1.0_"+platform+"_"+runtime.GOARCH)
+	// Exercise native Windows path semantics on Windows. Linux is a build
+	// target, not a pilot installer target, so it exercises the Darwin package
+	// contract with POSIX paths instead.
+	platform, home, localAppData := "darwin", "/Users/pilot", ""
+	wantManaged := "/Users/pilot/Library/Application Support/Maestro"
+	wantData := "/Users/pilot/Library/Application Support/BCGOS"
+	suffix := ""
+	if runtime.GOOS == "windows" {
+		platform = "windows"
+		home = `C:\Users\pilot`
+		localAppData = `C:\Users\pilot\AppData\Local`
+		wantManaged = `C:\Users\pilot\AppData\Local\Maestro`
+		wantData = `C:\Users\pilot\AppData\Local\BCGOS`
+		suffix = ".exe"
+	}
+	bootstrapper := filepath.Join(root, "bcgos-bootstrap_0.1.0_"+platform+"_"+runtime.GOARCH+suffix)
 	if err := os.WriteFile(bootstrapper, []byte("seed"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	options := options{}
-	if err := resolveDefaultsAt(&options, root, platform, runtime.GOARCH, "/Users/pilot", ""); err != nil {
+	if err := resolveDefaultsAt(&options, root, platform, runtime.GOARCH, home, localAppData); err != nil {
 		t.Fatal(err)
 	}
 	if options.bootstrapper != bootstrapper || options.wizardDir != filepath.Join(root, "wizard") || options.releaseDir != filepath.Join(root, "release") || options.authorityRegistry != filepath.Join(root, "authority-registry.json") {
 		t.Fatalf("package defaults = %#v", options)
 	}
-	if options.managedRoot != "/Users/pilot/Library/Application Support/Maestro" || options.dataRoot != "/Users/pilot/Library/Application Support/BCGOS" {
+	if options.managedRoot != wantManaged || options.dataRoot != wantData {
 		t.Fatalf("user-space roots = %q, %q", options.managedRoot, options.dataRoot)
 	}
 }
