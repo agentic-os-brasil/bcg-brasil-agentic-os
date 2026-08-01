@@ -12,6 +12,11 @@
     {"name": "weekly", "catch_up": "bounded", "worker": "lease_owned"},
     {"name": "monthly", "catch_up": "bounded", "worker": "lease_owned"}
   ],
+  "governed_jobs": {
+    "daily": "darwin-housekeeping-daily",
+    "weekly": ["darwin-deep-weekly", "walter-self-review-weekly"],
+    "monthly": "darwin-structural-evolution-proposal"
+  },
   "worker_contract": {
     "authority": "runtime_qualified_catalog_attendance_and_exact_occurrence",
     "deadline_required": true,
@@ -28,7 +33,7 @@
   "native": {
     "claude": "unavailable",
     "codex": "unavailable",
-    "macos": "template_only",
-    "windows": "template_only"
+    "macos": "adapter_installed_native_qualification_pending",
+    "windows": "unavailable_native_qualification_pending"
   }
 }

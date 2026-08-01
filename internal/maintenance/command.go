@@ -6,11 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 const CommandSchemaVersion = 1
+
+const (
+	DarwinStructuralProposalJobID = "darwin-structural-evolution-proposal"
+	WalterSelfReviewWeeklyJobID   = "walter-self-review-weekly"
+)
 
 type Trigger string
 
@@ -39,30 +45,36 @@ type Command struct {
 type ReceiptState string
 
 const (
-	ReceiptAccepted        ReceiptState = "accepted"
-	ReceiptBusy            ReceiptState = "busy"
-	ReceiptSucceeded       ReceiptState = "succeeded"
-	ReceiptFailed          ReceiptState = "failed"
-	ReceiptUnavailable     ReceiptState = "unavailable"
-	ReceiptTimedOut        ReceiptState = "timed_out"
-	ReceiptProposalEmitted ReceiptState = "proposal_emitted"
+	ReceiptAccepted         ReceiptState = "accepted"
+	ReceiptBusy             ReceiptState = "busy"
+	ReceiptSucceeded        ReceiptState = "succeeded"
+	ReceiptReviewedNoChange ReceiptState = "reviewed_no_change"
+	ReceiptRecoveryRequired ReceiptState = "recovery_required"
+	ReceiptFailed           ReceiptState = "failed"
+	ReceiptUnavailable      ReceiptState = "unavailable"
+	ReceiptTimedOut         ReceiptState = "timed_out"
+	ReceiptProposalEmitted  ReceiptState = "proposal_emitted"
 )
 
 type Receipt struct {
-	SchemaVersion    int          `json:"schema_version"`
-	AttemptID        string       `json:"attempt_id"`
-	OccurrenceDigest string       `json:"occurrence_digest"`
-	CommandID        string       `json:"command_id"`
-	JobID            string       `json:"job_id"`
-	WorkspaceID      string       `json:"workspace_id"`
-	Trigger          Trigger      `json:"trigger"`
-	State            ReceiptState `json:"state"`
-	RecordedAt       time.Time    `json:"recorded_at"`
-	Deadline         time.Time    `json:"deadline"`
-	ProposalOnly     bool         `json:"proposal_only"`
-	ProposalCount    int          `json:"proposal_count,omitempty"`
-	ProposalDigest   string       `json:"proposal_digest,omitempty"`
-	Diagnostic       string       `json:"diagnostic,omitempty"`
+	SchemaVersion        int          `json:"schema_version"`
+	AttemptID            string       `json:"attempt_id"`
+	OccurrenceDigest     string       `json:"occurrence_digest"`
+	CommandID            string       `json:"command_id"`
+	JobID                string       `json:"job_id"`
+	WorkspaceID          string       `json:"workspace_id"`
+	Trigger              Trigger      `json:"trigger"`
+	State                ReceiptState `json:"state"`
+	RecordedAt           time.Time    `json:"recorded_at"`
+	Deadline             time.Time    `json:"deadline"`
+	ProposalOnly         bool         `json:"proposal_only"`
+	ProposalCount        int          `json:"proposal_count,omitempty"`
+	ProposalDigest       string       `json:"proposal_digest,omitempty"`
+	ProposalArtifactID   string       `json:"proposal_artifact_id,omitempty"`
+	RecoveryPhase        string       `json:"recovery_phase,omitempty"`
+	RecoveryIntentDigest string       `json:"recovery_intent_digest,omitempty"`
+	FenceTokenDigest     string       `json:"fence_token_digest,omitempty"`
+	ReasonCode           ReasonCode   `json:"reason_code"`
 }
 
 var (
@@ -97,8 +109,8 @@ func (receipt Receipt) Validate() error {
 	if receipt.SchemaVersion != CommandSchemaVersion || !attemptIDPattern.MatchString(receipt.AttemptID) || !digestPattern.MatchString(receipt.OccurrenceDigest) || !commandIDPattern.MatchString(receipt.CommandID) || !commandIDPattern.MatchString(receipt.JobID) || !commandIDPattern.MatchString(receipt.WorkspaceID) || !validTrigger(receipt.Trigger) || !validReceiptState(receipt.State) || receipt.RecordedAt.IsZero() || receipt.Deadline.IsZero() {
 		return errors.New("maintenance receipt is invalid")
 	}
-	if len([]byte(receipt.Diagnostic)) > 256 || strings.ContainsAny(receipt.Diagnostic, "\r\n") {
-		return errors.New("maintenance receipt diagnostic is not bounded")
+	if !validReasonCode(receipt.ReasonCode) {
+		return errors.New("maintenance receipt reason code is not allowlisted")
 	}
 	if receipt.ProposalOnly != isProposalOnlyJob(receipt.JobID) {
 		return errors.New("maintenance receipt proposal flag does not match the job")
@@ -106,17 +118,46 @@ func (receipt Receipt) Validate() error {
 	if receipt.ProposalOnly && receipt.State == ReceiptSucceeded {
 		return errors.New("proposal-only maintenance cannot report an applied success")
 	}
-	if receipt.State == ReceiptProposalEmitted && receipt.ProposalCount < 0 {
-		return errors.New("maintenance proposal count is invalid")
+	if receipt.State == ReceiptProposalEmitted && receipt.ProposalCount < 1 {
+		return errors.New("proposal-emitted maintenance receipt requires at least one proposal")
 	}
 	if receipt.ProposalDigest != "" && !digestPattern.MatchString(receipt.ProposalDigest) {
 		return errors.New("maintenance proposal digest is invalid")
 	}
-	if receipt.State == ReceiptProposalEmitted && receipt.ProposalCount > 0 && receipt.ProposalDigest == "" {
+	if receipt.State == ReceiptProposalEmitted && receipt.ProposalDigest == "" {
 		return errors.New("maintenance proposal receipt requires a digest")
+	}
+	if receipt.ProposalArtifactID != "" && !digestPattern.MatchString(receipt.ProposalArtifactID) {
+		return errors.New("maintenance proposal artifact ID is invalid")
+	}
+	if receipt.State == ReceiptProposalEmitted && receipt.ProposalArtifactID == "" {
+		return errors.New("maintenance proposal receipt requires a durable artifact ID")
 	}
 	if receipt.State != ReceiptProposalEmitted && (receipt.ProposalCount != 0 || receipt.ProposalDigest != "") {
 		return errors.New("non-proposal maintenance receipt cannot carry proposal evidence")
+	}
+	if receipt.State != ReceiptProposalEmitted && receipt.ProposalArtifactID != "" {
+		return errors.New("non-proposal maintenance receipt cannot carry a proposal artifact ID")
+	}
+	if receipt.RecoveryPhase != "" && receipt.RecoveryPhase != "intent" && receipt.RecoveryPhase != "completed" && receipt.RecoveryPhase != "failed" && receipt.RecoveryPhase != "audit_incomplete" {
+		return errors.New("maintenance recovery phase is invalid")
+	}
+	if receipt.RecoveryPhase == "intent" {
+		if receipt.RecoveryIntentDigest == "" || receipt.FenceTokenDigest == "" || receipt.ReasonCode != ReasonRecoveryIntent {
+			return errors.New("maintenance recovery intent is incomplete")
+		}
+	}
+	if receipt.RecoveryPhase == "completed" || receipt.RecoveryPhase == "failed" || receipt.RecoveryPhase == "audit_incomplete" {
+		if receipt.RecoveryIntentDigest == "" || receipt.FenceTokenDigest == "" {
+			return errors.New("maintenance recovery outcome is incomplete")
+		}
+		wantReason := map[string]ReasonCode{"completed": ReasonRecoveryCompleted, "failed": ReasonRecoveryFailed, "audit_incomplete": ReasonRecoveryAuditIncomplete}[receipt.RecoveryPhase]
+		if receipt.ReasonCode != wantReason {
+			return errors.New("maintenance recovery outcome reason is invalid")
+		}
+	}
+	if receipt.RecoveryPhase == "" && (receipt.RecoveryIntentDigest != "" || receipt.FenceTokenDigest != "") {
+		return errors.New("maintenance recovery binding requires a phase")
 	}
 	return nil
 }
@@ -138,6 +179,39 @@ type GateDecision struct {
 	Reason      string   `json:"reason,omitempty"`
 	EventID     string   `json:"event_id,omitempty"`
 	PlannedJobs []string `json:"planned_jobs,omitempty"`
+}
+
+// NewRecoveryReceipt records an operator-attested quarantine recovery without
+// claiming scheduler success. The reason is an allowlisted code, never free
+// text from a shell or process.
+func NewRecoveryReceipt(workspaceID, jobID string, trigger Trigger, scheduledFor, now time.Time) (Receipt, error) {
+	attempt, err := attemptID()
+	if err != nil {
+		return Receipt{}, err
+	}
+	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: digest(scheduler.ScheduledOccurrenceKey(jobID, scheduledFor)), CommandID: "recovery-" + digestPrefix(jobID+scheduledFor.UTC().Format(time.RFC3339Nano)), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ProposalOnly: IsProposalOnlyJob(jobID), ReasonCode: ReasonReceiptPersisted}, nil
+}
+
+func NewRecoveryIntentReceipt(workspaceID, jobID string, trigger Trigger, scheduledFor, now time.Time, fenceToken string) (Receipt, error) {
+	attempt, err := attemptID()
+	if err != nil {
+		return Receipt{}, err
+	}
+	occurrence := digest(scheduler.ScheduledOccurrenceKey(jobID, scheduledFor))
+	fenceDigest := digest(fenceToken)
+	intentDigest := digest(workspaceID + "\x00" + jobID + "\x00" + occurrence + "\x00" + fenceDigest)
+	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: occurrence, CommandID: "recovery-intent-" + digestPrefix(intentDigest), JobID: jobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ProposalOnly: IsProposalOnlyJob(jobID), RecoveryPhase: "intent", RecoveryIntentDigest: intentDigest, FenceTokenDigest: fenceDigest, ReasonCode: ReasonRecoveryIntent}, nil
+}
+
+func NewRecoveryOutcomeReceipt(intent Receipt, now time.Time, phase string, reason ReasonCode) (Receipt, error) {
+	if intent.RecoveryPhase != "intent" || intent.RecoveryIntentDigest == "" || intent.FenceTokenDigest == "" || (phase != "completed" && phase != "failed" && phase != "audit_incomplete") {
+		return Receipt{}, errors.New("invalid maintenance recovery intent")
+	}
+	attempt, err := attemptID()
+	if err != nil {
+		return Receipt{}, err
+	}
+	return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: intent.OccurrenceDigest, CommandID: "recovery-" + phase + "-" + digestPrefix(intent.RecoveryIntentDigest), JobID: intent.JobID, WorkspaceID: intent.WorkspaceID, Trigger: intent.Trigger, State: ReceiptUnavailable, RecordedAt: now.UTC(), Deadline: now.UTC(), ProposalOnly: intent.ProposalOnly, RecoveryPhase: phase, RecoveryIntentDigest: intent.RecoveryIntentDigest, FenceTokenDigest: intent.FenceTokenDigest, ReasonCode: reason}, nil
 }
 
 func Gate(catalog Catalog, command Command, now time.Time) (GateDecision, error) {
@@ -174,13 +248,17 @@ func validTrigger(trigger Trigger) bool {
 
 func validReceiptState(state ReceiptState) bool {
 	switch state {
-	case ReceiptAccepted, ReceiptBusy, ReceiptSucceeded, ReceiptFailed, ReceiptUnavailable, ReceiptTimedOut, ReceiptProposalEmitted:
+	case ReceiptAccepted, ReceiptBusy, ReceiptSucceeded, ReceiptReviewedNoChange, ReceiptRecoveryRequired, ReceiptFailed, ReceiptUnavailable, ReceiptTimedOut, ReceiptProposalEmitted:
 		return true
 	default:
 		return false
 	}
 }
 
+func IsProposalOnlyJob(jobID string) bool {
+	return jobID == DarwinStructuralProposalJobID || jobID == WalterSelfReviewWeeklyJobID
+}
+
 func isProposalOnlyJob(jobID string) bool {
-	return jobID == "darwin-structural-evolution-proposal" || jobID == "walter-self-review-weekly"
+	return IsProposalOnlyJob(jobID)
 }

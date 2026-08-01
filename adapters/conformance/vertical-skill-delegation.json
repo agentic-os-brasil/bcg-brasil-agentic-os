@@ -7,14 +7,14 @@
   },
   "delegated_selection": {
     "parent_agent_id": "workspace-agent-alpha",
-    "target_agent_id": "capability-research",
+    "target_agent_id": "workspace-agent-alpha",
     "scope_kind": "workspace",
     "scope_id": "alpha",
     "skill_id": "qualitative-analysis",
-    "allowed": true
+    "allowed": false
   },
   "denials": [
-    {"target_agent_id": "capability-research", "scope_kind": "workspace", "scope_id": "alpha", "skill_id": ""},
-    {"target_agent_id": "capability-research", "scope_kind": "workspace", "scope_id": "alpha", "skill_id": "unmanaged-method"}
+    {"target_agent_id": "workspace-agent-alpha", "scope_kind": "workspace", "scope_id": "alpha", "skill_id": ""},
+    {"target_agent_id": "workspace-agent-alpha", "scope_kind": "workspace", "scope_id": "alpha", "skill_id": "unmanaged-method"}
   ]
 }

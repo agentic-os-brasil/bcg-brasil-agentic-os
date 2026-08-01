@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +15,16 @@ import (
 
 var ErrLeaseBusy = errors.New("scheduler lease is already held")
 var ErrLeaseLost = errors.New("scheduler lease fencing token is no longer current")
+
+func (store Store) openLeaseDirectory(workspaceID, jobID string) (*secureDirectory, string, error) {
+	if err := validateStoreInput(store.Root, workspaceID); err != nil {
+		return nil, "", err
+	}
+	if !jobIDPattern.MatchString(jobID) {
+		return nil, "", errors.New("invalid scheduler lease identity")
+	}
+	return openPrivateTree(store.Root, true, "workspaces", workspaceID, "leases", jobID)
+}
 
 // Lease is a short-lived worker claim. Hooks never acquire this lease; only a
 // bounded worker does. A busy or malformed lease is surfaced immediately so a
@@ -41,12 +50,14 @@ func (store Store) TryAcquireLease(workspaceID, jobID, occurrenceKey, ownerID st
 	if now.IsZero() || ttl <= 0 || ttl > 15*time.Minute {
 		return Lease{}, errors.New("scheduler lease requires a bounded positive TTL")
 	}
-	directory, err := ensurePrivateTree(store.Root, "workspaces", workspaceID, "leases", jobID)
+	directory, directoryPath, err := store.openLeaseDirectory(workspaceID, jobID)
 	if err != nil {
 		return Lease{}, err
 	}
-	path := filepath.Join(directory, safeLeaseName(occurrenceKey)+".json")
-	guard, err := acquireLeaseGuard(filepath.Join(directory, safeLeaseName(occurrenceKey)+".guard"))
+	defer directory.close()
+	name := safeLeaseName(occurrenceKey)
+	leaseName := name + ".json"
+	guard, err := acquireLeaseGuard(directory, name+".guard")
 	if err != nil {
 		if errors.Is(err, errLeaseGuardBusy) {
 			return Lease{}, ErrLeaseBusy
@@ -54,14 +65,20 @@ func (store Store) TryAcquireLease(workspaceID, jobID, occurrenceKey, ownerID st
 		return Lease{}, err
 	}
 	defer guard.release()
-	if existing, err := readLease(path); err == nil {
+	markerName := leaseName + ".quarantine"
+	if _, markerErr := directory.readFile(markerName); markerErr == nil {
+		return Lease{}, ErrLeaseBusy
+	} else if !errors.Is(markerErr, os.ErrNotExist) {
+		return Lease{}, markerErr
+	}
+	if existing, err := readLeaseInDirectory(directory, leaseName, filepath.Join(directoryPath, leaseName)); err == nil {
 		if existing.WorkspaceID != workspaceID || existing.JobID != jobID || existing.OccurrenceKey != occurrenceKey {
 			return Lease{}, errors.New("scheduler lease identity mismatch")
 		}
 		if existing.ExpiresAt.After(now) {
 			return Lease{}, ErrLeaseBusy
 		}
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := directory.removeFile(leaseName); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return Lease{}, err
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -72,7 +89,7 @@ func (store Store) TryAcquireLease(workspaceID, jobID, occurrenceKey, ownerID st
 		return Lease{}, err
 	}
 	lease := Lease{SchemaVersion: 1, WorkspaceID: workspaceID, JobID: jobID, OccurrenceKey: occurrenceKey, OwnerID: ownerID, FenceToken: fenceToken, AcquiredAt: now.UTC(), ExpiresAt: now.Add(ttl).UTC()}
-	if err := writeNewJSON(path, lease); errors.Is(err, os.ErrExist) {
+	if err := writeNewJSONInDirectory(directory, leaseName, lease); errors.Is(err, os.ErrExist) {
 		return Lease{}, ErrLeaseBusy
 	} else if err != nil {
 		return Lease{}, err
@@ -87,12 +104,14 @@ func (store Store) ReleaseLease(lease Lease) error {
 	if err := validateLeaseIdentity(lease); err != nil {
 		return err
 	}
-	directory, err := ensurePrivateTree(store.Root, "workspaces", lease.WorkspaceID, "leases", lease.JobID)
+	directory, directoryPath, err := store.openLeaseDirectory(lease.WorkspaceID, lease.JobID)
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(directory, safeLeaseName(lease.OccurrenceKey)+".json")
-	guard, err := acquireLeaseGuard(filepath.Join(directory, safeLeaseName(lease.OccurrenceKey)+".guard"))
+	defer directory.close()
+	name := safeLeaseName(lease.OccurrenceKey)
+	leaseName := name + ".json"
+	guard, err := acquireLeaseGuard(directory, name+".guard")
 	if err != nil {
 		if errors.Is(err, errLeaseGuardBusy) {
 			return ErrLeaseBusy
@@ -100,9 +119,9 @@ func (store Store) ReleaseLease(lease Lease) error {
 		return err
 	}
 	defer guard.release()
-	current, err := readLease(path)
+	current, err := readLeaseInDirectory(directory, leaseName, filepath.Join(directoryPath, leaseName))
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return removeQuarantineMarkerInDirectory(directory, leaseName+".quarantine", lease)
 	}
 	if err != nil {
 		return err
@@ -110,7 +129,233 @@ func (store Store) ReleaseLease(lease Lease) error {
 	if !sameLeaseIdentity(current, lease) {
 		return ErrLeaseLost
 	}
-	return os.Remove(path)
+	if err := removeQuarantineMarkerInDirectory(directory, leaseName+".quarantine", lease); err != nil {
+		return err
+	}
+	if err := directory.removeFile(leaseName); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+func removeQuarantineMarker(leasePath string, lease Lease) error {
+	absolute := filepath.Clean(leasePath)
+	name := filepath.Base(absolute)
+	if err := validateSecureLeaf(name); err != nil {
+		return err
+	}
+	parent := filepath.Dir(absolute)
+	directory, err := openSecureDirectory(parent, false)
+	if err != nil {
+		return err
+	}
+	defer directory.close()
+	return removeQuarantineMarkerInDirectory(directory, name+".quarantine", lease)
+}
+
+func removeQuarantineMarkerInDirectory(directory *secureDirectory, markerName string, lease Lease) error {
+	body, err := directory.readFile(markerName)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var markerData struct {
+		FenceToken string `json:"fence_token"`
+	}
+	if err := json.Unmarshal(body, &markerData); err != nil || markerData.FenceToken != lease.FenceToken {
+		return ErrLeaseLost
+	}
+	return directory.removeFile(markerName)
+}
+
+// ArmLease installs an active execution fence before handler side effects.
+// Normal completion removes it; a crashed process leaves an explicit marker
+// that becomes recoverable after the lease deadline.
+func (store Store) ArmLease(lease Lease) error {
+	return store.writeFenceMarker(lease, "active")
+}
+
+// QuarantineLease transitions an active fence to operator-recoverable state.
+// The marker is removed only by the original fence owner when its handler
+// exits and ReleaseLease succeeds; a successor can therefore never reclaim a
+// live, non-cooperative execution between TTL expiry and timeout handling.
+func (store Store) QuarantineLease(lease Lease) error {
+	return store.writeFenceMarker(lease, "quarantined")
+}
+
+func (store Store) writeFenceMarker(lease Lease, state string) error {
+	if err := validateStoreInput(store.Root, lease.WorkspaceID); err != nil {
+		return err
+	}
+	if err := validateLeaseIdentity(lease); err != nil {
+		return err
+	}
+	directory, directoryPath, err := store.openLeaseDirectory(lease.WorkspaceID, lease.JobID)
+	if err != nil {
+		return err
+	}
+	defer directory.close()
+	name := safeLeaseName(lease.OccurrenceKey)
+	leaseName := name + ".json"
+	guard, err := acquireLeaseGuard(directory, name+".guard")
+	if err != nil {
+		if errors.Is(err, errLeaseGuardBusy) {
+			return ErrLeaseBusy
+		}
+		return err
+	}
+	defer guard.release()
+	current, err := readLeaseInDirectory(directory, leaseName, filepath.Join(directoryPath, leaseName))
+	if err != nil {
+		return err
+	}
+	if !sameLeaseIdentity(current, lease) {
+		return ErrLeaseLost
+	}
+	markerName := leaseName + ".quarantine"
+	if body, markerErr := directory.readFile(markerName); markerErr == nil {
+		var existing struct {
+			FenceToken string `json:"fence_token"`
+			State      string `json:"state"`
+		}
+		if err := json.Unmarshal(body, &existing); err != nil || existing.FenceToken != lease.FenceToken {
+			return ErrLeaseLost
+		}
+		if existing.State == state || (existing.State == "quarantined" && state == "active") {
+			return nil
+		}
+		body, err = json.Marshal(struct {
+			FenceToken string `json:"fence_token"`
+			State      string `json:"state"`
+		}{FenceToken: lease.FenceToken, State: state})
+		if err != nil {
+			return err
+		}
+		return directory.writeFile(markerName, append(body, '\n'))
+	} else if !errors.Is(markerErr, os.ErrNotExist) {
+		return markerErr
+	}
+	return writeNewJSONInDirectory(directory, markerName, struct {
+		FenceToken string `json:"fence_token"`
+		State      string `json:"state"`
+	}{FenceToken: lease.FenceToken, State: state})
+}
+
+// QuarantinedLeases lists timeout-marked fences and expired active fences left
+// by a crashed process. Healthy active execution fences are intentionally not
+// reported as orphaned quarantine. The result is metadata-only.
+func (store Store) QuarantinedLeases(workspaceID string) ([]Lease, error) {
+	if err := validateStoreInput(store.Root, workspaceID); err != nil {
+		return nil, err
+	}
+	root, rootErr := lookupPrivateTree(store.Root, "workspaces", workspaceID, "leases")
+	if errors.Is(rootErr, os.ErrNotExist) {
+		return nil, nil
+	}
+	if rootErr != nil {
+		return nil, rootErr
+	}
+	entries, err := secureReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var leases []Lease
+	for _, jobEntry := range entries {
+		if jobEntry.Type()&os.ModeSymlink != 0 {
+			return nil, errors.New("scheduler quarantine job path cannot be a symlink")
+		}
+		if !jobEntry.IsDir() {
+			continue
+		}
+		jobRoot := filepath.Join(root, jobEntry.Name())
+		markers, readErr := secureReadDir(jobRoot)
+		if readErr != nil {
+			return nil, readErr
+		}
+		for _, marker := range markers {
+			if marker.Type()&os.ModeSymlink != 0 {
+				return nil, errors.New("scheduler quarantine marker cannot be a symlink")
+			}
+			if marker.IsDir() || !strings.HasSuffix(marker.Name(), ".json.quarantine") {
+				continue
+			}
+			leasePath := filepath.Join(jobRoot, strings.TrimSuffix(marker.Name(), ".quarantine"))
+			lease, leaseErr := readLease(leasePath)
+			if leaseErr != nil {
+				return nil, leaseErr
+			}
+			if lease.WorkspaceID != workspaceID {
+				return nil, errors.New("scheduler quarantine workspace mismatch")
+			}
+			markerBody, readErr := secureReadFile(filepath.Join(jobRoot, marker.Name()))
+			if readErr != nil {
+				return nil, readErr
+			}
+			var markerState struct {
+				State string `json:"state"`
+			}
+			if err := json.Unmarshal(markerBody, &markerState); err != nil {
+				return nil, err
+			}
+			if markerState.State == "active" && lease.ExpiresAt.After(time.Now().UTC()) {
+				continue
+			}
+			leases = append(leases, lease)
+		}
+	}
+	return leases, nil
+}
+
+// RecoverQuarantinedLease is an explicit operator recovery boundary. It
+// refuses to clear a quarantine while the original lease is still live; the
+// caller must separately attest that the process has exited or been restarted.
+func (store Store) RecoverQuarantinedLease(lease Lease, now time.Time) error {
+	if now.IsZero() || !lease.ExpiresAt.Before(now.UTC()) {
+		return ErrLeaseBusy
+	}
+	if err := validateStoreInput(store.Root, lease.WorkspaceID); err != nil {
+		return err
+	}
+	if err := validateLeaseIdentity(lease); err != nil {
+		return err
+	}
+	directory, _, err := store.openLeaseDirectory(lease.WorkspaceID, lease.JobID)
+	if err != nil {
+		return err
+	}
+	defer directory.close()
+	name := safeLeaseName(lease.OccurrenceKey)
+	leaseName := name + ".json"
+	guard, err := acquireLeaseGuard(directory, name+".guard")
+	if err != nil {
+		if errors.Is(err, errLeaseGuardBusy) {
+			return ErrLeaseBusy
+		}
+		return err
+	}
+	defer guard.release()
+	if _, err := directory.readFile(leaseName + ".quarantine"); err != nil {
+		return err
+	}
+	current, err := readLeaseInDirectory(directory, leaseName, leaseName)
+	if err != nil {
+		return err
+	}
+	if !sameLeaseIdentity(current, lease) {
+		return ErrLeaseLost
+	}
+	if err := removeQuarantineMarkerInDirectory(directory, leaseName+".quarantine", lease); err != nil {
+		return err
+	}
+	if err := directory.removeFile(leaseName); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // LeaseCurrent is the side-effect/finalization fence. A worker must still own
@@ -131,13 +376,14 @@ func (store Store) WithCurrentLease(lease Lease, now time.Time, publish func() e
 	if now.IsZero() || publish == nil {
 		return errors.New("scheduler lease validation time is required")
 	}
-	directory, err := ensurePrivateTree(store.Root, "workspaces", lease.WorkspaceID, "leases", lease.JobID)
+	directory, directoryPath, err := store.openLeaseDirectory(lease.WorkspaceID, lease.JobID)
 	if err != nil {
 		return err
 	}
+	defer directory.close()
 	name := safeLeaseName(lease.OccurrenceKey)
-	path := filepath.Join(directory, name+".json")
-	guard, err := acquireLeaseGuard(filepath.Join(directory, name+".guard"))
+	leaseName := name + ".json"
+	guard, err := acquireLeaseGuard(directory, name+".guard")
 	if err != nil {
 		if errors.Is(err, errLeaseGuardBusy) {
 			return ErrLeaseBusy
@@ -145,7 +391,7 @@ func (store Store) WithCurrentLease(lease Lease, now time.Time, publish func() e
 		return err
 	}
 	defer guard.release()
-	current, err := readLease(path)
+	current, err := readLeaseInDirectory(directory, leaseName, filepath.Join(directoryPath, leaseName))
 	if err != nil {
 		return err
 	}
@@ -160,38 +406,30 @@ func safeLeaseName(value string) string {
 	return hex.EncodeToString(digest[:])
 }
 
+func quarantinePath(leasePath string) string { return leasePath + ".quarantine" }
+
+func ScheduledOccurrenceKey(jobID string, scheduledFor time.Time) string {
+	return jobID + "\x00scheduled\x00" + scheduledFor.UTC().Format(time.RFC3339Nano)
+}
+
 func readLease(path string) (Lease, error) {
-	before, err := os.Lstat(path)
-	if err != nil {
-		return Lease{}, err
-	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
-		return Lease{}, fmt.Errorf("invalid scheduler lease %s", path)
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return Lease{}, err
-	}
-	defer file.Close()
-	opened, err := file.Stat()
-	if err != nil || !os.SameFile(before, opened) {
-		return Lease{}, fmt.Errorf("scheduler lease changed during secure open: %s", path)
-	}
-	decoder := json.NewDecoder(file)
-	decoder.DisallowUnknownFields()
 	var lease Lease
-	if err := decoder.Decode(&lease); err != nil {
-		return Lease{}, err
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return Lease{}, fmt.Errorf("scheduler lease contains multiple JSON values: %s", path)
-		}
+	if err := readStrictJSON(path, &lease); err != nil {
 		return Lease{}, err
 	}
 	if err := validateLeaseIdentity(lease); err != nil || !lease.ExpiresAt.After(lease.AcquiredAt) || lease.ExpiresAt.Sub(lease.AcquiredAt) > 15*time.Minute {
 		return Lease{}, fmt.Errorf("invalid scheduler lease %s", path)
+	}
+	return lease, nil
+}
+
+func readLeaseInDirectory(directory *secureDirectory, name, label string) (Lease, error) {
+	var lease Lease
+	if err := readStrictJSONInDirectory(directory, name, &lease); err != nil {
+		return Lease{}, err
+	}
+	if err := validateLeaseIdentity(lease); err != nil || !lease.ExpiresAt.After(lease.AcquiredAt) || lease.ExpiresAt.Sub(lease.AcquiredAt) > 15*time.Minute {
+		return Lease{}, fmt.Errorf("invalid scheduler lease %s", label)
 	}
 	return lease, nil
 }

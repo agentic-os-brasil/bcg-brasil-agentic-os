@@ -1,8 +1,9 @@
 # Windows maintenance adapter
 
 This directory contains a disabled reference template for a per-user Windows
-Task Scheduler wake-up. It is not installed by the base bundle and is not
-evidence that native maintenance is available.
+Task Scheduler wake-up. `internal/windowsadapter` renders and validates the
+contract, but native task creation deliberately returns `unavailable` until a
+qualified Windows probe exists. The repository does not claim Windows parity.
 
 Only a future installer, after workspace enrollment, local binary verification
 and executor qualification, may render and explicitly enable the XML. Until

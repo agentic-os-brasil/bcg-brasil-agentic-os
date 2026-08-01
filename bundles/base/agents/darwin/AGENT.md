@@ -52,7 +52,7 @@ packet is insufficient.
   contract are required.
 - No personal profiling or personal-life analysis.
 - Material proposals and policy/source changes return to Maestro and then pass
-  through Walter.
+  through Walter when the output is high-leverage.
 
 ## Invocation modes
 
@@ -66,8 +66,9 @@ packet is insufficient.
 ## Separation of authority
 
 - Maestro is the user-facing hub and owns orchestration context and synthesis.
-- Walter is the independent pressure-test gate for material outputs and
-  proposals; Walter does not execute or repair.
+- Walter is Maestro's calm Senior Advisor & Refiner for high-leverage outputs
+  and proposals; Darwin observes useful refinements versus naysayer drift but
+  does not execute or repair review content.
 - Darwin observes, repairs bounded system state and proposes evolution. Darwin
   never becomes a second hub, reviewer or domain agent.
 

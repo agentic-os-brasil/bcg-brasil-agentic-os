@@ -1,7 +1,8 @@
 # Spec 037 - Darwin lifecycle and bounded cadence
 
-Status: runtime-neutral command, cadence and lease contracts implemented;
-native runtime and scheduler activation remain unavailable.
+Status: runtime-neutral command, cadence, lease and local worker contracts
+implemented; macOS adapter is explicit-Canary-only and native qualification
+remains pending; Windows native creation is unavailable.
 
 ## Objective
 
@@ -35,8 +36,10 @@ occurrences. Continuous lifecycle events map only to catalog jobs with the
 `event` trigger and require an event ID. No cadence or executor receives a
 silent default.
 
-The base catalog includes `darwin-structural-evolution-proposal` as unavailable,
-disabled and never unattended. The worker contract can emit a bounded proposal
+The base catalog separates `darwin-housekeeping-daily`, `darwin-deep-weekly`,
+`walter-self-review-weekly` and `darwin-structural-evolution-proposal`. The
+Walter handler remains unavailable until its runtime-neutral integration lands.
+The monthly Darwin job is unavailable, disabled and never unattended. The worker can emit a bounded proposal
 receipt only after a concrete runtime-qualified catalog, explicit activation
 and attended monthly authority bind the exact occurrence; the shipped
 catalog-only/unavailable state cannot authorize it. Approval and application
@@ -52,8 +55,8 @@ passing an occurrence directly cannot invoke Darwin tools.
 The command/receipt/lease schemas, conformance fixture and adversarial tests
 prove local contracts only. Receipt attempts are immutable and carry an opaque
 occurrence digest; successful or proposal-emitted attempts suppress every retry
-for that occurrence even when the command ID changes. Claude, Codex and native
-macOS/Windows schedulers remain
-`unavailable` or `template_only` until a qualifying native observation and
-executor success boundary are recorded. Nothing in this spec promotes a
-capability.
+for that occurrence even when the command ID changes. Claude and Codex remain
+unavailable. macOS is
+`adapter_installed_native_qualification_pending` after explicit Canary install;
+Windows is `unavailable_native_qualification_pending`. Neither state is native
+qualification, and no wake receipt alone promotes a capability.

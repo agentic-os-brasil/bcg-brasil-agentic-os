@@ -30,6 +30,44 @@ func (store Store) AppendReceipt(receipt Receipt) error {
 	if err != nil {
 		return err
 	}
+	if existing, readErr := store.Receipts(receipt.WorkspaceID, receipt.JobID); readErr != nil {
+		return readErr
+	} else {
+		if receipt.RecoveryPhase != "" {
+			if err := validateRecoveryChain(receipt, existing); err != nil {
+				return err
+			}
+		}
+		for _, prior := range existing {
+			if prior.OccurrenceDigest != receipt.OccurrenceDigest {
+				continue
+			}
+			if receipt.RecoveryPhase != "" && prior.RecoveryPhase != "" {
+				if prior.RecoveryPhase == receipt.RecoveryPhase {
+					if prior.RecoveryIntentDigest == receipt.RecoveryIntentDigest && prior.FenceTokenDigest == receipt.FenceTokenDigest {
+						return nil
+					}
+					return errors.New("maintenance recovery audit conflicts with an existing phase")
+				}
+				continue
+			}
+			if prior.State == ReceiptSucceeded || prior.State == ReceiptReviewedNoChange || prior.State == ReceiptProposalEmitted || prior.State == ReceiptRecoveryRequired {
+				// Recovery intent/outcome records are a separate immutable audit
+				// chain. They must remain appendable after the operation's success
+				// receipt; otherwise a release failure cannot be recorded.
+				if receipt.RecoveryPhase != "" {
+					continue
+				}
+				if receipt.State == ReceiptRecoveryRequired && prior.State != ReceiptRecoveryRequired {
+					continue
+				}
+				if prior.State != receipt.State || prior.ProposalDigest != receipt.ProposalDigest || prior.ProposalArtifactID != receipt.ProposalArtifactID {
+					return errors.New("maintenance receipt occurrence has conflicting terminal evidence")
+				}
+				return nil
+			}
+		}
+	}
 	path := filepath.Join(root, receipt.CommandID+"--"+receipt.AttemptID+".json")
 	if err := writeReceipt(path, receipt); errors.Is(err, os.ErrExist) {
 		existing, readErr := readReceipt(path)
@@ -43,6 +81,50 @@ func (store Store) AppendReceipt(receipt Receipt) error {
 	} else {
 		return err
 	}
+}
+
+func validateRecoveryChain(receipt Receipt, existing []Receipt) error {
+	if receipt.RecoveryPhase == "intent" {
+		for _, prior := range existing {
+			if prior.OccurrenceDigest != receipt.OccurrenceDigest || prior.RecoveryPhase == "" {
+				continue
+			}
+			if prior.RecoveryPhase != "intent" {
+				return errors.New("maintenance recovery intent follows a terminal recovery outcome")
+			}
+			if sameRecoveryBinding(prior, receipt) {
+				return nil
+			}
+			return errors.New("maintenance recovery intent conflicts with the existing occurrence fence")
+		}
+		return nil
+	}
+
+	matchedIntent := false
+	for _, prior := range existing {
+		if prior.OccurrenceDigest != receipt.OccurrenceDigest || prior.RecoveryPhase == "" {
+			continue
+		}
+		if prior.RecoveryPhase == "intent" {
+			if !sameRecoveryBinding(prior, receipt) {
+				return errors.New("maintenance recovery outcome does not match its persisted intent")
+			}
+			matchedIntent = true
+			continue
+		}
+		if prior.RecoveryPhase == receipt.RecoveryPhase && sameRecoveryBinding(prior, receipt) {
+			return nil
+		}
+		return errors.New("maintenance recovery occurrence already has a different terminal outcome")
+	}
+	if !matchedIntent {
+		return errors.New("maintenance recovery outcome requires a persisted intent")
+	}
+	return nil
+}
+
+func sameRecoveryBinding(left, right Receipt) bool {
+	return left.WorkspaceID == right.WorkspaceID && left.JobID == right.JobID && left.OccurrenceDigest == right.OccurrenceDigest && left.Trigger == right.Trigger && left.ProposalOnly == right.ProposalOnly && left.RecoveryIntentDigest == right.RecoveryIntentDigest && left.FenceTokenDigest == right.FenceTokenDigest
 }
 
 func (store Store) Receipts(workspaceID, jobID string) ([]Receipt, error) {

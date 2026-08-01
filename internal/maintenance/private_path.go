@@ -15,13 +15,20 @@ func ensurePrivateTree(root string, relative ...string) (string, error) {
 	if strings.TrimSpace(root) == "" {
 		return "", errors.New("maintenance receipt root is required")
 	}
-	if err := os.MkdirAll(root, 0o700); err != nil {
+	canonicalRoot, err := canonicalPrivateRoot(root)
+	if err != nil {
 		return "", err
 	}
-	if err := validatePrivateDirectory(root); err != nil {
+	if err := rejectPrivateSymlinkAncestors(canonicalRoot); err != nil {
 		return "", err
 	}
-	current := filepath.Clean(root)
+	if err := os.MkdirAll(canonicalRoot, 0o700); err != nil {
+		return "", err
+	}
+	if err := validatePrivateDirectory(canonicalRoot); err != nil {
+		return "", err
+	}
+	current := filepath.Clean(canonicalRoot)
 	for _, component := range relative {
 		if component == "" || component == "." || component == ".." || filepath.Base(component) != component {
 			return "", errors.New("invalid maintenance storage component")
@@ -47,6 +54,57 @@ func ensurePrivateTree(root string, relative ...string) (string, error) {
 		}
 	}
 	return current, nil
+}
+
+// canonicalPrivateRoot normalizes only the operating system's temporary
+// directory alias (for example /tmp -> /private/tmp on macOS). Symlinks in
+// user-controlled portions remain visible and are rejected before creation.
+func canonicalPrivateRoot(root string) (string, error) {
+	absolute, err := filepath.Abs(filepath.Clean(root))
+	if err != nil {
+		return "", err
+	}
+	temporary, err := filepath.Abs(filepath.Clean(os.TempDir()))
+	if err != nil {
+		return "", err
+	}
+	physicalTemporary, err := filepath.EvalSymlinks(temporary)
+	if err != nil {
+		return "", err
+	}
+	relative, err := filepath.Rel(temporary, absolute)
+	if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return filepath.Join(physicalTemporary, relative), nil
+	}
+	return absolute, nil
+}
+
+func rejectPrivateSymlinkAncestors(path string) error {
+	absolute, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return err
+	}
+	volume := filepath.VolumeName(absolute)
+	remainder := strings.TrimPrefix(absolute, volume)
+	remainder = strings.TrimPrefix(remainder, string(filepath.Separator))
+	current := volume + string(filepath.Separator)
+	for _, component := range strings.Split(remainder, string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("maintenance storage path cannot traverse symlinked ancestors")
+		}
+	}
+	return nil
 }
 
 func validatePrivateDirectory(path string) error {

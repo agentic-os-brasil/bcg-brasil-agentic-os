@@ -219,10 +219,18 @@ delivery and validation contract, see [CONTRIBUTING.md](CONTRIBUTING.md).
 `bcgos maintenance status` shows whether the maintenance plane is merely
 prebuilt or actually executable. `bcgos maintenance catalog` exposes the
 platform-neutral job contracts; `bcgos maintenance wake --trigger presence`
-returns an unavailable state until a qualified executor exists. macOS and
-Windows wake templates live under [`adapters/`](adapters) and are disabled
-reference artifacts, not raw tasks inside the immutable base bundle. A wake-up
-never counts as a successful memory commit or wiki publication.
+uses only persisted Canary enrollment and qualified local handlers. Install the
+attended macOS presence surface explicitly with
+`bcgos maintenance canary install-macos --confirm`; status distinguishes the
+plist, native loaded/enabled state, local timezone, due work and unavailable
+jobs. Enrollment is persisted as preauthorized local authority, not as
+per-wake attended consent. Windows remains fail-closed until native
+qualification. A wake-up never counts as a successful memory commit or wiki
+publication. If a timed-out handler is quarantined, status exposes the
+occurrence; recovery requires an exact, confirmed
+`canary recover-quarantine --job-id ... --scheduled-for ... --reason
+operator_confirmed_process_gone --confirm` operation and never auto-clears a
+live fence.
 
 ### For a pilot user
 

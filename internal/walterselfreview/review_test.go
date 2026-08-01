@@ -701,9 +701,20 @@ func TestMaintenanceHandlerReturnsUnavailableUntilQualified(t *testing.T) {
 	}
 	now := time.Now().UTC()
 	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "command-1", JobID: WeeklyJobID, WorkspaceID: "workspace-1", Trigger: maintenance.TriggerWeekly, ScheduledFor: now, RequestedAt: now, Deadline: now.Add(time.Minute), ProposalOnly: true}
-	handler := Handler{Root: root, OwnerID: "owner", ScopeKind: ownerctx.PromptScopeGlobal, ScopeID: "owner", CurrentPrompt: "Current request", CurrentLanguage: "en-US", WorkingLanguage: "en-US", TranslatorID: "translator", TranslatorVersion: "v1", Translator: func(original, _, _ string) (string, error) { return original, nil }, ReviewFacets: []string{"voice"}, Store: ReceiptStore{Root: t.TempDir()}, MaintenanceStore: maintenance.Store{Root: t.TempDir()}, Now: func() time.Time { return now }}
+	maintenanceRoot := t.TempDir()
+	handler := Handler{Root: root, OwnerID: "owner", ScopeKind: ownerctx.PromptScopeGlobal, ScopeID: "owner", CurrentPrompt: "Current request", CurrentLanguage: "en-US", WorkingLanguage: "en-US", TranslatorID: "translator", TranslatorVersion: "v1", Translator: func(original, _, _ string) (string, error) { return original, nil }, ReviewFacets: []string{"voice"}, Store: ReceiptStore{Root: t.TempDir()}, MaintenanceStore: maintenance.Store{Root: maintenanceRoot}, Now: func() time.Time { return now }}
+	executed, err := handler.Execute(context.Background(), command)
+	if !errors.Is(err, ErrUnavailable) || executed.State != maintenance.ReceiptUnavailable {
+		t.Fatalf("execution seam did not return typed unavailable result: %+v %v", executed, err)
+	}
+	if receipts, readErr := handler.MaintenanceStore.Receipts(command.WorkspaceID, command.JobID); readErr != nil || len(receipts) != 0 {
+		t.Fatalf("execution seam published a terminal receipt: %#v %v", receipts, readErr)
+	}
 	receipt, err := handler.Handle(context.Background(), command)
-	if !errors.Is(err, ErrUnavailable) || receipt.State != maintenance.ReceiptUnavailable {
+	if err != nil || receipt.State != maintenance.ReceiptUnavailable {
 		t.Fatalf("unqualified handler did not fail closed: %+v %v", receipt, err)
+	}
+	if receipts, readErr := handler.MaintenanceStore.Receipts(command.WorkspaceID, command.JobID); readErr != nil || len(receipts) != 1 {
+		t.Fatalf("direct handler did not publish exactly one terminal receipt: %#v %v", receipts, readErr)
 	}
 }

@@ -27,7 +27,7 @@ func testCommand(now time.Time) Command {
 func TestReceiptStoreKeepsRetriesAsSeparateAttempts(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
 	store := Store{Root: t.TempDir()}
-	failed := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-retry-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptFailed, RecordedAt: now, Deadline: now.Add(time.Minute)}
+	failed := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-retry-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptFailed, RecordedAt: now, Deadline: now.Add(time.Minute), ReasonCode: ReasonHandlerFailure}
 	succeeded := failed
 	succeeded.AttemptID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	succeeded.State = ReceiptSucceeded
@@ -43,10 +43,99 @@ func TestReceiptStoreKeepsRetriesAsSeparateAttempts(t *testing.T) {
 	}
 }
 
+func TestReceiptStoreAllowsRecoveryAfterPublishedSuccess(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	store := Store{Root: t.TempDir()}
+	success := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-release-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptSucceeded, RecordedAt: now, Deadline: now.Add(time.Minute), ReasonCode: ReasonCompleted}
+	recovery := success
+	recovery.AttemptID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	recovery.State = ReceiptRecoveryRequired
+	recovery.ReasonCode = ReasonRecoveryRequired
+	if err := store.AppendReceipt(success); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendReceipt(recovery); err != nil {
+		t.Fatalf("recovery after success was rejected: %v", err)
+	}
+	receipts, err := store.Receipts("workspace-1", "memory-daily")
+	if err != nil || len(receipts) != 2 {
+		t.Fatalf("recovery chain receipts=%#v err=%v", receipts, err)
+	}
+}
+
+func TestReceiptStoreAllowsRecoveryIntentAfterPublishedSuccess(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	intent, err := NewRecoveryIntentReceipt("workspace-1", "memory-daily", TriggerDaily, now, now, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := Store{Root: t.TempDir()}
+	success := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: intent.OccurrenceDigest, CommandID: "cmd-intent-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptSucceeded, RecordedAt: now, Deadline: now.Add(time.Minute), ReasonCode: ReasonCompleted}
+	if err := store.AppendReceipt(success); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendReceipt(intent); err != nil {
+		t.Fatalf("recovery intent after success was rejected: %v", err)
+	}
+	receipts, err := store.Receipts("workspace-1", "memory-daily")
+	if err != nil || len(receipts) != 2 {
+		t.Fatalf("recovery intent chain receipts=%#v err=%v", receipts, err)
+	}
+}
+
+func TestMonthlyRecoveryReceiptsRetainProposalOnlyBinding(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	intent, err := NewRecoveryIntentReceipt("workspace-1", "darwin-structural-evolution-proposal", TriggerMonthly, now, now, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err != nil || !intent.ProposalOnly || intent.Validate() != nil {
+		t.Fatalf("monthly recovery intent=%#v err=%v validate=%v", intent, err, intent.Validate())
+	}
+	completed, err := NewRecoveryOutcomeReceipt(intent, now, "completed", ReasonRecoveryCompleted)
+	if err != nil || !completed.ProposalOnly || completed.Validate() != nil {
+		t.Fatalf("monthly recovery outcome=%#v err=%v validate=%v", completed, err, completed.Validate())
+	}
+}
+
+func TestReceiptStoreRejectsRecoveryOutcomeWithoutMatchingIntent(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	intent, err := NewRecoveryIntentReceipt("workspace-1", "memory-daily", TriggerDaily, now, now, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := NewRecoveryOutcomeReceipt(intent, now, "completed", ReasonRecoveryCompleted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := Store{Root: t.TempDir()}
+	if err := store.AppendReceipt(outcome); err == nil {
+		t.Fatal("recovery outcome without an intent was accepted")
+	}
+	if err := store.AppendReceipt(intent); err != nil {
+		t.Fatal(err)
+	}
+	forged := outcome
+	forged.AttemptID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	forged.FenceTokenDigest = digest("different-fence")
+	if err := store.AppendReceipt(forged); err == nil {
+		t.Fatal("recovery outcome with a forged fence binding was accepted")
+	}
+	forged = outcome
+	forged.AttemptID = "cccccccccccccccccccccccccccccccc"
+	forged.OccurrenceDigest = digest("different-occurrence")
+	if err := store.AppendReceipt(forged); err == nil {
+		t.Fatal("recovery outcome with a forged occurrence was accepted")
+	}
+	if err := store.AppendReceipt(outcome); err != nil {
+		t.Fatalf("matching recovery outcome was rejected: %v", err)
+	}
+	if err := store.AppendReceipt(outcome); err != nil {
+		t.Fatalf("matching recovery outcome was not idempotent: %v", err)
+	}
+}
+
 func TestReceiptStoreRejectsEphemeralBusyResult(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
 	store := Store{Root: t.TempDir()}
-	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-busy-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptBusy, RecordedAt: now, Deadline: now.Add(time.Minute)}
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-busy-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptBusy, RecordedAt: now, Deadline: now.Add(time.Minute), ReasonCode: ReasonLeaseBusy}
 	if err := store.AppendReceipt(receipt); err == nil {
 		t.Fatal("ephemeral busy result was persisted")
 	}
@@ -63,7 +152,7 @@ func TestReceiptStoreRejectsSymlinkedWorkspaceAncestor(t *testing.T) {
 	}
 	store := Store{Root: root}
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
-	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-store-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptSucceeded, RecordedAt: now, Deadline: now.Add(time.Minute)}
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-store-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptSucceeded, RecordedAt: now, Deadline: now.Add(time.Minute), ReasonCode: ReasonCompleted}
 	if err := store.AppendReceipt(receipt); err == nil {
 		t.Fatal("receipt store followed a symlinked workspace ancestor")
 	}
@@ -161,6 +250,20 @@ func TestExecutionAuthorityEnforcesCatalogQualificationAndAttendance(t *testing.
 	if got, err := attended.Authorize(command, now); err != nil || got.JobID != command.JobID || !got.ScheduledFor.Equal(command.ScheduledFor) {
 		t.Fatalf("qualified authority occurrence=%#v err=%v", got, err)
 	}
+	qualificationDigest := ""
+	for _, job := range qualified.Jobs {
+		if job.ID == command.JobID {
+			qualificationDigest = job.QualificationDigest
+			break
+		}
+	}
+	preauthorized, err := NewPreauthorizedLocalExecutionAuthority(qualified, []OccurrenceAuthorization{occurrence}, map[string]string{command.JobID: qualificationDigest}, []string{command.JobID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := preauthorized.Authorize(command, now); err == nil || got.JobID != "" {
+		t.Fatalf("preauthorized authority bypassed never-unattended policy: occurrence=%#v err=%v", got, err)
+	}
 	otherWorkspace := command
 	otherWorkspace.WorkspaceID = "workspace-2"
 	if _, err := attended.Authorize(otherWorkspace, now); err == nil {
@@ -195,7 +298,7 @@ func qualifiedCatalogForTest(t *testing.T, jobIDs ...string) Catalog {
 
 func TestProposalReceiptCannotClaimApplication(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
-	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-monthly-1", JobID: "darwin-structural-evolution-proposal", WorkspaceID: "workspace-1", Trigger: TriggerMonthly, State: ReceiptProposalEmitted, RecordedAt: now, Deadline: now.Add(time.Minute), ProposalOnly: true, ProposalCount: 2, ProposalDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-monthly-1", JobID: "darwin-structural-evolution-proposal", WorkspaceID: "workspace-1", Trigger: TriggerMonthly, State: ReceiptProposalEmitted, RecordedAt: now, Deadline: now.Add(time.Minute), ProposalOnly: true, ProposalCount: 2, ProposalDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ProposalArtifactID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ReasonCode: ReasonProposalEmitted}
 	if err := receipt.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +311,7 @@ func TestProposalReceiptCannotClaimApplication(t *testing.T) {
 func TestReceiptStoreKeepsOnlyTypedMetadata(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
 	store := Store{Root: t.TempDir()}
-	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-store-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptSucceeded, RecordedAt: now, Deadline: now.Add(time.Minute)}
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-store-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptSucceeded, RecordedAt: now, Deadline: now.Add(time.Minute), ReasonCode: ReasonCompleted}
 	if err := store.AppendReceipt(receipt); err != nil {
 		t.Fatal(err)
 	}
