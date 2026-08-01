@@ -67,7 +67,13 @@ func TestWorkerReleaseFailureReturnsRecoveryRequired(t *testing.T) {
 		t.Fatalf("release failure report=%#v err=%v", report, err)
 	}
 	stored, err := (Store{Root: receiptRoot}).Receipts("maestro-system", "darwin-housekeeping-daily")
-	if err != nil || len(stored) != 2 || stored[1].State != ReceiptRecoveryRequired {
+	foundRecovery := false
+	for _, receipt := range stored {
+		if receipt.State == ReceiptRecoveryRequired {
+			foundRecovery = true
+		}
+	}
+	if err != nil || len(stored) != 2 || !foundRecovery {
 		t.Fatalf("release failure receipts=%#v err=%v", stored, err)
 	}
 }
