@@ -29,6 +29,11 @@ func TestManifestHasEquivalentClaudeAndCodexCapabilities(t *testing.T) {
 			t.Fatalf("capability[%d] claude=%#v codex=%#v", index, capability, other)
 		}
 	}
+	for _, capability := range claude.Capabilities {
+		if capability.ID == "agent_orchestration" && (!capability.Configured || capability.AdapterObserved || capability.NativeQualified) {
+			t.Fatalf("agent orchestration evidence levels drifted: %#v", capability)
+		}
+	}
 }
 
 func TestClaudeLifecycleRemainsUnavailableOnlyForPendingNativeEvidence(t *testing.T) {

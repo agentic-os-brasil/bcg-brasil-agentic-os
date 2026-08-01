@@ -96,6 +96,12 @@
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]{43}$"
         },
+        "walter_key_id": {
+          "$ref": "#/$defs/id"
+        },
+        "walter_installation_id": {
+          "$ref": "#/$defs/id"
+        },
         "created_at": {"type": "string", "format": "date-time"}
       },
       "allOf": [
@@ -104,8 +110,14 @@
             "properties": {"require_walter_review": {"const": true}},
             "required": ["require_walter_review"]
           },
-          "then": {"required": ["walter_public_key"]},
-          "else": {"not": {"required": ["walter_public_key"]}}
+          "then": {"required": ["walter_public_key", "walter_key_id", "walter_installation_id"]},
+          "else": {
+            "allOf": [
+              {"not": {"required": ["walter_public_key"]}},
+              {"not": {"required": ["walter_key_id"]}},
+              {"not": {"required": ["walter_installation_id"]}}
+            ]
+          }
         }
       ]
     },
@@ -307,7 +319,8 @@
       "required": [
         "schema_version", "review_id", "item_id", "workspace_id",
         "attempt_id", "reviewed_revision", "recorded_revision",
-        "contract_sha256", "decision", "signer_sha256",
+        "contract_sha256", "signer_key_id", "installation_id", "custody_scope",
+        "decision", "signer_sha256",
         "envelope_sha256", "observed_at"
       ],
       "properties": {
@@ -319,6 +332,9 @@
         "reviewed_revision": {"type": "integer", "minimum": 1},
         "recorded_revision": {"type": "integer", "minimum": 2},
         "contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "signer_key_id": {"$ref": "#/$defs/id"},
+        "installation_id": {"$ref": "#/$defs/id"},
+        "custody_scope": {"const": "maestro/walter-review"},
         "decision": {"enum": ["approved", "rejected"]},
         "signer_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "envelope_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},

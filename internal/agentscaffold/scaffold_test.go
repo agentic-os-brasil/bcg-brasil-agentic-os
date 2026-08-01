@@ -65,19 +65,11 @@ func TestScaffoldUsesConfirmedAgentPersonalizationWithoutChangingAuthority(t *te
 	}
 }
 
-func TestScaffoldCreatesWorkspaceAndAccountChains(t *testing.T) {
+func TestScaffoldCreatesAccountAndRejectsAgentToAgentChild(t *testing.T) {
 	root := t.TempDir()
 	initializeWorkspaceScope(t, root, "ws-alpha")
 	if _, err := Scaffold(root, WorkspaceRequest("ws-alpha")); err != nil {
 		t.Fatal(err)
-	}
-	request := Request{
-		AgentID: "capability-research", Role: "capability_specialist",
-		ScopeKind: "workspace", ScopeID: "ws-alpha",
-		ParentAgent: "workspace-agent-ws-alpha", ParentRole: "workspace_agent",
-	}
-	if _, err := Scaffold(root, request); err == nil {
-		t.Fatal("Capability Specialist scaffold was accepted")
 	}
 	account := Request{
 		AgentID: "account-agent-client-alpha", Role: "account_agent",
@@ -89,9 +81,9 @@ func TestScaffoldCreatesWorkspaceAndAccountChains(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := Scaffold(root, Request{
-		AgentID: "capability-account-research", Role: "capability_specialist",
+		AgentID: "retired-research", Role: "retired_specialist_role",
 		ScopeKind: "account", ScopeID: "client-alpha",
-		ParentAgent: account.AgentID, ParentRole: "account_agent",
+		ParentAgent: account.AgentID, ParentRole: "client_account_agent",
 	}); err == nil {
 		t.Fatal("Client Account Agent unexpectedly delegated a case capability directly")
 	}
@@ -240,12 +232,12 @@ func TestScaffoldRejectsUngovernedRolesEdgesAndScopeReuse(t *testing.T) {
 			ParentAgent: "workspace-agent-ws-alpha", ParentRole: "workspace_agent",
 		},
 		{
-			AgentID: "capability-research", Role: "capability_specialist",
+			AgentID: "retired-research", Role: "retired_specialist_role",
 			ScopeKind: "workspace", ScopeID: "ws-alpha",
 			ParentAgent: "practice-insurance", ParentRole: "practice_agent",
 		},
 		{
-			AgentID: "../capability-research", Role: "capability_specialist",
+			AgentID: "../retired-research", Role: "retired_specialist_role",
 			ScopeKind: "workspace", ScopeID: "ws-alpha",
 			ParentAgent: "workspace-agent-ws-alpha", ParentRole: "workspace_agent",
 		},
@@ -351,16 +343,16 @@ func TestScaffoldRejectsSameIDWithDifferentImmutableScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := Request{
-		AgentID: "account-agent-client-alpha", Role: "account_agent",
+		AgentID: "client-account-agent-client-alpha", Role: "client_account_agent",
 		ScopeKind: "account", ScopeID: "client-alpha",
-		ParentAgent: "maestro", ParentRole: "hub", Owner: "owner", Mandate: "bounded account context",
+		ParentAgent: "maestro", ParentRole: "hub", Owner: "account-owner", Mandate: "Maintain bounded account context.",
 	}
 	if _, err := Scaffold(root, request); err != nil {
 		t.Fatal(err)
 	}
 	request.ScopeID = "client-beta"
 	if _, err := Scaffold(root, request); err == nil {
-		t.Fatal("account scaffold with a different immutable scope was accepted")
+		t.Fatal("same specialist ID was rebound to another workspace")
 	}
 }
 
@@ -374,7 +366,7 @@ func TestScaffoldRejectsOrphanAccountAndSubjectSpecialists(t *testing.T) {
 	root := t.TempDir()
 	requests := []Request{
 		{
-			AgentID: "capability-account-research", Role: "capability_specialist",
+			AgentID: "retired-account-research", Role: "retired_specialist_role",
 			ScopeKind: "account", ScopeID: "client-alpha",
 			ParentAgent: "account-agent-client-alpha", ParentRole: "account_agent",
 		},

@@ -8,13 +8,23 @@
       "scope": "client-alpha-project",
       "actor_id": "maestro",
       "actor_capability": "maestro-cap",
-      "target_id": "workspace-alpha-project"
+      "target_id": "case-agent-alpha"
+    },
+    {
+      "semantic_event": "tool_request",
+      "branch_id": "run-case-alpha-1",
+      "actor_id": "case-agent-alpha",
+      "actor_capability": "case-agent-alpha-cap",
+      "scope": "client-alpha-project",
+      "tool": "workspace_reader",
+      "operation": "read",
+      "resource": "bcgos://workspace/client-alpha-project/research.md"
     },
     {
       "semantic_event": "branch_finish",
       "branch_id": "run-case-alpha-1",
-      "actor_id": "workspace-alpha-project",
-      "actor_capability": "workspace-alpha-project-cap"
+      "actor_id": "case-agent-alpha",
+      "actor_capability": "case-agent-alpha-cap"
     }
   ],
   "adversarial_cases": [
@@ -53,6 +63,14 @@
       "actor_id": "maestro",
       "actor_capability": "maestro-cap",
       "expected_code": "tool_denied"
+    },
+    {
+      "name": "nested child packet",
+      "semantic_event": "child_start",
+      "actor_id": "case-agent-alpha",
+      "actor_capability": "case-agent-alpha-cap",
+      "target_id": "case-agent-alpha",
+      "expected_code": "depth_one_no_children"
     }
   ]
 }

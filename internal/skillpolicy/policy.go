@@ -139,19 +139,10 @@ func directRole(role string) bool {
 }
 
 func validateDelegated(rules []DelegatedRule, known map[string]bool, agents agentcatalog.Catalog) error {
-	previous := ""
-	for _, rule := range rules {
-		fromRole, toRole := canonicalRole(rule.FromRole), canonicalRole(rule.ToRole)
-		from, fromOK := (agentcatalog.Catalog{}).ContractForRole(fromRole)
-		to, toOK := (agentcatalog.Catalog{}).ContractForRole(toRole)
-		key := fromRole + "\x00" + toRole
-		if !fromOK || !toOK || !from.MayDelegate || to.MayDelegate || !agents.AllowsDelegation(fromRole, toRole, 1) || key <= previous || len(rule.SkillIDs) == 0 {
-			return errors.New("agent skill delegated rules are invalid or unsorted")
-		}
-		if err := validateSkills(rule.SkillIDs, known); err != nil {
-			return fmt.Errorf("delegated rule %s -> %s: %w", rule.FromRole, rule.ToRole, err)
-		}
-		previous = key
+	_ = known
+	_ = agents
+	if len(rules) != 0 {
+		return errors.New("delegated skill rules are forbidden at Maestro depth one")
 	}
 	return nil
 }

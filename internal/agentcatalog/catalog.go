@@ -87,7 +87,7 @@ var roleContracts = map[string]struct {
 	"hub":                  {true, "none", true, "session_context_packet"},
 	"pa_expert":            {false, "none", false, "bounded_advisory_packet"},
 	"reviewer":             {false, "none", false, "sealed_review_packet"},
-	"workspace_agent":      {false, "scoped", true, "bounded_workspace_packet"}, // compatibility only
+	"workspace_agent":      {false, "scoped", false, "bounded_workspace_packet"}, // compatibility only
 }
 
 type RoleContract struct {
@@ -133,9 +133,6 @@ func (catalog Catalog) CanonicalRole(role string) string {
 // roles and IDs. Compatibility aliases remain readable; deprecated practice
 // identities fail closed and require an explicit PA Expert kind.
 func (catalog Catalog) RejectLegacyRegistration(agentID, role string) error {
-	if role == "capability_specialist" {
-		return errors.New("Capability Specialist is not a canonical or compatibility role")
-	}
 	if alias, ok := catalog.LegacyAliases[role]; ok && strings.HasPrefix(alias.Status, "deprecated") {
 		return fmt.Errorf("legacy role %q is deprecated; %s", role, alias.Migration)
 	}
@@ -189,8 +186,8 @@ func (catalog Catalog) Validate() error {
 	if err := validateLegacyIDs(catalog.LegacyIDs); err != nil {
 		return err
 	}
-	if catalog.Delegation.Mode != "role_gated_chains" || catalog.Delegation.RegisteredChains != "sequential_direct_spokes" || catalog.Delegation.MaxActiveBranches != 1 || catalog.Delegation.MaxDepth != 1 || catalog.Delegation.MaxChildrenPerAgent != 1 || catalog.Delegation.MaxErrandHelpers != 1 || catalog.Delegation.ErrandScope != "basic_reversible" {
-		return errors.New("agent catalog must enforce sequential direct spokes, one active branch and no nesting")
+	if catalog.Delegation.Mode != "maestro_planner" || catalog.Delegation.RegisteredChains != "bounded_sequential" || catalog.Delegation.MaxActiveBranches != 1 || catalog.Delegation.MaxDepth != 1 || catalog.Delegation.MaxChildrenPerAgent != 0 || catalog.Delegation.MaxErrandHelpers != 1 || catalog.Delegation.ErrandScope != "basic_reversible" {
+		return errors.New("agent catalog must enforce Maestro planning, one active spoke and depth one")
 	}
 	if err := validateDelegationEdges(catalog.Delegation.AllowedEdges); err != nil {
 		return err
@@ -239,9 +236,12 @@ func (catalog Catalog) Validate() error {
 		mayDelegate   bool
 		inputContract string
 	}{
-		"maestro": {"hub", true, "none", true, "session_context_packet"},
-		"walter":  {"reviewer", false, "none", false, "sealed_review_packet"},
-		"darwin":  {"governance_analyst", false, "scoped", false, "bounded_health_packet"},
+		"maestro":              {"hub", true, "none", true, "session_context_packet"},
+		"walter":               {"reviewer", false, "none", false, "sealed_review_packet"},
+		"darwin":               {"governance_analyst", false, "scoped", false, "bounded_health_packet"},
+		"case-agent":           {"case_agent", false, "scoped", false, "bounded_case_packet"},
+		"client-account-agent": {"client_account_agent", false, "scoped", false, "bounded_client_account_packet"},
+		"pa-expert":            {"pa_expert", false, "none", false, "bounded_advisory_packet"},
 	}
 	for id, contract := range wanted {
 		agent, ok := seen[id]
@@ -261,7 +261,7 @@ func (catalog Catalog) AllowsDelegation(fromRole, toRole string, depth int) bool
 	}
 	fromRole = catalog.CanonicalRole(fromRole)
 	toRole = catalog.CanonicalRole(toRole)
-	if (fromRole == "hub" && depth != 1) || (fromRole != "hub" && depth != 2) {
+	if fromRole != "hub" || depth != 1 {
 		return false
 	}
 	for _, edge := range catalog.Delegation.AllowedEdges {
@@ -288,9 +288,7 @@ func (catalog Catalog) roleMayDelegate(role string) bool {
 }
 
 func validateDelegationEdges(edges []DelegationEdge) error {
-	wanted := []DelegationEdge{
-		{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}},
-	}
+	wanted := []DelegationEdge{{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}}}
 	if len(edges) != len(wanted) {
 		return errors.New("agent catalog has an incomplete or unauthorized delegation graph")
 	}

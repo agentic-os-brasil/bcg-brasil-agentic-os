@@ -1,0 +1,134 @@
+package agentorchestration
+
+import (
+	"path/filepath"
+	"sync"
+	"testing"
+)
+
+func TestDurableStoreRestartsFencesReplacementAndReplays(t *testing.T) {
+	catalog := loadCatalog(t)
+	path := filepath.Join(t.TempDir(), ".bcgos", "maestro-orchestration-state.json")
+	store, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claude, err := NewAdapter("claude", catalog, testAuthorizations(), store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision := claude.StartBranch("maestro", "maestro-cap", "case-agent-alpha", "run-one", "alpha", "case"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	oldEpoch := claude.Snapshot().FenceEpoch
+	restartedStore, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex, err := NewAdapter("codex", catalog, testAuthorizations(), restartedStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision := codex.StartBranch("maestro", "maestro-cap", "client-account-agent-alpha", "run-two", "account-alpha", "account"); decision.Allowed || decision.Code != "branch_active" {
+		t.Fatalf("parallel replacement was accepted: %#v", decision)
+	}
+	if decision := codex.Handle(NativeEvent{Name: "collaboration_branch_stop", BranchID: "run-one", ActorID: "case-agent-alpha", ActorCapability: "case-cap", FenceEpoch: oldEpoch + 1}); decision.Allowed || decision.Code != "fence_epoch_mismatch" {
+		t.Fatalf("stale replay was accepted: %#v", decision)
+	}
+	if decision := claude.FinishBranch("case-agent-alpha", "case-cap", "run-one"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	newStore, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := NewAdapter("codex", catalog, testAuthorizations(), newStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision := replacement.StartBranch("maestro", "maestro-cap", "client-account-agent-alpha", "run-two", "account-alpha", "account"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	if replacement.Snapshot().FenceEpoch <= oldEpoch {
+		t.Fatalf("fence epoch did not advance: old=%d new=%d", oldEpoch, replacement.Snapshot().FenceEpoch)
+	}
+}
+
+func TestDurableStoreConcurrentInstancesFenceStaleStart(t *testing.T) {
+	catalog := loadCatalog(t)
+	path := filepath.Join(t.TempDir(), ".bcgos", "maestro-orchestration-state.json")
+	first, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	left, err := NewAdapter("claude", catalog, testAuthorizations(), first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := NewAdapter("codex", catalog, testAuthorizations(), second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decisions := make(chan Decision, 2)
+	var wait sync.WaitGroup
+	wait.Add(2)
+	go func() {
+		defer wait.Done()
+		decisions <- left.StartBranch("maestro", "maestro-cap", "case-agent-alpha", "run-left", "alpha", "case")
+	}()
+	go func() {
+		defer wait.Done()
+		decisions <- right.StartBranch("maestro", "maestro-cap", "client-account-agent-alpha", "run-right", "account-alpha", "account")
+	}()
+	wait.Wait()
+	close(decisions)
+	allowedCount := 0
+	for decision := range decisions {
+		if decision.Allowed {
+			allowedCount++
+		}
+	}
+	if allowedCount != 1 {
+		t.Fatalf("concurrent stale instances allowed %d branches", allowedCount)
+	}
+}
+
+func TestAuthorizeActiveRootRefreshesBeforeAuthorizingStaleInstance(t *testing.T) {
+	catalog := loadCatalog(t)
+	path := filepath.Join(t.TempDir(), ".bcgos", "maestro-orchestration-state.json")
+	first, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	left, err := NewAdapter("claude", catalog, testAuthorizations(), first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := NewAdapter("codex", catalog, testAuthorizations(), second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision := left.StartBranch("maestro", "maestro-cap", "case-agent-alpha", "run-one", "alpha", "case"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	if decision := right.AuthorizeActiveRoot("case-agent-alpha", "case-cap", "run-one", "alpha", "case"); !decision.Allowed {
+		t.Fatalf("stale instance did not refresh active branch: %#v", decision)
+	}
+	if decision := left.FinishBranch("case-agent-alpha", "case-cap", "run-one"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	if decision := left.StartBranch("maestro", "maestro-cap", "client-account-agent-alpha", "run-two", "account-alpha", "account"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	if decision := right.AuthorizeActiveRoot("case-agent-alpha", "case-cap", "run-one", "alpha", "case"); decision.Allowed {
+		t.Fatalf("stale branch was authorized after epoch change: %#v", decision)
+	}
+}

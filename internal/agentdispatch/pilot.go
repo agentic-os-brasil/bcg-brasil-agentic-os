@@ -408,7 +408,7 @@ func (pilot *Pilot) RequireWalterReview(sourceDelegationID string, request Walte
 		case ReviewDispatched:
 			receipt, err := pilot.recordReviewFailure(source, request, "review_already_active", StateFailed)
 			return Dispatch{}, receipt, err
-		case ReviewRefineReturn, ReviewMissingMark:
+		case ReviewRefineReturn, ReviewMissingMark, ReviewHold:
 			receipt, err := pilot.recordReviewFailure(source, request, "rework_required", StateFailed)
 			return Dispatch{}, receipt, err
 		}
@@ -486,7 +486,7 @@ func (pilot *Pilot) Rework(sourceDelegationID string, intent Intent) (Dispatch, 
 	source, exists := pilot.records[sourceDelegationID]
 	if !exists || source.receipt.State != StatePendingReview || source.packet.ReviewTrigger == "" ||
 		source.receipt.Review == nil ||
-		(source.receipt.Review.State != ReviewRefineReturn && source.receipt.Review.State != ReviewMissingMark) {
+		(source.receipt.Review.State != ReviewRefineReturn && source.receipt.Review.State != ReviewMissingMark && source.receipt.Review.State != ReviewHold) {
 		receipt, err := pilot.recordFailure("workspace", "", intent.WorkspaceID, "rework_not_authorized", StateFailed)
 		return Dispatch{}, receipt, err
 	}
@@ -707,6 +707,8 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 		state = ReviewApproved
 	case WalterRefineAndReturn:
 		state = ReviewRefineReturn
+	case WalterHold:
+		state = ReviewHold
 	}
 	receipt := pilot.complete(verified, envelope, "", StateCompleted, state)
 	if receipt.Review != nil {

@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/reviewcustody"
 )
 
 type WalterReviewDecision string
@@ -34,6 +36,9 @@ type WalterReviewEnvelope struct {
 	AttemptID        string               `json:"attempt_id"`
 	ReviewedRevision int                  `json:"reviewed_revision"`
 	ContractSHA256   string               `json:"contract_sha256"`
+	SignerKeyID      string               `json:"signer_key_id"`
+	InstallationID   string               `json:"installation_id"`
+	CustodyScope     string               `json:"custody_scope"`
 	Decision         WalterReviewDecision `json:"decision"`
 	Nonce            string               `json:"nonce"`
 	IssuedAt         time.Time            `json:"issued_at"`
@@ -47,6 +52,9 @@ type walterReviewSigningPayload struct {
 	AttemptID        string               `json:"attempt_id"`
 	ReviewedRevision int                  `json:"reviewed_revision"`
 	ContractSHA256   string               `json:"contract_sha256"`
+	SignerKeyID      string               `json:"signer_key_id"`
+	InstallationID   string               `json:"installation_id"`
+	CustodyScope     string               `json:"custody_scope"`
 	Decision         WalterReviewDecision `json:"decision"`
 	Nonce            string               `json:"nonce"`
 	IssuedAt         time.Time            `json:"issued_at"`
@@ -63,6 +71,9 @@ func WalterReviewSigningPayload(envelope WalterReviewEnvelope) ([]byte, error) {
 		AttemptID:        envelope.AttemptID,
 		ReviewedRevision: envelope.ReviewedRevision,
 		ContractSHA256:   envelope.ContractSHA256,
+		SignerKeyID:      envelope.SignerKeyID,
+		InstallationID:   envelope.InstallationID,
+		CustodyScope:     envelope.CustodyScope,
 		Decision:         envelope.Decision,
 		Nonce:            envelope.Nonce,
 		IssuedAt:         envelope.IssuedAt,
@@ -80,6 +91,9 @@ type WalterReviewReceipt struct {
 	ReviewedRevision int                  `json:"reviewed_revision"`
 	RecordedRevision int                  `json:"recorded_revision"`
 	ContractSHA256   string               `json:"contract_sha256"`
+	SignerKeyID      string               `json:"signer_key_id"`
+	InstallationID   string               `json:"installation_id"`
+	CustodyScope     string               `json:"custody_scope"`
 	Decision         WalterReviewDecision `json:"decision"`
 	SignerSHA256     string               `json:"signer_sha256"`
 	EnvelopeSHA256   string               `json:"envelope_sha256"`
@@ -174,6 +188,9 @@ func (store Store) RecordWalterReview(workspaceID, itemID string, input WalterRe
 		ReviewedRevision: input.ExpectedRevision,
 		RecordedRevision: state.StateRevision,
 		ContractSHA256:   item.State.ContractSHA256,
+		SignerKeyID:      input.Envelope.SignerKeyID,
+		InstallationID:   input.Envelope.InstallationID,
+		CustodyScope:     input.Envelope.CustodyScope,
 		Decision:         input.Envelope.Decision,
 		SignerSHA256:     hex.EncodeToString(keyDigest[:]),
 		EnvelopeSHA256:   envelopeSHA256,
@@ -213,6 +230,11 @@ func verifyWalterReviewEnvelope(item Item, envelope WalterReviewEnvelope, now ti
 		envelope.ReviewedRevision != item.State.StateRevision ||
 		envelope.ContractSHA256 != item.State.ContractSHA256 {
 		return errors.New("Walter review envelope does not match the current ledger")
+	}
+	if envelope.SignerKeyID != item.Contract.WalterKeyID ||
+		envelope.InstallationID != item.Contract.WalterInstallationID ||
+		envelope.CustodyScope != reviewcustody.WalterReviewScope {
+		return errors.New("Walter review envelope is outside the installation custody scope")
 	}
 	if envelope.Decision != WalterReviewApproved && envelope.Decision != WalterReviewRejected {
 		return errors.New("invalid Walter review decision")
@@ -257,6 +279,10 @@ func validateWalterReviewReceipt(receipt WalterReviewReceipt) error {
 			return err
 		}
 	}
+	if !safeCustodyIdentity(receipt.SignerKeyID) || !safeCustodyIdentity(receipt.InstallationID) ||
+		receipt.CustodyScope != reviewcustody.WalterReviewScope {
+		return errors.New("invalid Walter review custody identity")
+	}
 	if receipt.Decision != WalterReviewApproved && receipt.Decision != WalterReviewRejected {
 		return errors.New("invalid Walter review receipt decision")
 	}
@@ -280,15 +306,31 @@ func decodeWalterPublicKey(encoded string) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(key), nil
 }
 
-func validateWalterContractSettings(required bool, encodedPublicKey string) error {
+func validateWalterContractSettings(required bool, encodedPublicKey, keyID, installationID string) error {
 	if !required {
-		if strings.TrimSpace(encodedPublicKey) != "" {
+		if strings.TrimSpace(encodedPublicKey) != "" || strings.TrimSpace(keyID) != "" || strings.TrimSpace(installationID) != "" {
 			return errors.New("Walter public key requires the review gate")
 		}
 		return nil
 	}
+	if !safeCustodyIdentity(keyID) || !safeCustodyIdentity(installationID) {
+		return errors.New("Walter review custody identity is required")
+	}
 	_, err := decodeWalterPublicKey(encodedPublicKey)
 	return err
+}
+
+func safeCustodyIdentity(value string) bool {
+	if value == "" || len(value) > 96 {
+		return false
+	}
+	for _, character := range value {
+		if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') &&
+			(character < '0' || character > '9') && character != '_' && character != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func (store Store) walterReviews(workspaceID, itemID string) ([]WalterReviewReceipt, error) {

@@ -8,7 +8,6 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/userintent"
 )
 
 // WalterReviewTrigger is the closed set of material situations that enter
@@ -32,24 +31,24 @@ const (
 	ReviewApproved     ReviewState = "approved"
 	ReviewRefineReturn ReviewState = "refine-and-return"
 	ReviewMissingMark  ReviewState = "missing-the-mark"
+	ReviewHold         ReviewState = "hold"
 	ReviewUnavailable  ReviewState = "unavailable"
 )
 
 // ReviewPacket is the sealed, bounded input Walter receives. Content remains
 // in the ephemeral dispatch body; durable receipts retain only its digests.
 type ReviewPacket struct {
-	SourcePacketID     string                       `json:"source_packet_id"`
-	SourcePacketSHA256 string                       `json:"source_packet_sha256"`
-	SourceScopeKind    string                       `json:"source_scope_kind"`
-	SourceScopeID      string                       `json:"source_scope_id"`
-	Trigger            WalterReviewTrigger          `json:"trigger"`
-	Audience           string                       `json:"audience"`
-	Recommendation     string                       `json:"recommendation"`
-	DefinitionOfDone   string                       `json:"definition_of_done"`
-	ArtifactRefs       []string                     `json:"artifact_refs,omitempty"`
-	EvidenceRefs       []string                     `json:"evidence_refs,omitempty"`
-	Uncertainties      []string                     `json:"uncertainties,omitempty"`
-	SelfReview         *userintent.SelfReviewPacket `json:"self_review,omitempty"`
+	SourcePacketID     string              `json:"source_packet_id"`
+	SourcePacketSHA256 string              `json:"source_packet_sha256"`
+	SourceScopeKind    string              `json:"source_scope_kind"`
+	SourceScopeID      string              `json:"source_scope_id"`
+	Trigger            WalterReviewTrigger `json:"trigger"`
+	Audience           string              `json:"audience"`
+	Recommendation     string              `json:"recommendation"`
+	DefinitionOfDone   string              `json:"definition_of_done"`
+	ArtifactRefs       []string            `json:"artifact_refs,omitempty"`
+	EvidenceRefs       []string            `json:"evidence_refs,omitempty"`
+	Uncertainties      []string            `json:"uncertainties,omitempty"`
 }
 
 // WalterReviewRequest is assembled by Maestro after the producing branch has
@@ -75,20 +74,23 @@ const (
 	WalterApproved        WalterVerdict = "approved"
 	WalterRefineAndReturn WalterVerdict = "refine-and-return"
 	WalterMissingTheMark  WalterVerdict = "missing-the-mark"
+	WalterHold            WalterVerdict = "hold"
 )
 
 type WalterObjection struct {
-	Code          string `json:"code"`
-	Fix           string `json:"fix"`
-	ExitCondition string `json:"exit_condition"`
+	Code               string `json:"code"`
+	Fix                string `json:"fix"`
+	ExitCondition      string `json:"exit_condition"`
+	ProposedRefinement string `json:"proposed_refinement,omitempty"`
+	Blocking           bool   `json:"blocking"`
 }
 
 type WalterReviewBody struct {
-	Verdict      WalterVerdict            `json:"verdict"`
-	Objections   []WalterObjection        `json:"objections,omitempty"`
-	EvidenceRefs []string                 `json:"evidence_refs,omitempty"`
-	Uncertainty  string                   `json:"uncertainty,omitempty"`
-	IntentReview *userintent.IntentReview `json:"intent_review,omitempty"`
+	Verdict         WalterVerdict     `json:"verdict"`
+	Objections      []WalterObjection `json:"objections,omitempty"`
+	EvidenceRefs    []string          `json:"evidence_refs,omitempty"`
+	Uncertainty     string            `json:"uncertainty,omitempty"`
+	PreservesIntent bool              `json:"preserves_intent"`
 }
 
 type ReviewSummary struct {
@@ -97,6 +99,8 @@ type ReviewSummary struct {
 	SourcePacketID     string              `json:"source_packet_id"`
 	SourcePacketSHA256 string              `json:"source_packet_sha256"`
 	ObjectionCount     int                 `json:"objection_count,omitempty"`
+	LeverageDecision   string              `json:"leverage_decision"`
+	Posture            string              `json:"posture"`
 }
 
 const (
@@ -120,11 +124,6 @@ func RequiresWalterReview(trigger WalterReviewTrigger) bool {
 func validateReviewPacket(review *ReviewPacket, packetID, objective string) error {
 	if review == nil {
 		return nil
-	}
-	if review.SelfReview != nil {
-		if err := review.SelfReview.Validate(); err != nil {
-			return errors.New("Walter self review packet is invalid")
-		}
 	}
 	if !validPacketID(review.SourcePacketID) || (packetID != "" && review.SourcePacketID == packetID) ||
 		!validSHA256(review.SourcePacketSHA256) || !validReviewScope(review.SourceScopeKind, review.SourceScopeID) ||
@@ -172,11 +171,14 @@ func validateReviewRequest(request WalterReviewRequest) error {
 }
 
 func validateWalterReviewBody(body WalterReviewBody, review ReviewPacket) error {
-	if body.Verdict != WalterApproved && body.Verdict != WalterRefineAndReturn && body.Verdict != WalterMissingTheMark {
+	if body.Verdict != WalterApproved && body.Verdict != WalterRefineAndReturn && body.Verdict != WalterMissingTheMark && body.Verdict != WalterHold {
 		return errors.New("Walter review verdict is invalid")
 	}
-	if len(body.Objections) > maxWalterObjections || (body.Verdict == WalterApproved && len(body.Objections) != 0) ||
-		(body.Verdict == WalterMissingTheMark && len(body.Objections) == 0) {
+	if !body.PreservesIntent {
+		return errors.New("Walter review must preserve the user's defensible intent")
+	}
+	if len(body.Objections) > maxWalterObjections ||
+		((body.Verdict == WalterMissingTheMark || body.Verdict == WalterHold || body.Verdict == WalterRefineAndReturn) && len(body.Objections) == 0) {
 		return errors.New("Walter review objection count does not match the verdict")
 	}
 	seen := make(map[string]bool, len(body.Objections))
@@ -186,6 +188,15 @@ func validateWalterReviewBody(body WalterReviewBody, review ReviewPacket) error 
 			len([]byte(strings.TrimSpace(objection.Fix))) > maxConstraintBytes ||
 			len([]byte(strings.TrimSpace(objection.ExitCondition))) > maxConstraintBytes {
 			return errors.New("Walter objection requires a unique code, concrete fix and exit condition")
+		}
+		if objection.ProposedRefinement != "" && len([]byte(strings.TrimSpace(objection.ProposedRefinement))) > maxConstraintBytes {
+			return errors.New("Walter proposed refinement is oversized")
+		}
+		if body.Verdict == WalterApproved && objection.Blocking {
+			return errors.New("approved Walter review cannot contain a blocking objection")
+		}
+		if body.Verdict == WalterHold && !objection.Blocking {
+			return errors.New("Walter hold requires a material blocking objection")
 		}
 		seen[objection.Code] = true
 	}
@@ -200,14 +211,6 @@ func validateWalterReviewBody(body WalterReviewBody, review ReviewPacket) error 
 	}
 	if len([]byte(strings.TrimSpace(body.Uncertainty))) > maxConstraintBytes {
 		return errors.New("Walter review uncertainty is oversized")
-	}
-	if body.IntentReview != nil {
-		if review.SelfReview == nil {
-			return errors.New("Walter intent review has no bound self review packet")
-		}
-		if err := body.IntentReview.Validate(*review.SelfReview); err != nil {
-			return errors.New("Walter intent review is invalid")
-		}
 	}
 	return nil
 }
@@ -237,6 +240,7 @@ func reviewSummary(review *ReviewPacket, state ReviewState) *ReviewSummary {
 	return &ReviewSummary{
 		Trigger: review.Trigger, State: state,
 		SourcePacketID: review.SourcePacketID, SourcePacketSHA256: review.SourcePacketSHA256,
+		LeverageDecision: "high_leverage_trigger", Posture: "calm_constructive_advisory",
 	}
 }
 

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil/schemas/user-self-snapshot.schema.json",
+  "title": "UserSelfSnapshot projection",
+  "description": "A versioned, stale-checked projection of the canonical Owner Context facets; not a second authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "version", "projection_of", "canonical_source_digest", "generated_at", "facets"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "version": {"type": "string", "pattern": "^self-[a-f0-9]{16}$"},
+    "projection_of": {"const": "ownerctx.facets.v2"},
+    "canonical_source_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "facets": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/facet"}}
+  },
+  "$defs": {
+    "facet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["facet", "source_path", "content_digest", "sensitivity", "readers", "refinement"],
+      "properties": {
+        "facet": {"type": "string", "minLength": 1},
+        "source_path": {"type": "string", "pattern": "^owner/self/"},
+        "content_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "sensitivity": {"enum": ["professional", "sensitive", "restricted"]},
+        "readers": {"type": "array", "items": {"type": "string"}},
+        "refinement": {"enum": ["automatic_with_audit", "proposal_only", "confirmation_required"]},
+        "content": {"type": "string", "maxLength": 32768}
+      }
+    }
+  }
+}

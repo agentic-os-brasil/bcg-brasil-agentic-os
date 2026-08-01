@@ -404,7 +404,7 @@ func validISODate(value string) bool {
 func managedFingerprint(root string, sources []ManagedSource) (string, error) {
 	hash := sha256.New()
 	for _, source := range sources {
-		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(source.Path)))
+		body, err := readManagedSource(filepath.Join(root, filepath.FromSlash(source.Path)))
 		if err != nil {
 			return "", err
 		}
@@ -421,7 +421,7 @@ func managedFingerprint(root string, sources []ManagedSource) (string, error) {
 }
 
 func writeManagedConcept(bundleRoot, sourceRoot string, source ManagedSource, byID map[string]ManagedSource, fingerprint string, allowlist ManagedAllowlist) error {
-	body, err := os.ReadFile(filepath.Join(sourceRoot, filepath.FromSlash(source.Path)))
+	body, err := readManagedSource(filepath.Join(sourceRoot, filepath.FromSlash(source.Path)))
 	if err != nil {
 		return err
 	}
@@ -471,6 +471,17 @@ func writeManagedConcept(bundleRoot, sourceRoot string, source ManagedSource, by
 		return err
 	}
 	return os.WriteFile(path, []byte(builder.String()), 0o644)
+}
+
+func readManagedSource(path string) ([]byte, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	// Git checkouts may use CRLF on Windows. Normalize source bytes before
+	// fingerprinting and compilation so the checked-in managed bundle is
+	// deterministic across supported platforms.
+	return bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n")), nil
 }
 
 func writeManagedIndex(bundleRoot string, sources []ManagedSource, fingerprint string, allowlist ManagedAllowlist) error {
@@ -576,6 +587,9 @@ func directorySnapshot(root string) (string, error) {
 		if err != nil {
 			return err
 		}
+		// A Windows checkout may materialize tracked Markdown as CRLF while
+		// reconciliation writes LF. Compare semantic bytes, not checkout EOL.
+		body = bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
 		builder.WriteString(filepath.ToSlash(relative))
 		builder.WriteByte('\n')
 		builder.Write(body)

@@ -41,8 +41,8 @@ The core must not depend on Claude- or Codex-specific paths, hook names or paylo
 The managed agent catalog under `bundles/base/agents/` defines Maestro, Walter,
 Darwin and the lean delegation invariants. A catalog definition is not runtime
 activation. `agent_orchestration` remains unavailable until an adapter proves
-no-tool enforcement, one active branch, one child per agent and role-gated
-Maestro-mediated sequential direct-spoke delegation with no nesting.
+no-tool enforcement, one active spoke, depth one and zero agent children. All
+delegation is selected and mediated by Maestro.
 
 ## Runtime adapters
 
