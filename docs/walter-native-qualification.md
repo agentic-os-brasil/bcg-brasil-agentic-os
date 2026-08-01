@@ -12,15 +12,28 @@ or launchd catalog entries. Its orchestration dependency is PR
 [#148](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/pull/148);
 after that PR lands, orchestration may rebase and trim this seam as needed.
 
-The weekly occurrence is reserved before any model call. The current prompt is
-kept separate and wins over history; selected history is translated through a
-caller-supplied translator whose identity/version and receipt digest are
-bound into the ephemeral input. Historical entries are explicitly quoted
-non-instructional evidence. Walter may emit only a facet-bound proposal:
+The weekly occurrence is keyed by the command's stable occurrence digest, not
+its retry command ID, and is reserved before any model call. A recoverable,
+cross-platform advisory lease fences concurrent workers and allows an expired
+reservation to resume after a crash. The current prompt is kept separate and
+wins over history; selected history is translated through a caller-supplied
+translator whose identity/version and receipt digest are bound into the
+ephemeral input. Per-field and combined UTF-8 bounds plus translation
+expansion checks run before the adapter and in request validation. Historical
+entries are explicitly quoted non-instructional evidence. Walter receives only
+an explicit minimal facet allowlist; sensitive facets require a declared
+purpose and owner authorization. Walter may emit only a facet-bound proposal:
 `communication-style`, `voice` and `preferences` use the declared low-risk
 policy, `professional-role` and `decision-rules` remain proposal-only, and
 boundaries/profile require explicit owner confirmation. Intrinsic-purpose
 hypotheses remain task-local and cannot become self facets.
+
+The facet sensitivity, readers, refinement mode and confirmation requirement
+are derived from the canonical `ownerctx` snapshot and compared exactly with
+the adapter result. After a model call, the actual ownerctx proposal ID,
+proposal digest and canonical policy are bound into the terminal weekly
+receipt. Re-running a crashed occurrence returns the same ownerctx proposal
+and emits one terminal receipt; it never creates a second proposal.
 
 Run the qualification in an attended, fresh session for each runtime:
 

@@ -39,6 +39,32 @@ func TestInitializeCreatesInspectablePointersWithoutOverwritingSelf(t *testing.T
 	}
 }
 
+func TestOccurrenceBoundRefinementIsIdempotent(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	input := RefinementInput{Facet: "voice", Evidence: "weekly-occurrence-evidence", ProposedBody: "# Voice\n\nConcise.\n", OccurrenceID: "occurrence-digest-1"}
+	first, err := SubmitRefinement(root, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := SubmitRefinement(root, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID == "" || first.ID != second.ID || first.ProposalSHA256 == "" || first.ProposalSHA256 != second.ProposalSHA256 {
+		t.Fatalf("idempotent receipts differ: first=%+v second=%+v", first, second)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "owner", "refinement", "proposals"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("proposal retry created %d proposal files", len(entries))
+	}
+}
+
 func TestAutomaticRefinementAppliesVoiceWithAuditAndCanRevert(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {

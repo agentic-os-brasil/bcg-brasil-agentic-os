@@ -26,27 +26,37 @@ type RefinementInput struct {
 	ProposedBody string
 	ProducerID   string
 	Capability   string
+	// OccurrenceID binds a periodic proposal to one execution occurrence. When
+	// present, retries return the same proposal instead of creating another.
+	OccurrenceID string
 }
 
 // RefinementReceipt is safe to expose in CLI output: it deliberately omits the
 // proposed text and evidence body.
 type RefinementReceipt struct {
-	ID      string `json:"id"`
-	Facet   string `json:"facet"`
-	State   string `json:"state"`
-	Policy  string `json:"policy"`
-	AuditID string `json:"audit_id,omitempty"`
+	ID             string   `json:"id"`
+	Facet          string   `json:"facet"`
+	State          string   `json:"state"`
+	Policy         string   `json:"policy"`
+	Sensitivity    string   `json:"sensitivity"`
+	Readers        []string `json:"readers"`
+	ProposalSHA256 string   `json:"proposal_sha256"`
+	OccurrenceID   string   `json:"occurrence_id,omitempty"`
+	AuditID        string   `json:"audit_id,omitempty"`
 }
 
 type proposal struct {
 	ID           string    `json:"id"`
 	Facet        string    `json:"facet"`
+	Sensitivity  string    `json:"sensitivity"`
+	Readers      []string  `json:"readers"`
 	SourceSHA256 string    `json:"source_sha256"`
 	Evidence     string    `json:"evidence"`
 	ProposedBody string    `json:"proposed_body"`
 	Policy       string    `json:"policy"`
 	ProducerID   string    `json:"producer_id"`
 	AutoApproved bool      `json:"auto_approved"`
+	OccurrenceID string    `json:"occurrence_id,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	State        string    `json:"state"`
 	AuditID      string    `json:"audit_id,omitempty"`
@@ -120,7 +130,22 @@ func SubmitRefinement(root string, input RefinementInput) (RefinementReceipt, er
 	}
 	created := time.Now().UTC()
 	id := refinementID(input.Facet, input.Evidence, input.ProposedBody, created)
-	p := proposal{ID: id, Facet: input.Facet, SourceSHA256: digest(string(current)), Evidence: input.Evidence, ProposedBody: input.ProposedBody, Policy: definition.Refinement, ProducerID: input.ProducerID, AutoApproved: autoApproved, CreatedAt: created, State: "proposed"}
+	if strings.TrimSpace(input.OccurrenceID) != "" {
+		id = "proposal-" + digest(input.Facet + "\x00" + input.OccurrenceID)[:40]
+		// The occurrence identity, not wall-clock time, is the durable retry
+		// identity. This keeps the ownerctx proposal digest stable if a process
+		// crashes between proposal commit and receipt finalization.
+		created = time.Unix(0, 0).UTC()
+	}
+	p := proposal{ID: id, Facet: input.Facet, Sensitivity: definition.Sensitivity, Readers: append([]string(nil), definition.Readers...), SourceSHA256: digest(string(current)), Evidence: input.Evidence, ProposedBody: input.ProposedBody, Policy: definition.Refinement, ProducerID: input.ProducerID, AutoApproved: autoApproved, OccurrenceID: input.OccurrenceID, CreatedAt: created, State: "proposed"}
+	if existing, readErr := readProposal(root, id); readErr == nil {
+		if existing.Facet != p.Facet || existing.Sensitivity != p.Sensitivity || !sameStrings(existing.Readers, p.Readers) || existing.SourceSHA256 != p.SourceSHA256 || existing.Evidence != p.Evidence || existing.ProposedBody != p.ProposedBody || existing.Policy != p.Policy || existing.OccurrenceID != p.OccurrenceID {
+			return RefinementReceipt{}, errors.New("owner refinement occurrence is already bound to different content")
+		}
+		return receipt(existing), nil
+	} else if !errors.Is(readErr, os.ErrNotExist) {
+		return RefinementReceipt{}, readErr
+	}
 	if err := writePrivateJSON(proposalPath(root, id), p); err != nil {
 		return RefinementReceipt{}, err
 	}
@@ -181,7 +206,7 @@ func RevertRefinement(root, auditID string, confirmed bool) (RefinementReceipt, 
 	if err := writePrivateJSON(reversionPath(root, reversionID), event); err != nil {
 		return RefinementReceipt{}, err
 	}
-	return RefinementReceipt{ID: reversionID, Facet: item.Facet, State: "reverted", Policy: definition.Refinement, AuditID: auditID}, nil
+	return RefinementReceipt{ID: reversionID, Facet: item.Facet, State: "reverted", Policy: definition.Refinement, Sensitivity: definition.Sensitivity, Readers: append([]string(nil), definition.Readers...), AuditID: auditID}, nil
 }
 
 func apply(root string, p proposal, definition facetRecord, confirmed bool) (RefinementReceipt, error) {
@@ -275,7 +300,12 @@ func readAudit(root, id string) (audit, error) {
 }
 
 func receipt(p proposal) RefinementReceipt {
-	return RefinementReceipt{ID: p.ID, Facet: p.Facet, State: p.State, Policy: p.Policy, AuditID: p.AuditID}
+	return RefinementReceipt{ID: p.ID, Facet: p.Facet, State: p.State, Policy: p.Policy, Sensitivity: p.Sensitivity, Readers: append([]string(nil), p.Readers...), ProposalSHA256: digestJSON(p), OccurrenceID: p.OccurrenceID, AuditID: p.AuditID}
+}
+
+func digestJSON(value any) string {
+	body, _ := json.Marshal(value)
+	return digest(string(body))
 }
 
 func proposalPath(root, id string) string {
