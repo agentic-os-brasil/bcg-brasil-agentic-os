@@ -33,6 +33,11 @@ func (store Store) AppendReceipt(receipt Receipt) error {
 	if existing, readErr := store.Receipts(receipt.WorkspaceID, receipt.JobID); readErr != nil {
 		return readErr
 	} else {
+		if receipt.RecoveryPhase != "" {
+			if err := validateRecoveryChain(receipt, existing); err != nil {
+				return err
+			}
+		}
 		for _, prior := range existing {
 			if prior.OccurrenceDigest != receipt.OccurrenceDigest {
 				continue
@@ -76,6 +81,50 @@ func (store Store) AppendReceipt(receipt Receipt) error {
 	} else {
 		return err
 	}
+}
+
+func validateRecoveryChain(receipt Receipt, existing []Receipt) error {
+	if receipt.RecoveryPhase == "intent" {
+		for _, prior := range existing {
+			if prior.OccurrenceDigest != receipt.OccurrenceDigest || prior.RecoveryPhase == "" {
+				continue
+			}
+			if prior.RecoveryPhase != "intent" {
+				return errors.New("maintenance recovery intent follows a terminal recovery outcome")
+			}
+			if sameRecoveryBinding(prior, receipt) {
+				return nil
+			}
+			return errors.New("maintenance recovery intent conflicts with the existing occurrence fence")
+		}
+		return nil
+	}
+
+	matchedIntent := false
+	for _, prior := range existing {
+		if prior.OccurrenceDigest != receipt.OccurrenceDigest || prior.RecoveryPhase == "" {
+			continue
+		}
+		if prior.RecoveryPhase == "intent" {
+			if !sameRecoveryBinding(prior, receipt) {
+				return errors.New("maintenance recovery outcome does not match its persisted intent")
+			}
+			matchedIntent = true
+			continue
+		}
+		if prior.RecoveryPhase == receipt.RecoveryPhase && sameRecoveryBinding(prior, receipt) {
+			return nil
+		}
+		return errors.New("maintenance recovery occurrence already has a different terminal outcome")
+	}
+	if !matchedIntent {
+		return errors.New("maintenance recovery outcome requires a persisted intent")
+	}
+	return nil
+}
+
+func sameRecoveryBinding(left, right Receipt) bool {
+	return left.WorkspaceID == right.WorkspaceID && left.JobID == right.JobID && left.OccurrenceDigest == right.OccurrenceDigest && left.Trigger == right.Trigger && left.ProposalOnly == right.ProposalOnly && left.RecoveryIntentDigest == right.RecoveryIntentDigest && left.FenceTokenDigest == right.FenceTokenDigest
 }
 
 func (store Store) Receipts(workspaceID, jobID string) ([]Receipt, error) {

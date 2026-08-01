@@ -331,3 +331,38 @@ func TestSchedulerStoreRejectsSymlinkedWorkspaceAncestor(t *testing.T) {
 		t.Fatalf("scheduler wrote outside its root: entries=%#v err=%v", entries, err)
 	}
 }
+
+func TestSecurePathWalkSurvivesAncestorRenameToSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("descriptor-relative nofollow walk is Unix-specific")
+	}
+	root, outside := t.TempDir(), t.TempDir()
+	workspaces := filepath.Join(root, "workspaces")
+	if err := os.Mkdir(workspaces, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(root, "workspaces-original")
+	previous := securePathStepHook
+	t.Cleanup(func() { securePathStepHook = previous })
+	securePathStepHook = func(component string) {
+		if component != "workspaces" {
+			return
+		}
+		if err := os.Rename(workspaces, moved); err != nil {
+			t.Fatalf("rename ancestor: %v", err)
+		}
+		if err := os.Symlink(outside, workspaces); err != nil {
+			t.Fatalf("replace ancestor with symlink: %v", err)
+		}
+	}
+	if _, err := ensurePrivateTree(root, "workspaces", "workspace-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(moved, "workspace-1")); err != nil {
+		t.Fatalf("descriptor-relative creation missed original ancestor: %v", err)
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("path walk followed renamed symlink: entries=%#v err=%v", entries, err)
+	}
+}

@@ -43,6 +43,7 @@ type HousekeepingExecutor struct {
 	Scheduler     scheduler.Store
 	Authority     maintenance.ExecutionAuthority
 	Now           func() time.Time
+	ArmLease      func(scheduler.Lease) error
 	ReleaseLease  func(scheduler.Lease) error
 }
 
@@ -77,31 +78,6 @@ func (executor HousekeepingExecutor) ExecuteCommand(ctx context.Context, command
 		base.ReasonCode = maintenance.ReasonAuthorityRejected
 		return base, errors.New("Darwin housekeeping guard and invoker are required")
 	}
-	if command.ProposalOnly {
-		if recovered, found, recoveryErr := executor.recoverProposalArtifact(command, base); recoveryErr != nil {
-			return base, recoveryErr
-		} else if found {
-			return recovered, nil
-		}
-	}
-	if existing, readErr := executor.CommandStore.Receipts(command.WorkspaceID, command.JobID); readErr == nil && len(existing) > 0 {
-		for _, receipt := range existing {
-			if receipt.OccurrenceDigest == command.OccurrenceDigest() && (receipt.State == maintenance.ReceiptSucceeded || receipt.State == maintenance.ReceiptReviewedNoChange || receipt.State == maintenance.ReceiptProposalEmitted) {
-				if receipt.State == maintenance.ReceiptProposalEmitted {
-					proposalStore := executor.ProposalStore
-					if proposalStore.Root == "" {
-						proposalStore = ProposalStore{Root: executor.CommandStore.Root}
-					}
-					if err := proposalStore.ValidateReceipt(receipt); err != nil {
-						return base, err
-					}
-				}
-				return receipt, nil
-			}
-		}
-	} else if readErr != nil {
-		return base, readErr
-	}
 	occurrence, err := executor.Authority.Authorize(command, now)
 	if err != nil {
 		base.State = maintenance.ReceiptUnavailable
@@ -121,37 +97,50 @@ func (executor HousekeepingExecutor) ExecuteCommand(ctx context.Context, command
 		}
 		return base, err
 	}
-	if err := executor.Scheduler.ArmLease(lease); err != nil {
-		_ = executor.Scheduler.ReleaseLease(lease)
+	if err := executor.armLease(lease); err != nil {
+		if releaseErr := executor.releaseLease(lease); releaseErr != nil {
+			return executor.persistRecoveryEvidence(base, errors.Join(err, releaseErr))
+		}
 		return base, err
 	}
 	var result maintenance.Receipt
 	var executionErr error
 	guardErr := executor.Scheduler.WithCurrentLease(lease, now, func() error {
+		if existing, found, readErr := executor.existingTerminalReceipt(command); readErr != nil {
+			return readErr
+		} else if found {
+			result = existing
+			return nil
+		}
+		if command.ProposalOnly {
+			if recovered, found, recoveryErr := executor.recoverProposalArtifact(command); recoveryErr != nil {
+				return recoveryErr
+			} else if found {
+				result = recovered
+				return nil
+			}
+		}
 		result, executionErr = executor.executeLeasedCommand(ctx, command, occurrence, base, now)
 		return nil
 	})
 	if guardErr != nil {
 		if releaseErr := executor.releaseLease(lease); releaseErr != nil {
-			recovery := recoveryRequiredReceipt(base, executor.currentTime())
-			_ = executor.CommandStore.AppendReceipt(recovery)
-			return recovery, releaseErr
+			return executor.persistRecoveryEvidence(base, errors.Join(guardErr, releaseErr))
 		}
 		return base, guardErr
 	}
 	if releaseErr := executor.releaseLease(lease); releaseErr != nil {
-		recovery := recoveryRequiredReceipt(result, executor.currentTime())
-		_ = executor.CommandStore.AppendReceipt(recovery)
-		return recovery, releaseErr
+		return executor.persistRecoveryEvidence(result, releaseErr)
 	}
 	return result, executionErr
 }
 
 // recoverProposalArtifact closes the monthly crash window where the
-// occurrence artifact was published before the command receipt. It runs
-// before health construction, so changed health cannot create a second
-// structural assessment for the same occurrence.
-func (executor HousekeepingExecutor) recoverProposalArtifact(command maintenance.Command, base maintenance.Receipt) (maintenance.Receipt, bool, error) {
+// occurrence artifact was published before the command receipt. It is called
+// only after authority and the occurrence fence are held, but before health
+// construction, so changed health cannot create a second structural
+// assessment for the same occurrence.
+func (executor HousekeepingExecutor) recoverProposalArtifact(command maintenance.Command) (maintenance.Receipt, bool, error) {
 	proposalStore := executor.ProposalStore
 	if proposalStore.Root == "" {
 		proposalStore = ProposalStore{Root: executor.CommandStore.Root}
@@ -186,11 +175,49 @@ func (executor HousekeepingExecutor) recoverProposalArtifact(command maintenance
 	return recovered, true, nil
 }
 
+func (executor HousekeepingExecutor) existingTerminalReceipt(command maintenance.Command) (maintenance.Receipt, bool, error) {
+	existing, err := executor.CommandStore.Receipts(command.WorkspaceID, command.JobID)
+	if err != nil {
+		return maintenance.Receipt{}, false, err
+	}
+	for _, receipt := range existing {
+		if receipt.OccurrenceDigest != command.OccurrenceDigest() || (receipt.State != maintenance.ReceiptSucceeded && receipt.State != maintenance.ReceiptReviewedNoChange && receipt.State != maintenance.ReceiptProposalEmitted) {
+			continue
+		}
+		if receipt.State == maintenance.ReceiptProposalEmitted {
+			proposalStore := executor.ProposalStore
+			if proposalStore.Root == "" {
+				proposalStore = ProposalStore{Root: executor.CommandStore.Root}
+			}
+			if err := proposalStore.ValidateReceipt(receipt); err != nil {
+				return maintenance.Receipt{}, false, err
+			}
+		}
+		return receipt, true, nil
+	}
+	return maintenance.Receipt{}, false, nil
+}
+
 func (executor HousekeepingExecutor) releaseLease(lease scheduler.Lease) error {
 	if executor.ReleaseLease != nil {
 		return executor.ReleaseLease(lease)
 	}
 	return executor.Scheduler.ReleaseLease(lease)
+}
+
+func (executor HousekeepingExecutor) armLease(lease scheduler.Lease) error {
+	if executor.ArmLease != nil {
+		return executor.ArmLease(lease)
+	}
+	return executor.Scheduler.ArmLease(lease)
+}
+
+func (executor HousekeepingExecutor) persistRecoveryEvidence(base maintenance.Receipt, cause error) (maintenance.Receipt, error) {
+	recovery := recoveryRequiredReceipt(base, executor.currentTime())
+	if appendErr := executor.CommandStore.AppendReceipt(recovery); appendErr != nil {
+		return recovery, errors.Join(cause, appendErr)
+	}
+	return recovery, cause
 }
 
 func recoveryRequiredReceipt(base maintenance.Receipt, now time.Time) maintenance.Receipt {

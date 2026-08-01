@@ -95,6 +95,43 @@ func TestMonthlyRecoveryReceiptsRetainProposalOnlyBinding(t *testing.T) {
 	}
 }
 
+func TestReceiptStoreRejectsRecoveryOutcomeWithoutMatchingIntent(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	intent, err := NewRecoveryIntentReceipt("workspace-1", "memory-daily", TriggerDaily, now, now, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := NewRecoveryOutcomeReceipt(intent, now, "completed", ReasonRecoveryCompleted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := Store{Root: t.TempDir()}
+	if err := store.AppendReceipt(outcome); err == nil {
+		t.Fatal("recovery outcome without an intent was accepted")
+	}
+	if err := store.AppendReceipt(intent); err != nil {
+		t.Fatal(err)
+	}
+	forged := outcome
+	forged.AttemptID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	forged.FenceTokenDigest = digest("different-fence")
+	if err := store.AppendReceipt(forged); err == nil {
+		t.Fatal("recovery outcome with a forged fence binding was accepted")
+	}
+	forged = outcome
+	forged.AttemptID = "cccccccccccccccccccccccccccccccc"
+	forged.OccurrenceDigest = digest("different-occurrence")
+	if err := store.AppendReceipt(forged); err == nil {
+		t.Fatal("recovery outcome with a forged occurrence was accepted")
+	}
+	if err := store.AppendReceipt(outcome); err != nil {
+		t.Fatalf("matching recovery outcome was rejected: %v", err)
+	}
+	if err := store.AppendReceipt(outcome); err != nil {
+		t.Fatalf("matching recovery outcome was not idempotent: %v", err)
+	}
+}
+
 func TestReceiptStoreRejectsEphemeralBusyResult(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
 	store := Store{Root: t.TempDir()}
