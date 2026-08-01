@@ -172,8 +172,8 @@ func TestExecutionAuthorityEnforcesCatalogQualificationAndAttendance(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := preauthorized.Authorize(command, now); err != nil || got.JobID != command.JobID {
-		t.Fatalf("preauthorized authority occurrence=%#v err=%v", got, err)
+	if got, err := preauthorized.Authorize(command, now); err == nil || got.JobID != "" {
+		t.Fatalf("preauthorized authority bypassed never-unattended policy: occurrence=%#v err=%v", got, err)
 	}
 	otherWorkspace := command
 	otherWorkspace.WorkspaceID = "workspace-2"

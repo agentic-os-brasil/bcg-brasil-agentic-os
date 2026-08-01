@@ -41,7 +41,11 @@ func UserLaunchAgentsPath(home string) (string, error) {
 	if strings.TrimSpace(home) == "" || !filepath.IsAbs(home) {
 		return "", errors.New("absolute user home is required")
 	}
-	return filepath.Join(filepath.Clean(home), "Library", "LaunchAgents"), nil
+	canonical, err := canonicalLaunchAgentHome(home)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(canonical, "Library", "LaunchAgents"), nil
 }
 
 func Render(spec Spec) ([]byte, error) {
@@ -156,6 +160,9 @@ func Install(home string, spec Spec, optIn bool) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
+	if err := rejectLaunchAgentSymlinkAncestors(directory); err != nil {
+		return Status{}, err
+	}
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return Status{}, err
 	}
@@ -202,6 +209,16 @@ func ReadStatus(home, label string) (Status, error) {
 		return Status{}, errors.New("invalid LaunchAgent label")
 	}
 	path := filepath.Join(directory, label+".plist")
+	if err := rejectLaunchAgentSymlinkAncestors(directory); err != nil {
+		return Status{}, err
+	}
+	if info, statErr := os.Lstat(path); statErr == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return Status{}, errors.New("LaunchAgent plist must be a regular file")
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return Status{}, statErr
+	}
 	body, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return Status{State: "not_installed", Path: path, Label: label}, nil
@@ -215,6 +232,54 @@ func ReadStatus(home, label string) (Status, error) {
 	return Status{State: "adapter_installed_native_qualification_pending", Path: path, Label: label, Disabled: bytes.Contains(body, []byte("<key>Disabled</key><true/>"))}, nil
 }
 
+func canonicalLaunchAgentHome(home string) (string, error) {
+	absolute, err := filepath.Abs(filepath.Clean(home))
+	if err != nil {
+		return "", err
+	}
+	temporary, err := filepath.Abs(filepath.Clean(os.TempDir()))
+	if err != nil {
+		return "", err
+	}
+	physicalTemporary, err := filepath.EvalSymlinks(temporary)
+	if err != nil {
+		return "", err
+	}
+	relative, err := filepath.Rel(temporary, absolute)
+	if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return filepath.Join(physicalTemporary, relative), nil
+	}
+	return absolute, nil
+}
+
+func rejectLaunchAgentSymlinkAncestors(path string) error {
+	absolute, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return err
+	}
+	volume := filepath.VolumeName(absolute)
+	remainder := strings.TrimPrefix(absolute, volume)
+	remainder = strings.TrimPrefix(remainder, string(filepath.Separator))
+	current := volume + string(filepath.Separator)
+	for _, component := range strings.Split(remainder, string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("LaunchAgent path cannot traverse symlinked ancestors")
+		}
+	}
+	return nil
+}
+
 func Pause(home, label string) (Status, error)  { return setDisabled(home, label, true) }
 func Resume(home, label string) (Status, error) { return setDisabled(home, label, false) }
 
@@ -226,15 +291,29 @@ func Uninstall(home, label string) error {
 	if status.State == "not_installed" {
 		return nil
 	}
+	info, err := os.Lstat(status.Path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return errors.New("LaunchAgent plist must be a regular file")
+	}
 	return os.Remove(status.Path)
 }
 
 func setDisabled(home, label string, disabled bool) (Status, error) {
-	directory, err := UserLaunchAgentsPath(home)
+	status, err := ReadStatus(home, label)
 	if err != nil {
 		return Status{}, err
 	}
-	path := filepath.Join(directory, label+".plist")
+	if status.State == "not_installed" {
+		return status, nil
+	}
+	directory := filepath.Dir(status.Path)
+	path := status.Path
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return Status{}, err

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 )
 
 const proposalArtifactSchemaVersion = 1
@@ -31,6 +33,20 @@ type AssessmentProposalArtifact struct {
 }
 
 type ProposalStore struct{ Root string }
+
+func (store ProposalStore) ValidateReceipt(receipt maintenance.Receipt) error {
+	if receipt.State != maintenance.ReceiptProposalEmitted || receipt.ProposalDigest == "" || receipt.ProposalArtifactID != receipt.ProposalDigest {
+		return errors.New("Darwin proposal receipt has no valid artifact binding")
+	}
+	artifact, err := store.Read(receipt.ProposalArtifactID)
+	if err != nil {
+		return err
+	}
+	if artifact.OccurrenceDigest != receipt.OccurrenceDigest || artifact.JobID != receipt.JobID || artifact.ProposalDigest != receipt.ProposalDigest || len(artifact.Assessment.Proposals) != receipt.ProposalCount {
+		return errors.New("Darwin proposal receipt does not match its durable artifact")
+	}
+	return nil
+}
 
 func (artifact AssessmentProposalArtifact) Validate() error {
 	if artifact.SchemaVersion != proposalArtifactSchemaVersion || artifact.RecordType != "assessment" || artifact.AgentID != AgentID || (artifact.JobID != "darwin-deep-weekly" && artifact.JobID != "darwin-structural-evolution-proposal") || !validEvolutionSHA(artifact.OccurrenceDigest) || !validEvolutionSHA(artifact.ProposalDigest) || artifact.ScheduledFor.IsZero() || artifact.RecordedAt.IsZero() || !artifact.RecordedAt.Equal(artifact.ScheduledFor.UTC()) {
@@ -69,8 +85,12 @@ func (store ProposalStore) Append(artifact AssessmentProposalArtifact) error {
 	if err := artifact.Validate(); err != nil {
 		return err
 	}
-	path := filepath.Join(store.Root, "proposals", artifact.ProposalDigest+".json")
-	if err := ensureProposalDirectory(store.Root, filepath.Dir(path)); err != nil {
+	root, err := canonicalProposalRoot(store.Root)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(root, "proposals", artifact.ProposalDigest+".json")
+	if err := ensureProposalDirectory(root, filepath.Dir(path)); err != nil {
 		return err
 	}
 	body, err := json.Marshal(artifact)
@@ -127,8 +147,12 @@ func (store ProposalStore) Read(proposalDigest string) (AssessmentProposalArtifa
 	if !validEvolutionSHA(proposalDigest) {
 		return AssessmentProposalArtifact{}, errors.New("Darwin proposal digest is invalid")
 	}
-	path := filepath.Join(store.Root, "proposals", proposalDigest+".json")
-	if err := validateProposalDirectory(store.Root, filepath.Dir(path)); err != nil {
+	root, err := canonicalProposalRoot(store.Root)
+	if err != nil {
+		return AssessmentProposalArtifact{}, err
+	}
+	path := filepath.Join(root, "proposals", proposalDigest+".json")
+	if err := validateProposalDirectory(root, filepath.Dir(path)); err != nil {
 		return AssessmentProposalArtifact{}, err
 	}
 	var artifact AssessmentProposalArtifact
@@ -141,72 +165,34 @@ func (store ProposalStore) Read(proposalDigest string) (AssessmentProposalArtifa
 	return artifact, nil
 }
 
+// canonicalProposalRoot keeps the OS-provided temporary-directory alias
+// (notably /tmp -> /private/tmp and /var -> /private/var on macOS) from being
+// mistaken for a user-controlled redirect. User-created symlinks below that
+// physical prefix remain visible to rejectEvolutionSymlinkAncestors.
+func canonicalProposalRoot(root string) (string, error) {
+	absolute, err := filepath.Abs(filepath.Clean(root))
+	if err != nil {
+		return "", err
+	}
+	temporary, err := filepath.Abs(filepath.Clean(os.TempDir()))
+	if err != nil {
+		return "", err
+	}
+	physicalTemporary, err := filepath.EvalSymlinks(temporary)
+	if err != nil {
+		return "", err
+	}
+	relative, err := filepath.Rel(temporary, absolute)
+	if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return filepath.Join(physicalTemporary, relative), nil
+	}
+	return absolute, nil
+}
+
 func ensureProposalDirectory(root, directory string) error {
-	if err := ensurePrivateDirectory(root); err != nil {
-		return err
-	}
-	rootAbs, err := filepath.Abs(filepath.Clean(root))
-	if err != nil {
-		return err
-	}
-	directoryAbs, err := filepath.Abs(filepath.Clean(directory))
-	if err != nil {
-		return err
-	}
-	relative, err := filepath.Rel(rootAbs, directoryAbs)
-	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return errors.New("Darwin proposal path escapes its store root")
-	}
-	current := rootAbs
-	for _, component := range strings.Split(relative, string(filepath.Separator)) {
-		if component == "" || component == "." {
-			continue
-		}
-		current = filepath.Join(current, component)
-		if err := os.Mkdir(current, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-			return err
-		}
-		info, err := os.Lstat(current)
-		if err != nil {
-			return err
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-			return errors.New("Darwin proposal path cannot traverse symlinks or non-directories")
-		}
-		if info.Mode().Perm() != 0o700 {
-			if err := os.Chmod(current, 0o700); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return ensureEvolutionDirectory(root, directory)
 }
 
 func validateProposalDirectory(root, directory string) error {
-	rootAbs, err := filepath.Abs(filepath.Clean(root))
-	if err != nil {
-		return err
-	}
-	directoryAbs, err := filepath.Abs(filepath.Clean(directory))
-	if err != nil {
-		return err
-	}
-	relative, err := filepath.Rel(rootAbs, directoryAbs)
-	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return errors.New("Darwin proposal path escapes its store root")
-	}
-	current := rootAbs
-	for _, component := range append([]string{"."}, strings.Split(relative, string(filepath.Separator))...) {
-		if component != "." && component != "" {
-			current = filepath.Join(current, component)
-		}
-		info, statErr := os.Lstat(current)
-		if statErr != nil {
-			return statErr
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-			return errors.New("Darwin proposal path cannot traverse symlinks or non-directories")
-		}
-	}
-	return nil
+	return validateEvolutionPath(root, directory)
 }

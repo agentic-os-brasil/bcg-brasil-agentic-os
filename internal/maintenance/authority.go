@@ -133,7 +133,10 @@ func (authority ExecutionAuthority) Authorize(command Command, now time.Time) (s
 	if (job.Availability != Available && !locallyQualified) || (!job.DefaultEnabled && !authority.activated[job.ID]) {
 		return scheduler.Occurrence{}, errors.New("maintenance command job is unavailable or disabled")
 	}
-	if (job.Unattended == "policy_gated" || job.Unattended == "never") && !authority.attended && !authority.preauthorized {
+	if job.Unattended == "never" && !authority.attended {
+		return scheduler.Occurrence{}, errors.New("maintenance command requires fresh attended authority")
+	}
+	if job.Unattended == "policy_gated" && !authority.attended && !authority.preauthorized {
 		return scheduler.Occurrence{}, errors.New("maintenance command requires attended authority")
 	}
 	key := authorityOccurrenceKey(command.WorkspaceID, command.JobID, command.Trigger, command.EventID, command.ScheduledFor)

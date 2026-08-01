@@ -72,7 +72,10 @@ type Worker struct {
 	ActivatedJobs      []string
 	Deadline           time.Duration
 	Now                func() time.Time
+	ReleaseLease       func(scheduler.Lease) error
 }
+
+const leaseQuarantineGrace = time.Second
 
 func (worker Worker) Run(ctx context.Context, request WakeRequest) (WakeReport, error) {
 	now := request.Now
@@ -167,12 +170,28 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	if err != nil {
 		return Receipt{}, err
 	}
-	lease, err := worker.Scheduler.TryAcquireLease(request.WorkspaceID, occurrence.JobID, command.OccurrenceKey(), request.OwnerID, now, worker.Deadline)
+	leaseTTL := worker.Deadline
+	if leaseTTL < 15*time.Minute {
+		// Keep the lease alive past the handler deadline so the timeout path can
+		// atomically install the quarantine marker before any successor can
+		// observe an expired lease. The marker, not TTL expiry, is the recovery
+		// boundary for a still-running handler.
+		leaseTTL += leaseQuarantineGrace
+	}
+	lease, err := worker.Scheduler.TryAcquireLease(request.WorkspaceID, occurrence.JobID, command.OccurrenceKey(), request.OwnerID, now, leaseTTL)
 	if err != nil {
 		base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, State: ReceiptBusy, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, ReasonCode: ReasonLeaseBusy}
 		return base, err
 	}
 	base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, State: ReceiptFailed, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, ReasonCode: ReasonHandlerFailure}
+	// Arm the quarantine fence before invoking any handler. This removes the
+	// expiry-to-quarantine race entirely: a crashed or stalled worker leaves an
+	// explicit operator-recoverable fence instead of an ordinary reclaimable
+	// lease.
+	if err := worker.Scheduler.ArmLease(lease); err != nil {
+		_ = worker.releaseLease(lease)
+		return base, err
+	}
 	workerCtx, cancel := context.WithDeadline(ctx, command.Deadline)
 	defer cancel()
 	outcomeChannel := make(chan handlerOutcome, 1)
@@ -197,6 +216,8 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 				result.ReasonCode = ReasonHandlerFailure
 				if result.State == ReceiptSucceeded {
 					result.ReasonCode = ReasonCompleted
+				} else if result.State == ReceiptReviewedNoChange {
+					result.ReasonCode = ReasonReviewedNoChange
 				} else if result.State == ReceiptProposalEmitted {
 					result.ReasonCode = ReasonProposalEmitted
 				}
@@ -216,17 +237,22 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 			return base, quarantineErr
 		}
 		if err := worker.publishOccurrence(request.WorkspaceID, occurrence, now, lease, base); err != nil {
-			worker.boundLateHandler(outcomeChannel, lease)
+			worker.boundLateHandler(outcomeChannel, lease, base)
 			return base, err
 		}
-		worker.boundLateHandler(outcomeChannel, lease)
+		worker.boundLateHandler(outcomeChannel, lease, base)
 		return base, executeErr
 	}
 	if err := worker.publishOccurrence(request.WorkspaceID, occurrence, now, lease, base); err != nil {
-		_ = worker.Scheduler.ReleaseLease(lease)
+		_ = worker.releaseLease(lease)
 		return base, err
 	}
-	_ = worker.Scheduler.ReleaseLease(lease)
+	if err := worker.releaseLease(lease); err != nil {
+		recovery := worker.recoveryReceipt(base, now)
+		_ = worker.Receipts.AppendReceipt(recovery)
+		_ = worker.Scheduler.AppendReceipt(request.WorkspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now.UTC(), State: scheduler.Failed, Error: string(ReasonRecoveryRequired)})
+		return recovery, err
+	}
 	return base, executeErr
 }
 
@@ -236,7 +262,7 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 // handler exits within the bounded cleanup window, releasing the lease is
 // safe and allows prompt retry. If it never exits, manual recovery is required
 // after the original process is gone.
-func (worker Worker) boundLateHandler(outcomeChannel <-chan handlerOutcome, lease scheduler.Lease) {
+func (worker Worker) boundLateHandler(outcomeChannel <-chan handlerOutcome, lease scheduler.Lease, base Receipt) {
 	cleanup := worker.Deadline
 	if cleanup <= 0 || cleanup > 15*time.Minute {
 		cleanup = 2 * time.Minute
@@ -246,12 +272,43 @@ func (worker Worker) boundLateHandler(outcomeChannel <-chan handlerOutcome, leas
 		defer timer.Stop()
 		select {
 		case <-outcomeChannel:
-			_ = worker.Scheduler.ReleaseLease(lease)
+			if err := worker.releaseLease(lease); err != nil {
+				_ = worker.Receipts.AppendReceipt(worker.recoveryReceipt(base, worker.currentTime()))
+			}
 		case <-timer.C:
 			// Quarantine deliberately survives lease expiry. A stuck handler
 			// requires explicit operator recovery after its process is gone.
 		}
 	}()
+}
+
+func (worker Worker) releaseLease(lease scheduler.Lease) error {
+	if worker.ReleaseLease != nil {
+		return worker.ReleaseLease(lease)
+	}
+	return worker.Scheduler.ReleaseLease(lease)
+}
+
+func (worker Worker) currentTime() time.Time {
+	if worker.Now != nil {
+		return worker.Now().UTC()
+	}
+	return time.Now().UTC()
+}
+
+func (worker Worker) recoveryReceipt(base Receipt, now time.Time) Receipt {
+	attempt, err := attemptID()
+	if err != nil {
+		attempt = base.AttemptID
+	}
+	base.AttemptID = attempt
+	base.State = ReceiptRecoveryRequired
+	base.ProposalCount = 0
+	base.ProposalDigest = ""
+	base.ProposalArtifactID = ""
+	base.ReasonCode = ReasonRecoveryRequired
+	base.RecordedAt = now.UTC()
+	return base
 }
 
 func (worker Worker) publishOccurrence(workspaceID string, occurrence scheduler.Occurrence, now time.Time, lease scheduler.Lease, receipt Receipt) error {
@@ -260,7 +317,7 @@ func (worker Worker) publishOccurrence(workspaceID string, occurrence scheduler.
 			return err
 		}
 		state := scheduler.Failed
-		if receipt.State == ReceiptSucceeded || receipt.State == ReceiptProposalEmitted {
+		if receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange || receipt.State == ReceiptProposalEmitted {
 			state = scheduler.Succeeded
 		}
 		return worker.Scheduler.AppendReceipt(workspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now.UTC(), State: state, Error: schedulerError(receipt)})

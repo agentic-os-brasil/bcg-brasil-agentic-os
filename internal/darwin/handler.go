@@ -78,7 +78,16 @@ func (handler DeepReviewHandler) Execute(ctx context.Context, command maintenanc
 		return maintenance.HandlerResult{}, readErr
 	} else {
 		for _, receipt := range existing {
-			if receipt.OccurrenceDigest == command.OccurrenceDigest() && (receipt.State == maintenance.ReceiptSucceeded || receipt.State == maintenance.ReceiptProposalEmitted) {
+			if receipt.OccurrenceDigest == command.OccurrenceDigest() && (receipt.State == maintenance.ReceiptSucceeded || receipt.State == maintenance.ReceiptReviewedNoChange || receipt.State == maintenance.ReceiptProposalEmitted) {
+				if receipt.State == maintenance.ReceiptProposalEmitted {
+					proposalStore := handler.ProposalStore
+					if proposalStore.Root == "" {
+						proposalStore = ProposalStore{Root: handler.CommandStore.Root}
+					}
+					if err := proposalStore.ValidateReceipt(receipt); err != nil {
+						return maintenance.HandlerResult{}, err
+					}
+				}
 				return maintenance.HandlerResult{State: receipt.State, ProposalCount: receipt.ProposalCount, ProposalDigest: receipt.ProposalDigest, ProposalArtifactID: receipt.ProposalArtifactID, ReasonCode: receipt.ReasonCode}, nil
 			}
 		}
@@ -111,8 +120,8 @@ func (handler DeepReviewHandler) Execute(ctx context.Context, command maintenanc
 	if len(assessment.Proposals) == 0 {
 		// No structural change is a successful no-change review, not an empty
 		// proposal receipt that could falsely look like durable evidence.
-		state = maintenance.ReceiptSucceeded
-		reason = maintenance.ReasonCompleted
+		state = maintenance.ReceiptReviewedNoChange
+		reason = maintenance.ReasonReviewedNoChange
 	}
 	base := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: state, RecordedAt: now, Deadline: command.Deadline, ProposalCount: len(assessment.Proposals), ReasonCode: reason}
 	if len(assessment.Proposals) > 0 {

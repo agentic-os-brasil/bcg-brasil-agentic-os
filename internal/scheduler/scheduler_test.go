@@ -230,6 +230,30 @@ func TestQuarantinedLeaseRequiresExplicitRecoveryAfterExpiry(t *testing.T) {
 	}
 }
 
+func TestReleaseLeaseCannotClearQuarantineWithWrongFenceToken(t *testing.T) {
+	root := t.TempDir()
+	store := Store{Root: root}
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	lease, err := store.TryAcquireLease("case-a", "memory-daily", ScheduledOccurrenceKey("memory-daily", now), "worker-a", now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.QuarantineLease(lease); err != nil {
+		t.Fatal(err)
+	}
+	wrong := lease
+	wrong.FenceToken = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	if err := store.ReleaseLease(wrong); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("wrong fence release err=%v, want ErrLeaseLost", err)
+	}
+	if _, err := store.TryAcquireLease("case-a", "memory-daily", lease.OccurrenceKey, "worker-b", now.Add(2*time.Minute), time.Minute); !errors.Is(err, ErrLeaseBusy) {
+		t.Fatalf("wrong fence removed quarantine: %v", err)
+	}
+	if err := store.ReleaseLease(lease); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLeaseNamesDoNotAliasSanitizedOccurrenceKeys(t *testing.T) {
 	if safeLeaseName("event/a") == safeLeaseName("event?a") {
 		t.Fatal("distinct occurrence keys produced the same lease name")

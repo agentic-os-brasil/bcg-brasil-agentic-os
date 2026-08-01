@@ -61,8 +61,15 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		if err != nil {
 			return reportError(errOut, err)
 		}
+		currentHome, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return reportError(errOut, homeErr)
+		}
 		jobs := schedulerJobsForTrigger(strings.TrimSpace(*trigger))
 		enrollment, enrollmentErr := maintenance.LoadCanaryEnrollment(root)
+		if enrollmentErr == nil && (enrollment.WorkspaceID != strings.TrimSpace(*workspace) || !samePathCLI(enrollment.Home, currentHome)) {
+			enrollmentErr = errors.New("Canary enrollment is bound to a different workspace or home")
+		}
 		handlers, qualification, activated := maintenanceHandlers(root, strings.TrimSpace(*workspace), enrollment, enrollmentErr == nil)
 		worker := maintenance.Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: filepath.Join(root, "maintenance", "scheduler")}, Receipts: maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}, Jobs: jobs, Handlers: handlers, LocalQualification: qualification, ActivatedJobs: activated, Deadline: 2 * time.Minute}
 		timezone := ""
@@ -192,20 +199,36 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 				}
 			}
 		}
-		audit, auditErr := maintenance.NewRecoveryReceipt(strings.TrimSpace(*workspace), target.JobID, trigger, when, now)
+		intent, auditErr := maintenance.NewRecoveryIntentReceipt(strings.TrimSpace(*workspace), target.JobID, trigger, when, now, target.FenceToken)
 		if auditErr != nil {
 			return reportError(errOut, auditErr)
 		}
-		if auditErr = (maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}).AppendReceipt(audit); auditErr != nil {
-			return reportError(errOut, auditErr)
-		}
-		if auditErr = store.AppendReceipt(strings.TrimSpace(*workspace), scheduler.Receipt{JobID: target.JobID, ScheduledFor: when, AttemptedAt: now, State: scheduler.Unavailable, Error: "quarantine_recovery_attested"}); auditErr != nil {
+		receiptStore := maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}
+		if auditErr = receiptStore.AppendReceipt(intent); auditErr != nil {
 			return reportError(errOut, auditErr)
 		}
 		if recoveryErr := store.RecoverQuarantinedLease(target, now); recoveryErr != nil {
+			failed, buildErr := maintenance.NewRecoveryOutcomeReceipt(intent, now, "failed", maintenance.ReasonRecoveryFailed)
+			if buildErr == nil {
+				_ = receiptStore.AppendReceipt(failed)
+			}
 			return reportError(errOut, recoveryErr)
 		}
-		return writeJSON(out, map[string]any{"state": "quarantine_recovered", "job_id": target.JobID, "scheduled_for": when.UTC(), "reason": "operator_confirmed_process_gone", "audit_receipt": audit}, errOut)
+		completed, buildErr := maintenance.NewRecoveryOutcomeReceipt(intent, now, "completed", maintenance.ReasonRecoveryCompleted)
+		if buildErr != nil {
+			return reportError(errOut, buildErr)
+		}
+		// The fenced removal succeeded. If completion audit publication fails,
+		// preserve the committed-but-incomplete state as a scheduler diagnostic
+		// and return a repair-required error rather than claiming clean success.
+		if auditErr = receiptStore.AppendReceipt(completed); auditErr != nil {
+			_ = store.AppendReceipt(strings.TrimSpace(*workspace), scheduler.Receipt{JobID: target.JobID, ScheduledFor: when, AttemptedAt: now, State: scheduler.Failed, Error: "recovery_committed_audit_incomplete"})
+			return reportError(errOut, errors.New("recovery committed but completion audit is incomplete"))
+		}
+		if auditErr = store.AppendReceipt(strings.TrimSpace(*workspace), scheduler.Receipt{JobID: target.JobID, ScheduledFor: when, AttemptedAt: now, State: scheduler.Unavailable, Error: "quarantine_recovery_completed"}); auditErr != nil {
+			return reportError(errOut, auditErr)
+		}
+		return writeJSON(out, map[string]any{"state": "quarantine_recovered", "job_id": target.JobID, "scheduled_for": when.UTC(), "reason": "operator_confirmed_process_gone", "audit_receipt": completed, "recovery_intent": intent}, errOut)
 	}
 	uid, uidErr := macosadapter.CurrentUID()
 	if uidErr != nil {
@@ -222,7 +245,7 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 			program = executable
 		}
 		logRoot := filepath.Join(*home, "Library", "Logs")
-		status, installErr := lifecycle.Install(context.Background(), *home, macosadapter.Spec{Label: "com.bcg.maestro.maintenance", Program: program, Arguments: []string{"maintenance", "wake", "--trigger", "presence"}, StartInterval: 900, RunAtLoad: true, StandardOutPath: filepath.Join(logRoot, "bcgos-maintenance.stdout.log"), StandardErrPath: filepath.Join(logRoot, "bcgos-maintenance.stderr.log")}, true)
+		status, installErr := lifecycle.Install(context.Background(), *home, macosadapter.Spec{Label: "com.bcg.maestro.maintenance", Program: program, Arguments: []string{"maintenance", "wake", "--trigger", "presence", "--workspace", strings.TrimSpace(*workspace)}, StartInterval: 900, RunAtLoad: true, StandardOutPath: filepath.Join(logRoot, "bcgos-maintenance.stdout.log"), StandardErrPath: filepath.Join(logRoot, "bcgos-maintenance.stderr.log")}, true)
 		if installErr != nil {
 			return reportError(errOut, installErr)
 		}
@@ -328,6 +351,28 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 	if len(last) > 0 {
 		result["last_receipt"] = last
 	}
+	maintenanceStore := maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}
+	recoveryRequired, auditIncomplete, recoveryIntents := 0, 0, 0
+	for _, job := range schedulerJobsForTrigger("presence") {
+		maintenanceReceipts, readErr := maintenanceStore.Receipts(enrollment.WorkspaceID, job.ID)
+		if readErr != nil {
+			continue
+		}
+		for _, receipt := range maintenanceReceipts {
+			if receipt.State == maintenance.ReceiptRecoveryRequired {
+				recoveryRequired++
+			}
+			switch receipt.RecoveryPhase {
+			case "intent":
+				recoveryIntents++
+			case "audit_incomplete":
+				auditIncomplete++
+			}
+		}
+	}
+	result["recovery_required_count"] = recoveryRequired
+	result["recovery_intent_count"] = recoveryIntents
+	result["recovery_audit_incomplete_count"] = auditIncomplete
 	path := filepath.Join(root, "maintenance", "scheduler", "workspaces", enrollment.WorkspaceID, "enrollment.json")
 	if body, readErr := os.ReadFile(path); readErr == nil {
 		var schedulerEnrollment scheduler.Enrollment

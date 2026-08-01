@@ -42,6 +42,7 @@ type HousekeepingExecutor struct {
 	Scheduler     scheduler.Store
 	Authority     maintenance.ExecutionAuthority
 	Now           func() time.Time
+	ReleaseLease  func(scheduler.Lease) error
 }
 
 // ExecuteCommand is the worker-owned Darwin entrypoint. Hooks may construct a
@@ -77,7 +78,16 @@ func (executor HousekeepingExecutor) ExecuteCommand(ctx context.Context, command
 	}
 	if existing, readErr := executor.CommandStore.Receipts(command.WorkspaceID, command.JobID); readErr == nil && len(existing) > 0 {
 		for _, receipt := range existing {
-			if receipt.OccurrenceDigest == command.OccurrenceDigest() && (receipt.State == maintenance.ReceiptSucceeded || receipt.State == maintenance.ReceiptProposalEmitted) {
+			if receipt.OccurrenceDigest == command.OccurrenceDigest() && (receipt.State == maintenance.ReceiptSucceeded || receipt.State == maintenance.ReceiptReviewedNoChange || receipt.State == maintenance.ReceiptProposalEmitted) {
+				if receipt.State == maintenance.ReceiptProposalEmitted {
+					proposalStore := executor.ProposalStore
+					if proposalStore.Root == "" {
+						proposalStore = ProposalStore{Root: executor.CommandStore.Root}
+					}
+					if err := proposalStore.ValidateReceipt(receipt); err != nil {
+						return base, err
+					}
+				}
 				return receipt, nil
 			}
 		}
@@ -103,10 +113,10 @@ func (executor HousekeepingExecutor) ExecuteCommand(ctx context.Context, command
 		}
 		return base, err
 	}
-	defer func() {
+	if err := executor.Scheduler.ArmLease(lease); err != nil {
 		_ = executor.Scheduler.ReleaseLease(lease)
-	}()
-
+		return base, err
+	}
 	var result maintenance.Receipt
 	var executionErr error
 	guardErr := executor.Scheduler.WithCurrentLease(lease, now, func() error {
@@ -114,9 +124,40 @@ func (executor HousekeepingExecutor) ExecuteCommand(ctx context.Context, command
 		return nil
 	})
 	if guardErr != nil {
+		if releaseErr := executor.releaseLease(lease); releaseErr != nil {
+			recovery := recoveryRequiredReceipt(base, executor.currentTime())
+			_ = executor.CommandStore.AppendReceipt(recovery)
+			return recovery, releaseErr
+		}
 		return base, guardErr
 	}
+	if releaseErr := executor.releaseLease(lease); releaseErr != nil {
+		recovery := recoveryRequiredReceipt(result, executor.currentTime())
+		_ = executor.CommandStore.AppendReceipt(recovery)
+		return recovery, releaseErr
+	}
 	return result, executionErr
+}
+
+func (executor HousekeepingExecutor) releaseLease(lease scheduler.Lease) error {
+	if executor.ReleaseLease != nil {
+		return executor.ReleaseLease(lease)
+	}
+	return executor.Scheduler.ReleaseLease(lease)
+}
+
+func recoveryRequiredReceipt(base maintenance.Receipt, now time.Time) maintenance.Receipt {
+	attempt, err := newAttemptID()
+	if err == nil {
+		base.AttemptID = attempt
+	}
+	base.State = maintenance.ReceiptRecoveryRequired
+	base.ProposalCount = 0
+	base.ProposalDigest = ""
+	base.ProposalArtifactID = ""
+	base.ReasonCode = maintenance.ReasonRecoveryRequired
+	base.RecordedAt = now.UTC()
+	return base
 }
 
 // executeLeasedCommand runs while the scheduler's per-occurrence OS guard is
@@ -279,9 +320,9 @@ func newAttemptID() (string, error) {
 
 func proposalDigest(occurrenceDigest string, assessment Assessment) string {
 	body, _ := json.Marshal(struct {
-		CommandID  string
-		Assessment Assessment
-	}{CommandID: occurrenceDigest, Assessment: assessment})
+		OccurrenceDigest string
+		Assessment       Assessment
+	}{OccurrenceDigest: occurrenceDigest, Assessment: assessment})
 	digest := sha256.Sum256(body)
 	return hex.EncodeToString(digest[:])
 }

@@ -94,6 +94,22 @@ func TestProposalStoreRejectsSymlinkedProposalDirectory(t *testing.T) {
 	}
 }
 
+func TestProposalStoreRejectsSymlinkedAncestorBeforeCreatingStore(t *testing.T) {
+	parent := t.TempDir()
+	outside := t.TempDir()
+	alias := filepath.Join(parent, "alias")
+	if err := os.Symlink(outside, alias); err != nil {
+		t.Skipf("symlink capability unavailable: %v", err)
+	}
+	root := filepath.Join(alias, "darwin")
+	if err := (ProposalStore{Root: root}).Append(testAssessmentArtifact(t)); err == nil {
+		t.Fatal("proposal store traversed a symlinked ancestor")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "darwin")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("symlink target was modified, stat err=%v", err)
+	}
+}
+
 func TestDeepReviewRetryAfterArtifactOnlyCrashIsSingleReceipt(t *testing.T) {
 	root := t.TempDir()
 	commandStore := maintenance.Store{Root: filepath.Join(root, "receipts")}
@@ -109,16 +125,45 @@ func TestDeepReviewRetryAfterArtifactOnlyCrashIsSingleReceipt(t *testing.T) {
 		t.Fatalf("first proposal=%#v err=%v", first, err)
 	}
 	// Simulate a process crash after the artifact commit but before the outer
-	// maintenance receipt publication: the next command ID is a new attempt,
-	// while the occurrence and assessment identity remain unchanged.
-	retry := base
-	retry.CommandID = "wake-retry"
-	second, err := handler.Execute(context.Background(), retry)
-	if err != nil || second.ProposalDigest != first.ProposalDigest || builds != 1 {
-		t.Fatalf("retry proposal=%#v err=%v builds=%d", second, err, builds)
-	}
+	// maintenance receipt publication. Remove the first terminal receipt while
+	// leaving the durable proposal artifact in place.
 	receipts, err := commandStore.Receipts(base.WorkspaceID, base.JobID)
 	if err != nil || len(receipts) != 1 {
+		t.Fatalf("first receipt=%#v err=%v", receipts, err)
+	}
+	if err := os.Remove(filepath.Join(root, "receipts", "workspaces", base.WorkspaceID, "receipts", base.JobID, receipts[0].CommandID+"--"+receipts[0].AttemptID+".json")); err != nil {
+		t.Fatal(err)
+	}
+	retry := base
+	retry.CommandID = "wake-retry"
+	handler.Now = func() time.Time { return time.Unix(120, 0).UTC() }
+	second, err := handler.Execute(context.Background(), retry)
+	if err != nil || second.ProposalDigest != first.ProposalDigest || builds != 2 {
+		t.Fatalf("retry proposal=%#v err=%v builds=%d", second, err, builds)
+	}
+	receipts, err = commandStore.Receipts(base.WorkspaceID, base.JobID)
+	if err != nil || len(receipts) != 1 {
 		t.Fatalf("retry produced duplicate terminal receipts: %#v err=%v", receipts, err)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "proposals", "proposals"))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("retry produced duplicate proposal artifacts: entries=%d err=%v", len(entries), err)
+	}
+}
+
+func TestDeepReviewNoProposalUsesReviewedNoChangeTerminalState(t *testing.T) {
+	root := t.TempDir()
+	commandStore := maintenance.Store{Root: filepath.Join(root, "receipts")}
+	handler := DeepReviewHandler{
+		Build: HealthPacketBuilderFunc(func(context.Context, scheduler.Occurrence) (HealthPacket, error) {
+			return HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-no-change", Runtime: "runtime-neutral", Mode: DeepReview}, nil
+		}),
+		CommandStore: commandStore,
+		Now:          func() time.Time { return time.Unix(20, 0).UTC() },
+	}
+	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "wake-no-change", JobID: "darwin-deep-weekly", WorkspaceID: "maestro-system", Trigger: maintenance.TriggerWeekly, ScheduledFor: time.Unix(10, 0).UTC(), RequestedAt: time.Unix(10, 0).UTC(), Deadline: time.Unix(30, 0).UTC()}
+	result, err := handler.Execute(context.Background(), command)
+	if err != nil || result.State != maintenance.ReceiptReviewedNoChange || result.ProposalCount != 0 || result.ProposalDigest != "" {
+		t.Fatalf("no-change result=%#v err=%v", result, err)
 	}
 }

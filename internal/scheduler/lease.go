@@ -111,8 +111,7 @@ func (store Store) ReleaseLease(lease Lease) error {
 	defer guard.release()
 	current, err := readLease(path)
 	if errors.Is(err, os.ErrNotExist) {
-		_ = os.Remove(quarantinePath(path))
-		return nil
+		return removeQuarantineMarker(path, lease)
 	}
 	if err != nil {
 		return err
@@ -120,7 +119,7 @@ func (store Store) ReleaseLease(lease Lease) error {
 	if !sameLeaseIdentity(current, lease) {
 		return ErrLeaseLost
 	}
-	if err := os.Remove(quarantinePath(path)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := removeQuarantineMarker(path, lease); err != nil {
 		return err
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -129,11 +128,47 @@ func (store Store) ReleaseLease(lease Lease) error {
 	return nil
 }
 
-// QuarantineLease fences a timed-out occurrence beyond its normal TTL. The
-// marker is removed only by the original fence owner when its late handler
+func removeQuarantineMarker(leasePath string, lease Lease) error {
+	marker := quarantinePath(leasePath)
+	info, err := os.Lstat(marker)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return errors.New("invalid scheduler quarantine marker")
+	}
+	body, err := os.ReadFile(marker)
+	if err != nil {
+		return err
+	}
+	var markerData struct {
+		FenceToken string `json:"fence_token"`
+	}
+	if err := json.Unmarshal(body, &markerData); err != nil || markerData.FenceToken != lease.FenceToken {
+		return ErrLeaseLost
+	}
+	return os.Remove(marker)
+}
+
+// ArmLease installs an active execution fence before handler side effects.
+// Normal completion removes it; a crashed process leaves an explicit marker
+// that becomes recoverable after the lease deadline.
+func (store Store) ArmLease(lease Lease) error {
+	return store.writeFenceMarker(lease, "active")
+}
+
+// QuarantineLease transitions an active fence to operator-recoverable state.
+// The marker is removed only by the original fence owner when its handler
 // exits and ReleaseLease succeeds; a successor can therefore never reclaim a
-// live, non-cooperative execution.
+// live, non-cooperative execution between TTL expiry and timeout handling.
 func (store Store) QuarantineLease(lease Lease) error {
+	return store.writeFenceMarker(lease, "quarantined")
+}
+
+func (store Store) writeFenceMarker(lease Lease, state string) error {
 	if err := validateStoreInput(store.Root, lease.WorkspaceID); err != nil {
 		return err
 	}
@@ -165,15 +200,40 @@ func (store Store) QuarantineLease(lease Lease) error {
 		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 			return errors.New("invalid scheduler quarantine marker")
 		}
-		return nil
+		body, readErr := os.ReadFile(marker)
+		if readErr != nil {
+			return readErr
+		}
+		var existing struct {
+			FenceToken string `json:"fence_token"`
+			State      string `json:"state"`
+		}
+		if err := json.Unmarshal(body, &existing); err != nil || existing.FenceToken != lease.FenceToken {
+			return ErrLeaseLost
+		}
+		if existing.State == state || (existing.State == "quarantined" && state == "active") {
+			return nil
+		}
+		body, err = json.Marshal(struct {
+			FenceToken string `json:"fence_token"`
+			State      string `json:"state"`
+		}{FenceToken: lease.FenceToken, State: state})
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(marker, append(body, '\n'), 0o600)
 	} else if !errors.Is(markerErr, os.ErrNotExist) {
 		return markerErr
 	}
-	return writeNewJSON(marker, map[string]string{"fence_token": lease.FenceToken})
+	return writeNewJSON(marker, struct {
+		FenceToken string `json:"fence_token"`
+		State      string `json:"state"`
+	}{FenceToken: lease.FenceToken, State: state})
 }
 
-// QuarantinedLeases lists live fence records whose late handler has prevented
-// normal TTL reclamation. It is intentionally metadata-only.
+// QuarantinedLeases lists timeout-marked fences and expired active fences left
+// by a crashed process. Healthy active execution fences are intentionally not
+// reported as orphaned quarantine. The result is metadata-only.
 func (store Store) QuarantinedLeases(workspaceID string) ([]Lease, error) {
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return nil, err
@@ -223,6 +283,19 @@ func (store Store) QuarantinedLeases(workspaceID string) ([]Lease, error) {
 			}
 			if lease.WorkspaceID != workspaceID {
 				return nil, errors.New("scheduler quarantine workspace mismatch")
+			}
+			markerBody, readErr := os.ReadFile(filepath.Join(jobRoot, marker.Name()))
+			if readErr != nil {
+				return nil, readErr
+			}
+			var markerState struct {
+				State string `json:"state"`
+			}
+			if err := json.Unmarshal(markerBody, &markerState); err != nil {
+				return nil, err
+			}
+			if markerState.State == "active" && lease.ExpiresAt.After(time.Now().UTC()) {
+				continue
 			}
 			leases = append(leases, lease)
 		}

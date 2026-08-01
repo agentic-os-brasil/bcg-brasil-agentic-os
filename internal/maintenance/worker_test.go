@@ -42,6 +42,36 @@ func TestWorkerRunsQualifiedDueOccurrenceAndFencesSuccess(t *testing.T) {
 	}
 }
 
+func TestWorkerReleaseFailureReturnsRecoveryRequired(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	root, receiptRoot := t.TempDir(), t.TempDir()
+	if _, err := (scheduler.Store{Root: root}).EnsureEnrollment("maestro-system", now.Add(-24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	worker := Worker{
+		Catalog: catalog, Scheduler: scheduler.Store{Root: root}, Receipts: Store{Root: receiptRoot},
+		Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 1}},
+		Handlers: map[string]Handler{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
+		})},
+		LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")},
+		ActivatedJobs:      []string{"darwin-housekeeping-daily"}, Deadline: time.Minute,
+		ReleaseLease: func(scheduler.Lease) error { return errors.New("injected release failure") },
+	}
+	report, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "cleanup-failure", Now: now, Attended: true})
+	if err != nil || report.State != "completed_with_failures" || len(report.Receipts) != 1 || report.Receipts[0].State != ReceiptRecoveryRequired {
+		t.Fatalf("release failure report=%#v err=%v", report, err)
+	}
+	stored, err := (Store{Root: receiptRoot}).Receipts("maestro-system", "darwin-housekeeping-daily")
+	if err != nil || len(stored) != 2 || stored[1].State != ReceiptRecoveryRequired {
+		t.Fatalf("release failure receipts=%#v err=%v", stored, err)
+	}
+}
+
 func TestWorkerPlansCalendarInEnrollmentTimezoneAndRecordsUTC(t *testing.T) {
 	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
 	if err != nil {

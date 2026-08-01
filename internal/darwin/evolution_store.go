@@ -676,6 +676,12 @@ func ensureEvolutionDirectory(root, directory string) error {
 	if err := rejectEvolutionSymlinkAncestors(filepath.Dir(rootAbs)); err != nil {
 		return err
 	}
+	// Check the root itself before MkdirAll. Otherwise a pre-existing symlink
+	// in the root path could redirect creation into an unrelated tree before
+	// the post-create validation gets a chance to reject it.
+	if err := rejectEvolutionSymlinkAncestors(rootAbs); err != nil {
+		return err
+	}
 	_, rootStatErr := os.Lstat(rootAbs)
 	rootWasMissing := errors.Is(rootStatErr, os.ErrNotExist)
 	if rootStatErr != nil && !rootWasMissing {

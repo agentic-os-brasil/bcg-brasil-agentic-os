@@ -34,7 +34,10 @@ func (store Store) AppendReceipt(receipt Receipt) error {
 		return readErr
 	} else {
 		for _, prior := range existing {
-			if prior.OccurrenceDigest == receipt.OccurrenceDigest && (prior.State == ReceiptSucceeded || prior.State == ReceiptProposalEmitted) {
+			if prior.OccurrenceDigest == receipt.OccurrenceDigest && (prior.State == ReceiptSucceeded || prior.State == ReceiptReviewedNoChange || prior.State == ReceiptProposalEmitted || prior.State == ReceiptRecoveryRequired) {
+				if receipt.State == ReceiptRecoveryRequired && prior.State != ReceiptRecoveryRequired {
+					continue
+				}
 				if prior.State != receipt.State || prior.ProposalDigest != receipt.ProposalDigest || prior.ProposalArtifactID != receipt.ProposalArtifactID {
 					return errors.New("maintenance receipt occurrence has conflicting terminal evidence")
 				}
