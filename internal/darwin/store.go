@@ -114,7 +114,7 @@ func validAction(action Action) bool {
 
 func validOutcome(outcome Outcome) bool {
 	switch outcome {
-	case OutcomeSucceeded, OutcomeFailed, OutcomeBlocked:
+	case OutcomeSucceeded, OutcomeFailed, OutcomeBlocked, OutcomeNoAction:
 		return true
 	default:
 		return false

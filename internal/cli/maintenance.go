@@ -116,7 +116,8 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 	}
 	qualification, activated = maintenance.ActivationMaps(enrollment)
 	schedulerStore := scheduler.Store{Root: filepath.Join(root, "maintenance", "scheduler")}
-	builder := darwin.LocalProductHealthBuilder{Scheduler: schedulerStore, Workspace: workspace, Runtime: "runtime-neutral"}
+	darwinRoot := filepath.Join(root, "maintenance", "darwin")
+	builder := darwin.LocalProductHealthBuilder{Scheduler: schedulerStore, Workspace: workspace, Runtime: "runtime-neutral", ManagedStateRoot: darwinRoot}
 	commandStore := maintenance.Store{Root: filepath.Join(root, "maintenance", "darwin-commands")}
 	guard := darwin.ToolGuardFunc(func(call darwin.ToolCall) error {
 		if call.Tool != "filesystem" || (call.Operation != "write" && call.Operation != "edit") || !strings.HasPrefix(call.Resource, "bcgos://health/maestro-system/") {
@@ -125,8 +126,10 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 		return nil
 	})
 	proposalStore := darwin.ProposalStore{Root: filepath.Join(root, "maintenance", "darwin-proposals")}
-	handlers[darwin.HousekeepingJobID] = darwin.HousekeepingHandler{Build: builder, Guard: guard, Invoker: darwin.FilesystemInvoker{Root: filepath.Join(root, "maintenance", "darwin")}, Store: darwin.Store{Root: filepath.Join(root, "maintenance", "darwin")}, CommandStore: commandStore}
-	handlers["darwin-deep-weekly"] = darwin.DeepReviewHandler{Build: builder, CommandStore: commandStore, ProposalStore: proposalStore}
+	invoker := darwin.OperationalInvoker{Diagnostics: darwin.FilesystemInvoker{Root: darwinRoot}, Repairs: darwin.ManagedStateRepairInvoker{Root: darwinRoot}, Guard: guard}
+	darwinStore := darwin.Store{Root: darwinRoot}
+	handlers[darwin.HousekeepingJobID] = darwin.HousekeepingHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore}
+	handlers["darwin-deep-weekly"] = darwin.DeepReviewHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore, ProposalStore: proposalStore}
 	handlers["walter-self-review-weekly"] = maintenance.WalterWeeklyAdapter{}
 	return handlers, qualification, activated
 }

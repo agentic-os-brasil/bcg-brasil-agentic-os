@@ -95,7 +95,7 @@ func TestExecuteUsesSameIdentityForInteractiveAndHeadless(t *testing.T) {
 }
 
 func TestExecuteBlocksDeniedOrIrreversibleActionsWithoutInvoking(t *testing.T) {
-	packet := HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-3", Runtime: "claude", Mode: HeadlessHousekeeping, Observations: []Observation{{Code: ObservationSchedulerMissed, Severity: SeverityHigh, Count: 1}}}
+	packet := HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-3", Runtime: "claude", Mode: HeadlessHousekeeping, Observations: []Observation{{Code: ObservationStateStale, Severity: SeverityHigh, Count: 1}}}
 	assessment, err := Plan(packet)
 	if err != nil {
 		t.Fatal(err)
@@ -143,9 +143,9 @@ func TestExecuteRejectsForgedAssessmentIdentityAndPlan(t *testing.T) {
 func TestFilesystemInvokerIsScopedAndMetadataOnly(t *testing.T) {
 	root := t.TempDir()
 	invoker := FilesystemInvoker{Root: root}
-	artifact := Artifact{SchemaVersion: SchemaVersion, AgentID: AgentID, WindowID: "window-4", ProposalID: "proposal-1", Finding: ObservationStateStale, Action: ActionRefreshDerivedState}
+	artifact := Artifact{SchemaVersion: SchemaVersion, AgentID: AgentID, WindowID: "window-4", ProposalID: "proposal-1", Finding: ObservationSchedulerMissed, Action: ActionReconcileScheduler}
 	result, err := invoker.Invoke(context.Background(), ToolCall{Tool: "filesystem", Operation: "write", Resource: "bcgos://health/maestro-system/derived/proposal-1.json"}, artifact)
-	if err != nil || result.Outcome != OutcomeSucceeded {
+	if err != nil || result.Outcome != OutcomeNoAction {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
 	body, err := os.ReadFile(filepath.Join(root, "derived", "proposal-1.json"))

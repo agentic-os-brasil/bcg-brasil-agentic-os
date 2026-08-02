@@ -22,7 +22,6 @@
     "capability-recheck",
     "runtime-drift-check",
     "self-observation-capture",
-    "self-refinement-proposal",
     "update-check",
     "darwin-housekeeping-daily",
     "darwin-deep-weekly",

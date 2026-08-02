@@ -4,13 +4,15 @@ The repository contains the runtime-neutral Walter wiring, but the capability
 remains `unavailable` until a native Claude and Codex session proves the same
 contract. Adapter-command receipts are diagnostic only.
 
-The weekly self-review contract in this PR is intentionally limited to
-Walter custody, canonical `ownerctx` observations/snapshots and
-`PromptHistoryStore` selection, proposal validation, fenced metadata receipts
-and the unavailable-by-default maintenance handler. It does not add scheduler
-or launchd catalog entries. Its orchestration dependency is PR
-[#148](https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/pull/148);
-after that PR lands, orchestration may rebase and trim this seam as needed.
+The weekly self-review contract is intentionally limited to Walter custody,
+canonical `ownerctx` observations/snapshots and `PromptHistoryStore` selection,
+proposal validation, fenced metadata receipts and an unavailable-by-default
+model handler. The shared maintenance scheduler already emits the weekly
+occurrence and the macOS LaunchAgent may wake the worker; neither mechanism
+installs model authority or turns an unavailable handler into a successful
+review. The remaining work is an approved runtime model adapter, its
+installation-scoped authority, deterministic scheduled input assembly and
+fresh native-session qualification.
 
 The weekly occurrence is always keyed by the command's stable occurrence
 digest, never by its retry command ID; a bounded IntentHypothesis digest is

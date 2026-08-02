@@ -290,11 +290,12 @@ func Execute(ctx context.Context, packet HealthPacket, assessment Assessment, gu
 			return receipt, err
 		}
 		call := callFor(packet, proposal)
-		entry := ActionReceipt{ProposalID: proposal.ID, Action: proposal.Action, Tool: call.Tool, Operation: call.Operation, Resource: call.Resource, Outcome: OutcomeBlocked, Rollback: proposal.Rollback}
-		if !proposal.Reversible {
+		entry := ActionReceipt{ProposalID: proposal.ID, Action: proposal.Action, Tool: call.Tool, Operation: call.Operation, Resource: call.Resource, Outcome: OutcomeNoAction, Rollback: proposal.Rollback}
+		if !isExecutableRepair(proposal) {
 			receipt.Actions = append(receipt.Actions, entry)
 			continue
 		}
+		entry.Outcome = OutcomeBlocked
 		if err := guard.Authorize(call); err != nil {
 			receipt.Actions = append(receipt.Actions, entry)
 			continue
@@ -305,12 +306,16 @@ func Execute(ctx context.Context, packet HealthPacket, assessment Assessment, gu
 			return receipt, err
 		}
 		result, err := invoker.Invoke(ctx, call, Artifact{SchemaVersion: SchemaVersion, AgentID: AgentID, WindowID: packet.WindowID, ProposalID: proposal.ID, Finding: proposal.Finding, Action: proposal.Action})
-		if err != nil || result.Outcome != OutcomeSucceeded {
+		if err != nil {
 			entry.Outcome = OutcomeFailed
 			receipt.Actions = append(receipt.Actions, entry)
 			continue
 		}
-		entry.Outcome = OutcomeSucceeded
+		if result.Outcome != OutcomeSucceeded && result.Outcome != OutcomeNoAction {
+			entry.Outcome = OutcomeFailed
+		} else {
+			entry.Outcome = result.Outcome
+		}
 		receipt.Actions = append(receipt.Actions, entry)
 	}
 	receipt.Outcome = summarize(receipt.Actions)
@@ -390,7 +395,7 @@ func (invoker FilesystemInvoker) Invoke(ctx context.Context, call ToolCall, arti
 	if errors.Is(err, os.ErrExist) {
 		existing, readErr := os.ReadFile(destination)
 		if readErr == nil && bytes.Equal(existing, []byte(body)) {
-			return ToolResult{Outcome: OutcomeSucceeded}, nil
+			return ToolResult{Outcome: OutcomeNoAction}, nil
 		}
 		return ToolResult{}, errors.New("Darwin metadata artifact already exists with different content")
 	}
@@ -408,7 +413,7 @@ func (invoker FilesystemInvoker) Invoke(ctx context.Context, call ToolCall, arti
 	if err := file.Close(); err != nil {
 		return ToolResult{}, err
 	}
-	return ToolResult{Outcome: OutcomeSucceeded}, nil
+	return ToolResult{Outcome: OutcomeNoAction}, nil
 }
 
 func rejectSymlinkPath(root, relative string) error {
@@ -469,6 +474,10 @@ func proposalFor(observation Observation) Proposal {
 	return proposal
 }
 
+func isExecutableRepair(proposal Proposal) bool {
+	return proposal.Reversible && proposal.Finding == ObservationStateStale && proposal.Action == ActionRefreshDerivedState
+}
+
 func proposalID(windowID string, observation Observation) string {
 	digest := sha256.Sum256([]byte(windowID + "\x00" + string(observation.Code) + "\x00" + string(observation.Severity)))
 	return hex.EncodeToString(digest[:8])
@@ -489,13 +498,15 @@ func summarize(actions []ActionReceipt) Outcome {
 	if len(actions) == 0 {
 		return OutcomeNoAction
 	}
-	succeeded, failed, blocked := 0, 0, 0
+	succeeded, failed, blocked, noAction := 0, 0, 0, 0
 	for _, action := range actions {
 		switch action.Outcome {
 		case OutcomeSucceeded:
 			succeeded++
 		case OutcomeFailed:
 			failed++
+		case OutcomeNoAction:
+			noAction++
 		default:
 			blocked++
 		}
@@ -508,6 +519,9 @@ func summarize(actions []ActionReceipt) Outcome {
 	}
 	if failed > 0 {
 		return OutcomeFailed
+	}
+	if noAction == len(actions) {
+		return OutcomeNoAction
 	}
 	return OutcomeBlocked
 }

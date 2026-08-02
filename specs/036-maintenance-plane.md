@@ -38,20 +38,24 @@ The jobs are deliberately split by success boundary:
 
 - deterministic checks may eventually run unattended once their local contract
   is qualified;
-- local adapters (capture, owner observation and update diagnosis) remain
-  policy-gated;
-- model-backed weekly dreaming and self refinement are never silently enabled;
+- local adapters, including Darwin housekeeping, remain policy-gated; Darwin
+  may apply only an allowlisted, reversible repair inside managed state after
+  deterministic assessment, guard authorization and post-repair validation;
+- model-backed weekly memory dreaming and Walter self review are never silently enabled;
 - managed-scope jobs cannot write owner or private workspace state.
 
 ## Wake and catch-up
 
 `bcgos maintenance wake --trigger presence|daily|weekly|monthly|event` is a
 bounded worker invocation. Without persisted Canary enrollment it fails closed
-and emits no receipt. With enrollment, the daily deterministic Darwin handler
-and weekly deep proposal handler may execute only when their exact activation,
-qualification digest, lease, deadline and occurrence fence are valid. Walter
-and monthly structural work remain due/unavailable and never become successful
-from a wake receipt alone.
+and emits no receipt. With enrollment, Darwin daily housekeeping may apply its
+smallest allowlisted reversible repair after validation, while weekly deep
+review may apply the same operational repair and emit proposals only for
+remaining structural findings. Both require their exact activation,
+qualification digest, lease, deadline and occurrence fence. Walter and monthly
+structural work remain due/unavailable and never become successful from a wake
+receipt alone. Walter is the sole recurring self-refinement synthesis surface;
+the retired generic placeholder is not a second job.
 
 macOS and Windows surfaces live under `adapters/` and are not part of the
 immutable base distribution. macOS has an explicit per-user Canary installer

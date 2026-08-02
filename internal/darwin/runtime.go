@@ -346,6 +346,24 @@ func (executor HousekeepingExecutor) executeLeasedCommand(ctx context.Context, c
 		}
 		return base, fmt.Errorf("Darwin housekeeping %s", receipt.Outcome)
 	}
+	if receipt.Outcome == OutcomeNoAction {
+		base.State = maintenance.ReceiptReviewedNoChange
+		base.ReasonCode = maintenance.ReasonReviewedNoChange
+		base.RecordedAt = executor.currentTime()
+		if err := executor.CommandStore.AppendReceipt(base); err != nil {
+			return base, err
+		}
+		return base, nil
+	}
+	if receipt.Outcome == OutcomePartial {
+		base.State = maintenance.ReceiptFailed
+		base.ReasonCode = maintenance.ReasonHandlerFailure
+		base.RecordedAt = executor.currentTime()
+		if err := executor.CommandStore.AppendReceipt(base); err != nil {
+			return base, err
+		}
+		return base, errors.New("Darwin housekeeping did not complete every planned action")
+	}
 	base.State = maintenance.ReceiptSucceeded
 	base.ReasonCode = maintenance.ReasonCompleted
 	base.RecordedAt = executor.currentTime()

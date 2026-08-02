@@ -37,9 +37,11 @@ The attended local Canary is explicit and uses the same `darwin` identity and
 `health/maestro-system` scope for health and housekeeping. `bcgos maintenance
 canary install-macos --confirm` persists the validated IANA timezone and exact
 activated job digests, then reports filesystem and native lifecycle state
-separately. The daily deterministic and weekly proposal handlers are
-contract-tested and locally executable after enrollment; Walter and monthly
-structural work remain due/unavailable. A current-user macOS install can be
+separately. Daily Darwin housekeeping and the operational portion of weekly
+deep review are contract-tested and locally executable after enrollment: they
+may repair only allowlisted, reversible managed state after validation.
+Walter and monthly structural work remain due/unavailable. A current-user
+macOS install can be
 adapter-installed and native-qualified only when `launchctl` confirms it; a
 fixture install is filesystem-only. Windows remains
 `unavailable_native_qualification_pending`.

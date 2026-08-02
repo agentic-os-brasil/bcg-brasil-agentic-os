@@ -37,9 +37,15 @@ occurrences. Continuous lifecycle events map only to catalog jobs with the
 silent default.
 
 The base catalog separates `darwin-housekeeping-daily`, `darwin-deep-weekly`,
-`walter-self-review-weekly` and `darwin-structural-evolution-proposal`. The
-Walter handler remains unavailable until its runtime-neutral integration lands.
-The monthly Darwin job is unavailable, disabled and never unattended. The worker can emit a bounded proposal
+`walter-self-review-weekly` and `darwin-structural-evolution-proposal`.
+Darwin housekeeping and the operational portion of deep review may execute the
+same allowlisted reversible repair after validation. The Walter scheduler seam
+and runtime-neutral review core exist, but its handler remains unavailable
+until an approved model adapter, authority and scheduled-input integration are
+installed.
+The monthly Darwin job uses the existing deterministic closed planner; it is
+not a model-backed executor. It remains unavailable, disabled and never
+unattended. The worker can emit a bounded proposal
 receipt only after a concrete runtime-qualified catalog, explicit activation
 and attended monthly authority bind the exact occurrence; the shipped
 catalog-only/unavailable state cannot authorize it. Approval and application

@@ -102,6 +102,9 @@ func (command Command) Validate(now time.Time) error {
 	if command.ProposalOnly != isProposalOnlyJob(command.JobID) {
 		return errors.New("proposal-only flag does not match the maintenance job")
 	}
+	if err := validateReservedJobTrigger(command.JobID, command.Trigger); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -114,6 +117,9 @@ func (receipt Receipt) Validate() error {
 	}
 	if receipt.ProposalOnly != isProposalOnlyJob(receipt.JobID) {
 		return errors.New("maintenance receipt proposal flag does not match the job")
+	}
+	if err := validateReservedJobTrigger(receipt.JobID, receipt.Trigger); err != nil {
+		return err
 	}
 	if receipt.ProposalOnly && receipt.State == ReceiptSucceeded {
 		return errors.New("proposal-only maintenance cannot report an applied success")
@@ -261,4 +267,18 @@ func IsProposalOnlyJob(jobID string) bool {
 
 func isProposalOnlyJob(jobID string) bool {
 	return IsProposalOnlyJob(jobID)
+}
+
+func validateReservedJobTrigger(jobID string, trigger Trigger) error {
+	switch jobID {
+	case DarwinStructuralProposalJobID:
+		if trigger != TriggerMonthly {
+			return errors.New("Darwin structural evolution requires a monthly trigger")
+		}
+	case WalterSelfReviewWeeklyJobID:
+		if trigger != TriggerWeekly {
+			return errors.New("Walter weekly self-review requires a weekly trigger")
+		}
+	}
+	return nil
 }
