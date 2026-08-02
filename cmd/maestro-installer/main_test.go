@@ -127,7 +127,7 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 		configureWorkspace: func(options, string) (workspaceActivation, error) {
 			return workspaceActivation{
 				State:       "ready",
-				Lifecycle:   lifecycleActivation{State: "configured", Events: []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}},
+				Lifecycle:   lifecycleActivation{State: "configured", Events: []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}, HookReview: "owner_review_required"},
 				Maintenance: maintenanceActivation{State: "active_loaded_enabled", NativeObserved: true, ModelBacked: "unavailable"},
 			}, nil
 		},
@@ -213,7 +213,7 @@ func TestConfigureWorkspaceRuntimeRunsIdempotentReadinessAndNativeMaintenance(t 
 		if err != nil {
 			t.Fatal(err)
 		}
-		if activation.State != "ready" || activation.Lifecycle.State != "configured" || activation.Lifecycle.StartSession != "configured" || activation.Lifecycle.NativeObserved != "unavailable_pending_first_session" {
+		if activation.State != "ready" || activation.Lifecycle.State != "configured" || activation.Lifecycle.StartSession != "configured" || activation.Lifecycle.HookReview != "owner_review_required" || activation.Lifecycle.NativeObserved != "unavailable_pending_first_session" {
 			t.Fatalf("lifecycle activation = %#v", activation)
 		}
 		if activation.Maintenance.State != "active_loaded_enabled" || !activation.Maintenance.NativeObserved || activation.Maintenance.ModelBacked != "unavailable" {

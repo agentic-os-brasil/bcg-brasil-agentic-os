@@ -52,4 +52,10 @@ is reported as native-observed only after launchctl verification. Model-backed
 maintenance remains unavailable and the scheduled lifecycle never invokes a
 model implicitly. In direct preview mode, no workspace or lifecycle is created.
 
+Codex keeps a separate, owner-controlled trust record for non-managed project
+hooks. The wizard makes that review explicit at handoff: it installs and
+verifies the five definitions but never edits `~/.codex/config.toml` to
+pre-approve them. The owner reviews the exact commands in Codex on first use;
+only then can later sessions run them automatically.
+
 The wizard must never turn a failed verification into an unsigned fallback.

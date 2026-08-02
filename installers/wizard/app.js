@@ -160,7 +160,7 @@
       summary = document.createElement('div');
       summary.id = 'activation-summary';
       summary.className = 'activation-summary';
-      summary.innerHTML = '<article><span>HOOKS DO WORKSPACE</span><strong id="activation-hooks">CONFIGURADO</strong><small id="activation-hook-events"></small></article><article><span>MANUTENÇÃO LOCAL</span><strong id="activation-maintenance">OBSERVADO NO LAUNCHD</strong><small id="activation-maintenance-detail"></small></article><article><span>SESSÃO NATIVA CODEX</span><strong id="activation-native-session">AGUARDANDO PRIMEIRA SESSÃO</strong><small>Configuração não é evidência de que o runtime já executou os hooks.</small></article><article><span>JOBS COM MODELO</span><strong id="activation-model">INDISPONÍVEL</strong><small>Nenhum modelo será executado pela manutenção agendada.</small></article>';
+      summary.innerHTML = '<article><span>HOOKS DO WORKSPACE</span><strong id="activation-hooks">CONFIGURADO</strong><small id="activation-hook-events"></small></article><article><span>REVISÃO DOS HOOKS</span><strong id="activation-hook-review">REVISÃO DO OWNER NECESSÁRIA</strong><small id="activation-hook-review-detail">O Codex pede a confirmação dos comandos locais antes da primeira execução. O instalador não grava confiança global em seu nome.</small></article><article><span>MANUTENÇÃO LOCAL</span><strong id="activation-maintenance">OBSERVADO NO LAUNCHD</strong><small id="activation-maintenance-detail"></small></article><article><span>SESSÃO NATIVA CODEX</span><strong id="activation-native-session">AGUARDANDO PRIMEIRA SESSÃO</strong><small>Configuração não é evidência de que o runtime já executou os hooks.</small></article><article><span>JOBS COM MODELO</span><strong id="activation-model">INDISPONÍVEL</strong><small>Nenhum modelo será executado pela manutenção agendada.</small></article>';
       document.querySelector('#runtime-handoff .next-command')?.before(summary);
     }
     const lifecycle = activation.lifecycle || {};
@@ -172,6 +172,13 @@
     document.querySelector('#activation-hook-events').textContent = events.length
       ? events.join(' · ')
       : 'StartSession · UserPromptSubmit · PreToolUse · PostToolUse · Stop';
+    const reviewRequired = lifecycle.hook_review === 'owner_review_required';
+    document.querySelector('#activation-hook-review').textContent = reviewRequired
+      ? 'REVISÃO DO OWNER NECESSÁRIA'
+      : String(lifecycle.hook_review || 'NÃO CONFIRMADO').replaceAll('_', ' ').toUpperCase();
+    document.querySelector('#activation-hook-review-detail').textContent = reviewRequired
+      ? 'Ao abrir o Codex, revise os cinco comandos locais quando ele solicitar. O instalador nunca grava confiança global em seu nome.'
+      : 'A revisão de confiança dos hooks segue o estado reportado pelo runtime.';
     document.querySelector('#activation-maintenance').textContent = maintenance.native_observed
       ? 'OBSERVADO NO LAUNCHD'
       : 'NÃO OBSERVADO';
@@ -198,7 +205,7 @@
     } else if (!runtimeTargets.length) {
       copy.textContent = 'Nenhum runtime compatível foi detectado. Instale Claude Code ou Codex e abra este instalador novamente.';
     } else {
-      copy.textContent = 'Escolha um workspace Maestro; o runtime será aberto já no contexto certo.';
+      copy.textContent = 'Abra o workspace no runtime. Na primeira abertura, revise os cinco hooks locais quando o Codex solicitar; essa aprovação permanece sob seu controle.';
       runtimeTargets.forEach((target, index) => {
         const button = document.createElement('button');
         button.type = 'button';

@@ -83,13 +83,14 @@ first-command card uses the exact
 "<installed-cli>" doctor`. Static preview and disconnected mode remain
 non-installing.
 
-Workspace creation is not the final runtime-readiness claim. The bridge returns
-`workspace_created`, the exact `workspace_path` and a diagnostic command bound
-to that path. It reports adapter configuration, readiness verification and
-scheduler activation as separate states; until all required later gates run,
-`ready_for_runtime` remains false. This prevents a generated workspace or a
-present `AGENTS.md` from being mistaken for observed hooks, verified readiness
-or an active scheduler.
+Workspace creation alone is not the final runtime-readiness claim. The bridge
+reports adapter configuration, readiness verification and scheduler activation
+as separate states, alongside the exact `workspace_path` and a diagnostic
+command bound to that path. It returns `ready_for_runtime=true` only after the
+workspace, Codex projection and per-user scheduler pass their respective
+checks; a failure returns an error and never marks the workspace ready. A
+generated workspace or a present `AGENTS.md` is therefore not mistaken for
+observed hooks, verified readiness or an active scheduler.
 
 If an earlier first install was interrupted, the connected bridge may preserve
 the installer-owned managed root and its bound install state in a deterministic
@@ -98,6 +99,14 @@ installation, never overwrites an earlier recovery and never auto-recovers an
 ambiguous root containing unrecognized entries. A final diagnostic failure
 after bootstrapper activation is reported as quarantined/reinstallable, not as
 completed.
+
+Codex project hooks are intentionally a separate owner-consent boundary. The
+wizard installs and verifies the five workspace-local hook definitions, then
+states that the first Codex opening must review their exact commands before
+they execute automatically. It never manufactures entries in
+`~/.codex/config.toml`, bypasses the Codex hook-review UX, or presents a
+configured hook as a native observation. This keeps local hooks both wired and
+revocable by their owner.
 
 ## Visual identity
 

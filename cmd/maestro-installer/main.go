@@ -86,6 +86,7 @@ type lifecycleActivation struct {
 	State          string   `json:"state"`
 	Events         []string `json:"events"`
 	StartSession   string   `json:"start_session"`
+	HookReview     string   `json:"hook_review"`
 	NativeObserved string   `json:"native_observed"`
 }
 
@@ -1077,6 +1078,7 @@ func configureWorkspaceRuntime(options options, workspacePath string) (workspace
 			State:          "configured",
 			Events:         []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
 			StartSession:   "configured",
+			HookReview:     "owner_review_required",
 			NativeObserved: "unavailable_pending_first_session",
 		},
 		Maintenance: maintenanceActivation{
@@ -1163,7 +1165,7 @@ func codexWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "codex", Host: "new"}
 	query := deepLink.Query()
 	query.Set("path", workspacePath)
-	query.Set("prompt", "Você está no workspace Maestro recém-criado. Leia AGENTS.md e proponha a primeira tarefa segura.")
+	query.Set("prompt", "Você está no workspace Maestro recém-criado. Antes da primeira tarefa, revise os cinco hooks locais do Maestro quando o Codex solicitar a confiança deles; essa revisão pertence ao owner e não é burlada pelo instalador. Em seguida, leia AGENTS.md e proponha a primeira tarefa segura.")
 	deepLink.RawQuery = query.Encode()
 	return deepLink.String()
 }
