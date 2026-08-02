@@ -183,11 +183,11 @@ func Validate(root string, full bool, out io.Writer) error {
 	}
 	if full {
 		checks = append(checks,
-			check{"go vet", func() error { return runCommand(root, "go", "vet", "./...") }},
-			check{"unit tests", func() error { return runCommand(root, "go", "test", "./...") }},
+			check{"go vet (offline)", func() error { return runCommand(root, "go", "vet", "./...") }},
+			check{"unit tests (offline)", func() error { return runCommand(root, "go", "test", "./...") }},
 		)
 	} else {
-		checks = append(checks, check{"fast unit tests", func() error { return runCommand(root, "go", "test", "./internal/dev/...") }})
+		checks = append(checks, check{"fast unit tests (offline)", func() error { return runCommand(root, "go", "test", "./internal/dev/...") }})
 	}
 	for _, current := range checks {
 		if err := current.run(); err != nil {
@@ -239,6 +239,11 @@ func checkFormatting(root string) error {
 func runCommand(root, name string, args ...string) error {
 	command := exec.Command(name, args...)
 	command.Dir = root
+	if name == "go" {
+		// Local validation must never spend credits or depend on network access.
+		// The module and checksum caches remain the only allowed dependency source.
+		command.Env = append(os.Environ(), "GOPROXY=off", "GOSUMDB=off")
+	}
 	var output bytes.Buffer
 	command.Stdout = &output
 	command.Stderr = &output
