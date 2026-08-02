@@ -15,7 +15,7 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/wiki-entrypoint
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 9aff0e5974db0dde5642e35230dec2ac150ae00a0eb8ac0c5d1d6be8711f494d
+x-bcgos-source-fingerprint: ec95d49c253ab3755edf865b4f8b9d10692cd1fcfee42bf3f16491a491449b71
 x-bcgos-freshness: fresh
 x-bcgos-status: active
 x-bcgos-generator-version: bcgos-managed-wiki/0.2
@@ -59,20 +59,21 @@ source of truth, a private-memory store or a client/workspace content store.
 - [Darwin lifecycle and cadence](/concepts/darwin-lifecycle-cadence.md)
 - [Model-backed maintenance activation](/concepts/model-backed-maintenance-activation.md)
 - [Release and publication contract](/concepts/release-distribution.md)
-- [Accepted wiki decision](repo://docs/decisions/decision-log.md#WIKI)
-- [Accepted OKF decision](repo://docs/decisions/decision-log.md#OKFP)
-- [Accepted Darwin maintenance decision](repo://docs/decisions/decision-log.md#DARN)
-- [Accepted bounded weekly self/state decision](repo://docs/decisions/decision-log.md#SILE)
+- Accepted decision anchors: `WIKI`, `OKFP`, `DARN`, and `SILE` in the canonical decision register.
 
 ## Official maintenance flow
 
-Run from the repository root:
+Use the repository-owned wiki harness from the repository root with these stable
+subcommands:
 
-```sh
-go run ./dev/harness wiki reconcile
-go run ./dev/harness wiki validate
-go run ./dev/harness wiki verify
+```text
+wiki reconcile
+wiki validate
+wiki verify
 ```
+
+The development-only executable invocation is intentionally kept outside the
+managed distribution surface; the subcommands above are its stable contract.
 
 `reconcile` is the only generation path. `validate` checks the OKF/profile and
 Markdown-link contract; `verify` recompiles in an isolated temporary directory

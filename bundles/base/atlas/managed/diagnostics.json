@@ -3,11 +3,7 @@
   "opaque_links": [
     "docs/releasing.md:repo://docs/release-gates-checklist.md",
     "docs/wiki.md:repo://bundles/base/atlas/managed/index.md",
-    "docs/wiki.md:repo://dev/wiki/managed-allowlist.json",
-    "docs/wiki.md:repo://docs/decisions/decision-log.md#DARN",
-    "docs/wiki.md:repo://docs/decisions/decision-log.md#OKFP",
-    "docs/wiki.md:repo://docs/decisions/decision-log.md#SILE",
-    "docs/wiki.md:repo://docs/decisions/decision-log.md#WIKI"
+    "docs/wiki.md:repo://dev/wiki/managed-allowlist.json"
   ],
   "orphans": [],
   "rewritten_links": [

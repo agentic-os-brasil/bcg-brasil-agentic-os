@@ -201,6 +201,16 @@ func TestValidateManagedBundleRejectsBrokenMarkdownLink(t *testing.T) {
 	}
 }
 
+func TestValidateManagedBundleRejectsBrokenRootRelativeMarkdownLink(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "index.md", "okf_version: \"0.2\"\n\n# Bundle\n")
+	writeTestFile(t, root, "log.md", "# Directory Update Log\n")
+	writeTestFile(t, root, "concepts/one.md", "---\ntype: Reference\nx-bcgos-profile-version: \"1\"\nx-bcgos-scope: managed\nx-bcgos-policy-version: \"1\"\nx-bcgos-generator-version: \"test\"\n---\n\n# One\n\n[Missing](/concepts/missing.md)\n")
+	if err := ValidateManagedBundle(root); err == nil || !strings.Contains(err.Error(), "broken generated markdown link") {
+		t.Fatalf("expected broken root-relative link failure, got %v", err)
+	}
+}
+
 func TestVerifyManagedUpToDateDetectsStaleGeneratedOutput(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, "specs/one.md", "# One\n")

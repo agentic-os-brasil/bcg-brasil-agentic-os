@@ -579,7 +579,7 @@ func splitManagedMarkdownDestination(raw string) (string, string) {
 }
 
 func isNonFileManagedLink(destination string) bool {
-	if strings.HasPrefix(destination, "#") || strings.HasPrefix(destination, "/") {
+	if strings.HasPrefix(destination, "#") {
 		return true
 	}
 	parsed, err := url.Parse(destination)

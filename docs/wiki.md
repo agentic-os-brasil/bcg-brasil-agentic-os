@@ -22,20 +22,21 @@ source of truth, a private-memory store or a client/workspace content store.
 - [Darwin lifecycle and cadence](../specs/037-darwin-lifecycle-cadence.md)
 - [Model-backed maintenance activation](../specs/041-model-backed-maintenance-activation.md)
 - [Release and publication contract](releasing.md)
-- [Accepted wiki decision](decisions/decision-log.md#WIKI)
-- [Accepted OKF decision](decisions/decision-log.md#OKFP)
-- [Accepted Darwin maintenance decision](decisions/decision-log.md#DARN)
-- [Accepted bounded weekly self/state decision](decisions/decision-log.md#SILE)
+- Accepted decision anchors: `WIKI`, `OKFP`, `DARN`, and `SILE` in the canonical decision register.
 
 ## Official maintenance flow
 
-Run from the repository root:
+Use the repository-owned wiki harness from the repository root with these stable
+subcommands:
 
-```sh
-go run ./dev/harness wiki reconcile
-go run ./dev/harness wiki validate
-go run ./dev/harness wiki verify
+```text
+wiki reconcile
+wiki validate
+wiki verify
 ```
+
+The development-only executable invocation is intentionally kept outside the
+managed distribution surface; the subcommands above are its stable contract.
 
 `reconcile` is the only generation path. `validate` checks the OKF/profile and
 Markdown-link contract; `verify` recompiles in an isolated temporary directory
