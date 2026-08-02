@@ -15,10 +15,10 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/human-atlas-bootstrap
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: ea273682e4d6a012818a7a4c7c16c60bd7ec98f26cf732b999ef5a5e62c3625d
+x-bcgos-source-fingerprint: 4e94811c1050f1c9a3c25b05023bec8b5f5887f9dd509519c5bdf938af0818ff
 x-bcgos-freshness: fresh
 x-bcgos-status: active
-x-bcgos-generator-version: bcgos-managed-wiki/0.1
+x-bcgos-generator-version: bcgos-managed-wiki/0.2
 x-bcgos-policy-version: managed-product/1
 ---
 

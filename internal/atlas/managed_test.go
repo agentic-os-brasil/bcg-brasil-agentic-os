@@ -9,7 +9,7 @@ import (
 
 func TestReconcileManagedProducesDeterministicOKFBundle(t *testing.T) {
 	root := t.TempDir()
-	writeTestFile(t, root, "specs/one.md", "# One\n\nThe first source.\n")
+	writeTestFile(t, root, "specs/one.md", "# One\n\nThe first source.\n\n[Two](two.md)\n")
 	writeTestFile(t, root, "specs/two.md", "# Two\n\nThe second source.\n")
 	allowlist := filepath.Join(root, "allowlist.json")
 	writeTestFile(t, root, "allowlist.json", `{
@@ -53,11 +53,37 @@ func TestReconcileManagedProducesDeterministicOKFBundle(t *testing.T) {
 		"x-bcgos-scope: managed",
 		"sources:",
 		"/concepts/two.md",
+		"[Two](/concepts/two.md)",
 		"# Source snapshot",
 	} {
 		if !strings.Contains(string(one), expected) {
 			t.Fatalf("one.md missing %q:\n%s", expected, one)
 		}
+	}
+}
+
+func TestReconcileManagedRewritesOpaqueAndRejectsBrokenMarkdownLinks(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "specs/one.md", "# One\n\n[Release gates](../docs/release-gates-checklist.md)\n")
+	writeTestFile(t, root, "docs/release-gates-checklist.md", "# Gates\n")
+	allowlist := filepath.Join(root, "allowlist.json")
+	writeTestFile(t, root, "allowlist.json", `{"schema_version":1,"okf_version":"0.2","generator_version":"test/1","policy_version":"managed-product/1","log_date":"2026-07-28","sources":[{"id":"one","path":"specs/one.md","type":"Reference","title":"One"}]}`)
+	output := filepath.Join(root, "bundle")
+	if _, err := ReconcileManaged(root, allowlist, output); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(output, "concepts", "one.md"))
+	if err != nil || !strings.Contains(string(body), "repo://docs/release-gates-checklist.md") {
+		t.Fatalf("opaque link body=%q err=%v", body, err)
+	}
+	diagnostics, err := os.ReadFile(filepath.Join(output, "diagnostics.json"))
+	if err != nil || !strings.Contains(string(diagnostics), "opaque_links") {
+		t.Fatalf("link diagnostics=%q err=%v", diagnostics, err)
+	}
+
+	writeTestFile(t, root, "specs/one.md", "# One\n\n[Missing](missing.md)\n")
+	if _, err := ReconcileManaged(root, allowlist, filepath.Join(root, "broken")); err == nil || !strings.Contains(err.Error(), "broken markdown link") {
+		t.Fatalf("broken link error=%v", err)
 	}
 }
 
@@ -162,6 +188,26 @@ func TestValidateManagedBundleRejectsMissingConceptType(t *testing.T) {
 	writeTestFile(t, root, "broken.md", "# Missing frontmatter\n")
 	if err := ValidateManagedBundle(root); err == nil || !strings.Contains(err.Error(), "frontmatter") {
 		t.Fatalf("ValidateManagedBundle() error = %v", err)
+	}
+}
+
+func TestValidateManagedBundleRejectsBrokenMarkdownLink(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "index.md", "okf_version: \"0.2\"\n\n# Bundle\n")
+	writeTestFile(t, root, "log.md", "# Directory Update Log\n")
+	writeTestFile(t, root, "concepts/one.md", "---\ntype: Reference\nx-bcgos-profile-version: \"1\"\nx-bcgos-scope: managed\nx-bcgos-policy-version: \"1\"\nx-bcgos-generator-version: \"test\"\n---\n\n# One\n\n[Missing](missing.md)\n")
+	if err := ValidateManagedBundle(root); err == nil || !strings.Contains(err.Error(), "broken generated markdown link") {
+		t.Fatalf("expected broken link failure, got %v", err)
+	}
+}
+
+func TestValidateManagedBundleRejectsBrokenRootRelativeMarkdownLink(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "index.md", "okf_version: \"0.2\"\n\n# Bundle\n")
+	writeTestFile(t, root, "log.md", "# Directory Update Log\n")
+	writeTestFile(t, root, "concepts/one.md", "---\ntype: Reference\nx-bcgos-profile-version: \"1\"\nx-bcgos-scope: managed\nx-bcgos-policy-version: \"1\"\nx-bcgos-generator-version: \"test\"\n---\n\n# One\n\n[Missing](/concepts/missing.md)\n")
+	if err := ValidateManagedBundle(root); err == nil || !strings.Contains(err.Error(), "broken generated markdown link") {
+		t.Fatalf("expected broken root-relative link failure, got %v", err)
 	}
 }
 

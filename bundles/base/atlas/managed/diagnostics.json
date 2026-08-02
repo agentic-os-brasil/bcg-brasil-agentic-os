@@ -1,4 +1,16 @@
 {
   "broken_links": [],
-  "orphans": []
+  "opaque_links": [
+    "docs/releasing.md:repo://docs/release-gates-checklist.md",
+    "docs/wiki.md:repo://bundles/base/atlas/managed/index.md",
+    "docs/wiki.md:repo://dev/wiki/managed-allowlist.json"
+  ],
+  "orphans": [],
+  "rewritten_links": [
+    "docs/wiki.md:../specs/007-content-navigation.md -\u003e /concepts/content-navigation.md",
+    "docs/wiki.md:../specs/008-wiki-update-okf.md -\u003e /concepts/wiki-okf.md",
+    "docs/wiki.md:../specs/037-darwin-lifecycle-cadence.md -\u003e /concepts/darwin-lifecycle-cadence.md",
+    "docs/wiki.md:../specs/041-model-backed-maintenance-activation.md -\u003e /concepts/model-backed-maintenance-activation.md",
+    "docs/wiki.md:releasing.md -\u003e /concepts/release-distribution.md"
+  ]
 }

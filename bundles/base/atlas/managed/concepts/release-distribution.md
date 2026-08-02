@@ -15,10 +15,10 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/release-distribution
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: ea273682e4d6a012818a7a4c7c16c60bd7ec98f26cf732b999ef5a5e62c3625d
+x-bcgos-source-fingerprint: 4e94811c1050f1c9a3c25b05023bec8b5f5887f9dd509519c5bdf938af0818ff
 x-bcgos-freshness: fresh
 x-bcgos-status: active
-x-bcgos-generator-version: bcgos-managed-wiki/0.1
+x-bcgos-generator-version: bcgos-managed-wiki/0.2
 x-bcgos-policy-version: managed-product/1
 ---
 
@@ -228,7 +228,7 @@ No production path may convert `unavailable` into an unsigned override.
 
 ## Release decision checklist
 
-Use [`docs/release-gates-checklist.md`](release-gates-checklist.md) as the
+Use [`docs/release-gates-checklist.md`](repo://docs/release-gates-checklist.md) as the
 evidence record. It separates a technical rehearsal, a signed release and a
 pilot-ready release, and names the external owner for every gate. A candidate
 that passes local closure verification remains unsigned engineering output.

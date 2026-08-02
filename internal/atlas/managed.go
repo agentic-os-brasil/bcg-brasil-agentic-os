@@ -8,8 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	pathpkg "path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -75,6 +78,28 @@ type sourceRef struct {
 	Title    string `yaml:"title,omitempty"`
 }
 
+var managedMarkdownLinkPattern = regexp.MustCompile(`\]\(([^)\r\n]*)\)`)
+
+type managedLinkDiagnostics struct {
+	BrokenLinks    []string `json:"broken_links"`
+	OpaqueLinks    []string `json:"opaque_links"`
+	RewrittenLinks []string `json:"rewritten_links"`
+}
+
+func (diagnostics *managedLinkDiagnostics) addOpaque(source, target string) {
+	diagnostics.OpaqueLinks = append(diagnostics.OpaqueLinks, source+":"+target)
+}
+
+func (diagnostics *managedLinkDiagnostics) addRewritten(source, from, to string) {
+	diagnostics.RewrittenLinks = append(diagnostics.RewrittenLinks, source+":"+from+" -> "+to)
+}
+
+func (diagnostics *managedLinkDiagnostics) sort() {
+	sort.Strings(diagnostics.BrokenLinks)
+	sort.Strings(diagnostics.OpaqueLinks)
+	sort.Strings(diagnostics.RewrittenLinks)
+}
+
 // ReconcileManaged compiles the reviewed managed source allowlist into a
 // deterministic OKF bundle and publishes it with a best-effort atomic
 // directory swap. Durable versioned manifests and last-known-good pointer
@@ -106,11 +131,16 @@ func ReconcileManaged(root, allowlistPath, outputPath string) (ManagedReport, er
 	defer os.RemoveAll(stage)
 
 	byID := make(map[string]ManagedSource, len(sources))
+	linkDiagnostics := managedLinkDiagnostics{
+		BrokenLinks:    []string{},
+		OpaqueLinks:    []string{},
+		RewrittenLinks: []string{},
+	}
 	for _, source := range sources {
 		byID[source.ID] = source
 	}
 	for _, source := range sources {
-		if err := writeManagedConcept(stage, root, source, byID, fingerprint, allowlist); err != nil {
+		if err := writeManagedConcept(stage, root, source, byID, fingerprint, allowlist, &linkDiagnostics); err != nil {
 			return ManagedReport{}, err
 		}
 	}
@@ -120,7 +150,7 @@ func ReconcileManaged(root, allowlistPath, outputPath string) (ManagedReport, er
 	if err := writeManagedLog(stage, sources, fingerprint, allowlist); err != nil {
 		return ManagedReport{}, err
 	}
-	if err := writeManagedReports(stage, sources, byID); err != nil {
+	if err := writeManagedReports(stage, sources, byID, linkDiagnostics); err != nil {
 		return ManagedReport{}, err
 	}
 	if err := ValidateManagedBundle(stage); err != nil {
@@ -143,6 +173,9 @@ func ValidateManagedBundle(root string) error {
 	}
 	if _, err := os.Stat(filepath.Join(root, "log.md")); err != nil {
 		return fmt.Errorf("read root log: %w", err)
+	}
+	if err := validateManagedMarkdownLinks(root); err != nil {
+		return err
 	}
 	return filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -420,7 +453,7 @@ func managedFingerprint(root string, sources []ManagedSource) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func writeManagedConcept(bundleRoot, sourceRoot string, source ManagedSource, byID map[string]ManagedSource, fingerprint string, allowlist ManagedAllowlist) error {
+func writeManagedConcept(bundleRoot, sourceRoot string, source ManagedSource, byID map[string]ManagedSource, fingerprint string, allowlist ManagedAllowlist, linkDiagnostics *managedLinkDiagnostics) error {
 	body, err := readManagedSource(filepath.Join(sourceRoot, filepath.FromSlash(source.Path)))
 	if err != nil {
 		return err
@@ -443,6 +476,10 @@ func writeManagedConcept(bundleRoot, sourceRoot string, source ManagedSource, by
 		Sources:           []sourceRef{{ID: source.ID, Resource: "repo://" + source.Path, Title: source.Title}},
 	}
 	encoded, err := yaml.Marshal(header)
+	if err != nil {
+		return err
+	}
+	body, err = rewriteManagedMarkdownLinks(body, sourceRoot, source, byID, linkDiagnostics)
 	if err != nil {
 		return err
 	}
@@ -473,6 +510,111 @@ func writeManagedConcept(bundleRoot, sourceRoot string, source ManagedSource, by
 	return os.WriteFile(path, []byte(builder.String()), 0o644)
 }
 
+func rewriteManagedMarkdownLinks(body []byte, sourceRoot string, source ManagedSource, byID map[string]ManagedSource, diagnostics *managedLinkDiagnostics) ([]byte, error) {
+	byPath := make(map[string]ManagedSource, len(byID))
+	for _, candidate := range byID {
+		byPath[candidate.Path] = candidate
+	}
+	text := string(body)
+	var rewriteErr error
+	rewritten := managedMarkdownLinkPattern.ReplaceAllStringFunc(text, func(match string) string {
+		if rewriteErr != nil {
+			return match
+		}
+		submatch := managedMarkdownLinkPattern.FindStringSubmatch(match)
+		if len(submatch) != 2 {
+			return match
+		}
+		raw := submatch[1]
+		destination, suffix := splitManagedMarkdownDestination(raw)
+		if destination == "" || isNonFileManagedLink(destination) {
+			return match
+		}
+		resolved, err := resolveManagedSourceLink(source.Path, destination)
+		if err != nil {
+			rewriteErr = fmt.Errorf("%s: %w", source.Path, err)
+			return match
+		}
+		if target, ok := byPath[resolved]; ok {
+			newDestination := "/concepts/" + target.ID + ".md" + managedLinkSuffix(destination, suffix)
+			if newDestination != destination+suffix {
+				diagnostics.addRewritten(source.Path, raw, newDestination)
+			}
+			return "](" + newDestination + ")"
+		}
+		absolute := filepath.Join(sourceRoot, filepath.FromSlash(resolved))
+		info, statErr := os.Stat(absolute)
+		if statErr != nil || !info.Mode().IsRegular() {
+			link := source.Path + ":" + destination
+			diagnostics.BrokenLinks = append(diagnostics.BrokenLinks, link)
+			rewriteErr = fmt.Errorf("broken markdown link %q in %s", destination, source.Path)
+			return match
+		}
+		newDestination := "repo://" + resolved + managedLinkSuffix(destination, suffix)
+		diagnostics.addOpaque(source.Path, newDestination)
+		return "](" + newDestination + ")"
+	})
+	if rewriteErr != nil {
+		return nil, rewriteErr
+	}
+	diagnostics.sort()
+	return []byte(rewritten), nil
+}
+
+func splitManagedMarkdownDestination(raw string) (string, string) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", ""
+	}
+	if strings.HasPrefix(trimmed, "<") {
+		if end := strings.IndexByte(trimmed, '>'); end >= 0 {
+			return trimmed[1:end], trimmed[end+1:]
+		}
+	}
+	fields := strings.Fields(trimmed)
+	if len(fields) == 0 {
+		return "", ""
+	}
+	return fields[0], strings.TrimPrefix(trimmed, fields[0])
+}
+
+func isNonFileManagedLink(destination string) bool {
+	if strings.HasPrefix(destination, "#") {
+		return true
+	}
+	parsed, err := url.Parse(destination)
+	return err == nil && (parsed.Scheme != "" || parsed.Host != "")
+}
+
+func resolveManagedSourceLink(sourcePath, destination string) (string, error) {
+	parsed, err := url.Parse(destination)
+	if err != nil || parsed.Path == "" {
+		return "", fmt.Errorf("invalid markdown link %q in %s", destination, sourcePath)
+	}
+	resolved := pathpkg.Clean(pathpkg.Join(pathpkg.Dir(filepath.ToSlash(sourcePath)), parsed.Path))
+	if resolved == "." || resolved == ".." || strings.HasPrefix(resolved, "../") {
+		return "", fmt.Errorf("markdown link escapes repository root: %q in %s", destination, sourcePath)
+	}
+	return resolved, nil
+}
+
+func managedLinkSuffix(destination, suffix string) string {
+	parsed, err := url.Parse(destination)
+	if err != nil {
+		return suffix
+	}
+	var builder strings.Builder
+	if parsed.RawQuery != "" {
+		builder.WriteByte('?')
+		builder.WriteString(parsed.RawQuery)
+	}
+	if parsed.Fragment != "" {
+		builder.WriteByte('#')
+		builder.WriteString(parsed.Fragment)
+	}
+	return builder.String() + suffix
+}
+
 func readManagedSource(path string) ([]byte, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -500,7 +642,7 @@ func writeManagedLog(bundleRoot string, sources []ManagedSource, fingerprint str
 	return os.WriteFile(filepath.Join(bundleRoot, "log.md"), []byte(body), 0o644)
 }
 
-func writeManagedReports(bundleRoot string, sources []ManagedSource, byID map[string]ManagedSource) error {
+func writeManagedReports(bundleRoot string, sources []ManagedSource, byID map[string]ManagedSource, linkDiagnostics managedLinkDiagnostics) error {
 	backlinks := make(map[string][]string, len(sources))
 	for _, source := range sources {
 		for _, related := range source.Related {
@@ -522,7 +664,13 @@ func writeManagedReports(bundleRoot string, sources []ManagedSource, byID map[st
 	if err := os.WriteFile(filepath.Join(bundleRoot, "backlinks.json"), append(backlinkJSON, '\n'), 0o644); err != nil {
 		return err
 	}
-	diagnostics := map[string]any{"broken_links": []string{}, "orphans": []string{}}
+	linkDiagnostics.sort()
+	diagnostics := map[string]any{
+		"broken_links":    linkDiagnostics.BrokenLinks,
+		"opaque_links":    linkDiagnostics.OpaqueLinks,
+		"rewritten_links": linkDiagnostics.RewrittenLinks,
+		"orphans":         []string{},
+	}
 	for _, source := range sources {
 		if len(source.Related) == 0 && len(backlinks[source.ID]) == 0 && len(byID) > 1 {
 			diagnostics["orphans"] = append(diagnostics["orphans"].([]string), source.ID)
@@ -533,6 +681,52 @@ func writeManagedReports(bundleRoot string, sources []ManagedSource, byID map[st
 		return err
 	}
 	return os.WriteFile(filepath.Join(bundleRoot, "diagnostics.json"), append(diagnosticJSON, '\n'), 0o644)
+}
+
+func validateManagedMarkdownLinks(root string) error {
+	return filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		var linkErr error
+		managedMarkdownLinkPattern.ReplaceAllStringFunc(string(body), func(match string) string {
+			if linkErr != nil {
+				return match
+			}
+			submatch := managedMarkdownLinkPattern.FindStringSubmatch(match)
+			if len(submatch) != 2 {
+				return match
+			}
+			destination, _ := splitManagedMarkdownDestination(submatch[1])
+			if destination == "" || isNonFileManagedLink(destination) {
+				return match
+			}
+			parsed, parseErr := url.Parse(destination)
+			if parseErr != nil || parsed.Path == "" {
+				linkErr = fmt.Errorf("invalid markdown link %q in %s", destination, path)
+				return match
+			}
+			var target string
+			if strings.HasPrefix(parsed.Path, "/") {
+				target = filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(parsed.Path, "/")))
+			} else {
+				target = filepath.Join(filepath.Dir(path), filepath.FromSlash(parsed.Path))
+			}
+			info, statErr := os.Stat(target)
+			if statErr != nil || !info.Mode().IsRegular() {
+				linkErr = fmt.Errorf("broken generated markdown link %q in %s", destination, path)
+			}
+			return match
+		})
+		return linkErr
+	})
 }
 
 func parseConceptHeader(body []byte) (conceptHeader, error) {

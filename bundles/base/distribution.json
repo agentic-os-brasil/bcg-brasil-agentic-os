@@ -38,6 +38,10 @@
       "path": "atlas/managed/concepts/content-navigation.md"
     },
     {
+      "source": "bundles/base/atlas/managed/concepts/darwin-lifecycle-cadence.md",
+      "path": "atlas/managed/concepts/darwin-lifecycle-cadence.md"
+    },
+    {
       "source": "bundles/base/atlas/managed/concepts/human-atlas-bootstrap.md",
       "path": "atlas/managed/concepts/human-atlas-bootstrap.md"
     },
@@ -46,8 +50,16 @@
       "path": "atlas/managed/concepts/install-update.md"
     },
     {
+      "source": "bundles/base/atlas/managed/concepts/model-backed-maintenance-activation.md",
+      "path": "atlas/managed/concepts/model-backed-maintenance-activation.md"
+    },
+    {
       "source": "bundles/base/atlas/managed/concepts/release-distribution.md",
       "path": "atlas/managed/concepts/release-distribution.md"
+    },
+    {
+      "source": "bundles/base/atlas/managed/concepts/wiki-entrypoint.md",
+      "path": "atlas/managed/concepts/wiki-entrypoint.md"
     },
     {
       "source": "bundles/base/atlas/managed/concepts/wiki-okf.md",

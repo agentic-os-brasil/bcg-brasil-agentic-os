@@ -1,7 +1,12 @@
 {
   "content-navigation": [
     "human-atlas-bootstrap",
+    "wiki-entrypoint",
     "wiki-okf"
+  ],
+  "darwin-lifecycle-cadence": [
+    "model-backed-maintenance-activation",
+    "wiki-entrypoint"
   ],
   "human-atlas-bootstrap": [
     "content-navigation",
@@ -10,13 +15,24 @@
   "install-update": [
     "release-distribution"
   ],
+  "model-backed-maintenance-activation": [
+    "darwin-lifecycle-cadence",
+    "wiki-entrypoint"
+  ],
   "release-distribution": [
     "install-update",
+    "wiki-okf"
+  ],
+  "wiki-entrypoint": [
+    "content-navigation",
+    "darwin-lifecycle-cadence",
+    "model-backed-maintenance-activation",
     "wiki-okf"
   ],
   "wiki-okf": [
     "content-navigation",
     "human-atlas-bootstrap",
-    "release-distribution"
+    "release-distribution",
+    "wiki-entrypoint"
   ]
 }
