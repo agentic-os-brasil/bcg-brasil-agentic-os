@@ -80,7 +80,14 @@ type DeepReviewHandler struct {
 	Now           func() time.Time
 }
 
-func (handler DeepReviewHandler) Execute(ctx context.Context, command maintenance.Command) (maintenance.HandlerResult, error) {
+func (handler DeepReviewHandler) ExecuteAuthorized(ctx context.Context, command maintenance.Command, grant maintenance.ExecutionGrant) (maintenance.HandlerResult, error) {
+	if err := maintenance.ValidateExecutionGrant(grant, command); err != nil {
+		return maintenance.HandlerResult{}, err
+	}
+	return handler.execute(ctx, command)
+}
+
+func (handler DeepReviewHandler) execute(ctx context.Context, command maintenance.Command) (maintenance.HandlerResult, error) {
 	if command.JobID != "darwin-deep-weekly" || handler.Build == nil || handler.CommandStore.Root == "" {
 		return maintenance.HandlerResult{}, errors.New("Darwin deep review handler is not configured")
 	}
@@ -208,7 +215,14 @@ func HandlerResultUnavailable(err error) (maintenance.HandlerResult, error) {
 	return maintenance.HandlerResult{State: maintenance.ReceiptUnavailable, ReasonCode: maintenance.ReasonHandlerUnavailable}, err
 }
 
-func (handler HousekeepingHandler) Execute(ctx context.Context, command maintenance.Command) (maintenance.HandlerResult, error) {
+func (handler HousekeepingHandler) ExecuteAuthorized(ctx context.Context, command maintenance.Command, grant maintenance.ExecutionGrant) (maintenance.HandlerResult, error) {
+	if err := maintenance.ValidateExecutionGrant(grant, command); err != nil {
+		return maintenance.HandlerResult{}, err
+	}
+	return handler.execute(ctx, command)
+}
+
+func (handler HousekeepingHandler) execute(ctx context.Context, command maintenance.Command) (maintenance.HandlerResult, error) {
 	if command.JobID != HousekeepingJobID || command.ProposalOnly {
 		return maintenance.HandlerResult{}, errors.New("Darwin housekeeping handler received an unauthorized job")
 	}

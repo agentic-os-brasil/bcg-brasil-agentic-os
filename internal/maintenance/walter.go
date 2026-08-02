@@ -11,7 +11,7 @@ import (
 // neutral Walter/self work. Darwin only dispatches through this typed seam;
 // it never reimplements intent or self logic.
 type WalterWeeklyProposalHandler interface {
-	ProposeWeekly(context.Context, Command) (HandlerResult, error)
+	ProposeWeekly(context.Context, Command, ExecutionGrant) (HandlerResult, error)
 }
 
 const WalterWeeklyJobID = WalterSelfReviewWeeklyJobID
@@ -20,11 +20,14 @@ type WalterWeeklyAdapter struct {
 	Handler WalterWeeklyProposalHandler
 }
 
-func (adapter WalterWeeklyAdapter) Execute(ctx context.Context, command Command) (HandlerResult, error) {
+func (adapter WalterWeeklyAdapter) ExecuteAuthorized(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+	if err := ValidateExecutionGrant(grant, command); err != nil {
+		return HandlerResult{}, err
+	}
 	if adapter.Handler == nil {
 		return HandlerResult{}, scheduler.ErrCapabilityUnavailable
 	}
-	result, err := adapter.Handler.ProposeWeekly(ctx, command)
+	result, err := adapter.Handler.ProposeWeekly(ctx, command, grant)
 	if err != nil {
 		return result, err
 	}

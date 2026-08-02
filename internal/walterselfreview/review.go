@@ -675,6 +675,26 @@ type Handler struct {
 
 var _ maintenance.Handler = Handler{}
 
+var _ maintenance.WalterWeeklyProposalHandler = Handler{}
+
+func (handler Handler) ExecuteAuthorized(ctx context.Context, command maintenance.Command, grant maintenance.ExecutionGrant) (maintenance.HandlerResult, error) {
+	if err := maintenance.ValidateExecutionGrant(grant, command); err != nil {
+		return maintenance.HandlerResult{}, err
+	}
+	receipt, err := handler.execute(ctx, command)
+	return maintenance.HandlerResult{
+		State:              receipt.State,
+		ProposalCount:      receipt.ProposalCount,
+		ProposalDigest:     receipt.ProposalDigest,
+		ProposalArtifactID: receipt.ProposalArtifactID,
+		ReasonCode:         receipt.ReasonCode,
+	}, err
+}
+
+func (handler Handler) ProposeWeekly(ctx context.Context, command maintenance.Command, grant maintenance.ExecutionGrant) (maintenance.HandlerResult, error) {
+	return handler.ExecuteAuthorized(ctx, command, grant)
+}
+
 func (handler Handler) Execute(ctx context.Context, command maintenance.Command) (maintenance.HandlerResult, error) {
 	receipt, err := handler.execute(ctx, command)
 	return maintenance.HandlerResult{

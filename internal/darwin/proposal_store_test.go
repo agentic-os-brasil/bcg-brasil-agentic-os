@@ -124,7 +124,7 @@ func TestDeepReviewRetryAfterArtifactOnlyCrashIsSingleReceipt(t *testing.T) {
 		return HealthPacket{SchemaVersion: SchemaVersion, WindowID: "window-retry", Runtime: "runtime-neutral", Mode: DeepReview, Observations: []Observation{{Code: code, Severity: SeverityHigh, Count: 1}}}, nil
 	}), CommandStore: commandStore, ProposalStore: proposalStore, Now: func() time.Time { return time.Unix(20, 0).UTC() }}
 	base := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "wake-first", JobID: "darwin-deep-weekly", WorkspaceID: "maestro-system", Trigger: maintenance.TriggerWeekly, ScheduledFor: time.Unix(10, 0).UTC(), RequestedAt: time.Unix(10, 0).UTC(), Deadline: time.Unix(30, 0).UTC()}
-	first, err := handler.Execute(context.Background(), base)
+	first, err := handler.execute(context.Background(), base)
 	if err != nil || first.State != maintenance.ReceiptProposalEmitted {
 		t.Fatalf("first proposal=%#v err=%v", first, err)
 	}
@@ -141,7 +141,7 @@ func TestDeepReviewRetryAfterArtifactOnlyCrashIsSingleReceipt(t *testing.T) {
 	retry := base
 	retry.CommandID = "wake-retry"
 	handler.Now = func() time.Time { return time.Unix(120, 0).UTC() }
-	second, err := handler.Execute(context.Background(), retry)
+	second, err := handler.execute(context.Background(), retry)
 	if err != nil || second.ProposalDigest != first.ProposalDigest || second.ProposalArtifactID != first.ProposalArtifactID || builds != 1 {
 		t.Fatalf("retry proposal=%#v err=%v builds=%d", second, err, builds)
 	}
@@ -170,7 +170,7 @@ func TestDeepReviewNoProposalUsesReviewedNoChangeTerminalState(t *testing.T) {
 		Now:          func() time.Time { return time.Unix(20, 0).UTC() },
 	}
 	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "wake-no-change", JobID: "darwin-deep-weekly", WorkspaceID: "maestro-system", Trigger: maintenance.TriggerWeekly, ScheduledFor: time.Unix(10, 0).UTC(), RequestedAt: time.Unix(10, 0).UTC(), Deadline: time.Unix(30, 0).UTC()}
-	result, err := handler.Execute(context.Background(), command)
+	result, err := handler.execute(context.Background(), command)
 	if err != nil || result.State != maintenance.ReceiptReviewedNoChange || result.ProposalCount != 0 || result.ProposalDigest != "" {
 		t.Fatalf("no-change result=%#v err=%v", result, err)
 	}

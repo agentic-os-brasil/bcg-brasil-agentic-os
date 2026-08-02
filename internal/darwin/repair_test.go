@@ -48,11 +48,12 @@ func TestDiagnosticArtifactCannotClaimAppliedRepair(t *testing.T) {
 	root := t.TempDir()
 	invoker := FilesystemInvoker{Root: root}
 	artifact := Artifact{SchemaVersion: SchemaVersion, AgentID: AgentID, WindowID: "window-diagnostic", ProposalID: "proposal-diagnostic", Finding: ObservationSchedulerMissed, Action: ActionReconcileScheduler}
-	result, err := invoker.Invoke(context.Background(), ToolCall{Tool: "filesystem", Operation: "write", Resource: "bcgos://health/maestro-system/derived/diagnostic.json"}, artifact)
+	resource := "bcgos://health/maestro-system/derived/" + string(artifact.Action) + "-" + artifact.ProposalID + ".json"
+	result, err := invoker.Invoke(context.Background(), ToolCall{Tool: "filesystem", Operation: "write", Resource: resource}, artifact)
 	if err != nil || result.Outcome != OutcomeNoAction {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
-	result, err = invoker.Invoke(context.Background(), ToolCall{Tool: "filesystem", Operation: "write", Resource: "bcgos://health/maestro-system/derived/diagnostic.json"}, artifact)
+	result, err = invoker.Invoke(context.Background(), ToolCall{Tool: "filesystem", Operation: "write", Resource: resource}, artifact)
 	if err != nil || result.Outcome != OutcomeNoAction {
 		t.Fatalf("replayed result=%#v err=%v", result, err)
 	}
@@ -107,9 +108,20 @@ func TestDailyDiagnosticOnlyReturnsReviewedNoChange(t *testing.T) {
 	}
 	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "daily-diagnostic", JobID: HousekeepingJobID, WorkspaceID: MaintenanceScope, Trigger: maintenance.TriggerDaily, ScheduledFor: now, RequestedAt: now, Deadline: now.Add(time.Minute)}
 
-	result, err := handler.Execute(context.Background(), command)
+	result, err := handler.execute(context.Background(), command)
 	if err != nil || result.State != maintenance.ReceiptReviewedNoChange {
 		t.Fatalf("result=%#v err=%v", result, err)
+	}
+}
+
+func TestDarwinHandlersRejectMissingExecutionGrant(t *testing.T) {
+	now := time.Now().UTC()
+	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "unauthorized", JobID: HousekeepingJobID, WorkspaceID: MaintenanceScope, Trigger: maintenance.TriggerDaily, ScheduledFor: now, RequestedAt: now, Deadline: now.Add(time.Minute)}
+	if _, err := (HousekeepingHandler{}).ExecuteAuthorized(context.Background(), command, nil); err == nil {
+		t.Fatal("housekeeping handler accepted a missing worker execution grant")
+	}
+	if _, err := (DeepReviewHandler{}).ExecuteAuthorized(context.Background(), command, nil); err == nil {
+		t.Fatal("deep review handler accepted a missing worker execution grant")
 	}
 }
 
@@ -132,7 +144,7 @@ func TestDeepReviewExecutesValidatedOperationalRepair(t *testing.T) {
 	}
 	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "weekly-repair", JobID: "darwin-deep-weekly", WorkspaceID: MaintenanceScope, Trigger: maintenance.TriggerWeekly, ScheduledFor: now, RequestedAt: now, Deadline: now.Add(time.Minute)}
 
-	result, err := handler.Execute(context.Background(), command)
+	result, err := handler.execute(context.Background(), command)
 	if err != nil || result.State != maintenance.ReceiptSucceeded {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
