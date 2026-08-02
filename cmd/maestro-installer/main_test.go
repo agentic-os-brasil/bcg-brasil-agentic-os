@@ -189,7 +189,7 @@ func TestConfigureWorkspaceRuntimeRunsIdempotentReadinessAndNativeMaintenance(t 
 	runner := commandRunnerFunc(func(_ context.Context, executable string, arguments []string) ([]byte, error) {
 		call := append([]string{executable}, arguments...)
 		calls = append(calls, call)
-		switch (len(calls)-1)%5 + 1 {
+		switch (len(calls)-1)%6 + 1 {
 		case 1:
 			return []byte(`{"state":"initialized"}`), nil
 		case 2:
@@ -199,6 +199,8 @@ func TestConfigureWorkspaceRuntimeRunsIdempotentReadinessAndNativeMaintenance(t 
 		case 4:
 			return []byte(`{"runtime":"codex","state":"installed","projection":{"state":"installed"}}`), nil
 		case 5:
+			return []byte(`{"runtime":"codex","state":"verified"}`), nil
+		case 6:
 			return []byte(`{"state":"enrolled","enrollment":{"workspace_id":"` + initialized.WorkspaceID + `"},"launch_agent":{"state":"active_loaded_enabled","file_present":true,"loaded":true,"enabled":true,"native_qualified":true}}`), nil
 		default:
 			t.Fatalf("unexpected command: %v", call)
@@ -223,6 +225,7 @@ func TestConfigureWorkspaceRuntimeRunsIdempotentReadinessAndNativeMaintenance(t 
 		{cliPath, "adapter", "install", "--runtime", "codex", "--executable", cliPath, workspacePath},
 		{cliPath, "status", workspacePath},
 		{cliPath, "adapter", "status", "--runtime", "codex", workspacePath},
+		{cliPath, "adapter", "verify", "--runtime", "codex", workspacePath},
 		{cliPath, "maintenance", "canary", "install-macos", "--workspace-path", workspacePath, "--executable", cliPath, "--confirm", "--launchctl"},
 	}
 	want := append(append([][]string{}, wantOnce...), wantOnce...)
@@ -263,6 +266,8 @@ func TestConfigureWorkspaceRuntimeDoesNotDeclareReadyWhenLaunchdIsNotNative(t *t
 		case 4:
 			return []byte(`{"state":"installed","projection":{"state":"installed"}}`), nil
 		case 5:
+			return []byte(`{"runtime":"codex","state":"verified"}`), nil
+		case 6:
 			return []byte(`{"state":"enrolled","enrollment":{"workspace_id":"` + initialized.WorkspaceID + `"},"launch_agent":{"state":"file_present_native_qualification_pending","file_present":true,"native_qualified":false}}`), nil
 		default:
 			return nil, errors.New("unexpected call")

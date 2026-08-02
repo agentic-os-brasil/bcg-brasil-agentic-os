@@ -1042,6 +1042,10 @@ func configureWorkspaceRuntime(options options, workspacePath string) (workspace
 	if err := json.Unmarshal(adapterOutput, &adapterStatus); err != nil || adapterStatus.State != "installed" || adapterStatus.Projection.State != "installed" {
 		return workspaceActivation{}, readinessError(cliPath, []string{"adapter", "status", "--runtime", "codex", workspacePath}, "os cinco hooks e a projeção Codex não ficaram configurados")
 	}
+	adapterVerifyArguments := []string{"adapter", "verify", "--runtime", "codex", workspacePath}
+	if _, err := run(adapterVerifyArguments); err != nil {
+		return workspaceActivation{}, err
+	}
 	maintenanceArguments := []string{"maintenance", "canary", "install-macos", "--workspace-path", workspacePath, "--executable", cliPath, "--confirm", "--launchctl"}
 	maintenanceOutput, err := run(maintenanceArguments)
 	if err != nil {
