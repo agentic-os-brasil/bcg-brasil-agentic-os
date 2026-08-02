@@ -30,6 +30,8 @@ type HandlerResult struct {
 
 type WakeRequest struct {
 	WorkspaceID string
+	Trigger     Trigger
+	EventID     string
 	Now         time.Time
 	Timezone    string
 	Attended    bool
@@ -42,6 +44,8 @@ type WakeRequest struct {
 type WakeReport struct {
 	SchemaVersion int                    `json:"schema_version"`
 	WorkspaceID   string                 `json:"workspace_id"`
+	Trigger       Trigger                `json:"trigger,omitempty"`
+	EventID       string                 `json:"event_id,omitempty"`
 	State         string                 `json:"state"`
 	Due           []scheduler.Occurrence `json:"due,omitempty"`
 	Receipts      []Receipt              `json:"receipts,omitempty"`
@@ -82,6 +86,13 @@ func (worker Worker) Run(ctx context.Context, request WakeRequest) (WakeReport, 
 	}
 	if now.IsZero() || strings.TrimSpace(request.WorkspaceID) == "" || strings.TrimSpace(request.OwnerID) == "" {
 		return WakeReport{}, errors.New("maintenance wake requires workspace, owner and time")
+	}
+	if request.Trigger == TriggerEvent || request.Trigger == TriggerContinuous {
+		if err := ValidateEventID(request.EventID); err != nil {
+			return WakeReport{}, err
+		}
+	} else if request.EventID != "" {
+		return WakeReport{}, errors.New("scheduled maintenance wake cannot carry an event ID")
 	}
 	planningNow := now
 	if request.Timezone != "" {
@@ -130,13 +141,24 @@ func (worker Worker) Run(ctx context.Context, request WakeRequest) (WakeReport, 
 	if err != nil {
 		return WakeReport{}, err
 	}
-	report := WakeReport{SchemaVersion: 1, WorkspaceID: request.WorkspaceID, State: "no_due_work", Due: due}
+	report := WakeReport{SchemaVersion: 1, WorkspaceID: request.WorkspaceID, Trigger: request.Trigger, EventID: request.EventID, State: "no_due_work", Due: due}
+	if request.Trigger == TriggerEvent || request.Trigger == TriggerContinuous {
+		jobs, eventErr := worker.Catalog.ForTrigger("event")
+		if eventErr != nil {
+			return WakeReport{}, eventErr
+		}
+		report.Due = make([]scheduler.Occurrence, 0, len(jobs))
+		for _, job := range jobs {
+			report.Due = append(report.Due, scheduler.Occurrence{JobID: job.ID, EventID: request.EventID, ScheduledFor: now.UTC()})
+		}
+		due = report.Due
+	}
 	if len(due) == 0 {
 		return report, nil
 	}
 	authorizations := make([]OccurrenceAuthorization, 0, len(due))
 	for _, occurrence := range due {
-		authorizations = append(authorizations, OccurrenceAuthorization{WorkspaceID: request.WorkspaceID, JobID: occurrence.JobID, Trigger: triggerForCadence(worker.Jobs, occurrence.JobID), ScheduledFor: occurrence.ScheduledFor})
+		authorizations = append(authorizations, OccurrenceAuthorization{WorkspaceID: request.WorkspaceID, JobID: occurrence.JobID, Trigger: triggerForOccurrence(worker.Jobs, occurrence), EventID: occurrence.EventID, ScheduledFor: occurrence.ScheduledFor})
 	}
 	var authority ExecutionAuthority
 	if request.Preauthorized {
@@ -169,17 +191,28 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	if !found {
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonCatalogUnavailable)
 	}
-	trigger := triggerForCadence(worker.Jobs, occurrence.JobID)
-	command := Command{SchemaVersion: CommandSchemaVersion, CommandID: "wake-" + digestPrefix(occurrence.JobID+occurrence.ScheduledFor.UTC().Format(time.RFC3339Nano)+now.UTC().Format(time.RFC3339Nano)), JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, ScheduledFor: occurrence.ScheduledFor, RequestedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID)}
+	trigger := triggerForOccurrence(worker.Jobs, occurrence)
+	command := Command{SchemaVersion: CommandSchemaVersion, CommandID: "wake-" + digestPrefix(occurrence.JobID+occurrence.EventID+occurrence.ScheduledFor.UTC().Format(time.RFC3339Nano)+now.UTC().Format(time.RFC3339Nano)), JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, EventID: occurrence.EventID, ScheduledFor: occurrence.ScheduledFor, RequestedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID)}
 	if err := command.Validate(now); err != nil {
 		return worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonOccurrenceRejected)
+	}
+	priorReceipts, receiptsErr := worker.Receipts.Receipts(request.WorkspaceID, occurrence.JobID)
+	if receiptsErr != nil {
+		return Receipt{}, receiptsErr
+	}
+	for _, prior := range priorReceipts {
+		if prior.OccurrenceDigest == command.OccurrenceDigest() && (prior.State == ReceiptSucceeded || prior.State == ReceiptReviewedNoChange || prior.State == ReceiptProposalEmitted) {
+			return prior, nil
+		}
 	}
 	handler, handlerFound := worker.Handlers[occurrence.JobID]
 	execute, executable := handlerExecutor(handler)
 	if !handlerFound || !executable || (worker.LocalQualification[occurrence.JobID] == "" && job.Availability != Available) {
 		receipt, err := worker.unavailableReceipt(request.WorkspaceID, occurrence, now, ReasonCatalogUnavailable)
-		if appendErr := worker.Scheduler.AppendReceipt(request.WorkspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now, State: scheduler.Unavailable, Error: "qualified local handler is not enrolled"}); appendErr != nil && err == nil {
-			err = appendErr
+		if occurrence.EventID == "" {
+			if appendErr := worker.Scheduler.AppendReceipt(request.WorkspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now, State: scheduler.Unavailable, Error: "qualified local handler is not enrolled"}); appendErr != nil && err == nil {
+				err = appendErr
+			}
 		}
 		return receipt, err
 	}
@@ -200,10 +233,10 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	}
 	lease, err := worker.Scheduler.TryAcquireLease(request.WorkspaceID, occurrence.JobID, command.OccurrenceKey(), request.OwnerID, now, leaseTTL)
 	if err != nil {
-		base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, State: ReceiptBusy, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, ReasonCode: ReasonLeaseBusy}
+		base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, EventID: command.EventID, State: ReceiptBusy, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, ReasonCode: ReasonLeaseBusy}
 		return base, err
 	}
-	base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, State: ReceiptFailed, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, ReasonCode: ReasonHandlerFailure}
+	base := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: attemptID, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: occurrence.JobID, WorkspaceID: request.WorkspaceID, Trigger: trigger, EventID: command.EventID, State: ReceiptFailed, RecordedAt: now, Deadline: command.Deadline, ProposalOnly: command.ProposalOnly, ReasonCode: ReasonHandlerFailure}
 	// Arm the quarantine fence before invoking any handler. This removes the
 	// expiry-to-quarantine race entirely: a crashed or stalled worker leaves an
 	// explicit operator-recoverable fence instead of an ordinary reclaimable
@@ -317,7 +350,10 @@ func (worker Worker) boundLateHandler(outcomeChannel <-chan handlerOutcome, leas
 func (worker Worker) recordReleaseRecovery(request WakeRequest, occurrence scheduler.Occurrence, base Receipt, releaseErr error) (Receipt, error) {
 	recovery := worker.recoveryReceipt(base, worker.currentTime())
 	appendErr := worker.Receipts.AppendReceipt(recovery)
-	schedulerErr := worker.Scheduler.AppendReceipt(request.WorkspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: worker.currentTime(), State: scheduler.Failed, Error: string(ReasonRecoveryRequired)})
+	var schedulerErr error
+	if occurrence.EventID == "" {
+		schedulerErr = worker.Scheduler.AppendReceipt(request.WorkspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: worker.currentTime(), State: scheduler.Failed, Error: string(ReasonRecoveryRequired)})
+	}
 	if appendErr != nil || schedulerErr != nil {
 		return recovery, errors.Join(releaseErr, appendErr, schedulerErr)
 	}
@@ -369,6 +405,9 @@ func (worker Worker) publishOccurrence(workspaceID string, occurrence scheduler.
 		if receipt.State == ReceiptSucceeded || receipt.State == ReceiptReviewedNoChange || receipt.State == ReceiptProposalEmitted {
 			state = scheduler.Succeeded
 		}
+		if occurrence.EventID != "" {
+			return nil
+		}
 		return worker.Scheduler.AppendReceipt(workspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now.UTC(), State: state, Error: schedulerError(receipt)})
 	})
 }
@@ -381,8 +420,8 @@ func (worker Worker) unavailableReceipt(workspaceID string, occurrence scheduler
 	if !validReasonCode(reason) {
 		reason = ReasonHandlerUnavailable
 	}
-	trigger := triggerForCadence(worker.Jobs, occurrence.JobID)
-	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: id, OccurrenceDigest: occurrenceDigest(occurrence, trigger), CommandID: "unavailable-" + digestPrefix(occurrence.JobID+occurrence.ScheduledFor.String()), JobID: occurrence.JobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptUnavailable, RecordedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID), ReasonCode: reason}
+	trigger := triggerForOccurrence(worker.Jobs, occurrence)
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: id, OccurrenceDigest: occurrenceDigest(occurrence, trigger), CommandID: "unavailable-" + digestPrefix(occurrence.JobID+occurrence.EventID+occurrence.ScheduledFor.String()), JobID: occurrence.JobID, WorkspaceID: workspaceID, Trigger: trigger, EventID: occurrence.EventID, State: ReceiptUnavailable, RecordedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID), ReasonCode: reason}
 	return receipt, worker.Receipts.AppendReceipt(receipt)
 }
 
@@ -402,9 +441,17 @@ func triggerForCadence(jobs []scheduler.Job, jobID string) Trigger {
 	return TriggerPresence
 }
 
-func occurrenceDigest(occurrence scheduler.Occurrence, trigger Trigger) string {
-	return (Command{JobID: occurrence.JobID, Trigger: trigger, ScheduledFor: occurrence.ScheduledFor}).OccurrenceDigest()
+func triggerForOccurrence(jobs []scheduler.Job, occurrence scheduler.Occurrence) Trigger {
+	if occurrence.EventID != "" {
+		return TriggerEvent
+	}
+	return triggerForCadence(jobs, occurrence.JobID)
 }
+
+func occurrenceDigest(occurrence scheduler.Occurrence, trigger Trigger) string {
+	return (Command{JobID: occurrence.JobID, Trigger: trigger, EventID: occurrence.EventID, ScheduledFor: occurrence.ScheduledFor}).OccurrenceDigest()
+}
+
 func digestPrefix(value string) string { return digest(value)[:16] }
 func digest(value string) string {
 	sum := sha256.Sum256([]byte(value))

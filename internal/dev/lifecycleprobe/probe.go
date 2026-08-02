@@ -15,6 +15,7 @@ import (
 )
 
 const ClaudeMinimumVersion = lifecycle.ClaudeMinimumVersion
+const CodexMinimumVersion = lifecycle.CodexMinimumVersion
 
 var (
 	namedVersionPattern    = regexp.MustCompile(`(?im)(?:claude|codex(?:-cli)?)[^0-9]{0,16}v?([0-9]+\.[0-9]+\.[0-9]+)`)
@@ -62,6 +63,11 @@ func Probe(runtime string, lookPath func(string) (string, error), version func(s
 		return result, nil
 	}
 	if runtime == "codex" {
+		if !lifecycle.MeetsCodexMinimum(result.RuntimeVersion) {
+			result.Blocker = "Codex runtime " + result.RuntimeVersion + " is below the required " + CodexMinimumVersion + " lifecycle-hook contract version"
+			setSurfaceBlocker(result.Surfaces, result.Blocker)
+			return result, nil
+		}
 		result.State = "not_observed"
 		result.Blocker = "Codex lifecycle hooks are configured, but no fresh native-session observation has been captured"
 		return result, nil

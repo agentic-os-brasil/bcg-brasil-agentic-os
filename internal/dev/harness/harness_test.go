@@ -1,11 +1,48 @@
 package harness
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestValidateEmitsCheckStartAndDurationOnFailure(t *testing.T) {
+	var output bytes.Buffer
+	if err := Validate(t.TempDir(), false, &output); err == nil {
+		t.Fatal("Validate() unexpectedly accepted an incomplete repository")
+	}
+	if !strings.Contains(output.String(), "[run] decision log") || !strings.Contains(output.String(), "[fail] decision log (") {
+		t.Fatalf("validation output lacks bounded check observability: %q", output.String())
+	}
+}
+
+func TestValidationWorkflowSummaryUsesTerminalContexts(t *testing.T) {
+	root, err := FindRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflowPath := filepath.Join(root, ".github", "workflows", "validate.yml")
+	if _, statErr := os.Stat(workflowPath); os.IsNotExist(statErr) {
+		workflowPath += ".disabled"
+	} else if statErr != nil {
+		t.Fatal(statErr)
+	}
+	body, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(body)
+	for _, expected := range []string{"id: development_harness", "steps.development_harness.outcome", "job.status"} {
+		if !strings.Contains(workflow, expected) {
+			t.Fatalf("validation workflow is missing terminal observability %q", expected)
+		}
+	}
+	if strings.Contains(workflow, "${CONCLUSION") {
+		t.Fatal("validation workflow still relies on an unset CONCLUSION variable")
+	}
+}
 
 func TestFindRootWalksUpward(t *testing.T) {
 	root := t.TempDir()

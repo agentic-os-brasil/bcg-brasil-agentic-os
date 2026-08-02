@@ -27,6 +27,16 @@ func TestEvaluateNativeQualificationBlocksUnsupportedClaudeVersion(t *testing.T)
 	}
 }
 
+func TestEvaluateNativeQualificationBlocksUnsupportedCodexVersion(t *testing.T) {
+	result, err := EvaluateNativeQualification(QualificationInput{
+		Runtime: "codex", Event: PreActionGuard, RuntimeVersion: "0.144.0",
+		EvidenceClass: EvidenceNativeQualified, NativeSurface: true, NativeObservation: true,
+	})
+	if err != nil || result.State != "blocked" || !strings.Contains(result.Blocker, CodexMinimumVersion) {
+		t.Fatalf("result = %#v, err = %v", result, err)
+	}
+}
+
 func TestEvaluateNativeQualificationQualifiesOnlyWithCompleteEvidence(t *testing.T) {
 	result, err := EvaluateNativeQualification(QualificationInput{
 		Runtime: "claude", Event: StopFinalize, RuntimeVersion: ClaudeMinimumVersion,

@@ -48,13 +48,29 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 	case "wake":
 		flags := newFlagSet("maintenance wake", errOut)
 		trigger := flags.String("trigger", "presence", "wake trigger")
+		eventID := flags.String("event-id", "", "bounded source event identity; required for event wakes")
 		workspace := flags.String("workspace", "maestro-system", "bounded maintenance workspace")
 		attended := flags.Bool("attended", false, "grant attended local Canary authority")
 		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) {
-			fmt.Fprintln(errOut, "usage: bcgos maintenance wake --trigger presence|daily|weekly|monthly|event [--workspace ID] [--attended]")
+			fmt.Fprintln(errOut, "usage: bcgos maintenance wake --trigger presence|daily|weekly|monthly|event [--event-id ID] [--workspace ID] [--attended]")
 			return ExitUsage
 		}
-		if _, err := catalog.ForTrigger(strings.TrimSpace(*trigger)); err != nil {
+		trimmedTrigger, trimmedEventID := strings.TrimSpace(*trigger), strings.TrimSpace(*eventID)
+		if trimmedTrigger == "event" && trimmedEventID == "" {
+			fmt.Fprintln(errOut, "maintenance wake --trigger event requires --event-id ID")
+			return ExitUsage
+		}
+		if trimmedTrigger == "event" {
+			if err := maintenance.ValidateEventID(trimmedEventID); err != nil {
+				fmt.Fprintln(errOut, err)
+				return ExitUsage
+			}
+		}
+		if trimmedTrigger != "event" && trimmedEventID != "" {
+			fmt.Fprintln(errOut, "--event-id is only valid with --trigger event")
+			return ExitUsage
+		}
+		if _, err := catalog.ForTrigger(trimmedTrigger); err != nil {
 			return reportError(errOut, err)
 		}
 		root, err := defaultDataRoot()
@@ -65,7 +81,7 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		if homeErr != nil {
 			return reportError(errOut, homeErr)
 		}
-		jobs := schedulerJobsForTrigger(strings.TrimSpace(*trigger))
+		jobs := schedulerJobsForTrigger(trimmedTrigger)
 		enrollment, enrollmentErr := maintenance.LoadCanaryEnrollment(root)
 		if enrollmentErr == nil && (enrollment.WorkspaceID != strings.TrimSpace(*workspace) || !samePathCLI(enrollment.Home, currentHome)) {
 			enrollmentErr = errors.New("Canary enrollment is bound to a different workspace or home")
@@ -76,9 +92,9 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		if enrollmentErr == nil {
 			timezone = enrollment.Timezone
 		}
-		report, err := worker.Run(context.Background(), maintenance.WakeRequest{WorkspaceID: strings.TrimSpace(*workspace), Timezone: timezone, OwnerID: "bcgos-presence", Now: time.Now(), Attended: *attended, Preauthorized: enrollmentErr == nil})
+		report, err := worker.Run(context.Background(), maintenance.WakeRequest{WorkspaceID: strings.TrimSpace(*workspace), Trigger: maintenance.Trigger(trimmedTrigger), EventID: trimmedEventID, Timezone: timezone, OwnerID: "bcgos-presence", Now: time.Now(), Attended: *attended, Preauthorized: enrollmentErr == nil})
 		if err != nil {
-			_ = writeJSON(out, map[string]any{"schema_version": 1, "state": maintenance.Unavailable, "agent_id": "darwin", "scope": "health/maestro-system", "trigger": *trigger, "native_schedulers": "disabled", "reason": err.Error() + "; no receipt was emitted"}, errOut)
+			_ = writeJSON(out, map[string]any{"schema_version": 1, "state": maintenance.Unavailable, "agent_id": "darwin", "scope": "health/maestro-system", "trigger": trimmedTrigger, "event_id": trimmedEventID, "native_schedulers": "disabled", "reason": err.Error() + "; no receipt was emitted"}, errOut)
 			return ExitUnavailable
 		}
 		wakeState, wakeReason, exitCode := report.State, "", ExitOK
@@ -92,7 +108,7 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 				exitCode, wakeState, wakeReason = ExitUnavailable, "completed_with_failures", "bounded handler failure remains due; recovery is available on a later wake"
 			}
 		}
-		code := writeJSON(out, map[string]any{"state": wakeState, "reason": wakeReason, "trigger": *trigger, "native_schedulers": "disabled_until_explicit_install_and_qualification", "worker": report}, errOut)
+		code := writeJSON(out, map[string]any{"state": wakeState, "reason": wakeReason, "trigger": trimmedTrigger, "event_id": trimmedEventID, "native_schedulers": "disabled_until_explicit_install_and_qualification", "worker": report}, errOut)
 		if code != ExitOK {
 			return code
 		}

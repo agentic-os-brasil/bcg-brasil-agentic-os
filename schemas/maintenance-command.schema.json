@@ -20,7 +20,8 @@
   "allOf": [
     {
       "if": {"properties": {"trigger": {"enum": ["continuous", "event"]}}},
-      "then": {"required": ["event_id"]}
+      "then": {"required": ["event_id"]},
+      "else": {"not": {"required": ["event_id"]}}
     },
     {
       "if": {"properties": {"proposal_only": {"const": true}}},

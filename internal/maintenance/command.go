@@ -64,6 +64,7 @@ type Receipt struct {
 	JobID                string       `json:"job_id"`
 	WorkspaceID          string       `json:"workspace_id"`
 	Trigger              Trigger      `json:"trigger"`
+	EventID              string       `json:"event_id,omitempty"`
 	State                ReceiptState `json:"state"`
 	RecordedAt           time.Time    `json:"recorded_at"`
 	Deadline             time.Time    `json:"deadline"`
@@ -96,8 +97,13 @@ func (command Command) Validate(now time.Time) error {
 	if command.RequestedAt.After(now.Add(time.Second)) || command.ScheduledFor.After(now.Add(time.Second)) || command.Deadline.Before(command.RequestedAt) || command.Deadline.Sub(command.RequestedAt) > 15*time.Minute || command.Deadline.Sub(now) > 15*time.Minute || !command.Deadline.After(now) {
 		return errors.New("maintenance command deadline is missing, expired or unbounded")
 	}
-	if (command.Trigger == TriggerEvent || command.Trigger == TriggerContinuous) && !commandIDPattern.MatchString(command.EventID) {
-		return errors.New("event maintenance command requires a bounded event ID")
+	if command.Trigger == TriggerEvent || command.Trigger == TriggerContinuous {
+		if err := ValidateEventID(command.EventID); err != nil {
+			return fmt.Errorf("event maintenance command: %w", err)
+		}
+	}
+	if command.Trigger != TriggerEvent && command.Trigger != TriggerContinuous && command.EventID != "" {
+		return errors.New("scheduled maintenance command cannot carry an event ID")
 	}
 	if command.ProposalOnly != isProposalOnlyJob(command.JobID) {
 		return errors.New("proposal-only flag does not match the maintenance job")
@@ -120,6 +126,9 @@ func (receipt Receipt) Validate() error {
 	}
 	if err := validateReservedJobTrigger(receipt.JobID, receipt.Trigger); err != nil {
 		return err
+	}
+	if (receipt.Trigger == TriggerEvent || receipt.Trigger == TriggerContinuous) != commandIDPattern.MatchString(receipt.EventID) {
+		return errors.New("maintenance receipt event identity is invalid")
 	}
 	if receipt.ProposalOnly && receipt.State == ReceiptSucceeded {
 		return errors.New("proposal-only maintenance cannot report an applied success")
@@ -164,6 +173,15 @@ func (receipt Receipt) Validate() error {
 	}
 	if receipt.RecoveryPhase == "" && (receipt.RecoveryIntentDigest != "" || receipt.FenceTokenDigest != "") {
 		return errors.New("maintenance recovery binding requires a phase")
+	}
+	return nil
+}
+
+// ValidateEventID checks the bounded identity required to bind event-driven
+// maintenance work to one source occurrence before any durable state exists.
+func ValidateEventID(eventID string) error {
+	if !commandIDPattern.MatchString(eventID) {
+		return errors.New("maintenance event requires a bounded event ID")
 	}
 	return nil
 }

@@ -143,7 +143,7 @@ func (authority ExecutionAuthority) Authorize(command Command, now time.Time) (s
 	if _, found := authority.occurrences[key]; !found {
 		return scheduler.Occurrence{}, errors.New("maintenance command was not emitted by the authoritative occurrence gate")
 	}
-	return scheduler.Occurrence{JobID: command.JobID, ScheduledFor: command.ScheduledFor}, nil
+	return scheduler.Occurrence{JobID: command.JobID, EventID: command.EventID, ScheduledFor: command.ScheduledFor}, nil
 }
 
 func authorityOccurrenceKey(workspaceID, jobID string, trigger Trigger, eventID string, scheduledFor time.Time) string {

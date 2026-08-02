@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -102,6 +103,25 @@ func TestWorkerUnauthorizedWakeDoesNotCreateEnrollmentOrReceipts(t *testing.T) {
 	}
 }
 
+func TestWorkerRejectsMalformedEventIDBeforeEnrollment(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schedulerRoot, receiptRoot := t.TempDir(), t.TempDir()
+	worker := Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: schedulerRoot}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "wiki-incremental-sync", Cadence: scheduler.Daily, LocalHour: 3, MaxCatchUp: 1}}}
+	_, err = worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", Trigger: TriggerEvent, EventID: "malformed event", OwnerID: "invalid-event", Now: time.Now().UTC(), Attended: true})
+	if err == nil || !strings.Contains(err.Error(), "bounded event ID") {
+		t.Fatalf("malformed event wake error=%v", err)
+	}
+	if _, err := (scheduler.Store{Root: schedulerRoot}).LoadEnrollment("maestro-system"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("malformed event wake changed enrollment: %v", err)
+	}
+	if entries, readErr := os.ReadDir(receiptRoot); readErr == nil && len(entries) != 0 {
+		t.Fatalf("malformed event wake created receipt state: %v", entries)
+	}
+}
+
 func TestWorkerRunsQualifiedDueOccurrenceAndFencesSuccess(t *testing.T) {
 	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
 	if err != nil {
@@ -130,6 +150,47 @@ func TestWorkerRunsQualifiedDueOccurrenceAndFencesSuccess(t *testing.T) {
 	retry, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "worker-1", Now: now, Attended: true})
 	if err != nil || retry.State != "no_due_work" || len(retry.Due) != 0 || called != 1 {
 		t.Fatalf("retry=%#v called=%d err=%v", retry, called, err)
+	}
+}
+
+func TestWorkerPreservesEventIdentityAndSuppressesDuplicateEvent(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog.CatalogState = RuntimeQualified
+	for index := range catalog.Jobs {
+		if catalog.Jobs[index].ID == "wiki-incremental-sync" {
+			catalog.Jobs[index].Availability = Available
+			catalog.Jobs[index].AvailabilityReason = ""
+			catalog.Jobs[index].QualificationDigest = QualificationDigest(catalog.Jobs[index].ID)
+		}
+	}
+	if err := catalog.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	receiptRoot := t.TempDir()
+	worker := Worker{
+		Catalog: catalog, Scheduler: scheduler.Store{Root: t.TempDir()}, Receipts: Store{Root: receiptRoot},
+		Handlers: map[string]any{"wiki-incremental-sync": HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
+			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
+		})},
+		LocalQualification: map[string]string{"wiki-incremental-sync": QualificationDigest("wiki-incremental-sync")},
+		ActivatedJobs:      []string{"wiki-incremental-sync"}, Deadline: time.Minute,
+	}
+	request := WakeRequest{WorkspaceID: "maestro-system", Trigger: TriggerEvent, EventID: "source-change-1", OwnerID: "event-worker", Now: now, Attended: true}
+	first, err := worker.Run(context.Background(), request)
+	if err != nil || len(first.Receipts) != 1 || first.Receipts[0].State != ReceiptSucceeded || first.Receipts[0].EventID != request.EventID {
+		t.Fatalf("first event report=%#v err=%v", first, err)
+	}
+	second, err := worker.Run(context.Background(), request)
+	if err != nil || len(second.Receipts) != 1 || second.Receipts[0].EventID != request.EventID {
+		t.Fatalf("duplicate event report=%#v err=%v", second, err)
+	}
+	stored, err := (Store{Root: receiptRoot}).Receipts("maestro-system", "wiki-incremental-sync")
+	if err != nil || len(stored) != 1 {
+		t.Fatalf("event receipt count=%d err=%v", len(stored), err)
 	}
 }
 

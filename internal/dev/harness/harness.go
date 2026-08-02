@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
@@ -190,11 +191,14 @@ func Validate(root string, full bool, out io.Writer) error {
 		checks = append(checks, check{"fast unit tests (offline)", func() error { return runCommand(root, "go", "test", "./internal/dev/...") }})
 	}
 	for _, current := range checks {
+		started := time.Now()
+		fmt.Fprintf(out, "[run] %s\n", current.name)
 		if err := current.run(); err != nil {
-			fmt.Fprintf(out, "[fail] %s\n", current.name)
-			return fmt.Errorf("%s: %w", current.name, err)
+			elapsed := time.Since(started).Round(time.Millisecond)
+			fmt.Fprintf(out, "[fail] %s (%s)\n", current.name, elapsed)
+			return fmt.Errorf("%s (%s): %w", current.name, elapsed, err)
 		}
-		fmt.Fprintf(out, "[ok] %s\n", current.name)
+		fmt.Fprintf(out, "[ok] %s (%s)\n", current.name, time.Since(started).Round(time.Millisecond))
 	}
 	return nil
 }
