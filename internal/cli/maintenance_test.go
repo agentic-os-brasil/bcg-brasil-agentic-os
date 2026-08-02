@@ -33,6 +33,16 @@ func TestMaintenanceWakeFailsClosedWithoutReceipt(t *testing.T) {
 	}
 }
 
+func TestMaintenanceEventWakeRequiresExplicitEventID(t *testing.T) {
+	var output bytes.Buffer
+	if code := Run([]string{"maintenance", "wake", "--trigger", "event"}, &output, &output); code != ExitUsage {
+		t.Fatalf("event wake exit = %d, output = %s", code, output.String())
+	}
+	if !strings.Contains(output.String(), "requires --event-id") {
+		t.Fatalf("unexpected event wake output: %s", output.String())
+	}
+}
+
 func TestCanaryFixtureUsesIsolatedDataRoot(t *testing.T) {
 	currentHome, err := os.UserHomeDir()
 	if err != nil {

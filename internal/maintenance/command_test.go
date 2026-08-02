@@ -216,6 +216,32 @@ func TestContinuousGateRejectsMissingEventID(t *testing.T) {
 	}
 }
 
+func TestMaintenanceReceiptRequiresEventIdentityParity(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	command := Command{SchemaVersion: CommandSchemaVersion, CommandID: "cmd-event", JobID: "wiki-incremental-sync", WorkspaceID: "workspace-1", Trigger: TriggerEvent, EventID: "source-change-1", ScheduledFor: now, RequestedAt: now, Deadline: now.Add(time.Minute)}
+	if err := command.Validate(now); err != nil {
+		t.Fatal(err)
+	}
+	if err := validatePublishedSchemaDocument(t, "maintenance-command.schema.json", command); err != nil {
+		t.Fatalf("event command does not satisfy its published schema: %v", err)
+	}
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-event-receipt", JobID: "wiki-incremental-sync", WorkspaceID: "workspace-1", Trigger: TriggerEvent, State: ReceiptUnavailable, RecordedAt: now, Deadline: now.Add(time.Minute), ReasonCode: ReasonHandlerUnavailable}
+	if err := receipt.Validate(); err == nil {
+		t.Fatal("event receipt without event ID was accepted")
+	}
+	receipt.EventID = "source-change-1"
+	if err := receipt.Validate(); err != nil {
+		t.Fatalf("event receipt with event ID was rejected: %v", err)
+	}
+	if err := validatePublishedSchemaDocument(t, "maintenance-receipt.schema.json", receipt); err != nil {
+		t.Fatalf("event receipt does not satisfy its published schema: %v", err)
+	}
+	receipt.Trigger = TriggerDaily
+	if err := receipt.Validate(); err == nil {
+		t.Fatal("scheduled receipt carrying event ID was accepted")
+	}
+}
+
 func TestExecutionAuthorityEnforcesCatalogQualificationAndAttendance(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
 	command := Command{

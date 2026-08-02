@@ -54,6 +54,7 @@ type Job struct {
 
 type Occurrence struct {
 	JobID        string    `json:"job_id"`
+	EventID      string    `json:"event_id,omitempty"`
 	ScheduledFor time.Time `json:"scheduled_for"`
 }
 

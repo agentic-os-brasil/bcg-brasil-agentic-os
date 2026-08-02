@@ -37,6 +37,13 @@ func TestProbeReportsCodexBindingsWithoutClaimingNativeEvidence(t *testing.T) {
 	}
 }
 
+func TestProbeBlocksCodexBelowLifecycleMinimum(t *testing.T) {
+	result, err := Probe("codex", func(string) (string, error) { return "/usr/local/bin/codex", nil }, func(string) (string, error) { return "codex-cli 0.144.0", nil })
+	if err != nil || result.State != "blocked" || result.CapabilityState != "unavailable" || result.Blocker == "" {
+		t.Fatalf("result = %#v, %v", result, err)
+	}
+}
+
 func TestProbeReportsMissingExecutableWithoutFailingTheAudit(t *testing.T) {
 	result, err := Probe("claude", func(string) (string, error) { return "", errors.New("not found") }, nil)
 	if err != nil || result.State != "blocked" || result.ExecutableDetected {

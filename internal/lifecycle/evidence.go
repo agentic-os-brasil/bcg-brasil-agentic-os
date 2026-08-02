@@ -9,6 +9,7 @@ import (
 
 const (
 	ClaudeMinimumVersion = "2.1.177"
+	CodexMinimumVersion  = "0.144.1"
 
 	EvidenceConfigured      = "configured"
 	EvidenceContractTested  = "contract-tested"
@@ -50,9 +51,15 @@ func EvaluateNativeQualification(input QualificationInput) (QualificationResult,
 		return QualificationResult{}, fmt.Errorf("unsupported lifecycle evidence class %q", input.EvidenceClass)
 	}
 	result := QualificationResult{State: "unavailable", EvidenceClass: input.EvidenceClass}
-	if input.Runtime == "claude" && !MeetsClaudeMinimum(input.RuntimeVersion) {
+	minimum := ""
+	if input.Runtime == "claude" {
+		minimum = ClaudeMinimumVersion
+	} else {
+		minimum = CodexMinimumVersion
+	}
+	if !MeetsMinimum(input.RuntimeVersion, minimum) {
 		result.State = "blocked"
-		result.Blocker = "Claude runtime is below the required " + ClaudeMinimumVersion + " lifecycle-hook contract version"
+		result.Blocker = input.Runtime + " runtime is below the required " + minimum + " lifecycle-hook contract version"
 		return result, nil
 	}
 	if !input.NativeSurface {
@@ -82,17 +89,27 @@ func validEvidenceClass(value string) bool {
 }
 
 func MeetsClaudeMinimum(value string) bool {
+	return MeetsMinimum(value, ClaudeMinimumVersion)
+}
+
+func MeetsCodexMinimum(value string) bool {
+	return MeetsMinimum(value, CodexMinimumVersion)
+}
+
+func MeetsMinimum(value, minimum string) bool {
 	actual := versionPattern.FindStringSubmatch(value)
-	if len(actual) != 4 {
+	want := versionPattern.FindStringSubmatch(minimum)
+	if len(actual) != 4 || len(want) != 4 {
 		return false
 	}
-	for index, minimum := range []int{2, 1, 177} {
-		parsed, err := strconv.Atoi(actual[index+1])
-		if err != nil {
+	for index := 1; index <= 3; index++ {
+		parsed, err := strconv.Atoi(actual[index])
+		required, requiredErr := strconv.Atoi(want[index])
+		if err != nil || requiredErr != nil {
 			return false
 		}
-		if parsed != minimum {
-			return parsed > minimum
+		if parsed != required {
+			return parsed > required
 		}
 	}
 	return true

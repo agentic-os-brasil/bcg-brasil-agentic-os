@@ -69,6 +69,47 @@ func TestWorkerRunsQualifiedDueOccurrenceAndFencesSuccess(t *testing.T) {
 	}
 }
 
+func TestWorkerPreservesEventIdentityAndSuppressesDuplicateEvent(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog.CatalogState = RuntimeQualified
+	for index := range catalog.Jobs {
+		if catalog.Jobs[index].ID == "wiki-incremental-sync" {
+			catalog.Jobs[index].Availability = Available
+			catalog.Jobs[index].AvailabilityReason = ""
+			catalog.Jobs[index].QualificationDigest = QualificationDigest(catalog.Jobs[index].ID)
+		}
+	}
+	if err := catalog.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	receiptRoot := t.TempDir()
+	worker := Worker{
+		Catalog: catalog, Scheduler: scheduler.Store{Root: t.TempDir()}, Receipts: Store{Root: receiptRoot},
+		Handlers: map[string]any{"wiki-incremental-sync": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
+		})},
+		LocalQualification: map[string]string{"wiki-incremental-sync": QualificationDigest("wiki-incremental-sync")},
+		ActivatedJobs:      []string{"wiki-incremental-sync"}, Deadline: time.Minute,
+	}
+	request := WakeRequest{WorkspaceID: "maestro-system", Trigger: TriggerEvent, EventID: "source-change-1", OwnerID: "event-worker", Now: now, Attended: true}
+	first, err := worker.Run(context.Background(), request)
+	if err != nil || len(first.Receipts) != 1 || first.Receipts[0].State != ReceiptSucceeded || first.Receipts[0].EventID != request.EventID {
+		t.Fatalf("first event report=%#v err=%v", first, err)
+	}
+	second, err := worker.Run(context.Background(), request)
+	if err != nil || len(second.Receipts) != 1 || second.Receipts[0].EventID != request.EventID {
+		t.Fatalf("duplicate event report=%#v err=%v", second, err)
+	}
+	stored, err := (Store{Root: receiptRoot}).Receipts("maestro-system", "wiki-incremental-sync")
+	if err != nil || len(stored) != 1 {
+		t.Fatalf("event receipt count=%d err=%v", len(stored), err)
+	}
+}
+
 func TestWorkerReleaseFailureReturnsRecoveryRequired(t *testing.T) {
 	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
 	if err != nil {

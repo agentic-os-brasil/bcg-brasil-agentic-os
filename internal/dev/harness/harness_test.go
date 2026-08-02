@@ -1,11 +1,22 @@
 package harness
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestValidateEmitsCheckStartAndDurationOnFailure(t *testing.T) {
+	var output bytes.Buffer
+	if err := Validate(t.TempDir(), false, &output); err == nil {
+		t.Fatal("Validate() unexpectedly accepted an incomplete repository")
+	}
+	if !strings.Contains(output.String(), "[run] decision log") || !strings.Contains(output.String(), "[fail] decision log (") {
+		t.Fatalf("validation output lacks bounded check observability: %q", output.String())
+	}
+}
 
 func TestFindRootWalksUpward(t *testing.T) {
 	root := t.TempDir()
