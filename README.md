@@ -83,24 +83,28 @@ narrative, cross-case context or promotion signals—not technical size. The
 second is based on consequence, leverage, reversibility, external exposure and
 reputational risk.
 
-The runtime keeps one active spoke at a time, depth one and zero children. An
-account-assisted Case uses `Maestro → Client Account → Maestro → Case →
-Maestro → Client Account validation → Maestro`; a direct execution-only Case
-omits only the pre-brief and converges at `Maestro`. Both paths then invoke
-Walter only when the independent high-leverage decision requires it, or record
-an auditable low-leverage skip, before delivery. Claude and Codex share the
-same controller and durable installation-state contract; capability reporting
-distinguishes configured, adapter-observed and native-qualified evidence.
+The deterministic core models one active spoke at a time, depth one and zero
+children. An account-assisted Case uses `Maestro → Client Account → Maestro →
+Case → Maestro → Client Account validation → Maestro`; a direct
+execution-only Case omits only the pre-brief and converges at `Maestro`. Both
+paths record whether Walter is required, skipped for low leverage or still
+unavailable before delivery. Claude and Codex share the same controller and
+durable installation-state contract; capability reporting distinguishes
+configured, local contract-tested, adapter-observed and native-qualified
+evidence. A native runtime must be qualified before this contract is described
+as active execution.
 
 Walter's review packet is an ephemeral, digest-bound `IntentReviewPacket`: it
 contains the literal request, selected route, bounded draft/context, audience,
 consequence, reversibility and a `UserSelfSnapshot` projection. Walter's
 intrinsic-intent assessment is a hypothesis with evidence and confidence, not
-mind-reading. Owner Context facets remain the sole self authority. Maestro
-evaluates every interaction, but persists only material, owner-attested
-signals as normalized local metadata; prompts, client documents and generated
-output never become self evidence. The local CLI exposes inspection/export and
-owner-confirmed rejection/redaction, revert and deletion controls.
+mind-reading. Owner Context facets remain the sole self authority. At the
+reachable local dispatch boundary, Maestro evaluates each submitted interaction
+and returns metadata-only dispatch state while model execution is unavailable.
+It persists only material, owner-attested signals as normalized local metadata;
+prompts, client documents and generated output never become self evidence. The
+local CLI exposes inspection/export and owner-confirmed rejection/redaction,
+revert and deletion controls.
 
 When explicitly enabled, the owner-local PromptHistoryStore retains only user
 prompts under bounded global/workspace/account/case scopes. Walter receives a
@@ -144,12 +148,36 @@ attestation is not cryptographic principal authentication.
 > schedulers and hosted bridge operation remain release operations with their
 > own evidence.
 
+### Evidence vocabulary and snapshot
+
+These labels are deliberately non-interchangeable:
+
+- **Configured** means files, hooks or plist definitions are installed or
+  rendered; it does not show that a runtime loaded or invoked them.
+- **Local contract-tested** means deterministic repository behavior and its
+  fixtures/tests cover the boundary; it is not a fresh test run or native
+  session result.
+- **Native-qualified** requires a fresh supported-runtime session with bounded,
+  reviewable event evidence.
+- **Release-ready** requires a signed, publishable artifact and the release
+  gates; **pilot-ready** additionally requires clean-device acceptance,
+  support/incident ownership and the pilot gate.
+
+**Evidence snapshot:** `as_of: 2026-08-02` · `base_commit:
+03fe7a0bdcb12bf6fbab693fa8e5fca418b160b3` (PR #150 head; this documentation
+follow-up is stacked on that commit) · test evidence: repository fixtures and
+prior local validation records are present; this follow-up claims no fresh test
+run · runtime evidence: no fresh native-session receipt for Claude or Codex ·
+release/pilot evidence: no signed artifact, clean-device acceptance,
+support/incident owner or pilot-gate record in this snapshot.
+
 ### Maturity ladder
 
 Maestro advances only when the evidence for the next tier exists:
 
 1. **Contract-validated** — deterministic core, skills, agent contracts and
-   local harness pass; runtime capabilities may still be `unavailable`.
+   local harness evidence are present; runtime capabilities may still be
+   `unavailable`.
 2. **Runtime-qualified** — one supported runtime/platform invokes the installed
    adapter in a fresh native session with bounded evidence.
 3. **Technical shadow** — two human-in-the-loop users exercise one bounded use
@@ -275,6 +303,9 @@ bcgos atlas status <workspace>
 bcgos skills index
 bcgos adapter install --runtime claude <workspace>
 bcgos adapter status --runtime claude <workspace>
+bcgos maintenance status
+bcgos maintenance catalog
+bcgos maintenance wake --trigger presence
 bcgos ingest --workspace <path> --source <local-file> --adapter markitdown
 bcgos prior-work actor
 bcgos prior-work enroll --stdin --confirm
