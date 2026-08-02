@@ -108,7 +108,11 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 				exitCode, wakeState, wakeReason = ExitUnavailable, "completed_with_failures", "bounded handler failure remains due; recovery is available on a later wake"
 			}
 		}
-		code := writeJSON(out, map[string]any{"state": wakeState, "reason": wakeReason, "trigger": trimmedTrigger, "event_id": trimmedEventID, "native_schedulers": "disabled_until_explicit_install_and_qualification", "worker": report}, errOut)
+		// A wake can arrive from launchd, an attended command or another approved
+		// adapter. It must not claim that the native scheduler is disabled merely
+		// because this bounded worker has no provenance for its caller. The
+		// lifecycle status command remains the source of truth for that question.
+		code := writeJSON(out, map[string]any{"state": wakeState, "reason": wakeReason, "trigger": trimmedTrigger, "event_id": trimmedEventID, "native_schedulers": "wake_received; inspect maintenance canary status for lifecycle state", "worker": report}, errOut)
 		if code != ExitOK {
 			return code
 		}
