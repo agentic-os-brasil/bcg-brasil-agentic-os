@@ -1,5 +1,11 @@
 # Maestro canary release: external trust-gate runbook
 
+The complete cross-track operating plan is
+[`docs/canary-operating-plan.md`](canary-operating-plan.md). Use it to classify
+Maintenance Canary, native qualification, Release Canary and pilot evidence
+before applying the external controls in this runbook. This document owns the
+release trust gate; it does not qualify the maintenance runtime.
+
 This runbook covers controls that deliberately live outside the repository. It
 is a prerequisite for a real canary run, not authorization to publish and not
 evidence that the pilot gates in `specs/022-guided-pilot-release.md` have
@@ -110,35 +116,40 @@ them, paste them into a ticket or move them to repository-wide secrets.
 An administrator must confirm that each input exists without revealing its
 value. Environment secrets must remain unavailable until independent approval.
 
-## Canary execution
+## Release Canary execution
 
 Use a reviewed commit on protected `main` and an unused canonical semantic
 version.
 
-1. Confirm the three required CI checks passed for the exact source commit.
-2. Dispatch **release candidate** from `main` with that version and the
+1. Confirm the Maintenance Canary and native-qualification evidence are either
+   explicitly out of scope or attached as separate ledger entries. Never use a
+   maintenance wake receipt as release evidence.
+2. Confirm the three required CI checks passed for the exact source commit.
+3. Dispatch **release candidate** from `main` with that version and the
    `canary` channel. Treat its artifact as unsigned engineering output only.
-3. Verify candidate closure with:
+4. Verify candidate closure with:
 
    ```text
    go run ./dev/release verify --directory dist/release-candidate
    ```
 
-4. Dispatch **signed Maestro prerelease** from the same protected commit,
+5. Dispatch **signed Maestro prerelease** from the same protected commit,
    version and channel, using its exact publication confirmation. The
    independent environment reviewer approves the job.
-5. Capture the workflow URL, immutable release URL and tag, source commit,
+6. Capture the workflow URL, immutable release URL and tag, source commit,
    manifest digest, signed asset checksums, native-signing evidence and GitHub
    attestation result.
-6. Through the approved OS installation channel, seed the platform-signed
+7. Through the approved OS installation channel, seed the platform-signed
    bootstrapper and authority registry on one clean managed Windows device and
    one clean managed macOS device.
-7. Follow `acceptance/clean-device/README.md` to record install, update and
+8. Follow `acceptance/clean-device/README.md` to record install, update and
    rollback receipts for the same run ID, assemble sanitized device reports and
    obtain the approved external countersignatures.
 
 Neither publication nor two device reports automatically make the release
-pilot-ready. Cohort progression remains a human decision under Spec 022.
+pilot-ready. Cohort progression remains a human decision under Spec 022. The
+exact state, evidence and stop/rollback criteria are maintained in the
+[canonical operating plan](canary-operating-plan.md).
 
 ## Stop and rollback
 
