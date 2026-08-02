@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:maintenance-command:v1",
+  "title": "BCG Brasil Agentic OS bounded maintenance command",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "command_id", "job_id", "workspace_id", "trigger", "scheduled_for", "requested_at", "deadline", "proposal_only"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "command_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
+    "job_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
+    "workspace_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
+    "trigger": {"enum": ["continuous", "event", "presence", "daily", "weekly", "monthly"]},
+    "event_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
+    "scheduled_for": {"type": "string", "format": "date-time"},
+    "requested_at": {"type": "string", "format": "date-time"},
+    "deadline": {"type": "string", "format": "date-time"},
+    "proposal_only": {"type": "boolean"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"trigger": {"enum": ["continuous", "event"]}}},
+      "then": {"required": ["event_id"]}
+    },
+    {
+      "if": {"properties": {"proposal_only": {"const": true}}},
+      "then": {
+        "properties": {
+          "job_id": {"const": "darwin-structural-evolution-proposal"},
+          "trigger": {"const": "monthly"}
+        }
+      },
+      "else": {
+        "not": {
+          "properties": {"job_id": {"const": "darwin-structural-evolution-proposal"}},
+          "required": ["job_id"]
+        }
+      }
+    }
+  ]
+}

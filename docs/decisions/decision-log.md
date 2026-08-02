@@ -150,6 +150,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/005-development-harness.md; .claude/README.md; dev/skills/start-contributing/SKILL.md
 - Supersedes: none
 
+## WIZR - Give the signed installer one branded, user-space wizard
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Pilot users can install software in their corporate user profile but may not have administrator permissions or technical context. The release trust and rollback contracts already exist, but the first visual interaction is still missing.
+- Decision: The Maestro installer uses one dependency-free, cross-platform visual wizard with a midnight/teal/gold identity derived from the Maestro conductor mark. It explains four states (welcome, verification, installation and ready), states the user-space/no-admin boundary, and delegates every trust-bearing operation to the signed `bcgos-bootstrap` process. Static assets are deterministic SVG and the wizard never provides an unsigned fallback.
+- Consequences: A future executable bridge can reuse the same screens and status vocabulary on Windows and macOS. The visual layer can be reviewed independently, while pilot readiness still requires signed artifacts, native signing/notarization and clean-device evidence. The global PATH, workspaces and owner data remain outside the installer transaction.
+- Refs: installers/wizard; docs/installer-wizard.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
+- Supersedes: none
+
 ## DUAL - Support Windows and macOS equally
 
 - Date: 2026-07-19
@@ -490,6 +501,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md; internal/ingest; adapters/ingest/markitdown; https://github.com/microsoft/markitdown
 - Supersedes: none
 
+## PROJ - Install the human runtime projection and real base skills
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A pilot user should be able to clone or receive the CLI and immediately understand the Agentic OS without learning Git or development. The prior adapter installer configured hooks but left the runtime without its orientation or product skills.
+- Decision: `bcgos adapter install` materializes a concise, rich `CLAUDE.md` or `AGENTS.md` from the managed orientation template and installs every active base-bundle `SKILL.md` under the runtime's local skills directory. A workspace manifest and explicit markers define ownership; user-authored orientation content is preserved, and modified or symlinked managed files fail closed.
+- Consequences: The installed runtime is navigable by a human and can invoke the actual product skills without copying the whole repository. Updates are idempotent and hash-aware. This projection is not native runtime evidence and never promotes a capability in the manifest.
+- Refs: specs/026-workspace-local-adapter-installation.md; bundles/base/runtime/orientation.md.tmpl; internal/runtimeprojection
+- Supersedes: none
+
 ## DARN - Make Darwin the scoped operational surgeon
 
 - Date: 2026-07-28
@@ -511,3 +533,147 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The first implementation can be consumed by any OKF-aware tool without a Google runtime dependency. Generated concepts, indexes, backlinks and logs remain reviewable in Git and reproducible from pinned sources. LLM-generated enrichment, private atlas compilation, provider selection and autonomous publication remain separate follow-up contracts.
 - Refs: specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/014-human-atlas-bootstrap.md; internal/atlas; https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f; https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
 - Supersedes: none
+
+## SPWK - Keep SharePoint prior-work retrieval separate and Claude-collected
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A senior office stakeholder needs to recover prior work with natural-language requests spanning themes, clients, projects, years and audiences. The corporate environment permits SharePoint access in Claude but forbids the equivalent connection in Codex. Adding this corpus to the managed wiki, owner memory or every workspace would leak scope and make ordinary sessions traverse cross-client metadata.
+- Decision: Create a physically separate organizational `sharepoint-work` OKF bundle containing bounded metadata, facets and source pointers from explicitly enrolled SharePoint roots. Claude is the only V1 collection adapter; Codex collection is `unavailable/corporate_policy` and cannot use browser, token, Graph or copied-link fallbacks. The normalized snapshot, compiler and query engine remain runtime-neutral. The bundle is selected only for explicit prior-work retrieval and is never injected at Session Start or searched by general wiki routing.
+- Consequences: Periodic refresh uses full or provider-delta snapshots, watermarks, synchronous deletion/access-revocation barriers, immutable versions and an atomic active manifest. The catalog stores no raw deck body, prompt, transcript or credential. Query returns ranked source pointers and rechecks SharePoint authorization when opened. Native readiness still requires an approved Claude MCP trial over a sanitized SharePoint scope; local fixtures cannot promote the capability.
+- Refs: specs/007-content-navigation.md; specs/008-wiki-update-okf.md; specs/009-scheduler-catch-up.md; specs/037-sharepoint-work-retrieval-wiki.md; schemas/sharepoint-work-catalog.schema.json
+- Supersedes: none
+
+## WIRE - Make Maestro's Walter gate executable and context-lean
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro already defines a tool-free hub, a sealed Walter reviewer and fail-closed delegation, but the pilot dispatch path can finish a material branch without an explicit Maestro-to-Walter handoff. Kowalski's useful enforcement pattern is a deterministic trigger, an authenticated owner relationship and a bounded escalation state; copying its broad prompt/history surfaces would increase token cost and blur the professional boundary.
+- Decision: Add a runtime-neutral Walter wire to the Maestro dispatch path. Material recommendations, consequential trade-offs and external-facing artifacts must produce a sealed review packet from Maestro to the registered Walter leaf after the producing branch closes. The packet carries only bounded review fields and scoped artifact/evidence pointers; public state carries only IDs, digests, trigger, verdict state and objection count. Walter returns one of `approved`, `refine-and-return` or `missing-the-mark`, with no more than three objections and a concrete fix plus exit condition for each. Ordinary factual or mechanical work does not enter the gate, and the execution ledger's binary authenticated approval remains a separate completion contract.
+- Consequences: The relationship is enforced by code and conformance tests rather than description alone, while no prompt, rationale, client body or response text enters durable state or receipts. Native Claude/Codex activation and signed runtime qualification remain unavailable until their adapters prove this wire in fresh sessions. No new agent or domain is introduced; the existing Maestro and Walter roles remain the only hub/reviewer pair.
+- Refs: specs/018-maestro-core-agents.md; specs/031-maestro-goal-orchestration.md; internal/agentdispatch; internal/agentorchestration; docs/agent-orchestration-assurance.md
+- Supersedes: none
+
+## BETA - Keep technical beta unsigned until corporate release authority exists
+
+- Date: 2026-07-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A useful technical beta can proceed before the organizational signing accounts, certificates and custody controls are funded and provisioned. Using a personal platform identity as a bridge would create the wrong ownership boundary and could make an engineering rehearsal look like an approved corporate release.
+- Decision: Continue the beta with local or controlled `unsigned-candidate` and technical-rehearsal artifacts, explicitly labeled as engineering evidence only. Do not purchase or use a personal Apple Developer membership or personal Windows signing identity, including for beta; technical beta remains unsigned. Production distribution requires organization-owned Apple Developer ID and notarization, Windows Authenticode, and a new organization-controlled Ed25519 production key/custody process. A beta Ed25519 key, if needed for isolated testing, lives in a separate test registry and is never promoted; its public key may be retained only for read-only historical verification of beta artifacts.
+- Consequences: The repository may demonstrate deterministic packaging, installation simulation and local closure without claiming authenticity, publication or pilot readiness. Release operators must provision corporate authorities before signing or publishing. The production authority registry and workflow must exclude the beta issuer/key ID (or mark it revoked) and reject it for installer/update trust and all new production artifacts. Historical verification must remain an archival operation outside production trust. This keeps cost, ownership, revocation and audit boundaries explicit.
+- Refs: docs/releasing.md; docs/release-gates-checklist.md; docs/installer-package.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md
+- Supersedes: none
+
+## PABN - Make the PA Expert boundary a declassified, receipt-boundary
+
+- Date: 2026-07-30
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Case and Client Account Agents need functional or industry advice without exporting client, stakeholder or workspace context into the centrally maintained PA Expert.
+- Decision: PA Expert is the sole canonical FPA/IPA advisory role. `internal/activationpolicy/advisory.go` is the single declassification and receipt contract: it binds the exact expert version and canon digest, accepts only closed public/internal codes and produces a bounded non-export-authorizing shadow receipt. `practice_agent` and `subject_specialist` remain rejected legacy identities; they are never scaffolded, authorized or delegated and require explicit PA Expert re-registration.
+- Consequences: Account stakeholder intelligence, case-local raw context and governed case-to-account promotion remain separate. Raw pointers, scoped identifiers, excerpts, duplicate fact codes, empty registry state and forged canon bindings fail closed. Native runtime activation remains unavailable until a qualified adapter proves the same contract.
+- Refs: specs/033-deterministic-agent-activation.md; specs/039-pa-expert-advisory-boundary.md; internal/activationpolicy/advisory.go
+- Supersedes: none
+
+## CADN - Keep Darwin cadence bounded, proposal-only and non-blocking
+
+- Date: 2026-07-30
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Darwin must improve Maestro continuously across event, daily, weekly and monthly windows without turning lifecycle hooks into workers or allowing unattended structural changes. The existing scheduler plans occurrences and the Darwin contract can execute scoped remediation, but they do not yet define a non-blocking event gate, reentrancy boundary or explicit timeout contract.
+- Decision: Add a runtime-neutral cadence gate and worker-owned lease for Darwin maintenance. Lifecycle hooks may emit bounded typed wake signals only; they never wait for a worker, acquire a worker lock, call a model or apply maintenance inline. Every worker command carries an explicit deadline, is authorized by a concrete runtime-qualified catalog/attendance policy, is bound to an exact scheduler occurrence and Darwin-owned job/trigger matrix, and produces a metadata-only attempt receipt. Event, daily and weekly work remains recoverable through enrollment and bounded catch-up. Monthly structural evolution emits reviewable proposals only after explicit activation and attended authority; approval and application are separate transactions. D0/D1/D2 remain experimental and no cadence or executor receives a silent default. Capabilities and native scheduler templates remain unavailable until qualifying runtime evidence exists.
+- Consequences: Claude, Codex, macOS and Windows share one cadence and receipt contract while retaining thin adapters. Reentrancy returns a bounded ephemeral busy/unavailable result rather than blocking; occurrence-keyed leases use unique fencing tokens and an OS guard spanning side effects plus terminal publication, so stale workers cannot overlap, release or overwrite successors. Terminal receipts carry an opaque occurrence digest and suppress retries across command IDs; failed attempts remain due. Darwin cannot mutate code, policy or release state from a scheduled run. The implementation adds typed command/receipt/lease schemas, authority, concurrency, path and timeout tests, lifecycle conformance fixtures and unavailable Darwin catalog entries without promoting any runtime capability.
+- Refs: DARN; SCHD; AUTO; LIFE; specs/009-scheduler-catch-up.md; specs/019-nonblocking-hook-execution.md; specs/030-claude-lifecycle-vertical.md; specs/036-maintenance-plane.md; internal/darwin; internal/scheduler
+
+- Supersedes: none
+
+## DEVO - Persist Darwin evolution as an append-only, policy-pinned evidence plane
+
+- Date: 2026-07-30
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Darwin's Wave 1 contract can emit proposal-only structural evolution and separate health receipts, but it does not yet survive restart or prove which policy and approved PA Expert portfolio were in force for each episode.
+- Decision: Add a local, versioned Darwin evolution store with immutable evidence windows, episode bindings, proposal artifacts and caller-asserted acceptance/rejection claims. Every episode pins an opaque policy ID and version plus an approved PA Expert portfolio snapshot and digest. Replay is idempotent for the same digest and rejects conflicting duplicates; recovery ignores incomplete projections and reports native persistence as unavailable until qualified. Decision claims are atomically fenced by proposal ID, remain `caller_asserted_shadow`, and cannot authorize or apply change. Health/housekeeping receipts remain in their existing store, and no evolution path may mutate live routing, the registry, canon or policy; only the existing signed reversible-repair scope may execute repairs.
+- Consequences: Darwin gains durable auditability without a second execution ledger or a context-bearing contract store. Local files remain metadata-only, native persistence and native runtime provenance remain unavailable, and a decision claim never promotes a proposal automatically or proves Walter identity. Future authoritative approval requires a separately qualified signed envelope and consumer contract; future policy changes require a new pinned episode and explicit human authority.
+- Refs: specs/038-darwin-durable-evolution.md; internal/darwin/evolution.go; internal/darwin/evolution_store.go; schemas/darwin-evolution-*.schema.json
+- Supersedes: none
+
+## MAST - Make Maestro native delegation and high-leverage review explicit
+
+- Date: 2026-07-31
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro needs a deterministic topology that keeps Client Account consultation focused on client strategic lens and stakeholder pressure-testing, while Walter remains a calm Senior Advisor & Refiner for genuinely high-leverage output. Configuration and caller role strings must not silently create authority or inflate review loops.
+- Decision: Use a typed Maestro planner with independent `account_consultation_required` and `walter_required` decisions. Account consultation is selected by closed client-strategy, stakeholder, relationship, narrative, cross-case and promotion signals; explicit execution-only work may use direct Case, while insufficient routing evidence fails safe to Client Account. Walter is selected by consequence, leverage, external/reputational exposure, hard-to-reverse decisions, materiality or a closed review trigger. Ordinary low-leverage work may carry an auditable Walter skip. The runtime keeps one active spoke, depth one, zero children, durable Claude/Codex state fencing, and constructive Walter verdicts with actionable refinements and exceptional holds.
+- Consequences: Account framing and return validation are paired; direct Case never invokes Client Account. Walter approval is not a routine veto: cosmetic observations remain non-blocking, load-bearing gaps require proposed refinements and acceptance criteria, and hold is exceptional. Content or risk mutation invalidates stale decisions and re-enters the bounded loop. Native qualification remains unavailable until fresh runtime evidence exists.
+- Refs: specs/016-workspace-agent-boundaries.md; specs/018-maestro-core-agents.md; specs/023-sequential-agent-dispatch.md; specs/034-vertical-agents-and-transversal-skills.md; specs/040-maestro-native-delegation.md; schemas/maestro-plan.schema.json; internal/maestro; internal/agentdispatch/review.go; internal/agentorchestration
+- Supersedes: none
+
+## INTN - Make Walter an intent proxy and keep self learning evidence-bound
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Walter's high-leverage review needs to approximate the user's calm, context-rich self-review without impersonating the user or turning a selective reviewer into the only learning path. The product also needs longitudinal learning when Walter is skipped, while keeping private self material local and auditable.
+- Decision: Maestro captures a typed, metadata-only `InteractionObservation` after every interaction and stores it in an append-only provisional log with source event/hash, timestamp, scope, confidence, sensitivity and expiry/recheck. The canonical Owner Context facets remain the sole authority; a versioned `UserSelfSnapshot` is only a stale-checked projection of those confirmed professional preferences, principles, decision rules, communication style, motivations and boundaries. Walter receives a versioned, digest-bound `IntentReviewPacket` containing the literal request, chosen plan, draft/output, minimum relevant context, self snapshot version/digest, applicable provisional observations and audience/consequence/reversibility. Walter returns a typed intent hypothesis with evidence references, confidence, purpose satisfaction, constructive refinement, unresolved uncertainty and `approve`, `refine`, `clarify` or exceptional `hold`. Explicit instruction/correction can deterministically update canon; endorsement reinforces an existing rule; isolated inference remains provisional. Repeated independent evidence or explicit confirmation is required for promotion. Contradictions create a versioned superseding record, and the user can inspect, edit, reject, reset, export or delete self data.
+- Consequences: Walter is a proxy of likely user review, never an impersonation or mind-reading claim. Low-confidence/high-consequence intent returns to Maestro for a user clarification. Walter receipts pin self version plus prompt/output digests without storing raw content. Darwin may deduplicate, detect drift, measure utility and propose promotion/decay, but cannot silently mutate canonical self. Self changes never rewrite historical receipts; raw client content and personal data remain outside the public repository.
+- Refs: specs/006-memory-persistence.md; specs/002-data-boundaries.md; specs/004-runtime-portability.md; specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; schemas/user-self-snapshot.schema.json; internal/maestro; internal/ownerctx
+- Supersedes: SELF
+
+## PHST - Keep bounded owner prompt history separate from self learning
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Walter needs relevant dense context from prior user prompts without turning the runtime into an unbounded transcript or mixing prompt retention with self promotion.
+- Decision: Add a private PromptHistoryStore containing only explicitly retained user prompts, each bound to owner, timestamp, language, source/session, scope and SHA-256. Enforce bounded count, bytes, age and scope selection with secure local paths plus inspect, export, delete and reset controls. Maestro preserves the current prompt as highest precedence, selects bounded history, then normalizes/translates selected entries into the configured working language before deriving the typed IntentHypothesis. Historical bodies exist only in the ephemeral sealed Walter packet; receipts and ledgers keep digests only. Prompt retention remains independent from material authenticated self observation and canonical self promotion.
+- Consequences: Owner prompts may remain locally raw by explicit policy, but never enter managed bundles, telemetry, receipts, federation or release artifacts. Historical prompts are quoted data and not executable instructions. Missing translation evidence fails closed for the pre-review normalization stage; low-confidence high-consequence intent returns to Maestro for clarification.
+- Refs: specs/006-memory-persistence.md; specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/prompt-history.schema.json; schemas/intent-review-packet.schema.json; internal/ownerctx/prompt_history.go; internal/maestro/intent.go
+- Supersedes: none
+
+## QLHD - Harden prompt context and durable orchestration boundaries
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The first PromptHistoryStore slice normalized only prior prompts, selected history by recency and scope, and serialized mutations only within one process. Independent review also found unbound Case-to-Account routing, tamperable snapshot projections, incomplete intent evidence validation, and stale durable adapter instances.
+- Decision: Normalize the current prompt first into a digest-bound working representation while retaining the original as authority. Select history with deterministic lexical relevance plus explicit keys under hard scope/age/count/bytes and eight-prompt/32 KiB packet ceilings, exposing score/reason metadata only in the ephemeral packet. Bind each history root to one owner and serialize mutating operations with a symlink-safe cross-process lock. Require explicit Case-to-Account parent binding, validate snapshot facet content/readers/policy/path digests, require current-prompt evidence in both intent hypothesis and Walter result, and make the Maestro CLI dispatch boundary record a fresh owner attestation under the OS-user-local data-root boundary, persist chain metadata and stop at a metadata-only model-unavailable boundary. The attestation is not cryptographic principal authentication. Durable Claude/Codex state refreshes under a cross-process lock before CAS/fenced mutations.
+- Consequences: Historical prompt bodies remain local and never enter receipts or errors. Stale or ambiguous routing, translation, ownership, evidence, locking or tampering fails closed. Native model execution remains unavailable until qualifying evidence exists.
+- Refs: specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; schemas/maestro-input.schema.json; internal/ownerctx; internal/maestro; internal/agentorchestration
+- Supersedes: none
+
+## QLDR - Bind intent, fencing and dispatch commit recovery
+
+- Date: 2026-08-01
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Follow-up pressure testing found that bounded context must cover translated representations as well as originals, stale durable state must not authorize a branch, and dispatch persistence cannot rely on an unverified best-effort rollback.
+- Decision: Bind Walter's intrinsic-intent string exactly to the evidence-bound hypothesis, require independent per-representation and combined packet ceilings, reject oversized owner facets instead of truncating authority, and seal the packet before recording the current prompt. The Maestro dispatch boundary uses an occurrence-bound metadata-only CAS/receipt store with append-only epochs and an atomic current pointer; it does not authenticate a native adapter or fabricate credentials. Chain persistence uses the repository's cross-platform advisory lock; prompt/chain commit failures compensate both sides and write a metadata-only recovery marker if compensation itself fails. Recovery markers are serialized, idempotent for the same incident and reject silent replacement of an unresolved incident.
+- Consequences: Earlier same-session or repeated prompts remain eligible history while the current occurrence cannot self-duplicate. Durable fence epochs are real transition evidence rather than an opened-store snapshot. Raw prompt, client or generated content never enters recovery markers, receipts or errors. Low-confidence intrinsic-intent hypotheses remain task-local and can clarify through Maestro; they never update canonical self state.
+- Refs: specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; internal/maestro; internal/ownerctx; internal/agentorchestration; internal/cli
+- Supersedes: none
+
+## BSEL - Activate optional engineering skills from confirmed interview selection
+
+- Date: 2026-07-31
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The Canary already ships professional engineering skills as source content, but the bundle catalog marked them unavailable and the initial interview had no capability-track selection. That made the useful code methods invisible at runtime and conflated missing data/runtime packs with an optional local capability.
+- Decision: Mark `engineering-core` as `optional`, expose `technical-explorer` and `software-engineering` in the canonical agent interview, persist confirmed `capability_tracks` with the local personalization profile, and have the adapter project the embedded engineering skills only for a valid selected plan. Keep `data-practice` unavailable until its runtime and release contract are qualified. Capability selection remains independent from interaction profile, tools, data scope, provider access and authority.
+- Consequences: A user can opt into code-oriented methods during onboarding and receive them in Claude/Codex projection without a new agent or implicit grant. Selection is validated against the catalog and fails closed before persistence or workspace writes when a required bundle is unavailable. Remote/downloaded optional packs, migrations, signatures and separate runtime authorities remain future work.
+- Refs: USER; specs/035-professional-capability-bundles.md; bundles/catalog/catalog.json; internal/agentidentity; internal/capabilitybundle; internal/runtimeprojection
+- Supersedes: CAPS
+
+## OPTS - Make all Canary professional bundles interview-selectable
+
+- Date: 2026-07-31
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The Canary's engineering and data practice content is already embedded, sanitized and runtime-neutral. Leaving `data-practice` as `unavailable` made the interview offer a choice that could not be fulfilled even though its three methodological skills require no external provider or file-generation capability.
+- Decision: Remove `unavailable` from the professional capability-bundle surface. `engineering-core` and `data-practice` are both `optional`, appear as selectable tracks in the canonical interview, and every skill in the selected bundle is projected together with its dependencies after confirmed local selection. Compose and project a manifest-owned, selection-scoped agent-skill policy so only the confirmed methods and dependencies become selectable by the Case Agent. Keep `unavailable` for unrelated native/runtime capabilities whose evidence or authority is not present.
+- Consequences: A user can select software, data or both practices during onboarding; the active projection and dispatcher policy remain deterministic, hash-bound and tool-neutral. Embedded methods from unselected bundles remain denied, and a modified or unmanaged policy path fails closed. The base catalog remains unchanged until selection, and no track grants tools, data scope, provider access, publication or agent authority.
+- Refs: USER; specs/035-professional-capability-bundles.md; bundles/catalog/catalog.json; internal/agentidentity; internal/runtimeprojection
+- Supersedes: BSEL

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Expert Interview Guide"
+  short_description: "Structure a bounded interview guide from approved case questions"
+  default_prompt: "Use $expert-interview-guide to structure a bounded interview guide from the approved case scope."

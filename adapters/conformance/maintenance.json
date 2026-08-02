@@ -2,12 +2,12 @@
   "schema_version": 1,
   "catalog_state": "catalog_only",
   "native_evidence": "pending",
-  "activation_gate": "executor_state == available and owning-subsystem receipt contract qualified",
+  "activation_gate": "persisted local Canary enrollment plus exact handler qualification; catalog-only jobs remain due/unavailable",
   "adapters": {
     "claude": {"state": "unavailable", "reason": "maintenance executor and scheduler installation are not qualified"},
     "codex": {"state": "unavailable", "reason": "maintenance executor and scheduler installation are not qualified"},
-    "macos": {"state": "template_only", "artifact": "adapters/macos/launchd/com.bcg.maestro.maintenance.plist.tmpl"},
-    "windows": {"state": "template_only", "artifact": "adapters/windows/task-scheduler/BCGOS-Maestro-Maintenance.xml.tmpl"}
+    "macos": {"state": "adapter_installed", "native_qualification": "pending", "artifact": "internal/macosadapter"},
+    "windows": {"state": "unavailable", "native_qualification": "pending", "artifact": "internal/windowsadapter"}
   },
   "jobs": [
     "memory-l1-capture",
@@ -23,6 +23,10 @@
     "runtime-drift-check",
     "self-observation-capture",
     "self-refinement-proposal",
-    "update-check"
+    "update-check",
+    "darwin-housekeeping-daily",
+    "darwin-deep-weekly",
+    "walter-self-review-weekly",
+    "darwin-structural-evolution-proposal"
   ]
 }

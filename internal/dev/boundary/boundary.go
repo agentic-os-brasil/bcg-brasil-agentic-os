@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-var distributionRoots = []string{"bundles", "adapters", "installers", filepath.Join("cmd", "bcgos")}
+var distributionRoots = []string{"bundles", "adapters", "installers", filepath.Join("cmd", "bcgos"), filepath.Join("cmd", "maestro-installer")}
 
 var forbiddenReferences = []string{
 	"dev/harness",

@@ -1,8 +1,20 @@
 # Maestro Proprietary License v1.0
 
-Copyright © 2026 BCG Brasil Agentic OS / Maestro. All rights reserved.
+SPDX-License-Identifier: LicenseRef-Maestro-Proprietary-1.0
 
-Developed by:
+> **INTERNAL DRAFT — NOT APPROVED FOR EXTERNAL DISTRIBUTION.** The owning
+> legal entity, chain of title, jurisdiction, contact, contributor treatment
+> and commercial terms must be confirmed by qualified counsel before this
+> license is used outside the authorized internal repository.
+
+**License type:** proprietary / closed source / all rights reserved. This
+project-specific license is the repository's current closed-license posture;
+it is not an OSI-approved open-source license.
+
+Copyright notice: © 2026. Rights holder to be confirmed by counsel. All rights
+reserved.
+
+Developed by (attribution does not, by itself, define legal ownership):
 
 - Daniel Scardini
 - Julia Ribeiro
@@ -15,9 +27,10 @@ and does not grant rights under the MIT, Apache-2.0, GPL, BSD or any other
 open-source license.
 
 The source code, documentation, product bundles, skills, adapters, artwork,
-schemas and other materials in this repository (the “Software”) are
-confidential and remain the property of the copyright holders and/or the
-authorized owner of the Maestro product.
+schemas and other materials in this repository (the “Software”) are intended
+to remain confidential and proprietary. This internal draft does not determine
+ownership or represent that a particular entity has completed the chain of
+title.
 
 ## 2. Permission
 

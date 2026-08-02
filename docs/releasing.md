@@ -24,6 +24,27 @@ identities, a read-only release-policy token and secret custody inputs. The
 repository does not contain those authorities, so the workflow fails closed
 until they are configured.
 
+## Technical beta boundary
+
+The beta can proceed as a local or controlled technical rehearsal without a
+paid personal signing account. Its artifacts must remain labeled
+`unsigned-candidate` or `technical rehearsal` and are engineering evidence only:
+they do not establish authenticity, publication, corporate-device trust or
+pilot readiness. A personal Apple Developer membership or Windows signing
+identity is prohibited, including for beta; technical beta remains unsigned. A
+production Ed25519 key must not be used as a bridge to the corporate release
+path.
+
+When the organization is ready to distribute, the release owner must provision
+organization-owned Apple Developer ID signing and notarization, Windows
+Authenticode, and a new organization-controlled Ed25519 production key with
+approved custody and registry seeding. A beta Ed25519 key, if needed for
+isolated testing, lives in a separate test registry and remains test-only. The
+production authority registry and workflow must exclude its issuer/key ID (or
+mark it revoked) and reject it for installer/update trust and all new production
+artifacts. Its public key may be retained only for read-only archival verification
+of beta artifacts, never as production trust during transition.
+
 ## Build an unsigned candidate
 
 From a clean source snapshot:
@@ -57,6 +78,38 @@ go run ./dev/release verify --directory dist/release-candidate
 
 Verification rejects missing, extra, non-regular or digest-mismatched files.
 It proves candidate closure and integrity, not authenticity.
+
+## Role migration at the 0.2.0 release boundary
+
+Release `0.2.0` opens the migration boundary from the retired `practice_agent`
+authority to canonical `pa_expert`. Its signed manifest, and later releases
+that can still receive a pre-boundary installation, must carry the required
+`practice-agent-to-pa-expert` migration with the exact
+bundle artifact digest plus the SHA-256 identities of the shipped agent
+catalog and agent-skill policy. The source range is `>=0.1.0 <0.2.0`; after
+`0.2.0`, the legacy role and IDs are rejected and are never silently renamed.
+
+The update plan preserves those catalog/policy bindings. Activation records
+them in install state, and both normal planning and direct prepared activation
+enforce the same bounded source range. A retry is idempotent and a rollback
+after the boundary fails closed if it would reactivate an unbound legacy
+authority, even when a later canonical release no longer carries the original
+migration marker.
+Once no pre-boundary installation is in scope, a post-migration release may
+omit the migration record; it still cannot reintroduce the legacy authority.
+
+## Assemble the macOS installer candidate
+
+The visual installer is packaged separately from the CLI candidate because it
+must carry the exact release directory, native bootstrapper and authority
+registry that the bridge will verify. Use
+`dev/release/build-macos-installer.sh` with explicit absolute paths to those
+inputs, the target-architecture bridge and the hash-approved `.icns`. The
+factory emits a DMG containing `Maestro Installer.app`, records tree/file
+digests and labels the result `unsigned-candidate`. It never creates keys,
+signs, notarizes or publishes the package. The protected release workflow must
+repeat the same packaging with approved inputs before the package can be
+called a signed release.
 
 ## Produce a local readiness report
 

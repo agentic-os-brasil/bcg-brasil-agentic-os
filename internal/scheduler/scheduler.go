@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,8 +18,10 @@ import (
 type Cadence string
 
 const (
-	Daily  Cadence = "daily"
-	Weekly Cadence = "weekly"
+	Daily    Cadence = "daily"
+	Weekly   Cadence = "weekly"
+	Monthly  Cadence = "monthly"
+	Interval Cadence = "interval"
 )
 
 type ReceiptState string
@@ -33,17 +36,20 @@ var (
 	ErrCapabilityUnavailable = errors.New("scheduler capability unavailable")
 	jobIDPattern             = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 	workspaceIDPattern       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
+	attemptTokenPattern      = regexp.MustCompile(`^[a-f0-9]{32}$`)
 )
 
 // Job describes cadence only. Native schedulers may wake the process, but this
 // runtime-neutral contract remains responsible for deciding what is due.
 type Job struct {
-	ID          string
-	Cadence     Cadence
-	Weekday     time.Weekday
-	LocalHour   int
-	LocalMinute int
-	MaxCatchUp  int
+	ID            string
+	Cadence       Cadence
+	Weekday       time.Weekday
+	DayOfMonth    int
+	LocalHour     int
+	LocalMinute   int
+	IntervalHours int
+	MaxCatchUp    int
 }
 
 type Occurrence struct {
@@ -140,6 +146,9 @@ func occurrenceKey(jobID string, scheduledFor time.Time) string {
 func RunDue(ctx context.Context, executor Executor, occurrences []Occurrence, attemptedAt time.Time) []Receipt {
 	receipts := make([]Receipt, 0, len(occurrences))
 	for _, occurrence := range occurrences {
+		if ctx.Err() != nil {
+			break
+		}
 		receipt := Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: attemptedAt, State: Succeeded}
 		err := executor.Execute(ctx, occurrence)
 		if err != nil {
@@ -159,8 +168,22 @@ func validateJob(job Job) error {
 	if !jobIDPattern.MatchString(job.ID) {
 		return fmt.Errorf("invalid scheduler job ID %q", job.ID)
 	}
-	if job.Cadence != Daily && job.Cadence != Weekly {
+	if job.Cadence != Daily && job.Cadence != Weekly && job.Cadence != Monthly && job.Cadence != Interval {
 		return fmt.Errorf("invalid cadence for job %q", job.ID)
+	}
+	if job.Cadence == Interval {
+		if job.IntervalHours <= 0 || job.IntervalHours > 8760 {
+			return fmt.Errorf("invalid interval for job %q", job.ID)
+		}
+	} else if job.IntervalHours != 0 {
+		return fmt.Errorf("calendar job %q cannot define an interval", job.ID)
+	}
+	if job.Cadence == Monthly {
+		if job.DayOfMonth < 1 || job.DayOfMonth > 28 {
+			return fmt.Errorf("monthly job %q requires day of month between 1 and 28", job.ID)
+		}
+	} else if job.DayOfMonth != 0 {
+		return fmt.Errorf("non-monthly job %q cannot define a day of month", job.ID)
 	}
 	if job.LocalHour < 0 || job.LocalHour > 23 || job.LocalMinute < 0 || job.LocalMinute > 59 {
 		return fmt.Errorf("invalid local schedule for job %q", job.ID)
@@ -175,17 +198,25 @@ func validateJob(job Job) error {
 }
 
 func nextOccurrence(job Job, after time.Time) time.Time {
+	if job.Cadence == Interval {
+		return after.Add(time.Duration(job.IntervalHours) * time.Hour)
+	}
 	location := after.Location()
 	candidate := time.Date(after.Year(), after.Month(), after.Day(), job.LocalHour, job.LocalMinute, 0, 0, location)
 	if job.Cadence == Weekly {
 		days := (int(job.Weekday) - int(candidate.Weekday()) + 7) % 7
 		candidate = candidate.AddDate(0, 0, days)
+	} else if job.Cadence == Monthly {
+		candidate = time.Date(after.Year(), after.Month(), job.DayOfMonth, job.LocalHour, job.LocalMinute, 0, 0, location)
 	}
 	if !candidate.After(after) {
 		if job.Cadence == Daily {
 			candidate = candidate.AddDate(0, 0, 1)
-		} else {
+		} else if job.Cadence == Weekly {
 			candidate = candidate.AddDate(0, 0, 7)
+		} else {
+			candidate = candidate.AddDate(0, 1, 0)
+			candidate = time.Date(candidate.Year(), candidate.Month(), job.DayOfMonth, job.LocalHour, job.LocalMinute, 0, 0, location)
 		}
 	}
 	return candidate
@@ -211,7 +242,11 @@ func (store Store) EnsureEnrollment(workspaceID string, enrolledAt time.Time) (E
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return Enrollment{}, err
 	}
-	path := filepath.Join(store.workspaceRoot(workspaceID), "enrollment.json")
+	workspaceRoot, err := ensurePrivateTree(store.Root, "workspaces", workspaceID)
+	if err != nil {
+		return Enrollment{}, err
+	}
+	path := filepath.Join(workspaceRoot, "enrollment.json")
 	if enrollment, err := readEnrollment(path); err == nil {
 		return enrollment, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -219,9 +254,6 @@ func (store Store) EnsureEnrollment(workspaceID string, enrolledAt time.Time) (E
 	}
 	if enrolledAt.IsZero() {
 		return Enrollment{}, errors.New("enrollment time is required")
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return Enrollment{}, err
 	}
 	enrollment := Enrollment{SchemaVersion: 1, WorkspaceID: workspaceID, EnrolledAt: enrolledAt}
 	if err := writeNewJSON(path, enrollment); err != nil {
@@ -233,6 +265,20 @@ func (store Store) EnsureEnrollment(workspaceID string, enrolledAt time.Time) (E
 	return enrollment, nil
 }
 
+// LoadEnrollment is a read-only authority preflight. It never creates the
+// enrollment boundary; callers must validate local attendance or persisted
+// preauthorization before invoking EnsureEnrollment.
+func (store Store) LoadEnrollment(workspaceID string) (Enrollment, error) {
+	if store.Root == "" || !workspaceIDPattern.MatchString(workspaceID) {
+		return Enrollment{}, errors.New("invalid scheduler enrollment lookup")
+	}
+	root, err := lookupPrivateTree(store.Root, "workspaces", workspaceID)
+	if err != nil {
+		return Enrollment{}, err
+	}
+	return readEnrollment(filepath.Join(root, "enrollment.json"))
+}
+
 func (store Store) AppendReceipt(workspaceID string, receipt Receipt) error {
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return err
@@ -242,8 +288,8 @@ func (store Store) AppendReceipt(workspaceID string, receipt Receipt) error {
 	}
 	receipt.SchemaVersion = 1
 	receipt.WorkspaceID = workspaceID
-	directory := filepath.Join(store.workspaceRoot(workspaceID), "receipts", receipt.JobID)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
+	directory, err := ensurePrivateTree(store.Root, "workspaces", workspaceID, "receipts", receipt.JobID)
+	if err != nil {
 		return err
 	}
 	name := receipt.AttemptedAt.UTC().Format("20060102T150405.000000000Z") + "-" + receipt.ScheduledFor.UTC().Format("20060102T150405.000000000Z") + ".json"
@@ -254,35 +300,51 @@ func (store Store) Receipts(workspaceID string) ([]Receipt, error) {
 	if err := validateStoreInput(store.Root, workspaceID); err != nil {
 		return nil, err
 	}
-	root := filepath.Join(store.workspaceRoot(workspaceID), "receipts")
-	var receipts []Receipt
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			return nil
-		}
-		var receipt Receipt
-		if err := readStrictJSON(path, &receipt); err != nil {
-			return err
-		}
-		if receipt.SchemaVersion != 1 || receipt.WorkspaceID != workspaceID {
-			return fmt.Errorf("invalid scheduler receipt %s", path)
-		}
-		if err := validateReceipt(receipt); err != nil {
-			return err
-		}
-		receipt.SchemaVersion = 0
-		receipt.WorkspaceID = ""
-		receipts = append(receipts, receipt)
-		return nil
-	})
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
+	root, err := ensurePrivateTree(store.Root, "workspaces", workspaceID, "receipts")
 	if err != nil {
 		return nil, err
+	}
+	var receipts []Receipt
+	entries, err := secureReadDir(root)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	for _, jobEntry := range entries {
+		if jobEntry.Type()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("scheduler receipt path must not be a symlink: %s", jobEntry.Name())
+		}
+		if !jobEntry.IsDir() {
+			continue
+		}
+		jobRoot := filepath.Join(root, jobEntry.Name())
+		files, readErr := secureReadDir(jobRoot)
+		if readErr != nil {
+			return nil, readErr
+		}
+		for _, entry := range files {
+			if entry.Type()&os.ModeSymlink != 0 {
+				return nil, fmt.Errorf("scheduler receipt path must not be a symlink: %s", entry.Name())
+			}
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+				continue
+			}
+			var receipt Receipt
+			if err := readStrictJSON(filepath.Join(jobRoot, entry.Name()), &receipt); err != nil {
+				return nil, err
+			}
+			if receipt.SchemaVersion != 1 || receipt.WorkspaceID != workspaceID || receipt.JobID != jobEntry.Name() {
+				return nil, fmt.Errorf("invalid scheduler receipt %s", entry.Name())
+			}
+			if err := validateReceipt(receipt); err != nil {
+				return nil, err
+			}
+			receipt.SchemaVersion = 0
+			receipt.WorkspaceID = ""
+			receipts = append(receipts, receipt)
+		}
 	}
 	sort.Slice(receipts, func(left, right int) bool { return receipts[left].AttemptedAt.Before(receipts[right].AttemptedAt) })
 	return receipts, nil
@@ -330,12 +392,23 @@ func readEnrollment(path string) (Enrollment, error) {
 }
 
 func readStrictJSON(path string, target any) error {
-	file, err := os.Open(path)
+	body, err := secureReadFile(path)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
+	return decodeStrictJSON(body, target)
+}
+
+func readStrictJSONInDirectory(directory *secureDirectory, name string, target any) error {
+	body, err := directory.readFile(name)
+	if err != nil {
+		return err
+	}
+	return decodeStrictJSON(body, target)
+}
+
+func decodeStrictJSON(body []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
@@ -351,20 +424,21 @@ func readStrictJSON(path string, target any) error {
 }
 
 func writeNewJSON(path string, value any) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	body, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	encoder := json.NewEncoder(file)
-	if err := encoder.Encode(value); err != nil {
-		_ = file.Close()
+	body = append(body, '\n')
+	return secureWriteNewFile(path, body)
+}
+
+func writeNewJSONInDirectory(directory *secureDirectory, name string, value any) error {
+	body, err := json.Marshal(value)
+	if err != nil {
 		return err
 	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
+	body = append(body, '\n')
+	return directory.writeNewFile(name, body)
 }
 
 // ValidateSchemaFile keeps the published scheduler-state contract wired into

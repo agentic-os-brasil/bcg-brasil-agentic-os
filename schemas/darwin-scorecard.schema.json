@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil.example/schemas/darwin-scorecard.schema.json",
+  "title": "Maestro Darwin operational and structural scorecards",
+  "oneOf": [
+    {"$ref": "#/$defs/weekly"},
+    {"$ref": "#/$defs/monthly"}
+  ],
+  "$defs": {
+    "window": {
+      "type": "object", "additionalProperties": false,
+      "required": ["window_id", "scope_sha256", "start", "end"],
+      "properties": {
+        "window_id": {"type": "string", "pattern": "^win-[a-f0-9]{32}$"},
+        "scope_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "start": {"type": "string", "format": "date-time"},
+        "end": {"type": "string", "format": "date-time"}
+      }
+    },
+    "health": {
+      "type": "object", "additionalProperties": false,
+      "required": ["records", "current", "aging", "stale", "missed", "unavailable", "recovered", "recovery_failed", "recovery_blocked"],
+      "properties": {
+        "records": {"type": "integer", "minimum": 0}, "current": {"type": "integer", "minimum": 0},
+        "aging": {"type": "integer", "minimum": 0}, "stale": {"type": "integer", "minimum": 0},
+        "missed": {"type": "integer", "minimum": 0}, "unavailable": {"type": "integer", "minimum": 0},
+        "recovered": {"type": "integer", "minimum": 0}, "recovery_failed": {"type": "integer", "minimum": 0},
+        "recovery_blocked": {"type": "integer", "minimum": 0}
+      }
+    },
+    "route": {
+      "type": "object", "additionalProperties": false,
+      "required": ["route", "count", "basis_points", "mean_duration_seconds", "budget_exhausted", "human_overrides", "pa_covered"],
+      "properties": {
+        "route": {"enum": ["D0_DIRECT", "D1_TARGETED", "D2_GOVERNED", "BLOCKED"]},
+        "count": {"type": "integer", "minimum": 0}, "basis_points": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "mean_duration_seconds": {"type": "integer", "minimum": 0}, "budget_exhausted": {"type": "integer", "minimum": 0},
+        "human_overrides": {"type": "integer", "minimum": 0}, "pa_covered": {"type": "integer", "minimum": 0}
+      }
+    },
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["records", "completed", "failed", "blocked", "routes", "missing_pa_coverage", "unavailable_pa_coverage", "capability_gap_count"],
+      "properties": {
+        "records": {"type": "integer", "minimum": 0}, "completed": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0}, "blocked": {"type": "integer", "minimum": 0},
+        "routes": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/route"}},
+        "missing_pa_coverage": {"type": "integer", "minimum": 0}, "unavailable_pa_coverage": {"type": "integer", "minimum": 0},
+        "capability_gap_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "integrity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["input_records", "accepted_records", "duplicate_records", "independence_violations"],
+      "properties": {
+        "input_records": {"type": "integer", "minimum": 0}, "accepted_records": {"type": "integer", "minimum": 0},
+        "duplicate_records": {"type": "integer", "minimum": 0}, "independence_violations": {"type": "integer", "minimum": 0}
+      }
+    },
+    "codes": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"enum": ["insufficient_sample", "review_recovery", "review_pa_coverage", "review_capability_gaps", "review_evaluator_independence", "review_evidence_authority", "insufficient_alternatives", "hold_current_posture"]}},
+    "weekly": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "report_kind", "report_version", "window", "input_sha256", "evidence_authority", "health", "selection", "integrity", "recommendation_codes", "may_mutate_policy"],
+      "properties": {
+        "schema_version": {"const": 1}, "report_kind": {"const": "weekly_operational"}, "report_version": {"const": "weekly-v1"},
+        "window": {"$ref": "#/$defs/window"}, "input_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "evidence_authority": {"const": "caller_asserted_shadow"},
+        "health": {"$ref": "#/$defs/health"}, "selection": {"$ref": "#/$defs/selection"}, "integrity": {"$ref": "#/$defs/integrity"},
+        "recommendation_codes": {"$ref": "#/$defs/codes"}, "may_mutate_policy": {"const": false}
+      }
+    },
+    "alternative": {
+      "type": "object", "additionalProperties": false,
+      "required": ["alternative_id", "records", "mean_duration_seconds", "budget_exhausted", "pa_unavailable", "outcome_counts"],
+      "properties": {
+        "alternative_id": {"enum": ["baseline", "candidate_a", "candidate_b", "candidate_c"]},
+        "records": {"type": "integer", "minimum": 0}, "mean_duration_seconds": {"type": "integer", "minimum": 0},
+        "budget_exhausted": {"type": "integer", "minimum": 0}, "pa_unavailable": {"type": "integer", "minimum": 0},
+        "outcome_counts": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["outcome", "count"], "properties": {"outcome": {"enum": ["succeeded", "failed", "blocked", "unavailable", "no_action", "partial"]}, "count": {"type": "integer", "minimum": 0}}}}
+      }
+    },
+    "funnel": {
+      "type": "object", "additionalProperties": false,
+      "required": ["authored", "accepted", "rejected", "deferred", "implemented", "rolled_back"],
+      "properties": {"authored": {"type": "integer", "minimum": 0}, "accepted": {"type": "integer", "minimum": 0}, "rejected": {"type": "integer", "minimum": 0}, "deferred": {"type": "integer", "minimum": 0}, "implemented": {"type": "integer", "minimum": 0}, "rolled_back": {"type": "integer", "minimum": 0}}
+    },
+    "evaluations": {
+      "type": "object", "additionalProperties": false,
+      "required": ["improved", "neutral", "regressed", "insufficient"],
+      "properties": {"improved": {"type": "integer", "minimum": 0}, "neutral": {"type": "integer", "minimum": 0}, "regressed": {"type": "integer", "minimum": 0}, "insufficient": {"type": "integer", "minimum": 0}}
+    },
+    "independence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evaluations", "self_evaluation", "violations"],
+      "properties": {"evaluations": {"type": "integer", "minimum": 0}, "self_evaluation": {"type": "integer", "minimum": 0}, "violations": {"type": "integer", "minimum": 0}}
+    },
+    "monthly": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "report_kind", "report_version", "windows", "input_sha256", "evidence_authority", "alternatives", "proposal_funnel", "evaluations", "independence", "recommendation_codes", "may_mutate_policy"],
+      "properties": {
+        "schema_version": {"const": 1}, "report_kind": {"const": "monthly_structural"}, "report_version": {"const": "monthly-v1"},
+        "windows": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/window"}}, "input_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "evidence_authority": {"const": "caller_asserted_shadow"},
+        "alternatives": {"type": "array", "items": {"$ref": "#/$defs/alternative"}}, "proposal_funnel": {"$ref": "#/$defs/funnel"},
+        "evaluations": {"$ref": "#/$defs/evaluations"}, "independence": {"$ref": "#/$defs/independence"},
+        "recommendation_codes": {"$ref": "#/$defs/codes"}, "may_mutate_policy": {"const": false}
+      }
+    }
+  }
+}

@@ -5,21 +5,18 @@
     {
       "role": "case_agent",
       "skill_ids": [
+        "case-kickoff",
+        "decision-log-entry",
+        "deck-review",
         "deck-storyline",
+        "expert-interview-guide",
+        "meeting-close",
+        "meeting-to-work-items",
         "qualitative-analysis",
-        "quantitative-analysis"
+        "quantitative-analysis",
+        "slide-summary"
       ]
     }
   ],
-  "delegated": [
-    {
-      "from_role": "case_agent",
-      "to_role": "capability_specialist",
-      "skill_ids": [
-        "deck-storyline",
-        "qualitative-analysis",
-        "quantitative-analysis"
-      ]
-    }
-  ]
+  "delegated": []
 }

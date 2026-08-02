@@ -39,6 +39,42 @@ type Registry struct {
 	policy Policy
 }
 
+// ActivateDirect returns a selection-scoped policy. It extends one governed
+// direct role with skill IDs that were activated by a confirmed bundle plan;
+// it does not grant tools, data scope, persistence or delegation authority.
+func ActivateDirect(policy Policy, role string, skillIDs []string) (Policy, error) {
+	role = canonicalRole(role)
+	if !directRole(role) {
+		return Policy{}, errors.New("optional skills may only be activated for a governed direct role")
+	}
+	result := policy
+	result.Direct = make([]DirectRule, len(policy.Direct))
+	found := false
+	for index, rule := range policy.Direct {
+		result.Direct[index] = DirectRule{Role: rule.Role, SkillIDs: append([]string(nil), rule.SkillIDs...)}
+		if canonicalRole(rule.Role) != role {
+			continue
+		}
+		found = true
+		merged := append(append([]string(nil), rule.SkillIDs...), skillIDs...)
+		sort.Strings(merged)
+		unique := merged[:0]
+		for _, skillID := range merged {
+			if skillID == "" {
+				return Policy{}, errors.New("activated skill ID is required")
+			}
+			if len(unique) == 0 || unique[len(unique)-1] != skillID {
+				unique = append(unique, skillID)
+			}
+		}
+		result.Direct[index].SkillIDs = unique
+	}
+	if !found {
+		return Policy{}, errors.New("governed direct role is absent from the base policy")
+	}
+	return result, nil
+}
+
 func ParseFile(path string) (Policy, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -139,19 +175,10 @@ func directRole(role string) bool {
 }
 
 func validateDelegated(rules []DelegatedRule, known map[string]bool, agents agentcatalog.Catalog) error {
-	previous := ""
-	for _, rule := range rules {
-		fromRole, toRole := canonicalRole(rule.FromRole), canonicalRole(rule.ToRole)
-		from, fromOK := (agentcatalog.Catalog{}).ContractForRole(fromRole)
-		to, toOK := (agentcatalog.Catalog{}).ContractForRole(toRole)
-		key := fromRole + "\x00" + toRole
-		if !fromOK || !toOK || !from.MayDelegate || to.MayDelegate || !agents.AllowsDelegation(fromRole, toRole, 2) || key <= previous || len(rule.SkillIDs) == 0 {
-			return errors.New("agent skill delegated rules are invalid or unsorted")
-		}
-		if err := validateSkills(rule.SkillIDs, known); err != nil {
-			return fmt.Errorf("delegated rule %s -> %s: %w", rule.FromRole, rule.ToRole, err)
-		}
-		previous = key
+	_ = known
+	_ = agents
+	if len(rules) != 0 {
+		return errors.New("delegated skill rules are forbidden at Maestro depth one")
 	}
 	return nil
 }

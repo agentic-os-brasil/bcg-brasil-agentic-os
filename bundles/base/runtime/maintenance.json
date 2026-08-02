@@ -183,6 +183,58 @@
       "unattended": "never",
       "writes": ["local_diagnostics"],
       "success_boundary": "a signed update plan is reported; activation still requires explicit confirmation"
+    },
+    {
+      "id": "darwin-housekeeping-daily",
+      "category": "runtime",
+      "trigger": "daily_or_presence",
+      "executor": "local_adapter",
+      "scope": "managed",
+      "availability": "unavailable",
+      "availability_reason": "Darwin daily handler requires explicit attended Canary enrollment and local qualification evidence",
+      "default_enabled": true,
+      "unattended": "policy_gated",
+      "writes": ["local_diagnostics"],
+      "success_boundary": "a bounded, reversible Darwin health attempt is durably recorded without overlapping the same occurrence"
+    },
+    {
+      "id": "darwin-deep-weekly",
+      "category": "runtime",
+      "trigger": "weekly_or_presence",
+      "executor": "local_adapter",
+      "scope": "managed",
+      "availability": "unavailable",
+      "availability_reason": "Darwin weekly deep-review handler requires explicit local qualification; structural changes remain proposal-only",
+      "default_enabled": true,
+      "unattended": "policy_gated",
+      "writes": ["local_diagnostics"],
+      "success_boundary": "a metadata-only deep health/recommendation receipt is durably recorded without applying structural change"
+    },
+    {
+      "id": "walter-self-review-weekly",
+      "category": "self",
+      "trigger": "weekly_or_presence",
+      "executor": "model_adapter",
+      "scope": "owner",
+      "availability": "unavailable",
+      "availability_reason": "runtime-neutral Walter weekly proposal handler is pending integration and native qualification",
+      "default_enabled": false,
+      "unattended": "policy_gated",
+      "writes": ["owner_observation"],
+      "success_boundary": "a self-review proposal receipt is staged without canonical self mutation"
+    },
+    {
+      "id": "darwin-structural-evolution-proposal",
+      "category": "runtime",
+      "trigger": "monthly_or_presence",
+      "executor": "model_adapter",
+      "scope": "managed",
+      "availability": "unavailable",
+      "availability_reason": "Darwin structural proposal adapter and human approval boundary are not installed",
+      "default_enabled": false,
+      "unattended": "never",
+      "writes": ["local_diagnostics"],
+      "success_boundary": "a bounded structural proposal is staged for human review without applying code, policy or release changes"
     }
   ]
 }

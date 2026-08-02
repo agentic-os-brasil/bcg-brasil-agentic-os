@@ -17,6 +17,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/decisionlog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/skillmeta"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/topologygate"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/hookpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
@@ -91,6 +92,7 @@ func Validate(root string, full bool, out io.Writer) error {
 		{"managed agents", func() error {
 			return agentcatalog.ValidateDir(filepath.Join(root, "bundles", "base", "agents"))
 		}},
+		{"canonical topology retired-role gate", func() error { return topologygate.Validate(root) }},
 		{"Claude skill projections", func() error {
 			return skillmeta.ValidateClaudeProjections(
 				filepath.Join(root, "dev", "skills"),

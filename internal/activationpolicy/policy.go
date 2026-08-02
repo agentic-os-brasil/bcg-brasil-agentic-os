@@ -16,7 +16,9 @@ import (
 	"strings"
 )
 
-const PolicyVersion = "pae-v1"
+// PolicyVersion is deliberately marked experimental: this shadow policy is
+// versioned for evidence and comparison, not finalized as a runtime default.
+const PolicyVersion = "pae-v1-experimental"
 
 type Posture string
 type ConsequenceLevel string
@@ -205,7 +207,7 @@ func normalizeEnvelope(input IntentEnvelope) (IntentEnvelope, error) {
 		return IntentEnvelope{}, errors.New("activation envelope owner is unsupported")
 	}
 	if input.Posture == "" {
-		input.Posture = Balanced
+		return IntentEnvelope{}, errors.New("activation posture is required; experimental policy has no implicit default")
 	}
 	if input.Posture != Direct && input.Posture != Balanced && input.Posture != Deliberative {
 		return IntentEnvelope{}, errors.New("activation posture is unsupported")
@@ -363,7 +365,8 @@ func IsValidPublishedPAExpert(expert PAExpert) bool {
 }
 
 func validPAExpertShape(expert PAExpert) bool {
-	return validID(expert.ID) && (expert.Kind == ExpertFPA || expert.Kind == ExpertIPA) &&
+	canonicalID := "pa-expert-" + strings.ToLower(string(expert.Kind)) + "-"
+	return validID(expert.ID) && strings.HasPrefix(expert.ID, canonicalID) && (expert.Kind == ExpertFPA || expert.Kind == ExpertIPA) &&
 		semver.MatchString(expert.Version) && validSHA256(expert.CanonSHA256) &&
 		(expert.Lifecycle == Draft || expert.Lifecycle == Published || expert.Lifecycle == Retired)
 }

@@ -35,24 +35,34 @@ type PacketRequest struct {
 	Pointers      []string
 	Constraints   []string
 	SkillID       string
-	TTL           time.Duration
+	// ReviewTrigger is signed into the producer packet so materiality cannot
+	// be added only after the producer has already completed.
+	ReviewTrigger WalterReviewTrigger
+	// ReworkOfPacketID binds a new producer attempt to the prior material
+	// packet after Walter requests refinement.
+	ReworkOfPacketID string
+	Review           *ReviewPacket
+	TTL              time.Duration
 }
 
 type WorkPacket struct {
-	SchemaVersion  int       `json:"schema_version"`
-	PacketID       string    `json:"packet_id"`
-	ParentPacketID string    `json:"parent_packet_id,omitempty"`
-	IssuerAgentID  string    `json:"issuer_agent_id"`
-	TargetAgentID  string    `json:"target_agent_id"`
-	ScopeKind      string    `json:"scope_kind"`
-	ScopeID        string    `json:"scope_id"`
-	Objective      string    `json:"objective"`
-	Pointers       []string  `json:"pointers,omitempty"`
-	Constraints    []string  `json:"constraints,omitempty"`
-	SkillID        string    `json:"skill_id,omitempty"`
-	IssuedAt       time.Time `json:"issued_at"`
-	ExpiresAt      time.Time `json:"expires_at"`
-	Signature      string    `json:"signature"`
+	SchemaVersion    int                 `json:"schema_version"`
+	PacketID         string              `json:"packet_id"`
+	ParentPacketID   string              `json:"parent_packet_id,omitempty"`
+	IssuerAgentID    string              `json:"issuer_agent_id"`
+	TargetAgentID    string              `json:"target_agent_id"`
+	ScopeKind        string              `json:"scope_kind"`
+	ScopeID          string              `json:"scope_id"`
+	Objective        string              `json:"objective"`
+	Pointers         []string            `json:"pointers,omitempty"`
+	Constraints      []string            `json:"constraints,omitempty"`
+	SkillID          string              `json:"skill_id,omitempty"`
+	ReviewTrigger    WalterReviewTrigger `json:"review_trigger,omitempty"`
+	ReworkOfPacketID string              `json:"rework_of_packet_id,omitempty"`
+	Review           *ReviewPacket       `json:"review,omitempty"`
+	IssuedAt         time.Time           `json:"issued_at"`
+	ExpiresAt        time.Time           `json:"expires_at"`
+	Signature        string              `json:"signature"`
 }
 
 type Dispatcher struct {
@@ -106,32 +116,7 @@ func (dispatcher *Dispatcher) StartRoot(request PacketRequest) (WorkPacket, agen
 }
 
 func (dispatcher *Dispatcher) StartChild(parent WorkPacket, request PacketRequest) (WorkPacket, agentorchestration.Decision, error) {
-	if err := dispatcher.Verify(parent); err != nil {
-		return WorkPacket{}, packetDenied(), err
-	}
-	if parent.SchemaVersion != packetSchemaVersion {
-		return WorkPacket{}, packetDenied(), errors.New("legacy work packet is completion-only")
-	}
-	if request.ScopeID != parent.ScopeID || request.ScopeKind != parent.ScopeKind {
-		return WorkPacket{}, packetDenied(), errors.New("child packet must inherit the parent scope root")
-	}
-	issuer := parent.TargetAgentID
-	capability := dispatcher.credentials[issuer]
-	if capability == "" || dispatcher.credentials[request.TargetAgentID] == "" {
-		return WorkPacket{}, packetDenied(), errors.New("child packet issuer or target is not authorized")
-	}
-	packet, err := dispatcher.issue(issuer, parent.PacketID, request)
-	if err != nil {
-		return WorkPacket{}, packetDenied(), err
-	}
-	decision := dispatcher.gate.StartChild(
-		issuer, capability, request.TargetAgentID, parent.PacketID,
-		packet.PacketID, request.ScopeID, request.ScopeKind,
-	)
-	if !decision.Allowed {
-		return WorkPacket{}, decision, nil
-	}
-	return packet, decision, nil
+	return WorkPacket{}, agentorchestration.Decision{Allowed: false, Code: "depth_one_no_children"}, errors.New("Maestro depth one does not permit child packets")
 }
 
 // SelectDirectSkill verifies that a vertical agent's role may select a managed
@@ -193,9 +178,6 @@ func (dispatcher *Dispatcher) issue(issuer, parentID string, request PacketReque
 	if err := validateRequest(request, child); err != nil {
 		return WorkPacket{}, err
 	}
-	if err := dispatcher.validateSkillSelection(issuer, request.TargetAgentID, request.SkillID, child); err != nil {
-		return WorkPacket{}, err
-	}
 	packetID, err := randomID()
 	if err != nil {
 		return WorkPacket{}, err
@@ -217,7 +199,13 @@ func (dispatcher *Dispatcher) issue(issuer, parentID string, request PacketReque
 		ScopeKind: request.ScopeKind, ScopeID: request.ScopeID,
 		Objective: strings.TrimSpace(request.Objective), Pointers: pointers,
 		Constraints: append([]string(nil), request.Constraints...), SkillID: request.SkillID,
-		IssuedAt: now, ExpiresAt: now.Add(request.TTL),
+		ReviewTrigger:    request.ReviewTrigger,
+		ReworkOfPacketID: request.ReworkOfPacketID,
+		Review:           cloneReviewPacket(request.Review),
+		IssuedAt:         now, ExpiresAt: now.Add(request.TTL),
+	}
+	if err := validateReviewPacket(packet.Review, packet.PacketID, packet.Objective); err != nil {
+		return WorkPacket{}, err
 	}
 	packet.Signature, err = dispatcher.signature(packet)
 	return packet, err
@@ -231,35 +219,37 @@ func validateRequest(request PacketRequest, child bool) error {
 		len(request.Pointers) > maxPointers || len(request.Constraints) > maxConstraints {
 		return errors.New("work packet exceeds its bounded contract")
 	}
-	if !child && request.SkillID != "" {
+	if (request.TargetAgentID == "walter") != (request.Review != nil) {
+		return errors.New("Walter dispatch requires exactly one sealed review packet")
+	}
+	if request.ReviewTrigger != "" && !request.ReviewTrigger.valid() {
+		return errors.New("work packet has an invalid Walter review trigger")
+	}
+	if request.ReworkOfPacketID != "" && (!validPacketID(request.ReworkOfPacketID) || child) {
+		return errors.New("work packet has an invalid rework binding")
+	}
+	if request.Review != nil && request.ReworkOfPacketID != "" {
+		return errors.New("Walter review packet cannot carry a rework binding")
+	}
+	if request.Review != nil && request.ReviewTrigger != "" {
+		return errors.New("Walter review packet cannot carry a producer review trigger")
+	}
+	if request.Review != nil && (child || request.ScopeKind != "review") {
+		return errors.New("Walter review must be a direct review root")
+	}
+	if child && request.ReviewTrigger != "" {
+		return errors.New("child packet cannot define a material review trigger")
+	}
+	if child {
+		return errors.New("Maestro depth one does not permit child packets")
+	}
+	if request.SkillID != "" {
 		return errors.New("work packet has an invalid skill selection boundary")
 	}
 	for _, constraint := range request.Constraints {
 		if strings.TrimSpace(constraint) == "" || len([]byte(constraint)) > maxConstraintBytes {
 			return errors.New("work packet constraint is empty or oversized")
 		}
-	}
-	return nil
-}
-
-func (dispatcher *Dispatcher) validateSkillSelection(issuer, target, skillID string, child bool) error {
-	if !child {
-		return nil
-	}
-	_, issuerOK := dispatcher.gate.RoleForAgent(issuer)
-	targetRole, targetOK := dispatcher.gate.RoleForAgent(target)
-	if !issuerOK || !targetOK {
-		return errors.New("delegated skill selection is not allowed for these agent roles")
-	}
-	if targetRole != "capability_specialist" {
-		if skillID != "" {
-			return errors.New("skill selection is only available to capability specialists")
-		}
-		return nil
-	}
-	issuerRole, _ := dispatcher.gate.RoleForAgent(issuer)
-	if skillID == "" || !dispatcher.skills.AllowsDelegated(issuerRole, targetRole, skillID) {
-		return errors.New("capability specialist delegation requires an authorized managed skill")
 	}
 	return nil
 }
@@ -286,7 +276,9 @@ func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
 	request := PacketRequest{
 		TargetAgentID: packet.TargetAgentID, ScopeKind: packet.ScopeKind,
 		ScopeID: packet.ScopeID, Objective: packet.Objective, Pointers: packet.Pointers,
-		Constraints: packet.Constraints, SkillID: packet.SkillID, TTL: packet.ExpiresAt.Sub(packet.IssuedAt),
+		Constraints: packet.Constraints, SkillID: packet.SkillID, ReviewTrigger: packet.ReviewTrigger,
+		ReworkOfPacketID: packet.ReworkOfPacketID,
+		Review:           cloneReviewPacket(packet.Review), TTL: packet.ExpiresAt.Sub(packet.IssuedAt),
 	}
 	if packet.SchemaVersion == legacyPacketSchemaVersion {
 		if packet.SkillID != "" || validateLegacyRequest(request) != nil {
@@ -295,10 +287,11 @@ func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
 	} else if err := validateRequest(request, child); err != nil {
 		return err
 	}
-	if packet.SchemaVersion == packetSchemaVersion {
-		if err := dispatcher.validateSkillSelection(packet.IssuerAgentID, packet.TargetAgentID, packet.SkillID, child); err != nil {
-			return err
-		}
+	if err := validateReviewPacket(packet.Review, packet.PacketID, packet.Objective); err != nil {
+		return err
+	}
+	if child {
+		return errors.New("Maestro depth one does not permit child packets")
 	}
 	seen := make(map[string]bool, len(packet.Pointers))
 	for _, pointer := range packet.Pointers {

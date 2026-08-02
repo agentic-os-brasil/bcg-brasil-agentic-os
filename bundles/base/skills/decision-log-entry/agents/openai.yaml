@@ -1,0 +1,4 @@
+interface:
+  display_name: "Decision Log Entry"
+  short_description: "Draft a source-grounded project decision record without writing it"
+  default_prompt: "Use $decision-log-entry to draft a reviewable decision record from the supplied decision language."

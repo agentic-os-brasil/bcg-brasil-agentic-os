@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "runtime_neutral": true,
+  "continuous_event": {
+    "trigger": "continuous",
+    "maps_to": "event",
+    "requires_event_id": true,
+    "hook_behavior": "signal_only"
+  },
+  "cadences": [
+    {"name": "daily", "catch_up": "bounded", "worker": "lease_owned"},
+    {"name": "weekly", "catch_up": "bounded", "worker": "lease_owned"},
+    {"name": "monthly", "catch_up": "bounded", "worker": "lease_owned"}
+  ],
+  "governed_jobs": {
+    "daily": "darwin-housekeeping-daily",
+    "weekly": ["darwin-deep-weekly", "walter-self-review-weekly"],
+    "monthly": "darwin-structural-evolution-proposal"
+  },
+  "worker_contract": {
+    "authority": "runtime_qualified_catalog_attendance_and_exact_occurrence",
+    "deadline_required": true,
+    "max_deadline_minutes": 15,
+    "reentrancy": "busy_without_wait",
+    "busy_receipt": "ephemeral_nonterminal",
+    "lease_key": "canonical_occurrence",
+    "lease_fencing": "unique_attempt_token_and_guarded_execution_plus_finalization",
+    "occurrence_idempotency": "terminal_occurrence_digest",
+    "receipts": "metadata_only",
+    "structural_evolution": "proposal_only",
+    "capability_promotion": "native_evidence_only"
+  },
+  "native": {
+    "claude": "unavailable",
+    "codex": "unavailable",
+    "macos": "adapter_installed_native_qualification_pending",
+    "windows": "unavailable_native_qualification_pending"
+  }
+}

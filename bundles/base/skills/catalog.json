@@ -9,11 +9,32 @@
       "relative_path": "skills/agent-identity-setup/SKILL.md"
     },
     {
+      "id": "case-kickoff",
+      "display_name": "Case Kickoff",
+      "trigger": "Build a bounded first-days plan from approved case scope",
+      "default_prompt": "Use $case-kickoff to turn the approved case scope into a bounded kickoff plan.",
+      "relative_path": "skills/case-kickoff/SKILL.md"
+    },
+    {
       "id": "coverage-diagnose",
       "display_name": "Diagnóstico de cobertura",
       "trigger": "Mapeia cobertura e escolhe o próximo alvo de testes por risco",
       "default_prompt": "Use $coverage-diagnose para diagnosticar a cobertura e recomendar a próxima onda de testes.",
       "relative_path": "skills/coverage-diagnose/SKILL.md"
+    },
+    {
+      "id": "decision-log-entry",
+      "display_name": "Decision Log Entry",
+      "trigger": "Draft a source-grounded project decision record without writing it",
+      "default_prompt": "Use $decision-log-entry to draft a reviewable decision record from the supplied decision language.",
+      "relative_path": "skills/decision-log-entry/SKILL.md"
+    },
+    {
+      "id": "deck-review",
+      "display_name": "Deck Review",
+      "trigger": "Review supplied slide text for storyline and evidence risks",
+      "default_prompt": "Use $deck-review to review the supplied slide text without editing or generating a deck.",
+      "relative_path": "skills/deck-review/SKILL.md"
     },
     {
       "id": "deck-storyline",
@@ -28,6 +49,20 @@
       "trigger": "Consolidate daily and weekly professional memory",
       "default_prompt": "Use $dream-memory to run or inspect the appropriate memory dreaming cycle safely.",
       "relative_path": "skills/dream-memory/SKILL.md"
+    },
+    {
+      "id": "expert-interview-guide",
+      "display_name": "Expert Interview Guide",
+      "trigger": "Structure a bounded interview guide from approved case questions",
+      "default_prompt": "Use $expert-interview-guide to structure a bounded interview guide from the approved case scope.",
+      "relative_path": "skills/expert-interview-guide/SKILL.md"
+    },
+    {
+      "id": "find-prior-work",
+      "display_name": "Find Prior Work",
+      "trigger": "Recover an explicitly requested past deck or work artifact",
+      "default_prompt": "Use $find-prior-work to search my private prior-work index for this explicitly requested professional artifact.",
+      "relative_path": "skills/find-prior-work/SKILL.md"
     },
     {
       "id": "ingest-content",
@@ -49,6 +84,20 @@
       "trigger": "Guide safe setup, updates and recovery conversationally",
       "default_prompt": "Use $maestro-setup-update to guide me through this Maestro setup or update in plain language, with helpful emojis and respectful adult analogies.",
       "relative_path": "skills/maestro-setup-update/SKILL.md"
+    },
+    {
+      "id": "meeting-close",
+      "display_name": "Meeting Close",
+      "trigger": "Turn meeting notes into a reviewable closure packet",
+      "default_prompt": "Use $meeting-close to produce a reviewable closure packet from the supplied meeting notes.",
+      "relative_path": "skills/meeting-close/SKILL.md"
+    },
+    {
+      "id": "meeting-to-work-items",
+      "display_name": "Meeting to Work Items",
+      "trigger": "Extract decisions, tasks and follow-ups from meeting notes",
+      "default_prompt": "Use $meeting-to-work-items to structure the supplied meeting notes without creating tasks.",
+      "relative_path": "skills/meeting-to-work-items/SKILL.md"
     },
     {
       "id": "pr-quality-loop",
@@ -84,6 +133,13 @@
       "trigger": "Analyze bounded quantitative evidence with explicit assumptions and checks",
       "default_prompt": "Use $quantitative-analysis to analyze the approved quantitative evidence for this case.",
       "relative_path": "skills/quantitative-analysis/SKILL.md"
+    },
+    {
+      "id": "slide-summary",
+      "display_name": "Slide Summary",
+      "trigger": "Map supplied deck text into slide messages and a narrative arc",
+      "default_prompt": "Use $slide-summary to map the supplied deck text slide by slide without creating a deck.",
+      "relative_path": "skills/slide-summary/SKILL.md"
     },
     {
       "id": "unit-test-wave",

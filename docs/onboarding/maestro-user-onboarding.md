@@ -18,6 +18,11 @@ contribuidor descrito em [`windows-contributor-prompt.md`](windows-contributor-p
 > runtime local de ingestão ainda precisam de evidência própria. Se `doctor`
 > reportar `unavailable`, isso é um estado seguro e honesto — não uma falha a
 > ser contornada instalando Python, `pip`, chaves ou scripts externos.
+>
+> Para recuperar trabalhos anteriores em pastas SharePoint autorizadas, use o
+> [onboarding específico de prior-work](sharepoint-prior-work-onboarding.md).
+> A regra corporativa é explícita: Claude pode ser qualificado para coletar;
+> Codex não se conecta ao SharePoint e usa somente o índice local verificado.
 
 ## 1. A promessa em linguagem simples
 
@@ -82,6 +87,7 @@ como lixeira de documentos ou como cópia do repositório.
 | Runtime pack | Componentes pesados, como extração local e modelos aprovados. | Instale apenas pelo fluxo verificado do Maestro. |
 | Ledger | Estado de trabalho, checkpoints, evidências e receipts locais. | Consulte-o para retomar; não o trate como transcript completo. |
 | Atlas/wiki | Navegação derivada e governada sobre fontes autorizadas. | Não é um segundo depósito informal de memória. |
+| Wiki organizacional de prior-work | Catálogo separado para recuperar trabalhos anteriores após pedido explícito. | Não ativa em toda conversa e não concede SharePoint ao Codex. |
 
 Essa separação é o que permite vender continuidade sem prometer memória
 ilimitada, automação irrestrita ou compartilhamento invisível.
@@ -126,6 +132,32 @@ O `init` deve ser idempotente: executar novamente não pode apagar ou substituir
 configuração e dados existentes. O `status` mostra a situação; o `doctor`
 explica diagnósticos. Nenhum desses comandos cria clientes, projetos ou
 conteúdo de trabalho sem pedido explícito.
+
+### Passo 2.1 — Conecte o Maestro ao seu runtime
+
+Depois do `init`, escolha o runtime que você usa no workspace:
+
+```text
+bcgos adapter install --runtime claude <workspace>
+# ou
+bcgos adapter install --runtime codex <workspace>
+```
+
+Esse passo instala os hooks locais e também deixa no próprio workspace uma
+orientação completa e legível (`CLAUDE.md` ou `AGENTS.md`) com os blocos do OS,
+além das skills reais do bundle em `.claude/skills/` ou `.codex/skills/`.
+Você pode abrir esses arquivos diretamente no editor. A instalação preserva
+texto que já exista; se uma skill gerenciada tiver sido alterada manualmente,
+ela para com `conflict` em vez de sobrescrevê-la.
+
+Confira o resultado:
+
+```text
+bcgos adapter status --runtime claude <workspace>
+```
+
+Troque `claude` por `codex` quando aplicável. A configuração local prepara o
+runtime, mas não prova que uma capability nativa já foi qualificada.
 
 ### Passo 3 — Escolha a profundidade de interação
 
@@ -337,6 +369,8 @@ documentos, nomes de cliente ou conteúdo de prompt.
 - [ ] Responsável por suporte e incidente conhecido.
 
 ## 12. Documentos relacionados
+
+- [Onboarding completo de recuperação de trabalhos anteriores no SharePoint](sharepoint-prior-work-onboarding.md)
 
 - [README do Maestro](../../README.md)
 - [Roadmap técnico](../../ROADMAP.md)

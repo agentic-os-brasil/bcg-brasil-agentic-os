@@ -44,6 +44,24 @@ or other mutation after review invalidates it and requires a new signed review.
 A rejected review never satisfies completion. Evidence remains mandatory and
 is re-witnessed immediately before completion.
 
+The ledger's binary `approved`/`rejected` decision is not the conversational
+Walter verdict. Maestro may receive `refine-and-return` or
+`missing-the-mark` first; those outcomes return the packet to the producing
+owner and cannot be translated into completion. A qualified adapter may issue
+the signed `approved` envelope only after Walter independently reviewed the
+sealed packet and the final evidence satisfies the contract.
+
+The runtime-neutral pilot enforces the handoff before any material result is
+presented as complete. Closed triggers are `material_recommendation`,
+`consequential_tradeoff` and `external_artifact`; the trigger is signed into
+the producer packet and a successful producer return becomes
+`pending_review`, never `completed`. `RequireWalterReview` accepts only that
+matching pending trigger, binds the source packet digest and scope, and opens
+only the registered Walter reviewer. `ReturnWalterReview` accepts only the
+typed verdict envelope, caps objections at three, and promotes the producer to
+`completed` only for `approved`; `refine-and-return`, `missing-the-mark` and
+`unavailable` leave the producer pending and project compact review state.
+
 ## Durability and replay
 
 Review commits use the existing revision-first publication and regenerable

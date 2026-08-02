@@ -1,15 +1,26 @@
 # Spec 026 - Workspace-local adapter installation
 
-Status: bounded Session Start implemented for Claude and Codex; complete Claude
-lifecycle configuration implemented.
+Status: complete five-event lifecycle configuration implemented for Claude and
+Codex; native runtime qualification remains separate.
 
 `bcgos adapter install --runtime claude|codex [workspace]` adds only
-Maestro-owned commands to the runtime's workspace-local configuration. Codex
-receives one bounded Session Start entry. Claude receives `SessionStart`,
-`UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` entries mapped to the
-canonical lifecycle. Claude uses `.claude/settings.local.json`; Codex uses
-`.codex/hooks.json`. This avoids mutating a user-wide configuration and keeps
-the adapter scoped to a professional workspace.
+Maestro-owned commands to the runtime's workspace-local configuration. Both
+Claude and Codex receive `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
+`PostToolUse` and `Stop` entries mapped to the canonical lifecycle. Claude uses
+`.claude/settings.local.json`; Codex uses `.codex/hooks.json`. This avoids
+mutating a user-wide configuration and keeps the adapter scoped to a
+professional workspace.
+
+The same command also installs the user-facing runtime projection from the
+active base bundle. Claude receives a managed `CLAUDE.md` and the complete
+base-skill bodies under `.claude/skills/<skill-id>/SKILL.md`; Codex receives the
+equivalent `AGENTS.md` and `.codex/skills/<skill-id>/SKILL.md`. The orientation
+explains the Agentic OS blocks (session/hooks, owner SELF, memory, brain/wiki
+navigation and agents) while remaining pointer-oriented. The projection writes
+`.bcgos/runtime-projection.json` with hashes and uses explicit Maestro markers.
+Reinstallation replaces only the managed block and unchanged managed skill
+files. User-authored orientation text is preserved; modified or symlinked
+managed files fail closed and are reported as conflicts.
 
 Installation preserves unrelated configuration entries and is idempotent.
 The commands point to the local released executable, rather than relying on a
@@ -25,6 +36,10 @@ Every installed command has a two-second timeout. Claude `PostToolUse` and
 `Stop` are explicitly asynchronous; the other bindings perform only their
 bounded inline responsibility. No binding starts a worker or makes a
 network/model request.
+
+The projection is local workspace materialization, not a capability claim:
+native runtime capabilities remain `unavailable` until the conformance protocol
+produces qualifying evidence.
 
 The runtime still requires its ordinary local trust/review behavior. An
 installed configuration is not proof that a runtime executed the hook; later

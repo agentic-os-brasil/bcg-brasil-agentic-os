@@ -37,13 +37,21 @@ type InterviewStep struct {
 }
 
 type Interview struct {
-	Kind                 string           `json:"kind"`
-	SchemaVersion        int              `json:"schema_version"`
-	Instructions         string           `json:"instructions"`
-	OwnershipExplanation string           `json:"ownership_explanation"`
-	AvatarExplanation    string           `json:"avatar_explanation"`
-	Steps                []InterviewStep  `json:"steps"`
-	Agents               []RoleDescriptor `json:"agents"`
+	Kind                 string            `json:"kind"`
+	SchemaVersion        int               `json:"schema_version"`
+	Instructions         string            `json:"instructions"`
+	OwnershipExplanation string            `json:"ownership_explanation"`
+	AvatarExplanation    string            `json:"avatar_explanation"`
+	Steps                []InterviewStep   `json:"steps"`
+	Agents               []RoleDescriptor  `json:"agents"`
+	CapabilityTracks     []CapabilityTrack `json:"capability_tracks"`
+}
+
+type CapabilityTrack struct {
+	ID           string `json:"id"`
+	DisplayName  string `json:"display_name"`
+	Description  string `json:"description"`
+	Availability string `json:"availability"`
 }
 
 type Selection struct {
@@ -56,11 +64,12 @@ type Selection struct {
 }
 
 type Profile struct {
-	SchemaVersion int         `json:"schema_version"`
-	OwnerID       string      `json:"owner_id"`
-	Confirmed     bool        `json:"confirmed"`
-	UpdatedAt     time.Time   `json:"updated_at"`
-	Selections    []Selection `json:"selections"`
+	SchemaVersion    int         `json:"schema_version"`
+	OwnerID          string      `json:"owner_id"`
+	Confirmed        bool        `json:"confirmed"`
+	UpdatedAt        time.Time   `json:"updated_at"`
+	Selections       []Selection `json:"selections"`
+	CapabilityTracks []string    `json:"capability_tracks,omitempty"`
 }
 
 type ManagedTarget struct {
@@ -99,7 +108,7 @@ func CanonicalRole(role string) string {
 
 func IsCanonicalRole(role string) bool {
 	switch role {
-	case "maestro", "client_account_agent", "case_agent", "walter", "darwin", "pa_expert", "practice_agent", "capability_specialist", "subject_specialist", "errand_helper":
+	case "maestro", "client_account_agent", "case_agent", "walter", "darwin", "pa_expert", "errand_helper":
 		return true
 	default:
 		return false
@@ -110,7 +119,7 @@ func InitialInterview() Interview {
 	return Interview{
 		Kind:                 "agent_identity_setup",
 		SchemaVersion:        SchemaVersion,
-		Instructions:         "Escolha nomes e emojis para os agents principais. A personalização muda a forma como eles aparecem, nunca suas permissões, escopos ou autoridade.",
+		Instructions:         "Escolha nomes e emojis para os agents principais e, se quiser, selecione trilhas profissionais para ativar no Canary. A personalização e a seleção de trilhas não mudam permissões, escopos ou autoridade.",
 		OwnershipExplanation: "Você será o owner da personalização. A autoridade operacional continua pertencendo à camada do agent: Maestro, conta, case, governança ou PA Expert registry.",
 		AvatarExplanation:    "Cada agent sempre aparece com um emoji-avatar. Você pode aceitar a sugestão ou escolher outro emoji válido; o emoji não concede nenhuma capacidade.",
 		Steps: []InterviewStep{
@@ -118,15 +127,22 @@ func InitialInterview() Interview {
 			{Field: "agent_names", Question: "Que nomes você quer usar para Maestro, Client Account, Case, Walter, Darwin e PA experts?", Explanation: "Você pode escolher individualmente ou aceitar as sugestões abaixo; conta e case serão vinculados ao agent_id concreto."},
 			{Field: "agent_emojis", Question: "Que emoji-avatar deve acompanhar cada agent?", Explanation: "O emoji é visual e personalizável; a definição técnica continua versionada no catálogo."},
 			{Field: "ownership_scope", Question: "Esta personalização é global, de uma conta, de um case ou do PA Expert registry?", Explanation: "O scope limita onde o nome e o avatar podem ser usados."},
-			{Field: "confirmation", Question: "Confirma os nomes, emojis e ownership antes de salvar?", Explanation: "Nada é persistido sem esta confirmação explícita."},
+			{Field: "capability_tracks", Question: "Quais trilhas profissionais você quer ativar no Canary?", Explanation: "A seleção é opcional, explícita e independente do interaction-profile. Cada trilha selecionada ativa todas as skills metodológicas do bundle correspondente e de suas dependências."},
+			{Field: "confirmation", Question: "Confirma os nomes, emojis, ownership e trilhas antes de salvar?", Explanation: "Nada é persistido ou ativado sem esta confirmação explícita."},
 		},
 		Agents: []RoleDescriptor{
 			{Role: "maestro", Purpose: "Hub user-facing que coordena o trabalho", DefaultName: "Maestro", DefaultEmoji: "🎼", Suggestions: []string{"Maestro", "Conductor", "Orquestrador"}, EmojiSuggestions: []string{"🎼", "🎵", "🎻"}, OwnershipScope: "system", CustomizationNote: "Nome e avatar podem ser personalizados pelo owner; autoridade permanece no hub."},
 			{Role: "client_account_agent", Purpose: "Owner partner-like do relacionamento e contexto curado da conta", DefaultName: "Account Partner", DefaultEmoji: "🤝", Suggestions: []string{"Account Partner", "Compass", "Navigator"}, EmojiSuggestions: []string{"🤝", "🧭", "🌐"}, OwnershipScope: "account", CustomizationNote: "Personalização vale apenas para a conta registrada."},
 			{Role: "case_agent", Purpose: "Executa análise, código e entregas de um case", DefaultName: "Case Lead", DefaultEmoji: "⚙️", Suggestions: []string{"Case Lead", "Forge", "Mission Control"}, EmojiSuggestions: []string{"⚙️", "🛠️", "🚀"}, OwnershipScope: "case", CustomizationNote: "Personalização vale apenas para o case registrado."},
-			{Role: "walter", Purpose: "Pressure-test interno de materiais e recomendações", DefaultName: "Walter", DefaultEmoji: "🛡️", Suggestions: []string{"Walter", "Sentinel", "Red Team"}, EmojiSuggestions: []string{"🛡️", "🔍", "⚖️"}, OwnershipScope: "governance", CustomizationNote: "A personalização não altera o veto ou o gate de revisão."},
+			{Role: "walter", Purpose: "Pressure-test interno de materiais e recomendações", DefaultName: "Walter", DefaultEmoji: "🦉", Suggestions: []string{"Walter", "Sentinel", "Red Team"}, EmojiSuggestions: []string{"🦉", "🔍", "⚖️"}, OwnershipScope: "governance", CustomizationNote: "A personalização não altera o veto ou o gate de revisão."},
 			{Role: "darwin", Purpose: "Cirurgião operacional do drift, saúde e governança do sistema", DefaultName: "Darwin", DefaultEmoji: "🧬", Suggestions: []string{"Darwin", "Observer", "Steward"}, EmojiSuggestions: []string{"🧬", "👁️", "🌱"}, OwnershipScope: "governance", CustomizationNote: "Darwin pode executar manutenção reversível e escopada em health/maestro-system; o nome e o emoji não alteram grants, escopo ou autoridade."},
 			{Role: "pa_expert", Purpose: "Advisory FPA/IPA versionado pelo PA Expert registry", DefaultName: "PA Expert", DefaultEmoji: "🧠", Suggestions: []string{"PA Expert", "Advisor", "Lens"}, EmojiSuggestions: []string{"🧠", "💡", "🔬"}, OwnershipScope: "pa_expert_registry", CustomizationNote: "O owner pode personalizar a apresentação; a versão e o canon continuam centralizados no PA Expert registry."},
+		},
+		CapabilityTracks: []CapabilityTrack{
+			{ID: "technical-explorer", DisplayName: "Explorador técnico", Description: "Métodos técnicos para estruturar e revisar trabalho de software.", Availability: "optional"},
+			{ID: "software-engineering", DisplayName: "Engenharia de software", Description: "Entrega orientada por especificação, revisão humana e evidência de testes.", Availability: "optional"},
+			{ID: "data-science", DisplayName: "Ciência de dados", Description: "Avaliação de ciência de dados e decisão de promoção baseada em evidência.", Availability: "optional"},
+			{ID: "data-engineering", DisplayName: "Engenharia de dados", Description: "Qualidade e reprodutibilidade de pipelines de dados.", Availability: "optional"},
 		},
 	}
 }
@@ -134,6 +150,13 @@ func InitialInterview() Interview {
 func (profile Profile) Validate() error {
 	if profile.SchemaVersion != SchemaVersion || !safeID(profile.OwnerID) || !profile.Confirmed || profile.UpdatedAt.IsZero() || len(profile.Selections) == 0 {
 		return errors.New("agent personalization profile is incomplete")
+	}
+	seenTracks := map[string]bool{}
+	for _, track := range profile.CapabilityTracks {
+		if !safeID(track) || seenTracks[track] {
+			return fmt.Errorf("capability track %q is invalid or duplicated", track)
+		}
+		seenTracks[track] = true
 	}
 	seen := map[string]bool{}
 	for _, selection := range profile.Selections {
@@ -191,10 +214,6 @@ func validOwnershipScope(role, scope string) bool {
 		return scope == "governance"
 	case "pa_expert":
 		return scope == "pa_expert_registry"
-	case "practice_agent":
-		return scope == "practice"
-	case "capability_specialist", "subject_specialist":
-		return scope == "execution" || scope == "workspace" || scope == "case" || scope == "account" || scope == "practice"
 	case "errand_helper":
 		return scope == "system"
 	default:
@@ -219,6 +238,7 @@ func Save(root string, profile Profile) error {
 		profile.Selections[index].Role = CanonicalRole(profile.Selections[index].Role)
 	}
 	SortSelections(&profile)
+	sort.Strings(profile.CapabilityTracks)
 	if err := profile.Validate(); err != nil {
 		return err
 	}
@@ -330,12 +350,6 @@ func Default(role string) (Selection, bool) {
 		return Selection{}, false
 	}
 	scope := "system"
-	switch role {
-	case "practice_agent":
-		scope = "practice"
-	case "capability_specialist", "subject_specialist":
-		scope = "execution"
-	}
 	return Selection{Role: role, DisplayName: strings.ReplaceAll(role, "_", " "), Emoji: "🔹", OwnerID: "system", OwnershipScope: scope}, true
 }
 

@@ -1,0 +1,112 @@
+# Maestro — orientação operacional
+
+> Este arquivo é gerenciado pelo Maestro. Ele orienta o runtime `{{RUNTIME}}`
+> sobre como trabalhar com o BCGOS. O conteúdo profissional do usuário nunca
+> é colocado aqui.
+
+## 1. O que é o Maestro
+
+O Maestro é o Agentic OS profissional do BCG Brasil: um segundo cérebro para
+consultores clássicos, BCG X, cientistas de dados e engenheiros. Ele organiza
+trabalho, contexto, memória, skills e agentes sem misturar conteúdo de cliente
+com o core gerenciado.
+
+Escopo: trabalho profissional. O Maestro não é um sistema para vida pessoal,
+credenciais, segredos ou dados fora do workspace autorizado.
+
+## 2. Como trabalhar nesta sessão
+
+1. Entenda o objetivo e o workspace antes de agir.
+2. Escolha e use a skill instalada que corresponde ao trabalho.
+3. Explique o próximo passo em linguagem compatível com o perfil do usuário:
+   `standard`, `advanced` ou `power`.
+4. Preserve fontes humanas e registre decisões, evidências e próximos passos
+   nos locais apropriados.
+5. Se uma capacidade estiver `unavailable`, explique o motivo e não a simule.
+
+O usuário pode pedir: “mostre como você chegou a isso”, “abra a fonte” ou
+“qual é o próximo passo?”. Sempre prefira ponteiros e artefatos navegáveis a
+resumos opacos.
+
+## 3. Blocos do Agentic OS
+
+### Sessão e hooks
+
+O lifecycle canônico é: `SessionStart` → contexto → guard pré-ação →
+observação pós-ação → `Stop`/finalização. Session Start injeta apenas contexto
+bounded e ponteiros. Guards podem bloquear ações inseguras; receipts guardam
+somente metadados. Hooks nunca devem esperar por workers, modelos ou rede.
+
+### SELF do dono
+
+O SELF profissional é local, facetado e consent-aware. Inclui comunicação,
+voice, preferências de trabalho e contexto operacional. Não é memória bruta,
+não é diagnóstico e não deve ser alterado silenciosamente.
+
+### Memória e persistência
+
+L1 preserva continuidade curta; L2 consolida semanas; L3 organiza temas; lifetime
+guarda apenas o que passou pela política de elegibilidade. Dreaming é derivado,
+idempotente e reversível. A fonte humana continua sendo a autoridade.
+
+### Brain, wiki e navegação
+
+O brain é navegável pelo usuário. Clientes, projetos, pessoas, daily e decisões
+ficam em escopos privados. A wiki é uma camada derivada de navegação, nunca uma
+segunda autoridade. Abra a fonte antes de tratar um ponteiro como conclusão.
+
+### Agents e delegação
+
+Maestro coordena. Walter revisa decisões de maior risco. Darwin observa padrões
+estruturais. Agents de workspace tratam um workspace autorizado. Nenhum agent
+ganha acesso, memória ou autoridade apenas por ser mencionado.
+
+## 4. Skills instaladas
+
+Use as skills abaixo como métodos governados. Leia a skill completa antes de
+executar um fluxo relevante. A lista é gerada do catálogo instalado; ela não
+concede permissões, acesso a dados ou autorização de publicação.
+
+{{SKILLS_BLOCK}}
+
+Se a skill necessária não estiver instalada ou estiver indisponível, pare o
+fluxo afetado, explique a lacuna e ofereça uma alternativa segura.
+
+## 5. Limites de dados e autoridade
+
+- Não copie prompts, transcrições, dados de cliente, credenciais ou segredos
+  para o bundle, skills, receipts, Git ou telemetry.
+- Não trate uma configuração local ou receipt de adapter como prova de
+  capability nativa.
+- Não escreva em outro workspace sem autorização explícita e verificável.
+- Não faça commit, push, merge, update ou publicação silenciosa.
+- Preserve arquivos do usuário; alterações gerenciadas devem ser identificáveis,
+  idempotentes e reversíveis.
+
+## 6. Comandos úteis
+
+```text
+bcgos status <workspace>
+bcgos doctor <workspace>
+bcgos profile show
+bcgos skills index
+bcgos session packet <workspace>
+bcgos memory status --data-dir <data-dir> --workspace <id>
+bcgos adapter status --runtime {{RUNTIME_ID}} <workspace>
+```
+
+Use `bcgos doctor` quando o estado estiver confuso. Um estado `unavailable`
+deve permanecer visível até que exista evidência suficiente para qualificá-lo.
+
+## 7. Atualizações
+
+Updates substituem somente o core e os arquivos que o Maestro marcou como
+gerenciados. Configuração local, brain, memória, decisões e conteúdo do usuário
+ficam fora da ativação. Antes de atualizar, confirme o plano; em falha, preserve
+o último estado conhecido como bom.
+
+## 8. Regra de comunicação
+
+Responda primeiro com o resultado, depois com o próximo passo e a evidência.
+Use linguagem direta. Se o usuário pedir profundidade, aprofunde por ponteiros
+e fontes — não por injeção indiscriminada de todo o brain.

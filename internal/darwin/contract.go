@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -221,8 +222,8 @@ func (packet HealthPacket) Validate() error {
 	if packet.SchemaVersion != SchemaVersion || !idPattern.MatchString(packet.WindowID) || !validRuntimes[packet.Runtime] || !validMode(packet.Mode) {
 		return errors.New("Darwin health packet header is invalid")
 	}
-	if len(packet.Observations) == 0 || len(packet.Observations) > maxObservations {
-		return errors.New("Darwin health packet observations are missing or oversized")
+	if len(packet.Observations) > maxObservations {
+		return errors.New("Darwin health packet observations are oversized")
 	}
 	seen := map[ObservationCode]bool{}
 	for _, observation := range packet.Observations {
@@ -284,6 +285,10 @@ func Execute(ctx context.Context, packet HealthPacket, assessment Assessment, gu
 	}
 	receipt := Receipt{SchemaVersion: SchemaVersion, AgentID: AgentID, DisplayName: DisplayName, Emoji: Emoji, WindowID: packet.WindowID, Mode: packet.Mode, Outcome: OutcomeNoAction, RecordedAt: now().UTC()}
 	for _, proposal := range assessment.Proposals {
+		if err := ctx.Err(); err != nil {
+			receipt.Outcome = summarize(receipt.Actions)
+			return receipt, err
+		}
 		call := callFor(packet, proposal)
 		entry := ActionReceipt{ProposalID: proposal.ID, Action: proposal.Action, Tool: call.Tool, Operation: call.Operation, Resource: call.Resource, Outcome: OutcomeBlocked, Rollback: proposal.Rollback}
 		if !proposal.Reversible {
@@ -293,6 +298,11 @@ func Execute(ctx context.Context, packet HealthPacket, assessment Assessment, gu
 		if err := guard.Authorize(call); err != nil {
 			receipt.Actions = append(receipt.Actions, entry)
 			continue
+		}
+		if err := ctx.Err(); err != nil {
+			receipt.Actions = append(receipt.Actions, entry)
+			receipt.Outcome = summarize(receipt.Actions)
+			return receipt, err
 		}
 		result, err := invoker.Invoke(ctx, call, Artifact{SchemaVersion: SchemaVersion, AgentID: AgentID, WindowID: packet.WindowID, ProposalID: proposal.ID, Finding: proposal.Finding, Action: proposal.Action})
 		if err != nil || result.Outcome != OutcomeSucceeded {
@@ -352,11 +362,11 @@ func (invoker FilesystemInvoker) Invoke(ctx context.Context, call ToolCall, arti
 		return ToolResult{}, errors.New("Darwin filesystem resource is invalid")
 	}
 	const scopePrefix = "/maestro-system/"
-	if !strings.HasPrefix(parsed.Path, scopePrefix) || strings.Contains(parsed.Path, "..") || filepath.Clean(parsed.Path) != parsed.Path {
+	if !strings.HasPrefix(parsed.Path, scopePrefix) || strings.Contains(parsed.Path, "..") || pathpkg.Clean(parsed.Path) != parsed.Path {
 		return ToolResult{}, errors.New("Darwin filesystem resource escapes the maintenance scope")
 	}
 	relative := strings.TrimPrefix(parsed.Path, scopePrefix)
-	if relative == "" || !idPattern.MatchString(filepath.Base(relative)) {
+	if relative == "" || !idPattern.MatchString(pathpkg.Base(relative)) {
 		return ToolResult{}, errors.New("Darwin filesystem resource has an unsafe artifact name")
 	}
 	if artifact.SchemaVersion != SchemaVersion || artifact.AgentID != AgentID || artifact.WindowID == "" || artifact.ProposalID == "" {
@@ -410,7 +420,7 @@ func rejectSymlinkPath(root, relative string) error {
 		return errors.New("Darwin filesystem root must not be a symlink")
 	}
 	current := root
-	for _, part := range strings.Split(filepath.Clean(relative), string(filepath.Separator)) {
+	for _, part := range strings.Split(pathpkg.Clean(relative), "/") {
 		if part == "." || part == "" {
 			continue
 		}

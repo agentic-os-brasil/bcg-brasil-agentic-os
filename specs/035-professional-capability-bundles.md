@@ -1,8 +1,9 @@
 # Spec 035 - Professional capability bundles
 
 Status: source topology and skill catalogs implemented. The neutral engineering
-quality methods are included in the base bundle; specialized engineering and
-data bundles remain unavailable until their separate activation contract exists.
+quality methods are included in the base bundle; the first specialized
+engineering and data bundles are optional and every skill in a selected bundle
+and its dependencies is activated through confirmed interview selection.
 
 ## Objective
 
@@ -37,8 +38,8 @@ The source inventory is `bundles/catalog/catalog.json`:
 | Bundle | Included now | Tracks | Depends on |
 | --- | --- | --- | --- |
 | `base` | Yes | `consulting` (plus transversal quality methods) | none |
-| `engineering-core` | No — explicitly unavailable | `technical-explorer`, `software-engineering` | `base` |
-| `data-practice` | No — explicitly unavailable | `data-science`, `data-engineering` | `engineering-core` |
+| `engineering-core` | Optional — activated by confirmed interview selection | `technical-explorer`, `software-engineering` | `base` |
+| `data-practice` | Optional — activated by confirmed interview selection | `data-science`, `data-engineering` | `engineering-core` |
 
 The base bundle contains six neutral engineering quality methods: coverage
 diagnosis, focused unit-test waves, strict expected-failure capture, QA gates,
@@ -48,9 +49,9 @@ quality controls, not a software-engineering identity or tool grant.
 `engineering-core` retains specialized delivery practices: specification-first
 delivery, proportionate tests/evidence and human review explanation.
 `data-practice` adds data-pipeline quality, data-science evaluation and
-reproducible data runs. These extract reusable principles from Kowalski's
-engineering practice; they do not copy HDI project procedures, paths, owners,
-data or automation assumptions.
+reproducible data runs. These extract reusable principles from a mature,
+runtime-neutral engineering practice; they do not copy client procedures,
+paths, owners, data or automation assumptions.
 
 Every bundle owns canonical `SKILL.md` files plus generated `catalog.json` and
 `INDEX.md` pointers. The development harness validates every declared bundle,
@@ -60,23 +61,32 @@ its skill metadata, its interaction-profile reference and generated catalog.
 
 `bcgos bundles index` exposes the compact source inventory. `bcgos bundles
 plan --track <track[,track...]>` resolves the selected bundles and dependencies
-without changing local state.
+without changing local state. `bcgos agent interview` exposes the same tracks;
+`bcgos agent personalize --stdin` persists a confirmed selection, and the next
+adapter installation projects the selected optional skills and a managed,
+selection-scoped policy at `.bcgos/agent-skill-policy.json`. The policy admits
+the selected methods and their dependencies for the Case Agent; methods from
+unselected bundles remain denied even though their source is embedded in the
+verified local distribution.
 
 For `consulting`, the result is `base_only` and its active skills index includes
-the neutral quality methods. Plans that require an optional bundle return
-`unavailable` with the reason that release identity,
-compatibility and local activation do not yet exist. The command must never
-write a selection, install a package, modify a workspace, contact a provider or
-present specialized optional bundles as installed.
+the neutral quality methods. Plans that require either optional bundle return
+`optional` and explain that the selection must be confirmed in the interview.
+The plan command must never write a selection, install a package, modify a
+workspace, contact a provider or grant authority.
 
 The existing `bcgos skills index` remains the index of the active base bundle.
-It lists the six explicitly included quality methods and must not list
-source-only optional skills as active capabilities.
+It lists the six explicitly included quality methods by default. After a
+confirmed selection, the adapter projection adds every selected
+engineering-core and/or data-practice method, including dependencies, without
+changing the base catalog or granting tools.
 
 ## Future activation contract
 
-Before onboarding may persist a capability-track choice or activation may take
-place, a later release contract must define all of the following:
+For optional bundles shipped in the signed Canary distribution, onboarding may
+persist a capability-track choice and the local adapter may project the bundle
+only after explicit confirmation. A later release contract must still define
+all of the following before remote or separately downloaded packs are allowed:
 
 1. separately versioned optional-bundle artifacts, identity and signatures;
 2. CLI/base/optional-bundle compatibility and migrations;
@@ -85,9 +95,10 @@ place, a later release contract must define all of the following:
 5. Session Start catalog composition, authorization and bounded injection;
 6. Windows and macOS clean-device acceptance evidence.
 
-The release manifest v1 intentionally excludes optional packs. Until this
-contract is implemented and tested, a conversational skill can explain the
-plan but cannot claim that a track has been installed or cause any activation.
+The release manifest v1 intentionally excludes remote optional packs. The
+Canary's two optional bundles are embedded in the verified local distribution;
+a conversational skill cannot emulate activation from source files or a Git
+clone.
 
 ## Safety invariants
 
@@ -100,17 +111,28 @@ plan but cannot claim that a track has been installed or cause any activation.
   data, models, code or releases.
 - Every product skill resolves the canonical `interaction-profile`; it may not
   define a second novice/expert taxonomy.
-- A runtime reports an optional bundle as unavailable rather than emulating an
-  install from source files or a Git clone.
+- A runtime activates only selected bundles embedded in the verified local
+  distribution; it does not emulate remote installation from source files or a
+  Git clone.
+- Projection, inspection and removal hash the selection-scoped policy in the
+  runtime manifest. A missing, modified, symlinked or unmanaged policy path
+  fails closed and preserves the existing file.
 
 ## Acceptance evidence
 
 - The catalog rejects unknown dependencies, duplicate identities, duplicate
   tracks across the entire catalog and dependency cycles, and an
-  optional bundle that claims to be included.
+  optional bundle with an invalid availability state.
+- Track planning resolves `software-engineering` through `base` and
+  `engineering-core`, and projection activates all three engineering-core
+  skills.
 - Track planning resolves `data-science` through `base`, `engineering-core`
-  and `data-practice`, but reports it as unavailable.
+  and `data-practice`, and projection activates all six selected/dependency
+  skills.
 - Track planning resolves `consulting` to the base bundle only.
+- The dispatcher's direct-skill gate admits selected and dependency methods for
+  the active Case Agent and rejects an embedded method from an unselected
+  bundle.
 - The full harness validates all declared bundle skill directories and generated
   indexes; the distribution allowlist contains the six explicit quality methods
-  and no specialized optional content.
+  and the signed Canary engineering-core and data-practice content.

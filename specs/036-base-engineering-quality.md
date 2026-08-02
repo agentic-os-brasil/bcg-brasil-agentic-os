@@ -31,8 +31,9 @@ source, prompts, client data, credentials or full command output.
 These methods are part of `bundles/base/distribution.json`, are generated into
 the active `bundles/base/skills/catalog.json` and `INDEX.md`, and are available
 to the normal skills-index surface. The specialized `engineering-core` bundle
-continues to be source-only and unavailable; its skills are not copied into the
-base bundle by dependency resolution.
+is optional and is activated only by confirmed interview selection; its skills
+are not copied into the base bundle or activated by dependency resolution
+alone.
 
 Development lifecycle hooks are not product skills and remain outside the base
 distribution. They may be supplied as a separate contributor/development pack
@@ -45,5 +46,7 @@ with the same metadata-only and fail-closed principles.
 - `go run ./dev/harness skills-index` produces a catalog and Markdown index that
   include exactly the six new skills in sorted order.
 - The base distribution allowlist names both files for each included skill.
-- `go run ./dev/harness validate --full` passes while specialized bundle entries
-  remain unavailable.
+- `go run ./dev/harness validate --full` passes with `data-practice` embedded as
+  optional: a confirmed data selection projects its three data skills together
+  with the three required engineering skills, without granting tools or
+  authority.

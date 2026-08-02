@@ -20,6 +20,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processwait"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/rolemigration"
 )
 
 const (
@@ -68,6 +69,9 @@ type ActivationPlan struct {
 	BundleArtifactName  string `json:"bundle_artifact_name"`
 	BundleSHA256        string `json:"bundle_sha256"`
 	BundleSize          int64  `json:"bundle_size"`
+	RoleMigrationID     string `json:"role_migration_id,omitempty"`
+	CatalogSHA256       string `json:"catalog_sha256,omitempty"`
+	PolicySHA256        string `json:"policy_sha256,omitempty"`
 	StagedCLI           string `json:"staged_cli"`
 	StagedBundleArchive string `json:"staged_bundle_archive"`
 }
@@ -88,6 +92,10 @@ type State struct {
 	BundleVersion string    `json:"bundle_version"`
 	TargetOS      string    `json:"target_os"`
 	TargetArch    string    `json:"target_arch"`
+	RoleAuthority string    `json:"role_authority,omitempty"`
+	MigrationID   string    `json:"migration_id,omitempty"`
+	CatalogSHA256 string    `json:"catalog_sha256,omitempty"`
+	PolicySHA256  string    `json:"policy_sha256,omitempty"`
 	ActivatedAt   time.Time `json:"activated_at"`
 	Previous      *Snapshot `json:"previous,omitempty"`
 }
@@ -109,6 +117,9 @@ type ActivationReceipt struct {
 	CLISize            int64     `json:"cli_size"`
 	BundleSHA256       string    `json:"bundle_sha256"`
 	BundleSize         int64     `json:"bundle_size"`
+	RoleMigrationID    string    `json:"role_migration_id,omitempty"`
+	CatalogSHA256      string    `json:"catalog_sha256,omitempty"`
+	PolicySHA256       string    `json:"policy_sha256,omitempty"`
 	SourceCLIBackup    string    `json:"source_cli_backup"`
 	CommittedAt        time.Time `json:"committed_at"`
 }
@@ -122,6 +133,10 @@ type stateWire struct {
 	BundleVersion string    `json:"bundle_version"`
 	TargetOS      string    `json:"target_os"`
 	TargetArch    string    `json:"target_arch"`
+	RoleAuthority string    `json:"role_authority,omitempty"`
+	MigrationID   string    `json:"migration_id,omitempty"`
+	CatalogSHA256 string    `json:"catalog_sha256,omitempty"`
+	PolicySHA256  string    `json:"policy_sha256,omitempty"`
 	ActivatedAt   time.Time `json:"activated_at"`
 	Previous      *Snapshot `json:"previous,omitempty"`
 }
@@ -133,6 +148,10 @@ type Snapshot struct {
 	BundleVersion string `json:"bundle_version"`
 	TargetOS      string `json:"target_os"`
 	TargetArch    string `json:"target_arch"`
+	RoleAuthority string `json:"role_authority,omitempty"`
+	MigrationID   string `json:"migration_id,omitempty"`
+	CatalogSHA256 string `json:"catalog_sha256,omitempty"`
+	PolicySHA256  string `json:"policy_sha256,omitempty"`
 	CLIBackup     string `json:"cli_backup"`
 }
 
@@ -145,6 +164,10 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 		return "", fmt.Errorf("unsupported install target %s/%s", options.TargetOS, options.TargetArch)
 	}
 	if err := validateTransitionOptions(options); err != nil {
+		return "", err
+	}
+	roleBinding, err := roleBindingForTransition(options, verified.Manifest)
+	if err != nil {
 		return "", err
 	}
 	cliArtifact, bundleArtifact, err := releaseArtifacts(verified, options.TargetOS, options.TargetArch)
@@ -209,6 +232,9 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 		BundleArtifactName:  bundleArtifact.Name,
 		BundleSHA256:        bundleArtifact.SHA256,
 		BundleSize:          bundleArtifact.Size,
+		RoleMigrationID:     roleBinding.ID,
+		CatalogSHA256:       roleBinding.CatalogSHA256,
+		PolicySHA256:        roleBinding.PolicySHA256,
 		StagedCLI:           stagedCLI,
 		StagedBundleArchive: stagedBundleArchive,
 	}
@@ -266,6 +292,23 @@ func ValidatePrepared(
 		plan.BundleSize != bundleArtifact.Size {
 		return ActivationPlan{}, errors.New("activation plan does not match the verified release and install target")
 	}
+	roleBinding, err := roleBindingForTransition(options, verified.Manifest)
+	if err != nil {
+		return ActivationPlan{}, err
+	}
+	hasRoleMigration := roleBinding.ID != ""
+	if (plan.RoleMigrationID != "") != hasRoleMigration {
+		return ActivationPlan{}, errors.New("activation plan role migration binding does not match the verified release")
+	}
+	if hasRoleMigration && (plan.RoleMigrationID != roleBinding.ID || plan.CatalogSHA256 != roleBinding.CatalogSHA256 || plan.PolicySHA256 != roleBinding.PolicySHA256) {
+		return ActivationPlan{}, errors.New("activation plan role migration identity does not match the verified release")
+	}
+	if err := ensureSafePath(dataRoot, plan.StagedCLI); err != nil {
+		return ActivationPlan{}, fmt.Errorf("staged CLI path is outside the private data root: %w", err)
+	}
+	if err := ensureSafePath(dataRoot, plan.StagedBundleArchive); err != nil {
+		return ActivationPlan{}, fmt.Errorf("staged bundle path is outside the private data root: %w", err)
+	}
 	if err := verifyRegularFile(plan.StagedCLI, plan.CLISize, plan.CLISHA256); err != nil {
 		return ActivationPlan{}, fmt.Errorf("verify staged CLI: %w", err)
 	}
@@ -309,6 +352,12 @@ func Activate(
 
 	activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableName(plan.TargetOS))
 	bundleTarget := filepath.Join(plan.ManagedRoot, "bundles", plan.BundleVersion)
+	if err := ensureSafePath(plan.ManagedRoot, activeCLI); err != nil {
+		return err
+	}
+	if err := ensureSafePath(plan.ManagedRoot, bundleTarget); err != nil {
+		return err
+	}
 	if _, err := os.Stat(bundleTarget); err == nil {
 		return fmt.Errorf("bundle version already exists: %s", plan.BundleVersion)
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -362,11 +411,17 @@ func Activate(
 		return err
 	}
 	pendingCLI := activeCLI + ".pending-" + plan.TransactionID
+	if err := ensureSafePath(plan.ManagedRoot, pendingCLI); err != nil {
+		return err
+	}
 	if err := copyVerifiedRegular(plan.StagedCLI, pendingCLI, 0o755, plan.CLISize, plan.CLISHA256); err != nil {
 		return err
 	}
 	defer os.Remove(pendingCLI)
 	pendingBundle := filepath.Join(plan.ManagedRoot, "bundles", ".pending-"+plan.TransactionID)
+	if err := ensureSafePath(plan.ManagedRoot, pendingBundle); err != nil {
+		return err
+	}
 	if err := extractVerifiedBundleArchive(
 		plan.StagedBundleArchive,
 		pendingBundle,
@@ -424,12 +479,18 @@ func Activate(
 		BundleVersion: plan.BundleVersion,
 		TargetOS:      plan.TargetOS,
 		TargetArch:    plan.TargetArch,
+		RoleAuthority: roleAuthorityForPlan(plan),
+		MigrationID:   plan.RoleMigrationID,
+		CatalogSHA256: plan.CatalogSHA256,
+		PolicySHA256:  plan.PolicySHA256,
 		ActivatedAt:   activatedAt,
 	}
 	if hadState {
 		next.Previous = &Snapshot{
 			Release: current.Release, Channel: current.Channel, CLIVersion: current.CLIVersion,
 			BundleVersion: current.BundleVersion, TargetOS: current.TargetOS, TargetArch: current.TargetArch,
+			RoleAuthority: current.RoleAuthority, MigrationID: current.MigrationID,
+			CatalogSHA256: current.CatalogSHA256, PolicySHA256: current.PolicySHA256,
 			CLIBackup: backup,
 		}
 	}
@@ -461,6 +522,21 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 	if current.Previous == nil {
 		return errors.New("no previous Maestro installation is available")
 	}
+	currentExpired, err := rolemigration.IsExpired(current.Release)
+	if err != nil {
+		return fmt.Errorf("validate rollback release authority: %w", err)
+	}
+	previousExpired, err := rolemigration.IsExpired(current.Previous.Release)
+	if err != nil {
+		return fmt.Errorf("validate previous rollback release authority: %w", err)
+	}
+	if (currentExpired || current.RoleAuthority == rolemigration.CanonicalRole) &&
+		(!previousExpired || current.Previous.RoleAuthority != rolemigration.CanonicalRole) {
+		return errors.New("rollback would reactivate a legacy agent authority after alias expiry")
+	}
+	if err := ensureSafePath(managedRoot, current.Previous.CLIBackup); err != nil {
+		return fmt.Errorf("previous CLI backup is outside the managed root: %w", err)
+	}
 	if checker == nil {
 		checker = commandSelfCheck
 	}
@@ -470,10 +546,16 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 	}
 	defer unlock()
 	activeCLI := filepath.Join(managedRoot, "bin", executableName(current.TargetOS))
+	if err := ensureSafePath(managedRoot, activeCLI); err != nil {
+		return err
+	}
 	if _, err := os.Lstat(current.Previous.CLIBackup); err != nil {
 		return fmt.Errorf("previous CLI backup unavailable: %w", err)
 	}
 	revertedBackup := filepath.Join(managedRoot, "recovery", "cli", current.CLIVersion+"-rollback-"+fmt.Sprint(time.Now().UnixNano()), executableName(current.TargetOS))
+	if err := ensureSafePath(managedRoot, revertedBackup); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(revertedBackup), 0o700); err != nil {
 		return err
 	}
@@ -498,14 +580,42 @@ func Rollback(managedRoot, dataRoot string, checker func(path, version string) e
 		BundleVersion: current.Previous.BundleVersion,
 		TargetOS:      current.Previous.TargetOS,
 		TargetArch:    current.Previous.TargetArch,
+		RoleAuthority: current.Previous.RoleAuthority,
+		MigrationID:   current.Previous.MigrationID,
+		CatalogSHA256: current.Previous.CatalogSHA256,
+		PolicySHA256:  current.Previous.PolicySHA256,
 		ActivatedAt:   time.Now().UTC(),
 		Previous: &Snapshot{
 			Release: current.Release, Channel: current.Channel, CLIVersion: current.CLIVersion,
 			BundleVersion: current.BundleVersion, TargetOS: current.TargetOS, TargetArch: current.TargetArch,
+			RoleAuthority: current.RoleAuthority, MigrationID: current.MigrationID,
+			CatalogSHA256: current.CatalogSHA256, PolicySHA256: current.PolicySHA256,
 			CLIBackup: revertedBackup,
 		},
 	}
-	return WriteState(dataRoot, next)
+	if err := WriteState(dataRoot, next); err != nil {
+		// The durable state is still current, so compensate the filesystem back
+		// to the current CLI rather than leaving role authority and bytes split.
+		backupErr := os.Rename(activeCLI, current.Previous.CLIBackup)
+		restoreErr := os.Rename(revertedBackup, activeCLI)
+		if backupErr != nil || restoreErr != nil {
+			return fmt.Errorf("commit rollback state: %w (filesystem compensation failed: backup=%v restore=%v)", err, backupErr, restoreErr)
+		}
+		return fmt.Errorf("commit rollback state: %w (filesystem restored)", err)
+	}
+	return nil
+}
+
+func roleBindingForTransition(options PrepareOptions, manifest releasecontract.Manifest) (rolemigration.Binding, error) {
+	if options.Transition == "update" {
+		return rolemigration.EnsureUpdateAllowed(options.FromRelease, manifest.Release, manifest)
+	}
+	// A fresh install validates any advertised migration but never applies or
+	// persists a legacy-source binding.
+	if _, _, err := rolemigration.FromManifest(manifest); err != nil {
+		return rolemigration.Binding{}, err
+	}
+	return rolemigration.Binding{}, nil
 }
 
 func WritePlan(path string, plan ActivationPlan) error {
@@ -736,10 +846,16 @@ func committedTargetState(plan ActivationPlan, source State, activatedAt time.Ti
 		BundleVersion: plan.BundleVersion,
 		TargetOS:      plan.TargetOS,
 		TargetArch:    plan.TargetArch,
+		RoleAuthority: roleAuthorityForPlan(plan),
+		MigrationID:   plan.RoleMigrationID,
+		CatalogSHA256: plan.CatalogSHA256,
+		PolicySHA256:  plan.PolicySHA256,
 		ActivatedAt:   activatedAt,
 		Previous: &Snapshot{
 			Release: source.Release, Channel: source.Channel, CLIVersion: source.CLIVersion,
 			BundleVersion: source.BundleVersion, TargetOS: source.TargetOS, TargetArch: source.TargetArch,
+			RoleAuthority: source.RoleAuthority, MigrationID: source.MigrationID,
+			CatalogSHA256: source.CatalogSHA256, PolicySHA256: source.PolicySHA256,
 			CLIBackup: expectedSourceCLIBackup(plan),
 		},
 	}
@@ -756,6 +872,10 @@ func stateMatchesCommittedTarget(
 		state.BundleVersion == plan.BundleVersion &&
 		state.TargetOS == plan.TargetOS &&
 		state.TargetArch == plan.TargetArch &&
+		state.RoleAuthority == roleAuthorityForPlan(plan) &&
+		state.MigrationID == plan.RoleMigrationID &&
+		state.CatalogSHA256 == plan.CatalogSHA256 &&
+		state.PolicySHA256 == plan.PolicySHA256 &&
 		state.Previous != nil &&
 		state.Previous.Release == plan.FromRelease &&
 		state.Previous.Channel == plan.FromChannel &&
@@ -784,9 +904,22 @@ func receiptForPlan(plan ActivationPlan, committedAt time.Time) ActivationReceip
 		CLISize:            plan.CLISize,
 		BundleSHA256:       plan.BundleSHA256,
 		BundleSize:         plan.BundleSize,
+		RoleMigrationID:    plan.RoleMigrationID,
+		CatalogSHA256:      plan.CatalogSHA256,
+		PolicySHA256:       plan.PolicySHA256,
 		SourceCLIBackup:    expectedSourceCLIBackup(plan),
 		CommittedAt:        committedAt,
 	}
+}
+
+func roleAuthorityForPlan(plan ActivationPlan) string {
+	if plan.RoleMigrationID == rolemigration.MigrationID {
+		return rolemigration.CanonicalRole
+	}
+	if expired, err := rolemigration.IsExpired(plan.Release); err == nil && expired {
+		return rolemigration.CanonicalRole
+	}
+	return ""
 }
 
 func expectedSourceCLIBackup(plan ActivationPlan) string {
@@ -809,6 +942,12 @@ func writeActivationReceipt(planPath string, receipt ActivationReceipt) error {
 func WriteState(dataRoot string, state State) error {
 	if state.SchemaVersion != 2 || state.ManagedRoot == "" {
 		return errors.New("new install state must use schema version 2 with a managed root")
+	}
+	if !validRoleState(state.RoleAuthority, state.MigrationID, state.CatalogSHA256, state.PolicySHA256) {
+		return errors.New("install state role migration binding is invalid")
+	}
+	if state.Previous != nil && !validRoleState(state.Previous.RoleAuthority, state.Previous.MigrationID, state.Previous.CatalogSHA256, state.Previous.PolicySHA256) {
+		return errors.New("previous install state role migration binding is invalid")
 	}
 	return writeJSONAtomic(statePath(dataRoot), state, 0o600)
 }
@@ -879,15 +1018,30 @@ func validStateCore(state stateWire) bool {
 		state.ActivatedAt.IsZero() {
 		return false
 	}
+	if !validRoleState(state.RoleAuthority, state.MigrationID, state.CatalogSHA256, state.PolicySHA256) {
+		return false
+	}
 	if state.Previous == nil {
 		return true
 	}
-	return versionPattern.MatchString(state.Previous.Release) &&
+	return validRoleState(state.Previous.RoleAuthority, state.Previous.MigrationID, state.Previous.CatalogSHA256, state.Previous.PolicySHA256) &&
+		versionPattern.MatchString(state.Previous.Release) &&
 		versionPattern.MatchString(state.Previous.CLIVersion) &&
 		versionPattern.MatchString(state.Previous.BundleVersion) &&
 		(state.Previous.Channel == "canary" || state.Previous.Channel == "beta" || state.Previous.Channel == "stable") &&
 		supportedTarget(state.Previous.TargetOS, state.Previous.TargetArch) &&
 		filepath.IsAbs(state.Previous.CLIBackup)
+}
+
+func validRoleState(authority, migrationID, catalogSHA256, policySHA256 string) bool {
+	if authority != "" && authority != rolemigration.CanonicalRole {
+		return false
+	}
+	if migrationID == "" {
+		return catalogSHA256 == "" && policySHA256 == ""
+	}
+	return migrationID == rolemigration.MigrationID && authority == rolemigration.CanonicalRole &&
+		sha256Pattern.MatchString(catalogSHA256) && sha256Pattern.MatchString(policySHA256)
 }
 
 func stateFromWire(wire stateWire, managedRoot string) State {
@@ -900,6 +1054,10 @@ func stateFromWire(wire stateWire, managedRoot string) State {
 		BundleVersion: wire.BundleVersion,
 		TargetOS:      wire.TargetOS,
 		TargetArch:    wire.TargetArch,
+		RoleAuthority: wire.RoleAuthority,
+		MigrationID:   wire.MigrationID,
+		CatalogSHA256: wire.CatalogSHA256,
+		PolicySHA256:  wire.PolicySHA256,
 		ActivatedAt:   wire.ActivatedAt,
 		Previous:      wire.Previous,
 	}
@@ -919,6 +1077,10 @@ func validatePlan(path string, plan ActivationPlan) error {
 		filepath.Base(plan.CLIArtifactName) != plan.CLIArtifactName ||
 		filepath.Base(plan.BundleArtifactName) != plan.BundleArtifactName {
 		return errors.New("invalid activation plan versions")
+	}
+	if plan.RoleMigrationID != "" && (plan.RoleMigrationID != rolemigration.MigrationID ||
+		!sha256Pattern.MatchString(plan.CatalogSHA256) || !sha256Pattern.MatchString(plan.PolicySHA256)) {
+		return errors.New("invalid activation plan role migration binding")
 	}
 	if err := validateTransitionOptions(PrepareOptions{
 		Transition:         plan.Transition,
@@ -1035,7 +1197,91 @@ func normalizedRoots(managedRoot, dataRoot string) (string, string, error) {
 	if within(managed, data) || within(data, managed) {
 		return "", "", errors.New("managed and owner-data roots must be separate")
 	}
+	if err := ensureSafePath(managed, managed); err != nil {
+		return "", "", fmt.Errorf("managed root is unsafe: %w", err)
+	}
+	if err := ensureSafePath(data, data); err != nil {
+		return "", "", fmt.Errorf("owner-data root is unsafe: %w", err)
+	}
 	return managed, data, nil
+}
+
+// ensureSafePath enforces the physical boundary of a trusted root. Lexical
+// containment alone is insufficient when a pre-existing symlink or junction
+// can redirect an install operation after validation.
+func ensureSafePath(root, candidate string) error {
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
+	candidate, err = filepath.Abs(candidate)
+	if err != nil {
+		return err
+	}
+	root, candidate = filepath.Clean(root), filepath.Clean(candidate)
+	if !within(root, candidate) {
+		return errors.New("path escapes its trusted root")
+	}
+	// A root may not exist yet. Walk to the nearest existing parent before
+	// validating the lexical components; otherwise a symlinked parent can make
+	// MkdirAll create the eventual root outside the physical boundary.
+	nearest := filepath.Dir(candidate)
+	for {
+		info, statErr := os.Lstat(nearest)
+		if statErr == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("path ancestor is a symlink or junction: %s", nearest)
+			}
+			if !info.IsDir() {
+				return fmt.Errorf("path ancestor is not a directory: %s", nearest)
+			}
+			break
+		}
+		if !errors.Is(statErr, os.ErrNotExist) {
+			return statErr
+		}
+		parent := filepath.Dir(nearest)
+		if parent == nearest {
+			return errors.New("path has no existing trusted ancestor")
+		}
+		nearest = parent
+	}
+	relative, err := filepath.Rel(root, candidate)
+	if err != nil {
+		return err
+	}
+	current := root
+	rootInfo, statErr := os.Lstat(current)
+	if statErr == nil {
+		if rootInfo.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("trusted root is a symlink or junction: %s", current)
+		}
+		if !rootInfo.IsDir() {
+			return fmt.Errorf("trusted root is not a directory: %s", current)
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return statErr
+	}
+	for _, part := range strings.Split(relative, string(filepath.Separator)) {
+		if part == "" || part == "." {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, statErr := os.Lstat(current)
+		if errors.Is(statErr, os.ErrNotExist) {
+			continue
+		}
+		if statErr != nil {
+			return statErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("path component is a symlink or junction: %s", current)
+		}
+		if current != candidate && !info.IsDir() {
+			return fmt.Errorf("path component is not a directory: %s", current)
+		}
+	}
+	return nil
 }
 
 func within(root, candidate string) bool {

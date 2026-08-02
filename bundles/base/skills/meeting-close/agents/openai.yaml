@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meeting Close"
+  short_description: "Turn meeting notes into a reviewable closure packet"
+  default_prompt: "Use $meeting-close to produce a reviewable closure packet from the supplied meeting notes."

@@ -25,7 +25,7 @@ func TestWorkspaceScaffoldIsConcreteDataFreeAndIdempotent(t *testing.T) {
 	if !first.Initialized || first.Existing ||
 		first.Instance.AgentID != "workspace-agent-ws-alpha" ||
 		first.Instance.InputContract != "bounded_case_packet" ||
-		first.Instance.ToolAccess != "scoped" || !first.Instance.MayDelegate ||
+		first.Instance.ToolAccess != "scoped" || first.Instance.MayDelegate ||
 		first.Instance.RuntimeState != "unavailable" {
 		t.Fatalf("unexpected workspace scaffold: %#v", first)
 	}
@@ -65,28 +65,11 @@ func TestScaffoldUsesConfirmedAgentPersonalizationWithoutChangingAuthority(t *te
 	}
 }
 
-func TestScaffoldCreatesWorkspaceAccountAndPracticeSpecialistChains(t *testing.T) {
+func TestScaffoldCreatesAccountAndRejectsAgentToAgentChild(t *testing.T) {
 	root := t.TempDir()
 	initializeWorkspaceScope(t, root, "ws-alpha")
 	if _, err := Scaffold(root, WorkspaceRequest("ws-alpha")); err != nil {
 		t.Fatal(err)
-	}
-	request := Request{
-		AgentID: "capability-research", Role: "capability_specialist",
-		ScopeKind: "workspace", ScopeID: "ws-alpha",
-		ParentAgent: "workspace-agent-ws-alpha", ParentRole: "workspace_agent",
-	}
-	status, err := Scaffold(root, request)
-	if err != nil {
-		t.Fatalf("Scaffold(%s): %v", request.AgentID, err)
-	}
-	if status.Instance.ParentRole != "case_agent" {
-		t.Fatalf("legacy parent role was persisted: %q", status.Instance.ParentRole)
-	}
-	if status.Instance.MayDelegate || status.Instance.ToolAccess != "scoped" ||
-		status.Instance.ParentAgentID != request.ParentAgent ||
-		status.Instance.ScopeID != request.ScopeID {
-		t.Fatalf("unexpected specialist scaffold: %#v", status)
 	}
 	account := Request{
 		AgentID: "account-agent-client-alpha", Role: "account_agent",
@@ -98,32 +81,13 @@ func TestScaffoldCreatesWorkspaceAccountAndPracticeSpecialistChains(t *testing.T
 		t.Fatal(err)
 	}
 	if _, err := Scaffold(root, Request{
-		AgentID: "capability-account-research", Role: "capability_specialist",
+		AgentID: "retired-research", Role: "retired_specialist_role",
 		ScopeKind: "account", ScopeID: "client-alpha",
-		ParentAgent: account.AgentID, ParentRole: "account_agent",
+		ParentAgent: account.AgentID, ParentRole: "client_account_agent",
 	}); err == nil {
 		t.Fatal("Client Account Agent unexpectedly delegated a case capability directly")
 	}
 
-	canonPath, canonSHA256 := preparePracticeCanon(t, root, "insurance")
-	practice := Request{
-		AgentID: "practice-agent-insurance", Role: "practice_agent",
-		ScopeKind: "practice", ScopeID: "insurance",
-		ParentAgent: "maestro", ParentRole: "hub",
-		Owner: "practice-owner", Mandate: "Maintain the bounded insurance canon.",
-		CanonPath: canonPath, CanonSHA256: canonSHA256,
-	}
-	if _, err := Scaffold(root, practice); err != nil {
-		t.Fatal(err)
-	}
-	subject := Request{
-		AgentID: "subject-insurance", Role: "subject_specialist",
-		ScopeKind: "practice", ScopeID: "insurance",
-		ParentAgent: practice.AgentID, ParentRole: "practice_agent",
-	}
-	if _, err := Scaffold(root, subject); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestScaffoldHiresClientAccountCaseAndVersionedPAExpert(t *testing.T) {
@@ -153,7 +117,7 @@ func TestScaffoldHiresClientAccountCaseAndVersionedPAExpert(t *testing.T) {
 		t.Fatal(err)
 	}
 	if caseStatus.Instance.InputContract != "bounded_case_packet" ||
-		!caseStatus.Instance.MayDelegate {
+		caseStatus.Instance.MayDelegate {
 		t.Fatalf("unexpected Case Agent: %#v", caseStatus.Instance)
 	}
 
@@ -220,6 +184,35 @@ func TestPAExpertRejectsLegacyCanonNamespace(t *testing.T) {
 	}
 }
 
+func TestPAExpertRejectsCanonSymlinkOutsideRegistryRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink fixture requires non-Windows test privileges")
+	}
+	root := t.TempDir()
+	canonPath, canonSHA256 := preparePAExpertCanon(t, root, "pa-expert-fpa-pricing")
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	if err := os.WriteFile(outside, []byte("# outside canon\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(root, filepath.FromSlash(canonPath))); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, filepath.FromSlash(canonPath))); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Scaffold(root, Request{
+		AgentID: "pa-expert-fpa-pricing", Role: "pa_expert",
+		ScopeKind: "practice", ScopeID: "pricing",
+		ParentAgent: "maestro", ParentRole: "hub",
+		Owner: "pa-expert-curator", Mandate: "Advise with the maintained pricing canon.",
+		CanonPath: canonPath, CanonSHA256: canonSHA256,
+		ExpertKind: "FPA", ExpertVersion: "1.0.0", ExpertLifecycle: "draft",
+	})
+	if err == nil {
+		t.Fatal("PA Expert canon symlink escaped its registry root")
+	}
+}
+
 func TestScaffoldRejectsUngovernedRolesEdgesAndScopeReuse(t *testing.T) {
 	root := t.TempDir()
 	tests := []Request{
@@ -239,12 +232,12 @@ func TestScaffoldRejectsUngovernedRolesEdgesAndScopeReuse(t *testing.T) {
 			ParentAgent: "workspace-agent-ws-alpha", ParentRole: "workspace_agent",
 		},
 		{
-			AgentID: "capability-research", Role: "capability_specialist",
+			AgentID: "retired-research", Role: "retired_specialist_role",
 			ScopeKind: "workspace", ScopeID: "ws-alpha",
 			ParentAgent: "practice-insurance", ParentRole: "practice_agent",
 		},
 		{
-			AgentID: "../capability-research", Role: "capability_specialist",
+			AgentID: "../retired-research", Role: "retired_specialist_role",
 			ScopeKind: "workspace", ScopeID: "ws-alpha",
 			ParentAgent: "workspace-agent-ws-alpha", ParentRole: "workspace_agent",
 		},
@@ -256,61 +249,16 @@ func TestScaffoldRejectsUngovernedRolesEdgesAndScopeReuse(t *testing.T) {
 	}
 }
 
-func TestSubjectScaffoldRejectsChangedPracticeCanon(t *testing.T) {
+func TestScaffoldRejectsRetiredPracticeRolesAndIDs(t *testing.T) {
 	root := t.TempDir()
-	canonPath, canonSHA256 := preparePracticeCanon(t, root, "insurance")
-	practice := Request{
-		AgentID: "practice-agent-insurance", Role: "practice_agent",
-		ScopeKind: "practice", ScopeID: "insurance",
-		ParentAgent: "maestro", ParentRole: "hub",
-		Owner: "practice-owner", Mandate: "Maintain the bounded insurance canon.",
-		CanonPath: canonPath, CanonSHA256: canonSHA256,
-	}
-	if _, err := Scaffold(root, practice); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(canonPath)), []byte("changed\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	subject := Request{
-		AgentID: "subject-insurance", Role: "subject_specialist",
-		ScopeKind: "practice", ScopeID: "insurance",
-		ParentAgent: practice.AgentID, ParentRole: "practice_agent",
-	}
-	if _, err := Scaffold(root, subject); err == nil {
-		t.Fatal("subject specialist accepted a parent with changed canon bytes")
-	}
-}
-
-func TestPracticeScaffoldRejectsCanonSymlinkOutsidePractice(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows symlink creation requires host-specific privileges")
-	}
-	root := t.TempDir()
-	outside := filepath.Join(root, "outside-canon.md")
-	body := []byte("# Outside canon\n")
-	if err := os.WriteFile(outside, body, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	practiceDirectory := filepath.Join(root, "practices", "insurance")
-	if err := os.MkdirAll(practiceDirectory, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	canonPath := filepath.Join(practiceDirectory, "canon.md")
-	if err := os.Symlink(outside, canonPath); err != nil {
-		t.Fatal(err)
-	}
-	digest := sha256.Sum256(body)
-	request := Request{
-		AgentID: "practice-agent-insurance", Role: "practice_agent",
-		ScopeKind: "practice", ScopeID: "insurance",
-		ParentAgent: "maestro", ParentRole: "hub",
-		Owner: "practice-owner", Mandate: "Maintain the bounded insurance canon.",
-		CanonPath:   "practices/insurance/canon.md",
-		CanonSHA256: hex.EncodeToString(digest[:]),
-	}
-	if _, err := Scaffold(root, request); err == nil {
-		t.Fatal("practice canon escaped its scope through a symlink")
+	for _, request := range []Request{
+		{AgentID: "practice-agent-insurance", Role: "practice_agent", ScopeKind: "practice", ScopeID: "insurance", ParentAgent: "maestro", ParentRole: "hub"},
+		{AgentID: "subject-insurance", Role: "subject_specialist", ScopeKind: "practice", ScopeID: "insurance", ParentAgent: "maestro", ParentRole: "hub"},
+		{AgentID: "practice-agent-insurance", Role: "pa_expert", ScopeKind: "practice", ScopeID: "insurance", ParentAgent: "maestro", ParentRole: "hub"},
+	} {
+		if _, err := Scaffold(root, request); err == nil {
+			t.Fatalf("retired practice registration was accepted: %#v", request)
+		}
 	}
 }
 
@@ -395,15 +343,14 @@ func TestScaffoldRejectsSameIDWithDifferentImmutableScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := Request{
-		AgentID: "capability-research", Role: "capability_specialist",
-		ScopeKind: "workspace", ScopeID: "ws-alpha",
-		ParentAgent: "workspace-agent-ws-alpha", ParentRole: "workspace_agent",
+		AgentID: "client-account-agent-client-alpha", Role: "client_account_agent",
+		ScopeKind: "account", ScopeID: "client-alpha",
+		ParentAgent: "maestro", ParentRole: "hub", Owner: "account-owner", Mandate: "Maintain bounded account context.",
 	}
 	if _, err := Scaffold(root, request); err != nil {
 		t.Fatal(err)
 	}
-	request.ScopeID = "ws-beta"
-	request.ParentAgent = "workspace-agent-ws-beta"
+	request.ScopeID = "client-beta"
 	if _, err := Scaffold(root, request); err == nil {
 		t.Fatal("same specialist ID was rebound to another workspace")
 	}
@@ -419,7 +366,7 @@ func TestScaffoldRejectsOrphanAccountAndSubjectSpecialists(t *testing.T) {
 	root := t.TempDir()
 	requests := []Request{
 		{
-			AgentID: "capability-account-research", Role: "capability_specialist",
+			AgentID: "retired-account-research", Role: "retired_specialist_role",
 			ScopeKind: "account", ScopeID: "client-alpha",
 			ParentAgent: "account-agent-client-alpha", ParentRole: "account_agent",
 		},
@@ -462,21 +409,6 @@ func initializeWorkspaceScope(t *testing.T, root, workspaceID string) {
 	if err := os.WriteFile(filepath.Join(directory, "agent.json"), body, 0o600); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func preparePracticeCanon(t *testing.T, root, practiceID string) (string, string) {
-	t.Helper()
-	relative := filepath.Join("practices", practiceID, "canon.md")
-	path := filepath.Join(root, relative)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	body := []byte("# Governed practice canon\n")
-	if err := os.WriteFile(path, body, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	digest := sha256.Sum256(body)
-	return filepath.ToSlash(relative), hex.EncodeToString(digest[:])
 }
 
 func preparePAExpertCanon(t *testing.T, root, expertID string) (string, string) {

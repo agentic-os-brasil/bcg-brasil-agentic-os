@@ -7,15 +7,20 @@ unavailable until separately qualified.
 
 ## Purpose
 
+This spec does not canonize PR #139 or a generic depth-profile policy. The
+current Maestro flow resolves `account_consultation_required` from client
+strategic-lens/stakeholder signals and `walter_required` independently from
+high-leverage signals; see Spec 040.
+
 Maestro needs a repeatable way to decide whether a decision episode should go
 straight to its accountable agent, consult one PA expert, or run a
 governed multi-agent loop. The decision cannot depend only on prompt wording.
 Darwin must be able to observe the chosen route and later recommend calibration
 without changing policy during an episode.
 
-The initial posture is `balanced`.
-An omitted posture normalizes to `balanced`; changing it is an explicit
-episode-level decision.
+The policy is explicitly experimental and has no implicit posture. Every
+episode must provide `direct`, `balanced` or `deliberative`; an omitted posture
+fails closed rather than silently selecting a depth.
 
 ## Closed decision envelope
 
@@ -40,7 +45,7 @@ compatible published expert or fail closed.
 
 ## Deterministic policy
 
-Policy version `pae-v1` produces exactly one shadow route. It is a breaking
+Policy version `pae-v1-experimental` produces exactly one shadow route. It is a breaking
 policy version: route plans stamped with the previous policy version must be
 replanned rather than accepted under the new contracts.
 
@@ -96,6 +101,9 @@ dispatch.
 A PA expert is a centrally versioned advisory agent of kind `FPA` or `IPA`,
 maintained through the PA Expert registry. It contributes the best maintained
 functional or industry perspective but has no client or case scope.
+The executable declassification details are canonicalized in
+`specs/039-pa-expert-advisory-boundary.md`; no parallel practice-agent or
+PA-boundary runtime exists.
 
 The advisory request is a bounded shadow-assessment packet. It may contain only
 an opaque request ID, episode and route digests, exact expert identity/version/
@@ -196,7 +204,10 @@ Only one branch is active. Raw context never transits between scopes.
 Shadow evaluation records only closed routing metadata and content-free
 receipts. Darwin may compare route mix, latency, budget exhaustion, missing
 expert coverage and human overrides over a defined window. Darwin proposes a
-new versioned policy; it cannot mutate thresholds or posture directly.
+new versioned policy through a proposal-only weekly or monthly evolution
+record; it cannot mutate thresholds or posture directly. Structural proposals
+require independent approval and a separate activation contract. Native
+evidence from one window is not proof of future version compatibility.
 
 `bcgos agent monitor --stdin` produces a deterministic content-free report for
 one explicit calibration window, policy version and posture. It rejects mixed

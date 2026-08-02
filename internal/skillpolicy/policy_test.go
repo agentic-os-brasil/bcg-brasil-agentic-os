@@ -28,17 +28,14 @@ func TestPolicyKeepsSkillsAsMethodsWithoutCreatingAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !registry.AllowsDirect("workspace_agent", "deck-storyline") {
-		t.Fatal("workspace agent cannot select its direct deck skill")
+	if !registry.AllowsDirect("case_agent", "deck-storyline") {
+		t.Fatal("Case Agent cannot select its direct deck skill")
 	}
-	if registry.AllowsDirect("capability_specialist", "deck-storyline") {
-		t.Fatal("capability specialist gained direct method selection")
+	if registry.AllowsDirect("reviewer", "deck-storyline") {
+		t.Fatal("Walter gained direct Case method selection")
 	}
-	if !registry.AllowsDelegated("workspace_agent", "capability_specialist", "qualitative-analysis") {
-		t.Fatal("workspace agent cannot assign the bounded qualitative skill")
-	}
-	if registry.AllowsDelegated("workspace_agent", "capability_specialist", "unknown-method") {
-		t.Fatal("unknown skill was delegable")
+	if registry.AllowsDelegated("case_agent", "reviewer", "qualitative-analysis") {
+		t.Fatal("agent-to-agent skill delegation was accepted")
 	}
 }
 
@@ -81,7 +78,7 @@ func TestPolicyCannotCreateANewAgentEdge(t *testing.T) {
   "schema_version": 1,
   "mode": "methods_not_authority",
   "direct": [],
-  "delegated": [{"from_role":"workspace_agent","to_role":"subject_specialist","skill_ids":["known"]}]
+  "delegated": [{"from_role":"case_agent","to_role":"reviewer","skill_ids":["known"]}]
 }`))
 	if err != nil {
 		t.Fatal(err)

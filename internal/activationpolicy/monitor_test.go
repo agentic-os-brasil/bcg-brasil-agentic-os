@@ -43,3 +43,13 @@ func TestDarwinReportRejectsMixedPostures(t *testing.T) {
 		t.Fatal("mixed-posture calibration window was accepted")
 	}
 }
+
+func TestEmptyDarwinReportDoesNotInventAPosture(t *testing.T) {
+	report, err := EvaluateObservations(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Posture != "" || report.RecommendationCodes[0] != "insufficient_sample" {
+		t.Fatalf("empty report invented posture: %#v", report)
+	}
+}

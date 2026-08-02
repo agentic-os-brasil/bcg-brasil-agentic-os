@@ -214,6 +214,48 @@ memória e atlas revogáveis
 extensões e escala
 ```
 
+## Trilha transversal — capital intelectual e prior-work
+
+A recuperação de trabalho anterior é uma das propostas mais tangíveis do
+Maestro: transformar “onde está aquele deck?” em uma busca governada,
+explicável e revogável. Ela atravessa distribuição, ingestão, memória e escala,
+mas permanece uma wiki organizacional separada — não uma expansão silenciosa
+da memória geral.
+
+| Etapa | Evolução | Vantagem vendida | Gate antes de avançar |
+| --- | --- | --- | --- |
+| V1 | Catálogo metadata-first de roots explícitos, import assinado, busca lexical, frescor e revogação. | Encontrar o material certo com rastreabilidade e sem download integral. | Trial Claude nativo, fixture aceita, ACL/roots e revogação testados. |
+| V1.1 | Busca guiada por cliente, ano, tema, audiência e apresentador; feedback tipado. | Menos refinamentos e resultado mais explicável para usuário não técnico. | Métricas top-k sem query ou nomes em telemetria. |
+| V1.2 | Delta otimizado, webhooks aprovados, key rotation e auditoria de drift. | Catálogo mais fresco com menor custo operacional. | Resiliência, replay, rotação e incident runbook aprovados. |
+| V2 | Enriquecimento local seletivo com MarkItDown e Docling. | Encontrar conceitos que não aparecem no nome/path, mantendo extração local. | Formatos, campos, retenção, fidelity e revogação de conteúdo aprovados. |
+| V2.1 | Ranking híbrido lexical/semântico com fallback determinístico. | Melhor recall sem perder explicação e previsibilidade. | Avaliação por corpus sanitizado, bias/error analysis e ACL pós-ranking. |
+| V3 | Taxonomia multi-office, ownership por domínio e compartilhamento governado. | Reuso organizacional de conhecimento com responsabilidade clara. | Modelo jurídico, retenção, suporte, opt-out e auditoria por domínio. |
+
+### Onde entram MarkItDown e Docling
+
+MarkItDown é um bom adaptador delimitado para formatos simples quando a
+conversão determinística for suficiente. Docling é a rota preferida quando
+estrutura, tabelas, OCR, layout e fidelidade multimodal importarem. Nenhum deles
+deve ampliar roots, baixar arquivos fora de escopo ou virar fallback remoto.
+
+No V1, a decisão correta é metadata-first: menor exposição, menor custo, melhor
+revogação e valor mais rápido. O enriquecimento só entra depois que a busca
+atual tiver baseline de precisão/recall e os direitos sobre conteúdo estiverem
+explícitos.
+
+### Métricas da trilha
+
+- tempo até abrir o material correto;
+- sucesso top 1/top 3/top 5;
+- refinamentos por recuperação;
+- percentual de consultas atendidas com catálogo fresh;
+- SLA de tombstone/revogação;
+- intervenções de suporte;
+- custo de coleta por root e por mudança;
+- falsos positivos/negativos em corpus sanitizado.
+
+As métricas não podem carregar query, cliente, arquivo, URL, path ou conteúdo.
+
 Não faz sentido prometer marketplace antes de haver release verificável; nem
 prometer memória inteligente antes de haver direitos de inspeção, correção e
 deleção. A ordem reduz risco de adoção e torna cada investimento uma prova do

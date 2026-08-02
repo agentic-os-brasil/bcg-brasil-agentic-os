@@ -36,10 +36,12 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest/markitdown"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimeprojection"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionhook"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionresolve"
@@ -67,12 +69,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|agent|workspace-agent|atlas|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -91,18 +93,22 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runProfile(args[1:], out, errOut, defaultDataRoot)
 	case "owner":
 		return runOwnerWithInput(args[1:], in, out, errOut, defaultDataRoot)
+	case "maestro":
+		return runMaestroWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "agent":
 		return runAgentWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "workspace-agent":
 		return runWorkspaceAgentWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "atlas":
 		return runAtlas(args[1:], out, errOut, defaultDataRoot)
+	case "prior-work":
+		return runPriorWork(args[1:], in, out, errOut, defaultDataRoot)
 	case "session":
 		return runSession(args[1:], out, errOut, defaultDataRoot)
 	case "hook":
 		return runHookWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "adapter":
-		return runAdapter(args[1:], out, errOut)
+		return runAdapterWithDataRoot(args[1:], out, errOut, defaultDataRoot)
 	case "skills":
 		return runSkills(args[1:], out, errOut)
 	case "bundles":
@@ -533,6 +539,16 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		if err := agentidentity.DecodeStrict(body, &input); err != nil {
 			return reportError(errOut, err)
 		}
+		if len(input.CapabilityTracks) > 0 {
+			catalog, catalogErr := bundlecatalog.Catalog()
+			if catalogErr != nil {
+				return reportError(errOut, catalogErr)
+			}
+			_, planErr := catalog.PlanForTracks(input.CapabilityTracks)
+			if planErr != nil {
+				return reportError(errOut, planErr)
+			}
+		}
 		input.UpdatedAt = time.Now().UTC()
 		if err := agentidentity.Save(root, input); err != nil {
 			return reportError(errOut, err)
@@ -709,10 +725,23 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 
 func runDarwin(args []string, in io.Reader, out, errOut io.Writer, root string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos agent darwin <assess|housekeeping> --stdin")
+		fmt.Fprintln(errOut, "usage: bcgos agent darwin <request|assess|housekeeping> --stdin")
 		return ExitUsage
 	}
 	switch args[0] {
+	case "request":
+		if err := requireAgentStdin(args[1:], errOut); err != nil {
+			return ExitUsage
+		}
+		var request darwin.HealthRequest
+		if err := decodeActivationJSON(in, &request); err != nil {
+			return reportError(errOut, err)
+		}
+		assessment, err := darwin.AssessHealth(context.Background(), request)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, assessment, errOut)
 	case "assess":
 		if err := requireAgentStdin(args[1:], errOut); err != nil {
 			return ExitUsage
@@ -792,7 +821,7 @@ func runDarwin(args []string, in io.Reader, out, errOut io.Writer, root string) 
 		}
 		return writeJSON(out, receipt, errOut)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos agent darwin <assess|housekeeping> --stdin")
+		fmt.Fprintln(errOut, "usage: bcgos agent darwin <request|assess|housekeeping> --stdin")
 		return ExitUsage
 	}
 }
@@ -1436,13 +1465,333 @@ func splitTracks(value string) []string {
 	return parts
 }
 
+type maestroDispatchRequest struct {
+	AuthenticatedOwner bool               `json:"authenticated_owner"`
+	OwnerID            string             `json:"owner_id"`
+	DispatchID         string             `json:"dispatch_id"`
+	OccurrenceID       string             `json:"occurrence_id"`
+	Prompt             string             `json:"prompt"`
+	Language           string             `json:"language"`
+	Source             string             `json:"source"`
+	SessionID          string             `json:"session_id"`
+	WorkingLanguage    string             `json:"working_language"`
+	CurrentLanguage    string             `json:"current_language"`
+	DraftOutput        string             `json:"draft_output"`
+	Audience           string             `json:"audience"`
+	Consequence        string             `json:"consequence"`
+	Reversibility      string             `json:"reversibility"`
+	RelevanceKeys      []string           `json:"relevance_keys"`
+	SelfSignal         *maestroSelfSignal `json:"self_signal,omitempty"`
+	Plan               maestro.Input      `json:"plan"`
+}
+
+// maestroSelfSignal is optional and deliberately narrow. A prompt or a
+// Walter invocation is not evidence about the owner's self; only this closed
+// explicit signal can request a material observation.
+type maestroSelfSignal struct {
+	Signal         ownerctx.SignalClass `json:"signal"`
+	Facet          string               `json:"facet"`
+	Claim          string               `json:"claim"`
+	EvidenceType   string               `json:"evidence_type"`
+	Confidence     float64              `json:"confidence"`
+	Sensitivity    string               `json:"sensitivity"`
+	OwnerConfirmed bool                 `json:"owner_confirmed"`
+}
+
+func validateMaestroSelfSignal(signal *maestroSelfSignal) error {
+	if signal == nil {
+		return nil
+	}
+	switch signal.Signal {
+	case ownerctx.SignalExplicitInstruction, ownerctx.SignalExplicitCorrection, ownerctx.SignalExplicitEndorsement:
+	default:
+		return errors.New("self_signal must be an explicit instruction, correction or endorsement")
+	}
+	if !validOwnerSelfFacet(signal.Facet) || !closedSelfSignalToken(signal.Claim) || len(signal.EvidenceType) < 1 || len(signal.EvidenceType) > 64 {
+		return errors.New("self_signal facet, claim or evidence is invalid")
+	}
+	switch signal.EvidenceType {
+	case "owner_instruction", "owner_correction", "owner_endorsement", "owner_preference_confirmation":
+	default:
+		return errors.New("self_signal evidence class is not allowed")
+	}
+	if signal.Confidence < 0 || signal.Confidence > 1 || signal.Sensitivity != "professional" && signal.Sensitivity != "sensitive" && signal.Sensitivity != "restricted" || !signal.OwnerConfirmed {
+		return errors.New("self_signal confidence, sensitivity or confirmation is invalid")
+	}
+	if signal.Signal == ownerctx.SignalExplicitEndorsement && (strings.EqualFold(signal.Claim, "ok") || strings.EqualFold(signal.Claim, "okay")) {
+		return errors.New("generic acknowledgement is not an explicit self endorsement")
+	}
+	return nil
+}
+
+func validOwnerSelfFacet(facet string) bool {
+	switch facet {
+	case "professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries":
+		return true
+	default:
+		return false
+	}
+}
+
+func closedSelfSignalToken(value string) bool {
+	if len(value) < 1 || len(value) > 128 {
+		return false
+	}
+	for index := 0; index < len(value); index++ {
+		char := value[index]
+		if !(char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '_' || char == '.' || char == ':' || char == '-') || index == 0 && char == '.' {
+			return false
+		}
+	}
+	return true
+}
+
+var maestroWalterFacetAllowlist = []string{"professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"}
+var recordUserPromptFunc = ownerctx.RecordUserPrompt
+
+func durableDispatchFence(root, ownerID, sessionID, dispatchID, promptDigest, packetDigest, draftDigest string, plan maestro.Plan, chain maestro.ChainState) (maestro.DispatchBoundaryState, error) {
+	state, err := (maestro.DispatchBoundaryInput{Root: root, OwnerID: ownerID, SessionID: sessionID, DispatchID: dispatchID, PromptDigest: promptDigest, PacketDigest: packetDigest, DraftDigest: draftDigest, Plan: plan, Chain: chain}).PersistDispatchBoundary()
+	if err != nil {
+		return maestro.DispatchBoundaryState{}, err
+	}
+	return state, nil
+}
+
+func finalizeDurableDispatchFence(root, ownerID, sessionID, dispatchID, promptDigest, packetDigest, draftDigest string, plan maestro.Plan, chain maestro.ChainState, prepared maestro.DispatchBoundaryState) (maestro.DispatchBoundaryState, error) {
+	return (maestro.DispatchBoundaryInput{Root: root, OwnerID: ownerID, SessionID: sessionID, DispatchID: dispatchID, PromptDigest: promptDigest, PacketDigest: packetDigest, DraftDigest: draftDigest, Plan: plan, Chain: chain}).FinalizeDispatchBoundary(prepared)
+}
+
+func mapPlannerObservationScope(scopeKind, scopeID string) (ownerctx.PromptScopeKind, string, error) {
+	if scopeID == "" {
+		return "", "", errors.New("planner observation scope ID is required")
+	}
+	switch scopeKind {
+	case string(ownerctx.PromptScopeCase):
+		return ownerctx.PromptScopeCase, scopeID, nil
+	case string(ownerctx.PromptScopeAccount):
+		return ownerctx.PromptScopeAccount, scopeID, nil
+	case string(ownerctx.PromptScopeWorkspace):
+		return ownerctx.PromptScopeWorkspace, scopeID, nil
+	case "control", "practice", "review", "health", "errand":
+		// These planner scopes are not owner self scopes. Project them into a
+		// deterministic workspace metadata scope without granting authority.
+		return ownerctx.PromptScopeWorkspace, "planner-" + maestro.SHA256Hex(scopeKind + "\x00" + scopeID)[:32], nil
+	default:
+		return "", "", fmt.Errorf("planner scope %q cannot be projected to an owner observation scope", scopeKind)
+	}
+}
+
+func maestroDispatchObservation(request maestroDispatchRequest, plan maestro.Plan, packet maestro.IntentReviewPacket, scopeKind ownerctx.PromptScopeKind, scopeID string, now time.Time) ownerctx.ObservationInput {
+	sensitivity := "professional"
+	if request.Plan.Sensitivity == maestro.SensitivityConfidential {
+		sensitivity = "sensitive"
+	} else if request.Plan.Sensitivity == maestro.SensitivityRestricted {
+		sensitivity = "restricted"
+	}
+	input := ownerctx.ObservationInput{
+		SchemaVersion: 1, Signal: ownerctx.SignalObservedPattern, Claim: "task_activity", EvidenceType: "interaction_metadata",
+		SourceEvent: "maestro.loop_completed", SourceDigest: maestro.SHA256Hex(packet.LiteralRequest), EpisodeID: request.DispatchID,
+		ScopeKind: string(scopeKind), ScopeID: scopeID, Confidence: 1, Sensitivity: sensitivity,
+		ExpiresAt: now.UTC().Add(30 * 24 * time.Hour), AuthenticatedOwner: request.AuthenticatedOwner,
+		Material: false, OwnerConfirmed: false,
+	}
+	if request.SelfSignal != nil {
+		input.Signal = request.SelfSignal.Signal
+		input.Facet = request.SelfSignal.Facet
+		input.Claim = request.SelfSignal.Claim
+		input.EvidenceType = request.SelfSignal.EvidenceType
+		input.Confidence = request.SelfSignal.Confidence
+		input.Sensitivity = request.SelfSignal.Sensitivity
+		input.Material = true
+		input.OwnerConfirmed = request.SelfSignal.OwnerConfirmed
+	}
+	return input
+}
+
+func rollbackDispatch(root string, chain maestro.ChainState, chainCreated bool, promptID, reason string) error {
+	var rollbackErr error
+	if promptID != "" {
+		if err := ownerctx.DeletePromptHistory(root, promptID, true); err != nil {
+			rollbackErr = err
+		}
+	}
+	if chainCreated {
+		if err := maestro.RemoveChainState(root, chain); err != nil && rollbackErr == nil {
+			rollbackErr = err
+		}
+	}
+	if rollbackErr == nil {
+		return nil
+	}
+	markerErr := maestro.PersistDispatchRecoveryMarker(root, maestro.DispatchRecoveryMarker{SchemaVersion: 1, PlanDigest: chain.PlanDigest, ArtifactKind: maestro.RecoveryArtifactChainState, TargetRef: filepath.Join(root, "owner", "maestro", "chains", chain.PlanDigest+".json"), Reason: reason + ": " + rollbackErr.Error()})
+	if markerErr != nil {
+		return fmt.Errorf("dispatch rollback failed: %v; recovery marker failed: %w", rollbackErr, markerErr)
+	}
+	return fmt.Errorf("dispatch rollback failed; recovery marker recorded: %w", rollbackErr)
+}
+
+func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) != 2 || args[0] != "dispatch" || args[1] != "--stdin" {
+		fmt.Fprintln(errOut, "usage: bcgos maestro dispatch --stdin")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	body, err := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
+	if err != nil || len(body) > maximumWorkContractBytes {
+		return reportError(errOut, errors.New("Maestro dispatch request exceeds 32 KiB limit"))
+	}
+	var request maestroDispatchRequest
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
+		return reportError(errOut, errors.New("Maestro dispatch request is not a closed JSON contract"))
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return reportError(errOut, errors.New("Maestro dispatch request must contain exactly one JSON value"))
+	}
+	if !request.AuthenticatedOwner || strings.TrimSpace(request.OwnerID) == "" || strings.TrimSpace(request.Prompt) == "" {
+		return reportError(errOut, errors.New("Maestro dispatch requires a fresh owner attestation and prompt"))
+	}
+	if request.DispatchID != "" && request.OccurrenceID != "" && request.DispatchID != request.OccurrenceID {
+		return reportError(errOut, errors.New("dispatch_id and occurrence_id must match when both are supplied"))
+	}
+	if request.DispatchID == "" {
+		request.DispatchID = request.OccurrenceID
+	}
+	if request.DispatchID == "" {
+		return reportError(errOut, errors.New("Maestro dispatch requires a caller-generated dispatch_id"))
+	}
+	if request.Language == "" {
+		request.Language = "en"
+	}
+	if request.Source == "" {
+		request.Source = "cli"
+	}
+	if request.SessionID == "" {
+		request.SessionID = "maestro-dispatch"
+	}
+	if request.WorkingLanguage == "" {
+		request.WorkingLanguage = request.Language
+	}
+	if request.CurrentLanguage == "" {
+		request.CurrentLanguage = request.Language
+	}
+	if request.DraftOutput == "" {
+		request.DraftOutput = "model_execution_unavailable"
+	}
+	if request.Audience == "" {
+		request.Audience = "owner"
+	}
+	if request.Consequence == "" {
+		request.Consequence = "low"
+	}
+	if request.Reversibility == "" {
+		request.Reversibility = "reversible"
+	}
+	plan, err := maestro.PlanFor(request.Plan)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if err := validateMaestroSelfSignal(request.SelfSignal); err != nil {
+		return reportError(errOut, err)
+	}
+	observationScopeKind, observationScopeID, err := mapPlannerObservationScope(request.Plan.ScopeKind, request.Plan.ScopeID)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	chain, err := maestro.NewChain(plan, maestro.DefaultLoopPolicy)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	// Initialization is the only local bootstrap mutation. No prompt or
+	// durable chain is written until plan, snapshot and sealed packet checks
+	// have all succeeded.
+	if _, err := ownerctx.Initialize(root); err != nil {
+		return reportError(errOut, err)
+	}
+	occurrenceAlreadyRecorded, err := ownerctx.PromptHistoryOccurrenceExists(root, request.OwnerID, request.DispatchID)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	excludeOccurrenceID := ""
+	if occurrenceAlreadyRecorded {
+		excludeOccurrenceID = request.DispatchID
+	}
+	snapshot, err := ownerctx.ProjectSnapshot(root, append([]string(nil), maestroWalterFacetAllowlist...))
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	packet, err := maestro.BuildIntentReviewPacketWithPromptHistory(request.Prompt, plan, request.DraftOutput, nil, snapshot, nil, request.Audience, request.Consequence, request.Reversibility, "", root, ownerctx.PromptHistorySelectionLimits{OwnerID: request.OwnerID, ExcludeOccurrenceID: excludeOccurrenceID, MaxCount: 8, MaxBytes: 32 << 10, MaxAge: 30 * 24 * time.Hour, ScopeKind: observationScopeKind, ScopeID: observationScopeID, CurrentPrompt: request.Prompt, RelevanceKeys: request.RelevanceKeys, CurrentLanguage: request.CurrentLanguage}, request.WorkingLanguage, nil, time.Now().UTC())
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if err := packet.Validate(); err != nil {
+		return reportError(errOut, err)
+	}
+	chainPath := filepath.Join(root, "owner", "maestro", "chains", chain.PlanDigest+".json")
+	_, chainStatErr := os.Lstat(chainPath)
+	chainExisted := chainStatErr == nil
+	if _, err := maestro.PersistChainState(root, chain); err != nil {
+		return reportError(errOut, err)
+	}
+	promptDigest := maestro.SHA256Hex(packet.LiteralRequest)
+	draftDigest := maestro.SHA256Hex(packet.DraftOutput)
+	durableState, err := durableDispatchFence(root, request.OwnerID, request.SessionID, request.DispatchID, promptDigest, packet.PacketDigest, draftDigest, plan, chain)
+	if err != nil {
+		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, "", "durable dispatch fence failed"); rollbackErr != nil {
+			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
+		}
+		return reportError(errOut, err)
+	}
+	promptReceipt, err := recordUserPromptFunc(root, ownerctx.PromptHistoryInput{OwnerID: request.OwnerID, OccurrenceID: request.DispatchID, Prompt: request.Prompt, Language: request.Language, Source: request.Source, SessionID: request.SessionID, ScopeKind: observationScopeKind, ScopeID: observationScopeID, ContentKind: "user_prompt"})
+	if err != nil {
+		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, "", "prompt commit failed"); rollbackErr != nil {
+			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
+		}
+		return reportError(errOut, err)
+	}
+	observationReceipt, _, err := ownerctx.AppendObservation(root, maestroDispatchObservation(request, plan, packet, observationScopeKind, observationScopeID, durableState.StartedAt))
+	if err != nil {
+		promptID := ""
+		if !occurrenceAlreadyRecorded {
+			promptID = promptReceipt.ID
+		}
+		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, promptID, "interaction observation commit failed"); rollbackErr != nil {
+			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
+		}
+		return reportError(errOut, err)
+	}
+	_ = observationReceipt
+	durableState, err = finalizeDurableDispatchFence(root, request.OwnerID, request.SessionID, request.DispatchID, promptDigest, packet.PacketDigest, draftDigest, plan, chain, durableState)
+	if err != nil {
+		if maestro.DispatchBoundaryStateUnknown(err) {
+			return reportError(errOut, err)
+		}
+		promptID := ""
+		if !occurrenceAlreadyRecorded {
+			promptID = promptReceipt.ID
+		}
+		if rollbackErr := rollbackDispatch(root, chain, !chainExisted, promptID, "dispatch finalization failed"); rollbackErr != nil {
+			return reportError(errOut, fmt.Errorf("%w; %v", err, rollbackErr))
+		}
+		return reportError(errOut, err)
+	}
+	chainBody, _ := json.Marshal(chain)
+	receipt := maestro.DispatchBoundaryReceipt{SchemaVersion: 1, PlanDigest: plan.PlanDigest, ChainDigest: maestro.SHA256Hex(string(chainBody)), PacketDigest: packet.PacketDigest, PromptDigest: promptDigest, DraftDigest: draftDigest, AccountConsultation: plan.AccountConsultationRequired, WalterRequired: plan.RequiresWalter, HistoryCount: len(packet.PriorPrompts), DispatchID: durableState.DispatchID, DurableDispatchEpoch: durableState.Epoch, BindingChainDigest: durableState.BindingChainDigest, State: chain.Stage, Outcome: "dispatch_boundary_model_unavailable"}
+	return writeJSON(out, receipt, errOut)
+}
+
 func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	return runOwnerWithInput(args, strings.NewReader(""), out, errOut, dataRoot)
 }
 
 func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine|self|prompt-history>")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -1478,8 +1827,228 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		return writeJSON(out, status, errOut)
 	case "refine":
 		return runOwnerRefine(args[1:], in, out, errOut, root)
+	case "self":
+		return runOwnerSelf(args[1:], in, out, errOut, root)
+	case "prompt-history":
+		return runOwnerPromptHistory(args[1:], in, out, errOut, root)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine|self|prompt-history>")
+		return ExitUsage
+	}
+}
+
+func runOwnerPromptHistory(args []string, in io.Reader, out, errOut io.Writer, root string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos owner prompt-history <config|add|inspect|export|delete|reset>")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "config":
+		flags := newFlagSet("owner prompt-history config", errOut)
+		maxEntries := flags.Int("max-entries", 0, "maximum retained user prompts")
+		maxBytes := flags.Int("max-bytes", 0, "maximum retained prompt bytes")
+		maxAgeDays := flags.Int("max-age-days", 0, "maximum prompt age in days")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history config [--max-entries N --max-bytes N --max-age-days N]")
+			return ExitUsage
+		}
+		config, err := ownerctx.LoadPromptHistoryConfig(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if *maxEntries != 0 {
+			config.MaxEntries = *maxEntries
+		}
+		if *maxBytes != 0 {
+			config.MaxBytes = *maxBytes
+		}
+		if *maxAgeDays != 0 {
+			config.MaxAgeSeconds = int64(*maxAgeDays) * 24 * 60 * 60
+		}
+		if *maxEntries != 0 || *maxBytes != 0 || *maxAgeDays != 0 {
+			if err := ownerctx.ConfigurePromptHistory(root, config); err != nil {
+				return reportError(errOut, err)
+			}
+		}
+		return writeJSON(out, config, errOut)
+	case "add":
+		flags := newFlagSet("owner prompt-history add", errOut)
+		ownerID := flags.String("owner-id", "owner", "owner identity")
+		scopeKind := flags.String("scope-kind", "", "global, workspace, account or case")
+		scopeID := flags.String("scope-id", "", "opaque scope ID")
+		language := flags.String("language", "", "prompt language, for example pt-BR")
+		source := flags.String("source", "owner", "claude, codex, cli or owner")
+		sessionID := flags.String("session-id", "", "opaque source session ID")
+		stdin := flags.Bool("stdin", false, "read only the user prompt body from stdin")
+		confirm := flags.Bool("confirm", false, "confirm local user-prompt retention")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || !*stdin || !*confirm || *scopeKind == "" || *scopeID == "" || *language == "" || *sessionID == "" {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history add --scope-kind K --scope-id ID --language LANG --session-id ID --stdin --confirm")
+			return ExitUsage
+		}
+		body, err := io.ReadAll(io.LimitReader(in, 64<<10+1))
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if len(body) > 64<<10 {
+			fmt.Fprintln(errOut, "user prompt exceeds 64 KiB")
+			return ExitUsage
+		}
+		receipt, err := ownerctx.RecordUserPrompt(root, ownerctx.PromptHistoryInput{OwnerID: *ownerID, Prompt: string(body), Language: *language, Source: *source, SessionID: *sessionID, ScopeKind: ownerctx.PromptScopeKind(*scopeKind), ScopeID: *scopeID, ContentKind: "user_prompt"})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	case "inspect":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history inspect")
+			return ExitUsage
+		}
+		value, err := ownerctx.InspectPromptHistory(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, value, errOut)
+	case "export":
+		if len(args) != 2 || args[1] != "--confirm" {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history export --confirm")
+			return ExitUsage
+		}
+		value, err := ownerctx.ExportPromptHistory(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, value, errOut)
+	case "delete":
+		if len(args) != 3 || args[2] != "--confirm" {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history delete ID --confirm")
+			return ExitUsage
+		}
+		if err := ownerctx.DeletePromptHistory(root, args[1], true); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]string{"deleted": args[1]}, errOut)
+	case "reset":
+		if len(args) != 2 || args[1] != "--confirm" {
+			fmt.Fprintln(errOut, "usage: bcgos owner prompt-history reset --confirm")
+			return ExitUsage
+		}
+		if err := ownerctx.ResetPromptHistory(root, true); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]string{"reset": "prompt_history"}, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos owner prompt-history <config|add|inspect|export|delete|reset>")
+		return ExitUsage
+	}
+}
+
+func runOwnerSelf(args []string, in io.Reader, out, errOut io.Writer, root string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos owner self <snapshot|observations|observe|observation|reset>")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "snapshot":
+		if len(args) >= 2 && args[1] == "delete" {
+			if len(args) != 4 || args[3] != "--confirm" {
+				fmt.Fprintln(errOut, "usage: bcgos owner self snapshot delete <version> --confirm")
+				return ExitUsage
+			}
+			if err := ownerctx.DeleteSnapshot(root, args[2], true); err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, map[string]string{"deleted": args[2]}, errOut)
+		}
+		flags := newFlagSet("owner self snapshot", errOut)
+		export := flags.Bool("export", false, "include bounded facet content in this local export")
+		facets := flags.String("facets", "", "comma-separated facet IDs; defaults to all registered facets")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+			fmt.Fprintln(errOut, "usage: bcgos owner self snapshot [--facets id,id] [--export]")
+			return ExitUsage
+		}
+		var requested []string
+		if strings.TrimSpace(*facets) != "" {
+			requested = splitTracks(*facets)
+		}
+		snapshot, err := ownerctx.ProjectSnapshot(root, requested)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if err := ownerctx.PersistSnapshot(root, snapshot); err != nil {
+			return reportError(errOut, err)
+		}
+		if !*export {
+			for id, facet := range snapshot.Facets {
+				facet.Content = ""
+				snapshot.Facets[id] = facet
+			}
+		}
+		return writeJSON(out, snapshot, errOut)
+	case "observations":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner self observations")
+			return ExitUsage
+		}
+		observations, err := ownerctx.ListObservations(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, observations, errOut)
+	case "observe":
+		flags := newFlagSet("owner self observe", errOut)
+		stdin := flags.Bool("stdin", false, "read a metadata-only observation JSON object")
+		confirm := flags.Bool("confirm", false, "confirm that this is an owner-attested signal under the local data-root boundary")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || !*stdin || !*confirm {
+			fmt.Fprintln(errOut, "usage: bcgos owner self observe --stdin --confirm")
+			return ExitUsage
+		}
+		var input ownerctx.ObservationInput
+		decoder := json.NewDecoder(io.LimitReader(in, 16<<10))
+		if err := decoder.Decode(&input); err != nil {
+			return reportError(errOut, err)
+		}
+		input.AuthenticatedOwner = true
+		input.OwnerConfirmed = true
+		receipt, evaluation, err := ownerctx.AppendObservation(root, input)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, struct {
+			Receipt    ownerctx.ObservationReceipt    `json:"receipt"`
+			Evaluation ownerctx.InteractionEvaluation `json:"evaluation"`
+		}{receipt, evaluation}, errOut)
+	case "observation":
+		if len(args) < 3 {
+			fmt.Fprintln(errOut, "usage: bcgos owner self observation <reject|contradict|expire|redact> <id> --transition-id ID --expected-state STATE --expected-revision DIGEST --confirm")
+			return ExitUsage
+		}
+		stateByName := map[string]ownerctx.ObservationState{"reject": ownerctx.ObservationRejected, "contradict": ownerctx.ObservationContradicted, "expire": ownerctx.ObservationExpired, "redact": ownerctx.ObservationRedacted}
+		state, ok := stateByName[args[1]]
+		flags := newFlagSet("owner self observation", errOut)
+		transitionID := flags.String("transition-id", "", "caller-generated transition occurrence")
+		expectedState := flags.String("expected-state", "", "current observation state")
+		expectedRevision := flags.String("expected-revision", "", "current observation revision")
+		confirm := flags.Bool("confirm", false, "confirm owner action")
+		if !ok || args[2] == "" || len(args) < 4 || flags.Parse(args[3:]) != nil || rejectPositionals(flags, errOut) || *transitionID == "" || *expectedState == "" || *expectedRevision == "" || !*confirm {
+			fmt.Fprintln(errOut, "usage: bcgos owner self observation <reject|contradict|expire|redact> <id> --transition-id ID --expected-state STATE --expected-revision DIGEST --confirm")
+			return ExitUsage
+		}
+		receipt, err := ownerctx.RejectObservation(root, ownerctx.ObservationTransitionInput{ObservationID: args[2], TransitionID: *transitionID, Next: state, ExpectedState: ownerctx.ObservationState(*expectedState), ExpectedRevision: *expectedRevision, OwnerAction: true})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, receipt, errOut)
+	case "reset":
+		if len(args) != 2 || args[1] != "--confirm" {
+			fmt.Fprintln(errOut, "usage: bcgos owner self reset --confirm")
+			return ExitUsage
+		}
+		if err := ownerctx.ResetDerivedSelf(root, true); err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]string{"reset": "derived_self"}, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos owner self <snapshot|observations|observe|observation|reset>")
 		return ExitUsage
 	}
 }
@@ -1775,10 +2344,12 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	flags := newFlagSet("hook session-start", errOut)
 	runtimeName := flags.String("runtime", "", "target runtime: claude or codex")
 	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	orchestrationState := flags.String("orchestration-state", "", "shared Maestro orchestration state path")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
 		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]")
 		return ExitUsage
 	}
+	_ = orchestrationState
 	root, err := dataRoot()
 	if err != nil {
 		return reportError(errOut, err)
@@ -1812,6 +2383,9 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	if err := evaluateAdapterInteraction(root, *runtimeName, string(lifecycle.SessionStart), lifecycle.IdempotencyKey(*runtimeName, string(lifecycle.SessionStart), inspection.WorkspaceID), inspection.WorkspaceID); err != nil {
+		return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+	}
 	return writeJSON(out, output, errOut)
 }
 
@@ -1824,10 +2398,12 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 	action := args[0]
 	flags := newFlagSet("hook codex "+action, errOut)
 	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	orchestrationState := flags.String("orchestration-state", "", "shared Maestro orchestration state path")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
 		fmt.Fprintln(errOut, usage)
 		return ExitUsage
 	}
+	_ = orchestrationState
 	switch action {
 	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
 	default:
@@ -1881,6 +2457,13 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if err != nil {
 			return reportError(errOut, err)
 		}
+		event := lifecycle.SessionStart
+		if action == "context-injection" {
+			event = lifecycle.ContextInject
+		}
+		if err := evaluateAdapterInteraction(root, "codex", event, lifecycle.IdempotencyKey("codex", event, inspection.WorkspaceID), inspection.WorkspaceID); err != nil {
+			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+		}
 		return writeJSON(out, response, errOut)
 	}
 	event := lifecycle.PostActionObserve
@@ -1894,6 +2477,9 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 	if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
 		return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
 	}
+	if err := evaluateAdapterInteraction(root, "codex", string(event), receipt.IdempotencyKey, inspection.WorkspaceID); err != nil {
+		return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+	}
 	return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
 }
 
@@ -1906,10 +2492,12 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 	action := args[0]
 	flags := newFlagSet("hook claude "+action, errOut)
 	adapterSource := flags.String("adapter-source", "", "internal adapter ownership marker")
+	orchestrationState := flags.String("orchestration-state", "", "shared Maestro orchestration state path")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 || (*adapterSource != "" && *adapterSource != "maestro") {
 		fmt.Fprintln(errOut, usage)
 		return ExitUsage
 	}
+	_ = orchestrationState
 	switch action {
 	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
 	default:
@@ -1969,6 +2557,13 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if err != nil {
 			return reportError(errOut, err)
 		}
+		event := lifecycle.SessionStart
+		if action == "context-injection" {
+			event = lifecycle.ContextInject
+		}
+		if err := evaluateAdapterInteraction(root, "claude", event, lifecycle.IdempotencyKey("claude", event, inspection.WorkspaceID), inspection.WorkspaceID); err != nil {
+			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+		}
 		return writeJSON(out, response, errOut)
 	case "post-action-receipt", "stop-finalization":
 		event := lifecycle.PostActionObserve
@@ -1982,12 +2577,42 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
 			return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
 		}
+		if err := evaluateAdapterInteraction(root, "claude", string(event), receipt.IdempotencyKey, inspection.WorkspaceID); err != nil {
+			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+		}
 		return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
 	}
 	panic("unreachable Claude hook action")
 }
 
+// evaluateAdapterInteraction is deliberately metadata-only. Adapter hooks
+// evaluate every observed interaction, but their unauthenticated/non-material
+// lifecycle signal cannot create a self observation. An attended owner command
+// is the separate path that may append an authenticated material signal.
+func evaluateAdapterInteraction(root, runtimeName, event, sourceEvent, workspaceID string) error {
+	_, _, err := ownerctx.AppendObservation(root, ownerctx.ObservationInput{
+		SchemaVersion: 1,
+		Signal:        ownerctx.SignalInferredHypothesis,
+		Claim:         "adapter_lifecycle_observed",
+		EvidenceType:  "adapter_receipt",
+		SourceEvent:   "interaction.completed",
+		SourceDigest:  maestro.SHA256Hex(runtimeName + "\x00" + event + "\x00" + sourceEvent),
+		EpisodeID:     runtimeName + "-" + event,
+		ScopeKind:     "workspace",
+		ScopeID:       workspaceID,
+		Confidence:    0,
+		Sensitivity:   "professional",
+		ExpiresAt:     time.Now().UTC().Add(24 * time.Hour),
+		Material:      false,
+	})
+	return err
+}
+
 func runAdapter(args []string, out, errOut io.Writer) int {
+	return runAdapterWithDataRoot(args, out, errOut, defaultDataRoot)
+}
+
+func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 || (args[0] != "install" && args[0] != "uninstall" && args[0] != "status") {
 		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status> --runtime claude|codex [workspace-path]")
 		return ExitUsage
@@ -2000,10 +2625,63 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 		return ExitUsage
 	}
 	path := optionalArg(flags.Args())
-	var (
-		status adaptercfg.Status
-		err    error
-	)
+	root, rootErr := dataRoot()
+	if rootErr != nil {
+		return reportError(errOut, rootErr)
+	}
+	tracks := []string(nil)
+	if profile, loadErr := agentidentity.Load(root); loadErr == nil {
+		tracks = profile.CapabilityTracks
+	} else if !errors.Is(loadErr, os.ErrNotExist) {
+		return reportError(errOut, loadErr)
+	}
+	type adapterResult struct {
+		adaptercfg.Status
+		Projection runtimeprojection.Status `json:"projection"`
+	}
+	var result adapterResult
+	var err error
+	type fileSnapshot struct {
+		path   string
+		exists bool
+		mode   os.FileMode
+		body   []byte
+	}
+	snapshotFile := func(path string) (fileSnapshot, error) {
+		if path == "" {
+			return fileSnapshot{}, nil
+		}
+		info, statErr := os.Lstat(path)
+		if errors.Is(statErr, os.ErrNotExist) {
+			return fileSnapshot{path: path}, nil
+		}
+		if statErr != nil {
+			return fileSnapshot{}, statErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fileSnapshot{}, fmt.Errorf("refusing to snapshot adapter symlink %s", path)
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fileSnapshot{}, readErr
+		}
+		return fileSnapshot{path: path, exists: true, mode: info.Mode().Perm(), body: body}, nil
+	}
+	restoreFile := func(snapshot fileSnapshot) error {
+		if snapshot.path == "" {
+			return nil
+		}
+		if !snapshot.exists {
+			if err := os.Remove(snapshot.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			return nil
+		}
+		if err := os.WriteFile(snapshot.path, snapshot.body, snapshot.mode); err != nil {
+			return err
+		}
+		return nil
+	}
 	switch args[0] {
 	case "install":
 		resolvedExecutable := *executable
@@ -2013,16 +2691,106 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 				return reportError(errOut, fmt.Errorf("locate installed bcgos executable: %w", err))
 			}
 		}
-		status, err = adaptercfg.Install(*runtimeName, path, resolvedExecutable)
+		// Preflight both local surfaces before either one writes. This keeps a
+		// malformed/tracked hook config or a user-file projection conflict from
+		// producing a known half-installed state.
+		if err = adaptercfg.ValidateInstall(*runtimeName, path, resolvedExecutable); err != nil {
+			return reportError(errOut, err)
+		}
+		if err = runtimeprojection.ValidateInstallForTracks(*runtimeName, path, tracks); err != nil {
+			return reportError(errOut, err)
+		}
+		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)
+		if inspectErr != nil {
+			return reportError(errOut, inspectErr)
+		}
+		excludePath, excludeErr := adaptercfg.LocalConfigExcludePath(*runtimeName, path)
+		if excludeErr != nil {
+			return reportError(errOut, excludeErr)
+		}
+		snapshot, snapshotErr := snapshotFile(priorAdapter.Path)
+		if snapshotErr != nil {
+			return reportError(errOut, snapshotErr)
+		}
+		excludeSnapshot, snapshotErr := snapshotFile(excludePath)
+		if snapshotErr != nil {
+			return reportError(errOut, snapshotErr)
+		}
+		restoreAdapterState := func() error {
+			if restoreErr := restoreFile(snapshot); restoreErr != nil {
+				return restoreErr
+			}
+			return restoreFile(excludeSnapshot)
+		}
+		previousProjection, _ := runtimeprojection.Inspect(*runtimeName, path)
+		result.Status, err = adaptercfg.Install(*runtimeName, path, resolvedExecutable)
+		if err != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
+				return reportError(errOut, fmt.Errorf("adapter install failed and rollback failed: %w (original: %v)", restoreErr, err))
+			}
+			return reportError(errOut, err)
+		}
+		result.Projection, err = runtimeprojection.InstallForTracks(*runtimeName, path, tracks)
+		if err != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
+				return reportError(errOut, fmt.Errorf("projection failed and adapter rollback failed: %w (original: %v)", restoreErr, err))
+			}
+			if previousProjection.State == "absent" {
+				_, _ = runtimeprojection.Uninstall(*runtimeName, path)
+			}
+		}
 	case "uninstall":
-		status, err = adaptercfg.Uninstall(*runtimeName, path)
+		if err = adaptercfg.ValidateUninstall(*runtimeName, path); err != nil {
+			return reportError(errOut, err)
+		}
+		if err = runtimeprojection.ValidateUninstall(*runtimeName, path); err != nil {
+			return reportError(errOut, err)
+		}
+		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)
+		if inspectErr != nil {
+			return reportError(errOut, inspectErr)
+		}
+		excludePath, excludeErr := adaptercfg.LocalConfigExcludePath(*runtimeName, path)
+		if excludeErr != nil {
+			return reportError(errOut, excludeErr)
+		}
+		snapshot, snapshotErr := snapshotFile(priorAdapter.Path)
+		if snapshotErr != nil {
+			return reportError(errOut, snapshotErr)
+		}
+		excludeSnapshot, snapshotErr := snapshotFile(excludePath)
+		if snapshotErr != nil {
+			return reportError(errOut, snapshotErr)
+		}
+		restoreAdapterState := func() error {
+			if restoreErr := restoreFile(snapshot); restoreErr != nil {
+				return restoreErr
+			}
+			return restoreFile(excludeSnapshot)
+		}
+		result.Status, err = adaptercfg.Uninstall(*runtimeName, path)
+		if err != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
+				return reportError(errOut, fmt.Errorf("adapter uninstall failed and rollback failed: %w (original: %v)", restoreErr, err))
+			}
+			return reportError(errOut, err)
+		}
+		result.Projection, err = runtimeprojection.Uninstall(*runtimeName, path)
+		if err != nil {
+			if restoreErr := restoreAdapterState(); restoreErr != nil {
+				return reportError(errOut, fmt.Errorf("projection uninstall failed and adapter rollback failed: %w (original: %v)", restoreErr, err))
+			}
+		}
 	case "status":
-		status, err = adaptercfg.Inspect(*runtimeName, path)
+		result.Status, err = adaptercfg.Inspect(*runtimeName, path)
+		if err == nil {
+			result.Projection, err = runtimeprojection.Inspect(*runtimeName, path)
+		}
 	}
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	return writeJSON(out, status, errOut)
+	return writeJSON(out, result, errOut)
 }
 
 func resolveProfile(dataRoot, requested string, explicit bool) (profile.State, error) {

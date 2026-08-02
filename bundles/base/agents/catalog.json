@@ -2,33 +2,57 @@
   "schema_version": 1,
   "hub": "maestro",
   "delegation": {
-    "mode": "role_gated_chains",
-    "registered_chains": "governed_unbounded",
+    "mode": "maestro_planner",
+    "registered_chains": "bounded_sequential",
     "max_active_branches": 1,
-    "max_depth": 2,
-    "max_children_per_agent": 1,
+    "max_depth": 1,
+    "max_children_per_agent": 0,
     "max_errand_helpers": 1,
     "errand_scope": "basic_reversible",
     "allowed_edges": [
       {
-        "from_role": "case_agent",
-        "to_roles": ["capability_specialist"]
-      },
-      {
         "from_role": "hub",
-        "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "practice_agent", "reviewer"]
-      },
-      {
-        "from_role": "practice_agent",
-        "to_roles": ["subject_specialist"]
+        "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"]
       }
     ]
   },
   "legacy_aliases": {
     "account_agent": {"canonical_role": "client_account_agent", "status": "compatibility_only"},
-    "workspace_agent": {"canonical_role": "case_agent", "status": "compatibility_only"}
+    "workspace_agent": {"canonical_role": "case_agent", "status": "compatibility_only"},
+    "practice_agent": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa_expert with expert_kind FPA or IPA"},
+    "subject_specialist": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa_expert with expert_kind FPA or IPA"}
+  },
+  "legacy_ids": {
+    "practice-": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa-expert-{fpa|ipa}-{scope}"},
+    "subject-": {"canonical_role": "pa_expert", "status": "deprecated_rejected", "migration": "re-register as pa-expert-{fpa|ipa}-{scope}"}
   },
   "agents": [
+    {
+      "id": "case-agent",
+      "role": "case_agent",
+      "direct_user_access": false,
+      "tool_access": "scoped",
+      "may_delegate": false,
+      "input_contract": "bounded_case_packet",
+      "relative_path": "agents/case-agent/AGENT.md",
+      "display_name": "Case Agent",
+      "default_emoji": "⚙️",
+      "ownership_scope": "case",
+      "customizable": true
+    },
+    {
+      "id": "client-account-agent",
+      "role": "client_account_agent",
+      "direct_user_access": false,
+      "tool_access": "scoped",
+      "may_delegate": false,
+      "input_contract": "bounded_client_account_packet",
+      "relative_path": "agents/client-account-agent/AGENT.md",
+      "display_name": "Client Account Agent",
+      "default_emoji": "🤝",
+      "ownership_scope": "account",
+      "customizable": true
+    },
     {
       "id": "darwin",
       "role": "governance_analyst",
@@ -56,6 +80,19 @@
       "customizable": true
     },
     {
+      "id": "pa-expert",
+      "role": "pa_expert",
+      "direct_user_access": false,
+      "tool_access": "none",
+      "may_delegate": false,
+      "input_contract": "bounded_advisory_packet",
+      "relative_path": "agents/pa-expert/AGENT.md",
+      "display_name": "PA Expert",
+      "default_emoji": "🧠",
+      "ownership_scope": "pa_expert_registry",
+      "customizable": true
+    },
+    {
       "id": "walter",
       "role": "reviewer",
       "direct_user_access": false,
@@ -64,7 +101,7 @@
       "input_contract": "sealed_review_packet",
       "relative_path": "agents/walter/AGENT.md",
       "display_name": "Walter",
-      "default_emoji": "🛡️",
+      "default_emoji": "🦉",
       "ownership_scope": "governance",
       "customizable": true
     }

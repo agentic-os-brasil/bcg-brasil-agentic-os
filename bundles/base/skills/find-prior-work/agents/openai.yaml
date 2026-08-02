@@ -1,0 +1,4 @@
+interface:
+  display_name: "Find Prior Work"
+  short_description: "Recover an explicitly requested past deck or work artifact"
+  default_prompt: "Use $find-prior-work to search my private prior-work index for this explicitly requested professional artifact."
