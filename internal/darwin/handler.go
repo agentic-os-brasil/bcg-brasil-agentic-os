@@ -28,10 +28,12 @@ type HousekeepingHandler struct {
 // LocalProductHealthBuilder derives only bounded product-surface counts from
 // scheduler receipts. It never reads prompts, workspace bodies or raw errors.
 type LocalProductHealthBuilder struct {
-	Scheduler scheduler.Store
-	Workspace string
-	Runtime   string
-	Now       func() time.Time
+	Scheduler          scheduler.Store
+	Workspace          string
+	Runtime            string
+	ManagedStateRoot   string
+	StateDocumentsRoot string
+	Now                func() time.Time
 }
 
 func (builder LocalProductHealthBuilder) Build(ctx context.Context, occurrence scheduler.Occurrence) (HealthPacket, error) {
@@ -57,15 +59,22 @@ func (builder LocalProductHealthBuilder) Build(ctx context.Context, occurrence s
 		runtimeName = "runtime-neutral"
 	}
 	windowDigest := sha256.Sum256([]byte(occurrence.JobID + "\x00" + occurrence.ScheduledFor.UTC().Format(time.RFC3339Nano)))
+	stateDocuments := ProductSurface{State: "healthy"}
+	if occurrence.JobID == "darwin-deep-weekly" {
+		stateDocuments = reviewStateDocuments(builder.StateDocumentsRoot)
+	}
 	request := HealthRequest{SchemaVersion: SchemaVersion, WindowID: "wake-" + hex.EncodeToString(windowDigest[:])[:16], Runtime: runtimeName, Mode: HeadlessHousekeeping, Surfaces: HealthSurfaces{
 		Doctor: ProductSurface{State: "healthy"}, Capability: ProductSurface{State: "healthy"}, Validation: ProductSurface{State: "healthy"},
-		Scheduler: ProductSurface{State: map[bool]string{true: "warning", false: "healthy"}[missed > 0], Count: missed}, ManagedState: ProductSurface{State: "healthy"},
+		Scheduler: ProductSurface{State: map[bool]string{true: "warning", false: "healthy"}[missed > 0], Count: missed}, ManagedState: managedStateSurface(builder.ManagedStateRoot), StateDocuments: stateDocuments,
 	}}
 	return BuildHealthPacket(request)
 }
 
 type DeepReviewHandler struct {
 	Build         HealthPacketBuilder
+	Guard         ToolGuard
+	Invoker       ToolInvoker
+	Store         Store
 	CommandStore  maintenance.Store
 	ProposalStore ProposalStore
 	Now           func() time.Time
@@ -137,6 +146,38 @@ func (handler DeepReviewHandler) Execute(ctx context.Context, command maintenanc
 	if err := ctx.Err(); err != nil {
 		return maintenance.HandlerResult{}, err
 	}
+	diagnostics := make([]Proposal, 0, len(assessment.Proposals))
+	hasRepair := false
+	for _, proposal := range assessment.Proposals {
+		if isExecutableRepair(proposal) {
+			hasRepair = true
+		} else {
+			diagnostics = append(diagnostics, proposal)
+		}
+	}
+	if hasRepair {
+		if handler.Guard == nil || handler.Invoker == nil || handler.Store.Root == "" {
+			return HandlerResultUnavailable(errors.New("Darwin deep repair executor is not configured"))
+		}
+		repairReceipt, executeErr := Execute(ctx, packet, assessment, handler.Guard, handler.Invoker, func() time.Time { return now })
+		if storeErr := handler.Store.Append(repairReceipt); storeErr != nil {
+			return maintenance.HandlerResult{}, storeErr
+		}
+		if executeErr != nil || repairReceipt.Outcome == OutcomeFailed || repairReceipt.Outcome == OutcomeBlocked {
+			if executeErr == nil {
+				executeErr = errors.New("Darwin deep repair did not reach a validated outcome")
+			}
+			return maintenance.HandlerResult{State: maintenance.ReceiptFailed, ReasonCode: maintenance.ReasonHandlerFailure}, executeErr
+		}
+		if len(diagnostics) == 0 {
+			base := maintenance.Receipt{SchemaVersion: maintenance.CommandSchemaVersion, AttemptID: attempt, OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: maintenance.ReceiptSucceeded, RecordedAt: now, Deadline: command.Deadline, ReasonCode: maintenance.ReasonCompleted}
+			if err := handler.CommandStore.AppendReceipt(base); err != nil {
+				return maintenance.HandlerResult{}, err
+			}
+			return maintenance.HandlerResult{State: maintenance.ReceiptSucceeded, ReasonCode: maintenance.ReasonCompleted}, nil
+		}
+		assessment.Proposals = diagnostics
+	}
 	state := maintenance.ReceiptProposalEmitted
 	reason := maintenance.ReasonProposalEmitted
 	if len(assessment.Proposals) == 0 {
@@ -185,8 +226,8 @@ func (handler HousekeepingHandler) Execute(ctx context.Context, command maintena
 	if executeErr != nil {
 		return maintenance.HandlerResult{State: receipt.State, ReasonCode: maintenance.ReasonHandlerFailure}, executeErr
 	}
-	if receipt.State != maintenance.ReceiptSucceeded {
+	if receipt.State != maintenance.ReceiptSucceeded && receipt.State != maintenance.ReceiptReviewedNoChange {
 		return maintenance.HandlerResult{State: receipt.State, ReasonCode: maintenance.ReasonHandlerFailure}, errors.New("Darwin housekeeping did not reach a successful boundary")
 	}
-	return maintenance.HandlerResult{State: maintenance.ReceiptSucceeded, ReasonCode: maintenance.ReasonCompleted}, nil
+	return maintenance.HandlerResult{State: receipt.State, ReasonCode: receipt.ReasonCode}, nil
 }

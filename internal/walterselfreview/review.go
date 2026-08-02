@@ -1,5 +1,7 @@
-// Package walterselfreview implements Walter's periodic, proposal-only self
-// review on top of the canonical ownerctx and Maestro contracts.
+// Package walterselfreview defines Walter's periodic, bounded self-ingestion
+// seam on top of the canonical ownerctx and Maestro contracts. The shipped
+// model path remains unavailable; a qualified implementation must compact a
+// bounded self projection without emitting a user-facing weekly artifact.
 package walterselfreview
 
 import (

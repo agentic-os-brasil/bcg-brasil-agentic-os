@@ -57,12 +57,13 @@ const (
 type ObservationCode string
 
 const (
-	ObservationCapabilityUnavailable ObservationCode = "capability_unavailable"
-	ObservationStateStale            ObservationCode = "state_stale"
-	ObservationSchedulerMissed       ObservationCode = "scheduler_missed"
-	ObservationContractDrift         ObservationCode = "contract_drift"
-	ObservationValidationFailure     ObservationCode = "validation_failure"
-	ObservationOperatingFriction     ObservationCode = "operating_friction"
+	ObservationCapabilityUnavailable   ObservationCode = "capability_unavailable"
+	ObservationStateStale              ObservationCode = "state_stale"
+	ObservationSchedulerMissed         ObservationCode = "scheduler_missed"
+	ObservationContractDrift           ObservationCode = "contract_drift"
+	ObservationValidationFailure       ObservationCode = "validation_failure"
+	ObservationOperatingFriction       ObservationCode = "operating_friction"
+	ObservationStateDocumentsOversized ObservationCode = "state_documents_oversized"
 )
 
 type Action string
@@ -72,6 +73,7 @@ const (
 	ActionRefreshDerivedState   Action = "refresh_derived_state"
 	ActionReconcileScheduler    Action = "reconcile_scheduler_receipt"
 	ActionRunContractValidation Action = "run_contract_validation"
+	ActionReviewStateDocuments  Action = "review_state_documents"
 )
 
 type Outcome string
@@ -209,12 +211,13 @@ var (
 	validSeverities = map[Severity]bool{SeverityLow: true, SeverityMedium: true, SeverityHigh: true}
 	validStates     = map[string]bool{"": true, "native": true, "adapter": true, "configured": true, "derived": true, "stale": true, "missing": true, "blocked": true, "healthy": true, "warning": true, "failed": true, "unavailable": true}
 	validCodes      = map[ObservationCode]bool{
-		ObservationCapabilityUnavailable: true,
-		ObservationStateStale:            true,
-		ObservationSchedulerMissed:       true,
-		ObservationContractDrift:         true,
-		ObservationValidationFailure:     true,
-		ObservationOperatingFriction:     true,
+		ObservationCapabilityUnavailable:   true,
+		ObservationStateStale:              true,
+		ObservationSchedulerMissed:         true,
+		ObservationContractDrift:           true,
+		ObservationValidationFailure:       true,
+		ObservationOperatingFriction:       true,
+		ObservationStateDocumentsOversized: true,
 	}
 )
 
@@ -290,11 +293,12 @@ func Execute(ctx context.Context, packet HealthPacket, assessment Assessment, gu
 			return receipt, err
 		}
 		call := callFor(packet, proposal)
-		entry := ActionReceipt{ProposalID: proposal.ID, Action: proposal.Action, Tool: call.Tool, Operation: call.Operation, Resource: call.Resource, Outcome: OutcomeBlocked, Rollback: proposal.Rollback}
-		if !proposal.Reversible {
+		entry := ActionReceipt{ProposalID: proposal.ID, Action: proposal.Action, Tool: call.Tool, Operation: call.Operation, Resource: call.Resource, Outcome: OutcomeNoAction, Rollback: proposal.Rollback}
+		if !isExecutableRepair(proposal) {
 			receipt.Actions = append(receipt.Actions, entry)
 			continue
 		}
+		entry.Outcome = OutcomeBlocked
 		if err := guard.Authorize(call); err != nil {
 			receipt.Actions = append(receipt.Actions, entry)
 			continue
@@ -305,12 +309,16 @@ func Execute(ctx context.Context, packet HealthPacket, assessment Assessment, gu
 			return receipt, err
 		}
 		result, err := invoker.Invoke(ctx, call, Artifact{SchemaVersion: SchemaVersion, AgentID: AgentID, WindowID: packet.WindowID, ProposalID: proposal.ID, Finding: proposal.Finding, Action: proposal.Action})
-		if err != nil || result.Outcome != OutcomeSucceeded {
+		if err != nil {
 			entry.Outcome = OutcomeFailed
 			receipt.Actions = append(receipt.Actions, entry)
 			continue
 		}
-		entry.Outcome = OutcomeSucceeded
+		if result.Outcome != OutcomeSucceeded && result.Outcome != OutcomeNoAction {
+			entry.Outcome = OutcomeFailed
+		} else {
+			entry.Outcome = result.Outcome
+		}
 		receipt.Actions = append(receipt.Actions, entry)
 	}
 	receipt.Outcome = summarize(receipt.Actions)
@@ -390,7 +398,7 @@ func (invoker FilesystemInvoker) Invoke(ctx context.Context, call ToolCall, arti
 	if errors.Is(err, os.ErrExist) {
 		existing, readErr := os.ReadFile(destination)
 		if readErr == nil && bytes.Equal(existing, []byte(body)) {
-			return ToolResult{Outcome: OutcomeSucceeded}, nil
+			return ToolResult{Outcome: OutcomeNoAction}, nil
 		}
 		return ToolResult{}, errors.New("Darwin metadata artifact already exists with different content")
 	}
@@ -408,7 +416,7 @@ func (invoker FilesystemInvoker) Invoke(ctx context.Context, call ToolCall, arti
 	if err := file.Close(); err != nil {
 		return ToolResult{}, err
 	}
-	return ToolResult{Outcome: OutcomeSucceeded}, nil
+	return ToolResult{Outcome: OutcomeNoAction}, nil
 }
 
 func rejectSymlinkPath(root, relative string) error {
@@ -462,11 +470,19 @@ func proposalFor(observation Observation) Proposal {
 		proposal.Action, proposal.Impact, proposal.Effort = ActionRunContractValidation, ImpactSafety, EffortMedium
 	case ObservationOperatingFriction:
 		proposal.Action, proposal.Impact = ActionRefreshDerivedState, ImpactFriction
+	case ObservationStateDocumentsOversized:
+		// A weekly state review is deliberately diagnostic/proposal-only. Darwin
+		// records no document body and does not rewrite operational context.
+		proposal.Action, proposal.Impact, proposal.Rollback = ActionReviewStateDocuments, ImpactFriction, ActionReviewStateDocuments
 	}
 	if observation.Severity == SeverityHigh {
 		proposal.Risk = RiskMedium
 	}
 	return proposal
+}
+
+func isExecutableRepair(proposal Proposal) bool {
+	return proposal.Reversible && proposal.Finding == ObservationStateStale && proposal.Action == ActionRefreshDerivedState
 }
 
 func proposalID(windowID string, observation Observation) string {
@@ -489,13 +505,15 @@ func summarize(actions []ActionReceipt) Outcome {
 	if len(actions) == 0 {
 		return OutcomeNoAction
 	}
-	succeeded, failed, blocked := 0, 0, 0
+	succeeded, failed, blocked, noAction := 0, 0, 0, 0
 	for _, action := range actions {
 		switch action.Outcome {
 		case OutcomeSucceeded:
 			succeeded++
 		case OutcomeFailed:
 			failed++
+		case OutcomeNoAction:
+			noAction++
 		default:
 			blocked++
 		}
@@ -508,6 +526,9 @@ func summarize(actions []ActionReceipt) Outcome {
 	}
 	if failed > 0 {
 		return OutcomeFailed
+	}
+	if noAction == len(actions) {
+		return OutcomeNoAction
 	}
 	return OutcomeBlocked
 }

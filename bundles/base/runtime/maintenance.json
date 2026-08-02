@@ -159,19 +159,6 @@
       "success_boundary": "sanitized observation is versioned as a proposal input, never as an active self facet"
     },
     {
-      "id": "self-refinement-proposal",
-      "category": "self",
-      "trigger": "weekly_or_presence",
-      "executor": "model_adapter",
-      "scope": "owner",
-      "availability": "unavailable",
-      "availability_reason": "self synthesis, confirmation and reversal adapters are not installed",
-      "default_enabled": false,
-      "unattended": "policy_gated",
-      "writes": ["owner_observation"],
-      "success_boundary": "a reviewable, provenance-bound proposal is staged without activating a self facet"
-    },
-    {
       "id": "update-check",
       "category": "update",
       "trigger": "daily_or_presence",
@@ -208,7 +195,7 @@
       "default_enabled": true,
       "unattended": "policy_gated",
       "writes": ["local_diagnostics"],
-      "success_boundary": "a metadata-only deep health/recommendation receipt is durably recorded without applying structural change"
+      "success_boundary": "a bounded deep review durably records an allowlisted validated operational repair or a metadata-only structural recommendation; it never applies structural change"
     },
     {
       "id": "walter-self-review-weekly",
@@ -217,20 +204,20 @@
       "executor": "model_adapter",
       "scope": "owner",
       "availability": "unavailable",
-      "availability_reason": "runtime-neutral Walter weekly proposal handler is pending integration and native qualification",
+      "availability_reason": "Walter's preliminary runtime-neutral seam exists, but the approved model adapter, authority, bounded silent-compaction publication boundary, scheduled input integration and native qualification are not installed",
       "default_enabled": false,
       "unattended": "policy_gated",
       "writes": ["owner_observation"],
-      "success_boundary": "a self-review proposal receipt is staged without canonical self mutation"
+      "success_boundary": "a bounded silent self-ingestion compaction is durably committed through Owner Context policy with metadata-only lifecycle evidence"
     },
     {
       "id": "darwin-structural-evolution-proposal",
       "category": "runtime",
       "trigger": "monthly_or_presence",
-      "executor": "model_adapter",
+      "executor": "local_adapter",
       "scope": "managed",
       "availability": "unavailable",
-      "availability_reason": "Darwin structural proposal adapter and human approval boundary are not installed",
+      "availability_reason": "Darwin's deterministic structural proposal planner exists, but attended runtime activation, qualification and the human review boundary are not installed",
       "default_enabled": false,
       "unattended": "never",
       "writes": ["local_diagnostics"],

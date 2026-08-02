@@ -99,6 +99,9 @@ func (catalog Catalog) Validate() error {
 		if !validCategories[job.Category] || !validTriggers[job.Trigger] || !validExecutors[job.Executor] || !validScopes[job.Scope] {
 			return fmt.Errorf("maintenance job %q has an invalid category, trigger, executor or scope", job.ID)
 		}
+		if err := validateRequiredJobInvariant(job); err != nil {
+			return err
+		}
 		if job.SuccessBoundary == "" {
 			return fmt.Errorf("maintenance job %q requires a success boundary", job.ID)
 		}
@@ -147,11 +150,25 @@ func (catalog Catalog) Validate() error {
 		"memory-l1-capture", "memory-daily", "memory-weekly", "memory-retention-check",
 		"wiki-incremental-sync", "wiki-reconcile", "wiki-integrity-check", "skills-index-refresh",
 		"runtime-health-check", "capability-recheck", "runtime-drift-check", "self-observation-capture",
-		"self-refinement-proposal", "update-check", "darwin-structural-evolution-proposal",
+		"update-check", "darwin-structural-evolution-proposal",
 		"darwin-housekeeping-daily", "darwin-deep-weekly", "walter-self-review-weekly",
 	} {
 		if !seen[required] {
 			return fmt.Errorf("maintenance catalog is missing required universal job %q", required)
+		}
+	}
+	return nil
+}
+
+func validateRequiredJobInvariant(job Job) error {
+	switch job.ID {
+	case "walter-self-review-weekly":
+		if job.Category != "self" || job.Trigger != "weekly_or_presence" || job.Executor != "model_adapter" || job.Scope != "owner" || job.DefaultEnabled || job.Unattended != "policy_gated" {
+			return errors.New("Walter weekly self-review has an unsafe maintenance contract")
+		}
+	case "darwin-structural-evolution-proposal":
+		if job.Category != "runtime" || job.Trigger != "monthly_or_presence" || job.Executor != "local_adapter" || job.Scope != "managed" || job.DefaultEnabled || job.Unattended != "never" {
+			return errors.New("Darwin structural evolution has an unsafe maintenance contract")
 		}
 	}
 	return nil

@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 const testOccurrenceDigest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -338,4 +340,78 @@ func TestPublishedCommandAndReceiptSchemasAreStrictlyPresent(t *testing.T) {
 			t.Fatalf("schema %s is not strict: %#v", name, schema)
 		}
 	}
+}
+
+func TestPublishedSchemasAcceptWalterWeeklyProposalOnly(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	command := Command{
+		SchemaVersion: CommandSchemaVersion, CommandID: "cmd-walter-weekly",
+		JobID: WalterSelfReviewWeeklyJobID, WorkspaceID: "maestro-system",
+		Trigger: TriggerWeekly, ScheduledFor: now, RequestedAt: now,
+		Deadline: now.Add(time.Minute), ProposalOnly: true,
+	}
+	if err := command.Validate(now); err != nil {
+		t.Fatal(err)
+	}
+	if err := validatePublishedSchemaDocument(t, "maintenance-command.schema.json", command); err != nil {
+		t.Fatalf("Walter weekly command does not satisfy its published schema: %v", err)
+	}
+	receipt := Receipt{
+		SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		OccurrenceDigest: testOccurrenceDigest, CommandID: command.CommandID,
+		JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger,
+		State: ReceiptProposalEmitted, RecordedAt: now, Deadline: command.Deadline,
+		ProposalOnly: true, ProposalCount: 1, ProposalDigest: testOccurrenceDigest,
+		ProposalArtifactID: testOccurrenceDigest, ReasonCode: ReasonProposalEmitted,
+	}
+	if err := receipt.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := validatePublishedSchemaDocument(t, "maintenance-receipt.schema.json", receipt); err != nil {
+		t.Fatalf("Walter weekly receipt does not satisfy its published schema: %v", err)
+	}
+
+	command.Trigger = TriggerMonthly
+	if err := command.Validate(now); err == nil {
+		t.Fatal("Go command validator accepted Walter on the Darwin monthly cadence")
+	}
+	if err := validatePublishedSchemaDocument(t, "maintenance-command.schema.json", command); err == nil {
+		t.Fatal("published command schema accepted Walter on the Darwin monthly cadence")
+	}
+	receipt.Trigger = TriggerMonthly
+	if err := receipt.Validate(); err == nil {
+		t.Fatal("Go receipt validator accepted Walter on the Darwin monthly cadence")
+	}
+	if err := validatePublishedSchemaDocument(t, "maintenance-receipt.schema.json", receipt); err == nil {
+		t.Fatal("published receipt schema accepted Walter on the Darwin monthly cadence")
+	}
+}
+
+func validatePublishedSchemaDocument(t *testing.T, name string, value any) error {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join("../../schemas", name))
+	if err != nil {
+		return err
+	}
+	var raw any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return err
+	}
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource(name, raw); err != nil {
+		return err
+	}
+	schema, err := compiler.Compile(name)
+	if err != nil {
+		return err
+	}
+	documentBody, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	var document any
+	if err := json.Unmarshal(documentBody, &document); err != nil {
+		return err
+	}
+	return schema.Validate(document)
 }

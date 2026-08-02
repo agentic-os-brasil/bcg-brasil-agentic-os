@@ -26,16 +26,23 @@
       "if": {"properties": {"proposal_only": {"const": true}}},
       "then": {
         "properties": {
-          "job_id": {"const": "darwin-structural-evolution-proposal"},
-          "trigger": {"const": "monthly"}
+          "job_id": {"enum": ["darwin-structural-evolution-proposal", "walter-self-review-weekly"]}
         }
       },
       "else": {
         "not": {
-          "properties": {"job_id": {"const": "darwin-structural-evolution-proposal"}},
+          "properties": {"job_id": {"enum": ["darwin-structural-evolution-proposal", "walter-self-review-weekly"]}},
           "required": ["job_id"]
         }
       }
+    },
+    {
+      "if": {"properties": {"job_id": {"const": "darwin-structural-evolution-proposal"}}, "required": ["job_id"]},
+      "then": {"properties": {"proposal_only": {"const": true}, "trigger": {"const": "monthly"}}}
+    },
+    {
+      "if": {"properties": {"job_id": {"const": "walter-self-review-weekly"}}, "required": ["job_id"]},
+      "then": {"properties": {"proposal_only": {"const": true}, "trigger": {"const": "weekly"}}}
     }
   ]
 }

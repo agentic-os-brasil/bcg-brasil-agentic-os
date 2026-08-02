@@ -37,14 +37,28 @@ occurrences. Continuous lifecycle events map only to catalog jobs with the
 silent default.
 
 The base catalog separates `darwin-housekeeping-daily`, `darwin-deep-weekly`,
-`walter-self-review-weekly` and `darwin-structural-evolution-proposal`. The
-Walter handler remains unavailable until its runtime-neutral integration lands.
-The monthly Darwin job is unavailable, disabled and never unattended. The worker can emit a bounded proposal
+`walter-self-review-weekly` and `darwin-structural-evolution-proposal`.
+Darwin housekeeping and the operational portion of deep review may execute the
+same allowlisted reversible repair after validation. The Walter scheduler seam
+and runtime-neutral review core exist, but its handler remains unavailable
+until an approved model adapter, authority and scheduled-input integration are
+installed.
+The monthly Darwin job uses the existing deterministic closed planner; it is
+not a model-backed executor. It remains unavailable, disabled and never
+unattended. The worker can emit a bounded proposal
 receipt only after a concrete runtime-qualified catalog, explicit activation
 and attended monthly authority bind the exact occurrence; the shipped
 catalog-only/unavailable state cannot authorize it. Approval and application
 are separate transactions. Darwin cannot mutate code, policy, release state or
 capability manifests from a scheduled run.
+
+The weekly deep review also evaluates only registered, Darwin-owned
+`<agent-id>/states.md` control-plane documents beneath its local maintenance
+root. It retains no path or body: it counts only documents that exceed the
+closed byte/line bounds and emits a proposal for concision. It never reads a
+client workspace or dossier, rewrites a `states.md`, or treats a missing state
+document as drift. Semantic condensation remains an attended, separately
+authorized runtime activity.
 
 The Darwin worker does not implement the scheduler's raw `Executor` interface.
 Native adapters must construct the qualified authority and bounded command;

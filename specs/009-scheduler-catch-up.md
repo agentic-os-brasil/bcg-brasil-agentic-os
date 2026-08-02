@@ -55,13 +55,15 @@ The first job vocabulary is:
   work-retrieval catalog through the approved Claude SharePoint adapter.
 - `darwin-housekeeping-daily`: policy-gated daily/presence health work;
 - `darwin-deep-weekly`: policy-gated weekly health/evolution review;
-- `walter-self-review-weekly`: weekly runtime-neutral Walter proposal seam;
+- `walter-self-review-weekly`: silent, bounded weekly Walter self-ingestion
+  seam and the sole recurring self-refinement synthesis job;
 - `darwin-structural-evolution-proposal`: monthly, proposal-only review of
-  operational structure; it never applies code, policy or release changes.
+  operational structure through Darwin's deterministic closed planner; it
+  never applies code, policy or release changes.
 
 Job IDs and cadence are runtime-neutral. Daily and weekly local windows, timezone behavior, retry/backoff and maximum catch-up are configuration, not hard-coded adapter behavior.
 
-`memory-weekly` succeeds only after the complete memory commit is active. Wiki work triggered by that commit follows the outbox and publication boundary in Spec 008; a scheduler receipt cannot substitute for either durable commit. The monthly Darwin job emits a metadata-only proposal receipt and remains unavailable until a qualified executor exists.
+`memory-weekly` succeeds only after the complete memory commit is active. Wiki work triggered by that commit follows the outbox and publication boundary in Spec 008; a scheduler receipt cannot substitute for either durable commit. Walter's weekly job supersedes the retired generic `self-refinement-proposal` catalog placeholder; it is a silent, finite self-ingestion/compaction pass, not a weekly user-facing proposal or notification. Observation capture remains a separate evidence producer. The monthly Darwin job emits a metadata-only proposal receipt and remains unavailable until its deterministic local executor is qualified and attended authority is present.
 
 `sharepoint-work-sync` succeeds only after Spec 037 publishes a new or
 idempotently unchanged active catalog manifest. If SharePoint collection is
