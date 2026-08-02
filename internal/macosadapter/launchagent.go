@@ -77,6 +77,38 @@ func Render(spec Spec) ([]byte, error) {
 	return body.Bytes(), nil
 }
 
+// ResolveExecutable returns the exact physical Darwin executable that may be
+// embedded in ProgramArguments. A caller may not smuggle a mutable symlink or
+// a non-executable fixture into a per-user scheduler definition.
+func ResolveExecutable(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.Contains(value, `\`) || !pathpkg.IsAbs(value) || strings.ContainsRune(value, '\x00') {
+		return "", errors.New("absolute Darwin executable path is required")
+	}
+	info, err := os.Lstat(value)
+	if err != nil {
+		return "", fmt.Errorf("inspect LaunchAgent executable: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", errors.New("LaunchAgent executable must not be a symlink")
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+		return "", errors.New("LaunchAgent executable must be a regular executable file")
+	}
+	physical, err := filepath.EvalSymlinks(value)
+	if err != nil {
+		return "", fmt.Errorf("resolve LaunchAgent executable: %w", err)
+	}
+	physical, err = filepath.Abs(filepath.Clean(physical))
+	if err != nil {
+		return "", err
+	}
+	if strings.Contains(physical, `\`) || !pathpkg.IsAbs(physical) {
+		return "", errors.New("resolved LaunchAgent executable is not a Darwin path")
+	}
+	return physical, nil
+}
+
 func Parse(body []byte) error {
 	decoder := xml.NewDecoder(bytes.NewReader(body))
 	keys := map[string]bool{}
@@ -265,6 +297,13 @@ func Install(home string, spec Spec, optIn bool) (Status, error) {
 		}
 	}
 	path := filepath.Join(directory, spec.Label+".plist")
+	if info, statErr := os.Lstat(path); statErr == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return Status{}, errors.New("LaunchAgent plist must be a regular file")
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return Status{}, statErr
+	}
 	temporary, err := os.CreateTemp(directory, "."+spec.Label+".plist.tmp-")
 	if err != nil {
 		return Status{}, err
@@ -287,6 +326,31 @@ func Install(home string, spec Spec, optIn bool) (Status, error) {
 		return Status{}, err
 	}
 	return Status{State: "adapter_installed_native_qualification_pending", Path: path, Label: spec.Label, Disabled: spec.Disabled}, nil
+}
+
+// Verify compares the installed plist with the deterministic expected bytes.
+// This binds program, workspace argument, schedule and diagnostics together;
+// a merely parseable plist is not sufficient evidence of managed identity.
+func Verify(home string, expected Spec) (Status, error) {
+	want, err := Render(expected)
+	if err != nil {
+		return Status{}, err
+	}
+	status, err := ReadStatus(home, expected.Label)
+	if err != nil {
+		return Status{}, err
+	}
+	if status.State == "not_installed" {
+		return status, os.ErrNotExist
+	}
+	body, err := readLaunchAgentBody(status.Path)
+	if err != nil {
+		return Status{}, err
+	}
+	if !bytes.Equal(body, want) {
+		return status, errors.New("LaunchAgent binding does not match the exact managed specification")
+	}
+	return status, nil
 }
 
 func ReadStatus(home, label string) (Status, error) {

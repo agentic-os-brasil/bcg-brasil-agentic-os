@@ -102,6 +102,18 @@ activated job digests; fixture homes remain filesystem-only. Windows continues
 to fail closed rather than claim native parity. Neither adapter decides whether
 an occurrence succeeded.
 
+`bcgos maintenance canary install-macos` requires the exact initialized
+workspace path and validates it against local workspace metadata. The rendered
+plist stores only the opaque workspace ID, never the workspace path or customer
+content, and invokes the exact regular running `bcgos` executable through the
+fixed bounded command `maintenance wake --trigger presence`. Executable and
+plist symlinks fail closed. Plist creation/removal is atomic and idempotent;
+native `launchctl` inspection or mutation occurs only with explicit
+`--launchctl`, only in the current user's `gui/<uid>` domain, and never requests
+administrator authority. `RunAtLoad` plus the bounded interval accelerate
+presence recovery but do not activate Walter, memory dreaming or any other
+model-backed maintenance capability.
+
 ## Executable core
 
 `internal/scheduler` currently implements:
@@ -139,4 +151,4 @@ It deliberately does not install OS tasks, choose schedules, invoke memory dream
 - retry/backoff, runtime and cost limits;
 - user notification, pause and manual-run UX;
 - receipt retention and privacy-safe telemetry;
-- native adapter installation and removal flow.
+- Windows native adapter installation and removal flow.
