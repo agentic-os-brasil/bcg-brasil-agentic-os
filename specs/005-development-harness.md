@@ -57,6 +57,31 @@ go run ./dev/harness recover
 
 The harness must remain cross-platform, idempotent and usable without an agent or skill.
 
+## Evidence layers
+
+The development harness is one layer of the repository's evidence model; a
+passing command never promotes a capability beyond the layer it actually
+checks.
+
+| Layer | Command or source | What it proves | What it does not prove |
+|---|---|---|---|
+| Local fast gate | `go run ./dev/harness validate` | Structural contracts, projections, policies, managed-atlas freshness, formatting and development tests | Full repository tests, hosted CI, review, mergeability, release or runtime qualification |
+| Local full gate | `go run ./dev/harness validate --full` | Fast gate plus `go vet ./...` and `go test ./...` | Hosted operating-system matrix, human review, protected-branch state, signed release or native runtime evidence |
+| Exact-tree gate | `go run ./dev/harness guard pre-commit` and repository hooks | The staged snapshot is safe, fully validated and free of blocked file classes/secrets | Remote acceptance or another person's review |
+| Hosted gate | `.github/workflows/validate.yml` | The configured Windows, macOS and Linux workflow ran for a specific commit | Approval, mergeability, publication or pilot readiness |
+| Product/release gates | `docs/release-gates-checklist.md` and release workflows | Separate packaging, authority, signing, clean-device and pilot evidence | A local harness pass by itself |
+| Runtime evidence | Adapter and attended-session receipts | A named runtime/platform actually exercised the contract | Contract implementation or source-level test coverage alone |
+
+The repository distinguishes `implemented`, `locally validated`, `CI green`,
+`reviewed`, `mergeable`, `merged` and `pilot-ready`. Reports and onboarding
+must preserve those labels instead of collapsing them into a generic
+"green" state.
+
+The repository may use a bare Git repository as object storage with linked
+worktrees. `doctor` treats the bare path as storage, reports that no files were
+changed and points the contributor to `git worktree list`; Git status, hooks and
+contribution commands belong in a real worktree.
+
 ## Skill contract
 
 `start-contributing` performs progressive first-time setup. `start-work` creates a safe daily path. `develop-change` classifies and implements changes. `record-decision` records durable choices. `prepare-pr` validates and prepares human review. `recover-work` diagnoses Git state without discarding files.

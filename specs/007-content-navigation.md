@@ -1,6 +1,8 @@
 # Spec 007 - Content navigation through a compiled LLM wiki
 
-Status: architecture accepted; deterministic managed atlas compiler/validator implemented; private memory atlas pending.
+Status: architecture accepted; initial deterministic managed atlas compiler and
+partial OKF/profile validator implemented through the development harness;
+full profile/security lifecycle and private memory atlas remain pending.
 
 ## Objective
 
@@ -160,9 +162,12 @@ Graph visualization, embeddings, vector search, Obsidian compatibility and a gra
 
 ## V1 implementation boundary
 
-V1 implements only the managed product atlas. The first deterministic compiler and
-OKF/profile validator are available through the development-only harness; durable
-event outbox, runtime pointer refresh and private compilation remain pending.
+V1 implements only the managed product atlas. The first deterministic compiler
+and partial OKF/profile validator are available through the development-only
+harness; durable event outbox, runtime pointer refresh, complete broken-link
+validation and private compilation remain pending. The current diagnostics
+shape is reviewable and deterministic, but a generated empty `broken_links`
+list is not evidence that every Markdown link was resolved.
 
 1. Define the page and machine-readable index schemas.
 2. Compile allowlisted decisions, specs, product skills and product documentation.
