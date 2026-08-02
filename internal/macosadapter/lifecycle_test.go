@@ -17,7 +17,7 @@ type fakeLaunchctl struct {
 
 func (fake *fakeLaunchctl) Run(_ context.Context, name string, args []string) (CommandResult, error) {
 	fake.calls = append(fake.calls, append([]string{name}, args...))
-	if name != "launchctl" {
+	if name != launchctlPath {
 		return CommandResult{}, errors.New("unexpected command")
 	}
 	if len(args) == 0 {
@@ -66,7 +66,7 @@ func TestLaunchAgentLifecycleUsesStructuredLaunchctlAndConfirmsLoaded(t *testing
 	}
 	bootstrapIndex := -1
 	for index, call := range fake.calls {
-		if len(call) > 1 && call[0] == "launchctl" && call[1] == "bootstrap" {
+		if len(call) > 1 && call[0] == launchctlPath && call[1] == "bootstrap" {
 			bootstrapIndex = index
 			break
 		}
