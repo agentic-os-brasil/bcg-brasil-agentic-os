@@ -1,5 +1,11 @@
 # Maestro canary release: external trust-gate runbook
 
+The complete cross-track operating plan is
+[`docs/canary-operating-plan.md`](canary-operating-plan.md). Use it to classify
+Maintenance Canary, native qualification, Release Canary and pilot evidence
+before applying the external controls in this runbook. This document owns the
+release trust gate; it does not qualify the maintenance runtime.
+
 This runbook covers controls that deliberately live outside the repository. It
 is a prerequisite for a real canary run, not authorization to publish and not
 evidence that the pilot gates in `specs/022-guided-pilot-release.md` have
@@ -7,9 +13,10 @@ passed.
 
 ## Status boundary
 
-The repository can build and verify deterministic unsigned candidates. The
-signed prerelease workflow fails closed when production signing, provider or
-GitHub governance authorities are absent.
+The repository can build and verify deterministic unsigned candidates; however,
+the release workflow files are currently disabled, so GitHub dispatch is
+unavailable. The signed prerelease path must also fail closed when production
+signing, provider or GitHub governance authorities are absent.
 
 The last administrative diagnosis on 2026-07-26 reported:
 
@@ -110,35 +117,94 @@ them, paste them into a ticket or move them to repository-wide secrets.
 An administrator must confirm that each input exists without revealing its
 value. Environment secrets must remain unavailable until independent approval.
 
-## Canary execution
+## Release Canary execution
 
 Use a reviewed commit on protected `main` and an unused canonical semantic
 version.
 
-1. Confirm the three required CI checks passed for the exact source commit.
-2. Dispatch **release candidate** from `main` with that version and the
-   `canary` channel. Treat its artifact as unsigned engineering output only.
-3. Verify candidate closure with:
+1. Confirm the Maintenance Canary and native-qualification evidence are either
+   explicitly out of scope or attached as separate ledger entries. Never use a
+   maintenance wake receipt as release evidence.
+2. Confirm the three required CI checks passed for the exact source commit.
+3. Check that the release-candidate workflow is actually enabled. In the
+   current checkout, `.github/workflows/release-candidate.yml` is absent and
+   only `.github/workflows/release-candidate.yml.disabled` exists. Record
+   `unavailable`/STOP and do not continue while that is true. Re-enable the
+   workflow only through a reviewed protected-branch change, then verify the
+   enabled path before dispatching.
+4. After the enabled-path check passes, dispatch **release candidate** from
+   `main` with that version and the `canary` channel. Treat its artifact as
+   unsigned engineering output only. The future dispatch syntax is:
+
+   ```text
+   gh workflow run release-candidate.yml --ref main \
+     -f version=VERSION -f channel=canary
+   ```
+
+5. Verify candidate closure with:
 
    ```text
    go run ./dev/release verify --directory dist/release-candidate
    ```
 
-4. Dispatch **signed Maestro prerelease** from the same protected commit,
-   version and channel, using its exact publication confirmation. The
-   independent environment reviewer approves the job.
-5. Capture the workflow URL, immutable release URL and tag, source commit,
+   Also run readiness against the exact public inputs and candidate. Exit code
+   `0` means no blocked/unavailable checks; exit code `1` is blocked and exit
+   code `3` is unavailable or not evaluated:
+
+   ```text
+   go run ./dev/release readiness \
+     --provider-config dist/release-authority/provider.json \
+     --authority-registry dist/release-authority/registry.json \
+     --authority-registry-sha256 AUTHORITY_REGISTRY_SHA256 \
+     --candidate dist/release-candidate
+   ```
+
+6. Check that the signed-prerelease workflow is actually enabled. In the
+   current checkout, `.github/workflows/signed-prerelease.yml` is absent and
+   only `.github/workflows/signed-prerelease.yml.disabled` exists. Record
+   `unavailable`/STOP and do not continue while that is true. After a reviewed
+   re-enable and independent environment approval, the future dispatch syntax
+   is:
+
+   ```text
+   gh workflow run signed-prerelease.yml --ref main \
+     -f version=VERSION -f channel=canary \
+     -f publish_confirmation=publish-maestro-prerelease
+   ```
+
+   The workflow executes the authoritative closure commands
+   `go run ./dev/release sign ...` and
+   `go run ./dev/release verify-signed ...` with the protected
+   `MAESTRO_ED25519_SEED_B64` secret. The local equivalent is only permitted
+   inside the approved signing custody and must receive the seed on stdin:
+
+   ```text
+   printf '%s' "$MAESTRO_ED25519_SEED_B64" | \
+     go run ./dev/release sign \
+       --candidate dist/release-candidate \
+       --output dist/signed-release \
+       --authority-registry dist/release-authority/registry.json \
+       --issuer RELEASE_ISSUER --key-id RELEASE_KEY_ID
+   go run ./dev/release verify-signed \
+     --directory dist/signed-release \
+     --authority-registry dist/release-authority/registry.json
+   ```
+
+   Never put the seed in the ledger, shell history, ticket or artifact.
+7. Capture the workflow URL, immutable release URL and tag, source commit,
    manifest digest, signed asset checksums, native-signing evidence and GitHub
    attestation result.
-6. Through the approved OS installation channel, seed the platform-signed
+8. Through the approved OS installation channel, seed the platform-signed
    bootstrapper and authority registry on one clean managed Windows device and
    one clean managed macOS device.
-7. Follow `acceptance/clean-device/README.md` to record install, update and
+9. Follow `acceptance/clean-device/README.md` to record install, update and
    rollback receipts for the same run ID, assemble sanitized device reports and
    obtain the approved external countersignatures.
 
 Neither publication nor two device reports automatically make the release
-pilot-ready. Cohort progression remains a human decision under Spec 022.
+pilot-ready. Cohort progression remains a human decision under Spec 022. The
+exact state, evidence and stop/rollback criteria are maintained in the
+[canonical operating plan](canary-operating-plan.md).
 
 ## Stop and rollback
 
@@ -150,7 +216,24 @@ replace release assets, force-update or use an unsigned override.
 
 Rollback is an authenticated activation of the previously approved release,
 bound to its provider release ID, manifest digest and activation receipt. It is
-not deletion or asset replacement.
+not deletion or asset replacement. The repository does not expose a generic
+`bcgos rollback` command. The only currently executable rollback path is the
+clean-device acceptance script, which invokes the approved bootstrapper:
+
+```text
+bash acceptance/clean-device/macos.sh --phase rollback ... \
+  --activation-receipt /evidence/update-activation-receipt.json \
+  --output /evidence/rollback.json
+powershell -File acceptance/clean-device/windows.ps1 -Phase rollback ... \
+  -ActivationReceipt C:\\evidence\\update-activation-receipt.json \
+  -Output C:\\evidence\\rollback.json
+```
+
+The omitted arguments are mandatory identity, signer, managed-root, data-root,
+workspace and sentinel arguments documented in
+`acceptance/clean-device/README.md`. A release-level rollback without that
+approved bootstrapper/provider surface is `unavailable`/STOP and cannot close
+the Release Canary or pilot gate.
 
 ## Administrator-owned open items
 
