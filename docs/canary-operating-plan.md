@@ -147,6 +147,8 @@ go run ./dev/release verify-signed \
   --directory dist/signed-release \
   --authority-registry dist/release-authority/registry.json
 
+# FUTURE SYNTAX ONLY: the workflows are currently disabled; record
+# unavailable/STOP until the reviewed enabled-path check passes.
 gh workflow run release-candidate.yml --ref main \
   -f version=VERSION -f channel=canary
 
@@ -167,6 +169,13 @@ go run ./dev/pilot-acceptance corporate \
   --support-owner SUPPORT_OWNER_ID \
   --output corporate-device-report.json
 ```
+
+The two `gh workflow run` commands above are not currently executable. The
+parent integration renamed all four repository workflows to `.disabled`,
+including `release-candidate.yml` and `signed-prerelease.yml`; no enabled
+dispatch path exists in this checkout. Record Release Canary and signed-release
+phases as `unavailable`/STOP until a reviewed change restores the enabled files
+and an administrator verifies the paths before dispatch.
 
 ## Evidence ledger
 

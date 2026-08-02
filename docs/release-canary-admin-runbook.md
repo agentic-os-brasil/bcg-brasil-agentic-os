@@ -13,9 +13,10 @@ passed.
 
 ## Status boundary
 
-The repository can build and verify deterministic unsigned candidates. The
-signed prerelease workflow fails closed when production signing, provider or
-GitHub governance authorities are absent.
+The repository can build and verify deterministic unsigned candidates; however,
+the release workflow files are currently disabled, so GitHub dispatch is
+unavailable. The signed prerelease path must also fail closed when production
+signing, provider or GitHub governance authorities are absent.
 
 The last administrative diagnosis on 2026-07-26 reported:
 
@@ -125,16 +126,22 @@ version.
    explicitly out of scope or attached as separate ledger entries. Never use a
    maintenance wake receipt as release evidence.
 2. Confirm the three required CI checks passed for the exact source commit.
-3. Dispatch **release candidate** from `main` with that version and the
-   `canary` channel. Treat its artifact as unsigned engineering output only.
-   The repository workflow dispatch is:
+3. Check that the release-candidate workflow is actually enabled. In the
+   current checkout, `.github/workflows/release-candidate.yml` is absent and
+   only `.github/workflows/release-candidate.yml.disabled` exists. Record
+   `unavailable`/STOP and do not continue while that is true. Re-enable the
+   workflow only through a reviewed protected-branch change, then verify the
+   enabled path before dispatching.
+4. After the enabled-path check passes, dispatch **release candidate** from
+   `main` with that version and the `canary` channel. Treat its artifact as
+   unsigned engineering output only. The future dispatch syntax is:
 
    ```text
    gh workflow run release-candidate.yml --ref main \
      -f version=VERSION -f channel=canary
    ```
 
-4. Verify candidate closure with:
+5. Verify candidate closure with:
 
    ```text
    go run ./dev/release verify --directory dist/release-candidate
@@ -152,9 +159,12 @@ version.
      --candidate dist/release-candidate
    ```
 
-5. Dispatch **signed Maestro prerelease** from the same protected commit,
-   version and channel, using its exact publication confirmation. The
-   independent environment reviewer approves the job:
+6. Check that the signed-prerelease workflow is actually enabled. In the
+   current checkout, `.github/workflows/signed-prerelease.yml` is absent and
+   only `.github/workflows/signed-prerelease.yml.disabled` exists. Record
+   `unavailable`/STOP and do not continue while that is true. After a reviewed
+   re-enable and independent environment approval, the future dispatch syntax
+   is:
 
    ```text
    gh workflow run signed-prerelease.yml --ref main \
@@ -181,13 +191,13 @@ version.
    ```
 
    Never put the seed in the ledger, shell history, ticket or artifact.
-6. Capture the workflow URL, immutable release URL and tag, source commit,
+7. Capture the workflow URL, immutable release URL and tag, source commit,
    manifest digest, signed asset checksums, native-signing evidence and GitHub
    attestation result.
-7. Through the approved OS installation channel, seed the platform-signed
+8. Through the approved OS installation channel, seed the platform-signed
    bootstrapper and authority registry on one clean managed Windows device and
    one clean managed macOS device.
-8. Follow `acceptance/clean-device/README.md` to record install, update and
+9. Follow `acceptance/clean-device/README.md` to record install, update and
    rollback receipts for the same run ID, assemble sanitized device reports and
    obtain the approved external countersignatures.
 

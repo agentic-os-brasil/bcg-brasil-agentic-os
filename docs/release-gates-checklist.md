@@ -53,7 +53,12 @@ covered.
 ### 3. Technical rehearsal (local/repository-deterministic)
 
 - [ ] Source commit is reviewed and `go run ./dev/harness validate --full` passes.
-- [ ] `release candidate` runs from that exact commit and version/channel.
+- [ ] The release-candidate workflow is enabled at
+  `.github/workflows/release-candidate.yml` before dispatch. The current
+  checkout contains only `.github/workflows/release-candidate.yml.disabled`,
+  so dispatch is `unavailable`/STOP and this gate cannot be checked.
+- [ ] Once enabled, `release candidate` runs from that exact commit and
+  version/channel.
 - [ ] Windows amd64, macOS Intel and macOS arm64 binaries are built on their
   matching runners and report the requested version.
 - [ ] `go run ./dev/release verify --directory <candidate>` passes.
@@ -71,6 +76,10 @@ covered.
 
 ### 4. Signed release (external authority + immutable publication)
 
+- [ ] The signed-prerelease workflow is enabled at
+  `.github/workflows/signed-prerelease.yml` before dispatch. The current
+  checkout contains only `.github/workflows/signed-prerelease.yml.disabled`,
+  so signed dispatch is `unavailable`/STOP and this gate cannot be checked.
 - [ ] `main` is protected with the required pull-request checks and no bypass
   actor; `github.ref_protected` is `true` in the dispatch run.
 - [ ] GitHub Actions billing/spending is active and a harmless job reached
