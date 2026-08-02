@@ -1,10 +1,19 @@
 {
   "schema_version": 1,
   "okf_version": "0.2",
-  "generator_version": "bcgos-managed-wiki/0.1",
+  "generator_version": "bcgos-managed-wiki/0.2",
   "policy_version": "managed-product/1",
-  "log_date": "2026-07-29",
+  "log_date": "2026-08-02",
   "sources": [
+    {
+      "id": "wiki-entrypoint",
+      "path": "docs/wiki.md",
+      "type": "Navigation Contract",
+      "title": "Wiki and atlas entrypoint",
+      "description": "Canonical source map and maintenance entrypoint for the managed atlas.",
+      "tags": ["atlas", "navigation", "source-of-truth"],
+      "related": ["content-navigation", "wiki-okf", "darwin-lifecycle-cadence", "model-backed-maintenance-activation"]
+    },
     {
       "id": "content-navigation",
       "path": "specs/007-content-navigation.md",
@@ -12,7 +21,7 @@
       "title": "Content navigation through a compiled LLM wiki",
       "description": "The governed navigation contract for a compiled Maestro atlas.",
       "tags": ["atlas", "navigation", "governance"],
-      "related": ["wiki-okf", "human-atlas-bootstrap"]
+      "related": ["wiki-okf", "human-atlas-bootstrap", "wiki-entrypoint"]
     },
     {
       "id": "wiki-okf",
@@ -21,7 +30,7 @@
       "title": "Wiki update lifecycle and OKF profile",
       "description": "The lifecycle, validation and publication contract for OKF bundles.",
       "tags": ["okf", "lifecycle", "validation"],
-      "related": ["content-navigation", "human-atlas-bootstrap", "release-distribution"]
+      "related": ["content-navigation", "human-atlas-bootstrap", "release-distribution", "wiki-entrypoint"]
     },
     {
       "id": "human-atlas-bootstrap",
@@ -31,6 +40,24 @@
       "description": "The local human-readable atlas scaffold and its explicit limits.",
       "tags": ["atlas", "local", "privacy"],
       "related": ["content-navigation", "wiki-okf"]
+    },
+    {
+      "id": "darwin-lifecycle-cadence",
+      "path": "specs/037-darwin-lifecycle-cadence.md",
+      "type": "Runtime Contract",
+      "title": "Darwin lifecycle and cadence",
+      "description": "Bounded Darwin maintenance, state hygiene and runtime qualification boundaries.",
+      "tags": ["darwin", "maintenance", "runtime", "qualification"],
+      "related": ["wiki-entrypoint", "model-backed-maintenance-activation"]
+    },
+    {
+      "id": "model-backed-maintenance-activation",
+      "path": "specs/041-model-backed-maintenance-activation.md",
+      "type": "Activation Contract",
+      "title": "Model-backed maintenance activation",
+      "description": "Default-deny activation and qualification contract for model-backed maintenance jobs.",
+      "tags": ["maintenance", "activation", "qualification", "privacy"],
+      "related": ["darwin-lifecycle-cadence", "wiki-entrypoint"]
     },
     {
       "id": "release-distribution",

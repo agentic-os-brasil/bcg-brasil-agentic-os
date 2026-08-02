@@ -15,10 +15,10 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/content-navigation
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 5b3b09f72f7872c9e9b058aad080cc89018c0fa48a7317823edb74ade66d9314
+x-bcgos-source-fingerprint: 9aff0e5974db0dde5642e35230dec2ac150ae00a0eb8ac0c5d1d6be8711f494d
 x-bcgos-freshness: fresh
 x-bcgos-status: active
-x-bcgos-generator-version: bcgos-managed-wiki/0.1
+x-bcgos-generator-version: bcgos-managed-wiki/0.2
 x-bcgos-policy-version: managed-product/1
 ---
 
@@ -30,6 +30,7 @@ This managed concept is generated from the reviewed repository source `specs/007
 
 - [Wiki update lifecycle and OKF profile](/concepts/wiki-okf.md)
 - [Human atlas bootstrap](/concepts/human-atlas-bootstrap.md)
+- [Wiki and atlas entrypoint](/concepts/wiki-entrypoint.md)
 
 ## Source content
 

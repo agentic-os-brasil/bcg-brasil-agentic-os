@@ -1,0 +1,91 @@
+---
+type: Navigation Contract
+title: Wiki and atlas entrypoint
+description: Canonical source map and maintenance entrypoint for the managed atlas.
+resource: repo://docs/wiki.md
+tags:
+    - atlas
+    - navigation
+    - source-of-truth
+sources:
+    - id: wiki-entrypoint
+      resource: repo://docs/wiki.md
+      title: Wiki and atlas entrypoint
+status: stable
+x-bcgos-profile-version: "1"
+x-bcgos-stable-id: managed/wiki-entrypoint
+x-bcgos-scope: managed
+x-bcgos-source-fingerprint: 9aff0e5974db0dde5642e35230dec2ac150ae00a0eb8ac0c5d1d6be8711f494d
+x-bcgos-freshness: fresh
+x-bcgos-status: active
+x-bcgos-generator-version: bcgos-managed-wiki/0.2
+x-bcgos-policy-version: managed-product/1
+---
+
+# Source snapshot
+
+This managed concept is generated from the reviewed repository source `docs/wiki.md`. The source remains authoritative.
+
+## Related
+
+- [Content navigation through a compiled LLM wiki](/concepts/content-navigation.md)
+- [Wiki update lifecycle and OKF profile](/concepts/wiki-okf.md)
+- [Darwin lifecycle and cadence](/concepts/darwin-lifecycle-cadence.md)
+- [Model-backed maintenance activation](/concepts/model-backed-maintenance-activation.md)
+
+## Source content
+
+# Wiki and atlas entrypoint
+
+This page is the navigation and maintenance entrypoint for the managed Maestro
+atlas. Canonical sources remain in the repository; the atlas is a deterministic,
+derived OKF bundle and must never be edited by hand.
+
+## Source-of-truth layers
+
+1. **Canonical contracts** — specs, accepted decisions and product-facing docs.
+2. **Reviewed source map** — [`managed-allowlist.json`](repo://dev/wiki/managed-allowlist.json)
+   selects the sanitized sources that may enter the managed atlas.
+3. **Generated bundle** — [`bundles/base/atlas/managed/index.md`](repo://bundles/base/atlas/managed/index.md)
+   contains the compiled human- and agent-readable navigation view.
+
+The generated bundle is distributed through the base bundle. It is not a second
+source of truth, a private-memory store or a client/workspace content store.
+
+## Canonical routes
+
+- [Content navigation contract](/concepts/content-navigation.md)
+- [Wiki update lifecycle and OKF profile](/concepts/wiki-okf.md)
+- [Darwin lifecycle and cadence](/concepts/darwin-lifecycle-cadence.md)
+- [Model-backed maintenance activation](/concepts/model-backed-maintenance-activation.md)
+- [Release and publication contract](/concepts/release-distribution.md)
+- [Accepted wiki decision](repo://docs/decisions/decision-log.md#WIKI)
+- [Accepted OKF decision](repo://docs/decisions/decision-log.md#OKFP)
+- [Accepted Darwin maintenance decision](repo://docs/decisions/decision-log.md#DARN)
+- [Accepted bounded weekly self/state decision](repo://docs/decisions/decision-log.md#SILE)
+
+## Official maintenance flow
+
+Run from the repository root:
+
+```sh
+go run ./dev/harness wiki reconcile
+go run ./dev/harness wiki validate
+go run ./dev/harness wiki verify
+```
+
+`reconcile` is the only generation path. `validate` checks the OKF/profile and
+Markdown-link contract; `verify` recompiles in an isolated temporary directory
+and compares every generated file without mutating the checked-in bundle.
+
+The link lint resolves source-relative links against their canonical source.
+Links to allowlisted concepts become atlas routes; valid repository sources that
+are not distributed become opaque `repo://` pointers; missing targets fail the
+generation and validation gate.
+
+## Current evidence boundary
+
+The managed atlas compiler is implemented and deterministic. Managed content is
+locally reviewable and distributable as a bundle, while private atlas
+compilation, runtime-native navigation and pilot distribution remain separate
+qualification and release gates.
