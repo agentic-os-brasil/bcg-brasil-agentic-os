@@ -28,6 +28,19 @@ func TestBlockedCommandRejectsDangerousGitOperations(t *testing.T) {
 	}
 }
 
+func TestDoctorHandlesBareRepositoryWithoutTreatingItAsAWorktree(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init", "--bare")
+	var output bytes.Buffer
+	if err := Doctor(root, &output); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	if !strings.Contains(text, "repositorio bare") || !strings.Contains(text, "git worktree list") || !strings.Contains(text, "nenhum arquivo foi alterado") {
+		t.Fatalf("Doctor() output = %s", text)
+	}
+}
+
 func TestScanStagedFindsSecretInFilenameWithSpaces(t *testing.T) {
 	root := t.TempDir()
 	runGit(t, root, "init")

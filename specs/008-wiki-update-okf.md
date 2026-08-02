@@ -1,6 +1,8 @@
 # Spec 008 - Wiki update lifecycle and BCGOS OKF profile
 
-Status: architecture accepted; initial managed compiler/validator implemented; schemas, event outbox, durable manifests and runtime integration pending.
+Status: architecture accepted; initial managed compiler and partial
+OKF/profile validator implemented; complete profile/security validation,
+schemas, event outbox, durable manifests and runtime integration pending.
 
 ## Objective
 
@@ -214,16 +216,16 @@ Backlinks and indexes belong to the same atomic atlas transaction as their chang
 ## V1 implementation boundary
 
 V1 implements the managed bundle first. The initial deterministic compiler and
-validator are now available through the development-only harness. It writes a
-reviewable local candidate with a best-effort directory swap; it is not yet the
-durable versioned-manifest or last-known-good publication mechanism. The
-remaining items are the durable lifecycle pieces:
+partial validator are now available through the development-only harness. It
+writes a reviewable local candidate with a best-effort directory swap; it is
+not yet the complete BCGOS profile/security validator or the durable
+versioned-manifest/last-known-good publication mechanism. The remaining items
+are the following:
 
-1. BCGOS Atlas Profile v1 schema and OKF validator.
-2. Deterministic compiler for allowlisted managed sources.
-3. Staging, source watermark, atomic manifest and last-known-good behavior.
-4. Generated `index.md`, `log.md`, backlinks and lint report.
-5. CI tests for OKF conformance, profile enforcement, determinism and product/private boundaries.
+1. Complete BCGOS Atlas Profile v1 schema, authorization and security checks.
+2. Durable staging, source watermark, atomic manifest and last-known-good behavior.
+3. Full link/provenance/revocation diagnostics and runtime pointer refresh.
+4. CI tests for complete OKF/profile conformance and product/private boundaries.
 
 Private bundle implementation follows only after Owner Context, enrollment, user-local storage, denial barriers, deletion propagation and approved compilation-provider contracts exist.
 
