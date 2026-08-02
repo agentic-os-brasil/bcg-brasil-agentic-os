@@ -10,12 +10,20 @@ pointer-only. The guard fails closed on invalid input and denies only the
 implemented protected-root deletion policy. Post/stop entries are asynchronous
 and emit metadata-only local receipts.
 
+This establishes configured wiring and local contract behavior, not native
+qualification. Evidence snapshot: `as_of: 2026-08-02` · `base_commit:
+61c66dfecbdc21bff6137398243236232fd14988` (current PR #150 parent; documentation
+follow-up stacked) · runtime evidence: no reproducible in-repo runtime-version artifact
+or qualifying fresh session is attached. This adapter is not `native-qualified`,
+`release-ready` or `pilot-ready`.
+
 Every product lifecycle event remains explicitly `unavailable` in the
 capability manifest. `bcgos doctor` diagnoses configuration and receipts
 separately. A receipt is marked `adapter_command`: it proves the bounded
 Maestro command ran, not that Claude invoked it in a qualifying native session.
-The lifecycle probe also blocks native qualification below Claude `2.1.177`
-and reports the evidence class for each event. See Spec 035 and
+The lifecycle probe applies the configured runtime qualification floor and
+reports the evidence class for each event; this snapshot does not attach the
+exact runtime version observed by that probe. See Spec 035 and
 `docs/lifecycle-readiness.md` for the evidence matrix.
 
 The managed Maestro, Case, Client Account, PA Expert, Walter and Darwin definitions live in
@@ -23,7 +31,7 @@ The managed Maestro, Case, Client Account, PA Expert, Walter and Darwin definiti
 fail-closed controller, and the Claude envelope maps `agent_branch_start`,
 `agent_child_start` (legacy denial only), `pre_tool_use`, `agent_child_stop` and
 `agent_branch_stop` to its semantic events. The shared conformance fixture
-proves equivalent decisions with Codex, including forged identities, scopes
+covers equivalent decisions with Codex, including forged identities, scopes
 and unregistered targets. Events require capability-bound agent identities and
 exact tool/resource grants. A shared durable Maestro state store prevents a
 second adapter instance from opening a parallel branch and is shared with

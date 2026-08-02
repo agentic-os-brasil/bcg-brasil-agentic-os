@@ -10,6 +10,13 @@ Codex runtime; this does not prove that Codex trusted or invoked them. Native
 observation is still pending, and Codex must not inherit Claude-specific
 development hooks as a product capability.
 
+Evidence snapshot: `as_of: 2026-08-02` · `base_commit:
+61c66dfecbdc21bff6137398243236232fd14988` (current PR #150 parent; documentation
+follow-up stacked) · runtime evidence: no reproducible in-repo runtime-version artifact
+or fresh native-session observation is attached. This adapter is configured and
+has local contract coverage, but is not `native-qualified`,
+`release-ready` or `pilot-ready`.
+
 The managed Maestro, Case, Client Account, PA Expert, Walter and Darwin definitions live in
 `bundles/base/agents/`. `internal/agentorchestration` now provides the shared
 fail-closed controller, and the Codex envelope maps
@@ -52,8 +59,8 @@ the final response.
 flowchart LR
     Catalog["Implemented<br/>managed agent catalog"] --> Adapter["Implemented<br/>shared enforcement"]
     Adapter --> Fixtures["Implemented<br/>cross-runtime fixtures"]
-    Fixtures --> Wiring["Implemented<br/>Codex-native lifecycle wiring"]
-    Wiring --> Active["Pending<br/>agent orchestration active"]
+    Fixtures --> Wiring["Configured<br/>Codex-native command-hook wiring"]
+    Wiring --> Active["Pending<br/>native qualification and activation"]
     Catalog -.->|current capability| Unavailable["Unavailable<br/>fails closed"]
 ```
 

@@ -6,6 +6,17 @@ All notable changes will be documented here.
 
 ### Added
 
+- [PR #150] Bounded Darwin daily/weekly maintenance and state-hygiene
+  contracts, local repair and quarantine handling, occurrence-bound receipts,
+  and fail-closed catalog updates. The repository contains local contract
+  evidence; native runtime and scheduler qualification remain pending.
+- [PR #150 documentation follow-up] Clarified the separate lifecycle evidence
+  classes configured, local contract-tested, adapter-observed and
+  native-qualified, alongside the delivery gates release-ready and pilot-ready;
+  recorded the current evidence boundary (`as_of: 2026-08-02`, base commit
+  `61c66dfecbdc21bff6137398243236232fd14988`, no reproducible in-repo runtime
+  version artifact or fresh Claude/Codex native-session receipt, and no signed
+  or clean-device pilot evidence).
 - Contributor-facing development-harness guide and evidence-layer map, with
   README/onboarding links and explicit bare-repository/worktree diagnosis.
 - Managed wiki status clarified to distinguish the implemented compiler slice
