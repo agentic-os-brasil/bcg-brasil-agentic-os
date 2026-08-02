@@ -35,6 +35,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ingest/markitdown"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installreadiness"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
@@ -2613,15 +2614,19 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 }
 
 func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
-	if len(args) == 0 || (args[0] != "install" && args[0] != "uninstall" && args[0] != "status") {
-		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status> --runtime claude|codex [workspace-path]")
+	if len(args) == 0 || (args[0] != "install" && args[0] != "uninstall" && args[0] != "status" && args[0] != "verify") {
+		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status|verify> --runtime claude|codex [workspace-path]")
 		return ExitUsage
 	}
 	flags := newFlagSet("adapter "+args[0], errOut)
 	runtimeName := flags.String("runtime", "", "target runtime: claude or codex")
 	executable := flags.String("executable", "", "path to the installed bcgos executable")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() > 1 {
-		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status> --runtime claude|codex [workspace-path]")
+		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status|verify> --runtime claude|codex [workspace-path]")
+		return ExitUsage
+	}
+	if args[0] == "verify" && (*runtimeName != "codex" || *executable != "") {
+		fmt.Fprintln(errOut, "usage: bcgos adapter verify --runtime codex [workspace-path]")
 		return ExitUsage
 	}
 	path := optionalArg(flags.Args())
@@ -2634,6 +2639,23 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 		tracks = profile.CapabilityTracks
 	} else if !errors.Is(loadErr, os.ErrNotExist) {
 		return reportError(errOut, loadErr)
+	}
+	if args[0] == "verify" {
+		resolvedExecutable, err := os.Executable()
+		if err != nil {
+			return reportError(errOut, fmt.Errorf("locate installed bcgos executable: %w", err))
+		}
+		report, verifyErr := installreadiness.Verify(installreadiness.Options{
+			WorkspacePath: path, DataRoot: root, ExecutablePath: resolvedExecutable,
+			CLIVersion: Version, CapabilityTracks: tracks,
+		})
+		if verifyErr != nil {
+			if code := writeJSON(errOut, report, errOut); code != ExitOK {
+				return code
+			}
+			return ExitFailure
+		}
+		return writeJSON(out, report, errOut)
 	}
 	type adapterResult struct {
 		adaptercfg.Status

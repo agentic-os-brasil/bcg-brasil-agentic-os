@@ -688,3 +688,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: A user can select software, data or both practices during onboarding; the active projection and dispatcher policy remain deterministic, hash-bound and tool-neutral. Embedded methods from unselected bundles remain denied, and a modified or unmanaged policy path fails closed. The base catalog remains unchanged until selection, and no track grants tools, data scope, provider access, publication or agent authority.
 - Refs: USER; specs/035-professional-capability-bundles.md; bundles/catalog/catalog.json; internal/agentidentity; internal/runtimeprojection
 - Supersedes: BSEL
+
+## IVRY - Bind post-install readiness to canonical local identities
+
+- Date: 2026-08-02
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A successful `bcgos init` and workspace-local adapter install can still leave a missing, redirected or tampered workspace projection, hook configuration or executable binding. Configuration presence alone is too weak for an installer handoff, while directly invoking hooks would still not prove native runtime execution.
+- Decision: Add one deterministic, read-only Codex post-install verifier. It anchors the running CLI to the canonical managed root recorded in owner-local install state, requires a canonical non-symlink workspace and exact initialized workspace identity, verifies the managed Codex projection against the active embedded bundle and selected tracks, and requires exactly one Maestro-owned binding for every canonical lifecycle event pointing to that installed CLI and workspace-local orchestration state. The report remains configuration-only: lifecycle capabilities must stay fail-closed and native observation must remain `not_observed`.
+- Consequences: Installers can stop on missing, mismatched, tampered, duplicate or symlinked local surfaces without mutating global Codex settings or starting a model session. The check does not qualify native hooks, release signing, clean-device acceptance or pilot readiness; those retain their separate evidence gates.
+- Refs: specs/001-cli-distribution.md; specs/020-adapter-diagnostics.md; specs/026-workspace-local-adapter-installation.md; specs/035-lifecycle-evidence-matrix.md; specs/042-post-install-readiness.md; internal/installreadiness
+- Supersedes: none
