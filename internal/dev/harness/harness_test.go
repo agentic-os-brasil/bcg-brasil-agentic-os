@@ -23,7 +23,13 @@ func TestValidationWorkflowSummaryUsesTerminalContexts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "validate.yml"))
+	workflowPath := filepath.Join(root, ".github", "workflows", "validate.yml")
+	if _, statErr := os.Stat(workflowPath); os.IsNotExist(statErr) {
+		workflowPath += ".disabled"
+	} else if statErr != nil {
+		t.Fatal(statErr)
+	}
+	body, err := os.ReadFile(workflowPath)
 	if err != nil {
 		t.Fatal(err)
 	}
