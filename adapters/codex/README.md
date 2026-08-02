@@ -12,9 +12,9 @@ development hooks as a product capability.
 
 Evidence snapshot: `as_of: 2026-08-02` · `base_commit:
 03fe7a0bdcb12bf6fbab693fa8e5fca418b160b3` (PR #150; documentation follow-up
-stacked) · recorded runtime: Codex `0.144.1` · native evidence: no fresh
-native-session observation for any lifecycle event. This adapter is configured
-and has local contract coverage, but is not `native-qualified`,
+stacked) · runtime evidence: no reproducible in-repo runtime-version artifact
+or fresh native-session observation is attached. This adapter is configured and
+has local contract coverage, but is not `native-qualified`,
 `release-ready` or `pilot-ready`.
 
 The managed Maestro, Case, Client Account, PA Expert, Walter and Darwin definitions live in

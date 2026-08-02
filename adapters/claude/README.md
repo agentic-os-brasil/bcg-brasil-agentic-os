@@ -13,17 +13,17 @@ and emit metadata-only local receipts.
 This establishes configured wiring and local contract behavior, not native
 qualification. Evidence snapshot: `as_of: 2026-08-02` · `base_commit:
 03fe7a0bdcb12bf6fbab693fa8e5fca418b160b3` (PR #150; documentation follow-up
-stacked) · recorded runtime: Claude `2.1.119`, below the `2.1.177`
-qualification floor · native evidence: no qualifying fresh session. This
-adapter is not `native-qualified`,
+stacked) · runtime evidence: no reproducible in-repo runtime-version artifact
+or qualifying fresh session is attached. This adapter is not `native-qualified`,
 `release-ready` or `pilot-ready`.
 
 Every product lifecycle event remains explicitly `unavailable` in the
 capability manifest. `bcgos doctor` diagnoses configuration and receipts
 separately. A receipt is marked `adapter_command`: it proves the bounded
 Maestro command ran, not that Claude invoked it in a qualifying native session.
-The lifecycle probe also blocks native qualification below Claude `2.1.177`
-and reports the evidence class for each event. See Spec 035 and
+The lifecycle probe applies the configured runtime qualification floor and
+reports the evidence class for each event; this snapshot does not attach the
+exact runtime version observed by that probe. See Spec 035 and
 `docs/lifecycle-readiness.md` for the evidence matrix.
 
 The managed Maestro, Case, Client Account, PA Expert, Walter and Darwin definitions live in

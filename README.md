@@ -150,13 +150,20 @@ attestation is not cryptographic principal authentication.
 
 ### Evidence vocabulary and snapshot
 
-These labels are deliberately non-interchangeable:
+These labels are deliberately non-interchangeable. Configured, local
+contract-tested, adapter-observed and native-qualified are lifecycle evidence
+classes; release-ready and pilot-ready are delivery gates and do not follow
+from lifecycle evidence alone:
 
 - **Configured** means files, hooks or plist definitions are installed or
   rendered; it does not show that a runtime loaded or invoked them.
 - **Local contract-tested** means deterministic repository behavior and its
   fixtures/tests cover the boundary; it is not a fresh test run or native
   session result.
+- **Adapter-observed** means an installed adapter emitted a bounded
+  `adapter_command` receipt or equivalent diagnostic signal; it proves the
+  product command/adapter boundary ran, not that a native runtime invoked the
+  hook or that the capability is qualified.
 - **Native-qualified** requires a fresh supported-runtime session with bounded,
   reviewable event evidence.
 - **Release-ready** requires a signed, publishable artifact and the release
@@ -167,9 +174,11 @@ These labels are deliberately non-interchangeable:
 03fe7a0bdcb12bf6fbab693fa8e5fca418b160b3` (PR #150 head; this documentation
 follow-up is stacked on that commit) · test evidence: repository fixtures and
 prior local validation records are present; this follow-up claims no fresh test
-run · runtime evidence: no fresh native-session receipt for Claude or Codex ·
-release/pilot evidence: no signed artifact, clean-device acceptance,
-support/incident owner or pilot-gate record in this snapshot.
+run · runtime evidence: no reproducible in-repo runtime-version artifact or
+fresh native-session receipt for Claude or Codex; prior external version
+observations are not treated as current snapshot evidence · release/pilot
+evidence: no signed artifact, clean-device acceptance, support/incident owner or
+pilot-gate record in this snapshot.
 
 ### Maturity ladder
 
