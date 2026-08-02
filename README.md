@@ -21,6 +21,7 @@
   <a href="#pilot-boundaries">Pilot boundaries</a> ·
   <a href="#start-here">Start here</a> ·
   <a href="docs/onboarding/maestro-user-onboarding.md">Onboarding</a> ·
+  <a href="docs/development-harness.md">Development harness</a> ·
   <a href="docs/onboarding/sharepoint-prior-work-onboarding.md">Prior-work retrieval</a> ·
   <a href="docs/roadmap/maestro-evolution-roadmap.md">Product evolution</a> ·
   <a href="ROADMAP.md">Engineering roadmap</a> ·
@@ -117,6 +118,24 @@ The repository is currently at tier 1. Q-011 (one concrete use case, persona
 and acceptance metric) must close before tier 3; no user pilot should be
 described as active while native lifecycle evidence is pending.
 
+### Readiness is not one status
+
+Maestro reports different kinds of evidence separately. Passing one row never
+closes the rows below it:
+
+| Surface | What it proves | What it does not prove | Current boundary |
+| --- | --- | --- | --- |
+| **Contract-validated** | Deterministic core, schemas, tests and the development harness agree. | A native runtime invoked the adapter, or that a release is trusted. | Current repository maturity tier. |
+| **Runtime-qualified** | A fresh supported native session invoked the exact installed adapter and produced bounded evidence. | That local configuration, a direct hook command or an `adapter_command` receipt came from a native session. | Lifecycle capabilities remain unavailable until this evidence exists. |
+| **CI** | The required hosted workflow ran and passed for the exact source revision. | That local validation is CI, or that a skipped/no-step run is green. | Check the remote run for each change. |
+| **Reviewed** | A human reviewer assessed the exact change and its evidence. | Approval, mergeability or merge by itself. | Required for the contributor path. |
+| **Mergeable** | The remote branch is current and its checks, review and repository rules allow a merge. | That the change was merged or is pilot-ready. | Recheck remote state; it can change after review. |
+| **Pilot-ready** | Signed distribution, clean-device acceptance, support/incident ownership and the approved pilot gate exist. | That contracts, docs or a technical rehearsal alone authorize users. | Not declared for this repository. |
+
+The detailed contributor procedures and evidence boundaries live in the
+[development harness guide](docs/development-harness.md). It is a
+development-only surface and is not part of the `bcgos` product installation.
+
 ## Pilot boundaries
 
 <table>
@@ -156,17 +175,26 @@ use a verified release and `bcgos` — not Git, Go, Python, Node or Docker.
 Distribution is intentionally not yet declared ready until signed artifacts and
 clean-device evidence exist.
 
+Start with the [Maestro user onboarding](docs/onboarding/maestro-user-onboarding.md).
+Do not run the contributor harness or clone the repository as a substitute for
+an authorized release.
+
 ### 🧑‍💻 Contributor
 
 ```text
 1. Read CONTRIBUTING.md
-2. Run: go run ./dev/harness setup
-3. Start a session and say: “Use start-contributing.”
-4. Follow: start-work → develop-change → prepare-pr → human review
+2. Run: go run ./dev/harness doctor
+3. Run: go run ./dev/harness setup
+4. Start a session and say: “Use start-contributing.”
+5. Follow: start-work → develop-change → prepare-pr → human review
 ```
 
 For the complete product map, see the [roadmap](ROADMAP.md). For the actual
-delivery and validation contract, see [CONTRIBUTING.md](CONTRIBUTING.md).
+delivery and validation contract, see [CONTRIBUTING.md](CONTRIBUTING.md) and
+the [development harness guide](docs/development-harness.md). The local fast
+gate is `go run ./dev/harness validate`; the complete repository gate is
+`go run ./dev/harness validate --full`. Neither command proves CI, review,
+mergeability or pilot readiness.
 
 ### Automatic maintenance, with honest boundaries
 
@@ -211,8 +239,15 @@ Lifecycle adapter evidence is intentionally separated into configuration,
 direct-contract tests, adapter-command receipts and native-session proof. See
 [the lifecycle evidence matrix](specs/035-lifecycle-evidence-matrix.md).
 
+The following are source-level `bcgos` commands exposed by the current CLI.
+Their existence is not a promise that every capability is available in an
+authorized release; `doctor` and the command result are the authority for
+`unavailable`, `blocked` or `degraded` states.
+
 ```text
+bcgos version
 bcgos init <workspace>
+bcgos status <workspace>
 bcgos doctor <workspace>
 bcgos profile show
 bcgos owner init
