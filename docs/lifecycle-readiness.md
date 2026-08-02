@@ -27,7 +27,7 @@ them.
 
 ```mermaid
 flowchart LR
-    Configured --> ContractTested["contract-tested"]
+    Configured --> ContractTested["local contract-tested"]
     ContractTested --> AdapterObserved["adapter-observed"]
     AdapterObserved --> NativeQualified["native-qualified"]
     NativeQualified --> Promote["capability may be promoted"]
