@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
@@ -28,6 +30,8 @@ func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
 		{"verify rejects get", http.MethodGet, "/api/verify", http.StatusMethodNotAllowed},
 		{"install rejects get", http.MethodGet, "/api/install", http.StatusMethodNotAllowed},
 		{"open data rejects get", http.MethodGet, "/api/open-data", http.StatusMethodNotAllowed},
+		{"create workspace rejects get", http.MethodGet, "/api/create-workspace", http.StatusMethodNotAllowed},
+		{"launch runtime rejects get", http.MethodGet, "/api/launch-runtime", http.StatusMethodNotAllowed},
 		{"close rejects get", http.MethodGet, "/api/close", http.StatusMethodNotAllowed},
 	}
 	for _, test := range tests {
@@ -39,6 +43,119 @@ func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
 				t.Fatalf("status = %d, want %d", recorder.Code, test.want)
 			}
 		})
+	}
+}
+
+func TestWizardLaunchRuntimeChoosesReadyWorkspaceAndUsesApprovedTarget(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "workspace")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: dataRoot}); err != nil {
+		t.Fatal(err)
+	}
+	var launchedRuntime, launchedWorkspace string
+	handler := wizardHandler(options{
+		dataRoot:     dataRoot,
+		sessionToken: "test-token",
+		runtimeTargets: func() []runtimeTarget {
+			return []runtimeTarget{{ID: "claude", Label: "Abrir no Claude Code"}}
+		},
+		workspacePath: func() (string, error) { return workspacePath, nil },
+		launchRuntime: func(runtimeID, path string) error {
+			launchedRuntime, launchedWorkspace = runtimeID, path
+			return nil
+		},
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/launch-runtime", strings.NewReader(`{"runtime":"claude"}`))
+	request.Header.Set("X-Maestro-Session", "test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if launchedRuntime != "claude" || launchedWorkspace != workspacePath {
+		t.Fatalf("launch = %q %q", launchedRuntime, launchedWorkspace)
+	}
+}
+
+func TestWizardLaunchRuntimeRejectsAnUnavailableTarget(t *testing.T) {
+	handler := wizardHandler(options{
+		sessionToken:   "test-token",
+		runtimeTargets: func() []runtimeTarget { return nil },
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/launch-runtime", strings.NewReader(`{"runtime":"codex"}`))
+	request.Header.Set("X-Maestro-Session", "test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "não está disponível") {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestCodexWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
+	workspacePath := "/Users/pilot/Projects/maestro workspace"
+	value, err := url.Parse(codexWorkspaceLink(workspacePath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.Scheme != "codex" || value.Host != "new" || value.Query().Get("path") != workspacePath || !strings.Contains(value.Query().Get("prompt"), "workspace Maestro") {
+		t.Fatalf("deep link = %q", value.String())
+	}
+}
+
+func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	handler := wizardHandler(options{
+		dataRoot:           dataRoot,
+		sessionToken:       "test-token",
+		workspacePath:      func() (string, error) { return workspacePath, nil },
+		configureWorkspace: func(options, string) error { return nil },
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/create-workspace", strings.NewReader(`{"import_existing":false}`))
+	request.Header.Set("X-Maestro-Session", "test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil || inspection.State != "ready" {
+		t.Fatalf("workspace = %#v, err = %v", inspection, err)
+	}
+	if _, err := os.Stat(filepath.Join(dataRoot, "agents", "instances", "workspace-agent-"+inspection.WorkspaceID, "instance.json")); err != nil {
+		t.Fatalf("workspace agent scaffold missing: %v", err)
+	}
+}
+
+func TestWizardStateReportsOnlyARegularInstalledCLI(t *testing.T) {
+	managedRoot := filepath.Join(t.TempDir(), "managed")
+	cliPath := filepath.Join(managedRoot, "bin", "bcgos")
+	if runtime.GOOS == "windows" {
+		cliPath += ".exe"
+	}
+	if err := os.MkdirAll(filepath.Dir(cliPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cliPath, []byte("test"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	handler := wizardHandler(options{managedRoot: managedRoot})
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/state", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var state struct {
+		Installed bool   `json:"installed"`
+		CLIPath   string `json:"cli_path"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &state); err != nil {
+		t.Fatal(err)
+	}
+	if !state.Installed || state.CLIPath != cliPath {
+		t.Fatalf("installed state = %#v, want %q", state, cliPath)
 	}
 }
 
