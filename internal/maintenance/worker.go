@@ -14,10 +14,10 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
-type HandlerFunc func(context.Context, Command) (HandlerResult, error)
+type HandlerFunc func(context.Context, Command, ExecutionGrant) (HandlerResult, error)
 
-func (function HandlerFunc) Execute(ctx context.Context, command Command) (HandlerResult, error) {
-	return function(ctx, command)
+func (function HandlerFunc) ExecuteAuthorized(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+	return function(ctx, command, grant)
 }
 
 type HandlerResult struct {
@@ -65,9 +65,9 @@ type Worker struct {
 	Scheduler scheduler.Store
 	Receipts  Store
 	Jobs      []scheduler.Job
-	// Handlers accepts both the Darwin Execute seam and the canonical Walter
-	// Handle seam. The worker converts either result into its bounded receipt;
-	// it does not duplicate Walter/self logic.
+	// Handlers accepts only grant-aware handlers. The worker owns grant
+	// validation at the dispatch boundary; concrete handlers validate again
+	// before their side effects.
 	Handlers           map[string]any
 	LocalQualification map[string]string
 	ActivatedJobs      []string
@@ -254,8 +254,15 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 	workerCtx, cancel := context.WithTimeout(ctx, command.Deadline.Sub(now))
 	defer cancel()
 	outcomeChannel := make(chan handlerOutcome, 1)
+	grant, grantErr := newExecutionGrant(command)
+	if grantErr != nil {
+		if releaseErr := worker.releaseLease(lease); releaseErr != nil {
+			return worker.recordReleaseRecovery(request, occurrence, base, releaseErr)
+		}
+		return base, grantErr
+	}
 	go func() {
-		result, handlerErr := execute(workerCtx, command)
+		result, handlerErr := execute(workerCtx, command, grant)
 		outcomeChannel <- handlerOutcome{result: result, err: handlerErr}
 	}()
 	var executeErr error
@@ -413,7 +420,8 @@ func (worker Worker) unavailableReceipt(workspaceID string, occurrence scheduler
 	if !validReasonCode(reason) {
 		reason = ReasonHandlerUnavailable
 	}
-	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: id, OccurrenceDigest: digestOccurrence(occurrence), CommandID: "unavailable-" + digestPrefix(occurrence.JobID+occurrence.EventID+occurrence.ScheduledFor.String()), JobID: occurrence.JobID, WorkspaceID: workspaceID, Trigger: triggerForOccurrence(worker.Jobs, occurrence), EventID: occurrence.EventID, State: ReceiptUnavailable, RecordedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID), ReasonCode: reason}
+	trigger := triggerForOccurrence(worker.Jobs, occurrence)
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: id, OccurrenceDigest: occurrenceDigest(occurrence, trigger), CommandID: "unavailable-" + digestPrefix(occurrence.JobID+occurrence.EventID+occurrence.ScheduledFor.String()), JobID: occurrence.JobID, WorkspaceID: workspaceID, Trigger: trigger, EventID: occurrence.EventID, State: ReceiptUnavailable, RecordedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID), ReasonCode: reason}
 	return receipt, worker.Receipts.AppendReceipt(receipt)
 }
 
@@ -440,8 +448,8 @@ func triggerForOccurrence(jobs []scheduler.Job, occurrence scheduler.Occurrence)
 	return triggerForCadence(jobs, occurrence.JobID)
 }
 
-func digestOccurrence(occurrence scheduler.Occurrence) string {
-	return digest(occurrence.JobID + "\x00" + occurrence.EventID + "\x00" + occurrence.ScheduledFor.UTC().Format(time.RFC3339Nano))
+func occurrenceDigest(occurrence scheduler.Occurrence, trigger Trigger) string {
+	return (Command{JobID: occurrence.JobID, Trigger: trigger, EventID: occurrence.EventID, ScheduledFor: occurrence.ScheduledFor}).OccurrenceDigest()
 }
 
 func digestPrefix(value string) string { return digest(value)[:16] }

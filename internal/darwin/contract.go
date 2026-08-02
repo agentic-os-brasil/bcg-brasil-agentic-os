@@ -374,11 +374,11 @@ func (invoker FilesystemInvoker) Invoke(ctx context.Context, call ToolCall, arti
 		return ToolResult{}, errors.New("Darwin filesystem resource escapes the maintenance scope")
 	}
 	relative := strings.TrimPrefix(parsed.Path, scopePrefix)
-	if relative == "" || !idPattern.MatchString(pathpkg.Base(relative)) {
-		return ToolResult{}, errors.New("Darwin filesystem resource has an unsafe artifact name")
-	}
 	if artifact.SchemaVersion != SchemaVersion || artifact.AgentID != AgentID || artifact.WindowID == "" || artifact.ProposalID == "" {
 		return ToolResult{}, errors.New("Darwin artifact is invalid")
+	}
+	if !idPattern.MatchString(artifact.ProposalID) || pathpkg.Dir(relative) != "derived" || pathpkg.Base(relative) != string(artifact.Action)+"-"+artifact.ProposalID+".json" {
+		return ToolResult{}, errors.New("Darwin filesystem resource is not the artifact-bound derived path")
 	}
 	body := fmt.Sprintf("{\"schema_version\":%d,\"agent_id\":%q,\"window_id\":%q,\"proposal_id\":%q,\"finding\":%q,\"action\":%q}\n", artifact.SchemaVersion, artifact.AgentID, artifact.WindowID, artifact.ProposalID, artifact.Finding, artifact.Action)
 	destination := filepath.Join(invoker.Root, relative)

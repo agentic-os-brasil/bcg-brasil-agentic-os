@@ -168,7 +168,13 @@ func withManagedStateLock(ctx context.Context, root string, operation func() err
 		if time.Now().After(deadline) {
 			return errManagedStateLockBusy
 		}
-		time.Sleep(5 * time.Millisecond)
+		timer := time.NewTimer(5 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
 }
 
@@ -207,7 +213,7 @@ func replaceManagedState(root string, body []byte) error {
 	if err := temporary.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(temporaryPath, filepath.Join(root, managedStateRelativePath)); err != nil {
+	if err := replaceManagedStateFile(temporaryPath, filepath.Join(root, managedStateRelativePath)); err != nil {
 		return err
 	}
 	actual, err := os.ReadFile(filepath.Join(root, managedStateRelativePath))
