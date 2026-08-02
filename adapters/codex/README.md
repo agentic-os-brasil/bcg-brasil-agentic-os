@@ -11,8 +11,8 @@ observation is still pending, and Codex must not inherit Claude-specific
 development hooks as a product capability.
 
 Evidence snapshot: `as_of: 2026-08-02` · `base_commit:
-03fe7a0bdcb12bf6fbab693fa8e5fca418b160b3` (PR #150; documentation follow-up
-stacked) · runtime evidence: no reproducible in-repo runtime-version artifact
+61c66dfecbdc21bff6137398243236232fd14988` (current PR #150 parent; documentation
+follow-up stacked) · runtime evidence: no reproducible in-repo runtime-version artifact
 or fresh native-session observation is attached. This adapter is configured and
 has local contract coverage, but is not `native-qualified`,
 `release-ready` or `pilot-ready`.

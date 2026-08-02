@@ -14,7 +14,7 @@ All notable changes will be documented here.
   classes configured, local contract-tested, adapter-observed and
   native-qualified, alongside the delivery gates release-ready and pilot-ready;
   recorded the current evidence boundary (`as_of: 2026-08-02`, base commit
-  `03fe7a0bdcb12bf6fbab693fa8e5fca418b160b3`, no reproducible in-repo runtime
+  `61c66dfecbdc21bff6137398243236232fd14988`, no reproducible in-repo runtime
   version artifact or fresh Claude/Codex native-session receipt, and no signed
   or clean-device pilot evidence).
 - Contributor-facing development-harness guide and evidence-layer map, with

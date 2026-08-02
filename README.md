@@ -172,8 +172,8 @@ from lifecycle evidence alone:
   support/incident ownership and the pilot gate.
 
 **Evidence snapshot:** `as_of: 2026-08-02` · `base_commit:
-03fe7a0bdcb12bf6fbab693fa8e5fca418b160b3` (PR #150 head; this documentation
-follow-up is stacked on that commit) · test evidence: repository fixtures and
+61c66dfecbdc21bff6137398243236232fd14988` (current PR #150 head; this
+documentation follow-up is stacked on that parent) · test evidence: repository fixtures and
 prior local validation records are present; this follow-up claims no fresh test
 run · runtime evidence: no reproducible in-repo runtime-version artifact or
 fresh native-session receipt for Claude or Codex; prior external version
