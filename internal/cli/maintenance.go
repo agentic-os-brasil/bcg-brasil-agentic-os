@@ -301,10 +301,6 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 				return reportError(errOut, errors.New("an unbound Maestro LaunchAgent plist already exists; refusing to replace it"))
 			}
 		}
-		status, installErr := lifecycle.Install(context.Background(), *home, spec, true)
-		if installErr != nil {
-			return reportError(errOut, installErr)
-		}
 		timezone := currentTimezone()
 		mode := "filesystem_only"
 		if lifecycle.Native {
@@ -316,12 +312,35 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 		if enrollmentErr == nil {
 			enrolledAt = existing.EnrolledAt
 		}
-		enrollment := maintenance.CanaryEnrollment{SchemaVersion: maintenance.EnrollmentSchemaVersion, WorkspaceID: inspection.WorkspaceID, AgentID: "darwin", Home: filepath.Clean(*home), Executable: program, UID: uid, Timezone: timezone, LaunchAgentLabel: status.Label, Mode: mode, EnrolledAt: enrolledAt, Activated: []maintenance.Activation{{JobID: darwin.HousekeepingJobID, QualificationDigest: maintenance.QualificationDigest(darwin.HousekeepingJobID)}, {JobID: "darwin-deep-weekly", QualificationDigest: maintenance.QualificationDigest("darwin-deep-weekly")}}}
-		if err := maintenance.SaveCanaryEnrollment(root, enrollment); err != nil {
+		enrollment := maintenance.CanaryEnrollment{SchemaVersion: maintenance.EnrollmentSchemaVersion, WorkspaceID: inspection.WorkspaceID, AgentID: "darwin", Home: filepath.Clean(*home), Executable: program, UID: uid, Timezone: timezone, LaunchAgentLabel: canaryLaunchAgentLabel, Mode: mode, EnrolledAt: enrolledAt, Activated: []maintenance.Activation{{JobID: darwin.HousekeepingJobID, QualificationDigest: maintenance.QualificationDigest(darwin.HousekeepingJobID)}, {JobID: "darwin-deep-weekly", QualificationDigest: maintenance.QualificationDigest("darwin-deep-weekly")}}}
+		// RunAtLoad may invoke the worker as soon as launchctl bootstraps the
+		// plist. Persist the exact enrollment first, so that first wake sees the
+		// same bounded authority as all subsequent interval wakes. On a failed
+		// first install we remove this provisional record together with the
+		// lifecycle so no authority survives a partial activation.
+		if freshEnrollment {
+			if err := maintenance.SaveCanaryEnrollment(root, enrollment); err != nil {
+				return reportError(errOut, err)
+			}
+		}
+		status, installErr := lifecycle.Install(context.Background(), *home, spec, true)
+		if installErr != nil {
+			if freshEnrollment {
+				_ = maintenance.DeleteCanaryEnrollment(root)
+			}
+			return reportError(errOut, installErr)
+		}
+		if status.Label != canaryLaunchAgentLabel {
 			if freshEnrollment {
 				_ = lifecycle.Uninstall(context.Background(), *home, status.Label)
+				_ = maintenance.DeleteCanaryEnrollment(root)
 			}
-			return reportError(errOut, err)
+			return reportError(errOut, errors.New("LaunchAgent returned an unexpected managed label"))
+		}
+		if !freshEnrollment {
+			if err := maintenance.SaveCanaryEnrollment(root, enrollment); err != nil {
+				return reportError(errOut, err)
+			}
 		}
 		return writeJSON(out, map[string]any{"state": "enrolled", "binding_state": "exact", "model_backed_capabilities": "unavailable", "enrollment": enrollment, "launch_agent": status}, errOut)
 	}
