@@ -1,4 +1,4 @@
-name: signed Maestro prerelease
+name: signed Maestro prerelease (disabled)
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: pilot engineering evidence
+name: pilot engineering evidence (disabled)
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: release candidate
+name: release candidate (disabled)
 
 on:
   workflow_dispatch:
