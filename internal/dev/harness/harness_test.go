@@ -18,6 +18,26 @@ func TestValidateEmitsCheckStartAndDurationOnFailure(t *testing.T) {
 	}
 }
 
+func TestValidationWorkflowSummaryUsesTerminalContexts(t *testing.T) {
+	root, err := FindRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "validate.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(body)
+	for _, expected := range []string{"id: development_harness", "steps.development_harness.outcome", "job.status"} {
+		if !strings.Contains(workflow, expected) {
+			t.Fatalf("validation workflow is missing terminal observability %q", expected)
+		}
+	}
+	if strings.Contains(workflow, "${CONCLUSION") {
+		t.Fatal("validation workflow still relies on an unset CONCLUSION variable")
+	}
+}
+
 func TestFindRootWalksUpward(t *testing.T) {
 	root := t.TempDir()
 	nested := filepath.Join(root, "a", "b")

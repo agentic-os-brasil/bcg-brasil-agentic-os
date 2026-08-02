@@ -87,6 +87,13 @@ func (worker Worker) Run(ctx context.Context, request WakeRequest) (WakeReport, 
 	if now.IsZero() || strings.TrimSpace(request.WorkspaceID) == "" || strings.TrimSpace(request.OwnerID) == "" {
 		return WakeReport{}, errors.New("maintenance wake requires workspace, owner and time")
 	}
+	if request.Trigger == TriggerEvent || request.Trigger == TriggerContinuous {
+		if err := ValidateEventID(request.EventID); err != nil {
+			return WakeReport{}, err
+		}
+	} else if request.EventID != "" {
+		return WakeReport{}, errors.New("scheduled maintenance wake cannot carry an event ID")
+	}
 	planningNow := now
 	if request.Timezone != "" {
 		location, loadErr := time.LoadLocation(request.Timezone)
@@ -136,9 +143,6 @@ func (worker Worker) Run(ctx context.Context, request WakeRequest) (WakeReport, 
 	}
 	report := WakeReport{SchemaVersion: 1, WorkspaceID: request.WorkspaceID, Trigger: request.Trigger, EventID: request.EventID, State: "no_due_work", Due: due}
 	if request.Trigger == TriggerEvent || request.Trigger == TriggerContinuous {
-		if !commandIDPattern.MatchString(request.EventID) {
-			return WakeReport{}, errors.New("event maintenance wake requires a bounded event ID")
-		}
 		jobs, eventErr := worker.Catalog.ForTrigger("event")
 		if eventErr != nil {
 			return WakeReport{}, eventErr

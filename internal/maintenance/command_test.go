@@ -297,6 +297,23 @@ func TestExecutionAuthorityEnforcesCatalogQualificationAndAttendance(t *testing.
 	if _, err := attended.Authorize(otherWorkspace, now); err == nil {
 		t.Fatal("authority grant crossed workspace boundary")
 	}
+
+	eventCommand := Command{
+		SchemaVersion: CommandSchemaVersion, CommandID: "cmd-event-authority",
+		JobID: "wiki-incremental-sync", WorkspaceID: "workspace-1",
+		Trigger: TriggerEvent, EventID: "source-change-1", ScheduledFor: now,
+		RequestedAt: now, Deadline: now.Add(time.Minute), ProposalOnly: false,
+	}
+	eventOccurrence := OccurrenceAuthorization{WorkspaceID: eventCommand.WorkspaceID, JobID: eventCommand.JobID, Trigger: eventCommand.Trigger, EventID: eventCommand.EventID, ScheduledFor: eventCommand.ScheduledFor}
+	eventCatalog := qualifiedCatalogForTest(t, eventCommand.JobID)
+	eventAuthority, err := NewExecutionAuthority(eventCatalog, []OccurrenceAuthorization{eventOccurrence}, []string{eventCommand.JobID}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := eventAuthority.Authorize(eventCommand, now)
+	if err != nil || got.EventID != eventCommand.EventID {
+		t.Fatalf("authorized event occurrence=%#v err=%v", got, err)
+	}
 }
 
 func qualifiedCatalogForTest(t *testing.T, jobIDs ...string) Catalog {

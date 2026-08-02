@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +36,25 @@ func TestWorkerUnauthorizedWakeDoesNotCreateEnrollmentOrReceipts(t *testing.T) {
 	}
 	if entries, readErr := os.ReadDir(receiptRoot); readErr == nil && len(entries) != 0 {
 		t.Fatalf("unauthorized wake created receipt state: %v", entries)
+	}
+}
+
+func TestWorkerRejectsMalformedEventIDBeforeEnrollment(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schedulerRoot, receiptRoot := t.TempDir(), t.TempDir()
+	worker := Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: schedulerRoot}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "wiki-incremental-sync", Cadence: scheduler.Daily, LocalHour: 3, MaxCatchUp: 1}}}
+	_, err = worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", Trigger: TriggerEvent, EventID: "malformed event", OwnerID: "invalid-event", Now: time.Now().UTC(), Attended: true})
+	if err == nil || !strings.Contains(err.Error(), "bounded event ID") {
+		t.Fatalf("malformed event wake error=%v", err)
+	}
+	if _, err := (scheduler.Store{Root: schedulerRoot}).LoadEnrollment("maestro-system"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("malformed event wake changed enrollment: %v", err)
+	}
+	if entries, readErr := os.ReadDir(receiptRoot); readErr == nil && len(entries) != 0 {
+		t.Fatalf("malformed event wake created receipt state: %v", entries)
 	}
 }
 

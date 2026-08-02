@@ -60,6 +60,12 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 			fmt.Fprintln(errOut, "maintenance wake --trigger event requires --event-id ID")
 			return ExitUsage
 		}
+		if trimmedTrigger == "event" {
+			if err := maintenance.ValidateEventID(trimmedEventID); err != nil {
+				fmt.Fprintln(errOut, err)
+				return ExitUsage
+			}
+		}
 		if trimmedTrigger != "event" && trimmedEventID != "" {
 			fmt.Fprintln(errOut, "--event-id is only valid with --trigger event")
 			return ExitUsage

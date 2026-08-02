@@ -35,6 +35,7 @@ jobs:
             go env GOOS GOARCH
           } | tee -a "${GITHUB_STEP_SUMMARY}"
       - name: Run full development harness (includes parsed action-pin policy)
+        id: development_harness
         run: go run ./dev/harness validate --full
       - name: Validate Windows clean-device operator script syntax
         if: runner.os == 'Windows'
@@ -111,7 +112,8 @@ jobs:
           {
             echo "### Validation completion"
             echo "- job: ${GITHUB_JOB}"
-            echo "- conclusion: ${CONCLUSION:-see job result above}"
+            echo "- harness outcome: ${{ steps.development_harness.outcome }}"
+            echo "- job status: ${{ job.status }}"
             echo "- checkout: $(git rev-parse --short HEAD 2>/dev/null || echo unavailable)"
             git status --short --branch 2>/dev/null || true
           } | tee -a "${GITHUB_STEP_SUMMARY}"
