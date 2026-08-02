@@ -14,10 +14,10 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
-type HandlerFunc func(context.Context, Command) (HandlerResult, error)
+type HandlerFunc func(context.Context, Command, ExecutionGrant) (HandlerResult, error)
 
-func (function HandlerFunc) Execute(ctx context.Context, command Command) (HandlerResult, error) {
-	return function(ctx, command)
+func (function HandlerFunc) ExecuteAuthorized(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+	return function(ctx, command, grant)
 }
 
 type HandlerResult struct {
@@ -61,9 +61,9 @@ type Worker struct {
 	Scheduler scheduler.Store
 	Receipts  Store
 	Jobs      []scheduler.Job
-	// Handlers accepts both the Darwin Execute seam and the canonical Walter
-	// Handle seam. The worker converts either result into its bounded receipt;
-	// it does not duplicate Walter/self logic.
+	// Handlers accepts only grant-aware handlers. The worker owns grant
+	// validation at the dispatch boundary; concrete handlers validate again
+	// before their side effects.
 	Handlers           map[string]any
 	LocalQualification map[string]string
 	ActivatedJobs      []string

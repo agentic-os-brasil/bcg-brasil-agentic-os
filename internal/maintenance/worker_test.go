@@ -13,10 +13,74 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
-type canonicalWalterHandlerFunc func(context.Context, Command) (Receipt, error)
+type canonicalWalterHandlerFunc func(context.Context, Command, ExecutionGrant) (Receipt, error)
 
-func (handler canonicalWalterHandlerFunc) Handle(ctx context.Context, command Command) (Receipt, error) {
+func (handler canonicalWalterHandlerFunc) ProposeWeekly(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+	receipt, err := handler(ctx, command, grant)
+	return HandlerResult{State: receipt.State, ProposalCount: receipt.ProposalCount, ProposalDigest: receipt.ProposalDigest, ProposalArtifactID: receipt.ProposalArtifactID, ReasonCode: receipt.ReasonCode}, err
+}
+
+type legacyExecuteHandlerFunc func(context.Context, Command) (HandlerResult, error)
+
+func (handler legacyExecuteHandlerFunc) Execute(ctx context.Context, command Command) (HandlerResult, error) {
 	return handler(ctx, command)
+}
+
+type authorizedHandlerFunc func(context.Context, Command, ExecutionGrant) (HandlerResult, error)
+
+func (handler authorizedHandlerFunc) ExecuteAuthorized(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+	return handler(ctx, command, grant)
+}
+
+func TestHandlerExecutorRejectsLegacySeam(t *testing.T) {
+	called := false
+	legacy := legacyExecuteHandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+		called = true
+		return HandlerResult{State: ReceiptSucceeded}, nil
+	})
+	if _, ok := handlerExecutor(legacy); ok {
+		t.Fatal("legacy Execute seam remained executable")
+	}
+	if called {
+		t.Fatal("legacy handler executed while being rejected")
+	}
+}
+
+func TestHandlerExecutorRejectsMissingOrMismatchedGrantBeforeHandler(t *testing.T) {
+	command := Command{CommandID: "command-1", JobID: "darwin-housekeeping-daily", WorkspaceID: "maestro-system", Deadline: time.Now().UTC().Add(time.Minute)}
+	otherCommand := command
+	otherCommand.CommandID = "command-2"
+	mismatchedGrant, err := newExecutionGrant(otherCommand)
+	if err != nil {
+		t.Fatal(err)
+	}
+	correctGrant, err := newExecutionGrant(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := 0
+	execute, ok := handlerExecutor(authorizedHandlerFunc(func(_ context.Context, _ Command, _ ExecutionGrant) (HandlerResult, error) {
+		called++
+		return HandlerResult{State: ReceiptSucceeded}, nil
+	}))
+	if !ok {
+		t.Fatal("grant-aware handler was not accepted")
+	}
+	if _, err := execute(context.Background(), command, nil); err == nil {
+		t.Fatal("missing execution grant was accepted")
+	}
+	if _, err := execute(context.Background(), command, mismatchedGrant); err == nil {
+		t.Fatal("command-mismatched execution grant was accepted")
+	}
+	if called != 0 {
+		t.Fatalf("handler executed before grant validation: called=%d", called)
+	}
+	if _, err := execute(context.Background(), command, correctGrant); err != nil {
+		t.Fatal(err)
+	}
+	if called != 1 {
+		t.Fatalf("handler was not executed with the valid grant: called=%d", called)
+	}
 }
 
 func TestWorkerUnauthorizedWakeDoesNotCreateEnrollmentOrReceipts(t *testing.T) {
@@ -52,7 +116,7 @@ func TestWorkerRunsQualifiedDueOccurrenceAndFencesSuccess(t *testing.T) {
 	worker := Worker{
 		Catalog: catalog, Scheduler: scheduler.Store{Root: root}, Receipts: Store{Root: t.TempDir()},
 		Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 2}},
-		Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+		Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
 			called++
 			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
 		})},
@@ -82,7 +146,7 @@ func TestWorkerReleaseFailureReturnsRecoveryRequired(t *testing.T) {
 	worker := Worker{
 		Catalog: catalog, Scheduler: scheduler.Store{Root: root}, Receipts: Store{Root: receiptRoot},
 		Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 1}},
-		Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+		Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
 			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
 		})},
 		LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")},
@@ -119,7 +183,7 @@ func TestWorkerArmFailureAndReleaseFailurePersistRecoveryEvidence(t *testing.T) 
 	worker := Worker{
 		Catalog: catalog, Scheduler: schedulerStore, Receipts: Store{Root: receiptRoot},
 		Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 1}},
-		Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+		Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
 			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
 		})},
 		LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")},
@@ -152,7 +216,7 @@ func TestWorkerPublishCleanupFailurePersistsRecoveryEvidence(t *testing.T) {
 	worker := Worker{
 		Catalog: catalog, Scheduler: schedulerStore, Receipts: Store{Root: receiptRoot},
 		Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 1}},
-		Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+		Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
 			receiptsPath := filepath.Join(schedulerRoot, "workspaces", "maestro-system", "receipts")
 			if err := os.Remove(receiptsPath); err != nil {
 				return HandlerResult{}, err
@@ -200,7 +264,7 @@ func TestWorkerPlansCalendarInEnrollmentTimezoneAndRecordsUTC(t *testing.T) {
 		t.Fatal(err)
 	}
 	receiptRoot := t.TempDir()
-	worker := Worker{Catalog: catalog, Scheduler: schedulerStore, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 3, MaxCatchUp: 1}}, Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+	worker := Worker{Catalog: catalog, Scheduler: schedulerStore, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 3, MaxCatchUp: 1}}, Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
 		return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
 	})}, LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")}, ActivatedJobs: []string{"darwin-housekeeping-daily"}, Deadline: time.Minute}
 	report, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "worker-tz", Timezone: "America/Sao_Paulo", Now: now, Attended: true})
@@ -247,9 +311,9 @@ func TestWorkerHandlesWalterProposalJobAndPublishesOneTerminalReceipt(t *testing
 	worker := Worker{
 		Catalog: catalog, Scheduler: scheduler.Store{Root: root}, Receipts: Store{Root: receiptRoot},
 		Jobs: []scheduler.Job{{ID: WalterSelfReviewWeeklyJobID, Cadence: scheduler.Weekly, Weekday: time.Saturday, LocalHour: 9, MaxCatchUp: 1}},
-		Handlers: map[string]any{WalterSelfReviewWeeklyJobID: canonicalWalterHandlerFunc(func(_ context.Context, command Command) (Receipt, error) {
+		Handlers: map[string]any{WalterSelfReviewWeeklyJobID: WalterWeeklyAdapter{Handler: canonicalWalterHandlerFunc(func(_ context.Context, command Command, _ ExecutionGrant) (Receipt, error) {
 			return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: ReceiptProposalEmitted, RecordedAt: command.RequestedAt, Deadline: command.Deadline, ProposalOnly: true, ProposalCount: 1, ProposalDigest: proposalDigest, ProposalArtifactID: proposalDigest, ReasonCode: ReasonProposalEmitted}, nil
-		})},
+		})}},
 		LocalQualification: map[string]string{WalterSelfReviewWeeklyJobID: QualificationDigest(WalterSelfReviewWeeklyJobID)},
 		ActivatedJobs:      []string{WalterSelfReviewWeeklyJobID}, Deadline: time.Minute,
 	}
@@ -278,7 +342,7 @@ func TestWorkerDoesNotPersistBusyReceipt(t *testing.T) {
 	}
 	started, release := make(chan struct{}), make(chan struct{})
 	makeWorker := func(receiptRoot string) Worker {
-		return Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: root}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 1}}, Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(ctx context.Context, _ Command) (HandlerResult, error) {
+		return Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: root}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 1}}, Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(ctx context.Context, _ Command, _ ExecutionGrant) (HandlerResult, error) {
 			close(started)
 			select {
 			case <-release:
@@ -319,7 +383,7 @@ func TestWorkerDeadlineReturnsFromNonCooperativeHandlerAndNeverMarksSuccess(t *t
 		t.Fatal(err)
 	}
 	release := make(chan struct{})
-	worker := Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: schedulerRoot}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: (now.Hour() + 23) % 24, MaxCatchUp: 1}}, Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+	worker := Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: schedulerRoot}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: (now.Hour() + 23) % 24, MaxCatchUp: 1}}, Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
 		<-release
 		return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
 	})}, LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")}, ActivatedJobs: []string{"darwin-housekeeping-daily"}, Deadline: 20 * time.Millisecond}
@@ -348,7 +412,7 @@ func TestWorkerQuarantinesOccurrenceWhileLateHandlerCanStillSideEffect(t *testin
 	}
 	release := make(chan struct{})
 	makeWorker := func(owner string) Worker {
-		return Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: schedulerRoot}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: (now.Hour() + 23) % 24, MaxCatchUp: 1}}, Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+		return Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: schedulerRoot}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: (now.Hour() + 23) % 24, MaxCatchUp: 1}}, Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
 			<-release
 			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
 		})}, LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")}, ActivatedJobs: []string{"darwin-housekeeping-daily"}, Deadline: 10 * time.Millisecond, Now: func() time.Time { return now }}
@@ -375,7 +439,7 @@ func TestWorkerNeverPersistsHandlerErrorOrSecret(t *testing.T) {
 	if _, err := (scheduler.Store{Root: schedulerRoot}).EnsureEnrollment("maestro-system", now.Add(-24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	worker := Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: schedulerRoot}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 1}}, Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command) (HandlerResult, error) {
+	worker := Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: schedulerRoot}, Receipts: Store{Root: receiptRoot}, Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 9, MaxCatchUp: 1}}, Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
 		return HandlerResult{}, errors.New("secret-client-prompt-body")
 	})}, LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")}, ActivatedJobs: []string{"darwin-housekeeping-daily"}, Deadline: time.Minute}
 	report, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "worker-secret", Now: now, Attended: true})

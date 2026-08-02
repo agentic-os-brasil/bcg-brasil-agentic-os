@@ -59,40 +59,25 @@ func ValidateExecutionGrant(grant ExecutionGrant, command Command) error {
 	return grant.validate(command)
 }
 
-// handlerExecutor bridges the bounded Darwin seam with the canonical Handle
-// seam used by Walter/self. The worker is the only place that normalizes the
-// two metadata-only result shapes.
+// handlerExecutor admits only the grant-aware worker seam. Validation happens
+// here as well as in concrete handlers so a handler cannot execute if the
+// worker ever passes a missing or command-mismatched grant.
 func handlerExecutor(handler any) (handlerExecuteFunc, bool) {
-	switch typed := handler.(type) {
-	case interface {
-		ExecuteAuthorized(context.Context, Command, ExecutionGrant) (HandlerResult, error)
-	}:
-		return typed.ExecuteAuthorized, true
-	case interface {
-		Execute(context.Context, Command) (HandlerResult, error)
-	}:
-		return func(ctx context.Context, command Command, _ ExecutionGrant) (HandlerResult, error) {
-			return typed.Execute(ctx, command)
-		}, true
-	case Handler:
-		return func(ctx context.Context, command Command, _ ExecutionGrant) (HandlerResult, error) {
-			receipt, err := typed.Handle(ctx, command)
-			return HandlerResult{
-				State:              receipt.State,
-				ProposalCount:      receipt.ProposalCount,
-				ProposalDigest:     receipt.ProposalDigest,
-				ProposalArtifactID: receipt.ProposalArtifactID,
-				ReasonCode:         receipt.ReasonCode,
-			}, err
-		}, true
-	default:
+	typed, ok := handler.(Handler)
+	if !ok {
 		return nil, false
 	}
+	return func(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+		if err := ValidateExecutionGrant(grant, command); err != nil {
+			return HandlerResult{}, err
+		}
+		return typed.ExecuteAuthorized(ctx, command, grant)
+	}, true
 }
 
-// Handler is the runtime-neutral worker seam. Scheduling and authority decide
-// whether a command may run; a handler only executes the already-authorized
-// bounded occurrence and returns a metadata-only receipt.
+// Handler is the only runtime-neutral worker seam. Scheduling and authority
+// decide whether a command may run; a handler must receive and honor the
+// worker-issued grant before any side effect.
 type Handler interface {
-	Handle(context.Context, Command) (Receipt, error)
+	ExecuteAuthorized(context.Context, Command, ExecutionGrant) (HandlerResult, error)
 }
