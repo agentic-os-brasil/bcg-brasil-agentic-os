@@ -15,7 +15,7 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/content-navigation
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 5b3b09f72f7872c9e9b058aad080cc89018c0fa48a7317823edb74ade66d9314
+x-bcgos-source-fingerprint: ea273682e4d6a012818a7a4c7c16c60bd7ec98f26cf732b999ef5a5e62c3625d
 x-bcgos-freshness: fresh
 x-bcgos-status: active
 x-bcgos-generator-version: bcgos-managed-wiki/0.1
@@ -35,7 +35,9 @@ This managed concept is generated from the reviewed repository source `specs/007
 
 # Spec 007 - Content navigation through a compiled LLM wiki
 
-Status: architecture accepted; deterministic managed atlas compiler/validator implemented; private memory atlas pending.
+Status: architecture accepted; initial deterministic managed atlas compiler and
+partial OKF/profile validator implemented through the development harness;
+full profile/security lifecycle and private memory atlas remain pending.
 
 ## Objective
 
@@ -195,9 +197,12 @@ Graph visualization, embeddings, vector search, Obsidian compatibility and a gra
 
 ## V1 implementation boundary
 
-V1 implements only the managed product atlas. The first deterministic compiler and
-OKF/profile validator are available through the development-only harness; durable
-event outbox, runtime pointer refresh and private compilation remain pending.
+V1 implements only the managed product atlas. The first deterministic compiler
+and partial OKF/profile validator are available through the development-only
+harness; durable event outbox, runtime pointer refresh, complete broken-link
+validation and private compilation remain pending. The current diagnostics
+shape is reviewable and deterministic, but a generated empty `broken_links`
+list is not evidence that every Markdown link was resolved.
 
 1. Define the page and machine-readable index schemas.
 2. Compile allowlisted decisions, specs, product skills and product documentation.
