@@ -105,7 +105,7 @@ func (store Store) Receipts() ([]Receipt, error) {
 
 func validAction(action Action) bool {
 	switch action {
-	case ActionRecordCapabilityGap, ActionRefreshDerivedState, ActionReconcileScheduler, ActionRunContractValidation:
+	case ActionRecordCapabilityGap, ActionRefreshDerivedState, ActionReconcileScheduler, ActionRunContractValidation, ActionReviewStateDocuments:
 		return true
 	default:
 		return false

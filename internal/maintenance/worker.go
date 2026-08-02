@@ -214,7 +214,12 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		}
 		return base, err
 	}
-	workerCtx, cancel := context.WithDeadline(ctx, command.Deadline)
+	// `WakeRequest.Now` is a logical scheduler clock used for deterministic
+	// planning and receipt timestamps. The execution budget itself must be a
+	// real elapsed duration: binding a context to that logical absolute time
+	// makes a valid recovered occurrence immediately time out whenever a
+	// caller replays an older scheduled window.
+	workerCtx, cancel := context.WithTimeout(ctx, worker.Deadline)
 	defer cancel()
 	outcomeChannel := make(chan handlerOutcome, 1)
 	go func() {

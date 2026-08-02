@@ -57,12 +57,13 @@ const (
 type ObservationCode string
 
 const (
-	ObservationCapabilityUnavailable ObservationCode = "capability_unavailable"
-	ObservationStateStale            ObservationCode = "state_stale"
-	ObservationSchedulerMissed       ObservationCode = "scheduler_missed"
-	ObservationContractDrift         ObservationCode = "contract_drift"
-	ObservationValidationFailure     ObservationCode = "validation_failure"
-	ObservationOperatingFriction     ObservationCode = "operating_friction"
+	ObservationCapabilityUnavailable   ObservationCode = "capability_unavailable"
+	ObservationStateStale              ObservationCode = "state_stale"
+	ObservationSchedulerMissed         ObservationCode = "scheduler_missed"
+	ObservationContractDrift           ObservationCode = "contract_drift"
+	ObservationValidationFailure       ObservationCode = "validation_failure"
+	ObservationOperatingFriction       ObservationCode = "operating_friction"
+	ObservationStateDocumentsOversized ObservationCode = "state_documents_oversized"
 )
 
 type Action string
@@ -72,6 +73,7 @@ const (
 	ActionRefreshDerivedState   Action = "refresh_derived_state"
 	ActionReconcileScheduler    Action = "reconcile_scheduler_receipt"
 	ActionRunContractValidation Action = "run_contract_validation"
+	ActionReviewStateDocuments  Action = "review_state_documents"
 )
 
 type Outcome string
@@ -209,12 +211,13 @@ var (
 	validSeverities = map[Severity]bool{SeverityLow: true, SeverityMedium: true, SeverityHigh: true}
 	validStates     = map[string]bool{"": true, "native": true, "adapter": true, "configured": true, "derived": true, "stale": true, "missing": true, "blocked": true, "healthy": true, "warning": true, "failed": true, "unavailable": true}
 	validCodes      = map[ObservationCode]bool{
-		ObservationCapabilityUnavailable: true,
-		ObservationStateStale:            true,
-		ObservationSchedulerMissed:       true,
-		ObservationContractDrift:         true,
-		ObservationValidationFailure:     true,
-		ObservationOperatingFriction:     true,
+		ObservationCapabilityUnavailable:   true,
+		ObservationStateStale:              true,
+		ObservationSchedulerMissed:         true,
+		ObservationContractDrift:           true,
+		ObservationValidationFailure:       true,
+		ObservationOperatingFriction:       true,
+		ObservationStateDocumentsOversized: true,
 	}
 )
 
@@ -467,6 +470,10 @@ func proposalFor(observation Observation) Proposal {
 		proposal.Action, proposal.Impact, proposal.Effort = ActionRunContractValidation, ImpactSafety, EffortMedium
 	case ObservationOperatingFriction:
 		proposal.Action, proposal.Impact = ActionRefreshDerivedState, ImpactFriction
+	case ObservationStateDocumentsOversized:
+		// A weekly state review is deliberately diagnostic/proposal-only. Darwin
+		// records no document body and does not rewrite operational context.
+		proposal.Action, proposal.Impact, proposal.Rollback = ActionReviewStateDocuments, ImpactFriction, ActionReviewStateDocuments
 	}
 	if observation.Severity == SeverityHigh {
 		proposal.Risk = RiskMedium

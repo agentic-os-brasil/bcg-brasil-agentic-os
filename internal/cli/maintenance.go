@@ -117,7 +117,7 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 	qualification, activated = maintenance.ActivationMaps(enrollment)
 	schedulerStore := scheduler.Store{Root: filepath.Join(root, "maintenance", "scheduler")}
 	darwinRoot := filepath.Join(root, "maintenance", "darwin")
-	builder := darwin.LocalProductHealthBuilder{Scheduler: schedulerStore, Workspace: workspace, Runtime: "runtime-neutral", ManagedStateRoot: darwinRoot}
+	builder := darwin.LocalProductHealthBuilder{Scheduler: schedulerStore, Workspace: workspace, Runtime: "runtime-neutral", ManagedStateRoot: darwinRoot, StateDocumentsRoot: filepath.Join(root, "maintenance", "state-documents")}
 	commandStore := maintenance.Store{Root: filepath.Join(root, "maintenance", "darwin-commands")}
 	guard := darwin.ToolGuardFunc(func(call darwin.ToolCall) error {
 		if call.Tool != "filesystem" || (call.Operation != "write" && call.Operation != "edit") || !strings.HasPrefix(call.Resource, "bcgos://health/maestro-system/") {

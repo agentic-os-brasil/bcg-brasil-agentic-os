@@ -17,12 +17,13 @@ type ProductSurface struct {
 }
 
 type HealthSurfaces struct {
-	Doctor        ProductSurface `json:"doctor"`
-	Capability    ProductSurface `json:"capability"`
-	Validation    ProductSurface `json:"validation"`
-	Scheduler     ProductSurface `json:"scheduler"`
-	ManagedState  ProductSurface `json:"managed_state"`
-	FrictionCodes []string       `json:"friction_codes"`
+	Doctor         ProductSurface `json:"doctor"`
+	Capability     ProductSurface `json:"capability"`
+	Validation     ProductSurface `json:"validation"`
+	Scheduler      ProductSurface `json:"scheduler"`
+	ManagedState   ProductSurface `json:"managed_state"`
+	StateDocuments ProductSurface `json:"state_documents"`
+	FrictionCodes  []string       `json:"friction_codes"`
 }
 
 type HealthRequest struct {
@@ -61,7 +62,7 @@ func (surface ProductSurface) validate() error {
 }
 
 func (surfaces HealthSurfaces) Validate() error {
-	for _, surface := range []ProductSurface{surfaces.Doctor, surfaces.Capability, surfaces.Validation, surfaces.Scheduler, surfaces.ManagedState} {
+	for _, surface := range []ProductSurface{surfaces.Doctor, surfaces.Capability, surfaces.Validation, surfaces.Scheduler, surfaces.ManagedState, surfaces.StateDocuments} {
 		if err := surface.validate(); err != nil {
 			return err
 		}
@@ -97,6 +98,7 @@ func BuildHealthPacket(request HealthRequest) (HealthPacket, error) {
 	add(ObservationSchedulerMissed, SeverityHigh, request.Surfaces.Scheduler)
 	add(ObservationValidationFailure, SeverityHigh, request.Surfaces.Validation)
 	add(ObservationContractDrift, SeverityMedium, request.Surfaces.Doctor)
+	add(ObservationStateDocumentsOversized, SeverityMedium, request.Surfaces.StateDocuments)
 	if len(request.Surfaces.FrictionCodes) > 0 {
 		observations = append(observations, Observation{Code: ObservationOperatingFriction, Severity: SeverityLow, Count: len(request.Surfaces.FrictionCodes), State: "derived"})
 	}

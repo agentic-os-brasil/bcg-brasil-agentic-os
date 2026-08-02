@@ -28,11 +28,12 @@ type HousekeepingHandler struct {
 // LocalProductHealthBuilder derives only bounded product-surface counts from
 // scheduler receipts. It never reads prompts, workspace bodies or raw errors.
 type LocalProductHealthBuilder struct {
-	Scheduler        scheduler.Store
-	Workspace        string
-	Runtime          string
-	ManagedStateRoot string
-	Now              func() time.Time
+	Scheduler          scheduler.Store
+	Workspace          string
+	Runtime            string
+	ManagedStateRoot   string
+	StateDocumentsRoot string
+	Now                func() time.Time
 }
 
 func (builder LocalProductHealthBuilder) Build(ctx context.Context, occurrence scheduler.Occurrence) (HealthPacket, error) {
@@ -58,9 +59,13 @@ func (builder LocalProductHealthBuilder) Build(ctx context.Context, occurrence s
 		runtimeName = "runtime-neutral"
 	}
 	windowDigest := sha256.Sum256([]byte(occurrence.JobID + "\x00" + occurrence.ScheduledFor.UTC().Format(time.RFC3339Nano)))
+	stateDocuments := ProductSurface{State: "healthy"}
+	if occurrence.JobID == "darwin-deep-weekly" {
+		stateDocuments = reviewStateDocuments(builder.StateDocumentsRoot)
+	}
 	request := HealthRequest{SchemaVersion: SchemaVersion, WindowID: "wake-" + hex.EncodeToString(windowDigest[:])[:16], Runtime: runtimeName, Mode: HeadlessHousekeeping, Surfaces: HealthSurfaces{
 		Doctor: ProductSurface{State: "healthy"}, Capability: ProductSurface{State: "healthy"}, Validation: ProductSurface{State: "healthy"},
-		Scheduler: ProductSurface{State: map[bool]string{true: "warning", false: "healthy"}[missed > 0], Count: missed}, ManagedState: managedStateSurface(builder.ManagedStateRoot),
+		Scheduler: ProductSurface{State: map[bool]string{true: "warning", false: "healthy"}[missed > 0], Count: missed}, ManagedState: managedStateSurface(builder.ManagedStateRoot), StateDocuments: stateDocuments,
 	}}
 	return BuildHealthPacket(request)
 }

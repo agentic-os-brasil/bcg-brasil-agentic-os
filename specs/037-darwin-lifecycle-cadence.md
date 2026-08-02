@@ -52,6 +52,14 @@ catalog-only/unavailable state cannot authorize it. Approval and application
 are separate transactions. Darwin cannot mutate code, policy, release state or
 capability manifests from a scheduled run.
 
+The weekly deep review also evaluates only registered, Darwin-owned
+`<agent-id>/states.md` control-plane documents beneath its local maintenance
+root. It retains no path or body: it counts only documents that exceed the
+closed byte/line bounds and emits a proposal for concision. It never reads a
+client workspace or dossier, rewrites a `states.md`, or treats a missing state
+document as drift. Semantic condensation remains an attended, separately
+authorized runtime activity.
+
 The Darwin worker does not implement the scheduler's raw `Executor` interface.
 Native adapters must construct the qualified authority and bounded command;
 passing an occurrence directly cannot invoke Darwin tools.

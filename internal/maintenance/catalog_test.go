@@ -36,8 +36,8 @@ func TestCatalogRequiresUniversalMaintenancePlane(t *testing.T) {
 		t.Fatal("retired generic self-refinement job remains in the canonical catalog")
 	}
 	walter, found := findJob(catalog.Jobs, "walter-self-review-weekly")
-	if !found || walter.Executor != "model_adapter" || walter.DefaultEnabled || walter.Unattended != "policy_gated" {
-		t.Fatalf("Walter weekly proposal contract drifted: %#v", walter)
+	if !found || walter.Executor != "model_adapter" || walter.DefaultEnabled || walter.Unattended != "policy_gated" || !strings.Contains(walter.SuccessBoundary, "silent self-ingestion") || strings.Contains(walter.SuccessBoundary, "proposal") {
+		t.Fatalf("Walter weekly silent-ingestion contract drifted: %#v", walter)
 	}
 }
 

@@ -4,52 +4,39 @@ The repository contains the runtime-neutral Walter wiring, but the capability
 remains `unavailable` until a native Claude and Codex session proves the same
 contract. Adapter-command receipts are diagnostic only.
 
-The weekly self-review contract is intentionally limited to Walter custody,
-canonical `ownerctx` observations/snapshots and `PromptHistoryStore` selection,
-proposal validation, fenced metadata receipts and an unavailable-by-default
-model handler. The shared maintenance scheduler already emits the weekly
-occurrence and the macOS LaunchAgent may wake the worker; neither mechanism
-installs model authority or turns an unavailable handler into a successful
-review. The remaining work is an approved runtime model adapter, its
-installation-scoped authority, deterministic scheduled input assembly and
-fresh native-session qualification.
+The weekly self-review contract is intentionally a silent, bounded ingestion
+pass: Walter reviews eligible owner-local interaction evidence to compact its
+self projection, without a weekly message, user-facing proposal, or unbounded
+journal. It remains limited to Walter custody, canonical `ownerctx`
+observations/snapshots, bounded `PromptHistoryStore` selection and
+metadata-only fenced receipts. The shared maintenance scheduler already emits
+the weekly occurrence and the macOS LaunchAgent may wake the worker; neither
+mechanism installs model authority or turns an unavailable handler into a
+successful review. The remaining work is an approved runtime model adapter,
+its installation-scoped authority, deterministic scheduled input assembly,
+the bounded silent-compaction publication boundary and fresh native-session
+qualification.
 
-The weekly occurrence is always keyed by the command's stable occurrence
-digest, never by its retry command ID; a bounded IntentHypothesis digest is
-bound into the request digest, not substituted into occurrence identity, and
-is reserved before any model call. A recoverable,
-cross-platform OS advisory lock plus a renewable, deadline-bound occurrence
-lease fences concurrent workers and allows an expired reservation to resume
-after a crash. The current prompt is kept separate and
-wins over history; selected history is translated through a caller-supplied
-translator whose identity/version and receipt digest are bound into the
-ephemeral input. Per-field and combined UTF-8 bounds plus translation
-expansion checks run before the adapter and in request validation. Historical
-entries are explicitly quoted non-instructional evidence. Walter receives only
-an explicit minimal facet allowlist; sensitive facets require a declared
-purpose and owner authorization. Walter may emit only a facet-bound proposal:
-`communication-style`, `voice` and `preferences` use the declared low-risk
-policy, `professional-role` and `decision-rules` remain proposal-only, and
-boundaries/profile require explicit owner confirmation. Intrinsic-purpose
-hypotheses remain task-local and cannot become self facets.
+The weekly occurrence is keyed by a stable occurrence digest, never by its
+retry command ID. A recoverable, cross-platform advisory lock and a renewable,
+deadline-bound occurrence lease fence concurrent workers and permit safe crash
+recovery. Its input is a weekly high-watermark window—not an interactive
+prompt: selected entries are translated through a caller-supplied translator
+whose identity/version and receipt digest are bound to the immutable input.
+Historical entries are quoted, non-instructional evidence. Per-field and
+combined UTF-8 limits apply before the adapter, and the input selector has
+finite interaction count, byte and age limits.
 
-Weekly proposal evidence is accepted only from observations in the
-`corroborated` state with a specific, owner-confirmed explicit instruction,
-correction or endorsement. Observed patterns and inferred hypotheses never
-enter weekly Walter proposals. Independent episodes are still required, and
-an explicit signal cannot jump from `captured` or `eligible` directly to a
-proposal. The maintenance command's deadline bounds the adapter context and
-lease renewal; once it expires, no ownerctx proposal may be written.
-
-The facet sensitivity, readers, refinement mode and confirmation requirement
-are derived from the canonical `ownerctx` snapshot and compared exactly with
-the adapter result. After a model call, the actual ownerctx proposal ID,
-proposal digest and canonical policy are bound into the terminal weekly
-receipt. Re-running a crashed occurrence returns the same ownerctx proposal
-and emits one terminal receipt without invoking the model again; it never
-creates a second proposal. If a self-proxy hypothesis is present, both the
-request and proposal must carry its exact digest; absent hypotheses cannot be
-silently added by an adapter.
+Only corroborated, owner-confirmed explicit instruction, correction or specific
+endorsement may affect the self projection. Observed patterns and inferred
+hypotheses remain provisional; an explicit signal cannot skip the required
+state transitions. The deterministic Owner Context policy derives facet
+sensitivity, readers, refinement mode and confirmation requirement. A
+qualified weekly implementation must replace a bounded per-facet working
+projection atomically, retain only metadata-safe lifecycle evidence for a
+finite recovery window, and fail closed rather than truncate, append another
+weekly narrative or create a user-facing proposal queue. The current preliminary
+proposal seam is not qualified for this behavior and may not be activated.
 
 Walter is the user's alter ego/self proxy inside Maestro's loop. Its central
 question is: “If the user saw this output now for the first time, would they
@@ -60,8 +47,8 @@ naysayer, mind-reader or second authority. Good output is approved quickly;
 gaps return a concrete load-bearing refinement to Maestro, never a direct user
 message. Current explicit prompt/correction dominates history. Self evolution
 is a governed track—explicit signal, bounded candidate, independent episodes,
-periodic Walter proposal, facet policy, owner-attested CAS promotion and
-versioned rollback—and silence, generic OK, isolated inference and ordinary
+facet policy, owner-attested policy where required and versioned rollback—and
+silence, generic OK, isolated inference and ordinary
 loops do not rewrite canonical self. Darwin observes health, drift, conflict
 and age only; it never authors or promotes self.
 

@@ -656,6 +656,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/013-owner-context.md; specs/040-maestro-native-delegation.md; schemas/intent-review-packet.schema.json; internal/maestro; internal/ownerctx; internal/agentorchestration; internal/cli
 - Supersedes: none
 
+## SILE - Keep weekly self learning silent and bounded
+
+- Date: 2026-08-02
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Walter's recurring self review must help the professional self learn from interactions without becoming a second user-facing conversation, an ever-growing transcript, or an uncontrolled canonical-self writer. Darwin's weekly deep maintenance must also prevent installed agent state summaries from accumulating stale detail.
+- Decision: Treat Walter's weekly cycle as a silent, owner-local ingestion and refinement pass. It selects a bounded, expiry-aware weekly interaction window, produces at most the policy-permitted self refinement through the existing Owner Context boundary, and emits only metadata-safe lifecycle evidence; it has no user channel, notification, browsing, delegation or canonical bypass. Boundaries, retention and no-change semantics are explicit so the cycle cannot grow input, output or durable self material indefinitely. Extend Darwin deep weekly with a deterministic, managed-only review of registered `states.md` summaries that enforces per-file bounds and emits only a concise review proposal after validation; it may not read client/workspace state, rewrite policy/canon, or change release/code state.
+- Consequences: Walter remains invisible unless the normal Owner Context policy requires owner confirmation; its silent execution does not imply broad permission or a visible proposal queue. Darwin state hygiene is a separate bounded operational concern, not a new memory system or a source of self evidence. Both tasks remain unavailable until their individual runtime activation and qualification requirements are met.
+- Refs: INTN; PHST; CADN; DARN; specs/013-owner-context.md; specs/036-maintenance-plane.md; specs/037-darwin-lifecycle-cadence.md; specs/041-model-backed-maintenance-activation.md; internal/walterselfreview; internal/darwin
+- Supersedes: none
+
 ## BSEL - Activate optional engineering skills from confirmed interview selection
 
 - Date: 2026-07-31

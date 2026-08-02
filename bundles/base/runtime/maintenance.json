@@ -204,11 +204,11 @@
       "executor": "model_adapter",
       "scope": "owner",
       "availability": "unavailable",
-      "availability_reason": "Walter's runtime-neutral proposal core exists, but an approved model adapter, authority, scheduled input integration and native qualification are not installed",
+      "availability_reason": "Walter's preliminary runtime-neutral seam exists, but the approved model adapter, authority, bounded silent-compaction publication boundary, scheduled input integration and native qualification are not installed",
       "default_enabled": false,
       "unattended": "policy_gated",
       "writes": ["owner_observation"],
-      "success_boundary": "a self-review proposal receipt is staged without canonical self mutation"
+      "success_boundary": "a bounded silent self-ingestion compaction is durably committed through Owner Context policy with metadata-only lifecycle evidence"
     },
     {
       "id": "darwin-structural-evolution-proposal",

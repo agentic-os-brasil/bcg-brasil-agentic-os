@@ -11,9 +11,12 @@ requires a model adapter. This specification defines the minimum activation
 contract for such a job without turning a scheduler, lifecycle hook, installed
 runtime, provider login or shared adapter into execution authority.
 
-`walter-self-review-weekly` is the first intended consumer. `memory-weekly` is
-a separate consumer with a different scope, input policy and success boundary.
-Qualifying or activating either job never activates the other.
+`walter-self-review-weekly` is the first intended consumer. It is a silent,
+bounded self-ingestion pass: it reviews eligible interaction evidence to keep
+Walter's owner-local self projection concise. It is not a user-facing review,
+a weekly message, or an ever-growing journal. `memory-weekly` is a separate
+consumer with a different scope, input policy and success boundary. Qualifying
+or activating either job never activates the other.
 
 ## Invariants
 
@@ -114,8 +117,9 @@ qualified worker derives or receives a short-lived grant that binds:
 - immutable input snapshot digest and its per-source high-watermarks;
 - command deadline, occurrence fence, maximum attempts and remaining token-unit
   budget;
-- exact permitted terminal operation: proposal publication for Walter or the
-  memory staging/commit protocol for weekly memory.
+- exact permitted terminal operation: bounded silent Walter compaction through
+  its Owner Context policy, or the memory staging/commit protocol for weekly
+  memory.
 
 The grant is one-occurrence, non-delegable and unusable after its deadline. It
 does not authorize tools, browsing, arbitrary files, model choice, another job
@@ -220,19 +224,33 @@ runtime, model-class or credential-mode change.
 ## Walter weekly self-review
 
 `walter-self-review-weekly` is the first consumer of this contract. Its
-activation is owner-scoped and proposal-only. The adapter implements the
-runtime-neutral `walterselfreview.ModelAdapter` response contract and receives
-only the explicitly selected canonical Owner Context facets, eligible
-corroborated owner observations, bounded prompt history and the current weekly
-input defined by its immutable snapshot. Sensitive facets require the existing
-declared purpose and owner authorization.
+activation is owner-scoped and silent: it has no user-channel, notification or
+user-action artifact. The adapter implements the runtime-neutral
+`walterselfreview.ModelAdapter` response contract and receives only the
+explicitly selected canonical Owner Context facets, eligible corroborated owner
+observations and bounded prompt history defined by its immutable weekly
+snapshot. It never requires or replays a current interactive task prompt.
+Sensitive facets require the existing declared purpose and owner authorization.
 
-The adapter has no tools, delegation, browsing, canonical-self mutation or user
-channel. Its typed proposal must bind the canonical snapshot, prompt-history,
-translation and optional intent-hypothesis digests. Deterministic Owner Context
-policy derives sensitivity, readers, refinement mode and confirmation
-requirement. Success is `proposal_emitted` only after the proposal and fenced
-metadata receipt are durable; it is never canonical promotion.
+The adapter has no tools, delegation, browsing or user channel. Its typed
+candidate must bind the canonical snapshot, prompt-history and translation
+digests. It has no authority to create a user-visible proposal or to mutate the
+canonical self directly. Deterministic Owner Context policy owns all durable
+compaction: it replaces a bounded per-facet working projection rather than
+appending weekly narrative. The only durable recurring evidence is a
+metadata-only, retention-bounded receipt; raw prompts, observation claims and
+candidate text are never retained as a weekly journal.
+
+Activation must pin the retention budget: maximum selected interactions and
+bytes, maximum eligible evidence age, maximum working bytes per facet and a
+finite receipt recovery window. A subsequent weekly run supersedes the prior
+working projection atomically after validating the same policy/snapshot
+bindings. If compaction cannot preserve an existing policy-bound facet within
+the budget, it fails closed instead of truncating or silently widening storage.
+The owner retains the existing inspect/export/edit/reset controls for canonical
+self data, but the weekly pass itself never surfaces a prompt, proposal or
+notification. Until this silent-compaction publication boundary is implemented
+and qualified, the shipped job remains `unavailable`.
 
 Activating this weekly job does not activate interactive Walter review,
 `agent_orchestration`, Darwin maintenance or any memory job.
