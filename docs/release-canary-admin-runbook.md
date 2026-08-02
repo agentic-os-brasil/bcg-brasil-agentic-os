@@ -127,15 +127,60 @@ version.
 2. Confirm the three required CI checks passed for the exact source commit.
 3. Dispatch **release candidate** from `main` with that version and the
    `canary` channel. Treat its artifact as unsigned engineering output only.
+   The repository workflow dispatch is:
+
+   ```text
+   gh workflow run release-candidate.yml --ref main \
+     -f version=VERSION -f channel=canary
+   ```
+
 4. Verify candidate closure with:
 
    ```text
    go run ./dev/release verify --directory dist/release-candidate
    ```
 
+   Also run readiness against the exact public inputs and candidate. Exit code
+   `0` means no blocked/unavailable checks; exit code `1` is blocked and exit
+   code `3` is unavailable or not evaluated:
+
+   ```text
+   go run ./dev/release readiness \
+     --provider-config dist/release-authority/provider.json \
+     --authority-registry dist/release-authority/registry.json \
+     --authority-registry-sha256 AUTHORITY_REGISTRY_SHA256 \
+     --candidate dist/release-candidate
+   ```
+
 5. Dispatch **signed Maestro prerelease** from the same protected commit,
    version and channel, using its exact publication confirmation. The
-   independent environment reviewer approves the job.
+   independent environment reviewer approves the job:
+
+   ```text
+   gh workflow run signed-prerelease.yml --ref main \
+     -f version=VERSION -f channel=canary \
+     -f publish_confirmation=publish-maestro-prerelease
+   ```
+
+   The workflow executes the authoritative closure commands
+   `go run ./dev/release sign ...` and
+   `go run ./dev/release verify-signed ...` with the protected
+   `MAESTRO_ED25519_SEED_B64` secret. The local equivalent is only permitted
+   inside the approved signing custody and must receive the seed on stdin:
+
+   ```text
+   printf '%s' "$MAESTRO_ED25519_SEED_B64" | \
+     go run ./dev/release sign \
+       --candidate dist/release-candidate \
+       --output dist/signed-release \
+       --authority-registry dist/release-authority/registry.json \
+       --issuer RELEASE_ISSUER --key-id RELEASE_KEY_ID
+   go run ./dev/release verify-signed \
+     --directory dist/signed-release \
+     --authority-registry dist/release-authority/registry.json
+   ```
+
+   Never put the seed in the ledger, shell history, ticket or artifact.
 6. Capture the workflow URL, immutable release URL and tag, source commit,
    manifest digest, signed asset checksums, native-signing evidence and GitHub
    attestation result.
@@ -161,7 +206,24 @@ replace release assets, force-update or use an unsigned override.
 
 Rollback is an authenticated activation of the previously approved release,
 bound to its provider release ID, manifest digest and activation receipt. It is
-not deletion or asset replacement.
+not deletion or asset replacement. The repository does not expose a generic
+`bcgos rollback` command. The only currently executable rollback path is the
+clean-device acceptance script, which invokes the approved bootstrapper:
+
+```text
+bash acceptance/clean-device/macos.sh --phase rollback ... \
+  --activation-receipt /evidence/update-activation-receipt.json \
+  --output /evidence/rollback.json
+powershell -File acceptance/clean-device/windows.ps1 -Phase rollback ... \
+  -ActivationReceipt C:\\evidence\\update-activation-receipt.json \
+  -Output C:\\evidence\\rollback.json
+```
+
+The omitted arguments are mandatory identity, signer, managed-root, data-root,
+workspace and sentinel arguments documented in
+`acceptance/clean-device/README.md`. A release-level rollback without that
+approved bootstrapper/provider surface is `unavailable`/STOP and cannot close
+the Release Canary or pilot gate.
 
 ## Administrator-owned open items
 

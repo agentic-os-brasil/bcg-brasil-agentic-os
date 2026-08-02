@@ -31,6 +31,15 @@ capability to native-qualified, release-ready or pilot-ready.
 Any state may be `unavailable`, `failed` or `stopped`. Those states are
 evidence outcomes, not reasons to infer the next state.
 
+The state vocabulary and ledger fields in this document are currently an
+operator contract, not a repository-emitted or repository-validated record.
+`schemas/canary-report.schema.json` validates only the aggregate local report;
+it does not validate run identity, phase transitions, stop decisions,
+last-known-good identity or countersignatures. Until a schema validator is
+added and run against every ledger entry, the ledger gate is a pre-Canary
+blocker: record the run as `unavailable` or `stopped` and do not claim
+machine-checked Canary evidence.
+
 ## Ownership and responsibilities
 
 | Role | Responsibility | Required sign-off |
@@ -60,7 +69,7 @@ executed for the release under review.
 bcgos maintenance catalog
 bcgos maintenance status
 bcgos maintenance wake \
-  --trigger presence|daily|weekly|monthly|event \
+  --trigger presence|daily|weekly|monthly \
   [--workspace ID] [--attended]
 
 bcgos maintenance canary install-macos \
@@ -85,15 +94,27 @@ current user's data root. Therefore a fixture-home enrollment is suitable for
 filesystem lifecycle evidence, but not for an end-to-end fixture worker wake.
 Do not present that fixture as a runtime result.
 
+Do not run `bcgos maintenance wake --trigger event` in a Canary. The current
+CLI accepts that syntax but has no `--event-id` and
+`internal/cli/maintenance.go:schedulerJobsForTrigger("event")` returns no
+concrete scheduler job. The expected result is no event execution evidence;
+record the path as `unavailable`/STOP until an event job and event identifier
+surface exist.
+
 The direct deterministic Darwin contract is a separate surface:
 
 ```text
 bcgos agent darwin assess --stdin
-bcgos agent darwin housekeeping --stdin
+BCGOS_MAESTRO_CAPABILITY=AUTHORIZED_VALUE \
+BCGOS_DARWIN_CAPABILITY=AUTHORIZED_VALUE \
+BCGOS_RECOVERY_CAPABILITY=AUTHORIZED_VALUE \
+  bcgos agent darwin housekeeping --stdin < health-packet.json
 ```
 
 These commands prove the local contract only. They do not qualify Claude,
-Codex, launchd or a native scheduler.
+Codex, launchd or a native scheduler. All three capability values are required
+by the CLI and must come from the authorized control plane; never place their
+values in the ledger.
 
 ### Release and clean-device evidence
 
@@ -107,6 +128,31 @@ go run ./dev/release candidate \
 
 go run ./dev/release verify \
   --directory dist/release-candidate
+
+go run ./dev/release readiness \
+  --provider-config dist/release-authority/provider.json \
+  --authority-registry dist/release-authority/registry.json \
+  --authority-registry-sha256 AUTHORITY_REGISTRY_SHA256 \
+  --candidate dist/release-candidate
+
+printf '%s' "$MAESTRO_ED25519_SEED_B64" | \
+  go run ./dev/release sign \
+    --candidate dist/release-candidate \
+    --output dist/signed-release \
+    --authority-registry dist/release-authority/registry.json \
+    --issuer RELEASE_ISSUER \
+    --key-id RELEASE_KEY_ID
+
+go run ./dev/release verify-signed \
+  --directory dist/signed-release \
+  --authority-registry dist/release-authority/registry.json
+
+gh workflow run release-candidate.yml --ref main \
+  -f version=VERSION -f channel=canary
+
+gh workflow run signed-prerelease.yml --ref main \
+  -f version=VERSION -f channel=canary \
+  -f publish_confirmation=publish-maestro-prerelease
 
 go run ./dev/pilot-acceptance validate-phase --receipt RECEIPT.json
 
@@ -244,7 +290,10 @@ mutable asset replacement, credential leakage or failed attestation.
 
 **Rollback:** activate the previously approved release through the authenticated
 bootstrapper, bound to its provider release ID, manifest digest and activation
-receipt. Never retag, replace assets or use an unsigned override.
+receipt. The repository has no `bcgos rollback` command and no generic release
+rollback workflow; release-level rollback is therefore `unavailable`/STOP
+until the external provider/bootstrapper invocation and receipt contract are
+attached. Never retag, replace assets or use an unsigned override.
 
 ### Phase 5 — clean-device acceptance
 
@@ -256,6 +305,37 @@ receipt. Never retag, replace assets or use an unsigned override.
 - [ ] Corporate reports bind release, manifest, bootstrapper, registry, signer,
       activation receipt, operator and support owner.
 - [ ] External evidence owner countersigns both reports.
+
+The clean-device scripts are the currently executable rollback surface. They
+invoke the approved bootstrapper's `rollback --data-root DATA_ROOT` only after
+binding the active release to the prior update activation receipt. Use the full
+platform command below; do not substitute `bcgos update --confirm`, which is an
+update activation, not a rollback.
+
+```text
+bash acceptance/clean-device/macos.sh \
+  --phase rollback --run-id RUN_ID --device-id-hash DEVICE_ID_HASH \
+  --version BASELINE_VERSION --provider-release-id BASELINE_PROVIDER_RELEASE_ID \
+  --release-tag maestro-vBASELINE_VERSION --manifest-sha256 BASELINE_MANIFEST_SHA256 \
+  --expected-signer-id EXPECTED_SIGNER_ID --managed-root /managed-root \
+  --data-root /data-root --workspace /workspace --sentinel /path/sentinel \
+  --sentinel-sha256 SENTINEL_SHA256 \
+  --activation-receipt /evidence/update-activation-receipt.json \
+  --output /evidence/rollback.json
+
+powershell -File acceptance/clean-device/windows.ps1 \
+  -Phase rollback -RunID RUN_ID -DeviceIDHash DEVICE_ID_HASH \
+  -Version BASELINE_VERSION -ProviderReleaseID BASELINE_PROVIDER_RELEASE_ID \
+  -ReleaseTag maestro-vBASELINE_VERSION -ManifestSHA256 BASELINE_MANIFEST_SHA256 \
+  -ExpectedSignerID EXPECTED_SIGNER_ID -ManagedRoot C:\\managed-root \
+  -DataRoot C:\\data-root -Workspace C:\\workspace -Sentinel C:\\evidence\\sentinel \
+  -SentinelSHA256 SENTINEL_SHA256 \
+  -ActivationReceipt C:\\evidence\\update-activation-receipt.json \
+  -Output C:\\evidence\\rollback.json
+```
+
+Validate the resulting receipt with
+`go run ./dev/pilot-acceptance validate-phase --receipt rollback.json`.
 
 **Pass:** both corporate reports pass and are externally countersigned.
 
@@ -282,8 +362,9 @@ rollback. Preserve evidence and keep the last-known-good release.
 Specs 009 and 037 require an event identifier for continuous/event signals. The
 current CLI accepts `--trigger event` but does not expose `--event-id`, and its
 current scheduler mapping does not provide a concrete event job. Until a
-separate code change is authorized, documentation must treat event wake as
-unsupported for qualification rather than implying event execution evidence.
+separate code change is authorized, event wake is removed from the executable
+Canary flow and must be recorded as `unavailable`/STOP rather than treated as
+execution evidence.
 
 Likewise, the current `maintenance wake` command has no fixture-home selector.
 Do not claim an isolated `--home` installation has exercised the worker; it has

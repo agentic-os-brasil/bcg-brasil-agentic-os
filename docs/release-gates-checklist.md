@@ -32,8 +32,9 @@ covered.
   the current command has no `--home` selector.
 - [ ] `unavailable`, `busy`, failed and quarantined outcomes remain explicit;
   no wake receipt is treated as durable subsystem success.
-- [ ] Event-trigger evidence is not claimed: the current CLI has no
-  `--event-id` and does not map a concrete event job. See the canonical plan.
+- [ ] `--trigger event` is not run: although the CLI accepts the syntax, it has
+  no `--event-id` and maps no concrete scheduler job. The expected result is
+  `unavailable`/STOP, not event evidence. See the canonical plan.
 
 ### 2. Native qualification (fresh attended runtime evidence)
 
@@ -44,6 +45,9 @@ covered.
   retry fencing, terminal receipt and negative cases pass.
 - [ ] macOS `launchctl` state is identity-bound; a plist on disk is not enough.
 - [ ] Claude and Codex evidence is collected separately where both are claimed.
+- [ ] Direct housekeeping uses all required environment inputs:
+  `BCGOS_MAESTRO_CAPABILITY`, `BCGOS_DARWIN_CAPABILITY` and
+  `BCGOS_RECOVERY_CAPABILITY`, supplied by the authorized control plane.
 - [ ] An independent reviewer signs the qualification evidence and digest.
 
 ### 3. Technical rehearsal (local/repository-deterministic)
@@ -53,6 +57,10 @@ covered.
 - [ ] Windows amd64, macOS Intel and macOS arm64 binaries are built on their
   matching runners and report the requested version.
 - [ ] `go run ./dev/release verify --directory <candidate>` passes.
+- [ ] `go run ./dev/release readiness --provider-config <file>
+  --authority-registry <file> --authority-registry-sha256 <sha256>
+  --candidate <candidate>` returns exit code `0`; exit code `1` is blocked and
+  exit code `3` is unavailable/not evaluated.
 - [ ] Candidate bytes, manifest and notes have recorded SHA-256 digests.
 - [ ] For `0.2.0` or any update receiving a pre-boundary install, the manifest
   carries `practice-agent-to-pa-expert` with exact bundle, catalog and policy
@@ -85,6 +93,9 @@ covered.
   commit, exact asset closure and provider attestation after publication.
 - [ ] Release notes state that the result is a signed prerelease, not
   pilot-ready.
+- [ ] The protected workflow runs `go run ./dev/release sign` with the signing
+  seed on stdin and then `go run ./dev/release verify-signed`; the workflow URL,
+  immutable release URL/tag and attestation are recorded.
 
 ### 5. Pilot-ready (device + operating evidence)
 
@@ -97,6 +108,10 @@ covered.
 - [ ] A clean managed Windows device produces passing install, update and
   rollback receipts for the same run ID and release identities.
 - [ ] A clean managed macOS device produces the same three passing receipts.
+- [ ] Rollback is executed through the platform clean-device script and its
+  approved bootstrapper, using the update activation receipt; there is no
+  generic `bcgos rollback` command. A missing external rollback surface is
+  `unavailable`/STOP.
 - [ ] Each schema-v2 corporate report binds provider release IDs/tags, manifest
   digests, bootstrapper and registry digests, native signer, activation receipt,
   operator and support owner.
@@ -119,11 +134,20 @@ operator/device report paths, countersignature decision ID, support owner and
 incident owner. Never copy private keys, passwords, tokens, certificates or
 raw device identifiers into the ledger.
 
+The current repository has no CLI that emits or validates the full phase ledger
+and transition state machine described by the canonical plan. The aggregate
+`schemas/canary-report.schema.json` is not a substitute. Until a dedicated
+ledger schema validator exists and passes for the exact run, this is an
+explicit pre-Canary blocker: do not check a gate or claim machine-validated
+state evidence.
+
 ## Current boundary
 
 The repository already provides deterministic candidate packaging, manifest and
 artifact closure checks, signed-release verification, provider/update planning,
-transactional install/update/rollback and strict clean-device receipt schemas.
+transactional install/update/rollback inside the approved bootstrapper and
+strict clean-device receipt schemas. It does not provide a generic operator
+rollback CLI or a full Canary ledger validator.
 The signed-release and pilot-ready boxes remain unchecked until the external
 authority, GitHub governance, native signing and managed-device evidence are
 actually present for one real run. A failed CI start caused by billing is an
