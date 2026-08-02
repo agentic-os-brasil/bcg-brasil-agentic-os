@@ -214,7 +214,11 @@ func (worker Worker) runOccurrence(ctx context.Context, request WakeRequest, now
 		}
 		return base, err
 	}
-	workerCtx, cancel := context.WithDeadline(ctx, command.Deadline)
+	// Command timestamps may come from the scheduler's injected clock (and
+	// therefore need not match wall-clock time in deterministic tests). Bound
+	// the handler by the command's logical budget rather than interpreting its
+	// absolute deadline against the process clock.
+	workerCtx, cancel := context.WithTimeout(ctx, command.Deadline.Sub(now))
 	defer cancel()
 	outcomeChannel := make(chan handlerOutcome, 1)
 	go func() {

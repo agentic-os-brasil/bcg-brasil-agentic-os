@@ -225,9 +225,11 @@ attended macOS presence surface explicitly with
 plist, native loaded/enabled state, local timezone, due work and unavailable
 jobs. Enrollment is persisted as preauthorized local authority, not as
 per-wake attended consent. Windows remains fail-closed until native
-qualification. A wake-up never counts as a successful memory commit or wiki
-publication. If a timed-out handler is quarantined, status exposes the
-occurrence; recovery requires an exact, confirmed
+qualification. The macOS and Windows wake templates live under
+[`adapters/`](adapters) as disabled reference artifacts, not raw tasks inside
+the immutable base bundle. A wake-up never counts as a successful memory
+commit or wiki publication. If a timed-out handler is quarantined, status
+exposes the occurrence; recovery requires an exact, confirmed
 `canary recover-quarantine --job-id ... --scheduled-for ... --reason
 operator_confirmed_process_gone --confirm` operation and never auto-clears a
 live fence.
