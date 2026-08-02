@@ -10,8 +10,10 @@ material de cliente em memória genérica.
 
 Este guia serve para o usuário de uma instalação autorizada do Maestro. Ele não
 é o guia para contribuir com o código-fonte. Se você está clonando o
-repositório, use [`CONTRIBUTING.md`](../../CONTRIBUTING.md) e o fluxo de
-contribuidor descrito em [`windows-contributor-prompt.md`](windows-contributor-prompt.md).
+repositório, use [`CONTRIBUTING.md`](../../CONTRIBUTING.md), o
+[guia do development harness](../development-harness.md) e, quando aplicável,
+o fluxo de contribuidor descrito em
+[`windows-contributor-prompt.md`](windows-contributor-prompt.md).
 
 > **Estado atual:** o repositório tem a camada de contratos, CLI e adaptadores
 > em evolução. A distribuição de piloto, a assinatura dos artefatos e o
@@ -23,6 +25,31 @@ contribuidor descrito em [`windows-contributor-prompt.md`](windows-contributor-p
 > [onboarding específico de prior-work](sharepoint-prior-work-onboarding.md).
 > A regra corporativa é explícita: Claude pode ser qualificado para coletar;
 > Codex não se conecta ao SharePoint e usa somente o índice local verificado.
+
+## 0. Escolha a jornada correta
+
+| Você é | Use | Comandos principais | O que não fazer |
+| --- | --- | --- | --- |
+| **Participante de piloto ou usuário autorizado** | Este guia e um release privado verificado. | `bcgos version`, `init`, `status`, `doctor` e os comandos liberados pelo release. | Não clonar o repositório nem usar o harness de desenvolvimento para instalar o produto. |
+| **Contribuidor do repositório** | [`CONTRIBUTING.md`](../../CONTRIBUTING.md) e o [development harness](../development-harness.md). | `go run ./dev/harness doctor`, `setup`, `validate` e `validate --full`. | Não tratar um gate local como CI verde, review concluído, mergeabilidade ou autorização de piloto. |
+
+### Estados que precisam permanecer separados
+
+O resultado de um comando é evidência de uma superfície específica. A escada
+abaixo não é um atalho entre superfícies:
+
+| Estado | Evidência mínima | Não significa |
+| --- | --- | --- |
+| **Contrato validado** | Core determinístico, schemas, testes e harness local passam. | Runtime nativo qualificado ou release confiável. |
+| **Runtime qualificado** | Sessão nativa nova invoca o adapter instalado e produz evidência limitada e reproduzível. | Configuração local, teste direto ou receipt `adapter_command`. |
+| **CI** | Workflow hospedado obrigatório executa e passa para o commit exato. | `validate` local, workflow sem steps ou execução ignorada. |
+| **Review** | Revisor humano avalia o diff e suas evidências. | Merge automático ou branch mergeável. |
+| **Mergeabilidade** | Branch remoto atualizado, checks/review/regras satisfeitos e estado remoto compatível. | Que o merge ocorreu ou que o produto está pronto para usuários. |
+| **Pilot-ready** | Release assinado, aceitação em dispositivos limpos, suporte/incidente e gate de piloto aprovados. | Uma instalação de teste, contrato ou documentação isolada. |
+
+No estado atual, o repositório está em **contract-validated**. A qualificação
+nativa, a distribuição assinada e o gate **pilot-ready** exigem evidência
+própria; uma capacidade `unavailable` deve permanecer fechada e explícita.
 
 ## 1. A promessa em linguagem simples
 
@@ -157,7 +184,9 @@ bcgos adapter status --runtime claude <workspace>
 ```
 
 Troque `claude` por `codex` quando aplicável. A configuração local prepara o
-runtime, mas não prova que uma capability nativa já foi qualificada.
+runtime, mas não prova que uma capability nativa já foi qualificada. Para isso,
+é necessária uma observação em uma sessão nativa nova; consulte a
+[matriz de evidências do lifecycle](../../specs/035-lifecycle-evidence-matrix.md).
 
 ### Passo 3 — Escolha a profundidade de interação
 
@@ -371,6 +400,8 @@ documentos, nomes de cliente ou conteúdo de prompt.
 ## 12. Documentos relacionados
 
 - [Onboarding completo de recuperação de trabalhos anteriores no SharePoint](sharepoint-prior-work-onboarding.md)
+
+- [Development harness para contribuidores](../development-harness.md)
 
 - [README do Maestro](../../README.md)
 - [Roadmap técnico](../../ROADMAP.md)

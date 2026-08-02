@@ -88,6 +88,13 @@ func Setup(root string, out io.Writer) error {
 // Doctor reports contribution readiness without changing files or Git history.
 func Doctor(root string, out io.Writer) error {
 	fmt.Fprintln(out, "BCG Agentic OS - diagnostico de contribuicao")
+	bare, err := gitOutput(root, "rev-parse", "--is-bare-repository")
+	if err == nil && strings.TrimSpace(bare) == "true" {
+		fmt.Fprintln(out, "[aviso] este caminho e um repositorio bare; use um worktree para contribuir")
+		fmt.Fprintln(out, "[ok] nenhum arquivo foi alterado")
+		fmt.Fprintln(out, "proximo passo seguro: rode git worktree list e entre em um worktree limpo")
+		return nil
+	}
 	checks := []struct {
 		label string
 		args  []string

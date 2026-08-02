@@ -17,6 +17,10 @@ All notable changes will be documented here.
   `03fe7a0bdcb12bf6fbab693fa8e5fca418b160b3`, no reproducible in-repo runtime
   version artifact or fresh Claude/Codex native-session receipt, and no signed
   or clean-device pilot evidence).
+- Contributor-facing development-harness guide and evidence-layer map, with
+  README/onboarding links and explicit bare-repository/worktree diagnosis.
+- Managed wiki status clarified to distinguish the implemented compiler slice
+  from the still-pending full profile/security lifecycle and private atlas.
 - Metadata-only core receipt contract for agent tool-call lifecycle breadcrumbs, using closed runtime/tool registries and no prompts, arguments or outputs; native adapter emission remains pending.
 - Initial workspace-scoped execution ledger contract and `bcgos work create|start|inspect|export|delete` commands, with immutable contract digests, revision-checked starts and metadata-only transition history.
 - Resumable execution handoff through bounded checkpoints, metadata-only mutation receipts, pause, compact next-action projection and explicit resume with a new fenced attempt.

@@ -1,31 +1,30 @@
 # Como contribuir
 
-Este guia e para contribuidores do codigo-fonte. Usuarios do piloto instalarao o produto pelo `bcgos` e nao precisarao aprender Git.
+Este arquivo é o ponto de entrada curto para contribuidores do código-fonte.
+Usuários do piloto instalarão o produto pelo `bcgos` e não precisarão aprender
+Git.
 
-## Se voce nao conhece Git
+## Comece pelo onboarding
 
-Se o repositorio ainda nao foi clonado no Windows, comece com `docs/onboarding/windows-contributor-prompt.md`. Envie esse prompt ao Claude para verificar ferramentas, autenticar pelo browser, clonar e executar o bootstrap oficial.
-
-Depois do clone, abra uma nova sessao do Claude dentro do repositorio e diga:
+Se o repositório ainda não foi clonado no Windows, siga o
+[onboarding de contribuidores Windows](docs/onboarding/windows-contributor-prompt.md).
+Depois do clone, abra uma nova sessão do Claude dentro do repositório e diga:
 
 > Use start-contributing e me guie passo a passo.
 
-O agente vai verificar seu ambiente, explicar os termos e oferecer uma unica proxima acao por vez. O caminho diario e:
+## Guia operacional
 
-```text
-start-work -> develop-change -> prepare-pr -> revisao humana
-```
+O [guia do harness de desenvolvimento](docs/development-harness.md) é a
+referência única para comandos, camadas de proteção, boundary entre
+desenvolvimento e produto, troubleshooting e estados de evidência. Consulte-o
+antes de repetir um comando ou interpretar um bloqueio.
 
-Mudancas em memoria, dreaming, rollups ou injecao de contexto usam `evolve-memory` dentro da etapa de desenvolvimento.
+O fluxo diário é conduzido pelas skills canônicas:
 
-Se algo der errado, diga: **"Use recover-work. Estou perdido."** O fluxo de recuperacao primeiro preserva seus arquivos e so depois propoe uma acao.
+~~~
+start-work -> develop-change -> prepare-pr -> revisão humana
+~~~
 
-## Protecoes
+Se algo der errado ou o estado não estiver claro, diga:
 
-- `go run ./dev/harness setup` instala os hooks deste clone.
-- O pre-commit bloqueia trabalho em `main`, possiveis segredos/arquivos de cliente e snapshots que nao passaram pelo gate completo.
-- O pre-push bloqueia envio direto para `main` e codigo diferente do snapshot validado.
-- A CI repete o gate em Windows, macOS e Linux.
-- Um humano revisa e decide o merge do pull request.
-
-Os hooks locais nunca apagam ou guardam arquivos automaticamente. Quando bloqueiam, nada foi perdido.
+> Use recover-work. Estou perdido.
