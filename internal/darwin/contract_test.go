@@ -144,11 +144,12 @@ func TestFilesystemInvokerIsScopedAndMetadataOnly(t *testing.T) {
 	root := t.TempDir()
 	invoker := FilesystemInvoker{Root: root}
 	artifact := Artifact{SchemaVersion: SchemaVersion, AgentID: AgentID, WindowID: "window-4", ProposalID: "proposal-1", Finding: ObservationSchedulerMissed, Action: ActionReconcileScheduler}
-	result, err := invoker.Invoke(context.Background(), ToolCall{Tool: "filesystem", Operation: "write", Resource: "bcgos://health/maestro-system/derived/proposal-1.json"}, artifact)
+	resource := "bcgos://health/maestro-system/derived/" + string(artifact.Action) + "-" + artifact.ProposalID + ".json"
+	result, err := invoker.Invoke(context.Background(), ToolCall{Tool: "filesystem", Operation: "write", Resource: resource}, artifact)
 	if err != nil || result.Outcome != OutcomeNoAction {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
-	body, err := os.ReadFile(filepath.Join(root, "derived", "proposal-1.json"))
+	body, err := os.ReadFile(filepath.Join(root, "derived", string(artifact.Action)+"-"+artifact.ProposalID+".json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,6 +158,12 @@ func TestFilesystemInvokerIsScopedAndMetadataOnly(t *testing.T) {
 	}
 	if _, err := invoker.Invoke(context.Background(), ToolCall{Tool: "filesystem", Operation: "write", Resource: "bcgos://health/maestro-system/derived/../escape.json"}, artifact); err == nil {
 		t.Fatal("traversal resource must fail closed")
+	}
+	if _, err := invoker.Invoke(context.Background(), ToolCall{Tool: "filesystem", Operation: "write", Resource: "bcgos://health/maestro-system/managed-state/other.json"}, artifact); err == nil {
+		t.Fatal("non-derived resource must fail closed")
+	}
+	if _, err := invoker.Invoke(context.Background(), ToolCall{Tool: "filesystem", Operation: "write", Resource: "bcgos://health/maestro-system/derived/other-proposal-1.json"}, artifact); err == nil {
+		t.Fatal("artifact-unbound resource must fail closed")
 	}
 	if _, err := invoker.Invoke(context.Background(), ToolCall{Tool: "shell", Operation: "exec", Resource: "bcgos://health/maestro-system/derived/proposal-1.json"}, artifact); err == nil {
 		t.Fatal("non-filesystem action must fail closed")

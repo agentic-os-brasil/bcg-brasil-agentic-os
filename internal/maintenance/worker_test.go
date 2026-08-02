@@ -390,3 +390,21 @@ func TestWorkerNeverPersistsHandlerErrorOrSecret(t *testing.T) {
 		t.Fatalf("secret leaked in receipt: %#v", report.Receipts[0])
 	}
 }
+
+func TestUnavailableReceiptUsesCanonicalOccurrenceDigest(t *testing.T) {
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	worker := Worker{
+		Receipts: Store{Root: t.TempDir()},
+		Jobs:     []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily}},
+		Deadline: time.Minute,
+	}
+	occurrence := scheduler.Occurrence{JobID: "darwin-housekeeping-daily", ScheduledFor: now}
+	receipt, err := worker.unavailableReceipt("maestro-system", occurrence, now, ReasonHandlerUnavailable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := (Command{JobID: occurrence.JobID, Trigger: TriggerDaily, ScheduledFor: occurrence.ScheduledFor}).OccurrenceDigest()
+	if receipt.OccurrenceDigest != expected {
+		t.Fatalf("unavailable receipt digest=%q, want canonical command digest %q", receipt.OccurrenceDigest, expected)
+	}
+}
