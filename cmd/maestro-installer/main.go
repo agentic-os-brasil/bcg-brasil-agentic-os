@@ -50,12 +50,50 @@ type options struct {
 	runtimeTargets     func() []runtimeTarget
 	chooseImportSource func() (string, error)
 	workspacePath      func() (string, error)
-	configureWorkspace func(options, string) error
+	configureWorkspace func(options, string) (workspaceActivation, error)
+	commandRunner      commandRunner
 }
 
 type runtimeTarget struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
+}
+
+type commandRunner interface {
+	Run(context.Context, string, []string) ([]byte, error)
+}
+
+type commandRunnerFunc func(context.Context, string, []string) ([]byte, error)
+
+func (function commandRunnerFunc) Run(ctx context.Context, executable string, arguments []string) ([]byte, error) {
+	return function(ctx, executable, arguments)
+}
+
+type execCommandRunner struct{}
+
+func (execCommandRunner) Run(ctx context.Context, executable string, arguments []string) ([]byte, error) {
+	return exec.CommandContext(ctx, executable, arguments...).CombinedOutput()
+}
+
+type workspaceActivation struct {
+	State       string                `json:"state"`
+	WorkspaceID string                `json:"workspace_id"`
+	Lifecycle   lifecycleActivation   `json:"lifecycle"`
+	Maintenance maintenanceActivation `json:"maintenance"`
+}
+
+type lifecycleActivation struct {
+	State          string   `json:"state"`
+	Events         []string `json:"events"`
+	StartSession   string   `json:"start_session"`
+	NativeObserved string   `json:"native_observed"`
+}
+
+type maintenanceActivation struct {
+	State          string `json:"state"`
+	Schedule       string `json:"schedule"`
+	NativeObserved bool   `json:"native_observed"`
+	ModelBacked    string `json:"model_backed"`
 }
 
 type wizardLifecycle struct {
@@ -527,7 +565,7 @@ func wizardHandler(options options) http.Handler {
 				return
 			}
 		}
-		result, err := initializeDefaultWorkspace(options, workspacePath)
+		result, activation, err := initializeDefaultWorkspace(options, workspacePath)
 		if err != nil {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
@@ -539,10 +577,11 @@ func wizardHandler(options options) http.Handler {
 			}
 		}
 		writeHTTPJSON(writer, map[string]any{
-			"status": "workspace_created", "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID,
+			"status": activation.State, "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID,
 			"source_registered": sourcePath != "", "ingestion_state": map[bool]string{true: "pending_verified_pack", false: "not_requested"}[sourcePath != ""],
-			"adapter_state": "configured_unverified", "readiness_state": "not_run", "scheduler_state": "not_run",
-			"ready_for_runtime": false, "diagnostic_command": workspaceDiagnosticCommand(options, result.WorkspacePath),
+			"adapter_state": activation.Lifecycle.State, "readiness_state": activation.State, "scheduler_state": activation.Maintenance.State,
+			"ready_for_runtime": activation.State == "ready", "diagnostic_command": workspaceDiagnosticCommand(options, result.WorkspacePath),
+			"activation": activation,
 		})
 	})
 	mux.HandleFunc("/api/launch-runtime", func(writer http.ResponseWriter, request *http.Request) {
@@ -904,62 +943,181 @@ func validateMemorySource(sourcePath, workspacePath string) error {
 	return nil
 }
 
-func initializeDefaultWorkspace(options options, workspacePath string) (workspace.Result, error) {
+func initializeDefaultWorkspace(options options, workspacePath string) (workspace.Result, workspaceActivation, error) {
 	if strings.TrimSpace(options.dataRoot) == "" {
-		return workspace.Result{}, fmt.Errorf("a área de dados do Maestro não está configurada")
+		return workspace.Result{}, workspaceActivation{}, fmt.Errorf("a área de dados do Maestro não está configurada")
 	}
 	if info, err := os.Stat(workspacePath); err == nil && info.IsDir() {
 		inspection, inspectErr := workspace.Inspect(workspacePath, options.dataRoot)
 		if inspectErr != nil {
-			return workspace.Result{}, inspectErr
+			return workspace.Result{}, workspaceActivation{}, inspectErr
 		}
 		if inspection.State != "ready" && inspection.State != "warning" {
 			entries, readErr := os.ReadDir(workspacePath)
 			if readErr != nil {
-				return workspace.Result{}, readErr
+				return workspace.Result{}, workspaceActivation{}, readErr
 			}
 			if len(entries) > 0 {
-				return workspace.Result{}, fmt.Errorf("%s já existe e não é um workspace Maestro; escolha um novo local ou renomeie essa pasta", workspacePath)
+				return workspace.Result{}, workspaceActivation{}, fmt.Errorf("%s já existe e não é um workspace Maestro; escolha um novo local ou renomeie essa pasta", workspacePath)
 			}
 		}
 	} else if err != nil && !os.IsNotExist(err) {
-		return workspace.Result{}, err
+		return workspace.Result{}, workspaceActivation{}, err
 	}
 	result, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: options.dataRoot})
 	if err != nil {
-		return workspace.Result{}, err
+		return workspace.Result{}, workspaceActivation{}, err
 	}
 	if _, err := workspaceagent.Initialize(options.dataRoot, result.WorkspaceID); err != nil {
-		return workspace.Result{}, err
+		return workspace.Result{}, workspaceActivation{}, err
 	}
 	if _, err := agentscaffold.Scaffold(options.dataRoot, agentscaffold.WorkspaceRequest(result.WorkspaceID)); err != nil {
-		return workspace.Result{}, err
+		return workspace.Result{}, workspaceActivation{}, err
 	}
 	configure := options.configureWorkspace
 	if configure == nil {
 		configure = configureWorkspaceRuntime
 	}
-	if err := configure(options, workspacePath); err != nil {
-		return workspace.Result{}, err
+	activation, err := configure(options, workspacePath)
+	if err != nil {
+		return workspace.Result{}, workspaceActivation{}, err
 	}
-	return result, nil
+	return result, activation, nil
 }
 
-func configureWorkspaceRuntime(options options, workspacePath string) error {
+func configureWorkspaceRuntime(options options, workspacePath string) (workspaceActivation, error) {
 	cliPath := installedCLIPath(options)
 	if cliPath == "" {
-		return fmt.Errorf("o executável instalado do Maestro não foi encontrado")
+		return workspaceActivation{}, fmt.Errorf("o executável instalado do Maestro não foi encontrado")
 	}
-	for _, arguments := range [][]string{
-		{"init", workspacePath},
-		{"adapter", "install", "--runtime", "codex", "--executable", cliPath, workspacePath},
-	} {
-		output, err := exec.Command(cliPath, arguments...).CombinedOutput()
+	runner := options.commandRunner
+	if runner == nil {
+		runner = execCommandRunner{}
+	}
+	run := func(arguments []string) ([]byte, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		output, err := runner.Run(ctx, cliPath, arguments)
 		if err != nil {
-			return fmt.Errorf("bootstrap %s falhou: %s", strings.Join(arguments[:min(3, len(arguments))], " "), strings.TrimSpace(string(output)))
+			return nil, commandStepError(cliPath, arguments, output, err)
 		}
+		return output, nil
 	}
-	return nil
+	if _, err := run([]string{"init", workspacePath}); err != nil {
+		return workspaceActivation{}, err
+	}
+	if _, err := run([]string{"adapter", "install", "--runtime", "codex", "--executable", cliPath, workspacePath}); err != nil {
+		return workspaceActivation{}, err
+	}
+	statusOutput, err := run([]string{"status", workspacePath})
+	if err != nil {
+		return workspaceActivation{}, err
+	}
+	var status struct {
+		Workspace struct {
+			State         string `json:"state"`
+			WorkspaceID   string `json:"workspace_id"`
+			WorkspacePath string `json:"workspace_path"`
+		} `json:"workspace"`
+	}
+	if err := json.Unmarshal(statusOutput, &status); err != nil {
+		return workspaceActivation{}, readinessError(cliPath, []string{"status", workspacePath}, "a resposta de readiness do workspace não é JSON válido")
+	}
+	if (status.Workspace.State != "ready" && status.Workspace.State != "warning") || strings.TrimSpace(status.Workspace.WorkspaceID) == "" {
+		return workspaceActivation{}, readinessError(cliPath, []string{"status", workspacePath}, "o workspace não ficou pronto")
+	}
+	if status.Workspace.WorkspacePath != "" && !sameInstallerPath(status.Workspace.WorkspacePath, workspacePath) {
+		return workspaceActivation{}, readinessError(cliPath, []string{"status", workspacePath}, "o readiness retornou outro workspace")
+	}
+	adapterOutput, err := run([]string{"adapter", "status", "--runtime", "codex", workspacePath})
+	if err != nil {
+		return workspaceActivation{}, err
+	}
+	var adapterStatus struct {
+		State      string `json:"state"`
+		Projection struct {
+			State string `json:"state"`
+		} `json:"projection"`
+	}
+	if err := json.Unmarshal(adapterOutput, &adapterStatus); err != nil || adapterStatus.State != "installed" || adapterStatus.Projection.State != "installed" {
+		return workspaceActivation{}, readinessError(cliPath, []string{"adapter", "status", "--runtime", "codex", workspacePath}, "os cinco hooks e a projeção Codex não ficaram configurados")
+	}
+	maintenanceArguments := []string{"maintenance", "canary", "install-macos", "--workspace-path", workspacePath, "--executable", cliPath, "--confirm", "--launchctl"}
+	maintenanceOutput, err := run(maintenanceArguments)
+	if err != nil {
+		return workspaceActivation{}, err
+	}
+	var maintenanceStatus struct {
+		State      string `json:"state"`
+		Enrollment struct {
+			WorkspaceID string `json:"workspace_id"`
+		} `json:"enrollment"`
+		LaunchAgent struct {
+			State           string `json:"state"`
+			FilePresent     bool   `json:"file_present"`
+			Loaded          bool   `json:"loaded"`
+			Enabled         bool   `json:"enabled"`
+			NativeQualified bool   `json:"native_qualified"`
+		} `json:"launch_agent"`
+	}
+	if err := json.Unmarshal(maintenanceOutput, &maintenanceStatus); err != nil {
+		return workspaceActivation{}, readinessError(cliPath, maintenanceArguments, "a resposta da manutenção não é JSON válido")
+	}
+	if maintenanceStatus.State != "enrolled" || maintenanceStatus.Enrollment.WorkspaceID != status.Workspace.WorkspaceID || maintenanceStatus.LaunchAgent.State != "active_loaded_enabled" || !maintenanceStatus.LaunchAgent.FilePresent || !maintenanceStatus.LaunchAgent.Loaded || !maintenanceStatus.LaunchAgent.Enabled || !maintenanceStatus.LaunchAgent.NativeQualified {
+		return workspaceActivation{}, readinessError(cliPath, maintenanceArguments, "o launchd não ficou ativo, carregado e vinculado a este workspace")
+	}
+	return workspaceActivation{
+		State:       "ready",
+		WorkspaceID: status.Workspace.WorkspaceID,
+		Lifecycle: lifecycleActivation{
+			State:          "configured",
+			Events:         []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
+			StartSession:   "configured",
+			NativeObserved: "unavailable_pending_first_session",
+		},
+		Maintenance: maintenanceActivation{
+			State:          maintenanceStatus.LaunchAgent.State,
+			Schedule:       "run_at_load_and_every_15_minutes",
+			NativeObserved: true,
+			ModelBacked:    "unavailable",
+		},
+	}, nil
+}
+
+func commandStepError(cliPath string, arguments []string, output []byte, runErr error) error {
+	detail := strings.TrimSpace(string(output))
+	if len(detail) > 2048 {
+		detail = detail[:2048] + "…"
+	}
+	if detail == "" {
+		detail = runErr.Error()
+	}
+	return fmt.Errorf("ativação falhou em %s: %s. Nada foi marcado como pronto. Corrija o motivo e execute novamente: %s", strings.Join(arguments[:min(3, len(arguments))], " "), detail, installerCommand(cliPath, arguments))
+}
+
+func readinessError(cliPath string, arguments []string, reason string) error {
+	return fmt.Errorf("readiness falhou: %s. Nada foi marcado como pronto. Execute novamente: %s", reason, installerCommand(cliPath, arguments))
+}
+
+func installerCommand(executable string, arguments []string) string {
+	parts := []string{installerShellArgument(executable)}
+	for _, argument := range arguments {
+		parts = append(parts, installerShellArgument(argument))
+	}
+	return strings.Join(parts, " ")
+}
+
+func installerShellArgument(value string) string {
+	if value != "" && !strings.ContainsAny(value, " \t\r\n'") {
+		return value
+	}
+	return shellQuote(value)
+}
+
+func sameInstallerPath(left, right string) bool {
+	leftAbsolute, leftErr := filepath.Abs(filepath.Clean(left))
+	rightAbsolute, rightErr := filepath.Abs(filepath.Clean(right))
+	return leftErr == nil && rightErr == nil && leftAbsolute == rightAbsolute
 }
 
 func writeImportIntent(workspacePath, sourcePath string) error {
