@@ -71,8 +71,8 @@ type Onboarding struct {
 }
 
 type OpenTasks struct {
-	State string   `json:"state"`
-	Items []string `json:"items,omitempty"`
+	State string `json:"state"`
+	Count int    `json:"count"`
 }
 
 type Atlas struct {
@@ -160,7 +160,7 @@ func Build(sources Sources) Packet {
 			OperatingState: pointer(sources.Owner.OperatingState),
 			Tasks:          pointer(sources.Owner.Tasks),
 			Onboarding:     Onboarding{State: onboarding.State, NextQuestion: onboarding.NextQuestion.Question},
-			OpenTasks:      OpenTasks{State: openTasks.State, Items: append([]string(nil), openTasks.Open...)},
+			OpenTasks:      OpenTasks{State: openTasks.State, Count: openTasks.Count},
 		},
 		Atlas: Atlas{
 			Managed:   pointerAtlas("managed", sources.Atlas.Managed),
@@ -201,10 +201,10 @@ func (packet Packet) Validate() error {
 	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Owner.Onboarding.State == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Agents.Message == "" || packet.Memory.State != "unavailable" || packet.Memory.Message == "" {
 		return errors.New("session context packet is missing a required bounded source")
 	}
-	if packet.Owner.Onboarding.State != "required" && packet.Owner.Onboarding.State != "in_progress" && packet.Owner.Onboarding.State != "complete" {
+	if packet.Owner.Onboarding.State != "required" && packet.Owner.Onboarding.State != "in_progress" && packet.Owner.Onboarding.State != "review_required" && packet.Owner.Onboarding.State != "complete" {
 		return errors.New("session context packet has an invalid onboarding state")
 	}
-	if packet.Owner.Onboarding.State != "complete" && packet.Owner.Onboarding.NextQuestion == "" {
+	if (packet.Owner.Onboarding.State == "required" || packet.Owner.Onboarding.State == "in_progress") && packet.Owner.Onboarding.NextQuestion == "" {
 		return errors.New("pending onboarding is missing its next question")
 	}
 	if packet.Owner.OpenTasks.State != "unavailable" && packet.Owner.OpenTasks.State != "empty" && packet.Owner.OpenTasks.State != "available" {

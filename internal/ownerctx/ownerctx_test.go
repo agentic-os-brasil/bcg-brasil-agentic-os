@@ -207,7 +207,7 @@ func TestInitializeCreatesProfessionalFacetsAndInterviewWithoutSensitiveDefaultR
 	}
 }
 
-func TestOnboardingRequiresAnsweredFacetsAndListsOnlyExplicitOpenTasks(t *testing.T) {
+func TestOnboardingRequiresExplicitConfirmationAndCountsOnlyExplicitOpenTasks(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {
 		t.Fatal(err)
@@ -226,8 +226,12 @@ func TestOnboardingRequiresAnsweredFacetsAndListsOnlyExplicitOpenTasks(t *testin
 		t.Fatal(err)
 	}
 	status, err = Inspect(root)
-	if err != nil || status.Onboarding.State != "complete" || status.OpenTasks.State != "available" || len(status.OpenTasks.Open) != 1 || status.OpenTasks.Open[0] != "Prepare kickoff" {
+	if err != nil || status.Onboarding.State != "review_required" || status.OpenTasks.State != "available" || status.OpenTasks.Count != 1 {
 		t.Fatalf("completed status = %#v err=%v", status, err)
+	}
+	status, err = ConfirmOnboarding(root)
+	if err != nil || status.Onboarding.State != "complete" {
+		t.Fatalf("confirmed status = %#v err=%v", status, err)
 	}
 }
 

@@ -51,6 +51,31 @@ func TestCanonicalizeProtectsExternalMutationButNotOrdinaryLocalWork(t *testing.
 	}
 }
 
+func TestReadOnlyBCGOSDiagnosticsUseAClosedSimpleCommandGrammar(t *testing.T) {
+	allowed := []string{
+		`{"command":"'/Users/example/Library/Application Support/Maestro/bin/bcgos' doctor"}`,
+		`{"command":"bcgos version"}`,
+		`{"command":"bcgos status '/Users/example/Developer/maestro-os'"}`,
+		`{"command":"bcgos owner onboarding status"}`,
+	}
+	for _, raw := range allowed {
+		if !IsReadOnlyBCGOSDiagnostic("Bash", json.RawMessage(raw)) {
+			t.Fatalf("read-only diagnostic was not recognized: %s", raw)
+		}
+	}
+	denied := []string{
+		`{"command":"bcgos init /tmp/workspace"}`,
+		`{"command":"bcgos doctor && touch /tmp/marker"}`,
+		`{"command":"bcgos owner init"}`,
+		`{"command":"bcgos update"}`,
+	}
+	for _, raw := range denied {
+		if IsReadOnlyBCGOSDiagnostic("Bash", json.RawMessage(raw)) {
+			t.Fatalf("mutating or compound command was recognized as read-only: %s", raw)
+		}
+	}
+}
+
 func TestStoreRejectsPermissiveRoot(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Chmod(root, 0o755); err != nil {

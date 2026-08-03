@@ -31,8 +31,8 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING IS NOT COMPLETE") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "Kowalski") {
 		t.Fatalf("pending directive = %q", got)
 	}
-	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Items: []string{"Prepare kickoff"}}}}
-	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "Prepare kickoff") {
+	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Count: 1}}}
+	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || strings.Contains(got, "Prepare kickoff") {
 		t.Fatalf("active directive = %q", got)
 	}
 }
@@ -69,6 +69,15 @@ func TestClaudeContextInjectionUsesTheSameBoundedPacketWithNativeEventName(t *te
 	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "wiring is not installed") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "capability remains unavailable") {
 		t.Fatalf("adapter output reported the wrong evidence state: %#v", output)
+	}
+	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO SESSION PROTOCOL") ||
+		strings.Contains(output.HookSpecificOutput.AdditionalContext, "Ask only this next question") ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO CONTEXT UPDATE") {
+		t.Fatalf("prompt hook repeated the startup protocol: %#v", output)
+	}
+	if !strings.Contains(output.HookSpecificOutput.AdditionalContext, `"adapter_delivery_state":"adapter_payload_emitted"`) ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, `"injection_state":"unavailable"`) {
+		t.Fatalf("adapter output did not separate delivery from qualification: %#v", output)
 	}
 }
 

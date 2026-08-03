@@ -375,6 +375,29 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 	}
 }
 
+func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"'/Users/example/Library/Application Support/Maestro/bin/bcgos' doctor"}}`
+			var output bytes.Buffer
+			rootCalled := false
+			code := runHookWithInput(
+				[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", "/workspace-that-must-not-be-inspected"},
+				strings.NewReader(input),
+				&output,
+				&output,
+				func() (string, error) {
+					rootCalled = true
+					return "", errors.New("read-only diagnostics must not inspect workspace state")
+				},
+			)
+			if code != ExitOK || rootCalled || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("guard = %d, rootCalled=%v, output=%s", code, rootCalled, output.String())
+			}
+		})
+	}
+}
+
 func TestPostActionReceiptIdentityIncludesValidatedOrchestrationSnapshot(t *testing.T) {
 	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

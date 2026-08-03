@@ -93,12 +93,14 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 	// This serializer is invoked by an adapter or its direct conformance
 	// command. The manifest still owns capability state, so report emitted
 	// payload separately from qualifying native-session evidence.
+	envelope.AdapterDeliveryState = "adapter_payload_emitted"
 	envelope.Message = "bounded adapter payload emitted; capability remains unavailable until qualifying native-session conformance evidence is recorded"
 	body, err := json.Marshal(envelope)
 	if err != nil {
 		return "", fmt.Errorf("encode session envelope: %w", err)
 	}
-	context := sessionDirective(packet) + "\n\nMaestro bounded session context (pointers only; unavailable sources are explicit):\n" + string(body)
+	directive := contextDirective(semanticEvent, packet)
+	context := directive + "\n\nMaestro bounded session context (pointers only; unavailable sources are explicit):\n" + string(body)
 	if len(context) <= MaximumAdditionalContextBytes {
 		return context, nil
 	}
@@ -108,6 +110,13 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 	// return a valid, explicit omission that directs the runtime to the normal
 	// packet command instead.
 	return "Maestro bounded session context omitted: packet exceeded the native hook output budget. Use `bcgos session packet` for the complete pointer-only packet.", nil
+}
+
+func contextDirective(semanticEvent string, packet sessionctx.Packet) string {
+	if semanticEvent == "session_start" {
+		return sessionDirective(packet)
+	}
+	return "MAESTRO CONTEXT UPDATE\nKeep the current Maestro workspace identity. Do not import Kowalski OS or global-memory claims into this workspace. Do not repeat the session greeting or onboarding question unless it remains unanswered."
 }
 
 func sessionDirective(packet sessionctx.Packet) string {
@@ -122,11 +131,15 @@ func sessionDirective(packet sessionctx.Packet) string {
 			"Ask only this next question, then wait for the owner's answer: "+packet.Owner.Onboarding.NextQuestion,
 			"Do not claim that answers were saved or that onboarding is complete until the owner explicitly confirms a reviewed local profile.",
 		)
+	case "review_required":
+		lines = append(lines,
+			"ONBOARDING ANSWERS ARE READY FOR REVIEW. Present the local profile for the owner's review and ask for an explicit confirmation; do not call onboarding complete before that confirmation.",
+		)
 	case "complete":
 		lines = append(lines, "Maestro is active in this workspace. Briefly state that at the start of the session.")
 		switch packet.Owner.OpenTasks.State {
 		case "available":
-			lines = append(lines, "Open tasks:\n- "+strings.Join(packet.Owner.OpenTasks.Items, "\n- "))
+			lines = append(lines, fmt.Sprintf("Open tasks: %d explicitly registered item(s). Their titles are not injected automatically; open the owner-local work state only when the owner asks.", packet.Owner.OpenTasks.Count))
 		case "empty":
 			lines = append(lines, "Open tasks: no local tasks are registered.")
 		default:
