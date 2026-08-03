@@ -24,7 +24,7 @@
     "recovery_phase": {"enum": ["intent", "completed", "failed", "audit_incomplete"]},
     "recovery_intent_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "fence_token_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "reason_code": {"enum": ["completed", "reviewed_no_change", "recovery_required", "recovery_intent", "recovery_completed", "recovery_failed", "recovery_committed_audit_incomplete", "proposal_emitted", "lease_busy", "handler_unavailable", "handler_failure", "deadline_exceeded", "catalog_unavailable", "authority_rejected", "occurrence_rejected", "receipt_persisted", "idle_state_unknown", "user_active"]}
+    "reason_code": {"enum": ["completed", "reviewed_no_change", "recovery_required", "recovery_intent", "recovery_completed", "recovery_failed", "recovery_committed_audit_incomplete", "proposal_emitted", "lease_busy", "handler_unavailable", "handler_failure", "deadline_exceeded", "catalog_unavailable", "authority_rejected", "occurrence_rejected", "receipt_persisted", "idle_state_unknown", "user_active", "failure_cooldown"]}
   },
   "allOf": [
     {

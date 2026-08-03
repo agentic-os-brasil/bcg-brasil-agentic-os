@@ -30,8 +30,11 @@ Dreaming has two depths over the same deterministic engine:
 
 The maintenance plane deliberately separates those synthesis operations from
 `memory-checkpoint`. The checkpoint is a three-hour, workspace-scoped,
-metadata-only continuity receipt. It reads no memory body, creates no L1/L2/L3
-artifact and is never evidence that dreaming occurred. `memory-light-dream`
+versioned watermark over allowlisted durable scheduler receipt metadata. Its
+atomic pointer preserves the last known good revision across interruption. It
+reads no error/body/prompt/tool payload, creates no L1/L2/L3 artifact and is
+never evidence that dreaming occurred. Without a durable source watermark it
+remains unavailable. `memory-light-dream`
 has a three-hour due contract but remains unavailable without a qualified
 synthesis adapter. `memory-deep-dream` is the weekly deep cycle and remains
 unavailable on the same basis.

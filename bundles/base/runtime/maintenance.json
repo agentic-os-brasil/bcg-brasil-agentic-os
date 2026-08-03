@@ -25,8 +25,8 @@
       "availability_reason": "local metadata-only checkpoint requires explicit runtime enrollment",
       "default_enabled": true,
       "unattended": "deterministic_only",
-      "writes": ["none"],
-      "success_boundary": "workspace-bound metadata-only checkpoint receipt is durably committed"
+      "writes": ["memory_checkpoint"],
+      "success_boundary": "versioned workspace continuity watermark over allowlisted durable scheduler metadata and its terminal receipt are durably committed"
     },
     {
       "id": "memory-light-dream",

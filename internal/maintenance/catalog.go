@@ -35,7 +35,7 @@ var (
 	validUnattended = map[string]bool{"deterministic_only": true, "policy_gated": true, "never": true}
 	validWrites     = map[string]bool{
 		"none": true, "memory_l1": true, "memory_rollups": true, "wiki_private": true,
-		"runtime_index": true, "owner_observation": true, "local_diagnostics": true,
+		"runtime_index": true, "owner_observation": true, "local_diagnostics": true, "memory_checkpoint": true,
 	}
 )
 
@@ -166,7 +166,7 @@ func (catalog Catalog) Validate() error {
 func validateRequiredJobInvariant(job Job) error {
 	switch job.ID {
 	case MemoryCheckpointJobID:
-		if job.Category != "memory" || job.Trigger != "daily_or_presence" || job.Executor != "deterministic" || job.Scope != "workspace" || !job.DefaultEnabled || job.Unattended != "deterministic_only" || len(job.Writes) != 1 || job.Writes[0] != "none" {
+		if job.Category != "memory" || job.Trigger != "daily_or_presence" || job.Executor != "deterministic" || job.Scope != "workspace" || !job.DefaultEnabled || job.Unattended != "deterministic_only" || len(job.Writes) != 1 || job.Writes[0] != "memory_checkpoint" {
 			return errors.New("memory checkpoint has an unsafe maintenance contract")
 		}
 	case MemoryLightDreamJobID:

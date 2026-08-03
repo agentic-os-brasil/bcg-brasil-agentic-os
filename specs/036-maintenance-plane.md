@@ -36,8 +36,10 @@ The Darwin worker deliberately has no raw occurrence execution method, so
 
 The jobs are deliberately split by success boundary:
 
-- the workspace-scoped `memory-checkpoint` may close only its own metadata
-  receipt boundary every three hours; it does not read or synthesize memory;
+- the workspace-scoped `memory-checkpoint` may atomically advance only a
+  versioned watermark over allowlisted durable scheduler metadata every three
+  hours, then close its own receipt boundary; it preserves last-known-good,
+  rejects source-free success and does not read or synthesize memory;
 - `memory-light-dream` has a separate three-hour due contract and
   `memory-deep-dream` remains weekly; both are model-backed and unavailable
   until their synthesis contracts are qualified;
@@ -75,6 +77,8 @@ closed and is not treated as idle. `suppressed` is distinct from failed,
 unavailable and succeeded: it records metadata-safe eligibility denial, stays
 due and cannot move a three-hour success anchor. Repeated suppressions are
 cooldown-bounded to avoid a pulse receipt loop.
+Failed and unavailable attempts use a separate per-job/occurrence cooldown;
+their `failure_cooldown` suppression stays due and retry resumes after expiry.
 
 ## Automatic improvement scope
 

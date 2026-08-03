@@ -151,7 +151,7 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 	invoker := darwin.OperationalInvoker{Diagnostics: darwin.FilesystemInvoker{Root: darwinRoot}, Repairs: darwin.ManagedStateRepairInvoker{Root: darwinRoot}, Guard: guard}
 	darwinStore := darwin.Store{Root: darwinRoot}
 	handlers[darwin.HousekeepingJobID] = darwin.HousekeepingHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore}
-	handlers[maintenance.MemoryCheckpointJobID] = maintenance.MemoryCheckpointHandler{}
+	handlers[maintenance.MemoryCheckpointJobID] = maintenance.MemoryCheckpointHandler{Scheduler: schedulerStore, Store: maintenance.ContinuityCheckpointStore{Root: filepath.Join(root, "maintenance", "checkpoints")}}
 	handlers["darwin-deep-weekly"] = darwin.DeepReviewHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore, ProposalStore: proposalStore}
 	handlers["walter-self-review-weekly"] = maintenance.WalterWeeklyAdapter{}
 	return handlers, qualification, activated

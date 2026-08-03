@@ -21,6 +21,7 @@ const (
 	ReasonReceiptPersisted        ReasonCode = "receipt_persisted"
 	ReasonIdleUnknown             ReasonCode = "idle_state_unknown"
 	ReasonUserActive              ReasonCode = "user_active"
+	ReasonFailureCooldown         ReasonCode = "failure_cooldown"
 )
 
 var reasonMessages = map[ReasonCode]string{
@@ -42,6 +43,7 @@ var reasonMessages = map[ReasonCode]string{
 	ReasonReceiptPersisted:        "metadata receipt was durably recorded",
 	ReasonIdleUnknown:             "idle state is unknown and therefore not eligible",
 	ReasonUserActive:              "user activity suppresses background continuity work",
+	ReasonFailureCooldown:         "a recent failed or unavailable attempt is inside its retry cooldown",
 }
 
 func validReasonCode(code ReasonCode) bool { _, ok := reasonMessages[code]; return ok }

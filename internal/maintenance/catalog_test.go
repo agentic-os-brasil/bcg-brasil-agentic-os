@@ -41,7 +41,7 @@ func TestCatalogRequiresUniversalMaintenancePlane(t *testing.T) {
 		t.Fatalf("Walter weekly silent-ingestion contract drifted: %#v", walter)
 	}
 	checkpoint, found := findJob(catalog.Jobs, MemoryCheckpointJobID)
-	if !found || checkpoint.Executor != "deterministic" || checkpoint.Scope != "workspace" || !checkpoint.DefaultEnabled || checkpoint.Unattended != "deterministic_only" || !reflect.DeepEqual(checkpoint.Writes, []string{"none"}) {
+	if !found || checkpoint.Executor != "deterministic" || checkpoint.Scope != "workspace" || !checkpoint.DefaultEnabled || checkpoint.Unattended != "deterministic_only" || !reflect.DeepEqual(checkpoint.Writes, []string{"memory_checkpoint"}) {
 		t.Fatalf("memory checkpoint contract drifted: %#v", checkpoint)
 	}
 	light, found := findJob(catalog.Jobs, MemoryLightDreamJobID)

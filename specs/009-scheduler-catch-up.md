@@ -69,8 +69,11 @@ The first job vocabulary is:
 
 Job IDs and cadence are runtime-neutral. Daily and weekly local windows, timezone behavior, retry/backoff and maximum catch-up are configuration, not hard-coded adapter behavior.
 
-`memory-checkpoint` succeeds only after its own metadata-only receipt is
-durable and never claims memory synthesis. The two three-hour interval jobs
+`memory-checkpoint` succeeds only after a versioned workspace watermark over
+allowlisted durable scheduler metadata is fsynced, atomically activated and
+followed by its terminal receipt. Interrupted publication preserves the last
+known good pointer; no durable source remains unavailable. It never claims
+memory synthesis. The two three-hour interval jobs
 anchor first to enrollment and, after success, to that successful attempt;
 both use `MaxCatchUp=1`. `memory-deep-dream` succeeds only after the complete
 memory commit is active. Wiki work triggered by that commit follows the outbox
@@ -119,6 +122,9 @@ The macOS adapter owns only the attended per-user lifecycle and a periodic
 depth-one worker; it is not the job cadence. Idle eligibility is explicit and
 fail-closed: `unknown` is not `idle`. Active or unknown pulses emit at most one
 suppression set per cooldown window, and suppression never satisfies due work.
+Recent failed or unavailable attempts also enter a per-job/occurrence cooldown;
+the next pulse records `failure_cooldown` suppression without dispatch, and a
+retry becomes eligible after expiry.
 Enrollment persists the validated IANA timezone, workspace and
 activated job digests; fixture homes remain filesystem-only. Windows continues
 to fail closed rather than claim native parity. Neither adapter decides whether

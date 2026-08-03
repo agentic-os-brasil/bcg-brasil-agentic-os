@@ -82,6 +82,7 @@ type Worker struct {
 	ActivatedJobs      []string
 	Deadline           time.Duration
 	IdleCooldown       time.Duration
+	FailureCooldown    time.Duration
 	Now                func() time.Time
 	ArmLease           func(scheduler.Lease) error
 	ReleaseLease       func(scheduler.Lease) error
@@ -190,6 +191,29 @@ func (worker Worker) Run(ctx context.Context, request WakeRequest) (WakeReport, 
 		}
 		report.State = "suppressed"
 		return report, nil
+	}
+	if request.Trigger == TriggerPresence {
+		cooldown := worker.FailureCooldown
+		if cooldown <= 0 {
+			cooldown = 15 * time.Minute
+		}
+		eligible := make([]scheduler.Occurrence, 0, len(due))
+		for _, occurrence := range due {
+			if recentFailedOccurrence(schedulerReceipts, occurrence, now, cooldown) {
+				receipt, suppressErr := worker.suppressedReceipt(request.WorkspaceID, occurrence, now, ReasonFailureCooldown)
+				if suppressErr != nil {
+					return WakeReport{}, suppressErr
+				}
+				report.Receipts = append(report.Receipts, receipt)
+				continue
+			}
+			eligible = append(eligible, occurrence)
+		}
+		due = eligible
+		if len(due) == 0 {
+			report.State = "suppressed"
+			return report, nil
+		}
 	}
 	authorizations := make([]OccurrenceAuthorization, 0, len(due))
 	for _, occurrence := range due {
@@ -474,6 +498,19 @@ func (worker Worker) suppressedReceipt(workspaceID string, occurrence scheduler.
 		err = worker.Scheduler.AppendReceipt(workspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now.UTC(), State: scheduler.Suppressed, Error: string(reason)})
 	}
 	return receipt, err
+}
+
+func recentFailedOccurrence(receipts []scheduler.Receipt, occurrence scheduler.Occurrence, now time.Time, cooldown time.Duration) bool {
+	for _, receipt := range receipts {
+		if receipt.JobID != occurrence.JobID || !receipt.ScheduledFor.Equal(occurrence.ScheduledFor) || (receipt.State != scheduler.Failed && receipt.State != scheduler.Unavailable) {
+			continue
+		}
+		age := now.Sub(receipt.AttemptedAt)
+		if age >= 0 && age < cooldown {
+			return true
+		}
+	}
+	return false
 }
 
 func triggerForCadence(jobs []scheduler.Job, jobID string) Trigger {

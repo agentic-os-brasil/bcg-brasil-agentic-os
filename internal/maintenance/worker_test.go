@@ -590,11 +590,15 @@ func TestMemoryCheckpointClosesOnlyItsMetadataReceiptBoundary(t *testing.T) {
 	if _, err := schedulerStore.EnsureEnrollment("maestro-system", now.Add(-3*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
+	if err := schedulerStore.AppendReceipt("maestro-system", scheduler.Receipt{JobID: "darwin-housekeeping-daily", ScheduledFor: now.Add(-time.Hour), AttemptedAt: now.Add(-30 * time.Minute), State: scheduler.Succeeded}); err != nil {
+		t.Fatal(err)
+	}
 	receiptStore := Store{Root: t.TempDir()}
+	checkpointStore := ContinuityCheckpointStore{Root: t.TempDir()}
 	worker := Worker{
 		Catalog: catalog, Scheduler: schedulerStore, Receipts: receiptStore,
 		Jobs:               []scheduler.Job{{ID: MemoryCheckpointJobID, Cadence: scheduler.Interval, IntervalHours: 3, MaxCatchUp: 1}},
-		Handlers:           map[string]any{MemoryCheckpointJobID: MemoryCheckpointHandler{}},
+		Handlers:           map[string]any{MemoryCheckpointJobID: MemoryCheckpointHandler{Scheduler: schedulerStore, Store: checkpointStore}},
 		LocalQualification: map[string]string{MemoryCheckpointJobID: QualificationDigest(MemoryCheckpointJobID)},
 		ActivatedJobs:      []string{MemoryCheckpointJobID}, Deadline: time.Minute,
 	}
@@ -605,5 +609,125 @@ func TestMemoryCheckpointClosesOnlyItsMetadataReceiptBoundary(t *testing.T) {
 	persisted, err := receiptStore.Receipts("maestro-system", MemoryCheckpointJobID)
 	if err != nil || len(persisted) != 1 || persisted[0].State != ReceiptSucceeded {
 		t.Fatalf("checkpoint own receipts=%#v err=%v", persisted, err)
+	}
+	checkpoint, err := checkpointStore.Load("maestro-system")
+	if err != nil || checkpoint.Revision != 1 || checkpoint.Provenance != CheckpointSchedulerProvenance || checkpoint.SourceCount != 1 || checkpoint.LatestSourceJobID != "darwin-housekeeping-daily" || !digestPattern.MatchString(checkpoint.SourceWatermarkSHA256) {
+		t.Fatalf("checkpoint watermark=%#v err=%v", checkpoint, err)
+	}
+}
+
+func TestMemoryCheckpointWithoutDurableSourceRemainsUnavailable(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
+	schedulerStore := scheduler.Store{Root: t.TempDir()}
+	if _, err := schedulerStore.EnsureEnrollment("maestro-system", now.Add(-3*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	checkpointStore := ContinuityCheckpointStore{Root: t.TempDir()}
+	worker := Worker{
+		Catalog: catalog, Scheduler: schedulerStore, Receipts: Store{Root: t.TempDir()},
+		Jobs:               []scheduler.Job{{ID: MemoryCheckpointJobID, Cadence: scheduler.Interval, IntervalHours: 3, MaxCatchUp: 1}},
+		Handlers:           map[string]any{MemoryCheckpointJobID: MemoryCheckpointHandler{Scheduler: schedulerStore, Store: checkpointStore}},
+		LocalQualification: map[string]string{MemoryCheckpointJobID: QualificationDigest(MemoryCheckpointJobID)},
+		ActivatedJobs:      []string{MemoryCheckpointJobID}, Deadline: time.Minute,
+	}
+	report, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", Trigger: TriggerPresence, IdleState: IdleConfirmed, OwnerID: "checkpoint-worker", Now: now, Preauthorized: true})
+	if err != nil || len(report.Receipts) != 1 || report.Receipts[0].State != ReceiptUnavailable {
+		t.Fatalf("source-free checkpoint report=%#v err=%v", report, err)
+	}
+	if _, err := checkpointStore.Load("maestro-system"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("source-free checkpoint created state: %v", err)
+	}
+}
+
+func TestFailedOccurrenceUsesPerOccurrenceCircuitBreakerBeforeRetry(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
+	schedulerStore := scheduler.Store{Root: t.TempDir()}
+	if _, err := schedulerStore.EnsureEnrollment("maestro-system", now.Add(-3*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	worker := Worker{
+		Catalog: catalog, Scheduler: schedulerStore, Receipts: Store{Root: t.TempDir()},
+		Jobs: []scheduler.Job{{ID: "darwin-housekeeping-daily", Cadence: scheduler.Interval, IntervalHours: 3, MaxCatchUp: 1}},
+		Handlers: map[string]any{"darwin-housekeeping-daily": HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
+			calls++
+			if calls == 1 {
+				return HandlerResult{}, errors.New("bounded failure")
+			}
+			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
+		})},
+		LocalQualification: map[string]string{"darwin-housekeeping-daily": QualificationDigest("darwin-housekeeping-daily")},
+		ActivatedJobs:      []string{"darwin-housekeeping-daily"}, Deadline: time.Minute, FailureCooldown: 15 * time.Minute,
+	}
+	request := WakeRequest{WorkspaceID: "maestro-system", Trigger: TriggerPresence, IdleState: IdleConfirmed, OwnerID: "pulse", Now: now, Preauthorized: true}
+	failed, err := worker.Run(context.Background(), request)
+	if err != nil || calls != 1 || len(failed.Receipts) != 1 || failed.Receipts[0].State != ReceiptFailed {
+		t.Fatalf("first failure report=%#v calls=%d err=%v", failed, calls, err)
+	}
+	request.Now = now.Add(time.Minute)
+	suppressed, err := worker.Run(context.Background(), request)
+	if err != nil || calls != 1 || len(suppressed.Receipts) != 1 || suppressed.Receipts[0].State != ReceiptSuppressed || suppressed.Receipts[0].ReasonCode != ReasonFailureCooldown {
+		t.Fatalf("circuit suppression report=%#v calls=%d err=%v", suppressed, calls, err)
+	}
+	receipts, err := schedulerStore.Receipts("maestro-system")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if due, err := scheduler.PlanDue(worker.Jobs, now.Add(-3*time.Hour), receipts, request.Now); err != nil || len(due) != 1 {
+		t.Fatalf("circuit suppression advanced due=%#v err=%v", due, err)
+	}
+	request.Now = now.Add(16 * time.Minute)
+	retried, err := worker.Run(context.Background(), request)
+	if err != nil || calls != 2 || len(retried.Receipts) != 1 || retried.Receipts[0].State != ReceiptSucceeded {
+		t.Fatalf("post-expiry retry report=%#v calls=%d err=%v", retried, calls, err)
+	}
+}
+
+func TestUnavailableOccurrenceUsesPerOccurrenceCircuitBreakerBeforeRetry(t *testing.T) {
+	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
+	schedulerStore := scheduler.Store{Root: t.TempDir()}
+	if _, err := schedulerStore.EnsureEnrollment("maestro-system", now.Add(-3*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	worker := Worker{
+		Catalog: catalog, Scheduler: schedulerStore, Receipts: Store{Root: t.TempDir()},
+		Jobs: []scheduler.Job{{ID: MemoryLightDreamJobID, Cadence: scheduler.Interval, IntervalHours: 3, MaxCatchUp: 1}},
+		Handlers: map[string]any{MemoryLightDreamJobID: HandlerFunc(func(context.Context, Command, ExecutionGrant) (HandlerResult, error) {
+			calls++
+			if calls == 1 {
+				return HandlerResult{State: ReceiptUnavailable}, scheduler.ErrCapabilityUnavailable
+			}
+			return HandlerResult{State: ReceiptSucceeded, ReasonCode: ReasonCompleted}, nil
+		})},
+		LocalQualification: map[string]string{MemoryLightDreamJobID: QualificationDigest(MemoryLightDreamJobID)},
+		ActivatedJobs:      []string{MemoryLightDreamJobID}, Deadline: time.Minute, FailureCooldown: 15 * time.Minute,
+	}
+	request := WakeRequest{WorkspaceID: "maestro-system", Trigger: TriggerPresence, IdleState: IdleConfirmed, OwnerID: "pulse", Now: now, Preauthorized: true}
+	first, err := worker.Run(context.Background(), request)
+	if err != nil || calls != 1 || len(first.Receipts) != 1 || first.Receipts[0].State != ReceiptUnavailable {
+		t.Fatalf("unavailable report=%#v calls=%d err=%v", first, calls, err)
+	}
+	request.Now = now.Add(time.Minute)
+	second, err := worker.Run(context.Background(), request)
+	if err != nil || calls != 1 || len(second.Receipts) != 1 || second.Receipts[0].State != ReceiptSuppressed || second.Receipts[0].ReasonCode != ReasonFailureCooldown {
+		t.Fatalf("unavailable cooldown report=%#v calls=%d err=%v", second, calls, err)
+	}
+	request.Now = now.Add(16 * time.Minute)
+	third, err := worker.Run(context.Background(), request)
+	if err != nil || calls != 2 || len(third.Receipts) != 1 || third.Receipts[0].State != ReceiptSucceeded {
+		t.Fatalf("unavailable retry report=%#v calls=%d err=%v", third, calls, err)
 	}
 }

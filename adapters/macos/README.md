@@ -33,8 +33,10 @@ only asks the scheduler for due work and hands eligible occurrences to the
 depth-one worker; it is not a 15-minute job cadence and does not run handlers
 inline. Three-hour continuity is anchored to enrollment and then the last
 successful receipt with `MaxCatchUp=1`. `memory-checkpoint` is the only
-locally qualified memory handler: it emits a workspace-bound metadata-only
-receipt and reads or synthesizes no memory body. `memory-light-dream` shares
+locally qualified memory handler: it atomically advances a versioned,
+workspace-bound watermark over allowlisted durable scheduler metadata, then
+emits its own receipt. It reads or synthesizes no memory body and preserves the
+last-known-good pointer if publication is interrupted. `memory-light-dream` shares
 the three-hour due contract and `memory-deep-dream` is weekly, but both remain
 unavailable until a synthesis adapter is qualified.
 
@@ -42,7 +44,9 @@ The checked-in template passes `--idle-state unknown`, which is intentionally
 fail-closed: unknown is not idle. A qualified activity observer may provide an
 explicit `idle` or `active` value at the same CLI boundary. Suppressed due work
 remains due, suppression receipts do not advance the success anchor, and a
-15-minute cooldown prevents receipt loops. `status`
+15-minute cooldown prevents idle-suppression loops. Recent failed or
+unavailable attempts have a separate per-occurrence cooldown; their suppression
+also remains due and retry resumes after expiry. `status`
 distinguishes the plist from
 native loaded/enabled state, local IANA timezone, due work and unavailable jobs.
 Pause, resume, status and uninstall are attended, idempotent and reversible.
