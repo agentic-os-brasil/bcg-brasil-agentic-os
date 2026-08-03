@@ -18,6 +18,11 @@ import (
 
 const maxRunnerOutput = 8192
 
+// launchctlPath is deliberately absolute. A Finder-launched macOS app and a
+// restricted/headless shell may have different PATH values, but the native
+// lifecycle must not become environment-dependent.
+const launchctlPath = "/bin/launchctl"
+
 var uidPattern = regexp.MustCompile(`^[0-9]+$`)
 
 type CommandResult struct {
@@ -32,7 +37,7 @@ type CommandRunner interface {
 type ExecCommandRunner struct{}
 
 func (ExecCommandRunner) Run(ctx context.Context, name string, args []string) (CommandResult, error) {
-	if name != "launchctl" {
+	if name != launchctlPath {
 		return CommandResult{}, errors.New("only launchctl is permitted")
 	}
 	command := exec.CommandContext(ctx, name, args...)
@@ -368,7 +373,7 @@ func (lifecycle Lifecycle) runResult(ctx context.Context, args []string) (Comman
 	}
 	callCtx, cancel := context.WithTimeout(ctx, lifecycle.Timeout)
 	defer cancel()
-	result, err := lifecycle.Runner.Run(callCtx, "launchctl", args)
+	result, err := lifecycle.Runner.Run(callCtx, launchctlPath, args)
 	if err == nil && result.ExitCode != 0 {
 		return result, errors.New("launchctl returned a non-zero status")
 	}

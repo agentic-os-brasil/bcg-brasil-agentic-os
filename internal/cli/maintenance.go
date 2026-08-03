@@ -81,12 +81,17 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		if homeErr != nil {
 			return reportError(errOut, homeErr)
 		}
-		jobs := schedulerJobsForTrigger(trimmedTrigger)
 		enrollment, enrollmentErr := maintenance.LoadCanaryEnrollment(root)
 		if enrollmentErr == nil && (enrollment.WorkspaceID != strings.TrimSpace(*workspace) || !samePathCLI(enrollment.Home, currentHome)) {
 			enrollmentErr = errors.New("Canary enrollment is bound to a different workspace or home")
 		}
 		handlers, qualification, activated := maintenanceHandlers(root, strings.TrimSpace(*workspace), enrollment, enrollmentErr == nil)
+		// The presence wake is an acceleration mechanism, not an activation
+		// mechanism. Only jobs explicitly enrolled by the attended installer may
+		// enter the scheduler plan. Catalog-only/model-backed jobs remain visible
+		// as unavailable capabilities without generating a fresh unavailable
+		// receipt on every RunAtLoad or interval wake.
+		jobs := activatedSchedulerJobs(schedulerJobsForTrigger(trimmedTrigger), activated)
 		worker := maintenance.Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: filepath.Join(root, "maintenance", "scheduler")}, Receipts: maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}, Jobs: jobs, Handlers: handlers, LocalQualification: qualification, ActivatedJobs: activated, Deadline: 2 * time.Minute}
 		timezone := ""
 		if enrollmentErr == nil {
@@ -108,7 +113,11 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 				exitCode, wakeState, wakeReason = ExitUnavailable, "completed_with_failures", "bounded handler failure remains due; recovery is available on a later wake"
 			}
 		}
-		code := writeJSON(out, map[string]any{"state": wakeState, "reason": wakeReason, "trigger": trimmedTrigger, "event_id": trimmedEventID, "native_schedulers": "disabled_until_explicit_install_and_qualification", "worker": report}, errOut)
+		// A wake can arrive from launchd, an attended command or another approved
+		// adapter. It must not claim that the native scheduler is disabled merely
+		// because this bounded worker has no provenance for its caller. The
+		// lifecycle status command remains the source of truth for that question.
+		code := writeJSON(out, map[string]any{"state": wakeState, "reason": wakeReason, "trigger": trimmedTrigger, "event_id": trimmedEventID, "native_schedulers": "wake_received; inspect maintenance canary status for lifecycle state", "worker": report}, errOut)
 		if code != ExitOK {
 			return code
 		}
@@ -131,6 +140,10 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 		return handlers, qualification, activated
 	}
 	qualification, activated = maintenance.ActivationMaps(enrollment)
+	active := make(map[string]bool, len(activated))
+	for _, jobID := range activated {
+		active[jobID] = true
+	}
 	schedulerStore := scheduler.Store{Root: filepath.Join(root, "maintenance", "scheduler")}
 	darwinRoot := filepath.Join(root, "maintenance", "darwin")
 	builder := darwin.LocalProductHealthBuilder{Scheduler: schedulerStore, Workspace: workspace, Runtime: "runtime-neutral", ManagedStateRoot: darwinRoot, StateDocumentsRoot: filepath.Join(root, "maintenance", "state-documents")}
@@ -144,22 +157,31 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 	proposalStore := darwin.ProposalStore{Root: filepath.Join(root, "maintenance", "darwin-proposals")}
 	invoker := darwin.OperationalInvoker{Diagnostics: darwin.FilesystemInvoker{Root: darwinRoot}, Repairs: darwin.ManagedStateRepairInvoker{Root: darwinRoot}, Guard: guard}
 	darwinStore := darwin.Store{Root: darwinRoot}
-	handlers[darwin.HousekeepingJobID] = darwin.HousekeepingHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore}
-	handlers["darwin-deep-weekly"] = darwin.DeepReviewHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore, ProposalStore: proposalStore}
-	handlers["walter-self-review-weekly"] = maintenance.WalterWeeklyAdapter{}
+	if active[darwin.HousekeepingJobID] {
+		handlers[darwin.HousekeepingJobID] = darwin.HousekeepingHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore}
+	}
+	if active["darwin-deep-weekly"] {
+		handlers["darwin-deep-weekly"] = darwin.DeepReviewHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore, ProposalStore: proposalStore}
+	}
+	if active[maintenance.WalterSelfReviewWeeklyJobID] {
+		handlers[maintenance.WalterSelfReviewWeeklyJobID] = maintenance.WalterWeeklyAdapter{}
+	}
 	return handlers, qualification, activated
 }
 
 func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintenance.Catalog) int {
 	action := args[0]
 	if action != "install-macos" && action != "status" && action != "pause" && action != "resume" && action != "uninstall" && action != "recover-quarantine" {
-		fmt.Fprintln(errOut, "usage: bcgos maintenance canary <install-macos|status|pause|resume|uninstall|recover-quarantine> [--confirm] [--home PATH] [--workspace ID]")
+		fmt.Fprintln(errOut, "usage: bcgos maintenance canary <install-macos|status|pause|resume|uninstall|recover-quarantine> [--confirm] [--launchctl] [--home PATH] [--workspace-path PATH]")
 		return ExitUsage
 	}
 	flags := newFlagSet("maintenance canary "+action, errOut)
 	confirm := flags.Bool("confirm", false, "explicitly confirm the requested lifecycle mutation")
+	launchctlRequested := flags.Bool("launchctl", false, "explicitly inspect or mutate the current macOS launchctl domain")
 	home := flags.String("home", "", "current user home or isolated filesystem-only fixture")
-	workspace := flags.String("workspace", "maestro-system", "bounded maintenance workspace")
+	workspace := flags.String("workspace", "", "bounded maintenance workspace ID for quarantine recovery")
+	workspacePath := flags.String("workspace-path", "", "exact initialized workspace path for scheduler enrollment")
+	executable := flags.String("executable", "", "exact installed bcgos executable; must match the running process")
 	jobID := flags.String("job-id", "", "exact quarantined job to recover")
 	scheduledFor := flags.String("scheduled-for", "", "exact scheduled occurrence in RFC3339 format")
 	reason := flags.String("reason", "", "operator recovery reason code")
@@ -181,6 +203,9 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 	root, err := canaryDataRoot(*home, currentHome)
 	if err != nil {
 		return reportError(errOut, err)
+	}
+	if *launchctlRequested && (runtime.GOOS != "darwin" || !samePathCLI(*home, currentHome)) {
+		return reportError(errOut, errors.New("--launchctl is available only for the current macOS user; no administrator domain is supported"))
 	}
 	if action == "recover-quarantine" {
 		if strings.TrimSpace(*jobID) == "" || strings.TrimSpace(*scheduledFor) == "" || *reason != "operator_confirmed_process_gone" {
@@ -253,57 +278,149 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 	if uidErr != nil {
 		return reportError(errOut, uidErr)
 	}
-	lifecycle := macosadapter.Lifecycle{Runner: macosadapter.ExecCommandRunner{}, UID: uid, CurrentHome: currentHome, Timeout: 15 * time.Second, Native: samePathCLI(*home, currentHome) && runtime.GOOS == "darwin"}
+	lifecycle := macosadapter.Lifecycle{Runner: macosadapter.ExecCommandRunner{}, UID: uid, CurrentHome: currentHome, Timeout: 15 * time.Second, Native: *launchctlRequested}
 	if action == "install-macos" {
-		program := "/usr/local/bin/bcgos"
-		if runtime.GOOS == "darwin" {
-			executable, execErr := os.Executable()
-			if execErr != nil {
-				return reportError(errOut, execErr)
-			}
-			program = executable
+		inspection, inspectErr := inspectCanaryWorkspace(strings.TrimSpace(*workspacePath), root)
+		if inspectErr != nil {
+			return reportError(errOut, inspectErr)
 		}
-		logRoot := filepath.Join(*home, "Library", "Logs")
-		status, installErr := lifecycle.Install(context.Background(), *home, macosadapter.Spec{Label: "com.bcg.maestro.maintenance", Program: program, Arguments: []string{"maintenance", "wake", "--trigger", "presence", "--workspace", strings.TrimSpace(*workspace)}, StartInterval: 900, RunAtLoad: true, StandardOutPath: filepath.Join(logRoot, "bcgos-maintenance.stdout.log"), StandardErrPath: filepath.Join(logRoot, "bcgos-maintenance.stderr.log")}, true)
-		if installErr != nil {
-			return reportError(errOut, installErr)
+		program, execErr := exactRunningExecutable(strings.TrimSpace(*executable))
+		if execErr != nil {
+			return reportError(errOut, execErr)
+		}
+		spec := canaryLaunchAgentSpec(*home, program, inspection.WorkspaceID)
+		existing, enrollmentErr := maintenance.LoadCanaryEnrollment(root)
+		freshEnrollment := errors.Is(enrollmentErr, os.ErrNotExist)
+		if enrollmentErr != nil && !freshEnrollment {
+			return reportError(errOut, fmt.Errorf("inspect existing scheduler enrollment: %w", enrollmentErr))
+		}
+		if enrollmentErr == nil {
+			if existing.WorkspaceID != inspection.WorkspaceID || !samePathCLI(existing.Executable, program) || !samePathCLI(existing.Home, *home) {
+				return reportError(errOut, errors.New("the single per-user scheduler is already bound to a different workspace, executable or home; uninstall it explicitly before rebinding"))
+			}
+			fileStatus, statusErr := macosadapter.ReadStatus(*home, canaryLaunchAgentLabel)
+			if statusErr != nil {
+				return reportError(errOut, statusErr)
+			}
+			if fileStatus.State != "not_installed" {
+				if _, verifyErr := macosadapter.Verify(*home, spec); verifyErr != nil {
+					return reportError(errOut, verifyErr)
+				}
+			}
+		} else {
+			fileStatus, statusErr := macosadapter.ReadStatus(*home, canaryLaunchAgentLabel)
+			if statusErr != nil {
+				return reportError(errOut, statusErr)
+			}
+			if fileStatus.State != "not_installed" {
+				return reportError(errOut, errors.New("an unbound Maestro LaunchAgent plist already exists; refusing to replace it"))
+			}
 		}
 		timezone := currentTimezone()
 		mode := "filesystem_only"
 		if lifecycle.Native {
 			mode = "native"
+		} else if enrollmentErr == nil && existing.Mode == "native" {
+			mode = "native"
 		}
-		enrollment := maintenance.CanaryEnrollment{SchemaVersion: maintenance.EnrollmentSchemaVersion, WorkspaceID: strings.TrimSpace(*workspace), AgentID: "darwin", Home: filepath.Clean(*home), UID: uid, Timezone: timezone, LaunchAgentLabel: status.Label, Mode: mode, EnrolledAt: time.Now().In(mustLoadTimezone(timezone)), Activated: []maintenance.Activation{{JobID: darwin.HousekeepingJobID, QualificationDigest: maintenance.QualificationDigest(darwin.HousekeepingJobID)}, {JobID: "darwin-deep-weekly", QualificationDigest: maintenance.QualificationDigest("darwin-deep-weekly")}}}
-		if err := maintenance.SaveCanaryEnrollment(root, enrollment); err != nil {
-			_ = lifecycle.Uninstall(context.Background(), *home, status.Label)
-			return reportError(errOut, err)
+		enrolledAt := time.Now().In(mustLoadTimezone(timezone))
+		if enrollmentErr == nil {
+			enrolledAt = existing.EnrolledAt
 		}
-		return writeJSON(out, map[string]any{"state": "enrolled", "enrollment": enrollment, "launch_agent": status}, errOut)
+		enrollment := maintenance.CanaryEnrollment{SchemaVersion: maintenance.EnrollmentSchemaVersion, WorkspaceID: inspection.WorkspaceID, AgentID: "darwin", Home: filepath.Clean(*home), Executable: program, UID: uid, Timezone: timezone, LaunchAgentLabel: canaryLaunchAgentLabel, Mode: mode, EnrolledAt: enrolledAt, Activated: []maintenance.Activation{{JobID: darwin.HousekeepingJobID, QualificationDigest: maintenance.QualificationDigest(darwin.HousekeepingJobID)}, {JobID: "darwin-deep-weekly", QualificationDigest: maintenance.QualificationDigest("darwin-deep-weekly")}}}
+		// RunAtLoad may invoke the worker as soon as launchctl bootstraps the
+		// plist. Persist the exact enrollment first, so that first wake sees the
+		// same bounded authority as all subsequent interval wakes. On a failed
+		// first install we remove this provisional record together with the
+		// lifecycle so no authority survives a partial activation.
+		if freshEnrollment {
+			if err := maintenance.SaveCanaryEnrollment(root, enrollment); err != nil {
+				return reportError(errOut, err)
+			}
+		}
+		status, installErr := lifecycle.Install(context.Background(), *home, spec, true)
+		if installErr != nil {
+			if freshEnrollment {
+				_ = maintenance.DeleteCanaryEnrollment(root)
+			}
+			return reportError(errOut, installErr)
+		}
+		if status.Label != canaryLaunchAgentLabel {
+			if freshEnrollment {
+				_ = lifecycle.Uninstall(context.Background(), *home, status.Label)
+				_ = maintenance.DeleteCanaryEnrollment(root)
+			}
+			return reportError(errOut, errors.New("LaunchAgent returned an unexpected managed label"))
+		}
+		if !freshEnrollment {
+			if err := maintenance.SaveCanaryEnrollment(root, enrollment); err != nil {
+				return reportError(errOut, err)
+			}
+		}
+		return writeJSON(out, map[string]any{"state": "enrolled", "binding_state": "exact", "model_backed_capabilities": "unavailable", "enrollment": enrollment, "launch_agent": status}, errOut)
 	}
 	enrollment, enrollmentErr := maintenance.LoadCanaryEnrollment(root)
 	if enrollmentErr == nil && !homeProvided {
 		*home = enrollment.Home
-		lifecycle.Native = enrollment.Mode == "native" && samePathCLI(*home, currentHome) && runtime.GOOS == "darwin"
+	}
+	lifecycle.Native = *launchctlRequested
+	fileStatus, fileErr := macosadapter.ReadStatus(*home, canaryLaunchAgentLabel)
+	if fileErr != nil {
+		return reportError(errOut, fileErr)
+	}
+	if enrollmentErr != nil && !errors.Is(enrollmentErr, os.ErrNotExist) {
+		return reportError(errOut, fmt.Errorf("inspect scheduler enrollment: %w", enrollmentErr))
+	}
+	if enrollmentErr != nil && fileStatus.State != "not_installed" {
+		return reportError(errOut, errors.New("LaunchAgent plist is present without its exact scheduler enrollment binding"))
+	}
+	if enrollmentErr == nil && fileStatus.State != "not_installed" {
+		resolvedExecutable, executableErr := macosadapter.ResolveExecutable(enrollment.Executable)
+		if executableErr != nil || !samePathCLI(resolvedExecutable, enrollment.Executable) {
+			if executableErr == nil {
+				executableErr = errors.New("enrolled scheduler executable no longer resolves to its exact path")
+			}
+			return reportError(errOut, executableErr)
+		}
+		if _, verifyErr := macosadapter.Verify(*home, canaryLaunchAgentSpec(*home, enrollment.Executable, enrollment.WorkspaceID)); verifyErr != nil {
+			return reportError(errOut, verifyErr)
+		}
+	}
+	if enrollmentErr == nil && enrollment.Mode == "native" && action != "status" && !*launchctlRequested {
+		return reportError(errOut, errors.New("this scheduler was loaded with launchctl; pause, resume or uninstall requires explicit --launchctl so no orphan service is left behind"))
 	}
 	var status macosadapter.LaunchAgentStatus
 	switch action {
 	case "status":
-		status, err = lifecycle.Status(context.Background(), *home, "com.bcg.maestro.maintenance")
+		status, err = lifecycle.Status(context.Background(), *home, canaryLaunchAgentLabel)
 	case "pause":
-		status, err = lifecycle.Pause(context.Background(), *home, "com.bcg.maestro.maintenance")
+		status, err = lifecycle.Pause(context.Background(), *home, canaryLaunchAgentLabel)
 	case "resume":
-		status, err = lifecycle.Resume(context.Background(), *home, "com.bcg.maestro.maintenance")
+		status, err = lifecycle.Resume(context.Background(), *home, canaryLaunchAgentLabel)
 	case "uninstall":
-		err = lifecycle.Uninstall(context.Background(), *home, "com.bcg.maestro.maintenance")
+		err = lifecycle.Uninstall(context.Background(), *home, canaryLaunchAgentLabel)
 		if err == nil {
 			_ = maintenance.DeleteCanaryEnrollment(root)
-			status = macosadapter.LaunchAgentStatus{State: "not_present", Label: "com.bcg.maestro.maintenance"}
+			status = macosadapter.LaunchAgentStatus{State: "not_present", Label: canaryLaunchAgentLabel}
 		}
 	}
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	result := map[string]any{"launch_agent": status, "enrollment_present": enrollmentErr == nil, "native_qualified": status.NativeQualified}
+	if enrollmentErr == nil && *launchctlRequested {
+		switch action {
+		case "pause":
+			enrollment.Mode = "filesystem_only"
+		case "resume":
+			enrollment.Mode = "native"
+		}
+		if action == "pause" || action == "resume" {
+			if saveErr := maintenance.SaveCanaryEnrollment(root, enrollment); saveErr != nil {
+				return reportError(errOut, errors.New("LaunchAgent lifecycle changed but its enrollment audit could not be updated"))
+			}
+		}
+	}
+	result := map[string]any{"launch_agent": status, "enrollment_present": enrollmentErr == nil, "native_qualified": status.NativeQualified, "binding_state": map[bool]string{true: "exact", false: "not_present"}[enrollmentErr == nil && fileStatus.State != "not_installed"], "model_backed_capabilities": "unavailable"}
 	if enrollmentErr == nil {
 		result["timezone"] = enrollment.Timezone
 		result["activated_jobs"] = enrollment.Activated
@@ -325,6 +442,57 @@ func canaryDataRoot(home, currentHome string) (string, error) {
 	return workspace.DefaultDataRoot(runtime.GOOS, home, "", "")
 }
 
+const canaryLaunchAgentLabel = "com.bcg.maestro.maintenance"
+
+func canaryLaunchAgentSpec(home, executable, workspaceID string) macosadapter.Spec {
+	logRoot := filepath.Join(home, "Library", "Logs")
+	return macosadapter.Spec{
+		Label:           canaryLaunchAgentLabel,
+		Program:         executable,
+		Arguments:       []string{"maintenance", "wake", "--trigger", "presence", "--workspace", workspaceID},
+		StartInterval:   900,
+		RunAtLoad:       true,
+		StandardOutPath: filepath.Join(logRoot, "bcgos-maintenance.stdout.log"),
+		StandardErrPath: filepath.Join(logRoot, "bcgos-maintenance.stderr.log"),
+	}
+}
+
+func exactRunningExecutable(requested string) (string, error) {
+	running, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve running bcgos executable: %w", err)
+	}
+	running, err = macosadapter.ResolveExecutable(running)
+	if err != nil {
+		return "", err
+	}
+	if requested == "" {
+		return running, nil
+	}
+	exact, err := macosadapter.ResolveExecutable(requested)
+	if err != nil {
+		return "", err
+	}
+	if !samePathCLI(exact, running) {
+		return "", errors.New("--executable must identify the exact running installed bcgos executable")
+	}
+	return exact, nil
+}
+
+func inspectCanaryWorkspace(path, dataRoot string) (workspace.Inspection, error) {
+	if path == "" {
+		return workspace.Inspection{}, errors.New("install-macos requires --workspace-path for an initialized workspace")
+	}
+	inspection, err := workspace.Inspect(path, dataRoot)
+	if err != nil {
+		return workspace.Inspection{}, fmt.Errorf("inspect initialized workspace: %w", err)
+	}
+	if (inspection.State != "ready" && inspection.State != "warning") || inspection.WorkspaceID == "" {
+		return workspace.Inspection{}, errors.New("workspace must be initialized and readable before scheduler enrollment")
+	}
+	return inspection, nil
+}
+
 func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollment maintenance.CanaryEnrollment) map[string]any {
 	store := scheduler.Store{Root: filepath.Join(root, "maintenance", "scheduler")}
 	_, activated := maintenance.ActivationMaps(enrollment)
@@ -337,7 +505,9 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 		catalogIDs[job.ID] = true
 	}
 	unavailableJobs := []string{}
-	for _, job := range schedulerJobsForTrigger("presence") {
+	allPresenceJobs := schedulerJobsForTrigger("presence")
+	plannedJobs := activatedSchedulerJobs(allPresenceJobs, activated)
+	for _, job := range allPresenceJobs {
 		if !active[job.ID] || !catalogIDs[job.ID] {
 			unavailableJobs = append(unavailableJobs, job.ID)
 		}
@@ -376,7 +546,7 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 	}
 	maintenanceStore := maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}
 	recoveryRequired, auditIncomplete, recoveryIntents := 0, schedulerAuditIncomplete, 0
-	for _, job := range schedulerJobsForTrigger("presence") {
+	for _, job := range allPresenceJobs {
 		maintenanceReceipts, readErr := maintenanceStore.Receipts(enrollment.WorkspaceID, job.ID)
 		if readErr != nil {
 			continue
@@ -400,7 +570,7 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 	if body, readErr := os.ReadFile(path); readErr == nil {
 		var schedulerEnrollment scheduler.Enrollment
 		if json.Unmarshal(body, &schedulerEnrollment) == nil {
-			if due, dueErr := scheduler.PlanDue(schedulerJobsForTrigger("presence"), schedulerEnrollment.EnrolledAt, receipts, time.Now().In(mustLoadTimezone(enrollment.Timezone))); dueErr == nil {
+			if due, dueErr := scheduler.PlanDue(plannedJobs, schedulerEnrollment.EnrolledAt, receipts, time.Now().In(mustLoadTimezone(enrollment.Timezone))); dueErr == nil {
 				result["due_count"] = len(due)
 			}
 		}
@@ -478,7 +648,18 @@ func maintenanceStatus(catalog maintenance.Catalog) map[string]any {
 		result["lifecycle_status"] = map[string]any{"state": "current_user_unavailable", "native_qualified": false}
 		return result
 	}
-	lifecycle := macosadapter.Lifecycle{Runner: macosadapter.ExecCommandRunner{}, UID: uid, CurrentHome: currentHome, Timeout: 15 * time.Second, Native: enrollment.Mode == "native" && runtime.GOOS == "darwin" && samePathCLI(enrollment.Home, currentHome)}
+	// The aggregate status command is read-only and filesystem-only. Native
+	// launchctl inspection is available solely through the explicit
+	// `maintenance canary status --launchctl` surface.
+	lifecycle := macosadapter.Lifecycle{Runner: macosadapter.ExecCommandRunner{}, UID: uid, CurrentHome: currentHome, Timeout: 15 * time.Second, Native: false}
+	if _, executableErr := macosadapter.ResolveExecutable(enrollment.Executable); executableErr != nil {
+		result["lifecycle_status"] = map[string]any{"state": "executable_binding_invalid", "native_qualified": false}
+		return result
+	}
+	if _, bindingErr := macosadapter.Verify(enrollment.Home, canaryLaunchAgentSpec(enrollment.Home, enrollment.Executable, enrollment.WorkspaceID)); bindingErr != nil {
+		result["lifecycle_status"] = map[string]any{"state": "plist_binding_invalid", "native_qualified": false}
+		return result
+	}
 	status, statusErr := lifecycle.Status(context.Background(), enrollment.Home, enrollment.LaunchAgentLabel)
 	if statusErr != nil {
 		result["lifecycle_status"] = map[string]any{"state": "status_unavailable", "native_qualified": false}
@@ -506,4 +687,18 @@ func schedulerJobsForTrigger(trigger string) []scheduler.Job {
 	default:
 		return []scheduler.Job{daily, weekly, walter, monthly}
 	}
+}
+
+func activatedSchedulerJobs(jobs []scheduler.Job, activated []string) []scheduler.Job {
+	active := make(map[string]bool, len(activated))
+	for _, jobID := range activated {
+		active[jobID] = true
+	}
+	filtered := make([]scheduler.Job, 0, len(jobs))
+	for _, job := range jobs {
+		if active[job.ID] {
+			filtered = append(filtered, job)
+		}
+	}
+	return filtered
 }
