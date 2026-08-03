@@ -22,7 +22,15 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 	}
 	for _, path := range []string{
 		filepath.Join(workspacePath, ".bcgos", "workspace.json"),
+		filepath.Join(workspacePath, "README.md"),
+		filepath.Join(workspacePath, "onboarding", "README.md"),
 		filepath.Join(workspacePath, "brain", "README.md"),
+		filepath.Join(workspacePath, "brain", "clients", "README.md"),
+		filepath.Join(workspacePath, "brain", "projects", "README.md"),
+		filepath.Join(workspacePath, "brain", "tasks", "README.md"),
+		filepath.Join(workspacePath, "agents", "maestro.md"),
+		filepath.Join(workspacePath, "agents", "client-accounts", "README.md"),
+		filepath.Join(workspacePath, "agents", "cases", "README.md"),
 		filepath.Join(dataRoot, "memory"),
 		filepath.Join(dataRoot, "config"),
 	} {
@@ -53,6 +61,17 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 	contents, err = os.ReadFile(readmePath)
 	if err != nil || string(contents) != "# Meu conteúdo\n" {
 		t.Fatalf("re-initialization overwrote brain README = %q, error = %v", contents, err)
+	}
+	rootReadmePath := filepath.Join(workspacePath, "README.md")
+	if err := os.WriteFile(rootReadmePath, []byte("# Meu workspace\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Initialize(Options{WorkspacePath: workspacePath, DataRoot: dataRoot}); err != nil {
+		t.Fatalf("third Initialize() error = %v", err)
+	}
+	contents, err = os.ReadFile(rootReadmePath)
+	if err != nil || string(contents) != "# Meu workspace\n" {
+		t.Fatalf("re-initialization overwrote root README = %q, error = %v", contents, err)
 	}
 }
 

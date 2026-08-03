@@ -47,6 +47,28 @@ type manifest struct {
 	WorkspaceID   string `json:"workspace_id"`
 }
 
+const rootReadme = `# Maestro workspace
+
+Este é o seu workspace profissional do Maestro. Ele começa com uma estrutura
+local e vazia por design: nada de cliente, memória antiga ou contexto externo é
+copiado para cá durante a instalação.
+
+## Comece aqui
+
+1. Abra este diretório no Claude Code ou Codex.
+2. O Maestro verificará o onboarding e conduzirá a entrevista inicial se ela
+   ainda estiver pendente.
+3. Depois, preencha as áreas do brain conforme o trabalho acontece.
+
+## Mapa
+
+- brain/ — clientes, projetos, conhecimento, pessoas, decisões e tarefas.
+- agents/ — stubs navegáveis dos papéis do Maestro.
+- onboarding/ — contrato da entrevista inicial e próximos passos.
+- .bcgos/ e .claude/ — configuração gerenciada do runtime; normalmente
+  ficam ocultas no Finder.
+`
+
 const brainReadme = `# Meu BCGOS Brain
 
 Este é o espaço navegável do seu segundo cérebro profissional.
@@ -60,8 +82,30 @@ profile show para consultá-la ou bcgos profile set standard|advanced|power
 para ajustar a profundidade técnica das sugestões.
 
 Estruture projetos, clientes e conhecimento reutilizável conforme seu trabalho
-e os bundles instalados. Este arquivo não é atualizado automaticamente.
+e os bundles instalados. Os diretórios iniciais são stubs vazios: use-os quando
+o trabalho existir, sem criar contexto de cliente artificialmente.
 `
+
+var visibleSurface = []struct {
+	path string
+	body string
+}{
+	{"README.md", rootReadme},
+	{"onboarding/README.md", "# Onboarding\n\nNa primeira sessão, Maestro verifica se o perfil do dono foi concluído. Se estiver pendente, ele conduz uma pergunta por vez e só trata o onboarding como completo depois da revisão e confirmação do dono.\n\nNenhuma memória anterior é lida, copiada ou enviada durante essa etapa.\n"},
+	{"brain/clients/README.md", "# Clientes\n\nCrie uma pasta somente quando houver um cliente autorizado. Registre stakeholders, fatos e decisões no escopo correto.\n"},
+	{"brain/projects/README.md", "# Projetos\n\nCrie um diretório por projeto ativo. Mantenha hipótese, entregáveis, plano de trabalho e evidências próximos ao projeto.\n"},
+	{"brain/knowledge/README.md", "# Conhecimento\n\nGuarde conhecimento reutilizável que tenha fonte e escopo claros. Não copie material de cliente para esta área.\n"},
+	{"brain/people/README.md", "# Pessoas\n\nUse para informações profissionais que sejam necessárias ao trabalho e tenham contexto e permissão apropriados.\n"},
+	{"brain/decisions/README.md", "# Decisões\n\nRegistre decisões relevantes com racional, evidência, dono e data. A fonte humana continua sendo a autoridade.\n"},
+	{"brain/tasks/README.md", "# Tarefas\n\nO Maestro mostra no início da sessão somente tarefas marcadas explicitamente como abertas no estado operacional do dono. Este diretório é para planos e artefatos de trabalho; não é um backlog inventado.\n"},
+	{"agents/README.md", "# Agentes\n\nEstes são stubs de papéis. Maestro coordena; nomes, avatares e ownership de Client Account Agents e Case Agents são definidos pelo dono durante o onboarding.\n"},
+	{"agents/maestro.md", "# Maestro 🎼\n\nHub do workspace: entende a intenção, decide profundidade e coordena os loops autorizados.\n"},
+	{"agents/walter.md", "# Walter 🧭\n\nSenior advisor e proxy do self do dono para tarefas de maior leverage. Refina; não é um naysayer.\n"},
+	{"agents/darwin.md", "# Darwin 🧬\n\nMeta-harness: observa saúde, housekeeping e caminhos de evolução do Agentic OS.\n"},
+	{"agents/pa-experts.md", "# PA Experts 🧠\n\nEspecialistas funcionais e industriais consultivos. São versionados e evoluem ao longo do tempo; nesta instalação permanecem stubs.\n"},
+	{"agents/client-accounts/README.md", "# Client Account Agents\n\nStubs para os agentes que exercem visão estratégica de conta e stakeholders. O dono define nome, avatar e ownership.\n"},
+	{"agents/cases/README.md", "# Case Agents\n\nStubs para os agentes especializados na execução de cada projeto. O dono define nome, avatar e ownership.\n"},
+}
 
 // DefaultDataRoot resolves per-user application storage without placing BCGOS
 // state below a workspace or a cloud-synchronized Documents folder.
@@ -131,6 +175,9 @@ func Initialize(options Options) (Result, error) {
 		return Result{}, err
 	}
 	if err := ensureBrainReadme(workspacePath); err != nil {
+		return Result{}, err
+	}
+	if err := ensureVisibleSurface(workspacePath); err != nil {
 		return Result{}, err
 	}
 
@@ -220,6 +267,33 @@ func ensureBrainReadme(workspacePath string) error {
 		return err
 	}
 	if _, err := file.WriteString(brainReadme); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
+func ensureVisibleSurface(workspacePath string) error {
+	for _, entry := range visibleSurface {
+		if err := ensureFile(filepath.Join(workspacePath, filepath.FromSlash(entry.path)), entry.body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureFile(path, body string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := file.WriteString(body); err != nil {
 		_ = file.Close()
 		return err
 	}
