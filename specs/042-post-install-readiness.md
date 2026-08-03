@@ -43,6 +43,18 @@ Codex entries are synchronous, and duplicate, legacy, mismatched or
 Maestro-marked commands on another event fail closed. Unrelated user hooks are
 preserved and ignored by the read-only check.
 
+The orchestration pointer is operational rather than a configuration marker.
+At hook time it resolves only to the exact relative path inside the canonical
+initialized workspace; absolute paths, traversal, symlinked workspace/`.bcgos`
+components, symlinked state files, oversized state and non-strict JSON fail
+closed. The shared durable store is opened and validated for every installed
+hook that reaches workspace-bound processing. Session/context observations and
+post-action/stop receipts bind to a digest of the validated metadata-only
+snapshot. A safe pre-action request also validates and binds the snapshot;
+an unsafe or unevaluable request is still denied before any workspace access.
+None of these bindings authenticates an agent, changes an orchestration branch
+or promotes native capability.
+
 ## Evidence boundary
 
 The structured report uses `evidence_class=configured` and
