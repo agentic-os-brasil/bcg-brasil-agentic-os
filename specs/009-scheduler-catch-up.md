@@ -38,9 +38,14 @@ scheduler/
     leases/<job-id>/<sha256-occurrence>.json
 ```
 
-Enrollment establishes the no-backfill boundary: a fresh installation never invents work before the user enrolled the workspace. Receipts are append-only, metadata-safe and classified as `succeeded`, `failed` or `unavailable`.
+Enrollment establishes the no-backfill boundary: a fresh installation never invents work before the user enrolled the workspace. Receipts are append-only, metadata-safe and classified as `succeeded`, `failed`, `unavailable` or `suppressed`.
 
-Only `succeeded` satisfies an occurrence. Failed or unavailable occurrences remain due so a later native wake-up, manual command or session-presence trigger can recover them. Catch-up is chronological and bounded per job to prevent an unattended backlog from creating unbounded model cost.
+Only `succeeded` satisfies an occurrence. Failed, unavailable or suppressed
+occurrences remain due so a later native wake-up, manual command or
+session-presence trigger can recover them. Suppression records a failed
+eligibility gate, not execution; it never advances the success anchor. Catch-up
+is chronological and bounded per job to prevent an unattended backlog from
+creating unbounded model cost.
 
 The scheduler state schema is `schemas/scheduler-state.schema.json`. Exact approved application directories remain governed by Q-007.
 
@@ -48,8 +53,9 @@ The scheduler state schema is `schemas/scheduler-state.schema.json`. Exact appro
 
 The first job vocabulary is:
 
-- `memory-daily`: light L1 maintenance;
-- `memory-weekly`: deep L2/L3/lifetime consolidation;
+- `memory-checkpoint`: three-hour metadata-only workspace continuity receipt;
+- `memory-light-dream`: three-hour light L1 synthesis, unavailable without a qualified synthesis adapter;
+- `memory-deep-dream`: weekly deep L2/L3/lifetime consolidation, unavailable without a qualified synthesis and eligibility adapter;
 - `wiki-reconcile`: reconciliation of source watermarks, outbox receipts and atlas manifests.
 - `sharepoint-work-sync`: refresh of the explicitly enrolled organizational
   work-retrieval catalog through the approved Claude SharePoint adapter.
@@ -63,7 +69,19 @@ The first job vocabulary is:
 
 Job IDs and cadence are runtime-neutral. Daily and weekly local windows, timezone behavior, retry/backoff and maximum catch-up are configuration, not hard-coded adapter behavior.
 
-`memory-weekly` succeeds only after the complete memory commit is active. Wiki work triggered by that commit follows the outbox and publication boundary in Spec 008; a scheduler receipt cannot substitute for either durable commit. Walter's weekly job supersedes the retired generic `self-refinement-proposal` catalog placeholder; it is a silent, finite self-ingestion/compaction pass, not a weekly user-facing proposal or notification. Observation capture remains a separate evidence producer. The monthly Darwin job emits a metadata-only proposal receipt and remains unavailable until its deterministic local executor is qualified and attended authority is present.
+`memory-checkpoint` succeeds only after its own metadata-only receipt is
+durable and never claims memory synthesis. The two three-hour interval jobs
+anchor first to enrollment and, after success, to that successful attempt;
+both use `MaxCatchUp=1`. `memory-deep-dream` succeeds only after the complete
+memory commit is active. Wiki work triggered by that commit follows the outbox
+and publication boundary in Spec 008; a scheduler receipt cannot substitute
+for either durable commit. Walter's weekly job supersedes the retired generic
+`self-refinement-proposal` catalog placeholder; it is a silent, finite
+self-ingestion/compaction pass, not a weekly user-facing proposal or
+notification. Observation capture remains a separate evidence producer. The
+monthly Darwin job emits a metadata-only proposal receipt and remains
+unavailable until its deterministic local executor is qualified and attended
+authority is present.
 
 `sharepoint-work-sync` succeeds only after Spec 037 publishes a new or
 idempotently unchanged active catalog manifest. If SharePoint collection is
@@ -97,7 +115,11 @@ If no approved model or eligibility adapter is available, the executor records `
 - Security denial and revocation work is never paused behind an ordinary enrichment schedule.
 
 The macOS adapter owns only the attended per-user lifecycle and a periodic
-presence wake. Enrollment persists the validated IANA timezone, workspace and
+15-minute presence pulse. The pulse only checks due work, eligibility and the
+depth-one worker; it is not the job cadence. Idle eligibility is explicit and
+fail-closed: `unknown` is not `idle`. Active or unknown pulses emit at most one
+suppression set per cooldown window, and suppression never satisfies due work.
+Enrollment persists the validated IANA timezone, workspace and
 activated job digests; fixture homes remain filesystem-only. Windows continues
 to fail closed rather than claim native parity. Neither adapter decides whether
 an occurrence succeeded.
@@ -106,11 +128,11 @@ an occurrence succeeded.
 
 `internal/scheduler` currently implements:
 
-- daily, weekly and monthly occurrence planning in an injected local timezone;
+- daily, weekly, monthly and fixed-interval occurrence planning in an injected local timezone;
 - enrollment-based no-backfill behavior;
 - chronological, per-job bounded catch-up;
 - successful-receipt deduplication;
-- retry eligibility after failed or unavailable attempts;
+- retry eligibility after failed, unavailable or suppressed attempts;
 - append-only user-local enrollment and receipt persistence;
 - deterministic ordering across multiple jobs.
 - cancellation before the next catch-up occurrence, leaving the remainder due;

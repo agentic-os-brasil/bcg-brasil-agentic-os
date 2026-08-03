@@ -28,15 +28,29 @@ filesystem-only and cannot load the real user's domain. An enabled adapter must:
   plist;
 - treat exit code `3` / `state: unavailable` as a capability gap, not success.
 
-The implemented Canary contract uses one periodic presence wake; due
-daily/weekly/monthly work is derived by the runtime worker. `status`
+The implemented Canary contract uses one 15-minute presence pulse. The pulse
+only asks the scheduler for due work and hands eligible occurrences to the
+depth-one worker; it is not a 15-minute job cadence and does not run handlers
+inline. Three-hour continuity is anchored to enrollment and then the last
+successful receipt with `MaxCatchUp=1`. `memory-checkpoint` is the only
+locally qualified memory handler: it emits a workspace-bound metadata-only
+receipt and reads or synthesizes no memory body. `memory-light-dream` shares
+the three-hour due contract and `memory-deep-dream` is weekly, but both remain
+unavailable until a synthesis adapter is qualified.
+
+The checked-in template passes `--idle-state unknown`, which is intentionally
+fail-closed: unknown is not idle. A qualified activity observer may provide an
+explicit `idle` or `active` value at the same CLI boundary. Suppressed due work
+remains due, suppression receipts do not advance the success anchor, and a
+15-minute cooldown prevents receipt loops. `status`
 distinguishes the plist from
 native loaded/enabled state, local IANA timezone, due work and unavailable jobs.
 Pause, resume, status and uninstall are attended, idempotent and reversible.
 The enrollment records the timezone and exact activated jobs; an unattended wake
 uses only that persisted qualification and never obtains new authority inline.
 
-The scheduler only wakes the process. The local Darwin worker contract has a
+The scheduler only plans occurrences and the adapter only wakes the process.
+The local Darwin worker contract has a
 bounded deterministic success boundary; weekly deep review emits
 proposal-only evidence. Walter and monthly structural work remain unavailable
 until their owning runtime integrations are qualified. The owning subsystem

@@ -14,7 +14,7 @@
     "workspace_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
     "trigger": {"enum": ["continuous", "event", "presence", "daily", "weekly", "monthly"]},
     "event_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"},
-    "state": {"enum": ["accepted", "busy", "succeeded", "reviewed_no_change", "recovery_required", "failed", "unavailable", "timed_out", "proposal_emitted"]},
+    "state": {"enum": ["accepted", "busy", "succeeded", "reviewed_no_change", "recovery_required", "failed", "unavailable", "suppressed", "timed_out", "proposal_emitted"]},
     "recorded_at": {"type": "string", "format": "date-time"},
     "deadline": {"type": "string", "format": "date-time"},
     "proposal_only": {"type": "boolean"},
@@ -24,7 +24,7 @@
     "recovery_phase": {"enum": ["intent", "completed", "failed", "audit_incomplete"]},
     "recovery_intent_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "fence_token_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "reason_code": {"enum": ["completed", "reviewed_no_change", "recovery_required", "recovery_intent", "recovery_completed", "recovery_failed", "recovery_committed_audit_incomplete", "proposal_emitted", "lease_busy", "handler_unavailable", "handler_failure", "deadline_exceeded", "catalog_unavailable", "authority_rejected", "occurrence_rejected", "receipt_persisted"]}
+    "reason_code": {"enum": ["completed", "reviewed_no_change", "recovery_required", "recovery_intent", "recovery_completed", "recovery_failed", "recovery_committed_audit_incomplete", "proposal_emitted", "lease_busy", "handler_unavailable", "handler_failure", "deadline_exceeded", "catalog_unavailable", "authority_rejected", "occurrence_rejected", "receipt_persisted", "idle_state_unknown", "user_active"]}
   },
   "allOf": [
     {

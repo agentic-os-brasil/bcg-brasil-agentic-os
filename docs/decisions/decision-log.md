@@ -688,3 +688,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: A user can select software, data or both practices during onboarding; the active projection and dispatcher policy remain deterministic, hash-bound and tool-neutral. Embedded methods from unselected bundles remain denied, and a modified or unmanaged policy path fails closed. The base catalog remains unchanged until selection, and no track grants tools, data scope, provider access, publication or agent authority.
 - Refs: USER; specs/035-professional-capability-bundles.md; bundles/catalog/catalog.json; internal/agentidentity; internal/runtimeprojection
 - Supersedes: BSEL
+
+## IDLE - Make idle continuity bounded and capability-honest
+
+- Date: 2026-08-02
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A fifteen-minute native wake can keep Maestro continuity responsive, but treating every pulse as permission to run would create loops, model cost and false success. Memory also needs a useful deterministic boundary that does not pretend model synthesis exists.
+- Decision: Keep the native pulse as a wake only. The runtime-neutral scheduler derives due work and a depth-one worker checks activation, qualification, explicit idle evidence and cooldown before dispatch. Unknown activity state is not idle. `memory-checkpoint` is a workspace-scoped, metadata-only deterministic three-hour interval job anchored first to enrollment and then to its last successful attempt, with `MaxCatchUp=1` and its own receipt. `memory-light-dream` has the same due contract but remains unavailable without a qualified synthesis adapter; `memory-deep-dream` remains weekly and model-backed. Suppression is a distinct metadata-safe terminal attempt state that never advances scheduler success or the due anchor, and repeated suppressed pulses are cooldown-bounded.
+- Consequences: A fifteen-minute macOS LaunchAgent improves discovery latency without defining cadence, running inline synthesis or creating catch-up storms. Only explicit idle evidence can cross the worker gate; unsupported idle observation fails closed and remains visible as suppression. Checkpoint success proves only a metadata checkpoint, while light or deep dream success requires its owning memory commit and runtime qualification. Catalog configuration, installed native adapters, local activation and successful execution remain separate capability claims.
+- Refs: MEMO; SCHD; CADN; specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/036-maintenance-plane.md; internal/scheduler; internal/maintenance; adapters/macos
+- Supersedes: none

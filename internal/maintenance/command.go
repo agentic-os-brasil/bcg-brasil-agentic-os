@@ -52,6 +52,7 @@ const (
 	ReceiptRecoveryRequired ReceiptState = "recovery_required"
 	ReceiptFailed           ReceiptState = "failed"
 	ReceiptUnavailable      ReceiptState = "unavailable"
+	ReceiptSuppressed       ReceiptState = "suppressed"
 	ReceiptTimedOut         ReceiptState = "timed_out"
 	ReceiptProposalEmitted  ReceiptState = "proposal_emitted"
 )
@@ -272,7 +273,7 @@ func validTrigger(trigger Trigger) bool {
 
 func validReceiptState(state ReceiptState) bool {
 	switch state {
-	case ReceiptAccepted, ReceiptBusy, ReceiptSucceeded, ReceiptReviewedNoChange, ReceiptRecoveryRequired, ReceiptFailed, ReceiptUnavailable, ReceiptTimedOut, ReceiptProposalEmitted:
+	case ReceiptAccepted, ReceiptBusy, ReceiptSucceeded, ReceiptReviewedNoChange, ReceiptRecoveryRequired, ReceiptFailed, ReceiptUnavailable, ReceiptSuppressed, ReceiptTimedOut, ReceiptProposalEmitted:
 		return true
 	default:
 		return false

@@ -11,8 +11,9 @@
   },
   "jobs": [
     "memory-l1-capture",
-    "memory-daily",
-    "memory-weekly",
+    "memory-checkpoint",
+    "memory-light-dream",
+    "memory-deep-dream",
     "memory-retention-check",
     "wiki-incremental-sync",
     "wiki-reconcile",

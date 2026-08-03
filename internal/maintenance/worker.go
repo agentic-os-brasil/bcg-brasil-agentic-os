@@ -39,7 +39,16 @@ type WakeRequest struct {
 	// from Attended, which represents consent for this individual wake.
 	Preauthorized bool
 	OwnerID       string
+	IdleState     IdleState
 }
+
+type IdleState string
+
+const (
+	IdleUnknown   IdleState = "unknown"
+	IdleConfirmed IdleState = "idle"
+	IdleActive    IdleState = "active"
+)
 
 type WakeReport struct {
 	SchemaVersion int                    `json:"schema_version"`
@@ -72,6 +81,7 @@ type Worker struct {
 	LocalQualification map[string]string
 	ActivatedJobs      []string
 	Deadline           time.Duration
+	IdleCooldown       time.Duration
 	Now                func() time.Time
 	ArmLease           func(scheduler.Lease) error
 	ReleaseLease       func(scheduler.Lease) error
@@ -154,6 +164,31 @@ func (worker Worker) Run(ctx context.Context, request WakeRequest) (WakeReport, 
 		due = report.Due
 	}
 	if len(due) == 0 {
+		return report, nil
+	}
+	if request.Trigger == TriggerPresence && request.IdleState != IdleConfirmed {
+		cooldown := worker.IdleCooldown
+		if cooldown <= 0 {
+			cooldown = 15 * time.Minute
+		}
+		for _, prior := range schedulerReceipts {
+			if prior.State == scheduler.Suppressed && now.Sub(prior.AttemptedAt) >= 0 && now.Sub(prior.AttemptedAt) < cooldown {
+				report.State = "suppressed_cooldown"
+				return report, nil
+			}
+		}
+		reason := ReasonIdleUnknown
+		if request.IdleState == IdleActive {
+			reason = ReasonUserActive
+		}
+		for _, occurrence := range due {
+			receipt, suppressErr := worker.suppressedReceipt(request.WorkspaceID, occurrence, now, reason)
+			if suppressErr != nil {
+				return WakeReport{}, suppressErr
+			}
+			report.Receipts = append(report.Receipts, receipt)
+		}
+		report.State = "suppressed"
 		return report, nil
 	}
 	authorizations := make([]OccurrenceAuthorization, 0, len(due))
@@ -423,6 +458,22 @@ func (worker Worker) unavailableReceipt(workspaceID string, occurrence scheduler
 	trigger := triggerForOccurrence(worker.Jobs, occurrence)
 	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: id, OccurrenceDigest: occurrenceDigest(occurrence, trigger), CommandID: "unavailable-" + digestPrefix(occurrence.JobID+occurrence.EventID+occurrence.ScheduledFor.String()), JobID: occurrence.JobID, WorkspaceID: workspaceID, Trigger: trigger, EventID: occurrence.EventID, State: ReceiptUnavailable, RecordedAt: now, Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID), ReasonCode: reason}
 	return receipt, worker.Receipts.AppendReceipt(receipt)
+}
+
+func (worker Worker) suppressedReceipt(workspaceID string, occurrence scheduler.Occurrence, now time.Time, reason ReasonCode) (Receipt, error) {
+	id, err := attemptID()
+	if err != nil {
+		return Receipt{}, err
+	}
+	trigger := triggerForOccurrence(worker.Jobs, occurrence)
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: id, OccurrenceDigest: occurrenceDigest(occurrence, trigger), CommandID: "suppressed-" + digestPrefix(occurrence.JobID+occurrence.ScheduledFor.String()+now.String()), JobID: occurrence.JobID, WorkspaceID: workspaceID, Trigger: trigger, State: ReceiptSuppressed, RecordedAt: now.UTC(), Deadline: now.Add(worker.Deadline), ProposalOnly: IsProposalOnlyJob(occurrence.JobID), ReasonCode: reason}
+	if err := worker.Receipts.AppendReceipt(receipt); err != nil {
+		return Receipt{}, err
+	}
+	if occurrence.EventID == "" {
+		err = worker.Scheduler.AppendReceipt(workspaceID, scheduler.Receipt{JobID: occurrence.JobID, ScheduledFor: occurrence.ScheduledFor, AttemptedAt: now.UTC(), State: scheduler.Suppressed, Error: string(reason)})
+	}
+	return receipt, err
 }
 
 func triggerForCadence(jobs []scheduler.Job, jobID string) Trigger {

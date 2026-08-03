@@ -16,20 +16,33 @@
       "success_boundary": "append-only sanitized L1 capture is durably committed"
     },
     {
-      "id": "memory-daily",
+      "id": "memory-checkpoint",
       "category": "memory",
       "trigger": "daily_or_presence",
       "executor": "deterministic",
       "scope": "workspace",
       "availability": "unavailable",
-      "availability_reason": "memory runtime adapter and approved daily executor are not installed",
+      "availability_reason": "local metadata-only checkpoint requires explicit runtime enrollment",
       "default_enabled": true,
       "unattended": "deterministic_only",
-      "writes": ["memory_l1"],
-      "success_boundary": "validated daily L1 commit is active"
+      "writes": ["none"],
+      "success_boundary": "workspace-bound metadata-only checkpoint receipt is durably committed"
     },
     {
-      "id": "memory-weekly",
+      "id": "memory-light-dream",
+      "category": "memory",
+      "trigger": "daily_or_presence",
+      "executor": "model_adapter",
+      "scope": "workspace",
+      "availability": "unavailable",
+      "availability_reason": "qualified synthesis adapter is not installed",
+      "default_enabled": false,
+      "unattended": "policy_gated",
+      "writes": ["memory_l1"],
+      "success_boundary": "validated light synthesis memory commit is active"
+    },
+    {
+      "id": "memory-deep-dream",
       "category": "memory",
       "trigger": "weekly_or_presence",
       "executor": "model_adapter",

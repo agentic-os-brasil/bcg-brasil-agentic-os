@@ -7,7 +7,7 @@ func TestEmbeddedMaintenanceCatalogIsAvailableThroughBaseRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Jobs) != 17 || catalog.CatalogState != "catalog_only" {
+	if len(catalog.Jobs) != 18 || catalog.CatalogState != "catalog_only" {
 		t.Fatalf("embedded maintenance catalog = %#v", catalog)
 	}
 }

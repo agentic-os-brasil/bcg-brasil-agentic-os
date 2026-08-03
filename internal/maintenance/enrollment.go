@@ -52,7 +52,7 @@ func (enrollment CanaryEnrollment) Validate() error {
 	}
 	seen := map[string]bool{}
 	for _, activation := range enrollment.Activated {
-		if !validID(activation.JobID) || (activation.JobID != "darwin-housekeeping-daily" && activation.JobID != "darwin-deep-weekly") || activation.QualificationDigest != QualificationDigest(activation.JobID) || seen[activation.JobID] {
+		if !validID(activation.JobID) || (activation.JobID != "darwin-housekeeping-daily" && activation.JobID != "darwin-deep-weekly" && activation.JobID != MemoryCheckpointJobID) || activation.QualificationDigest != QualificationDigest(activation.JobID) || seen[activation.JobID] {
 			return errors.New("invalid or duplicate Darwin Canary activation")
 		}
 		seen[activation.JobID] = true

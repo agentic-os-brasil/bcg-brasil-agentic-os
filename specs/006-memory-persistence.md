@@ -1,6 +1,8 @@
 # Spec 006 - Memory persistence and dreaming
 
-Status: architecture, runtime-neutral core engine and initial CLI bridge implemented; synthesis adapters, scheduling and executable dreaming pending.
+Status: architecture, runtime-neutral core engine, initial CLI bridge and
+metadata-only continuity checkpoint implemented; synthesis adapters and
+executable dreaming remain pending.
 
 ## Objective
 
@@ -25,6 +27,14 @@ Dreaming has two depths over the same deterministic engine:
 
 - **Daily light dreaming:** captures and compacts recent allowed signals into L1. It cannot write L2, L3 or lifetime memory.
 - **Weekly deep dreaming:** consumes the week's L1 evidence, refreshes L2 and L3, and consolidates eligible durable evidence into lifetime memory in one staged transaction.
+
+The maintenance plane deliberately separates those synthesis operations from
+`memory-checkpoint`. The checkpoint is a three-hour, workspace-scoped,
+metadata-only continuity receipt. It reads no memory body, creates no L1/L2/L3
+artifact and is never evidence that dreaming occurred. `memory-light-dream`
+has a three-hour due contract but remains unavailable without a qualified
+synthesis adapter. `memory-deep-dream` is the weekly deep cycle and remains
+unavailable on the same basis.
 
 ### L1 source composition
 
@@ -79,7 +89,15 @@ The repository does not define the final Windows or macOS data path yet; that re
 
 The policy, layer identifiers, provenance envelope, rollup state and injection order are runtime-neutral. Claude and Codex adapters may use different native lifecycle events or schedulers, but they must preserve the same observable invariants and capability reporting from Spec 004.
 
-Scheduling is not part of the memory truth model. Manual invocation, session-stop observation, periodic execution and presence-based catch-up are interchangeable triggers for the same idempotent dreaming operation. Spec 009 owns the runtime-neutral scheduler contract: native schedulers accelerate execution, while durable occurrence state and presence recovery detect missed work. A scheduler receipt reports execution metadata but never substitutes for the atomic memory commit that proves a dream succeeded.
+Scheduling is not part of the memory truth model. Manual invocation,
+session-stop observation, periodic execution and presence-based catch-up are
+interchangeable triggers for the same idempotent dreaming operation. Spec 009
+owns the runtime-neutral scheduler contract: native schedulers accelerate
+execution, while durable occurrence state and presence recovery detect missed
+work. Three-hour interval jobs anchor first to workspace enrollment and then
+to their last successful attempt, with one catch-up occurrence at most. A
+checkpoint receipt reports only metadata continuity; a dream scheduler receipt
+never substitutes for the atomic memory commit that proves synthesis succeeded.
 
 ## Context injection
 

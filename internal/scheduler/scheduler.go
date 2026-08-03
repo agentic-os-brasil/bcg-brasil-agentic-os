@@ -30,6 +30,7 @@ const (
 	Succeeded   ReceiptState = "succeeded"
 	Failed      ReceiptState = "failed"
 	Unavailable ReceiptState = "unavailable"
+	Suppressed  ReceiptState = "suppressed"
 )
 
 var (
@@ -107,9 +108,13 @@ func PlanDue(jobs []Job, enrolledAt time.Time, receipts []Receipt, now time.Time
 	var due []Occurrence
 	seen := make(map[string]bool)
 	succeeded := make(map[string]bool)
+	lastSuccess := make(map[string]time.Time)
 	for _, receipt := range receipts {
 		if receipt.State == Succeeded {
 			succeeded[occurrenceKey(receipt.JobID, receipt.ScheduledFor)] = true
+			if receipt.AttemptedAt.After(lastSuccess[receipt.JobID]) {
+				lastSuccess[receipt.JobID] = receipt.AttemptedAt
+			}
 		}
 	}
 	for _, job := range jobs {
@@ -121,6 +126,9 @@ func PlanDue(jobs []Job, enrolledAt time.Time, receipts []Receipt, now time.Time
 		}
 		seen[job.ID] = true
 		cursor := enrolledAt.In(now.Location())
+		if job.Cadence == Interval && !lastSuccess[job.ID].IsZero() {
+			cursor = lastSuccess[job.ID].In(now.Location())
+		}
 		for occurrence := nextOccurrence(job, cursor); !occurrence.After(now); occurrence = nextOccurrence(job, occurrence) {
 			if succeeded[occurrenceKey(job.ID, occurrence)] {
 				continue
@@ -369,7 +377,7 @@ func validateReceipt(receipt Receipt) error {
 	if !jobIDPattern.MatchString(receipt.JobID) || receipt.ScheduledFor.IsZero() || receipt.AttemptedAt.IsZero() {
 		return errors.New("invalid scheduler receipt")
 	}
-	if receipt.State != Succeeded && receipt.State != Failed && receipt.State != Unavailable {
+	if receipt.State != Succeeded && receipt.State != Failed && receipt.State != Unavailable && receipt.State != Suppressed {
 		return errors.New("invalid scheduler receipt state")
 	}
 	if receipt.State == Succeeded && receipt.Error != "" {
