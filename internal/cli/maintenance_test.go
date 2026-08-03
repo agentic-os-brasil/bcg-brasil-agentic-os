@@ -8,10 +8,45 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+func TestPresencePlannerIncludesOnlyExplicitlyActivatedJobs(t *testing.T) {
+	jobs := schedulerJobsForTrigger("presence")
+	activated := []string{"darwin-housekeeping-daily", "darwin-deep-weekly"}
+	planned := activatedSchedulerJobs(jobs, activated)
+	if len(planned) != 2 {
+		t.Fatalf("planned jobs=%#v, want exactly the two enrolled Darwin jobs", planned)
+	}
+	for _, job := range planned {
+		if job.ID == maintenance.WalterSelfReviewWeeklyJobID || job.ID == maintenance.DarwinStructuralProposalJobID {
+			t.Fatalf("inactive/model-backed job entered presence plan: %#v", job)
+		}
+	}
+
+	enrolledAt := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	due, err := scheduler.PlanDue(planned, enrolledAt, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, occurrence := range due {
+		if occurrence.JobID == maintenance.WalterSelfReviewWeeklyJobID || occurrence.JobID == maintenance.DarwinStructuralProposalJobID {
+			t.Fatalf("inactive occurrence entered presence plan: %#v", occurrence)
+		}
+	}
+}
+
+func TestPresencePlannerWithNoEnrollmentPlansNothing(t *testing.T) {
+	planned := activatedSchedulerJobs(schedulerJobsForTrigger("presence"), nil)
+	if len(planned) != 0 {
+		t.Fatalf("unenrolled presence wake planned jobs: %#v", planned)
+	}
+}
 
 func TestMaintenanceStatusReportsWorkerAndNativeEvidence(t *testing.T) {
 	var output bytes.Buffer

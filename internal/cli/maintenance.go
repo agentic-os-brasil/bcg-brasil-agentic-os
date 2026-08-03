@@ -81,12 +81,17 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		if homeErr != nil {
 			return reportError(errOut, homeErr)
 		}
-		jobs := schedulerJobsForTrigger(trimmedTrigger)
 		enrollment, enrollmentErr := maintenance.LoadCanaryEnrollment(root)
 		if enrollmentErr == nil && (enrollment.WorkspaceID != strings.TrimSpace(*workspace) || !samePathCLI(enrollment.Home, currentHome)) {
 			enrollmentErr = errors.New("Canary enrollment is bound to a different workspace or home")
 		}
 		handlers, qualification, activated := maintenanceHandlers(root, strings.TrimSpace(*workspace), enrollment, enrollmentErr == nil)
+		// The presence wake is an acceleration mechanism, not an activation
+		// mechanism. Only jobs explicitly enrolled by the attended installer may
+		// enter the scheduler plan. Catalog-only/model-backed jobs remain visible
+		// as unavailable capabilities without generating a fresh unavailable
+		// receipt on every RunAtLoad or interval wake.
+		jobs := activatedSchedulerJobs(schedulerJobsForTrigger(trimmedTrigger), activated)
 		worker := maintenance.Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: filepath.Join(root, "maintenance", "scheduler")}, Receipts: maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}, Jobs: jobs, Handlers: handlers, LocalQualification: qualification, ActivatedJobs: activated, Deadline: 2 * time.Minute}
 		timezone := ""
 		if enrollmentErr == nil {
@@ -135,6 +140,10 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 		return handlers, qualification, activated
 	}
 	qualification, activated = maintenance.ActivationMaps(enrollment)
+	active := make(map[string]bool, len(activated))
+	for _, jobID := range activated {
+		active[jobID] = true
+	}
 	schedulerStore := scheduler.Store{Root: filepath.Join(root, "maintenance", "scheduler")}
 	darwinRoot := filepath.Join(root, "maintenance", "darwin")
 	builder := darwin.LocalProductHealthBuilder{Scheduler: schedulerStore, Workspace: workspace, Runtime: "runtime-neutral", ManagedStateRoot: darwinRoot, StateDocumentsRoot: filepath.Join(root, "maintenance", "state-documents")}
@@ -148,9 +157,15 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 	proposalStore := darwin.ProposalStore{Root: filepath.Join(root, "maintenance", "darwin-proposals")}
 	invoker := darwin.OperationalInvoker{Diagnostics: darwin.FilesystemInvoker{Root: darwinRoot}, Repairs: darwin.ManagedStateRepairInvoker{Root: darwinRoot}, Guard: guard}
 	darwinStore := darwin.Store{Root: darwinRoot}
-	handlers[darwin.HousekeepingJobID] = darwin.HousekeepingHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore}
-	handlers["darwin-deep-weekly"] = darwin.DeepReviewHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore, ProposalStore: proposalStore}
-	handlers["walter-self-review-weekly"] = maintenance.WalterWeeklyAdapter{}
+	if active[darwin.HousekeepingJobID] {
+		handlers[darwin.HousekeepingJobID] = darwin.HousekeepingHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore}
+	}
+	if active["darwin-deep-weekly"] {
+		handlers["darwin-deep-weekly"] = darwin.DeepReviewHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore, ProposalStore: proposalStore}
+	}
+	if active[maintenance.WalterSelfReviewWeeklyJobID] {
+		handlers[maintenance.WalterSelfReviewWeeklyJobID] = maintenance.WalterWeeklyAdapter{}
+	}
 	return handlers, qualification, activated
 }
 
@@ -490,7 +505,9 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 		catalogIDs[job.ID] = true
 	}
 	unavailableJobs := []string{}
-	for _, job := range schedulerJobsForTrigger("presence") {
+	allPresenceJobs := schedulerJobsForTrigger("presence")
+	plannedJobs := activatedSchedulerJobs(allPresenceJobs, activated)
+	for _, job := range allPresenceJobs {
 		if !active[job.ID] || !catalogIDs[job.ID] {
 			unavailableJobs = append(unavailableJobs, job.ID)
 		}
@@ -529,7 +546,7 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 	}
 	maintenanceStore := maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}
 	recoveryRequired, auditIncomplete, recoveryIntents := 0, schedulerAuditIncomplete, 0
-	for _, job := range schedulerJobsForTrigger("presence") {
+	for _, job := range allPresenceJobs {
 		maintenanceReceipts, readErr := maintenanceStore.Receipts(enrollment.WorkspaceID, job.ID)
 		if readErr != nil {
 			continue
@@ -553,7 +570,7 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 	if body, readErr := os.ReadFile(path); readErr == nil {
 		var schedulerEnrollment scheduler.Enrollment
 		if json.Unmarshal(body, &schedulerEnrollment) == nil {
-			if due, dueErr := scheduler.PlanDue(schedulerJobsForTrigger("presence"), schedulerEnrollment.EnrolledAt, receipts, time.Now().In(mustLoadTimezone(enrollment.Timezone))); dueErr == nil {
+			if due, dueErr := scheduler.PlanDue(plannedJobs, schedulerEnrollment.EnrolledAt, receipts, time.Now().In(mustLoadTimezone(enrollment.Timezone))); dueErr == nil {
 				result["due_count"] = len(due)
 			}
 		}
@@ -670,4 +687,18 @@ func schedulerJobsForTrigger(trigger string) []scheduler.Job {
 	default:
 		return []scheduler.Job{daily, weekly, walter, monthly}
 	}
+}
+
+func activatedSchedulerJobs(jobs []scheduler.Job, activated []string) []scheduler.Job {
+	active := make(map[string]bool, len(activated))
+	for _, jobID := range activated {
+		active[jobID] = true
+	}
+	filtered := make([]scheduler.Job, 0, len(jobs))
+	for _, job := range jobs {
+		if active[job.ID] {
+			filtered = append(filtered, job)
+		}
+	}
+	return filtered
 }

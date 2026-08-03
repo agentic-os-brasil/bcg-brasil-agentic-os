@@ -114,6 +114,13 @@ administrator authority. `RunAtLoad` plus the bounded interval accelerate
 presence recovery but do not activate Walter, memory dreaming or any other
 model-backed maintenance capability.
 
+The presence planner receives only the jobs explicitly activated in the exact
+workspace enrollment. Catalog entries that are unavailable or not activated
+remain visible in capability/status reporting, but are not converted into due
+occurrences and do not emit repeated `unavailable` receipts on RunAtLoad or
+interval wakes. Adding a handler to the binary is not activation; an attended,
+validated enrollment update is required before that job can enter the plan.
+
 ## Executable core
 
 `internal/scheduler` currently implements:
