@@ -31,7 +31,7 @@ func TestInitializeCreatesInspectablePointersWithoutOverwritingSelf(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !status.Initialized || !status.Facets["voice"].Available || status.Tasks.State != "unavailable" {
+	if !status.Initialized || !status.Facets["voice"].Available || status.Tasks.State != "empty" {
 		t.Fatalf("status = %#v", status)
 	}
 	if profile := status.Facets["psychological-profile"]; profile.Sensitivity != "sensitive" || profile.Refinement != "confirmation_required" || profile.Readers[0] != "walter" {
@@ -204,6 +204,34 @@ func TestInitializeCreatesProfessionalFacetsAndInterviewWithoutSensitiveDefaultR
 		if step.Facet == "psychological-profile" {
 			t.Fatal("psychological profile must not be a default cold-start question")
 		}
+	}
+}
+
+func TestOnboardingRequiresExplicitConfirmationAndCountsOnlyExplicitOpenTasks(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Inspect(root)
+	if err != nil || status.Onboarding.State != "required" || status.Onboarding.NextQuestion.Facet != "professional-role" || status.OpenTasks.State != "empty" {
+		t.Fatalf("initial status = %#v err=%v", status, err)
+	}
+	for _, id := range onboardingFacets {
+		template := facets[id]
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)), []byte(template.Body+"\nOwner-confirmed detail.\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(statePath)), []byte(stateTemplate+"- [ ] Prepare kickoff\n- [x] Already done\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status, err = Inspect(root)
+	if err != nil || status.Onboarding.State != "review_required" || status.OpenTasks.State != "available" || status.OpenTasks.Count != 1 {
+		t.Fatalf("completed status = %#v err=%v", status, err)
+	}
+	status, err = ConfirmOnboarding(root)
+	if err != nil || status.Onboarding.State != "complete" {
+		t.Fatalf("confirmed status = %#v err=%v", status, err)
 	}
 }
 

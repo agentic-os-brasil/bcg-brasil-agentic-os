@@ -53,6 +53,14 @@ adapter with explicit consent. Raw reports stay local under `sources/` and are
 never automatically injected; any professional synthesis requires provenance
 and confirmation.
 
+Session Start derives one deterministic onboarding state from those facets:
+`required`, `in_progress`, `review_required` or `complete`. Answered facets do
+not make onboarding complete by themselves. `bcgos owner onboarding confirm
+--confirm` records a digest of the reviewed non-sensitive facets, and any later
+facet change invalidates that confirmation. The runtime asks only the next
+unanswered question, then waits; after all answers exist it requests explicit
+review rather than silently activating the profile.
+
 ## Refinement policy
 
 Every self change must be explainable, versioned by its future owning adapter
@@ -81,13 +89,17 @@ reported as unavailable.
 `bcgos owner init` creates non-overwriting templates. `bcgos owner status`
 returns pointers, policy and availability, never document bodies. `bcgos owner
 interview` exposes the cold-start questions without persisting an answer.
+`bcgos owner onboarding status` exposes only bounded progress and `bcgos owner
+onboarding confirm --confirm` records the explicit reviewed-facet digest.
 `bcgos owner refine submit --facet <facet> --evidence <summary> --stdin`
 accepts a proposed body through standard input, applies only an eligible
 policy, and returns an opaque receipt. `apply --confirm <proposal-id>` and
 `revert --confirm <audit-id>` protect guarded application and every reversal. A later Session Context Packet
 may read bounded content only after an adapter resolves purpose, owner and
-policy. Tasks remain an explicit unavailable pointer until a task system
-contract is accepted.
+policy. The owner-local operating state may expose only an explicit unchecked
+task count to Session Start. Task titles and bodies remain behind the pointer
+and are resolved only when the owner asks; prompts and workspace files never
+create inferred tasks.
 
 ### Self projection and evidence-bound learning
 

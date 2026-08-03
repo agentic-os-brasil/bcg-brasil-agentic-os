@@ -24,6 +24,12 @@ promotion, and it must carry a reproducible fresh-session observation from the
 runtime itself. `blocked` is an implementation state for a missing native
 surface, not an evidence class.
 
+Lifecycle envelopes make the same boundary machine-readable. The additive
+`adapter_delivery_state` says whether the value is only a contract or whether
+the adapter serializer emitted its bounded payload. The existing
+`injection_state` continues to represent native qualification and therefore
+remains `unavailable` until the pilot protocol is complete.
+
 | Class | What it proves | What it does not prove |
 | --- | --- | --- |
 | Local configuration | The workspace contains Maestro-owned bindings with expected timeout/async settings. | Runtime trust or invocation. |

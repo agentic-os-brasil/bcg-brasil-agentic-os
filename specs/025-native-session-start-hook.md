@@ -35,3 +35,12 @@ skill pointers and reasons, or a metadata-only `confirmed` state after an exact
 pending external-action challenge response. It never injects a skill body,
 stores the submitted prompt, or treats emitted payload as native conformance
 evidence.
+
+Only `SessionStart` carries the full Maestro startup protocol: workspace
+identity, one deterministic onboarding action, and the bounded local open-task
+state. `UserPromptSubmit` carries a short identity-continuity reminder plus the
+same pointer-only packet; it must not repeat the greeting or restart the
+interview on every prompt. Both payloads expose
+`adapter_delivery_state=adapter_payload_emitted` while retaining
+`injection_state=unavailable`, so successful serialization is visible without
+being mislabeled as native qualification.

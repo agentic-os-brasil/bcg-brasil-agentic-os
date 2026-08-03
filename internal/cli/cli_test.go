@@ -375,6 +375,29 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 	}
 }
 
+func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"'/Users/example/Library/Application Support/Maestro/bin/bcgos' doctor"}}`
+			var output bytes.Buffer
+			rootCalled := false
+			code := runHookWithInput(
+				[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", "/workspace-that-must-not-be-inspected"},
+				strings.NewReader(input),
+				&output,
+				&output,
+				func() (string, error) {
+					rootCalled = true
+					return "", errors.New("read-only diagnostics must not inspect workspace state")
+				},
+			)
+			if code != ExitOK || rootCalled || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("guard = %d, rootCalled=%v, output=%s", code, rootCalled, output.String())
+			}
+		})
+	}
+}
+
 func TestPostActionReceiptIdentityIncludesValidatedOrchestrationSnapshot(t *testing.T) {
 	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -1122,8 +1145,8 @@ func TestAtlasCommandsBootstrapOnlyPrivateOwnerAndWorkspaceRoots(t *testing.T) {
 	if code := runAtlas([]string{"init", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"managed": {`) || !strings.Contains(output.String(), `"state": "unavailable"`) || !strings.Contains(output.String(), `"workspace": {`) {
 		t.Fatalf("atlas init exit = %d, output = %s", code, output.String())
 	}
-	if _, err := os.Stat(filepath.Join(workspacePath, "brain", "tasks")); !os.IsNotExist(err) {
-		t.Fatalf("unexpected task taxonomy: %v", err)
+	if info, err := os.Stat(filepath.Join(workspacePath, "brain", "tasks", "README.md")); err != nil || info.IsDir() {
+		t.Fatalf("visible task stub = %v", err)
 	}
 }
 

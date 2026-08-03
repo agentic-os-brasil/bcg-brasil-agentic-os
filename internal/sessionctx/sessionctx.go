@@ -61,6 +61,18 @@ type Owner struct {
 	Facets         map[string]Pointer `json:"facets"`
 	OperatingState Pointer            `json:"operating_state"`
 	Tasks          Pointer            `json:"tasks"`
+	Onboarding     Onboarding         `json:"onboarding"`
+	OpenTasks      OpenTasks          `json:"open_tasks"`
+}
+
+type Onboarding struct {
+	State        string `json:"state"`
+	NextQuestion string `json:"next_question,omitempty"`
+}
+
+type OpenTasks struct {
+	State string `json:"state"`
+	Count int    `json:"count"`
 }
 
 type Atlas struct {
@@ -123,6 +135,18 @@ type Packet struct {
 }
 
 func Build(sources Sources) Packet {
+	onboarding := sources.Owner.Onboarding
+	if onboarding.State == "" {
+		interview := ownerctx.ColdStartInterview()
+		onboarding = ownerctx.OnboardingStatus{State: "required", Remaining: []string{"professional-role"}}
+		if len(interview.Steps) > 0 {
+			onboarding.NextQuestion = interview.Steps[0]
+		}
+	}
+	openTasks := sources.Owner.OpenTasks
+	if openTasks.State == "" {
+		openTasks.State = "unavailable"
+	}
 	packet := Packet{
 		SchemaVersion: 1,
 		State:         "ready",
@@ -135,6 +159,8 @@ func Build(sources Sources) Packet {
 			Facets:         sessionFacets(sources.Owner.Facets),
 			OperatingState: pointer(sources.Owner.OperatingState),
 			Tasks:          pointer(sources.Owner.Tasks),
+			Onboarding:     Onboarding{State: onboarding.State, NextQuestion: onboarding.NextQuestion.Question},
+			OpenTasks:      OpenTasks{State: openTasks.State, Count: openTasks.Count},
 		},
 		Atlas: Atlas{
 			Managed:   pointerAtlas("managed", sources.Atlas.Managed),
@@ -172,8 +198,17 @@ func (packet Packet) Validate() error {
 	if packet.SchemaVersion != 1 || (packet.State != "ready" && packet.State != "partial") {
 		return errors.New("invalid session context packet header")
 	}
-	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Agents.Message == "" || packet.Memory.State != "unavailable" || packet.Memory.Message == "" {
+	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Owner.Onboarding.State == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Agents.Message == "" || packet.Memory.State != "unavailable" || packet.Memory.Message == "" {
 		return errors.New("session context packet is missing a required bounded source")
+	}
+	if packet.Owner.Onboarding.State != "required" && packet.Owner.Onboarding.State != "in_progress" && packet.Owner.Onboarding.State != "review_required" && packet.Owner.Onboarding.State != "complete" {
+		return errors.New("session context packet has an invalid onboarding state")
+	}
+	if (packet.Owner.Onboarding.State == "required" || packet.Owner.Onboarding.State == "in_progress") && packet.Owner.Onboarding.NextQuestion == "" {
+		return errors.New("pending onboarding is missing its next question")
+	}
+	if packet.Owner.OpenTasks.State != "unavailable" && packet.Owner.OpenTasks.State != "empty" && packet.Owner.OpenTasks.State != "available" {
+		return errors.New("session context packet has an invalid open task state")
 	}
 	if len(packet.Skills.Selected) > 2 {
 		return errors.New("session context packet selects too many skills")

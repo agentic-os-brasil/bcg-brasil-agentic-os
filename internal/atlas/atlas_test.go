@@ -9,7 +9,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
-func TestInitializeCreatesSeparateOwnerAndWorkspaceHumanAtlasWithoutTasks(t *testing.T) {
+func TestInitializeCreatesSeparateOwnerAndWorkspaceHumanAtlasWithVisibleTaskStub(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")
 	workspacePath := filepath.Join(root, "Developer", "case-a")
@@ -50,8 +50,8 @@ func TestInitializeCreatesSeparateOwnerAndWorkspaceHumanAtlasWithoutTasks(t *tes
 	if err != nil || !strings.Contains(string(dailyTemplate), "sanitization") {
 		t.Fatalf("daily template = %q, err = %v", dailyTemplate, err)
 	}
-	if _, err := os.Stat(filepath.Join(workspacePath, "brain", "tasks")); !os.IsNotExist(err) {
-		t.Fatalf("tasks directory = %v; task source is not decided", err)
+	if info, err := os.Stat(filepath.Join(workspacePath, "brain", "tasks", "README.md")); err != nil || info.IsDir() {
+		t.Fatalf("visible task stub = %v", err)
 	}
 }
 
@@ -92,7 +92,7 @@ func TestInitializeRejectsForgedWorkspaceIDWithoutWritingOwnerOrWorkspaceAtlas(t
 	}
 	for _, path := range []string{
 		filepath.Join(dataRoot, "atlas", "owner"),
-		filepath.Join(workspacePath, "brain", "clients"),
+		filepath.Join(workspacePath, "brain", "clients", "index.md"),
 	} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("forged workspace identity wrote atlas content at %s: %v", path, err)

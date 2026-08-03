@@ -17,8 +17,8 @@ adapter; it does not itself read, inject or summarize private content.
 - workspace identity, readiness and brain readability;
 - pointers to owner facets that both explicitly allow the `session` reader and
   appear in the reviewed session-safe allowlist;
-- a pointer to current operating state and the explicit unavailable task
-  pointer;
+- a pointer to current operating state, deterministic onboarding progress and
+  an explicit unchecked-task count when the owner-local state is readable;
 - an opaque active-execution pointer only when exactly one running or paused
   execution item can be resolved;
 - managed, owner and workspace atlas availability and pointers;
@@ -32,6 +32,8 @@ The packet must never contain an owner-facet body, a client/project/daily page,
 a conversation transcript, a memory artifact body, a credential, or a
 Walter-only facet such as the psychological profile. It also must never contain
 an execution item ID, attempt ID, objective, done contract or checkpoint body.
+Open task titles and bodies stay behind the owner-local operating-state pointer;
+Session Start may report only the count and must not invent a backlog.
 
 The active execution capability has three states:
 
@@ -64,6 +66,10 @@ own context budget, and report unavailable or omitted sources consistently.
 bounded Session Start envelope for either runtime. It is an adapter input, not
 native lifecycle wiring: it cannot read a pointed source, inject content into a
 conversation or change the capability state reported by `bcgos doctor`.
+The envelope reports adapter delivery separately from native qualification: a
+direct bridge is `contract_only`; an adapter serializer may report
+`adapter_payload_emitted`; `injection_state` remains `unavailable` until the
+qualifying native-session protocol succeeds.
 
 ## Validation
 

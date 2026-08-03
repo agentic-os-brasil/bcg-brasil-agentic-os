@@ -754,3 +754,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The first shipped workspace starts with Claude's `CLAUDE.md`, skills and lifecycle configuration, while Codex remains compatible rather than silently installed in parallel. A workspace keeps one runtime projection at a time until a dual-projection migration contract exists. Install success means configured and verified, not native-qualified, release-ready or model-execution-ready.
 - Refs: specs/001-cli-distribution.md; specs/019-nonblocking-hook-execution.md; specs/026-workspace-local-adapter-installation.md; specs/035-lifecycle-evidence-matrix.md; specs/042-post-install-readiness.md; cmd/maestro-installer; internal/installreadiness
 - Supersedes: none
+
+## RDBG - Keep local diagnostics usable without weakening the guard
+
+- Date: 2026-08-03
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Installed lifecycle hooks bind ordinary actions to validated orchestration state, which can make the exact local `bcgos` diagnostics needed for recovery fail when that state is missing or under repair. Treating every such failure as a security denial also led runtimes to infer a nonexistent blanket ban on the CLI.
+- Decision: Recognize one closed simple-command subset of read-only local BCGOS diagnostics and let those commands proceed to the native runtime permission flow without inspecting orchestration state. Accept exact quoted installed paths, but reject compound shell syntax, expansion, flags outside the contract, unknown verbs and every mutating command. Emit no explicit allow decision. Separately expose adapter payload delivery in lifecycle envelopes while keeping native injection qualification unavailable until the established pilot protocol succeeds.
+- Consequences: `bcgos` help, version, doctor, status and bounded owner onboarding inspection remain usable during local diagnosis; state tampering, destructive actions and protected external mutations retain their existing fail-closed behavior. Adapter delivery can be observed without promoting capability state or fabricating native evidence.
+- Refs: specs/015-session-context-packet.md; specs/025-native-session-start-hook.md; specs/030-claude-lifecycle-vertical.md; specs/035-lifecycle-evidence-matrix.md; internal/actionconfirmation; internal/sessionstart; internal/sessionhook; internal/cli
+- Supersedes: none

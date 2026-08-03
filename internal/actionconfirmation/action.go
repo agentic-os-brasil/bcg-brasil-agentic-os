@@ -53,6 +53,48 @@ func Canonicalize(toolName string, raw json.RawMessage) (*Action, error) {
 	return &Action{Action: actionName, Target: target, InputDigest: digest(string(canonical))}, nil
 }
 
+// IsReadOnlyBCGOSDiagnostic recognizes a deliberately closed subset of local
+// CLI commands whose execution cannot mutate Maestro state. Installed
+// pre-action hooks may let the native runtime evaluate these commands without
+// depending on mutable orchestration state. This is not an authorization grant:
+// the runtime's own permission model still applies.
+func IsReadOnlyBCGOSDiagnostic(toolName string, raw json.RawMessage) bool {
+	if toolName != "Bash" || rejectDuplicateKeys(raw) != nil {
+		return false
+	}
+	var input map[string]any
+	if len(raw) == 0 || json.Unmarshal(raw, &input) != nil {
+		return false
+	}
+	command, ok := input["command"].(string)
+	if !ok || strings.TrimSpace(command) == "" {
+		return false
+	}
+	fields, err := splitSimpleCommand(command)
+	if err != nil || len(fields) == 0 || bcgosExecutableBase(fields[0]) != "bcgos" {
+		return false
+	}
+	arguments := fields[1:]
+	if len(arguments) == 1 && (arguments[0] == "help" || arguments[0] == "--help" || arguments[0] == "-h" || arguments[0] == "version") {
+		return true
+	}
+	if len(arguments) >= 1 && (arguments[0] == "doctor" || arguments[0] == "status") {
+		return len(arguments) <= 2 && (len(arguments) == 1 || !strings.HasPrefix(arguments[1], "-"))
+	}
+	if len(arguments) == 2 && arguments[0] == "owner" && (arguments[1] == "status" || arguments[1] == "interview") {
+		return true
+	}
+	return len(arguments) == 3 && arguments[0] == "owner" && arguments[1] == "onboarding" && arguments[2] == "status"
+}
+
+func bcgosExecutableBase(executable string) string {
+	normalized := strings.ReplaceAll(executable, "\\", "/")
+	if slash := strings.LastIndex(normalized, "/"); slash >= 0 {
+		normalized = normalized[slash+1:]
+	}
+	return strings.TrimSuffix(strings.ToLower(normalized), ".exe")
+}
+
 func rejectDuplicateKeys(raw json.RawMessage) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()

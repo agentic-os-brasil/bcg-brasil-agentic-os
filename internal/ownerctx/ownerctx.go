@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 type Pointer struct {
@@ -33,7 +35,25 @@ type Status struct {
 	Facets         map[string]Facet      `json:"facets"`
 	OperatingState Pointer               `json:"operating_state"`
 	Tasks          Pointer               `json:"tasks"`
+	Onboarding     OnboardingStatus      `json:"onboarding"`
+	OpenTasks      TaskStatus            `json:"open_tasks"`
 	Capabilities   map[string]Capability `json:"capabilities"`
+}
+
+// OnboardingStatus is a deterministic projection of the consented owner
+// facets. It never includes a facet body; runtimes use its next question to
+// resume the interview instead of assuming that setup was completed.
+type OnboardingStatus struct {
+	State        string        `json:"state"`
+	Remaining    []string      `json:"remaining,omitempty"`
+	NextQuestion InterviewStep `json:"next_question,omitempty"`
+}
+
+// TaskStatus exposes only a bounded list of explicitly marked open items in
+// the owner-local work state. It is not inferred from prompts or files.
+type TaskStatus struct {
+	State string `json:"state"`
+	Count int    `json:"count"`
 }
 
 type InterviewStep struct {
@@ -57,10 +77,12 @@ type facetRecord struct {
 }
 
 type registry struct {
-	SchemaVersion  int                       `json:"schema_version"`
-	Facets         map[string]facetRecord    `json:"facets"`
-	Producers      map[string]producerRecord `json:"producers"`
-	OperatingState string                    `json:"operating_state"`
+	SchemaVersion             int                       `json:"schema_version"`
+	Facets                    map[string]facetRecord    `json:"facets"`
+	Producers                 map[string]producerRecord `json:"producers"`
+	OperatingState            string                    `json:"operating_state"`
+	OnboardingConfirmedAt     string                    `json:"onboarding_confirmed_at,omitempty"`
+	OnboardingConfirmedSHA256 string                    `json:"onboarding_confirmed_sha256,omitempty"`
 }
 
 type producerRecord struct {
@@ -84,7 +106,9 @@ var facets = map[string]facetTemplate{
 }
 
 const statePath = "owner/operating/work-state.md"
-const stateTemplate = "# Work state\n\nRegistre somente estado operacional recente: prioridades, bloqueios, proximas acoes e itens aguardando resposta.\n"
+const stateTemplate = "# Work state\n\nRegistre somente estado operacional recente: prioridades, bloqueios, proximas acoes e itens aguardando resposta.\n\n## Tarefas abertas\n- [ ]\n"
+
+var onboardingFacets = []string{"professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"}
 
 func Initialize(root string) (Status, error) {
 	directory := filepath.Join(root, "owner")
@@ -147,6 +171,11 @@ func Inspect(root string) (Status, error) {
 	for id, record := range value.Facets {
 		status.Facets[id] = Facet{Pointer: pointer(root, record.Path), Sensitivity: record.Sensitivity, Readers: record.Readers, Refinement: record.Refinement}
 	}
+	status.Onboarding = onboarding(root, status.Facets, value.OnboardingConfirmedAt, value.OnboardingConfirmedSHA256)
+	status.OpenTasks = openTasks(root, value.OperatingState)
+	if status.OpenTasks.State != "unavailable" {
+		status.Tasks = Pointer{Path: value.OperatingState, Available: true, State: status.OpenTasks.State}
+	}
 	return status, nil
 }
 
@@ -166,7 +195,108 @@ func ColdStartInterview() Interview {
 }
 
 func emptyStatus() Status {
-	return Status{Tasks: Pointer{State: "unavailable"}, Capabilities: capabilities()}
+	return Status{Tasks: Pointer{State: "unavailable"}, Onboarding: OnboardingStatus{State: "required", Remaining: append([]string(nil), onboardingFacets...), NextQuestion: interviewStep(onboardingFacets[0])}, OpenTasks: TaskStatus{State: "unavailable"}, Capabilities: capabilities()}
+}
+
+func onboarding(root string, available map[string]Facet, confirmedAt, confirmedDigest string) OnboardingStatus {
+	remaining := make([]string, 0, len(onboardingFacets))
+	for _, id := range onboardingFacets {
+		facet, ok := available[id]
+		if !ok || !facet.Available || !facetAnswered(root, id) {
+			remaining = append(remaining, id)
+		}
+	}
+	if len(remaining) == 0 {
+		if confirmedAt != "" && confirmedDigest == onboardingDigest(root) {
+			return OnboardingStatus{State: "complete"}
+		}
+		return OnboardingStatus{State: "review_required"}
+	}
+	state := "in_progress"
+	if len(remaining) == len(onboardingFacets) {
+		state = "required"
+	}
+	return OnboardingStatus{State: state, Remaining: remaining, NextQuestion: interviewStep(remaining[0])}
+}
+
+func interviewStep(facet string) InterviewStep {
+	for _, step := range ColdStartInterview().Steps {
+		if step.Facet == facet {
+			return step
+		}
+	}
+	return InterviewStep{}
+}
+
+func facetAnswered(root, id string) bool {
+	template, ok := facets[id]
+	if !ok {
+		return false
+	}
+	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
+	return err == nil && strings.TrimSpace(string(body)) != strings.TrimSpace(template.Body)
+}
+
+func openTasks(root, relative string) TaskStatus {
+	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+	if err != nil {
+		return TaskStatus{State: "unavailable"}
+	}
+	count := 0
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "- [ ]") {
+			continue
+		}
+		if strings.TrimSpace(strings.TrimPrefix(line, "- [ ]")) != "" {
+			count++
+		}
+	}
+	if count == 0 {
+		return TaskStatus{State: "empty"}
+	}
+	return TaskStatus{State: "available", Count: count}
+}
+
+// ConfirmOnboarding records the owner's explicit review of the currently
+// answered non-sensitive facets. Any later change invalidates the digest and
+// returns onboarding to review_required.
+func ConfirmOnboarding(root string) (Status, error) {
+	value, err := readRegistry(root)
+	if err != nil {
+		return Status{}, err
+	}
+	status := onboarding(root, facetsFromRegistry(root, value), "", "")
+	if status.State != "review_required" {
+		return Status{}, errors.New("onboarding answers are not ready for owner confirmation")
+	}
+	value.OnboardingConfirmedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	value.OnboardingConfirmedSHA256 = onboardingDigest(root)
+	if err := writePrivateJSON(filepath.Join(root, "owner", "registry.json"), value); err != nil {
+		return Status{}, err
+	}
+	return Inspect(root)
+}
+
+func facetsFromRegistry(root string, value registry) map[string]Facet {
+	result := make(map[string]Facet, len(value.Facets))
+	for id, record := range value.Facets {
+		result[id] = Facet{Pointer: pointer(root, record.Path), Sensitivity: record.Sensitivity, Readers: record.Readers, Refinement: record.Refinement}
+	}
+	return result
+}
+
+func onboardingDigest(root string) string {
+	parts := make([]string, 0, len(onboardingFacets))
+	for _, id := range onboardingFacets {
+		template := facets[id]
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
+		if err != nil {
+			return ""
+		}
+		parts = append(parts, id+"\x00"+string(body))
+	}
+	return digest(strings.Join(parts, "\x00"))
 }
 
 func capabilities() map[string]Capability {

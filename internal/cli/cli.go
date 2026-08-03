@@ -1814,7 +1814,7 @@ func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, err
 
 func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine|self|prompt-history>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|onboarding|refine|self|prompt-history>")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -1848,6 +1848,8 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 			return reportError(errOut, err)
 		}
 		return writeJSON(out, status, errOut)
+	case "onboarding":
+		return runOwnerOnboarding(args[1:], out, errOut, root)
 	case "refine":
 		return runOwnerRefine(args[1:], in, out, errOut, root)
 	case "self":
@@ -1855,9 +1857,39 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 	case "prompt-history":
 		return runOwnerPromptHistory(args[1:], in, out, errOut, root)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|refine|self|prompt-history>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|onboarding|refine|self|prompt-history>")
 		return ExitUsage
 	}
+}
+
+func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
+	if len(args) == 0 || (args[0] != "status" && args[0] != "confirm") {
+		fmt.Fprintln(errOut, "usage: bcgos owner onboarding <status|confirm --confirm>")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "status":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner onboarding status")
+			return ExitUsage
+		}
+		status, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status.Onboarding, errOut)
+	case "confirm":
+		if len(args) != 2 || args[1] != "--confirm" {
+			fmt.Fprintln(errOut, "usage: bcgos owner onboarding confirm --confirm")
+			return ExitUsage
+		}
+		status, err := ownerctx.ConfirmOnboarding(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status.Onboarding, errOut)
+	}
+	return ExitUsage
 }
 
 func runOwnerPromptHistory(args []string, in io.Reader, out, errOut io.Writer, root string) int {
@@ -2560,6 +2592,9 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if protected == nil && strings.TrimSpace(*orchestrationState) == "" {
 			return writeJSON(out, response, errOut)
 		}
+		if protected == nil && actionconfirmation.IsReadOnlyBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
+			return writeJSON(out, response, errOut)
+		}
 		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
 		if inspectErr != nil {
 			if protected != nil {
@@ -2710,6 +2745,9 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			return writeJSON(out, claudeadapter.ExternalActionDenial(noncanonicalExternalDenial), errOut)
 		}
 		if protected == nil && strings.TrimSpace(*orchestrationState) == "" {
+			return writeJSON(out, response, errOut)
+		}
+		if protected == nil && actionconfirmation.IsReadOnlyBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
 			return writeJSON(out, response, errOut)
 		}
 		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
