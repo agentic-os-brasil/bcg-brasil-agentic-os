@@ -1,6 +1,7 @@
 package maintenance
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -20,8 +21,8 @@ func TestCatalogRequiresUniversalMaintenancePlane(t *testing.T) {
 	if err := catalog.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Jobs) != 17 {
-		t.Fatalf("job count = %d, want 17", len(catalog.Jobs))
+	if len(catalog.Jobs) != 18 {
+		t.Fatalf("job count = %d, want 18", len(catalog.Jobs))
 	}
 	for _, job := range catalog.Jobs {
 		if job.Availability != Unavailable {
@@ -38,6 +39,18 @@ func TestCatalogRequiresUniversalMaintenancePlane(t *testing.T) {
 	walter, found := findJob(catalog.Jobs, "walter-self-review-weekly")
 	if !found || walter.Executor != "model_adapter" || walter.DefaultEnabled || walter.Unattended != "policy_gated" || !strings.Contains(walter.SuccessBoundary, "silent self-ingestion") || strings.Contains(walter.SuccessBoundary, "proposal") {
 		t.Fatalf("Walter weekly silent-ingestion contract drifted: %#v", walter)
+	}
+	checkpoint, found := findJob(catalog.Jobs, MemoryCheckpointJobID)
+	if !found || checkpoint.Executor != "deterministic" || checkpoint.Scope != "workspace" || !checkpoint.DefaultEnabled || checkpoint.Unattended != "deterministic_only" || !reflect.DeepEqual(checkpoint.Writes, []string{"memory_checkpoint"}) {
+		t.Fatalf("memory checkpoint contract drifted: %#v", checkpoint)
+	}
+	light, found := findJob(catalog.Jobs, MemoryLightDreamJobID)
+	if !found || light.Executor != "deterministic" || light.Availability != Unavailable || !light.DefaultEnabled || light.Unattended != "deterministic_only" {
+		t.Fatalf("memory light dream capability truth drifted: %#v", light)
+	}
+	deep, found := findJob(catalog.Jobs, MemoryDeepDreamJobID)
+	if !found || deep.Trigger != "weekly_or_presence" || deep.Executor != "model_adapter" || deep.Availability != Unavailable {
+		t.Fatalf("memory deep dream contract drifted: %#v", deep)
 	}
 }
 
@@ -63,7 +76,7 @@ func TestPresenceIncludesDailyAndWeeklyCatchUpButNotEventOnlyJobs(t *testing.T) 
 	for _, job := range jobs {
 		seen[job.ID] = true
 	}
-	if !seen["memory-daily"] || !seen["memory-weekly"] || !seen["wiki-reconcile"] || !seen["darwin-structural-evolution-proposal"] {
+	if !seen[MemoryCheckpointJobID] || !seen[MemoryLightDreamJobID] || !seen[MemoryDeepDreamJobID] || !seen["wiki-reconcile"] || !seen["darwin-structural-evolution-proposal"] {
 		t.Fatalf("presence catch-up omitted core jobs: %#v", seen)
 	}
 	if seen["wiki-incremental-sync"] {

@@ -73,7 +73,7 @@ var enqueueHookPresenceWake = func(workspaceID string) error {
 	if err != nil {
 		return fmt.Errorf("resolve bcgos executable for presence wake: %w", err)
 	}
-	command := exec.Command(executable, "maintenance", "wake", "--trigger", "presence", "--workspace", workspaceID)
+	command := exec.Command(executable, "maintenance", "wake", "--trigger", "presence", "--workspace", workspaceID, "--idle-state", "auto")
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("enqueue maintenance presence wake: %w", err)
 	}
@@ -2883,7 +2883,41 @@ func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, 
 	for _, item := range selected {
 		packet.Skills.Selected = append(packet.Skills.Selected, sessionctx.SkillSelection{ID: item.ID, Reason: item.Reason, Pointer: item.Pointer})
 	}
+	// Continuity is intentionally best-effort and metadata-only: a prompt hook
+	// must never block because its local checkpoint could not be persisted.
+	_ = recordAttestedSkillRoute(root, runtimeName, packet.Workspace.ID, sessionID, selected)
 	return nil
+}
+
+func recordAttestedSkillRoute(root, runtimeName, workspaceID, sessionID string, selected []skillrouting.Selection) error {
+	if len(selected) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(selected))
+	for _, item := range selected {
+		ids = append(ids, item.ID)
+	}
+	memoryRoot := filepath.Join(root, "memory")
+	attestor := memory.CaptureAttestor{Root: memoryRoot}
+	capture, err := attestor.Seal(memory.Capture{
+		WorkspaceID:  workspaceID,
+		RecordedAt:   time.Now().UTC(),
+		Kind:         "skill_route",
+		Text:         strings.Join(ids, ","),
+		Sanitized:    true,
+		ProducerID:   runtimeName + ".context-injection",
+		SanitizerID:  memory.SkillRouteSanitizerID,
+		SourceDigest: maestro.SHA256Hex(runtimeName + "\x00" + sessionID + "\x00" + strings.Join(ids, "\x00")),
+	})
+	if err != nil {
+		return err
+	}
+	policy, err := basememory.Policy()
+	if err != nil {
+		return err
+	}
+	_, err = (&memory.Engine{Root: memoryRoot, Policy: policy}).Capture(capture)
+	return err
 }
 
 // evaluateAdapterInteraction is deliberately metadata-only. Adapter hooks
@@ -3299,7 +3333,7 @@ func runStatus(args []string, out, errOut io.Writer) int {
 	return writeJSON(out, struct {
 		memory.StatusReport
 		Dreaming string `json:"dreaming"`
-	}{StatusReport: report, Dreaming: "unavailable"}, errOut)
+	}{StatusReport: report, Dreaming: "daily_light_available_weekly_deep_unavailable"}, errOut)
 }
 
 func runContext(args []string, out, errOut io.Writer) int {
@@ -3358,17 +3392,32 @@ func runDream(args []string, out, errOut io.Writer) int {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
 	}
-	code := writeJSON(out, map[string]any{
-		"capability":   "memory_dreaming",
-		"cycle":        cycle,
-		"state":        "unavailable",
-		"workspace_id": *workspace,
-		"reason":       "no synthesis and eligibility adapter is installed",
-	}, errOut)
-	if code != ExitOK {
-		return code
+	if cycle == "weekly" {
+		code := writeJSON(out, map[string]any{"capability": "memory_deep_dreaming", "cycle": cycle, "state": "unavailable", "workspace_id": *workspace, "reason": "no qualified deep synthesis and lifetime eligibility adapter is installed"}, errOut)
+		if code != ExitOK {
+			return code
+		}
+		return ExitUnavailable
 	}
-	return ExitUnavailable
+	policy, err := basememory.Policy()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	config, err := basememory.Runtime()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	memoryRoot := filepath.Join(*dataDir, "memory")
+	attestor := memory.CaptureAttestor{Root: memoryRoot}
+	engine := memory.Engine{Root: memoryRoot, Policy: policy, Budgets: map[string]int{"L1": config.L1MaxRunes, "L2": 1, "L3": 1, "lifetime": 1}, MaxSourceBytes: config.L1MaxInputBytes, Synthesizer: memory.DeterministicL1Synthesizer{MaxRunes: config.L1MaxRunes, MaxEntries: config.L1MaxEntries, MaxInputBytes: config.L1MaxInputBytes, MaxInputEntries: config.L1MaxInputEntries, Attestor: attestor}, SynthesizerID: memory.DeterministicL1SynthesizerID}
+	result, err := engine.DreamDailyAttested(context.Background(), *workspace, time.Now().UTC())
+	if errors.Is(err, os.ErrNotExist) {
+		return writeJSON(out, map[string]any{"capability": "memory_light_dreaming", "cycle": cycle, "state": "reviewed_no_change", "workspace_id": *workspace, "reason": "no trusted capture-v2 L1 input is available for the current period"}, errOut)
+	}
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, map[string]any{"capability": "memory_light_dreaming", "cycle": cycle, "state": map[bool]string{true: "reviewed_no_change", false: "succeeded"}[result.Skipped], "workspace_id": *workspace, "result": result}, errOut)
 }
 
 func newFlagSet(name string, errOut io.Writer) *flag.FlagSet {

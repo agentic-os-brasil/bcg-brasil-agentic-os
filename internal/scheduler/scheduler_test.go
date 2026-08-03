@@ -103,6 +103,41 @@ func TestSuccessfulReceiptPreventsDuplicateExecution(t *testing.T) {
 	}
 }
 
+func TestIntervalCadenceAnchorsAtEnrollmentThenLastSuccess(t *testing.T) {
+	enrolledAt := time.Date(2026, 8, 2, 9, 10, 0, 0, time.UTC)
+	job := Job{ID: "memory-checkpoint", Cadence: Interval, IntervalHours: 3, MaxCatchUp: 1}
+
+	due, err := PlanDue([]Job{job}, enrolledAt, nil, enrolledAt.Add(3*time.Hour))
+	if err != nil || !reflect.DeepEqual(due, []Occurrence{{JobID: job.ID, ScheduledFor: enrolledAt.Add(3 * time.Hour)}}) {
+		t.Fatalf("enrollment-anchored due=%#v err=%v", due, err)
+	}
+
+	successAt := enrolledAt.Add(3*time.Hour + 7*time.Minute)
+	receipts := []Receipt{{JobID: job.ID, ScheduledFor: due[0].ScheduledFor, AttemptedAt: successAt, State: Succeeded}}
+	if got, err := PlanDue([]Job{job}, enrolledAt, receipts, successAt.Add(3*time.Hour-time.Second)); err != nil || len(got) != 0 {
+		t.Fatalf("interval became due before last-success anchor: due=%#v err=%v", got, err)
+	}
+	want := []Occurrence{{JobID: job.ID, ScheduledFor: successAt.Add(3 * time.Hour)}}
+	if got, err := PlanDue([]Job{job}, enrolledAt, receipts, want[0].ScheduledFor); err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("last-success-anchored due=%#v want=%#v err=%v", got, want, err)
+	}
+}
+
+func TestSuppressedIntervalAttemptRemainsDue(t *testing.T) {
+	enrolledAt := time.Date(2026, 8, 2, 9, 0, 0, 0, time.UTC)
+	scheduledFor := enrolledAt.Add(3 * time.Hour)
+	job := Job{ID: "memory-checkpoint", Cadence: Interval, IntervalHours: 3, MaxCatchUp: 1}
+	receipts := []Receipt{{JobID: job.ID, ScheduledFor: scheduledFor, AttemptedAt: scheduledFor, State: Suppressed, Error: "idle_state_unknown"}}
+
+	due, err := PlanDue([]Job{job}, enrolledAt, receipts, scheduledFor.Add(15*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(due, []Occurrence{{JobID: job.ID, ScheduledFor: scheduledFor}}) {
+		t.Fatalf("suppressed occurrence advanced success/due: %#v", due)
+	}
+}
+
 func TestLaterSuccessDoesNotHideEarlierGap(t *testing.T) {
 	location := time.FixedZone("pilot", -3*60*60)
 	enrolledAt := time.Date(2026, 7, 20, 9, 0, 0, 0, location)

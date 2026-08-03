@@ -15,6 +15,52 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
+func TestContinuityScheduleSeparatesCheckpointAndDreams(t *testing.T) {
+	jobs := schedulerJobsForTrigger("presence")
+	byID := map[string]scheduler.Job{}
+	for _, job := range jobs {
+		byID[job.ID] = job
+	}
+	for _, id := range []string{maintenance.MemoryCheckpointJobID, maintenance.MemoryLightDreamJobID} {
+		job := byID[id]
+		if job.Cadence != scheduler.Interval || job.IntervalHours != 3 || job.MaxCatchUp != 1 {
+			t.Fatalf("%s schedule=%#v", id, job)
+		}
+	}
+	deep := byID[maintenance.MemoryDeepDreamJobID]
+	if deep.Cadence != scheduler.Weekly || deep.Weekday != time.Sunday || deep.MaxCatchUp != 1 {
+		t.Fatalf("deep dream schedule=%#v", deep)
+	}
+}
+
+func TestCanaryLaunchAgentRequestsNativeIdleObservation(t *testing.T) {
+	spec := canaryLaunchAgentSpec("/Users/example", "/Applications/BCGOS/bin/bcgos", "maestro-system")
+	joined := strings.Join(spec.Arguments, " ")
+	if !strings.Contains(joined, "--idle-state auto") {
+		t.Fatalf("LaunchAgent arguments do not request native idle observation: %q", joined)
+	}
+}
+
+func TestCheckpointAndLightDreamHandlersAreOperableButDeepDreamRemainsUnavailable(t *testing.T) {
+	enrollment := maintenance.CanaryEnrollment{Activated: []maintenance.Activation{{JobID: maintenance.MemoryCheckpointJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryCheckpointJobID)}, {JobID: maintenance.MemoryLightDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryLightDreamJobID)}}}
+	handlers, qualification, activated := maintenanceHandlers(t.TempDir(), "maestro-system", enrollment, true)
+	if handlers[maintenance.MemoryCheckpointJobID] == nil || qualification[maintenance.MemoryCheckpointJobID] == "" || !containsString(activated, maintenance.MemoryCheckpointJobID) {
+		t.Fatalf("checkpoint not operable: handlers=%#v qualification=%#v activated=%#v", handlers, qualification, activated)
+	}
+	if handlers[maintenance.MemoryLightDreamJobID] == nil || qualification[maintenance.MemoryLightDreamJobID] == "" || handlers[maintenance.MemoryDeepDreamJobID] != nil {
+		t.Fatalf("light/deep dream activation drifted: %#v", handlers)
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestPresencePlannerIncludesOnlyExplicitlyActivatedJobs(t *testing.T) {
 	jobs := schedulerJobsForTrigger("presence")
 	activated := []string{"darwin-housekeeping-daily", "darwin-deep-weekly"}
@@ -59,6 +105,9 @@ func TestMaintenanceStatusReportsWorkerAndNativeEvidence(t *testing.T) {
 	}
 	if result["executor_state"] != "runtime_worker_ready_for_explicit_qualified_handlers" || result["catalog_state"] != "catalog_only" || result["native_adapters"] != "macos_adapter_available_windows_unavailable" {
 		t.Fatalf("unexpected status: %#v", result)
+	}
+	if result["idle_eligibility"] != "explicit_evidence_required_unknown_fails_closed" || result["memory_checkpoint"] != "locally_qualified_only_after_canary_enrollment" || result["memory_dreaming"] != "daily_light_locally_qualified_weekly_deep_unavailable" || result["pulse_interval_seconds"] != float64(900) {
+		t.Fatalf("continuity capability truth drifted: %#v", result)
 	}
 }
 
@@ -171,13 +220,20 @@ func TestCanaryInstallBindsExactInitializedWorkspaceAndRunningExecutable(t *test
 	if enrollment.WorkspaceID != initialized.WorkspaceID || enrollment.Executable != resolvedExecutable || enrollment.Mode != "filesystem_only" {
 		t.Fatalf("enrollment=%#v", enrollment)
 	}
-	if len(enrollment.Activated) != 2 {
+	if len(enrollment.Activated) != 4 {
 		t.Fatalf("activated jobs=%#v", enrollment.Activated)
 	}
 	for _, activation := range enrollment.Activated {
-		if activation.JobID == "walter-self-review-weekly" || strings.Contains(activation.JobID, "memory") {
+		if activation.JobID == "walter-self-review-weekly" || activation.JobID == maintenance.MemoryDeepDreamJobID {
 			t.Fatalf("model-backed job activated: %#v", activation)
 		}
+	}
+	activatedIDs := make([]string, 0, len(enrollment.Activated))
+	for _, activation := range enrollment.Activated {
+		activatedIDs = append(activatedIDs, activation.JobID)
+	}
+	if !containsString(activatedIDs, maintenance.MemoryCheckpointJobID) || !containsString(activatedIDs, maintenance.MemoryLightDreamJobID) {
+		t.Fatalf("memory continuity jobs were not activated: %#v", enrollment.Activated)
 	}
 
 	var status bytes.Buffer

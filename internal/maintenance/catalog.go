@@ -13,11 +13,14 @@ import (
 )
 
 const (
-	SchemaVersion    = 1
-	CatalogOnly      = "catalog_only"
-	RuntimeQualified = "runtime_qualified"
-	Available        = "available"
-	Unavailable      = "unavailable"
+	SchemaVersion         = 1
+	CatalogOnly           = "catalog_only"
+	RuntimeQualified      = "runtime_qualified"
+	Available             = "available"
+	Unavailable           = "unavailable"
+	MemoryCheckpointJobID = "memory-checkpoint"
+	MemoryLightDreamJobID = "memory-light-dream"
+	MemoryDeepDreamJobID  = "memory-deep-dream"
 )
 
 var (
@@ -32,7 +35,7 @@ var (
 	validUnattended = map[string]bool{"deterministic_only": true, "policy_gated": true, "never": true}
 	validWrites     = map[string]bool{
 		"none": true, "memory_l1": true, "memory_rollups": true, "wiki_private": true,
-		"runtime_index": true, "owner_observation": true, "local_diagnostics": true,
+		"runtime_index": true, "owner_observation": true, "local_diagnostics": true, "memory_checkpoint": true,
 	}
 )
 
@@ -147,7 +150,7 @@ func (catalog Catalog) Validate() error {
 		}
 	}
 	for _, required := range []string{
-		"memory-l1-capture", "memory-daily", "memory-weekly", "memory-retention-check",
+		"memory-l1-capture", MemoryCheckpointJobID, MemoryLightDreamJobID, MemoryDeepDreamJobID, "memory-retention-check",
 		"wiki-incremental-sync", "wiki-reconcile", "wiki-integrity-check", "skills-index-refresh",
 		"runtime-health-check", "capability-recheck", "runtime-drift-check", "self-observation-capture",
 		"update-check", "darwin-structural-evolution-proposal",
@@ -162,6 +165,18 @@ func (catalog Catalog) Validate() error {
 
 func validateRequiredJobInvariant(job Job) error {
 	switch job.ID {
+	case MemoryCheckpointJobID:
+		if job.Category != "memory" || job.Trigger != "daily_or_presence" || job.Executor != "deterministic" || job.Scope != "workspace" || !job.DefaultEnabled || job.Unattended != "deterministic_only" || len(job.Writes) != 1 || job.Writes[0] != "memory_checkpoint" {
+			return errors.New("memory checkpoint has an unsafe maintenance contract")
+		}
+	case MemoryLightDreamJobID:
+		if job.Category != "memory" || job.Trigger != "daily_or_presence" || job.Executor != "deterministic" || job.Scope != "workspace" || job.Availability != Unavailable || !job.DefaultEnabled || job.Unattended != "deterministic_only" || len(job.Writes) != 1 || job.Writes[0] != "memory_l1" {
+			return errors.New("memory light dream has an unsafe maintenance contract")
+		}
+	case MemoryDeepDreamJobID:
+		if job.Category != "memory" || job.Trigger != "weekly_or_presence" || job.Executor != "model_adapter" || job.Scope != "workspace" || job.Availability != Unavailable || job.DefaultEnabled || job.Unattended != "policy_gated" {
+			return errors.New("memory deep dream has an unsafe maintenance contract")
+		}
 	case "walter-self-review-weekly":
 		if job.Category != "self" || job.Trigger != "weekly_or_presence" || job.Executor != "model_adapter" || job.Scope != "owner" || job.DefaultEnabled || job.Unattended != "policy_gated" {
 			return errors.New("Walter weekly self-review has an unsafe maintenance contract")

@@ -14,7 +14,7 @@ place to synchronize or perform durable background work.
 | Semantic event | Inline responsibility | May block? |
 |---|---|---|
 | `session_start` | Read the last committed bounded snapshot or report an omission. | No |
-| `context_inject` | Read the last committed bounded snapshot, route at most two installed policy-allowed method pointers, or recognize one exact pending user confirmation. | No |
+| `context_inject` | Read the last committed bounded snapshot, route at most two installed policy-allowed method pointers, recognize one exact pending user confirmation, and best-effort emit only attested selected-skill IDs for later L1 continuity. | No |
 | `pre_action_guard` | Evaluate a local deterministic safety rule and atomically consume a matching external-action confirmation. | Only to deny an unsafe or unconfirmed action. |
 | `post_action_observe` | Emit an idempotent signal for later processing. | No |
 | `stop_finalize` | Emit an idempotent signal for later processing. | No |
@@ -24,6 +24,12 @@ rollup, compile the wiki, ingest a document, reconcile state or retry work. A
 snapshot reader uses the last fully committed version. If that version is
 unavailable or stale, it returns an explicit partial/omitted state rather than
 waiting.
+
+The context hook's continuity signal is a bounded local capture-v2 envelope,
+not background synthesis: it contains selected skill IDs only and excludes the
+prompt, reason and pointer. Persistence failure is non-fatal to the hook. The
+three-hour worker later verifies its HMAC producer attestation and performs the
+bounded deterministic L1 commit; legacy/manual captures are not eligible.
 
 ## Worker boundary
 

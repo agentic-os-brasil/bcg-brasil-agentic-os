@@ -12,10 +12,12 @@ import (
 	"strings"
 	"time"
 
+	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/darwin"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/macosadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
@@ -51,11 +53,22 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		eventID := flags.String("event-id", "", "bounded source event identity; required for event wakes")
 		workspace := flags.String("workspace", "maestro-system", "bounded maintenance workspace")
 		attended := flags.Bool("attended", false, "grant attended local Canary authority")
+		idleState := flags.String("idle-state", string(maintenance.IdleUnknown), "idle eligibility: auto, unknown, active or idle")
 		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) {
-			fmt.Fprintln(errOut, "usage: bcgos maintenance wake --trigger presence|daily|weekly|monthly|event [--event-id ID] [--workspace ID] [--attended]")
+			fmt.Fprintln(errOut, "usage: bcgos maintenance wake --trigger presence|daily|weekly|monthly|event [--event-id ID] [--workspace ID] [--idle-state auto|unknown|active|idle] [--attended]")
 			return ExitUsage
 		}
 		trimmedTrigger, trimmedEventID := strings.TrimSpace(*trigger), strings.TrimSpace(*eventID)
+		requestedIdle := strings.TrimSpace(*idleState)
+		trimmedIdle := maintenance.IdleState(requestedIdle)
+		idleObservation := "explicit"
+		if requestedIdle == "auto" {
+			trimmedIdle, idleObservation = observeNativeIdle(context.Background())
+		}
+		if trimmedIdle != maintenance.IdleUnknown && trimmedIdle != maintenance.IdleActive && trimmedIdle != maintenance.IdleConfirmed {
+			fmt.Fprintln(errOut, "--idle-state must be auto, unknown, active or idle")
+			return ExitUsage
+		}
 		if trimmedTrigger == "event" && trimmedEventID == "" {
 			fmt.Fprintln(errOut, "maintenance wake --trigger event requires --event-id ID")
 			return ExitUsage
@@ -97,7 +110,7 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		if enrollmentErr == nil {
 			timezone = enrollment.Timezone
 		}
-		report, err := worker.Run(context.Background(), maintenance.WakeRequest{WorkspaceID: strings.TrimSpace(*workspace), Trigger: maintenance.Trigger(trimmedTrigger), EventID: trimmedEventID, Timezone: timezone, OwnerID: "bcgos-presence", Now: time.Now(), Attended: *attended, Preauthorized: enrollmentErr == nil})
+		report, err := worker.Run(context.Background(), maintenance.WakeRequest{WorkspaceID: strings.TrimSpace(*workspace), Trigger: maintenance.Trigger(trimmedTrigger), EventID: trimmedEventID, Timezone: timezone, IdleState: trimmedIdle, OwnerID: "bcgos-presence", Now: time.Now(), Attended: *attended, Preauthorized: enrollmentErr == nil})
 		if err != nil {
 			_ = writeJSON(out, map[string]any{"schema_version": 1, "state": maintenance.Unavailable, "agent_id": "darwin", "scope": "health/maestro-system", "trigger": trimmedTrigger, "event_id": trimmedEventID, "native_schedulers": "disabled", "reason": err.Error() + "; no receipt was emitted"}, errOut)
 			return ExitUnavailable
@@ -117,7 +130,7 @@ func runMaintenance(args []string, out, errOut io.Writer) int {
 		// adapter. It must not claim that the native scheduler is disabled merely
 		// because this bounded worker has no provenance for its caller. The
 		// lifecycle status command remains the source of truth for that question.
-		code := writeJSON(out, map[string]any{"state": wakeState, "reason": wakeReason, "trigger": trimmedTrigger, "event_id": trimmedEventID, "native_schedulers": "wake_received; inspect maintenance canary status for lifecycle state", "worker": report}, errOut)
+		code := writeJSON(out, map[string]any{"state": wakeState, "reason": wakeReason, "trigger": trimmedTrigger, "event_id": trimmedEventID, "idle_observation": idleObservation, "native_schedulers": "wake_received; inspect maintenance canary status for lifecycle state", "worker": report}, errOut)
 		if code != ExitOK {
 			return code
 		}
@@ -159,6 +172,19 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 	darwinStore := darwin.Store{Root: darwinRoot}
 	if active[darwin.HousekeepingJobID] {
 		handlers[darwin.HousekeepingJobID] = darwin.HousekeepingHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore}
+	}
+	if active[maintenance.MemoryCheckpointJobID] {
+		handlers[maintenance.MemoryCheckpointJobID] = maintenance.MemoryCheckpointHandler{Scheduler: schedulerStore, Store: maintenance.ContinuityCheckpointStore{Root: filepath.Join(root, "maintenance", "checkpoints")}}
+	}
+	if active[maintenance.MemoryLightDreamJobID] {
+		policy, policyErr := basememory.Policy()
+		config, configErr := basememory.Runtime()
+		if policyErr == nil && configErr == nil {
+			memoryRoot := filepath.Join(root, "memory")
+			attestor := memory.CaptureAttestor{Root: memoryRoot}
+			engine := &memory.Engine{Root: memoryRoot, Policy: policy, Budgets: map[string]int{"L1": config.L1MaxRunes, "L2": 1, "L3": 1, "lifetime": 1}, MaxSourceBytes: config.L1MaxInputBytes, Synthesizer: memory.DeterministicL1Synthesizer{MaxRunes: config.L1MaxRunes, MaxEntries: config.L1MaxEntries, MaxInputBytes: config.L1MaxInputBytes, MaxInputEntries: config.L1MaxInputEntries, Attestor: attestor}, SynthesizerID: memory.DeterministicL1SynthesizerID}
+			handlers[maintenance.MemoryLightDreamJobID] = maintenance.MemoryLightDreamHandler{Engine: engine}
+		}
 	}
 	if active["darwin-deep-weekly"] {
 		handlers["darwin-deep-weekly"] = darwin.DeepReviewHandler{Build: builder, Guard: guard, Invoker: invoker, Store: darwinStore, CommandStore: commandStore, ProposalStore: proposalStore}
@@ -327,7 +353,7 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 		if enrollmentErr == nil {
 			enrolledAt = existing.EnrolledAt
 		}
-		enrollment := maintenance.CanaryEnrollment{SchemaVersion: maintenance.EnrollmentSchemaVersion, WorkspaceID: inspection.WorkspaceID, AgentID: "darwin", Home: filepath.Clean(*home), Executable: program, UID: uid, Timezone: timezone, LaunchAgentLabel: canaryLaunchAgentLabel, Mode: mode, EnrolledAt: enrolledAt, Activated: []maintenance.Activation{{JobID: darwin.HousekeepingJobID, QualificationDigest: maintenance.QualificationDigest(darwin.HousekeepingJobID)}, {JobID: "darwin-deep-weekly", QualificationDigest: maintenance.QualificationDigest("darwin-deep-weekly")}}}
+		enrollment := maintenance.CanaryEnrollment{SchemaVersion: maintenance.EnrollmentSchemaVersion, WorkspaceID: inspection.WorkspaceID, AgentID: "darwin", Home: filepath.Clean(*home), Executable: program, UID: uid, Timezone: timezone, LaunchAgentLabel: canaryLaunchAgentLabel, Mode: mode, EnrolledAt: enrolledAt, Activated: []maintenance.Activation{{JobID: maintenance.MemoryCheckpointJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryCheckpointJobID)}, {JobID: maintenance.MemoryLightDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryLightDreamJobID)}, {JobID: darwin.HousekeepingJobID, QualificationDigest: maintenance.QualificationDigest(darwin.HousekeepingJobID)}, {JobID: "darwin-deep-weekly", QualificationDigest: maintenance.QualificationDigest("darwin-deep-weekly")}}}
 		// RunAtLoad may invoke the worker as soon as launchctl bootstraps the
 		// plist. Persist the exact enrollment first, so that first wake sees the
 		// same bounded authority as all subsequent interval wakes. On a failed
@@ -449,12 +475,25 @@ func canaryLaunchAgentSpec(home, executable, workspaceID string) macosadapter.Sp
 	return macosadapter.Spec{
 		Label:           canaryLaunchAgentLabel,
 		Program:         executable,
-		Arguments:       []string{"maintenance", "wake", "--trigger", "presence", "--workspace", workspaceID},
+		Arguments:       []string{"maintenance", "wake", "--trigger", "presence", "--workspace", workspaceID, "--idle-state", "auto"},
 		StartInterval:   900,
 		RunAtLoad:       true,
 		StandardOutPath: filepath.Join(logRoot, "bcgos-maintenance.stdout.log"),
 		StandardErrPath: filepath.Join(logRoot, "bcgos-maintenance.stderr.log"),
 	}
+}
+
+const maestroIdleThreshold = 5 * time.Minute
+
+func observeNativeIdle(ctx context.Context) (maintenance.IdleState, string) {
+	state, idleFor, err := macosadapter.ObserveIdle(ctx, maestroIdleThreshold)
+	if err != nil {
+		return maintenance.IdleUnknown, "native_unavailable_fail_closed"
+	}
+	if state == macosadapter.NativeIdleConfirmed {
+		return maintenance.IdleConfirmed, fmt.Sprintf("native_hid_idle:%ds", int64(idleFor/time.Second))
+	}
+	return maintenance.IdleActive, fmt.Sprintf("native_hid_active:%ds", int64(idleFor/time.Second))
 }
 
 func exactRunningExecutable(requested string) (string, error) {
@@ -625,6 +664,10 @@ func maintenanceStatus(catalog maintenance.Catalog) map[string]any {
 		"interactive_and_housekeeping_identity": "darwin",
 		"canary_activation":                     "attended_local_only",
 		"native_schedulers":                     "disabled_until_explicit_install_and_qualification",
+		"idle_eligibility":                      "explicit_evidence_required_unknown_fails_closed",
+		"memory_checkpoint":                     "locally_qualified_only_after_canary_enrollment",
+		"memory_dreaming":                       "daily_light_locally_qualified_weekly_deep_unavailable",
+		"pulse_interval_seconds":                900,
 		"job_count":                             len(catalog.Jobs),
 		"reason":                                "unavailable model-backed jobs remain due; wake receipts never prove execution",
 	}
@@ -671,6 +714,9 @@ func maintenanceStatus(catalog maintenance.Catalog) map[string]any {
 }
 
 func schedulerJobsForTrigger(trigger string) []scheduler.Job {
+	checkpoint := scheduler.Job{ID: maintenance.MemoryCheckpointJobID, Cadence: scheduler.Interval, IntervalHours: 3, MaxCatchUp: 1}
+	lightDream := scheduler.Job{ID: maintenance.MemoryLightDreamJobID, Cadence: scheduler.Interval, IntervalHours: 3, MaxCatchUp: 1}
+	deepDream := scheduler.Job{ID: maintenance.MemoryDeepDreamJobID, Cadence: scheduler.Weekly, Weekday: time.Sunday, LocalHour: 2, MaxCatchUp: 1}
 	daily := scheduler.Job{ID: "darwin-housekeeping-daily", Cadence: scheduler.Daily, LocalHour: 3, MaxCatchUp: 1}
 	weekly := scheduler.Job{ID: "darwin-deep-weekly", Cadence: scheduler.Weekly, Weekday: time.Sunday, LocalHour: 4, MaxCatchUp: 1}
 	walter := scheduler.Job{ID: "walter-self-review-weekly", Cadence: scheduler.Weekly, Weekday: time.Sunday, LocalHour: 5, MaxCatchUp: 1}
@@ -679,13 +725,13 @@ func schedulerJobsForTrigger(trigger string) []scheduler.Job {
 	case "daily":
 		return []scheduler.Job{daily}
 	case "weekly":
-		return []scheduler.Job{weekly, walter}
+		return []scheduler.Job{deepDream, weekly, walter}
 	case "monthly":
 		return []scheduler.Job{monthly}
 	case "event":
 		return nil
 	default:
-		return []scheduler.Job{daily, weekly, walter, monthly}
+		return []scheduler.Job{checkpoint, lightDream, deepDream, daily, weekly, walter, monthly}
 	}
 }
 

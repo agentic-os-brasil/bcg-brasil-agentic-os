@@ -28,15 +28,35 @@ filesystem-only and cannot load the real user's domain. An enabled adapter must:
   plist;
 - treat exit code `3` / `state: unavailable` as a capability gap, not success.
 
-The implemented Canary contract uses one periodic presence wake; due
-daily/weekly/monthly work is derived by the runtime worker. `status`
+The implemented Canary contract uses one 15-minute presence pulse. The pulse
+only asks the scheduler for due work and hands eligible occurrences to the
+depth-one worker; it is not a 15-minute job cadence and does not run handlers
+inline. Three-hour continuity is anchored to enrollment and then the last
+successful receipt with `MaxCatchUp=1`. `memory-checkpoint` atomically advances a versioned,
+workspace-bound watermark over allowlisted durable scheduler metadata, then
+emits its own receipt. It reads or synthesizes no memory body and preserves the
+last-known-good pointer if publication is interrupted. `memory-light-dream`
+shares the three-hour due contract and is locally qualified through the bounded
+deterministic L1 synthesizer over already-sanitized captures. It cannot write
+L2, L3 or lifetime. `memory-deep-dream` remains weekly and unavailable until
+deep synthesis plus lifetime eligibility are qualified.
+
+The checked-in template passes `--idle-state auto`. On macOS this invokes the
+bounded native HID idle probe with a two-second timeout and a five-minute idle
+threshold. Missing, malformed, timed-out or unsupported observation becomes
+`unknown` and fails closed; it is never assumed idle. Suppressed due work
+remains due, suppression receipts do not advance the success anchor, and a
+15-minute cooldown prevents idle-suppression loops. Recent failed or
+unavailable attempts have a separate per-occurrence cooldown; their suppression
+also remains due and retry resumes after expiry. `status`
 distinguishes the plist from
 native loaded/enabled state, local IANA timezone, due work and unavailable jobs.
 Pause, resume, status and uninstall are attended, idempotent and reversible.
 The enrollment records the timezone and exact activated jobs; an unattended wake
 uses only that persisted qualification and never obtains new authority inline.
 
-The scheduler only wakes the process. The local Darwin worker contract has a
+The scheduler only plans occurrences and the adapter only wakes the process.
+The local Darwin worker contract has a
 bounded deterministic success boundary; weekly deep review emits
 proposal-only evidence. Walter and monthly structural work remain unavailable
 until their owning runtime integrations are qualified. The owning subsystem

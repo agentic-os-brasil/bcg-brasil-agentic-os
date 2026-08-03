@@ -47,7 +47,7 @@
           "uniqueItems": true,
           "oneOf": [
             {"const": ["none"]},
-            {"items": {"enum": ["memory_l1", "memory_rollups", "wiki_private", "runtime_index", "owner_observation", "local_diagnostics"]}}
+            {"items": {"enum": ["memory_l1", "memory_rollups", "memory_checkpoint", "wiki_private", "runtime_index", "owner_observation", "local_diagnostics"]}}
           ]
         },
         "success_boundary": {"type": "string", "minLength": 1, "maxLength": 512},

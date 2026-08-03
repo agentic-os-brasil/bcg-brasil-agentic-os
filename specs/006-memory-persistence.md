@@ -1,6 +1,8 @@
 # Spec 006 - Memory persistence and dreaming
 
-Status: architecture, runtime-neutral core engine and initial CLI bridge implemented; synthesis adapters, scheduling and executable dreaming pending.
+Status: architecture, runtime-neutral core engine, CLI bridge, deterministic
+L1 light dreaming and metadata-only continuity checkpoint implemented; weekly
+deep synthesis and lifetime eligibility adapters remain pending.
 
 ## Objective
 
@@ -12,7 +14,7 @@ The canonical memory pipeline has three generated operating layers plus a curate
 
 | Layer | Purpose | Input | Default shape |
 |---|---|---|---|
-| L1 | Recent daily continuity | Sanitized Claude/Codex conversation signals plus selected sanitized human daily-log signals | Append-only daily journal plus dense daily digest |
+| L1 | Recent daily continuity | Attested Claude/Codex skill-route metadata; future approved adapters may add selected sanitized signals | Append-only capture-v2 journal plus dense daily digest |
 | L2 | Cross-day continuity | Recent L1 digests | Weekly rollup that collapses repeated threads |
 | L3 | Medium-term continuity | Recent L2 rollups | Rolling thematic synthesis of open, changing or structurally important threads |
 | Lifetime | Stable recall and routing | Repeated, durable evidence promoted from L3 | Compact index with drill-down pointers to owned memory files |
@@ -26,6 +28,17 @@ Dreaming has two depths over the same deterministic engine:
 - **Daily light dreaming:** captures and compacts recent allowed signals into L1. It cannot write L2, L3 or lifetime memory.
 - **Weekly deep dreaming:** consumes the week's L1 evidence, refreshes L2 and L3, and consolidates eligible durable evidence into lifetime memory in one staged transaction.
 
+The maintenance plane deliberately separates those synthesis operations from
+`memory-checkpoint`. The checkpoint is a three-hour, workspace-scoped,
+versioned watermark over allowlisted durable scheduler receipt metadata. Its
+atomic pointer preserves the last known good revision across interruption. It
+reads no error/body/prompt/tool payload, creates no L1/L2/L3 artifact and is
+never evidence that dreaming occurred. Without a durable source watermark it
+remains unavailable. `memory-light-dream` has a separate three-hour due
+contract and uses a runtime-qualified deterministic L1 synthesizer over only
+trusted capture-v2 envelopes. `memory-deep-dream` is the weekly deep cycle and
+remains unavailable without qualified deep synthesis and eligibility adapters.
+
 ### L1 source composition
 
 The target L1 model combines two complementary local evidence streams for the
@@ -36,11 +49,15 @@ by itself. Before the deterministic memory engine may accept a daily-log
 signal, the capture contract must be extended to preserve a source kind,
 provenance and a verifiable sanitization attestation from the source adapter.
 
-That extension is not implemented yet. The current capture core has only its
-existing `Kind` and `Sanitized` fields, and it must not treat a self-declared
-CLI flag as the required evidence. Until the extended contract and its adapter
-tests exist, daily logs remain human-readable sources only and cannot enter
-L1. L1 remains a bounded continuity product, never a copy of either source.
+Capture-v2 implements that boundary for one narrow source: selected skill IDs
+emitted by the Claude or Codex context-injection adapter. The envelope binds
+workspace, timestamp, producer, sanitizer version, source digest and metadata
+body with a workspace-local HMAC key. It contains no prompt, routing rationale,
+pointer, transcript or client body. Manual CLI captures remain in the legacy
+journal and are deliberately excluded from unattended light dreaming; daily
+logs remain human-readable sources only until a separately approved producer
+and sanitizer exist. L1 remains a bounded continuity product, never a copy of
+either source.
 
 Manual invocation, a lifecycle hook, a scheduler and presence-based catch-up may all trigger these cycles. The trigger does not own memory semantics. A missed weekly run remains pending until the same idempotent deep cycle succeeds.
 
@@ -51,7 +68,7 @@ Dreaming is the promotion pipeline from L1 to L2 to L3 and, during the governed 
 1. Select source files through a deterministic recency window and stable ordering.
 2. Compute a source fingerprint and skip an already-produced equivalent rollup.
 3. Stage synthesis output outside the active memory paths.
-4. Validate size, layer and the provenance envelope; reject capture input not already marked sanitized by its adapter.
+4. Validate size, entry count, layer and the capture-v2 provenance envelope; reject missing, invalid or untrusted producer attestation.
 5. Publish immutable artifact versions, then atomically expose the complete set through one validated commit manifest.
 6. Record completion or failure without changing source layers.
 
@@ -79,7 +96,15 @@ The repository does not define the final Windows or macOS data path yet; that re
 
 The policy, layer identifiers, provenance envelope, rollup state and injection order are runtime-neutral. Claude and Codex adapters may use different native lifecycle events or schedulers, but they must preserve the same observable invariants and capability reporting from Spec 004.
 
-Scheduling is not part of the memory truth model. Manual invocation, session-stop observation, periodic execution and presence-based catch-up are interchangeable triggers for the same idempotent dreaming operation. Spec 009 owns the runtime-neutral scheduler contract: native schedulers accelerate execution, while durable occurrence state and presence recovery detect missed work. A scheduler receipt reports execution metadata but never substitutes for the atomic memory commit that proves a dream succeeded.
+Scheduling is not part of the memory truth model. Manual invocation,
+session-stop observation, periodic execution and presence-based catch-up are
+interchangeable triggers for the same idempotent dreaming operation. Spec 009
+owns the runtime-neutral scheduler contract: native schedulers accelerate
+execution, while durable occurrence state and presence recovery detect missed
+work. Three-hour interval jobs anchor first to workspace enrollment and then
+to their last successful attempt, with one catch-up occurrence at most. A
+checkpoint receipt reports only metadata continuity; a dream scheduler receipt
+never substitutes for the atomic memory commit that proves synthesis succeeded.
 
 ## Context injection
 
@@ -91,7 +116,12 @@ lifetime -> L3 -> L2 -> L1
 
 Each injected layer has an independent budget and an explicit pointer to deeper evidence. A missing or stale generated layer is skipped with a diagnostic; it never causes raw unbounded history to be injected as a silent fallback. Authoritative project state and decisions retain precedence over generated memory.
 
-The base policy requires a budget for every layer but deliberately leaves each value as required runtime configuration. Exact pilot values remain pending evidence from real sessions and must never be hard-coded in an adapter.
+The base policy requires a budget for every layer. The bundled light-dream
+runtime configuration sets a reviewable Canary bound of 12,000 L1 runes, 64
+complete output entries, 1 MiB of total source input and 256 input entries; it
+is managed configuration, not an adapter constant. Other
+layer budgets remain required runtime configuration and deep dreaming stays
+unavailable until they are qualified from real-session evidence.
 
 ## Wiki navigation
 
@@ -142,7 +172,12 @@ The engine deliberately does not select a model, sanitize raw input, decide life
 
 The canonical product skill is `bundles/base/skills/dream-memory/SKILL.md`. It routes daily, weekly and status intents to the installed adapter and must report the capability as unavailable until that adapter exists.
 
-`cmd/bcgos` now connects the safe adapter-independent operations to the engine: sanitized capture, commit/layer status and bounded context assembly. `bcgos memory dream daily|weekly` is deliberately present as an explicit unavailable capability until synthesis and lifetime-eligibility adapters are configured. It never substitutes a hard-coded model, eligibility rule, data directory or context budget.
+`cmd/bcgos` connects sanitized capture, commit/layer status, bounded context
+assembly and deterministic `memory dream daily` to the engine. Daily synthesis
+deduplicates and selects complete sanitized signals within the managed L1
+budget, then relies on the existing atomic commit. `memory dream weekly`
+remains explicitly unavailable and never substitutes a hard-coded model or
+lifetime eligibility rule.
 
 ## Test expectations for implementation
 
