@@ -215,7 +215,112 @@ func TestTamperedBindingCannotAuthorize(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := store.Authorize(testBinding(action))
-	if err != nil || result.State != ChallengeRequired || result.ChallengeID == first.ChallengeID {
-		t.Fatalf("tampered state authorized = %#v, %v", result, err)
+	if err == nil || result.State != Denied {
+		t.Fatalf("tampered state did not fail closed = %#v, %v", result, err)
+	}
+}
+
+func TestPendingStateEditCannotAuthorizeWithoutRecordKey(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	root := filepath.Join(t.TempDir(), "confirmation")
+	store := Store{Root: root, Now: func() time.Time { return now }, TTL: 5 * time.Minute}
+	action := Action{Action: "git.push", Target: "origin:refs/heads/topic", InputDigest: strings.Repeat("a", 64)}
+	first, err := store.Authorize(testBinding(action))
+	if err != nil || first.State != ChallengeRequired {
+		t.Fatalf("first authorization = %#v, %v", first, err)
+	}
+
+	path := filepath.Join(root, StateFileName)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state stateFile
+	if err := json.Unmarshal(body, &state); err != nil {
+		t.Fatal(err)
+	}
+	state.Challenges[0].State = "confirmed"
+	state.Challenges[0].ConfirmedAt = now
+	body, err = json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := store.Authorize(testBinding(action))
+	if err == nil || result.State != Denied {
+		t.Fatalf("edited pending challenge authorized = %#v, %v", result, err)
+	}
+}
+
+func TestChallengeTimestampEditFailsClosed(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	root := filepath.Join(t.TempDir(), "confirmation")
+	store := Store{Root: root, Now: func() time.Time { return now }, TTL: time.Minute}
+	action := Action{Action: "git.push", Target: "origin:refs/heads/topic", InputDigest: strings.Repeat("b", 64)}
+	if _, err := store.Authorize(testBinding(action)); err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(root, StateFileName)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state stateFile
+	if err := json.Unmarshal(body, &state); err != nil {
+		t.Fatal(err)
+	}
+	state.Challenges[0].ExpiresAt = state.Challenges[0].ExpiresAt.Add(24 * time.Hour)
+	body, err = json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := store.Authorize(testBinding(action))
+	if err == nil || result.State != Denied {
+		t.Fatalf("edited expiry remained trusted = %#v, %v", result, err)
+	}
+}
+
+func TestConfirmedRecordDuplicationCannotReplayAuthorization(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	root := filepath.Join(t.TempDir(), "confirmation")
+	store := Store{Root: root, Now: func() time.Time { return now }, TTL: 5 * time.Minute}
+	action := Action{Action: "git.push", Target: "origin:refs/heads/topic", InputDigest: strings.Repeat("c", 64)}
+	first, err := store.Authorize(testBinding(action))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if confirmed, err := store.Confirm("claude", "workspace-a", "owner-a", "session-a", "CONFIRM MAESTRO "+first.ChallengeID); err != nil || !confirmed {
+		t.Fatalf("confirmation = %v, %v", confirmed, err)
+	}
+
+	path := filepath.Join(root, StateFileName)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state stateFile
+	if err := json.Unmarshal(body, &state); err != nil {
+		t.Fatal(err)
+	}
+	state.Challenges = append(state.Challenges, state.Challenges[0])
+	body, err = json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := store.Authorize(testBinding(action))
+	if err == nil || result.State != Denied {
+		t.Fatalf("duplicated confirmed record remained authorized = %#v, %v", result, err)
 	}
 }
