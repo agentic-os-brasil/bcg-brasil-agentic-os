@@ -1,6 +1,7 @@
 package actionconfirmation
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,6 +10,10 @@ import (
 	"testing"
 	"time"
 )
+
+func testBinding(action Action) Binding {
+	return Binding{Runtime: "claude", WorkspaceID: "workspace-a", ActorID: "owner-a", SessionID: "session-a", Action: action}
+}
 
 func TestCanonicalizeProtectsExternalMutationButNotOrdinaryLocalWork(t *testing.T) {
 	protected, err := Canonicalize("Bash", json.RawMessage(`{"command":"git push origin refs/heads/topic"}`))
@@ -25,6 +30,25 @@ func TestCanonicalizeProtectsExternalMutationButNotOrdinaryLocalWork(t *testing.
 	if got, err := Canonicalize("Bash", json.RawMessage(`{"command":"go test ./...","command":"git push origin refs/heads/topic"}`)); err == nil || got != nil {
 		t.Fatalf("duplicate-key mutation = %#v, %v", got, err)
 	}
+	for _, test := range []struct {
+		tool, raw, action string
+	}{
+		{"mcp__github__create_pull_request", `{"repository":"org/repo","title":"title"}`, "github.pull_request.create"},
+		{"mcp__outlook_email__send_email", `{"to":"person@example.com","subject":"subject"}`, "email.send"},
+		{"mcp__teams__send_message", `{"channel":"channel-a","message":"hello"}`, "teams.message.send"},
+		{"mcp__slack__send_message", `{"channel":"channel-a","message":"hello"}`, "slack.message.send"},
+	} {
+		got, err := Canonicalize(test.tool, json.RawMessage(test.raw))
+		if err != nil || got == nil || got.Action != test.action {
+			t.Fatalf("Canonicalize(%s) = %#v, %v", test.tool, got, err)
+		}
+	}
+	for _, tool := range []string{"collaboration.send_message", "mcp__internal__send_message", "mcp__workspace_agents__send_message"} {
+		got, err := Canonicalize(tool, json.RawMessage(`{"target":"internal-agent","message":"hello"}`))
+		if err != nil || got != nil {
+			t.Fatalf("internal tool %s treated as external = %#v, %v", tool, got, err)
+		}
+	}
 }
 
 func TestStoreRejectsPermissiveRoot(t *testing.T) {
@@ -34,7 +58,7 @@ func TestStoreRejectsPermissiveRoot(t *testing.T) {
 	}
 	store := Store{Root: root}
 	action := Action{Action: "git.push", Target: "origin:refs/heads/topic", InputDigest: strings.Repeat("e", 64)}
-	if _, err := store.Authorize(Binding{ActorID: "owner-a", SessionID: "session-a", Action: action}); err == nil {
+	if _, err := store.Authorize(testBinding(action)); err == nil {
 		t.Fatal("permissive confirmation root was accepted")
 	}
 }
@@ -44,22 +68,22 @@ func TestChallengeRequiresExactUserConfirmationAndIsOneShot(t *testing.T) {
 	store := Store{Root: filepath.Join(t.TempDir(), "confirmation"), Now: func() time.Time { return now }, TTL: 5 * time.Minute}
 	action := Action{Action: "git.push", Target: "origin:refs/heads/topic", InputDigest: strings.Repeat("a", 64)}
 
-	first, err := store.Authorize(Binding{ActorID: "owner-a", SessionID: "session-a", Action: action})
+	first, err := store.Authorize(testBinding(action))
 	if err != nil || first.State != ChallengeRequired || first.ChallengeID == "" {
 		t.Fatalf("first authorization = %#v, %v", first, err)
 	}
-	if recognized, err := store.Confirm("owner-a", "session-a", "yes, please proceed"); err != nil || recognized {
+	if recognized, err := store.Confirm("claude", "workspace-a", "owner-a", "session-a", "yes, please proceed"); err != nil || recognized {
 		t.Fatalf("ordinary prompt recognized = %v, %v", recognized, err)
 	}
 	confirmation := "CONFIRM MAESTRO " + first.ChallengeID
-	if recognized, err := store.Confirm("owner-a", "session-a", confirmation); err != nil || !recognized {
+	if recognized, err := store.Confirm("claude", "workspace-a", "owner-a", "session-a", confirmation); err != nil || !recognized {
 		t.Fatalf("confirmation = %v, %v", recognized, err)
 	}
-	allowed, err := store.Authorize(Binding{ActorID: "owner-a", SessionID: "session-a", Action: action})
+	allowed, err := store.Authorize(testBinding(action))
 	if err != nil || allowed.State != Authorized {
 		t.Fatalf("allowed = %#v, %v", allowed, err)
 	}
-	replay, err := store.Authorize(Binding{ActorID: "owner-a", SessionID: "session-a", Action: action})
+	replay, err := store.Authorize(testBinding(action))
 	if err != nil || replay.State != ChallengeRequired || replay.ChallengeID == first.ChallengeID {
 		t.Fatalf("replay = %#v, %v", replay, err)
 	}
@@ -69,34 +93,41 @@ func TestChallengeFailsClosedAcrossIdentityExpiryAndMutation(t *testing.T) {
 	now := time.Date(2026, 8, 2, 20, 0, 0, 0, time.UTC)
 	store := Store{Root: filepath.Join(t.TempDir(), "confirmation"), Now: func() time.Time { return now }, TTL: time.Minute}
 	action := Action{Action: "git.push", Target: "origin:refs/heads/topic", InputDigest: strings.Repeat("b", 64)}
-	result, err := store.Authorize(Binding{ActorID: "owner-a", SessionID: "session-a", Action: action})
+	result, err := store.Authorize(testBinding(action))
 	if err != nil {
 		t.Fatal(err)
 	}
 	confirmation := "CONFIRM MAESTRO " + result.ChallengeID
 	for _, identity := range [][2]string{{"", "session-a"}, {"owner-a", ""}, {"owner-b", "session-a"}, {"owner-a", "session-b"}} {
-		if recognized, err := store.Confirm(identity[0], identity[1], confirmation); err == nil || recognized {
+		if recognized, err := store.Confirm("claude", "workspace-a", identity[0], identity[1], confirmation); err == nil || recognized {
 			t.Fatalf("cross identity confirmation accepted for %#v", identity)
 		}
 	}
-	if recognized, err := store.Confirm("owner-a", "session-a", confirmation); err != nil || !recognized {
+	if recognized, err := store.Confirm("codex", "workspace-a", "owner-a", "session-a", confirmation); err == nil || recognized {
+		t.Fatalf("cross-runtime confirmation = %v, %v", recognized, err)
+	}
+	if recognized, err := store.Confirm("claude", "workspace-b", "owner-a", "session-a", confirmation); err == nil || recognized {
+		t.Fatalf("cross-workspace confirmation = %v, %v", recognized, err)
+	}
+	if recognized, err := store.Confirm("claude", "workspace-a", "owner-a", "session-a", confirmation); err != nil || !recognized {
 		t.Fatal(err)
 	}
 	mutated := action
 	mutated.InputDigest = strings.Repeat("c", 64)
-	if got, err := store.Authorize(Binding{ActorID: "owner-a", SessionID: "session-a", Action: mutated}); err != nil || got.State != ChallengeRequired {
+	mutatedBinding := testBinding(mutated)
+	if got, err := store.Authorize(mutatedBinding); err != nil || got.State != ChallengeRequired {
 		t.Fatalf("mutated input = %#v, %v", got, err)
 	}
 	mutatedTarget := action
 	mutatedTarget.Target = "origin:refs/heads/other"
-	if got, err := store.Authorize(Binding{ActorID: "owner-a", SessionID: "session-a", Action: mutatedTarget}); err != nil || got.State != ChallengeRequired {
+	if got, err := store.Authorize(testBinding(mutatedTarget)); err != nil || got.State != ChallengeRequired {
 		t.Fatalf("mutated target = %#v, %v", got, err)
 	}
-	if recognized, err := store.Confirm("owner-a", "session-a", confirmation); err == nil || recognized {
+	if recognized, err := store.Confirm("claude", "workspace-a", "owner-a", "session-a", confirmation); err == nil || recognized {
 		t.Fatalf("confirmation replay = %v, %v", recognized, err)
 	}
 	now = now.Add(2 * time.Minute)
-	if got, err := store.Authorize(Binding{ActorID: "owner-a", SessionID: "session-a", Action: action}); err != nil || got.State != ChallengeRequired {
+	if got, err := store.Authorize(testBinding(action)); err != nil || got.State != ChallengeRequired {
 		t.Fatalf("expired confirmation = %#v, %v", got, err)
 	}
 }
@@ -106,11 +137,11 @@ func TestChallengeConsumptionIsAtomicAndPersistsNoRawInput(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "confirmation")
 	store := Store{Root: root, Now: func() time.Time { return now }, TTL: time.Minute}
 	action := Action{Action: "github.pull_request.create", Target: "org/private-repo", InputDigest: strings.Repeat("d", 64)}
-	first, err := store.Authorize(Binding{ActorID: "owner-a", SessionID: "session-a", Action: action})
+	first, err := store.Authorize(testBinding(action))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Confirm("owner-a", "session-a", "CONFIRM MAESTRO "+first.ChallengeID); err != nil {
+	if _, err := store.Confirm("claude", "workspace-a", "owner-a", "session-a", "CONFIRM MAESTRO "+first.ChallengeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -122,7 +153,7 @@ func TestChallengeConsumptionIsAtomicAndPersistsNoRawInput(t *testing.T) {
 		go func() {
 			defer wait.Done()
 			<-start
-			result, err := store.Authorize(Binding{ActorID: "owner-a", SessionID: "session-a", Action: action})
+			result, err := store.Authorize(testBinding(action))
 			if err != nil {
 				states <- Denied
 				return
@@ -151,5 +182,40 @@ func TestChallengeConsumptionIsAtomicAndPersistsNoRawInput(t *testing.T) {
 		if strings.Contains(string(body), forbidden) {
 			t.Fatalf("state persisted raw value %q: %s", forbidden, body)
 		}
+	}
+	for _, rawDigest := range []string{digest("owner-a"), digest("session-a"), digest("workspace-a"), digest("org/private-repo"), strings.Repeat("d", 64)} {
+		if strings.Contains(string(body), rawDigest) {
+			t.Fatalf("state persisted an unkeyed digest %q: %s", rawDigest, body)
+		}
+	}
+	keyInfo, err := os.Stat(filepath.Join(root, KeyFileName))
+	if err != nil || keyInfo.Mode().Perm() != 0o600 || keyInfo.Size() != sha256.Size {
+		t.Fatalf("HMAC key = %#v, %v", keyInfo, err)
+	}
+}
+
+func TestTamperedBindingCannotAuthorize(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "confirmation")
+	store := Store{Root: root}
+	action := Action{Action: "git.push", Target: "origin:refs/heads/topic", InputDigest: strings.Repeat("f", 64)}
+	first, err := store.Authorize(testBinding(action))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Confirm("claude", "workspace-a", "owner-a", "session-a", "CONFIRM MAESTRO "+first.ChallengeID); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, StateFileName)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = []byte(strings.Replace(string(body), `"input_hmac": "`, `"input_hmac": "tampered`, 1))
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := store.Authorize(testBinding(action))
+	if err != nil || result.State != ChallengeRequired || result.ChallengeID == first.ChallengeID {
+		t.Fatalf("tampered state authorized = %#v, %v", result, err)
 	}
 }

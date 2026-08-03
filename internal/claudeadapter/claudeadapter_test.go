@@ -1,6 +1,7 @@
 package claudeadapter
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -114,12 +115,17 @@ func TestReceiptHashesValidatedNativeIdentifiers(t *testing.T) {
 }
 
 func TestParseReaderPreservesBoundedIdentityPromptAndRawToolInput(t *testing.T) {
-	input, err := ParseReader(strings.NewReader(`{"actor_id":"owner-a","session_id":"session-a","prompt":"route this","tool_name":"mcp__github__create_pull_request","tool_input":{"repository":"org/repo","title":"private title"}}`))
+	input, err := ParseReader(strings.NewReader(`{"session_id":"session-a","prompt":"route this","tool_name":"mcp__github__create_pull_request","tool_input":{"repository":"org/repo","title":"private title"}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.ActorID != "owner-a" || input.SessionID != "session-a" || input.Prompt != "route this" || !strings.Contains(string(input.ToolInputJSON()), `"private title"`) {
+	if input.SessionID != "session-a" || input.Prompt != "route this" || !strings.Contains(string(input.ToolInputJSON()), `"private title"`) {
 		t.Fatalf("parsed input = %#v raw=%s", input, input.ToolInputJSON())
+	}
+	spoofed, err := ParseReader(strings.NewReader(`{"actor_id":"attacker","session_id":"session-a","prompt":"route this","tool_input":{}}`))
+	encoded, marshalErr := json.Marshal(spoofed)
+	if err != nil || marshalErr != nil || strings.Contains(string(encoded), "actor_id") {
+		t.Fatalf("caller actor was accepted as authority: %s, %v, %v", encoded, err, marshalErr)
 	}
 	if output := ExternalActionDenial("confirmation required"); output.HookSpecificOutput == nil || output.HookSpecificOutput.PermissionDecisionReason != "confirmation required" {
 		t.Fatalf("external denial = %#v", output)

@@ -20,7 +20,6 @@ const MaximumNativeInputBytes = 64 << 10
 var nativeIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 
 type NativeInput struct {
-	ActorID   string `json:"actor_id"`
 	SessionID string `json:"session_id"`
 	Prompt    string `json:"prompt"`
 	ToolUseID string `json:"tool_use_id"`

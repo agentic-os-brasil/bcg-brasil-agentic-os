@@ -18,6 +18,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/activationpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
@@ -368,18 +369,21 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 			if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
 				t.Fatal(output.String())
 			}
+			if err := agentidentity.Save(dataRoot, agentidentity.Profile{SchemaVersion: 1, OwnerID: "owner-enrolled", Confirmed: true, UpdatedAt: time.Now().UTC(), Selections: []agentidentity.Selection{{Role: "maestro", DisplayName: "Maestro", Emoji: "🎼", OwnerID: "owner-enrolled", OwnershipScope: "system"}}}); err != nil {
+				t.Fatal(err)
+			}
 			output.Reset()
 			if code := runAdapter([]string{"install", "--runtime", runtimeName, workspacePath}, &output, &output); code != ExitOK {
 				t.Fatalf("adapter install = %d %s", code, output.String())
 			}
 
-			prompt := `{"actor_id":"owner-a","session_id":"session-a","prompt":"Please use $case-kickoff for this request"}`
+			prompt := `{"session_id":"session-a","prompt":"Please use $case-kickoff for this request"}`
 			output.Reset()
 			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "case-kickoff") || !strings.Contains(output.String(), "explicit_skill_reference") || strings.Contains(output.String(), "name: case-kickoff") {
 				t.Fatalf("context routing = %d %s", code, output.String())
 			}
 
-			request := `{"actor_id":"owner-a","session_id":"session-a","tool_name":"Bash","tool_input":{"command":"git push origin refs/heads/topic"}}`
+			request := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"git push origin refs/heads/topic"}}`
 			output.Reset()
 			if code := runHookWithInput([]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", workspacePath}, strings.NewReader(request), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) {
 				t.Fatalf("challenge = %d %s", code, output.String())
@@ -388,7 +392,7 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 			if match == "" {
 				t.Fatalf("challenge phrase missing: %s", output.String())
 			}
-			confirmation := fmt.Sprintf(`{"actor_id":"owner-a","session_id":"session-a","prompt":%q}`, match)
+			confirmation := fmt.Sprintf(`{"session_id":"session-a","prompt":%q}`, match)
 			output.Reset()
 			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(confirmation), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "confirmed") {
 				t.Fatalf("confirmation = %d %s", code, output.String())

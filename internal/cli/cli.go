@@ -2442,7 +2442,11 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if err != nil {
 			return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
-		result, err := confirmationStore(root, inspection.WorkspaceID).Authorize(actionconfirmation.Binding{ActorID: native.ActorID, SessionID: native.SessionID, Action: *protected})
+		actorID, err := localConfirmedOwnerActor(root)
+		if err != nil {
+			return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+		}
+		result, err := confirmationStore(root, inspection.WorkspaceID).Authorize(actionconfirmation.Binding{Runtime: "codex", WorkspaceID: inspection.WorkspaceID, ActorID: actorID, SessionID: native.SessionID, Action: *protected})
 		if err != nil {
 			return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
@@ -2473,7 +2477,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 		})
 		if action == "context-injection" {
-			if err := enrichContextPacket(&packet, "codex", inspection.WorkspacePath, root, native.ActorID, native.SessionID, native.Prompt); err != nil {
+			if err := enrichContextPacket(&packet, "codex", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
 				return reportError(errOut, err)
 			}
 		}
@@ -2566,7 +2570,11 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if err != nil {
 			return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
-		result, err := confirmationStore(root, inspection.WorkspaceID).Authorize(actionconfirmation.Binding{ActorID: native.ActorID, SessionID: native.SessionID, Action: *protected})
+		actorID, err := localConfirmedOwnerActor(root)
+		if err != nil {
+			return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+		}
+		result, err := confirmationStore(root, inspection.WorkspaceID).Authorize(actionconfirmation.Binding{Runtime: "claude", WorkspaceID: inspection.WorkspaceID, ActorID: actorID, SessionID: native.SessionID, Action: *protected})
 		if err != nil {
 			return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
@@ -2599,7 +2607,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 		})
 		if action == "context-injection" {
-			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.ActorID, native.SessionID, native.Prompt); err != nil {
+			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
 				return reportError(errOut, err)
 			}
 		}
@@ -2660,12 +2668,25 @@ func confirmationStore(root, workspaceID string) actionconfirmation.Store {
 	return actionconfirmation.Store{Root: filepath.Join(root, "runtime", "action-confirmation", workspaceID)}
 }
 
+func localConfirmedOwnerActor(root string) (string, error) {
+	profile, err := agentidentity.Load(root)
+	if err != nil {
+		return "", fmt.Errorf("load confirmed owner enrollment: %w", err)
+	}
+	principal, err := localPriorWorkActorRef()
+	if err != nil {
+		return "", err
+	}
+	return profile.OwnerID + "@" + principal, nil
+}
+
 func challengeDenial(result actionconfirmation.Result) string {
 	return fmt.Sprintf("Maestro requires explicit user confirmation for external action %s on target %s. Reply exactly: CONFIRM MAESTRO %s. Challenge expires at %s. Nothing was changed.", result.Action, result.Target, result.ChallengeID, result.ExpiresAt.UTC().Format(time.RFC3339))
 }
 
-func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, root, actorID, sessionID, prompt string) error {
-	confirmed, err := confirmationStore(root, packet.Workspace.ID).Confirm(actorID, sessionID, prompt)
+func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, root, sessionID, prompt string) error {
+	actorID, _ := localConfirmedOwnerActor(root)
+	confirmed, err := confirmationStore(root, packet.Workspace.ID).Confirm(runtimeName, packet.Workspace.ID, actorID, sessionID, prompt)
 	if err != nil {
 		return fmt.Errorf("confirm external action: %w", err)
 	}

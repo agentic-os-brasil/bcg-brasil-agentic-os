@@ -21,6 +21,13 @@ type Action struct {
 // that resembles external mutation but cannot be represented by the bounded
 // grammar returns an error so the caller can fail closed.
 func Canonicalize(toolName string, raw json.RawMessage) (*Action, error) {
+	actionName := ""
+	if toolName != "Bash" {
+		actionName = protectedToolAction(toolName)
+		if actionName == "" {
+			return nil, nil
+		}
+	}
 	if err := rejectDuplicateKeys(raw); err != nil {
 		return nil, errors.New("tool input is not canonical JSON")
 	}
@@ -34,10 +41,6 @@ func Canonicalize(toolName string, raw json.RawMessage) (*Action, error) {
 			return nil, errors.New("Bash command is required")
 		}
 		return canonicalShellAction(command)
-	}
-	actionName := protectedToolAction(toolName)
-	if actionName == "" {
-		return nil, nil
 	}
 	target := firstString(input, "target", "repository", "repo", "channel", "recipient", "to", "url")
 	if target == "" {
@@ -206,23 +209,13 @@ func shellAction(action, target string, fields []string) *Action {
 }
 
 func protectedToolAction(toolName string) string {
-	name := strings.ToLower(toolName)
-	switch {
-	case strings.Contains(name, "create_pull_request"):
-		return "github.pull_request.create"
-	case strings.Contains(name, "merge_pull_request"):
-		return "github.pull_request.merge"
-	case strings.Contains(name, "send_email"):
-		return "email.send"
-	case strings.Contains(name, "send_message"):
-		return "message.send"
-	case strings.Contains(name, "publish"):
-		return "external.publish"
-	case strings.Contains(name, "deploy"):
-		return "external.deploy"
-	default:
-		return ""
-	}
+	return map[string]string{
+		"mcp__github__create_pull_request": "github.pull_request.create",
+		"mcp__github__merge_pull_request":  "github.pull_request.merge",
+		"mcp__outlook_email__send_email":   "email.send",
+		"mcp__teams__send_message":         "teams.message.send",
+		"mcp__slack__send_message":         "slack.message.send",
+	}[toolName]
 }
 
 func firstString(values map[string]any, keys ...string) string {

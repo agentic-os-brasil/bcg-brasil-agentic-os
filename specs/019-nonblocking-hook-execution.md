@@ -38,13 +38,22 @@ another process to resolve a race. If safety cannot be established immediately,
 the guard denies the action with an actionable explanation.
 
 External publication and mutation use a short-lived local challenge bound to
-actor, native session, canonical action, target, input digest and expiry.
+runtime, workspace, locally attested owner actor, native session, canonical
+action, target, input digest and expiry. The actor is derived from the confirmed
+owner personalization enrollment plus the authenticated local OS principal;
+native payload fields cannot declare it. Durable bindings are HMAC-SHA256 values
+under a private workspace-local key, not replayable unkeyed hashes.
 `UserPromptSubmit` recognizes only `CONFIRM MAESTRO <challenge-id>` for the
 same pending binding. `PreToolUse` consumes that confirmation atomically once;
 missing identity, expiry, replay, mutation, lock contention or a command outside
 the bounded grammar denies without changing external state. Ordinary local
 actions do not enter this path, and protected-root destruction remains an
 absolute denial.
+
+Non-shell external tool protection uses an exact namespace/tool-ID allowlist
+for the supported GitHub, Outlook email, Teams and Slack mutations. Internal,
+collaboration and workspace-agent messaging with a similar method suffix is not
+classified as external publication by substring.
 
 ## Executable policy
 

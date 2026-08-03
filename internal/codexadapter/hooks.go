@@ -19,7 +19,6 @@ var nativeIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,
 // NativeInput is the bounded Codex command-hook payload. Codex-specific fields
 // beyond this contract are deliberately ignored.
 type NativeInput struct {
-	ActorID   string `json:"actor_id"`
 	SessionID string `json:"session_id"`
 	Prompt    string `json:"prompt"`
 	ToolUseID string `json:"tool_use_id"`
