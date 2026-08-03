@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const EnrollmentSchemaVersion = 1
+const EnrollmentSchemaVersion = 2
 
 var uidValuePattern = regexp.MustCompile(`^[0-9]+$`)
 
@@ -27,6 +27,7 @@ type CanaryEnrollment struct {
 	WorkspaceID      string       `json:"workspace_id"`
 	AgentID          string       `json:"agent_id"`
 	Home             string       `json:"home"`
+	Executable       string       `json:"executable"`
 	UID              string       `json:"uid"`
 	Timezone         string       `json:"timezone"`
 	LaunchAgentLabel string       `json:"launch_agent_label"`
@@ -41,7 +42,7 @@ func QualificationDigest(jobID string) string {
 }
 
 func (enrollment CanaryEnrollment) Validate() error {
-	if enrollment.SchemaVersion != EnrollmentSchemaVersion || !commandIDPattern.MatchString(enrollment.WorkspaceID) || enrollment.AgentID != "darwin" || !filepath.IsAbs(enrollment.Home) || !uidValuePattern.MatchString(enrollment.UID) || enrollment.Timezone == "" || enrollment.LaunchAgentLabel != "com.bcg.maestro.maintenance" || enrollment.EnrolledAt.IsZero() {
+	if enrollment.SchemaVersion != EnrollmentSchemaVersion || !commandIDPattern.MatchString(enrollment.WorkspaceID) || enrollment.AgentID != "darwin" || !filepath.IsAbs(enrollment.Home) || !filepath.IsAbs(enrollment.Executable) || !uidValuePattern.MatchString(enrollment.UID) || enrollment.Timezone == "" || enrollment.LaunchAgentLabel != "com.bcg.maestro.maintenance" || enrollment.EnrolledAt.IsZero() {
 		return errors.New("invalid Darwin Canary enrollment header")
 	}
 	if _, err := time.LoadLocation(enrollment.Timezone); err != nil {

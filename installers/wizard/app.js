@@ -7,6 +7,7 @@
   const welcomeActionLabel = document.querySelector('#welcome-action-label');
   const runtimeLabel = document.querySelector('#runtime-label');
   const firstCommand = document.querySelector('#first-command');
+  const workspaceDefault = document.querySelector('#workspace-default');
   const commandHint = document.querySelector('#command-hint');
   const stageAnnouncement = document.querySelector('#stage-announcement');
   const mode = document.body.dataset.mode || 'preview';
@@ -16,6 +17,10 @@
   let runtimePlatform = '';
   let planDigest = '';
   let verified = false;
+  let installed = false;
+  let installedCLIPath = '';
+  let runtimeTargets = [];
+  let defaultWorkspace = '';
   const platform = /Win/i.test(navigator.userAgent) ? 'Windows' : /Mac/i.test(navigator.userAgent) ? 'macOS' : 'seu dispositivo';
 
   platformLabel.textContent = platform;
@@ -116,7 +121,9 @@
 
   function updateConnectionChrome(state) {
     const connectedMode = state?.mode || 'preview';
-    const copy = connectedMode === 'simulation'
+    const copy = state?.installed
+      ? { badge: 'MAESTRO INSTALADO', action: 'Abrir Maestro', footer: 'instalação já concluída' }
+      : connectedMode === 'simulation'
       ? { badge: 'ENSAIO TÉCNICO', action: 'Simular instalação', footer: 'ensaio técnico conectado' }
       : connectedMode === 'runtime'
       ? { badge: 'RELEASE CONECTADO', action: 'Instalar no meu perfil', footer: 'instalação conectada' }
@@ -131,16 +138,97 @@
   }
 
   function updateFinishCopy() {
-    const lead = document.querySelector('#finish-lead');
+    const lead = document.querySelector('#runtime-handoff .lead');
     if (!lead) return;
     lead.textContent = simulation
-      ? 'O ensaio técnico terminou em uma pasta isolada. Abra os dados para conferir o resultado; nenhum release assinado foi instalado.'
-      : runtime
-      ? 'O Maestro foi instalado no seu perfil. Abra a pasta dele e escolha um workspace de teste quando estiver pronto.'
+      ? 'O ensaio técnico terminou em uma pasta isolada. Nenhum release assinado foi instalado.'
+      : installed || runtime
+      ? 'O Maestro foi instalado no seu perfil. Agora, abra um workspace no runtime em que você trabalha.'
       : 'Esta é uma prévia visual. Nenhum arquivo foi instalado; no modo real, o Maestro ficará no seu perfil.';
   }
 
+  function showRuntimeHandoff() {
+    document.querySelector('#workspace-setup').hidden = true;
+    document.querySelector('#runtime-handoff').hidden = false;
+    updateFinishCopy();
+  }
+
+  function renderActivation(activation) {
+    if (!activation) return;
+    let summary = document.querySelector('#activation-summary');
+    if (!summary) {
+      summary = document.createElement('div');
+      summary.id = 'activation-summary';
+      summary.className = 'activation-summary';
+      summary.innerHTML = '<article><span>HOOKS DO WORKSPACE</span><strong id="activation-hooks">CONFIGURADO</strong><small id="activation-hook-events"></small></article><article><span>REVISÃO DOS HOOKS</span><strong id="activation-hook-review">REVISÃO DO OWNER NECESSÁRIA</strong><small id="activation-hook-review-detail">O Codex pede a confirmação dos comandos locais antes da primeira execução. O instalador não grava confiança global em seu nome.</small></article><article><span>MANUTENÇÃO LOCAL</span><strong id="activation-maintenance">OBSERVADO NO LAUNCHD</strong><small id="activation-maintenance-detail"></small></article><article><span>SESSÃO NATIVA CODEX</span><strong id="activation-native-session">AGUARDANDO PRIMEIRA SESSÃO</strong><small>Configuração não é evidência de que o runtime já executou os hooks.</small></article><article><span>JOBS COM MODELO</span><strong id="activation-model">INDISPONÍVEL</strong><small>Nenhum modelo será executado pela manutenção agendada.</small></article>';
+      document.querySelector('#runtime-handoff .next-command')?.before(summary);
+    }
+    const lifecycle = activation.lifecycle || {};
+    const maintenance = activation.maintenance || {};
+    const events = Array.isArray(lifecycle.events) ? lifecycle.events : [];
+    document.querySelector('#activation-hooks').textContent = lifecycle.state === 'configured'
+      ? `CONFIGURADO · ${events.length || 5} HOOKS`
+      : 'NÃO CONFIRMADO';
+    document.querySelector('#activation-hook-events').textContent = events.length
+      ? events.join(' · ')
+      : 'StartSession · UserPromptSubmit · PreToolUse · PostToolUse · Stop';
+    const reviewRequired = lifecycle.hook_review === 'owner_review_required';
+    document.querySelector('#activation-hook-review').textContent = reviewRequired
+      ? 'REVISÃO DO OWNER NECESSÁRIA'
+      : String(lifecycle.hook_review || 'NÃO CONFIRMADO').replaceAll('_', ' ').toUpperCase();
+    document.querySelector('#activation-hook-review-detail').textContent = reviewRequired
+      ? 'Ao abrir o Codex, revise os cinco comandos locais quando ele solicitar. O instalador nunca grava confiança global em seu nome.'
+      : 'A revisão de confiança dos hooks segue o estado reportado pelo runtime.';
+    document.querySelector('#activation-maintenance').textContent = maintenance.native_observed
+      ? 'OBSERVADO NO LAUNCHD'
+      : 'NÃO OBSERVADO';
+    document.querySelector('#activation-maintenance-detail').textContent = maintenance.native_observed
+      ? 'Carregado no login e verificado a cada 15 minutos para recuperar manutenção local pendente.'
+      : 'A manutenção agendada ainda não foi carregada pelo macOS.';
+    document.querySelector('#activation-native-session').textContent = lifecycle.native_observed === 'unavailable_pending_first_session'
+      ? 'AGUARDANDO PRIMEIRA SESSÃO'
+      : String(lifecycle.native_observed || 'NÃO OBSERVADO').replaceAll('_', ' ').toUpperCase();
+    document.querySelector('#activation-model').textContent = maintenance.model_backed === 'unavailable'
+      ? 'INDISPONÍVEL'
+      : String(maintenance.model_backed || 'NÃO CONFIGURADO').replaceAll('_', ' ').toUpperCase();
+    summary.hidden = false;
+  }
+
+  function renderRuntimeTargets(targets = []) {
+    const actions = document.querySelector('#runtime-actions');
+    const copy = document.querySelector('#runtime-launch-copy');
+    if (!actions || !copy) return;
+    runtimeTargets = Array.isArray(targets) ? targets : [];
+    actions.replaceChildren();
+    if (!runtime) {
+      copy.textContent = 'No instalador conectado, o Maestro detecta os runtimes disponíveis e abre o workspace no lugar certo.';
+    } else if (!runtimeTargets.length) {
+      copy.textContent = 'Nenhum runtime compatível foi detectado. Instale Claude Code ou Codex e abra este instalador novamente.';
+    } else {
+      copy.textContent = 'Abra o workspace no runtime. Na primeira abertura, revise os cinco hooks locais quando o Codex solicitar; essa aprovação permanece sob seu controle.';
+      runtimeTargets.forEach((target, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = index === 0 ? 'primary' : 'quiet runtime-secondary';
+        button.dataset.action = 'launch-runtime';
+        button.dataset.runtime = target.id;
+        button.innerHTML = `<span>${target.label}</span><span class="arrow">↗</span>`;
+        actions.append(button);
+      });
+    }
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'quiet';
+    close.dataset.action = 'close';
+    close.textContent = 'Fechar instalador';
+    actions.append(close);
+  }
+
   function show(name, { focusHeading = true } = {}) {
+    // Errors are scoped to one action. A new scene always starts clean so an
+    // empty error container can never survive a successful transition.
+    showError('check', '');
+    showError('install', '');
     panels.forEach(panel => {
       const visible = panel.dataset.panel === name;
       panel.hidden = !visible;
@@ -163,6 +251,10 @@
       finish: 'Etapa 4 de 4: pronto. O Maestro está preparado para o primeiro comando.'
     };
     if (stageAnnouncement) stageAnnouncement.textContent = announcements[name] || '';
+    // Each installer step occupies the same app scene. Reset scroll roots so
+    // navigation never leaves the following step peeking under the current one.
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.querySelector('.content')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     if (focusHeading) {
       const heading = document.querySelector(`[data-panel="${name}"] h1`);
       if (heading) window.requestAnimationFrame(() => heading.focus());
@@ -192,6 +284,11 @@
       const state = await response.json();
       runtime = true;
       simulation = state.mode === 'simulation';
+      installed = Boolean(state.installed) && !simulation;
+      installedCLIPath = state.cli_path || '';
+      defaultWorkspace = state.workspace_default || '';
+      if (workspaceDefault && defaultWorkspace) workspaceDefault.textContent = defaultWorkspace;
+      renderRuntimeTargets(state.runtimes);
       document.body.dataset.mode = 'runtime';
       updateConnectionChrome(state);
       updateModeBanner(state);
@@ -199,6 +296,7 @@
       runtimePlatform = state.platform || '';
       platformLabel.textContent = state.platform || platform;
       destination.textContent = state.managed_root || destination.textContent;
+      if (installed) setFirstCommand(installedCLIPath);
     } catch (_) {
       // Opening index.html directly is a deliberate, non-mutating preview.
     }
@@ -207,6 +305,11 @@
   async function verifyRelease() {
     showError('check', '');
     showRuntimeStage('check', 'Conferindo release, assinatura e destino…');
+    if (installed) {
+      show('finish');
+      showStatus('Maestro já está instalado neste perfil. Nenhuma alteração foi necessária.');
+      return;
+    }
     if (!runtime) {
       show('install');
       showRuntimeStage('check', '');
@@ -236,6 +339,11 @@
   async function installRelease() {
     showError('install', '');
     showRuntimeStage('install', 'Preparando a instalação no seu perfil…');
+    if (installed) {
+      show('finish');
+      showStatus('Maestro já está instalado neste perfil. Nenhuma alteração foi necessária.');
+      return;
+    }
     if (!runtime) {
       show('finish');
       showRuntimeStage('install', '');
@@ -289,6 +397,64 @@
     }
   }
 
+  async function launchSelectedRuntime(button) {
+    showStatus('');
+    if (!runtime) {
+      showStatus('Esta é uma prévia visual. No instalador conectado, você escolherá um workspace antes de abrir o runtime.');
+      return;
+    }
+    const runtimeID = button?.dataset.runtime;
+    if (!runtimeID || !runtimeTargets.some(target => target.id === runtimeID)) {
+      showStatus('Esse runtime não está disponível neste computador. Abra o instalador novamente após instalá-lo.');
+      return;
+    }
+    button.disabled = true;
+    const label = button.querySelector('span');
+    const original = label?.textContent || 'Abrir runtime';
+    setButtonLabel(button, 'Escolha seu workspace…');
+    try {
+      const response = await fetch('/api/launch-runtime', requestOptions('POST', { runtime: runtimeID }));
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível abrir o runtime.');
+      const runtimeName = runtimeID === 'claude' ? 'Claude Code' : 'Codex no ChatGPT';
+      showStatus(`${runtimeName} foi iniciado em ${payload.workspace_path}. O Maestro continua disponível no seu perfil.`);
+    } catch (error) {
+      showStatus(error.message);
+    } finally {
+      setButtonLabel(button, original);
+      button.disabled = false;
+    }
+  }
+
+  async function createWorkspace(button) {
+    showStatus('');
+    if (!runtime) {
+      showStatus('Esta é uma prévia visual. No instalador conectado, o Maestro cria o workspace padrão antes de abrir um runtime.');
+      return;
+    }
+    const importExisting = button?.dataset.import === 'true';
+    button.disabled = true;
+    const original = button.querySelector('span')?.textContent || button.textContent;
+    setButtonLabel(button, importExisting ? 'Escolha a pasta…' : 'Preparando…');
+    try {
+      const response = await fetch('/api/create-workspace', requestOptions('POST', { import_existing: importExisting }));
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível criar seu workspace.');
+      defaultWorkspace = payload.workspace_path || defaultWorkspace;
+      renderActivation(payload.activation);
+      renderRuntimeTargets(runtimeTargets.filter(target => target.id === 'codex'));
+      showRuntimeHandoff();
+      showStatus(payload.source_registered
+        ? `Workspace pronto em ${payload.workspace_path}. Hooks e manutenção local foram configurados; a fonte foi registrada para ingestão verificada.`
+        : `Workspace pronto em ${payload.workspace_path}. Hooks e manutenção local foram configurados; uma sessão nativa ainda precisa observá-los.`);
+    } catch (error) {
+      showStatus(error.message);
+    } finally {
+      setButtonLabel(button, original);
+      button.disabled = false;
+    }
+  }
+
   async function closeInstaller() {
     if (!runtime) {
       showStatus('Esta é uma prévia visual: feche esta aba quando terminar.');
@@ -324,7 +490,12 @@
     const next = event.target.closest('[data-next]');
     const previous = event.target.closest('[data-prev]');
     const action = event.target.closest('[data-action]')?.dataset.action;
-    if (next) show(next.dataset.next);
+    if (next) {
+      if (installed) {
+        show('finish');
+        showStatus('Maestro já está instalado neste perfil. Nenhuma alteração foi necessária.');
+      } else show(next.dataset.next);
+    }
     if (previous) show(previous.dataset.prev);
     if (event.target.closest('.step') && event.target.closest('.step').classList.contains('is-done')) show(event.target.closest('.step').dataset.step);
     if (action === 'help') document.querySelector('#help-modal').showModal();
@@ -337,11 +508,14 @@
     }
     if (action === 'verify') await verifyRelease();
     if (action === 'install') await installRelease();
+    if (action === 'create-workspace') await createWorkspace(event.target.closest('[data-action="create-workspace"]'));
     if (action === 'open-data') await openDataFolder();
+    if (action === 'launch-runtime') await launchSelectedRuntime(event.target.closest('[data-action="launch-runtime"]'));
     if (action === 'copy-path') navigator.clipboard?.writeText(destination.textContent);
     if (action === 'copy-command') await copyFirstCommand();
     if (action === 'close') await closeInstaller();
   });
 
+  renderRuntimeTargets();
   discoverRuntime();
 })();

@@ -107,7 +107,7 @@ manifest_size="$(stat -f%z "$release_manifest")"
   echo "error: release manifest exceeds the 1 MiB packaging bound." >&2
   exit 1
 }
-plutil -lint "$release_manifest" >/dev/null 2>&1 || {
+plutil -convert xml1 -o /dev/null "$release_manifest" >/dev/null 2>&1 || {
   echo "error: release manifest is not valid property-list/JSON data." >&2
   exit 1
 }
@@ -189,13 +189,13 @@ cat > "$app/Contents/Info.plist" <<EOF
 <key>CFBundleDisplayName</key><string>Maestro Installer</string>
 <key>CFBundleExecutable</key><string>Maestro Installer</string>
 <key>CFBundleIconFile</key><string>maestro.icns</string>
-<key>CFBundleIdentifier</key><string>com.bcgbrasil.maestro.installer</string>
+<key>CFBundleIdentifier</key><string>com.bcgbrasil.maestro.installer.runtime</string>
 <key>CFBundleName</key><string>Maestro Installer</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>$version</string>
 <key>CFBundleVersion</key><string>${version}-unsigned-candidate</string>
 <key>LSMinimumSystemVersion</key><string>12.0</string>
-<key>LSUIElement</key><true/>
+<key>LSUIElement</key><false/>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 EOF

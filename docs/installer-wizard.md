@@ -16,10 +16,17 @@ authorities allowed to verify, activate or roll back bytes.
    path are shown before any write.
 3. **Instalação** — the exact per-user destination and the atomic activation
    plan are explained. The user confirms once.
-4. **Pronto** — the first `doctor` command and the recovery promise are
-   visible. In a connected install, the command uses the exact user-profile
-   executable returned by the bridge; in a technical rehearsal, it remains a
-   clearly labelled conceptual command.
+4. **Seu workspace** — creates one new local workspace at
+   `~/Developer/maestro-os`. Before creation, the user may nominate an existing
+   memory folder. That source remains untouched and is registered as a pending
+   local intake; no document is read, copied or uploaded by the installer.
+5. **Pronto** — returns the person to work, rather than to an application
+   folder. The first-use projection is Codex, because a workspace may carry
+   one managed runtime projection at a time. On macOS, Codex in the ChatGPT
+   desktop app receives the workspace through the documented
+   `codex://new?path=<absolute-path>` deep link. Switching that workspace to
+   Claude is a separate explicit adapter migration, not a second concurrent
+   install. The `doctor` command remains a support action.
 
 The **Ver como funciona** action opens a compact in-product explainer with the
 same three contract movements — check, install, conduct — so a non-technical
@@ -65,12 +72,48 @@ The normal destination is user-level application storage (`%LOCALAPPDATA%\\BCGOS
 on Windows and `~/Library/Application Support/BCGOS` on macOS). The wizard
 does not modify the global `PATH`, workspace content or credentials.
 
-After a connected install, the first-command card uses the exact `cli_path`
-returned by the bridge. On macOS it copies `"<installed-cli>" doctor`; on
-Windows PowerShell it copies `& "<installed-cli>" doctor`. This keeps the
-instruction executable for a standard user without requiring a shell restart
-or a global `PATH` change. Static preview and disconnected mode keep the
-shorthand `bcgos doctor` and explicitly remain non-installing.
+After a connected install, the wizard detects compatible runtimes locally. It
+never accepts a browser-provided workspace path: it creates and verifies the
+canonical local workspace, then launches only a detected runtime. A separately
+selected memory source is recorded under `.bcgos/import-intake.json` with
+state `pending_verified_pack`; it is not itself used as a workspace. The
+first-command card uses the exact
+`cli_path` returned by the bridge as a support action. On macOS it copies
+`"<installed-cli>" doctor`; on Windows PowerShell it copies `&
+"<installed-cli>" doctor`. Static preview and disconnected mode remain
+non-installing.
+
+Workspace creation alone is not the final runtime-readiness claim. The bridge
+reports adapter configuration, readiness verification and scheduler activation
+as separate states, alongside the exact `workspace_path` and a diagnostic
+command bound to that path. It returns `ready_for_runtime=true` only after the
+workspace, Codex projection and per-user scheduler pass their respective
+checks; a failure returns an error and never marks the workspace ready. A
+generated workspace or a present `AGENTS.md` is therefore not mistaken for
+observed hooks, verified readiness or an active scheduler.
+
+If an earlier first install was interrupted, the connected bridge may preserve
+the installer-owned managed root and its bound install state in a deterministic
+plan-digest recovery location before retrying. It never replaces a healthy
+installation, never overwrites an earlier recovery and never auto-recovers an
+ambiguous root containing unrecognized entries. A final diagnostic failure
+after bootstrapper activation is reported as quarantined/reinstallable, not as
+completed.
+
+Codex project hooks are intentionally a separate owner-consent boundary. The
+wizard installs and verifies the five workspace-local hook definitions, then
+states that the first Codex opening must review their exact commands before
+they execute automatically. It never manufactures entries in
+`~/.codex/config.toml`, bypasses the Codex hook-review UX, or presents a
+configured hook as a native observation. This keeps local hooks both wired and
+revocable by their owner.
+
+Once the owner accepts those commands, each hook resolves and validates the
+same strict workspace-local orchestration snapshot before recording bounded
+metadata evidence. Session Start also emits a non-blocking presence wake to
+the already enrolled maintenance boundary. That wake is occurrence-idempotent,
+does not run a model inline and remains separate from native hook
+qualification.
 
 ## Visual identity
 
@@ -98,6 +141,12 @@ Unlike the rehearsal DMG, it requires the exact release directory, authority
 registry and native bootstrapper as explicit inputs and passes them to the
 bridge. It remains `unsigned-candidate` until the protected Developer ID and
 notarization steps run.
+
+macOS does not permit a mounted DMG to auto-execute an installer app. The DMG
+therefore remains a transport container: opening it mounts the volume, then
+the user opens **Maestro Installer.app**. A production one-click delivery
+should use a signed/notarized launcher or a signed `.pkg`, rather than relying
+on DMG autorun behavior.
 
 ### Musical references
 
