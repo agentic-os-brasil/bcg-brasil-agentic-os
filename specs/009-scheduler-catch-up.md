@@ -73,6 +73,16 @@ forbidden or unavailable in the active runtime, the occurrence remains due.
 
 Session Start may perform one bounded, read-only status check. If work is due, the runtime adapter enqueues execution after startup and immediately returns control to the user. It may not invoke a model, compile a wiki or wait for completion inside Session Start.
 
+Installed Maestro lifecycle hooks resolve the exact workspace-local
+`.bcgos/maestro-orchestration-state.json` pointer before emitting this signal.
+The pointer cannot be absolute, escape the initialized workspace or traverse a
+symlink; an existing store must be a bounded, strict JSON durable snapshot.
+`SessionStart` starts the same `maintenance wake --trigger presence` boundary
+as a best-effort child process and does not wait for it. Repeated starts remain
+idempotent at the scheduler occurrence/lease boundary. Failure to start the
+best-effort wake does not turn configuration into execution evidence, block
+context output or invoke a model.
+
 No lifecycle event may wait for a scheduler or worker lock. The eventual worker
 owns serialized execution; hooks read a last committed snapshot or emit a
 best-effort idempotent signal as defined in Spec 019. Signals carry a bounded

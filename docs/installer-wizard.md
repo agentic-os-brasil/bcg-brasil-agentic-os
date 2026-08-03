@@ -108,6 +108,13 @@ they execute automatically. It never manufactures entries in
 configured hook as a native observation. This keeps local hooks both wired and
 revocable by their owner.
 
+Once the owner accepts those commands, each hook resolves and validates the
+same strict workspace-local orchestration snapshot before recording bounded
+metadata evidence. Session Start also emits a non-blocking presence wake to
+the already enrolled maintenance boundary. That wake is occurrence-idempotent,
+does not run a model inline and remains separate from native hook
+qualification.
+
 ## Visual identity
 
 The wizard uses a small Maestro identity system rather than a generic themed

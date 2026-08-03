@@ -63,6 +63,26 @@ var Version = "0.0.0-dev"
 const maximumOwnerFacetBytes = 1 << 20
 const maximumWorkspaceAgentBytes = 1 << 20
 const maximumWorkContractBytes = 32 << 10
+const maximumOrchestrationStateBytes = 64 << 10
+const installedOrchestrationStatePath = ".bcgos/maestro-orchestration-state.json"
+
+var enqueueHookPresenceWake = func(workspaceID string) error {
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve bcgos executable for presence wake: %w", err)
+	}
+	command := exec.Command(executable, "maintenance", "wake", "--trigger", "presence", "--workspace", workspaceID)
+	if err := command.Start(); err != nil {
+		return fmt.Errorf("enqueue maintenance presence wake: %w", err)
+	}
+	go func() { _ = command.Wait() }()
+	return nil
+}
+
+type hookOrchestrationState struct {
+	configured bool
+	digest     string
+}
 
 func Run(args []string, out, errOut io.Writer) int {
 	return RunWithInput(args, strings.NewReader(""), out, errOut)
@@ -2331,6 +2351,103 @@ func runHook(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 	return runHookWithInput(args, strings.NewReader(""), out, errOut, dataRoot)
 }
 
+func resolveHookOrchestrationState(inspection workspace.Inspection, pointer string) (hookOrchestrationState, error) {
+	pointer = strings.TrimSpace(pointer)
+	if pointer == "" {
+		return hookOrchestrationState{}, nil
+	}
+	if pointer != installedOrchestrationStatePath || filepath.IsAbs(pointer) || filepath.Clean(pointer) != pointer {
+		return hookOrchestrationState{}, errors.New("orchestration state must use the installed workspace-local pointer " + installedOrchestrationStatePath)
+	}
+	workspaceRoot, err := filepath.Abs(filepath.Clean(inspection.WorkspacePath))
+	if err != nil {
+		return hookOrchestrationState{}, fmt.Errorf("resolve orchestration workspace: %w", err)
+	}
+	workspaceInfo, err := os.Lstat(workspaceRoot)
+	if err != nil {
+		return hookOrchestrationState{}, fmt.Errorf("inspect orchestration workspace: %w", err)
+	}
+	if workspaceInfo.Mode()&os.ModeSymlink != 0 || !workspaceInfo.IsDir() {
+		return hookOrchestrationState{}, errors.New("orchestration workspace must be a non-symlink directory")
+	}
+	physicalWorkspace, err := filepath.EvalSymlinks(workspaceRoot)
+	if err != nil || !samePathCLI(workspaceRoot, physicalWorkspace) {
+		return hookOrchestrationState{}, errors.New("orchestration workspace path cannot traverse symlinked components")
+	}
+	statePath := filepath.Join(workspaceRoot, pointer)
+	relative, err := filepath.Rel(workspaceRoot, statePath)
+	if err != nil || relative != pointer {
+		return hookOrchestrationState{}, errors.New("orchestration state escaped its canonical workspace")
+	}
+	metadataRoot := filepath.Dir(statePath)
+	metadataInfo, err := os.Lstat(metadataRoot)
+	if err != nil || metadataInfo.Mode()&os.ModeSymlink != 0 || !metadataInfo.IsDir() {
+		return hookOrchestrationState{}, errors.New("orchestration state parent must be the regular workspace .bcgos directory")
+	}
+	physicalMetadata, err := filepath.EvalSymlinks(metadataRoot)
+	if err != nil || !samePathCLI(metadataRoot, physicalMetadata) {
+		return hookOrchestrationState{}, errors.New("orchestration state parent cannot traverse symlinked components")
+	}
+	stateInfo, statErr := os.Lstat(statePath)
+	if statErr == nil {
+		if stateInfo.Mode()&os.ModeSymlink != 0 || !stateInfo.Mode().IsRegular() {
+			return hookOrchestrationState{}, errors.New("orchestration state must be a regular non-symlink file")
+		}
+		if stateInfo.Size() <= 0 || stateInfo.Size() > maximumOrchestrationStateBytes {
+			return hookOrchestrationState{}, errors.New("orchestration state must be a non-empty bounded JSON file")
+		}
+		file, openErr := os.Open(statePath)
+		if openErr != nil {
+			return hookOrchestrationState{}, fmt.Errorf("open orchestration state: %w", openErr)
+		}
+		decoder := json.NewDecoder(io.LimitReader(file, maximumOrchestrationStateBytes+1))
+		decoder.DisallowUnknownFields()
+		var snapshot agentorchestration.StateSnapshot
+		decodeErr := decoder.Decode(&snapshot)
+		if decodeErr == nil {
+			var trailing any
+			if trailingErr := decoder.Decode(&trailing); !errors.Is(trailingErr, io.EOF) {
+				if trailingErr == nil {
+					decodeErr = errors.New("orchestration state contains multiple JSON values")
+				} else {
+					decodeErr = trailingErr
+				}
+			}
+		}
+		closeErr := file.Close()
+		if decodeErr != nil {
+			return hookOrchestrationState{}, fmt.Errorf("decode orchestration state: %w", decodeErr)
+		}
+		if closeErr != nil {
+			return hookOrchestrationState{}, fmt.Errorf("close orchestration state: %w", closeErr)
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return hookOrchestrationState{}, fmt.Errorf("inspect orchestration state: %w", statErr)
+	}
+	store, err := agentorchestration.NewDurableStateStore(statePath, lifecycle.IdempotencyKey("hook-store-reader", inspection.WorkspaceID))
+	if err != nil {
+		return hookOrchestrationState{}, err
+	}
+	snapshotBody, err := json.Marshal(store.Snapshot())
+	if err != nil {
+		return hookOrchestrationState{}, fmt.Errorf("encode orchestration snapshot identity: %w", err)
+	}
+	return hookOrchestrationState{configured: true, digest: maestro.SHA256Hex(inspection.WorkspaceID + "\x00" + pointer + "\x00" + string(snapshotBody))}, nil
+}
+
+func orchestrationBoundKey(base string, state hookOrchestrationState) string {
+	if !state.configured {
+		return base
+	}
+	return lifecycle.IdempotencyKey(base, state.digest)
+}
+
+func signalSessionPresence(state hookOrchestrationState, workspaceID string) {
+	if state.configured {
+		_ = enqueueHookPresenceWake(workspaceID)
+	}
+}
+
 func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) > 0 && args[0] == "claude" {
 		return runClaudeHook(args[1:], in, out, errOut, dataRoot)
@@ -2350,13 +2467,16 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 		fmt.Fprintln(errOut, "usage: bcgos hook session-start --runtime claude|codex [workspace-path]")
 		return ExitUsage
 	}
-	_ = orchestrationState
 	root, err := dataRoot()
 	if err != nil {
 		return reportError(errOut, err)
 	}
 	path := optionalArg(flags.Args())
 	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	state, err := resolveHookOrchestrationState(inspection, *orchestrationState)
 	if err != nil {
 		return reportError(errOut, err)
 	}
@@ -2384,9 +2504,11 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	if err := evaluateAdapterInteraction(root, *runtimeName, string(lifecycle.SessionStart), lifecycle.IdempotencyKey(*runtimeName, string(lifecycle.SessionStart), inspection.WorkspaceID), inspection.WorkspaceID); err != nil {
+	interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey(*runtimeName, string(lifecycle.SessionStart), inspection.WorkspaceID), state)
+	if err := evaluateAdapterInteraction(root, *runtimeName, string(lifecycle.SessionStart), interactionKey, inspection.WorkspaceID); err != nil {
 		return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
 	}
+	signalSessionPresence(state, inspection.WorkspaceID)
 	return writeJSON(out, output, errOut)
 }
 
@@ -2404,7 +2526,6 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		fmt.Fprintln(errOut, usage)
 		return ExitUsage
 	}
-	_ = orchestrationState
 	switch action {
 	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
 	default:
@@ -2427,6 +2548,25 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if err != nil {
 			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
 		}
+		if response.HookSpecificOutput != nil || strings.TrimSpace(*orchestrationState) == "" {
+			return writeJSON(out, response, errOut)
+		}
+		root, rootErr := dataRoot()
+		if rootErr != nil {
+			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+		}
+		inspection, inspectErr := workspace.Inspect(optionalArg(flags.Args()), root)
+		if inspectErr != nil {
+			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+		}
+		state, stateErr := resolveHookOrchestrationState(inspection, *orchestrationState)
+		if stateErr != nil {
+			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+		}
+		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("codex", string(lifecycle.PreActionGuard), inspection.WorkspaceID, native.ToolName, native.ToolUseID), state)
+		if err := evaluateAdapterInteraction(root, "codex", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID); err != nil {
+			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+		}
 		return writeJSON(out, response, errOut)
 	}
 	root, err := dataRoot()
@@ -2434,6 +2574,10 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		return reportError(errOut, err)
 	}
 	inspection, err := workspace.Inspect(optionalArg(flags.Args()), root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	state, err := resolveHookOrchestrationState(inspection, *orchestrationState)
 	if err != nil {
 		return reportError(errOut, err)
 	}
@@ -2462,8 +2606,12 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if action == "context-injection" {
 			event = lifecycle.ContextInject
 		}
-		if err := evaluateAdapterInteraction(root, "codex", event, lifecycle.IdempotencyKey("codex", event, inspection.WorkspaceID), inspection.WorkspaceID); err != nil {
+		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("codex", event, inspection.WorkspaceID), state)
+		if err := evaluateAdapterInteraction(root, "codex", event, interactionKey, inspection.WorkspaceID); err != nil {
 			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+		}
+		if action == "session-start" {
+			signalSessionPresence(state, inspection.WorkspaceID)
 		}
 		return writeJSON(out, response, errOut)
 	}
@@ -2475,6 +2623,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 	if err != nil {
 		return reportError(errOut, fmt.Errorf("build lifecycle receipt: %w", err))
 	}
+	receipt.IdempotencyKey = orchestrationBoundKey(receipt.IdempotencyKey, state)
 	if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
 		return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
 	}
@@ -2498,7 +2647,6 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		fmt.Fprintln(errOut, usage)
 		return ExitUsage
 	}
-	_ = orchestrationState
 	switch action {
 	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
 	default:
@@ -2525,6 +2673,25 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if err != nil {
 			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
 		}
+		if response.HookSpecificOutput != nil || strings.TrimSpace(*orchestrationState) == "" {
+			return writeJSON(out, response, errOut)
+		}
+		root, rootErr := dataRoot()
+		if rootErr != nil {
+			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+		}
+		inspection, inspectErr := workspace.Inspect(optionalArg(flags.Args()), root)
+		if inspectErr != nil {
+			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+		}
+		state, stateErr := resolveHookOrchestrationState(inspection, *orchestrationState)
+		if stateErr != nil {
+			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+		}
+		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("claude", string(lifecycle.PreActionGuard), inspection.WorkspaceID, native.ToolName, native.ToolUseID), state)
+		if err := evaluateAdapterInteraction(root, "claude", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID); err != nil {
+			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+		}
 		return writeJSON(out, response, errOut)
 	}
 
@@ -2533,6 +2700,10 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		return reportError(errOut, err)
 	}
 	inspection, err := workspace.Inspect(optionalArg(flags.Args()), root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	state, err := resolveHookOrchestrationState(inspection, *orchestrationState)
 	if err != nil {
 		return reportError(errOut, err)
 	}
@@ -2562,8 +2733,12 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if action == "context-injection" {
 			event = lifecycle.ContextInject
 		}
-		if err := evaluateAdapterInteraction(root, "claude", event, lifecycle.IdempotencyKey("claude", event, inspection.WorkspaceID), inspection.WorkspaceID); err != nil {
+		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("claude", event, inspection.WorkspaceID), state)
+		if err := evaluateAdapterInteraction(root, "claude", event, interactionKey, inspection.WorkspaceID); err != nil {
 			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
+		}
+		if action == "session-start" {
+			signalSessionPresence(state, inspection.WorkspaceID)
 		}
 		return writeJSON(out, response, errOut)
 	case "post-action-receipt", "stop-finalization":
@@ -2575,6 +2750,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if err != nil {
 			return reportError(errOut, fmt.Errorf("build lifecycle receipt: %w", err))
 		}
+		receipt.IdempotencyKey = orchestrationBoundKey(receipt.IdempotencyKey, state)
 		if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
 			return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
 		}

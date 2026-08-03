@@ -58,4 +58,10 @@ verifies the five definitions but never edits `~/.codex/config.toml` to
 pre-approve them. The owner reviews the exact commands in Codex on first use;
 only then can later sessions run them automatically.
 
+The installed `--orchestration-state` argument is executable contract state,
+not display metadata: hook processing rejects path escape/symlink drift, opens
+the bounded durable snapshot and binds lifecycle metadata to its digest.
+Session Start additionally starts the enrolled presence wake asynchronously;
+the hook does not wait for maintenance or invoke a model.
+
 The wizard must never turn a failed verification into an unsigned fallback.
