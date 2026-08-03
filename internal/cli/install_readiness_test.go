@@ -31,9 +31,9 @@ func TestAdapterVerifyEmitsStructuredFailClosedReport(t *testing.T) {
 	}
 }
 
-func TestAdapterVerifyRejectsAlternateRuntimeAndExecutable(t *testing.T) {
+func TestAdapterVerifyRejectsUnsupportedRuntimeAndExecutable(t *testing.T) {
 	for _, args := range [][]string{
-		{"verify", "--runtime", "claude"},
+		{"verify", "--runtime", "other"},
 		{"verify", "--runtime", "codex", "--executable", "/tmp/arbitrary"},
 	} {
 		var output bytes.Buffer

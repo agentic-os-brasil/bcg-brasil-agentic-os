@@ -40,6 +40,7 @@ type options struct {
 	preview            bool
 	simulate           bool
 	simulationRoot     string
+	primaryRuntime     string
 	sessionToken       string
 	origin             string
 	shutdown           func()
@@ -83,6 +84,7 @@ type workspaceActivation struct {
 }
 
 type lifecycleActivation struct {
+	Runtime        string   `json:"runtime"`
 	State          string   `json:"state"`
 	Events         []string `json:"events"`
 	StartSession   string   `json:"start_session"`
@@ -221,6 +223,7 @@ func parseOptions() options {
 	flags.BoolVar(&result.preview, "preview", false, "open the non-mutating visual preview without release inputs")
 	flags.BoolVar(&result.simulate, "simulate", false, "run a local technical installation rehearsal in an isolated user-space sandbox")
 	flags.StringVar(&result.simulationRoot, "simulation-root", "", "optional empty root for the technical installation rehearsal")
+	flags.StringVar(&result.primaryRuntime, "runtime", "claude", "primary workspace runtime: claude or codex")
 	flags.Parse(os.Args[1:])
 	if flags.NArg() != 0 {
 		writeError(fmt.Errorf("unexpected arguments: %s", strings.Join(flags.Args(), " ")))
@@ -987,6 +990,10 @@ func initializeDefaultWorkspace(options options, workspacePath string) (workspac
 }
 
 func configureWorkspaceRuntime(options options, workspacePath string) (workspaceActivation, error) {
+	runtimeName, err := primaryRuntime(options)
+	if err != nil {
+		return workspaceActivation{}, err
+	}
 	cliPath := installedCLIPath(options)
 	if cliPath == "" {
 		return workspaceActivation{}, fmt.Errorf("o executável instalado do Maestro não foi encontrado")
@@ -1007,7 +1014,7 @@ func configureWorkspaceRuntime(options options, workspacePath string) (workspace
 	if _, err := run([]string{"init", workspacePath}); err != nil {
 		return workspaceActivation{}, err
 	}
-	if _, err := run([]string{"adapter", "install", "--runtime", "codex", "--executable", cliPath, workspacePath}); err != nil {
+	if _, err := run([]string{"adapter", "install", "--runtime", runtimeName, "--executable", cliPath, workspacePath}); err != nil {
 		return workspaceActivation{}, err
 	}
 	statusOutput, err := run([]string{"status", workspacePath})
@@ -1030,20 +1037,21 @@ func configureWorkspaceRuntime(options options, workspacePath string) (workspace
 	if status.Workspace.WorkspacePath != "" && !sameInstallerPath(status.Workspace.WorkspacePath, workspacePath) {
 		return workspaceActivation{}, readinessError(cliPath, []string{"status", workspacePath}, "o readiness retornou outro workspace")
 	}
-	adapterOutput, err := run([]string{"adapter", "status", "--runtime", "codex", workspacePath})
+	adapterOutput, err := run([]string{"adapter", "status", "--runtime", runtimeName, workspacePath})
 	if err != nil {
 		return workspaceActivation{}, err
 	}
 	var adapterStatus struct {
+		Runtime    string `json:"runtime"`
 		State      string `json:"state"`
 		Projection struct {
 			State string `json:"state"`
 		} `json:"projection"`
 	}
-	if err := json.Unmarshal(adapterOutput, &adapterStatus); err != nil || adapterStatus.State != "installed" || adapterStatus.Projection.State != "installed" {
-		return workspaceActivation{}, readinessError(cliPath, []string{"adapter", "status", "--runtime", "codex", workspacePath}, "os cinco hooks e a projeção Codex não ficaram configurados")
+	if err := json.Unmarshal(adapterOutput, &adapterStatus); err != nil || adapterStatus.Runtime != runtimeName || adapterStatus.State != "installed" || adapterStatus.Projection.State != "installed" {
+		return workspaceActivation{}, readinessError(cliPath, []string{"adapter", "status", "--runtime", runtimeName, workspacePath}, "os cinco hooks e a projeção do runtime primário não ficaram configurados")
 	}
-	adapterVerifyArguments := []string{"adapter", "verify", "--runtime", "codex", workspacePath}
+	adapterVerifyArguments := []string{"adapter", "verify", "--runtime", runtimeName, workspacePath}
 	if _, err := run(adapterVerifyArguments); err != nil {
 		return workspaceActivation{}, err
 	}
@@ -1075,6 +1083,7 @@ func configureWorkspaceRuntime(options options, workspacePath string) (workspace
 		State:       "ready",
 		WorkspaceID: status.Workspace.WorkspaceID,
 		Lifecycle: lifecycleActivation{
+			Runtime:        runtimeName,
 			State:          "configured",
 			Events:         []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
 			StartSession:   "configured",
@@ -1088,6 +1097,17 @@ func configureWorkspaceRuntime(options options, workspacePath string) (workspace
 			ModelBacked:    "unavailable",
 		},
 	}, nil
+}
+
+func primaryRuntime(options options) (string, error) {
+	runtimeName := strings.TrimSpace(options.primaryRuntime)
+	if runtimeName == "" {
+		runtimeName = "claude"
+	}
+	if runtimeName != "claude" && runtimeName != "codex" {
+		return "", fmt.Errorf("runtime primário deve ser claude ou codex")
+	}
+	return runtimeName, nil
 }
 
 func commandStepError(cliPath string, arguments []string, output []byte, runErr error) error {

@@ -193,13 +193,13 @@ func TestConfigureWorkspaceRuntimeRunsIdempotentReadinessAndNativeMaintenance(t 
 		case 1:
 			return []byte(`{"state":"initialized"}`), nil
 		case 2:
-			return []byte(`{"runtime":"codex","state":"installed","projection":{"state":"installed"}}`), nil
+			return []byte(`{"runtime":"claude","state":"installed","projection":{"state":"installed"}}`), nil
 		case 3:
 			return []byte(`{"workspace":{"state":"ready","workspace_id":"` + initialized.WorkspaceID + `","workspace_path":"` + workspacePath + `"}}`), nil
 		case 4:
-			return []byte(`{"runtime":"codex","state":"installed","projection":{"state":"installed"}}`), nil
+			return []byte(`{"runtime":"claude","state":"installed","projection":{"state":"installed"}}`), nil
 		case 5:
-			return []byte(`{"runtime":"codex","state":"verified"}`), nil
+			return []byte(`{"runtime":"claude","state":"verified"}`), nil
 		case 6:
 			return []byte(`{"state":"enrolled","enrollment":{"workspace_id":"` + initialized.WorkspaceID + `"},"launch_agent":{"state":"active_loaded_enabled","file_present":true,"loaded":true,"enabled":true,"native_qualified":true}}`), nil
 		default:
@@ -222,10 +222,10 @@ func TestConfigureWorkspaceRuntimeRunsIdempotentReadinessAndNativeMaintenance(t 
 	}
 	wantOnce := [][]string{
 		{cliPath, "init", workspacePath},
-		{cliPath, "adapter", "install", "--runtime", "codex", "--executable", cliPath, workspacePath},
+		{cliPath, "adapter", "install", "--runtime", "claude", "--executable", cliPath, workspacePath},
 		{cliPath, "status", workspacePath},
-		{cliPath, "adapter", "status", "--runtime", "codex", workspacePath},
-		{cliPath, "adapter", "verify", "--runtime", "codex", workspacePath},
+		{cliPath, "adapter", "status", "--runtime", "claude", workspacePath},
+		{cliPath, "adapter", "verify", "--runtime", "claude", workspacePath},
 		{cliPath, "maintenance", "canary", "install-macos", "--workspace-path", workspacePath, "--executable", cliPath, "--confirm", "--launchctl"},
 	}
 	want := append(append([][]string{}, wantOnce...), wantOnce...)
@@ -236,6 +236,26 @@ func TestConfigureWorkspaceRuntimeRunsIdempotentReadinessAndNativeMaintenance(t 
 		if strings.Join(calls[index], "\x00") != strings.Join(want[index], "\x00") {
 			t.Fatalf("call %d = %#v, want %#v", index, calls[index], want[index])
 		}
+	}
+}
+
+func TestPrimaryRuntimeDefaultsToClaudeAndAllowsExplicitCodex(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		input string
+		want  string
+		err   bool
+	}{
+		{name: "default", want: "claude"},
+		{name: "explicit Codex", input: "codex", want: "codex"},
+		{name: "unsupported", input: "other", err: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := primaryRuntime(options{primaryRuntime: test.input})
+			if (err != nil) != test.err || got != test.want {
+				t.Fatalf("primaryRuntime(%q) = %q, %v; want %q, error=%v", test.input, got, err, test.want, test.err)
+			}
+		})
 	}
 }
 
@@ -259,14 +279,16 @@ func TestConfigureWorkspaceRuntimeDoesNotDeclareReadyWhenLaunchdIsNotNative(t *t
 	runner := commandRunnerFunc(func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		call++
 		switch call {
-		case 1, 2:
-			return []byte(`{"state":"installed","projection":{"state":"installed"}}`), nil
+		case 1:
+			return []byte(`{"runtime":"claude","state":"installed","projection":{"state":"installed"}}`), nil
+		case 2:
+			return []byte(`{"runtime":"claude","state":"installed","projection":{"state":"installed"}}`), nil
 		case 3:
 			return []byte(`{"workspace":{"state":"ready","workspace_id":"` + initialized.WorkspaceID + `"}}`), nil
 		case 4:
-			return []byte(`{"state":"installed","projection":{"state":"installed"}}`), nil
+			return []byte(`{"runtime":"claude","state":"installed","projection":{"state":"installed"}}`), nil
 		case 5:
-			return []byte(`{"runtime":"codex","state":"verified"}`), nil
+			return []byte(`{"runtime":"claude","state":"verified"}`), nil
 		case 6:
 			return []byte(`{"state":"enrolled","enrollment":{"workspace_id":"` + initialized.WorkspaceID + `"},"launch_agent":{"state":"file_present_native_qualification_pending","file_present":true,"native_qualified":false}}`), nil
 		default:

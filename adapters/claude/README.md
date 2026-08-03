@@ -17,6 +17,12 @@ follow-up stacked) · runtime evidence: no reproducible in-repo runtime-version 
 or qualifying fresh session is attached. This adapter is not `native-qualified`,
 `release-ready` or `pilot-ready`.
 
+The product installer selects Claude as the primary workspace projection by
+default and verifies this exact projection after activation. Codex remains a
+deliberate alternative; a workspace never carries both managed projections at
+once. Installation and verification are configuration evidence only, never
+evidence that Claude has invoked a hook natively.
+
 Every product lifecycle event remains explicitly `unavailable` in the
 capability manifest. `bcgos doctor` diagnoses configuration and receipts
 separately. A receipt is marked `adapter_command`: it proves the bounded

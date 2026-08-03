@@ -743,3 +743,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Quality loops can route through Maestro → Gamma Guardian → Maestro without inheriting Case context or introducing a second child hierarchy. Claude/Codex skills remain methods over the same contract; native adapter qualification, mutation remediation and merge authority remain separate unavailable gates.
 - Refs: specs/018-maestro-core-agents.md; specs/040-maestro-native-delegation.md; specs/043-gamma-guardian.md; bundles/base/agents/catalog.json; internal/maestro; adapters/conformance/gamma-guardian.json
 - Supersedes: none
+
+## CLFR - Make Claude the primary installed Maestro runtime
+
+- Date: 2026-08-03
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro is Claude-first by product intent, but the signed installer activated and verified only a Codex projection. This left the default user journey misaligned with the primary runtime and made Claude readiness a manual, weaker path.
+- Decision: The installer selects Claude as its default runtime and may select Codex only through an explicit runtime choice. Post-install readiness verifies the selected runtime's exact five workspace-local bindings, projection and fail-closed capability state. Runtime selection never promotes native lifecycle evidence; first-session trust review and the attended qualification protocol remain owner-controlled.
+- Consequences: The first shipped workspace starts with Claude's `CLAUDE.md`, skills and lifecycle configuration, while Codex remains compatible rather than silently installed in parallel. A workspace keeps one runtime projection at a time until a dual-projection migration contract exists. Install success means configured and verified, not native-qualified, release-ready or model-execution-ready.
+- Refs: specs/001-cli-distribution.md; specs/019-nonblocking-hook-execution.md; specs/026-workspace-local-adapter-installation.md; specs/035-lifecycle-evidence-matrix.md; specs/042-post-install-readiness.md; cmd/maestro-installer; internal/installreadiness
+- Supersedes: none

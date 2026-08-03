@@ -1,13 +1,13 @@
 # Spec 042 - Deterministic post-install readiness
 
-Status: Codex configuration verifier implemented; native runtime qualification remains separate.
+Status: Claude-first/Codex-compatible configuration verifier implemented; native runtime qualification remains separate.
 
 ## Objective
 
 Give the signed installer a deterministic, read-only check to run after
-`bcgos init` and `bcgos adapter install --runtime codex`. The check proves that
+`bcgos init` and `bcgos adapter install --runtime <claude|codex>`. The check proves that
 the installed CLI, initialized workspace, managed runtime projection and five
-workspace-local lifecycle bindings still agree. It never starts Codex, invokes
+workspace-local lifecycle bindings still agree. It never starts a runtime, invokes
 a hook, calls a model or changes global runtime settings.
 
 ## Canonical identities
@@ -20,26 +20,28 @@ valid readiness identity.
 
 The workspace must be an existing canonical directory with no symlinked path
 component. Its strict `.bcgos/workspace.json` identity must match the physical
-path produced by `bcgos init`. The Codex projection must contain a regular
-`AGENTS.md`, strict `.bcgos/runtime-projection.json`, selection-scoped policy
+path produced by `bcgos init`. The selected runtime projection must contain a regular
+`CLAUDE.md` (Claude) or `AGENTS.md` (Codex), strict `.bcgos/runtime-projection.json`, selection-scoped policy
 and every manifest-owned skill. Their paths, hashes and managed orientation
 block must match the active embedded bundle and the owner-confirmed capability
 tracks; self-consistent but rewritten local manifests are not accepted.
 
-The regular workspace-local `.codex/hooks.json` must contain exactly one
+The regular workspace-local `.claude/settings.local.json` (Claude) or
+`.codex/hooks.json` (Codex) must contain exactly one
 Maestro-owned command for each canonical binding:
 
-| Semantic event | Codex event | Command suffix |
-| --- | --- | --- |
-| `session_start` | `SessionStart` | `hook session-start --runtime codex` |
-| `context_inject` | `UserPromptSubmit` | `hook codex context-injection` |
-| `pre_action_guard` | `PreToolUse` | `hook codex pre-action-guard` |
-| `post_action_observe` | `PostToolUse` | `hook codex post-action-receipt` |
-| `stop_finalize` | `Stop` | `hook codex stop-finalization` |
+| Semantic event | Native event | Claude command suffix | Codex command suffix |
+| --- | --- | --- | --- |
+| `session_start` | `SessionStart` | `hook claude session-start` | `hook session-start --runtime codex` |
+| `context_inject` | `UserPromptSubmit` | `hook claude context-injection` | `hook codex context-injection` |
+| `pre_action_guard` | `PreToolUse` | `hook claude pre-action-guard` | `hook codex pre-action-guard` |
+| `post_action_observe` | `PostToolUse` | `hook claude post-action-receipt` | `hook codex post-action-receipt` |
+| `stop_finalize` | `Stop` | `hook claude stop-finalization` | `hook codex stop-finalization` |
 
 Every command uses the exact installed CLI, the `--adapter-source maestro`
-marker and `.bcgos/maestro-orchestration-state.json`. Timeout is two seconds,
-Codex entries are synchronous, and duplicate, legacy, mismatched or
+marker and `.bcgos/maestro-orchestration-state.json`. Timeout is two seconds;
+Codex entries are synchronous, while Claude's `PostToolUse` and `Stop` entries
+are asynchronous. Duplicate, legacy, mismatched or
 Maestro-marked commands on another event fail closed. Unrelated user hooks are
 preserved and ignored by the read-only check.
 
@@ -66,10 +68,10 @@ post-install check fail; this command cannot create qualification evidence.
 The CLI surface is:
 
 ```text
-bcgos adapter verify --runtime codex [workspace-path]
+bcgos adapter verify --runtime <claude|codex> [workspace-path]
 ```
 
 It emits one schema-versioned JSON report and exits non-zero on any failed
-check. `claude`, custom executable paths, missing install state, missing or
-tampered files, symlinks, path/version drift and lifecycle mismatches are
+check. Unsupported runtimes, custom executable paths, missing install state,
+missing or tampered files, symlinks, path/version drift and lifecycle mismatches are
 rejected without writes.
