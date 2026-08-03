@@ -41,3 +41,12 @@ func TestDeterministicL1SynthesizerRejectsUnsanitizedOrWrongWorkspace(t *testing
 		}
 	}
 }
+
+func TestDeterministicL1SynthesizerRejectsCrossPeriodCapture(t *testing.T) {
+	capture := Capture{WorkspaceID: "case-a", RecordedAt: time.Date(2026, 8, 2, 23, 59, 0, 0, time.UTC), Kind: "signal", Text: "wrong day", Sanitized: true}
+	body, _ := json.Marshal(capture)
+	_, err := (DeterministicL1Synthesizer{MaxRunes: 1000, MaxEntries: 8}).Synthesize(context.Background(), SynthesisRequest{Cycle: "daily", TargetLayer: "L1", WorkspaceID: "case-a", Period: "2026-08-03", Sources: []SourceDocument{{ID: "captures.jsonl", Content: append(body, '\n')}}})
+	if err == nil {
+		t.Fatal("cross-period capture was synthesized")
+	}
+}

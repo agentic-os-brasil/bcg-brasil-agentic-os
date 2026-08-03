@@ -39,7 +39,7 @@ func (synthesizer DeterministicL1Synthesizer) Synthesize(_ context.Context, requ
 			if err := ensureJSONEOF(decoder); err != nil {
 				return "", fmt.Errorf("decode sanitized L1 capture: %w", err)
 			}
-			if capture.WorkspaceID != request.WorkspaceID || !capture.Sanitized || capture.RecordedAt.IsZero() || strings.TrimSpace(capture.Kind) == "" || strings.TrimSpace(capture.Text) == "" {
+			if capture.WorkspaceID != request.WorkspaceID || !capture.Sanitized || capture.RecordedAt.IsZero() || capture.RecordedAt.UTC().Format("2006-01-02") != request.Period || strings.TrimSpace(capture.Kind) == "" || strings.TrimSpace(capture.Text) == "" {
 				return "", errors.New("L1 synthesis source is not a valid sanitized workspace capture")
 			}
 			captures = append(captures, capture)
@@ -56,12 +56,13 @@ func (synthesizer DeterministicL1Synthesizer) Synthesize(_ context.Context, requ
 	lines := make([]string, 0, len(captures))
 	for index := len(captures) - 1; index >= 0 && len(lines) < synthesizer.MaxEntries; index-- {
 		capture := captures[index]
-		key := strings.TrimSpace(capture.Kind) + "\x00" + strings.TrimSpace(capture.Text)
+		kind, text := strings.Join(strings.Fields(capture.Kind), " "), strings.Join(strings.Fields(capture.Text), " ")
+		key := kind + "\x00" + text
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
-		line := fmt.Sprintf("- %s | %s | %s", capture.RecordedAt.UTC().Format("15:04:05Z"), strings.TrimSpace(capture.Kind), strings.TrimSpace(capture.Text))
+		line := fmt.Sprintf("- %s | %s | %s", capture.RecordedAt.UTC().Format("15:04:05Z"), kind, text)
 		lines = append(lines, line)
 	}
 	for left, right := 0, len(lines)-1; left < right; left, right = left+1, right-1 {

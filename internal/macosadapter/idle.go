@@ -12,6 +12,7 @@ import (
 )
 
 const ioregPath = "/usr/sbin/ioreg"
+const idleProbeTimeout = 2 * time.Second
 
 var hidIdlePattern = regexp.MustCompile(`"HIDIdleTime"\s*=\s*([0-9]+)`)
 
@@ -29,7 +30,9 @@ func ObserveIdle(ctx context.Context, threshold time.Duration) (NativeIdleState,
 	if runtime.GOOS != "darwin" {
 		return "", 0, errors.New("native idle observation is available only on macOS")
 	}
-	command := exec.CommandContext(ctx, ioregPath, "-c", "IOHIDSystem", "-d", "1")
+	probeCtx, cancel := context.WithTimeout(ctx, idleProbeTimeout)
+	defer cancel()
+	command := exec.CommandContext(probeCtx, ioregPath, "-c", "IOHIDSystem", "-d", "1")
 	var output boundedBuffer
 	command.Stdout, command.Stderr = &output, &output
 	if err := command.Run(); err != nil {
