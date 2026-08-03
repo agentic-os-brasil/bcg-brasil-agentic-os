@@ -61,6 +61,32 @@
   function setButtonLabel(button, label) {
     const text = button?.querySelector('span');
     if (text) text.textContent = label;
+    else if (button) button.textContent = label;
+  }
+
+  function setWorkspaceProvisioning(phase) {
+    const scene = document.querySelector('#workspace-provisioning');
+    const setup = document.querySelector('#workspace-setup');
+    if (!scene || !setup) return;
+    const copy = {
+      creating: ['MAESTRO EM MOVIMENTO', 'Criando seu espaço local', 'Montando estrutura, hooks Claude e manutenção no seu perfil.'],
+      ready: ['ESPAÇO PREPARADO', 'Seu palco está pronto', 'Workspace, hooks Claude e manutenção local foram configurados.'],
+    }[phase];
+    if (!copy) {
+      scene.hidden = true;
+      setup.classList.remove('is-provisioning');
+      return;
+    }
+    document.querySelector('#workspace-provisioning-kicker').textContent = copy[0];
+    document.querySelector('#workspace-provisioning-title').textContent = copy[1];
+    document.querySelector('#workspace-provisioning-copy').textContent = copy[2];
+    scene.dataset.phase = phase;
+    scene.hidden = false;
+    setup.classList.add('is-provisioning');
+  }
+
+  function pause(milliseconds) {
+    return new Promise(resolve => window.setTimeout(resolve, milliseconds));
   }
 
   function commandForPath(path) {
@@ -205,7 +231,7 @@
     } else if (!runtimeTargets.length) {
       copy.textContent = 'Nenhum runtime compatível foi detectado. Instale Claude Code ou Codex e abra este instalador novamente.';
     } else {
-      copy.textContent = 'Abra o workspace no runtime. Na primeira abertura, revise os cinco hooks locais quando o Codex solicitar; essa aprovação permanece sob seu controle.';
+      copy.textContent = 'Claude Code é o caminho principal e abre este workspace no contexto certo. Codex continua disponível como alternativa; cada runtime pede sua própria revisão de hooks.';
       runtimeTargets.forEach((target, index) => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -433,25 +459,30 @@
       return;
     }
     const importExisting = button?.dataset.import === 'true';
-    button.disabled = true;
+    const choices = [...document.querySelectorAll('[data-action="create-workspace"]')];
+    choices.forEach(choice => { choice.disabled = true; });
     const original = button.querySelector('span')?.textContent || button.textContent;
     setButtonLabel(button, importExisting ? 'Escolha a pasta…' : 'Preparando…');
+    setWorkspaceProvisioning('creating');
     try {
       const response = await fetch('/api/create-workspace', requestOptions('POST', { import_existing: importExisting }));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível criar seu workspace.');
       defaultWorkspace = payload.workspace_path || defaultWorkspace;
       renderActivation(payload.activation);
-      renderRuntimeTargets(runtimeTargets.filter(target => target.id === 'codex'));
+      renderRuntimeTargets(runtimeTargets);
+      setWorkspaceProvisioning('ready');
+      await pause(760);
       showRuntimeHandoff();
       showStatus(payload.source_registered
-        ? `Workspace pronto em ${payload.workspace_path}. Hooks e manutenção local foram configurados; a fonte foi registrada para ingestão verificada.`
-        : `Workspace pronto em ${payload.workspace_path}. Hooks e manutenção local foram configurados; uma sessão nativa ainda precisa observá-los.`);
+        ? `Workspace pronto em ${payload.workspace_path}. Claude Code é o caminho principal; a fonte foi registrada para ingestão verificada.`
+        : `Workspace pronto em ${payload.workspace_path}. Claude Code está configurado; a primeira sessão ainda precisa observar os hooks.`);
     } catch (error) {
+      setWorkspaceProvisioning('');
       showStatus(error.message);
     } finally {
       setButtonLabel(button, original);
-      button.disabled = false;
+      choices.forEach(choice => { choice.disabled = false; });
     }
   }
 
