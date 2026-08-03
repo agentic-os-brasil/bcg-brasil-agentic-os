@@ -539,8 +539,10 @@ func wizardHandler(options options) http.Handler {
 			}
 		}
 		writeHTTPJSON(writer, map[string]any{
-			"status": "ready", "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID,
+			"status": "workspace_created", "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID,
 			"source_registered": sourcePath != "", "ingestion_state": map[bool]string{true: "pending_verified_pack", false: "not_requested"}[sourcePath != ""],
+			"adapter_state": "configured_unverified", "readiness_state": "not_run", "scheduler_state": "not_run",
+			"ready_for_runtime": false, "diagnostic_command": workspaceDiagnosticCommand(options, result.WorkspacePath),
 		})
 	})
 	mux.HandleFunc("/api/launch-runtime", func(writer http.ResponseWriter, request *http.Request) {
@@ -623,6 +625,17 @@ func wizardHandler(options options) http.Handler {
 		}
 	})
 	return mux
+}
+
+func workspaceDiagnosticCommand(options options, workspacePath string) string {
+	cliPath := installedCLIPath(options)
+	if cliPath == "" || strings.TrimSpace(workspacePath) == "" {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		return "& " + strconv.Quote(cliPath) + " doctor " + strconv.Quote(workspacePath)
+	}
+	return shellQuote(cliPath) + " doctor " + shellQuote(workspacePath)
 }
 
 // installedCLIPath is intentionally a narrow, read-only UX hint. It never

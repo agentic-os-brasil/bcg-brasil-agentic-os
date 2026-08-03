@@ -107,8 +107,20 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "data")
 	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	managedRoot := filepath.Join(root, "managed")
+	cliPath := filepath.Join(managedRoot, "bin", "bcgos")
+	if runtime.GOOS == "windows" {
+		cliPath += ".exe"
+	}
+	if err := os.MkdirAll(filepath.Dir(cliPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cliPath, []byte("test"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	handler := wizardHandler(options{
 		dataRoot:           dataRoot,
+		managedRoot:        managedRoot,
 		sessionToken:       "test-token",
 		workspacePath:      func() (string, error) { return workspacePath, nil },
 		configureWorkspace: func(options, string) error { return nil },
@@ -119,6 +131,24 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response struct {
+		Status            string `json:"status"`
+		WorkspacePath     string `json:"workspace_path"`
+		AdapterState      string `json:"adapter_state"`
+		ReadinessState    string `json:"readiness_state"`
+		SchedulerState    string `json:"scheduler_state"`
+		ReadyForRuntime   bool   `json:"ready_for_runtime"`
+		DiagnosticCommand string `json:"diagnostic_command"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "workspace_created" || response.WorkspacePath != workspacePath ||
+		response.AdapterState != "configured_unverified" || response.ReadinessState != "not_run" ||
+		response.SchedulerState != "not_run" || response.ReadyForRuntime ||
+		!strings.Contains(response.DiagnosticCommand, workspacePath) {
+		t.Fatalf("workspace diagnostic = %#v", response)
 	}
 	inspection, err := workspace.Inspect(workspacePath, dataRoot)
 	if err != nil || inspection.State != "ready" {

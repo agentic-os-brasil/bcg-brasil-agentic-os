@@ -83,6 +83,22 @@ first-command card uses the exact
 "<installed-cli>" doctor`. Static preview and disconnected mode remain
 non-installing.
 
+Workspace creation is not the final runtime-readiness claim. The bridge returns
+`workspace_created`, the exact `workspace_path` and a diagnostic command bound
+to that path. It reports adapter configuration, readiness verification and
+scheduler activation as separate states; until all required later gates run,
+`ready_for_runtime` remains false. This prevents a generated workspace or a
+present `AGENTS.md` from being mistaken for observed hooks, verified readiness
+or an active scheduler.
+
+If an earlier first install was interrupted, the connected bridge may preserve
+the installer-owned managed root and its bound install state in a deterministic
+plan-digest recovery location before retrying. It never replaces a healthy
+installation, never overwrites an earlier recovery and never auto-recovers an
+ambiguous root containing unrecognized entries. A final diagnostic failure
+after bootstrapper activation is reported as quarantined/reinstallable, not as
+completed.
+
 ## Visual identity
 
 The wizard uses a small Maestro identity system rather than a generic themed

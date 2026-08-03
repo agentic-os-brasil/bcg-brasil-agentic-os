@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
@@ -94,8 +95,34 @@ type Plan struct {
 // Result is the durable handoff summary returned after bootstrapper success.
 type Result struct {
 	Plan
-	CLIPath string `json:"cli_path"`
-	Output  string `json:"bootstrapper_output"`
+	CLIPath     string    `json:"cli_path"`
+	Output      string    `json:"bootstrapper_output"`
+	Disposition string    `json:"disposition"`
+	Recovery    *Recovery `json:"recovery,omitempty"`
+}
+
+// Recovery identifies preserved installer-owned material from an incomplete
+// first install. It never contains workspace or owner content.
+type Recovery struct {
+	PlanDigest         string `json:"plan_digest"`
+	ManagedRootBackup  string `json:"managed_root_backup,omitempty"`
+	InstallStateBackup string `json:"install_state_backup,omitempty"`
+}
+
+type managedRootPreparation struct {
+	Existing *Result
+	Recovery *Recovery
+}
+
+type recoveryRecord struct {
+	SchemaVersion      int    `json:"schema_version"`
+	PlanDigest         string `json:"plan_digest"`
+	Reason             string `json:"reason"`
+	ManagedRoot        string `json:"managed_root"`
+	ManagedRootBackup  string `json:"managed_root_backup"`
+	InstallState       string `json:"install_state"`
+	InstallStateBackup string `json:"install_state_backup"`
+	Status             string `json:"status"`
 }
 
 type seedStatus struct {
@@ -221,8 +248,12 @@ func Install(ctx context.Context, options Options) (Result, error) {
 	if options.ExpectedPlanDigest != "" && options.ExpectedPlanDigest != plan.PlanDigest {
 		return Result{}, errors.New("verified release changed since confirmation")
 	}
-	if err := ensureFreshManagedRoot(plan.ManagedRoot); err != nil {
+	preparation, err := prepareManagedRoot(ctx, plan, options)
+	if err != nil {
 		return Result{}, err
+	}
+	if preparation.Existing != nil {
+		return *preparation.Existing, nil
 	}
 	created := false
 	cleanup := func() {
@@ -274,6 +305,13 @@ func Install(ctx context.Context, options Options) (Result, error) {
 	}
 	output, err := run(ctx, installedBootstrapper, "install", "--verified-directory", plan.ReleaseDir, "--data-root", plan.DataRoot)
 	if err != nil {
+		if stateExists(plan.DataRoot) {
+			recovery, recoveryErr := quarantineInterruptedInstall(plan, "bootstrapper_failed_after_state", true)
+			if recoveryErr != nil {
+				return Result{}, fmt.Errorf("bootstrapper installation failed after durable state; installation preserved at %s for recovery: %w: %s (automatic quarantine failed: %v)", plan.ManagedRoot, err, strings.TrimSpace(string(output)), recoveryErr)
+			}
+			return Result{}, fmt.Errorf("bootstrapper installation failed after durable state; incomplete installation quarantined at %s: %w: %s", recovery.ManagedRootBackup, err, strings.TrimSpace(string(output)))
+		}
 		cleanup()
 		return Result{}, fmt.Errorf("bootstrapper installation failed: %w: %s", err, strings.TrimSpace(string(output)))
 	}
@@ -284,13 +322,415 @@ func Install(ctx context.Context, options Options) (Result, error) {
 	cliPath := filepath.Join(plan.ManagedRoot, "bin", cliName)
 	versionOutput, err := run(ctx, cliPath, "version")
 	if err != nil || strings.TrimSpace(string(versionOutput)) != "bcgos "+plan.Release {
-		cleanup()
 		if err == nil {
 			err = errors.New("installed CLI reported an unexpected version")
 		}
-		return Result{}, fmt.Errorf("installed CLI self-check failed: %w", err)
+		recovery, recoveryErr := quarantineInterruptedInstall(plan, "post_activation_diagnostic_failed", true)
+		if recoveryErr != nil {
+			return Result{}, fmt.Errorf("installed CLI final diagnostic failed after activation; coherent installation preserved at %s and was not reported ready: %w (automatic quarantine failed: %v)", plan.ManagedRoot, err, recoveryErr)
+		}
+		return Result{}, fmt.Errorf("installed CLI final diagnostic failed after activation; incomplete installation quarantined at %s and is safe to reinstall: %w", recovery.ManagedRootBackup, err)
 	}
-	return Result{Plan: plan, CLIPath: cliPath, Output: strings.TrimSpace(string(output))}, nil
+	if err := validateCommittedInstallation(plan); err != nil {
+		recovery, recoveryErr := quarantineInterruptedInstall(plan, "post_activation_state_incomplete", true)
+		if recoveryErr != nil {
+			return Result{}, fmt.Errorf("bootstrapper returned success but the committed installation is incomplete; preserved at %s and not reported ready: %w (automatic quarantine failed: %v)", plan.ManagedRoot, err, recoveryErr)
+		}
+		return Result{}, fmt.Errorf("bootstrapper returned success but the committed installation is incomplete; quarantined at %s and safe to reinstall: %w", recovery.ManagedRootBackup, err)
+	}
+	disposition := "installed"
+	if preparation.Recovery != nil {
+		disposition = "recovered_and_installed"
+	}
+	return Result{
+		Plan: plan, CLIPath: cliPath, Output: strings.TrimSpace(string(output)),
+		Disposition: disposition, Recovery: preparation.Recovery,
+	}, nil
+}
+
+func prepareManagedRoot(ctx context.Context, plan Plan, options Options) (managedRootPreparation, error) {
+	run := options.Run
+	rootInfo, rootErr := os.Lstat(plan.ManagedRoot)
+	rootExists := rootErr == nil
+	if rootErr != nil && !errors.Is(rootErr, os.ErrNotExist) {
+		return managedRootPreparation{}, fmt.Errorf("inspect managed root: %w", rootErr)
+	}
+	if rootExists && !rootInfo.IsDir() {
+		return managedRootPreparation{}, errors.New("managed root already exists and is not a directory")
+	}
+	statePath := installStatePath(plan.DataRoot)
+	if err := ensureNoSymlinkComponents(plan.DataRoot, statePath); err != nil {
+		return managedRootPreparation{}, fmt.Errorf("install state path is unsafe; preserved without replacement: %w", err)
+	}
+	stateInfo, stateErr := os.Lstat(statePath)
+	statePresent := stateErr == nil
+	if stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) {
+		return managedRootPreparation{}, fmt.Errorf("inspect install state: %w", stateErr)
+	}
+	if statePresent && !stateInfo.Mode().IsRegular() {
+		return managedRootPreparation{}, errors.New("existing install state must be a regular file; refusing automatic recovery")
+	}
+
+	var state installtx.State
+	if statePresent {
+		var err error
+		state, err = installtx.ReadStateForManagedRoot(plan.DataRoot, plan.ManagedRoot)
+		if err != nil {
+			return managedRootPreparation{}, fmt.Errorf("existing install state is invalid; preserved without replacement: %w", err)
+		}
+	}
+	if !rootExists && !statePresent {
+		return managedRootPreparation{}, nil
+	}
+	if !rootExists && statePresent {
+		recovery, err := quarantineInterruptedInstall(plan, "orphan_install_state", false)
+		if err != nil {
+			return managedRootPreparation{}, err
+		}
+		return managedRootPreparation{Recovery: recovery}, nil
+	}
+
+	entries, err := os.ReadDir(plan.ManagedRoot)
+	if err != nil {
+		return managedRootPreparation{}, fmt.Errorf("inspect managed root: %w", err)
+	}
+	if len(entries) == 0 && !statePresent {
+		return managedRootPreparation{}, nil
+	}
+	if statePresent {
+		cliPath := installedCLIPath(plan.ManagedRoot, state.TargetOS)
+		if cliPath != "" && installationStructureComplete(plan.ManagedRoot, state) == nil {
+			output, checkErr := run(ctx, cliPath, "version")
+			if checkErr == nil && strings.TrimSpace(string(output)) == "bcgos "+state.CLIVersion {
+				if state.Release != plan.Release || state.TargetOS != plan.TargetOS || state.TargetArch != plan.TargetArch {
+					return managedRootPreparation{}, fmt.Errorf("a healthy Maestro %s installation already exists at %s; use the signed update flow instead of first install", state.Release, plan.ManagedRoot)
+				}
+				if err := verifyExistingInstallTrust(ctx, plan, options); err != nil {
+					recovery, recoveryErr := quarantineInterruptedInstall(plan, "existing_install_trust_failed", true)
+					if recoveryErr != nil {
+						return managedRootPreparation{}, fmt.Errorf("existing installation trust check failed and was preserved without replacement: %w (automatic quarantine failed: %v)", err, recoveryErr)
+					}
+					return managedRootPreparation{Recovery: recovery}, nil
+				}
+				return managedRootPreparation{Existing: &Result{
+					Plan: plan, CLIPath: cliPath,
+					Output: "existing healthy installation preserved", Disposition: "already_installed",
+				}}, nil
+			}
+		}
+		recovery, err := quarantineInterruptedInstall(plan, "stale_bound_installation", true)
+		if err != nil {
+			return managedRootPreparation{}, err
+		}
+		return managedRootPreparation{Recovery: recovery}, nil
+	}
+	for _, entry := range entries {
+		if !installerOwnedTopLevel(entry.Name(), plan.TargetOS) {
+			return managedRootPreparation{}, fmt.Errorf("managed root contains unrecognized entry %q; preserved without replacement", entry.Name())
+		}
+	}
+	recovery, err := quarantineInterruptedInstall(plan, "interrupted_installer_owned_root", true)
+	if err != nil {
+		return managedRootPreparation{}, err
+	}
+	return managedRootPreparation{Recovery: recovery}, nil
+}
+
+func verifyExistingInstallTrust(ctx context.Context, plan Plan, options Options) error {
+	bootstrapper := installedBootstrapperPath(plan.ManagedRoot, plan.TargetOS)
+	if err := options.VerifyNative(ctx, bootstrapper); err != nil {
+		return fmt.Errorf("installed bootstrapper trust check: %w", err)
+	}
+	registryPath := filepath.Join(plan.ManagedRoot, "trust", "release-authority-registry.json")
+	digest, err := fileSHA256(registryPath)
+	if err != nil {
+		return fmt.Errorf("hash installed authority registry: %w", err)
+	}
+	if digest != plan.RegistrySHA256 {
+		return errors.New("installed authority registry does not match the confirmed release package")
+	}
+	status, err := readSeedStatus(ctx, bootstrapper, options.Run)
+	if err != nil {
+		return err
+	}
+	if status.AuthorityRegistrySHA256 != plan.RegistrySHA256 || status.BootstrapperVersion != plan.Release {
+		return errors.New("installed bootstrapper seed does not match the confirmed release package")
+	}
+	return nil
+}
+
+func validateCommittedInstallation(plan Plan) error {
+	state, err := installtx.ReadStateForManagedRoot(plan.DataRoot, plan.ManagedRoot)
+	if err != nil {
+		return fmt.Errorf("read committed install state: %w", err)
+	}
+	if state.Release != plan.Release || state.TargetOS != plan.TargetOS || state.TargetArch != plan.TargetArch {
+		return errors.New("committed install state does not match the confirmed release target")
+	}
+	return installationStructureComplete(plan.ManagedRoot, state)
+}
+
+func installationStructureComplete(managedRoot string, state installtx.State) error {
+	cliPath := installedCLIPath(managedRoot, state.TargetOS)
+	if cliPath == "" {
+		return errors.New("installed CLI is missing or unsafe")
+	}
+	bootstrapper := installedBootstrapperPath(managedRoot, state.TargetOS)
+	for label, path := range map[string]string{
+		"bootstrapper":       bootstrapper,
+		"authority registry": filepath.Join(managedRoot, "trust", "release-authority-registry.json"),
+	} {
+		if err := ensureNoSymlinkComponents(managedRoot, path); err != nil {
+			return fmt.Errorf("%s path is unsafe: %w", label, err)
+		}
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			return fmt.Errorf("%s is missing or not a regular file", label)
+		}
+	}
+	bundlePath := filepath.Join(managedRoot, "bundles", state.BundleVersion)
+	if err := ensureNoSymlinkComponents(managedRoot, bundlePath); err != nil {
+		return fmt.Errorf("bundle path is unsafe: %w", err)
+	}
+	info, err := os.Lstat(bundlePath)
+	if err != nil || !info.IsDir() {
+		return errors.New("installed bundle is missing or not a directory")
+	}
+	return nil
+}
+
+func installedBootstrapperPath(managedRoot, targetOS string) string {
+	name := "bcgos-bootstrap"
+	if targetOS == "windows" {
+		name += ".exe"
+	}
+	return filepath.Join(managedRoot, name)
+}
+
+func installedCLIPath(managedRoot, targetOS string) string {
+	name := "bcgos"
+	if targetOS == "windows" {
+		name += ".exe"
+	}
+	path := filepath.Join(managedRoot, "bin", name)
+	if err := ensureNoSymlinkComponents(managedRoot, path); err != nil {
+		return ""
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	return path
+}
+
+func ensureNoSymlinkComponents(root, target string) error {
+	root = filepath.Clean(root)
+	target = filepath.Clean(target)
+	relative, err := filepath.Rel(root, target)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return errors.New("path escapes its trusted root")
+	}
+	current := root
+	for _, component := range strings.Split(relative, string(filepath.Separator)) {
+		if component == "." || component == "" {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("path contains a symlink or reparse point")
+		}
+	}
+	return nil
+}
+
+func installerOwnedTopLevel(name, targetOS string) bool {
+	allowed := map[string]bool{
+		"trust": true, "bin": true, "bundles": true, "recovery": true,
+		".activation.lock": true, "bcgos-bootstrap": true,
+	}
+	if targetOS == "windows" {
+		allowed["bcgos-bootstrap.exe"] = true
+	}
+	return allowed[name]
+}
+
+func stateExists(dataRoot string) bool {
+	info, err := os.Lstat(installStatePath(dataRoot))
+	return err == nil && info.Mode().IsRegular()
+}
+
+func installStatePath(dataRoot string) string {
+	return filepath.Join(dataRoot, "config", "install-state.json")
+}
+
+func quarantineInterruptedInstall(plan Plan, reason string, includeManagedRoot bool) (*Recovery, error) {
+	if len(plan.PlanDigest) < 12 {
+		return nil, errors.New("cannot quarantine an installation without an exact plan digest")
+	}
+	prefix := plan.PlanDigest[:12]
+	recoveryDir := filepath.Join(plan.DataRoot, "recovery", "installer", plan.PlanDigest)
+	statePath := installStatePath(plan.DataRoot)
+	stateBackup := filepath.Join(recoveryDir, "install-state.json")
+	rootBackup := plan.ManagedRoot + ".interrupted-" + prefix
+	recordPath := filepath.Join(recoveryDir, "recovery.json")
+	if err := ensureNoSymlinkComponents(plan.DataRoot, statePath); err != nil {
+		return nil, fmt.Errorf("install state path is unsafe: %w", err)
+	}
+	if err := ensureNoSymlinkComponents(plan.DataRoot, recoveryDir); err != nil {
+		return nil, fmt.Errorf("installer recovery path is unsafe: %w", err)
+	}
+	record := recoveryRecord{
+		SchemaVersion: 1, PlanDigest: plan.PlanDigest, Reason: reason,
+		ManagedRoot: plan.ManagedRoot, ManagedRootBackup: rootBackup,
+		InstallState: statePath, InstallStateBackup: stateBackup, Status: "prepared",
+	}
+	if err := os.MkdirAll(recoveryDir, 0o700); err != nil {
+		return nil, fmt.Errorf("create installer recovery directory: %w", err)
+	}
+	if err := prepareRecoveryRecord(recordPath, record); err != nil {
+		return nil, err
+	}
+	if err := moveRegularIfPresent(statePath, stateBackup); err != nil {
+		return nil, fmt.Errorf("preserve interrupted install state: %w", err)
+	}
+	if includeManagedRoot {
+		if err := moveDirectoryIfPresent(plan.ManagedRoot, rootBackup); err != nil {
+			return nil, fmt.Errorf("preserve interrupted managed root: %w", err)
+		}
+	}
+	record.Status = "quarantined"
+	if err := writeRecoveryRecord(recordPath, record); err != nil {
+		return nil, fmt.Errorf("complete installer recovery record: %w", err)
+	}
+	result := &Recovery{PlanDigest: plan.PlanDigest, InstallStateBackup: stateBackup}
+	if includeManagedRoot {
+		result.ManagedRootBackup = rootBackup
+	}
+	return result, nil
+}
+
+func prepareRecoveryRecord(path string, expected recoveryRecord) error {
+	body, err := json.MarshalIndent(expected, "", "  ")
+	if err != nil {
+		return err
+	}
+	body = append(body, '\n')
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err == nil {
+		if _, writeErr := file.Write(body); writeErr != nil {
+			file.Close()
+			_ = os.Remove(path)
+			return writeErr
+		}
+		return file.Close()
+	}
+	if !errors.Is(err, os.ErrExist) {
+		return fmt.Errorf("create installer recovery record: %w", err)
+	}
+	var existing recoveryRecord
+	if readErr := readStrictJSON(path, &existing); readErr != nil {
+		return fmt.Errorf("read existing installer recovery record: %w", readErr)
+	}
+	expected.Status = existing.Status
+	if existing != expected || (existing.Status != "prepared" && existing.Status != "quarantined") {
+		return errors.New("existing installer recovery record does not match this recovery")
+	}
+	if existing.Status == "quarantined" {
+		return errors.New("this installer plan already has a completed recovery; refusing to overwrite it")
+	}
+	return nil
+}
+
+func writeRecoveryRecord(path string, record recoveryRecord) error {
+	body, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		return err
+	}
+	temporary := path + ".tmp"
+	if err := os.WriteFile(temporary, append(body, '\n'), 0o600); err != nil {
+		return err
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		_ = os.Remove(temporary)
+		return err
+	}
+	return nil
+}
+
+func readStrictJSON(path string, target any) error {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return errors.New("recovery record contains multiple JSON values")
+	}
+	return nil
+}
+
+func moveRegularIfPresent(source, target string) error {
+	info, err := os.Lstat(source)
+	if errors.Is(err, os.ErrNotExist) {
+		targetInfo, targetErr := os.Lstat(target)
+		if targetErr == nil && targetInfo.Mode().IsRegular() {
+			return nil
+		}
+		if errors.Is(targetErr, os.ErrNotExist) {
+			return nil
+		}
+		return targetErr
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("source is not a regular file")
+	}
+	if _, err := os.Lstat(target); err == nil {
+		return errors.New("recovery target already exists")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return os.Rename(source, target)
+}
+
+func moveDirectoryIfPresent(source, target string) error {
+	info, err := os.Lstat(source)
+	if errors.Is(err, os.ErrNotExist) {
+		targetInfo, targetErr := os.Lstat(target)
+		if targetErr == nil && targetInfo.IsDir() {
+			return nil
+		}
+		if errors.Is(targetErr, os.ErrNotExist) {
+			return nil
+		}
+		return targetErr
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return errors.New("source is not a directory")
+	}
+	if _, err := os.Lstat(target); err == nil {
+		return errors.New("recovery target already exists")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return os.Rename(source, target)
 }
 
 // PlanDigest returns the stable digest bound to one verify/install handoff.
