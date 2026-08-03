@@ -57,7 +57,7 @@ func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 
 	output.Reset()
 	code = Run([]string{"memory", "status", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
-	if code != 0 || !strings.Contains(output.String(), `"state": "captured"`) || !strings.Contains(output.String(), `"dreaming": "unavailable"`) {
+	if code != 0 || !strings.Contains(output.String(), `"state": "captured"`) || !strings.Contains(output.String(), `"dreaming": "daily_light_available_weekly_deep_unavailable"`) {
 		t.Fatalf("status exit = %d, output = %s", code, output.String())
 	}
 
@@ -159,11 +159,21 @@ func TestMemoryCLIReportsAllInvalidCommitsAsCorrupt(t *testing.T) {
 	}
 }
 
-func TestMemoryDreamReportsUnavailableWithoutAdapter(t *testing.T) {
+func TestMemoryDailyDreamRunsDeterministicallyAndWeeklyRemainsUnavailable(t *testing.T) {
+	dataDir := t.TempDir()
 	var output bytes.Buffer
-	code := Run([]string{"memory", "dream", "daily", "--data-dir", t.TempDir(), "--workspace", "case-a"}, &output, &output)
-	if code != ExitUnavailable || !strings.Contains(output.String(), `"capability": "memory_dreaming"`) || !strings.Contains(output.String(), `"state": "unavailable"`) {
-		t.Fatalf("dream exit = %d, output = %s", code, output.String())
+	if code := RunWithInput([]string{"memory", "capture", "--data-dir", dataDir, "--workspace", "case-a", "--kind", "decision", "--stdin", "--sanitized"}, strings.NewReader("owner confirmation required"), &output, &output); code != ExitOK {
+		t.Fatalf("capture exit=%d output=%s", code, output.String())
+	}
+	output.Reset()
+	code := Run([]string{"memory", "dream", "daily", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
+	if code != ExitOK || !strings.Contains(output.String(), `"capability": "memory_light_dreaming"`) || !strings.Contains(output.String(), `"state": "succeeded"`) {
+		t.Fatalf("daily dream exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	code = Run([]string{"memory", "dream", "weekly", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
+	if code != ExitUnavailable || !strings.Contains(output.String(), `"capability": "memory_deep_dreaming"`) || !strings.Contains(output.String(), `"state": "unavailable"`) {
+		t.Fatalf("weekly dream exit = %d, output = %s", code, output.String())
 	}
 }
 

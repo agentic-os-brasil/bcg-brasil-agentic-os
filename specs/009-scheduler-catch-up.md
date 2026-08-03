@@ -54,7 +54,7 @@ The scheduler state schema is `schemas/scheduler-state.schema.json`. Exact appro
 The first job vocabulary is:
 
 - `memory-checkpoint`: three-hour metadata-only workspace continuity receipt;
-- `memory-light-dream`: three-hour light L1 synthesis, unavailable without a qualified synthesis adapter;
+- `memory-light-dream`: three-hour deterministic light L1 synthesis over already-sanitized captures;
 - `memory-deep-dream`: weekly deep L2/L3/lifetime consolidation, unavailable without a qualified synthesis and eligibility adapter;
 - `wiki-reconcile`: reconciliation of source watermarks, outbox receipts and atlas manifests.
 - `sharepoint-work-sync`: refresh of the explicitly enrolled organizational
@@ -99,7 +99,8 @@ Installed Maestro lifecycle hooks resolve the exact workspace-local
 The pointer cannot be absolute, escape the initialized workspace or traverse a
 symlink; an existing store must be a bounded, strict JSON durable snapshot.
 `SessionStart` starts the same `maintenance wake --trigger presence` boundary
-as a best-effort child process and does not wait for it. Repeated starts remain
+with native automatic idle observation as a best-effort child process and does
+not wait for it. Repeated starts remain
 idempotent at the scheduler occurrence/lease boundary. Failure to start the
 best-effort wake does not turn configuration into execution evidence, block
 context output or invoke a model.

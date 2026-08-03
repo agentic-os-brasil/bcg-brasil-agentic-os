@@ -71,7 +71,7 @@ var enqueueHookPresenceWake = func(workspaceID string) error {
 	if err != nil {
 		return fmt.Errorf("resolve bcgos executable for presence wake: %w", err)
 	}
-	command := exec.Command(executable, "maintenance", "wake", "--trigger", "presence", "--workspace", workspaceID)
+	command := exec.Command(executable, "maintenance", "wake", "--trigger", "presence", "--workspace", workspaceID, "--idle-state", "auto")
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("enqueue maintenance presence wake: %w", err)
 	}
@@ -3175,7 +3175,7 @@ func runStatus(args []string, out, errOut io.Writer) int {
 	return writeJSON(out, struct {
 		memory.StatusReport
 		Dreaming string `json:"dreaming"`
-	}{StatusReport: report, Dreaming: "unavailable"}, errOut)
+	}{StatusReport: report, Dreaming: "daily_light_available_weekly_deep_unavailable"}, errOut)
 }
 
 func runContext(args []string, out, errOut io.Writer) int {
@@ -3234,17 +3234,30 @@ func runDream(args []string, out, errOut io.Writer) int {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
 	}
-	code := writeJSON(out, map[string]any{
-		"capability":   "memory_dreaming",
-		"cycle":        cycle,
-		"state":        "unavailable",
-		"workspace_id": *workspace,
-		"reason":       "no synthesis and eligibility adapter is installed",
-	}, errOut)
-	if code != ExitOK {
-		return code
+	if cycle == "weekly" {
+		code := writeJSON(out, map[string]any{"capability": "memory_deep_dreaming", "cycle": cycle, "state": "unavailable", "workspace_id": *workspace, "reason": "no qualified deep synthesis and lifetime eligibility adapter is installed"}, errOut)
+		if code != ExitOK {
+			return code
+		}
+		return ExitUnavailable
 	}
-	return ExitUnavailable
+	policy, err := basememory.Policy()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	config, err := basememory.Runtime()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	engine := memory.Engine{Root: filepath.Join(*dataDir, "memory"), Policy: policy, Budgets: map[string]int{"L1": config.L1MaxRunes, "L2": 1, "L3": 1, "lifetime": 1}, Synthesizer: memory.DeterministicL1Synthesizer{MaxRunes: config.L1MaxRunes, MaxEntries: config.L1MaxEntries}, SynthesizerID: memory.DeterministicL1SynthesizerID}
+	result, err := engine.DreamDaily(context.Background(), *workspace, time.Now().UTC())
+	if errors.Is(err, os.ErrNotExist) {
+		return writeJSON(out, map[string]any{"capability": "memory_light_dreaming", "cycle": cycle, "state": "reviewed_no_change", "workspace_id": *workspace, "reason": "no sanitized L1 capture is available for the current period"}, errOut)
+	}
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, map[string]any{"capability": "memory_light_dreaming", "cycle": cycle, "state": map[bool]string{true: "reviewed_no_change", false: "succeeded"}[result.Skipped], "workspace_id": *workspace, "result": result}, errOut)
 }
 
 func newFlagSet(name string, errOut io.Writer) *flag.FlagSet {

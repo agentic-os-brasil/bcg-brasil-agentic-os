@@ -45,7 +45,7 @@ func TestCatalogRequiresUniversalMaintenancePlane(t *testing.T) {
 		t.Fatalf("memory checkpoint contract drifted: %#v", checkpoint)
 	}
 	light, found := findJob(catalog.Jobs, MemoryLightDreamJobID)
-	if !found || light.Executor != "model_adapter" || light.Availability != Unavailable || light.DefaultEnabled || light.Unattended != "policy_gated" {
+	if !found || light.Executor != "deterministic" || light.Availability != Unavailable || !light.DefaultEnabled || light.Unattended != "deterministic_only" {
 		t.Fatalf("memory light dream capability truth drifted: %#v", light)
 	}
 	deep, found := findJob(catalog.Jobs, MemoryDeepDreamJobID)

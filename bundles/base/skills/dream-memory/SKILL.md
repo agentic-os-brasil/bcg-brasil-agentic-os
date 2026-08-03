@@ -29,7 +29,7 @@ only the explanation and optional detail do.
 ## Workflow
 
 1. Resolve the active workspace identity and local memory root through the installed runtime adapter.
-2. Confirm the adapter reports the memory capability as supported and the effective per-layer budgets as configured.
+2. Confirm daily L1 is supported and inspect its effective managed bounds. For weekly deep work, require the separate synthesis and eligibility capabilities.
 3. For capture, persist only signals already classified as sanitized by the adapter. Never pass raw credentials, client files or unrestricted prompt history.
 4. Invoke exactly one canonical cycle through the adapter. Hooks, schedules and manual requests all call the same idempotent engine operation.
 5. For weekly lifetime promotion, require a named eligibility policy. If it is missing, stop: lifetime activation must fail closed.
@@ -50,4 +50,8 @@ only the explanation and optional detail do.
 
 ## Current delivery boundary
 
-The managed bundle contains this canonical skill and the executable Go engine contract. Runtime adapters and the user-facing `bcgos memory` command are separate capabilities; until one is installed, this skill must report dreaming as unavailable rather than claim execution.
+The managed bundle contains this canonical skill, the deterministic daily L1
+synthesizer and its bounded runtime configuration. `bcgos memory dream daily`
+is executable over already-sanitized local captures. Weekly deep dreaming and
+L2/L3/lifetime promotion remain unavailable until their separately qualified
+synthesis and eligibility adapters exist.

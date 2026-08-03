@@ -1,6 +1,6 @@
 # Spec 036 - Universal maintenance plane
 
-Status: catalog, bounded command/receipt surface, metadata-only memory checkpoint, Darwin deterministic worker and
+Status: catalog, bounded command/receipt surface, metadata-only memory checkpoint, deterministic L1 light dream, Darwin deterministic worker and
 explicit Canary lifecycle are implemented; Walter/model-backed work and native
 Windows task creation remain unavailable pending runtime evidence. macOS native
 qualification is environment-dependent and is never inferred from a plist.
@@ -40,9 +40,10 @@ The jobs are deliberately split by success boundary:
   versioned watermark over allowlisted durable scheduler metadata every three
   hours, then close its own receipt boundary; it preserves last-known-good,
   rejects source-free success and does not read or synthesize memory;
-- `memory-light-dream` has a separate three-hour due contract and
-  `memory-deep-dream` remains weekly; both are model-backed and unavailable
-  until their synthesis contracts are qualified;
+- `memory-light-dream` has a separate three-hour due contract and a qualified
+  deterministic L1-only handler over already-sanitized captures;
+  `memory-deep-dream` remains weekly, model-backed and unavailable until deep
+  synthesis plus lifetime eligibility are qualified;
 - deterministic checks may eventually run unattended once their local contract
   is qualified;
 - local adapters, including Darwin housekeeping, remain policy-gated; Darwin
@@ -72,7 +73,9 @@ source of truth; the owning subsystem's durable commit/manifest is.
 
 The macOS LaunchAgent emits a 15-minute pulse only. The scheduler derives due
 work and the depth-one worker applies activation, qualification, explicit idle
-and cooldown gates before one handler dispatch. Unknown activity state fails
+and cooldown gates before one handler dispatch. Its `auto` idle mode reads the
+bounded native HID idle counter and requires five minutes without activity.
+Unknown, malformed or unsupported activity state fails
 closed and is not treated as idle. `suppressed` is distinct from failed,
 unavailable and succeeded: it records metadata-safe eligibility denial, stays
 due and cannot move a three-hour success anchor. Repeated suppressions are

@@ -1,8 +1,8 @@
 # Spec 006 - Memory persistence and dreaming
 
-Status: architecture, runtime-neutral core engine, initial CLI bridge and
-metadata-only continuity checkpoint implemented; synthesis adapters and
-executable dreaming remain pending.
+Status: architecture, runtime-neutral core engine, CLI bridge, deterministic
+L1 light dreaming and metadata-only continuity checkpoint implemented; weekly
+deep synthesis and lifetime eligibility adapters remain pending.
 
 ## Objective
 
@@ -34,10 +34,10 @@ versioned watermark over allowlisted durable scheduler receipt metadata. Its
 atomic pointer preserves the last known good revision across interruption. It
 reads no error/body/prompt/tool payload, creates no L1/L2/L3 artifact and is
 never evidence that dreaming occurred. Without a durable source watermark it
-remains unavailable. `memory-light-dream`
-has a three-hour due contract but remains unavailable without a qualified
-synthesis adapter. `memory-deep-dream` is the weekly deep cycle and remains
-unavailable on the same basis.
+remains unavailable. `memory-light-dream` has a separate three-hour due
+contract and uses a runtime-qualified deterministic L1 synthesizer over only
+already-sanitized captures. `memory-deep-dream` is the weekly deep cycle and
+remains unavailable without qualified deep synthesis and eligibility adapters.
 
 ### L1 source composition
 
@@ -112,7 +112,11 @@ lifetime -> L3 -> L2 -> L1
 
 Each injected layer has an independent budget and an explicit pointer to deeper evidence. A missing or stale generated layer is skipped with a diagnostic; it never causes raw unbounded history to be injected as a silent fallback. Authoritative project state and decisions retain precedence over generated memory.
 
-The base policy requires a budget for every layer but deliberately leaves each value as required runtime configuration. Exact pilot values remain pending evidence from real sessions and must never be hard-coded in an adapter.
+The base policy requires a budget for every layer. The bundled light-dream
+runtime configuration sets a reviewable Canary bound of 12,000 L1 runes and 64
+complete entries; it is managed configuration, not an adapter constant. Other
+layer budgets remain required runtime configuration and deep dreaming stays
+unavailable until they are qualified from real-session evidence.
 
 ## Wiki navigation
 
@@ -163,7 +167,12 @@ The engine deliberately does not select a model, sanitize raw input, decide life
 
 The canonical product skill is `bundles/base/skills/dream-memory/SKILL.md`. It routes daily, weekly and status intents to the installed adapter and must report the capability as unavailable until that adapter exists.
 
-`cmd/bcgos` now connects the safe adapter-independent operations to the engine: sanitized capture, commit/layer status and bounded context assembly. `bcgos memory dream daily|weekly` is deliberately present as an explicit unavailable capability until synthesis and lifetime-eligibility adapters are configured. It never substitutes a hard-coded model, eligibility rule, data directory or context budget.
+`cmd/bcgos` connects sanitized capture, commit/layer status, bounded context
+assembly and deterministic `memory dream daily` to the engine. Daily synthesis
+deduplicates and selects complete sanitized signals within the managed L1
+budget, then relies on the existing atomic commit. `memory dream weekly`
+remains explicitly unavailable and never substitutes a hard-coded model or
+lifetime eligibility rule.
 
 ## Test expectations for implementation
 

@@ -170,7 +170,7 @@ func validateRequiredJobInvariant(job Job) error {
 			return errors.New("memory checkpoint has an unsafe maintenance contract")
 		}
 	case MemoryLightDreamJobID:
-		if job.Category != "memory" || job.Trigger != "daily_or_presence" || job.Executor != "model_adapter" || job.Scope != "workspace" || job.Availability != Unavailable || job.DefaultEnabled || job.Unattended != "policy_gated" {
+		if job.Category != "memory" || job.Trigger != "daily_or_presence" || job.Executor != "deterministic" || job.Scope != "workspace" || job.Availability != Unavailable || !job.DefaultEnabled || job.Unattended != "deterministic_only" || len(job.Writes) != 1 || job.Writes[0] != "memory_l1" {
 			return errors.New("memory light dream has an unsafe maintenance contract")
 		}
 	case MemoryDeepDreamJobID:

@@ -710,3 +710,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: A fifteen-minute macOS LaunchAgent improves discovery latency without defining cadence, running inline synthesis or creating catch-up storms. Only explicit idle evidence can cross the worker gate; unsupported idle observation fails closed and remains visible as suppression. Checkpoint success proves only a metadata checkpoint, while light or deep dream success requires its owning memory commit and runtime qualification. Catalog configuration, installed native adapters, local activation and successful execution remain separate capability claims.
 - Refs: MEMO; SCHD; CADN; specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/036-maintenance-plane.md; internal/scheduler; internal/maintenance; adapters/macos
 - Supersedes: none
+
+## DLIT - Activate deterministic light dreaming only at L1
+
+- Date: 2026-08-03
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The enrolled three-hour light-dream occurrence had no executable owner, and the macOS pulse supplied `unknown` idle state, so the safe worker could never cross either boundary. Relying on a headless model would also make continuity depend on provider authentication and create cost or retry pressure during unattended idle time.
+- Decision: Qualify one local deterministic L1 synthesizer over already-durable captures that carry the existing sanitized workspace attestation. It uses the managed runtime configuration of 12,000 runes and 64 complete entries, stable ordering, exact duplicate collapse, immutable provenance and the existing staged atomic memory commit. It may write only L1. A source-free occurrence closes as `reviewed_no_change`; invalid, unsanitized, cross-workspace or over-budget input fails without changing active memory. Enroll this light job with the metadata checkpoint, and let the macOS adapter resolve `--idle-state auto` from the bounded `IOHIDSystem` HID idle counter with a five-minute eligibility threshold. Missing, ambiguous or unsupported observation remains `unknown` and fails closed.
+- Consequences: The 15-minute LaunchAgent pulse is still only a discovery mechanism; the scheduler remains anchored to elapsed three-hour success with `MaxCatchUp=1`. Daily/manual light dreaming no longer needs a model, while weekly deep dreaming, L2/L3/lifetime promotion and raw prompt or daily-log ingestion remain unavailable without their separate adapters and eligibility evidence. A terminal scheduler receipt still cannot substitute for the active memory commit.
+- Refs: IDLE; MEMO; SCHD; specs/001-cli-distribution.md; specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/036-maintenance-plane.md; internal/memory; internal/maintenance; internal/macosadapter
+- Supersedes: none
