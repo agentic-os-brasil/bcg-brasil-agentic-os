@@ -37,6 +37,18 @@ Every installed command has a two-second timeout. Claude `PostToolUse` and
 bounded inline responsibility. No binding starts a worker or makes a
 network/model request.
 
+Both adapters preserve the bounded native session, prompt and complete
+tool-input JSON in memory long enough to route method pointers or digest an
+external mutation. A caller-supplied `actor_id` is ignored; the gate resolves
+the actor from the confirmed owner enrollment and authenticated local OS
+principal. Raw prompt/tool input is not written to challenge state. External
+mutation remains denied until the same runtime, workspace, locally resolved
+actor and session submit the exact short-lived challenge phrase and
+`PreToolUse` atomically consumes it. Binding values at rest use a generated,
+private workspace-local HMAC key.
+The adapter never converts an environment variable or installation flag into
+user approval.
+
 The projection is local workspace materialization, not a capability claim:
 native runtime capabilities remain `unavailable` until the conformance protocol
 produces qualifying evidence.

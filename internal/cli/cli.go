@@ -21,6 +21,7 @@ import (
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	bundlecatalog "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/catalog"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/actionconfirmation"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/activationpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
@@ -47,6 +48,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionhook"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionresolve"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillrouting"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 )
@@ -2533,7 +2535,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		return ExitUsage
 	}
 	var native codexadapter.NativeInput
-	if action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" {
+	if action == "context-injection" || action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" {
 		parsed, err := codexadapter.ParseReader(in)
 		if err != nil {
 			if action == "pre-action-guard" {
@@ -2548,20 +2550,42 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if err != nil {
 			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
 		}
-		if response.HookSpecificOutput != nil || strings.TrimSpace(*orchestrationState) == "" {
+		if response.HookSpecificOutput != nil {
 			return writeJSON(out, response, errOut)
 		}
-		root, rootErr := dataRoot()
-		if rootErr != nil {
-			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+		protected, canonicalErr := actionconfirmation.Canonicalize(native.ToolName, native.ToolInputJSON())
+		if canonicalErr != nil {
+			return writeJSON(out, codexadapter.ExternalActionDenial(noncanonicalExternalDenial), errOut)
 		}
-		inspection, inspectErr := workspace.Inspect(optionalArg(flags.Args()), root)
+		if protected == nil && strings.TrimSpace(*orchestrationState) == "" {
+			return writeJSON(out, response, errOut)
+		}
+		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
 		if inspectErr != nil {
+			if protected != nil {
+				return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+			}
 			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
 		}
 		state, stateErr := resolveHookOrchestrationState(inspection, *orchestrationState)
 		if stateErr != nil {
+			if protected != nil {
+				return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+			}
 			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+		}
+		if protected != nil {
+			actorID, actorErr := localConfirmedOwnerActor(root)
+			if actorErr != nil {
+				return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+			}
+			result, authorizeErr := confirmationStore(root, inspection.WorkspaceID).Authorize(actionconfirmation.Binding{Runtime: "codex", WorkspaceID: inspection.WorkspaceID, ActorID: actorID, SessionID: native.SessionID, Action: *protected})
+			if authorizeErr != nil {
+				return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+			}
+			if result.State != actionconfirmation.Authorized {
+				return writeJSON(out, codexadapter.ExternalActionDenial(challengeDenial(result)), errOut)
+			}
 		}
 		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("codex", string(lifecycle.PreActionGuard), inspection.WorkspaceID, native.ToolName, native.ToolUseID), state)
 		if err := evaluateAdapterInteraction(root, "codex", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID); err != nil {
@@ -2594,6 +2618,11 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			Profile: profileState, Workspace: inspection, Owner: owner,
 			Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 		})
+		if action == "context-injection" {
+			if err := enrichContextPacket(&packet, "codex", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
+				return reportError(errOut, err)
+			}
+		}
 		eventName := "SessionStart"
 		if action == "context-injection" {
 			eventName = "UserPromptSubmit"
@@ -2655,7 +2684,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 	}
 
 	var native claudeadapter.NativeInput
-	if action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" {
+	if action == "context-injection" || action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" {
 		parsed, err := claudeadapter.ParseReader(in)
 		if err != nil {
 			if action == "pre-action-guard" {
@@ -2673,20 +2702,42 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if err != nil {
 			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
 		}
-		if response.HookSpecificOutput != nil || strings.TrimSpace(*orchestrationState) == "" {
+		if response.HookSpecificOutput != nil {
 			return writeJSON(out, response, errOut)
 		}
-		root, rootErr := dataRoot()
-		if rootErr != nil {
-			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+		protected, canonicalErr := actionconfirmation.Canonicalize(native.ToolName, native.ToolInputJSON())
+		if canonicalErr != nil {
+			return writeJSON(out, claudeadapter.ExternalActionDenial(noncanonicalExternalDenial), errOut)
 		}
-		inspection, inspectErr := workspace.Inspect(optionalArg(flags.Args()), root)
+		if protected == nil && strings.TrimSpace(*orchestrationState) == "" {
+			return writeJSON(out, response, errOut)
+		}
+		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
 		if inspectErr != nil {
+			if protected != nil {
+				return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+			}
 			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
 		}
 		state, stateErr := resolveHookOrchestrationState(inspection, *orchestrationState)
 		if stateErr != nil {
+			if protected != nil {
+				return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+			}
 			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+		}
+		if protected != nil {
+			actorID, actorErr := localConfirmedOwnerActor(root)
+			if actorErr != nil {
+				return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+			}
+			result, authorizeErr := confirmationStore(root, inspection.WorkspaceID).Authorize(actionconfirmation.Binding{Runtime: "claude", WorkspaceID: inspection.WorkspaceID, ActorID: actorID, SessionID: native.SessionID, Action: *protected})
+			if authorizeErr != nil {
+				return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+			}
+			if result.State != actionconfirmation.Authorized {
+				return writeJSON(out, claudeadapter.ExternalActionDenial(challengeDenial(result)), errOut)
+			}
 		}
 		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("claude", string(lifecycle.PreActionGuard), inspection.WorkspaceID, native.ToolName, native.ToolUseID), state)
 		if err := evaluateAdapterInteraction(root, "claude", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID); err != nil {
@@ -2721,6 +2772,11 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			Profile: profileState, Workspace: inspection, Owner: owner,
 			Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 		})
+		if action == "context-injection" {
+			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
+				return reportError(errOut, err)
+			}
+		}
 		eventName := "SessionStart"
 		if action == "context-injection" {
 			eventName = "UserPromptSubmit"
@@ -2760,6 +2816,74 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
 	}
 	panic("unreachable Claude hook action")
+}
+
+const (
+	noncanonicalExternalDenial    = "Maestro denied this external mutation because the request is outside the bounded canonical grammar. Nothing was changed. Use an explicit action and target, then retry."
+	unavailableConfirmationDenial = "Maestro denied this external mutation because a user-bound confirmation challenge could not be evaluated. Nothing was changed. Retry from an identified native session."
+)
+
+func inspectProtectedActionWorkspace(path string, dataRoot func() (string, error)) (string, workspace.Inspection, error) {
+	root, err := dataRoot()
+	if err != nil {
+		return "", workspace.Inspection{}, err
+	}
+	inspection, err := workspace.Inspect(path, root)
+	if err != nil {
+		return "", workspace.Inspection{}, err
+	}
+	return root, inspection, nil
+}
+
+func confirmationStore(root, workspaceID string) actionconfirmation.Store {
+	return actionconfirmation.Store{Root: filepath.Join(root, "runtime", "action-confirmation", workspaceID)}
+}
+
+func localConfirmedOwnerActor(root string) (string, error) {
+	profile, err := agentidentity.Load(root)
+	if err != nil {
+		return "", fmt.Errorf("load confirmed owner enrollment: %w", err)
+	}
+	principal, err := localPriorWorkActorRef()
+	if err != nil {
+		return "", err
+	}
+	return profile.OwnerID + "@" + principal, nil
+}
+
+func challengeDenial(result actionconfirmation.Result) string {
+	return fmt.Sprintf("Maestro requires explicit user confirmation for external action %s on target %s. Reply exactly: CONFIRM MAESTRO %s. Challenge expires at %s. Nothing was changed.", result.Action, result.Target, result.ChallengeID, result.ExpiresAt.UTC().Format(time.RFC3339))
+}
+
+func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, root, sessionID, prompt string) error {
+	actorID, _ := localConfirmedOwnerActor(root)
+	confirmed, err := confirmationStore(root, packet.Workspace.ID).Confirm(runtimeName, packet.Workspace.ID, actorID, sessionID, prompt)
+	if err != nil {
+		return fmt.Errorf("confirm external action: %w", err)
+	}
+	if confirmed {
+		packet.ActionConfirmation = &sessionctx.ActionConfirmation{State: "confirmed"}
+		return nil
+	}
+	projection, err := runtimeprojection.Inspect(runtimeName, workspacePath)
+	if err != nil {
+		return fmt.Errorf("inspect runtime projection for contextual routing: %w", err)
+	}
+	if projection.State != "installed" {
+		return nil
+	}
+	catalog, policy, installed, err := runtimeprojection.RoutingInputs(runtimeName, workspacePath)
+	if err != nil {
+		return fmt.Errorf("load governed contextual routing inputs: %w", err)
+	}
+	selected, err := skillrouting.Route(skillrouting.Request{Prompt: prompt, Role: "case_agent", Catalog: catalog, Policy: policy, Installed: installed})
+	if err != nil {
+		return fmt.Errorf("route contextual skills: %w", err)
+	}
+	for _, item := range selected {
+		packet.Skills.Selected = append(packet.Skills.Selected, sessionctx.SkillSelection{ID: item.ID, Reason: item.Reason, Pointer: item.Pointer})
+	}
+	return nil
 }
 
 // evaluateAdapterInteraction is deliberately metadata-only. Adapter hooks
