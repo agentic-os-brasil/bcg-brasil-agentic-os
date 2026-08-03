@@ -251,6 +251,126 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	}
 }
 
+func TestInstalledSessionStartUsesWorkspaceOrchestrationStateAndEnqueuesPresence(t *testing.T) {
+	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspacePath, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := enqueueHookPresenceWake
+	defer func() { enqueueHookPresenceWake = previous }()
+	called := 0
+	enqueueHookPresenceWake = func(workspaceID string) error {
+		called++
+		if workspaceID != inspection.WorkspaceID {
+			t.Fatalf("presence workspace = %q, want %q", workspaceID, inspection.WorkspaceID)
+		}
+		return nil
+	}
+	output.Reset()
+	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || called != 1 || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) {
+		t.Fatalf("hook exit = %d, enqueue=%d, output=%s", code, called, output.String())
+	}
+	output.Reset()
+	code = runHookWithInput([]string{"claude", "session-start", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || called != 2 || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) {
+		t.Fatalf("Claude hook exit = %d, enqueue=%d, output=%s", code, called, output.String())
+	}
+}
+
+func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
+	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspacePath, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	for _, pointer := range []string{"../outside.json", ".bcgos/../outside.json"} {
+		output.Reset()
+		if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", pointer, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK || !strings.Contains(output.String(), "orchestration state") {
+			t.Fatalf("pointer %q accepted: exit=%d output=%s", pointer, code, output.String())
+		}
+	}
+	outside := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(outside, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")
+	if err := os.Symlink(outside, statePath); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"echo safe"}}`
+	code := runHookWithInput([]string{"codex", "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, strings.NewReader(input), &output, &output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) || !strings.Contains(output.String(), "Nothing was changed") {
+		t.Fatalf("symlink guard = %d %s", code, output.String())
+	}
+	if err := os.Remove(statePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, []byte(`{"unknown_field":true}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	code = runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code == ExitOK || !strings.Contains(output.String(), "decode orchestration state") {
+		t.Fatalf("malformed state accepted: exit=%d output=%s", code, output.String())
+	}
+}
+
+func TestPostActionReceiptIdentityIncludesValidatedOrchestrationSnapshot(t *testing.T) {
+	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspacePath, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")
+	input := `{"session_id":"session-a","tool_use_id":"toolu_a","tool_name":"Bash","tool_input":{"command":"sensitive"}}`
+	for _, policy := range []string{"policy-a", "policy-b"} {
+		if err := os.WriteFile(statePath, []byte(`{"policy_sha256":"`+policy+`","branch_id":"","scope_id":"","scope_kind":"","root_id":"","updated":"0001-01-01T00:00:00Z","fence_epoch":0}`+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		output.Reset()
+		code := runHookWithInput([]string{"codex", "post-action-receipt", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, strings.NewReader(input), &output, &output, func() (string, error) { return dataRoot, nil })
+		if code != ExitOK || !strings.Contains(output.String(), `"continue": true`) {
+			t.Fatalf("policy %s receipt = %d %s", policy, code, output.String())
+		}
+	}
+	receipts, err := os.ReadDir(filepath.Join(dataRoot, "runtime", "receipts", inspection.WorkspaceID))
+	if err != nil || len(receipts) != 2 {
+		t.Fatalf("snapshot-bound receipt count = %d, err=%v", len(receipts), err)
+	}
+}
+
 func TestClaudeGuardFailsClosedBeforeWorkspaceInspection(t *testing.T) {
 	tests := []struct {
 		name  string

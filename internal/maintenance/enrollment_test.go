@@ -9,7 +9,7 @@ import (
 
 func TestCanaryEnrollmentPersistsIANAZoneAndScopedActivations(t *testing.T) {
 	root := t.TempDir()
-	enrollment := CanaryEnrollment{SchemaVersion: EnrollmentSchemaVersion, WorkspaceID: "maestro-system", AgentID: "darwin", Home: filepath.Join(root, "home"), UID: "501", Timezone: "America/Sao_Paulo", LaunchAgentLabel: "com.bcg.maestro.maintenance", Mode: "filesystem_only", EnrolledAt: time.Date(2026, 8, 2, 7, 0, 0, 0, time.FixedZone("BRT", -3*60*60)), Activated: []Activation{{JobID: "darwin-housekeeping-daily", QualificationDigest: QualificationDigest("darwin-housekeeping-daily")}, {JobID: "darwin-deep-weekly", QualificationDigest: QualificationDigest("darwin-deep-weekly")}}}
+	enrollment := CanaryEnrollment{SchemaVersion: EnrollmentSchemaVersion, WorkspaceID: "maestro-system", AgentID: "darwin", Home: filepath.Join(root, "home"), Executable: filepath.Join(root, "bin", "bcgos"), UID: "501", Timezone: "America/Sao_Paulo", LaunchAgentLabel: "com.bcg.maestro.maintenance", Mode: "filesystem_only", EnrolledAt: time.Date(2026, 8, 2, 7, 0, 0, 0, time.FixedZone("BRT", -3*60*60)), Activated: []Activation{{JobID: "darwin-housekeeping-daily", QualificationDigest: QualificationDigest("darwin-housekeeping-daily")}, {JobID: "darwin-deep-weekly", QualificationDigest: QualificationDigest("darwin-deep-weekly")}}}
 	if err := SaveCanaryEnrollment(root, enrollment); err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestCanaryEnrollmentPersistsIANAZoneAndScopedActivations(t *testing.T) {
 }
 
 func TestCanaryEnrollmentRejectsNonIANATimezone(t *testing.T) {
-	enrollment := CanaryEnrollment{SchemaVersion: EnrollmentSchemaVersion, WorkspaceID: "maestro-system", AgentID: "darwin", Home: "/tmp/home", UID: "501", Timezone: "not-a-timezone", LaunchAgentLabel: "com.bcg.maestro.maintenance", Mode: "native", EnrolledAt: time.Now(), Activated: nil}
+	enrollment := CanaryEnrollment{SchemaVersion: EnrollmentSchemaVersion, WorkspaceID: "maestro-system", AgentID: "darwin", Home: "/tmp/home", Executable: "/usr/local/bin/bcgos", UID: "501", Timezone: "not-a-timezone", LaunchAgentLabel: "com.bcg.maestro.maintenance", Mode: "native", EnrolledAt: time.Now(), Activated: nil}
 	if err := enrollment.Validate(); err == nil {
 		t.Fatal("invalid timezone accepted")
 	}

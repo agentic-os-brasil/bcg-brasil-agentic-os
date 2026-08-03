@@ -73,6 +73,16 @@ forbidden or unavailable in the active runtime, the occurrence remains due.
 
 Session Start may perform one bounded, read-only status check. If work is due, the runtime adapter enqueues execution after startup and immediately returns control to the user. It may not invoke a model, compile a wiki or wait for completion inside Session Start.
 
+Installed Maestro lifecycle hooks resolve the exact workspace-local
+`.bcgos/maestro-orchestration-state.json` pointer before emitting this signal.
+The pointer cannot be absolute, escape the initialized workspace or traverse a
+symlink; an existing store must be a bounded, strict JSON durable snapshot.
+`SessionStart` starts the same `maintenance wake --trigger presence` boundary
+as a best-effort child process and does not wait for it. Repeated starts remain
+idempotent at the scheduler occurrence/lease boundary. Failure to start the
+best-effort wake does not turn configuration into execution evidence, block
+context output or invoke a model.
+
 No lifecycle event may wait for a scheduler or worker lock. The eventual worker
 owns serialized execution; hooks read a last committed snapshot or emit a
 best-effort idempotent signal as defined in Spec 019. Signals carry a bounded
@@ -101,6 +111,25 @@ presence wake. Enrollment persists the validated IANA timezone, workspace and
 activated job digests; fixture homes remain filesystem-only. Windows continues
 to fail closed rather than claim native parity. Neither adapter decides whether
 an occurrence succeeded.
+
+`bcgos maintenance canary install-macos` requires the exact initialized
+workspace path and validates it against local workspace metadata. The rendered
+plist stores only the opaque workspace ID, never the workspace path or customer
+content, and invokes the exact regular running `bcgos` executable through the
+fixed bounded command `maintenance wake --trigger presence`. Executable and
+plist symlinks fail closed. Plist creation/removal is atomic and idempotent;
+native `launchctl` inspection or mutation occurs only with explicit
+`--launchctl`, only in the current user's `gui/<uid>` domain, and never requests
+administrator authority. `RunAtLoad` plus the bounded interval accelerate
+presence recovery but do not activate Walter, memory dreaming or any other
+model-backed maintenance capability.
+
+The presence planner receives only the jobs explicitly activated in the exact
+workspace enrollment. Catalog entries that are unavailable or not activated
+remain visible in capability/status reporting, but are not converted into due
+occurrences and do not emit repeated `unavailable` receipts on RunAtLoad or
+interval wakes. Adding a handler to the binary is not activation; an attended,
+validated enrollment update is required before that job can enter the plan.
 
 ## Executable core
 
@@ -139,4 +168,4 @@ It deliberately does not install OS tasks, choose schedules, invoke memory dream
 - retry/backoff, runtime and cost limits;
 - user notification, pause and manual-run UX;
 - receipt retention and privacy-safe telemetry;
-- native adapter installation and removal flow.
+- Windows native adapter installation and removal flow.
