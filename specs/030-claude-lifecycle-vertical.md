@@ -39,6 +39,15 @@ expansions, globbing, shell operators, substitutions, escapes and unbalanced
 quotes instead of claiming to be a general shell parser. All other
 successfully evaluated actions remain subject to Claude's own permission flow.
 
+An installed guard may short-circuit workspace-state inspection only for a
+closed, simple-command allowlist of read-only local BCGOS diagnostics: help,
+version, doctor, product status, owner status/interview and owner onboarding
+status. The executable may be the exact quoted installed path. Shell operators,
+expansions, additional flags, mutation verbs and unknown forms do not enter the
+exception. The short-circuit emits no allow decision and does not bypass the
+runtime's own permission model; its only purpose is to keep diagnosis usable
+when mutable orchestration state is absent or under repair.
+
 ## Non-blocking receipts
 
 `PostToolUse` and `Stop` are configured with `async: true`. They emit one small
