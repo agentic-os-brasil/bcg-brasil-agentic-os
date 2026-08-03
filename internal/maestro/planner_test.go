@@ -94,13 +94,41 @@ func routeInput(intent IntentClass, scopeKind, scopeID string, agent RegisteredA
 	agent.AuthorizationDigest = digestFor(agent.ID + "-authorization")
 	agent.CapabilityDigest = digestFor(agent.ID + "-capability")
 	agent.StateSnapshotDigest = digestFor(agent.ID + "-state")
-	return Input{SchemaVersion: 1, IntentClass: intent, ScopeKind: scopeKind, ScopeID: scopeID, Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone, SimpleReversible: intent == IntentErrand, ExecutionOnly: intent == IntentErrand, AvailableAgents: []RegisteredAgent{agent}}
+	input := Input{SchemaVersion: 1, IntentClass: intent, ScopeKind: scopeKind, ScopeID: scopeID, Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone, SimpleReversible: intent == IntentErrand, ExecutionOnly: intent == IntentErrand, AvailableAgents: []RegisteredAgent{agent}}
+	if intent == IntentQuality {
+		input.SourceHead = strings.Repeat("a", 40)
+	}
+	return input
 }
 
 func TestGammaQualityRejectsCaseScopeContext(t *testing.T) {
 	input := routeInput(IntentQuality, "case", "case-alpha", RegisteredAgent{ID: "gamma-guardian", Role: "quality_guardian", ScopeKind: "case", ScopeID: "case-alpha"})
 	if _, err := PlanFor(input); err == nil || !strings.Contains(err.Error(), "workspace scope") {
 		t.Fatalf("Gamma accepted case-scoped quality context: %v", err)
+	}
+}
+
+func TestGammaQualityPinsCanonicalSourceHeadIntoPlanDigest(t *testing.T) {
+	input := routeInput(IntentQuality, "workspace", "repo-a", RegisteredAgent{ID: "gamma-guardian", Role: "quality_guardian", ScopeKind: "workspace", ScopeID: "repo-a"})
+	plan, err := PlanFor(input)
+	if err != nil || plan.SourceHead != input.SourceHead || plan.PlanDigest != digestPlan(plan) {
+		t.Fatalf("Gamma source head was not plan-bound: %#v %v", plan, err)
+	}
+	mutated := plan
+	mutated.SourceHead = strings.Repeat("b", 40)
+	if err := mutated.Validate(); err == nil {
+		t.Fatal("Gamma source-head mutation bypassed the plan/dispatch binding digest")
+	}
+	for _, malformed := range []string{"", "main", strings.Repeat("A", 40), strings.Repeat("a", 39)} {
+		input.SourceHead = malformed
+		if _, err := PlanFor(input); err == nil {
+			t.Fatalf("Gamma accepted mutable or malformed source head %q", malformed)
+		}
+	}
+	input = caseInput(true)
+	input.SourceHead = strings.Repeat("a", 40)
+	if _, err := PlanFor(input); err == nil {
+		t.Fatal("non-Gamma plan accepted source head")
 	}
 }
 

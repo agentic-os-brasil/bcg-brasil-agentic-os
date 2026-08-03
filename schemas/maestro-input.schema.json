@@ -29,8 +29,12 @@
     "external_artifact": {"type": "boolean"},
     "reputational_risk": {"type": "boolean"},
     "hard_to_reverse": {"type": "boolean"},
+    "source_head": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
     "available_registered_agents": {"type": "array", "items": {"$ref": "#/$defs/agent"}}
   },
+  "allOf": [
+    {"if": {"properties": {"intent_class": {"const": "code_quality"}}}, "then": {"required": ["source_head"]}}
+  ],
   "$defs": {
     "agent": {
       "type": "object",

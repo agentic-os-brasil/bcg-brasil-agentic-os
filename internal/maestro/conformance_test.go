@@ -145,6 +145,7 @@ func TestGammaGuardianFixturePinsLongitudinalQualityContract(t *testing.T) {
 		InputContract       string   `json:"input_contract"`
 		EvaluationScope     string   `json:"evaluation_scope"`
 		RuntimeScopeKind    string   `json:"runtime_scope_kind"`
+		SourceHeadBinding   string   `json:"source_head_binding"`
 		Dimensions          []string `json:"dimensions"`
 		Signals             []string `json:"signals"`
 		NativeQualification string   `json:"native_qualification"`
@@ -160,7 +161,7 @@ func TestGammaGuardianFixturePinsLongitudinalQualityContract(t *testing.T) {
 	if err := json.Unmarshal(body, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.SchemaVersion != 1 || fixture.Identity != "gamma-guardian" || fixture.Role != "quality_guardian" || fixture.Placement != "maestro_longitudinal_spoke" || fixture.InputContract != "bounded_quality_packet" || fixture.EvaluationScope != "one_authorized_workspace_per_request" || fixture.RuntimeScopeKind != "workspace" || fixture.NativeQualification != "unavailable" {
+	if fixture.SchemaVersion != 1 || fixture.Identity != "gamma-guardian" || fixture.Role != "quality_guardian" || fixture.Placement != "maestro_longitudinal_spoke" || fixture.InputContract != "bounded_quality_packet" || fixture.EvaluationScope != "one_authorized_workspace_per_request" || fixture.RuntimeScopeKind != "workspace" || fixture.SourceHeadBinding != "immutable_git_object_id_in_plan_and_execution_grant" || fixture.NativeQualification != "unavailable" {
 		t.Fatalf("Gamma Guardian fixture header drifted: %#v", fixture)
 	}
 	for _, dimension := range []string{"clean_code", "architecture_system_design", "testing", "security_reliability", "documentation_sdd"} {

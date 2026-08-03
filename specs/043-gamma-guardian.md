@@ -11,7 +11,10 @@ binds exactly one authorized workspace and source head.
 - Canonical role: `quality_guardian`.
 - Ownership scope: `quality_longitudinal`.
 - Input contract: `bounded_quality_packet`.
-- Runtime grant scope: one `workspace` and source head per request; never a
+- Runtime grant scope: one `workspace` and one immutable lower-case Git object
+  ID (SHA-1 or SHA-256) per request. The source head is mandatory and included
+  in the integrity-bound plan and dispatch binding digest; a branch,
+  tag, missing or divergent revision fails closed. Gamma never receives a
   `case` scope or inherited Case context.
 - Tool access: scoped inspection only; no merge, publish, release or routing
   authority.

@@ -95,30 +95,33 @@ type RegisteredAgent struct {
 }
 
 type Input struct {
-	SchemaVersion          int               `json:"schema_version"`
-	IntentClass            IntentClass       `json:"intent_class"`
-	ScopeKind              string            `json:"scope_kind"`
-	ScopeID                string            `json:"scope_id"`
-	AccountScopeID         string            `json:"account_scope_id,omitempty"`
-	Sensitivity            Sensitivity       `json:"sensitivity"`
-	Materiality            Materiality       `json:"materiality"`
-	ReviewTrigger          string            `json:"review_trigger"`
-	HealthIntent           HealthIntent      `json:"health_governance_intent"`
-	RequestedCapability    string            `json:"requested_capability"`
-	CallerRole             string            `json:"caller_role,omitempty"`
-	ClientImplication      bool              `json:"client_implication"`
-	StakeholderImplication bool              `json:"stakeholder_implication"`
-	StrategicImplication   bool              `json:"strategic_implication"`
-	PromotionImplication   bool              `json:"promotion_implication"`
-	CrossCaseContext       bool              `json:"cross_case_context"`
-	ExecutionOnly          bool              `json:"execution_only"`
-	SimpleReversible       bool              `json:"simple_reversible"`
-	HighLeverage           bool              `json:"high_leverage"`
-	ConsequentialDecision  bool              `json:"consequential_decision"`
-	ExternalArtifact       bool              `json:"external_artifact"`
-	ReputationalRisk       bool              `json:"reputational_risk"`
-	HardToReverse          bool              `json:"hard_to_reverse"`
-	AvailableAgents        []RegisteredAgent `json:"available_registered_agents"`
+	SchemaVersion          int          `json:"schema_version"`
+	IntentClass            IntentClass  `json:"intent_class"`
+	ScopeKind              string       `json:"scope_kind"`
+	ScopeID                string       `json:"scope_id"`
+	AccountScopeID         string       `json:"account_scope_id,omitempty"`
+	Sensitivity            Sensitivity  `json:"sensitivity"`
+	Materiality            Materiality  `json:"materiality"`
+	ReviewTrigger          string       `json:"review_trigger"`
+	HealthIntent           HealthIntent `json:"health_governance_intent"`
+	RequestedCapability    string       `json:"requested_capability"`
+	CallerRole             string       `json:"caller_role,omitempty"`
+	ClientImplication      bool         `json:"client_implication"`
+	StakeholderImplication bool         `json:"stakeholder_implication"`
+	StrategicImplication   bool         `json:"strategic_implication"`
+	PromotionImplication   bool         `json:"promotion_implication"`
+	CrossCaseContext       bool         `json:"cross_case_context"`
+	ExecutionOnly          bool         `json:"execution_only"`
+	SimpleReversible       bool         `json:"simple_reversible"`
+	HighLeverage           bool         `json:"high_leverage"`
+	ConsequentialDecision  bool         `json:"consequential_decision"`
+	ExternalArtifact       bool         `json:"external_artifact"`
+	ReputationalRisk       bool         `json:"reputational_risk"`
+	HardToReverse          bool         `json:"hard_to_reverse"`
+	// SourceHead pins a Gamma quality run to one immutable source revision.
+	// It is intentionally empty for every non-quality route.
+	SourceHead      string            `json:"source_head,omitempty"`
+	AvailableAgents []RegisteredAgent `json:"available_registered_agents"`
 }
 
 type AgentBinding struct {
@@ -152,6 +155,7 @@ type Plan struct {
 	ScopeID                     string         `json:"scope_id"`
 	AccountScopeID              string         `json:"account_scope_id,omitempty"`
 	RequestedCapability         string         `json:"requested_capability,omitempty"`
+	SourceHead                  string         `json:"source_head,omitempty"`
 	AccountConsultationRequired bool           `json:"account_consultation_required"`
 	Bindings                    []AgentBinding `json:"bindings,omitempty"`
 	PlanDigest                  string         `json:"plan_digest"`
@@ -222,6 +226,7 @@ func PlanFor(input Input) (Plan, error) {
 		add(err)
 	case IntentQuality:
 		plan.Action, plan.ReasonCode = ActionGamma, "longitudinal_code_quality_requested"
+		plan.SourceHead = input.SourceHead
 		gamma, ok := find("quality_guardian", input.ScopeKind, input.ScopeID)
 		if !ok {
 			return Plan{}, errors.New("Gamma Guardian routing is unavailable")
@@ -325,6 +330,12 @@ func validateInput(input Input) error {
 	if input.IntentClass == IntentQuality && input.ScopeKind != "workspace" {
 		return errors.New("Gamma quality evaluation requires one authorized workspace scope")
 	}
+	if input.IntentClass == IntentQuality && !validSourceHead(input.SourceHead) {
+		return errors.New("Gamma quality evaluation requires one canonical authorized source head")
+	}
+	if input.IntentClass != IntentQuality && input.SourceHead != "" {
+		return errors.New("source head is reserved for Gamma quality evaluation")
+	}
 	validSensitivity := map[Sensitivity]bool{SensitivityPublic: true, SensitivityInternal: true, SensitivityConfidential: true, SensitivityRestricted: true}
 	if !validSensitivity[input.Sensitivity] {
 		return fmt.Errorf("unknown sensitivity %q", input.Sensitivity)
@@ -367,6 +378,21 @@ func validRole(role string) bool {
 	default:
 		return false
 	}
+}
+
+// validSourceHead accepts immutable Git object identifiers only. Supporting
+// both SHA-1 and SHA-256 keeps the contract portable without admitting a
+// branch, tag or mutable ref name as quality evidence.
+func validSourceHead(value string) bool {
+	if len(value) != 40 && len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func validDigest(value string) bool {
@@ -458,6 +484,12 @@ func (plan Plan) Validate() error {
 	}
 	if plan.Action == ActionGamma && bindingID(plan, "quality_guardian") == "" {
 		return errors.New("Gamma plan must bind the longitudinal quality guardian")
+	}
+	if plan.Action == ActionGamma && !validSourceHead(plan.SourceHead) {
+		return errors.New("Gamma plan must bind one canonical source head")
+	}
+	if plan.Action != ActionGamma && plan.SourceHead != "" {
+		return errors.New("non-Gamma plan cannot carry a source head")
 	}
 	return nil
 }

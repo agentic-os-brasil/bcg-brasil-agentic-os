@@ -6,6 +6,7 @@
   "input_contract": "bounded_quality_packet",
   "evaluation_scope": "one_authorized_workspace_per_request",
   "runtime_scope_kind": "workspace",
+  "source_head_binding": "immutable_git_object_id_in_plan_and_execution_grant",
   "dimensions": [
     "clean_code",
     "architecture_system_design",
