@@ -11,22 +11,30 @@ import (
 	"strings"
 )
 
-const DeterministicL1SynthesizerID = "deterministic-l1-v1"
+const DeterministicL1SynthesizerID = "deterministic-l1-v2"
 
 type DeterministicL1Synthesizer struct {
-	MaxRunes   int
-	MaxEntries int
+	MaxRunes        int
+	MaxEntries      int
+	MaxInputBytes   int
+	MaxInputEntries int
+	Attestor        CaptureAttestor
 }
 
 func (synthesizer DeterministicL1Synthesizer) Synthesize(_ context.Context, request SynthesisRequest) (string, error) {
 	if request.Cycle != "daily" || request.TargetLayer != "L1" || request.WorkspaceID == "" || request.Period == "" {
 		return "", errors.New("deterministic L1 synthesizer accepts only a bounded daily L1 request")
 	}
-	if synthesizer.MaxRunes <= 0 || synthesizer.MaxEntries <= 0 {
+	if synthesizer.MaxRunes <= 0 || synthesizer.MaxEntries <= 0 || synthesizer.MaxInputBytes <= 0 || synthesizer.MaxInputEntries <= 0 {
 		return "", errors.New("deterministic L1 synthesizer requires explicit positive bounds")
 	}
 	var captures []Capture
+	totalBytes := 0
 	for _, source := range request.Sources {
+		totalBytes += len(source.Content)
+		if totalBytes > synthesizer.MaxInputBytes {
+			return "", errors.New("daily L1 synthesis source bytes exceed the configured bound")
+		}
 		scanner := bufio.NewScanner(bytes.NewReader(source.Content))
 		scanner.Buffer(make([]byte, 4096), 1<<20)
 		for scanner.Scan() {
@@ -42,7 +50,13 @@ func (synthesizer DeterministicL1Synthesizer) Synthesize(_ context.Context, requ
 			if capture.WorkspaceID != request.WorkspaceID || !capture.Sanitized || capture.RecordedAt.IsZero() || capture.RecordedAt.UTC().Format("2006-01-02") != request.Period || strings.TrimSpace(capture.Kind) == "" || strings.TrimSpace(capture.Text) == "" {
 				return "", errors.New("L1 synthesis source is not a valid sanitized workspace capture")
 			}
+			if err := synthesizer.Attestor.Verify(capture); err != nil {
+				return "", fmt.Errorf("verify trusted L1 capture: %w", err)
+			}
 			captures = append(captures, capture)
+			if len(captures) > synthesizer.MaxInputEntries {
+				return "", errors.New("daily L1 synthesis entries exceed the configured bound")
+			}
 		}
 		if err := scanner.Err(); err != nil {
 			return "", err

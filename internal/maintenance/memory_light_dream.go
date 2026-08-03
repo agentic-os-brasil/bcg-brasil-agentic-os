@@ -19,7 +19,7 @@ func (handler MemoryLightDreamHandler) ExecuteAuthorized(ctx context.Context, co
 	if command.JobID != MemoryLightDreamJobID || command.WorkspaceID == "" || command.Trigger != TriggerPresence || handler.Engine == nil {
 		return HandlerResult{}, errors.New("memory light dream command is outside its bounded L1 boundary")
 	}
-	result, err := handler.Engine.DreamDaily(ctx, command.WorkspaceID, command.RequestedAt)
+	result, err := handler.Engine.DreamDailyAttested(ctx, command.WorkspaceID, command.RequestedAt)
 	if errors.Is(err, os.ErrNotExist) {
 		return HandlerResult{State: ReceiptReviewedNoChange, ReasonCode: ReasonReviewedNoChange}, nil
 	}

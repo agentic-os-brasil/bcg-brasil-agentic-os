@@ -180,7 +180,9 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 		policy, policyErr := basememory.Policy()
 		config, configErr := basememory.Runtime()
 		if policyErr == nil && configErr == nil {
-			engine := &memory.Engine{Root: filepath.Join(root, "memory"), Policy: policy, Budgets: map[string]int{"L1": config.L1MaxRunes, "L2": 1, "L3": 1, "lifetime": 1}, Synthesizer: memory.DeterministicL1Synthesizer{MaxRunes: config.L1MaxRunes, MaxEntries: config.L1MaxEntries}, SynthesizerID: memory.DeterministicL1SynthesizerID}
+			memoryRoot := filepath.Join(root, "memory")
+			attestor := memory.CaptureAttestor{Root: memoryRoot}
+			engine := &memory.Engine{Root: memoryRoot, Policy: policy, Budgets: map[string]int{"L1": config.L1MaxRunes, "L2": 1, "L3": 1, "lifetime": 1}, MaxSourceBytes: config.L1MaxInputBytes, Synthesizer: memory.DeterministicL1Synthesizer{MaxRunes: config.L1MaxRunes, MaxEntries: config.L1MaxEntries, MaxInputBytes: config.L1MaxInputBytes, MaxInputEntries: config.L1MaxInputEntries, Attestor: attestor}, SynthesizerID: memory.DeterministicL1SynthesizerID}
 			handlers[maintenance.MemoryLightDreamJobID] = maintenance.MemoryLightDreamHandler{Engine: engine}
 		}
 	}

@@ -14,7 +14,7 @@ The canonical memory pipeline has three generated operating layers plus a curate
 
 | Layer | Purpose | Input | Default shape |
 |---|---|---|---|
-| L1 | Recent daily continuity | Sanitized Claude/Codex conversation signals plus selected sanitized human daily-log signals | Append-only daily journal plus dense daily digest |
+| L1 | Recent daily continuity | Attested Claude/Codex skill-route metadata; future approved adapters may add selected sanitized signals | Append-only capture-v2 journal plus dense daily digest |
 | L2 | Cross-day continuity | Recent L1 digests | Weekly rollup that collapses repeated threads |
 | L3 | Medium-term continuity | Recent L2 rollups | Rolling thematic synthesis of open, changing or structurally important threads |
 | Lifetime | Stable recall and routing | Repeated, durable evidence promoted from L3 | Compact index with drill-down pointers to owned memory files |
@@ -36,7 +36,7 @@ reads no error/body/prompt/tool payload, creates no L1/L2/L3 artifact and is
 never evidence that dreaming occurred. Without a durable source watermark it
 remains unavailable. `memory-light-dream` has a separate three-hour due
 contract and uses a runtime-qualified deterministic L1 synthesizer over only
-already-sanitized captures. `memory-deep-dream` is the weekly deep cycle and
+trusted capture-v2 envelopes. `memory-deep-dream` is the weekly deep cycle and
 remains unavailable without qualified deep synthesis and eligibility adapters.
 
 ### L1 source composition
@@ -49,11 +49,15 @@ by itself. Before the deterministic memory engine may accept a daily-log
 signal, the capture contract must be extended to preserve a source kind,
 provenance and a verifiable sanitization attestation from the source adapter.
 
-That extension is not implemented yet. The current capture core has only its
-existing `Kind` and `Sanitized` fields, and it must not treat a self-declared
-CLI flag as the required evidence. Until the extended contract and its adapter
-tests exist, daily logs remain human-readable sources only and cannot enter
-L1. L1 remains a bounded continuity product, never a copy of either source.
+Capture-v2 implements that boundary for one narrow source: selected skill IDs
+emitted by the Claude or Codex context-injection adapter. The envelope binds
+workspace, timestamp, producer, sanitizer version, source digest and metadata
+body with a workspace-local HMAC key. It contains no prompt, routing rationale,
+pointer, transcript or client body. Manual CLI captures remain in the legacy
+journal and are deliberately excluded from unattended light dreaming; daily
+logs remain human-readable sources only until a separately approved producer
+and sanitizer exist. L1 remains a bounded continuity product, never a copy of
+either source.
 
 Manual invocation, a lifecycle hook, a scheduler and presence-based catch-up may all trigger these cycles. The trigger does not own memory semantics. A missed weekly run remains pending until the same idempotent deep cycle succeeds.
 
@@ -64,7 +68,7 @@ Dreaming is the promotion pipeline from L1 to L2 to L3 and, during the governed 
 1. Select source files through a deterministic recency window and stable ordering.
 2. Compute a source fingerprint and skip an already-produced equivalent rollup.
 3. Stage synthesis output outside the active memory paths.
-4. Validate size, layer and the provenance envelope; reject capture input not already marked sanitized by its adapter.
+4. Validate size, entry count, layer and the capture-v2 provenance envelope; reject missing, invalid or untrusted producer attestation.
 5. Publish immutable artifact versions, then atomically expose the complete set through one validated commit manifest.
 6. Record completion or failure without changing source layers.
 
@@ -113,8 +117,9 @@ lifetime -> L3 -> L2 -> L1
 Each injected layer has an independent budget and an explicit pointer to deeper evidence. A missing or stale generated layer is skipped with a diagnostic; it never causes raw unbounded history to be injected as a silent fallback. Authoritative project state and decisions retain precedence over generated memory.
 
 The base policy requires a budget for every layer. The bundled light-dream
-runtime configuration sets a reviewable Canary bound of 12,000 L1 runes and 64
-complete entries; it is managed configuration, not an adapter constant. Other
+runtime configuration sets a reviewable Canary bound of 12,000 L1 runes, 64
+complete output entries, 1 MiB of total source input and 256 input entries; it
+is managed configuration, not an adapter constant. Other
 layer budgets remain required runtime configuration and deep dreaming stays
 unavailable until they are qualified from real-session evidence.
 

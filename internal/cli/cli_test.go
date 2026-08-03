@@ -22,8 +22,10 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillrouting"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -162,7 +164,7 @@ func TestMemoryCLIReportsAllInvalidCommitsAsCorrupt(t *testing.T) {
 	}
 }
 
-func TestMemoryDailyDreamRunsDeterministicallyAndWeeklyRemainsUnavailable(t *testing.T) {
+func TestMemoryDailyDreamExcludesManualCaptureAndWeeklyRemainsUnavailable(t *testing.T) {
 	dataDir := t.TempDir()
 	var output bytes.Buffer
 	if code := RunWithInput([]string{"memory", "capture", "--data-dir", dataDir, "--workspace", "case-a", "--kind", "decision", "--stdin", "--sanitized"}, strings.NewReader("owner confirmation required"), &output, &output); code != ExitOK {
@@ -170,13 +172,40 @@ func TestMemoryDailyDreamRunsDeterministicallyAndWeeklyRemainsUnavailable(t *tes
 	}
 	output.Reset()
 	code := Run([]string{"memory", "dream", "daily", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
-	if code != ExitOK || !strings.Contains(output.String(), `"capability": "memory_light_dreaming"`) || !strings.Contains(output.String(), `"state": "succeeded"`) {
+	if code != ExitOK || !strings.Contains(output.String(), `"capability": "memory_light_dreaming"`) || !strings.Contains(output.String(), `"state": "reviewed_no_change"`) || !strings.Contains(output.String(), "trusted capture-v2") {
 		t.Fatalf("daily dream exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
 	code = Run([]string{"memory", "dream", "weekly", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
 	if code != ExitUnavailable || !strings.Contains(output.String(), `"capability": "memory_deep_dreaming"`) || !strings.Contains(output.String(), `"state": "unavailable"`) {
 		t.Fatalf("weekly dream exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestRecordAttestedSkillRoutePersistsOnlyTrustedMetadata(t *testing.T) {
+	root := t.TempDir()
+	selected := []skillrouting.Selection{{ID: "meeting-close", Reason: "secret prompt phrase", Pointer: "/secret/pointer"}}
+	if err := recordAttestedSkillRoute(root, "claude", "case-a", "session-a", selected); err != nil {
+		t.Fatal(err)
+	}
+	period := time.Now().UTC().Format("2006-01-02")
+	path := filepath.Join(root, "memory", "workspaces", "case-a", "l1", "attested-captures", period+".jsonl")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "secret prompt phrase") || strings.Contains(string(body), "/secret/pointer") {
+		t.Fatalf("capture leaked prompt rationale or pointer: %s", body)
+	}
+	var capture memory.Capture
+	if err := json.Unmarshal(bytes.TrimSpace(body), &capture); err != nil {
+		t.Fatal(err)
+	}
+	if capture.Text != "meeting-close" || capture.ProducerID != "claude.context-injection" {
+		t.Fatalf("unexpected capture envelope: %#v", capture)
+	}
+	if err := (memory.CaptureAttestor{Root: filepath.Join(root, "memory")}).Verify(capture); err != nil {
+		t.Fatalf("capture is not verifiably attested: %v", err)
 	}
 }
 

@@ -1,5 +1,7 @@
 {
   "schema_version": 1,
   "l1_max_runes": 12000,
-  "l1_max_entries": 64
+  "l1_max_entries": 64,
+  "l1_max_input_bytes": 1048576,
+  "l1_max_input_entries": 256
 }

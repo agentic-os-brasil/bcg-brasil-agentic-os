@@ -31,6 +31,11 @@ func (engine *Engine) Status(workspaceID string) (StatusReport, error) {
 		return StatusReport{}, err
 	}
 	report.CaptureFiles = len(captures)
+	attested, err := filepath.Glob(filepath.Join(engine.workspaceRoot(workspaceID), "l1", "attested-captures", "*.jsonl"))
+	if err != nil {
+		return StatusReport{}, err
+	}
+	report.CaptureFiles += len(attested)
 	if report.CaptureFiles > 0 {
 		report.State = "captured"
 	}

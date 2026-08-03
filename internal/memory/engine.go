@@ -22,11 +22,16 @@ var workspaceIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 var ErrDreamInProgress = errors.New("memory dreaming cycle already in progress")
 
 type Capture struct {
-	WorkspaceID string    `json:"workspace_id"`
-	RecordedAt  time.Time `json:"recorded_at"`
-	Kind        string    `json:"kind"`
-	Text        string    `json:"text"`
-	Sanitized   bool      `json:"sanitized"`
+	SchemaVersion int       `json:"schema_version,omitempty"`
+	WorkspaceID   string    `json:"workspace_id"`
+	RecordedAt    time.Time `json:"recorded_at"`
+	Kind          string    `json:"kind"`
+	Text          string    `json:"text"`
+	Sanitized     bool      `json:"sanitized"`
+	ProducerID    string    `json:"producer_id,omitempty"`
+	SanitizerID   string    `json:"sanitizer_id,omitempty"`
+	SourceDigest  string    `json:"source_digest,omitempty"`
+	Attestation   string    `json:"attestation,omitempty"`
 }
 
 type SourceDocument struct {
@@ -92,6 +97,7 @@ type Engine struct {
 	EligibilityPolicyID string
 	Now                 func() time.Time
 	FaultPoint          func(string) error
+	MaxSourceBytes      int
 	contextReadPoint    func(string) error
 }
 
@@ -166,10 +172,20 @@ func (engine *Engine) Capture(capture Capture) (string, error) {
 	if !capture.Sanitized {
 		return "", errors.New("capture must be sanitized before persistence")
 	}
+	if capture.SchemaVersion != 0 && capture.SchemaVersion != AttestedCaptureSchemaVersion {
+		return "", errors.New("unsupported capture schema version")
+	}
+	if capture.SchemaVersion == AttestedCaptureSchemaVersion && len(capture.Attestation) != 64 {
+		return "", errors.New("attested capture requires its producer attestation")
+	}
 	if capture.RecordedAt.IsZero() || strings.TrimSpace(capture.Kind) == "" || strings.TrimSpace(capture.Text) == "" {
 		return "", errors.New("capture requires recorded_at, kind and text")
 	}
-	path := engine.currentPath(capture.WorkspaceID, "l1", filepath.Join("captures", capture.RecordedAt.UTC().Format("2006-01-02")+".jsonl"))
+	directory := "captures"
+	if capture.SchemaVersion == AttestedCaptureSchemaVersion {
+		directory = "attested-captures"
+	}
+	path := engine.currentPath(capture.WorkspaceID, "l1", filepath.Join(directory, capture.RecordedAt.UTC().Format("2006-01-02")+".jsonl"))
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return "", err
 	}
@@ -192,6 +208,14 @@ func (engine *Engine) Capture(capture Capture) (string, error) {
 }
 
 func (engine *Engine) DreamDaily(ctx context.Context, workspaceID string, day time.Time) (DreamResult, error) {
+	return engine.dreamDaily(ctx, workspaceID, day, "captures")
+}
+
+func (engine *Engine) DreamDailyAttested(ctx context.Context, workspaceID string, day time.Time) (DreamResult, error) {
+	return engine.dreamDaily(ctx, workspaceID, day, "attested-captures")
+}
+
+func (engine *Engine) dreamDaily(ctx context.Context, workspaceID string, day time.Time, captureDirectory string) (DreamResult, error) {
 	if err := engine.validateRuntime(workspaceID, false); err != nil {
 		return DreamResult{}, err
 	}
@@ -201,7 +225,7 @@ func (engine *Engine) DreamDaily(ctx context.Context, workspaceID string, day ti
 		return DreamResult{}, err
 	}
 	defer release()
-	capturePath := engine.currentPath(workspaceID, "l1", filepath.Join("captures", period+".jsonl"))
+	capturePath := engine.currentPath(workspaceID, "l1", filepath.Join(captureDirectory, period+".jsonl"))
 	sources, err := engine.readSources(workspaceID, []string{capturePath})
 	if err != nil {
 		return DreamResult{}, err
@@ -365,11 +389,33 @@ func (engine *Engine) readSources(workspaceID string, paths []string) ([]SourceD
 	sort.Strings(paths)
 	root := engine.workspaceRoot(workspaceID)
 	sources := make([]SourceDocument, 0, len(paths))
+	maximum := engine.MaxSourceBytes
+	if maximum <= 0 {
+		maximum = 1 << 20
+	}
+	total := 0
 	for _, path := range paths {
-		content, err := os.ReadFile(path)
+		file, err := os.Open(path)
 		if err != nil {
 			return nil, err
 		}
+		remaining := maximum - total
+		if remaining <= 0 {
+			_ = file.Close()
+			return nil, errors.New("memory dream sources exceed the configured byte limit")
+		}
+		content, readErr := io.ReadAll(io.LimitReader(file, int64(remaining+1)))
+		closeErr := file.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+		if len(content) > remaining {
+			return nil, errors.New("memory dream sources exceed the configured byte limit")
+		}
+		total += len(content)
 		relative, err := filepath.Rel(root, path)
 		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 			return nil, fmt.Errorf("source outside workspace memory root: %s", path)
