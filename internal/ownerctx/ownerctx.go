@@ -2,6 +2,8 @@
 package ownerctx
 
 import (
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -47,6 +49,7 @@ type OnboardingStatus struct {
 	State        string        `json:"state"`
 	Remaining    []string      `json:"remaining,omitempty"`
 	NextQuestion InterviewStep `json:"next_question,omitempty"`
+	ReviewDigest string        `json:"review_digest,omitempty"`
 }
 
 // TaskStatus exposes only a bounded list of explicitly marked open items in
@@ -207,10 +210,11 @@ func onboarding(root string, available map[string]Facet, confirmedAt, confirmedD
 		}
 	}
 	if len(remaining) == 0 {
-		if confirmedAt != "" && confirmedDigest == onboardingDigest(root) {
+		currentDigest := onboardingDigest(root)
+		if confirmedAt != "" && secureDigestEqual(confirmedDigest, currentDigest) {
 			return OnboardingStatus{State: "complete"}
 		}
-		return OnboardingStatus{State: "review_required"}
+		return OnboardingStatus{State: "review_required", ReviewDigest: currentDigest}
 	}
 	state := "in_progress"
 	if len(remaining) == len(onboardingFacets) {
@@ -261,21 +265,42 @@ func openTasks(root, relative string) TaskStatus {
 // ConfirmOnboarding records the owner's explicit review of the currently
 // answered non-sensitive facets. Any later change invalidates the digest and
 // returns onboarding to review_required.
-func ConfirmOnboarding(root string) (Status, error) {
+func ConfirmOnboarding(root, expectedDigest string) (Status, error) {
+	if !validOnboardingDigest(expectedDigest) {
+		return Status{}, errors.New("onboarding confirmation requires the 64-character SHA-256 review_digest shown by bcgos owner onboarding status; nothing was changed")
+	}
 	value, err := readRegistry(root)
 	if err != nil {
 		return Status{}, err
 	}
 	status := onboarding(root, facetsFromRegistry(root, value), "", "")
-	if status.State != "review_required" {
+	if status.State != "review_required" || status.ReviewDigest == "" {
 		return Status{}, errors.New("onboarding answers are not ready for owner confirmation")
 	}
+	if !secureDigestEqual(expectedDigest, status.ReviewDigest) {
+		return Status{}, errors.New("onboarding confirmation denied because the reviewed digest no longer matches the current facets; nothing was changed; run bcgos owner onboarding status, review the updated profile, and retry with its review_digest")
+	}
 	value.OnboardingConfirmedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	value.OnboardingConfirmedSHA256 = onboardingDigest(root)
+	value.OnboardingConfirmedSHA256 = status.ReviewDigest
 	if err := writePrivateJSON(filepath.Join(root, "owner", "registry.json"), value); err != nil {
 		return Status{}, err
 	}
 	return Inspect(root)
+}
+
+func validOnboardingDigest(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func secureDigestEqual(left, right string) bool {
+	if !validOnboardingDigest(left) || !validOnboardingDigest(right) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(strings.ToLower(left)), []byte(strings.ToLower(right))) == 1
 }
 
 func facetsFromRegistry(root string, value registry) map[string]Facet {

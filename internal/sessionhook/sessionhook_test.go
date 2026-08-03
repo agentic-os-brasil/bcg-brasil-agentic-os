@@ -35,6 +35,11 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || strings.Contains(got, "Prepare kickoff") {
 		t.Fatalf("active directive = %q", got)
 	}
+	reviewDigest := strings.Repeat("a", 64)
+	review := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "review_required", ReviewDigest: reviewDigest}}}
+	if got := sessionDirective(review); !strings.Contains(got, "--digest "+reviewDigest+" --confirm") || !strings.Contains(got, "Only after the owner confirms") {
+		t.Fatalf("review directive = %q", got)
+	}
 }
 
 func TestClaudeAndCodexSerializationAreSeparateAdapterCalls(t *testing.T) {

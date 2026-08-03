@@ -376,14 +376,22 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 }
 
 func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
-			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"'/Users/example/Library/Application Support/Maestro/bin/bcgos' doctor"}}`
+			command := fmt.Sprintf("%q doctor", executable)
+			body, err := json.Marshal(map[string]any{"session_id": "session-a", "tool_name": "Bash", "tool_input": map[string]string{"command": command}})
+			if err != nil {
+				t.Fatal(err)
+			}
 			var output bytes.Buffer
 			rootCalled := false
 			code := runHookWithInput(
 				[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", "/workspace-that-must-not-be-inspected"},
-				strings.NewReader(input),
+				bytes.NewReader(body),
 				&output,
 				&output,
 				func() (string, error) {
@@ -393,6 +401,23 @@ func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *
 			)
 			if code != ExitOK || rootCalled || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
 				t.Fatalf("guard = %d, rootCalled=%v, output=%s", code, rootCalled, output.String())
+			}
+		})
+	}
+}
+
+func TestInstalledGuardRejectsHomonymousBCGOSDiagnosticWhenStateCannotBeValidated(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"/tmp/attacker/bcgos doctor"}}`
+			var output bytes.Buffer
+			code := runHookWithInput(
+				[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", "/workspace-that-must-not-be-inspected"},
+				strings.NewReader(input), &output, &output,
+				func() (string, error) { return "", errors.New("invalid orchestration state") },
+			)
+			if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) || !strings.Contains(output.String(), "Nothing was changed") {
+				t.Fatalf("guard = %d output=%s", code, output.String())
 			}
 		})
 	}

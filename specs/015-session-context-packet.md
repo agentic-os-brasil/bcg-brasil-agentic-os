@@ -34,6 +34,9 @@ Walter-only facet such as the psychological profile. It also must never contain
 an execution item ID, attempt ID, objective, done contract or checkpoint body.
 Open task titles and bodies stay behind the owner-local operating-state pointer;
 Session Start may report only the count and must not invent a backlog.
+When onboarding is `review_required`, the packet includes only the SHA-256
+digest of the reviewable non-sensitive facets so an explicit confirmation can
+be bound to the exact version shown. It never includes the facet bodies.
 
 The active execution capability has three states:
 

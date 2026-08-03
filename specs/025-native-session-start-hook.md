@@ -44,3 +44,8 @@ interview on every prompt. Both payloads expose
 `adapter_delivery_state=adapter_payload_emitted` while retaining
 `injection_state=unavailable`, so successful serialization is visible without
 being mislabeled as native qualification.
+
+At the onboarding review boundary, Session Start presents the bounded
+`review_digest` and the exact confirmation command. The command must echo that
+digest; confirmation without it, or after any facet changes, fails closed and
+leaves onboarding in `review_required`.

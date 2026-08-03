@@ -134,6 +134,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 	case "review_required":
 		lines = append(lines,
 			"ONBOARDING ANSWERS ARE READY FOR REVIEW. Present the local profile for the owner's review and ask for an explicit confirmation; do not call onboarding complete before that confirmation.",
+			"The reviewed profile digest is "+packet.Owner.Onboarding.ReviewDigest+". Only after the owner confirms the displayed facets, run `bcgos owner onboarding confirm --digest "+packet.Owner.Onboarding.ReviewDigest+" --confirm`.",
 		)
 	case "complete":
 		lines = append(lines, "Maestro is active in this workspace. Briefly state that at the start of the session.")
