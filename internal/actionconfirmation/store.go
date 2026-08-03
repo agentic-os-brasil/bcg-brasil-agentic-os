@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,8 +17,9 @@ import (
 )
 
 const (
-	StateFileName = "confirmation-state.json"
-	KeyFileName   = "confirmation.key"
+	StateFileName                  = "confirmation-state.json"
+	KeyFileName                    = "confirmation.key"
+	confirmationStateSchemaVersion = 3
 )
 
 type State string
@@ -56,6 +58,7 @@ type Store struct {
 type stateFile struct {
 	SchemaVersion int         `json:"schema_version"`
 	Challenges    []challenge `json:"challenges"`
+	StateHMAC     string      `json:"state_hmac"`
 }
 
 type challenge struct {
@@ -72,6 +75,7 @@ type challenge struct {
 	ExpiresAt     time.Time `json:"expires_at"`
 	ConfirmedAt   time.Time `json:"confirmed_at,omitempty"`
 	ConsumedAt    time.Time `json:"consumed_at,omitempty"`
+	RecordHMAC    string    `json:"record_hmac"`
 }
 
 func (store Store) Authorize(binding Binding) (Result, error) {
@@ -219,13 +223,20 @@ func (store Store) transaction(change func(*stateFile, []byte) error) error {
 		return err
 	}
 
-	state, err := readState(filepath.Join(store.Root, StateFileName))
+	state, err := readState(filepath.Join(store.Root, StateFileName), key)
 	if err != nil {
 		return err
 	}
 	if err := change(&state, key); err != nil {
 		return err
 	}
+	for index := range state.Challenges {
+		if err := validateChallengeRecord(state.Challenges[index]); err != nil {
+			return err
+		}
+		state.Challenges[index].RecordHMAC = challengeRecordHMAC(key, state.Challenges[index])
+	}
+	state.StateHMAC = stateFileHMAC(key, state)
 	return writeState(filepath.Join(store.Root, StateFileName), state)
 }
 
@@ -258,7 +269,7 @@ func loadOrCreateKey(path string) ([]byte, error) {
 	return key, nil
 }
 
-func readState(path string) (stateFile, error) {
+func readState(path string, key []byte) (stateFile, error) {
 	info, statErr := os.Lstat(path)
 	if statErr == nil && (!info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0) {
 		return stateFile{}, errors.New("confirmation state is not a private regular file")
@@ -268,16 +279,71 @@ func readState(path string) (stateFile, error) {
 	}
 	body, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return stateFile{SchemaVersion: 2}, nil
+		return stateFile{SchemaVersion: confirmationStateSchemaVersion}, nil
 	}
 	if err != nil {
 		return stateFile{}, err
 	}
 	var state stateFile
-	if err := json.Unmarshal(body, &state); err != nil || state.SchemaVersion != 2 {
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&state); err != nil || state.SchemaVersion != confirmationStateSchemaVersion {
 		return stateFile{}, errors.New("confirmation state is invalid")
 	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return stateFile{}, errors.New("confirmation state contains multiple JSON values")
+		}
+		return stateFile{}, errors.New("confirmation state is invalid")
+	}
+	if !macEqual(state.StateHMAC, stateFileHMAC(key, state)) {
+		return stateFile{}, errors.New("confirmation state envelope authentication failed")
+	}
+	for _, item := range state.Challenges {
+		if !macEqual(item.RecordHMAC, challengeRecordHMAC(key, item)) {
+			return stateFile{}, errors.New("confirmation state authentication failed")
+		}
+		if err := validateChallengeRecord(item); err != nil {
+			return stateFile{}, err
+		}
+	}
 	return state, nil
+}
+
+func stateFileHMAC(key []byte, state stateFile) string {
+	state.StateHMAC = ""
+	body, _ := json.Marshal(state)
+	return hmacValue(key, "state-file", string(body))
+}
+
+func challengeRecordHMAC(key []byte, item challenge) string {
+	item.RecordHMAC = ""
+	body, _ := json.Marshal(item)
+	return hmacValue(key, "challenge-record", string(body))
+}
+
+func validateChallengeRecord(item challenge) error {
+	if !challengePattern.MatchString(item.ID) || item.Action == "" || item.CreatedAt.IsZero() || item.ExpiresAt.IsZero() || !item.ExpiresAt.After(item.CreatedAt) {
+		return errors.New("confirmation challenge record is invalid")
+	}
+	switch item.State {
+	case "pending":
+		if !item.ConfirmedAt.IsZero() || !item.ConsumedAt.IsZero() {
+			return errors.New("pending confirmation challenge has terminal timestamps")
+		}
+	case "confirmed":
+		if item.ConfirmedAt.IsZero() || item.ConfirmedAt.Before(item.CreatedAt) || item.ConfirmedAt.After(item.ExpiresAt) || !item.ConsumedAt.IsZero() {
+			return errors.New("confirmed challenge timestamps are invalid")
+		}
+	case "consumed":
+		if item.ConfirmedAt.IsZero() || item.ConsumedAt.IsZero() || item.ConfirmedAt.Before(item.CreatedAt) || item.ConfirmedAt.After(item.ExpiresAt) || item.ConsumedAt.Before(item.ConfirmedAt) || item.ConsumedAt.After(item.ExpiresAt) {
+			return errors.New("consumed challenge timestamps are invalid")
+		}
+	default:
+		return errors.New("confirmation challenge state is invalid")
+	}
+	return nil
 }
 
 func writeState(path string, state stateFile) error {

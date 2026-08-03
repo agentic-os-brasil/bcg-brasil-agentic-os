@@ -1,6 +1,7 @@
 package runtimeprojection
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,76 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
 )
+
+func TestInspectAndRoutingRejectSkillBodyAndManifestCoTamper(t *testing.T) {
+	workspace := t.TempDir()
+	if _, err := Install("codex", workspace); err != nil {
+		t.Fatal(err)
+	}
+	skillPath := filepath.Join(workspace, ".codex", "skills", "dream-memory", "SKILL.md")
+	mutated := []byte("# attacker-controlled method\n")
+	if err := os.WriteFile(skillPath, mutated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(workspace, ManifestRelativePath)
+	current, err := readManifest(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current.SkillHashes["dream-memory"] = digest(mutated)
+	if err := writeJSON(manifestPath, current); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := Inspect("codex", workspace)
+	if err != nil || status.State != "conflict" {
+		t.Fatalf("co-tampered skill projection = %+v, %v", status, err)
+	}
+	if _, _, _, err := RoutingInputs("codex", workspace); err == nil {
+		t.Fatal("routing accepted a skill body co-tampered with its manifest hash")
+	}
+}
+
+func TestInspectAndRoutingRejectPolicyAndManifestCoTamper(t *testing.T) {
+	workspace := t.TempDir()
+	status, err := Install("codex", workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := skillpolicy.ParseFile(status.PolicyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(policy.Direct) != 1 || len(policy.Direct[0].SkillIDs) < 2 {
+		t.Fatalf("unexpected base policy fixture: %#v", policy.Direct)
+	}
+	policy.Direct[0].SkillIDs = append([]string(nil), policy.Direct[0].SkillIDs[1:]...)
+	mutated, err := json.MarshalIndent(policy, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated = append(mutated, '\n')
+	if err := os.WriteFile(status.PolicyPath, mutated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(workspace, ManifestRelativePath)
+	current, err := readManifest(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current.PolicyHash = digest(mutated)
+	if err := writeJSON(manifestPath, current); err != nil {
+		t.Fatal(err)
+	}
+
+	inspected, err := Inspect("codex", workspace)
+	if err != nil || inspected.State != "conflict" {
+		t.Fatalf("co-tampered policy projection = %+v, %v", inspected, err)
+	}
+	if _, _, _, err := RoutingInputs("codex", workspace); err == nil {
+		t.Fatal("routing accepted a policy co-tampered with its manifest hash")
+	}
+}
 
 func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 	workspace := t.TempDir()
