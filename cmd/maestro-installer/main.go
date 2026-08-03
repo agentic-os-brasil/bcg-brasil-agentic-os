@@ -18,29 +18,44 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 )
 
 type options struct {
-	releaseDir        string
-	bootstrapper      string
-	authorityRegistry string
-	managedRoot       string
-	dataRoot          string
-	wizardDir         string
-	headless          bool
-	preview           bool
-	simulate          bool
-	simulationRoot    string
-	sessionToken      string
-	origin            string
-	shutdown          func()
-	shutdownGraceful  func(context.Context) error
-	lifecycle         *wizardLifecycle
+	releaseDir         string
+	bootstrapper       string
+	authorityRegistry  string
+	managedRoot        string
+	dataRoot           string
+	wizardDir          string
+	headless           bool
+	preview            bool
+	simulate           bool
+	simulationRoot     string
+	sessionToken       string
+	origin             string
+	shutdown           func()
+	shutdownGraceful   func(context.Context) error
+	lifecycle          *wizardLifecycle
+	chooseWorkspace    func() (string, error)
+	launchRuntime      func(runtimeID, workspacePath string) error
+	runtimeTargets     func() []runtimeTarget
+	chooseImportSource func() (string, error)
+	workspacePath      func() (string, error)
+	configureWorkspace func(options, string) error
+}
+
+type runtimeTarget struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
 }
 
 type wizardLifecycle struct {
@@ -352,11 +367,15 @@ func wizardHandler(options options) http.Handler {
 			writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
+		installedCLI := installedCLIPath(options)
 		writeHTTPJSON(writer, map[string]any{
 			"platform": runtime.GOOS, "architecture": runtime.GOARCH,
 			"release_dir": options.releaseDir, "managed_root": options.managedRoot,
 			"data_root": options.dataRoot, "trust": map[bool]string{true: "simulation", false: "pending"}[options.simulate],
-			"mode": map[bool]string{true: "simulation", false: "runtime"}[options.simulate],
+			"mode":      map[bool]string{true: "simulation", false: "runtime"}[options.simulate],
+			"installed": installedCLI != "", "cli_path": installedCLI,
+			"runtimes":          availableRuntimeTargets(options),
+			"workspace_default": defaultWorkspaceFor(options),
 		})
 	})
 	mux.HandleFunc("/api/verify", func(writer http.ResponseWriter, request *http.Request) {
@@ -467,6 +486,113 @@ func wizardHandler(options options) http.Handler {
 		}
 		writeHTTPJSON(writer, map[string]any{"path": options.dataRoot, "status": "opened"})
 	})
+	mux.HandleFunc("/api/create-workspace", func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if !authorizeMutation(writer, request, options) {
+			return
+		}
+		if options.lifecycle != nil && !options.lifecycle.beginMutation() {
+			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": "o instalador está sendo encerrado"})
+			return
+		}
+		defer options.lifecycle.endMutation()
+		var payload struct {
+			ImportExisting bool `json:"import_existing"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": "não foi possível entender sua escolha de memória"})
+			return
+		}
+		workspacePath, err := defaultWorkspacePath(options)
+		if err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		var sourcePath string
+		if payload.ImportExisting {
+			chooser := options.chooseImportSource
+			if chooser == nil {
+				chooser = chooseImportSource
+			}
+			sourcePath, err = chooser()
+			if err != nil {
+				writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("não foi possível escolher a pasta de memórias: %v", err)})
+				return
+			}
+			if err := validateMemorySource(sourcePath, workspacePath); err != nil {
+				writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
+				return
+			}
+		}
+		result, err := initializeDefaultWorkspace(options, workspacePath)
+		if err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		if sourcePath != "" {
+			if err := writeImportIntent(workspacePath, sourcePath); err != nil {
+				writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("o workspace foi criado, mas não foi possível registrar a fonte: %v", err)})
+				return
+			}
+		}
+		writeHTTPJSON(writer, map[string]any{
+			"status": "workspace_created", "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID,
+			"source_registered": sourcePath != "", "ingestion_state": map[bool]string{true: "pending_verified_pack", false: "not_requested"}[sourcePath != ""],
+			"adapter_state": "configured_unverified", "readiness_state": "not_run", "scheduler_state": "not_run",
+			"ready_for_runtime": false, "diagnostic_command": workspaceDiagnosticCommand(options, result.WorkspacePath),
+		})
+	})
+	mux.HandleFunc("/api/launch-runtime", func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if !authorizeMutation(writer, request, options) {
+			return
+		}
+		if options.lifecycle != nil && !options.lifecycle.beginMutation() {
+			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": "o instalador está sendo encerrado"})
+			return
+		}
+		defer options.lifecycle.endMutation()
+		var payload struct {
+			Runtime string `json:"runtime"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": "não foi possível entender o runtime selecionado"})
+			return
+		}
+		if !runtimeIsAvailable(options, payload.Runtime) {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": "esse runtime não está disponível neste computador"})
+			return
+		}
+		workspacePath, err := defaultWorkspacePath(options)
+		if err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("não foi possível localizar o workspace padrão: %v", err)})
+			return
+		}
+		inspection, err := workspace.Inspect(workspacePath, options.dataRoot)
+		if err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("não foi possível conferir o workspace: %v", err)})
+			return
+		}
+		if inspection.State != "ready" && inspection.State != "warning" {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": "a pasta escolhida ainda não é um workspace Maestro pronto; escolha uma pasta com .bcgos/workspace.json e brain/README.md"})
+			return
+		}
+		launcher := options.launchRuntime
+		if launcher == nil {
+			launcher = launchRuntime
+		}
+		if err := launcher(payload.Runtime, inspection.WorkspacePath); err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("não foi possível abrir o runtime: %v", err)})
+			return
+		}
+		writeHTTPJSON(writer, map[string]any{"status": "launched", "runtime": payload.Runtime, "workspace_path": inspection.WorkspacePath})
+	})
 	mux.HandleFunc("/api/close", func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			writer.WriteHeader(http.StatusMethodNotAllowed)
@@ -499,6 +625,33 @@ func wizardHandler(options options) http.Handler {
 		}
 	})
 	return mux
+}
+
+func workspaceDiagnosticCommand(options options, workspacePath string) string {
+	cliPath := installedCLIPath(options)
+	if cliPath == "" || strings.TrimSpace(workspacePath) == "" {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		return "& " + strconv.Quote(cliPath) + " doctor " + strconv.Quote(workspacePath)
+	}
+	return shellQuote(cliPath) + " doctor " + shellQuote(workspacePath)
+}
+
+// installedCLIPath is intentionally a narrow, read-only UX hint. It never
+// treats an arbitrary managed root as installed: the exact regular CLI path
+// must exist. Activation remains exclusively owned by installer.Install.
+func installedCLIPath(options options) string {
+	name := "bcgos"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	path := filepath.Join(options.managedRoot, "bin", name)
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	return path
 }
 
 func authorizeMutation(writer http.ResponseWriter, request *http.Request, options options) bool {
@@ -610,6 +763,261 @@ func openPath(path string) error {
 		command, args = "xdg-open", []string{path}
 	}
 	return exec.Command(command, args...).Start()
+}
+
+func availableRuntimeTargets(options options) []runtimeTarget {
+	if options.runtimeTargets != nil {
+		return options.runtimeTargets()
+	}
+	targets := make([]runtimeTarget, 0, 2)
+	if runtimeAvailable("claude") {
+		targets = append(targets, runtimeTarget{ID: "claude", Label: "Abrir no Claude Code"})
+	}
+	if runtimeAvailable("codex") {
+		label := "Abrir no Codex"
+		if chatGPTAppAvailable() {
+			label = "Abrir Codex no ChatGPT"
+		}
+		targets = append(targets, runtimeTarget{ID: "codex", Label: label})
+	}
+	return targets
+}
+
+func chatGPTAppAvailable() bool {
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	for _, root := range []string{"/Applications", filepath.Join(os.Getenv("HOME"), "Applications")} {
+		if info, err := os.Stat(filepath.Join(root, "ChatGPT.app")); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
+}
+
+func runtimeIsAvailable(options options, runtimeID string) bool {
+	for _, target := range availableRuntimeTargets(options) {
+		if target.ID == runtimeID {
+			return true
+		}
+	}
+	return false
+}
+
+func runtimeAvailable(runtimeID string) bool {
+	if _, ok := runtimeCLIPath(runtimeID); ok {
+		return true
+	}
+	if runtime.GOOS != "darwin" || runtimeID != "codex" {
+		return false
+	}
+	for _, root := range []string{"/Applications", filepath.Join(os.Getenv("HOME"), "Applications")} {
+		if info, err := os.Stat(filepath.Join(root, "Codex.app")); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return chatGPTAppAvailable()
+}
+
+func runtimeCLIPath(runtimeID string) (string, bool) {
+	if path, err := exec.LookPath(runtimeID); err == nil {
+		return path, true
+	}
+	if runtime.GOOS != "darwin" {
+		return "", false
+	}
+	for _, directory := range []string{"/opt/homebrew/bin", "/usr/local/bin", filepath.Join(os.Getenv("HOME"), ".local", "bin")} {
+		path := filepath.Join(directory, runtimeID)
+		info, err := os.Stat(path)
+		if err == nil && !info.IsDir() && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
+			return path, true
+		}
+	}
+	return "", false
+}
+
+func chooseWorkspace() (string, error) {
+	if runtime.GOOS != "darwin" {
+		return "", fmt.Errorf("a seleção gráfica de workspace ainda está disponível apenas no macOS")
+	}
+	output, err := exec.Command("osascript", "-e", `POSIX path of (choose folder with prompt "Escolha um workspace Maestro")`).Output()
+	if err != nil {
+		return "", fmt.Errorf("a seleção foi cancelada ou não pôde ser aberta")
+	}
+	path := strings.TrimSpace(string(output))
+	if path == "" {
+		return "", fmt.Errorf("nenhum workspace foi selecionado")
+	}
+	return path, nil
+}
+
+func defaultWorkspaceFor(options options) string {
+	path, err := defaultWorkspacePath(options)
+	if err != nil {
+		return "~/Developer/maestro-os"
+	}
+	return path
+}
+
+func defaultWorkspacePath(options options) (string, error) {
+	if options.workspacePath != nil {
+		return options.workspacePath()
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return "", fmt.Errorf("não foi possível localizar o seu diretório de usuário")
+	}
+	return filepath.Join(home, "Developer", "maestro-os"), nil
+}
+
+func chooseImportSource() (string, error) {
+	if runtime.GOOS != "darwin" {
+		return "", fmt.Errorf("a seleção gráfica de memórias ainda está disponível apenas no macOS")
+	}
+	output, err := exec.Command("osascript", "-e", `POSIX path of (choose folder with prompt "Escolha a pasta de memórias que o Maestro deve preparar para ingestão")`).Output()
+	if err != nil {
+		return "", fmt.Errorf("a seleção foi cancelada ou não pôde ser aberta")
+	}
+	path := strings.TrimSpace(string(output))
+	if path == "" {
+		return "", fmt.Errorf("nenhuma pasta de memórias foi selecionada")
+	}
+	return path, nil
+}
+
+func validateMemorySource(sourcePath, workspacePath string) error {
+	source, err := filepath.Abs(filepath.Clean(sourcePath))
+	if err != nil {
+		return fmt.Errorf("não foi possível resolver a pasta de memórias")
+	}
+	workspace, err := filepath.Abs(filepath.Clean(workspacePath))
+	if err != nil {
+		return fmt.Errorf("não foi possível resolver o novo workspace")
+	}
+	if source == workspace || strings.HasPrefix(workspace, source+string(filepath.Separator)) {
+		return fmt.Errorf("a pasta de memórias não pode ser o novo workspace nem seu diretório-pai")
+	}
+	info, err := os.Stat(source)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("a pasta de memórias escolhida não está disponível")
+	}
+	return nil
+}
+
+func initializeDefaultWorkspace(options options, workspacePath string) (workspace.Result, error) {
+	if strings.TrimSpace(options.dataRoot) == "" {
+		return workspace.Result{}, fmt.Errorf("a área de dados do Maestro não está configurada")
+	}
+	if info, err := os.Stat(workspacePath); err == nil && info.IsDir() {
+		inspection, inspectErr := workspace.Inspect(workspacePath, options.dataRoot)
+		if inspectErr != nil {
+			return workspace.Result{}, inspectErr
+		}
+		if inspection.State != "ready" && inspection.State != "warning" {
+			entries, readErr := os.ReadDir(workspacePath)
+			if readErr != nil {
+				return workspace.Result{}, readErr
+			}
+			if len(entries) > 0 {
+				return workspace.Result{}, fmt.Errorf("%s já existe e não é um workspace Maestro; escolha um novo local ou renomeie essa pasta", workspacePath)
+			}
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return workspace.Result{}, err
+	}
+	result, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: options.dataRoot})
+	if err != nil {
+		return workspace.Result{}, err
+	}
+	if _, err := workspaceagent.Initialize(options.dataRoot, result.WorkspaceID); err != nil {
+		return workspace.Result{}, err
+	}
+	if _, err := agentscaffold.Scaffold(options.dataRoot, agentscaffold.WorkspaceRequest(result.WorkspaceID)); err != nil {
+		return workspace.Result{}, err
+	}
+	configure := options.configureWorkspace
+	if configure == nil {
+		configure = configureWorkspaceRuntime
+	}
+	if err := configure(options, workspacePath); err != nil {
+		return workspace.Result{}, err
+	}
+	return result, nil
+}
+
+func configureWorkspaceRuntime(options options, workspacePath string) error {
+	cliPath := installedCLIPath(options)
+	if cliPath == "" {
+		return fmt.Errorf("o executável instalado do Maestro não foi encontrado")
+	}
+	for _, arguments := range [][]string{
+		{"init", workspacePath},
+		{"adapter", "install", "--runtime", "codex", "--executable", cliPath, workspacePath},
+	} {
+		output, err := exec.Command(cliPath, arguments...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("bootstrap %s falhou: %s", strings.Join(arguments[:min(3, len(arguments))], " "), strings.TrimSpace(string(output)))
+		}
+	}
+	return nil
+}
+
+func writeImportIntent(workspacePath, sourcePath string) error {
+	value, err := json.MarshalIndent(map[string]any{
+		"schema_version": 1,
+		"source_path":    sourcePath,
+		"state":          "pending_verified_pack",
+		"notice":         "Source was selected by the owner. No files have been read, copied or uploaded yet.",
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(workspacePath, ".bcgos", "import-intake.json"), append(value, '\n'), 0o600)
+}
+
+func launchRuntime(runtimeID, workspacePath string) error {
+	if !runtimeAvailable(runtimeID) {
+		return fmt.Errorf("%s não está instalado", runtimeID)
+	}
+	if runtime.GOOS == "darwin" && runtimeID == "codex" && chatGPTAppAvailable() {
+		return openPath(codexWorkspaceLink(workspacePath))
+	}
+	if runtime.GOOS == "darwin" && runtimeID == "codex" {
+		for _, root := range []string{"/Applications", filepath.Join(os.Getenv("HOME"), "Applications")} {
+			app := filepath.Join(root, "Codex.app")
+			if info, err := os.Stat(app); err == nil && info.IsDir() {
+				return exec.Command("open", "-a", app, workspacePath).Start()
+			}
+		}
+	}
+	cliPath, ok := runtimeCLIPath(runtimeID)
+	if !ok {
+		return fmt.Errorf("%s não tem um launcher local", runtimeID)
+	}
+	return openCLIInWorkspace(cliPath, workspacePath)
+}
+
+func codexWorkspaceLink(workspacePath string) string {
+	deepLink := url.URL{Scheme: "codex", Host: "new"}
+	query := deepLink.Query()
+	query.Set("path", workspacePath)
+	query.Set("prompt", "Você está no workspace Maestro recém-criado. Leia AGENTS.md e proponha a primeira tarefa segura.")
+	deepLink.RawQuery = query.Encode()
+	return deepLink.String()
+}
+
+func openCLIInWorkspace(cliPath, workspacePath string) error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("iniciar o CLI no workspace pelo wizard ainda está disponível apenas no macOS")
+	}
+	command := "cd -- " + shellQuote(workspacePath) + " && exec " + shellQuote(cliPath)
+	activate := `tell application "Terminal" to activate`
+	run := "tell application \"Terminal\" to do script " + strconv.Quote(command)
+	return exec.Command("osascript", "-e", activate, "-e", run).Start()
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func writeJSON(value any) {

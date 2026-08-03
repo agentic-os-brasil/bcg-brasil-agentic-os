@@ -18,9 +18,26 @@ but cannot elevate to device administrator.
    bootstrapper, and delegates activation to `bcgos-bootstrap install`.
 6. It runs `bcgos version` from the activated path before returning success.
 
-The bridge refuses existing non-empty managed roots, never mutates the global
-`PATH`, never accepts an unsigned override and removes only a newly-created
-managed root if first activation fails. Owner data remains a separate root.
+The bridge never replaces a healthy existing installation and never treats a
+regular CLI file by itself as installation health. It requires the exact
+managed-root binding in `install-state.json`, the expected CLI version and the
+managed bootstrapper, authority registry and bundle structure. A healthy
+installation of the same release is preserved idempotently; a different
+healthy release must use the signed update flow.
+
+An interrupted installer-owned root or a valid state bound to an unhealthy or
+missing root is moved to a plan-digest-bound recovery location before a clean
+retry. The install state moves first, so a crash cannot leave an authoritative
+state pointing at a missing managed root. Recovery never overwrites an earlier
+quarantine, and an invalid state, symlinked path or unrecognized top-level file
+fails closed without changing either root. The bridge never mutates the global
+`PATH`, never accepts an unsigned override and never deletes owner data.
+
+The bootstrapper's activation success is not accepted on process exit alone.
+The bridge repeats the CLI version diagnostic and then requires a coherent
+durable state plus the expected managed structure. A failure after state commit
+is quarantined, not recursively deleted, and is explicitly reported as safe to
+reinstall rather than ready. Owner data remains a separate root.
 
 ## Visual mode and tests
 
@@ -38,9 +55,13 @@ without flags. `--headless` is available for clean-device automation and does
 not skip any verification. No telemetry, runtime hook or model request is
 started by the installer.
 
-The final action opens the installed user-data directory, not a made-up
-workspace. A workspace is chosen and initialized by the person after install;
-the bridge never silently creates one or claims that a preview has one.
+The connected wizard creates the canonical local workspace only after core
+installation. Its response says `workspace_created`, reports the exact path
+and a workspace-bound `doctor` command, and keeps `ready_for_runtime=false`
+while the adapter is only configured/unverified and readiness or scheduler
+checks have not run. Later installer layers may promote those individual
+fields only from their own observed checks. A preview never claims a workspace
+or runtime is ready.
 
 For a local unsigned visual test, `--preview` intentionally skips all release
 inputs and serves only the static wizard. It cannot verify or install anything;
