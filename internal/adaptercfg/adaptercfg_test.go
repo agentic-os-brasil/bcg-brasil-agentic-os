@@ -328,6 +328,46 @@ func TestInstallRejectsMalformedSessionStartGroupInsteadOfOverwriting(t *testing
 	}
 }
 
+func TestCodexInstallOwnsCompleteSynchronousLifecycle(t *testing.T) {
+	workspace := t.TempDir()
+	if _, err := Install("codex", workspace, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	config, err := read(filepath.Join(workspace, ".codex", "hooks.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooks, err := hooksMap(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"} {
+		groups, err := groupsForEvent(hooks, event)
+		if err != nil || len(groups) == 0 {
+			t.Fatalf("%s groups = %#v, %v", event, groups, err)
+		}
+		found := false
+		for _, group := range groups {
+			for _, raw := range group.(map[string]any)["hooks"].([]any) {
+				entry := raw.(map[string]any)
+				if !isOwnedEventCommand("codex", event, entry["command"]) {
+					continue
+				}
+				found = true
+				if entry["timeout"] != float64(2) {
+					t.Fatalf("%s timeout = %#v", event, entry["timeout"])
+				}
+				if async, _ := entry["async"].(bool); async {
+					t.Fatalf("%s must remain synchronous", event)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("owned %s binding not found", event)
+		}
+	}
+}
+
 func TestClaudeInstallOwnsCompleteLifecycleAndKeepsObserveHooksAsync(t *testing.T) {
 	workspace := t.TempDir()
 	path := filepath.Join(workspace, ".claude", "settings.local.json")

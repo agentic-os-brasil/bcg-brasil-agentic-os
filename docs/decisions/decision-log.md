@@ -688,3 +688,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: A user can select software, data or both practices during onboarding; the active projection and dispatcher policy remain deterministic, hash-bound and tool-neutral. Embedded methods from unselected bundles remain denied, and a modified or unmanaged policy path fails closed. The base catalog remains unchanged until selection, and no track grants tools, data scope, provider access, publication or agent authority.
 - Refs: USER; specs/035-professional-capability-bundles.md; bundles/catalog/catalog.json; internal/agentidentity; internal/runtimeprojection
 - Supersedes: BSEL
+
+## CAGT - Route contextual methods and gate external mutation
+
+- Date: 2026-08-02
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro's installed lifecycle hooks could emit a generic pointer-only packet and deny protected-root deletion, but they neither selected the smallest relevant installed method nor required a user-bound handshake before an external publication or mutation. Any solution must preserve local responsiveness, avoid prompt/tool-payload persistence and keep adapter output separate from native capability evidence.
+- Decision: On Claude and Codex `UserPromptSubmit`, deterministically select at most two integrity-checked, installed and direct-policy-allowed skill pointers from explicit or lexical intent; inject only IDs, reasons and pointers. For a bounded set of external mutation commands/tools, `PreToolUse` issues a short-lived challenge bound to actor, session, canonical action, target and input digest. Only the exact same-session user phrase confirms it, and an identical `PreToolUse` request consumes it atomically once. Unknown intent selects nothing; missing identity, noncanonical input, mutation, expiry, replay or contention fails closed. Ordinary local actions bypass the handshake, while protected-root destruction remains absolutely denied.
+- Consequences: Prompt and raw tool input remain ephemeral; durable challenge state contains only digests, timestamps and state. Confirmation does not grant tools, data scope, delegation or a general permission bypass, and the adapter emits no explicit allow decision. Claude/Codex keep separate native serializers and complete five-event binding tests, while contextual injection and guard capabilities remain unavailable until qualifying native-session evidence exists.
+- Refs: specs/012-skills-index.md; specs/019-nonblocking-hook-execution.md; specs/025-native-session-start-hook.md; specs/026-workspace-local-adapter-installation.md; internal/skillrouting; internal/actionconfirmation; internal/cli; internal/claudeadapter; internal/codexadapter
+- Supersedes: none

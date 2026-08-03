@@ -20,12 +20,36 @@ const MaximumNativeInputBytes = 64 << 10
 var nativeIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 
 type NativeInput struct {
+	ActorID   string `json:"actor_id"`
 	SessionID string `json:"session_id"`
+	Prompt    string `json:"prompt"`
 	ToolUseID string `json:"tool_use_id"`
 	ToolName  string `json:"tool_name"`
 	ToolInput struct {
 		Command string `json:"command"`
 	} `json:"tool_input"`
+	rawToolInput json.RawMessage
+}
+
+func (input *NativeInput) UnmarshalJSON(body []byte) error {
+	type alias NativeInput
+	var decoded alias
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		return err
+	}
+	var raw struct {
+		ToolInput json.RawMessage `json:"tool_input"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return err
+	}
+	*input = NativeInput(decoded)
+	input.rawToolInput = append(json.RawMessage(nil), raw.ToolInput...)
+	return nil
+}
+
+func (input NativeInput) ToolInputJSON() json.RawMessage {
+	return append(json.RawMessage(nil), input.rawToolInput...)
 }
 
 type GuardOutput struct {
@@ -88,6 +112,10 @@ func Guard(input NativeInput) (GuardOutput, error) {
 
 func FailClosedDenial() GuardOutput {
 	return denial("Maestro denied this action because the local safety guard could not evaluate the bounded Claude hook input. Nothing was changed. Review the command and retry.")
+}
+
+func ExternalActionDenial(reason string) GuardOutput {
+	return denial(reason)
 }
 
 func Receipt(event string, input NativeInput) (lifecycle.Receipt, error) {

@@ -1,6 +1,7 @@
 # Spec 012 - Managed skills index
 
-Status: decision accepted; compiler, generated catalog and inspection command implemented. Session Start consumption remains pending.
+Status: compiler, generated catalog, inspection command and bounded
+UserPromptSubmit routing implemented; native qualification remains pending.
 
 ## Objective
 
@@ -23,9 +24,12 @@ client material, logs or execution state.
 
 ## Context behavior
 
-Future Session Start receives a bounded pointer to the catalog, not the full
-catalog by default. It may select one or a small number of skill entries based
-on explicit intent, then read the canonical SKILL.md on demand. The active
+Session context receives a bounded pointer to the catalog, not the full catalog
+by default. `UserPromptSubmit` may select at most two integrity-checked,
+installed and policy-allowed skill entries from an explicit `$skill-id`
+reference or deterministic lexical intent. It injects IDs, reasons and runtime
+pointers only; prompt text and skill bodies are neither returned nor persisted.
+Unknown or ambiguous intent selects nothing. The active
 interaction profile changes how that capability is presented; it does not
 filter the catalog or authorize execution.
 
@@ -39,7 +43,8 @@ artifacts, not development paths, ship inside the managed bundle.
 
 ## Delivery boundary
 
-`bcgos skills index` exposes the managed catalog now. Session Start injection,
-intent routing, private skills and organization-specific bundles remain
-unavailable until their separate ownership, authorization and adapter
-contracts exist.
+`bcgos skills index` exposes the managed catalog. Contextual routing is a
+method-selection hint, never tool, data, delegation or publication authority.
+Private skills and organization-specific bundles remain unavailable until
+their separate ownership and authorization contracts exist. Adapter output
+does not promote native capability without qualifying runtime evidence.

@@ -14,8 +14,8 @@ place to synchronize or perform durable background work.
 | Semantic event | Inline responsibility | May block? |
 |---|---|---|
 | `session_start` | Read the last committed bounded snapshot or report an omission. | No |
-| `context_inject` | Read the last committed bounded snapshot or report an omission. | No |
-| `pre_action_guard` | Evaluate a local, deterministic safety rule. | Only to deny an unsafe action. |
+| `context_inject` | Read the last committed bounded snapshot, route at most two installed policy-allowed method pointers, or recognize one exact pending user confirmation. | No |
+| `pre_action_guard` | Evaluate a local deterministic safety rule and atomically consume a matching external-action confirmation. | Only to deny an unsafe or unconfirmed action. |
 | `post_action_observe` | Emit an idempotent signal for later processing. | No |
 | `stop_finalize` | Emit an idempotent signal for later processing. | No |
 
@@ -36,6 +36,15 @@ to the worker alone. A hook must never contend for it.
 in-process deterministic decision over local committed data; it never waits for
 another process to resolve a race. If safety cannot be established immediately,
 the guard denies the action with an actionable explanation.
+
+External publication and mutation use a short-lived local challenge bound to
+actor, native session, canonical action, target, input digest and expiry.
+`UserPromptSubmit` recognizes only `CONFIRM MAESTRO <challenge-id>` for the
+same pending binding. `PreToolUse` consumes that confirmation atomically once;
+missing identity, expiry, replay, mutation, lock contention or a command outside
+the bounded grammar denies without changing external state. Ordinary local
+actions do not enter this path, and protected-root destruction remains an
+absolute denial.
 
 ## Executable policy
 

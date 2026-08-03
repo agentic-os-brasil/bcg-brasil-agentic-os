@@ -70,8 +70,19 @@ type Atlas struct {
 }
 
 type Skills struct {
-	CatalogPointer string `json:"catalog_pointer"`
-	State          string `json:"state"`
+	CatalogPointer string           `json:"catalog_pointer"`
+	State          string           `json:"state"`
+	Selected       []SkillSelection `json:"selected,omitempty"`
+}
+
+type SkillSelection struct {
+	ID      string `json:"id"`
+	Reason  string `json:"reason"`
+	Pointer string `json:"pointer"`
+}
+
+type ActionConfirmation struct {
+	State string `json:"state"`
 }
 
 type Agents struct {
@@ -97,17 +108,18 @@ type Omission struct {
 }
 
 type Packet struct {
-	SchemaVersion      int                `json:"schema_version"`
-	State              string             `json:"state"`
-	InteractionProfile InteractionProfile `json:"interaction_profile"`
-	Workspace          Workspace          `json:"workspace"`
-	Owner              Owner              `json:"owner"`
-	Atlas              Atlas              `json:"atlas"`
-	Execution          ExecutionContext   `json:"execution"`
-	Skills             Skills             `json:"skills"`
-	Agents             Agents             `json:"agents"`
-	Memory             Memory             `json:"memory"`
-	Omissions          []Omission         `json:"omissions"`
+	SchemaVersion      int                 `json:"schema_version"`
+	State              string              `json:"state"`
+	InteractionProfile InteractionProfile  `json:"interaction_profile"`
+	Workspace          Workspace           `json:"workspace"`
+	Owner              Owner               `json:"owner"`
+	Atlas              Atlas               `json:"atlas"`
+	Execution          ExecutionContext    `json:"execution"`
+	Skills             Skills              `json:"skills"`
+	Agents             Agents              `json:"agents"`
+	Memory             Memory              `json:"memory"`
+	ActionConfirmation *ActionConfirmation `json:"action_confirmation,omitempty"`
+	Omissions          []Omission          `json:"omissions"`
 }
 
 func Build(sources Sources) Packet {
@@ -162,6 +174,17 @@ func (packet Packet) Validate() error {
 	}
 	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Agents.Message == "" || packet.Memory.State != "unavailable" || packet.Memory.Message == "" {
 		return errors.New("session context packet is missing a required bounded source")
+	}
+	if len(packet.Skills.Selected) > 2 {
+		return errors.New("session context packet selects too many skills")
+	}
+	for _, selected := range packet.Skills.Selected {
+		if selected.ID == "" || selected.Reason == "" || selected.Pointer == "" {
+			return errors.New("session context packet has an invalid selected skill pointer")
+		}
+	}
+	if packet.ActionConfirmation != nil && packet.ActionConfirmation.State != "confirmed" {
+		return errors.New("session context packet has an invalid action confirmation state")
 	}
 	for id, facet := range packet.Owner.Facets {
 		if id == "" || facet.Path == "" || facet.State == "" {

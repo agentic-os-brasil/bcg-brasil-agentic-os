@@ -35,3 +35,16 @@ func TestCodexNativePayloadFailsClosed(t *testing.T) {
 		t.Fatalf("fail-closed output = %#v", output)
 	}
 }
+
+func TestParseReaderPreservesBoundedIdentityPromptAndRawToolInput(t *testing.T) {
+	input, err := ParseReader(strings.NewReader(`{"actor_id":"owner-a","session_id":"session-a","prompt":"route this","tool_name":"mcp__github__create_pull_request","tool_input":{"repository":"org/repo","title":"private title"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.ActorID != "owner-a" || input.SessionID != "session-a" || input.Prompt != "route this" || !strings.Contains(string(input.ToolInputJSON()), `"private title"`) {
+		t.Fatalf("parsed input = %#v raw=%s", input, input.ToolInputJSON())
+	}
+	if output := ExternalActionDenial("confirmation required"); output.HookSpecificOutput == nil || output.HookSpecificOutput.PermissionDecisionReason != "confirmation required" {
+		t.Fatalf("external denial = %#v", output)
+	}
+}

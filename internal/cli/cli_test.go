@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -354,6 +356,52 @@ func TestCodexLifecycleHooksUseSharedContractsWithoutNativePromotion(t *testing.
 	output.Reset()
 	if code := runHookWithInput([]string{"codex", "stop-finalization", "--adapter-source", "maestro", workspacePath}, strings.NewReader(`{"session_id":"session-a"}`), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"continue": true`) {
 		t.Fatalf("Codex stop hook = %d %s", code, output.String())
+	}
+}
+
+func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+			workspacePath := t.TempDir()
+			var output bytes.Buffer
+			if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+				t.Fatal(output.String())
+			}
+			output.Reset()
+			if code := runAdapter([]string{"install", "--runtime", runtimeName, workspacePath}, &output, &output); code != ExitOK {
+				t.Fatalf("adapter install = %d %s", code, output.String())
+			}
+
+			prompt := `{"actor_id":"owner-a","session_id":"session-a","prompt":"Please use $case-kickoff for this request"}`
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "case-kickoff") || !strings.Contains(output.String(), "explicit_skill_reference") || strings.Contains(output.String(), "name: case-kickoff") {
+				t.Fatalf("context routing = %d %s", code, output.String())
+			}
+
+			request := `{"actor_id":"owner-a","session_id":"session-a","tool_name":"Bash","tool_input":{"command":"git push origin refs/heads/topic"}}`
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", workspacePath}, strings.NewReader(request), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("challenge = %d %s", code, output.String())
+			}
+			match := regexp.MustCompile(`CONFIRM MAESTRO [a-f0-9]{32}`).FindString(output.String())
+			if match == "" {
+				t.Fatalf("challenge phrase missing: %s", output.String())
+			}
+			confirmation := fmt.Sprintf(`{"actor_id":"owner-a","session_id":"session-a","prompt":%q}`, match)
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(confirmation), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "confirmed") {
+				t.Fatalf("confirmation = %d %s", code, output.String())
+			}
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", workspacePath}, strings.NewReader(request), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("authorized one-shot = %d %s", code, output.String())
+			}
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", workspacePath}, strings.NewReader(request), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("replay = %d %s", code, output.String())
+			}
+		})
 	}
 }
 

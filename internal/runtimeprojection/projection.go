@@ -22,6 +22,7 @@ import (
 	datapracticeskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/data-practice/skills"
 	engineeringcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/engineering-core/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillrouting"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
@@ -263,6 +264,69 @@ func Inspect(runtimeName, workspace string) (Status, error) {
 		state = "conflict"
 	}
 	return Status{Runtime: runtimeName, State: state, OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: path, PolicyPath: policyPath, SkillCount: len(current.SkillHashes), Conflicts: conflicts}, nil
+}
+
+// RoutingInputs returns only integrity-checked installed methods, their
+// governed selection policy, and runtime-relative pointers. Skill bodies are
+// deliberately not returned to the prompt hook.
+func RoutingInputs(runtimeName, workspace string) (skillsindex.Catalog, skillpolicy.Policy, []skillrouting.InstalledSkill, error) {
+	status, err := Inspect(runtimeName, workspace)
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	if status.State != "installed" {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, fmt.Errorf("runtime projection is %s", status.State)
+	}
+	current, err := readManifest(filepath.Join(workspace, ManifestRelativePath))
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	base, err := baseskills.Catalog()
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	engineering, err := engineeringcoreskills.Catalog()
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	dataPractice, err := datapracticeskills.Catalog()
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	all := append(append(base.Skills, engineering.Skills...), dataPractice.Skills...)
+	active := skillsindex.Catalog{SchemaVersion: base.SchemaVersion}
+	for _, skill := range all {
+		if _, installed := current.SkillHashes[skill.ID]; installed {
+			active.Skills = append(active.Skills, skill)
+		}
+	}
+	sort.Slice(active.Skills, func(left, right int) bool { return active.Skills[left].ID < active.Skills[right].ID })
+	if len(active.Skills) != len(current.SkillHashes) {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, errors.New("runtime projection contains a skill outside embedded governed catalogs")
+	}
+	if err := active.Validate(); err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	policy, err := skillpolicy.ParseFile(filepath.Join(workspace, PolicyRelativePath))
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	agents, err := baseagents.Catalog()
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	if err := policy.Validate(active, agents); err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	installed := make([]skillrouting.InstalledSkill, 0, len(active.Skills))
+	layout, err := layout(runtimeName, workspace)
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	for _, skill := range active.Skills {
+		installed = append(installed, skillrouting.InstalledSkill{ID: skill.ID, Pointer: filepath.ToSlash(filepath.Join(layout.root, skill.ID, "SKILL.md"))})
+	}
+	return active, policy, installed, nil
 }
 
 func Uninstall(runtimeName, workspace string) (Status, error) {

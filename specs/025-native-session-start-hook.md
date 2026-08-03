@@ -28,3 +28,10 @@ The Codex serializer follows the documented `SessionStart` command-hook output
 shape, including `hookSpecificOutput.hookEventName` and `additionalContext`.
 That evidence does not make it a shared Claude/Codex protocol: each serializer
 remains versioned and tested independently.
+
+The same pointer-only envelope serializer serves each runtime's
+`UserPromptSubmit` binding. That binding may add at most two governed installed
+skill pointers and reasons, or a metadata-only `confirmed` state after an exact
+pending external-action challenge response. It never injects a skill body,
+stores the submitted prompt, or treats emitted payload as native conformance
+evidence.
