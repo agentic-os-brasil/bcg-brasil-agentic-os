@@ -1879,17 +1879,25 @@ func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
 		}
 		return writeJSON(out, status.Onboarding, errOut)
 	case "confirm":
-		if len(args) != 2 || args[1] != "--confirm" {
-			fmt.Fprintln(errOut, "usage: bcgos owner onboarding confirm --confirm")
+		flags := newFlagSet("owner onboarding confirm", errOut)
+		reviewDigest := flags.String("digest", "", "SHA-256 digest shown by owner onboarding status")
+		confirmed := flags.Bool("confirm", false, "confirm the reviewed onboarding profile")
+		if flags.Parse(args[1:]) != nil || rejectPositionals(flags, errOut) || !*confirmed || strings.TrimSpace(*reviewDigest) == "" {
+			fmt.Fprintln(errOut, "usage: bcgos owner onboarding confirm --digest SHA256 --confirm")
 			return ExitUsage
 		}
-		status, err := ownerctx.ConfirmOnboarding(root)
+		status, err := ownerctx.ConfirmOnboarding(root, *reviewDigest)
 		if err != nil {
 			return reportError(errOut, err)
 		}
 		return writeJSON(out, status.Onboarding, errOut)
 	}
 	return ExitUsage
+}
+
+func isReadOnlyInstalledBCGOSDiagnostic(toolName string, raw json.RawMessage) bool {
+	executable, err := os.Executable()
+	return err == nil && actionconfirmation.IsReadOnlyBCGOSDiagnostic(toolName, raw, executable)
 }
 
 func runOwnerPromptHistory(args []string, in io.Reader, out, errOut io.Writer, root string) int {
@@ -2592,7 +2600,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if protected == nil && strings.TrimSpace(*orchestrationState) == "" {
 			return writeJSON(out, response, errOut)
 		}
-		if protected == nil && actionconfirmation.IsReadOnlyBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
+		if protected == nil && isReadOnlyInstalledBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
 			return writeJSON(out, response, errOut)
 		}
 		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
@@ -2747,7 +2755,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if protected == nil && strings.TrimSpace(*orchestrationState) == "" {
 			return writeJSON(out, response, errOut)
 		}
-		if protected == nil && actionconfirmation.IsReadOnlyBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
+		if protected == nil && isReadOnlyInstalledBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
 			return writeJSON(out, response, errOut)
 		}
 		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)

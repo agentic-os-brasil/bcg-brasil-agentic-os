@@ -229,7 +229,22 @@ func TestOnboardingRequiresExplicitConfirmationAndCountsOnlyExplicitOpenTasks(t 
 	if err != nil || status.Onboarding.State != "review_required" || status.OpenTasks.State != "available" || status.OpenTasks.Count != 1 {
 		t.Fatalf("completed status = %#v err=%v", status, err)
 	}
-	status, err = ConfirmOnboarding(root)
+	reviewDigest := status.Onboarding.ReviewDigest
+	if reviewDigest == "" {
+		t.Fatal("review-required status omitted its digest")
+	}
+	voicePath := filepath.Join(root, filepath.FromSlash(facets["voice"].Record.Path))
+	if err := os.WriteFile(voicePath, []byte(facets["voice"].Body+"\nChanged after review.\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ConfirmOnboarding(root, reviewDigest); err == nil {
+		t.Fatal("stale reviewed digest confirmed changed facets")
+	}
+	status, err = Inspect(root)
+	if err != nil || status.Onboarding.ReviewDigest == "" || status.Onboarding.ReviewDigest == reviewDigest {
+		t.Fatalf("refreshed review status = %#v err=%v", status, err)
+	}
+	status, err = ConfirmOnboarding(root, status.Onboarding.ReviewDigest)
 	if err != nil || status.Onboarding.State != "complete" {
 		t.Fatalf("confirmed status = %#v err=%v", status, err)
 	}

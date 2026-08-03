@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -58,7 +60,7 @@ func Canonicalize(toolName string, raw json.RawMessage) (*Action, error) {
 // pre-action hooks may let the native runtime evaluate these commands without
 // depending on mutable orchestration state. This is not an authorization grant:
 // the runtime's own permission model still applies.
-func IsReadOnlyBCGOSDiagnostic(toolName string, raw json.RawMessage) bool {
+func IsReadOnlyBCGOSDiagnostic(toolName string, raw json.RawMessage, installedExecutable string) bool {
 	if toolName != "Bash" || rejectDuplicateKeys(raw) != nil {
 		return false
 	}
@@ -71,7 +73,7 @@ func IsReadOnlyBCGOSDiagnostic(toolName string, raw json.RawMessage) bool {
 		return false
 	}
 	fields, err := splitSimpleCommand(command)
-	if err != nil || len(fields) == 0 || bcgosExecutableBase(fields[0]) != "bcgos" {
+	if err != nil || len(fields) == 0 || !sameInstalledExecutable(fields[0], installedExecutable) {
 		return false
 	}
 	arguments := fields[1:]
@@ -87,12 +89,18 @@ func IsReadOnlyBCGOSDiagnostic(toolName string, raw json.RawMessage) bool {
 	return len(arguments) == 3 && arguments[0] == "owner" && arguments[1] == "onboarding" && arguments[2] == "status"
 }
 
-func bcgosExecutableBase(executable string) string {
-	normalized := strings.ReplaceAll(executable, "\\", "/")
-	if slash := strings.LastIndex(normalized, "/"); slash >= 0 {
-		normalized = normalized[slash+1:]
+func sameInstalledExecutable(candidate, installed string) bool {
+	if !filepath.IsAbs(candidate) || !filepath.IsAbs(installed) {
+		return false
 	}
-	return strings.TrimSuffix(strings.ToLower(normalized), ".exe")
+	candidatePath, candidateErr := filepath.Abs(candidate)
+	installedPath, installedErr := filepath.Abs(installed)
+	if candidateErr != nil || installedErr != nil || filepath.Clean(candidatePath) != filepath.Clean(installedPath) {
+		return false
+	}
+	candidateInfo, candidateErr := os.Stat(candidatePath)
+	installedInfo, installedErr := os.Stat(installedPath)
+	return candidateErr == nil && installedErr == nil && os.SameFile(candidateInfo, installedInfo)
 }
 
 func rejectDuplicateKeys(raw json.RawMessage) error {

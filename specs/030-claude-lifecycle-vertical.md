@@ -48,6 +48,13 @@ exception. The short-circuit emits no allow decision and does not bypass the
 runtime's own permission model; its only purpose is to keep diagnosis usable
 when mutable orchestration state is absent or under repair.
 
+"Installed path" is an identity check, not a basename check: the command must
+name the same absolute path as the currently running BCGOS executable and the
+resolved filesystem objects must match. A homonymous `bcgos` on `PATH`, a copy
+under another directory, an arbitrary `.exe` path or a symlink spelling does
+not qualify for the short-circuit and falls back to normal fail-closed state
+validation.
+
 ## Non-blocking receipts
 
 `PostToolUse` and `Stop` are configured with `async: true`. They emit one small

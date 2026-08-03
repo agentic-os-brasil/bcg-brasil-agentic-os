@@ -137,3 +137,25 @@ func TestBuildReportsMissingSourcesWithoutReadingBodies(t *testing.T) {
 		t.Fatalf("packet = %#v", packet)
 	}
 }
+
+func TestReviewRequiredOnboardingCarriesOnlyItsBoundedDigest(t *testing.T) {
+	reviewDigest := strings.Repeat("b", 64)
+	packet := Build(Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+		Owner: ownerctx.Status{Initialized: true, Onboarding: ownerctx.OnboardingStatus{
+			State: "review_required", ReviewDigest: reviewDigest,
+		}},
+		Atlas: atlas.Status{Managed: atlas.Pointer{State: "unavailable"}},
+	})
+	if err := packet.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if packet.Owner.Onboarding.ReviewDigest != reviewDigest || packet.Owner.Onboarding.NextQuestion != "" {
+		t.Fatalf("review projection = %#v", packet.Owner.Onboarding)
+	}
+	packet.Owner.Onboarding.ReviewDigest = ""
+	if err := packet.Validate(); err == nil {
+		t.Fatal("review-required onboarding validated without a digest")
+	}
+}

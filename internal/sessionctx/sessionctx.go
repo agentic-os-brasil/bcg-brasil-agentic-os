@@ -68,6 +68,7 @@ type Owner struct {
 type Onboarding struct {
 	State        string `json:"state"`
 	NextQuestion string `json:"next_question,omitempty"`
+	ReviewDigest string `json:"review_digest,omitempty"`
 }
 
 type OpenTasks struct {
@@ -159,7 +160,7 @@ func Build(sources Sources) Packet {
 			Facets:         sessionFacets(sources.Owner.Facets),
 			OperatingState: pointer(sources.Owner.OperatingState),
 			Tasks:          pointer(sources.Owner.Tasks),
-			Onboarding:     Onboarding{State: onboarding.State, NextQuestion: onboarding.NextQuestion.Question},
+			Onboarding:     Onboarding{State: onboarding.State, NextQuestion: onboarding.NextQuestion.Question, ReviewDigest: onboarding.ReviewDigest},
 			OpenTasks:      OpenTasks{State: openTasks.State, Count: openTasks.Count},
 		},
 		Atlas: Atlas{
@@ -206,6 +207,12 @@ func (packet Packet) Validate() error {
 	}
 	if (packet.Owner.Onboarding.State == "required" || packet.Owner.Onboarding.State == "in_progress") && packet.Owner.Onboarding.NextQuestion == "" {
 		return errors.New("pending onboarding is missing its next question")
+	}
+	if packet.Owner.Onboarding.State == "review_required" && (packet.Owner.Onboarding.NextQuestion != "" || packet.Owner.Onboarding.ReviewDigest == "") {
+		return errors.New("review-required onboarding is missing its bounded review digest")
+	}
+	if packet.Owner.Onboarding.State != "review_required" && packet.Owner.Onboarding.ReviewDigest != "" {
+		return errors.New("session context packet exposes a review digest outside review-required onboarding")
 	}
 	if packet.Owner.OpenTasks.State != "unavailable" && packet.Owner.OpenTasks.State != "empty" && packet.Owner.OpenTasks.State != "available" {
 		return errors.New("session context packet has an invalid open task state")

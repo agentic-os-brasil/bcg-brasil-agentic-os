@@ -55,11 +55,14 @@ and confirmation.
 
 Session Start derives one deterministic onboarding state from those facets:
 `required`, `in_progress`, `review_required` or `complete`. Answered facets do
-not make onboarding complete by themselves. `bcgos owner onboarding confirm
---confirm` records a digest of the reviewed non-sensitive facets, and any later
-facet change invalidates that confirmation. The runtime asks only the next
-unanswered question, then waits; after all answers exist it requests explicit
-review rather than silently activating the profile.
+not make onboarding complete by themselves. The `review_required` projection
+exposes a SHA-256 `review_digest`; `bcgos owner onboarding confirm --digest
+<review_digest> --confirm` records only that exact reviewed version of the
+non-sensitive facets. A missing, malformed or stale digest fails closed without
+changing owner state, and any later facet change invalidates the confirmation.
+The runtime asks only the next unanswered question, then waits; after all
+answers exist it requests explicit review rather than silently activating the
+profile.
 
 ## Refinement policy
 
@@ -89,17 +92,18 @@ reported as unavailable.
 `bcgos owner init` creates non-overwriting templates. `bcgos owner status`
 returns pointers, policy and availability, never document bodies. `bcgos owner
 interview` exposes the cold-start questions without persisting an answer.
-`bcgos owner onboarding status` exposes only bounded progress and `bcgos owner
-onboarding confirm --confirm` records the explicit reviewed-facet digest.
+`bcgos owner onboarding status` exposes only bounded progress and the digest
+needed at the review boundary; `bcgos owner onboarding confirm --digest
+<review_digest> --confirm` records the explicit reviewed-facet version.
 `bcgos owner refine submit --facet <facet> --evidence <summary> --stdin`
 accepts a proposed body through standard input, applies only an eligible
 policy, and returns an opaque receipt. `apply --confirm <proposal-id>` and
-`revert --confirm <audit-id>` protect guarded application and every reversal. A later Session Context Packet
-may read bounded content only after an adapter resolves purpose, owner and
-policy. The owner-local operating state may expose only an explicit unchecked
-task count to Session Start. Task titles and bodies remain behind the pointer
-and are resolved only when the owner asks; prompts and workspace files never
-create inferred tasks.
+`revert --confirm <audit-id>` protect guarded application and every reversal.
+A later Session Context Packet may read bounded content only after an adapter
+resolves purpose, owner and policy. The owner-local operating state may expose
+only an explicit unchecked task count to Session Start. Task titles and bodies
+remain behind the pointer and are resolved only when the owner asks; prompts
+and workspace files never create inferred tasks.
 
 ### Self projection and evidence-bound learning
 
