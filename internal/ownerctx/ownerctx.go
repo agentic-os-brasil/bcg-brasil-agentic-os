@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Pointer struct {
@@ -33,7 +34,25 @@ type Status struct {
 	Facets         map[string]Facet      `json:"facets"`
 	OperatingState Pointer               `json:"operating_state"`
 	Tasks          Pointer               `json:"tasks"`
+	Onboarding     OnboardingStatus      `json:"onboarding"`
+	OpenTasks      TaskStatus            `json:"open_tasks"`
 	Capabilities   map[string]Capability `json:"capabilities"`
+}
+
+// OnboardingStatus is a deterministic projection of the consented owner
+// facets. It never includes a facet body; runtimes use its next question to
+// resume the interview instead of assuming that setup was completed.
+type OnboardingStatus struct {
+	State        string        `json:"state"`
+	Remaining    []string      `json:"remaining,omitempty"`
+	NextQuestion InterviewStep `json:"next_question,omitempty"`
+}
+
+// TaskStatus exposes only a bounded list of explicitly marked open items in
+// the owner-local work state. It is not inferred from prompts or files.
+type TaskStatus struct {
+	State string   `json:"state"`
+	Open  []string `json:"open,omitempty"`
 }
 
 type InterviewStep struct {
@@ -84,7 +103,9 @@ var facets = map[string]facetTemplate{
 }
 
 const statePath = "owner/operating/work-state.md"
-const stateTemplate = "# Work state\n\nRegistre somente estado operacional recente: prioridades, bloqueios, proximas acoes e itens aguardando resposta.\n"
+const stateTemplate = "# Work state\n\nRegistre somente estado operacional recente: prioridades, bloqueios, proximas acoes e itens aguardando resposta.\n\n## Tarefas abertas\n- [ ]\n"
+
+var onboardingFacets = []string{"professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"}
 
 func Initialize(root string) (Status, error) {
 	directory := filepath.Join(root, "owner")
@@ -147,6 +168,11 @@ func Inspect(root string) (Status, error) {
 	for id, record := range value.Facets {
 		status.Facets[id] = Facet{Pointer: pointer(root, record.Path), Sensitivity: record.Sensitivity, Readers: record.Readers, Refinement: record.Refinement}
 	}
+	status.Onboarding = onboarding(root, status.Facets)
+	status.OpenTasks = openTasks(root, value.OperatingState)
+	if status.OpenTasks.State != "unavailable" {
+		status.Tasks = Pointer{Path: value.OperatingState, Available: true, State: status.OpenTasks.State}
+	}
 	return status, nil
 }
 
@@ -166,7 +192,68 @@ func ColdStartInterview() Interview {
 }
 
 func emptyStatus() Status {
-	return Status{Tasks: Pointer{State: "unavailable"}, Capabilities: capabilities()}
+	return Status{Tasks: Pointer{State: "unavailable"}, Onboarding: OnboardingStatus{State: "required", Remaining: append([]string(nil), onboardingFacets...), NextQuestion: interviewStep(onboardingFacets[0])}, OpenTasks: TaskStatus{State: "unavailable"}, Capabilities: capabilities()}
+}
+
+func onboarding(root string, available map[string]Facet) OnboardingStatus {
+	remaining := make([]string, 0, len(onboardingFacets))
+	for _, id := range onboardingFacets {
+		facet, ok := available[id]
+		if !ok || !facet.Available || !facetAnswered(root, id) {
+			remaining = append(remaining, id)
+		}
+	}
+	if len(remaining) == 0 {
+		return OnboardingStatus{State: "complete"}
+	}
+	state := "in_progress"
+	if len(remaining) == len(onboardingFacets) {
+		state = "required"
+	}
+	return OnboardingStatus{State: state, Remaining: remaining, NextQuestion: interviewStep(remaining[0])}
+}
+
+func interviewStep(facet string) InterviewStep {
+	for _, step := range ColdStartInterview().Steps {
+		if step.Facet == facet {
+			return step
+		}
+	}
+	return InterviewStep{}
+}
+
+func facetAnswered(root, id string) bool {
+	template, ok := facets[id]
+	if !ok {
+		return false
+	}
+	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
+	return err == nil && strings.TrimSpace(string(body)) != strings.TrimSpace(template.Body)
+}
+
+func openTasks(root, relative string) TaskStatus {
+	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+	if err != nil {
+		return TaskStatus{State: "unavailable"}
+	}
+	open := make([]string, 0, 5)
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "- [ ]") {
+			continue
+		}
+		title := strings.TrimSpace(strings.TrimPrefix(line, "- [ ]"))
+		if title != "" {
+			open = append(open, title)
+		}
+		if len(open) == 5 {
+			break
+		}
+	}
+	if len(open) == 0 {
+		return TaskStatus{State: "empty"}
+	}
+	return TaskStatus{State: "available", Open: open}
 }
 
 func capabilities() map[string]Capability {

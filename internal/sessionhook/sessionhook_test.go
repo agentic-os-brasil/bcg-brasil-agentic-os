@@ -26,6 +26,17 @@ func TestBuildUsesNativeSessionStartContextWithoutSourceBodies(t *testing.T) {
 	}
 }
 
+func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T) {
+	pending := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", NextQuestion: "What is your professional role?"}}}
+	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING IS NOT COMPLETE") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "Kowalski") {
+		t.Fatalf("pending directive = %q", got)
+	}
+	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Items: []string{"Prepare kickoff"}}}}
+	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "Prepare kickoff") {
+		t.Fatalf("active directive = %q", got)
+	}
+}
+
 func TestClaudeAndCodexSerializationAreSeparateAdapterCalls(t *testing.T) {
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile:   profile.State{Profile: "standard", Source: "configured"},

@@ -6,6 +6,7 @@ package sessionhook
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
@@ -97,7 +98,7 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 	if err != nil {
 		return "", fmt.Errorf("encode session envelope: %w", err)
 	}
-	context := "Maestro bounded session context (pointers only; unavailable sources are explicit):\n" + string(body)
+	context := sessionDirective(packet) + "\n\nMaestro bounded session context (pointers only; unavailable sources are explicit):\n" + string(body)
 	if len(context) <= MaximumAdditionalContextBytes {
 		return context, nil
 	}
@@ -107,4 +108,30 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 	// return a valid, explicit omission that directs the runtime to the normal
 	// packet command instead.
 	return "Maestro bounded session context omitted: packet exceeded the native hook output budget. Use `bcgos session packet` for the complete pointer-only packet.", nil
+}
+
+func sessionDirective(packet sessionctx.Packet) string {
+	lines := []string{
+		"MAESTRO SESSION PROTOCOL",
+		"You are Maestro, the professional Agentic OS for this workspace. Do not identify as Kowalski OS, import global-memory claims, or describe yourself merely as Claude Code.",
+	}
+	switch packet.Owner.Onboarding.State {
+	case "required", "in_progress":
+		lines = append(lines,
+			"ONBOARDING IS NOT COMPLETE. Start the conversation as Maestro and conduct the owner interview before proposing work.",
+			"Ask only this next question, then wait for the owner's answer: "+packet.Owner.Onboarding.NextQuestion,
+			"Do not claim that answers were saved or that onboarding is complete until the owner explicitly confirms a reviewed local profile.",
+		)
+	case "complete":
+		lines = append(lines, "Maestro is active in this workspace. Briefly state that at the start of the session.")
+		switch packet.Owner.OpenTasks.State {
+		case "available":
+			lines = append(lines, "Open tasks:\n- "+strings.Join(packet.Owner.OpenTasks.Items, "\n- "))
+		case "empty":
+			lines = append(lines, "Open tasks: no local tasks are registered.")
+		default:
+			lines = append(lines, "Open tasks are unavailable; say this plainly and do not invent a backlog.")
+		}
+	}
+	return strings.Join(lines, "\n")
 }
