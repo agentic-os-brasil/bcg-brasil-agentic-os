@@ -21,11 +21,11 @@ authorities allowed to verify, activate or roll back bytes.
    memory folder. That source remains untouched and is registered as a pending
    local intake; no document is read, copied or uploaded by the installer.
 5. **Pronto** — returns the person to work, rather than to an application
-   folder. The first-use projection is Codex, because a workspace may carry
-   one managed runtime projection at a time. On macOS, Codex in the ChatGPT
-   desktop app receives the workspace through the documented
-   `codex://new?path=<absolute-path>` deep link. Switching that workspace to
-   Claude is a separate explicit adapter migration, not a second concurrent
+   folder. The first-use projection is Claude, because a workspace may carry
+   one managed runtime projection at a time. Codex in the ChatGPT desktop app
+   remains an explicit compatible target through the documented
+   `codex://new?path=<absolute-path>` deep link. Switching a workspace between
+   Claude and Codex is an explicit adapter migration, not a second concurrent
    install. The `doctor` command remains a support action.
 
 The **Ver como funciona** action opens a compact in-product explainer with the

@@ -50,6 +50,23 @@ func TestVerifyAcceptsOnlyCanonicalConfiguredCodexInstall(t *testing.T) {
 	}
 }
 
+func TestVerifyAcceptsOnlyCanonicalConfiguredClaudeInstall(t *testing.T) {
+	fixture := newReadinessFixtureForRuntime(t, "claude", nil)
+	report, err := Verify(fixture.options())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Runtime != "claude" || !report.Ready || len(report.Lifecycle) != 5 {
+		t.Fatalf("unexpected Claude readiness report: %#v", report)
+	}
+	for _, binding := range report.Lifecycle {
+		if !strings.HasPrefix(binding.Command, quoteTestPath(fixture.cli)+" hook claude ") ||
+			!binding.Configured || binding.AdapterObserved || binding.NativeQualified {
+			t.Fatalf("unsafe Claude lifecycle binding: %#v", binding)
+		}
+	}
+}
+
 func TestVerifyRejectsMissingAndTamperedSurfaces(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -84,10 +101,10 @@ func TestVerifyRejectsMissingAndTamperedSurfaces(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{name: "missing hooks", failedID: "codex_hooks", mutate: func(t *testing.T, f readinessFixture) {
+		{name: "missing hooks", failedID: "runtime_hooks", mutate: func(t *testing.T, f readinessFixture) {
 			removeFile(t, filepath.Join(f.workspace, ".codex", "hooks.json"))
 		}},
-		{name: "mismatched hook command", failedID: "codex_hooks", mutate: func(t *testing.T, f readinessFixture) {
+		{name: "mismatched hook command", failedID: "runtime_hooks", mutate: func(t *testing.T, f readinessFixture) {
 			path := filepath.Join(f.workspace, ".codex", "hooks.json")
 			body, err := os.ReadFile(path)
 			if err != nil {
@@ -98,7 +115,7 @@ func TestVerifyRejectsMissingAndTamperedSurfaces(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{name: "duplicate owned hook", failedID: "codex_hooks", mutate: duplicateFirstHook},
+		{name: "duplicate owned hook", failedID: "runtime_hooks", mutate: duplicateFirstHook},
 		{name: "missing installed CLI", failedID: "installed_cli", mutate: func(t *testing.T, f readinessFixture) {
 			removeFile(t, f.cli)
 		}},
@@ -146,7 +163,7 @@ func TestVerifyRejectsSymlinksAndMismatchedIdentities(t *testing.T) {
 			t.Skipf("symlink unavailable: %v", err)
 		}
 		report, err := Verify(fixture.options())
-		if err == nil || failedCheck(report) != "codex_hooks" {
+		if err == nil || failedCheck(report) != "runtime_hooks" {
 			t.Fatalf("hooks symlink report=%#v err=%v", report, err)
 		}
 	})
@@ -202,9 +219,14 @@ func TestVerifyRejectsSymlinksAndMismatchedIdentities(t *testing.T) {
 type readinessFixture struct {
 	workspace, dataRoot, managedRoot, cli string
 	tracks                                []string
+	runtime                               string
 }
 
 func newReadinessFixture(t *testing.T, tracks []string) readinessFixture {
+	return newReadinessFixtureForRuntime(t, "codex", tracks)
+}
+
+func newReadinessFixtureForRuntime(t *testing.T, runtimeName string, tracks []string) readinessFixture {
 	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -215,6 +237,7 @@ func newReadinessFixture(t *testing.T, tracks []string) readinessFixture {
 		dataRoot:    filepath.Join(root, "owner-data"),
 		managedRoot: filepath.Join(root, "Maestro"),
 		tracks:      append([]string(nil), tracks...),
+		runtime:     runtimeName,
 	}
 	cliName := "bcgos"
 	if runtime.GOOS == "windows" {
@@ -225,10 +248,10 @@ func newReadinessFixture(t *testing.T, tracks []string) readinessFixture {
 	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: fixture.workspace, DataRoot: fixture.dataRoot}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtimeprojection.InstallForTracks("codex", fixture.workspace, fixture.tracks); err != nil {
+	if _, err := runtimeprojection.InstallForTracks(runtimeName, fixture.workspace, fixture.tracks); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := adaptercfg.Install("codex", fixture.workspace, fixture.cli); err != nil {
+	if _, err := adaptercfg.Install(runtimeName, fixture.workspace, fixture.cli); err != nil {
 		t.Fatal(err)
 	}
 	if err := installtx.WriteState(fixture.dataRoot, fixture.installState()); err != nil {
@@ -256,7 +279,7 @@ func (fixture readinessFixture) installState() installtx.State {
 func (fixture readinessFixture) options() Options {
 	return Options{
 		WorkspacePath: fixture.workspace, DataRoot: fixture.dataRoot,
-		ExecutablePath: fixture.cli, CLIVersion: "0.1.0", CapabilityTracks: fixture.tracks,
+		ExecutablePath: fixture.cli, CLIVersion: "0.1.0", CapabilityTracks: fixture.tracks, Runtime: fixture.runtime,
 	}
 }
 

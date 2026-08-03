@@ -1,5 +1,5 @@
 // Package installreadiness verifies the local identities created by first
-// installation, workspace initialization and Codex adapter installation.
+// installation, workspace initialization and runtime adapter installation.
 // It is deliberately read-only and never treats configuration as native hook
 // observation or capability qualification.
 package installreadiness
@@ -33,6 +33,7 @@ const maximumConfigurationBytes = 1 << 20
 // onboarding. The product CLI supplies its own executable path and version;
 // they are not caller-selected flags on the readiness command.
 type Options struct {
+	Runtime          string
 	WorkspacePath    string
 	DataRoot         string
 	ExecutablePath   string
@@ -91,21 +92,38 @@ type projectionManifest struct {
 
 type expectedBinding struct {
 	semantic, native, commandSuffix, capability string
+	asynchronous                                bool
 }
 
-var expectedCodexBindings = []expectedBinding{
-	{semantic: "session_start", native: "SessionStart", commandSuffix: "session-start --runtime codex", capability: "session_start"},
-	{semantic: "context_inject", native: "UserPromptSubmit", commandSuffix: "codex context-injection", capability: "context_injection"},
-	{semantic: "pre_action_guard", native: "PreToolUse", commandSuffix: "codex pre-action-guard", capability: "pre_action_guard"},
-	{semantic: "post_action_observe", native: "PostToolUse", commandSuffix: "codex post-action-receipt", capability: "post_action_observe"},
-	{semantic: "stop_finalize", native: "Stop", commandSuffix: "codex stop-finalization", capability: "stop_finalize"},
+var expectedBindings = map[string][]expectedBinding{
+	"claude": {
+		{semantic: "session_start", native: "SessionStart", commandSuffix: "claude session-start", capability: "session_start"},
+		{semantic: "context_inject", native: "UserPromptSubmit", commandSuffix: "claude context-injection", capability: "context_injection"},
+		{semantic: "pre_action_guard", native: "PreToolUse", commandSuffix: "claude pre-action-guard", capability: "pre_action_guard"},
+		{semantic: "post_action_observe", native: "PostToolUse", commandSuffix: "claude post-action-receipt", capability: "post_action_observe", asynchronous: true},
+		{semantic: "stop_finalize", native: "Stop", commandSuffix: "claude stop-finalization", capability: "stop_finalize", asynchronous: true},
+	},
+	"codex": {
+		{semantic: "session_start", native: "SessionStart", commandSuffix: "session-start --runtime codex", capability: "session_start"},
+		{semantic: "context_inject", native: "UserPromptSubmit", commandSuffix: "codex context-injection", capability: "context_injection"},
+		{semantic: "pre_action_guard", native: "PreToolUse", commandSuffix: "codex pre-action-guard", capability: "pre_action_guard"},
+		{semantic: "post_action_observe", native: "PostToolUse", commandSuffix: "codex post-action-receipt", capability: "post_action_observe"},
+		{semantic: "stop_finalize", native: "Stop", commandSuffix: "codex stop-finalization", capability: "stop_finalize"},
+	},
 }
 
 // Verify performs no writes and invokes no external process. It stops at the
 // first failed trust boundary and returns the partial structured report.
 func Verify(options Options) (Report, error) {
+	runtimeName := strings.TrimSpace(options.Runtime)
+	if runtimeName == "" {
+		runtimeName = "codex"
+	}
+	if _, supported := expectedBindings[runtimeName]; !supported {
+		return Report{SchemaVersion: 1, State: "failed", Runtime: runtimeName}, fmt.Errorf("unsupported readiness runtime %q", runtimeName)
+	}
 	report := Report{
-		SchemaVersion: 1, State: "failed", Runtime: "codex",
+		SchemaVersion: 1, State: "failed", Runtime: runtimeName,
 		EvidenceClass: "configured", NativeObservation: "not_observed", CapabilityState: "unavailable",
 		Checks: []Check{},
 	}
@@ -186,18 +204,18 @@ func Verify(options Options) (Report, error) {
 	report.WorkspaceID = inspection.WorkspaceID
 	pass("workspace_identity", "workspace manifest is bound to this canonical path")
 
-	if err := verifyProjection(workspacePath, options.CapabilityTracks); err != nil {
+	if err := verifyProjection(runtimeName, workspacePath, options.CapabilityTracks); err != nil {
 		return fail("runtime_projection", err)
 	}
-	pass("runtime_projection", "AGENTS.md and the managed Codex projection match the active embedded bundle")
+	pass("runtime_projection", "the managed "+runtimeName+" projection matches the active embedded bundle")
 
-	lifecycle, err := verifyHooks(workspacePath, executable, targetOS)
+	lifecycle, err := verifyHooks(runtimeName, workspacePath, executable, targetOS)
 	if err != nil {
-		return fail("codex_hooks", err)
+		return fail("runtime_hooks", err)
 	}
-	pass("codex_hooks", "all five workspace-local Codex lifecycle commands point to the installed CLI")
+	pass("runtime_hooks", "all five workspace-local "+runtimeName+" lifecycle commands point to the installed CLI")
 
-	if err := bindCapabilities(&lifecycle); err != nil {
+	if err := bindCapabilities(runtimeName, &lifecycle); err != nil {
 		return fail("lifecycle_capabilities", err)
 	}
 	report.Lifecycle = lifecycle
@@ -206,10 +224,14 @@ func Verify(options Options) (Report, error) {
 	return report, nil
 }
 
-func verifyProjection(workspacePath string, tracks []string) error {
-	for _, relative := range []string{"AGENTS.md", runtimeprojection.ManifestRelativePath, runtimeprojection.PolicyRelativePath, filepath.Join(".codex", "skills")} {
+func verifyProjection(runtimeName, workspacePath string, tracks []string) error {
+	orientation, skillsRoot, runtimeLabel := "AGENTS.md", filepath.Join(".codex", "skills"), "Codex"
+	if runtimeName == "claude" {
+		orientation, skillsRoot, runtimeLabel = "CLAUDE.md", filepath.Join(".claude", "skills"), "Claude Code"
+	}
+	for _, relative := range []string{orientation, runtimeprojection.ManifestRelativePath, runtimeprojection.PolicyRelativePath, skillsRoot} {
 		if strings.HasSuffix(relative, "skills") {
-			if _, err := canonicalDirectory(filepath.Join(workspacePath, relative), "Codex skills root"); err != nil {
+			if _, err := canonicalDirectory(filepath.Join(workspacePath, relative), runtimeLabel+" skills root"); err != nil {
 				return err
 			}
 			continue
@@ -226,9 +248,9 @@ func verifyProjection(workspacePath string, tracks []string) error {
 	if err := decodeStrict(manifestBody, &manifest); err != nil {
 		return fmt.Errorf("decode runtime projection manifest: %w", err)
 	}
-	if manifest.SchemaVersion != runtimeprojection.SchemaVersion || manifest.Runtime != "codex" ||
-		manifest.OrientationPath != "AGENTS.md" || manifest.PolicyPath != runtimeprojection.PolicyRelativePath {
-		return errors.New("runtime projection manifest has a mismatched Codex path identity")
+	if manifest.SchemaVersion != runtimeprojection.SchemaVersion || manifest.Runtime != runtimeName ||
+		manifest.OrientationPath != orientation || manifest.PolicyPath != runtimeprojection.PolicyRelativePath {
+		return errors.New("runtime projection manifest has a mismatched " + runtimeLabel + " path identity")
 	}
 	policy, catalog, err := runtimeprojection.PolicyForTracks(tracks)
 	if err != nil {
@@ -254,7 +276,7 @@ func verifyProjection(workspacePath string, tracks []string) error {
 			return err
 		}
 		expectedHashes[skill.ID] = digest(body)
-		path, err := regularFile(workspacePath, filepath.Join(".codex", "skills", skill.ID, "SKILL.md"), maximumConfigurationBytes, false)
+		path, err := regularFile(workspacePath, filepath.Join(skillsRoot, skill.ID, "SKILL.md"), maximumConfigurationBytes, false)
 		if err != nil {
 			return err
 		}
@@ -267,11 +289,11 @@ func verifyProjection(workspacePath string, tracks []string) error {
 		return errors.New("runtime projection skill identities do not match the active embedded bundle")
 	}
 
-	expectedOrientation, err := renderCodexOrientation(catalog.Skills)
+	expectedOrientation, err := renderOrientation(runtimeName, catalog.Skills)
 	if err != nil {
 		return err
 	}
-	orientationBody, err := os.ReadFile(filepath.Join(workspacePath, "AGENTS.md"))
+	orientationBody, err := os.ReadFile(filepath.Join(workspacePath, orientation))
 	if err != nil {
 		return err
 	}
@@ -284,13 +306,17 @@ func verifyProjection(workspacePath string, tracks []string) error {
 		return err
 	}
 	if managedBlock != expectedBlock || manifest.OrientationHash != digest([]byte(strings.TrimSpace(expectedBlock))) {
-		return errors.New("managed AGENTS.md orientation does not match the active embedded bundle")
+		return errors.New("managed " + orientation + " orientation does not match the active embedded bundle")
 	}
 	return nil
 }
 
-func verifyHooks(workspacePath, executable, targetOS string) ([]LifecycleBinding, error) {
-	path, err := regularFile(workspacePath, filepath.Join(".codex", "hooks.json"), maximumConfigurationBytes, false)
+func verifyHooks(runtimeName, workspacePath, executable, targetOS string) ([]LifecycleBinding, error) {
+	configRelativePath := filepath.Join(".codex", "hooks.json")
+	if runtimeName == "claude" {
+		configRelativePath = filepath.Join(".claude", "settings.local.json")
+	}
+	path, err := regularFile(workspacePath, configRelativePath, maximumConfigurationBytes, false)
 	if err != nil {
 		return nil, err
 	}
@@ -300,20 +326,21 @@ func verifyHooks(workspacePath, executable, targetOS string) ([]LifecycleBinding
 	}
 	var config map[string]any
 	if err := decodeStrict(body, &config); err != nil {
-		return nil, fmt.Errorf("decode Codex hook configuration: %w", err)
+		return nil, fmt.Errorf("decode %s hook configuration: %w", runtimeName, err)
 	}
 	hooks, ok := config["hooks"].(map[string]any)
 	if !ok {
-		return nil, errors.New("Codex hook configuration hooks must be an object")
+		return nil, errors.New(runtimeName + " hook configuration hooks must be an object")
 	}
-	expectedByNative := make(map[string]expectedBinding, len(expectedCodexBindings))
-	for _, binding := range expectedCodexBindings {
+	expected := expectedBindings[runtimeName]
+	expectedByNative := make(map[string]expectedBinding, len(expected))
+	for _, binding := range expected {
 		expectedByNative[binding.native] = binding
 	}
 	for event, groupsValue := range hooks {
 		groups, ok := groupsValue.([]any)
 		if !ok {
-			return nil, fmt.Errorf("Codex hook event %s must be a list", event)
+			return nil, fmt.Errorf("%s hook event %s must be a list", runtimeName, event)
 		}
 		if _, expected := expectedByNative[event]; expected {
 			continue
@@ -324,28 +351,32 @@ func verifyHooks(workspacePath, executable, targetOS string) ([]LifecycleBinding
 			}
 		}
 	}
-	result := make([]LifecycleBinding, 0, len(expectedCodexBindings))
-	for _, binding := range expectedCodexBindings {
+	result := make([]LifecycleBinding, 0, len(expected))
+	for _, binding := range expected {
 		groupsValue, exists := hooks[binding.native]
 		if !exists {
-			return nil, fmt.Errorf("missing Maestro-owned %s hook", binding.native)
+			return nil, fmt.Errorf("missing Maestro-owned %s %s hook", runtimeName, binding.native)
 		}
 		groups, ok := groupsValue.([]any)
 		if !ok {
-			return nil, fmt.Errorf("Codex hook event %s must be a list", binding.native)
+			return nil, fmt.Errorf("%s hook event %s must be a list", runtimeName, binding.native)
 		}
 		expectedCommand := quoteCommandPath(targetOS, executable) + " hook " + binding.commandSuffix +
 			" --adapter-source maestro --orchestration-state .bcgos/maestro-orchestration-state.json"
 		owned := ownedHookEntries(groups, binding.native)
 		if len(owned) != 1 {
-			return nil, fmt.Errorf("Codex hook event %s has %d Maestro-owned entries, want exactly one", binding.native, len(owned))
+			return nil, fmt.Errorf("%s hook event %s has %d Maestro-owned entries, want exactly one", runtimeName, binding.native, len(owned))
 		}
 		entry := owned[0]
-		if len(entry) != 3 || entry["type"] != "command" || entry["command"] != expectedCommand || entry["timeout"] != float64(2) {
-			return nil, fmt.Errorf("Codex hook event %s does not match the installed CLI contract", binding.native)
+		if entry["type"] != "command" || entry["command"] != expectedCommand || entry["timeout"] != float64(2) {
+			return nil, fmt.Errorf("%s hook event %s does not match the installed CLI contract", runtimeName, binding.native)
 		}
-		if _, exists := entry["async"]; exists {
-			return nil, fmt.Errorf("Codex hook event %s must remain synchronous", binding.native)
+		if binding.asynchronous {
+			if len(entry) != 4 || entry["async"] != true {
+				return nil, fmt.Errorf("%s hook event %s must remain asynchronous", runtimeName, binding.native)
+			}
+		} else if len(entry) != 3 {
+			return nil, fmt.Errorf("%s hook event %s must remain synchronous", runtimeName, binding.native)
 		}
 		result = append(result, LifecycleBinding{
 			SemanticEvent: binding.semantic, NativeEvent: binding.native, Command: expectedCommand,
@@ -355,7 +386,7 @@ func verifyHooks(workspacePath, executable, targetOS string) ([]LifecycleBinding
 	return result, nil
 }
 
-func bindCapabilities(bindings *[]LifecycleBinding) error {
+func bindCapabilities(runtimeName string, bindings *[]LifecycleBinding) error {
 	manifest, err := baseruntime.Manifest()
 	if err != nil {
 		return fmt.Errorf("load canonical capability manifest: %w", err)
@@ -374,11 +405,11 @@ func bindCapabilities(bindings *[]LifecycleBinding) error {
 			return fmt.Errorf("duplicate lifecycle capability %s", capability.ID)
 		}
 		seen[capability.ID] = true
-		contract, exists := capability.Runtimes["codex"]
+		contract, exists := capability.Runtimes[runtimeName]
 		binding := &(*bindings)[index]
 		if !exists || capability.SemanticEvent != binding.SemanticEvent || contract.State != "unavailable" ||
 			!contract.Configured || contract.AdapterObserved || contract.NativeQualified || contract.Reason == "" {
-			return fmt.Errorf("Codex lifecycle capability %s is not fail-closed and configuration-only", capability.ID)
+			return fmt.Errorf("%s lifecycle capability %s is not fail-closed and configuration-only", runtimeName, capability.ID)
 		}
 		binding.CapabilityState = contract.State
 		binding.Configured = contract.Configured
@@ -432,19 +463,23 @@ func isMaestroOwned(command string) bool {
 		strings.HasPrefix(strings.TrimSpace(command), "bcgos hook ")
 }
 
-func renderCodexOrientation(skills []skillsindex.Skill) (string, error) {
+func renderOrientation(runtimeName string, skills []skillsindex.Skill) (string, error) {
 	template := string(baseruntime.OrientationTemplate())
 	if !strings.Contains(template, "{{SKILLS_BLOCK}}") || !strings.Contains(template, "{{RUNTIME}}") || !strings.Contains(template, "{{RUNTIME_ID}}") {
 		return "", errors.New("orientation template is missing required placeholders")
 	}
 	var block strings.Builder
 	block.WriteString("<!-- BCGOS:INSTALLED-SKILLS:BEGIN -->\n")
+	skillsRoot, runtimeLabel := ".codex/skills", "Codex"
+	if runtimeName == "claude" {
+		skillsRoot, runtimeLabel = ".claude/skills", "Claude Code"
+	}
 	for _, skill := range skills {
-		fmt.Fprintf(&block, "- `$%s` — %s; usar quando: %s; fonte: `.codex/skills/%s/SKILL.md`\n", skill.ID, skill.DisplayName, skill.Trigger, skill.ID)
+		fmt.Fprintf(&block, "- `$%s` — %s; usar quando: %s; fonte: `%s/%s/SKILL.md`\n", skill.ID, skill.DisplayName, skill.Trigger, skillsRoot, skill.ID)
 	}
 	block.WriteString("<!-- BCGOS:INSTALLED-SKILLS:END -->")
-	body := strings.ReplaceAll(template, "{{RUNTIME}}", "Codex")
-	body = strings.ReplaceAll(body, "{{RUNTIME_ID}}", "codex")
+	body := strings.ReplaceAll(template, "{{RUNTIME}}", runtimeLabel)
+	body = strings.ReplaceAll(body, "{{RUNTIME_ID}}", runtimeName)
 	body = strings.ReplaceAll(body, "{{SKILLS_BLOCK}}", block.String())
 	return runtimeprojection.OrientationBegin + "\n" + strings.TrimSpace(body) + "\n" + runtimeprojection.OrientationEnd + "\n", nil
 }

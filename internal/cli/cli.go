@@ -2959,8 +2959,8 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status|verify> --runtime claude|codex [workspace-path]")
 		return ExitUsage
 	}
-	if args[0] == "verify" && (*runtimeName != "codex" || *executable != "") {
-		fmt.Fprintln(errOut, "usage: bcgos adapter verify --runtime codex [workspace-path]")
+	if args[0] == "verify" && ((*runtimeName != "claude" && *runtimeName != "codex") || *executable != "") {
+		fmt.Fprintln(errOut, "usage: bcgos adapter verify --runtime claude|codex [workspace-path]")
 		return ExitUsage
 	}
 	path := optionalArg(flags.Args())
@@ -2980,7 +2980,7 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 			return reportError(errOut, fmt.Errorf("locate installed bcgos executable: %w", err))
 		}
 		report, verifyErr := installreadiness.Verify(installreadiness.Options{
-			WorkspacePath: path, DataRoot: root, ExecutablePath: resolvedExecutable,
+			Runtime: *runtimeName, WorkspacePath: path, DataRoot: root, ExecutablePath: resolvedExecutable,
 			CLIVersion: Version, CapabilityTracks: tracks,
 		})
 		if verifyErr != nil {
