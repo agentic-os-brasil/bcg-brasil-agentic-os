@@ -22,6 +22,7 @@ import (
 	datapracticeskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/data-practice/skills"
 	engineeringcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/engineering-core/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillrouting"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 )
 
@@ -66,6 +67,14 @@ type runtimeLayout struct {
 	orientation string
 	root        string
 	runtimeName string
+}
+
+type canonicalProjectionContract struct {
+	Catalog      skillsindex.Catalog
+	Policy       skillpolicy.Policy
+	SkillHashes  map[string]string
+	PolicyBody   []byte
+	PolicyDigest string
 }
 
 // ValidateInstall performs the projection preflight without writing files.
@@ -233,36 +242,48 @@ func Inspect(runtimeName, workspace string) (Status, error) {
 	if current.Runtime != runtimeName {
 		return Status{}, fmt.Errorf("runtime projection manifest belongs to %s", current.Runtime)
 	}
-	conflicts := []string{}
-	orientation, err := os.ReadFile(filepath.Join(workspace, layout.orientation))
-	if err != nil {
-		conflicts = append(conflicts, layout.orientation)
-	} else if !orientationMatchesManifest(string(orientation), current.OrientationHash) {
-		conflicts = append(conflicts, layout.orientation)
-	}
-	for id, expected := range current.SkillHashes {
-		relative := filepath.Join(layout.root, id, "SKILL.md")
-		if err := rejectSymlinkComponents(workspace, relative); err != nil {
-			conflicts = append(conflicts, relative)
-			continue
-		}
-		body, err := os.ReadFile(filepath.Join(workspace, relative))
-		if err != nil || digest(body) != expected {
-			conflicts = append(conflicts, relative)
-		}
-	}
+	canonical, canonicalErr := canonicalProjection(current)
+	conflicts := projectionConflicts(workspace, layout, current, canonical, canonicalErr)
 	policyPath := filepath.Join(workspace, PolicyRelativePath)
-	if current.PolicyPath != PolicyRelativePath || current.PolicyHash == "" {
-		conflicts = append(conflicts, policyPath)
-	} else if body, readErr := os.ReadFile(policyPath); readErr != nil || digest(body) != current.PolicyHash {
-		conflicts = append(conflicts, policyPath)
-	}
 	sort.Strings(conflicts)
 	state := "installed"
 	if len(conflicts) > 0 {
 		state = "conflict"
 	}
 	return Status{Runtime: runtimeName, State: state, OrientationPath: filepath.Join(workspace, layout.orientation), SkillsRoot: filepath.Join(workspace, layout.root), ManifestPath: path, PolicyPath: policyPath, SkillCount: len(current.SkillHashes), Conflicts: conflicts}, nil
+}
+
+// RoutingInputs returns only integrity-checked installed methods, their
+// governed selection policy, and runtime-relative pointers. Skill bodies are
+// deliberately not returned to the prompt hook.
+func RoutingInputs(runtimeName, workspace string) (skillsindex.Catalog, skillpolicy.Policy, []skillrouting.InstalledSkill, error) {
+	status, err := Inspect(runtimeName, workspace)
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	if status.State != "installed" {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, fmt.Errorf("runtime projection is %s", status.State)
+	}
+	current, err := readManifest(filepath.Join(workspace, ManifestRelativePath))
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	layout, err := layout(runtimeName, workspace)
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	canonical, err := canonicalProjection(current)
+	if err != nil {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, err
+	}
+	if conflicts := projectionConflicts(workspace, layout, current, canonical, nil); len(conflicts) > 0 {
+		return skillsindex.Catalog{}, skillpolicy.Policy{}, nil, fmt.Errorf("runtime projection failed embedded integrity reconciliation: %s", strings.Join(conflicts, ", "))
+	}
+	installed := make([]skillrouting.InstalledSkill, 0, len(canonical.Catalog.Skills))
+	for _, skill := range canonical.Catalog.Skills {
+		installed = append(installed, skillrouting.InstalledSkill{ID: skill.ID, Pointer: filepath.ToSlash(filepath.Join(layout.root, skill.ID, "SKILL.md"))})
+	}
+	return canonical.Catalog, canonical.Policy, installed, nil
 }
 
 func Uninstall(runtimeName, workspace string) (Status, error) {
@@ -418,6 +439,84 @@ func skillContents(catalog skillsindex.Catalog) (map[string][]byte, map[string]s
 	return contents, hashes, nil
 }
 
+func canonicalProjection(current manifest) (canonicalProjectionContract, error) {
+	base, err := baseskills.Catalog()
+	if err != nil {
+		return canonicalProjectionContract{}, err
+	}
+	engineering, err := engineeringcoreskills.Catalog()
+	if err != nil {
+		return canonicalProjectionContract{}, err
+	}
+	dataPractice, err := datapracticeskills.Catalog()
+	if err != nil {
+		return canonicalProjectionContract{}, err
+	}
+	known := make(map[string]skillsindex.Skill, len(base.Skills)+len(engineering.Skills)+len(dataPractice.Skills))
+	for _, skill := range append(append(base.Skills, engineering.Skills...), dataPractice.Skills...) {
+		known[skill.ID] = skill
+	}
+	active := skillsindex.Catalog{SchemaVersion: base.SchemaVersion}
+	hashes := make(map[string]string, len(current.SkillHashes))
+	for id := range current.SkillHashes {
+		skill, exists := known[id]
+		if !exists {
+			return canonicalProjectionContract{}, fmt.Errorf("runtime projection contains skill %q outside embedded governed catalogs", id)
+		}
+		body, err := skillBody(id)
+		if err != nil {
+			return canonicalProjectionContract{}, err
+		}
+		active.Skills = append(active.Skills, skill)
+		hashes[id] = digest(body)
+	}
+	sort.Slice(active.Skills, func(left, right int) bool { return active.Skills[left].ID < active.Skills[right].ID })
+	if err := active.Validate(); err != nil {
+		return canonicalProjectionContract{}, err
+	}
+	policy, err := policyForCatalog(active)
+	if err != nil {
+		return canonicalProjectionContract{}, err
+	}
+	policyBody, err := json.MarshalIndent(policy, "", "  ")
+	if err != nil {
+		return canonicalProjectionContract{}, err
+	}
+	policyBody = append(policyBody, '\n')
+	return canonicalProjectionContract{Catalog: active, Policy: policy, SkillHashes: hashes, PolicyBody: policyBody, PolicyDigest: digest(policyBody)}, nil
+}
+
+func projectionConflicts(workspace string, layout runtimeLayout, current manifest, canonical canonicalProjectionContract, canonicalErr error) []string {
+	conflicts := []string{}
+	orientation, err := os.ReadFile(filepath.Join(workspace, layout.orientation))
+	if err != nil || !orientationMatchesManifest(string(orientation), current.OrientationHash) {
+		conflicts = append(conflicts, layout.orientation)
+	}
+	if canonicalErr != nil {
+		conflicts = append(conflicts, filepath.Join(workspace, ManifestRelativePath))
+		sort.Strings(conflicts)
+		return conflicts
+	}
+	for id, expected := range canonical.SkillHashes {
+		relative := filepath.Join(layout.root, id, "SKILL.md")
+		if err := rejectSymlinkComponents(workspace, relative); err != nil {
+			conflicts = append(conflicts, relative)
+			continue
+		}
+		body, readErr := os.ReadFile(filepath.Join(workspace, relative))
+		if readErr != nil || current.SkillHashes[id] != expected || digest(body) != expected {
+			conflicts = append(conflicts, relative)
+		}
+	}
+	policyPath := filepath.Join(workspace, PolicyRelativePath)
+	policyBody, policyErr := os.ReadFile(policyPath)
+	if current.PolicyPath != PolicyRelativePath || current.PolicyHash != canonical.PolicyDigest || policyErr != nil || !bytes.Equal(policyBody, canonical.PolicyBody) {
+		conflicts = append(conflicts, policyPath)
+	}
+	sort.Strings(conflicts)
+	return conflicts
+}
+
 func catalogForTracks(tracks []string) (skillsindex.Catalog, error) {
 	base, err := baseskills.Catalog()
 	if err != nil {
@@ -466,13 +565,21 @@ func PolicyForTracks(tracks []string) (skillpolicy.Policy, skillsindex.Catalog, 
 	if err != nil {
 		return skillpolicy.Policy{}, skillsindex.Catalog{}, err
 	}
-	base, err := baseskills.Catalog()
+	policy, err := policyForCatalog(active)
 	if err != nil {
 		return skillpolicy.Policy{}, skillsindex.Catalog{}, err
 	}
+	return policy, active, nil
+}
+
+func policyForCatalog(active skillsindex.Catalog) (skillpolicy.Policy, error) {
+	base, err := baseskills.Catalog()
+	if err != nil {
+		return skillpolicy.Policy{}, err
+	}
 	policy, err := skillpolicy.Parse(bytes.NewReader(baseskills.AgentSkillPolicy()))
 	if err != nil {
-		return skillpolicy.Policy{}, skillsindex.Catalog{}, fmt.Errorf("parse base agent skill policy: %w", err)
+		return skillpolicy.Policy{}, fmt.Errorf("parse base agent skill policy: %w", err)
 	}
 	baseIDs := make(map[string]bool, len(base.Skills))
 	for _, skill := range base.Skills {
@@ -486,16 +593,16 @@ func PolicyForTracks(tracks []string) (skillpolicy.Policy, skillsindex.Catalog, 
 	}
 	policy, err = skillpolicy.ActivateDirect(policy, "case_agent", optionalIDs)
 	if err != nil {
-		return skillpolicy.Policy{}, skillsindex.Catalog{}, err
+		return skillpolicy.Policy{}, err
 	}
 	agents, err := baseagents.Catalog()
 	if err != nil {
-		return skillpolicy.Policy{}, skillsindex.Catalog{}, err
+		return skillpolicy.Policy{}, err
 	}
 	if _, err := skillpolicy.Compile(policy, active, agents); err != nil {
-		return skillpolicy.Policy{}, skillsindex.Catalog{}, fmt.Errorf("compile selection-scoped agent skill policy: %w", err)
+		return skillpolicy.Policy{}, fmt.Errorf("compile selection-scoped agent skill policy: %w", err)
 	}
-	return policy, active, nil
+	return policy, nil
 }
 
 func policyBodyForTracks(tracks []string) ([]byte, error) {
