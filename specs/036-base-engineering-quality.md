@@ -22,9 +22,13 @@ The base bundle includes these six managed skills:
 - `pr-review`
 - `pr-quality-loop`
 
-They are procedural and evidence-oriented. They do not grant tools, write to a
-repository by implication, approve a release, merge a pull request or persist
-source, prompts, client data, credentials or full command output.
+They are procedural and evidence-oriented. Case Agent can use the broader
+method set for delivery work; Gamma Guardian receives only the bounded quality
+subset (`coverage-diagnose`, `unit-test-wave`, `qa-gate`, `pr-review` and
+`pr-quality-loop`) as a longitudinal evaluation method. Neither role receives
+tools or write authority from a skill, approves a release, merges a pull
+request or persists source, prompts, client data, credentials or full command
+output.
 
 ## Bundle boundary
 

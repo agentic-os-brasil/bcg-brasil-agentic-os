@@ -1,7 +1,7 @@
 # Spec 027 — managed agent scaffolding
 
 The base bundle projects data-free definitions for Maestro, Case Agent, Client
-Account Agent, PA Expert, Walter and Darwin. Installed instances add immutable
+Account Agent, PA Expert, Walter, Darwin and Gamma Guardian. Installed instances add immutable
 scope, owner, authorization and state digests; they do not create new roles.
 
 | Role | Owner | Scope | Direct user | Delegation |
@@ -12,6 +12,7 @@ scope, owner, authorization and state digests; they do not create new roles.
 | `pa_expert` | PA Expert registry | practice | no | none |
 | `reviewer` | Maestro | review | no | none |
 | `governance_analyst` | Maestro | health | no | none |
+| `quality_guardian` | Maestro | quality_longitudinal | no | none |
 
 Scaffolding validates the canonical catalog, exact ID-to-scope relationship,
 parent Maestro identity, role contract and data-free managed definition.

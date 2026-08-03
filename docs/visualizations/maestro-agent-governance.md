@@ -22,6 +22,14 @@ flowchart LR
   Deliver --> User
 ```
 
+```mermaid
+flowchart LR
+  Maestro --> Gamma[Gamma Guardian\nlongitudinal quality]
+  Gamma --> Maestro
+  Gamma -. "one authorized workspace/head per packet" .-> Evidence[bounded evidence]
+  Gamma -. "no Case context, children, write or merge" .-> Boundary[fail-closed boundary]
+```
+
 The first decision is `account_assistance`: account-assisted work has both
 framing and return validation; direct Case work has neither. The second is
 `walter_required`: material or ambiguous work goes to Walter, while a
@@ -31,4 +39,7 @@ decisions are never collapsed into one depth profile.
 Case methods remain local skills. PA Expert is the sole centrally versioned
 FPA/IPA advisory authority. Walter is internal and tool-free. Darwin handles
 scoped health/governance maintenance only and cannot approve itself or mutate
-live policy.
+live policy. Gamma Guardian is a direct Maestro spoke for longitudinal code
+quality; its rubric is a method inside that agent, and it never becomes a Case
+child or inherits Case context. Local quality signals remain advisory until
+independent native runtime evidence exists.

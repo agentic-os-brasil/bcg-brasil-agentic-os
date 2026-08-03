@@ -25,6 +25,7 @@ const (
 	IntentReview       IntentClass = "material_review"
 	IntentHealth       IntentClass = "health_governance"
 	IntentErrand       IntentClass = "bounded_errand"
+	IntentQuality      IntentClass = "code_quality"
 )
 
 type Sensitivity string
@@ -70,6 +71,7 @@ const (
 	ActionWalter   Action = "invoke_walter"
 	ActionDarwin   Action = "invoke_darwin"
 	ActionErrand   Action = "bounded_errand"
+	ActionGamma    Action = "invoke_gamma_guardian"
 )
 
 type CaseEntry string
@@ -93,30 +95,33 @@ type RegisteredAgent struct {
 }
 
 type Input struct {
-	SchemaVersion          int               `json:"schema_version"`
-	IntentClass            IntentClass       `json:"intent_class"`
-	ScopeKind              string            `json:"scope_kind"`
-	ScopeID                string            `json:"scope_id"`
-	AccountScopeID         string            `json:"account_scope_id,omitempty"`
-	Sensitivity            Sensitivity       `json:"sensitivity"`
-	Materiality            Materiality       `json:"materiality"`
-	ReviewTrigger          string            `json:"review_trigger"`
-	HealthIntent           HealthIntent      `json:"health_governance_intent"`
-	RequestedCapability    string            `json:"requested_capability"`
-	CallerRole             string            `json:"caller_role,omitempty"`
-	ClientImplication      bool              `json:"client_implication"`
-	StakeholderImplication bool              `json:"stakeholder_implication"`
-	StrategicImplication   bool              `json:"strategic_implication"`
-	PromotionImplication   bool              `json:"promotion_implication"`
-	CrossCaseContext       bool              `json:"cross_case_context"`
-	ExecutionOnly          bool              `json:"execution_only"`
-	SimpleReversible       bool              `json:"simple_reversible"`
-	HighLeverage           bool              `json:"high_leverage"`
-	ConsequentialDecision  bool              `json:"consequential_decision"`
-	ExternalArtifact       bool              `json:"external_artifact"`
-	ReputationalRisk       bool              `json:"reputational_risk"`
-	HardToReverse          bool              `json:"hard_to_reverse"`
-	AvailableAgents        []RegisteredAgent `json:"available_registered_agents"`
+	SchemaVersion          int          `json:"schema_version"`
+	IntentClass            IntentClass  `json:"intent_class"`
+	ScopeKind              string       `json:"scope_kind"`
+	ScopeID                string       `json:"scope_id"`
+	AccountScopeID         string       `json:"account_scope_id,omitempty"`
+	Sensitivity            Sensitivity  `json:"sensitivity"`
+	Materiality            Materiality  `json:"materiality"`
+	ReviewTrigger          string       `json:"review_trigger"`
+	HealthIntent           HealthIntent `json:"health_governance_intent"`
+	RequestedCapability    string       `json:"requested_capability"`
+	CallerRole             string       `json:"caller_role,omitempty"`
+	ClientImplication      bool         `json:"client_implication"`
+	StakeholderImplication bool         `json:"stakeholder_implication"`
+	StrategicImplication   bool         `json:"strategic_implication"`
+	PromotionImplication   bool         `json:"promotion_implication"`
+	CrossCaseContext       bool         `json:"cross_case_context"`
+	ExecutionOnly          bool         `json:"execution_only"`
+	SimpleReversible       bool         `json:"simple_reversible"`
+	HighLeverage           bool         `json:"high_leverage"`
+	ConsequentialDecision  bool         `json:"consequential_decision"`
+	ExternalArtifact       bool         `json:"external_artifact"`
+	ReputationalRisk       bool         `json:"reputational_risk"`
+	HardToReverse          bool         `json:"hard_to_reverse"`
+	// SourceHead pins a Gamma quality run to one immutable source revision.
+	// It is intentionally empty for every non-quality route.
+	SourceHead      string            `json:"source_head,omitempty"`
+	AvailableAgents []RegisteredAgent `json:"available_registered_agents"`
 }
 
 type AgentBinding struct {
@@ -150,6 +155,7 @@ type Plan struct {
 	ScopeID                     string         `json:"scope_id"`
 	AccountScopeID              string         `json:"account_scope_id,omitempty"`
 	RequestedCapability         string         `json:"requested_capability,omitempty"`
+	SourceHead                  string         `json:"source_head,omitempty"`
 	AccountConsultationRequired bool           `json:"account_consultation_required"`
 	Bindings                    []AgentBinding `json:"bindings,omitempty"`
 	PlanDigest                  string         `json:"plan_digest"`
@@ -218,6 +224,14 @@ func PlanFor(input Input) (Plan, error) {
 			return Plan{}, errors.New("bounded errand helper is unavailable")
 		}
 		add(err)
+	case IntentQuality:
+		plan.Action, plan.ReasonCode = ActionGamma, "longitudinal_code_quality_requested"
+		plan.SourceHead = input.SourceHead
+		gamma, ok := find("quality_guardian", input.ScopeKind, input.ScopeID)
+		if !ok {
+			return Plan{}, errors.New("Gamma Guardian routing is unavailable")
+		}
+		add(gamma)
 	case IntentCase:
 		caseAgent, ok := find("case_agent", input.ScopeKind, input.ScopeID)
 		if !ok {
@@ -309,9 +323,18 @@ func validateInput(input Input) error {
 	if input.ScopeID != "" && !agentcatalog.ValidAgentID(input.ScopeID) {
 		return errors.New("Maestro scope ID is invalid")
 	}
-	validIntent := map[IntentClass]bool{IntentDirectAnswer: true, IntentCase: true, IntentAccount: true, IntentAdvisory: true, IntentReview: true, IntentHealth: true, IntentErrand: true}
+	validIntent := map[IntentClass]bool{IntentDirectAnswer: true, IntentCase: true, IntentAccount: true, IntentAdvisory: true, IntentReview: true, IntentHealth: true, IntentErrand: true, IntentQuality: true}
 	if !validIntent[input.IntentClass] {
 		return fmt.Errorf("unknown Maestro intent class %q", input.IntentClass)
+	}
+	if input.IntentClass == IntentQuality && input.ScopeKind != "workspace" {
+		return errors.New("Gamma quality evaluation requires one authorized workspace scope")
+	}
+	if input.IntentClass == IntentQuality && !validSourceHead(input.SourceHead) {
+		return errors.New("Gamma quality evaluation requires one canonical authorized source head")
+	}
+	if input.IntentClass != IntentQuality && input.SourceHead != "" {
+		return errors.New("source head is reserved for Gamma quality evaluation")
 	}
 	validSensitivity := map[Sensitivity]bool{SensitivityPublic: true, SensitivityInternal: true, SensitivityConfidential: true, SensitivityRestricted: true}
 	if !validSensitivity[input.Sensitivity] {
@@ -350,11 +373,26 @@ func validScopeKind(kind string) bool {
 
 func validRole(role string) bool {
 	switch role {
-	case "case_agent", "client_account_agent", "pa_expert", "reviewer", "governance_analyst", "errand_helper":
+	case "case_agent", "client_account_agent", "pa_expert", "reviewer", "governance_analyst", "errand_helper", "quality_guardian":
 		return true
 	default:
 		return false
 	}
+}
+
+// validSourceHead accepts immutable Git object identifiers only. Supporting
+// both SHA-1 and SHA-256 keeps the contract portable without admitting a
+// branch, tag or mutable ref name as quality evidence.
+func validSourceHead(value string) bool {
+	if len(value) != 40 && len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func validDigest(value string) bool {
@@ -444,6 +482,15 @@ func (plan Plan) Validate() error {
 	if len(plan.Bindings) == 0 && plan.Action != ActionDirect {
 		return errors.New("non-direct plan has no exact agent binding")
 	}
+	if plan.Action == ActionGamma && bindingID(plan, "quality_guardian") == "" {
+		return errors.New("Gamma plan must bind the longitudinal quality guardian")
+	}
+	if plan.Action == ActionGamma && !validSourceHead(plan.SourceHead) {
+		return errors.New("Gamma plan must bind one canonical source head")
+	}
+	if plan.Action != ActionGamma && plan.SourceHead != "" {
+		return errors.New("non-Gamma plan cannot carry a source head")
+	}
 	return nil
 }
 
@@ -487,11 +534,21 @@ func validatePlanBindings(plan Plan) error {
 			allowed["governance_analyst"] = true
 		case ActionErrand:
 			allowed["errand_helper"] = true
+		case ActionGamma:
+			allowed["quality_guardian"] = true
 		}
 	}
 	for _, binding := range plan.Bindings {
 		if !allowed[binding.Role] {
 			return errors.New("Maestro plan contains an unreferenced agent binding")
+		}
+	}
+	if plan.Action == ActionGamma {
+		gammaBindingID := bindingID(plan, "quality_guardian")
+		for _, binding := range plan.Bindings {
+			if binding.ID == gammaBindingID && (binding.ScopeKind != "workspace" || binding.ScopeID != plan.ScopeID || binding.ParentScopeKind != "" || binding.ParentScopeID != "") {
+				return errors.New("Gamma route binding must be the standalone authorized workspace scope")
+			}
 		}
 	}
 	if plan.CaseEntry != "" {
@@ -538,6 +595,7 @@ const (
 	StageWalterReview    Stage = "walter_review"
 	StageDarwinHealth    Stage = "darwin_health"
 	StageErrandExecution Stage = "errand_execution"
+	StageGammaQuality    Stage = "gamma_quality"
 	StageFinal           Stage = "final"
 	StageFailed          Stage = "failed_closed"
 )
@@ -619,6 +677,8 @@ func NewChain(plan Plan, policy LoopPolicy) (ChainState, error) {
 		state.Stage, state.ActiveAgentID = StageDarwinHealth, bindingID(plan, "governance_analyst")
 	case ActionErrand:
 		state.Stage, state.ActiveAgentID = StageErrandExecution, bindingID(plan, "errand_helper")
+	case ActionGamma:
+		state.Stage, state.ActiveAgentID = StageGammaQuality, bindingID(plan, "quality_guardian")
 	default:
 		return ChainState{}, errors.New("Maestro plan has no executable chain route")
 	}
@@ -667,7 +727,7 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 			return state, Receipt{}, errors.New("account framing decision must be approve or refine")
 		}
 		state.Stage, state.ActiveAgentID = StageCaseExecution, bindingID(plan, "case_agent")
-	case StageAccountAdvisory, StagePAExpert, StageDarwinHealth, StageErrandExecution:
+	case StageAccountAdvisory, StagePAExpert, StageDarwinHealth, StageErrandExecution, StageGammaQuality:
 		if event.Decision != "approve" && event.Decision != "return" {
 			return state, Receipt{}, errors.New("advisory action must approve or return")
 		}

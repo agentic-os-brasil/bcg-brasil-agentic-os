@@ -49,10 +49,17 @@ func TestInspectAndRoutingRejectPolicyAndManifestCoTamper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(policy.Direct) != 1 || len(policy.Direct[0].SkillIDs) < 2 {
+	caseRule := -1
+	for i, rule := range policy.Direct {
+		if rule.Role == "case_agent" {
+			caseRule = i
+			break
+		}
+	}
+	if caseRule < 0 || len(policy.Direct[caseRule].SkillIDs) < 2 {
 		t.Fatalf("unexpected base policy fixture: %#v", policy.Direct)
 	}
-	policy.Direct[0].SkillIDs = append([]string(nil), policy.Direct[0].SkillIDs[1:]...)
+	policy.Direct[caseRule].SkillIDs = append([]string(nil), policy.Direct[caseRule].SkillIDs[1:]...)
 	mutated, err := json.MarshalIndent(policy, "", "  ")
 	if err != nil {
 		t.Fatal(err)

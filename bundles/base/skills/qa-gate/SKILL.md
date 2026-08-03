@@ -32,6 +32,10 @@ check or approval boundary.
    `unit-test-wave` when the change exposes a gap.
 6. Classify each signal as `pass`, `fail`, `skipped`, `blocked` or
    `unavailable`. A skipped or unavailable required check is not a pass.
+   For code changes, Maestro may request a bounded `code_quality` evaluation
+   from Gamma Guardian. Keep its five-dimension result separate from command
+   checks: a local signal is advisory, and native qualification remains
+   `unavailable` without independent runtime evidence.
 7. Produce a QA packet with verdict `PASS`, `HOLD` or `UNAVAILABLE`, residual
    risk and the smallest next action.
 

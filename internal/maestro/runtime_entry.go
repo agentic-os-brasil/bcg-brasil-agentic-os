@@ -354,6 +354,9 @@ func orderedBindingDigest(plan Plan) string {
 	if plan.RequiresWalter {
 		appendBinding("walter_review", "reviewer", "review", "review")
 	}
+	if plan.Action == ActionGamma {
+		appendBinding("gamma_quality", "quality_guardian", "workspace", plan.ScopeID)
+	}
 	if len(steps) == 0 {
 		for _, binding := range plan.Bindings {
 			steps = append(steps, invocationStep{Phase: "selected", Binding: binding})

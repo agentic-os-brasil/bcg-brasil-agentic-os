@@ -86,6 +86,7 @@ var roleContracts = map[string]struct {
 	"governance_analyst":   {false, "scoped", false, "bounded_health_packet"},
 	"hub":                  {true, "none", true, "session_context_packet"},
 	"pa_expert":            {false, "none", false, "bounded_advisory_packet"},
+	"quality_guardian":     {false, "scoped", false, "bounded_quality_packet"},
 	"reviewer":             {false, "none", false, "sealed_review_packet"},
 	"workspace_agent":      {false, "scoped", false, "bounded_workspace_packet"}, // compatibility only
 }
@@ -242,6 +243,7 @@ func (catalog Catalog) Validate() error {
 		"case-agent":           {"case_agent", false, "scoped", false, "bounded_case_packet"},
 		"client-account-agent": {"client_account_agent", false, "scoped", false, "bounded_client_account_packet"},
 		"pa-expert":            {"pa_expert", false, "none", false, "bounded_advisory_packet"},
+		"gamma-guardian":       {"quality_guardian", false, "scoped", false, "bounded_quality_packet"},
 	}
 	for id, contract := range wanted {
 		agent, ok := seen[id]
@@ -288,7 +290,7 @@ func (catalog Catalog) roleMayDelegate(role string) bool {
 }
 
 func validateDelegationEdges(edges []DelegationEdge) error {
-	wanted := []DelegationEdge{{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}}}
+	wanted := []DelegationEdge{{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "quality_guardian", "reviewer"}}}
 	if len(edges) != len(wanted) {
 		return errors.New("agent catalog has an incomplete or unauthorized delegation graph")
 	}

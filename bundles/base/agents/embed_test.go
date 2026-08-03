@@ -6,7 +6,7 @@ import (
 )
 
 func TestManagedScaffoldTemplatesAreEmbeddedAndDataFree(t *testing.T) {
-	for _, role := range []string{"account_agent", "case_agent", "client_account_agent", "pa_expert", "workspace_agent"} {
+	for _, role := range []string{"account_agent", "case_agent", "client_account_agent", "pa_expert", "quality_guardian", "workspace_agent"} {
 		body, err := Template(role)
 		if err != nil {
 			t.Fatalf("Template(%q): %v", role, err)

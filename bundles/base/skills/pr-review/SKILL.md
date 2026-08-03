@@ -49,7 +49,11 @@ default.
 Check correctness and invariants, contract/API compatibility, tests and
 failure paths, security/data boundaries, observability/rollback and
 documentation. Treat automated reviewer comments as signals to verify, not as
-the verdict. Separate confirmed findings, false positives and open questions.
+the verdict. For a code change, Maestro may attach a current `code_quality`
+packet from its longitudinal Gamma Guardian spoke. Use the five-dimensional
+signal as an additional pointer to inspect; it is advisory, metadata-only and
+cannot approve, merge or publish. Separate confirmed findings, false positives
+and open questions.
 
 ## Verdict
 

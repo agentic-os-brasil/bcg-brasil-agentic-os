@@ -29,6 +29,12 @@ evidence or authority.
    be fixed first.
 5. Run `pr-review` and `qa-gate` at that depth. Classify findings as blocker,
    non-blocker, false positive or question, with a pointer and owner route.
+   For code changes, Maestro may route one fresh `code_quality` packet to the
+   longitudinal Gamma Guardian spoke. Gamma evaluates the bounded head across
+   clean code, architecture/system design, testing, security/reliability and
+   documentation/SDD; it returns metadata-only signals, never an approval.
+   `RED`, `UNAVAILABLE` and `BLOCKED` remain visible in the loop and are not
+   converted into a green result.
 6. Return blockers to the PR author. Do not modify their branch unless the
    user explicitly changes ownership and scope.
 7. When the head changes, invalidate the pack and all head-bound evidence.
@@ -50,4 +56,5 @@ credentials, client data or full tool output.
 - rerunning fresh checks without a revision or reason;
 - treating an automated reviewer as the decision maker;
 - declaring merge-ready while required evidence is stale or unavailable;
+- treating Gamma Guardian's quality signal as a merge or release decision;
 - merging inside the loop.

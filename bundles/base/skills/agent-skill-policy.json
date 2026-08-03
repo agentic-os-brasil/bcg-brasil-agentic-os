@@ -16,6 +16,16 @@
         "quantitative-analysis",
         "slide-summary"
       ]
+    },
+    {
+      "role": "quality_guardian",
+      "skill_ids": [
+        "coverage-diagnose",
+        "pr-quality-loop",
+        "pr-review",
+        "qa-gate",
+        "unit-test-wave"
+      ]
     }
   ],
   "delegated": []

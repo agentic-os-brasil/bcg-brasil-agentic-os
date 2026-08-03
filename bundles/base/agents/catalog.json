@@ -12,7 +12,7 @@
     "allowed_edges": [
       {
         "from_role": "hub",
-        "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"]
+        "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "quality_guardian", "reviewer"]
       }
     ]
   },
@@ -64,6 +64,19 @@
       "display_name": "Darwin",
       "default_emoji": "🧬",
       "ownership_scope": "governance",
+      "customizable": true
+    },
+    {
+      "id": "gamma-guardian",
+      "role": "quality_guardian",
+      "direct_user_access": false,
+      "tool_access": "scoped",
+      "may_delegate": false,
+      "input_contract": "bounded_quality_packet",
+      "relative_path": "agents/gamma-guardian/AGENT.md",
+      "display_name": "Gamma Guardian",
+      "default_emoji": "🧪",
+      "ownership_scope": "quality_longitudinal",
       "customizable": true
     },
     {

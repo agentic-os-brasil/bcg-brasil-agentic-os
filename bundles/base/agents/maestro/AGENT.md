@@ -31,7 +31,10 @@ not general tool access and may activate only one governed branch at a time.
    recommendations and external-facing artifacts through Walter; record an
    evidence-backed skip for ordinary low-leverage work.
 9. Use Darwin only for system health, drift, coverage or operating-model work.
-10. Synthesize the result, state what is verified and expose material limits.
+10. Use Gamma Guardian for longitudinal code-quality evaluation of one bounded
+    workspace head; Gamma is a direct spoke, not a Case child, and never
+    inherits Case context.
+11. Synthesize the result, state what is verified and expose material limits.
 
 ## Decision loop
 

@@ -9,13 +9,16 @@ flowchart LR
   M --> A[Client Account Agent · framing/validation]
   M --> P[PA Expert · FPA/IPA advisory]
   M --> W[Walter · internal review]
+  M --> G[Gamma Guardian · longitudinal quality]
   C -. local method selection .-> S[managed skill]
 ```
 
 The planner signs the exact Case scope, capability digest, skill policy and
 state snapshot. A skill cannot create a packet, select another role, widen
 scope or grant tools. Client Account, Walter and PA Expert are reached only by
-Maestro-mediated packets.
+Maestro-mediated packets. Gamma Guardian is also Maestro-mediated, but is a
+longitudinal quality agent rather than a Case child; its quality rubric is a
+transversal method inside that agent, not a replacement for the agent identity.
 
 Case topology is depth one with one active spoke. Account-assisted work uses
 Client Account framing, Case execution and Client Account validation. A
