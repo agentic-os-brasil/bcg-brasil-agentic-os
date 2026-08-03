@@ -25,6 +25,9 @@ func (fake *fakeLaunchctl) Run(_ context.Context, name string, args []string) (C
 	}
 	switch args[0] {
 	case "bootstrap":
+		if fake.disabled {
+			return CommandResult{ExitCode: 5}, errors.New("service is disabled")
+		}
 		fake.loaded = true
 		if len(args) > 2 {
 			fake.printPath = args[2]
@@ -190,6 +193,9 @@ func TestLaunchAgentStatusFailsClosedOnMismatchedLoadedIdentity(t *testing.T) {
 
 type failingRunner struct{}
 
-func (failingRunner) Run(context.Context, string, []string) (CommandResult, error) {
-	return CommandResult{ExitCode: 1}, errors.New("launchctl failed")
+func (failingRunner) Run(_ context.Context, _ string, args []string) (CommandResult, error) {
+	if len(args) > 0 && args[0] == "bootstrap" {
+		return CommandResult{ExitCode: 1}, errors.New("launchctl failed")
+	}
+	return CommandResult{}, nil
 }

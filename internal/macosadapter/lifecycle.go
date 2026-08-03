@@ -152,14 +152,16 @@ func (lifecycle Lifecycle) Install(ctx context.Context, home string, spec Spec, 
 		_ = Uninstall(home, spec.Label)
 		return LaunchAgentStatus{State: "partial_native_runner_unavailable", Path: filesystemStatus.Path, Label: spec.Label}, errors.New("launchctl runner is unavailable")
 	}
+	// launchd retains a disabled label even after a prior service is booted out.
+	// Re-enable the allow-listed label before bootstrap; otherwise launchctl
+	// rejects a valid replacement plist with exit status 5.
+	if err := lifecycle.run(ctx, []string{"enable", "gui/" + lifecycle.UID + "/" + spec.Label}); err != nil {
+		_ = Uninstall(home, spec.Label)
+		return LaunchAgentStatus{State: "partial_enable_failed", Path: filesystemStatus.Path, Label: spec.Label, Diagnostic: "launchctl enable failed"}, err
+	}
 	if err := lifecycle.run(ctx, []string{"bootstrap", "gui/" + lifecycle.UID, filesystemStatus.Path}); err != nil {
 		_ = Uninstall(home, spec.Label)
 		return LaunchAgentStatus{State: "partial_bootstrap_failed", Path: filesystemStatus.Path, Label: spec.Label, Diagnostic: "launchctl bootstrap failed"}, err
-	}
-	if err := lifecycle.run(ctx, []string{"enable", "gui/" + lifecycle.UID + "/" + spec.Label}); err != nil {
-		_ = lifecycle.run(ctx, []string{"bootout", "gui/" + lifecycle.UID + "/" + spec.Label})
-		_ = Uninstall(home, spec.Label)
-		return LaunchAgentStatus{State: "partial_enable_failed", Path: filesystemStatus.Path, Label: spec.Label, Diagnostic: "launchctl enable failed"}, err
 	}
 	if err := lifecycle.run(ctx, []string{"kickstart", "-k", "gui/" + lifecycle.UID + "/" + spec.Label}); err != nil {
 		_ = lifecycle.run(ctx, []string{"bootout", "gui/" + lifecycle.UID + "/" + spec.Label})
@@ -290,14 +292,14 @@ func (lifecycle Lifecycle) Resume(ctx context.Context, home, label string) (Laun
 	if !lifecycle.Native {
 		return lifecycle.Status(ctx, home, label)
 	}
+	if err := lifecycle.run(ctx, []string{"enable", "gui/" + lifecycle.UID + "/" + label}); err != nil {
+		return status, err
+	}
 	path := status.Path
 	if !status.Loaded {
 		if err := lifecycle.run(ctx, []string{"bootstrap", "gui/" + lifecycle.UID, path}); err != nil {
 			return status, err
 		}
-	}
-	if err := lifecycle.run(ctx, []string{"enable", "gui/" + lifecycle.UID + "/" + label}); err != nil {
-		return status, err
 	}
 	if err := lifecycle.run(ctx, []string{"kickstart", "-k", "gui/" + lifecycle.UID + "/" + label}); err != nil {
 		return status, err
