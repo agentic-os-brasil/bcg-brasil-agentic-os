@@ -8,7 +8,7 @@
   "properties": {
     "schema_version": {"const": 1},
     "planner_version": {"const": "maestro-native-v2"},
-    "action": {"enum": ["direct", "open_case", "open_client_account", "request_pa_expert", "invoke_walter", "invoke_darwin", "bounded_errand"]},
+    "action": {"enum": ["direct", "open_case", "open_client_account", "request_pa_expert", "invoke_walter", "invoke_darwin", "invoke_gamma_guardian", "bounded_errand"]},
     "reason_code": {"type": "string", "minLength": 1},
     "case_entry": {"enum": ["account_first", "direct_case"]},
     "skip_pre_account": {"type": "boolean"},
@@ -41,7 +41,7 @@
       "required": ["id", "role", "scope_kind", "scope_id", "authorization_digest", "capability_digest", "state_snapshot_digest"],
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
-        "role": {"enum": ["case_agent", "client_account_agent", "pa_expert", "reviewer", "governance_analyst", "errand_helper"]},
+        "role": {"enum": ["case_agent", "client_account_agent", "pa_expert", "reviewer", "governance_analyst", "errand_helper", "quality_guardian"]},
         "scope_kind": {"type": "string", "minLength": 1},
         "scope_id": {"type": "string", "minLength": 1},
         "parent_scope_kind": {"type": "string"},

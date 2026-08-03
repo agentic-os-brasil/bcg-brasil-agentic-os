@@ -4,6 +4,11 @@ Maestro is the only user-facing hub and the only authority that selects a
 spoke. The runtime has one active spoke, depth one and zero agent children.
 Every transition is mediated by Maestro; an agent-to-agent call is denied.
 
+Gamma Guardian is a direct longitudinal quality spoke. A `code_quality` intent
+routes `Maestro → Gamma Guardian → Maestro`; it never routes through Case and
+does not receive Case context. The packet binds one authorized workspace and
+source head while the identity and rubric remain longitudinal.
+
 The closed planner input contains intent class, active scope kind/ID,
 sensitivity, materiality, review trigger, health/governance intent, requested
 capability, client/stakeholder/strategy/promotion implications, reversibility

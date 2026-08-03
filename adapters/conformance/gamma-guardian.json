@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "identity": "gamma-guardian",
+  "role": "quality_guardian",
+  "placement": "maestro_longitudinal_spoke",
+  "input_contract": "bounded_quality_packet",
+  "evaluation_scope": "one_authorized_workspace_per_request",
+  "runtime_scope_kind": "workspace",
+  "dimensions": [
+    "clean_code",
+    "architecture_system_design",
+    "testing",
+    "security_reliability",
+    "documentation_sdd"
+  ],
+  "signals": ["GREEN", "YELLOW", "RED", "UNAVAILABLE", "BLOCKED"],
+  "authority": {
+    "direct_user_access": false,
+    "can_write": false,
+    "can_merge": false,
+    "can_publish": false,
+    "can_delegate": false,
+    "max_parallel_branches": 0
+  },
+  "native_qualification": "unavailable"
+}

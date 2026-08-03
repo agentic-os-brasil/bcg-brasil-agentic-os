@@ -281,6 +281,7 @@ var roleScopeKinds = map[string]map[string]bool{
 	"governance_analyst":   {"health": true},
 	"hub":                  {"control": true},
 	"pa_expert":            {"practice": true},
+	"quality_guardian":     {"workspace": true},
 	"reviewer":             {"review": true},
 }
 

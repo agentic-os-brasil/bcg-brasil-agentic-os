@@ -9,7 +9,7 @@ import (
 
 func TestInitialInterviewExplainsNamesAvatarsAndOwnership(t *testing.T) {
 	interview := InitialInterview()
-	if interview.Kind != "agent_identity_setup" || interview.SchemaVersion != SchemaVersion || len(interview.Agents) < 6 {
+	if interview.Kind != "agent_identity_setup" || interview.SchemaVersion != SchemaVersion || len(interview.Agents) < 7 {
 		t.Fatalf("unexpected interview: %#v", interview)
 	}
 	if interview.OwnershipExplanation == "" || interview.AvatarExplanation == "" {
@@ -24,6 +24,9 @@ func TestInitialInterviewExplainsNamesAvatarsAndOwnership(t *testing.T) {
 		}
 		if descriptor.Role == "walter" && descriptor.DefaultEmoji != "🦉" {
 			t.Fatalf("Walter default emoji = %q, want owl", descriptor.DefaultEmoji)
+		}
+		if descriptor.Role == "quality_guardian" && descriptor.OwnershipScope != "quality_longitudinal" {
+			t.Fatalf("Gamma ownership scope = %q", descriptor.OwnershipScope)
 		}
 	}
 }
@@ -132,7 +135,7 @@ func TestManagedProjectionConsumesConfirmedCorePersonalization(t *testing.T) {
 		t.Fatal(err)
 	}
 	managed := ResolveManaged(profile)
-	if len(managed) != 3 || managed[0].DisplayName != "Conductor" || managed[1].DisplayName != "Sentinel" || managed[2].DisplayName != "Darwin" {
+	if len(managed) != 4 || managed[0].DisplayName != "Conductor" || managed[1].DisplayName != "Sentinel" || managed[2].DisplayName != "Darwin" || managed[3].DisplayName != "Gamma Guardian" {
 		t.Fatalf("managed identity projection = %#v", managed)
 	}
 }

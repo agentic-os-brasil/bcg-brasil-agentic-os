@@ -31,6 +31,12 @@ func TestPolicyKeepsSkillsAsMethodsWithoutCreatingAuthority(t *testing.T) {
 	if !registry.AllowsDirect("case_agent", "deck-storyline") {
 		t.Fatal("Case Agent cannot select its direct deck skill")
 	}
+	if !registry.AllowsDirect("quality_guardian", "pr-quality-loop") || !registry.AllowsDirect("quality_guardian", "pr-review") {
+		t.Fatal("Gamma Guardian cannot select its bounded quality methods")
+	}
+	if registry.AllowsDirect("quality_guardian", "deck-storyline") {
+		t.Fatal("Gamma Guardian gained an unrelated case-deliverable method")
+	}
 	if registry.AllowsDirect("reviewer", "deck-storyline") {
 		t.Fatal("Walter gained direct Case method selection")
 	}

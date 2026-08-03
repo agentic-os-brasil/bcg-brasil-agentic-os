@@ -132,6 +132,52 @@ func TestWalterIntentReviewFixturePinsSelfAndIntentContract(t *testing.T) {
 	}
 }
 
+func TestGammaGuardianFixturePinsLongitudinalQualityContract(t *testing.T) {
+	body, err := os.ReadFile("../../adapters/conformance/gamma-guardian.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		SchemaVersion       int      `json:"schema_version"`
+		Identity            string   `json:"identity"`
+		Role                string   `json:"role"`
+		Placement           string   `json:"placement"`
+		InputContract       string   `json:"input_contract"`
+		EvaluationScope     string   `json:"evaluation_scope"`
+		RuntimeScopeKind    string   `json:"runtime_scope_kind"`
+		Dimensions          []string `json:"dimensions"`
+		Signals             []string `json:"signals"`
+		NativeQualification string   `json:"native_qualification"`
+		Authority           struct {
+			DirectUserAccess    bool `json:"direct_user_access"`
+			CanWrite            bool `json:"can_write"`
+			CanMerge            bool `json:"can_merge"`
+			CanPublish          bool `json:"can_publish"`
+			CanDelegate         bool `json:"can_delegate"`
+			MaxParallelBranches int  `json:"max_parallel_branches"`
+		} `json:"authority"`
+	}
+	if err := json.Unmarshal(body, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.SchemaVersion != 1 || fixture.Identity != "gamma-guardian" || fixture.Role != "quality_guardian" || fixture.Placement != "maestro_longitudinal_spoke" || fixture.InputContract != "bounded_quality_packet" || fixture.EvaluationScope != "one_authorized_workspace_per_request" || fixture.RuntimeScopeKind != "workspace" || fixture.NativeQualification != "unavailable" {
+		t.Fatalf("Gamma Guardian fixture header drifted: %#v", fixture)
+	}
+	for _, dimension := range []string{"clean_code", "architecture_system_design", "testing", "security_reliability", "documentation_sdd"} {
+		if !contains(fixture.Dimensions, dimension) {
+			t.Fatalf("Gamma dimension missing: %s", dimension)
+		}
+	}
+	for _, signal := range []string{"GREEN", "YELLOW", "RED", "UNAVAILABLE", "BLOCKED"} {
+		if !contains(fixture.Signals, signal) {
+			t.Fatalf("Gamma signal missing: %s", signal)
+		}
+	}
+	if fixture.Authority.DirectUserAccess || fixture.Authority.CanWrite || fixture.Authority.CanMerge || fixture.Authority.CanPublish || fixture.Authority.CanDelegate || fixture.Authority.MaxParallelBranches != 0 {
+		t.Fatalf("Gamma authority widened: %#v", fixture.Authority)
+	}
+}
+
 func contains(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {

@@ -732,3 +732,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The 15-minute LaunchAgent pulse is still only a discovery mechanism; the scheduler remains anchored to elapsed three-hour success with `MaxCatchUp=1`. Light dreaming no longer needs a model, but manual/legacy capture, raw prompts, routing rationale, pointers, daily logs, weekly deep dreaming and L2/L3/lifetime promotion remain excluded or unavailable without their separate adapters and eligibility evidence. A terminal scheduler receipt still cannot substitute for the active memory commit.
 - Refs: IDLE; MEMO; SCHD; specs/001-cli-distribution.md; specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/036-maintenance-plane.md; internal/memory; internal/maintenance; internal/macosadapter
 - Supersedes: none
+
+## GQAG - Make Gamma Guardian a longitudinal Maestro quality spoke
+
+- Date: 2026-08-03
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Code-quality evaluation needs a durable agent identity and evidence rubric without attaching it to a Case Agent or confusing a skill/harness with an agent.
+- Decision: Register `gamma-guardian` as the `quality_guardian` direct spoke of Maestro. Its identity and rubric are longitudinal across cases, while each bounded packet binds one authorized workspace and source head. Maestro owns routing and completion; Gamma is read-only, cannot delegate or mutate, and returns metadata-only five-dimension quality signals. Local results never promote native runtime qualification.
+- Consequences: Quality loops can route through Maestro → Gamma Guardian → Maestro without inheriting Case context or introducing a second child hierarchy. Claude/Codex skills remain methods over the same contract; native adapter qualification, mutation remediation and merge authority remain separate unavailable gates.
+- Refs: specs/018-maestro-core-agents.md; specs/040-maestro-native-delegation.md; specs/043-gamma-guardian.md; bundles/base/agents/catalog.json; internal/maestro; adapters/conformance/gamma-guardian.json
+- Supersedes: none

@@ -14,7 +14,7 @@ func TestCatalogAcceptsMaestroDepthOneQualityLoop(t *testing.T) {
 
 func TestCatalogAllowsOnlyMaestroDirectSpokesAtDepthOne(t *testing.T) {
 	catalog := mustTestCatalog(t)
-	allowed := []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "reviewer"}
+	allowed := []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "quality_guardian", "reviewer"}
 	for _, role := range allowed {
 		if !catalog.AllowsDelegation("hub", role, 1) {
 			t.Errorf("Maestro cannot open %s", role)

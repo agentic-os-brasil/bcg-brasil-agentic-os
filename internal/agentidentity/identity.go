@@ -81,6 +81,7 @@ var managedTargets = []ManagedTarget{
 	{AgentID: "maestro", Role: "maestro"},
 	{AgentID: "walter", Role: "walter"},
 	{AgentID: "darwin", Role: "darwin"},
+	{AgentID: "gamma-guardian", Role: "quality_guardian"},
 }
 
 var safeID = func(value string) bool {
@@ -108,7 +109,7 @@ func CanonicalRole(role string) string {
 
 func IsCanonicalRole(role string) bool {
 	switch role {
-	case "maestro", "client_account_agent", "case_agent", "walter", "darwin", "pa_expert", "errand_helper":
+	case "maestro", "client_account_agent", "case_agent", "walter", "darwin", "pa_expert", "errand_helper", "quality_guardian":
 		return true
 	default:
 		return false
@@ -136,6 +137,7 @@ func InitialInterview() Interview {
 			{Role: "case_agent", Purpose: "Executa análise, código e entregas de um case", DefaultName: "Case Lead", DefaultEmoji: "⚙️", Suggestions: []string{"Case Lead", "Forge", "Mission Control"}, EmojiSuggestions: []string{"⚙️", "🛠️", "🚀"}, OwnershipScope: "case", CustomizationNote: "Personalização vale apenas para o case registrado."},
 			{Role: "walter", Purpose: "Pressure-test interno de materiais e recomendações", DefaultName: "Walter", DefaultEmoji: "🦉", Suggestions: []string{"Walter", "Sentinel", "Red Team"}, EmojiSuggestions: []string{"🦉", "🔍", "⚖️"}, OwnershipScope: "governance", CustomizationNote: "A personalização não altera o veto ou o gate de revisão."},
 			{Role: "darwin", Purpose: "Cirurgião operacional do drift, saúde e governança do sistema", DefaultName: "Darwin", DefaultEmoji: "🧬", Suggestions: []string{"Darwin", "Observer", "Steward"}, EmojiSuggestions: []string{"🧬", "👁️", "🌱"}, OwnershipScope: "governance", CustomizationNote: "Darwin pode executar manutenção reversível e escopada em health/maestro-system; o nome e o emoji não alteram grants, escopo ou autoridade."},
+			{Role: "quality_guardian", Purpose: "Avalia longitudinalmente a qualidade de código e arquitetura", DefaultName: "Gamma Guardian", DefaultEmoji: "🧪", Suggestions: []string{"Gamma Guardian", "Verifier", "Quality Lens"}, EmojiSuggestions: []string{"🧪", "🔬", "✅"}, OwnershipScope: "quality_longitudinal", CustomizationNote: "Gamma é um spoke direto do Maestro, somente leitura e sem contexto de case; o nome e o emoji não alteram o rubric, grants ou autoridade."},
 			{Role: "pa_expert", Purpose: "Advisory FPA/IPA versionado pelo PA Expert registry", DefaultName: "PA Expert", DefaultEmoji: "🧠", Suggestions: []string{"PA Expert", "Advisor", "Lens"}, EmojiSuggestions: []string{"🧠", "💡", "🔬"}, OwnershipScope: "pa_expert_registry", CustomizationNote: "O owner pode personalizar a apresentação; a versão e o canon continuam centralizados no PA Expert registry."},
 		},
 		CapabilityTracks: []CapabilityTrack{
@@ -214,6 +216,8 @@ func validOwnershipScope(role, scope string) bool {
 		return scope == "governance"
 	case "pa_expert":
 		return scope == "pa_expert_registry"
+	case "quality_guardian":
+		return scope == "quality_longitudinal"
 	case "errand_helper":
 		return scope == "system"
 	default:

@@ -57,6 +57,7 @@ func TestPlannerBuildsActionSpecificChainsForEveryNonCaseRoute(t *testing.T) {
 			return input
 		}(), stage: StageDarwinHealth, activeRole: "governance_analyst"},
 		{name: "bounded errand", input: routeInput(IntentErrand, "errand", "errand-a", RegisteredAgent{ID: "errand", Role: "errand_helper", ScopeKind: "errand", ScopeID: "errand-a"}), stage: StageErrandExecution, activeRole: "errand_helper"},
+		{name: "longitudinal Gamma quality", input: routeInput(IntentQuality, "workspace", "repo-a", RegisteredAgent{ID: "gamma-guardian", Role: "quality_guardian", ScopeKind: "workspace", ScopeID: "repo-a"}), stage: StageGammaQuality, activeRole: "quality_guardian"},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -94,6 +95,13 @@ func routeInput(intent IntentClass, scopeKind, scopeID string, agent RegisteredA
 	agent.CapabilityDigest = digestFor(agent.ID + "-capability")
 	agent.StateSnapshotDigest = digestFor(agent.ID + "-state")
 	return Input{SchemaVersion: 1, IntentClass: intent, ScopeKind: scopeKind, ScopeID: scopeID, Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone, SimpleReversible: intent == IntentErrand, ExecutionOnly: intent == IntentErrand, AvailableAgents: []RegisteredAgent{agent}}
+}
+
+func TestGammaQualityRejectsCaseScopeContext(t *testing.T) {
+	input := routeInput(IntentQuality, "case", "case-alpha", RegisteredAgent{ID: "gamma-guardian", Role: "quality_guardian", ScopeKind: "case", ScopeID: "case-alpha"})
+	if _, err := PlanFor(input); err == nil || !strings.Contains(err.Error(), "workspace scope") {
+		t.Fatalf("Gamma accepted case-scoped quality context: %v", err)
+	}
 }
 
 func TestPlanValidateAcceptsAllFourCaseRoutes(t *testing.T) {

@@ -171,7 +171,8 @@ func validateDirect(rules []DirectRule, known map[string]bool) error {
 }
 
 func directRole(role string) bool {
-	return canonicalRole(role) == "case_agent"
+	role = canonicalRole(role)
+	return role == "case_agent" || role == "quality_guardian"
 }
 
 func validateDelegated(rules []DelegatedRule, known map[string]bool, agents agentcatalog.Catalog) error {

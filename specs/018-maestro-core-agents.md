@@ -14,11 +14,17 @@ The managed core is:
 | PA Expert | `pa_expert` | no | none | no |
 | Walter | `reviewer` | no | none | no |
 | Darwin | `governance_analyst` | no | scoped maintenance | no |
+| Gamma Guardian | `quality_guardian` | no | scoped inspection | no |
 
 Walter is an internal, tool-free review leaf. Darwin is a scoped health and
 governance leaf; it cannot execute client work, approve its own changes or
 mutate live policy. PA Expert is the sole FPA/IPA practice authority and is
 centrally versioned; its registry may be empty.
+
+Gamma Guardian is a longitudinal quality spoke owned by Maestro, not a child of
+the Case Agent. It evaluates one authorized workspace per bounded packet and
+does not inherit Case context. Its rubric is transversal, but its managed agent
+identity remains a direct spoke with no children.
 
 ## Deterministic Case topology
 

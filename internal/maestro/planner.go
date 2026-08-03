@@ -25,6 +25,7 @@ const (
 	IntentReview       IntentClass = "material_review"
 	IntentHealth       IntentClass = "health_governance"
 	IntentErrand       IntentClass = "bounded_errand"
+	IntentQuality      IntentClass = "code_quality"
 )
 
 type Sensitivity string
@@ -70,6 +71,7 @@ const (
 	ActionWalter   Action = "invoke_walter"
 	ActionDarwin   Action = "invoke_darwin"
 	ActionErrand   Action = "bounded_errand"
+	ActionGamma    Action = "invoke_gamma_guardian"
 )
 
 type CaseEntry string
@@ -218,6 +220,13 @@ func PlanFor(input Input) (Plan, error) {
 			return Plan{}, errors.New("bounded errand helper is unavailable")
 		}
 		add(err)
+	case IntentQuality:
+		plan.Action, plan.ReasonCode = ActionGamma, "longitudinal_code_quality_requested"
+		gamma, ok := find("quality_guardian", input.ScopeKind, input.ScopeID)
+		if !ok {
+			return Plan{}, errors.New("Gamma Guardian routing is unavailable")
+		}
+		add(gamma)
 	case IntentCase:
 		caseAgent, ok := find("case_agent", input.ScopeKind, input.ScopeID)
 		if !ok {
@@ -309,9 +318,12 @@ func validateInput(input Input) error {
 	if input.ScopeID != "" && !agentcatalog.ValidAgentID(input.ScopeID) {
 		return errors.New("Maestro scope ID is invalid")
 	}
-	validIntent := map[IntentClass]bool{IntentDirectAnswer: true, IntentCase: true, IntentAccount: true, IntentAdvisory: true, IntentReview: true, IntentHealth: true, IntentErrand: true}
+	validIntent := map[IntentClass]bool{IntentDirectAnswer: true, IntentCase: true, IntentAccount: true, IntentAdvisory: true, IntentReview: true, IntentHealth: true, IntentErrand: true, IntentQuality: true}
 	if !validIntent[input.IntentClass] {
 		return fmt.Errorf("unknown Maestro intent class %q", input.IntentClass)
+	}
+	if input.IntentClass == IntentQuality && input.ScopeKind != "workspace" {
+		return errors.New("Gamma quality evaluation requires one authorized workspace scope")
 	}
 	validSensitivity := map[Sensitivity]bool{SensitivityPublic: true, SensitivityInternal: true, SensitivityConfidential: true, SensitivityRestricted: true}
 	if !validSensitivity[input.Sensitivity] {
@@ -350,7 +362,7 @@ func validScopeKind(kind string) bool {
 
 func validRole(role string) bool {
 	switch role {
-	case "case_agent", "client_account_agent", "pa_expert", "reviewer", "governance_analyst", "errand_helper":
+	case "case_agent", "client_account_agent", "pa_expert", "reviewer", "governance_analyst", "errand_helper", "quality_guardian":
 		return true
 	default:
 		return false
@@ -444,6 +456,9 @@ func (plan Plan) Validate() error {
 	if len(plan.Bindings) == 0 && plan.Action != ActionDirect {
 		return errors.New("non-direct plan has no exact agent binding")
 	}
+	if plan.Action == ActionGamma && bindingID(plan, "quality_guardian") == "" {
+		return errors.New("Gamma plan must bind the longitudinal quality guardian")
+	}
 	return nil
 }
 
@@ -487,11 +502,21 @@ func validatePlanBindings(plan Plan) error {
 			allowed["governance_analyst"] = true
 		case ActionErrand:
 			allowed["errand_helper"] = true
+		case ActionGamma:
+			allowed["quality_guardian"] = true
 		}
 	}
 	for _, binding := range plan.Bindings {
 		if !allowed[binding.Role] {
 			return errors.New("Maestro plan contains an unreferenced agent binding")
+		}
+	}
+	if plan.Action == ActionGamma {
+		gammaBindingID := bindingID(plan, "quality_guardian")
+		for _, binding := range plan.Bindings {
+			if binding.ID == gammaBindingID && (binding.ScopeKind != "workspace" || binding.ScopeID != plan.ScopeID || binding.ParentScopeKind != "" || binding.ParentScopeID != "") {
+				return errors.New("Gamma route binding must be the standalone authorized workspace scope")
+			}
 		}
 	}
 	if plan.CaseEntry != "" {
@@ -538,6 +563,7 @@ const (
 	StageWalterReview    Stage = "walter_review"
 	StageDarwinHealth    Stage = "darwin_health"
 	StageErrandExecution Stage = "errand_execution"
+	StageGammaQuality    Stage = "gamma_quality"
 	StageFinal           Stage = "final"
 	StageFailed          Stage = "failed_closed"
 )
@@ -619,6 +645,8 @@ func NewChain(plan Plan, policy LoopPolicy) (ChainState, error) {
 		state.Stage, state.ActiveAgentID = StageDarwinHealth, bindingID(plan, "governance_analyst")
 	case ActionErrand:
 		state.Stage, state.ActiveAgentID = StageErrandExecution, bindingID(plan, "errand_helper")
+	case ActionGamma:
+		state.Stage, state.ActiveAgentID = StageGammaQuality, bindingID(plan, "quality_guardian")
 	default:
 		return ChainState{}, errors.New("Maestro plan has no executable chain route")
 	}
@@ -667,7 +695,7 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 			return state, Receipt{}, errors.New("account framing decision must be approve or refine")
 		}
 		state.Stage, state.ActiveAgentID = StageCaseExecution, bindingID(plan, "case_agent")
-	case StageAccountAdvisory, StagePAExpert, StageDarwinHealth, StageErrandExecution:
+	case StageAccountAdvisory, StagePAExpert, StageDarwinHealth, StageErrandExecution, StageGammaQuality:
 		if event.Decision != "approve" && event.Decision != "return" {
 			return state, Receipt{}, errors.New("advisory action must approve or return")
 		}

@@ -21,6 +21,7 @@ customize them, and explicitly confirms the result before it is persisted.
 | `walter` | internal pressure-test and review gate | governance |
 | `darwin` | drift, health and bounded operating-model maintenance | governance |
 | `pa_expert` | versioned Functional/Industrial Practice advice from the PA Expert registry | PA Expert registry |
+| `quality_guardian` | longitudinal code-quality and architecture evaluation | quality longitudinal |
 
 The interview may also personalize scoped practice and specialist agents when
 they are created. Every agent has one emoji-avatar. The avatar is a display
