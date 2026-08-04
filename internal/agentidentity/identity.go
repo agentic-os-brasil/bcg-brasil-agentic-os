@@ -197,6 +197,9 @@ func RecommendNarrativeSuggestions(role string, explicitPreferences []string, li
 	if limit <= 0 || len(explicitPreferences) == 0 {
 		return nil
 	}
+	if limit > 3 {
+		limit = 3
+	}
 	var candidates []NarrativeSuggestion
 	switch CanonicalRole(role) {
 	case "walter":
@@ -209,7 +212,9 @@ func RecommendNarrativeSuggestions(role string, explicitPreferences []string, li
 	preferences := map[string]bool{}
 	for _, preference := range explicitPreferences {
 		if normalized := normalizedNarrativeTag(preference); normalized != "" {
-			preferences[normalized] = true
+			for _, tag := range narrativePreferenceTags(normalized) {
+				preferences[tag] = true
+			}
 		}
 	}
 	type rankedSuggestion struct {
@@ -244,6 +249,29 @@ func RecommendNarrativeSuggestions(role string, explicitPreferences []string, li
 
 func normalizedNarrativeTag(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
+}
+
+// narrativePreferenceTags translates only the six phrases the onboarding
+// explicitly offers into the canonical tags carried by each reference. It is
+// intentionally closed: arbitrary conversation text cannot become profiling
+// input for an identity recommendation.
+func narrativePreferenceTags(preference string) []string {
+	switch preference {
+	case "guia sereno":
+		return []string{"calma", "mentoria"}
+	case "estrategista":
+		return []string{"estratégia", "prudência"}
+	case "parceiro firme":
+		return []string{"parceria", "resiliência"}
+	case "advisor técnico":
+		return []string{"tecnologia", "precisão"}
+	case "arquiteto de sistemas":
+		return []string{"arquitetura", "sistemas"}
+	case "observador de evolução":
+		return []string{"evolução", "continuidade"}
+	default:
+		return []string{preference}
+	}
 }
 
 func (profile Profile) Validate() error {

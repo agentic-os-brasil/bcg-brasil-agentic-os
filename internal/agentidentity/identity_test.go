@@ -69,6 +69,36 @@ func TestNarrativeRecommendationsUseOnlyExplicitPreferences(t *testing.T) {
 	}
 }
 
+func TestNarrativeRecommendationsCoverEveryPromptedPreferenceAndCapAtThree(t *testing.T) {
+	cases := []struct {
+		preference string
+		role       string
+		want       string
+	}{
+		{preference: "guia sereno", role: "walter", want: "Iroh"},
+		{preference: "estrategista", role: "walter", want: "Athena"},
+		{preference: "parceiro firme", role: "walter", want: "Samwise"},
+		{preference: "advisor técnico", role: "walter", want: "Jarvis"},
+		{preference: "arquiteto de sistemas", role: "darwin", want: "Ariadne"},
+		{preference: "observador de evolução", role: "darwin", want: "Darwin"},
+	}
+	for _, test := range cases {
+		t.Run(test.preference, func(t *testing.T) {
+			got := RecommendNarrativeSuggestions(test.role, []string{test.preference}, 3)
+			for _, candidate := range got {
+				if candidate.Name == test.want {
+					return
+				}
+			}
+			t.Fatalf("%q did not suggest %q: %#v", test.preference, test.want, got)
+		})
+	}
+	got := RecommendNarrativeSuggestions("darwin", []string{"arquitetura", "sistemas", "evolução", "continuidade", "resiliência", "pragmatismo"}, 99)
+	if len(got) > 3 {
+		t.Fatalf("recommendation must cap at three, got %#v", got)
+	}
+}
+
 func TestProfileValidatesCanonicalRolesAndPersistsAtomically(t *testing.T) {
 	root := t.TempDir()
 	profile := Profile{
