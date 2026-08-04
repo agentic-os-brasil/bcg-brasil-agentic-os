@@ -848,6 +848,9 @@ func runtimeIsAvailable(options options, runtimeID string) bool {
 }
 
 func runtimeAvailable(runtimeID string) bool {
+	if runtimeID == "claude" && runtime.GOOS == "darwin" {
+		return claudeDesktopAvailable()
+	}
 	if _, ok := runtimeCLIPath(runtimeID); ok {
 		return true
 	}
@@ -860,6 +863,18 @@ func runtimeAvailable(runtimeID string) bool {
 		}
 	}
 	return chatGPTAppAvailable()
+}
+
+func claudeDesktopAvailable() bool {
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	for _, root := range []string{"/Applications", filepath.Join(os.Getenv("HOME"), "Applications")} {
+		if info, err := os.Stat(filepath.Join(root, "Claude.app")); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 func runtimeCLIPath(runtimeID string) (string, bool) {
@@ -1163,6 +1178,9 @@ func launchRuntime(runtimeID, workspacePath string) error {
 	if !runtimeAvailable(runtimeID) {
 		return fmt.Errorf("%s não está instalado", runtimeID)
 	}
+	if runtime.GOOS == "darwin" && runtimeID == "claude" {
+		return openPath(claudeCodeWorkspaceLink(workspacePath))
+	}
 	if runtime.GOOS == "darwin" && runtimeID == "codex" && chatGPTAppAvailable() {
 		return openPath(codexWorkspaceLink(workspacePath))
 	}
@@ -1179,6 +1197,15 @@ func launchRuntime(runtimeID, workspacePath string) error {
 		return fmt.Errorf("%s não tem um launcher local", runtimeID)
 	}
 	return openCLIInWorkspace(cliPath, workspacePath)
+}
+
+func claudeCodeWorkspaceLink(workspacePath string) string {
+	deepLink := url.URL{Scheme: "claude", Host: "code", Path: "/new"}
+	query := deepLink.Query()
+	query.Set("folder", workspacePath)
+	query.Set("q", "Você está no workspace Maestro recém-criado. Confirme este diretório no Claude Desktop; depois revise os hooks locais do Maestro quando forem apresentados, leia AGENTS.md e conduza a entrevista inicial antes da primeira tarefa profissional.")
+	deepLink.RawQuery = query.Encode()
+	return deepLink.String()
 }
 
 func codexWorkspaceLink(workspacePath string) string {
