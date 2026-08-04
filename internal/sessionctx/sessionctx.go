@@ -13,6 +13,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
@@ -34,11 +35,12 @@ var sessionSafeFacets = map[string]struct{}{
 }
 
 type Sources struct {
-	Profile   profile.State
-	Workspace workspace.Inspection
-	Owner     ownerctx.Status
-	Atlas     atlas.Status
-	Execution execution.ActivePointer
+	Profile          profile.State
+	Workspace        workspace.Inspection
+	Owner            ownerctx.Status
+	Atlas            atlas.Status
+	Execution        execution.ActivePointer
+	SharePointSource priorwork.SourceSelectionStatus
 }
 
 type Pointer struct {
@@ -119,6 +121,20 @@ type ExecutionContext struct {
 	Active Pointer `json:"active"`
 }
 
+// SharePointSource contains only bounded setup state. Exact URLs remain behind
+// Pointer in private local storage and collection authority remains separate.
+type SharePointSource struct {
+	State                string `json:"state"`
+	Pointer              string `json:"pointer,omitempty"`
+	FolderCount          int    `json:"folder_count"`
+	SourceAuthority      string `json:"source_authority"`
+	LocalProjection      string `json:"local_projection"`
+	AuthorizationState   string `json:"authorization_state"`
+	CollectionRuntime    string `json:"collection_runtime"`
+	CollectionState      string `json:"collection_state"`
+	CodexCollectionState string `json:"codex_collection_state"`
+}
+
 type Omission struct {
 	Source string `json:"source"`
 	Reason string `json:"reason"`
@@ -132,6 +148,7 @@ type Packet struct {
 	Owner              Owner               `json:"owner"`
 	Atlas              Atlas               `json:"atlas"`
 	Execution          ExecutionContext    `json:"execution"`
+	SharePointSource   SharePointSource    `json:"sharepoint_source"`
 	Skills             Skills              `json:"skills"`
 	Agents             Agents              `json:"agents"`
 	Memory             Memory              `json:"memory"`
@@ -155,6 +172,15 @@ func Build(sources Sources) Packet {
 	if openTasks.State == "" {
 		openTasks.State = "unavailable"
 	}
+	sharePointSource := sources.SharePointSource
+	if sharePointSource.State == "" {
+		sharePointSource = priorwork.SourceSelectionStatus{
+			SchemaVersion: 1, State: priorwork.SourceSelectionRequired,
+			SourceAuthority: "sharepoint", LocalProjection: "metadata_and_source_pointers_only",
+			AuthorizationState: "not_selected", CollectionRuntime: "claude",
+			CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy",
+		}
+	}
 	packet := Packet{
 		SchemaVersion: 1,
 		State:         "ready",
@@ -176,7 +202,13 @@ func Build(sources Sources) Packet {
 			Workspace: pointerAtlas("workspace", sources.Atlas.Workspace),
 		},
 		Execution: ExecutionContext{Active: executionPointer(sources.Execution)},
-		Skills:    Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
+		SharePointSource: SharePointSource{
+			State: sharePointSource.State, Pointer: sharePointSource.Pointer, FolderCount: sharePointSource.FolderCount,
+			SourceAuthority: sharePointSource.SourceAuthority, LocalProjection: sharePointSource.LocalProjection,
+			AuthorizationState: sharePointSource.AuthorizationState, CollectionRuntime: sharePointSource.CollectionRuntime,
+			CollectionState: sharePointSource.CollectionState, CodexCollectionState: sharePointSource.CodexCollectionState,
+		},
+		Skills: Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
 		Agents: Agents{
 			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: "unavailable",
 			Message: "native agent orchestration requires a runtime adapter with tool and delegation enforcement",
@@ -224,6 +256,9 @@ func (packet Packet) Validate() error {
 	}
 	if packet.Owner.OpenTasks.State != "unavailable" && packet.Owner.OpenTasks.State != "empty" && packet.Owner.OpenTasks.State != "available" {
 		return errors.New("session context packet has an invalid open task state")
+	}
+	if err := validateSharePointSource(packet.SharePointSource); err != nil {
+		return err
 	}
 	if len(packet.Skills.Selected) > 2 {
 		return errors.New("session context packet selects too many skills")
@@ -279,6 +314,34 @@ func validSelectedSkill(selected SkillSelection) bool {
 	claudePointer := path.Join(".claude", "skills", selected.ID, "SKILL.md")
 	codexPointer := path.Join(".codex", "skills", selected.ID, "SKILL.md")
 	return cleaned == claudePointer || cleaned == codexPointer
+}
+
+func validateSharePointSource(source SharePointSource) error {
+	if source.State != priorwork.SourceSelectionRequired && source.State != priorwork.SourceSelected && source.State != priorwork.SourceDeferred && source.State != priorwork.SourceSelectionUnavailable {
+		return errors.New("session context packet has an invalid SharePoint source selection state")
+	}
+	if source.SourceAuthority != "sharepoint" || source.LocalProjection != "metadata_and_source_pointers_only" || source.CollectionRuntime != "claude" || source.CollectionState != "unavailable" || source.CodexCollectionState != "unavailable/corporate_policy" {
+		return errors.New("session context packet weakens the SharePoint source or runtime boundary")
+	}
+	switch source.State {
+	case priorwork.SourceSelectionRequired:
+		if source.Pointer != "" || source.FolderCount != 0 || source.AuthorizationState != "not_selected" {
+			return errors.New("pending SharePoint source selection exposes unexpected state")
+		}
+	case priorwork.SourceSelected:
+		if source.Pointer == "" || source.FolderCount <= 0 || source.AuthorizationState != "pending_signed_enrollment" {
+			return errors.New("selected SharePoint source is missing its bounded authorization state")
+		}
+	case priorwork.SourceDeferred:
+		if source.Pointer == "" || source.FolderCount != 0 || source.AuthorizationState != "deferred_by_owner" {
+			return errors.New("deferred SharePoint source selection is invalid")
+		}
+	case priorwork.SourceSelectionUnavailable:
+		if source.FolderCount != 0 || source.AuthorizationState != "unavailable" {
+			return errors.New("unavailable SharePoint source selection is invalid")
+		}
+	}
+	return nil
 }
 
 func hasOmission(omissions []Omission, source string) bool {

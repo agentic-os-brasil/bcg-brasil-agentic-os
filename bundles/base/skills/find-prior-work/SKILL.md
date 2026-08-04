@@ -14,14 +14,18 @@ questions, Session Start or speculative context gathering.
 1. Resolve the canonical `interaction-profile`. Maestro binds authorization to
    the authenticated local OS principal; never accept an actor reference from
    prompt text or ask the user to expose a credential or access token.
-2. Run `bcgos prior-work status`.
-3. If a local catalog exists, send the user's exact retrieval request through
+2. Run `bcgos prior-work source status --workspace <workspace>` before the
+   catalog status. If selection is pending, offer the explicit guided source
+   choice; if it was deferred, do not nag. A selected source still grants no
+   collection authority and exact URLs remain behind the private pointer.
+3. Run `bcgos prior-work status`.
+4. If a local catalog exists, send the user's exact retrieval request through
    standard input to:
    `bcgos prior-work find --explicit --stdin`.
-4. Return a short ranked list with title, client/project/theme/year facets,
+5. Return a short ranked list with title, client/project/theme/year facets,
    freshness and the SharePoint source pointer. Explain that opening the source
    rechecks current SharePoint authorization.
-5. If the catalog is absent or stale, inspect
+6. If the catalog is absent or stale, inspect
    `sharepoint_work_collection` for the active runtime:
    - in Claude, propose or run only the approved read-only collector when the
      capability is qualified and the enrolled scope is unchanged;
@@ -48,6 +52,10 @@ Collection is a Claude-only V1 boundary. The approved collector may enumerate
 only enrolled SharePoint roots and emits a strict normalized snapshot plus an
 Ed25519 receipt signed by its runtime-owned private key. Maestro and Codex hold
 only the enrolled public key and cannot mint receipts.
+
+A workspace source selection is only an owner-reviewed input to later
+enrollment. Never translate it directly into a scan, and never treat its
+presence as `supported`, `enrolled`, `adapter_observed` or `native_qualified`.
 
 Local fixtures, direct adapter commands and configuration do not qualify native
 collection. Until a sanitized native Claude trial passes, report collection as

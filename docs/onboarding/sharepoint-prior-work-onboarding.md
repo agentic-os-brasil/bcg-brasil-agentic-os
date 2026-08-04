@@ -54,6 +54,7 @@ No Claude:
 
 | Camada | Estado | O que isso prova |
 | --- | --- | --- |
+| Seleção guiada por projeto | Implementada e validada localmente | O owner pode indicar, adiar ou revisar pastas exatas sem iniciar coleta; Session Start recebe apenas estado bounded. |
 | Contrato, schemas e threat model | Implementado e validado localmente | Enrollment, snapshot, receipt, revogação e consulta têm regras testáveis. |
 | Índice local determinístico | Implementado e validado localmente | Um snapshot assinado pode ser publicado e consultado sem SharePoint ao vivo. |
 | CLI `bcgos prior-work` | Implementado e validado localmente | Actor local, enrollment, status, import e find funcionam sobre artefatos locais; sync-due é diagnóstico fail-closed no build atual. |
@@ -65,6 +66,29 @@ No Claude:
 O estado atual é útil para desenvolvimento, revisão de segurança e teste com
 fixtures sanitizadas. Uso com tenant corporativo exige o trial Claude e os
 gates de distribuição aplicáveis.
+
+### A escolha guiada vem antes da matrícula
+
+Depois do onboarding do owner, o Maestro pergunta se o usuário quer indicar as
+pastas autorizadas do SharePoint para aquele workspace. A resposta é
+workspace-bound e versionada em estado privado local:
+
+```text
+bcgos prior-work source status --workspace <workspace>
+bcgos prior-work source select --workspace <workspace> --stdin --confirm
+bcgos prior-work source defer --workspace <workspace> --confirm
+```
+
+O comando `select` recebe apenas JSON estrito com `schema_version: 1` e uma
+lista `folder_urls`. URLs de compartilhamento com query/fragment, roots amplos,
+credenciais, outros provedores e campos desconhecidos são recusados. O status
+mostra somente contagem e ponteiro privado; nunca devolve URLs para Session
+Start.
+
+Essa escolha não substitui a matrícula das seções seguintes. O owner informa a
+intenção e o escopo exato; a autoridade aprovada ainda precisa resolver os
+ponteiros em roots opacos e assinar o enrollment. Até lá, collection continua
+`unavailable`. Nenhum runtime coleta durante o onboarding.
 
 ## 3. Arquitetura e separação de responsabilidades
 

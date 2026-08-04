@@ -7,6 +7,8 @@ connection is available in Claude and unavailable in Codex.
 
 - active runtime is Claude;
 - the approved SharePoint MCP connection is authenticated;
+- the owner-reviewed workspace source selection has been resolved to the exact
+  opaque roots by the approved enrollment authority;
 - a create-only enrollment exists;
 - the requested roots exactly match that enrollment;
 - the runtime-owned Ed25519 private key matches the enrolled public key; and
@@ -14,6 +16,13 @@ connection is available in Claude and unavailable in Codex.
 
 Until every precondition is evidenced,
 `sharepoint_work_collection` remains `unavailable`.
+
+The guided selection under `bcgos prior-work source` is only a private local
+handoff. Reading that pointer must not start collection. The approved authority
+reviews the exact canonical folder URLs, resolves them through the authorized
+Claude connection, and issues a signed enrollment over opaque roots. No broad
+tenant discovery is permitted while resolving the selection, and neither the
+selection nor its Session Start status is native-runtime evidence.
 
 ## Read-only collection protocol
 

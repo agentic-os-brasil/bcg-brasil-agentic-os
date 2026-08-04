@@ -91,7 +91,7 @@ var visibleSurface = []struct {
 	body string
 }{
 	{"README.md", rootReadme},
-	{"onboarding/README.md", "# Onboarding\n\nNa primeira sessão, Maestro verifica se o perfil do dono foi concluído. Se estiver pendente, ele conduz uma pergunta por vez e só trata o onboarding como completo depois da revisão e confirmação do dono.\n\nNenhuma memória anterior é lida, copiada ou enviada durante essa etapa.\n"},
+	{"onboarding/README.md", "# Onboarding\n\nNa primeira sessão, Maestro verifica se o perfil do dono foi concluído. Se estiver pendente, ele conduz uma pergunta por vez e só trata o onboarding como completo depois da revisão e confirmação do dono.\n\nDepois da confirmação, o Maestro pergunta uma vez se o dono quer indicar pastas autorizadas do SharePoint deste projeto ou começar sem essa fonte. A escolha registra somente ponteiros locais revisados: não lê, copia, envia nem coleta documentos durante o onboarding.\n\nNenhuma memória anterior é lida, copiada ou enviada durante essa etapa.\n"},
 	{"brain/clients/README.md", "# Clientes\n\nCrie uma pasta somente quando houver um cliente autorizado. Registre stakeholders, fatos e decisões no escopo correto.\n"},
 	{"brain/projects/README.md", "# Projetos\n\nCrie um diretório por projeto ativo. Mantenha hipótese, entregáveis, plano de trabalho e evidências próximos ao projeto.\n"},
 	{"brain/knowledge/README.md", "# Conhecimento\n\nGuarde conhecimento reutilizável que tenha fonte e escopo claros. Não copie material de cliente para esta área.\n"},
