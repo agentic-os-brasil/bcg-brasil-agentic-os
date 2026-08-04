@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -23,6 +24,51 @@ func TestBuildUsesNativeSessionStartContextWithoutSourceBodies(t *testing.T) {
 	}
 	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "professional self body") {
 		t.Fatalf("output exposed a source body: %s", output.HookSpecificOutput.AdditionalContext)
+	}
+}
+
+func TestSessionStartInjectsBoundedLocalMemoryButPromptHookDoesNotRepeatIt(t *testing.T) {
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+		Memory: sessionctx.MemorySource{State: "available", Bundle: basememory.ContextBundle{Sections: []basememory.ContextSection{
+			{Layer: "lifetime", Content: "stable owner routing", DrillDown: "versions/lifetime.json"},
+			{Layer: "L1", Content: "recent selected methods", DrillDown: "versions/l1.json"},
+		}}},
+	})
+	started, err := BuildClaude(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	context := started.HookSpecificOutput.AdditionalContext
+	if !strings.Contains(context, "MAESTRO LOCAL MEMORY") || !strings.Contains(context, "stable owner routing") || !strings.Contains(context, "recent selected methods") || strings.Index(context, "stable owner routing") > strings.Index(context, "recent selected methods") {
+		t.Fatalf("session memory context = %q", context)
+	}
+	if strings.Contains(context, "versions/lifetime.json") {
+		t.Fatalf("session memory leaked a storage path: %q", context)
+	}
+	prompt, err := BuildClaudeEvent(packet, "UserPromptSubmit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(prompt.HookSpecificOutput.AdditionalContext, "stable owner routing") || strings.Contains(prompt.HookSpecificOutput.AdditionalContext, "MAESTRO LOCAL MEMORY") {
+		t.Fatalf("prompt hook repeated memory context: %q", prompt.HookSpecificOutput.AdditionalContext)
+	}
+}
+
+func TestSessionStartTruncatesMemoryBeforeDroppingThePointerPacket(t *testing.T) {
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+		Memory:    sessionctx.MemorySource{State: "available", Bundle: basememory.ContextBundle{Sections: []basememory.ContextSection{{Layer: "L1", Content: strings.Repeat("memória ", MaximumAdditionalContextBytes)}}}},
+	})
+	output, err := BuildCodex(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	context := output.HookSpecificOutput.AdditionalContext
+	if len(context) > MaximumAdditionalContextBytes || strings.Contains(context, "packet exceeded") || !strings.Contains(context, "memory context truncated") || !strings.Contains(context, `"memory":{"state":"available"`) {
+		t.Fatalf("bounded memory output = %q", context)
 	}
 }
 

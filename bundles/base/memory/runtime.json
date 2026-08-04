@@ -3,5 +3,9 @@
   "l1_max_runes": 12000,
   "l1_max_entries": 64,
   "l1_max_input_bytes": 1048576,
-  "l1_max_input_entries": 256
+  "l1_max_input_entries": 256,
+  "session_context_lifetime_max_runes": 1024,
+  "session_context_l3_max_runes": 768,
+  "session_context_l2_max_runes": 768,
+  "session_context_l1_max_runes": 1024
 }

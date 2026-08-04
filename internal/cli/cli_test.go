@@ -285,7 +285,7 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	}
 	output.Reset()
 	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"injection_state\":\"unavailable\"`) {
+	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"injection_state\":\"unavailable\"`) || !strings.Contains(output.String(), `\"memory\":{\"state\":\"empty\"`) || strings.Contains(output.String(), "memory context injection requires a runtime adapter") {
 		t.Fatalf("hook exit = %d, output = %s", code, output.String())
 	}
 }

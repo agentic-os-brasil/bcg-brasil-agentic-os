@@ -1,8 +1,9 @@
 # Spec 006 - Memory persistence and dreaming
 
 Status: architecture, runtime-neutral core engine, CLI bridge, deterministic
-L1 light dreaming and metadata-only continuity checkpoint implemented; weekly
-deep synthesis and lifetime eligibility adapters remain pending.
+L1 light dreaming, metadata-only continuity checkpoint and bounded Session Start
+consumption implemented; weekly deep synthesis and lifetime eligibility adapters
+remain pending.
 
 ## Objective
 
@@ -116,12 +117,23 @@ lifetime -> L3 -> L2 -> L1
 
 Each injected layer has an independent budget and an explicit pointer to deeper evidence. A missing or stale generated layer is skipped with a diagnostic; it never causes raw unbounded history to be injected as a silent fallback. Authoritative project state and decisions retain precedence over generated memory.
 
+The installed Session Start boundary resolves only the newest fully valid local
+commit for the exact workspace, applies the managed per-layer budgets and
+renders generated content ephemerally in canonical order. The serialized
+Session Context Packet carries only portable `bcgos://memory/<layer>` pointers,
+state and truncation metadata. `UserPromptSubmit` never repeats memory bodies.
+Missing memory is an active `empty` state; invalid or incomplete state is
+`unavailable` and never falls back to raw captures. Successful local assembly
+is adapter delivery, not native lifecycle qualification.
+
 The base policy requires a budget for every layer. The bundled light-dream
 runtime configuration sets a reviewable Canary bound of 12,000 L1 runes, 64
-complete output entries, 1 MiB of total source input and 256 input entries; it
-is managed configuration, not an adapter constant. Other
-layer budgets remain required runtime configuration and deep dreaming stays
-unavailable until they are qualified from real-session evidence.
+complete output entries, 1 MiB of total source input and 256 input entries. It
+also bounds Session Start memory to 1,024 lifetime runes, 768 L3 runes, 768 L2
+runes and 1,024 L1 runes, with the native hook retaining its independent 8 KiB
+total ceiling. These are managed configuration, not adapter constants. Deep
+dreaming stays unavailable until its model and eligibility adapters are
+qualified from real-session evidence.
 
 ## Wiki navigation
 
