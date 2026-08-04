@@ -866,15 +866,20 @@ func runtimeAvailable(runtimeID string) bool {
 }
 
 func claudeDesktopAvailable() bool {
+	return claudeDesktopPath() != ""
+}
+
+func claudeDesktopPath() string {
 	if runtime.GOOS != "darwin" {
-		return false
+		return ""
 	}
 	for _, root := range []string{"/Applications", filepath.Join(os.Getenv("HOME"), "Applications")} {
-		if info, err := os.Stat(filepath.Join(root, "Claude.app")); err == nil && info.IsDir() {
-			return true
+		path := filepath.Join(root, "Claude.app")
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			return path
 		}
 	}
-	return false
+	return ""
 }
 
 func runtimeCLIPath(runtimeID string) (string, bool) {
@@ -1179,7 +1184,14 @@ func launchRuntime(runtimeID, workspacePath string) error {
 		return fmt.Errorf("%s não está instalado", runtimeID)
 	}
 	if runtime.GOOS == "darwin" && runtimeID == "claude" {
-		return openPath(claudeCodeWorkspaceLink(workspacePath))
+		link := claudeCodeWorkspaceLink(workspacePath)
+		if app := claudeDesktopPath(); app != "" {
+			// Passing the deep link to the explicit app bundle both opens the
+			// correct workspace and asks macOS to activate Claude in front of
+			// the installer window.
+			return exec.Command("open", "-a", app, link).Start()
+		}
+		return openPath(link)
 	}
 	if runtime.GOOS == "darwin" && runtimeID == "codex" && chatGPTAppAvailable() {
 		return openPath(codexWorkspaceLink(workspacePath))
