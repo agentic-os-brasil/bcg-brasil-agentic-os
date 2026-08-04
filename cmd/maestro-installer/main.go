@@ -1236,7 +1236,7 @@ Sugira apenas estas skills instaladas, sem executá-las automaticamente:
 ## 🚀 Primeiro passo
 Faça somente a primeira pergunta da entrevista: “Qual é o seu papel, contexto profissional e tipo de trabalho que você quer que o Maestro ajude a conduzir?”
 
-Antes de responder, leia AGENTS.md. Não inicie tarefa profissional, não execute skill, não acesse memória externa e não conceda confiança global; aguarde a resposta do owner após essa primeira pergunta.`
+Antes de responder, leia CLAUDE.md. Não inicie tarefa profissional, não execute skill, não acesse memória externa e não conceda confiança global; aguarde a resposta do owner após essa primeira pergunta.`
 
 func codexWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "codex", Host: "new"}
