@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 )
@@ -199,6 +200,26 @@ func sessionDirective(packet sessionctx.Packet) string {
 			lines = append(lines, "Open tasks: no local tasks are registered.")
 		default:
 			lines = append(lines, "Open tasks are unavailable; say this plainly and do not invent a backlog.")
+		}
+		sourceState := packet.SharePointSource.State
+		if sourceState == "" {
+			sourceState = priorwork.SourceSelectionRequired
+		}
+		switch sourceState {
+		case priorwork.SourceSelectionRequired:
+			lines = append(lines,
+				"GUIDED SHAREPOINT SETUP IS PENDING. Before proposing the first project task, ask only: ‘Você quer indicar as pastas autorizadas do SharePoint deste projeto agora ou prefere começar sem essa fonte?’ Then wait.",
+				"If the owner chooses folders, use the managed Maestro onboarding route to review and record only exact canonical folder pointers. Do not discover broadly, read, copy, upload or collect content during onboarding. If the owner defers, record that choice and do not ask again automatically.",
+			)
+		case priorwork.SourceSelected:
+			lines = append(lines,
+				fmt.Sprintf("A confirmed exact SharePoint folder selection exists for this workspace (%d folder(s)); the URLs remain behind the private local pointer and are not injected here.", packet.SharePointSource.FolderCount),
+				"This selection grants no collection authority. SharePoint remains the source of truth and the local projection may contain only bounded metadata and source pointers. Never collect at Session Start. Only Claude may collect after signed enrollment and native qualification; Codex collection is unavailable/corporate_policy and Codex may query only an already verified local index.",
+			)
+		case priorwork.SourceDeferred:
+			lines = append(lines, "Guided SharePoint source setup was deferred by the owner. Do not ask again automatically; offer it only when the owner requests prior-work or project-source setup.")
+		case priorwork.SourceSelectionUnavailable:
+			lines = append(lines, "Guided SharePoint source status is unavailable. Say this plainly and point to `bcgos prior-work source status --workspace <workspace>`; do not discover or collect any SharePoint content.")
 		}
 	}
 	return strings.Join(lines, "\n")

@@ -51,6 +51,7 @@ func TestBaseSkillCatalogIsClosedByDistributionAllowlist(t *testing.T) {
 	}
 
 	for _, schema := range []string{
+		"schemas/sharepoint-project-source-selection.schema.json",
 		"schemas/sharepoint-work-catalog.schema.json",
 		"schemas/sharepoint-work-enrollment.schema.json",
 		"schemas/sharepoint-work-import-receipt.schema.json",

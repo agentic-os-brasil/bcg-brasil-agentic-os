@@ -85,3 +85,11 @@ Darwin maintenance signals use `darwin_maintenance_wake` and map to the same
 `darwin` identity over `health/maestro-system`. The signal is signal-only: the
 qualified local worker owns command validation, occurrence fencing and receipt
 publication. Native scheduler installation remains disabled pending evidence.
+
+Codex may present and persist the local guided SharePoint project-source choice
+through `bcgos prior-work source`, because that operation records only reviewed
+pointers under the workspace-bound local contract. It must not resolve those
+URLs, enumerate SharePoint, mint an enrollment, use a browser/plugin/token
+fallback or call the collector. Collection remains
+`unavailable/corporate_policy`; Codex may query only an already verified local
+metadata/pointer index produced by the qualified Claude path.

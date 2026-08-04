@@ -354,6 +354,9 @@ bcgos maintenance catalog
 bcgos maintenance wake --trigger presence
 bcgos ingest --workspace <path> --source <local-file> --adapter markitdown
 bcgos prior-work actor
+bcgos prior-work source status --workspace <path>
+bcgos prior-work source select --workspace <path> --stdin --confirm
+bcgos prior-work source defer --workspace <path> --confirm
 bcgos prior-work enroll --stdin --confirm
 bcgos prior-work status
 bcgos prior-work import --snapshot <json> --receipt <json>
