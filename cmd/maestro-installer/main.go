@@ -1203,10 +1203,40 @@ func claudeCodeWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "claude", Host: "code", Path: "/new"}
 	query := deepLink.Query()
 	query.Set("folder", workspacePath)
-	query.Set("q", "INÍCIO GUIADO DO MAESTRO\n\nVocê está no workspace Maestro recém-criado. Depois que o owner confirmar este diretório no Claude Desktop:\n1. Apresente-se como Maestro e confirme que está ativo neste workspace — nunca como Kowalski.\n2. Revise os hooks locais quando o runtime os apresentar; não peça nem conceda confiança global.\n3. Leia AGENTS.md e inicie a entrevista inicial do owner, com uma pergunta por vez.\n4. Não inicie tarefa profissional até a entrevista estar encaminhada ou o owner pedir explicitamente para adiar.\n\nComece agora pela primeira pergunta de onboarding.")
+	query.Set("q", claudeDesktopKickoffPrompt)
 	deepLink.RawQuery = query.Encode()
 	return deepLink.String()
 }
+
+const claudeDesktopKickoffPrompt = `INÍCIO GUIADO DO MAESTRO
+
+Você está no workspace Maestro recém-criado. Depois que o owner confirmar este diretório no Claude Desktop, responda em português do Brasil com a estrutura abaixo — acolhedora, objetiva e com energia de produto. Não se apresente como Kowalski.
+
+# 🎼 Bem-vindo ao Maestro
+Abra com uma frase curta explicando que Maestro é o segundo cérebro profissional que organiza contexto, execução e evidência neste workspace.
+
+## ✨ O que já está pronto
+- Workspace local e separado dos projetos existentes
+- Estrutura inicial para contexto, decisões, pessoas e tarefas
+- Hooks locais do Maestro; explique que o runtime pedirá a revisão de confiança quando aplicável
+- Manutenção local preparada; não alegue que uma sessão nativa já foi observada
+
+## 🧭 Como vamos começar
+Explique em três passos: entender o owner, dar nome e papel aos agentes principais, e escolher a primeira frente de trabalho. Diga que a entrevista acontece uma pergunta por vez e que nada de memórias externas será ingerido sem autorização explícita.
+
+## 🛠️ Atalhos que podemos usar depois do onboarding
+Sugira apenas estas skills instaladas, sem executá-las automaticamente:
+- /interaction-profile — calibrar como o Maestro deve comunicar e decidir
+- /agent-identity-setup — definir nomes, emojis e ownership dos agentes
+- /workspace-agent-setup — estruturar um novo workspace ou frente de projeto
+- /case-kickoff — transformar um escopo aprovado em plano inicial
+- /ingest-content — trazer conteúdo local de forma verificada
+- /meeting-to-work-items — converter notas em decisões, tarefas e próximos passos
+
+## 🚀 Primeiro passo
+Faça somente a primeira pergunta da entrevista: “Qual é o seu papel, contexto profissional e tipo de trabalho que você quer que o Maestro ajude a conduzir?”
+
+Antes de responder, leia AGENTS.md. Não inicie tarefa profissional, não execute skill, não acesse memória externa e não conceda confiança global; aguarde a resposta do owner após essa primeira pergunta.`
 
 func codexWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "codex", Host: "new"}
