@@ -1218,7 +1218,7 @@ func codexWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "codex", Host: "new"}
 	query := deepLink.Query()
 	query.Set("path", workspacePath)
-	query.Set("prompt", "Você está no workspace Maestro recém-criado. Antes da primeira tarefa, revise os cinco hooks locais do Maestro quando o Codex solicitar a confiança deles; essa revisão pertence ao owner e não é burlada pelo instalador. Em seguida, leia AGENTS.md e proponha a primeira tarefa segura.")
+	query.Set("prompt", "Você está no workspace Maestro recém-criado. Leia AGENTS.md e siga a skill instalada maestro-onboarding para conduzir o onboarding do owner. Não inicie tarefa profissional, não acesse memória externa, não ingira fontes e não conceda confiança global. A escolha é entre a entrevista curta e a completa; faça uma pergunta por vez e aguarde a confirmação do owner antes de propor trabalho.")
 	deepLink.RawQuery = query.Encode()
 	return deepLink.String()
 }

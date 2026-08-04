@@ -202,7 +202,17 @@ func Inspect(root string) (Status, error) {
 	for id, record := range value.Facets {
 		status.Facets[id] = Facet{Pointer: pointer(root, record.Path), Sensitivity: record.Sensitivity, Readers: record.Readers, Refinement: record.Refinement}
 	}
-	status.Onboarding = onboarding(root, status.Facets, value.OnboardingTrack, value.OnboardingConfirmedAt, value.OnboardingConfirmedSHA256)
+	track := value.OnboardingTrack
+	if value.SchemaVersion == 2 && track == "" {
+		// Schema-v2 had only the complete interview. Preserve that contract
+		// while accepting the new explicit-track registry shape.
+		track = OnboardingTrackComplete
+	}
+	status.Onboarding = onboarding(root, status.Facets, track, value.OnboardingConfirmedAt, value.OnboardingConfirmedSHA256)
+	if value.SchemaVersion == 2 && value.OnboardingConfirmedAt != "" && status.Onboarding.State == "review_required" && secureDigestEqual(value.OnboardingConfirmedSHA256, legacyOnboardingDigest(root)) {
+		status.Onboarding.State = "complete"
+		status.Onboarding.ReviewDigest = ""
+	}
 	status.OpenTasks = openTasks(root, value.OperatingState)
 	if status.OpenTasks.State != "unavailable" {
 		status.Tasks = Pointer{Path: value.OperatingState, Available: true, State: status.OpenTasks.State}
@@ -397,6 +407,19 @@ func onboardingDigest(root string, definition onboardingTrackDefinition) string 
 	parts := make([]string, 0, len(definition.Facets)+1)
 	parts = append(parts, "track\x00"+definition.ID)
 	for _, id := range definition.Facets {
+		template := facets[id]
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
+		if err != nil {
+			return ""
+		}
+		parts = append(parts, id+"\x00"+string(body))
+	}
+	return digest(strings.Join(parts, "\x00"))
+}
+
+func legacyOnboardingDigest(root string) string {
+	parts := make([]string, 0, len(onboardingFacets))
+	for _, id := range onboardingFacets {
 		template := facets[id]
 		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
 		if err != nil {

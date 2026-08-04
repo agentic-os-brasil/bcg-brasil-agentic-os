@@ -1,6 +1,7 @@
 package ownerctx
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -278,6 +279,44 @@ func TestQuickOnboardingIsAnExplicitBoundedBaseline(t *testing.T) {
 	status, err = SelectOnboardingTrack(root, OnboardingTrackComplete)
 	if err != nil || status.Onboarding.State != "in_progress" || status.Onboarding.NextQuestion.Facet != "voice" {
 		t.Fatalf("upgrade status = %#v err=%v", status, err)
+	}
+}
+
+func TestSchemaV2ConfirmedCompleteOnboardingRemainsComplete(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range onboardingFacets {
+		template := facets[id]
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)), []byte(template.Body+"\nLegacy owner detail.\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacyDigest := legacyOnboardingDigest(root)
+	registryPath := filepath.Join(root, "owner", "registry.json")
+	body, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value registry
+	if err := json.Unmarshal(body, &value); err != nil {
+		t.Fatal(err)
+	}
+	value.SchemaVersion = 2
+	value.OnboardingConfirmedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	value.OnboardingConfirmedSHA256 = legacyDigest
+	value.OnboardingTrack = ""
+	body, err = json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(registryPath, append(body, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Inspect(root)
+	if err != nil || status.Onboarding.State != "complete" || status.Onboarding.Track != OnboardingTrackComplete {
+		t.Fatalf("legacy status = %#v err=%v", status, err)
 	}
 }
 
