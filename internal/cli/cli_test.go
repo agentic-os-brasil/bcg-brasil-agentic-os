@@ -722,6 +722,14 @@ func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
 	if code := runOwner([]string{"interview"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"cold_start"`) || strings.Contains(output.String(), `"psychological-profile"`) {
 		t.Fatalf("owner interview exit = %d, output = %s", code, output.String())
 	}
+	output.Reset()
+	if code := runOwner([]string{"onboarding", "select", "--track", "quick", "--confirm"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"estimated_minutes": 7`) {
+		t.Fatalf("quick onboarding selection = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwner([]string{"interview", "quick"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || strings.Contains(output.String(), `"decision-rules"`) {
+		t.Fatalf("quick interview = %d, output = %s", code, output.String())
+	}
 }
 
 func TestOwnerRefineAppliesEligibleFacetFromStdinAndRequiresConfirmationToRevert(t *testing.T) {
@@ -1428,10 +1436,10 @@ func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
 		t.Fatalf("personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 26`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 27`) {
 		t.Fatalf("optional adapter install = %d %s", code, output.String())
 	}
-	for _, skillID := range []string{"review-explain-change", "spec-driven-delivery", "test-and-evidence"} {
+	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence"} {
 		if _, err := os.Stat(filepath.Join(workspacePath, ".codex", "skills", skillID, "SKILL.md")); err != nil {
 			t.Fatalf("engineering skill %s was not projected: %v", skillID, err)
 		}
@@ -1451,10 +1459,10 @@ func TestInterviewSelectionActivatesDataProjection(t *testing.T) {
 		t.Fatalf("data personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 29`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 30`) {
 		t.Fatalf("data adapter install = %d %s", code, output.String())
 	}
-	for _, skillID := range []string{"review-explain-change", "spec-driven-delivery", "test-and-evidence", "data-pipeline-quality", "data-science-evaluation", "reproducible-data-run"} {
+	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence", "data-pipeline-quality", "data-science-evaluation", "reproducible-data-run"} {
 		if _, err := os.Stat(filepath.Join(workspacePath, ".codex", "skills", skillID, "SKILL.md")); err != nil {
 			t.Fatalf("data selection did not project all skills; missing %s: %v", skillID, err)
 		}

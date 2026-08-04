@@ -144,7 +144,7 @@ func TestReviewRequiredOnboardingCarriesOnlyItsBoundedDigest(t *testing.T) {
 		Profile:   profile.State{Profile: "standard", Source: "configured"},
 		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
 		Owner: ownerctx.Status{Initialized: true, Onboarding: ownerctx.OnboardingStatus{
-			State: "review_required", ReviewDigest: reviewDigest,
+			State: "review_required", Track: ownerctx.OnboardingTrackComplete, ReviewDigest: reviewDigest,
 		}},
 		Atlas: atlas.Status{Managed: atlas.Pointer{State: "unavailable"}},
 	})
