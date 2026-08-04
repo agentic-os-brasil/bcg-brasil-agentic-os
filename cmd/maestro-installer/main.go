@@ -1203,18 +1203,21 @@ func claudeCodeWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "claude", Host: "code", Path: "/new"}
 	query := deepLink.Query()
 	query.Set("folder", workspacePath)
-	query.Set("q", maestroHumanKickoffPrompt)
+	query.Set("q", maestroClaudeKickoffPrompt)
 	deepLink.RawQuery = query.Encode()
 	return deepLink.String()
 }
 
-const maestroHumanKickoffPrompt = "Olá, Maestro! Estou chegando agora e acabei de fazer minha instalação. Me direcione pelos próximos passos; não vejo a hora de gerar valor ao acionista."
+const maestroHumanKickoffPrompt = "👋 Olá, Maestro! 🎼 Estou chegando agora e acabei de fazer minha instalação. 🚀 Me direcione pelos próximos passos; não vejo a hora de gerar valor ao acionista."
+
+const maestroClaudeKickoffPrompt = maestroHumanKickoffPrompt + " 🧭 Para começar, execute agora a skill `/maestro-onboarding` e conduza minha entrevista inicial, uma pergunta por vez."
+const maestroCodexKickoffPrompt = maestroHumanKickoffPrompt + " 🧭 Para começar, execute agora a skill `$maestro-onboarding` e conduza minha entrevista inicial, uma pergunta por vez."
 
 func codexWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "codex", Host: "new"}
 	query := deepLink.Query()
 	query.Set("path", workspacePath)
-	query.Set("prompt", maestroHumanKickoffPrompt)
+	query.Set("prompt", maestroCodexKickoffPrompt)
 	deepLink.RawQuery = query.Encode()
 	return deepLink.String()
 }

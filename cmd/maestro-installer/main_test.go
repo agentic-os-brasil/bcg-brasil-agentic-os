@@ -99,7 +99,7 @@ func TestCodexWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.Scheme != "codex" || value.Host != "new" || value.Query().Get("path") != workspacePath || value.Query().Get("prompt") != maestroHumanKickoffPrompt {
+	if value.Scheme != "codex" || value.Host != "new" || value.Query().Get("path") != workspacePath || value.Query().Get("prompt") != maestroCodexKickoffPrompt {
 		t.Fatalf("deep link = %q", value.String())
 	}
 }
@@ -111,7 +111,7 @@ func TestClaudeCodeWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 		t.Fatal(err)
 	}
 	prompt := value.Query().Get("q")
-	if value.Scheme != "claude" || value.Host != "code" || value.Path != "/new" || value.Query().Get("folder") != workspacePath || prompt != maestroHumanKickoffPrompt {
+	if value.Scheme != "claude" || value.Host != "code" || value.Path != "/new" || value.Query().Get("folder") != workspacePath || prompt != maestroClaudeKickoffPrompt {
 		t.Fatalf("deep link = %q", value.String())
 	}
 }
