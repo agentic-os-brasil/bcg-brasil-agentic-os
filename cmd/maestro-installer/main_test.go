@@ -176,6 +176,15 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 	if _, err := os.Stat(filepath.Join(dataRoot, "agents", "instances", "workspace-agent-"+inspection.WorkspaceID, "instance.json")); err != nil {
 		t.Fatalf("workspace agent scaffold missing: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dataRoot, "owner", "registry.json")); err != nil {
+		t.Fatalf("owner context bootstrap missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(workspacePath, "brain", "organization", "bcg", "README.md")); err != nil {
+		t.Fatalf("BCG organizational scaffold missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(workspacePath, "agents", "client-accounts", "acme-example.md")); err != nil {
+		t.Fatalf("ACME example scaffold missing: %v", err)
+	}
 	if !strings.Contains(recorder.Body.String(), `"activation"`) || !strings.Contains(recorder.Body.String(), `"active_loaded_enabled"`) || !strings.Contains(recorder.Body.String(), `"model_backed":"unavailable"`) {
 		t.Fatalf("activation evidence missing from response: %s", recorder.Body.String())
 	}

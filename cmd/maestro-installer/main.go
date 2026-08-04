@@ -25,6 +25,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 )
@@ -991,6 +992,9 @@ func initializeDefaultWorkspace(options options, workspacePath string) (workspac
 	result, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: options.dataRoot})
 	if err != nil {
 		return workspace.Result{}, workspaceActivation{}, err
+	}
+	if _, err := ownerctx.Initialize(options.dataRoot); err != nil {
+		return workspace.Result{}, workspaceActivation{}, fmt.Errorf("bootstrap owner context: %w", err)
 	}
 	if _, err := workspaceagent.Initialize(options.dataRoot, result.WorkspaceID); err != nil {
 		return workspace.Result{}, workspaceActivation{}, err
