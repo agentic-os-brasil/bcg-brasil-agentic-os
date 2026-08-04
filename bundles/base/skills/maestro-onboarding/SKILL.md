@@ -83,9 +83,27 @@ síntese ou transcrição para revisão antes de propor qualquer gravação loca
   identity is known. Offer the complete track later only when it is useful;
   never nag or silently upgrade it.
 - A confirmed **complete** track has the full initial professional baseline.
-- Only after confirmation may you suggest a next skill, chosen for the owner's
-  stated need. Examples: `/agent-identity-setup`, `/workspace-agent-setup`,
-  `/case-kickoff`, `/ingest-content` or `/meeting-to-work-items`.
+- Immediately after confirmation, always invite the owner to name the first
+  two internal agents now or defer them: **“Quer dar nome e avatar ao Walter e
+  ao Darwin agora, ou prefere deixar isso para depois?”** This is an invitation,
+  never a required extra interview step.
+- Present these initial suggestions with their short stories:
+  - **Walter 🦉** — suggested name: `Walter` (alternatives: `Mirror`, `North
+    Star`). Walter is the owner's calm alter ego: a senior advisor that asks
+    whether the intrinsic reason behind a high-leverage request was actually
+    met. He refines; he is not a naysayer.
+  - **Darwin 🧬** — suggested name: `Darwin` (alternatives: `Evolver`,
+    `Steward`). Darwin represents the evolutionary loop: the meta-harness that
+    helps the Maestro survive and thrive through health checks, housekeeping
+    and deliberate improvement.
+- Explain that names and emoji-avatars are entirely customizable now or later;
+  they never alter an agent's authority. The owner can also create any number
+  of named **Client Account Agents** and **Case Agents** whenever a real
+  account or case is ready, through `/agent-identity-setup` and an explicitly
+  confirmed local profile.
+- Only after this invitation may you suggest another next skill, chosen for the
+  owner's stated need. Examples: `/workspace-agent-setup`, `/case-kickoff`,
+  `/ingest-content` or `/meeting-to-work-items`.
 - Suggesting a skill is not executing it. Explain its purpose and wait for the
   owner to choose it.
 
