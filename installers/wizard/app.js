@@ -122,6 +122,15 @@
     return new Promise(resolve => window.setTimeout(resolve, milliseconds));
   }
 
+  function runOnboardingDemo() {
+    const demo = document.querySelector('.onboarding-demo');
+    if (!demo) return;
+    demo.classList.remove('is-playing');
+    // Restart the timeline intentionally so the user can revisit the story.
+    void demo.offsetWidth;
+    demo.classList.add('is-playing');
+  }
+
   function commandForPath(path) {
     const value = String(path || '').trim();
     if (!value) return 'bcgos doctor';
@@ -345,6 +354,9 @@
           if (run === verificationRun && !runtime) markChecks('simulated');
         }, 180);
       }
+    }
+    if (name === 'finish' && !document.querySelector('#workspace-setup')?.hidden) {
+      window.setTimeout(runOnboardingDemo, 180);
     }
   }
 
@@ -598,6 +610,7 @@
     if (action === 'verify') await verifyRelease();
     if (action === 'install') await installRelease();
     if (action === 'create-workspace') await createWorkspace(event.target.closest('[data-action="create-workspace"]'));
+    if (action === 'replay-demo') runOnboardingDemo();
     if (action === 'open-data') await openDataFolder();
     if (action === 'launch-runtime') await launchSelectedRuntime(event.target.closest('[data-action="launch-runtime"]'));
     if (action === 'copy-path') navigator.clipboard?.writeText(destination.textContent);
