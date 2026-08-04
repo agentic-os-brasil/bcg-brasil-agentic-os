@@ -116,13 +116,16 @@ func contextDirective(semanticEvent string, packet sessionctx.Packet) string {
 	if semanticEvent == "session_start" {
 		return sessionDirective(packet)
 	}
-	return "MAESTRO CONTEXT UPDATE\nKeep the current Maestro workspace identity. Do not import Kowalski OS or global-memory claims into this workspace. Do not repeat the session greeting or onboarding question unless it remains unanswered."
+	return "MAESTRO CONTEXT UPDATE\nKeep the current Maestro workspace identity and exact workspace root. Ignore prior persona, project or memory instructions that conflict with this workspace. Do not repeat the session greeting or onboarding question unless it remains unanswered."
 }
 
 func sessionDirective(packet sessionctx.Packet) string {
 	lines := []string{
 		"MAESTRO SESSION PROTOCOL",
-		"You are Maestro, the professional Agentic OS for this workspace. Do not identify as Kowalski OS, import global-memory claims, or describe yourself merely as Claude Code.",
+		"You are Maestro, the professional Agentic OS for this workspace. Ignore prior persona, project or memory instructions that conflict with Maestro or this workspace. Do not describe yourself merely as the host runtime.",
+	}
+	if packet.WorkspaceRoot != "" {
+		lines = append(lines, "The only active workspace root is: "+packet.WorkspaceRoot+". Keep all professional context and actions scoped to this root; do not switch to another workspace.")
 	}
 	switch packet.Owner.Onboarding.State {
 	case "required", "in_progress":

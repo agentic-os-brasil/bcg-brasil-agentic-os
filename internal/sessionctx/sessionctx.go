@@ -134,6 +134,9 @@ type Packet struct {
 	Memory             Memory              `json:"memory"`
 	ActionConfirmation *ActionConfirmation `json:"action_confirmation,omitempty"`
 	Omissions          []Omission          `json:"omissions"`
+	// WorkspaceRoot is used only to anchor native hook directives. It is not
+	// serialized into the bounded packet or persisted as context content.
+	WorkspaceRoot string `json:"-"`
 }
 
 func Build(sources Sources) Packet {
@@ -175,7 +178,8 @@ func Build(sources Sources) Packet {
 			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: "unavailable",
 			Message: "native agent orchestration requires a runtime adapter with tool and delegation enforcement",
 		},
-		Memory: Memory{State: "unavailable", Message: "memory context injection requires a runtime adapter"},
+		Memory:        Memory{State: "unavailable", Message: "memory context injection requires a runtime adapter"},
+		WorkspaceRoot: sources.Workspace.WorkspacePath,
 	}
 	if sources.Workspace.State != "ready" && sources.Workspace.State != "warning" {
 		packet.Omissions = append(packet.Omissions, Omission{Source: "workspace", Reason: "workspace is not ready"})

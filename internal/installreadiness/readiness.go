@@ -362,7 +362,7 @@ func verifyHooks(runtimeName, workspacePath, executable, targetOS string) ([]Lif
 			return nil, fmt.Errorf("%s hook event %s must be a list", runtimeName, binding.native)
 		}
 		expectedCommand := quoteCommandPath(targetOS, executable) + " hook " + binding.commandSuffix +
-			" --adapter-source maestro --orchestration-state .bcgos/maestro-orchestration-state.json"
+			" --adapter-source maestro --orchestration-state .bcgos/maestro-orchestration-state.json " + quoteCommandPath(targetOS, workspacePath)
 		owned := ownedHookEntries(groups, binding.native)
 		if len(owned) != 1 {
 			return nil, fmt.Errorf("%s hook event %s has %d Maestro-owned entries, want exactly one", runtimeName, binding.native, len(owned))
