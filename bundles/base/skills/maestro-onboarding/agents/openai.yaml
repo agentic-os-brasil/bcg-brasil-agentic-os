@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maestro Onboarding"
+  short_description: "Start a guided owner interview with quick or complete tracks"
+  default_prompt: "Use $maestro-onboarding to welcome me to Maestro and start the guided interview with a clear choice between the short and complete tracks."

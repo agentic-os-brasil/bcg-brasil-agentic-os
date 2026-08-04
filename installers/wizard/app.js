@@ -252,6 +252,18 @@
     actions.append(close);
   }
 
+  function alignActiveScene(panel) {
+    if (!panel) return;
+    panel.dataset.fitsViewport = 'false';
+    panel.scrollTop = 0;
+    window.requestAnimationFrame(() => {
+      // The panel, rather than the document, owns overflow on desktop. First
+      // reset that real scroll root, then center only scenes that actually fit.
+      panel.scrollTop = 0;
+      panel.dataset.fitsViewport = panel.scrollHeight <= panel.clientHeight + 1 ? 'true' : 'false';
+    });
+  }
+
   function show(name, { focusHeading = true } = {}) {
     // Errors are scoped to one action. A new scene always starts clean so an
     // empty error container can never survive a successful transition.
@@ -282,10 +294,11 @@
     // Each installer step occupies the same app scene. Reset scroll roots so
     // navigation never leaves the following step peeking under the current one.
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-    document.querySelector('.content')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    const activePanel = document.querySelector(`[data-panel="${name}"]`);
+    alignActiveScene(activePanel);
     if (focusHeading) {
-      const heading = document.querySelector(`[data-panel="${name}"] h1`);
-      if (heading) window.requestAnimationFrame(() => heading.focus());
+      const heading = activePanel?.querySelector('h1');
+      if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
     }
     if (name === 'check') setProgress('verify');
     if (name === 'install') setProgress('install');
@@ -553,4 +566,5 @@
 
   renderRuntimeTargets();
   discoverRuntime();
+  alignActiveScene(document.querySelector('[data-panel].is-visible'));
 })();

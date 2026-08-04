@@ -213,8 +213,11 @@ func TestOnboardingRequiresExplicitConfirmationAndCountsOnlyExplicitOpenTasks(t 
 		t.Fatal(err)
 	}
 	status, err := Inspect(root)
-	if err != nil || status.Onboarding.State != "required" || status.Onboarding.NextQuestion.Facet != "professional-role" || status.OpenTasks.State != "empty" {
+	if err != nil || status.Onboarding.State != "required" || status.Onboarding.Track != "selection_required" || status.Onboarding.NextQuestion.Facet != "onboarding-track" || status.OpenTasks.State != "empty" {
 		t.Fatalf("initial status = %#v err=%v", status, err)
+	}
+	if _, err := SelectOnboardingTrack(root, OnboardingTrackComplete); err != nil {
+		t.Fatal(err)
 	}
 	for _, id := range onboardingFacets {
 		template := facets[id]
@@ -247,6 +250,34 @@ func TestOnboardingRequiresExplicitConfirmationAndCountsOnlyExplicitOpenTasks(t 
 	status, err = ConfirmOnboarding(root, status.Onboarding.ReviewDigest)
 	if err != nil || status.Onboarding.State != "complete" {
 		t.Fatalf("confirmed status = %#v err=%v", status, err)
+	}
+}
+
+func TestQuickOnboardingIsAnExplicitBoundedBaseline(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	status, err := SelectOnboardingTrack(root, OnboardingTrackQuick)
+	if err != nil || status.Onboarding.Track != OnboardingTrackQuick || status.Onboarding.EstimatedMinutes != 7 || len(status.Onboarding.Remaining) != len(quickOnboardingFacets) {
+		t.Fatalf("quick status = %#v err=%v", status, err)
+	}
+	for _, id := range quickOnboardingFacets {
+		template := facets[id]
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)), []byte(template.Body+"\nOwner-confirmed detail.\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status, err = Inspect(root)
+	if err != nil || status.Onboarding.State != "review_required" || status.Onboarding.Track != OnboardingTrackQuick {
+		t.Fatalf("quick review = %#v err=%v", status, err)
+	}
+	if _, err := ConfirmOnboarding(root, status.Onboarding.ReviewDigest); err != nil {
+		t.Fatal(err)
+	}
+	status, err = SelectOnboardingTrack(root, OnboardingTrackComplete)
+	if err != nil || status.Onboarding.State != "in_progress" || status.Onboarding.NextQuestion.Facet != "voice" {
+		t.Fatalf("upgrade status = %#v err=%v", status, err)
 	}
 }
 

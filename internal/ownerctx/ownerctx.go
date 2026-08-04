@@ -46,10 +46,12 @@ type Status struct {
 // facets. It never includes a facet body; runtimes use its next question to
 // resume the interview instead of assuming that setup was completed.
 type OnboardingStatus struct {
-	State        string        `json:"state"`
-	Remaining    []string      `json:"remaining,omitempty"`
-	NextQuestion InterviewStep `json:"next_question,omitempty"`
-	ReviewDigest string        `json:"review_digest,omitempty"`
+	State            string        `json:"state"`
+	Track            string        `json:"track"`
+	EstimatedMinutes int           `json:"estimated_minutes,omitempty"`
+	Remaining        []string      `json:"remaining,omitempty"`
+	NextQuestion     InterviewStep `json:"next_question,omitempty"`
+	ReviewDigest     string        `json:"review_digest,omitempty"`
 }
 
 // TaskStatus exposes only a bounded list of explicitly marked open items in
@@ -67,9 +69,11 @@ type InterviewStep struct {
 // Interview is a runtime-neutral prompt contract. Runtimes may present it
 // conversationally, but must not infer or persist answers without user review.
 type Interview struct {
-	Kind         string          `json:"kind"`
-	Instructions string          `json:"instructions"`
-	Steps        []InterviewStep `json:"steps"`
+	Kind             string          `json:"kind"`
+	Track            string          `json:"track"`
+	EstimatedMinutes int             `json:"estimated_minutes"`
+	Instructions     string          `json:"instructions"`
+	Steps            []InterviewStep `json:"steps"`
 }
 
 type facetRecord struct {
@@ -86,6 +90,7 @@ type registry struct {
 	OperatingState            string                    `json:"operating_state"`
 	OnboardingConfirmedAt     string                    `json:"onboarding_confirmed_at,omitempty"`
 	OnboardingConfirmedSHA256 string                    `json:"onboarding_confirmed_sha256,omitempty"`
+	OnboardingTrack           string                    `json:"onboarding_track,omitempty"`
 }
 
 type producerRecord struct {
@@ -111,7 +116,25 @@ var facets = map[string]facetTemplate{
 const statePath = "owner/operating/work-state.md"
 const stateTemplate = "# Work state\n\nRegistre somente estado operacional recente: prioridades, bloqueios, proximas acoes e itens aguardando resposta.\n\n## Tarefas abertas\n- [ ]\n"
 
+const (
+	OnboardingTrackQuick    = "quick"
+	OnboardingTrackComplete = "complete"
+)
+
 var onboardingFacets = []string{"professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"}
+
+var quickOnboardingFacets = []string{"professional-role", "communication-style", "working-boundaries"}
+
+type onboardingTrackDefinition struct {
+	ID               string
+	EstimatedMinutes int
+	Facets           []string
+}
+
+var onboardingTracks = map[string]onboardingTrackDefinition{
+	OnboardingTrackQuick:    {ID: OnboardingTrackQuick, EstimatedMinutes: 7, Facets: quickOnboardingFacets},
+	OnboardingTrackComplete: {ID: OnboardingTrackComplete, EstimatedMinutes: 25, Facets: onboardingFacets},
+}
 
 func Initialize(root string) (Status, error) {
 	directory := filepath.Join(root, "owner")
@@ -138,7 +161,7 @@ func Initialize(root string) (Status, error) {
 		for id, template := range facets {
 			definitions[id] = template.Record
 		}
-		body, err := json.MarshalIndent(registry{SchemaVersion: 2, Facets: definitions, Producers: map[string]producerRecord{}, OperatingState: statePath}, "", "  ")
+		body, err := json.MarshalIndent(registry{SchemaVersion: 3, Facets: definitions, Producers: map[string]producerRecord{}, OperatingState: statePath}, "", "  ")
 		if err != nil {
 			return Status{}, err
 		}
@@ -161,8 +184,13 @@ func Inspect(root string) (Status, error) {
 		return Status{}, err
 	}
 	var value registry
-	if err := json.Unmarshal(file, &value); err != nil || value.SchemaVersion != 2 {
+	if err := json.Unmarshal(file, &value); err != nil || (value.SchemaVersion != 2 && value.SchemaVersion != 3) {
 		return Status{}, errors.New("owner context registry is invalid")
+	}
+	if value.SchemaVersion == 2 && value.OnboardingTrack == "" {
+		// Existing profiles predate explicit track selection. Preserve their
+		// already-reviewed full onboarding instead of forcing a new interview.
+		value.OnboardingTrack = OnboardingTrackComplete
 	}
 	status := Status{
 		Initialized:    true,
@@ -174,7 +202,7 @@ func Inspect(root string) (Status, error) {
 	for id, record := range value.Facets {
 		status.Facets[id] = Facet{Pointer: pointer(root, record.Path), Sensitivity: record.Sensitivity, Readers: record.Readers, Refinement: record.Refinement}
 	}
-	status.Onboarding = onboarding(root, status.Facets, value.OnboardingConfirmedAt, value.OnboardingConfirmedSHA256)
+	status.Onboarding = onboarding(root, status.Facets, value.OnboardingTrack, value.OnboardingConfirmedAt, value.OnboardingConfirmedSHA256)
 	status.OpenTasks = openTasks(root, value.OperatingState)
 	if status.OpenTasks.State != "unavailable" {
 		status.Tasks = Pointer{Path: value.OperatingState, Available: true, State: status.OpenTasks.State}
@@ -183,53 +211,107 @@ func Inspect(root string) (Status, error) {
 }
 
 func ColdStartInterview() Interview {
-	return Interview{
-		Kind:         "cold_start",
-		Instructions: "Conduza uma conversa curta. Mostre cada resposta ao dono antes de sugerir que ela seja gravada na faceta correspondente. Nao infira perfil psicologico.",
-		Steps: []InterviewStep{
-			{Facet: "professional-role", Question: "Qual e seu papel, principais responsabilidades e quais resultados voce precisa gerar?"},
-			{Facet: "communication-style", Question: "Como voce prefere que o Agentic OS explique, estruture e comunique o trabalho com voce?"},
-			{Facet: "voice", Question: "Como sua voz deve aparecer em entregas para clientes, lideres e colegas?"},
-			{Facet: "preferences", Question: "Quais ferramentas, formatos e rotinas tornam seu trabalho melhor?"},
-			{Facet: "decision-rules", Question: "Quais principios e trade-offs devem orientar recomendacoes importantes?"},
-			{Facet: "working-boundaries", Question: "Quais limites de confidencialidade, escopo e escalonamento o sistema deve respeitar?"},
-		},
+	return interviewForTrack(OnboardingTrackComplete)
+}
+
+// QuickStartInterview captures the minimum operational self needed to begin
+// safely. The owner may upgrade to the complete track later; it never infers
+// the omitted identity and preference facets.
+func QuickStartInterview() Interview {
+	return interviewForTrack(OnboardingTrackQuick)
+}
+
+func interviewForTrack(track string) Interview {
+	definition, ok := onboardingTracks[track]
+	if !ok {
+		return Interview{}
 	}
+	allSteps := map[string]InterviewStep{
+		"professional-role":   {Facet: "professional-role", Question: "Qual e seu papel, principais responsabilidades e quais resultados voce precisa gerar?"},
+		"communication-style": {Facet: "communication-style", Question: "Como voce prefere que o Agentic OS explique, estruture e comunique o trabalho com voce?"},
+		"voice":               {Facet: "voice", Question: "Como sua voz deve aparecer em entregas para clientes, lideres e colegas?"},
+		"preferences":         {Facet: "preferences", Question: "Quais ferramentas, formatos e rotinas tornam seu trabalho melhor?"},
+		"decision-rules":      {Facet: "decision-rules", Question: "Quais principios e trade-offs devem orientar recomendacoes importantes?"},
+		"working-boundaries":  {Facet: "working-boundaries", Question: "Quais limites de confidencialidade, escopo e escalonamento o sistema deve respeitar?"},
+	}
+	steps := make([]InterviewStep, 0, len(definition.Facets))
+	for _, facet := range definition.Facets {
+		steps = append(steps, allSteps[facet])
+	}
+	return Interview{
+		Kind:             "cold_start",
+		Track:            definition.ID,
+		EstimatedMinutes: definition.EstimatedMinutes,
+		Instructions:     "Conduza uma conversa com uma pergunta por vez. Mostre cada resposta ao dono antes de sugerir que ela seja gravada na faceta correspondente. Nao infira perfil psicologico.",
+		Steps:            steps,
+	}
+	/*
+		The full interview remains the canonical identity route. The quick track
+		is deliberately narrower, not a hidden shortcut through the same data.
+	*/
 }
 
 func emptyStatus() Status {
-	return Status{Tasks: Pointer{State: "unavailable"}, Onboarding: OnboardingStatus{State: "required", Remaining: append([]string(nil), onboardingFacets...), NextQuestion: interviewStep(onboardingFacets[0])}, OpenTasks: TaskStatus{State: "unavailable"}, Capabilities: capabilities()}
+	return Status{Tasks: Pointer{State: "unavailable"}, Onboarding: onboardingSelectionRequired(), OpenTasks: TaskStatus{State: "unavailable"}, Capabilities: capabilities()}
 }
 
-func onboarding(root string, available map[string]Facet, confirmedAt, confirmedDigest string) OnboardingStatus {
-	remaining := make([]string, 0, len(onboardingFacets))
-	for _, id := range onboardingFacets {
+func onboardingSelectionRequired() OnboardingStatus {
+	return OnboardingStatus{State: "required", Track: "selection_required", Remaining: append([]string(nil), onboardingFacets...), NextQuestion: InterviewStep{Facet: "onboarding-track", Question: "Você prefere a entrevista curta (cerca de 7 minutos, base operacional) ou a completa (cerca de 25 minutos, identidade e preferências mais refinadas)?"}}
+}
+
+func onboarding(root string, available map[string]Facet, track, confirmedAt, confirmedDigest string) OnboardingStatus {
+	definition, ok := onboardingTracks[track]
+	if !ok {
+		return onboardingSelectionRequired()
+	}
+	remaining := make([]string, 0, len(definition.Facets))
+	for _, id := range definition.Facets {
 		facet, ok := available[id]
 		if !ok || !facet.Available || !facetAnswered(root, id) {
 			remaining = append(remaining, id)
 		}
 	}
 	if len(remaining) == 0 {
-		currentDigest := onboardingDigest(root)
+		currentDigest := onboardingDigest(root, definition)
 		if confirmedAt != "" && secureDigestEqual(confirmedDigest, currentDigest) {
-			return OnboardingStatus{State: "complete"}
+			return OnboardingStatus{State: "complete", Track: definition.ID, EstimatedMinutes: definition.EstimatedMinutes}
 		}
-		return OnboardingStatus{State: "review_required", ReviewDigest: currentDigest}
+		return OnboardingStatus{State: "review_required", Track: definition.ID, EstimatedMinutes: definition.EstimatedMinutes, ReviewDigest: currentDigest}
 	}
 	state := "in_progress"
-	if len(remaining) == len(onboardingFacets) {
+	if len(remaining) == len(definition.Facets) {
 		state = "required"
 	}
-	return OnboardingStatus{State: state, Remaining: remaining, NextQuestion: interviewStep(remaining[0])}
+	return OnboardingStatus{State: state, Track: definition.ID, EstimatedMinutes: definition.EstimatedMinutes, Remaining: remaining, NextQuestion: interviewStepForTrack(definition.ID, remaining[0])}
 }
 
-func interviewStep(facet string) InterviewStep {
-	for _, step := range ColdStartInterview().Steps {
+func interviewStepForTrack(track, facet string) InterviewStep {
+	for _, step := range interviewForTrack(track).Steps {
 		if step.Facet == facet {
 			return step
 		}
 	}
 	return InterviewStep{}
+}
+
+// SelectOnboardingTrack records an explicit owner choice. Changing track
+// invalidates any prior confirmation because the reviewed facet set changes.
+func SelectOnboardingTrack(root, track string) (Status, error) {
+	if _, ok := onboardingTracks[track]; !ok {
+		return Status{}, errors.New("onboarding track must be quick or complete")
+	}
+	value, err := readRegistry(root)
+	if err != nil {
+		return Status{}, err
+	}
+	value.SchemaVersion = 3
+	value.OnboardingTrack = track
+	value.OnboardingConfirmedAt = ""
+	value.OnboardingConfirmedSHA256 = ""
+	if err := writePrivateJSON(filepath.Join(root, "owner", "registry.json"), value); err != nil {
+		return Status{}, err
+	}
+	return Inspect(root)
 }
 
 func facetAnswered(root, id string) bool {
@@ -273,7 +355,7 @@ func ConfirmOnboarding(root, expectedDigest string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	status := onboarding(root, facetsFromRegistry(root, value), "", "")
+	status := onboarding(root, facetsFromRegistry(root, value), value.OnboardingTrack, "", "")
 	if status.State != "review_required" || status.ReviewDigest == "" {
 		return Status{}, errors.New("onboarding answers are not ready for owner confirmation")
 	}
@@ -311,9 +393,10 @@ func facetsFromRegistry(root string, value registry) map[string]Facet {
 	return result
 }
 
-func onboardingDigest(root string) string {
-	parts := make([]string, 0, len(onboardingFacets))
-	for _, id := range onboardingFacets {
+func onboardingDigest(root string, definition onboardingTrackDefinition) string {
+	parts := make([]string, 0, len(definition.Facets)+1)
+	parts = append(parts, "track\x00"+definition.ID)
+	for _, id := range definition.Facets {
 		template := facets[id]
 		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
 		if err != nil {

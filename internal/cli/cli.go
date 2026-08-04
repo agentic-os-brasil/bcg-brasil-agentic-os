@@ -1814,7 +1814,7 @@ func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, err
 
 func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|onboarding|refine|self|prompt-history>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview [quick|complete]|onboarding|refine|self|prompt-history>")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -1833,11 +1833,18 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		}
 		return writeJSON(out, status, errOut)
 	case "interview":
-		if len(args) != 1 {
-			fmt.Fprintln(errOut, "usage: bcgos owner interview")
+		if len(args) > 2 {
+			fmt.Fprintln(errOut, "usage: bcgos owner interview [quick|complete]")
 			return ExitUsage
 		}
-		return writeJSON(out, ownerctx.ColdStartInterview(), errOut)
+		if len(args) == 2 && args[1] == ownerctx.OnboardingTrackQuick {
+			return writeJSON(out, ownerctx.QuickStartInterview(), errOut)
+		}
+		if len(args) == 1 || args[1] == ownerctx.OnboardingTrackComplete {
+			return writeJSON(out, ownerctx.ColdStartInterview(), errOut)
+		}
+		fmt.Fprintln(errOut, "usage: bcgos owner interview [quick|complete]")
+		return ExitUsage
 	case "status":
 		if len(args) != 1 {
 			fmt.Fprintln(errOut, "usage: bcgos owner status")
@@ -1857,14 +1864,14 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 	case "prompt-history":
 		return runOwnerPromptHistory(args[1:], in, out, errOut, root)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview|onboarding|refine|self|prompt-history>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview [quick|complete]|onboarding|refine|self|prompt-history>")
 		return ExitUsage
 	}
 }
 
 func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
-	if len(args) == 0 || (args[0] != "status" && args[0] != "confirm") {
-		fmt.Fprintln(errOut, "usage: bcgos owner onboarding <status|confirm --confirm>")
+	if len(args) == 0 || (args[0] != "status" && args[0] != "select" && args[0] != "confirm") {
+		fmt.Fprintln(errOut, "usage: bcgos owner onboarding <status|select --track quick|complete --confirm|confirm --confirm>")
 		return ExitUsage
 	}
 	switch args[0] {
@@ -1874,6 +1881,19 @@ func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
 			return ExitUsage
 		}
 		status, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status.Onboarding, errOut)
+	case "select":
+		flags := newFlagSet("owner onboarding select", errOut)
+		track := flags.String("track", "", "onboarding track: quick or complete")
+		confirmed := flags.Bool("confirm", false, "record the owner's selected onboarding track")
+		if flags.Parse(args[1:]) != nil || rejectPositionals(flags, errOut) || !*confirmed || strings.TrimSpace(*track) == "" {
+			fmt.Fprintln(errOut, "usage: bcgos owner onboarding select --track quick|complete --confirm")
+			return ExitUsage
+		}
+		status, err := ownerctx.SelectOnboardingTrack(root, *track)
 		if err != nil {
 			return reportError(errOut, err)
 		}

@@ -15,6 +15,7 @@
 | Find Prior Work | Recover an explicitly requested past deck or work artifact | `skills/find-prior-work/SKILL.md` |
 | Ingest Content | Extract professional documents locally and safely | `skills/ingest-content/SKILL.md` |
 | Interaction Profile | Apply the user's BCGOS communication and disclosure preference | `skills/interaction-profile/SKILL.md` |
+| Maestro Onboarding | Start a guided owner interview with quick or complete tracks | `skills/maestro-onboarding/SKILL.md` |
 | Maestro Setup and Update | Guide safe setup, updates and recovery conversationally | `skills/maestro-setup-update/SKILL.md` |
 | Meeting Close | Turn meeting notes into a reviewable closure packet | `skills/meeting-close/SKILL.md` |
 | Meeting to Work Items | Extract decisions, tasks and follow-ups from meeting notes | `skills/meeting-to-work-items/SKILL.md` |

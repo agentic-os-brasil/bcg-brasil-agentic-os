@@ -317,8 +317,11 @@ func readRegistry(root string) (registry, error) {
 		return registry{}, err
 	}
 	var value registry
-	if err := json.Unmarshal(file, &value); err != nil || value.SchemaVersion != 2 {
+	if err := json.Unmarshal(file, &value); err != nil || (value.SchemaVersion != 2 && value.SchemaVersion != 3) {
 		return registry{}, errors.New("owner context registry is invalid")
+	}
+	if value.SchemaVersion == 2 && value.OnboardingTrack == "" {
+		value.OnboardingTrack = OnboardingTrackComplete
 	}
 	return value, nil
 }

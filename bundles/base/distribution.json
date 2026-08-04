@@ -242,6 +242,14 @@
       "path": "skills/maestro-setup-update/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/maestro-onboarding/SKILL.md",
+      "path": "skills/maestro-onboarding/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/maestro-onboarding/agents/openai.yaml",
+      "path": "skills/maestro-onboarding/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/pr-quality-loop/SKILL.md",
       "path": "skills/pr-quality-loop/SKILL.md"
     },

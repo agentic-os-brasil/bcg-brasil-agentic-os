@@ -79,6 +79,13 @@
       "relative_path": "skills/interaction-profile/SKILL.md"
     },
     {
+      "id": "maestro-onboarding",
+      "display_name": "Maestro Onboarding",
+      "trigger": "Start a guided owner interview with quick or complete tracks",
+      "default_prompt": "Use $maestro-onboarding to welcome me to Maestro and start the guided interview with a clear choice between the short and complete tracks.",
+      "relative_path": "skills/maestro-onboarding/SKILL.md"
+    },
+    {
       "id": "maestro-setup-update",
       "display_name": "Maestro Setup and Update",
       "trigger": "Guide safe setup, updates and recovery conversationally",
