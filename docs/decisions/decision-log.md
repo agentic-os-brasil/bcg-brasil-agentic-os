@@ -765,3 +765,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: `bcgos` help, version, doctor, status and bounded owner onboarding inspection remain usable during local diagnosis; state tampering, destructive actions and protected external mutations retain their existing fail-closed behavior. Adapter delivery can be observed without promoting capability state or fabricating native evidence.
 - Refs: specs/015-session-context-packet.md; specs/025-native-session-start-hook.md; specs/030-claude-lifecycle-vertical.md; specs/035-lifecycle-evidence-matrix.md; internal/actionconfirmation; internal/sessionstart; internal/sessionhook; internal/cli
 - Supersedes: none
+
+## MINJ - Inject activated local memory at Session Start
+
+- Date: 2026-08-04
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Deterministic L1 light dreaming, three-hour continuity checkpoints and the local maintenance wake were installed and bounded, but the Session Context Packet still reported memory as globally unavailable and Session Start never consumed the newest valid local commit. The automated cycle therefore produced durable continuity that the next conversation could not use.
+- Decision: Resolve the newest fully valid workspace-local memory commit at the shared Claude/Codex Session Start boundary, apply managed per-layer budgets in canonical `lifetime -> L3 -> L2 -> L1` order and inject the bounded generated content only into the ephemeral Session Start context. Keep the serialized packet pointer-only, expose portable layer references and distinguish `available`, active-but-`empty` and fail-closed `unavailable` states. Never fall back to raw captures or history, never repeat memory bodies on `UserPromptSubmit`, and never promote native lifecycle qualification from successful local assembly.
+- Consequences: An explicitly enrolled Canary can now close the deterministic loop from context-injection skill-route capture to idle L1 synthesis and bounded next-session continuity. Corrupt, incomplete, missing-policy or over-budget memory remains excluded without blocking the session. Weekly deep L2/L3/lifetime synthesis, model-backed Walter review and native Claude/Codex qualification remain separate unavailable capabilities until their own activation evidence exists.
+- Refs: MEMO; IDLE; DLIT; specs/006-memory-persistence.md; specs/015-session-context-packet.md; specs/025-native-session-start-hook.md; bundles/base/memory/runtime.json; internal/memory; internal/sessionctx; internal/sessionhook; internal/cli
+- Supersedes: none

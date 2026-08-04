@@ -12,11 +12,13 @@ adapter serializers; the shared envelope is not evidence that their native
 hook-output protocols are interchangeable.
 
 The command is deliberately read-only: it builds the existing pointer-only
-packet, never reads a pointed owner, atlas or memory source, does not wait for
-a worker and does not make a network or model request. If a source is not ready
-the packet reports an omission. The native configuration installer is a
-separate concern, and even an installed command leaves product capabilities
-`unavailable` until qualifying native-session evidence exists.
+packet, resolves only the newest fully valid generated memory commit for the
+exact workspace, does not wait for a worker and does not make a network or
+model request. It never reads raw captures or history as a fallback. If memory
+is missing it reports an active empty state; invalid state is unavailable. The
+native configuration installer is a separate concern, and even an installed
+command leaves native lifecycle capabilities `unavailable` until qualifying
+native-session evidence exists.
 
 Claude and Codex receive the same packet body, differing only in the explicit
 runtime field. Each native adapter must prove its own output shape and use a
@@ -38,9 +40,13 @@ evidence.
 
 Only `SessionStart` carries the full Maestro startup protocol: workspace
 identity, one deterministic onboarding action, and the bounded local open-task
-state. `UserPromptSubmit` carries a short identity-continuity reminder plus the
-same pointer-only packet; it must not repeat the greeting or restart the
-interview on every prompt. Both payloads expose
+state. When a valid local memory commit exists, Session Start also carries its
+generated layers in canonical broad-to-recent order within managed per-layer
+budgets and the existing 8 KiB total ceiling. The serialized packet retains
+only `bcgos://memory/<layer>` pointers and truncation state. `UserPromptSubmit`
+carries a short identity-continuity reminder plus the same pointer-only packet;
+it must not repeat the greeting, memory bodies or interview on every prompt.
+Both payloads expose
 `adapter_delivery_state=adapter_payload_emitted` while retaining
 `injection_state=unavailable`, so successful serialization is visible without
 being mislabeled as native qualification.

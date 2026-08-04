@@ -5,9 +5,10 @@ Claude and Codex native lifecycle adapters remain unavailable.
 
 ## Objective
 
-Give future Claude and Codex Session Start adapters one small, identical and
-safe description of the current user and workspace. The packet orients an
-adapter; it does not itself read, inject or summarize private content.
+Give Claude and Codex Session Start adapters one small, identical and safe
+description of the current user and workspace. The serialized packet orients
+an adapter and remains pointer-only; the local hook boundary may separately
+attach an ephemeral, bounded generated memory context.
 
 ## Packet contents
 
@@ -25,7 +26,8 @@ adapter; it does not itself read, inject or summarize private content.
 - the managed skills-catalog pointer, not its full contents;
 - the managed agents-catalog pointer, Maestro hub ID and explicit definition
   versus runtime-activation states;
-- an explicit unavailable memory-injection capability; and
+- local memory state plus portable pointers for valid generated layers, without
+  artifact bodies or storage paths; and
 - omission diagnostics for sources that are not ready.
 
 The packet must never contain an owner-facet body, a client/project/daily page,
@@ -60,15 +62,16 @@ allowlist with contract tests.
 ## Runtime boundary
 
 The packet is a local, runtime-neutral contract. It does not install a Claude
-hook, configure Codex, read a source on behalf of a model, or claim that
-Session Start or context injection is available. A future adapter must resolve
-purpose and authorization again before reading a pointed source, respect its
-own context budget, and report unavailable or omitted sources consistently.
+hook, configure Codex or claim that native Session Start is qualified. The
+shared local adapter may resolve only the newest valid memory commit for the
+exact workspace and render its already-generated layers inside the managed
+per-layer and 8 KiB total budgets. It reports active-but-empty memory separately
+from invalid/unavailable state and never reads raw captures as fallback.
 
 `bcgos session bridge --runtime claude|codex [workspace-path]` emits the same
 bounded Session Start envelope for either runtime. It is an adapter input, not
-native lifecycle wiring: it cannot read a pointed source, inject content into a
-conversation or change the capability state reported by `bcgos doctor`.
+native lifecycle evidence: local memory assembly and emitted content cannot
+change the capability state reported by `bcgos doctor`.
 The envelope reports adapter delivery separately from native qualification: a
 direct bridge is `contract_only`; an adapter serializer may report
 `adapter_payload_emitted`; `injection_state` remains `unavailable` until the
@@ -80,7 +83,10 @@ qualifying native-session protocol succeeds.
   and unreviewed owner pointers are omitted;
 - missing owner, workspace or atlas sources produce a valid `partial` packet;
 - the skills catalog remains a pointer only;
-- memory injection remains explicitly unavailable until adapters exist.
+- available memory exposes portable layer pointers only in serialized JSON;
+  bodies and storage paths remain absent.
+- Session Start may carry bounded generated memory, while `UserPromptSubmit`
+  never repeats it and corrupt state fails closed without raw fallback.
 - packet references never reveal absolute local filesystem paths.
 - agent definitions remain pointer-only and runtime activation remains
   explicitly unavailable until orchestration enforcement exists.

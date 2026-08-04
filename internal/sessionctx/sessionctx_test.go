@@ -7,6 +7,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -24,6 +25,7 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 		}, OperatingState: ownerctx.Pointer{Path: "owner/operating/work-state.md", Available: true, State: "available"}},
 		Atlas:     atlas.Status{Managed: atlas.Pointer{State: "unavailable"}, Owner: atlas.Pointer{Path: "/local/atlas/owner", Available: true, State: "available"}, Workspace: atlas.Pointer{Path: "/work/case-a/brain", Available: true, State: "available"}},
 		Execution: execution.ActivePointer{Path: execution.ActivePointerPath, Available: true, State: execution.ActivePointerAvailable},
+		Memory:    MemorySource{State: "available", Bundle: basememory.ContextBundle{Sections: []basememory.ContextSection{{Layer: "L1", Content: "selected methods: case-kickoff", DrillDown: "versions/tx/l1.json", Truncated: false}}}},
 	})
 	if err := packet.Validate(); err != nil {
 		t.Fatal(err)
@@ -40,7 +42,7 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 	if packet.Atlas.Owner.Path != "bcgos://atlas/owner" || packet.Atlas.Workspace.Path != "bcgos://atlas/workspace" {
 		t.Fatalf("atlas references must be portable: %#v", packet.Atlas)
 	}
-	if packet.Skills.CatalogPointer != "bundles/base/skills/catalog.json" || packet.Agents.CatalogPointer != "bundles/base/agents/catalog.json" || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Memory.State != "unavailable" {
+	if packet.Skills.CatalogPointer != "bundles/base/skills/catalog.json" || packet.Agents.CatalogPointer != "bundles/base/agents/catalog.json" || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Memory.State != "available" || len(packet.Memory.Layers) != 1 || packet.Memory.Layers[0].Pointer != "bcgos://memory/L1" {
 		t.Fatalf("bounded sources = %#v", packet)
 	}
 	if packet.Execution.Active.Path != execution.ActivePointerPath || !packet.Execution.Active.Available || packet.Execution.Active.State != execution.ActivePointerAvailable {
@@ -50,8 +52,30 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(encoded), "/local/") || strings.Contains(string(encoded), "/work/") {
+	if strings.Contains(string(encoded), "/local/") || strings.Contains(string(encoded), "/work/") || strings.Contains(string(encoded), "selected methods") || strings.Contains(string(encoded), "versions/tx") {
 		t.Fatalf("packet leaked an absolute local path: %s", encoded)
+	}
+	var roundTrip Packet
+	if err := json.Unmarshal(encoded, &roundTrip); err != nil {
+		t.Fatal(err)
+	}
+	if err := roundTrip.Validate(); err != nil {
+		t.Fatalf("pointer-only packet did not survive JSON round trip: %v", err)
+	}
+}
+
+func TestBuildReportsEmptyAndUnavailableMemoryWithoutRawFallback(t *testing.T) {
+	base := Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+	}
+	empty := Build(func() Sources { value := base; value.Memory = MemorySource{State: "empty"}; return value }())
+	if err := empty.Validate(); err != nil || empty.Memory.State != "empty" || len(empty.Memory.Sections) != 0 {
+		t.Fatalf("empty memory packet = %#v, err=%v", empty.Memory, err)
+	}
+	unavailable := Build(base)
+	if err := unavailable.Validate(); err != nil || unavailable.Memory.State != "unavailable" || len(unavailable.Memory.Sections) != 0 {
+		t.Fatalf("unavailable memory packet = %#v, err=%v", unavailable.Memory, err)
 	}
 }
 

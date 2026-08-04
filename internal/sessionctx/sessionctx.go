@@ -6,9 +6,11 @@ package sessionctx
 import (
 	"errors"
 	"sort"
+	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -36,6 +38,15 @@ type Sources struct {
 	Owner     ownerctx.Status
 	Atlas     atlas.Status
 	Execution execution.ActivePointer
+	Memory    MemorySource
+}
+
+// MemorySource is assembled by the local runtime boundary. Build never reads
+// local memory files itself, and the serialized packet receives only portable
+// layer pointers. Sections remain ephemeral input for SessionStart rendering.
+type MemorySource struct {
+	State  string
+	Bundle basememory.ContextBundle
 }
 
 type Pointer struct {
@@ -108,8 +119,16 @@ type Agents struct {
 }
 
 type Memory struct {
-	State   string `json:"state"`
-	Message string `json:"message"`
+	State    string                      `json:"state"`
+	Message  string                      `json:"message"`
+	Layers   []MemoryLayer               `json:"layers,omitempty"`
+	Sections []basememory.ContextSection `json:"-"`
+}
+
+type MemoryLayer struct {
+	Layer     string `json:"layer"`
+	Pointer   string `json:"pointer"`
+	Truncated bool   `json:"truncated"`
 }
 
 type ExecutionContext struct {
@@ -178,7 +197,7 @@ func Build(sources Sources) Packet {
 			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: "unavailable",
 			Message: "native agent orchestration requires a runtime adapter with tool and delegation enforcement",
 		},
-		Memory:        Memory{State: "unavailable", Message: "memory context injection requires a runtime adapter"},
+		Memory:        buildMemory(sources.Memory),
 		WorkspaceRoot: sources.Workspace.WorkspacePath,
 	}
 	if sources.Workspace.State != "ready" && sources.Workspace.State != "warning" {
@@ -204,8 +223,22 @@ func (packet Packet) Validate() error {
 	if packet.SchemaVersion != 1 || (packet.State != "ready" && packet.State != "partial") {
 		return errors.New("invalid session context packet header")
 	}
-	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Owner.Onboarding.State == "" || packet.Owner.Onboarding.Track == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Agents.Message == "" || packet.Memory.State != "unavailable" || packet.Memory.Message == "" {
+	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Owner.Onboarding.State == "" || packet.Owner.Onboarding.Track == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Agents.Message == "" || packet.Memory.Message == "" {
 		return errors.New("session context packet is missing a required bounded source")
+	}
+	if packet.Memory.State != "available" && packet.Memory.State != "empty" && packet.Memory.State != "unavailable" {
+		return errors.New("session context packet has an invalid memory state")
+	}
+	if packet.Memory.State == "available" && len(packet.Memory.Layers) == 0 {
+		return errors.New("available session memory is missing bounded layers")
+	}
+	if packet.Memory.State != "available" && (len(packet.Memory.Layers) != 0 || len(packet.Memory.Sections) != 0) {
+		return errors.New("inactive session memory exposes bounded layers")
+	}
+	for _, layer := range packet.Memory.Layers {
+		if !validMemoryLayer(layer.Layer) || layer.Pointer != "bcgos://memory/"+layer.Layer {
+			return errors.New("session context packet has an invalid memory pointer")
+		}
 	}
 	if packet.Owner.Onboarding.State != "required" && packet.Owner.Onboarding.State != "in_progress" && packet.Owner.Onboarding.State != "review_required" && packet.Owner.Onboarding.State != "complete" {
 		return errors.New("session context packet has an invalid onboarding state")
@@ -258,6 +291,53 @@ func (packet Packet) Validate() error {
 		return errors.New("ready session context packet has omissions")
 	}
 	return nil
+}
+
+func buildMemory(source MemorySource) Memory {
+	result := Memory{State: "unavailable", Message: "local memory context is unavailable; raw history was not injected"}
+	switch source.State {
+	case "empty":
+		result.State = "empty"
+		result.Message = "local memory is active; no generated layer is currently available"
+	case "available":
+		if len(source.Bundle.Sections) == 0 {
+			result.State = "empty"
+			result.Message = "local memory is active; no generated layer is currently available"
+			return result
+		}
+		result.State = "available"
+		result.Message = "bounded local memory is available for this SessionStart"
+		result.Sections = append([]basememory.ContextSection(nil), source.Bundle.Sections...)
+		lastRank := -1
+		for _, section := range source.Bundle.Sections {
+			rank := memoryLayerRank(section.Layer)
+			if rank <= lastRank || strings.TrimSpace(section.Content) == "" {
+				return Memory{State: "unavailable", Message: "local memory context is invalid; raw history was not injected"}
+			}
+			lastRank = rank
+			result.Layers = append(result.Layers, MemoryLayer{Layer: section.Layer, Pointer: "bcgos://memory/" + section.Layer, Truncated: section.Truncated})
+		}
+	}
+	return result
+}
+
+func validMemoryLayer(layer string) bool {
+	return memoryLayerRank(layer) >= 0
+}
+
+func memoryLayerRank(layer string) int {
+	switch layer {
+	case "lifetime":
+		return 0
+	case "L3":
+		return 1
+	case "L2":
+		return 2
+	case "L1":
+		return 3
+	default:
+		return -1
+	}
 }
 
 func hasOmission(omissions []Omission, source string) bool {
