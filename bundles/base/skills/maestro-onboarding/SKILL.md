@@ -48,6 +48,14 @@ first identity question in the same message.
 
 Ask only: **“Você prefere a entrevista curta ou a completa?”**
 
+### 🎙️ Uma forma mais leve de responder
+
+Antes da pergunta de escolha, diga em uma frase que, se a interface do runtime
+permitir, o owner pode responder por áudio. Voz costuma trazer mais contexto e
+nuance com menos esforço do que digitar. Esclareça que o Maestro mostrará uma
+síntese ou transcrição para revisão antes de propor qualquer gravação local;
+áudio não é ingerido, enviado ou persistido automaticamente.
+
 ## After the owner chooses
 
 1. Confirm the exact selected track once and persist it only with:
@@ -75,9 +83,39 @@ Ask only: **“Você prefere a entrevista curta ou a completa?”**
   identity is known. Offer the complete track later only when it is useful;
   never nag or silently upgrade it.
 - A confirmed **complete** track has the full initial professional baseline.
-- Only after confirmation may you suggest a next skill, chosen for the owner's
-  stated need. Examples: `/agent-identity-setup`, `/workspace-agent-setup`,
-  `/case-kickoff`, `/ingest-content` or `/meeting-to-work-items`.
+- Immediately after confirmation, always invite the owner to name the first
+  two internal agents now or defer them: **“Quer dar nome e avatar ao Walter e
+  ao Darwin agora, ou prefere deixar isso para depois?”** This is an invitation,
+  never a required extra interview step.
+- Present these initial suggestions with their short stories:
+  - **Walter 🦉** — suggested name: `Walter`. He is the owner's calm alter
+    ego: a senior advisor that asks whether the intrinsic reason behind a
+    high-leverage request was actually met. He refines; he is not a naysayer.
+    If the owner explicitly asks for a reference-based alternative, examples
+    include `Virgil` (guide through complexity), `Iroh` (mentor sereno),
+    `Athena` (estratégia prudente) and `Jarvis` (advisor técnico elegante).
+  - **Darwin 🧬** — suggested name: `Darwin`. He represents the evolutionary
+    loop: the meta-harness that helps the Maestro survive and thrive through
+    health checks, housekeeping and deliberate improvement. If the owner
+    explicitly asks for a reference-based alternative, examples include `TARS`
+    (resiliência pragmática), `Ariadne` (arquitetura de complexidade), `EVE`
+    (sinais de futuro) and `Data` (aprendizado contínuo).
+- The full repertoire lives in `/agent-identity-setup`. Before suggesting a
+  reference-based name, ask one optional question: **“Que presença você quer
+  desses agentes: guia sereno, estrategista, parceiro firme, advisor técnico,
+  arquiteto de sistemas ou observador de evolução?”** Use only the preferences
+  the owner explicitly states to offer at most three relevant choices and say
+  why each was suggested. Do not derive a personality, role fit or psychological
+  profile from past conversations. `HAL` remains available only if the owner
+  chooses it deliberately; never suggest it by default.
+- Explain that names and emoji-avatars are entirely customizable now or later;
+  they never alter an agent's authority. The owner can also create any number
+  of named **Client Account Agents** and **Case Agents** whenever a real
+  account or case is ready, through `/agent-identity-setup` and an explicitly
+  confirmed local profile.
+- Only after this invitation may you suggest another next skill, chosen for the
+  owner's stated need. Examples: `/workspace-agent-setup`, `/case-kickoff`,
+  `/ingest-content` or `/meeting-to-work-items`.
 - Suggesting a skill is not executing it. Explain its purpose and wait for the
   owner to choose it.
 

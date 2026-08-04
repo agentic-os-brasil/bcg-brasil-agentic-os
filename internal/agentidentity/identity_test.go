@@ -25,9 +25,77 @@ func TestInitialInterviewExplainsNamesAvatarsAndOwnership(t *testing.T) {
 		if descriptor.Role == "walter" && descriptor.DefaultEmoji != "🦉" {
 			t.Fatalf("Walter default emoji = %q, want owl", descriptor.DefaultEmoji)
 		}
+		if (descriptor.Role == "walter" || descriptor.Role == "darwin") && len(descriptor.NarrativeSuggestions) < 9 {
+			t.Fatalf("%s omitted its narrative repertoire: %#v", descriptor.Role, descriptor.NarrativeSuggestions)
+		}
 		if descriptor.Role == "quality_guardian" && descriptor.OwnershipScope != "quality_longitudinal" {
 			t.Fatalf("Gamma ownership scope = %q", descriptor.OwnershipScope)
 		}
+	}
+}
+
+func TestNarrativeSuggestionsAreTransparentAndHALIsNotDefaultRecommended(t *testing.T) {
+	interview := InitialInterview()
+	seenHAL := false
+	for _, descriptor := range interview.Agents {
+		for _, suggestion := range descriptor.NarrativeSuggestions {
+			if suggestion.Name == "" || suggestion.Reference == "" || suggestion.Story == "" || len(suggestion.BestFor) == 0 {
+				t.Fatalf("incomplete narrative suggestion: %#v", suggestion)
+			}
+			if suggestion.Name == "HAL" {
+				seenHAL = true
+				if suggestion.AvoidWhen == "" {
+					t.Fatal("HAL must carry an explicit non-default recommendation warning")
+				}
+			}
+		}
+	}
+	if !seenHAL {
+		t.Fatal("the preserved narrative repertoire omitted HAL")
+	}
+}
+
+func TestNarrativeRecommendationsUseOnlyExplicitPreferences(t *testing.T) {
+	if got := RecommendNarrativeSuggestions("walter", nil, 3); got != nil {
+		t.Fatalf("recommendation without explicit preferences = %#v", got)
+	}
+	got := RecommendNarrativeSuggestions("walter", []string{"estratégia", "prudência"}, 3)
+	if len(got) != 1 || got[0].Name != "Athena" {
+		t.Fatalf("Walter recommendation = %#v, want Athena only", got)
+	}
+	got = RecommendNarrativeSuggestions("darwin", []string{"ficção científica clássica"}, 3)
+	if len(got) != 0 {
+		t.Fatalf("HAL must never be default recommended: %#v", got)
+	}
+}
+
+func TestNarrativeRecommendationsCoverEveryPromptedPreferenceAndCapAtThree(t *testing.T) {
+	cases := []struct {
+		preference string
+		role       string
+		want       string
+	}{
+		{preference: "guia sereno", role: "walter", want: "Iroh"},
+		{preference: "estrategista", role: "walter", want: "Athena"},
+		{preference: "parceiro firme", role: "walter", want: "Samwise"},
+		{preference: "advisor técnico", role: "walter", want: "Jarvis"},
+		{preference: "arquiteto de sistemas", role: "darwin", want: "Ariadne"},
+		{preference: "observador de evolução", role: "darwin", want: "Darwin"},
+	}
+	for _, test := range cases {
+		t.Run(test.preference, func(t *testing.T) {
+			got := RecommendNarrativeSuggestions(test.role, []string{test.preference}, 3)
+			for _, candidate := range got {
+				if candidate.Name == test.want {
+					return
+				}
+			}
+			t.Fatalf("%q did not suggest %q: %#v", test.preference, test.want, got)
+		})
+	}
+	got := RecommendNarrativeSuggestions("darwin", []string{"arquitetura", "sistemas", "evolução", "continuidade", "resiliência", "pragmatismo"}, 99)
+	if len(got) > 3 {
+		t.Fatalf("recommendation must cap at three, got %#v", got)
 	}
 }
 
