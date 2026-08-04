@@ -48,6 +48,14 @@ first identity question in the same message.
 
 Ask only: **“Você prefere a entrevista curta ou a completa?”**
 
+### 🎙️ Uma forma mais leve de responder
+
+Antes da pergunta de escolha, diga em uma frase que, se a interface do runtime
+permitir, o owner pode responder por áudio. Voz costuma trazer mais contexto e
+nuance com menos esforço do que digitar. Esclareça que o Maestro mostrará uma
+síntese ou transcrição para revisão antes de propor qualquer gravação local;
+áudio não é ingerido, enviado ou persistido automaticamente.
+
 ## After the owner chooses
 
 1. Confirm the exact selected track once and persist it only with:
