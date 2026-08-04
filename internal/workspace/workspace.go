@@ -95,6 +95,9 @@ var visibleSurface = []struct {
 	{"brain/clients/README.md", "# Clientes\n\nCrie uma pasta somente quando houver um cliente autorizado. Registre stakeholders, fatos e decisões no escopo correto.\n"},
 	{"brain/projects/README.md", "# Projetos\n\nCrie um diretório por projeto ativo. Mantenha hipótese, entregáveis, plano de trabalho e evidências próximos ao projeto.\n"},
 	{"brain/knowledge/README.md", "# Conhecimento\n\nGuarde conhecimento reutilizável que tenha fonte e escopo claros. Não copie material de cliente para esta área.\n"},
+	{"brain/organization/bcg/README.md", "# BCG\n\nEste é o espaço organizacional-base do Maestro. Use-o para contexto profissional transversal, colegas e práticas internas que possam ser relevantes entre frentes de trabalho. Não é uma conta de cliente e não deve receber conteúdo de cliente.\n"},
+	{"brain/organization/bcg/people/README.md", "# Pessoas BCG\n\nRegistre somente informações profissionais necessárias, com origem e finalidade claras. Não há colegas pré-carregados.\n"},
+	{"brain/organization/bcg/practices/README.md", "# Práticas BCG\n\nPonteiros para conhecimento funcional e industrial reutilizável. PA Experts continuam versionados e consultivos; este diretório não substitui o registry.\n"},
 	{"brain/people/README.md", "# Pessoas\n\nUse para informações profissionais que sejam necessárias ao trabalho e tenham contexto e permissão apropriados.\n"},
 	{"brain/decisions/README.md", "# Decisões\n\nRegistre decisões relevantes com racional, evidência, dono e data. A fonte humana continua sendo a autoridade.\n"},
 	{"brain/tasks/README.md", "# Tarefas\n\nO Maestro mostra no início da sessão somente tarefas marcadas explicitamente como abertas no estado operacional do dono. Este diretório é para planos e artefatos de trabalho; não é um backlog inventado.\n"},
@@ -103,7 +106,9 @@ var visibleSurface = []struct {
 	{"agents/walter.md", "# Walter 🧭\n\nSenior advisor e proxy do self do dono para tarefas de maior leverage. Refina; não é um naysayer.\n"},
 	{"agents/darwin.md", "# Darwin 🧬\n\nMeta-harness: observa saúde, housekeeping e caminhos de evolução do Agentic OS.\n"},
 	{"agents/pa-experts.md", "# PA Experts 🧠\n\nEspecialistas funcionais e industriais consultivos. São versionados e evoluem ao longo do tempo; nesta instalação permanecem stubs.\n"},
+	{"agents/bcg-workspace.md", "# Espaço BCG 🏛️\n\nBCG é o workspace organizacional transversal. Não é um Client Account Agent: o Maestro usa esse espaço para colegas, práticas e contexto interno compartilhado, mantendo clientes e cases em seus próprios limites.\n"},
 	{"agents/client-accounts/README.md", "# Client Account Agents\n\nStubs para os agentes que exercem visão estratégica de conta e stakeholders. O dono define nome, avatar e ownership.\n"},
+	{"agents/client-accounts/acme-example.md", "# ACME example 🤝\n\nExemplo sintético e inativo de Client Account Agent. Não representa cliente, stakeholder, dado ou autorização real. Quando houver uma conta autorizada, crie uma instância com nome, avatar, ownership e escopo confirmados pelo dono.\n"},
 	{"agents/cases/README.md", "# Case Agents\n\nStubs para os agentes especializados na execução de cada projeto. O dono define nome, avatar e ownership.\n"},
 }
 
