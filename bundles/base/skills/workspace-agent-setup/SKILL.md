@@ -26,6 +26,10 @@ classification, provenance or workspace-isolation requirements.
    The compatibility command operates the canonical `case_agent` role.
    Ask the six minimum questions: decision/horizon; audience/constraints;
    useful result; authorized material; balanced hypotheses; and next step.
+   For authorized material, explicitly ask the owner to point to the minimum
+   local folders and SharePoint project roots needed for this case. Keep those
+   roots as reviewed source pointers in the brief; do not enumerate, read,
+   copy or ingest them during setup.
    Show the consolidated brief and one-to-three-action plan before writing.
 4. Persist the reviewed result with `bcgos workspace-agent value submit --run
    <id> --stdin <workspace-path>`. It creates the classified decision brief,
@@ -37,8 +41,9 @@ classification, provenance or workspace-isolation requirements.
    from the handoff. Do not repeat the interview or inject its transcript.
 
 The first-value flow does not browse, ingest documents, query a wiki, dream
-memory, refresh economics or create an agent. External research remains the
-separate approved flow below.
+memory, refresh economics or create an agent. A SharePoint root named in the
+brief is not a connection or collection grant. External research and source
+processing remain separate approved flows below.
 
 ## Optional public research
 1. Propose a minimized public research plan. Use only hostname allowlist entries
@@ -84,6 +89,9 @@ approved themes or domains requires a new plan and approval.
 - Briefs, plans, approvals and evidence are immutable, workspace-scoped
   artifacts with provenance.
 - No cross-workspace lookup or automatic promotion to Client Account context occurs.
+- A project SharePoint pointer stays case-scoped. Cross-project prior-work
+  retrieval uses the separate explicitly enrolled index and is never inferred
+  from this brief.
 - Attested public economic snapshots are stored outside every workspace and can
   only be attached by immutable ID. Each claim points to declared public
   sources and records who attested that no workspace material was used.

@@ -113,6 +113,20 @@ síntese ou transcrição para revisão antes de propor qualquer gravação loca
   of named **Client Account Agents** and **Case Agents** whenever a real
   account or case is ready, through `/agent-identity-setup` and an explicitly
   confirmed local profile.
+- Then offer one optional, concrete path into real work: **“Quer configurar o
+  primeiro cliente/caso agora ou prefere começar limpo?”** If the owner chooses
+  a case, route to `/workspace-agent-setup` and ask which exact local folders
+  and SharePoint project roots are authorized sources. Show the proposed
+  source map before recording it in the reviewed case brief. At this step,
+  record pointers and purpose only: do not read, copy, upload, crawl or ingest
+  any source.
+- Keep the two SharePoint journeys distinct. Project folders belong to the
+  exact Case setup and may be read only through a later explicitly authorized
+  project action. Cross-project recovery of old decks or documents uses the
+  separate `/find-prior-work` enrollment and index. Never turn a project source
+  choice into tenant-wide discovery, and never imply that Codex can collect
+  SharePoint content. Claude collection remains unavailable until its approved
+  native trial is qualified.
 - Only after this invitation may you suggest another next skill, chosen for the
   owner's stated need. Examples: `/workspace-agent-setup`, `/case-kickoff`,
   `/ingest-content` or `/meeting-to-work-items`.
@@ -125,5 +139,6 @@ síntese ou transcrição para revisão antes de propor qualquer gravação loca
   Maestro workspace. Keep the conversation focused on the owner's
   professional work.
 - Do not ingest, copy or upload a selected source during onboarding.
+- A source pointer is not ingestion or authorization to traverse its parent.
 - Do not infer a psychological profile.
 - Do not bypass the owner's review digest or runtime trust prompt.

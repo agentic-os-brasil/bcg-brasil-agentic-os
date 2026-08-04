@@ -159,3 +159,33 @@ func TestReviewRequiredOnboardingCarriesOnlyItsBoundedDigest(t *testing.T) {
 		t.Fatal("review-required onboarding validated without a digest")
 	}
 }
+
+func TestSelectedSkillPointersUseClosedReasonsAndCannotEscapeTheRuntimeProjection(t *testing.T) {
+	base := Build(Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+		Owner: ownerctx.Status{Initialized: true, Onboarding: ownerctx.OnboardingStatus{
+			State: "complete", Track: ownerctx.OnboardingTrackQuick,
+		}},
+		Atlas: atlas.Status{Managed: atlas.Pointer{State: "unavailable"}},
+	})
+	valid := SkillSelection{ID: "ingest-content", Reason: "explicit_skill_reference", Pointer: ".claude/skills/ingest-content/SKILL.md"}
+	base.Skills.Selected = []SkillSelection{valid}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid selected skill pointer was rejected: %v", err)
+	}
+
+	invalid := []SkillSelection{
+		{ID: "ingest-content", Reason: "caller_claimed_safe", Pointer: valid.Pointer},
+		{ID: "ingest-content", Reason: valid.Reason, Pointer: "/tmp/skills/ingest-content/SKILL.md"},
+		{ID: "ingest-content", Reason: valid.Reason, Pointer: ".claude/skills/find-prior-work/SKILL.md"},
+		{ID: "../ingest-content", Reason: valid.Reason, Pointer: valid.Pointer},
+	}
+	for _, selection := range invalid {
+		packet := base
+		packet.Skills.Selected = []SkillSelection{selection}
+		if err := packet.Validate(); err == nil {
+			t.Fatalf("unsafe selected skill pointer validated: %#v", selection)
+		}
+	}
+}

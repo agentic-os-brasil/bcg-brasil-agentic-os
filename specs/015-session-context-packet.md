@@ -23,6 +23,9 @@ adapter; it does not itself read, inject or summarize private content.
   execution item can be resolved;
 - managed, owner and workspace atlas availability and pointers;
 - the managed skills-catalog pointer, not its full contents;
+- at most two relative managed-skill pointers whose IDs, reasons and runtime
+  paths are validated as one unit; while onboarding is pending this is exactly
+  the integrity-checked `maestro-onboarding` guide;
 - the managed agents-catalog pointer, Maestro hub ID and explicit definition
   versus runtime-activation states;
 - an explicit unavailable memory-injection capability; and
@@ -37,6 +40,8 @@ Session Start may report only the count and must not invent a backlog.
 When onboarding is `review_required`, the packet includes only the SHA-256
 digest of the reviewable non-sensitive facets so an explicit confirmation can
 be bound to the exact version shown. It never includes the facet bodies.
+Before that confirmation, prompt hooks suppress unrelated Case methods instead
+of letting a lexical prompt silently bypass the deterministic first-use flow.
 
 The active execution capability has three states:
 
@@ -80,6 +85,9 @@ qualifying native-session protocol succeeds.
   and unreviewed owner pointers are omitted;
 - missing owner, workspace or atlas sources produce a valid `partial` packet;
 - the skills catalog remains a pointer only;
+- selected skill pointers are relative, match their declared IDs and use only
+  governed selection reasons; absolute, traversal or caller-invented pointers
+  fail closed;
 - memory injection remains explicitly unavailable until adapters exist.
 - packet references never reveal absolute local filesystem paths.
 - agent definitions remain pointer-only and runtime activation remains

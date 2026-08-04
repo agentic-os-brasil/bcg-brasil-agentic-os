@@ -33,6 +33,18 @@ Unknown or ambiguous intent selects nothing. The active
 interaction profile changes how that capability is presented; it does not
 filter the catalog or authorize execution.
 
+Pending owner onboarding has lifecycle precedence over contextual method
+selection. `SessionStart` and subsequent prompt hooks expose only the exact
+integrity-checked `maestro-onboarding` guide with reason
+`deterministic_onboarding_state`; unrelated Case methods remain suppressed
+until the reviewed onboarding digest is explicitly confirmed. This is a
+startup-control pointer, not a direct Maestro tool or delegation grant.
+
+After onboarding, the Case policy includes `ingest-content` and
+`find-prior-work`. Both retain their own explicit source, consent and runtime
+boundaries: selecting the method does not read a source, authorize SharePoint
+collection or promote a runtime capability.
+
 ## Lifecycle and validation
 
 The compiler is deterministic for the same ordered managed skill set. The

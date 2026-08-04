@@ -45,6 +45,14 @@ interview on every prompt. Both payloads expose
 `injection_state=unavailable`, so successful serialization is visible without
 being mislabeled as native qualification.
 
+While onboarding is `required`, `in_progress` or `review_required`, the
+lifecycle selects the installed, integrity-checked `maestro-onboarding` pointer
+with a closed reason code and suppresses unrelated contextual Case methods.
+After onboarding becomes `complete`, ordinary explicit/lexical method routing
+resumes. The selected pointer must remain under the active runtime's managed
+`.claude/skills` or `.codex/skills` projection and must match its skill ID;
+absolute, mismatched or caller-invented pointers fail validation.
+
 At the onboarding review boundary, Session Start presents the bounded
 `review_digest` and the exact confirmation command. The command must echo that
 digest; confirmation without it, or after any facet changes, fails closed and

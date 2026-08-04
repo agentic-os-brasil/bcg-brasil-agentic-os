@@ -2554,6 +2554,9 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 		Profile: profileState, Workspace: inspection, Owner: owner,
 		Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 	})
+	if err := enrichOnboardingGuide(&packet, *runtimeName, inspection.WorkspacePath); err != nil {
+		return reportError(errOut, err)
+	}
 	var output any
 	switch *runtimeName {
 	case "claude":
@@ -2685,6 +2688,8 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			if err := enrichContextPacket(&packet, "codex", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
 				return reportError(errOut, err)
 			}
+		} else if err := enrichOnboardingGuide(&packet, "codex", inspection.WorkspacePath); err != nil {
+			return reportError(errOut, err)
 		}
 		eventName := "SessionStart"
 		if action == "context-injection" {
@@ -2842,6 +2847,8 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
 				return reportError(errOut, err)
 			}
+		} else if err := enrichOnboardingGuide(&packet, "claude", inspection.WorkspacePath); err != nil {
+			return reportError(errOut, err)
 		}
 		eventName := "SessionStart"
 		if action == "context-injection" {
@@ -2938,6 +2945,9 @@ func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, 
 	if projection.State != "installed" {
 		return nil
 	}
+	if packet.Owner.Onboarding.State != "complete" {
+		return enrichOnboardingGuide(packet, runtimeName, workspacePath)
+	}
 	catalog, policy, installed, err := runtimeprojection.RoutingInputs(runtimeName, workspacePath)
 	if err != nil {
 		return fmt.Errorf("load governed contextual routing inputs: %w", err)
@@ -2953,6 +2963,45 @@ func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, 
 	// must never block because its local checkpoint could not be persisted.
 	_ = recordAttestedSkillRoute(root, runtimeName, packet.Workspace.ID, sessionID, selected)
 	return nil
+}
+
+// enrichOnboardingGuide is a lifecycle-owned startup rule, not an agent skill
+// grant. While the deterministic owner state is incomplete, it points the
+// runtime to the exact integrity-checked onboarding guide and suppresses
+// unrelated contextual methods. The guide does not grant tools, data access or
+// native runtime authority.
+func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath string) error {
+	if packet.Owner.Onboarding.State == "complete" {
+		return nil
+	}
+	projection, err := runtimeprojection.Inspect(runtimeName, workspacePath)
+	if err != nil {
+		return fmt.Errorf("inspect runtime projection for onboarding guide: %w", err)
+	}
+	if projection.State != "installed" {
+		return nil
+	}
+	catalog, _, installed, err := runtimeprojection.RoutingInputs(runtimeName, workspacePath)
+	if err != nil {
+		return fmt.Errorf("load governed onboarding guide: %w", err)
+	}
+	known := false
+	for _, skill := range catalog.Skills {
+		if skill.ID == "maestro-onboarding" {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return errors.New("managed onboarding guide is absent from the active skill catalog")
+	}
+	for _, skill := range installed {
+		if skill.ID == "maestro-onboarding" {
+			packet.Skills.Selected = []sessionctx.SkillSelection{{ID: skill.ID, Reason: "deterministic_onboarding_state", Pointer: skill.Pointer}}
+			return nil
+		}
+	}
+	return errors.New("managed onboarding guide is absent from the integrity-checked runtime projection")
 }
 
 func recordAttestedSkillRoute(root, runtimeName, workspaceID, sessionID string, selected []skillrouting.Selection) error {
