@@ -31,6 +31,38 @@ Account Agents and Case Agents when those scopes exist. The owner may customize
 presentation, but cannot change role authority, scope rules, PA Expert
 versioning or review gates.
 
+## Repertório narrativo para Walter e Darwin
+
+The interview returned by `bcgos agent interview` carries the canonical
+reference repertoire with a short story and `best_for` tags. It is a menu of
+presentation options, not a personality assessment and not an authority model.
+
+When the owner wants help choosing, ask exactly one optional question first:
+
+> “Que presença você quer desses agentes: guia sereno, estrategista, parceiro
+> firme, advisor técnico, arquiteto de sistemas ou observador de evolução?”
+
+Map only the preferences the owner explicitly states to at most three entries
+from the returned `narrative_suggestions`. The deterministic helper
+`RecommendNarrativeSuggestions` accepts only those explicit tags and excludes
+references marked as non-default. Explain the reference and why it matches the
+declared preference. Never infer a name from occupation, language, tone, prior
+conversations or a psychological profile. Always preserve `Walter` and `Darwin`
+as valid original names and state that the owner can choose any custom name
+instead.
+
+The initial repertoire is deliberately broad:
+
+- Walter: Walter, Virgil, Iroh, Morpheus, Atticus, Obi-Wan, Athena, Samwise
+  and Jarvis.
+- Darwin: Darwin, TARS, Ariadne, Daedalus, EVE, HAL, KITT, Data, The Doctor
+  and Hermione.
+
+`HAL` is retained for an owner who chooses the reference deliberately, but must
+never be a default suggestion because it can evoke surveillance and loss of
+control. No reference, name or emoji changes the role's scope, grants,
+authority or review requirement.
+
 Before writing, show the complete proposed profile and ask for one explicit
 confirmation. Persist only the confirmed strict JSON profile through
 `bcgos agent personalize --stdin`. A missing confirmation, unknown role,

@@ -88,14 +88,26 @@ síntese ou transcrição para revisão antes de propor qualquer gravação loca
   ao Darwin agora, ou prefere deixar isso para depois?”** This is an invitation,
   never a required extra interview step.
 - Present these initial suggestions with their short stories:
-  - **Walter 🦉** — suggested name: `Walter` (alternatives: `Mirror`, `North
-    Star`). Walter is the owner's calm alter ego: a senior advisor that asks
-    whether the intrinsic reason behind a high-leverage request was actually
-    met. He refines; he is not a naysayer.
-  - **Darwin 🧬** — suggested name: `Darwin` (alternatives: `Evolver`,
-    `Steward`). Darwin represents the evolutionary loop: the meta-harness that
-    helps the Maestro survive and thrive through health checks, housekeeping
-    and deliberate improvement.
+  - **Walter 🦉** — suggested name: `Walter`. He is the owner's calm alter
+    ego: a senior advisor that asks whether the intrinsic reason behind a
+    high-leverage request was actually met. He refines; he is not a naysayer.
+    If the owner explicitly asks for a reference-based alternative, examples
+    include `Virgil` (guide through complexity), `Iroh` (mentor sereno),
+    `Athena` (estratégia prudente) and `Jarvis` (advisor técnico elegante).
+  - **Darwin 🧬** — suggested name: `Darwin`. He represents the evolutionary
+    loop: the meta-harness that helps the Maestro survive and thrive through
+    health checks, housekeeping and deliberate improvement. If the owner
+    explicitly asks for a reference-based alternative, examples include `TARS`
+    (resiliência pragmática), `Ariadne` (arquitetura de complexidade), `EVE`
+    (sinais de futuro) and `Data` (aprendizado contínuo).
+- The full repertoire lives in `/agent-identity-setup`. Before suggesting a
+  reference-based name, ask one optional question: **“Que presença você quer
+  desses agentes: guia sereno, estrategista, parceiro firme, advisor técnico,
+  arquiteto de sistemas ou observador de evolução?”** Use only the preferences
+  the owner explicitly states to offer at most three relevant choices and say
+  why each was suggested. Do not derive a personality, role fit or psychological
+  profile from past conversations. `HAL` remains available only if the owner
+  chooses it deliberately; never suggest it by default.
 - Explain that names and emoji-avatars are entirely customizable now or later;
   they never alter an agent's authority. The owner can also create any number
   of named **Client Account Agents** and **Case Agents** whenever a real

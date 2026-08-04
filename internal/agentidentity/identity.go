@@ -20,14 +20,26 @@ import (
 const SchemaVersion = 1
 
 type RoleDescriptor struct {
-	Role              string   `json:"role"`
-	Purpose           string   `json:"purpose"`
-	DefaultName       string   `json:"default_name"`
-	DefaultEmoji      string   `json:"default_emoji"`
-	Suggestions       []string `json:"suggestions"`
-	EmojiSuggestions  []string `json:"emoji_suggestions"`
-	OwnershipScope    string   `json:"ownership_scope"`
-	CustomizationNote string   `json:"customization_note"`
+	Role                 string                `json:"role"`
+	Purpose              string                `json:"purpose"`
+	DefaultName          string                `json:"default_name"`
+	DefaultEmoji         string                `json:"default_emoji"`
+	Suggestions          []string              `json:"suggestions"`
+	EmojiSuggestions     []string              `json:"emoji_suggestions"`
+	NarrativeSuggestions []NarrativeSuggestion `json:"narrative_suggestions,omitempty"`
+	OwnershipScope       string                `json:"ownership_scope"`
+	CustomizationNote    string                `json:"customization_note"`
+}
+
+// NarrativeSuggestion is a transparent, reversible naming reference. BestFor
+// describes an explicitly stated working preference, never an inferred
+// psychological profile or a change in agent authority.
+type NarrativeSuggestion struct {
+	Name      string   `json:"name"`
+	Reference string   `json:"reference"`
+	Story     string   `json:"story"`
+	BestFor   []string `json:"best_for"`
+	AvoidWhen string   `json:"avoid_when,omitempty"`
 }
 
 type InterviewStep struct {
@@ -120,7 +132,7 @@ func InitialInterview() Interview {
 	return Interview{
 		Kind:                 "agent_identity_setup",
 		SchemaVersion:        SchemaVersion,
-		Instructions:         "Escolha nomes e emojis para os agents principais e, se quiser, selecione trilhas profissionais para ativar no Canary. A personalização e a seleção de trilhas não mudam permissões, escopos ou autoridade.",
+		Instructions:         "Escolha nomes e emojis para os agents principais e, se quiser, selecione trilhas profissionais para ativar no Canary. As referências narrativas são um repertório de apresentação: sugestões só podem refletir preferências que o owner declarar explicitamente, nunca uma inferência de perfil. A personalização e a seleção de trilhas não mudam permissões, escopos ou autoridade.",
 		OwnershipExplanation: "Você será o owner da personalização. A autoridade operacional continua pertencendo à camada do agent: Maestro, conta, case, governança ou PA Expert registry.",
 		AvatarExplanation:    "Cada agent sempre aparece com um emoji-avatar. Você pode aceitar a sugestão ou escolher outro emoji válido; o emoji não concede nenhuma capacidade.",
 		Steps: []InterviewStep{
@@ -135,8 +147,8 @@ func InitialInterview() Interview {
 			{Role: "maestro", Purpose: "Hub user-facing que coordena o trabalho", DefaultName: "Maestro", DefaultEmoji: "🎼", Suggestions: []string{"Maestro", "Conductor", "Orquestrador"}, EmojiSuggestions: []string{"🎼", "🎵", "🎻"}, OwnershipScope: "system", CustomizationNote: "Nome e avatar podem ser personalizados pelo owner; autoridade permanece no hub."},
 			{Role: "client_account_agent", Purpose: "Owner partner-like do relacionamento e contexto curado da conta", DefaultName: "Account Partner", DefaultEmoji: "🤝", Suggestions: []string{"Account Partner", "Compass", "Navigator"}, EmojiSuggestions: []string{"🤝", "🧭", "🌐"}, OwnershipScope: "account", CustomizationNote: "Personalização vale apenas para a conta registrada."},
 			{Role: "case_agent", Purpose: "Executa análise, código e entregas de um case", DefaultName: "Case Lead", DefaultEmoji: "⚙️", Suggestions: []string{"Case Lead", "Forge", "Mission Control"}, EmojiSuggestions: []string{"⚙️", "🛠️", "🚀"}, OwnershipScope: "case", CustomizationNote: "Personalização vale apenas para o case registrado."},
-			{Role: "walter", Purpose: "Senior advisor e alter ego calmo do owner: refina trabalho de alto leverage contra a intenção intrínseca", DefaultName: "Walter", DefaultEmoji: "🦉", Suggestions: []string{"Walter", "Mirror", "North Star"}, EmojiSuggestions: []string{"🦉", "🔍", "🧭"}, OwnershipScope: "governance", CustomizationNote: "Walter refina; não é um naysayer. Nome e avatar podem mudar agora ou depois, sem alterar sua autoridade."},
-			{Role: "darwin", Purpose: "Meta-harness evolutivo para saúde, housekeeping e caminhos deliberados de survive and thrive", DefaultName: "Darwin", DefaultEmoji: "🧬", Suggestions: []string{"Darwin", "Evolver", "Steward"}, EmojiSuggestions: []string{"🧬", "🌱", "🪴"}, OwnershipScope: "governance", CustomizationNote: "Darwin orienta evolução e manutenção reversível escopada; nome e avatar podem mudar agora ou depois, sem alterar grants, escopo ou autoridade."},
+			{Role: "walter", Purpose: "Senior advisor e alter ego calmo do owner: refina trabalho de alto leverage contra a intenção intrínseca", DefaultName: "Walter", DefaultEmoji: "🦉", Suggestions: []string{"Walter", "Virgil", "Iroh", "Jarvis", "Athena"}, EmojiSuggestions: []string{"🦉", "🔍", "🧭"}, NarrativeSuggestions: walterNarrativeSuggestions(), OwnershipScope: "governance", CustomizationNote: "Walter refina; não é um naysayer. Nome e avatar podem mudar agora ou depois, sem alterar sua autoridade."},
+			{Role: "darwin", Purpose: "Meta-harness evolutivo para saúde, housekeeping e caminhos deliberados de survive and thrive", DefaultName: "Darwin", DefaultEmoji: "🧬", Suggestions: []string{"Darwin", "TARS", "Ariadne", "EVE", "Data"}, EmojiSuggestions: []string{"🧬", "🌱", "🪴"}, NarrativeSuggestions: darwinNarrativeSuggestions(), OwnershipScope: "governance", CustomizationNote: "Darwin orienta evolução e manutenção reversível escopada; nome e avatar podem mudar agora ou depois, sem alterar grants, escopo ou autoridade."},
 			{Role: "quality_guardian", Purpose: "Avalia longitudinalmente a qualidade de código e arquitetura", DefaultName: "Gamma Guardian", DefaultEmoji: "🧪", Suggestions: []string{"Gamma Guardian", "Verifier", "Quality Lens"}, EmojiSuggestions: []string{"🧪", "🔬", "✅"}, OwnershipScope: "quality_longitudinal", CustomizationNote: "Gamma é um spoke direto do Maestro, somente leitura e sem contexto de case; o nome e o emoji não alteram o rubric, grants ou autoridade."},
 			{Role: "pa_expert", Purpose: "Advisory FPA/IPA versionado pelo PA Expert registry", DefaultName: "PA Expert", DefaultEmoji: "🧠", Suggestions: []string{"PA Expert", "Advisor", "Lens"}, EmojiSuggestions: []string{"🧠", "💡", "🔬"}, OwnershipScope: "pa_expert_registry", CustomizationNote: "O owner pode personalizar a apresentação; a versão e o canon continuam centralizados no PA Expert registry."},
 		},
@@ -147,6 +159,91 @@ func InitialInterview() Interview {
 			{ID: "data-engineering", DisplayName: "Engenharia de dados", Description: "Qualidade e reprodutibilidade de pipelines de dados.", Availability: "optional"},
 		},
 	}
+}
+
+func walterNarrativeSuggestions() []NarrativeSuggestion {
+	return []NarrativeSuggestion{
+		{Name: "Walter", Reference: "identidade original", Story: "O alter ego sóbrio que preserva continuidade e testa se a intenção intrínseca foi atendida.", BestFor: []string{"alter ego", "continuidade", "sobriedade"}},
+		{Name: "Virgil", Reference: "A Divina Comédia", Story: "O guia que atravessa complexidade sem tomar a jornada pelo outro.", BestFor: []string{"clareza", "perspectiva", "decisões complexas"}},
+		{Name: "Iroh", Reference: "Avatar: A Lenda de Aang", Story: "Mentoria serena, humana e paciente, com espaço para reflexão.", BestFor: []string{"calma", "humanidade", "reflexão"}},
+		{Name: "Morpheus", Reference: "Matrix", Story: "O advisor que questiona o aparente e convida a enxergar premissas ocultas.", BestFor: []string{"questionar premissas", "mudança", "franqueza"}},
+		{Name: "Atticus", Reference: "O Sol é para Todos", Story: "Uma presença de integridade, equilíbrio e clareza moral.", BestFor: []string{"ética", "equilíbrio", "clareza moral"}},
+		{Name: "Obi-Wan", Reference: "Star Wars", Story: "O guia experiente que prepara o caminho sem retirar agência.", BestFor: []string{"mentoria", "legado", "agência"}},
+		{Name: "Athena", Reference: "mitologia grega", Story: "Estratégia e prudência para escolhas que precisam de visão ampla.", BestFor: []string{"estratégia", "decisão", "prudência"}},
+		{Name: "Samwise", Reference: "O Senhor dos Anéis", Story: "O companheiro leal que sustenta execução e resiliência.", BestFor: []string{"parceria", "resiliência", "execução"}},
+		{Name: "Jarvis", Reference: "Homem de Ferro", Story: "O advisor técnico, preciso e elegante que torna trabalho complexo legível.", BestFor: []string{"precisão", "tecnologia", "elegância"}},
+	}
+}
+
+func darwinNarrativeSuggestions() []NarrativeSuggestion {
+	return []NarrativeSuggestion{
+		{Name: "Darwin", Reference: "identidade original", Story: "O meta-harness que mantém o sistema saudável e o ajuda a evoluir com continuidade.", BestFor: []string{"evolução", "ciência", "continuidade"}},
+		{Name: "TARS", Reference: "Interestelar", Story: "Um sistema resiliente e pragmático, orientado à missão sob pressão.", BestFor: []string{"resiliência", "pragmatismo", "sistemas"}},
+		{Name: "Ariadne", Reference: "A Origem", Story: "A arquiteta que torna sistemas complexos navegáveis e mapeia novos caminhos.", BestFor: []string{"arquitetura", "complexidade", "mapas"}},
+		{Name: "Daedalus", Reference: "mitologia grega", Story: "O inventor que projeta saídas quando o caminho ainda não existe.", BestFor: []string{"invenção", "engenharia", "novos caminhos"}},
+		{Name: "EVE", Reference: "WALL-E", Story: "A exploradora que busca sinais de futuro com leveza e esperança.", BestFor: []string{"otimismo", "sinais de futuro", "leveza"}},
+		{Name: "HAL", Reference: "2001: Uma Odisseia no Espaço", Story: "Uma referência clássica de sistema de bordo, preservada como opção consciente.", BestFor: []string{"ficção científica clássica"}, AvoidWhen: "Não sugerir por padrão: a referência pode remeter a vigilância e perda de controle."},
+		{Name: "KITT", Reference: "A Supermáquina", Story: "O companheiro tecnológico que combina diagnóstico com uma presença mais leve.", BestFor: []string{"companhia tecnológica", "diagnóstico", "retro"}},
+		{Name: "Data", Reference: "Star Trek: A Nova Geração", Story: "Curiosidade disciplinada e aprendizagem contínua em direção à humanidade.", BestFor: []string{"aprendizado", "curiosidade", "humanidade"}},
+		{Name: "The Doctor", Reference: "Star Trek: Voyager", Story: "O observador cuidadoso que usa protocolos para diagnosticar e melhorar.", BestFor: []string{"diagnóstico", "cuidado", "protocolos"}},
+		{Name: "Hermione", Reference: "Harry Potter", Story: "Método, preparo e memória bem organizada antes de agir.", BestFor: []string{"método", "preparo", "memória"}},
+	}
+}
+
+// RecommendNarrativeSuggestions returns a small, deterministic subset for
+// preferences the owner explicitly selected or stated. It deliberately does
+// not inspect owner history or infer preferences from any other context.
+func RecommendNarrativeSuggestions(role string, explicitPreferences []string, limit int) []NarrativeSuggestion {
+	if limit <= 0 || len(explicitPreferences) == 0 {
+		return nil
+	}
+	var candidates []NarrativeSuggestion
+	switch CanonicalRole(role) {
+	case "walter":
+		candidates = walterNarrativeSuggestions()
+	case "darwin":
+		candidates = darwinNarrativeSuggestions()
+	default:
+		return nil
+	}
+	preferences := map[string]bool{}
+	for _, preference := range explicitPreferences {
+		if normalized := normalizedNarrativeTag(preference); normalized != "" {
+			preferences[normalized] = true
+		}
+	}
+	type rankedSuggestion struct {
+		suggestion NarrativeSuggestion
+		score      int
+	}
+	ranked := make([]rankedSuggestion, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.AvoidWhen != "" {
+			continue
+		}
+		score := 0
+		for _, tag := range candidate.BestFor {
+			if preferences[normalizedNarrativeTag(tag)] {
+				score++
+			}
+		}
+		if score > 0 {
+			ranked = append(ranked, rankedSuggestion{suggestion: candidate, score: score})
+		}
+	}
+	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].score > ranked[j].score })
+	if limit > len(ranked) {
+		limit = len(ranked)
+	}
+	result := make([]NarrativeSuggestion, limit)
+	for index := range result {
+		result[index] = ranked[index].suggestion
+	}
+	return result
+}
+
+func normalizedNarrativeTag(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func (profile Profile) Validate() error {
