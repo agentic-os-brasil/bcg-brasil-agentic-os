@@ -36,7 +36,7 @@ func ValidateInstall(runtimeName, workspace, executable string) error {
 	if err != nil {
 		return err
 	}
-	bindings, err := bindingsFor(runtimeName, executable)
+	bindings, err := bindingsFor(runtimeName, executable, workspace)
 	if err != nil {
 		return err
 	}
@@ -79,7 +79,7 @@ func ValidateUninstall(runtimeName, workspace string) error {
 	if err != nil {
 		return err
 	}
-	bindings, err := bindingsFor(runtimeName, "bcgos")
+	bindings, err := bindingsFor(runtimeName, "bcgos", workspace)
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func Install(runtimeName, workspace, executable string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	bindings, err := bindingsFor(runtimeName, executable)
+	bindings, err := bindingsFor(runtimeName, executable, workspace)
 	if err != nil {
 		return Status{}, err
 	}
@@ -186,7 +186,7 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	bindings, err := bindingsFor(runtimeName, "bcgos")
+	bindings, err := bindingsFor(runtimeName, "bcgos", workspace)
 	if err != nil {
 		return Status{}, err
 	}
@@ -230,7 +230,7 @@ func Inspect(runtimeName, workspace string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	bindings, err := bindingsFor(runtimeName, "bcgos")
+	bindings, err := bindingsFor(runtimeName, "bcgos", workspace)
 	if err != nil {
 		return Status{}, err
 	}
@@ -267,7 +267,7 @@ func commandFor(runtimeName, executable string) (string, error) {
 	return bindings[0].Command, nil
 }
 
-func bindingsFor(runtimeName, executable string) ([]binding, error) {
+func bindingsFor(runtimeName, executable string, workspacePath ...string) ([]binding, error) {
 	if strings.TrimSpace(executable) == "" {
 		return nil, errors.New("adapter executable must not be empty")
 	}
@@ -277,22 +277,30 @@ func bindingsFor(runtimeName, executable string) ([]binding, error) {
 	}
 	prefix := quoteCommandPath(abs) + " hook "
 	markers := adapterSourceMarker + " " + orchestrationStateMarker
+	workspaceArgument := ""
+	if len(workspacePath) > 0 && strings.TrimSpace(workspacePath[0]) != "" {
+		workspace, err := filepath.Abs(filepath.Clean(workspacePath[0]))
+		if err != nil {
+			return nil, fmt.Errorf("resolve adapter workspace: %w", err)
+		}
+		workspaceArgument = " " + quoteCommandPath(workspace)
+	}
 	switch runtimeName {
 	case "codex":
 		return []binding{
-			{NativeEvent: "SessionStart", Command: prefix + "session-start --runtime codex " + markers},
-			{NativeEvent: "UserPromptSubmit", Command: prefix + "codex context-injection " + markers},
-			{NativeEvent: "PreToolUse", Command: prefix + "codex pre-action-guard " + markers},
-			{NativeEvent: "PostToolUse", Command: prefix + "codex post-action-receipt " + markers},
-			{NativeEvent: "Stop", Command: prefix + "codex stop-finalization " + markers},
+			{NativeEvent: "SessionStart", Command: prefix + "session-start --runtime codex " + markers + workspaceArgument},
+			{NativeEvent: "UserPromptSubmit", Command: prefix + "codex context-injection " + markers + workspaceArgument},
+			{NativeEvent: "PreToolUse", Command: prefix + "codex pre-action-guard " + markers + workspaceArgument},
+			{NativeEvent: "PostToolUse", Command: prefix + "codex post-action-receipt " + markers + workspaceArgument},
+			{NativeEvent: "Stop", Command: prefix + "codex stop-finalization " + markers + workspaceArgument},
 		}, nil
 	case "claude":
 		return []binding{
-			{NativeEvent: "SessionStart", Command: prefix + "claude session-start " + markers},
-			{NativeEvent: "UserPromptSubmit", Command: prefix + "claude context-injection " + markers},
-			{NativeEvent: "PreToolUse", Command: prefix + "claude pre-action-guard " + markers},
-			{NativeEvent: "PostToolUse", Command: prefix + "claude post-action-receipt " + markers, Async: true},
-			{NativeEvent: "Stop", Command: prefix + "claude stop-finalization " + markers, Async: true},
+			{NativeEvent: "SessionStart", Command: prefix + "claude session-start " + markers + workspaceArgument},
+			{NativeEvent: "UserPromptSubmit", Command: prefix + "claude context-injection " + markers + workspaceArgument},
+			{NativeEvent: "PreToolUse", Command: prefix + "claude pre-action-guard " + markers + workspaceArgument},
+			{NativeEvent: "PostToolUse", Command: prefix + "claude post-action-receipt " + markers + workspaceArgument, Async: true},
+			{NativeEvent: "Stop", Command: prefix + "claude stop-finalization " + markers + workspaceArgument, Async: true},
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported runtime %q", runtimeName)
@@ -559,7 +567,7 @@ func isOwnedEventCommand(runtimeName, event string, value any) bool {
 		if !exists {
 			return false
 		}
-		return strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker+" "+orchestrationStateMarker) ||
+		return ownedMarkerMatches(command, suffix) ||
 			strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker) ||
 			command == "bcgos hook "+suffix
 	}
@@ -578,14 +586,34 @@ func isOwnedEventCommand(runtimeName, event string, value any) bool {
 		return false
 	}
 	if event == "SessionStart" &&
-		(strings.HasSuffix(command, " hook session-start --runtime claude "+adapterSourceMarker+" "+orchestrationStateMarker) ||
+		(ownedMarkerMatches(command, "session-start --runtime claude") ||
 			strings.HasSuffix(command, " hook session-start --runtime claude "+adapterSourceMarker) ||
 			command == "bcgos hook session-start --runtime claude") {
 		return true
 	}
-	return strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker+" "+orchestrationStateMarker) ||
+	return ownedMarkerMatches(command, suffix) ||
 		strings.HasSuffix(command, " hook "+suffix+" "+adapterSourceMarker) ||
 		command == "bcgos hook "+suffix
+}
+
+// ownedMarkerMatches accepts the generated absolute workspace argument after
+// the governance markers while keeping legacy marker-only commands readable.
+// The marker is intentionally required as a contiguous command segment; a
+// random mention in an argument cannot establish Maestro ownership.
+func ownedMarkerMatches(command, suffix string) bool {
+	marker := " hook " + suffix + " " + adapterSourceMarker + " " + orchestrationStateMarker
+	index := strings.LastIndex(command, marker)
+	if index < 0 {
+		return false
+	}
+	remainder := strings.TrimSpace(command[index+len(marker):])
+	if remainder == "" {
+		return true
+	}
+	if len(remainder) < 2 || (remainder[0] != '\'' && remainder[0] != '"') || remainder[len(remainder)-1] != remainder[0] {
+		return false
+	}
+	return strings.TrimSpace(remainder[1:len(remainder)-1]) != ""
 }
 
 func removeOwnedHooks(groups []any, runtimeName, event string) []any {
