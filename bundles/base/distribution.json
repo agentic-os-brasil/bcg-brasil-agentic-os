@@ -414,6 +414,10 @@
       "path": "schemas/scheduler-state.schema.json"
     },
     {
+      "source": "schemas/sharepoint-project-source-selection.schema.json",
+      "path": "schemas/sharepoint-project-source-selection.schema.json"
+    },
+    {
       "source": "schemas/sharepoint-work-catalog.schema.json",
       "path": "schemas/sharepoint-work-catalog.schema.json"
     },

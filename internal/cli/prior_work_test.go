@@ -102,6 +102,67 @@ func TestPriorWorkRequiresConfirmationExplicitIntentAndStdin(t *testing.T) {
 	}
 }
 
+func TestGuidedSharePointSourceSelectionWorksBeforeEnrollmentTrustIsAvailable(t *testing.T) {
+	dataRoot := t.TempDir()
+	workspacePath := filepath.Join(t.TempDir(), "maestro-project")
+	resolve := func() (string, error) { return dataRoot, nil }
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, resolve); code != ExitOK {
+		t.Fatalf("init exit=%d output=%s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runPriorWork(
+		[]string{"source", "status", "--workspace", workspacePath},
+		strings.NewReader(""), &output, &output, resolve,
+	); code != ExitOK || !strings.Contains(output.String(), `"state": "selection_required"`) || strings.Contains(output.String(), "trust anchor") {
+		t.Fatalf("initial source status exit=%d output=%s", code, output.String())
+	}
+
+	output.Reset()
+	selection := `{"schema_version":1,"folder_urls":["https://bcg.sharepoint.com/sites/project/Shared%20Documents/Authorized-Folder"]}`
+	if code := runPriorWork(
+		[]string{"source", "select", "--workspace", workspacePath, "--stdin", "--confirm"},
+		strings.NewReader(selection), &output, &output, resolve,
+	); code != ExitOK || !strings.Contains(output.String(), `"state": "selected"`) || !strings.Contains(output.String(), `"authorization_state": "pending_signed_enrollment"`) || strings.Contains(output.String(), "Authorized-Folder") {
+		t.Fatalf("source selection exit=%d output=%s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runSession([]string{"packet", workspacePath}, &output, &output, resolve); code != ExitOK || !strings.Contains(output.String(), `"sharepoint_source"`) || !strings.Contains(output.String(), `"state": "selected"`) || !strings.Contains(output.String(), `"folder_count": 1`) || strings.Contains(output.String(), "Authorized-Folder") {
+		t.Fatalf("session source projection exit=%d output=%s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runPriorWork(
+		[]string{"source", "defer", "--workspace", workspacePath, "--confirm"},
+		strings.NewReader(""), &output, &output, resolve,
+	); code != ExitOK || !strings.Contains(output.String(), `"state": "deferred"`) {
+		t.Fatalf("source defer exit=%d output=%s", code, output.String())
+	}
+}
+
+func TestGuidedSharePointSourceSelectionRequiresExplicitReview(t *testing.T) {
+	dataRoot := t.TempDir()
+	workspacePath := filepath.Join(t.TempDir(), "maestro-project")
+	resolve := func() (string, error) { return dataRoot, nil }
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, resolve); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	selection := `{"schema_version":1,"folder_urls":["https://bcg.sharepoint.com/sites/project/Shared%20Documents/Authorized-Folder"]}`
+	for _, args := range [][]string{
+		{"source", "select", "--workspace", workspacePath, "--stdin"},
+		{"source", "select", "--workspace", workspacePath, "--confirm"},
+		{"source", "defer", "--workspace", workspacePath},
+	} {
+		output.Reset()
+		if code := runPriorWork(args, strings.NewReader(selection), &output, &output, resolve); code != ExitUsage || !strings.Contains(output.String(), "--confirm") {
+			t.Fatalf("args=%v exit=%d output=%s", args, code, output.String())
+		}
+	}
+}
+
 func TestPriorWorkCLIEndToEndSignedImportAndSuzanoFind(t *testing.T) {
 	dataRoot := t.TempDir()
 	resolve := func() (string, error) { return dataRoot, nil }

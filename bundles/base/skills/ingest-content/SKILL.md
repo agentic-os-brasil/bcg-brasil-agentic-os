@@ -22,6 +22,12 @@ provider as a fallback.
 6. Return the extraction route, fidelity classification, provenance pointer,
    retained-artifact policy and any capability limitation.
 
+This skill ingests one explicitly selected local source. It must not crawl a
+SharePoint folder or turn a project-source pointer into document ingestion.
+For project SharePoint setup, use the guided `bcgos prior-work source` choice;
+that flow preserves SharePoint as authority and builds only a separately
+authorized metadata/pointer index through the Claude-only collector.
+
 ## Interaction profile
 
 Resolve the canonical user-local profile through `interaction-profile` before
@@ -41,6 +47,7 @@ data boundaries or bypasses release verification.
 
 ## Current delivery boundary
 
-This skill defines the product route. The managed Docling runtime pack and the
-`bcgos ingest` command are not installed yet, so the runtime must report the
-capability as unavailable rather than emulate ingestion.
+This skill defines the product route. The `bcgos ingest` command is present,
+but the managed Docling runtime pack is not yet available in the release; the
+runtime therefore reports the conversion capability as unavailable rather
+than emulating ingestion.

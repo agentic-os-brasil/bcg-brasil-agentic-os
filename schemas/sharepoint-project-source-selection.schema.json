@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os-brasil.local/schemas/sharepoint-project-source-selection.schema.json",
+  "title": "Maestro guided SharePoint project source selection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "folder_urls"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "folder_urls": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^https://[^/?#]+\\.sharepoint\\.com/(sites|teams)/[^/?#]+/.+/.+$"
+      }
+    }
+  }
+}

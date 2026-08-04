@@ -77,6 +77,33 @@ The bundle is a central navigation node across the enrolled SharePoint roots,
 but it is selected only for explicit prior-work retrieval. It is not injected
 at Session Start, searched for ordinary questions or traversed speculatively.
 
+## Guided project-source selection
+
+After the owner interview is confirmed, Session Start asks once whether the
+owner wants to point Maestro to SharePoint folders authorized for the current
+project or defer. This is source setup, not collection.
+
+An accepted selection:
+
+- is bound to the exact initialized workspace ID derived by `bcgos`;
+- accepts at most 32 canonical HTTPS folder URLs below an explicit SharePoint
+  site or team library, through standard input and an explicit confirmation;
+- rejects tenant/site roots, sharing links with query or fragment data,
+  credentials, non-SharePoint origins and unknown fields;
+- stores immutable, versioned private selections plus one atomic active
+  pointer below `source-selections/<workspace-id>/`;
+- exposes to Session Start only state, folder count and a private local
+  pointer — never URLs, names, paths or document content; and
+- may be deferred or revised without broad discovery or silent ingestion.
+
+The selection grants no SharePoint enrollment, collection, indexing or
+retention authority. An approved authority must still resolve the reviewed
+folder pointers to opaque roots and sign the enrollment. Only a qualified
+Claude collector may enumerate those roots. Codex may record a local choice
+but collection remains `unavailable/corporate_policy`; it may query only an
+already verified local index. Session Start never resolves URLs, calls
+SharePoint, imports a snapshot or compiles the index.
+
 ## Enrollment and least privilege
 
 “Map all folders” means all folders recursively reachable under an explicit
@@ -296,6 +323,9 @@ The intended CLI contract is:
 
 ```text
 bcgos prior-work actor
+bcgos prior-work source status --workspace <path>
+bcgos prior-work source select --workspace <path> --stdin --confirm
+bcgos prior-work source defer --workspace <path> --confirm
 bcgos prior-work enroll --stdin --confirm
 bcgos prior-work status
 bcgos prior-work import --snapshot <normalized-json> --receipt <signed-adapter-command-receipt>
@@ -333,6 +363,12 @@ Claude with the approved SharePoint connection.
 11. An adapter-command receipt can authorize a bounded local import but cannot
     promote the SharePoint collector from `unavailable`; native qualification
     remains separate evidence.
+12. A first-use source selection persists only exact canonical folder pointers,
+    Session Start exposes no URL or project name, and the selection alone cannot
+    authorize enrollment or collection.
+13. A deferred choice is remembered and not asked again automatically; a later
+    confirmed selection creates a new immutable version without broadening any
+    signed enrollment.
 
 ## Delivery boundary
 

@@ -64,6 +64,16 @@ The runtime asks only the next unanswered question, then waits; after all
 answers exist it requests explicit review rather than silently activating the
 profile.
 
+After that reviewed owner onboarding becomes `complete`, the workspace has a
+separate first-use source step. Session Start asks once whether the owner wants
+to indicate exact authorized SharePoint project folders or defer. This choice
+is not an Owner Context facet and never changes the confirmed profile digest.
+The source contract stores only a versioned private selection bound to the
+initialized workspace, exposes only bounded pointer state to Session Start and
+performs no discovery, reading, copying, ingestion or collection. A selected
+folder still requires an independently signed enrollment and a qualified
+Claude collector; Codex collection remains unavailable by corporate policy.
+
 ## Refinement policy
 
 Every self change must be explainable, versioned by its future owning adapter

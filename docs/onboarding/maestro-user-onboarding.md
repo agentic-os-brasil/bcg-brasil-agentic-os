@@ -216,6 +216,39 @@ O contexto do owner é local, inspecionável e limitado às facetas autorizadas.
 O atlas navega fontes derivadas e governadas; ele não deve ser preenchido com
 segredos, dumps de conversa ou conteúdo de cliente sem política e consentimento.
 
+### Passo 4.1 — Escolha as fontes SharePoint do projeto
+
+Depois que a entrevista do owner estiver revisada e confirmada, o Maestro
+pergunta uma vez se você quer indicar as pastas autorizadas do SharePoint deste
+projeto ou começar sem essa fonte. Você pode adiar sem perder funcionalidade;
+essa escolha fica registrada e o Maestro não repete a pergunta em toda sessão.
+
+Para inspecionar o estado:
+
+```text
+bcgos prior-work source status --workspace <workspace>
+```
+
+Se você escolher conectar, o Maestro mostra as URLs canônicas das pastas para
+revisão e envia um JSON estrito por entrada padrão para:
+
+```text
+bcgos prior-work source select --workspace <workspace> --stdin --confirm
+```
+
+Se preferir começar sem a fonte:
+
+```text
+bcgos prior-work source defer --workspace <workspace> --confirm
+```
+
+Essa etapa registra somente ponteiros exatos em armazenamento privado local.
+Ela não descobre outras pastas, não lê nem copia documentos e não concede
+autoridade de coleta. O SharePoint continua sendo a fonte. Um enrollment
+assinado ainda é obrigatório antes que um coletor Claude qualificado possa
+produzir o índice local de metadados e ponteiros. Codex não coleta SharePoint;
+ele pode consultar apenas um índice local já verificado.
+
 ### Passo 5 — Faça uma primeira tarefa pequena
 
 Escolha uma tarefa que possa ser verificada em menos de uma hora: organizar um

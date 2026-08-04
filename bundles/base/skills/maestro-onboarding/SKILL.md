@@ -83,6 +83,23 @@ síntese ou transcrição para revisão antes de propor qualquer gravação loca
   identity is known. Offer the complete track later only when it is useful;
   never nag or silently upgrade it.
 - A confirmed **complete** track has the full initial professional baseline.
+- After either track is confirmed, inspect the deterministic project-source
+  state with `bcgos prior-work source status --workspace <workspace>`. If it is
+  `selection_required`, ask exactly one question and wait: **“Você quer indicar
+  as pastas autorizadas do SharePoint deste projeto agora ou prefere começar
+  sem essa fonte?”**
+  - If the owner chooses SharePoint, explain that the selection records exact
+    folder pointers only and does not read, copy, upload or ingest content.
+    Review the canonical folder URLs with the owner, then send strict JSON
+    (`schema_version: 1`, `folder_urls`) through standard input to
+    `bcgos prior-work source select --workspace <workspace> --stdin --confirm`.
+  - If the owner prefers to start clean, record the choice with
+    `bcgos prior-work source defer --workspace <workspace> --confirm` and do
+    not ask again automatically.
+  - A selection is not enrollment or collection authority. SharePoint remains
+    authoritative; only a signed enrollment plus a qualified Claude collector
+    can build the local metadata/pointer index. Codex collection remains
+    `unavailable/corporate_policy` and no fallback is allowed.
 - Immediately after confirmation, always invite the owner to name the first
   two internal agents now or defer them: **“Quer dar nome e avatar ao Walter e
   ao Darwin agora, ou prefere deixar isso para depois?”** This is an invitation,
@@ -125,5 +142,7 @@ síntese ou transcrição para revisão antes de propor qualquer gravação loca
   Maestro workspace. Keep the conversation focused on the owner's
   professional work.
 - Do not ingest, copy or upload a selected source during onboarding.
+- Do not discover SharePoint broadly, resolve a selected folder, call a
+  collector or claim that an index exists during onboarding.
 - Do not infer a psychological profile.
 - Do not bypass the owner's review digest or runtime trust prompt.
