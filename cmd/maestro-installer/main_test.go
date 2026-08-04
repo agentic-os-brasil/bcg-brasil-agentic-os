@@ -110,7 +110,8 @@ func TestClaudeCodeWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.Scheme != "claude" || value.Host != "code" || value.Path != "/new" || value.Query().Get("folder") != workspacePath || !strings.Contains(value.Query().Get("q"), "workspace Maestro") || !strings.Contains(value.Query().Get("q"), "Comece agora pela primeira pergunta de onboarding") {
+	prompt := value.Query().Get("q")
+	if value.Scheme != "claude" || value.Host != "code" || value.Path != "/new" || value.Query().Get("folder") != workspacePath || !strings.Contains(prompt, "workspace Maestro") || !strings.Contains(prompt, "# 🎼 Bem-vindo ao Maestro") || !strings.Contains(prompt, "/agent-identity-setup") || !strings.Contains(prompt, "Faça somente a primeira pergunta") || !strings.Contains(prompt, "leia CLAUDE.md") || strings.Contains(prompt, "leia AGENTS.md") {
 		t.Fatalf("deep link = %q", value.String())
 	}
 }
