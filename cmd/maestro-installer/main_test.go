@@ -110,7 +110,7 @@ func TestClaudeCodeWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.Scheme != "claude" || value.Host != "code" || value.Path != "/new" || value.Query().Get("folder") != workspacePath || !strings.Contains(value.Query().Get("q"), "workspace Maestro") {
+	if value.Scheme != "claude" || value.Host != "code" || value.Path != "/new" || value.Query().Get("folder") != workspacePath || !strings.Contains(value.Query().Get("q"), "workspace Maestro") || !strings.Contains(value.Query().Get("q"), "Comece agora pela primeira pergunta de onboarding") {
 		t.Fatalf("deep link = %q", value.String())
 	}
 }

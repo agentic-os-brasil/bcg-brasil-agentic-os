@@ -1203,7 +1203,7 @@ func claudeCodeWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "claude", Host: "code", Path: "/new"}
 	query := deepLink.Query()
 	query.Set("folder", workspacePath)
-	query.Set("q", "Você está no workspace Maestro recém-criado. Confirme este diretório no Claude Desktop; depois revise os hooks locais do Maestro quando forem apresentados, leia AGENTS.md e conduza a entrevista inicial antes da primeira tarefa profissional.")
+	query.Set("q", "INÍCIO GUIADO DO MAESTRO\n\nVocê está no workspace Maestro recém-criado. Depois que o owner confirmar este diretório no Claude Desktop:\n1. Apresente-se como Maestro e confirme que está ativo neste workspace — nunca como Kowalski.\n2. Revise os hooks locais quando o runtime os apresentar; não peça nem conceda confiança global.\n3. Leia AGENTS.md e inicie a entrevista inicial do owner, com uma pergunta por vez.\n4. Não inicie tarefa profissional até a entrevista estar encaminhada ou o owner pedir explicitamente para adiar.\n\nComece agora pela primeira pergunta de onboarding.")
 	deepLink.RawQuery = query.Encode()
 	return deepLink.String()
 }
