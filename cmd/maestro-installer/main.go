@@ -1203,22 +1203,18 @@ func claudeCodeWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "claude", Host: "code", Path: "/new"}
 	query := deepLink.Query()
 	query.Set("folder", workspacePath)
-	query.Set("q", claudeDesktopKickoffPrompt)
+	query.Set("q", maestroHumanKickoffPrompt)
 	deepLink.RawQuery = query.Encode()
 	return deepLink.String()
 }
 
-const claudeDesktopKickoffPrompt = `INÍCIO GUIADO DO MAESTRO
-
-Você está no workspace Maestro recém-criado. Leia CLAUDE.md e, em seguida, siga a skill instalada /maestro-onboarding para conduzir o onboarding do owner. Não se apresente como Kowalski.
-
-Não inicie tarefa profissional, não acesse memória externa, não ingira a fonte de memória escolhida e não conceda confiança global. A skill define a abertura estruturada, a escolha explícita entre entrevista curta e completa, o roteiro uma pergunta por vez e a confirmação local do perfil.`
+const maestroHumanKickoffPrompt = "Olá, Maestro! Estou chegando agora e acabei de fazer minha instalação. Me direcione pelos próximos passos; não vejo a hora de gerar valor ao acionista."
 
 func codexWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "codex", Host: "new"}
 	query := deepLink.Query()
 	query.Set("path", workspacePath)
-	query.Set("prompt", "Você está no workspace Maestro recém-criado. Leia AGENTS.md e siga a skill instalada maestro-onboarding para conduzir o onboarding do owner. Não inicie tarefa profissional, não acesse memória externa, não ingira fontes e não conceda confiança global. A escolha é entre a entrevista curta e a completa; faça uma pergunta por vez e aguarde a confirmação do owner antes de propor trabalho.")
+	query.Set("prompt", maestroHumanKickoffPrompt)
 	deepLink.RawQuery = query.Encode()
 	return deepLink.String()
 }
