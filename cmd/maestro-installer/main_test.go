@@ -104,6 +104,17 @@ func TestCodexWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
+	workspacePath := "/Users/pilot/Projects/maestro workspace"
+	value, err := url.Parse(claudeCodeWorkspaceLink(workspacePath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.Scheme != "claude" || value.Host != "code" || value.Path != "/new" || value.Query().Get("folder") != workspacePath || !strings.Contains(value.Query().Get("q"), "workspace Maestro") || !strings.Contains(value.Query().Get("q"), "Comece agora pela primeira pergunta de onboarding") {
+		t.Fatalf("deep link = %q", value.String())
+	}
+}
+
 func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "data")

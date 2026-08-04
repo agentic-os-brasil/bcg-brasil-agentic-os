@@ -75,6 +75,7 @@
     if (!copy) {
       scene.hidden = true;
       setup.classList.remove('is-provisioning');
+	  document.body.classList.remove('is-workspace-provisioning');
       return;
     }
     document.querySelector('#workspace-provisioning-kicker').textContent = copy[0];
@@ -83,6 +84,7 @@
     scene.dataset.phase = phase;
     scene.hidden = false;
     setup.classList.add('is-provisioning');
+	  document.body.classList.add('is-workspace-provisioning');
   }
 
   function pause(milliseconds) {
@@ -383,6 +385,7 @@
     const button = document.querySelector('[data-action="install"]');
     button.disabled = true;
     setButtonLabel(button, 'Instalando…');
+	  document.body.classList.add('is-installing');
     try {
       const response = await fetch('/api/install', requestOptions('POST', { plan_digest: planDigest }));
       const payload = await response.json();
@@ -400,6 +403,7 @@
       showRuntimeStage('install', '');
       setButtonLabel(button, 'Instalar Maestro');
       button.disabled = false;
+	  document.body.classList.remove('is-installing');
     }
   }
 
