@@ -21,20 +21,51 @@
   let installedCLIPath = '';
   let runtimeTargets = [];
   let defaultWorkspace = '';
+  let verificationRun = 0;
   const platform = /Win/i.test(navigator.userAgent) ? 'Windows' : /Mac/i.test(navigator.userAgent) ? 'macOS' : 'seu dispositivo';
 
   platformLabel.textContent = platform;
   destination.textContent = platform === 'Windows' ? '%LOCALAPPDATA%\\BCGOS' : platform === 'macOS' ? '~/Library/Application Support/BCGOS' : '~/.local/share/bcgos';
 
+  const checkNames = ['release', 'signature', 'space'];
+
+  function setCheckState(name, state, label) {
+    const item = document.querySelector(`.check-item[data-check="${name}"]`);
+    if (!item) return;
+    const icon = item.querySelector('.check-icon');
+    const status = item.querySelector('strong');
+    item.classList.remove('is-checking', 'is-ready', 'is-simulated', 'is-error');
+    item.classList.add(`is-${state}`);
+    const copy = {
+      idle: ['◌', 'aguardando'],
+      checking: ['◌', 'analisando'],
+      ready: ['✓', 'confirmado'],
+      simulated: ['◇', 'ensaio'],
+      error: ['×', 'não concluído'],
+    }[state] || ['◌', 'aguardando'];
+    icon.textContent = copy[0];
+    status.textContent = label || copy[1];
+    status.setAttribute('aria-label', `${item.querySelector('b')?.textContent || name}: ${status.textContent}`);
+  }
+
+  function resetChecks() {
+    checkNames.forEach(name => setCheckState(name, 'idle'));
+  }
+
   function markChecks(status) {
-    document.querySelectorAll('.check-item').forEach(item => {
-      const isReady = status === 'ready';
-      const isSimulated = status === 'simulated';
-      item.querySelector('.check-icon').textContent = isReady ? '✓' : isSimulated ? '◇' : '◌';
-      item.querySelector('.check-icon').style.color = isReady ? 'var(--teal)' : isSimulated ? 'var(--gold)' : '';
-      item.querySelector('strong').textContent = isReady ? 'pronto' : isSimulated ? 'simulado' : 'aguardando';
-      item.querySelector('strong').style.color = isReady ? 'var(--teal)' : isSimulated ? 'var(--gold)' : '';
-    });
+    const state = status === 'ready' ? 'ready' : status === 'simulated' ? 'simulated' : status === 'error' ? 'error' : 'idle';
+    checkNames.forEach(name => setCheckState(name, state));
+  }
+
+  async function animateCheckProgress(run) {
+    resetChecks();
+    // The API is atomic, but the UI gives each contract a visible handoff so
+    // the owner can follow the verification before the next scene opens.
+    for (const name of checkNames) {
+      if (run !== verificationRun) return;
+      setCheckState(name, 'checking');
+      await pause(340);
+    }
   }
 
   function showError(panel, message) {
@@ -303,17 +334,17 @@
     if (name === 'check') setProgress('verify');
     if (name === 'install') setProgress('install');
     if (name === 'finish') setProgress('complete');
-    if (name === 'check' && mode === 'preview' && !runtime) {
-      window.setTimeout(() => {
-        document.querySelectorAll('.check-item').forEach((item, index) => {
-          window.setTimeout(() => {
-            item.querySelector('.check-icon').textContent = '◇';
-            item.querySelector('.check-icon').style.color = 'var(--gold)';
-            item.querySelector('strong').textContent = 'simulado';
-            item.querySelector('strong').style.color = 'var(--gold)';
-          }, index * 320);
-        });
-      }, 180);
+    if (name === 'check' && !verified) {
+      verificationRun += 1;
+      resetChecks();
+      if (mode === 'preview' && !runtime) {
+        const run = verificationRun;
+        window.setTimeout(async () => {
+          if (runtime) return;
+          await animateCheckProgress(run);
+          if (run === verificationRun && !runtime) markChecks('simulated');
+        }, 180);
+      }
     }
   }
 
@@ -323,6 +354,7 @@
       const response = await fetch('/api/state');
       if (!response.ok) return;
       const state = await response.json();
+      const wasRuntime = runtime;
       runtime = true;
       simulation = state.mode === 'simulation';
       installed = Boolean(state.installed) && !simulation;
@@ -337,6 +369,10 @@
       runtimePlatform = state.platform || '';
       platformLabel.textContent = state.platform || platform;
       destination.textContent = state.managed_root || destination.textContent;
+      if (!wasRuntime && !verified) {
+        verificationRun += 1;
+        resetChecks();
+      }
       if (installed) setFirstCommand(installedCLIPath);
     } catch (_) {
       // Opening index.html directly is a deliberate, non-mutating preview.
@@ -360,15 +396,20 @@
     button.disabled = true;
     setButtonLabel(button, 'Conferindo…');
     try {
+      const run = ++verificationRun;
+      const progress = animateCheckProgress(run);
       const response = await fetch('/api/verify', requestOptions('POST'));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível verificar este release.');
+      await progress;
       markChecks(simulation ? 'simulated' : 'ready');
       verified = true;
       planDigest = payload.plan_digest || '';
       setProgress('install');
       show('install');
     } catch (error) {
+      verificationRun += 1;
+      markChecks('error');
       showError('check', error.message);
     } finally {
       showRuntimeStage('check', '');

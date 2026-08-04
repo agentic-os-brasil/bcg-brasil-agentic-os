@@ -128,3 +128,48 @@ html,body{height:100%;overflow:hidden}
 @media(max-width:980px){html,body{height:auto;overflow:auto}.shell{height:auto;min-height:100vh;overflow:visible}.content{display:block;height:auto;min-height:100vh;overflow:visible}.panel{height:auto;min-height:0;overflow:visible}.footer{display:flex}}
 .activation-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;width:min(760px,100%);margin:30px auto 4px;border:1px solid var(--line);background:var(--line);text-align:left}.activation-summary article{min-width:0;padding:17px 18px;background:rgba(7,24,34,.96)}.activation-summary span,.activation-summary strong,.activation-summary small{display:block}.activation-summary span{color:#789092;font-size:9px;font-weight:800;letter-spacing:.14em}.activation-summary strong{margin-top:7px;color:var(--teal);font-size:11px;letter-spacing:.08em}.activation-summary small{margin-top:7px;color:#91a8a8;font-size:10px;line-height:1.5}.activation-summary article:nth-child(3) strong,.activation-summary article:nth-child(4) strong{color:var(--gold)}
 @media(max-width:700px){.activation-summary{grid-template-columns:1fr}}
+
+/* The Maestro is already conducting the scene on the opening screen. Motion
+   is staged and purposeful: the owner sees the product wake up, then the
+   content arrives in the same order in which the installer works. */
+.topbar{animation:topbar-arrival .7s cubic-bezier(.23,1,.32,1) both}
+.status-dot{animation:signal-pulse 2.8s ease-in-out infinite}
+.connection-badge{animation:badge-breathe 4.2s ease-in-out infinite}
+.panel-welcome.is-visible .hero-copy>*{animation:welcome-rise .7s cubic-bezier(.23,1,.32,1) both}
+.panel-welcome.is-visible .hero-copy>h1{animation-delay:.08s}
+.panel-welcome.is-visible .hero-copy>.lead{animation-delay:.16s}
+.panel-welcome.is-visible .hero-copy>.hero-actions{animation-delay:.24s}
+.panel-welcome.is-visible .hero-copy>.micro-proof{animation-delay:.34s}
+.panel-welcome.is-visible .hero-art{animation:welcome-art-arrival .95s cubic-bezier(.23,1,.32,1) both,hero-breathe 8s ease-in-out 1s infinite}
+.panel-welcome.is-visible .hero-art:before{animation:orbit-breathe 10s ease-in-out infinite alternate}
+.panel-welcome.is-visible .halo-one{animation:halo-orbit 16s linear infinite}
+.panel-welcome.is-visible .halo-two{animation:halo-orbit-reverse 19s linear infinite}
+.panel-welcome.is-visible .trust-row article{animation:welcome-rise .62s cubic-bezier(.23,1,.32,1) both}
+.panel-welcome.is-visible .trust-row article:nth-child(1){animation-delay:.42s}
+.panel-welcome.is-visible .trust-row article:nth-child(2){animation-delay:.5s}
+.panel-welcome.is-visible .trust-row article:nth-child(3){animation-delay:.58s}
+
+/* Verification is a live handoff, not three static alert cards. */
+.check-item{position:relative;overflow:hidden;transition:border-color .3s ease,background .3s ease,transform .3s ease,box-shadow .3s ease}
+.check-item.is-checking{border-bottom-color:rgba(49,224,181,.62);background:linear-gradient(90deg,rgba(49,224,181,.08),transparent 72%);transform:translateX(3px);box-shadow:inset 3px 0 0 var(--teal),0 10px 28px rgba(49,224,181,.06)}
+.check-item.is-checking:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,transparent 0 38%,rgba(49,224,181,.18) 50%,transparent 62%);transform:translateX(-130%);animation:check-scan 1.7s ease-in-out infinite}
+.check-item.is-checking .check-icon{color:var(--teal);animation:check-beacon 1.15s ease-in-out infinite}
+.check-item.is-checking strong{color:var(--teal)}
+.check-item.is-ready{border-bottom-color:rgba(49,224,181,.42);background:linear-gradient(90deg,rgba(49,224,181,.045),transparent 72%);animation:check-confirm .5s cubic-bezier(.23,1,.32,1) both}
+.check-item.is-ready .check-icon,.check-item.is-ready strong{color:var(--teal)}
+.check-item.is-simulated{border-bottom-color:rgba(155,216,200,.35);background:linear-gradient(90deg,rgba(155,216,200,.05),transparent 72%)}
+.check-item.is-simulated .check-icon,.check-item.is-simulated strong{color:var(--gold)}
+.check-item.is-error{border-bottom-color:rgba(245,133,118,.5);background:linear-gradient(90deg,rgba(245,133,118,.08),transparent 72%)}
+.check-item.is-error .check-icon,.check-item.is-error strong{color:#ffb4a6}
+
+@keyframes topbar-arrival{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+@keyframes badge-breathe{0%,100%{box-shadow:0 0 0 rgba(49,224,181,0)}50%{box-shadow:0 0 22px rgba(49,224,181,.14)}}
+@keyframes welcome-rise{from{opacity:0;transform:translateY(18px);filter:blur(4px)}to{opacity:1;transform:none;filter:none}}
+@keyframes welcome-art-arrival{from{opacity:0;transform:translate3d(18px,8px,0) scale(.96);filter:blur(4px)}to{opacity:1;transform:none;filter:none}}
+@keyframes hero-breathe{0%,100%{box-shadow:inset 0 0 60px rgba(77,212,204,.04),0 0 0 rgba(49,224,181,0)}50%{box-shadow:inset 0 0 80px rgba(77,212,204,.1),0 0 32px rgba(49,224,181,.08)}}
+@keyframes orbit-breathe{from{transform:rotate(-19deg) scale(.98);opacity:.55}to{transform:rotate(-15deg) scale(1.04);opacity:.92}}
+@keyframes halo-orbit{to{transform:translate(-50%,-50%) rotate(336deg)}}
+@keyframes halo-orbit-reverse{to{transform:translate(-50%,-50%) rotate(-384deg)}}
+@keyframes check-scan{0%,20%{transform:translateX(-130%)}75%,100%{transform:translateX(130%)}}
+@keyframes check-beacon{0%,100%{opacity:.55;transform:scale(.9)}50%{opacity:1;transform:scale(1.18);text-shadow:0 0 18px rgba(49,224,181,.8)}}
+@keyframes check-confirm{from{opacity:.56;transform:translateX(3px)}to{opacity:1;transform:none}}
