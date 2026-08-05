@@ -2,6 +2,7 @@ package memory
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,5 +60,81 @@ func TestAllInvalidCommitsAreCorruptNotMissing(t *testing.T) {
 	}
 	if _, err := engine.AssembleContext("case-a"); !errors.Is(err, ErrNoValidCommit) {
 		t.Fatalf("context corruption error = %v", err)
+	}
+}
+
+func TestStatusSeparatesAttestedContinuitySignalsFromLegacyCaptures(t *testing.T) {
+	engine := testEngine(t)
+	now := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
+	if _, err := engine.Capture(Capture{WorkspaceID: "case-a", RecordedAt: now, Kind: "legacy", Text: "legacy", Sanitized: true}); err != nil {
+		t.Fatal(err)
+	}
+	attestor := CaptureAttestor{Root: engine.Root}
+	sealed, err := attestor.Seal(Capture{WorkspaceID: "case-a", RecordedAt: now, Kind: "skill_route", Text: "case-kickoff", Sanitized: true, ProducerID: "claude.context-injection", SanitizerID: SkillRouteSanitizerID, SourceDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Capture(sealed); err != nil {
+		t.Fatal(err)
+	}
+	status, err := engine.Status("case-a")
+	if err != nil || status.CaptureFiles != 2 || status.AttestedCaptureFiles != 1 {
+		t.Fatalf("status = %#v, err = %v", status, err)
+	}
+}
+
+func TestContinuityStatusVerifiesAndBoundsAttestedCaptures(t *testing.T) {
+	engine := testEngine(t)
+	now := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
+	attestor := CaptureAttestor{Root: engine.Root}
+	sealed, err := attestor.Seal(Capture{WorkspaceID: "case-a", RecordedAt: now, Kind: "skill_route", Text: "case-kickoff", Sanitized: true, ProducerID: "claude.context-injection", SanitizerID: SkillRouteSanitizerID, SourceDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Capture(sealed); err != nil {
+		t.Fatal(err)
+	}
+	status, err := engine.ContinuityStatus("case-a")
+	if err != nil || status.AttestedCaptureFiles != 1 || status.State != "empty" {
+		t.Fatalf("continuity status=%#v err=%v", status, err)
+	}
+	path := filepath.Join(engine.workspaceRoot("case-a"), "l1", "attested-captures", "2026-08-06.jsonl")
+	if err := os.WriteFile(path, []byte(`{"schema_version":2`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.ContinuityStatus("case-a"); err == nil {
+		t.Fatal("truncated attested capture was accepted as continuity evidence")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index <= MaximumContinuityCaptureFiles; index++ {
+		candidate := sealed
+		candidate.RecordedAt = now.AddDate(0, 0, index+1)
+		candidate, err = attestor.Seal(candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := engine.Capture(candidate); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := engine.ContinuityStatus("case-a"); err == nil {
+		t.Fatal("unbounded attested capture history was accepted")
+	}
+	if err := os.RemoveAll(filepath.Join(engine.workspaceRoot("case-a"), "l1", "attested-captures")); err != nil {
+		t.Fatal(err)
+	}
+	commits := filepath.Join(engine.workspaceRoot("case-a"), "commits")
+	if err := os.MkdirAll(commits, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index <= MaximumContinuityCommitEntries; index++ {
+		if err := os.WriteFile(filepath.Join(commits, fmt.Sprintf("20260805T120000.%09dZ-overflow.json", index)), []byte(`{}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := engine.ContinuityStatus("case-a"); err == nil {
+		t.Fatal("unbounded memory commit history was accepted")
 	}
 }

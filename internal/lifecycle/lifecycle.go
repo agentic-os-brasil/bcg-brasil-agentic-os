@@ -3,11 +3,13 @@
 package lifecycle
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,6 +28,10 @@ const (
 	// receipt. It deliberately does not claim that a qualifying native runtime
 	// session invoked that command.
 	AdapterCommand = "adapter_command"
+	// MaximumDiagnosticReceiptEntries bounds a read-only diagnostic projection;
+	// excess historical receipts fail closed rather than being enumerated.
+	MaximumDiagnosticReceiptEntries = 64
+	maximumReceiptBytes             = 8 << 10
 )
 
 var (
@@ -74,11 +80,11 @@ func Record(dataRoot, workspaceID string, receipt Receipt) (Receipt, error) {
 	if err != nil {
 		return Receipt{}, err
 	}
-	if err := validateReceipt(receipt); err != nil {
-		return Receipt{}, err
-	}
 	if receipt.OccurredAt.IsZero() {
 		receipt.OccurredAt = time.Now().UTC()
+	}
+	if err := validateReceipt(receipt); err != nil {
+		return Receipt{}, err
 	}
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return Receipt{}, fmt.Errorf("create receipt root: %w", err)
@@ -128,17 +134,49 @@ func Record(dataRoot, workspaceID string, receipt Receipt) (Receipt, error) {
 }
 
 func Diagnose(dataRoot, workspaceID string) (Summary, error) {
+	return diagnose(dataRoot, workspaceID, "")
+}
+
+// DiagnoseRuntime reports bounded adapter-command evidence for one runtime.
+// It does not promote a receipt to native observation.
+func DiagnoseRuntime(dataRoot, workspaceID, runtime string) (Summary, error) {
+	if runtime != "claude" && runtime != "codex" {
+		return Summary{}, fmt.Errorf("unsupported lifecycle runtime %q", runtime)
+	}
+	return diagnose(dataRoot, workspaceID, runtime)
+}
+
+func diagnose(dataRoot, workspaceID, runtime string) (Summary, error) {
 	root, err := validatedReceiptRoot(dataRoot, workspaceID)
 	if err != nil {
 		return Summary{}, err
 	}
 	summary := Summary{State: "unavailable", ReceiptRoot: root}
-	entries, err := os.ReadDir(root)
+	before, err := os.Lstat(root)
 	if errors.Is(err, os.ErrNotExist) {
 		return summary, nil
 	}
 	if err != nil {
 		return Summary{}, fmt.Errorf("read receipt root: %w", err)
+	}
+	if !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+		return Summary{}, errors.New("lifecycle receipt root is not private")
+	}
+	directory, err := os.Open(root)
+	if err != nil {
+		return Summary{}, fmt.Errorf("open receipt root: %w", err)
+	}
+	defer directory.Close()
+	opened, err := directory.Stat()
+	if err != nil || !os.SameFile(before, opened) {
+		return Summary{}, errors.New("lifecycle receipt root changed during secure open")
+	}
+	entries, err := directory.ReadDir(MaximumDiagnosticReceiptEntries + 1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return Summary{}, fmt.Errorf("read bounded receipt root: %w", err)
+	}
+	if len(entries) > MaximumDiagnosticReceiptEntries {
+		return Summary{}, errors.New("lifecycle receipt history exceeds diagnostic scan bound")
 	}
 	events := map[string]bool{}
 	provenance := map[string]bool{}
@@ -154,6 +192,9 @@ func Diagnose(dataRoot, workspaceID string) (Summary, error) {
 		expectedName := receipt.Event + "-" + receipt.IdempotencyKey + ".json"
 		if entry.Name() != expectedName {
 			return Summary{}, fmt.Errorf("receipt filename does not match bounded metadata")
+		}
+		if runtime != "" && receipt.Runtime != runtime {
+			continue
 		}
 		events[receipt.Event] = true
 		provenance[receipt.Provenance] = true
@@ -208,7 +249,7 @@ func validateReceipt(receipt Receipt) error {
 	if !validEvents[receipt.Event] {
 		return fmt.Errorf("unsupported lifecycle event %q", receipt.Event)
 	}
-	if receipt.State != "observed" {
+	if receipt.State != "observed" || receipt.OccurredAt.IsZero() {
 		return fmt.Errorf("unsupported receipt state %q", receipt.State)
 	}
 	if !validProvenance[receipt.Provenance] {
@@ -227,13 +268,38 @@ func validateReceipt(receipt Receipt) error {
 }
 
 func readReceipt(path string) (Receipt, error) {
-	body, err := os.ReadFile(path)
+	before, err := os.Lstat(path)
 	if err != nil {
 		return Receipt{}, err
 	}
-	var receipt Receipt
-	if err := json.Unmarshal(body, &receipt); err != nil {
+	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() || before.Size() > maximumReceiptBytes {
+		return Receipt{}, errors.New("lifecycle receipt is not a bounded regular file")
+	}
+	file, err := os.Open(path)
+	if err != nil {
 		return Receipt{}, err
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil || !os.SameFile(before, opened) {
+		return Receipt{}, errors.New("lifecycle receipt changed during secure open")
+	}
+	body, err := io.ReadAll(io.LimitReader(file, maximumReceiptBytes+1))
+	if err != nil {
+		return Receipt{}, err
+	}
+	if len(body) > maximumReceiptBytes {
+		return Receipt{}, errors.New("lifecycle receipt exceeds bounded read limit")
+	}
+	var receipt Receipt
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&receipt); err != nil {
+		return Receipt{}, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return Receipt{}, errors.New("lifecycle receipt contains multiple JSON values")
 	}
 	if err := validateReceipt(receipt); err != nil {
 		return Receipt{}, err

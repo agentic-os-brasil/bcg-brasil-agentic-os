@@ -140,7 +140,7 @@ attestation is not cryptographic principal authentication.
 | ✅ Canary contract | The local store can aggregate typed outcomes, capability failures, interventions and receipt metadata — native telemetry remains unavailable and no work content is exported. |
 | ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |
 | ✅ Darwin 🧬 operational surgeon | The same Darwin contract supports interactive and headless housekeeping with scoped `health/maestro-system` repairs and metadata-only receipts; native runtime invocation remains unavailable. |
-| ✅ Local continuity loop | An explicitly enrolled macOS Canary captures bounded skill-route metadata, runs deterministic three-hour L1/checkpoint work while idle, injects only valid generated memory at the next Session Start and runs bounded Darwin daily/weekly maintenance. Model-backed deep dreaming, Walter weekly review and native qualification remain unavailable. |
+| ✅ Local continuity loop | `bcgos maestro status` derives calibration, open work/checkpoint presence, attested signals, memory, maintenance and runtime evidence from their existing local authorities. An explicitly enrolled macOS Canary may run deterministic three-hour L1/checkpoint work while idle. Model-backed deep dreaming, lifetime promotion, Walter weekly review and native qualification remain unavailable. |
 | ✅ Local ingestion | Provider-neutral contract, Docling-first fallback selector, bounded MarkItDown adapter and fail-closed `bcgos ingest`; conversion remains unavailable until an approved managed runtime pack is verified. |
 | ✅ Governed prior-work retrieval | Enrollment, signed snapshot import, deterministic local indexing, explicit search, freshness, revocation and scheduling are implemented and locally validated. Native Claude collection remains unavailable pending a qualifying trial; Codex collection is prohibited by corporate policy. |
 
@@ -149,6 +149,38 @@ attestation is not cryptographic principal authentication.
 > end-user release or a user pilot is available. Pilot distribution, native
 > schedulers and hosted bridge operation remain release operations with their
 > own evidence.
+
+### Continuous use after installation
+
+Maestro re-orients from durable local authorities instead of treating a prior
+conversation as state:
+
+```text
+bcgos maestro status <workspace>
+```
+
+The versioned result reports onboarding/calibration, open-task count, an opaque
+active-work pointer, checkpoint presence, generated-memory state, attested
+capture-v2 count, maintenance state and one safe next action. Session Start
+renders the same bounded status. It never injects an execution item ID,
+objective, checkpoint body, transcript, client content or local path.
+The status is rebuilt on every read, capped at 4 KiB and has no receipt/history
+store: growing ledgers and journals remain behind their versioned authorities
+and cannot grow Session Start state.
+Its evidence readers are also bounded and fail closed: capture-v2 requires its
+workspace-local HMAC, while lifecycle and maintenance receipts are strictly
+validated before they can report `adapter_observed`.
+
+For work that crosses sessions, write an explicit bounded checkpoint and pause.
+The next session can resolve it with `bcgos work next --active --workspace
+<workspace>` and resume through a new fenced attempt. A hook cannot synthesize
+a checkpoint. `UserPromptSubmit` may retain only HMAC-attested selected-skill
+IDs; it does not store the prompt.
+
+Runtime evidence stays split into `configured`, `adapter_observed`,
+`native_qualified` and `unavailable`. An installed adapter or local receipt is
+not native qualification. Three-hour metadata checkpoints and deterministic L1
+light dreaming are also not weekly deep dreaming or lifetime promotion.
 
 ### Evidence vocabulary and snapshot
 
@@ -370,6 +402,7 @@ bcgos prior-work import --snapshot <json> --receipt <json>
 bcgos prior-work find --explicit --stdin --limit 5
 bcgos prior-work sync-due --runtime <claude|codex>
 bcgos session packet [workspace]
+bcgos maestro status [workspace]
 bcgos work create --workspace <path> --stdin
 bcgos work start --workspace <path> --item <id> --revision <n>
 bcgos work checkpoint --workspace <path> --item <id> --revision <n> --attempt <id> --stdin

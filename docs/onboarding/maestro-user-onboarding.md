@@ -153,12 +153,15 @@ Depois de confirmar o caminho:
 bcgos init <workspace>
 bcgos status <workspace>
 bcgos doctor <workspace>
+bcgos maestro status <workspace>
 ```
 
 O `init` deve ser idempotente: executar novamente não pode apagar ou substituir
 configuração e dados existentes. O `status` mostra a situação; o `doctor`
-explica diagnósticos. Nenhum desses comandos cria clientes, projetos ou
-conteúdo de trabalho sem pedido explícito.
+explica diagnósticos. `maestro status` reúne a calibração, tarefas abertas,
+checkpoint, memória, manutenção e evidência de runtime já existentes, com uma
+próxima ação segura. Nenhum desses comandos cria clientes, projetos ou conteúdo
+de trabalho sem pedido explícito.
 
 ### Passo 2.1 — Conecte o Maestro ao seu runtime
 
@@ -303,6 +306,25 @@ bcgos work resume --workspace <workspace> --item <id> --revision <n>
 bcgos work inspect --workspace <workspace> --item <id>
 bcgos work export --workspace <workspace> --item <id>
 ```
+
+Ao abrir uma nova sessão, o Maestro apresenta a mesma projeção de
+`bcgos maestro status <workspace>`. Se houver um único trabalho ativo, ele
+mostra apenas `bcgos://execution/active`, o estado e se existe checkpoint. Para
+ler a próxima ação privada, resolva o ponteiro explicitamente:
+
+```text
+bcgos work next --active --workspace <workspace>
+```
+
+Um runtime configurado ou um receipt local pode aparecer como `configured` ou
+`adapter_observed`; isso não significa `native_qualified`. `unavailable`
+permanece explícito até existir evidência nativa atendida para a versão exata.
+Nenhuma sessão fabrica checkpoint, injeta transcript ou promove memória para
+deep dreaming/lifetime automaticamente.
+Esse status não acumula sessões nem receipts: ele é recalculado em um formato
+fechado de até 4 KiB. O histórico continua no ledger versionado, e retenção e
+compactação continuam sob responsabilidade do ledger, da memória e dos stores
+de receipts correspondentes.
 
 Boas práticas:
 

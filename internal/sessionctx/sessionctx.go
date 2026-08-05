@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/continuoususe"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
@@ -43,6 +44,7 @@ type Sources struct {
 	Execution        execution.ActivePointer
 	Memory           MemorySource
 	SharePointSource priorwork.SourceSelectionStatus
+	ContinuousUse    continuoususe.Status
 }
 
 // MemorySource is assembled by the local runtime boundary. Build never reads
@@ -171,19 +173,20 @@ type Omission struct {
 }
 
 type Packet struct {
-	SchemaVersion      int                 `json:"schema_version"`
-	State              string              `json:"state"`
-	InteractionProfile InteractionProfile  `json:"interaction_profile"`
-	Workspace          Workspace           `json:"workspace"`
-	Owner              Owner               `json:"owner"`
-	Atlas              Atlas               `json:"atlas"`
-	Execution          ExecutionContext    `json:"execution"`
-	SharePointSource   SharePointSource    `json:"sharepoint_source"`
-	Skills             Skills              `json:"skills"`
-	Agents             Agents              `json:"agents"`
-	Memory             Memory              `json:"memory"`
-	ActionConfirmation *ActionConfirmation `json:"action_confirmation,omitempty"`
-	Omissions          []Omission          `json:"omissions"`
+	SchemaVersion      int                  `json:"schema_version"`
+	State              string               `json:"state"`
+	InteractionProfile InteractionProfile   `json:"interaction_profile"`
+	Workspace          Workspace            `json:"workspace"`
+	Owner              Owner                `json:"owner"`
+	Atlas              Atlas                `json:"atlas"`
+	Execution          ExecutionContext     `json:"execution"`
+	SharePointSource   SharePointSource     `json:"sharepoint_source"`
+	Skills             Skills               `json:"skills"`
+	Agents             Agents               `json:"agents"`
+	Memory             Memory               `json:"memory"`
+	ContinuousUse      continuoususe.Status `json:"continuous_use"`
+	ActionConfirmation *ActionConfirmation  `json:"action_confirmation,omitempty"`
+	Omissions          []Omission           `json:"omissions"`
 	// WorkspaceRoot is used only to anchor native hook directives. It is not
 	// serialized into the bounded packet or persisted as context content.
 	WorkspaceRoot string `json:"-"`
@@ -222,6 +225,32 @@ func Build(sources Sources) Packet {
 			CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy",
 		}
 	}
+	continuous := sources.ContinuousUse
+	if continuous.SchemaVersion == 0 {
+		fallback, err := continuoususe.Build(continuoususe.Source{
+			WorkspaceState: sources.Workspace.State, CalibrationState: onboarding.State, CalibrationTrack: onboarding.Track,
+			OpenTasksState: openTasks.State, OpenTasksCount: openTasks.Count,
+			OpenWorkState: execution.ActivePointerUnavailable, MemoryState: normalizedMemoryState(sources.Memory.State),
+		})
+		if err == nil {
+			continuous = fallback
+		} else {
+			continuous = continuoususe.Status{
+				SchemaVersion: 1, State: continuoususe.StateUnavailable,
+				Calibration: continuoususe.Calibration{State: onboarding.State, Track: onboarding.Track},
+				OpenTasks:   continuoususe.OpenTasks{State: openTasks.State, Count: openTasks.Count},
+				OpenWork:    continuoususe.OpenWork{State: execution.ActivePointerUnavailable, CheckpointState: execution.CheckpointUnavailable},
+				Memory:      continuoususe.MemoryStatus{State: "unavailable"},
+				Signals: continuoususe.SignalEvidence{CapabilityEvidence: continuoususe.CapabilityEvidence{
+					State: continuoususe.EvidenceUnavailable, Unavailable: true, Reason: continuoususe.ReasonSourceUnavailable,
+				}},
+				Maintenance: continuoususe.CapabilityEvidence{
+					State: continuoususe.EvidenceUnavailable, Unavailable: true, Reason: continuoususe.ReasonSourceUnavailable,
+				},
+				NextActions: []continuoususe.NextAction{{ID: continuoususe.ActionInspectContinuity, Command: "bcgos maestro status <workspace>", Reason: "inspect the bounded continuity projection after source state changes"}},
+			}
+		}
+	}
 	packet := Packet{
 		SchemaVersion: 1,
 		State:         "ready",
@@ -257,6 +286,7 @@ func Build(sources Sources) Packet {
 			Message: "native agent orchestration requires a runtime adapter with tool and delegation enforcement",
 		},
 		Memory:        buildMemory(sources.Memory),
+		ContinuousUse: continuous,
 		WorkspaceRoot: sources.Workspace.WorkspacePath,
 	}
 	if sources.Workspace.State != "ready" && sources.Workspace.State != "warning" {
@@ -282,8 +312,11 @@ func (packet Packet) Validate() error {
 	if packet.SchemaVersion != 1 || (packet.State != "ready" && packet.State != "partial") {
 		return errors.New("invalid session context packet header")
 	}
-	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Owner.Onboarding.State == "" || packet.Owner.Onboarding.Track == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Agents.Message == "" || packet.Memory.Message == "" {
+	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Owner.Onboarding.State == "" || packet.Owner.Onboarding.Track == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Agents.Message == "" || packet.Memory.Message == "" || packet.ContinuousUse.SchemaVersion != 1 || len(packet.ContinuousUse.NextActions) == 0 {
 		return errors.New("session context packet is missing a required bounded source")
+	}
+	if err := packet.ContinuousUse.Validate(); err != nil {
+		return err
 	}
 	if packet.Memory.State != "available" && packet.Memory.State != "empty" && packet.Memory.State != "unavailable" {
 		return errors.New("session context packet has an invalid memory state")
@@ -380,6 +413,15 @@ func (packet Packet) Validate() error {
 		return errors.New("ready session context packet has omissions")
 	}
 	return nil
+}
+
+func normalizedMemoryState(state string) string {
+	switch state {
+	case "available", "empty", "unavailable":
+		return state
+	default:
+		return "unavailable"
+	}
 }
 
 func validSelectedSkill(selected SkillSelection) bool {

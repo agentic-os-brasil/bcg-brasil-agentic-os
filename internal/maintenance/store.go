@@ -16,6 +16,12 @@ type Store struct {
 	Root string
 }
 
+// MaximumContinuityReceiptEntries bounds the continuous-use diagnostic view.
+// Detailed receipt history remains in this store and is never read wholesale at
+// Session Start.
+const MaximumContinuityReceiptEntries = 64
+const maximumReceiptBytes = 16 << 10
+
 func (store Store) AppendReceipt(receipt Receipt) error {
 	if err := receipt.Validate(); err != nil {
 		return err
@@ -175,6 +181,57 @@ func (store Store) Receipts(workspaceID, jobID string) ([]Receipt, error) {
 	return receipts, nil
 }
 
+// BoundedValidatedReceiptCount reads a small, strict receipt projection without
+// creating directories. It is the only maintenance receipt view used by
+// continuous-use status.
+func (store Store) BoundedValidatedReceiptCount(workspaceID, jobID string) (int, error) {
+	if store.Root == "" || !commandIDPattern.MatchString(workspaceID) || !commandIDPattern.MatchString(jobID) {
+		return 0, errors.New("invalid maintenance bounded receipt lookup")
+	}
+	directoryPath := filepath.Join(store.Root, "workspaces", workspaceID, "receipts", jobID)
+	before, err := os.Lstat(directoryPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	if !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+		return 0, errors.New("maintenance receipt directory is not private")
+	}
+	directory, err := os.Open(directoryPath)
+	if err != nil {
+		return 0, err
+	}
+	defer directory.Close()
+	opened, err := directory.Stat()
+	if err != nil || !os.SameFile(before, opened) {
+		return 0, errors.New("maintenance receipt directory changed during secure open")
+	}
+	entries, err := directory.ReadDir(MaximumContinuityReceiptEntries + 1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return 0, err
+	}
+	if len(entries) > MaximumContinuityReceiptEntries {
+		return 0, errors.New("maintenance receipt history exceeds continuity scan bound")
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || filepath.Ext(entry.Name()) != ".json" {
+			return 0, fmt.Errorf("invalid maintenance continuity receipt entry %q", entry.Name())
+		}
+		receipt, err := readReceipt(filepath.Join(directoryPath, entry.Name()))
+		if err != nil || receipt.JobID != jobID || receipt.WorkspaceID != workspaceID || receipt.CommandID+"--"+receipt.AttemptID+".json" != entry.Name() {
+			if err != nil {
+				return 0, err
+			}
+			return 0, errors.New("maintenance continuity receipt identity mismatch")
+		}
+		count++
+	}
+	return count, nil
+}
+
 func writeReceipt(path string, receipt Receipt) error {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
@@ -206,7 +263,7 @@ func readReceipt(path string) (Receipt, error) {
 	if err != nil {
 		return Receipt{}, err
 	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
+	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() || before.Size() > maximumReceiptBytes {
 		return Receipt{}, errors.New("maintenance receipt must be a regular file")
 	}
 	file, err := os.Open(path)
@@ -218,7 +275,14 @@ func readReceipt(path string) (Receipt, error) {
 	if err != nil || !os.SameFile(before, opened) {
 		return Receipt{}, errors.New("maintenance receipt changed during secure open")
 	}
-	decoder := json.NewDecoder(file)
+	body, err := io.ReadAll(io.LimitReader(file, maximumReceiptBytes+1))
+	if err != nil {
+		return Receipt{}, err
+	}
+	if len(body) > maximumReceiptBytes {
+		return Receipt{}, errors.New("maintenance receipt exceeds bounded read limit")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var receipt Receipt
 	if err := decoder.Decode(&receipt); err != nil {

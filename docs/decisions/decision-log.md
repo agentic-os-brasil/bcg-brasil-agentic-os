@@ -798,3 +798,36 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Owners can deepen or refresh SELF and customize the main agents without a second truth store, silent overwrite or unbounded diary. Only one draft may remain open; applied SELF drafts compact to the latest per facet and identity drafts to the latest receipt, while canonical prior bodies remain in versioned audit storage. Profile selection and track counts are closed. The no-client-data gate is explicitly an owner attestation, not a classifier. This interview flow writes canonical facets only through the existing audited refinement core and does not activate prompt history, observations, Darwin, L1-L3 synthesis or a general continuous lifecycle.
 - Refs: INTN; SELF; specs/013-owner-context.md; specs/015-session-context-packet.md; specs/027-agent-scaffolding.md; specs/035-agent-identity-personalization.md; internal/ownerctx; internal/agentidentity; internal/sessionctx
 - Supersedes: none
+
+## CONT - Derive continuous use from existing local authorities
+
+ - Date: 2026-08-05
+ - Status: accepted
+ - Owner: Daniel Scardini
+ - Context: A configured Maestro installation can still feel like a static prompt when a new session does not deterministically expose calibration state, safely resumable work, bounded continuity signals and the next action. Creating another continuity database would duplicate Owner Context, the Execution Ledger, memory commits, maintenance receipts and lifecycle evidence, while inferring progress from transcripts would violate the professional data boundary.
+ - Decision: Define CONTINUOUS USE as one read-only, workspace-scoped projection over the existing authorities. It reports owner onboarding/calibration, the opaque active-execution pointer and metadata-only checkpoint presence, valid generated-memory state, attested skill-route signal counts, maintenance enrollment and runtime lifecycle evidence. `bcgos maestro status` and top-level `bcgos status` expose the projection; Session Start renders one bounded orientation and next safe action from it. Context injection may persist only the existing HMAC-attested selected-skill IDs, and hooks remain non-blocking. Meaningful checkpoint bodies remain explicit Execution Ledger writes; Stop may record only metadata-safe adapter evidence and never synthesize a checkpoint from a prompt, transcript, tool payload or model output. Every runtime surface reports configured, adapter-observed, native-qualified and unavailable separately.
+ - Consequences: Maestro can re-orient deterministically across sessions without a competing work or memory authority, raw transcript retention, client leakage or repeated onboarding. An active item with no checkpoint becomes a visible checkpoint requirement; a valid checkpoint becomes an explicit bounded resume action. Direct hook execution and receipts remain adapter observation only, while native qualification still requires fresh attended runtime evidence. Weekly deep dreaming, lifetime promotion, model-backed checkpoint synthesis and canonical Owner Context facet changes remain outside this capability.
+ - Refs: specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/015-session-context-packet.md; specs/019-nonblocking-hook-execution.md; specs/025-native-session-start-hook.md; specs/029-execution-ledger-v1.md; specs/044-continuous-use.md; internal/continuoususe
+- Supersedes: none
+
+## CUBD - Bound continuous-use state independently of history growth
+
+- Date: 2026-08-05
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A derived continuity status could remain content-safe yet still grow across sessions if it copied receipt lists, historical explanations, timestamps or caller-provided labels into Session Start. That would turn orientation state into another history channel and gradually consume the startup context budget.
+- Decision: Continuous-use status is a disposable projection with no append store and a 4 KiB serialization ceiling. It accepts only closed calibration/evidence enums and reason codes, fixed count fields, one opaque work pointer, two runtime rows, five unique lifecycle event IDs per runtime and unique commands from the six-action registry. Arbitrary reason, command, label, receipt/history or body text fails validation before Session Start. Retention and compaction remain owned by Owner Context, the versioned Execution Ledger, the memory engine and the lifecycle/maintenance receipt stores; continuous use consumes only bounded current-state projections from them.
+- Consequences: Ledger revisions, memory journals and receipt stores may grow or compact according to their own governed policies without growing Maestro's continuous status. Historical detail remains available only through explicit ledger/export, memory rollup or receipt inspection boundaries and cannot accumulate in Session Start state.
+- Refs: CONT; specs/015-session-context-packet.md; specs/044-continuous-use.md; internal/continuoususe; internal/sessionctx; internal/sessionhook
+- Supersedes: none
+
+## CUEV - Treat continuity evidence as bounded authenticated or validated input
+
+- Date: 2026-08-05
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A compact output alone is insufficient if rendering status enumerates unbounded receipt or capture history, or marks adapter observation from an empty or forged file. That would permit local history growth to consume startup resources and let malformed evidence alter the projection.
+- Decision: Continuous use reads only bounded source projections. Capture-v2 counts only after strict decode, workspace binding and workspace-local HMAC verification. Lifecycle and maintenance observations count only strict, identity-bound validated receipts. Every reader has a small directory/file/entry ceiling and performs no directory creation; overflow, truncation, empty files, symlinks, malformed JSON or identity mismatch fail closed to unavailable/not-observed.
+- Consequences: `adapter_observed` is evidence of a validated local adapter boundary, not filesystem-file presence and not native qualification. Retention policies may evolve in the source stores, but must preserve or publish a bounded current watermark for continuity to remain observable.
+- Refs: CUBD; specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/019-nonblocking-hook-execution.md; specs/044-continuous-use.md; internal/memory; internal/lifecycle; internal/maintenance
+- Supersedes: none

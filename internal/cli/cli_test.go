@@ -22,6 +22,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
@@ -93,6 +94,35 @@ func TestMemoryCaptureFailsClosedWithoutSanitizedAttestation(t *testing.T) {
 	code := RunWithInput([]string{"memory", "capture", "--data-dir", t.TempDir(), "--workspace", "case-a", "--kind", "note", "--stdin"}, strings.NewReader("raw"), &output, &output)
 	if code == 0 || !strings.Contains(output.String(), "--sanitized") {
 		t.Fatalf("capture exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestContinuousStatusFailsClosedForForgedCaptureAndMaintenanceReceipts(t *testing.T) {
+	root := t.TempDir()
+	workspaceID := "0123456789abcdef0123456789abcdef"
+	captureDirectory := filepath.Join(root, "memory", "workspaces", workspaceID, "l1", "attested-captures")
+	if err := os.MkdirAll(captureDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(captureDirectory, "2026-08-05.jsonl"), []byte(`{"schema_version":2`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if state, count := continuousMemoryStatus(root, workspaceID); state != "unavailable" || count != 0 {
+		t.Fatalf("forged capture continuity state=%q count=%d", state, count)
+	}
+	enrollment := maintenance.CanaryEnrollment{SchemaVersion: maintenance.EnrollmentSchemaVersion, WorkspaceID: workspaceID, AgentID: "darwin", Home: "/tmp", Executable: "/bin/true", UID: "501", Timezone: "UTC", LaunchAgentLabel: "com.bcg.maestro.maintenance", Mode: "filesystem_only", EnrolledAt: time.Now().UTC(), Activated: []maintenance.Activation{{JobID: maintenance.MemoryCheckpointJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryCheckpointJobID)}, {JobID: maintenance.MemoryLightDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryLightDreamJobID)}}}
+	if err := maintenance.SaveCanaryEnrollment(root, enrollment); err != nil {
+		t.Fatal(err)
+	}
+	receiptDirectory := filepath.Join(root, "maintenance", "receipts", "workspaces", workspaceID, "receipts", maintenance.MemoryCheckpointJobID)
+	if err := os.MkdirAll(receiptDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(receiptDirectory, "forged--empty.json"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if configured, observed := continuousMaintenanceStatus(root, workspaceID); !configured || observed {
+		t.Fatalf("forged maintenance receipt configured=%t observed=%t", configured, observed)
 	}
 }
 
@@ -672,6 +702,46 @@ func TestContextRoutingCanSelectGovernedIngestionAndPriorWorkMethods(t *testing.
 				t.Fatalf("governed source methods were not routed = %d %s", code, output.String())
 			}
 		})
+	}
+}
+
+func TestSessionStartReorientsToCheckpointStateWithoutExecutionContent(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	completeQuickOwnerOnboarding(t, dataRoot)
+	output.Reset()
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("adapter install = %d %s", code, output.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := execution.Store{Root: dataRoot}
+	created, err := store.Create(execution.CreateInput{WorkspaceID: inspection.WorkspaceID, Objective: "secret client objective", InitialNextStep: "private next step", Criteria: []execution.Criterion{{ID: "criterion-a", Type: execution.CriterionCommandCheck, Command: []string{"go", "version"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := store.Start(inspection.WorkspaceID, created.Contract.ItemID, created.State.StateRevision)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output.Reset()
+	if code := runHookWithInput([]string{"codex", "session-start", "--adapter-source", "maestro", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "CONTINUOUS USE STATUS") || !strings.Contains(output.String(), "checkpoint=missing") || !strings.Contains(output.String(), "bcgos work next --active") || strings.Contains(output.String(), created.Contract.ItemID) || strings.Contains(output.String(), "secret client objective") {
+		t.Fatalf("pre-checkpoint SessionStart = %d %s", code, output.String())
+	}
+
+	if _, err := store.Checkpoint(inspection.WorkspaceID, created.Contract.ItemID, execution.CheckpointInput{ExpectedRevision: started.State.StateRevision, AttemptID: started.State.ActiveAttemptID, Summary: "private checkpoint body", NextStep: "private resume step"}); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"codex", "session-start", "--adapter-source", "maestro", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "checkpoint=available") || !strings.Contains(output.String(), "resume through a new fenced attempt") || strings.Contains(output.String(), "private checkpoint body") || strings.Contains(output.String(), created.Contract.ItemID) {
+		t.Fatalf("checkpointed SessionStart = %d %s", code, output.String())
 	}
 }
 
@@ -1902,8 +1972,13 @@ func TestProductStatusAndDoctorDescribeReadyWorkspace(t *testing.T) {
 	}
 
 	output.Reset()
-	if code := runProductStatus([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) || !strings.Contains(output.String(), `"brain_readable": true`) || !strings.Contains(output.String(), `"profile": "standard"`) {
+	if code := runProductStatus([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) || !strings.Contains(output.String(), `"brain_readable": true`) || !strings.Contains(output.String(), `"profile": "standard"`) || !strings.Contains(output.String(), `"continuous_use"`) || !strings.Contains(output.String(), `"configured"`) || !strings.Contains(output.String(), `"adapter_observed"`) || !strings.Contains(output.String(), `"native_qualified"`) || !strings.Contains(output.String(), `"unavailable"`) {
 		t.Fatalf("status exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runMaestroWithInput([]string{"status", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"calibration"`) || !strings.Contains(output.String(), `"complete_calibration"`) || strings.Contains(output.String(), "professional-role.md") {
+		t.Fatalf("Maestro status exit = %d, output = %s", code, output.String())
 	}
 
 	output.Reset()

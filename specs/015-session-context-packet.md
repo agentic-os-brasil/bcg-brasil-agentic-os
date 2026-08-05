@@ -33,6 +33,9 @@ attach an ephemeral, bounded generated memory context.
   versus runtime-activation states;
 - local memory state plus portable pointers for valid generated layers, without
   artifact bodies or storage paths; and
+- the versioned continuous-use projection: calibration, open-task count,
+  pointer-only active work, checkpoint presence, bounded-signal count, memory,
+  maintenance, per-runtime evidence classes and closed safe next actions; and
 - omission diagnostics for sources that are not ready.
 
 The packet must never contain an owner-facet body, a client/project/daily page,
@@ -112,3 +115,8 @@ qualifying native-session protocol succeeds.
 - a two-session handoff proves that Session A can checkpoint and pause, Session
   B can resolve and resume with a new attempt, and the stale Session A attempt
   can no longer mutate the item.
+- continuous-use evidence ordering is revalidated after serialization; a
+  forged native-qualified flag or non-portable execution pointer fails closed.
+- the continuous-use subprojection remains within its independent 4 KiB
+  ceiling and rejects arbitrary labels, action text, receipt/history bodies or
+  cardinality growth before Session Start serialization.

@@ -83,6 +83,10 @@ exactly one running or paused item exists. Ambiguity fails closed and requires
 an explicit item ID. The Session Context Packet exposes only
 `bcgos://execution/active` when that same resolution is unambiguous. It never
 exposes the item ID, attempt ID, objective, done contract or checkpoint body.
+The derived continuous-use status adds only the active enum state and
+checkpoint presence (`available`, `missing` or `unavailable`) to that opaque
+pointer. Writing a meaningful checkpoint remains an explicit ledger mutation;
+Session Start, Stop and maintenance workers cannot synthesize one.
 
 ## Evidence and completion
 

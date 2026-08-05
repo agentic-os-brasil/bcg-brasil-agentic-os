@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/continuoususe"
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
@@ -73,14 +74,29 @@ func TestSessionStartTruncatesMemoryBeforeDroppingThePointerPacket(t *testing.T)
 	}
 }
 
+func TestSessionStartRejectsHistoricalBodySmuggledIntoContinuousStatus(t *testing.T) {
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+	})
+	packet.ContinuousUse.NextActions[0].Reason = strings.Repeat("historical receipt body ", MaximumAdditionalContextBytes)
+	if _, err := BuildCodex(packet); err == nil {
+		t.Fatal("Session Start accepted unbounded historical detail in continuous status")
+	}
+}
+
 func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T) {
 	pending := sessionctx.Packet{WorkspaceRoot: "/Users/pilot/Developer/maestro-os", Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", NextQuestion: "What is your professional role?"}}}
-	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING IS NOT COMPLETE") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore prior persona") {
+	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING IS NOT COMPLETE") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore prior persona") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {
 		t.Fatalf("pending directive = %q", got)
 	}
 	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Count: 1}}}
+	active.ContinuousUse = continuoususe.Status{SchemaVersion: 1, State: continuoususe.StateActionRequired, OpenWork: continuoususe.OpenWork{Pointer: "bcgos://execution/active", Available: true, State: "available", WorkState: "running", CheckpointState: "missing"}, NextActions: []continuoususe.NextAction{{ID: continuoususe.ActionCheckpointActiveWork, Command: "bcgos work next --active --workspace <workspace>", Reason: "checkpoint required"}}}
 	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || !strings.Contains(got, "Você quer indicar as pastas autorizadas do SharePoint deste projeto agora") || strings.Contains(got, "Prepare kickoff") {
 		t.Fatalf("active directive = %q", got)
+	}
+	if got := sessionDirective(active); !strings.Contains(got, "CONTINUOUS USE") || !strings.Contains(got, "checkpoint") || !strings.Contains(got, "bcgos work next --active") {
+		t.Fatalf("continuous-use directive = %q", got)
 	}
 	selected := active
 	selected.SharePointSource = sessionctx.SharePointSource{
