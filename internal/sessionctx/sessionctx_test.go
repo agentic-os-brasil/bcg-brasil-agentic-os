@@ -27,6 +27,8 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 		},
 		Owner: ownerctx.Status{Initialized: true, Facets: map[string]ownerctx.Facet{
 			"voice":                 {Pointer: ownerctx.Pointer{Path: "owner/self/voice.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}},
+			"motivations":           {Pointer: ownerctx.Pointer{Path: "owner/self/motivations.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}},
+			"quality-bar":           {Pointer: ownerctx.Pointer{Path: "owner/self/quality-bar.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}},
 			"psychological-profile": {Pointer: ownerctx.Pointer{Path: "owner/self/psychological-profile.md", Available: true, State: "available"}, Readers: []string{"walter"}, Sensitivity: "sensitive"},
 		}, OperatingState: ownerctx.Pointer{Path: "owner/operating/work-state.md", Available: true, State: "available"}},
 		Atlas:         atlas.Status{Managed: atlas.Pointer{State: "unavailable"}, Owner: atlas.Pointer{Path: "/local/atlas/owner", Available: true, State: "available"}, Workspace: atlas.Pointer{Path: "/work/case-a/brain", Available: true, State: "available"}},
@@ -42,6 +44,12 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 	}
 	if _, ok := packet.Owner.Facets["voice"]; !ok {
 		t.Fatalf("session-readable facet missing: %#v", packet.Owner.Facets)
+	}
+	if _, ok := packet.Owner.Facets["motivations"]; !ok {
+		t.Fatalf("motivations facet missing: %#v", packet.Owner.Facets)
+	}
+	if _, ok := packet.Owner.Facets["quality-bar"]; !ok {
+		t.Fatalf("quality bar facet missing: %#v", packet.Owner.Facets)
 	}
 	if _, ok := packet.Owner.Facets["psychological-profile"]; ok {
 		t.Fatalf("sensitive Walter-only facet leaked into packet: %#v", packet.Owner.Facets)

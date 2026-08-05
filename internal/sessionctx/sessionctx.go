@@ -32,6 +32,8 @@ var sessionSafeFacets = map[string]struct{}{
 	"communication-style": {},
 	"voice":               {},
 	"preferences":         {},
+	"motivations":         {},
+	"quality-bar":         {},
 	"decision-rules":      {},
 	"working-boundaries":  {},
 }
@@ -211,7 +213,7 @@ func Build(sources Sources) Packet {
 		selfIndex = ownerctx.Pointer{Path: "owner/self/README.md", Available: true, State: "available"}
 	}
 	if sources.Owner.Initialized && expansion.State == "" {
-		expansion = ownerctx.ExpansionStatus{State: "action_required", Total: 6, Unknown: 6, NextFacet: "professional-role"}
+		expansion = ownerctx.ExpansionStatus{State: "action_required", Total: ownerctx.SelfFacetCount(), Unknown: ownerctx.SelfFacetCount(), NextFacet: "professional-role"}
 	}
 	if !sources.Owner.Initialized && expansion.State == "" {
 		expansion.State = "unavailable"
@@ -352,7 +354,7 @@ func (packet Packet) Validate() error {
 		if packet.Owner.SelfIndex.Path != "owner/self/README.md" || !packet.Owner.SelfIndex.Available || packet.Owner.SelfIndex.State != "available" {
 			return errors.New("initialized owner is missing the canonical SELF index pointer")
 		}
-		if expansion.Total != 6 || expansion.Current < 0 || expansion.Unknown < 0 || expansion.Stale < 0 || expansion.ReviewCount < 0 || expansion.Current+expansion.Unknown+expansion.Stale != expansion.Total {
+		if expansion.Total != ownerctx.SelfFacetCount() || expansion.Current < 0 || expansion.Unknown < 0 || expansion.Stale < 0 || expansion.ReviewCount < 0 || expansion.Current+expansion.Unknown+expansion.Stale != expansion.Total {
 			return errors.New("session context packet has invalid SELF expansion counts")
 		}
 		switch expansion.State {

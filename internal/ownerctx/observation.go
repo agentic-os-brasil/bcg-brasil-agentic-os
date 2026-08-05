@@ -442,7 +442,7 @@ func validateObservationInput(input ObservationInput) error {
 
 func validObservationFacet(facet string) bool {
 	switch facet {
-	case "professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries":
+	case "professional-role", "communication-style", "voice", "preferences", "motivations", "quality-bar", "decision-rules", "working-boundaries":
 		return true
 	default:
 		return false

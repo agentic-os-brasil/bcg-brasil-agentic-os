@@ -40,6 +40,48 @@ func TestInitializeCreatesInspectablePointersWithoutOverwritingSelf(t *testing.T
 	}
 }
 
+func TestInitializeAddsNewProfessionalFacetsWithoutOverwritingExistingRegistry(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	registryPath := filepath.Join(root, "owner", "registry.json")
+	body, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value registry
+	if err := json.Unmarshal(body, &value); err != nil {
+		t.Fatal(err)
+	}
+	delete(value.Facets, "motivations")
+	delete(value.Facets, "quality-bar")
+	value.OnboardingTrack = OnboardingTrackQuick
+	value.OnboardingConfirmedSHA256 = "owner-reviewed-digest"
+	body, err = json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(registryPath, append(body, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Inspect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"motivations", "quality-bar"} {
+		if facet, ok := status.Facets[id]; !ok || !facet.Available {
+			t.Fatalf("migrated facet %q = %#v", id, facet)
+		}
+	}
+	if status.Onboarding.Track != OnboardingTrackQuick || status.Onboarding.State != "required" {
+		t.Fatalf("migration changed onboarding state unexpectedly: %#v", status.Onboarding)
+	}
+}
+
 func TestOccurrenceBoundRefinementIsIdempotent(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {
@@ -188,18 +230,21 @@ func TestInitializeCreatesProfessionalFacetsAndInterviewWithoutSensitiveDefaultR
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries", "psychological-profile"} {
+	for _, id := range []string{"professional-role", "communication-style", "voice", "preferences", "motivations", "quality-bar", "decision-rules", "working-boundaries", "psychological-profile"} {
 		facet, ok := status.Facets[id]
 		if !ok || !facet.Available {
 			t.Fatalf("facet %q = %#v", id, facet)
 		}
 	}
-	if status.Facets["voice"].Refinement != "automatic_with_audit" || status.Facets["decision-rules"].Refinement != "proposal_only" {
+	if status.Facets["voice"].Refinement != "automatic_with_audit" || status.Facets["motivations"].Refinement != "proposal_only" || status.Facets["quality-bar"].Refinement != "proposal_only" || status.Facets["decision-rules"].Refinement != "proposal_only" {
 		t.Fatalf("unexpected refinement policy: %#v", status.Facets)
 	}
 	interview := ColdStartInterview()
-	if len(interview.Steps) < 3 || interview.Steps[0].Facet != "professional-role" {
+	if len(interview.Steps) != len(onboardingFacets) || interview.Steps[0].Facet != "professional-role" {
 		t.Fatalf("interview = %#v", interview)
+	}
+	if interview.Steps[5].Facet != "quality-bar" || !strings.Contains(interview.Steps[5].Question, "QA") {
+		t.Fatalf("quality bar question = %#v", interview.Steps[5])
 	}
 	for _, step := range interview.Steps {
 		if step.Facet == "psychological-profile" {
@@ -287,7 +332,7 @@ func TestSchemaV2ConfirmedCompleteOnboardingRemainsComplete(t *testing.T) {
 	if _, err := Initialize(root); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range onboardingFacets {
+	for _, id := range legacyOnboardingFacets {
 		template := facets[id]
 		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)), []byte(template.Body+"\nLegacy owner detail.\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -303,6 +348,8 @@ func TestSchemaV2ConfirmedCompleteOnboardingRemainsComplete(t *testing.T) {
 	if err := json.Unmarshal(body, &value); err != nil {
 		t.Fatal(err)
 	}
+	delete(value.Facets, "motivations")
+	delete(value.Facets, "quality-bar")
 	value.SchemaVersion = 2
 	value.OnboardingConfirmedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	value.OnboardingConfirmedSHA256 = legacyDigest
@@ -314,9 +361,22 @@ func TestSchemaV2ConfirmedCompleteOnboardingRemainsComplete(t *testing.T) {
 	if err := os.WriteFile(registryPath, append(body, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	legacyVoice, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(facets["voice"].Record.Path)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
 	status, err := Inspect(root)
 	if err != nil || status.Onboarding.State != "complete" || status.Onboarding.Track != OnboardingTrackComplete {
 		t.Fatalf("legacy status = %#v err=%v", status, err)
+	}
+	if facet, ok := status.Facets["motivations"]; !ok || !facet.Available {
+		t.Fatalf("migrated motivations facet = %#v", facet)
+	}
+	if current, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(facets["voice"].Record.Path))); err != nil || string(current) != string(legacyVoice) {
+		t.Fatalf("legacy voice was overwritten: current=%q before=%q err=%v", current, legacyVoice, err)
 	}
 }
 

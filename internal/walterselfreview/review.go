@@ -1145,7 +1145,7 @@ func sameStrings(left, right []string) bool {
 
 func validFacet(value string) bool {
 	switch value {
-	case "professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries", "psychological-profile":
+	case "professional-role", "communication-style", "voice", "preferences", "motivations", "quality-bar", "decision-rules", "working-boundaries", "psychological-profile":
 		return true
 	default:
 		return false
