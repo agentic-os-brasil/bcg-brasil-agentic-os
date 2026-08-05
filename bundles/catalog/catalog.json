@@ -14,7 +14,7 @@
     },
     {
       "id": "tech-core",
-      "display_name": "Tech Core — Engineering, Data e Qualidade",
+      "display_name": "Tech Core — Engineering, Data, AI e Qualidade",
       "availability": "optional",
       "availability_reason": "Disponível no Canary; a ativação local exige seleção confirmada na entrevista.",
       "depends_on": [
@@ -24,7 +24,8 @@
         "software-engineering",
         "technical-explorer",
         "data-engineering",
-        "data-science"
+        "data-science",
+        "ai-engineering"
       ],
       "catalog_pointer": "bundles/tech-core/skills/catalog.json"
     }

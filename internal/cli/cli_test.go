@@ -985,6 +985,22 @@ func TestBundlesPlanKeepsClassicConsultingOnTheBaseBundle(t *testing.T) {
 	}
 }
 
+func TestBundlesRecommendUsesDeclaredFunctionAndDoesNotActivate(t *testing.T) {
+	var output bytes.Buffer
+	if code := Run([]string{"bundles", "recommend", "--function", "Engenheira de software"}, &output, &output); code != ExitOK ||
+		!strings.Contains(output.String(), `"state": "recommended"`) ||
+		!strings.Contains(output.String(), `"bundle": "tech-core"`) ||
+		!strings.Contains(output.String(), `"software-engineering"`) {
+		t.Fatalf("recommendation exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := Run([]string{"bundles", "recommend", "--function", "Consultora de estratégia"}, &output, &output); code != ExitOK ||
+		!strings.Contains(output.String(), `"state": "ask"`) ||
+		!strings.Contains(output.String(), "deseja incluir skills de tecnologia") {
+		t.Fatalf("ambiguous recommendation exit = %d, output = %s", code, output.String())
+	}
+}
+
 func TestProfileCommandsSwitchTheCanonicalUserPreference(t *testing.T) {
 	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
 	var output bytes.Buffer

@@ -2,8 +2,8 @@
 
 Status: source topology and skill catalogs implemented. Professional methods
 remain in the base bundle; the optional `tech-core` bundle contains engineering,
-data and transversal quality skills and is activated through confirmed interview
-selection.
+data, AI and transversal quality skills and is activated through confirmed
+interview selection.
 
 ## Objective
 
@@ -18,8 +18,8 @@ authority from that choice.
 - **Interaction profile:** `standard`, `advanced` or `power`; controls only
   language and progressive disclosure.
 - **Capability track:** a self-declared interest or professional practice such
-  as `technical-explorer`, `software-engineering`, `data-science` or
-  `data-engineering`.
+  as `technical-explorer`, `software-engineering`, `data-science`,
+  `data-engineering` or `ai-engineering`.
 - **Bundle:** a managed set of product skills with a stable identity,
   dependency list and generated compact skills catalog. Release versioning is
   part of the future activation contract.
@@ -38,7 +38,7 @@ The source inventory is `bundles/catalog/catalog.json`:
 | Bundle | Included now | Tracks | Depends on |
 | --- | --- | --- | --- |
 | `base` | Yes | `consulting` | none |
-| `tech-core` | Optional — activated by confirmed interview selection | `technical-explorer`, `software-engineering`, `data-science`, `data-engineering` | `base` |
+| `tech-core` | Optional — activated by confirmed interview selection | `technical-explorer`, `software-engineering`, `data-science`, `data-engineering`, `ai-engineering` | `base` |
 
 `tech-core` combines six transversal quality methods (`coverage-diagnose`,
 `decision-log-entry`, `pr-quality-loop`, `pr-review`, `unit-test-wave` and
@@ -76,7 +76,8 @@ After a confirmed technical selection, the adapter projection adds every
 ## Future activation contract
 
 For optional bundles shipped in the signed Canary distribution, onboarding may
-persist a capability-track choice and the local adapter may project the bundle
+use the declared professional function to make a bounded recommendation and
+persist a capability-track choice; the local adapter may then project the bundle
 only after explicit confirmation. A later release contract must still define
 all of the following before remote or separately downloaded packs are allowed:
 
