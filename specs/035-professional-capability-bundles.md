@@ -1,9 +1,9 @@
 # Spec 035 - Professional capability bundles
 
-Status: source topology and skill catalogs implemented. The neutral engineering
-quality methods are included in the base bundle; the first specialized
-engineering and data bundles are optional and every skill in a selected bundle
-and its dependencies is activated through confirmed interview selection.
+Status: source topology and skill catalogs implemented. Professional methods
+remain in the base bundle; the optional `tech-core` bundle contains engineering,
+data, AI and transversal quality skills and is activated through confirmed
+interview selection.
 
 ## Objective
 
@@ -18,8 +18,8 @@ authority from that choice.
 - **Interaction profile:** `standard`, `advanced` or `power`; controls only
   language and progressive disclosure.
 - **Capability track:** a self-declared interest or professional practice such
-  as `technical-explorer`, `software-engineering`, `data-science` or
-  `data-engineering`.
+  as `technical-explorer`, `software-engineering`, `data-science`,
+  `data-engineering` or `ai-engineering`.
 - **Bundle:** a managed set of product skills with a stable identity,
   dependency list and generated compact skills catalog. Release versioning is
   part of the future activation contract.
@@ -37,21 +37,15 @@ The source inventory is `bundles/catalog/catalog.json`:
 
 | Bundle | Included now | Tracks | Depends on |
 | --- | --- | --- | --- |
-| `base` | Yes | `consulting` (plus transversal quality methods) | none |
-| `engineering-core` | Optional — activated by confirmed interview selection | `technical-explorer`, `software-engineering` | `base` |
-| `data-practice` | Optional — activated by confirmed interview selection | `data-science`, `data-engineering` | `engineering-core` |
+| `base` | Yes | `consulting` | none |
+| `tech-core` | Optional — activated by confirmed interview selection | `technical-explorer`, `software-engineering`, `data-science`, `data-engineering`, `ai-engineering` | `base` |
 
-The base bundle contains six neutral engineering quality methods: coverage
-diagnosis, focused unit-test waves, strict expected-failure capture, QA gates,
-pull-request review and the pull-request quality loop. They are transversal
-quality controls, not a software-engineering identity or tool grant.
-
-`engineering-core` retains specialized delivery practices: specification-first
-delivery, proportionate tests/evidence and human review explanation.
-`data-practice` adds data-pipeline quality, data-science evaluation and
-reproducible data runs. These extract reusable principles from a mature,
-runtime-neutral engineering practice; they do not copy client procedures,
-paths, owners, data or automation assumptions.
+`tech-core` combines six transversal quality methods (`coverage-diagnose`,
+`decision-log-entry`, `pr-quality-loop`, `pr-review`, `unit-test-wave` and
+`xfail-bug-capture`) with specification-first delivery, proportionate
+tests/evidence, human review explanation, data-pipeline quality, data-science
+evaluation and reproducible data runs. These methods do not grant tools,
+filesystem scope or client-data access.
 
 Every bundle owns canonical `SKILL.md` files plus generated `catalog.json` and
 `INDEX.md` pointers. The development harness validates every declared bundle,
@@ -69,22 +63,21 @@ the selected methods and their dependencies for the Case Agent; methods from
 unselected bundles remain denied even though their source is embedded in the
 verified local distribution.
 
-For `consulting`, the result is `base_only` and its active skills index includes
-the neutral quality methods. Plans that require either optional bundle return
+For `consulting`, the result is `base_only` and its active skills index contains
+only the professional base methods. Plans that require a technical track return
 `optional` and explain that the selection must be confirmed in the interview.
 The plan command must never write a selection, install a package, modify a
 workspace, contact a provider or grant authority.
 
 The existing `bcgos skills index` remains the index of the active base bundle.
-It lists the six explicitly included quality methods by default. After a
-confirmed selection, the adapter projection adds every selected
-engineering-core and/or data-practice method, including dependencies, without
-changing the base catalog or granting tools.
+After a confirmed technical selection, the adapter projection adds every
+`tech-core` method without changing the base catalog or granting tools.
 
 ## Future activation contract
 
 For optional bundles shipped in the signed Canary distribution, onboarding may
-persist a capability-track choice and the local adapter may project the bundle
+use the declared professional function to make a bounded recommendation and
+persist a capability-track choice; the local adapter may then project the bundle
 only after explicit confirmation. A later release contract must still define
 all of the following before remote or separately downloaded packs are allowed:
 
@@ -96,7 +89,7 @@ all of the following before remote or separately downloaded packs are allowed:
 6. Windows and macOS clean-device acceptance evidence.
 
 The release manifest v1 intentionally excludes remote optional packs. The
-Canary's two optional bundles are embedded in the verified local distribution;
+Canary's optional `tech-core` bundle is embedded in the verified local distribution;
 a conversational skill cannot emulate activation from source files or a Git
 clone.
 
@@ -124,15 +117,13 @@ clone.
   tracks across the entire catalog and dependency cycles, and an
   optional bundle with an invalid availability state.
 - Track planning resolves `software-engineering` through `base` and
-  `engineering-core`, and projection activates all three engineering-core
-  skills.
-- Track planning resolves `data-science` through `base`, `engineering-core`
-  and `data-practice`, and projection activates all six selected/dependency
-  skills.
+  `tech-core`, and projection activates the full technical catalog.
+- Track planning resolves `data-science` through `base` and `tech-core`, and
+  projection activates the same governed technical catalog.
 - Track planning resolves `consulting` to the base bundle only.
 - The dispatcher's direct-skill gate admits selected and dependency methods for
   the active Case Agent and rejects an embedded method from an unselected
   bundle.
 - The full harness validates all declared bundle skill directories and generated
-  indexes; the distribution allowlist contains the six explicit quality methods
-  and the signed Canary engineering-core and data-practice content.
+  indexes; the distribution allowlist contains the signed Canary `tech-core`
+  content.

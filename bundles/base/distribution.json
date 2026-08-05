@@ -110,68 +110,60 @@
       "path": "skills/catalog.json"
     },
     {
-      "source": "bundles/engineering-core/skills/INDEX.md",
-      "path": "bundles/engineering-core/skills/INDEX.md"
+      "source": "bundles/tech-core/skills/INDEX.md",
+      "path": "bundles/tech-core/skills/INDEX.md"
     },
     {
-      "source": "bundles/engineering-core/skills/catalog.json",
-      "path": "bundles/engineering-core/skills/catalog.json"
+      "source": "bundles/tech-core/skills/catalog.json",
+      "path": "bundles/tech-core/skills/catalog.json"
     },
     {
-      "source": "bundles/engineering-core/skills/review-explain-change/SKILL.md",
-      "path": "bundles/engineering-core/skills/review-explain-change/SKILL.md"
+      "source": "bundles/tech-core/skills/review-explain-change/SKILL.md",
+      "path": "bundles/tech-core/skills/review-explain-change/SKILL.md"
     },
     {
-      "source": "bundles/engineering-core/skills/review-explain-change/agents/openai.yaml",
-      "path": "bundles/engineering-core/skills/review-explain-change/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/review-explain-change/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/review-explain-change/agents/openai.yaml"
     },
     {
-      "source": "bundles/engineering-core/skills/spec-driven-delivery/SKILL.md",
-      "path": "bundles/engineering-core/skills/spec-driven-delivery/SKILL.md"
+      "source": "bundles/tech-core/skills/spec-driven-delivery/SKILL.md",
+      "path": "bundles/tech-core/skills/spec-driven-delivery/SKILL.md"
     },
     {
-      "source": "bundles/engineering-core/skills/spec-driven-delivery/agents/openai.yaml",
-      "path": "bundles/engineering-core/skills/spec-driven-delivery/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/spec-driven-delivery/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/spec-driven-delivery/agents/openai.yaml"
     },
     {
-      "source": "bundles/engineering-core/skills/test-and-evidence/SKILL.md",
-      "path": "bundles/engineering-core/skills/test-and-evidence/SKILL.md"
+      "source": "bundles/tech-core/skills/test-and-evidence/SKILL.md",
+      "path": "bundles/tech-core/skills/test-and-evidence/SKILL.md"
     },
     {
-      "source": "bundles/engineering-core/skills/test-and-evidence/agents/openai.yaml",
-      "path": "bundles/engineering-core/skills/test-and-evidence/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/test-and-evidence/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/test-and-evidence/agents/openai.yaml"
     },
     {
-      "source": "bundles/data-practice/skills/INDEX.md",
-      "path": "bundles/data-practice/skills/INDEX.md"
+      "source": "bundles/tech-core/skills/data-pipeline-quality/SKILL.md",
+      "path": "bundles/tech-core/skills/data-pipeline-quality/SKILL.md"
     },
     {
-      "source": "bundles/data-practice/skills/catalog.json",
-      "path": "bundles/data-practice/skills/catalog.json"
+      "source": "bundles/tech-core/skills/data-pipeline-quality/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/data-pipeline-quality/agents/openai.yaml"
     },
     {
-      "source": "bundles/data-practice/skills/data-pipeline-quality/SKILL.md",
-      "path": "bundles/data-practice/skills/data-pipeline-quality/SKILL.md"
+      "source": "bundles/tech-core/skills/data-science-evaluation/SKILL.md",
+      "path": "bundles/tech-core/skills/data-science-evaluation/SKILL.md"
     },
     {
-      "source": "bundles/data-practice/skills/data-pipeline-quality/agents/openai.yaml",
-      "path": "bundles/data-practice/skills/data-pipeline-quality/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/data-science-evaluation/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/data-science-evaluation/agents/openai.yaml"
     },
     {
-      "source": "bundles/data-practice/skills/data-science-evaluation/SKILL.md",
-      "path": "bundles/data-practice/skills/data-science-evaluation/SKILL.md"
+      "source": "bundles/tech-core/skills/reproducible-data-run/SKILL.md",
+      "path": "bundles/tech-core/skills/reproducible-data-run/SKILL.md"
     },
     {
-      "source": "bundles/data-practice/skills/data-science-evaluation/agents/openai.yaml",
-      "path": "bundles/data-practice/skills/data-science-evaluation/agents/openai.yaml"
-    },
-    {
-      "source": "bundles/data-practice/skills/reproducible-data-run/SKILL.md",
-      "path": "bundles/data-practice/skills/reproducible-data-run/SKILL.md"
-    },
-    {
-      "source": "bundles/data-practice/skills/reproducible-data-run/agents/openai.yaml",
-      "path": "bundles/data-practice/skills/reproducible-data-run/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/reproducible-data-run/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/reproducible-data-run/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/agent-skill-policy.json",
@@ -186,12 +178,12 @@
       "path": "skills/agent-identity-setup/agents/openai.yaml"
     },
     {
-      "source": "bundles/base/skills/coverage-diagnose/SKILL.md",
-      "path": "skills/coverage-diagnose/SKILL.md"
+      "source": "bundles/tech-core/skills/coverage-diagnose/SKILL.md",
+      "path": "bundles/tech-core/skills/coverage-diagnose/SKILL.md"
     },
     {
-      "source": "bundles/base/skills/coverage-diagnose/agents/openai.yaml",
-      "path": "skills/coverage-diagnose/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/coverage-diagnose/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/coverage-diagnose/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/deck-storyline/SKILL.md",
@@ -250,20 +242,20 @@
       "path": "skills/maestro-onboarding/agents/openai.yaml"
     },
     {
-      "source": "bundles/base/skills/pr-quality-loop/SKILL.md",
-      "path": "skills/pr-quality-loop/SKILL.md"
+      "source": "bundles/tech-core/skills/pr-quality-loop/SKILL.md",
+      "path": "bundles/tech-core/skills/pr-quality-loop/SKILL.md"
     },
     {
-      "source": "bundles/base/skills/pr-quality-loop/agents/openai.yaml",
-      "path": "skills/pr-quality-loop/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/pr-quality-loop/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/pr-quality-loop/agents/openai.yaml"
     },
     {
-      "source": "bundles/base/skills/pr-review/SKILL.md",
-      "path": "skills/pr-review/SKILL.md"
+      "source": "bundles/tech-core/skills/pr-review/SKILL.md",
+      "path": "bundles/tech-core/skills/pr-review/SKILL.md"
     },
     {
-      "source": "bundles/base/skills/pr-review/agents/openai.yaml",
-      "path": "skills/pr-review/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/pr-review/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/pr-review/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/qa-gate/SKILL.md",
@@ -298,20 +290,20 @@
       "path": "skills/workspace-agent-setup/agents/openai.yaml"
     },
     {
-      "source": "bundles/base/skills/unit-test-wave/SKILL.md",
-      "path": "skills/unit-test-wave/SKILL.md"
+      "source": "bundles/tech-core/skills/unit-test-wave/SKILL.md",
+      "path": "bundles/tech-core/skills/unit-test-wave/SKILL.md"
     },
     {
-      "source": "bundles/base/skills/unit-test-wave/agents/openai.yaml",
-      "path": "skills/unit-test-wave/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/unit-test-wave/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/unit-test-wave/agents/openai.yaml"
     },
     {
-      "source": "bundles/base/skills/xfail-bug-capture/SKILL.md",
-      "path": "skills/xfail-bug-capture/SKILL.md"
+      "source": "bundles/tech-core/skills/xfail-bug-capture/SKILL.md",
+      "path": "bundles/tech-core/skills/xfail-bug-capture/SKILL.md"
     },
     {
-      "source": "bundles/base/skills/xfail-bug-capture/agents/openai.yaml",
-      "path": "skills/xfail-bug-capture/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/xfail-bug-capture/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/xfail-bug-capture/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/case-kickoff/SKILL.md",
@@ -322,12 +314,12 @@
       "path": "skills/case-kickoff/agents/openai.yaml"
     },
     {
-      "source": "bundles/base/skills/decision-log-entry/SKILL.md",
-      "path": "skills/decision-log-entry/SKILL.md"
+      "source": "bundles/tech-core/skills/decision-log-entry/SKILL.md",
+      "path": "bundles/tech-core/skills/decision-log-entry/SKILL.md"
     },
     {
-      "source": "bundles/base/skills/decision-log-entry/agents/openai.yaml",
-      "path": "skills/decision-log-entry/agents/openai.yaml"
+      "source": "bundles/tech-core/skills/decision-log-entry/agents/openai.yaml",
+      "path": "bundles/tech-core/skills/decision-log-entry/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/deck-review/SKILL.md",

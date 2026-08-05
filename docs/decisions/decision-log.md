@@ -831,3 +831,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: `adapter_observed` is evidence of a validated local adapter boundary, not filesystem-file presence and not native qualification. Retention policies may evolve in the source stores, but must preserve or publish a bounded current watermark for continuity to remain observable.
 - Refs: CUBD; specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/019-nonblocking-hook-execution.md; specs/044-continuous-use.md; internal/memory; internal/lifecycle; internal/maintenance
 - Supersedes: none
+
+## TCHB - Unify technical engineering, data and quality skills in Tech Core
+
+- Date: 2026-08-05
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The six quality skills currently shipped in the professional base are technical operating methods and should be activated together with engineering and data capabilities rather than presented as a universal consulting baseline. Maintaining separate engineering and data bundles also fragments the technical track and duplicates dependency reasoning.
+- Decision: Create one optional `tech-core` bundle, depending on `base`, containing the six requested quality skills (`coverage-diagnose`, `decision-log-entry`, `pr-quality-loop`, `pr-review`, `unit-test-wave` and `xfail-bug-capture`), the existing engineering delivery skills and the existing data-practice skills. The base bundle remains professional/consulting-focused; confirmed technical tracks activate the complete Tech Core catalog without granting tools or authority.
+- Consequences: `bcgos bundles plan` resolves one technical dependency for software-engineering, technical-explorer, data-engineering and data-science. Gamma quality methods are unavailable in a base-only profile and become direct methods only after Tech Core selection. Release allowlists, embedded catalogs, projection code, policies, tests and documentation must use the new canonical bundle identity.
+- Refs: specs/035-professional-capability-bundles.md; specs/036-base-engineering-quality.md; bundles/catalog/catalog.json; bundles/tech-core/skills/catalog.json
+- Supersedes: none

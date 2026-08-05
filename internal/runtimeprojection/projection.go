@@ -19,8 +19,7 @@ import (
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	bundlecatalog "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/catalog"
-	datapracticeskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/data-practice/skills"
-	engineeringcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/engineering-core/skills"
+	techcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/tech-core/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillrouting"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
@@ -471,16 +470,12 @@ func canonicalProjection(current manifest) (canonicalProjectionContract, error) 
 	if err != nil {
 		return canonicalProjectionContract{}, err
 	}
-	engineering, err := engineeringcoreskills.Catalog()
+	tech, err := techcoreskills.Catalog()
 	if err != nil {
 		return canonicalProjectionContract{}, err
 	}
-	dataPractice, err := datapracticeskills.Catalog()
-	if err != nil {
-		return canonicalProjectionContract{}, err
-	}
-	known := make(map[string]skillsindex.Skill, len(base.Skills)+len(engineering.Skills)+len(dataPractice.Skills))
-	for _, skill := range append(append(base.Skills, engineering.Skills...), dataPractice.Skills...) {
+	known := make(map[string]skillsindex.Skill, len(base.Skills)+len(tech.Skills))
+	for _, skill := range append(base.Skills, tech.Skills...) {
 		known[skill.ID] = skill
 	}
 	active := skillsindex.Catalog{SchemaVersion: base.SchemaVersion}
@@ -564,10 +559,8 @@ func catalogForTracks(tracks []string) (skillsindex.Catalog, error) {
 		var optional skillsindex.Catalog
 		var loadErr error
 		switch bundle.ID {
-		case "engineering-core":
-			optional, loadErr = engineeringcoreskills.Catalog()
-		case "data-practice":
-			optional, loadErr = datapracticeskills.Catalog()
+		case "tech-core":
+			optional, loadErr = techcoreskills.Catalog()
 		default:
 			continue
 		}
@@ -622,6 +615,21 @@ func policyForCatalog(active skillsindex.Catalog) (skillpolicy.Policy, error) {
 	if err != nil {
 		return skillpolicy.Policy{}, err
 	}
+	qualityIDs := []string{"coverage-diagnose", "pr-quality-loop", "pr-review", "unit-test-wave"}
+	activeIDs := make(map[string]bool, len(active.Skills))
+	for _, skill := range active.Skills {
+		activeIDs[skill.ID] = true
+	}
+	selectedQualityIDs := make([]string, 0, len(qualityIDs))
+	for _, id := range qualityIDs {
+		if activeIDs[id] {
+			selectedQualityIDs = append(selectedQualityIDs, id)
+		}
+	}
+	policy, err = skillpolicy.ActivateDirect(policy, "quality_guardian", selectedQualityIDs)
+	if err != nil {
+		return skillpolicy.Policy{}, err
+	}
 	agents, err := baseagents.Catalog()
 	if err != nil {
 		return skillpolicy.Policy{}, err
@@ -648,10 +656,7 @@ func skillBody(id string) ([]byte, error) {
 	if body, err := baseskills.Skill(id); err == nil {
 		return body, nil
 	}
-	if body, err := engineeringcoreskills.Skill(id); err == nil {
-		return body, nil
-	}
-	return datapracticeskills.Skill(id)
+	return techcoreskills.Skill(id)
 }
 
 func renderOrientation(layout runtimeLayout, catalog skillsindex.Catalog) (string, error) {

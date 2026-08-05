@@ -1,43 +1,39 @@
-# Spec 036 - Base engineering quality methods
+# Spec 036 - Tech Core engineering quality methods
 
-Status: implemented in the base bundle; specialized engineering capability
-activation remains governed by Spec 035.
+Status: implemented in the optional `tech-core` bundle; activation remains
+governed by Spec 035.
 
 ## Objective
 
-Ship the smallest useful quality loop in every Maestro installation. A
-consultant should be able to inspect coverage risk, run a bounded test wave,
-capture a real regression, qualify a change, review a pull request and repeat
-the loop without selecting an engineering persona or activating a separate
-bundle.
+Ship the quality loop with the technical capability bundle. Professional users
+keep the base consulting surface, while technical users can activate coverage,
+test, bug-capture and PR methods together with engineering and data practices.
 
 ## Included methods
 
-The base bundle includes these six managed skills:
+The `tech-core` bundle includes these six managed skills:
 
 - `coverage-diagnose`
+- `decision-log-entry`
+- `pr-quality-loop`
+- `pr-review`
 - `unit-test-wave`
 - `xfail-bug-capture`
-- `qa-gate`
-- `pr-review`
-- `pr-quality-loop`
 
 They are procedural and evidence-oriented. Case Agent can use the broader
 method set for delivery work; Gamma Guardian receives only the bounded quality
-subset (`coverage-diagnose`, `unit-test-wave`, `qa-gate`, `pr-review` and
-`pr-quality-loop`) as a longitudinal evaluation method. Neither role receives
+subset (`coverage-diagnose`, `unit-test-wave`, `pr-review` and
+`pr-quality-loop`) when Tech Core is activated as a longitudinal evaluation
+method. Neither role receives
 tools or write authority from a skill, approves a release, merges a pull
 request or persists source, prompts, client data, credentials or full command
 output.
 
 ## Bundle boundary
 
-These methods are part of `bundles/base/distribution.json`, are generated into
-the active `bundles/base/skills/catalog.json` and `INDEX.md`, and are available
-to the normal skills-index surface. The specialized `engineering-core` bundle
-is optional and is activated only by confirmed interview selection; its skills
-are not copied into the base bundle or activated by dependency resolution
-alone.
+These methods are part of `bundles/base/distribution.json` as signed `tech-core`
+content, are generated into `bundles/tech-core/skills/catalog.json` and
+`INDEX.md`, and are available only after confirmed technical track selection.
 
 Development lifecycle hooks are not product skills and remain outside the base
 distribution. They may be supplied as a separate contributor/development pack
@@ -50,7 +46,6 @@ with the same metadata-only and fail-closed principles.
 - `go run ./dev/harness skills-index` produces a catalog and Markdown index that
   include exactly the six new skills in sorted order.
 - The base distribution allowlist names both files for each included skill.
-- `go run ./dev/harness validate --full` passes with `data-practice` embedded as
-  optional: a confirmed data selection projects its three data skills together
-  with the three required engineering skills, without granting tools or
-  authority.
+- `go run ./dev/harness validate --full` passes with `tech-core` embedded as
+  optional: a confirmed engineering or data selection projects its full
+  technical catalog without granting tools or authority.

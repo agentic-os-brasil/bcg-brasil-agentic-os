@@ -973,22 +973,38 @@ func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 
 func TestBundlesPlanMarksDataPracticeOptional(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "optional"`) || !strings.Contains(output.String(), `"id": "engineering-core"`) || !strings.Contains(output.String(), `"id": "data-practice"`) {
+	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "optional"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
 	}
 }
 
 func TestBundlesPlanMarksEngineeringCoreOptional(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "software-engineering"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "optional"`) || !strings.Contains(output.String(), `"id": "engineering-core"`) {
+	if code := Run([]string{"bundles", "plan", "--track", "software-engineering"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "optional"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
 	}
 }
 
 func TestBundlesPlanKeepsClassicConsultingOnTheBaseBundle(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "consulting"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "base_only"`) || strings.Contains(output.String(), `"id": "data-practice"`) {
+	if code := Run([]string{"bundles", "plan", "--track", "consulting"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "base_only"`) || strings.Contains(output.String(), `"id": "tech-core"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestBundlesRecommendUsesDeclaredFunctionAndDoesNotActivate(t *testing.T) {
+	var output bytes.Buffer
+	if code := Run([]string{"bundles", "recommend", "--function", "Engenheira de software"}, &output, &output); code != ExitOK ||
+		!strings.Contains(output.String(), `"state": "recommended"`) ||
+		!strings.Contains(output.String(), `"bundle": "tech-core"`) ||
+		!strings.Contains(output.String(), `"software-engineering"`) {
+		t.Fatalf("recommendation exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := Run([]string{"bundles", "recommend", "--function", "Consultora de estratégia"}, &output, &output); code != ExitOK ||
+		!strings.Contains(output.String(), `"state": "ask"`) ||
+		!strings.Contains(output.String(), "deseja incluir skills de tecnologia") {
+		t.Fatalf("ambiguous recommendation exit = %d, output = %s", code, output.String())
 	}
 }
 
@@ -1734,7 +1750,7 @@ func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
 		t.Fatalf("personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 27`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 30`) {
 		t.Fatalf("optional adapter install = %d %s", code, output.String())
 	}
 	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence"} {

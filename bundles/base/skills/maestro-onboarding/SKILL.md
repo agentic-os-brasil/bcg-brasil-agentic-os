@@ -98,6 +98,23 @@ boundaries for later refinement. Psychological/personality material, personal
 history, faith, assessments and visual identity are not inferred or imported by
 either track; they require a separate, explicit local consent path.
 
+## Sugestão técnica orientada pela função
+
+Depois que o owner responder qual é sua função, use a recomendação determinística
+do runtime:
+
+```sh
+bcgos bundles recommend --function "<resposta declarada pelo owner>"
+```
+
+Se o resultado for `recommended`, explique que engineering, data ou AI foram
+identificados somente na resposta declarada e pergunte se a pessoa quer incluir
+o bundle opcional `tech-core`. Se o resultado for `ask`, faça a mesma pergunta
+sem presumir que a função é técnica. Nunca ative o bundle automaticamente: a
+seleção de uma trilha técnica e a confirmação do owner continuam sendo a única
+forma de projetar as skills. O `tech-core` é um bundle único e inclui engineering,
+data, AI e métodos de qualidade.
+
 ## Camadas opcionais de identidade
 
 The first interview must not pretend that a professional baseline is the whole

@@ -16,7 +16,7 @@ func TestPlanForDataScienceResolvesOptionalDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.State != capabilitybundle.Optional || len(plan.Bundles) != 3 || plan.Bundles[0].ID != "base" || plan.Bundles[1].ID != "data-practice" || plan.Bundles[2].ID != "engineering-core" {
+	if plan.State != capabilitybundle.Optional || len(plan.Bundles) != 2 || plan.Bundles[0].ID != "base" || plan.Bundles[1].ID != "tech-core" {
 		t.Fatalf("plan = %#v", plan)
 	}
 	if !strings.Contains(plan.Reason, "confirmed interview") {
@@ -46,15 +46,15 @@ func TestParseRejectsOptionalBundleThatClaimsActivation(t *testing.T) {
 }
 
 func TestParseRejectsDuplicateTrackAcrossBundles(t *testing.T) {
-	broken := strings.Replace(validCatalog, `"tracks": ["software-engineering", "technical-explorer"]`, `"tracks": ["consulting", "technical-explorer"]`, 1)
+	broken := strings.Replace(validCatalog, `"tracks": ["software-engineering", "technical-explorer", "data-engineering", "data-science"]`, `"tracks": ["consulting", "technical-explorer", "data-engineering", "data-science"]`, 1)
 	if _, err := capabilitybundle.Parse(strings.NewReader(broken)); err == nil || !strings.Contains(err.Error(), "claimed by bundles") {
 		t.Fatalf("Parse() error = %v", err)
 	}
 }
 
-func TestParseRejectsTwoNodeDependencyCycle(t *testing.T) {
-	broken := strings.Replace(validCatalog, `"depends_on": ["base"]`, `"depends_on": ["data-practice"]`, 1)
-	if _, err := capabilitybundle.Parse(strings.NewReader(broken)); err == nil || !strings.Contains(err.Error(), "dependency cycle") {
+func TestParseRejectsSelfDependency(t *testing.T) {
+	broken := strings.Replace(validCatalog, `"depends_on": ["base"]`, `"depends_on": ["tech-core"]`, 1)
+	if _, err := capabilitybundle.Parse(strings.NewReader(broken)); err == nil || !strings.Contains(err.Error(), "invalid dependency") {
 		t.Fatalf("Parse() error = %v", err)
 	}
 }
@@ -78,7 +78,6 @@ const validCatalog = `{
   "schema_version": 1,
   "bundles": [
     {"id": "base", "display_name": "Base", "availability": "included", "availability_reason": "", "depends_on": [], "tracks": ["consulting"], "catalog_pointer": "bundles/base/skills/catalog.json"},
-	    {"id": "engineering-core", "display_name": "Engineering Core", "availability": "optional", "availability_reason": "release activation is available", "depends_on": ["base"], "tracks": ["software-engineering", "technical-explorer"], "catalog_pointer": "bundles/engineering-core/skills/catalog.json"},
-    {"id": "data-practice", "display_name": "Data Practice", "availability": "optional", "availability_reason": "release activation is available", "depends_on": ["engineering-core"], "tracks": ["data-engineering", "data-science"], "catalog_pointer": "bundles/data-practice/skills/catalog.json"}
+    {"id": "tech-core", "display_name": "Tech Core", "availability": "optional", "availability_reason": "release activation is available", "depends_on": ["base"], "tracks": ["software-engineering", "technical-explorer", "data-engineering", "data-science"], "catalog_pointer": "bundles/tech-core/skills/catalog.json"}
   ]
 }`

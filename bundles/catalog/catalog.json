@@ -13,8 +13,8 @@
       "catalog_pointer": "bundles/base/skills/catalog.json"
     },
     {
-      "id": "engineering-core",
-      "display_name": "Fundamentos de engenharia",
+      "id": "tech-core",
+      "display_name": "Tech Core — Engineering, Data, AI e Qualidade",
       "availability": "optional",
       "availability_reason": "Disponível no Canary; a ativação local exige seleção confirmada na entrevista.",
       "depends_on": [
@@ -22,23 +22,12 @@
       ],
       "tracks": [
         "software-engineering",
-        "technical-explorer"
-      ],
-      "catalog_pointer": "bundles/engineering-core/skills/catalog.json"
-    },
-    {
-      "id": "data-practice",
-      "display_name": "Prática de dados",
-      "availability": "optional",
-      "availability_reason": "Disponível no Canary; a ativação local exige seleção confirmada na entrevista.",
-      "depends_on": [
-        "engineering-core"
-      ],
-      "tracks": [
+        "technical-explorer",
         "data-engineering",
-        "data-science"
+        "data-science",
+        "ai-engineering"
       ],
-      "catalog_pointer": "bundles/data-practice/skills/catalog.json"
+      "catalog_pointer": "bundles/tech-core/skills/catalog.json"
     }
   ]
 }

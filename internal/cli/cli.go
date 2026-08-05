@@ -1536,7 +1536,7 @@ func runSkills(args []string, out, errOut io.Writer) int {
 
 func runBundles(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(out, "usage: bcgos bundles <index|plan --track TRACK[,TRACK...]>")
+		fmt.Fprintln(out, "usage: bcgos bundles <index|plan --track TRACK[,TRACK...]|recommend --function TEXT>")
 		return ExitOK
 	}
 	catalog, err := bundlecatalog.Catalog()
@@ -1562,8 +1562,16 @@ func runBundles(args []string, out, errOut io.Writer) int {
 			return reportError(errOut, err)
 		}
 		return writeJSON(out, plan, errOut)
+	case "recommend":
+		flags := newFlagSet("bundles recommend", errOut)
+		function := flags.String("function", "", "explicitly declared collaborator function")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*function) == "" {
+			fmt.Fprintln(errOut, "usage: bcgos bundles recommend --function TEXT")
+			return ExitUsage
+		}
+		return writeJSON(out, ownerctx.RecommendTechCore(*function), errOut)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos bundles <index|plan --track TRACK[,TRACK...]>")
+		fmt.Fprintln(errOut, "usage: bcgos bundles <index|plan --track TRACK[,TRACK...]|recommend --function TEXT>")
 		return ExitUsage
 	}
 }

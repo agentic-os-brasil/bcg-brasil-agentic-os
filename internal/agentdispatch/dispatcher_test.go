@@ -72,8 +72,8 @@ func TestDispatcherEnforcesConfirmedTrackSelection(t *testing.T) {
 	if err != nil || !decision.Allowed {
 		t.Fatalf("engineering root dispatch failed: %#v %v", decision, err)
 	}
-	if err := engineeringDispatcher.SelectDirectSkill(root, "case-agent-alpha", "case-cap", "data-science-evaluation"); err == nil {
-		t.Fatal("unselected data skill was allowed")
+	if err := engineeringDispatcher.SelectDirectSkill(root, "case-agent-alpha", "case-cap", "data-science-evaluation"); err != nil {
+		t.Fatalf("unified Tech Core data skill was denied for a technical track: %v", err)
 	}
 }
 
