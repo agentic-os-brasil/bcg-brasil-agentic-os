@@ -1,10 +1,42 @@
 package agentorchestration
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 )
+
+func TestEnsureDurableStateRepairsEmptyFileAndRejectsSymlink(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "maestro-orchestration-state.json")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureDurableState(path, "recovery-cap"); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.Snapshot() != (StateSnapshot{}) {
+		t.Fatalf("repaired state = %#v, want empty snapshot", store.Snapshot())
+	}
+	outside := filepath.Join(directory, "outside.json")
+	if err := os.WriteFile(outside, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, path); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := EnsureDurableState(path, "recovery-cap"); err == nil {
+		t.Fatal("symlink state was accepted")
+	}
+}
 
 func TestDurableStoreRestartsFencesReplacementAndReplays(t *testing.T) {
 	catalog := loadCatalog(t)

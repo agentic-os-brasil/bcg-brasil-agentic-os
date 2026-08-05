@@ -488,6 +488,9 @@ func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	if _, err := ownerctx.Initialize(root); err != nil {
+		return reportError(errOut, fmt.Errorf("bootstrap owner context: %w", err))
+	}
 	agent, err := workspaceagent.Initialize(root, result.WorkspaceID)
 	if err != nil {
 		return reportError(errOut, err)
@@ -2618,6 +2621,9 @@ func resolveHookOrchestrationState(inspection workspace.Inspection, pointer stri
 		if stateInfo.Size() <= 0 || stateInfo.Size() > maximumOrchestrationStateBytes {
 			return hookOrchestrationState{}, errors.New("orchestration state must be a non-empty bounded JSON file")
 		}
+		if stateInfo.Mode().Perm()&0o077 != 0 {
+			return hookOrchestrationState{}, errors.New("orchestration state must be owner-only (0600 or stricter)")
+		}
 		file, openErr := os.Open(statePath)
 		if openErr != nil {
 			return hookOrchestrationState{}, fmt.Errorf("open orchestration state: %w", openErr)
@@ -2643,7 +2649,9 @@ func resolveHookOrchestrationState(inspection workspace.Inspection, pointer stri
 		if closeErr != nil {
 			return hookOrchestrationState{}, fmt.Errorf("close orchestration state: %w", closeErr)
 		}
-	} else if !errors.Is(statErr, os.ErrNotExist) {
+	} else if errors.Is(statErr, os.ErrNotExist) {
+		return hookOrchestrationState{}, errors.New("orchestration state is missing; run bcgos init for this workspace before opening the runtime")
+	} else {
 		return hookOrchestrationState{}, fmt.Errorf("inspect orchestration state: %w", statErr)
 	}
 	store, err := agentorchestration.NewDurableStateStore(statePath, lifecycle.IdempotencyKey("hook-store-reader", inspection.WorkspaceID))

@@ -10,9 +10,12 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimeprojection"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 )
 
 func TestVerifyAcceptsOnlyCanonicalConfiguredCodexInstall(t *testing.T) {
@@ -103,6 +106,9 @@ func TestVerifyRejectsMissingAndTamperedSurfaces(t *testing.T) {
 		}},
 		{name: "missing hooks", failedID: "runtime_hooks", mutate: func(t *testing.T, f readinessFixture) {
 			removeFile(t, filepath.Join(f.workspace, ".codex", "hooks.json"))
+		}},
+		{name: "missing orchestration state", failedID: "orchestration_state", mutate: func(t *testing.T, f readinessFixture) {
+			removeFile(t, filepath.Join(f.workspace, ".bcgos", "maestro-orchestration-state.json"))
 		}},
 		{name: "mismatched hook command", failedID: "runtime_hooks", mutate: func(t *testing.T, f readinessFixture) {
 			path := filepath.Join(f.workspace, ".codex", "hooks.json")
@@ -245,7 +251,17 @@ func newReadinessFixtureForRuntime(t *testing.T, runtimeName string, tracks []st
 	}
 	fixture.cli = filepath.Join(fixture.managedRoot, "bin", cliName)
 	writeExecutable(t, fixture.cli)
-	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: fixture.workspace, DataRoot: fixture.dataRoot}); err != nil {
+	initialized, err := workspace.Initialize(workspace.Options{WorkspacePath: fixture.workspace, DataRoot: fixture.dataRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ownerctx.Initialize(fixture.dataRoot); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspaceagent.Initialize(fixture.dataRoot, initialized.WorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := agentscaffold.Scaffold(fixture.dataRoot, agentscaffold.WorkspaceRequest(initialized.WorkspaceID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := runtimeprojection.InstallForTracks(runtimeName, fixture.workspace, fixture.tracks); err != nil {

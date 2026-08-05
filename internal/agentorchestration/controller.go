@@ -125,16 +125,26 @@ func NewDurableStateStore(path, recoveryCapability string) (*StateStore, error) 
 // EnsureDurableState materializes the empty, valid snapshot required before a
 // workspace-local runtime hook is handed to a native adapter. It is separate
 // from NewDurableStateStore because opening a missing state file must remain a
-// read-only operation for hook inspection. Existing state is never replaced.
+// read-only operation for hook inspection. Existing valid state is never
+// replaced; an empty interrupted file is repaired to the valid empty snapshot.
 func EnsureDurableState(path, recoveryCapability string) error {
+	// Inspect the directory entry before opening it. Hooks must never accept a
+	// symlink as the durable state target, even if the symlink currently points
+	// at valid JSON.
+	info, err := os.Lstat(path)
+	if err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return errors.New("orchestration state target is not a regular non-symlink file")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect durable orchestration state: %w", err)
+	}
 	store, err := NewDurableStateStore(path, recoveryCapability)
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(path); err == nil {
+	if info != nil && info.Size() > 0 {
 		return nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("inspect durable orchestration state: %w", err)
 	}
 
 	unlock, err := acquireStateFileLock(path)
@@ -142,12 +152,25 @@ func EnsureDurableState(path, recoveryCapability string) error {
 		return err
 	}
 	defer func() { _ = unlock() }()
-	if _, err := os.Stat(path); err == nil {
-		return nil
+	info, err = os.Lstat(path)
+	if err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return errors.New("orchestration state target is not a regular non-symlink file")
+		}
+		if info.Size() > 0 {
+			return nil
+		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect durable orchestration state: %w", err)
 	}
 	return store.persistLocked()
+}
+
+// ValidateStateSnapshot exposes the same structural invariant used by the
+// durable store so read-only readiness checks cannot drift from persisted
+// transition validation.
+func ValidateStateSnapshot(snapshot StateSnapshot) error {
+	return validateSnapshot(snapshot)
 }
 
 func RestoreStateStore(snapshot StateSnapshot, recoveryCapability string) (*StateStore, error) {

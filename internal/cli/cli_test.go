@@ -411,6 +411,29 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 	}
 }
 
+func TestInstalledHookRejectsMissingOrchestrationStateWithRemediation(t *testing.T) {
+	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspacePath, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	if err := os.Remove(filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code == ExitOK || !strings.Contains(output.String(), "orchestration state is missing") || !strings.Contains(output.String(), "bcgos init") {
+		t.Fatalf("missing state accepted without remediation: exit=%d output=%s", code, output.String())
+	}
+}
+
 func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {

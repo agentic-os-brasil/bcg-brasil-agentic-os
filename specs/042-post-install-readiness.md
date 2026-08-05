@@ -26,6 +26,16 @@ and every manifest-owned skill. Their paths, hashes and managed orientation
 block must match the active embedded bundle and the owner-confirmed capability
 tracks; self-consistent but rewritten local manifests are not accepted.
 
+Readiness also requires the installation dependencies that make the first
+session deterministic: a protected, strict-JSON
+`.bcgos/maestro-orchestration-state.json` snapshot, an initialized owner
+context/onboarding registry, the workspace-agent dossier and the signed
+workspace-agent scaffold. `bcgos init` materializes these surfaces
+idempotently; an interrupted or legacy installation fails with a precise
+check rather than being presented as ready. The verifier does not install
+external Claude Code, Codex or provider packs: those remain explicit runtime
+availability and authority gates outside the local Maestro transaction.
+
 The regular workspace-local `.claude/settings.local.json` (Claude) or
 `.codex/hooks.json` (Codex) must contain exactly one
 Maestro-owned command for each canonical binding:
@@ -73,5 +83,5 @@ bcgos adapter verify --runtime <claude|codex> [workspace-path]
 
 It emits one schema-versioned JSON report and exits non-zero on any failed
 check. Unsupported runtimes, custom executable paths, missing install state,
-missing or tampered files, symlinks, path/version drift and lifecycle mismatches are
-rejected without writes.
+missing or tampered files, missing installation dependencies, symlinks,
+path/version drift and lifecycle mismatches are rejected without writes.

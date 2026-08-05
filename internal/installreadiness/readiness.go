@@ -21,10 +21,14 @@ import (
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	datapracticeskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/data-practice/skills"
 	engineeringcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/engineering-core/skills"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimeprojection"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 )
 
 const maximumConfigurationBytes = 1 << 20
@@ -204,6 +208,36 @@ func Verify(options Options) (Report, error) {
 	report.WorkspaceID = inspection.WorkspaceID
 	pass("workspace_identity", "workspace manifest is bound to this canonical path")
 
+	if err := verifyOrchestrationState(workspacePath); err != nil {
+		return fail("orchestration_state", err)
+	}
+	pass("orchestration_state", "durable orchestration state is present, valid and protected")
+	owner, err := ownerctx.Inspect(dataRoot)
+	if err != nil || !owner.Initialized {
+		if err == nil {
+			err = errors.New("owner context is not initialized")
+		}
+		return fail("owner_context", err)
+	}
+	pass("owner_context", "owner facets and onboarding registry are initialized")
+	workspaceAgent, err := workspaceagent.Inspect(dataRoot, inspection.WorkspaceID)
+	if err != nil || !workspaceAgent.Initialized {
+		if err == nil {
+			err = errors.New("workspace agent is not initialized")
+		}
+		return fail("workspace_agent", err)
+	}
+	pass("workspace_agent", "workspace agent state and dossier are initialized")
+	agentID := agentscaffold.WorkspaceRequest(inspection.WorkspaceID).AgentID
+	agentStub, err := agentscaffold.Inspect(dataRoot, agentID)
+	if err != nil || !agentStub.Initialized {
+		if err == nil {
+			err = errors.New("workspace agent scaffold is not initialized")
+		}
+		return fail("agent_scaffold", err)
+	}
+	pass("agent_scaffold", "signed workspace-agent scaffold is initialized")
+
 	if err := verifyProjection(runtimeName, workspacePath, options.CapabilityTracks); err != nil {
 		return fail("runtime_projection", err)
 	}
@@ -222,6 +256,29 @@ func Verify(options Options) (Report, error) {
 	pass("lifecycle_capabilities", "canonical lifecycle capabilities remain configured and unavailable without native observation")
 	report.State, report.Ready = "verified", true
 	return report, nil
+}
+
+func verifyOrchestrationState(workspacePath string) error {
+	path, err := regularFile(workspacePath, filepath.Join(".bcgos", "maestro-orchestration-state.json"), maximumConfigurationBytes, false)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return errors.New("orchestration state must be owner-only (0600 or stricter)")
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var snapshot agentorchestration.StateSnapshot
+	if err := decodeStrict(body, &snapshot); err != nil {
+		return fmt.Errorf("decode durable orchestration state: %w", err)
+	}
+	return agentorchestration.ValidateStateSnapshot(snapshot)
 }
 
 func verifyProjection(runtimeName, workspacePath string, tracks []string) error {
