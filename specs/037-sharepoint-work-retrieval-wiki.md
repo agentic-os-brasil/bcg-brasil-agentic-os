@@ -12,10 +12,11 @@ Let an authorized professional recover prior work with a request such as:
 > Quero o deck que apresentei para o CEO da Suzano em 2023 sobre plantio.
 
 Maestro maps the explicitly enrolled SharePoint scope, compiles a local
-organizational work-retrieval wiki and returns a bounded ranked set of source
-pointers. The SharePoint source remains authoritative. The wiki is a derived
-retrieval surface, not a document repository, a memory layer or permission to
-read every result.
+organizational work-retrieval wiki and, when the owner explicitly authorizes
+it, creates a workspace-local layer of concise rationales for the most recent
+materials. The SharePoint source remains authoritative. Both surfaces are
+derived retrieval aids, not a document repository, a memory layer or
+permission to read every result.
 
 ## Runtime boundary
 
@@ -103,6 +104,42 @@ Claude collector may enumerate those roots. Codex may record a local choice
 but collection remains `unavailable/corporate_policy`; it may query only an
 already verified local index. Session Start never resolves URLs, calls
 SharePoint, imports a snapshot or compiles the index.
+
+## Owner-authorized rationale projection
+
+Folder selection and content reading are separate decisions. After a confirmed
+selection, onboarding asks a second, explicit question before any read:
+
+> Posso ler os materiais mais recentes dessas pastas e criar racionais internos
+> rastreáveis no workspace?
+
+If the owner agrees, a qualified Claude collector may read only the enrolled
+roots and emit a bounded `RationaleBatch` together with the signed metadata
+snapshot and adapter receipt. The local command validates that the batch binds
+the initialized workspace, the exact selection fingerprint, the enrolled
+Claude key and the selected source URL for every item. It then materializes:
+
+```text
+<workspace>/
+  brain/
+    sources/sharepoint/README.md
+    knowledge/sharepoint-rationales/
+      README.md
+      index.md
+      <rank>-<stable-item-id>.md
+```
+
+Each rationale contains only a concise derived synthesis plus the authoritative
+SharePoint URL, item reference, content digest and source modification time.
+Raw document bodies, credentials and transcripts are rejected. Items are
+ordered by source modification descending, with stable item reference as the
+deterministic tie-breaker. Re-ingesting the same batch is idempotent and a
+changed digest replaces the prior derived rationale. SharePoint remains the
+place to verify the current source and permissions.
+
+If signed enrollment, native Claude qualification or the local extraction
+runtime is unavailable, the request fails closed and the selected source stays
+selected but not ingested. No fallback runtime or Codex collection is allowed.
 
 ## Enrollment and least privilege
 
@@ -333,6 +370,7 @@ bcgos prior-work actor
 bcgos prior-work source status --workspace <path>
 bcgos prior-work source select --workspace <path> --stdin --confirm
 bcgos prior-work source defer --workspace <path> --confirm
+bcgos prior-work rationale ingest --workspace <path> --stdin --confirm
 bcgos prior-work enroll --stdin --confirm
 bcgos prior-work status
 bcgos prior-work import --snapshot <normalized-json> --receipt <signed-adapter-command-receipt>
@@ -376,6 +414,11 @@ Claude with the approved SharePoint connection.
 13. A deferred choice is remembered and not asked again automatically; a later
     confirmed selection creates a new immutable version without broadening any
     signed enrollment.
+14. With a second explicit owner authorization, a signed Claude batch writes
+    only derived rationales under the workspace path, orders newer source items
+    first, preserves a SharePoint pointer per rationale and never writes raw
+    source bodies. Missing enrollment, invalid provenance or an unavailable
+    runtime leaves the workspace unchanged.
 
 ## Delivery boundary
 

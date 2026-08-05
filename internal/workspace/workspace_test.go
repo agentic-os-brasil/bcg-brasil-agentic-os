@@ -31,6 +31,8 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 		filepath.Join(workspacePath, "brain", "README.md"),
 		filepath.Join(workspacePath, "brain", "clients", "README.md"),
 		filepath.Join(workspacePath, "brain", "projects", "README.md"),
+		filepath.Join(workspacePath, "brain", "sources", "sharepoint", "README.md"),
+		filepath.Join(workspacePath, "brain", "knowledge", "sharepoint-rationales", "README.md"),
 		filepath.Join(workspacePath, "brain", "organization", "bcg", "README.md"),
 		filepath.Join(workspacePath, "brain", "organization", "bcg", "people", "README.md"),
 		filepath.Join(workspacePath, "brain", "organization", "bcg", "practices", "README.md"),
