@@ -38,8 +38,22 @@ type Status struct {
 	OperatingState Pointer               `json:"operating_state"`
 	Tasks          Pointer               `json:"tasks"`
 	Onboarding     OnboardingStatus      `json:"onboarding"`
+	SelfIndex      Pointer               `json:"self_index"`
+	Expansion      ExpansionStatus       `json:"expansion"`
 	OpenTasks      TaskStatus            `json:"open_tasks"`
 	Capabilities   map[string]Capability `json:"capabilities"`
+}
+
+// ExpansionStatus is a bounded projection of the six non-sensitive SELF
+// facets. It contains no answer, draft body or interview token.
+type ExpansionStatus struct {
+	State       string `json:"state"`
+	Total       int    `json:"total"`
+	Current     int    `json:"current"`
+	Unknown     int    `json:"unknown"`
+	Stale       int    `json:"stale"`
+	NextFacet   string `json:"next_facet,omitempty"`
+	ReviewCount int    `json:"review_count"`
 }
 
 // OnboardingStatus is a deterministic projection of the consented owner
@@ -62,8 +76,9 @@ type TaskStatus struct {
 }
 
 type InterviewStep struct {
-	Facet    string `json:"facet"`
-	Question string `json:"question"`
+	Facet       string `json:"facet"`
+	Question    string `json:"question"`
+	AudioPrompt string `json:"audio_prompt,omitempty"`
 }
 
 // Interview is a runtime-neutral prompt contract. Runtimes may present it
@@ -104,17 +119,57 @@ type facetTemplate struct {
 }
 
 var facets = map[string]facetTemplate{
-	"professional-role":     {facetRecord{"owner/self/professional-role.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Professional role\n\nDescreva responsabilidades, contexto profissional e resultados pelos quais voce responde.\n"},
-	"communication-style":   {facetRecord{"owner/self/communication-style.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Communication style\n\nDescreva como prefere colaborar com o Agentic OS: tom, nivel de detalhe, idioma e formato.\n"},
-	"voice":                 {facetRecord{"owner/self/voice.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Voice\n\nDescreva como voce quer falar com o mundo em entregas externas: emails, documentos, propostas e apresentacoes.\n"},
-	"preferences":           {facetRecord{"owner/self/preferences.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Preferences\n\nRegistre preferencias de ferramentas, formatos, rotinas e formas de trabalho.\n"},
-	"decision-rules":        {facetRecord{"owner/self/decision-rules.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Decision rules\n\nRegistre principios e trade-offs que devem orientar recomendacoes importantes.\n"},
-	"working-boundaries":    {facetRecord{"owner/self/working-boundaries.md", "professional", []string{"session", "walter"}, "confirmation_required"}, "# Working boundaries\n\nRegistre limites de escopo, confidencialidade e quando escalar decisoes.\n"},
+	"professional-role":     {facetRecord{"owner/self/professional-role.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Professional role\n\n## Current\n\nDescreva responsabilidades, contexto profissional e resultados pelos quais voce responde.\n"},
+	"communication-style":   {facetRecord{"owner/self/communication-style.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Communication style\n\n## Current\n\nDescreva como prefere colaborar com o Agentic OS: tom, nivel de detalhe, idioma e formato.\n"},
+	"voice":                 {facetRecord{"owner/self/voice.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Voice\n\n## Current\n\nDescreva como voce quer falar com o mundo em entregas externas: emails, documentos, propostas e apresentacoes.\n"},
+	"preferences":           {facetRecord{"owner/self/preferences.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Preferences\n\n## Current\n\nRegistre preferencias de ferramentas, formatos, rotinas e formas de trabalho.\n"},
+	"decision-rules":        {facetRecord{"owner/self/decision-rules.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Decision rules\n\n## Current\n\nRegistre principios e trade-offs que devem orientar recomendacoes importantes.\n"},
+	"working-boundaries":    {facetRecord{"owner/self/working-boundaries.md", "professional", []string{"session", "walter"}, "confirmation_required"}, "# Working boundaries\n\n## Current\n\nRegistre limites de escopo, confidencialidade e quando escalar decisoes.\n"},
 	"psychological-profile": {facetRecord{"owner/self/psychological-profile.md", "sensitive", []string{"walter"}, "confirmation_required"}, "# Psychological profile\n\nOpcional. Inclua apenas uma sintese profissional revisada por voce, com fontes e finalidades autorizadas. Nunca use como diagnostico ou rotulo deterministico.\n"},
 }
 
 const statePath = "owner/operating/work-state.md"
+const selfIndexPath = "owner/self/README.md"
 const stateTemplate = "# Work state\n\nRegistre somente estado operacional recente: prioridades, bloqueios, proximas acoes e itens aguardando resposta.\n\n## Tarefas abertas\n- [ ]\n"
+const selfIndexTemplate = `# Owner SELF
+
+Este diretorio e a fonte canonica local do SELF profissional do owner. Cada
+faceta abaixo so muda por resposta explicita, draft revisavel e confirmacao do
+owner. Conversas, observacoes, client data e inferencias nunca sobrescrevem
+estas paginas.
+
+## Facetas
+
+- [Professional role](professional-role.md) — papel, responsabilidades e
+  resultados que definem sucesso.
+- [Communication style](communication-style.md) — idioma, tom, detalhe,
+  formato e como o Maestro deve desafiar.
+- [Voice](voice.md) — como entregas em nome do owner devem e nao devem soar.
+- [Preferences](preferences.md) — ferramentas, formatos, rituais e formas de
+  colaboracao que ajudam ou atrapalham.
+- [Decision rules](decision-rules.md) — principios para trade-offs e sinais
+  que justificam mudar de direcao.
+- [Working boundaries](working-boundaries.md) — limites de confidencialidade,
+  escopo, autonomia e escalada.
+
+## Contrato de verdade
+
+Cada pagina deve registrar apenas afirmacoes que o owner reconhece como suas,
+com linguagem suficientemente concreta para orientar trabalho e suficientemente
+estavel para sobreviver a uma sessao. Instrucao explicita atual prevalece;
+correcoes devem atravessar novo draft e confirmacao. Ausencia e staleness sao
+lacunas visiveis, nunca permissao para completar o perfil por inferencia.
+Cada faceta mantem somente uma secao ` + "`## Current`" + ` concisa. Historico nao e
+acumulado como prosa: revisoes anteriores ficam em
+` + "`owner/refinement/versions/<facet>/`" + ` e sao referenciadas pelos receipts de
+auditoria. Facetas repetitivas, transcript-like ou acima dos limites fechados
+falham antes de virar draft.
+
+` + "`psychological-profile.md`" + ` e opcional, sensivel e exclusivo de Walter; ele
+nao integra entrevistas de expansao, o indice de sessao ou recomendacoes
+deterministicas. A confirmacao ` + "`no_client_data`" + ` e uma declaracao do owner,
+nao um classificador automatico de conteudo.
+`
 
 const (
 	OnboardingTrackQuick    = "quick"
@@ -147,6 +202,9 @@ func Initialize(root string) (Status, error) {
 		}
 	}
 	if err := create(filepath.Join(root, filepath.FromSlash(statePath)), stateTemplate); err != nil {
+		return Status{}, err
+	}
+	if err := create(filepath.Join(root, filepath.FromSlash(selfIndexPath)), selfIndexTemplate); err != nil {
 		return Status{}, err
 	}
 	if err := os.MkdirAll(filepath.Join(directory, "sources", "assessments"), 0o700); err != nil {
@@ -196,6 +254,7 @@ func Inspect(root string) (Status, error) {
 		Initialized:    true,
 		Facets:         make(map[string]Facet, len(value.Facets)),
 		OperatingState: pointer(root, value.OperatingState),
+		SelfIndex:      pointer(root, selfIndexPath),
 		Tasks:          Pointer{State: "unavailable"},
 		Capabilities:   capabilities(),
 	}
@@ -212,6 +271,10 @@ func Inspect(root string) (Status, error) {
 	if value.SchemaVersion == 2 && value.OnboardingConfirmedAt != "" && status.Onboarding.State == "review_required" && secureDigestEqual(value.OnboardingConfirmedSHA256, legacyOnboardingDigest(root)) {
 		status.Onboarding.State = "complete"
 		status.Onboarding.ReviewDigest = ""
+	}
+	status.Expansion, err = expansionStatus(root, value, status.Onboarding)
+	if err != nil {
+		return Status{}, err
 	}
 	status.OpenTasks = openTasks(root, value.OperatingState)
 	if status.OpenTasks.State != "unavailable" {
@@ -262,7 +325,7 @@ func interviewForTrack(track string) Interview {
 }
 
 func emptyStatus() Status {
-	return Status{Tasks: Pointer{State: "unavailable"}, Onboarding: onboardingSelectionRequired(), OpenTasks: TaskStatus{State: "unavailable"}, Capabilities: capabilities()}
+	return Status{Tasks: Pointer{State: "unavailable"}, SelfIndex: Pointer{State: "missing"}, Onboarding: onboardingSelectionRequired(), Expansion: ExpansionStatus{State: "unavailable"}, OpenTasks: TaskStatus{State: "unavailable"}, Capabilities: capabilities()}
 }
 
 func onboardingSelectionRequired() OnboardingStatus {
@@ -433,6 +496,7 @@ func legacyOnboardingDigest(root string) string {
 func capabilities() map[string]Capability {
 	return map[string]Capability{
 		"cold_start_interview":   {State: "supported", Message: "guided questions are available for a runtime adapter"},
+		"self_expansion":         {State: "supported", Message: "one-question owner interviews create reviewable, digest-bound local drafts"},
 		"assessment_ingestion":   {State: "unavailable", Message: "assessment extraction requires an approved local ingestion adapter and explicit consent"},
 		"refinement_application": {State: "supported", Message: "local proposals apply declared facet policies with audit and reversal"},
 		"observation_capture":    {State: "supported", Message: "Maestro evaluates every interaction; only material owner-attested signals persist locally"},

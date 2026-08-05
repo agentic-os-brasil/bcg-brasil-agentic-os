@@ -18,6 +18,8 @@ import (
 var ErrConfirmationRequired = errors.New("owner confirmation is required by this facet policy")
 var ErrRevisionConflict = errors.New("owner facet has changed since this audit; refusing to overwrite newer content")
 
+var refinementWriteJSON = writePrivateJSON
+
 // RefinementInput is produced by an approved observation or synthesis adapter.
 // The engine records it locally and never derives content from raw work itself.
 type RefinementInput struct {
@@ -258,27 +260,43 @@ func apply(root string, p proposal, definition facetRecord, confirmed bool) (Ref
 	if err != nil {
 		return RefinementReceipt{}, err
 	}
-	if p.SourceSHA256 == "" || digest(string(before)) != p.SourceSHA256 {
+	currentSHA := digest(string(before))
+	auditID := "audit-" + p.ID
+	if p.SourceSHA256 != "" && currentSHA != p.SourceSHA256 && currentSHA == digest(p.ProposedBody) {
+		item, readErr := readAudit(root, auditID)
+		if readErr != nil || (item.State != "prepared" && item.State != "applied") || item.ID != auditID || item.ProposalID != p.ID || item.Facet != p.Facet || item.BeforeSHA256 != p.SourceSHA256 || item.AfterSHA256 != currentSHA || item.EvidenceSHA256 != digest(p.Evidence) {
+			return RefinementReceipt{}, ErrRevisionConflict
+		}
+		item.State = "applied"
+		if err := refinementWriteJSON(auditPath(root, auditID), item); err != nil {
+			return RefinementReceipt{}, err
+		}
+		p.State, p.AuditID = "applied", auditID
+		if err := refinementWriteJSON(proposalPath(root, p.ID), p); err != nil {
+			return RefinementReceipt{}, err
+		}
+		return receipt(p), nil
+	}
+	if p.SourceSHA256 == "" || currentSHA != p.SourceSHA256 {
 		return RefinementReceipt{}, ErrRevisionConflict
 	}
 	beforePath := filepath.ToSlash(filepath.Join("owner", "refinement", "versions", p.Facet, p.ID+".before.md"))
 	if err := writePrivateFile(filepath.Join(root, filepath.FromSlash(beforePath)), before); err != nil {
 		return RefinementReceipt{}, err
 	}
-	auditID := "audit-" + p.ID
 	item := audit{ID: auditID, ProposalID: p.ID, Facet: p.Facet, EvidenceSHA256: digest(p.Evidence), BeforePath: beforePath, BeforeSHA256: digest(string(before)), AfterSHA256: digest(p.ProposedBody), AppliedAt: time.Now().UTC(), State: "prepared"}
-	if err := writePrivateJSON(auditPath(root, auditID), item); err != nil {
+	if err := refinementWriteJSON(auditPath(root, auditID), item); err != nil {
 		return RefinementReceipt{}, err
 	}
 	if err := atomicPrivateWrite(currentPath, []byte(p.ProposedBody)); err != nil {
 		return RefinementReceipt{}, err
 	}
 	item.State = "applied"
-	if err := writePrivateJSON(auditPath(root, auditID), item); err != nil {
+	if err := refinementWriteJSON(auditPath(root, auditID), item); err != nil {
 		return RefinementReceipt{}, err
 	}
 	p.State, p.AuditID = "applied", auditID
-	if err := writePrivateJSON(proposalPath(root, p.ID), p); err != nil {
+	if err := refinementWriteJSON(proposalPath(root, p.ID), p); err != nil {
 		return RefinementReceipt{}, err
 	}
 	return receipt(p), nil

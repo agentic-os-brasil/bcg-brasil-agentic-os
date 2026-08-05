@@ -77,7 +77,19 @@ type Owner struct {
 	OperatingState Pointer            `json:"operating_state"`
 	Tasks          Pointer            `json:"tasks"`
 	Onboarding     Onboarding         `json:"onboarding"`
+	SelfIndex      Pointer            `json:"self_index"`
+	Expansion      SelfExpansion      `json:"expansion"`
 	OpenTasks      OpenTasks          `json:"open_tasks"`
+}
+
+type SelfExpansion struct {
+	State       string `json:"state"`
+	Total       int    `json:"total"`
+	Current     int    `json:"current"`
+	Unknown     int    `json:"unknown"`
+	Stale       int    `json:"stale"`
+	NextFacet   string `json:"next_facet,omitempty"`
+	ReviewCount int    `json:"review_count"`
 }
 
 type Onboarding struct {
@@ -190,6 +202,17 @@ func Build(sources Sources) Packet {
 	if openTasks.State == "" {
 		openTasks.State = "unavailable"
 	}
+	selfIndex := sources.Owner.SelfIndex
+	expansion := sources.Owner.Expansion
+	if sources.Owner.Initialized && selfIndex.State == "" {
+		selfIndex = ownerctx.Pointer{Path: "owner/self/README.md", Available: true, State: "available"}
+	}
+	if sources.Owner.Initialized && expansion.State == "" {
+		expansion = ownerctx.ExpansionStatus{State: "action_required", Total: 6, Unknown: 6, NextFacet: "professional-role"}
+	}
+	if !sources.Owner.Initialized && expansion.State == "" {
+		expansion.State = "unavailable"
+	}
 	sharePointSource := sources.SharePointSource
 	if sharePointSource.State == "" {
 		sharePointSource = priorwork.SourceSelectionStatus{
@@ -212,6 +235,8 @@ func Build(sources Sources) Packet {
 			OperatingState: pointer(sources.Owner.OperatingState),
 			Tasks:          pointer(sources.Owner.Tasks),
 			Onboarding:     Onboarding{State: onboarding.State, Track: onboarding.Track, NextQuestion: onboarding.NextQuestion.Question, ReviewDigest: onboarding.ReviewDigest},
+			SelfIndex:      pointer(selfIndex),
+			Expansion:      SelfExpansion{State: expansion.State, Total: expansion.Total, Current: expansion.Current, Unknown: expansion.Unknown, Stale: expansion.Stale, NextFacet: expansion.NextFacet, ReviewCount: expansion.ReviewCount},
 			OpenTasks:      OpenTasks{State: openTasks.State, Count: openTasks.Count},
 		},
 		Atlas: Atlas{
@@ -288,6 +313,33 @@ func (packet Packet) Validate() error {
 	}
 	if packet.Owner.OpenTasks.State != "unavailable" && packet.Owner.OpenTasks.State != "empty" && packet.Owner.OpenTasks.State != "available" {
 		return errors.New("session context packet has an invalid open task state")
+	}
+	if packet.Owner.Initialized {
+		expansion := packet.Owner.Expansion
+		if packet.Owner.SelfIndex.Path != "owner/self/README.md" || !packet.Owner.SelfIndex.Available || packet.Owner.SelfIndex.State != "available" {
+			return errors.New("initialized owner is missing the canonical SELF index pointer")
+		}
+		if expansion.Total != 6 || expansion.Current < 0 || expansion.Unknown < 0 || expansion.Stale < 0 || expansion.ReviewCount < 0 || expansion.Current+expansion.Unknown+expansion.Stale != expansion.Total {
+			return errors.New("session context packet has invalid SELF expansion counts")
+		}
+		switch expansion.State {
+		case "current":
+			if expansion.NextFacet != "" || expansion.ReviewCount != 0 || expansion.Current != expansion.Total {
+				return errors.New("current SELF expansion summary is inconsistent")
+			}
+		case "action_required":
+			if _, ok := sessionSafeFacets[expansion.NextFacet]; !ok || expansion.ReviewCount != 0 {
+				return errors.New("action-required SELF expansion summary is inconsistent")
+			}
+		case "review_required":
+			if expansion.NextFacet != "" || expansion.ReviewCount <= 0 {
+				return errors.New("review-required SELF expansion summary is inconsistent")
+			}
+		default:
+			return errors.New("session context packet has an invalid SELF expansion state")
+		}
+	} else if packet.Owner.Expansion.State != "unavailable" {
+		return errors.New("uninitialized owner exposes SELF expansion state")
 	}
 	if err := validateSharePointSource(packet.SharePointSource); err != nil {
 		return err

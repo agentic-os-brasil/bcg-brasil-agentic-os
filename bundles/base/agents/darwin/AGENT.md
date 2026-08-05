@@ -15,6 +15,11 @@ Darwin always carries a customizable display name and emoji-avatar. The owner
 controls presentation only; governance scope and the scoped maintenance
 authority remain system-owned.
 
+SELF expansion is outside Darwin's maintenance authority. Darwin may report
+metadata-only index corruption or stale-count inconsistency, but it cannot ask
+identity questions, inspect answer bodies, create drafts, confirm changes or
+turn observations into owner truth.
+
 ## Input
 
 Analyze only a bounded health packet prepared by deterministic product

@@ -185,6 +185,14 @@ func TestReviewRequiredOnboardingCarriesOnlyItsBoundedDigest(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsMalformedSelfExpansionMetadata(t *testing.T) {
+	packet := Build(Sources{Profile: profile.State{Profile: "standard", Source: "default"}, Workspace: workspace.Inspection{State: "missing"}, Owner: ownerctx.Status{Initialized: true, Onboarding: ownerctx.OnboardingStatus{State: "complete", Track: "complete"}}, Memory: MemorySource{State: "empty"}})
+	packet.Owner.Expansion = SelfExpansion{State: "action_required", Total: 6, Current: 1, Unknown: 1, Stale: 1, NextFacet: "psychological-profile"}
+	if err := packet.Validate(); err == nil {
+		t.Fatal("malformed SELF expansion counts and unsafe next facet were accepted")
+	}
+}
+
 func TestSelectedSkillPointersUseClosedReasonsAndCannotEscapeTheRuntimeProjection(t *testing.T) {
 	base := Build(Sources{
 		Profile:   profile.State{Profile: "standard", Source: "configured"},

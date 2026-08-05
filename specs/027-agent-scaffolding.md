@@ -25,3 +25,8 @@ runtime still mediates every transition through Maestro.
 
 Personalization changes display name and avatar only. It cannot change role,
 scope, tools, delegation, runtime state or native qualification.
+Maestro, Walter and Darwin are interviewed one at a time. Narrative suggestions
+may reflect only preferences the owner explicitly states. The local profile
+changes only after a digest-bound draft is reviewed and confirmed against its
+base revision; scaffolding continues to derive authority exclusively from the
+canonical catalog and signed instance.

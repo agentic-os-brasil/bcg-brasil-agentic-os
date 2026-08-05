@@ -549,9 +549,46 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 			fmt.Fprintln(errOut, "usage: bcgos agent interview")
 			return ExitUsage
 		}
-		return writeJSON(out, agentidentity.InitialInterview(), errOut)
+		return writeJSON(out, agentidentity.GuidedIdentityInterview(root), errOut)
 	case "personalize":
-		if err := requireAgentStdin(args[1:], errOut); err != nil {
+		if len(args) == 1 || (args[1] != "draft" && args[1] != "review" && args[1] != "confirm") {
+			fmt.Fprintln(errOut, "usage: bcgos agent personalize <draft --stdin --consent --no-client-data|review --id ID|confirm --id ID --digest SHA256 --confirm>")
+			return ExitUsage
+		}
+		if args[1] == "review" {
+			flags := newFlagSet("agent personalize review", errOut)
+			id := flags.String("id", "", "draft ID")
+			if flags.Parse(args[2:]) != nil || rejectPositionals(flags, errOut) || *id == "" {
+				fmt.Fprintln(errOut, "usage: bcgos agent personalize review --id ID")
+				return ExitUsage
+			}
+			draft, err := agentidentity.ReviewProfileDraft(root, *id)
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, draft, errOut)
+		}
+		if args[1] == "confirm" {
+			flags := newFlagSet("agent personalize confirm", errOut)
+			id := flags.String("id", "", "draft ID")
+			digest := flags.String("digest", "", "review digest")
+			confirmed := flags.Bool("confirm", false, "confirm exact reviewed draft")
+			if flags.Parse(args[2:]) != nil || rejectPositionals(flags, errOut) || *id == "" || *digest == "" || !*confirmed {
+				fmt.Fprintln(errOut, "usage: bcgos agent personalize confirm --id ID --digest SHA256 --confirm")
+				return ExitUsage
+			}
+			draft, err := agentidentity.ConfirmProfileDraft(root, *id, *digest, true)
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			return writeJSON(out, draft, errOut)
+		}
+		flags := newFlagSet("agent personalize draft", errOut)
+		stdin := flags.Bool("stdin", false, "read proposed profile from stdin")
+		consent := flags.Bool("consent", false, "record explicit owner consent")
+		noClientData := flags.Bool("no-client-data", false, "owner attests that the profile contains no client data")
+		if flags.Parse(args[2:]) != nil || rejectPositionals(flags, errOut) || !*stdin || !*consent || !*noClientData {
+			fmt.Fprintln(errOut, "usage: bcgos agent personalize draft --stdin --consent --no-client-data")
 			return ExitUsage
 		}
 		body, err := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
@@ -573,14 +610,11 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 			}
 		}
 		input.UpdatedAt = time.Now().UTC()
-		if err := agentidentity.Save(root, input); err != nil {
-			return reportError(errOut, err)
-		}
-		saved, err := agentidentity.Load(root)
+		draft, err := agentidentity.DraftProfile(root, input, true, true)
 		if err != nil {
 			return reportError(errOut, err)
 		}
-		return writeJSON(out, saved, errOut)
+		return writeJSON(out, draft, errOut)
 	case "identity":
 		if len(args) != 1 {
 			fmt.Fprintln(errOut, "usage: bcgos agent identity")
@@ -1814,7 +1848,7 @@ func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, err
 
 func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview [quick|complete]|onboarding|refine|self|prompt-history>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview [quick|complete]|onboarding|expand|refine|self|prompt-history>")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -1857,6 +1891,8 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		return writeJSON(out, status, errOut)
 	case "onboarding":
 		return runOwnerOnboarding(args[1:], out, errOut, root)
+	case "expand":
+		return runOwnerExpand(args[1:], in, out, errOut, root)
 	case "refine":
 		return runOwnerRefine(args[1:], in, out, errOut, root)
 	case "self":
@@ -1864,7 +1900,84 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 	case "prompt-history":
 		return runOwnerPromptHistory(args[1:], in, out, errOut, root)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview [quick|complete]|onboarding|refine|self|prompt-history>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview [quick|complete]|onboarding|expand|refine|self|prompt-history>")
+		return ExitUsage
+	}
+}
+
+func runOwnerExpand(args []string, in io.Reader, out, errOut io.Writer, root string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos owner expand <status|next|draft|review|confirm>")
+		return ExitUsage
+	}
+	switch args[0] {
+	case "status":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner expand status")
+			return ExitUsage
+		}
+		status, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status.Expansion, errOut)
+	case "next":
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos owner expand next")
+			return ExitUsage
+		}
+		question, err := ownerctx.NextExpansionQuestion(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, question, errOut)
+	case "draft":
+		flags := newFlagSet("owner expand draft", errOut)
+		token := flags.String("question-token", "", "digest-bound token returned by owner expand next")
+		stdin := flags.Bool("stdin", false, "read the proposed canonical facet body from stdin")
+		consent := flags.Bool("consent", false, "record explicit owner consent for this interview answer")
+		noClientData := flags.Bool("no-client-data", false, "owner attests that the answer contains no client data")
+		if flags.Parse(args[1:]) != nil || rejectPositionals(flags, errOut) || !*stdin || !*consent || !*noClientData || strings.TrimSpace(*token) == "" {
+			fmt.Fprintln(errOut, "usage: bcgos owner expand draft --question-token SHA256 --stdin --consent --no-client-data")
+			return ExitUsage
+		}
+		body, err := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
+		if err != nil || len(body) > maximumWorkContractBytes {
+			return reportError(errOut, errors.New("SELF expansion draft exceeds 32 KiB"))
+		}
+		draft, err := ownerctx.DraftExpansion(root, *token, string(body), true, true)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, draft, errOut)
+	case "review":
+		flags := newFlagSet("owner expand review", errOut)
+		id := flags.String("id", "", "draft ID")
+		if flags.Parse(args[1:]) != nil || rejectPositionals(flags, errOut) || *id == "" {
+			fmt.Fprintln(errOut, "usage: bcgos owner expand review --id ID")
+			return ExitUsage
+		}
+		draft, err := ownerctx.ReviewExpansion(root, *id)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, draft, errOut)
+	case "confirm":
+		flags := newFlagSet("owner expand confirm", errOut)
+		id := flags.String("id", "", "draft ID")
+		digest := flags.String("digest", "", "review digest")
+		confirm := flags.Bool("confirm", false, "confirm the exact reviewed draft")
+		if flags.Parse(args[1:]) != nil || rejectPositionals(flags, errOut) || *id == "" || *digest == "" || !*confirm {
+			fmt.Fprintln(errOut, "usage: bcgos owner expand confirm --id ID --digest SHA256 --confirm")
+			return ExitUsage
+		}
+		draft, err := ownerctx.ConfirmExpansion(root, *id, *digest, true)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, draft, errOut)
+	default:
+		fmt.Fprintln(errOut, "usage: bcgos owner expand <status|next|draft|review|confirm>")
 		return ExitUsage
 	}
 }

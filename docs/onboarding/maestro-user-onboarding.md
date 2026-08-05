@@ -216,6 +216,21 @@ O contexto do owner é local, inspecionável e limitado às facetas autorizadas.
 O atlas navega fontes derivadas e governadas; ele não deve ser preenchido com
 segredos, dumps de conversa ou conteúdo de cliente sem política e consentimento.
 
+Depois da confirmação inicial, o Maestro pode oferecer uma única pergunta para
+aprofundar ou atualizar uma faceta profissional desconhecida ou antiga:
+
+```text
+bcgos owner expand status
+bcgos owner expand next
+```
+
+Você pode responder por texto ou voz; a versão de áudio é apenas uma formulação
+curta da mesma pergunta. A resposta vira um rascunho local somente com seu
+consentimento e sua declaração de que não contém dados de cliente. O Maestro
+mostra o rascunho inteiro e o digest; só a confirmação exata atualiza a faceta.
+Ele nunca deduz uma resposta, preenche lacunas sozinho ou altera o perfil
+psicológico.
+
 ### Passo 4.1 — Escolha as fontes SharePoint do projeto
 
 Depois que a entrevista do owner estiver revisada e confirmada, o Maestro

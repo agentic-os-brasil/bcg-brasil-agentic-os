@@ -69,6 +69,7 @@ can inspect.
 | Organizational prior-work | Retrieve an earlier deck from explicitly enrolled SharePoint folders through an explainable local catalog, without giving Codex a SharePoint connection. |
 | Runtime neutrality | Claude-first and Codex-compatible projections share product contracts and conformance language. |
 | Privacy-safe improvement | The canary can measure friction and reliability without collecting prompts, documents or client names. |
+| Explicit SELF expansion | One consented question at a time produces a bounded, reviewable local draft; current truth stays compact and prior revisions remain audit-addressable. |
 
 For the full user journey, read the [Maestro user onboarding](docs/onboarding/maestro-user-onboarding.md).
 For the business-facing evolution path, read the [product evolution roadmap](docs/roadmap/maestro-evolution-roadmap.md).
@@ -131,7 +132,7 @@ attestation is not cryptographic principal authentication.
 | --- | --- |
 | ✅ Local workspace | `bcgos init`, `status` and `doctor` establish a local workspace without mixing it into the managed core. |
 | ✅ Guided runtime projection | `bcgos adapter install` installs hooks, a concise but complete `CLAUDE.md`/`AGENTS.md`, and the real base skills with idempotent, conflict-safe ownership. |
-| ✅ Professional context | Owner profile, skills index, human atlas and bounded session pointers stay inspectable and local. |
+| ✅ Professional context | A canonical SELF index, six professional facets, one-question expansion, agent identity drafts, skills index, human atlas and bounded session pointers stay inspectable and local. |
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
 | ✅ Governed completion | High-stakes work can require a separately authenticated Walter review before completion. |
 | ✅ Bounded delegation contract | The deterministic core can dispatch a narrow packet to the right agent; native runtime activation remains unavailable until adapter qualification. |
@@ -344,6 +345,12 @@ bcgos status <workspace>
 bcgos doctor <workspace>
 bcgos profile show
 bcgos owner init
+bcgos owner expand status
+bcgos owner expand next
+bcgos agent interview
+bcgos agent personalize draft --stdin --consent --no-client-data
+bcgos agent personalize review --id <draft-id>
+bcgos agent personalize confirm --id <draft-id> --digest <sha256> --confirm
 bcgos atlas init <workspace>
 bcgos atlas status <workspace>
 bcgos skills index
