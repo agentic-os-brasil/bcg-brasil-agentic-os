@@ -24,6 +24,11 @@ Windows Task Scheduler, a macOS LaunchAgent, Claude lifecycle hooks, Codex lifec
 | Runtime adapter | Observes session presence and enqueues catch-up after startup. |
 | Session Start | Reads status only; it never blocks startup or runs model work synchronously. |
 
+Continuous-use status derives maintenance `configured` and
+`adapter_observed` independently from exact enrollment and bounded receipts.
+Neither is native scheduler qualification, and a scheduler receipt never
+becomes evidence that a checkpoint body or memory layer was synthesized.
+
 The scheduler never stores prompts, memory bodies, client content or job outputs. A receipt is evidence of an attempt, not proof that the owning subsystem published valid state. Executors report success only after the owning subsystem's durable completion boundary.
 
 ## Durable state

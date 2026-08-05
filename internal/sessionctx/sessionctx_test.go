@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/continuoususe"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
@@ -15,6 +16,10 @@ import (
 )
 
 func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
+	continuous, err := continuoususe.Build(continuoususe.Source{WorkspaceState: "ready", CalibrationState: "complete", CalibrationTrack: "quick", OpenTasksState: "empty", OpenWorkState: "available", WorkState: "paused", CheckpointState: "available", MemoryState: "available"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	packet := Build(Sources{
 		Profile: profile.State{Profile: "standard", Source: "configured"},
 		Workspace: workspace.Inspection{
@@ -24,9 +29,10 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 			"voice":                 {Pointer: ownerctx.Pointer{Path: "owner/self/voice.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}},
 			"psychological-profile": {Pointer: ownerctx.Pointer{Path: "owner/self/psychological-profile.md", Available: true, State: "available"}, Readers: []string{"walter"}, Sensitivity: "sensitive"},
 		}, OperatingState: ownerctx.Pointer{Path: "owner/operating/work-state.md", Available: true, State: "available"}},
-		Atlas:     atlas.Status{Managed: atlas.Pointer{State: "unavailable"}, Owner: atlas.Pointer{Path: "/local/atlas/owner", Available: true, State: "available"}, Workspace: atlas.Pointer{Path: "/work/case-a/brain", Available: true, State: "available"}},
-		Execution: execution.ActivePointer{Path: execution.ActivePointerPath, Available: true, State: execution.ActivePointerAvailable},
-		Memory:    MemorySource{State: "available", Bundle: basememory.ContextBundle{Sections: []basememory.ContextSection{{Layer: "L1", Content: "selected methods: case-kickoff", DrillDown: "versions/tx/l1.json", Truncated: false}}}},
+		Atlas:         atlas.Status{Managed: atlas.Pointer{State: "unavailable"}, Owner: atlas.Pointer{Path: "/local/atlas/owner", Available: true, State: "available"}, Workspace: atlas.Pointer{Path: "/work/case-a/brain", Available: true, State: "available"}},
+		Execution:     execution.ActivePointer{Path: execution.ActivePointerPath, Available: true, State: execution.ActivePointerAvailable},
+		Memory:        MemorySource{State: "available", Bundle: basememory.ContextBundle{Sections: []basememory.ContextSection{{Layer: "L1", Content: "selected methods: case-kickoff", DrillDown: "versions/tx/l1.json", Truncated: false}}}},
+		ContinuousUse: continuous,
 	})
 	if err := packet.Validate(); err != nil {
 		t.Fatal(err)
@@ -49,11 +55,14 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 	if packet.Execution.Active.Path != execution.ActivePointerPath || !packet.Execution.Active.Available || packet.Execution.Active.State != execution.ActivePointerAvailable {
 		t.Fatalf("execution pointer = %#v", packet.Execution)
 	}
+	if packet.ContinuousUse.OpenWork.Pointer != execution.ActivePointerPath || packet.ContinuousUse.OpenWork.CheckpointState != "available" || packet.ContinuousUse.NextActions[0].ID != continuoususe.ActionResumeActiveWork {
+		t.Fatalf("continuous-use projection = %#v", packet.ContinuousUse)
+	}
 	encoded, err := json.Marshal(packet)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(encoded), "/local/") || strings.Contains(string(encoded), "/work/") || strings.Contains(string(encoded), "selected methods") || strings.Contains(string(encoded), "versions/tx") {
+	if strings.Contains(string(encoded), "/local/") || strings.Contains(string(encoded), "/work/") || strings.Contains(string(encoded), "selected methods") || strings.Contains(string(encoded), "versions/tx") || strings.Contains(string(encoded), "item_id") || strings.Contains(string(encoded), "attempt_id") {
 		t.Fatalf("packet leaked an absolute local path: %s", encoded)
 	}
 	var roundTrip Packet
@@ -77,6 +86,26 @@ func TestBuildReportsEmptyAndUnavailableMemoryWithoutRawFallback(t *testing.T) {
 	unavailable := Build(base)
 	if err := unavailable.Validate(); err != nil || unavailable.Memory.State != "unavailable" || len(unavailable.Memory.Sections) != 0 {
 		t.Fatalf("unavailable memory packet = %#v, err=%v", unavailable.Memory, err)
+	}
+}
+
+func TestPacketValidateRejectsTamperedContinuousUse(t *testing.T) {
+	packet := Build(Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+		Memory:    MemorySource{State: "empty"},
+	})
+	if err := packet.Validate(); err != nil {
+		t.Fatalf("valid packet setup: %v", err)
+	}
+	packet.ContinuousUse.Runtimes = []continuoususe.RuntimeEvidence{{
+		Runtime: "codex",
+		CapabilityEvidence: continuoususe.CapabilityEvidence{
+			State: continuoususe.EvidenceNativeQualified, NativeQualified: true,
+		},
+	}}
+	if err := packet.Validate(); err == nil {
+		t.Fatal("packet accepted tampered continuous-use evidence")
 	}
 }
 

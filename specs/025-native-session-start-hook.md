@@ -40,7 +40,10 @@ evidence.
 
 Only `SessionStart` carries the full Maestro startup protocol: workspace
 identity, one deterministic onboarding action, and the bounded local open-task
-state. When a valid local memory commit exists, Session Start also carries its
+state. It also renders the Spec 044 continuous-use state, including only an
+opaque active-work pointer, checkpoint presence, per-runtime evidence classes
+and the first safe next action. It does not resolve or inject execution
+content. When a valid local memory commit exists, Session Start also carries its
 generated layers in canonical broad-to-recent order within managed per-layer
 budgets and the existing 8 KiB total ceiling. The serialized packet retains
 only `bcgos://memory/<layer>` pointers and truncation state. `UserPromptSubmit`

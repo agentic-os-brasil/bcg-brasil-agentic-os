@@ -101,3 +101,20 @@ func TestDiagnoseAbsentIsExplicitlyUnavailable(t *testing.T) {
 		t.Fatalf("summary = %#v, %v", summary, err)
 	}
 }
+
+func TestDiagnoseRuntimeSeparatesAdapterObservationByRuntime(t *testing.T) {
+	root := t.TempDir()
+	for _, runtimeName := range []string{"claude", "codex"} {
+		receipt := Receipt{SchemaVersion: 1, Runtime: runtimeName, Event: StopFinalize, State: "observed", Provenance: AdapterCommand, IdempotencyKey: IdempotencyKey(runtimeName, "session-a")}
+		if _, err := Record(root, testWorkspaceID, receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	claude, err := DiagnoseRuntime(root, testWorkspaceID, "claude")
+	if err != nil || claude.State != "observed" || claude.Observed != 1 || len(claude.Events) != 1 || claude.Events[0] != StopFinalize || len(claude.Provenance) != 1 || claude.Provenance[0] != AdapterCommand {
+		t.Fatalf("Claude summary = %#v, err = %v", claude, err)
+	}
+	if _, err := DiagnoseRuntime(root, testWorkspaceID, "other"); err == nil {
+		t.Fatal("unknown runtime diagnostic was accepted")
+	}
+}

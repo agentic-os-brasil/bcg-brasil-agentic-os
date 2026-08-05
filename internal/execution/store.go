@@ -54,6 +54,9 @@ const (
 	ActivePointerAvailable   = "available"
 	ActivePointerUnavailable = "unavailable"
 	ActivePointerAmbiguous   = "ambiguous"
+	CheckpointAvailable      = "available"
+	CheckpointMissing        = "missing"
+	CheckpointUnavailable    = "unavailable"
 )
 
 var (
@@ -235,6 +238,17 @@ type ActivePointer struct {
 	Path      string `json:"path,omitempty"`
 	Available bool   `json:"available"`
 	State     string `json:"state"`
+}
+
+// ActiveContinuity is the metadata-only status needed to decide whether work
+// can be resumed safely. It deliberately omits the item, attempt, objective,
+// checkpoint body and every artifact reference.
+type ActiveContinuity struct {
+	Path            string    `json:"path,omitempty"`
+	Available       bool      `json:"available"`
+	State           string    `json:"state"`
+	WorkState       ItemState `json:"work_state,omitempty"`
+	CheckpointState string    `json:"checkpoint_state"`
 }
 
 type Store struct {
@@ -632,6 +646,35 @@ func (store Store) ActivePointer(workspaceID string) (ActivePointer, error) {
 		return ActivePointer{Path: ActivePointerPath, Available: true, State: ActivePointerAvailable}, nil
 	default:
 		return ActivePointer{State: ActivePointerAmbiguous}, nil
+	}
+}
+
+// ActiveContinuity extends ActivePointer with only the enum state and whether
+// a bounded checkpoint exists. Resolving its content remains an explicit
+// `work next --active` operation.
+func (store Store) ActiveContinuity(workspaceID string) (ActiveContinuity, error) {
+	active, err := store.activeItemIDs(workspaceID)
+	if err != nil {
+		return ActiveContinuity{}, err
+	}
+	switch len(active) {
+	case 0:
+		return ActiveContinuity{State: ActivePointerUnavailable, CheckpointState: CheckpointUnavailable}, nil
+	case 1:
+		item, err := store.Inspect(workspaceID, active[0])
+		if err != nil {
+			return ActiveContinuity{}, err
+		}
+		checkpointState := CheckpointMissing
+		if item.Checkpoint != nil {
+			checkpointState = CheckpointAvailable
+		}
+		return ActiveContinuity{
+			Path: ActivePointerPath, Available: true, State: ActivePointerAvailable,
+			WorkState: item.State.State, CheckpointState: checkpointState,
+		}, nil
+	default:
+		return ActiveContinuity{State: ActivePointerAmbiguous, CheckpointState: CheckpointUnavailable}, nil
 	}
 }
 

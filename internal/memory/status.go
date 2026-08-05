@@ -9,13 +9,14 @@ import (
 )
 
 type StatusReport struct {
-	WorkspaceID      string            `json:"workspace_id"`
-	State            string            `json:"state"`
-	CaptureFiles     int               `json:"capture_files"`
-	TransactionID    string            `json:"transaction_id,omitempty"`
-	CommittedAt      time.Time         `json:"committed_at,omitempty"`
-	Layers           map[string]string `json:"layers"`
-	ActivationLocked bool              `json:"activation_locked"`
+	WorkspaceID          string            `json:"workspace_id"`
+	State                string            `json:"state"`
+	CaptureFiles         int               `json:"capture_files"`
+	AttestedCaptureFiles int               `json:"attested_capture_files"`
+	TransactionID        string            `json:"transaction_id,omitempty"`
+	CommittedAt          time.Time         `json:"committed_at,omitempty"`
+	Layers               map[string]string `json:"layers"`
+	ActivationLocked     bool              `json:"activation_locked"`
 }
 
 func (engine *Engine) Status(workspaceID string) (StatusReport, error) {
@@ -35,7 +36,8 @@ func (engine *Engine) Status(workspaceID string) (StatusReport, error) {
 	if err != nil {
 		return StatusReport{}, err
 	}
-	report.CaptureFiles += len(attested)
+	report.AttestedCaptureFiles = len(attested)
+	report.CaptureFiles += report.AttestedCaptureFiles
 	if report.CaptureFiles > 0 {
 		report.State = "captured"
 	}

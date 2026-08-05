@@ -128,6 +128,19 @@ func Record(dataRoot, workspaceID string, receipt Receipt) (Receipt, error) {
 }
 
 func Diagnose(dataRoot, workspaceID string) (Summary, error) {
+	return diagnose(dataRoot, workspaceID, "")
+}
+
+// DiagnoseRuntime reports bounded adapter-command evidence for one runtime.
+// It does not promote a receipt to native observation.
+func DiagnoseRuntime(dataRoot, workspaceID, runtime string) (Summary, error) {
+	if runtime != "claude" && runtime != "codex" {
+		return Summary{}, fmt.Errorf("unsupported lifecycle runtime %q", runtime)
+	}
+	return diagnose(dataRoot, workspaceID, runtime)
+}
+
+func diagnose(dataRoot, workspaceID, runtime string) (Summary, error) {
 	root, err := validatedReceiptRoot(dataRoot, workspaceID)
 	if err != nil {
 		return Summary{}, err
@@ -154,6 +167,9 @@ func Diagnose(dataRoot, workspaceID string) (Summary, error) {
 		expectedName := receipt.Event + "-" + receipt.IdempotencyKey + ".json"
 		if entry.Name() != expectedName {
 			return Summary{}, fmt.Errorf("receipt filename does not match bounded metadata")
+		}
+		if runtime != "" && receipt.Runtime != runtime {
+			continue
 		}
 		events[receipt.Event] = true
 		provenance[receipt.Provenance] = true

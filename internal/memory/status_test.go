@@ -61,3 +61,23 @@ func TestAllInvalidCommitsAreCorruptNotMissing(t *testing.T) {
 		t.Fatalf("context corruption error = %v", err)
 	}
 }
+
+func TestStatusSeparatesAttestedContinuitySignalsFromLegacyCaptures(t *testing.T) {
+	engine := testEngine(t)
+	now := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
+	if _, err := engine.Capture(Capture{WorkspaceID: "case-a", RecordedAt: now, Kind: "legacy", Text: "legacy", Sanitized: true}); err != nil {
+		t.Fatal(err)
+	}
+	attestor := CaptureAttestor{Root: engine.Root}
+	sealed, err := attestor.Seal(Capture{WorkspaceID: "case-a", RecordedAt: now, Kind: "skill_route", Text: "case-kickoff", Sanitized: true, ProducerID: "claude.context-injection", SanitizerID: SkillRouteSanitizerID, SourceDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Capture(sealed); err != nil {
+		t.Fatal(err)
+	}
+	status, err := engine.Status("case-a")
+	if err != nil || status.CaptureFiles != 2 || status.AttestedCaptureFiles != 1 {
+		t.Fatalf("status = %#v, err = %v", status, err)
+	}
+}

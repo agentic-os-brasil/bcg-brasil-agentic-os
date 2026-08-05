@@ -222,5 +222,30 @@ func sessionDirective(packet sessionctx.Packet) string {
 			lines = append(lines, "Guided SharePoint source status is unavailable. Say this plainly and point to `bcgos prior-work source status --workspace <workspace>`; do not discover or collect any SharePoint content.")
 		}
 	}
+	lines = appendContinuousUseDirective(lines, packet)
 	return strings.Join(lines, "\n")
+}
+
+func appendContinuousUseDirective(lines []string, packet sessionctx.Packet) []string {
+	status := packet.ContinuousUse
+	if status.SchemaVersion != 1 {
+		return append(lines, "CONTINUOUS USE status is unavailable. Do not infer calibration, checkpoint or native lifecycle state.")
+	}
+	lines = append(lines, "CONTINUOUS USE STATUS: calibration="+status.Calibration.State+", open_work="+status.OpenWork.State+", checkpoint="+status.OpenWork.CheckpointState+", memory="+status.Memory.State+".")
+	switch {
+	case status.OpenWork.State == "available" && status.OpenWork.CheckpointState == "available":
+		lines = append(lines, "One active work item has a bounded checkpoint. Resolve it explicitly; do not inject or invent the checkpoint body.")
+	case status.OpenWork.State == "available" && status.OpenWork.CheckpointState == "missing":
+		lines = append(lines, "One active work item has no durable checkpoint. Before a handoff, require an explicit bounded checkpoint; never synthesize it from transcript or tool output.")
+	case status.OpenWork.State == "ambiguous":
+		lines = append(lines, "Active work is ambiguous. Fail closed and require an explicit item selection.")
+	}
+	if len(status.NextActions) > 0 {
+		next := status.NextActions[0]
+		lines = append(lines, "Next safe action: `"+next.Command+"`. "+next.Reason+".")
+	}
+	for _, runtime := range status.Runtimes {
+		lines = append(lines, fmt.Sprintf("%s lifecycle evidence: configured=%t, adapter_observed=%t, native_qualified=%t, unavailable=%t. Adapter observation is not native proof.", runtime.Runtime, runtime.Configured, runtime.AdapterObserved, runtime.NativeQualified, runtime.Unavailable))
+	}
+	return lines
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/codexadapter"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/continuoususe"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/darwin"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/federation"
@@ -1318,20 +1319,31 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 		return reportError(errOut, err)
 	}
 	releaseCapability := defaultReleaseCapability()
+	owner, err := ownerctx.Inspect(root)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	continuous, _, err := buildContinuousUseStatus(root, inspection, owner)
+	if err != nil {
+		return reportError(errOut, err)
+	}
 	return writeJSON(out, struct {
-		Version      string               `json:"version"`
-		Workspace    workspace.Inspection `json:"workspace"`
-		Capabilities map[string]string    `json:"capabilities"`
-		Profile      profile.State        `json:"profile"`
+		Version       string               `json:"version"`
+		Workspace     workspace.Inspection `json:"workspace"`
+		Capabilities  map[string]string    `json:"capabilities"`
+		Profile       profile.State        `json:"profile"`
+		ContinuousUse continuoususe.Status `json:"continuous_use"`
 	}{
-		Version:   Version,
-		Workspace: inspection,
-		Profile:   state,
+		Version:       Version,
+		Workspace:     inspection,
+		Profile:       state,
+		ContinuousUse: continuous,
 		Capabilities: map[string]string{
 			"bundles":                "supported",
 			"human_atlas_bootstrap":  "supported",
 			"interaction_profile":    "supported",
-			"memory_dreaming":        "unavailable",
+			"memory_dreaming":        "daily_light_local_contract_weekly_deep_unavailable",
+			"continuous_use":         continuous.State,
 			"private_release_auth":   releaseCapability.State,
 			"updates":                releaseCapability.State,
 			"case_agent_setup":       "supported",
@@ -1688,8 +1700,31 @@ func rollbackDispatch(root string, chain maestro.ChainState, chainCreated bool, 
 }
 
 func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	if len(args) >= 1 && args[0] == "status" {
+		path, code := oneOptionalPath("maestro status", args[1:], errOut)
+		if code != ExitOK {
+			return code
+		}
+		root, err := dataRoot()
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		inspection, err := workspace.Inspect(path, root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		owner, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		status, _, err := buildContinuousUseStatus(root, inspection, owner)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status, errOut)
+	}
 	if len(args) != 2 || args[0] != "dispatch" || args[1] != "--stdin" {
-		fmt.Fprintln(errOut, "usage: bcgos maestro dispatch --stdin")
+		fmt.Fprintln(errOut, "usage: bcgos maestro <status [workspace-path]|dispatch --stdin>")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -2394,19 +2429,17 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 	if err != nil {
 		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
 	}
-	activeExecution := execution.ActivePointer{State: execution.ActivePointerUnavailable}
-	if inspection.WorkspaceID != "" {
-		activeExecution, err = (execution.Store{Root: root}).ActivePointer(inspection.WorkspaceID)
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("inspect active execution pointer: %w", err))
-		}
+	continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
+	if err != nil {
+		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 	}
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner,
 		Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
-		Execution:        activeExecution,
+		Execution:        activePointerFromContinuity(activeExecution),
 		Memory:           sessionMemorySource(root, inspection.WorkspaceID),
 		SharePointSource: sharePointSource,
+		ContinuousUse:    continuous,
 	})
 	if err := packet.Validate(); err != nil {
 		return reportError(errOut, err)
@@ -2451,7 +2484,11 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 	if err != nil {
 		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
 	}
-	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Memory: sessionMemorySource(root, inspection.WorkspaceID), SharePointSource: sharePointSource})
+	continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
+	if err != nil {
+		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
+	}
+	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Execution: activePointerFromContinuity(activeExecution), Memory: sessionMemorySource(root, inspection.WorkspaceID), SharePointSource: sharePointSource, ContinuousUse: continuous})
 	result, err := sessionresolve.Resolve(root, *pointer, *purpose, packet, *budget)
 	if err != nil {
 		return reportError(errOut, err)
@@ -2677,11 +2714,17 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	if err != nil {
 		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
 	}
+	continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
+	if err != nil {
+		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
+	}
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner,
 		Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		Execution:        activePointerFromContinuity(activeExecution),
 		Memory:           sessionMemorySource(root, inspection.WorkspaceID),
 		SharePointSource: sharePointSource,
+		ContinuousUse:    continuous,
 	})
 	if err := enrichOnboardingGuide(&packet, *runtimeName, inspection.WorkspacePath); err != nil {
 		return reportError(errOut, err)
@@ -2813,11 +2856,17 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if err != nil {
 			return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
 		}
+		continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
+		if err != nil {
+			return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
+		}
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner,
 			Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+			Execution:        activePointerFromContinuity(activeExecution),
 			Memory:           sessionMemorySource(root, inspection.WorkspaceID),
 			SharePointSource: sharePointSource,
+			ContinuousUse:    continuous,
 		})
 		if action == "context-injection" {
 			if err := enrichContextPacket(&packet, "codex", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
@@ -2978,11 +3027,17 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if err != nil {
 			return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
 		}
+		continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
+		if err != nil {
+			return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
+		}
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner,
 			Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+			Execution:        activePointerFromContinuity(activeExecution),
 			Memory:           sessionMemorySource(root, inspection.WorkspaceID),
 			SharePointSource: sharePointSource,
+			ContinuousUse:    continuous,
 		})
 		if action == "context-injection" {
 			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {

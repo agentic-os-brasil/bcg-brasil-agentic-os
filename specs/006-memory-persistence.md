@@ -126,6 +126,11 @@ Missing memory is an active `empty` state; invalid or incomplete state is
 `unavailable` and never falls back to raw captures. Successful local assembly
 is adapter delivery, not native lifecycle qualification.
 
+The continuous-use projection may report generated-memory state and the count
+of valid HMAC-attested capture-v2 files. It cannot expose capture bodies, count
+legacy/manual captures as eligible signals, trigger a rollup or promote L1 into
+L2/L3/lifetime.
+
 The base policy requires a budget for every layer. The bundled light-dream
 runtime configuration sets a reviewable Canary bound of 12,000 L1 runes, 64
 complete output entries, 1 MiB of total source input and 256 input entries. It

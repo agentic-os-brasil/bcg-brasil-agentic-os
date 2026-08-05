@@ -25,6 +25,12 @@ snapshot reader uses the last fully committed version. If that version is
 unavailable or stale, it returns an explicit partial/omitted state rather than
 waiting.
 
+Session Start derives the Spec 044 continuous-use projection read-only from
+those committed authorities. It may report checkpoint presence and one safe
+next action, but it never resolves the execution pointer, reads the checkpoint
+body or advances any source state. Stop remains a metadata-only lifecycle
+receipt and cannot manufacture a work checkpoint or memory synthesis result.
+
 The context hook's continuity signal is a bounded local capture-v2 envelope,
 not background synthesis: it contains selected skill IDs only and excludes the
 prompt, reason and pointer. Persistence failure is non-fatal to the hook. The

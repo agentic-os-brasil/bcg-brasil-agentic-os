@@ -675,6 +675,46 @@ func TestContextRoutingCanSelectGovernedIngestionAndPriorWorkMethods(t *testing.
 	}
 }
 
+func TestSessionStartReorientsToCheckpointStateWithoutExecutionContent(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	completeQuickOwnerOnboarding(t, dataRoot)
+	output.Reset()
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("adapter install = %d %s", code, output.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := execution.Store{Root: dataRoot}
+	created, err := store.Create(execution.CreateInput{WorkspaceID: inspection.WorkspaceID, Objective: "secret client objective", InitialNextStep: "private next step", Criteria: []execution.Criterion{{ID: "criterion-a", Type: execution.CriterionCommandCheck, Command: []string{"go", "version"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := store.Start(inspection.WorkspaceID, created.Contract.ItemID, created.State.StateRevision)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output.Reset()
+	if code := runHookWithInput([]string{"codex", "session-start", "--adapter-source", "maestro", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "CONTINUOUS USE STATUS") || !strings.Contains(output.String(), "checkpoint=missing") || !strings.Contains(output.String(), "bcgos work next --active") || strings.Contains(output.String(), created.Contract.ItemID) || strings.Contains(output.String(), "secret client objective") {
+		t.Fatalf("pre-checkpoint SessionStart = %d %s", code, output.String())
+	}
+
+	if _, err := store.Checkpoint(inspection.WorkspaceID, created.Contract.ItemID, execution.CheckpointInput{ExpectedRevision: started.State.StateRevision, AttemptID: started.State.ActiveAttemptID, Summary: "private checkpoint body", NextStep: "private resume step"}); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"codex", "session-start", "--adapter-source", "maestro", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "checkpoint=available") || !strings.Contains(output.String(), "resume through a new fenced attempt") || strings.Contains(output.String(), "private checkpoint body") || strings.Contains(output.String(), created.Contract.ItemID) {
+		t.Fatalf("checkpointed SessionStart = %d %s", code, output.String())
+	}
+}
+
 func completeQuickOwnerOnboarding(t *testing.T, root string) {
 	t.Helper()
 	if _, err := ownerctx.Initialize(root); err != nil {
@@ -1902,8 +1942,13 @@ func TestProductStatusAndDoctorDescribeReadyWorkspace(t *testing.T) {
 	}
 
 	output.Reset()
-	if code := runProductStatus([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) || !strings.Contains(output.String(), `"brain_readable": true`) || !strings.Contains(output.String(), `"profile": "standard"`) {
+	if code := runProductStatus([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) || !strings.Contains(output.String(), `"brain_readable": true`) || !strings.Contains(output.String(), `"profile": "standard"`) || !strings.Contains(output.String(), `"continuous_use"`) || !strings.Contains(output.String(), `"configured"`) || !strings.Contains(output.String(), `"adapter_observed"`) || !strings.Contains(output.String(), `"native_qualified"`) || !strings.Contains(output.String(), `"unavailable"`) {
 		t.Fatalf("status exit = %d, output = %s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runMaestroWithInput([]string{"status", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"calibration"`) || !strings.Contains(output.String(), `"complete_calibration"`) || strings.Contains(output.String(), "professional-role.md") {
+		t.Fatalf("Maestro status exit = %d, output = %s", code, output.String())
 	}
 
 	output.Reset()

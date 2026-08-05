@@ -448,6 +448,59 @@ func TestNextActiveFailsClosedWhenSelectionIsAmbiguous(t *testing.T) {
 	}
 }
 
+func TestActiveContinuityReportsCheckpointPresenceWithoutContentOrIdentity(t *testing.T) {
+	store := testStore(t)
+	created, err := store.Create(testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := store.Start(testWorkspaceID, created.Contract.ItemID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	continuity, err := store.ActiveContinuity(testWorkspaceID)
+	if err != nil || continuity.State != ActivePointerAvailable || continuity.Path != ActivePointerPath || continuity.WorkState != StateRunning || continuity.CheckpointState != CheckpointMissing {
+		t.Fatalf("continuity before checkpoint = %#v, err = %v", continuity, err)
+	}
+	body, err := json.Marshal(continuity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "item_id") || strings.Contains(string(body), "attempt_id") {
+		t.Fatalf("continuity leaked identity: %s", body)
+	}
+	if _, err := store.Checkpoint(testWorkspaceID, created.Contract.ItemID, CheckpointInput{ExpectedRevision: 2, AttemptID: started.State.ActiveAttemptID, Summary: "bounded handoff", NextStep: "resume safely"}); err != nil {
+		t.Fatal(err)
+	}
+	continuity, err = store.ActiveContinuity(testWorkspaceID)
+	if err != nil || continuity.CheckpointState != CheckpointAvailable || continuity.WorkState != StateRunning {
+		t.Fatalf("continuity after checkpoint = %#v, err = %v", continuity, err)
+	}
+}
+
+func TestActiveContinuityFailsClosedWhenAmbiguous(t *testing.T) {
+	store := testStore(t)
+	ids := []string{"item-a", "attempt-a", "item-b", "attempt-b"}
+	store.NewID = func(kind string) (string, error) {
+		id := ids[0]
+		ids = ids[1:]
+		return id, nil
+	}
+	for index := 0; index < 2; index++ {
+		created, err := store.Create(testCreateInput())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.Start(testWorkspaceID, created.Contract.ItemID, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	continuity, err := store.ActiveContinuity(testWorkspaceID)
+	if err != nil || continuity.State != ActivePointerAmbiguous || continuity.Path != "" || continuity.CheckpointState != CheckpointUnavailable {
+		t.Fatalf("ambiguous continuity = %#v, err = %v", continuity, err)
+	}
+}
+
 func TestExportAndConfirmedDelete(t *testing.T) {
 	store := testStore(t)
 	created, err := store.Create(testCreateInput())
