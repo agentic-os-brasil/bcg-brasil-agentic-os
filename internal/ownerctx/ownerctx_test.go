@@ -40,6 +40,49 @@ func TestInitializeCreatesInspectablePointersWithoutOverwritingSelf(t *testing.T
 	}
 }
 
+func TestOwnerRegistryRejectsPermissiveAndTrailingJSON(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not enforced on Windows")
+	}
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	registryPath := filepath.Join(root, "owner", "registry.json")
+	if err := os.Chmod(registryPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Inspect(root); err == nil {
+		t.Fatal("permissive owner registry was accepted")
+	}
+	if err := os.Chmod(registryPath, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(registryPath, append(body, []byte("{}\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Inspect(root); err == nil {
+		t.Fatal("trailing owner registry JSON was accepted")
+	}
+}
+
+func TestAuthorizeProducerRejectsOversizedRegistryBeforeWrite(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AuthorizeProducer(root, strings.Repeat("p", maximumOwnerRegistryBytes)); err == nil {
+		t.Fatal("oversized owner registry write was accepted")
+	}
+	if _, err := Inspect(root); err != nil {
+		t.Fatalf("oversized write damaged registry: %v", err)
+	}
+}
+
 func TestInitializeAddsNewProfessionalFacetsWithoutOverwritingExistingRegistry(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {

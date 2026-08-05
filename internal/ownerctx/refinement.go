@@ -1,6 +1,7 @@
 package ownerctx
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -8,12 +9,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 )
+
+const maximumOwnerRegistryBytes = 64 << 10
 
 var ErrConfirmationRequired = errors.New("owner confirmation is required by this facet policy")
 var ErrRevisionConflict = errors.New("owner facet has changed since this audit; refusing to overwrite newer content")
@@ -135,7 +139,7 @@ func AuthorizeProducer(root, id string) (string, error) {
 		value.Producers = map[string]producerRecord{}
 	}
 	value.Producers[id] = producerRecord{CapabilitySHA256: digest(capability), AuthorizedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-	if err := writePrivateJSON(filepath.Join(root, "owner", "registry.json"), value); err != nil {
+	if err := writeOwnerRegistry(root, value); err != nil {
 		return "", err
 	}
 	return capability, nil
@@ -330,18 +334,55 @@ func authorizedProducer(root, id, capability string) (bool, error) {
 }
 
 func readRegistry(root string) (registry, error) {
-	file, err := os.ReadFile(filepath.Join(root, "owner", "registry.json"))
+	path := filepath.Join(root, "owner", "registry.json")
+	info, err := os.Lstat(path)
 	if err != nil {
 		return registry{}, err
 	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return registry{}, errors.New("owner context registry must be a regular non-symlink file")
+	}
+	if info.Size() <= 0 || info.Size() > maximumOwnerRegistryBytes || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
+		return registry{}, errors.New("owner context registry must be a bounded owner-only file")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return registry{}, err
+	}
+	defer file.Close()
+	body, err := io.ReadAll(io.LimitReader(file, maximumOwnerRegistryBytes+1))
+	if err != nil {
+		return registry{}, err
+	}
+	if int64(len(body)) > maximumOwnerRegistryBytes {
+		return registry{}, errors.New("owner context registry exceeds the bounded JSON limit")
+	}
 	var value registry
-	if err := json.Unmarshal(file, &value); err != nil || (value.SchemaVersion != 2 && value.SchemaVersion != 3) {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil || (value.SchemaVersion != 2 && value.SchemaVersion != 3) {
 		return registry{}, errors.New("owner context registry is invalid")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return registry{}, errors.New("owner context registry contains multiple JSON values")
 	}
 	if value.SchemaVersion == 2 && value.OnboardingTrack == "" {
 		value.OnboardingTrack = OnboardingTrackComplete
 	}
 	return value, nil
+}
+
+func writeOwnerRegistry(root string, value registry) error {
+	body, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	body = append(body, '\n')
+	if len(body) > maximumOwnerRegistryBytes {
+		return errors.New("owner context registry exceeds the bounded JSON limit")
+	}
+	return atomicPrivateWrite(filepath.Join(root, "owner", "registry.json"), body)
 }
 
 func readProposal(root, id string) (proposal, error) {
