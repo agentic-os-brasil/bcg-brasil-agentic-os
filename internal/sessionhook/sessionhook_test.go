@@ -108,12 +108,13 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 		t.Fatalf("continuous-use directive = %q", got)
 	}
 	selected := active
+	selected.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
 	selected.SharePointSource = sessionctx.SharePointSource{
 		State: priorwork.SourceSelected, FolderCount: 2, SourceAuthority: "sharepoint",
 		LocalProjection: "metadata_and_source_pointers_only", AuthorizationState: "pending_signed_enrollment",
 		CollectionRuntime: "claude", CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy",
 	}
-	if got := sessionDirective(selected); !strings.Contains(got, "exact SharePoint folder selection") || !strings.Contains(got, "Only Claude") || !strings.Contains(got, "Codex") || strings.Contains(got, "SharePoint folder URL") {
+	if got := sessionDirective(selected); !strings.Contains(got, "exact SharePoint folder selection") || !strings.Contains(got, "Only Claude") || !strings.Contains(got, "Codex") || !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" prior-work rationale ingest`) || strings.Contains(got, "`bcgos prior-work rationale ingest") || strings.Contains(got, "SharePoint folder URL") {
 		t.Fatalf("selected directive = %q", got)
 	}
 	deferred := active

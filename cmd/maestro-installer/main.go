@@ -554,26 +554,30 @@ func wizardHandler(options options) http.Handler {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
 		}
+		result, activation, err := initializeDefaultWorkspace(options, workspacePath)
+		if err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
 		var sourcePath string
 		if payload.ImportExisting {
+			// Source selection is deliberately post-bootstrap. Any selected
+			// material must be interpreted and ingested from the workspace that
+			// owns it; the installer never asks for a source before that workspace
+			// exists.
 			chooser := options.chooseImportSource
 			if chooser == nil {
 				chooser = chooseImportSource
 			}
 			sourcePath, err = chooser()
 			if err != nil {
-				writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("não foi possível escolher a pasta de memórias: %v", err)})
+				writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("o workspace foi criado, mas não foi possível escolher a fonte de trabalho: %v", err)})
 				return
 			}
 			if err := validateMemorySource(sourcePath, workspacePath); err != nil {
 				writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
 				return
 			}
-		}
-		result, activation, err := initializeDefaultWorkspace(options, workspacePath)
-		if err != nil {
-			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
-			return
 		}
 		if sourcePath != "" {
 			if err := writeImportIntent(workspacePath, sourcePath); err != nil {
@@ -1175,7 +1179,7 @@ func writeImportIntent(workspacePath, sourcePath string) error {
 		"schema_version": 1,
 		"source_path":    sourcePath,
 		"state":          "pending_verified_pack",
-		"notice":         "Source was selected by the owner. No files have been read, copied or uploaded yet.",
+		"notice":         "Source was selected after workspace bootstrap. It is a pointer for a later, owner-authorized ingestion inside this workspace; no files have been read, copied or uploaded yet.",
 	}, "", "  ")
 	if err != nil {
 		return err

@@ -212,12 +212,13 @@ func sessionDirective(packet sessionctx.Packet) string {
 		case priorwork.SourceSelectionRequired:
 			lines = append(lines,
 				"GUIDED SHAREPOINT SETUP IS PENDING. Before proposing the first project task, ask only: ‘Você quer indicar as pastas autorizadas do SharePoint deste projeto agora ou prefere começar sem essa fonte?’ Then wait.",
-				"If the owner chooses folders, use the managed Maestro onboarding route to review and record only exact canonical folder pointers. Do not discover broadly, read, copy, upload or collect content during onboarding. If the owner defers, record that choice and do not ask again automatically.",
+				"If the owner chooses folders, use the managed Maestro onboarding route to review and record only exact canonical folder pointers. Do not discover broadly or read anything before the separate explicit rationale-ingestion authorization. If the owner defers, record that choice and do not ask again automatically.",
 			)
 		case priorwork.SourceSelected:
 			lines = append(lines,
 				fmt.Sprintf("A confirmed exact SharePoint folder selection exists for this workspace (%d folder(s)); the URLs remain behind the private local pointer and are not injected here.", packet.SharePointSource.FolderCount),
-				"This selection grants no collection authority. SharePoint remains the source of truth and the local projection may contain only bounded metadata and source pointers. Never collect at Session Start. Only Claude may collect after signed enrollment and native qualification; Codex collection is unavailable/corporate_policy and Codex may query only an already verified local index.",
+				"The selection itself does not authorize a read. Before the first project task, ask whether the owner authorizes a bounded pass over the most recent materials: ‘Posso ler os materiais mais recentes dessas pastas e criar racionais internos rastreáveis no workspace?’ Explain that the pass creates derived racionais under brain/knowledge/sharepoint-rationales, preserves the SharePoint link and modification date on each one, and never copies raw document bodies.",
+				"Only Claude may collect after signed enrollment and native qualification; Codex collection is unavailable/corporate_policy and no fallback is allowed. If authorized and available, use "+commandFor(packet, "bcgos prior-work rationale ingest --workspace <workspace> --stdin --confirm")+". Newest source modifications are materialized first with a stable item-reference tie-breaker. SharePoint remains authoritative.",
 			)
 		case priorwork.SourceDeferred:
 			lines = append(lines, "Guided SharePoint source setup was deferred by the owner. Do not ask again automatically; offer it only when the owner requests prior-work or project-source setup.")

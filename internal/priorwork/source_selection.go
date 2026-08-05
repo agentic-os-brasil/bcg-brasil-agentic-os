@@ -79,6 +79,34 @@ type SourceSelectionStore struct {
 	clock func() time.Time
 }
 
+// SelectedFolders returns the exact reviewed pointers for a workspace. It is
+// intentionally callable only by a bounded local ingestion path; Session Start
+// continues to expose counts and fingerprints, never these URLs.
+func (store SourceSelectionStore) SelectedFolders(workspaceID string) ([]string, error) {
+	if err := validateWorkspaceID(workspaceID); err != nil {
+		return nil, err
+	}
+	status, err := store.Status(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if status.State != SourceSelected {
+		return nil, errors.New("SharePoint source folders are not selected")
+	}
+	active, err := loadJSONAt[sourceSelectionActive](store.Root, filepath.Join("source-selections", workspaceID, "active.json"))
+	if err != nil {
+		return nil, err
+	}
+	record, err := loadJSONAt[sourceSelection](store.Root, filepath.Join("source-selections", workspaceID, "versions", active.Version+".json"))
+	if err != nil {
+		return nil, err
+	}
+	if err := validateStoredSourceSelection(record, active, workspaceID); err != nil {
+		return nil, err
+	}
+	return append([]string(nil), record.FolderURLs...), nil
+}
+
 func ParseSourceSelectionInput(reader io.Reader) (SourceSelectionInput, error) {
 	body, err := io.ReadAll(io.LimitReader(reader, MaximumSourceSelectionInputBytes+1))
 	if err != nil {

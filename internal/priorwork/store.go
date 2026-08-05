@@ -121,6 +121,12 @@ func (store Store) Enroll(enrollment Enrollment) error {
 	return syncRootDirectory(root, ".")
 }
 
+// Enrollment returns the verified active scope for a bounded local adapter
+// hand-off. It never exposes credentials or a private key.
+func (store Store) Enrollment() (Enrollment, error) {
+	return store.loadEnrollment()
+}
+
 func (store Store) Apply(snapshot Snapshot, receipt ImportReceipt, access AccessContext) (ApplyReport, error) {
 	if err := ValidateSnapshot(snapshot); err != nil {
 		return ApplyReport{}, err

@@ -31,12 +31,12 @@ func runPriorWork(
 	dataRoot func() (string, error),
 ) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos prior-work <actor|source|enroll|status|import|find|sync-due>")
+		fmt.Fprintln(errOut, "usage: bcgos prior-work <actor|source|rationale|enroll|status|import|find|sync-due>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos prior-work <actor|source|enroll|status|import|find|sync-due>")
+		fmt.Fprintln(out, "usage: bcgos prior-work <actor|source|rationale|enroll|status|import|find|sync-due>")
 		return ExitOK
 	case "actor":
 		if len(args) != 1 {
@@ -56,6 +56,8 @@ func runPriorWork(
 		return runPriorWorkEnroll(args[1:], in, out, errOut, dataRoot)
 	case "source":
 		return runPriorWorkSource(args[1:], in, out, errOut, dataRoot)
+	case "rationale":
+		return runPriorWorkRationale(args[1:], in, out, errOut, dataRoot)
 	case "status":
 		return runPriorWorkStatus(args[1:], out, errOut, dataRoot)
 	case "import":
@@ -68,6 +70,76 @@ func runPriorWork(
 		fmt.Fprintf(errOut, "unknown prior-work command %q\n", args[0])
 		return ExitUsage
 	}
+}
+
+func runPriorWorkRationale(
+	args []string,
+	in io.Reader,
+	out io.Writer,
+	errOut io.Writer,
+	dataRoot func() (string, error),
+) int {
+	if len(args) == 0 || args[0] != "ingest" {
+		fmt.Fprintln(errOut, "usage: bcgos prior-work rationale ingest --workspace PATH --stdin --confirm")
+		return ExitUsage
+	}
+	flags := flag.NewFlagSet("prior-work rationale ingest", flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	workspacePath := flags.String("workspace", "", "initialized Maestro workspace path")
+	stdin := flags.Bool("stdin", false, "read a signed, bounded rationale batch from standard input")
+	confirm := flags.Bool("confirm", false, "confirm the reviewed local rationale ingestion")
+	if err := flags.Parse(args[1:]); err != nil {
+		return ExitUsage
+	}
+	if flags.NArg() != 0 || strings.TrimSpace(*workspacePath) == "" || !*stdin || !*confirm {
+		fmt.Fprintln(errOut, "usage: bcgos prior-work rationale ingest --workspace PATH --stdin --confirm")
+		return ExitUsage
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(*workspacePath, root)
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	if inspection.WorkspaceID == "" || (inspection.State != "ready" && inspection.State != "warning") {
+		return writePriorWorkError(errOut, errors.New("rationale ingestion requires an initialized Maestro workspace"))
+	}
+	selectionStore := priorWorkSourceSelectionStore(root)
+	status, err := selectionStore.Status(inspection.WorkspaceID)
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	if status.State != priorwork.SourceSelected {
+		return writePriorWorkError(errOut, errors.New("rationale ingestion requires an explicitly selected SharePoint source"))
+	}
+	batch, err := priorwork.ParseRationaleBatch(in)
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	if batch.WorkspaceID != inspection.WorkspaceID || batch.SourceSelectionFingerprint != status.Fingerprint {
+		return writePriorWorkError(errOut, errors.New("rationale batch does not bind the selected Maestro workspace and SharePoint folders"))
+	}
+	folders, err := selectionStore.SelectedFolders(inspection.WorkspaceID)
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	priorStore, err := priorWorkStore(func() (string, error) { return root, nil })
+	if err != nil {
+		fmt.Fprintf(errOut, "prior-work rationale: collector trust is unavailable: %v\n", err)
+		return ExitUnavailable
+	}
+	enrollment, err := priorStore.Enrollment()
+	if err != nil {
+		fmt.Fprintf(errOut, "prior-work rationale: signed Claude collection is unavailable: %v\n", err)
+		return ExitUnavailable
+	}
+	report, err := priorwork.MaterializeRationales(*workspacePath, batch, folders, enrollment)
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	return writePriorWorkJSON(out, report)
 }
 
 func runPriorWorkSource(

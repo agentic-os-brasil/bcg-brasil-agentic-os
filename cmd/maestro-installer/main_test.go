@@ -190,6 +190,43 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 	}
 }
 
+func TestWizardDefersSourceSelectionUntilWorkspaceBootstrapCompletes(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	sourcePath := filepath.Join(root, "prior-material")
+	if err := os.MkdirAll(sourcePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	chooserSawWorkspace := false
+	handler := wizardHandler(options{
+		dataRoot:     dataRoot,
+		managedRoot:  filepath.Join(root, "managed"),
+		sessionToken: "test-token",
+		workspacePath: func() (string, error) {
+			return workspacePath, nil
+		},
+		chooseImportSource: func() (string, error) {
+			_, err := os.Stat(filepath.Join(workspacePath, ".bcgos", "workspace.json"))
+			chooserSawWorkspace = err == nil
+			return sourcePath, err
+		},
+		configureWorkspace: func(options, string) (workspaceActivation, error) {
+			return workspaceActivation{State: "ready", Lifecycle: lifecycleActivation{State: "configured"}, Maintenance: maintenanceActivation{State: "active_loaded_enabled"}}, nil
+		},
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/create-workspace", strings.NewReader(`{"import_existing":true}`))
+	request.Header.Set("X-Maestro-Session", "test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !chooserSawWorkspace || !strings.Contains(recorder.Body.String(), `"source_registered":true`) {
+		t.Fatalf("status=%d chooserSawWorkspace=%v body=%s", recorder.Code, chooserSawWorkspace, recorder.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(workspacePath, ".bcgos", "import-intake.json")); err != nil {
+		t.Fatalf("post-bootstrap source pointer missing: %v", err)
+	}
+}
+
 func TestConfigureWorkspaceRuntimeRunsIdempotentReadinessAndNativeMaintenance(t *testing.T) {
 	root := t.TempDir()
 	managedRoot := filepath.Join(root, "managed")

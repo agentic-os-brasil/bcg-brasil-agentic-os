@@ -271,9 +271,11 @@ psicológico.
 
 ### Passo 4.1 — Escolha as fontes SharePoint do projeto
 
-Depois que a entrevista do owner estiver revisada e confirmada, o Maestro
-pergunta uma vez se você quer indicar as pastas autorizadas do SharePoint deste
-projeto ou começar sem essa fonte. Você pode adiar sem perder funcionalidade;
+Depois que a entrevista do owner estiver revisada e confirmada **dentro do
+workspace recém-criado**, o Maestro pergunta uma vez se você quer indicar as
+pastas autorizadas do SharePoint deste projeto ou começar sem essa fonte. O
+instalador não pede essa fonte antes de criar o workspace: o conteúdo derivado
+será lido e organizado dentro dele. Você pode adiar sem perder funcionalidade;
 essa escolha fica registrada e o Maestro não repete a pergunta em toda sessão.
 
 Para inspecionar o estado:
@@ -295,12 +297,23 @@ Se preferir começar sem a fonte:
 bcgos prior-work source defer --workspace <workspace> --confirm
 ```
 
-Essa etapa registra somente ponteiros exatos em armazenamento privado local.
-Ela não descobre outras pastas, não lê nem copia documentos e não concede
-autoridade de coleta. O SharePoint continua sendo a fonte. Um enrollment
-assinado ainda é obrigatório antes que um coletor Claude qualificado possa
-produzir o índice local de metadados e ponteiros. Codex não coleta SharePoint;
-ele pode consultar apenas um índice local já verificado.
+Essa primeira etapa registra somente ponteiros exatos em armazenamento privado
+local; selecionar não é o mesmo que autorizar leitura. Em seguida, o Maestro
+pergunta explicitamente se pode ler os materiais mais recentes dessas pastas e
+criar racionais internos rastreáveis. Com essa autorização, um coletor Claude
+qualificado lê apenas o escopo aprovado e envia um lote assinado para:
+
+```text
+bcgos prior-work rationale ingest --workspace <workspace> --stdin --confirm
+```
+
+O Maestro grava apenas racionais derivados em
+`brain/knowledge/sharepoint-rationales/`, ordenados pelos materiais mais
+recentes, com o link SharePoint, item, digest e data de modificação em cada
+registro. O corpo bruto do documento não é copiado e o SharePoint continua
+sendo a fonte de verdade. Sem enrollment, qualificação nativa ou runtime local
+disponível, a ingestão falha fechada e nada é criado. Codex não coleta
+SharePoint; ele pode consultar apenas um índice local já verificado.
 
 ### Passo 5 — Faça uma primeira tarefa pequena
 

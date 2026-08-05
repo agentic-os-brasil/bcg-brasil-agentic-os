@@ -170,23 +170,44 @@ professional baseline; do not emulate ingestion from conversation.
   identity is known. Offer the complete track later only when it is useful;
   never nag or silently upgrade it.
 - A confirmed **complete** track has the full initial professional baseline.
+- The workspace bootstrap is always first. Never ask for, resolve or ingest a
+  SharePoint source before the new workspace has been initialized and the
+  Maestro session is running inside that workspace. The source question below
+  is deliberately a post-bootstrap onboarding step because all derived
+  content must be read and organized from within the workspace.
 - After either track is confirmed, inspect the deterministic project-source
   state with `<maestro-cli> prior-work source status --workspace <workspace>`. If it is
   `selection_required`, ask exactly one question and wait: **“Você quer indicar
   as pastas autorizadas do SharePoint deste projeto agora ou prefere começar
   sem essa fonte?”**
-  - If the owner chooses SharePoint, explain that the selection records exact
-    folder pointers only and does not read, copy, upload or ingest content.
-    Review the canonical folder URLs with the owner, then send strict JSON
-    (`schema_version: 1`, `folder_urls`) through standard input to
+  - If the owner chooses SharePoint, make the two-stage contract explicit:
+    selecting folders records the exact scope, but **does not yet authorize a
+    read**. Review the canonical folder URLs with the owner, then send strict
+    JSON (`schema_version: 1`, `folder_urls`) through standard input to
     `<maestro-cli> prior-work source select --workspace <workspace> --stdin --confirm`.
+    Immediately after selection, ask whether the owner authorizes a bounded
+    recent-material pass: **“Posso ler os materiais mais recentes dessas
+    pastas e criar racionais internos rastreáveis no workspace?”** Explain
+    plainly that the pass reads only the selected folders through the qualified
+    Claude collector, writes concise derived racionais under
+    `brain/knowledge/sharepoint-rationales/`, keeps the SharePoint link and
+    modification date on every rationale, and never copies the raw document
+    body. If the owner authorizes it, run the explicit rationale-ingestion
+    command only when signed enrollment and the qualified local ingestion
+    runtime are available:
+    `<maestro-cli> prior-work rationale ingest --workspace <workspace> --stdin --confirm`.
+    The batch is deterministic: newest source modifications first, then stable
+    item reference as tie-breaker. If the collector/runtime is unavailable,
+    report that honestly and leave the source selected but not ingested.
   - If the owner prefers to start clean, record the choice with
     `<maestro-cli> prior-work source defer --workspace <workspace> --confirm` and do
     not ask again automatically.
   - A selection is not enrollment or collection authority. SharePoint remains
     authoritative; only a signed enrollment plus a qualified Claude collector
-    can build the local metadata/pointer index. Codex collection remains
-    `unavailable/corporate_policy` and no fallback is allowed.
+    can read the selected roots and produce the bounded rationale batch. Codex
+    collection remains `unavailable/corporate_policy` and no fallback is
+    allowed. The local rationale layer is a derived convenience, never a
+    replacement for the SharePoint source.
 - Immediately after confirmation, always invite the owner to name the first
   two internal agents now or defer them: **“Quer dar nome e avatar ao Walter e
   ao Darwin agora, ou prefere deixar isso para depois?”** This is an invitation,
@@ -228,7 +249,10 @@ professional baseline; do not emulate ingestion from conversation.
 - Do not import prior persona, project or memory context that is outside this
   Maestro workspace. Keep the conversation focused on the owner's
   professional work.
-- Do not ingest, copy or upload a selected source during onboarding.
+- Do not read a selected source until the owner gives the second, explicit
+  rationale-ingestion authorization. After that authorization, never copy raw
+  source bodies; only materialize bounded derived racionais with a source
+  pointer and freshness metadata.
 - Do not discover SharePoint broadly, resolve a selected folder, call a
   collector or claim that an index exists during onboarding.
 - Do not infer a psychological profile.

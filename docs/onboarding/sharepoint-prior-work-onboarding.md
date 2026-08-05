@@ -77,6 +77,7 @@ workspace-bound e versionada em estado privado local:
 bcgos prior-work source status --workspace <workspace>
 bcgos prior-work source select --workspace <workspace> --stdin --confirm
 bcgos prior-work source defer --workspace <workspace> --confirm
+bcgos prior-work rationale ingest --workspace <workspace> --stdin --confirm
 ```
 
 O comando `select` recebe apenas JSON estrito com `schema_version: 1` e uma
@@ -87,8 +88,13 @@ Start.
 
 Essa escolha não substitui a matrícula das seções seguintes. O owner informa a
 intenção e o escopo exato; a autoridade aprovada ainda precisa resolver os
-ponteiros em roots opacos e assinar o enrollment. Até lá, collection continua
-`unavailable`. Nenhum runtime coleta durante o onboarding.
+ponteiros em roots opacos e assinar o enrollment. Depois da seleção, existe um
+segundo consentimento: autorizar a leitura limitada dos materiais mais recentes
+para gerar racionais derivados no workspace. Cada racional preserva o ponteiro
+SharePoint e a data da fonte; nenhum corpo bruto é armazenado localmente. A
+ordenação é determinística (mais recente primeiro, depois `item_ref`). Até que
+o enrollment assinado, o coletor Claude qualificado e o runtime local estejam
+disponíveis, collection continua `unavailable` e o workspace não é alterado.
 
 ## 3. Arquitetura e separação de responsabilidades
 
