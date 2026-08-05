@@ -61,3 +61,12 @@ func TestRecommendTechCoreNeverActivatesState(t *testing.T) {
 		t.Fatal("recommendation omitted explicit confirmation question")
 	}
 }
+
+func TestRecommendTechCoreDoesNotInferFromNegatedOrAmbiguousRoles(t *testing.T) {
+	for _, function := range []string{"Não sou desenvolvedor", "Desenvolvedora de negócios", "Não trabalho como data scientist"} {
+		got := RecommendTechCore(function)
+		if got.State != "ask" || len(got.SuggestedTracks) != 0 {
+			t.Fatalf("recommendation for %q = %#v", function, got)
+		}
+	}
+}

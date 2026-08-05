@@ -1,6 +1,9 @@
 package ownerctx
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // TechCoreRecommendation is a bounded, deterministic suggestion derived only
 // from the function the collaborator explicitly declared. It never activates
@@ -24,19 +27,19 @@ func RecommendTechCore(function string) TechCoreRecommendation {
 
 	domains := make([]string, 0, 3)
 	tracks := make([]string, 0, 3)
-	if containsAny(value, "engenheiro de software", "engenheira de software", "engenharia de software", "software engineer", "software developer", "desenvolvedor", "desenvolvedora", "developer", "programador", "programadora", "tech lead", "devops", "sre") {
+	if containsRole(value, "engenheiro de software", "engenheira de software", "engenharia de software", "software engineer", "software developer", "desenvolvedor", "desenvolvedora", "developer", "programador", "programadora", "tech lead", "devops", "sre") {
 		domains = append(domains, "engineering")
 		tracks = append(tracks, "software-engineering")
 	}
-	if containsAny(value, "inteligencia artificial", "artificial intelligence", "machine learning", "ml engineer", "engenharia de ia", "engenheiro de ia", "genai", "llm", "ia aplicada", "ai engineer", "ai engineering") {
+	if containsRole(value, "inteligencia artificial", "artificial intelligence", "machine learning", "ml engineer", "engenharia de ia", "engenheiro de ia", "genai", "llm", "ia aplicada", "ai engineer", "ai engineering") {
 		domains = append(domains, "ai")
 		tracks = append(tracks, "ai-engineering")
 	}
-	if containsAny(value, "cientista de dados", "cientista em dados", "data scientist", "data science", "analista de dados", "data analyst", "analytics", "estatistica", "modelagem estatistica") {
+	if containsRole(value, "cientista de dados", "cientista em dados", "data scientist", "data science", "analista de dados", "data analyst", "analytics", "estatistica", "modelagem estatistica") {
 		domains = append(domains, "data")
 		tracks = append(tracks, "data-science")
 	}
-	if containsAny(value, "engenheiro de dados", "engenheira de dados", "engenharia de dados", "data engineer", "data engineering", "data platform", "plataforma de dados", "pipeline de dados") {
+	if containsRole(value, "engenheiro de dados", "engenheira de dados", "engenharia de dados", "data engineer", "data engineering", "data platform", "plataforma de dados", "pipeline de dados") {
 		domains = append(domains, "data")
 		tracks = append(tracks, "data-engineering")
 	}
@@ -68,13 +71,51 @@ func normalizeFunction(value string) string {
 	return strings.Join(strings.Fields(value), " ")
 }
 
-func containsAny(value string, terms ...string) bool {
+func containsRole(value string, terms ...string) bool {
 	for _, term := range terms {
-		if strings.Contains(value, term) {
+		for offset := 0; offset < len(value); {
+			found := strings.Index(value[offset:], term)
+			if found < 0 {
+				break
+			}
+			start := offset + found
+			end := start + len(term)
+			if tokenBoundary(value, start, end) && !negatedRole(value, start) && !businessRole(value, end) {
+				return true
+			}
+			offset = end
+		}
+	}
+	return false
+}
+
+func tokenBoundary(value string, start, end int) bool {
+	isWord := func(char byte) bool {
+		return char == '_' || unicode.IsLetter(rune(char)) || unicode.IsDigit(rune(char))
+	}
+	return (start == 0 || !isWord(value[start-1])) && (end == len(value) || !isWord(value[end]))
+}
+
+func negatedRole(value string, start int) bool {
+	prefix := strings.TrimSpace(value[maxInt(0, start-32):start])
+	for _, marker := range []string{"nao sou", "nao trabalho como", "nao atuo como", "nao exerco", "fora de"} {
+		if strings.HasSuffix(prefix, marker) {
 			return true
 		}
 	}
 	return false
+}
+
+func businessRole(value string, end int) bool {
+	suffix := strings.TrimSpace(value[end:])
+	return strings.HasPrefix(suffix, "de negocio") || strings.HasPrefix(suffix, "de negocios")
+}
+
+func maxInt(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
 }
 
 func uniqueStrings(values []string) []string {
