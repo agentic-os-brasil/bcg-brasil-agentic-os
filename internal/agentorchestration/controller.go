@@ -122,6 +122,34 @@ func NewDurableStateStore(path, recoveryCapability string) (*StateStore, error) 
 	return store, nil
 }
 
+// EnsureDurableState materializes the empty, valid snapshot required before a
+// workspace-local runtime hook is handed to a native adapter. It is separate
+// from NewDurableStateStore because opening a missing state file must remain a
+// read-only operation for hook inspection. Existing state is never replaced.
+func EnsureDurableState(path, recoveryCapability string) error {
+	store, err := NewDurableStateStore(path, recoveryCapability)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect durable orchestration state: %w", err)
+	}
+
+	unlock, err := acquireStateFileLock(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = unlock() }()
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect durable orchestration state: %w", err)
+	}
+	return store.persistLocked()
+}
+
 func RestoreStateStore(snapshot StateSnapshot, recoveryCapability string) (*StateStore, error) {
 	if recoveryCapability == "" {
 		return nil, errors.New("orchestration state store requires a recovery capability")

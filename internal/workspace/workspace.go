@@ -13,6 +13,8 @@ import (
 	pathpkg "path"
 	"path/filepath"
 	"strings"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
 )
 
 var ErrSynchronizedWorkspace = errors.New("workspace appears to be inside a synchronized directory")
@@ -178,6 +180,12 @@ func Initialize(options Options) (Result, error) {
 		}
 	} else {
 		return Result{}, err
+	}
+	if err := agentorchestration.EnsureDurableState(
+		filepath.Join(metadataRoot, "maestro-orchestration-state.json"),
+		"workspace-bootstrap\x00"+id,
+	); err != nil {
+		return Result{}, fmt.Errorf("bootstrap orchestration state: %w", err)
 	}
 	if err := ensureBrainReadme(workspacePath); err != nil {
 		return Result{}, err

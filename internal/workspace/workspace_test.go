@@ -1,11 +1,14 @@
 package workspace
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
 )
 
 func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
@@ -22,6 +25,7 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 	}
 	for _, path := range []string{
 		filepath.Join(workspacePath, ".bcgos", "workspace.json"),
+		filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json"),
 		filepath.Join(workspacePath, "README.md"),
 		filepath.Join(workspacePath, "onboarding", "README.md"),
 		filepath.Join(workspacePath, "brain", "README.md"),
@@ -55,6 +59,21 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 	if inspection.State != "ready" || inspection.WorkspaceID != result.WorkspaceID || !inspection.BrainReadable {
 		t.Fatalf("Inspect() = %#v", inspection)
 	}
+	statePath := filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")
+	stateBody, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state agentorchestration.StateSnapshot
+	if err := json.Unmarshal(stateBody, &state); err != nil {
+		t.Fatalf("initial orchestration state is not valid JSON: %v", err)
+	}
+	if state != (agentorchestration.StateSnapshot{}) {
+		t.Fatalf("initial orchestration state should be an empty snapshot: %#v", state)
+	}
+	if info, err := os.Stat(statePath); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("initial orchestration state permissions = %v, want 0600 (err=%v)", info.Mode().Perm(), err)
+	}
 
 	readmePath := filepath.Join(workspacePath, "brain", "README.md")
 	if err := os.WriteFile(readmePath, []byte("# Meu conteúdo\n"), 0o600); err != nil {
@@ -77,6 +96,26 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 	contents, err = os.ReadFile(rootReadmePath)
 	if err != nil || string(contents) != "# Meu workspace\n" {
 		t.Fatalf("re-initialization overwrote root README = %q, error = %v", contents, err)
+	}
+	stateBodyAfter, err := os.ReadFile(statePath)
+	if err != nil || string(stateBodyAfter) != string(stateBody) {
+		t.Fatalf("re-initialization changed orchestration state = %q, error = %v", stateBodyAfter, err)
+	}
+}
+
+func TestInitializeRejectsMalformedExistingOrchestrationState(t *testing.T) {
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "Developer", "workspace")
+	dataRoot := filepath.Join(root, "AppData", "BCGOS")
+	if _, err := Initialize(Options{WorkspacePath: workspacePath, DataRoot: dataRoot}); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")
+	if err := os.WriteFile(statePath, []byte(`{"unknown":true}\n`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Initialize(Options{WorkspacePath: workspacePath, DataRoot: dataRoot}); err == nil || !strings.Contains(err.Error(), "decode durable orchestration state") {
+		t.Fatalf("malformed orchestration state accepted: %v", err)
 	}
 }
 

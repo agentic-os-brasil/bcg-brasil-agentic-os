@@ -383,6 +383,12 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	statePath := filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")
+	// Workspace bootstrap now creates the initial valid state eagerly. Remove
+	// it here so this test can inject the malicious symlink it is meant to
+	// reject.
+	if err := os.Remove(statePath); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Symlink(outside, statePath); err != nil {
 		t.Fatal(err)
 	}
