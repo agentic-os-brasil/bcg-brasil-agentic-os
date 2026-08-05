@@ -10,7 +10,7 @@ func TestRecommendTechCoreForTechnicalFunctions(t *testing.T) {
 		track  string
 	}{
 		{name: "engineering", input: "Engenheira de software", domain: "engineering", track: "software-engineering"},
-		{name: "data", input: "cientista de dados", domain: "data", track: "data-engineering"},
+		{name: "data science", input: "cientista de dados", domain: "data", track: "data-science"},
 		{name: "ai", input: "AI engineer trabalhando com LLMs", domain: "ai", track: "ai-engineering"},
 	}
 	for _, test := range tests {
@@ -27,9 +27,26 @@ func TestRecommendTechCoreForTechnicalFunctions(t *testing.T) {
 }
 
 func TestRecommendTechCoreAsksWhenFunctionIsAmbiguous(t *testing.T) {
-	got := RecommendTechCore("Consultora de estratégia")
-	if got.State != "ask" || got.Bundle != "tech-core" || got.Question == "" || len(got.SuggestedTracks) != 0 {
-		t.Fatalf("recommendation = %#v", got)
+	for _, function := range []string{"Consultora de estratégia", "Profissional de cuidados paliativos"} {
+		got := RecommendTechCore(function)
+		if got.State != "ask" || got.Bundle != "tech-core" || got.Question == "" || len(got.SuggestedTracks) != 0 {
+			t.Fatalf("recommendation for %q = %#v", function, got)
+		}
+	}
+}
+
+func TestRecommendTechCoreSeparatesDataScienceAndDataEngineering(t *testing.T) {
+	for _, test := range []struct {
+		function string
+		track    string
+	}{
+		{function: "Cientista de dados", track: "data-science"},
+		{function: "Engenheiro de dados", track: "data-engineering"},
+	} {
+		got := RecommendTechCore(test.function)
+		if got.State != "recommended" || len(got.SuggestedTracks) != 1 || got.SuggestedTracks[0] != test.track {
+			t.Fatalf("recommendation for %q = %#v", test.function, got)
+		}
 	}
 }
 

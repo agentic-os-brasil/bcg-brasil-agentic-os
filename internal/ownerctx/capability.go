@@ -28,13 +28,17 @@ func RecommendTechCore(function string) TechCoreRecommendation {
 		domains = append(domains, "engineering")
 		tracks = append(tracks, "software-engineering")
 	}
-	if containsAny(value, "engenheiro de dados", "engenharia de dados", "data engineer", "data engineering", "cientista de dados", "data scientist", "analista de dados", "data analyst", "analytics", "dados") {
-		domains = append(domains, "data")
-		tracks = append(tracks, "data-engineering")
-	}
 	if containsAny(value, "inteligencia artificial", "artificial intelligence", "machine learning", "ml engineer", "engenharia de ia", "engenheiro de ia", "genai", "llm", "ia aplicada", "ai engineer", "ai engineering") {
 		domains = append(domains, "ai")
 		tracks = append(tracks, "ai-engineering")
+	}
+	if containsAny(value, "cientista de dados", "cientista em dados", "data scientist", "data science", "analista de dados", "data analyst", "analytics", "estatistica", "modelagem estatistica") {
+		domains = append(domains, "data")
+		tracks = append(tracks, "data-science")
+	}
+	if containsAny(value, "engenheiro de dados", "engenheira de dados", "engenharia de dados", "data engineer", "data engineering", "data platform", "plataforma de dados", "pipeline de dados") {
+		domains = append(domains, "data")
+		tracks = append(tracks, "data-engineering")
 	}
 	if len(domains) == 0 {
 		return askForTechCore()
