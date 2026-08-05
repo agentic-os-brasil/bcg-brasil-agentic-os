@@ -9,13 +9,28 @@ Run this skill when a newly installed Maestro workspace receives its first
 guided-onboarding prompt. The goal is a useful, consented professional baseline
 — not a long system explanation and not an unreviewed memory import.
 
+## Resolve the Maestro CLI before any command
+
+Never invoke a bare `bcgos` command. Desktop runtimes do not inherit the
+owner's shell `PATH`, and a missing PATH entry must not be reported as a
+permission or onboarding-state failure. Use the exact executable path emitted
+by the Maestro `SessionStart` context and shown in the managed orientation's
+**Comandos úteis** section. If that pointer is unavailable, use the platform
+managed install location (`~/Library/Application Support/Maestro/bin/bcgos` on
+macOS or `%LOCALAPPDATA%\\Maestro\\bin\\bcgos.exe` on Windows); use `PATH` only
+as a final fallback. Call the resolved path as
+`<maestro-cli>` in the commands below; this is a placeholder to substitute,
+never a literal command to execute. If no executable can be resolved, stop and
+report the concrete missing path; do not substitute another runtime or pretend
+the command succeeded.
+
 ## Before the first reply
 
 1. Read `CLAUDE.md` and preserve the Maestro workspace identity.
 2. Resolve the canonical `interaction-profile` before choosing language,
    explanation depth or optional technical detail. It does not choose the
    onboarding track, grant authority or change the review requirement.
-3. Run `bcgos owner onboarding status` to inspect the deterministic local
+3. Run `<maestro-cli> owner onboarding status` to inspect the deterministic local
    state. Do not infer that onboarding exists from files or prior messages.
 4. Do not start a professional task, read a selected memory source, execute an
    unrelated skill or grant runtime trust globally.
@@ -112,11 +127,11 @@ professional baseline; do not emulate ingestion from conversation.
 1. Confirm the exact selected track once and persist it only with:
 
    ```sh
-   bcgos owner onboarding select --track quick|complete --confirm
+   <maestro-cli> owner onboarding select --track quick|complete --confirm
    ```
 
 2. Ask one interview question at a time. Use the next question returned by
-   `bcgos owner onboarding status`; do not invent extra mandatory questions.
+   `<maestro-cli> owner onboarding status`; do not invent extra mandatory questions.
 3. After each answer, reflect back a concise interpretation and ask whether it
    is accurate. Only then propose the corresponding facet draft. This is the
    quality loop for onboarding: the owner corrects meaning before anything is
@@ -129,7 +144,7 @@ professional baseline; do not emulate ingestion from conversation.
    then use the exact digest returned by the status command:
 
    ```sh
-   bcgos owner onboarding confirm --digest SHA256 --confirm
+   <maestro-cli> owner onboarding confirm --digest SHA256 --confirm
    ```
 
 ## Completion and follow-through
@@ -139,7 +154,7 @@ professional baseline; do not emulate ingestion from conversation.
   never nag or silently upgrade it.
 - A confirmed **complete** track has the full initial professional baseline.
 - After either track is confirmed, inspect the deterministic project-source
-  state with `bcgos prior-work source status --workspace <workspace>`. If it is
+  state with `<maestro-cli> prior-work source status --workspace <workspace>`. If it is
   `selection_required`, ask exactly one question and wait: **“Você quer indicar
   as pastas autorizadas do SharePoint deste projeto agora ou prefere começar
   sem essa fonte?”**
@@ -147,9 +162,9 @@ professional baseline; do not emulate ingestion from conversation.
     folder pointers only and does not read, copy, upload or ingest content.
     Review the canonical folder URLs with the owner, then send strict JSON
     (`schema_version: 1`, `folder_urls`) through standard input to
-    `bcgos prior-work source select --workspace <workspace> --stdin --confirm`.
+    `<maestro-cli> prior-work source select --workspace <workspace> --stdin --confirm`.
   - If the owner prefers to start clean, record the choice with
-    `bcgos prior-work source defer --workspace <workspace> --confirm` and do
+    `<maestro-cli> prior-work source defer --workspace <workspace> --confirm` and do
     not ask again automatically.
   - A selection is not enrollment or collection authority. SharePoint remains
     authoritative; only a signed enrollment plus a qualified Claude collector

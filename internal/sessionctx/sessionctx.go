@@ -192,6 +192,10 @@ type Packet struct {
 	// WorkspaceRoot is used only to anchor native hook directives. It is not
 	// serialized into the bounded packet or persisted as context content.
 	WorkspaceRoot string `json:"-"`
+	// MaestroCLIPath is the exact installed executable that emitted this
+	// lifecycle packet. It is a local directive anchor, never bounded context
+	// or persisted owner data.
+	MaestroCLIPath string `json:"-"`
 }
 
 func Build(sources Sources) Packet {

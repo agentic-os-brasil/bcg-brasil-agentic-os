@@ -107,7 +107,7 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 		// verbose warning. Do not fail the session or truncate JSON mid-document:
 		// return a valid, explicit omission that directs the runtime to the normal
 		// packet command instead.
-		return "Maestro bounded session context omitted: packet exceeded the native hook output budget. Use `bcgos session packet` for the complete pointer-only packet.", nil
+		return "Maestro bounded session context omitted: packet exceeded the native hook output budget. Use " + commandFor(packet, "bcgos session packet") + " for the complete pointer-only packet.", nil
 	}
 	if semanticEvent == "session_start" && packet.Memory.State == "available" && len(packet.Memory.Sections) > 0 {
 		memoryContext := renderMemoryContext(packet.Memory)
@@ -173,11 +173,14 @@ func sessionDirective(packet sessionctx.Packet) string {
 	if packet.WorkspaceRoot != "" {
 		lines = append(lines, "The only active workspace root is: "+packet.WorkspaceRoot+". Keep all professional context and actions scoped to this root; do not switch to another workspace.")
 	}
+	if packet.MaestroCLIPath != "" {
+		lines = append(lines, "Use the exact installed Maestro CLI executable at "+quoteCLIPath(packet.MaestroCLIPath)+" for every bcgos command below. Do not invoke a bare `bcgos` command or depend on PATH.")
+	}
 	switch packet.Owner.Onboarding.State {
 	case "required", "in_progress":
 		trackChoice := ""
 		if packet.Owner.Onboarding.Track == "selection_required" {
-			trackChoice = "Explain the two explicit choices before asking: `quick` is about 7 minutes and establishes role, communication style, work preferences and quality bar; it starts useful work sooner but leaves external voice, motivations, decision rules and boundaries to later refinement. `complete` is about 25 minutes and establishes all eight professional self facets for a more personalized starting point. Personality, psychological material, personal history and visual identity are not inferred or imported by default. After the owner chooses, record exactly that choice with `bcgos owner onboarding select --track quick|complete --confirm`."
+			trackChoice = "Explain the two explicit choices before asking: `quick` is about 7 minutes and establishes role, communication style, work preferences and quality bar; it starts useful work sooner but leaves external voice, motivations, decision rules and boundaries to later refinement. `complete` is about 25 minutes and establishes all eight professional self facets for a more personalized starting point. Personality, psychological material, personal history and visual identity are not inferred or imported by default. After the owner chooses, record exactly that choice with " + commandFor(packet, "bcgos owner onboarding select --track quick|complete --confirm") + "."
 		}
 		lines = append(lines,
 			"ONBOARDING IS NOT COMPLETE. Start the conversation as Maestro and conduct the owner interview before proposing work.",
@@ -189,7 +192,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 	case "review_required":
 		lines = append(lines,
 			"ONBOARDING ANSWERS ARE READY FOR REVIEW. Present the local profile for the owner's review and ask for an explicit confirmation; do not call onboarding complete before that confirmation.",
-			"The reviewed profile digest is "+packet.Owner.Onboarding.ReviewDigest+". Only after the owner confirms the displayed facets, run `bcgos owner onboarding confirm --digest "+packet.Owner.Onboarding.ReviewDigest+" --confirm`.",
+			"The reviewed profile digest is "+packet.Owner.Onboarding.ReviewDigest+". Only after the owner confirms the displayed facets, run "+commandFor(packet, "bcgos owner onboarding confirm --digest "+packet.Owner.Onboarding.ReviewDigest+" --confirm")+".",
 		)
 	case "complete":
 		lines = append(lines, "Maestro is active in this workspace. Briefly state that at the start of the session.")
@@ -219,7 +222,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 		case priorwork.SourceDeferred:
 			lines = append(lines, "Guided SharePoint source setup was deferred by the owner. Do not ask again automatically; offer it only when the owner requests prior-work or project-source setup.")
 		case priorwork.SourceSelectionUnavailable:
-			lines = append(lines, "Guided SharePoint source status is unavailable. Say this plainly and point to `bcgos prior-work source status --workspace <workspace>`; do not discover or collect any SharePoint content.")
+			lines = append(lines, "Guided SharePoint source status is unavailable. Say this plainly and point to "+commandFor(packet, "bcgos prior-work source status --workspace <workspace>")+"; do not discover or collect any SharePoint content.")
 		}
 	}
 	lines = appendContinuousUseDirective(lines, packet)
@@ -242,10 +245,22 @@ func appendContinuousUseDirective(lines []string, packet sessionctx.Packet) []st
 	}
 	if len(status.NextActions) > 0 {
 		next := status.NextActions[0]
-		lines = append(lines, "Next safe action: `"+next.Command+"`. "+next.Reason+".")
+		lines = append(lines, "Next safe action: "+commandFor(packet, next.Command)+". "+next.Reason+".")
 	}
 	for _, runtime := range status.Runtimes {
 		lines = append(lines, fmt.Sprintf("%s lifecycle evidence: configured=%t, adapter_observed=%t, native_qualified=%t, unavailable=%t. Adapter observation is not native proof.", runtime.Runtime, runtime.Configured, runtime.AdapterObserved, runtime.NativeQualified, runtime.Unavailable))
 	}
 	return lines
+}
+
+func commandFor(packet sessionctx.Packet, command string) string {
+	trimmed := strings.TrimSpace(command)
+	if packet.MaestroCLIPath == "" || (trimmed != "bcgos" && !strings.HasPrefix(trimmed, "bcgos ")) {
+		return "`" + trimmed + "`"
+	}
+	return "`" + quoteCLIPath(packet.MaestroCLIPath) + strings.TrimPrefix(trimmed, "bcgos") + "`"
+}
+
+func quoteCLIPath(path string) string {
+	return `"` + strings.ReplaceAll(path, `"`, `\"`) + `"`
 }

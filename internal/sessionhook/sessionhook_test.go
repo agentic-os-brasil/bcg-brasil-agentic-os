@@ -95,6 +95,10 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	if got := sessionDirective(selection); !strings.Contains(got, "work preferences") || !strings.Contains(got, "quality bar") || !strings.Contains(got, "all eight professional self facets") || !strings.Contains(got, "not inferred") {
 		t.Fatalf("track selection directive = %q", got)
 	}
+	selection.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
+	if got := sessionDirective(selection); !strings.Contains(got, "Do not invoke a bare `bcgos` command") || !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" owner onboarding select`) {
+		t.Fatalf("resolved CLI directive = %q", got)
+	}
 	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Count: 1}}}
 	active.ContinuousUse = continuoususe.Status{SchemaVersion: 1, State: continuoususe.StateActionRequired, OpenWork: continuoususe.OpenWork{Pointer: "bcgos://execution/active", Available: true, State: "available", WorkState: "running", CheckpointState: "missing"}, NextActions: []continuoususe.NextAction{{ID: continuoususe.ActionCheckpointActiveWork, Command: "bcgos work next --active --workspace <workspace>", Reason: "checkpoint required"}}}
 	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || !strings.Contains(got, "Você quer indicar as pastas autorizadas do SharePoint deste projeto agora") || strings.Contains(got, "Prepare kickoff") {
@@ -116,6 +120,12 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	deferred.SharePointSource = sessionctx.SharePointSource{State: priorwork.SourceDeferred, SourceAuthority: "sharepoint", LocalProjection: "metadata_and_source_pointers_only", CollectionRuntime: "claude", CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy"}
 	if got := sessionDirective(deferred); strings.Contains(got, "Você quer indicar as pastas autorizadas") || !strings.Contains(got, "was deferred") {
 		t.Fatalf("deferred directive = %q", got)
+	}
+	unavailable := active
+	unavailable.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
+	unavailable.SharePointSource = sessionctx.SharePointSource{State: priorwork.SourceSelectionUnavailable}
+	if got := sessionDirective(unavailable); !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" prior-work source status`) || strings.Contains(got, "`bcgos prior-work source status") {
+		t.Fatalf("unavailable source directive = %q", got)
 	}
 	reviewDigest := strings.Repeat("a", 64)
 	review := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "review_required", ReviewDigest: reviewDigest}}}

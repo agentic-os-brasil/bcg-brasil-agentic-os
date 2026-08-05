@@ -318,6 +318,13 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"injection_state\":\"unavailable\"`) || !strings.Contains(output.String(), `\"memory\":{\"state\":\"empty\"`) || strings.Contains(output.String(), "memory context injection requires a runtime adapter") {
 		t.Fatalf("hook exit = %d, output = %s", code, output.String())
 	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "Do not invoke a bare `bcgos` command") || !strings.Contains(output.String(), executable) {
+		t.Fatalf("session hook did not expose the invoking Maestro CLI path: %s", output.String())
+	}
 }
 
 func TestInstalledSessionStartUsesWorkspaceOrchestrationStateAndEnqueuesPresence(t *testing.T) {

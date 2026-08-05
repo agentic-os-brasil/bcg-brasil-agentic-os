@@ -105,7 +105,7 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 	for _, expected := range []string{
 		"Sessão e hooks", "SELF do dono", "Memória e persistência",
 		"Brain, wiki e navegação", "Agents e delegação", "dream-memory",
-		"bcgos adapter status --runtime claude",
+		"<maestro-cli> adapter status --runtime claude",
 	} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("orientation missing %q", expected)
