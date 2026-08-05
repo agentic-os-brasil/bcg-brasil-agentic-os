@@ -1,4 +1,4 @@
-package engineeringcoreskills
+package techcoreskills
 
 import (
 	"bytes"
@@ -24,7 +24,7 @@ func Skill(id string) ([]byte, error) {
 	}
 	body, err := skillFiles.ReadFile(id + "/SKILL.md")
 	if err != nil {
-		return nil, fmt.Errorf("read embedded engineering skill %s: %w", id, err)
+		return nil, fmt.Errorf("read embedded tech-core skill %s: %w", id, err)
 	}
 	return append([]byte(nil), body...), nil
 }

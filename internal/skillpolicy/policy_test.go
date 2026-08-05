@@ -34,8 +34,8 @@ func TestPolicyKeepsSkillsAsMethodsWithoutCreatingAuthority(t *testing.T) {
 	if !registry.AllowsDirect("case_agent", "ingest-content") || !registry.AllowsDirect("case_agent", "find-prior-work") {
 		t.Fatal("Case Agent cannot select the governed local-ingestion and explicit prior-work methods")
 	}
-	if !registry.AllowsDirect("quality_guardian", "pr-quality-loop") || !registry.AllowsDirect("quality_guardian", "pr-review") {
-		t.Fatal("Gamma Guardian cannot select its bounded quality methods")
+	if registry.AllowsDirect("quality_guardian", "pr-quality-loop") || registry.AllowsDirect("quality_guardian", "pr-review") {
+		t.Fatal("Gamma Guardian received technical quality methods from the base bundle")
 	}
 	if registry.AllowsDirect("quality_guardian", "deck-storyline") {
 		t.Fatal("Gamma Guardian gained an unrelated case-deliverable method")

@@ -6,7 +6,6 @@
       "role": "case_agent",
       "skill_ids": [
         "case-kickoff",
-        "decision-log-entry",
         "deck-review",
         "deck-storyline",
         "expert-interview-guide",
@@ -22,11 +21,7 @@
     {
       "role": "quality_guardian",
       "skill_ids": [
-        "coverage-diagnose",
-        "pr-quality-loop",
-        "pr-review",
-        "qa-gate",
-        "unit-test-wave"
+        "qa-gate"
       ]
     }
   ],

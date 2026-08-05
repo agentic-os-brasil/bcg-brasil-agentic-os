@@ -29,7 +29,7 @@ not be used as evidence that a pending capability is already released.
 - [x] Implement a non-overwriting owner/workspace human-atlas bootstrap with no task taxonomy or compiled navigation.
 - [x] Implement a bounded runtime-neutral Session Context Packet with pointers and omission diagnostics only.
 - [x] Define the execution-ledger authority boundary and implement the initial local contract, attempt, revision and inspection store.
-- [x] Define an inspectable capability-bundle topology that keeps interaction profile separate from professional practice, with neutral quality methods in base and source-only specialized engineering/data bundles.
+- [x] Define an inspectable capability-bundle topology that keeps interaction profile separate from professional practice, with a unified optional Tech Core bundle for engineering, data and quality methods.
 
 ## Track A - Contributor onboarding
 

@@ -289,7 +289,7 @@ func TestCodexProjectionAndUninstallPreserveUserContent(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "AGENTS.md"), []byte("# Local rules\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	installed, err := Install("codex", workspace)
+	installed, err := InstallForTracks("codex", workspace, []string{"software-engineering"})
 	if err != nil || installed.State != "installed" {
 		t.Fatalf("codex install = %+v, %v", installed, err)
 	}

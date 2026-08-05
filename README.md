@@ -136,7 +136,7 @@ attestation is not cryptographic principal authentication.
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
 | ✅ Governed completion | High-stakes work can require a separately authenticated Walter review before completion. |
 | ✅ Bounded delegation contract | The deterministic core can dispatch a narrow packet to the right agent; native runtime activation remains unavailable until adapter qualification. |
-| ✅ Professional capability bundles | Neutral engineering quality methods ship in the base bundle; a confirmed interview selection activates every skill in the selected engineering/data bundle and its dependencies. |
+| ✅ Professional capability bundles | The base bundle serves professional work; a confirmed technical selection activates the unified Tech Core bundle with engineering, data and quality skills. |
 | ✅ Canary contract | The local store can aggregate typed outcomes, capability failures, interventions and receipt metadata — native telemetry remains unavailable and no work content is exported. |
 | ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |
 | ✅ Darwin 🧬 operational surgeon | The same Darwin contract supports interactive and headless housekeeping with scoped `health/maestro-system` repairs and metadata-only receipts; native runtime invocation remains unavailable. |

@@ -19,8 +19,7 @@ import (
 
 	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
-	datapracticeskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/data-practice/skills"
-	engineeringcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/engineering-core/skills"
+	techcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/tech-core/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
@@ -545,10 +544,7 @@ func managedSkill(id string) ([]byte, error) {
 	if body, err := baseskills.Skill(id); err == nil {
 		return body, nil
 	}
-	if body, err := engineeringcoreskills.Skill(id); err == nil {
-		return body, nil
-	}
-	return datapracticeskills.Skill(id)
+	return techcoreskills.Skill(id)
 }
 
 func exactManagedBlock(body string) (string, error) {

@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "skills": [
+    {
+      "id": "coverage-diagnose",
+      "display_name": "Diagnóstico de cobertura",
+      "trigger": "Mapeia cobertura e escolhe o próximo alvo de testes por risco",
+      "default_prompt": "Use $coverage-diagnose para diagnosticar a cobertura e recomendar a próxima onda de testes.",
+      "relative_path": "skills/coverage-diagnose/SKILL.md"
+    },
+    {
+      "id": "data-pipeline-quality",
+      "display_name": "Qualidade de pipeline de dados",
+      "trigger": "Define contratos, verificações e recuperação para pipelines operáveis",
+      "default_prompt": "Use $data-pipeline-quality para desenhar ou avaliar a qualidade deste pipeline de dados.",
+      "relative_path": "skills/data-pipeline-quality/SKILL.md"
+    },
+    {
+      "id": "data-science-evaluation",
+      "display_name": "Avaliação de ciência de dados",
+      "trigger": "Conecta problema, baseline, qualidade da avaliação e decisão de promoção",
+      "default_prompt": "Use $data-science-evaluation para avaliar se esta abordagem melhora a decisão de negócio.",
+      "relative_path": "skills/data-science-evaluation/SKILL.md"
+    },
+    {
+      "id": "decision-log-entry",
+      "display_name": "Decision Log Entry",
+      "trigger": "Draft a source-grounded project decision record without writing it",
+      "default_prompt": "Use $decision-log-entry to draft a reviewable decision record from the supplied decision language.",
+      "relative_path": "skills/decision-log-entry/SKILL.md"
+    },
+    {
+      "id": "pr-quality-loop",
+      "display_name": "Quality loop de PR",
+      "trigger": "Orquestra QA e revisão de PR sem duplicar coleta ou pular gates",
+      "default_prompt": "Use $pr-quality-loop para conduzir o ciclo evidence-gated deste PR.",
+      "relative_path": "skills/pr-quality-loop/SKILL.md"
+    },
+    {
+      "id": "pr-review",
+      "display_name": "Revisão de pull request",
+      "trigger": "Revisa PR por risco, gates determinísticos e evidência atual",
+      "default_prompt": "Use $pr-review para revisar este pull request com evidência e verdict sem fazer merge.",
+      "relative_path": "skills/pr-review/SKILL.md"
+    },
+    {
+      "id": "reproducible-data-run",
+      "display_name": "Execução de dados reproduzível",
+      "trigger": "Registra o necessário para repetir uma análise sem copiar dados sensíveis",
+      "default_prompt": "Use $reproducible-data-run para tornar esta análise ou pipeline reproduzível.",
+      "relative_path": "skills/reproducible-data-run/SKILL.md"
+    },
+    {
+      "id": "review-explain-change",
+      "display_name": "Revisar e explicar mudança",
+      "trigger": "Prepara uma mudança técnica para revisão humana com evidência e limites claros",
+      "default_prompt": "Use $review-explain-change para preparar esta mudança técnica para revisão humana.",
+      "relative_path": "skills/review-explain-change/SKILL.md"
+    },
+    {
+      "id": "spec-driven-delivery",
+      "display_name": "Entrega orientada por especificação",
+      "trigger": "Transforma uma necessidade técnica em um contrato de entrega revisável",
+      "default_prompt": "Use $spec-driven-delivery para estruturar esta entrega técnica antes de implementar.",
+      "relative_path": "skills/spec-driven-delivery/SKILL.md"
+    },
+    {
+      "id": "test-and-evidence",
+      "display_name": "Teste e evidência",
+      "trigger": "Define verificações proporcionais e deixa lacunas de evidência visíveis",
+      "default_prompt": "Use $test-and-evidence para definir e revisar a evidência desta entrega técnica.",
+      "relative_path": "skills/test-and-evidence/SKILL.md"
+    },
+    {
+      "id": "unit-test-wave",
+      "display_name": "Onda de testes unitários",
+      "trigger": "Orquestra uma onda de testes focada, com cobertura e evidência",
+      "default_prompt": "Use $unit-test-wave para planejar e validar uma onda cirúrgica de testes.",
+      "relative_path": "skills/unit-test-wave/SKILL.md"
+    },
+    {
+      "id": "xfail-bug-capture",
+      "display_name": "Captura de bug via teste",
+      "trigger": "Registra bugs reais expostos por testes sem esconder a falha",
+      "default_prompt": "Use $xfail-bug-capture quando um teste revelar um bug real no código de produção.",
+      "relative_path": "skills/xfail-bug-capture/SKILL.md"
+    }
+  ]
+}
