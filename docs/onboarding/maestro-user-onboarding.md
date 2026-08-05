@@ -128,14 +128,22 @@ profissional corrigível — não inferir personalidade nem importar silenciosam
 o conteúdo de outro sistema.
 
 O percurso completo cobre oito facetas: papel profissional, estilo de
-comunicação, voz externa, preferências de trabalho, motivações profissionais,
+comunicação, preferências de trabalho, voz externa, motivações profissionais,
 barra de qualidade/QA, regras de decisão e limites de trabalho. A jornada curta
-cobre papel, comunicação, barra de qualidade e limites; começa mais rápido, mas
-demora mais para absorver voz, preferências, motivações e regras de decisão.
+cobre papel, comunicação, preferências e barra de qualidade; começa mais rápido,
+mas demora mais para absorver voz, motivações, regras de decisão e limites.
 
 Personality/psychological profile, história pessoal, fé, avaliações e identidade
 visual ficam fora da entrevista padrão. Só entram por uma etapa local,
 explicitamente autorizada, com finalidade e revisão próprias.
+
+Isso não significa que o Maestro conheça apenas o cargo. Depois da revisão do
+percurso escolhido, ele pode oferecer camadas opcionais — propósito e não
+negociáveis, contexto pessoal autorizado, personalidade/avaliações ou identidade
+visual — sempre com finalidade, fonte, leitores e retenção explícitos. Essas
+camadas não são necessárias para começar um trabalho profissional, não entram em
+contexto de cliente por padrão e permanecem `unavailable` quando não houver um
+adaptador local qualificado.
 
 Escolha entre:
 

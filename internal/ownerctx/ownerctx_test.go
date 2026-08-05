@@ -304,6 +304,16 @@ func TestQuickOnboardingIsAnExplicitBoundedBaseline(t *testing.T) {
 	if _, err := Initialize(root); err != nil {
 		t.Fatal(err)
 	}
+	quickInterview := QuickStartInterview()
+	wantFacets := []string{"professional-role", "communication-style", "preferences", "quality-bar"}
+	if len(quickInterview.Steps) != len(wantFacets) {
+		t.Fatalf("quick interview steps = %#v", quickInterview.Steps)
+	}
+	for index, want := range wantFacets {
+		if quickInterview.Steps[index].Facet != want {
+			t.Fatalf("quick interview step %d = %#v, want %q", index+1, quickInterview.Steps[index], want)
+		}
+	}
 	status, err := SelectOnboardingTrack(root, OnboardingTrackQuick)
 	if err != nil || status.Onboarding.Track != OnboardingTrackQuick || status.Onboarding.EstimatedMinutes != 7 || len(status.Onboarding.Remaining) != len(quickOnboardingFacets) {
 		t.Fatalf("quick status = %#v err=%v", status, err)

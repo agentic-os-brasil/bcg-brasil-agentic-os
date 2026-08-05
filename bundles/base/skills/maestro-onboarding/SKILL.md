@@ -43,8 +43,8 @@ first identity question in the same message.
 
 | Opção | Tempo estimado | O que estabelece | Implicação |
 | --- | --- | --- | --- |
-| **Curta** | **~7 minutos** | Papel profissional, estilo de colaboração e limites de trabalho | Você começa mais rápido, mas voz, preferências e regras de decisão serão refinadas em conversas futuras; as sugestões iniciais serão menos personalizadas. |
-| **Completa** | **~25 minutos** | As seis facetas acima, incluindo voz, preferências e regras de decisão | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha e decide. |
+| **Curta** | **~7 minutos** | Papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites serão refinados em conversas futuras; as sugestões iniciais serão menos personalizadas. |
+| **Completa** | **~25 minutos** | As oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e define qualidade. |
 
 Ask only: **“Você prefere a entrevista curta ou a completa?”**
 
@@ -77,11 +77,35 @@ memory. The complete track covers eight explicit, reviewable facets:
   communication that require authorization.
 
 The quick track covers `professional-role`, `communication-style`,
-`quality-bar` and `working-boundaries`. It is a useful operating baseline, but
-it intentionally leaves voice, preferences, motivations and decision rules for
-later refinement. Psychological/personality material, personal history, faith,
-assessments and visual identity are not inferred or imported by either track;
-they require a separate, explicit local consent path.
+`preferences` and `quality-bar`. It is a useful operating baseline, but it
+intentionally leaves external voice, motivations, decision rules and working
+boundaries for later refinement. Psychological/personality material, personal
+history, faith, assessments and visual identity are not inferred or imported by
+either track; they require a separate, explicit local consent path.
+
+## Camadas opcionais de identidade
+
+The first interview must not pretend that a professional baseline is the whole
+person. After the selected track is reviewed, offer (do not start automatically)
+these optional layers when they are useful:
+
+- **Propósito e não negociáveis** — values, long-term direction and personal
+  constraints that the owner explicitly wants the professional system to
+  respect. Keep this private and out of client/case packets by default.
+- **Contexto pessoal autorizado** — only the minimum family, faith or life
+  context the owner deliberately chooses to share, with a declared purpose and
+  reader scope. It is never required for ordinary professional work.
+- **Personalidade ou avaliação** — a local owner-authored synthesis or an
+  explicitly selected assessment source. Never diagnose, infer or turn a score
+  into an agent rule; a source that cannot be reviewed remains unavailable.
+- **Identidade visual** — colors, references and presentation preferences for
+  owner-facing artifacts only. It changes presentation, never authority or
+  routing.
+
+For every optional layer, ask for the purpose, source, allowed readers, retention
+and explicit confirmation before writing. If the runtime has no qualified local
+adapter for the chosen layer, report `unavailable` and continue with the
+professional baseline; do not emulate ingestion from conversation.
 
 ## After the owner chooses
 

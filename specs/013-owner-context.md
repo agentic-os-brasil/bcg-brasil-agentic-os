@@ -64,7 +64,7 @@ inferred by cold start.
 
 After onboarding, SELF expansion remains an explicit owner interview, not a
 continuous-learning lifecycle. `owner/self/README.md` is the canonical local
-index for the six non-sensitive professional facets. The deterministic status
+index for the eight non-sensitive professional facets. The deterministic status
 classifies each facet as `unknown`, `current` or `stale` (a confirmed body was
 changed or its confirmation is older than 180 days), then exposes exactly one
 next facet. `bcgos owner expand next` returns one text question, one short
@@ -94,7 +94,7 @@ closure are then idempotently recoverable after a crash. Draft states are the
 closed set `drafted`, `prepared`, `applied`, and ID/path/digest mismatches fail
 closed.
 The interview surface permits only one open draft and retains at most the
-latest applied draft for each of the six facets; authoritative prior bodies
+latest applied draft for each of the eight facets; authoritative prior bodies
 remain in the separate refinement audit/version surface. This bounds
 interview-state growth without appending history to current SELF.
 Draft creation and confirmation/compaction share one cross-process local
@@ -106,8 +106,10 @@ The V1 question set is exact and versioned:
 | --- | --- | --- |
 | `professional-role` | Hoje, qual é o seu papel profissional, pelo que você é responsável e que resultado prova que você está indo bem? | Conte seu papel, suas responsabilidades e como você mede sucesso. |
 | `communication-style` | Como você quer que o Maestro trabalhe e converse com você — idioma, tom, nível de detalhe, formato e quando desafiar? | Como você prefere conversar, receber respostas e ser desafiado? |
-| `voice` | Quando algo sai em seu nome, como deve soar — e o que nunca deve parecer? | Como sua voz deve soar, e o que ela nunca deve parecer? |
 | `preferences` | Quais ferramentas, formatos, rituais e formas de colaboração aumentam ou reduzem sua qualidade e velocidade? | O que ajuda ou atrapalha sua qualidade e velocidade de trabalho? |
+| `voice` | Quando algo sai em seu nome, como deve soar — e o que nunca deve parecer? | Como sua voz deve soar, e o que ela nunca deve parecer? |
+| `motivations` | Que impacto e resultados tornam um trabalho realmente importante para você e devem orientar minhas prioridades? | Que impacto e resultados tornam seu trabalho importante? |
+| `quality-bar` | O que precisa ser verificado antes de chamarmos algo de pronto — critérios, QA, evidências e acabamento? | O que precisa ser verificado antes de considerar algo pronto? |
 | `decision-rules` | Quando há um trade-off real, quais princípios pesam mais e quais sinais fazem você mudar de direção? | Quais princípios guiam seus trade-offs e o que faz você mudar de ideia? |
 | `working-boundaries` | Quais limites de confidencialidade, escopo, autonomia e escalada o Maestro nunca deve cruzar? | Quais limites o Maestro nunca deve cruzar? |
 

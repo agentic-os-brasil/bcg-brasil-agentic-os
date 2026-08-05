@@ -44,7 +44,7 @@ type Status struct {
 	Capabilities   map[string]Capability `json:"capabilities"`
 }
 
-// ExpansionStatus is a bounded projection of the six non-sensitive SELF
+// ExpansionStatus is a bounded projection of the eight non-sensitive SELF
 // facets. It contains no answer, draft body or interview token.
 type ExpansionStatus struct {
 	State       string `json:"state"`
@@ -146,9 +146,9 @@ estas paginas.
   resultados que definem sucesso.
 - [Communication style](communication-style.md) — idioma, tom, detalhe,
   formato e como o Maestro deve desafiar.
-- [Voice](voice.md) — como entregas em nome do owner devem e nao devem soar.
 - [Preferences](preferences.md) — ferramentas, formatos, rituais e formas de
   colaboracao que ajudam ou atrapalham.
+- [Voice](voice.md) — como entregas em nome do owner devem e nao devem soar.
 - [Professional motivations](motivations.md) — impacto e resultados que tornam
   o trabalho importante.
 - [Quality bar](quality-bar.md) — criterios de qualidade, QA, evidencias e
@@ -182,9 +182,9 @@ const (
 	OnboardingTrackComplete = "complete"
 )
 
-var onboardingFacets = []string{"professional-role", "communication-style", "voice", "preferences", "motivations", "quality-bar", "decision-rules", "working-boundaries"}
+var onboardingFacets = []string{"professional-role", "communication-style", "preferences", "voice", "motivations", "quality-bar", "decision-rules", "working-boundaries"}
 
-var quickOnboardingFacets = []string{"professional-role", "communication-style", "quality-bar", "working-boundaries"}
+var quickOnboardingFacets = []string{"professional-role", "communication-style", "preferences", "quality-bar"}
 
 // legacyOnboardingFacets is frozen at the schema-v2 contract. It must never
 // grow with the current interview, otherwise an already confirmed legacy
@@ -334,7 +334,7 @@ func ColdStartInterview() Interview {
 
 // QuickStartInterview captures the minimum operational self needed to begin
 // safely. The owner may upgrade to the complete track later; it never infers
-// the omitted identity and preference facets.
+// the omitted external voice, motivations, decision rules or boundaries.
 func QuickStartInterview() Interview {
 	return interviewForTrack(OnboardingTrackQuick)
 }
@@ -376,7 +376,7 @@ func emptyStatus() Status {
 }
 
 func onboardingSelectionRequired() OnboardingStatus {
-	return OnboardingStatus{State: "required", Track: "selection_required", Remaining: append([]string(nil), onboardingFacets...), NextQuestion: InterviewStep{Facet: "onboarding-track", Question: "Você prefere a entrevista curta (cerca de 7 minutos: papel, comunicação, qualidade/QA e limites) ou a completa (cerca de 25 minutos: as oito facetas do seu self profissional)?"}}
+	return OnboardingStatus{State: "required", Track: "selection_required", Remaining: append([]string(nil), onboardingFacets...), NextQuestion: InterviewStep{Facet: "onboarding-track", Question: "Você prefere a entrevista curta (cerca de 7 minutos: papel, comunicação, preferências e qualidade/QA) ou a completa (cerca de 25 minutos: as oito facetas do seu self profissional)?"}}
 }
 
 func onboarding(root string, available map[string]Facet, track, confirmedAt, confirmedDigest string) OnboardingStatus {

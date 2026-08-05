@@ -92,7 +92,7 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	}
 	selection := pending
 	selection.Owner.Onboarding.Track = "selection_required"
-	if got := sessionDirective(selection); !strings.Contains(got, "quality bar") || !strings.Contains(got, "all eight professional self facets") || !strings.Contains(got, "not inferred") {
+	if got := sessionDirective(selection); !strings.Contains(got, "work preferences") || !strings.Contains(got, "quality bar") || !strings.Contains(got, "all eight professional self facets") || !strings.Contains(got, "not inferred") {
 		t.Fatalf("track selection directive = %q", got)
 	}
 	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Count: 1}}}

@@ -51,7 +51,7 @@ Before that confirmation, prompt hooks suppress unrelated Case methods instead
 of letting a lexical prompt silently bypass the deterministic first-use flow.
 Ongoing expansion never places a question token, question body, audio prompt,
 draft ID, review digest or facet body in Session Context. Counts are
-non-negative, sum to the closed six-facet set, and `next_facet` must belong to
+non-negative, sum to the closed eight-facet set, and `next_facet` must belong to
 the reviewed session-safe allowlist. Review-required expansion exposes only a
 count.
 
