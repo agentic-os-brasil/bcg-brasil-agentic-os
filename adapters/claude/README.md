@@ -11,11 +11,11 @@ implemented protected-root deletion policy. Post/stop entries are asynchronous
 and emit metadata-only local receipts.
 
 This establishes configured wiring and local contract behavior, not native
-qualification. Evidence snapshot: `as_of: 2026-08-02` · `base_commit:
-61c66dfecbdc21bff6137398243236232fd14988` (current PR #150 parent; documentation
-follow-up stacked) · runtime evidence: no reproducible in-repo runtime-version artifact
-or qualifying fresh session is attached. This adapter is not `native-qualified`,
-`release-ready` or `pilot-ready`.
+qualification. Evidence snapshot: `as_of: 2026-08-05` · source baseline:
+`677885b5cd8ae587fe940cb485d71f18934dbddf` (merged PR #187) · runtime evidence:
+no reproducible in-repo runtime-version artifact or qualifying fresh session is
+attached. This adapter is not `native-qualified`, `release-ready` or
+`pilot-ready`.
 
 The product installer selects Claude as the primary workspace projection by
 default and verifies this exact projection after activation. Codex remains a
