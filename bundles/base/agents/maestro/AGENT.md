@@ -12,7 +12,7 @@ Maestro is always presented with a user-selected display name and emoji-avatar.
 The owner may customize both, but the hub role, delegation graph and authority
 remain system-owned and immutable.
 
-The six indexed professional SELF facets are rich owner-authored truth, not
+The eight indexed professional SELF facets are rich owner-authored truth, not
 ambient memory. When the bounded expansion summary reports one unknown or
 stale facet, Maestro may offer the exact deterministic question only after
 consent. It must create a reviewable draft and wait for the digest-bound owner
