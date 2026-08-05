@@ -132,7 +132,7 @@ attestation is not cryptographic principal authentication.
 | --- | --- |
 | ✅ Local workspace | `bcgos init`, `status` and `doctor` establish a local workspace without mixing it into the managed core. |
 | ✅ Guided runtime projection | `bcgos adapter install` installs hooks, a concise but complete `CLAUDE.md`/`AGENTS.md`, and the real base skills with idempotent, conflict-safe ownership. |
-| ✅ Professional context | A canonical SELF index, six professional facets, one-question expansion, agent identity drafts, skills index, human atlas and bounded session pointers stay inspectable and local. |
+| ✅ Professional context | A canonical SELF index, eight professional facets, one-question expansion, agent identity drafts, skills index, human atlas and bounded session pointers stay inspectable and local. The quick onboarding track establishes role, communication, quality bar and boundaries; the complete track covers all eight facets. |
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
 | ✅ Governed completion | High-stakes work can require a separately authenticated Walter review before completion. |
 | ✅ Bounded delegation contract | The deterministic core can dispatch a narrow packet to the right agent; native runtime activation remains unavailable until adapter qualification. |
@@ -204,15 +204,14 @@ from lifecycle evidence alone:
   gates; **pilot-ready** additionally requires clean-device acceptance,
   support/incident ownership and the pilot gate.
 
-**Evidence snapshot:** `as_of: 2026-08-02` · `base_commit:
-61c66dfecbdc21bff6137398243236232fd14988` (current PR #150 head; this
-documentation follow-up is stacked on that parent) · test evidence: repository fixtures and
-prior local validation records are present; this follow-up claims no fresh test
-run · runtime evidence: no reproducible in-repo runtime-version artifact or
-fresh native-session receipt for Claude or Codex; prior external version
-observations are not treated as current snapshot evidence · release/pilot
-evidence: no signed artifact, clean-device acceptance, support/incident owner or
-pilot-gate record in this snapshot.
+**Evidence snapshot:** `as_of: 2026-08-05` · source baseline:
+`677885b5cd8ae587fe940cb485d71f18934dbddf` (merged PR #187) · test evidence:
+the full local development harness was run for the merged SELF, continuous-use
+and onboarding changes; hosted CI is not configured and is not inferred from
+that local evidence · runtime evidence: no reproducible in-repo runtime-version
+artifact or fresh native-session receipt for Claude or Codex · release/pilot
+evidence: no organization-signed artifact, clean-device acceptance,
+support/incident owner or pilot-gate record in this snapshot.
 
 ### Maturity ladder
 

@@ -40,23 +40,27 @@ The copy is part of the installation contract:
 - rollback remains available after a failed update.
 
 After the signed core is installed, the wizard initializes the canonical local
-workspace, installs the complete five-event Codex lifecycle projection, checks
-both surfaces deterministically and enrolls the explicit per-user macOS
-maintenance lifecycle against that workspace. The native LaunchAgent must be
-loaded, enabled and identity-bound before the UI declares readiness; failures
-remain visible with a reproducible remediation command.
+workspace and installs the complete five-event **Claude** lifecycle projection
+by default. It renders the explicit Codex projection only when the owner
+selects Codex; a workspace never carries both managed projections at once. The
+wizard checks the chosen runtime surface deterministically and enrolls the
+explicit per-user macOS maintenance lifecycle against that workspace. The
+native LaunchAgent must be loaded, enabled and identity-bound before the UI
+declares readiness; failures remain visible with a reproducible remediation
+command.
 
 The finish screen keeps evidence classes separate: hooks may be configured
-before a native Codex session observes them, while the maintenance LaunchAgent
-is reported as native-observed only after launchctl verification. Model-backed
-maintenance remains unavailable and the scheduled lifecycle never invokes a
-model implicitly. In direct preview mode, no workspace or lifecycle is created.
+before a native Claude or Codex session observes them, while the maintenance
+LaunchAgent is reported as native-observed only after launchctl verification.
+Model-backed maintenance remains unavailable and the scheduled lifecycle never
+invokes a model implicitly. In direct preview mode, no workspace or lifecycle
+is created.
 
-Codex keeps a separate, owner-controlled trust record for non-managed project
+Claude and Codex keep separate, owner-controlled trust boundaries for project
 hooks. The wizard makes that review explicit at handoff: it installs and
-verifies the five definitions but never edits `~/.codex/config.toml` to
-pre-approve them. The owner reviews the exact commands in Codex on first use;
-only then can later sessions run them automatically.
+verifies the five definitions but never grants global trust automatically. The
+owner reviews the exact commands in the selected runtime on first use; only
+then can later sessions run them automatically.
 
 The installed `--orchestration-state` argument is executable contract state,
 not display metadata: hook processing rejects path escape/symlink drift, opens
