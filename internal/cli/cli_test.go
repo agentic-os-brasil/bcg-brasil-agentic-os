@@ -2033,6 +2033,24 @@ func TestDoctorExplainsUninitializedWorkspace(t *testing.T) {
 	}
 }
 
+func TestDoctorExplainsMissingRuntimeDependencies(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	if err := os.Remove(filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, func(string) bool { return true }); code != ExitOK ||
+		!strings.Contains(output.String(), `"id": "runtime_dependencies"`) || !strings.Contains(output.String(), `"state": "action_required"`) || !strings.Contains(output.String(), "bcgos init") {
+		t.Fatalf("doctor did not expose missing dependencies: exit=%d output=%s", code, output.String())
+	}
+}
+
 func TestFederationEnrollmentIsOneTimeAndRevocable(t *testing.T) {
 	dataRoot := t.TempDir()
 	root := func() (string, error) { return dataRoot, nil }

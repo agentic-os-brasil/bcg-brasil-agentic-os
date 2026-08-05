@@ -1362,6 +1362,37 @@ type doctorCheck struct {
 	Message string `json:"message"`
 }
 
+func runtimeDependencyCheck(root string, inspection workspace.Inspection) (doctorCheck, string) {
+	if inspection.WorkspaceID == "" {
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: "workspace dependencies are unavailable until bcgos init completes"}, "Run bcgos init <local-workspace-path>."
+	}
+	if _, err := resolveHookOrchestrationState(inspection, installedOrchestrationStatePath); err != nil {
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to repair the local runtime bootstrap."
+	}
+	owner, err := ownerctx.Inspect(root)
+	if err != nil || !owner.Initialized {
+		if err == nil {
+			err = errors.New("owner context is not initialized")
+		}
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to create the owner context."
+	}
+	workspaceAgent, err := workspaceagent.Inspect(root, inspection.WorkspaceID)
+	if err != nil || !workspaceAgent.Initialized {
+		if err == nil {
+			err = errors.New("workspace agent is not initialized")
+		}
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to create the workspace agent."
+	}
+	status, err := agentscaffold.Inspect(root, agentscaffold.WorkspaceRequest(inspection.WorkspaceID).AgentID)
+	if err != nil || !status.Initialized {
+		if err == nil {
+			err = errors.New("workspace agent scaffold is not initialized")
+		}
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to create the agent scaffold."
+	}
+	return doctorCheck{ID: "runtime_dependencies", State: "pass", Message: "durable state, owner context and agent scaffolds are ready"}, ""
+}
+
 func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, error), available func(string) bool) int {
 	path, code := oneOptionalPath("doctor", args, errOut)
 	if code != ExitOK {
@@ -1375,6 +1406,7 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	dependencyCheck, dependencyAction := runtimeDependencyCheck(root, inspection)
 	profileState, err := resolveProfile(root, "", false)
 	if err != nil {
 		return reportError(errOut, err)
@@ -1411,6 +1443,7 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 	releaseCapability := defaultReleaseCapability()
 	checks := []doctorCheck{
 		workspaceCheck,
+		dependencyCheck,
 		{ID: "local_data", State: "pass", Message: "private BCGOS data is separated from the workspace"},
 		interactionProfileCheck(profileState),
 		runtimeCheck("claude_code", "claude", available),
@@ -1433,6 +1466,12 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 			state = "action_required"
 		}
 		nextActions = append(nextActions, "Install or open Claude Code or Codex before starting an assisted session.")
+	}
+	if dependencyAction != "" {
+		if state == "ready" {
+			state = "action_required"
+		}
+		nextActions = append(nextActions, dependencyAction)
 	}
 	if len(nextActions) == 0 {
 		nextActions = append(nextActions, "Open Claude Code or Codex in this workspace to begin guided onboarding.")
