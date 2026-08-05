@@ -4,15 +4,19 @@
 package workspaceagent
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 )
+
+const maximumWorkspaceAgentRegistryBytes = 64 << 10
 
 var (
 	ErrResearchApprovalRequired = errors.New("external research requires explicit owner approval")
@@ -139,13 +143,21 @@ func Inspect(dataRoot, workspaceID string) (Status, error) {
 	if value.WorkspaceID != workspaceID || value.AgentID != "workspace-agent-"+workspaceID || (value.Role != "" && value.Role != "case_agent") {
 		return Status{}, errors.New("workspace agent registry does not match workspace")
 	}
+	state, err := requiredPointer(root, "agent/state.json")
+	if err != nil {
+		return Status{}, err
+	}
+	dossier, err := requiredPointer(root, "dossier/README.md")
+	if err != nil {
+		return Status{}, err
+	}
 	return Status{
-		Initialized:  true,
+		Initialized:  state.Available && dossier.Available,
 		WorkspaceID:  workspaceID,
 		AgentID:      value.AgentID,
 		Role:         "case_agent",
-		State:        pointer(root, "agent/state.json"),
-		Dossier:      pointer(root, "dossier/README.md"),
+		State:        state,
+		Dossier:      dossier,
 		Capabilities: capabilities(),
 	}, nil
 }
@@ -190,8 +202,27 @@ func capabilities() map[string]string {
 }
 
 func pointer(root, relative string) Pointer {
-	_, err := os.Stat(filepath.Join(root, filepath.FromSlash(relative)))
-	return Pointer{Path: relative, Available: err == nil}
+	info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(relative)))
+	return Pointer{Path: relative, Available: err == nil && info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0 && info.Mode().Perm()&0o077 == 0}
+}
+
+func requiredPointer(root, relative string) (Pointer, error) {
+	p := pointer(root, relative)
+	path := filepath.Join(root, filepath.FromSlash(relative))
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return p, nil
+	}
+	if err != nil {
+		return Pointer{}, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return Pointer{}, errors.New("workspace agent dependency must be a regular non-symlink file")
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return Pointer{}, errors.New("workspace agent dependency must be owner-only (0600 or stricter)")
+	}
+	return p, nil
 }
 
 func createText(path, content string) error {
@@ -237,16 +268,30 @@ func loadRegistry(path string) (registry, error) {
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return registry{}, errors.New("workspace agent registry must be a regular non-symlink file")
 	}
+	if info.Size() <= 0 || info.Size() > maximumWorkspaceAgentRegistryBytes || info.Mode().Perm()&0o077 != 0 {
+		return registry{}, errors.New("workspace agent registry must be a bounded owner-only file")
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return registry{}, err
 	}
 	defer file.Close()
-	decoder := json.NewDecoder(file)
+	body, err := io.ReadAll(io.LimitReader(file, maximumWorkspaceAgentRegistryBytes+1))
+	if err != nil {
+		return registry{}, err
+	}
+	if int64(len(body)) > maximumWorkspaceAgentRegistryBytes {
+		return registry{}, errors.New("workspace agent registry exceeds the bounded JSON limit")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var value registry
 	if err := decoder.Decode(&value); err != nil {
 		return registry{}, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return registry{}, errors.New("workspace agent registry contains multiple JSON values")
 	}
 	if value.SchemaVersion != 1 || value.WorkspaceID == "" || value.AgentID == "" {
 		return registry{}, errors.New("workspace agent registry is invalid")

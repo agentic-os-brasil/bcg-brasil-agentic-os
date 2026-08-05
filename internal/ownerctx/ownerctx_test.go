@@ -40,6 +40,33 @@ func TestInitializeCreatesInspectablePointersWithoutOverwritingSelf(t *testing.T
 	}
 }
 
+func TestOwnerRegistryRejectsPermissiveAndTrailingJSON(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	registryPath := filepath.Join(root, "owner", "registry.json")
+	if err := os.Chmod(registryPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Inspect(root); err == nil {
+		t.Fatal("permissive owner registry was accepted")
+	}
+	if err := os.Chmod(registryPath, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(registryPath, append(body, []byte("{}\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Inspect(root); err == nil {
+		t.Fatal("trailing owner registry JSON was accepted")
+	}
+}
+
 func TestInitializeAddsNewProfessionalFacetsWithoutOverwritingExistingRegistry(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {

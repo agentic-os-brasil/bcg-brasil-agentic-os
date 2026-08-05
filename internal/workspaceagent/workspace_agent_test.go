@@ -28,6 +28,51 @@ func TestInitializeCreatesCompactAgentControlPlane(t *testing.T) {
 	}
 }
 
+func TestInspectRequiresAllProtectedDependencies(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root, "ws-123"); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(root, "workspaces", "ws-123", "agent", "state.json")
+	if err := os.Remove(statePath); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Inspect(root, "ws-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Initialized || status.State.Available {
+		t.Fatalf("incomplete workspace agent reported initialized: %#v", status)
+	}
+}
+
+func TestRegistryRejectsPermissiveAndTrailingJSON(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root, "ws-123"); err != nil {
+		t.Fatal(err)
+	}
+	registryPath := filepath.Join(root, "workspaces", "ws-123", "agent", "agent.json")
+	if err := os.Chmod(registryPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Inspect(root, "ws-123"); err == nil {
+		t.Fatal("permissive workspace agent registry was accepted")
+	}
+	if err := os.Chmod(registryPath, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(registryPath, append(body, []byte("{}\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Inspect(root, "ws-123"); err == nil {
+		t.Fatal("trailing workspace agent JSON was accepted")
+	}
+}
+
 func TestInterviewAndResearchApprovalPreserveDisclosureGuardrail(t *testing.T) {
 	interview := ColdStartInterview()
 	if interview.Kind != "case_agent_setup" || len(interview.Steps) < 5 {
