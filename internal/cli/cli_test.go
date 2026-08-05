@@ -823,6 +823,34 @@ func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 	}
 }
 
+func TestAdapterInstallRepairsMissingStateBeforeSessionHook(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	statePath := filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")
+	if err := os.Remove(statePath); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("adapter install did not repair state: %d %s", code, output.String())
+	}
+	if _, err := os.Stat(statePath); err != nil {
+		t.Fatalf("repaired state missing: %v", err)
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"claude", "session-start", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) {
+		t.Fatalf("session hook after repair = %d %s", code, output.String())
+	}
+}
+
 func TestDoctorSeparatesConfiguredAdapterFromRuntimeCapability(t *testing.T) {
 	dataRoot, workspacePath := filepath.Join(t.TempDir(), "BCGOS"), t.TempDir()
 	var output bytes.Buffer
