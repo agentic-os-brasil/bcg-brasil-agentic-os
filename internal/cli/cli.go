@@ -1583,7 +1583,7 @@ func validateMaestroSelfSignal(signal *maestroSelfSignal) error {
 
 func validOwnerSelfFacet(facet string) bool {
 	switch facet {
-	case "professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries":
+	case "professional-role", "communication-style", "voice", "preferences", "motivations", "quality-bar", "decision-rules", "working-boundaries":
 		return true
 	default:
 		return false
@@ -1603,7 +1603,7 @@ func closedSelfSignalToken(value string) bool {
 	return true
 }
 
-var maestroWalterFacetAllowlist = []string{"professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"}
+var maestroWalterFacetAllowlist = []string{"professional-role", "communication-style", "voice", "preferences", "motivations", "quality-bar", "decision-rules", "working-boundaries"}
 var recordUserPromptFunc = ownerctx.RecordUserPrompt
 
 func durableDispatchFence(root, ownerID, sessionID, dispatchID, promptDigest, packetDigest, draftDigest string, plan maestro.Plan, chain maestro.ChainState) (maestro.DispatchBoundaryState, error) {

@@ -119,7 +119,34 @@ como lixeira de documentos ou como cópia do repositório.
 Essa separação é o que permite vender continuidade sem prometer memória
 ilimitada, automação irrestrita ou compartilhamento invisível.
 
-## 4. Primeira configuração: percurso recomendado
+## 4. Entrevista inicial: calibrar o self profissional
+
+Na primeira sessão, o Maestro não começa uma tarefa profissional. Ele conduz
+uma entrevista, uma pergunta por vez, e mostra a interpretação de cada resposta
+antes de propor qualquer gravação local. O objetivo é construir um self
+profissional corrigível — não inferir personalidade nem importar silenciosamente
+o conteúdo de outro sistema.
+
+O percurso completo cobre oito facetas: papel profissional, estilo de
+comunicação, voz externa, preferências de trabalho, motivações profissionais,
+barra de qualidade/QA, regras de decisão e limites de trabalho. A jornada curta
+cobre papel, comunicação, barra de qualidade e limites; começa mais rápido, mas
+demora mais para absorver voz, preferências, motivações e regras de decisão.
+
+Personality/psychological profile, história pessoal, fé, avaliações e identidade
+visual ficam fora da entrevista padrão. Só entram por uma etapa local,
+explicitamente autorizada, com finalidade e revisão próprias.
+
+Escolha entre:
+
+- **Curta — cerca de 7 minutos:** baseline operacional para começar com segurança.
+- **Completa — cerca de 25 minutos:** perfil profissional mais fiel para
+  recomendações, comunicação e revisão de qualidade desde o início.
+
+Em ambos os casos, o Maestro resume o que entendeu, espera sua correção e só
+depois apresenta o digest para confirmação final.
+
+## 5. Primeira configuração: percurso recomendado
 
 Faça a primeira configuração em um workspace de teste. O roteiro abaixo mostra
 o destino da experiência; um comando que ainda não estiver liberado deve ser
@@ -281,7 +308,7 @@ Próxima ação: qual é o menor passo reversível?
 O objetivo é provar continuidade e qualidade, não testar todas as features no
 primeiro dia.
 
-## 5. Trabalhos longos: como pausar e retomar
+## 6. Trabalhos longos: como pausar e retomar
 
 Para trabalhos que atravessam sessões, use o ledger local. O fluxo conceitual é:
 
@@ -318,7 +345,7 @@ Boas práticas:
 O ledger é uma memória operacional auditável. Ele não é uma licença para
 persistir tudo, nem substitui revisão humana em decisões de alto risco.
 
-## 6. Ingestão de documentos e fontes
+## 7. Ingestão de documentos e fontes
 
 O objetivo da ingestão é transformar uma fonte autorizada em conhecimento local
 estruturado, preservando proveniência e classificação de fidelidade.
@@ -351,7 +378,7 @@ Não trate “Markdown gerado” como prova de qualidade. Em documentos complexo
 confira tabelas, ordem, notas, imagens, OCR e referências antes de usar o
 resultado em uma decisão.
 
-## 7. Skills e agentes: o que o Maestro pode organizar
+## 8. Skills e agentes: o que o Maestro pode organizar
 
 As skills são capacidades versionadas e governadas, não prompts soltos. Entre as
 principais superfícies descritas no bundle estão:
@@ -370,7 +397,7 @@ principais superfícies descritas no bundle estão:
 A progressão `standard → advanced → power` determina como a capacidade é
 explicada, nunca quais dados ou ações ficam autorizados.
 
-## 8. Privacidade, segurança e limites de autoridade
+## 9. Privacidade, segurança e limites de autoridade
 
 O Maestro foi desenhado para ser útil justamente onde autonomia sem controle
 seria perigosa:
@@ -390,7 +417,7 @@ Antes de qualquer uso, pergunte: “a fonte está autorizada, o destino está
 correto e a ação é reversível?”. Se uma resposta for não, pause e use
 `bcgos doctor` ou o responsável pelo ambiente.
 
-## 9. Rotina recomendada de adoção
+## 10. Rotina recomendada de adoção
 
 ### Primeiro dia — provar o caminho
 
@@ -415,7 +442,7 @@ retomada, qualidade aceitável, instalação estável, suporte compreensível e
 ausência de vazamento de conteúdo. “Usamos bastante” é um sinal; não é, sozinho,
 critério de produção.
 
-## 10. Diagnóstico e recuperação
+## 11. Diagnóstico e recuperação
 
 | Situação | Interpretação | Próxima ação |
 | --- | --- | --- |
@@ -432,7 +459,7 @@ Git como recuperação de uma instalação. Preserve o estado e encaminhe a
 mensagem de erro, versão, sistema operacional e etapa — sem credenciais,
 documentos, nomes de cliente ou conteúdo de prompt.
 
-## 11. Checklist de conclusão
+## 12. Checklist de conclusão
 
 - [ ] Release privado e autorizado confirmado.
 - [ ] `bcgos version` executado.
@@ -445,7 +472,7 @@ documentos, nomes de cliente ou conteúdo de prompt.
 - [ ] Limitações e próximos passos registrados sem conteúdo sensível.
 - [ ] Responsável por suporte e incidente conhecido.
 
-## 12. Documentos relacionados
+## 13. Documentos relacionados
 
 - [Onboarding completo de recuperação de trabalhos anteriores no SharePoint](sharepoint-prior-work-onboarding.md)
 

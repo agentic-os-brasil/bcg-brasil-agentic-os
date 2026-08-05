@@ -123,6 +123,8 @@ var facets = map[string]facetTemplate{
 	"communication-style":   {facetRecord{"owner/self/communication-style.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Communication style\n\n## Current\n\nDescreva como prefere colaborar com o Agentic OS: tom, nivel de detalhe, idioma e formato.\n"},
 	"voice":                 {facetRecord{"owner/self/voice.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Voice\n\n## Current\n\nDescreva como voce quer falar com o mundo em entregas externas: emails, documentos, propostas e apresentacoes.\n"},
 	"preferences":           {facetRecord{"owner/self/preferences.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Preferences\n\n## Current\n\nRegistre preferencias de ferramentas, formatos, rotinas e formas de trabalho.\n"},
+	"motivations":           {facetRecord{"owner/self/motivations.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Professional motivations\n\n## Current\n\nDescreva o impacto, os resultados e o tipo de valor que tornam seu trabalho significativo.\n"},
+	"quality-bar":           {facetRecord{"owner/self/quality-bar.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Quality bar\n\n## Current\n\nDescreva o que precisa ser verdadeiro antes de considerar um trabalho pronto: criterios, validacoes, evidencias e nivel de acabamento.\n"},
 	"decision-rules":        {facetRecord{"owner/self/decision-rules.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Decision rules\n\n## Current\n\nRegistre principios e trade-offs que devem orientar recomendacoes importantes.\n"},
 	"working-boundaries":    {facetRecord{"owner/self/working-boundaries.md", "professional", []string{"session", "walter"}, "confirmation_required"}, "# Working boundaries\n\n## Current\n\nRegistre limites de escopo, confidencialidade e quando escalar decisoes.\n"},
 	"psychological-profile": {facetRecord{"owner/self/psychological-profile.md", "sensitive", []string{"walter"}, "confirmation_required"}, "# Psychological profile\n\nOpcional. Inclua apenas uma sintese profissional revisada por voce, com fontes e finalidades autorizadas. Nunca use como diagnostico ou rotulo deterministico.\n"},
@@ -147,6 +149,10 @@ estas paginas.
 - [Voice](voice.md) — como entregas em nome do owner devem e nao devem soar.
 - [Preferences](preferences.md) — ferramentas, formatos, rituais e formas de
   colaboracao que ajudam ou atrapalham.
+- [Professional motivations](motivations.md) — impacto e resultados que tornam
+  o trabalho importante.
+- [Quality bar](quality-bar.md) — criterios de qualidade, QA, evidencias e
+  acabamento exigidos antes de chamar algo de pronto.
 - [Decision rules](decision-rules.md) — principios para trade-offs e sinais
   que justificam mudar de direcao.
 - [Working boundaries](working-boundaries.md) — limites de confidencialidade,
@@ -176,9 +182,14 @@ const (
 	OnboardingTrackComplete = "complete"
 )
 
-var onboardingFacets = []string{"professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"}
+var onboardingFacets = []string{"professional-role", "communication-style", "voice", "preferences", "motivations", "quality-bar", "decision-rules", "working-boundaries"}
 
-var quickOnboardingFacets = []string{"professional-role", "communication-style", "working-boundaries"}
+var quickOnboardingFacets = []string{"professional-role", "communication-style", "quality-bar", "working-boundaries"}
+
+// legacyOnboardingFacets is frozen at the schema-v2 contract. It must never
+// grow with the current interview, otherwise an already confirmed legacy
+// profile would be reinterpreted as an incomplete profile during inspection.
+var legacyOnboardingFacets = []string{"professional-role", "communication-style", "voice", "preferences", "decision-rules", "working-boundaries"}
 
 type onboardingTrackDefinition struct {
 	ID               string
@@ -228,6 +239,35 @@ func Initialize(root string) (Status, error) {
 		}
 	} else if err != nil {
 		return Status{}, err
+	} else {
+		// Additive migrations keep an existing owner registry and its reviewed
+		// content intact while making newly introduced professional facets
+		// available to the next onboarding/review pass. No existing pointer or
+		// answer is replaced.
+		value, err := readRegistry(root)
+		if err != nil {
+			return Status{}, err
+		}
+		changed := false
+		if value.Facets == nil {
+			value.Facets = make(map[string]facetRecord, len(facets))
+			changed = true
+		}
+		for id, template := range facets {
+			if _, exists := value.Facets[id]; !exists {
+				value.Facets[id] = template.Record
+				changed = true
+			}
+		}
+		if value.Producers == nil {
+			value.Producers = map[string]producerRecord{}
+			changed = true
+		}
+		if changed {
+			if err := writePrivateJSON(path, value); err != nil {
+				return Status{}, err
+			}
+		}
 	}
 	return Inspect(root)
 }
@@ -267,10 +307,15 @@ func Inspect(root string) (Status, error) {
 		// while accepting the new explicit-track registry shape.
 		track = OnboardingTrackComplete
 	}
-	status.Onboarding = onboarding(root, status.Facets, track, value.OnboardingConfirmedAt, value.OnboardingConfirmedSHA256)
-	if value.SchemaVersion == 2 && value.OnboardingConfirmedAt != "" && status.Onboarding.State == "review_required" && secureDigestEqual(value.OnboardingConfirmedSHA256, legacyOnboardingDigest(root)) {
-		status.Onboarding.State = "complete"
-		status.Onboarding.ReviewDigest = ""
+	legacyConfirmed := value.SchemaVersion == 2 && value.OnboardingConfirmedAt != "" && secureDigestEqual(value.OnboardingConfirmedSHA256, legacyOnboardingDigest(root))
+	if legacyConfirmed {
+		// Schema-v2 owners explicitly reviewed the original six-facet contract.
+		// Preserve that confirmation until the owner deliberately selects a new
+		// track; never turn the additive facet migration into an unsolicited
+		// re-interview.
+		status.Onboarding = OnboardingStatus{State: "complete", Track: OnboardingTrackComplete, EstimatedMinutes: onboardingTracks[OnboardingTrackComplete].EstimatedMinutes}
+	} else {
+		status.Onboarding = onboarding(root, status.Facets, track, value.OnboardingConfirmedAt, value.OnboardingConfirmedSHA256)
 	}
 	status.Expansion, err = expansionStatus(root, value, status.Onboarding)
 	if err != nil {
@@ -300,12 +345,14 @@ func interviewForTrack(track string) Interview {
 		return Interview{}
 	}
 	allSteps := map[string]InterviewStep{
-		"professional-role":   {Facet: "professional-role", Question: "Qual e seu papel, principais responsabilidades e quais resultados voce precisa gerar?"},
-		"communication-style": {Facet: "communication-style", Question: "Como voce prefere que o Agentic OS explique, estruture e comunique o trabalho com voce?"},
-		"voice":               {Facet: "voice", Question: "Como sua voz deve aparecer em entregas para clientes, lideres e colegas?"},
-		"preferences":         {Facet: "preferences", Question: "Quais ferramentas, formatos e rotinas tornam seu trabalho melhor?"},
-		"decision-rules":      {Facet: "decision-rules", Question: "Quais principios e trade-offs devem orientar recomendacoes importantes?"},
-		"working-boundaries":  {Facet: "working-boundaries", Question: "Quais limites de confidencialidade, escopo e escalonamento o sistema deve respeitar?"},
+		"professional-role":   {Facet: "professional-role", Question: "Para eu entender quem voce e no trabalho: qual e seu papel, que resultados precisa gerar e onde o Maestro deve criar mais alavancagem?"},
+		"communication-style": {Facet: "communication-style", Question: "Como voce prefere que eu pense e comunique com voce: conclusao primeiro ou raciocinio detalhado, mais direto ou mais exploratorio, e em qual idioma?"},
+		"voice":               {Facet: "voice", Question: "Quando eu preparar algo para outras pessoas, que voz devo preservar: tom, nivel de firmeza, linguagem e o que definitivamente nao pode aparecer?"},
+		"preferences":         {Facet: "preferences", Question: "Quais formatos, ferramentas, ritmos e formas de trabalho fazem voce produzir melhor — e o que costuma tornar uma interacao ruim?"},
+		"motivations":         {Facet: "motivations", Question: "O que torna um trabalho realmente importante para voce: qual impacto, tipo de valor ou resultado deve orientar minhas prioridades?"},
+		"quality-bar":         {Facet: "quality-bar", Question: "Antes de eu dizer que algo esta pronto, o que precisa ser verificado: quais criterios de qualidade, QA, evidencias ou acabamento sao inegociaveis?"},
+		"decision-rules":      {Facet: "decision-rules", Question: "Quando houver trade-offs, quais principios devem orientar minhas recomendacoes e quais decisoes continuam sendo sempre suas?"},
+		"working-boundaries":  {Facet: "working-boundaries", Question: "Quais limites de escopo, confidencialidade, pessoas, fontes ou comunicacao externa exigem sua autorizacao antes de eu agir?"},
 	}
 	steps := make([]InterviewStep, 0, len(definition.Facets))
 	for _, facet := range definition.Facets {
@@ -315,7 +362,7 @@ func interviewForTrack(track string) Interview {
 		Kind:             "cold_start",
 		Track:            definition.ID,
 		EstimatedMinutes: definition.EstimatedMinutes,
-		Instructions:     "Conduza uma conversa com uma pergunta por vez. Mostre cada resposta ao dono antes de sugerir que ela seja gravada na faceta correspondente. Nao infira perfil psicologico.",
+		Instructions:     "Conduza uma conversa com uma pergunta por vez. Depois de cada resposta, resuma o que entendeu e confirme se esta correto antes de sugerir a faceta correspondente. A entrevista cobre somente o self profissional: papel, comunicacao, voz, preferencias, motivacoes, qualidade/QA, regras de decisao e limites. Nao infira personalidade, psicologia, historia pessoal, fe ou preferencias visuais; essas fontes so entram por uma importacao local explicitamente autorizada.",
 		Steps:            steps,
 	}
 	/*
@@ -329,7 +376,7 @@ func emptyStatus() Status {
 }
 
 func onboardingSelectionRequired() OnboardingStatus {
-	return OnboardingStatus{State: "required", Track: "selection_required", Remaining: append([]string(nil), onboardingFacets...), NextQuestion: InterviewStep{Facet: "onboarding-track", Question: "Você prefere a entrevista curta (cerca de 7 minutos, base operacional) ou a completa (cerca de 25 minutos, identidade e preferências mais refinadas)?"}}
+	return OnboardingStatus{State: "required", Track: "selection_required", Remaining: append([]string(nil), onboardingFacets...), NextQuestion: InterviewStep{Facet: "onboarding-track", Question: "Você prefere a entrevista curta (cerca de 7 minutos: papel, comunicação, qualidade/QA e limites) ou a completa (cerca de 25 minutos: as oito facetas do seu self profissional)?"}}
 }
 
 func onboarding(root string, available map[string]Facet, track, confirmedAt, confirmedDigest string) OnboardingStatus {
@@ -481,8 +528,8 @@ func onboardingDigest(root string, definition onboardingTrackDefinition) string 
 }
 
 func legacyOnboardingDigest(root string) string {
-	parts := make([]string, 0, len(onboardingFacets))
-	for _, id := range onboardingFacets {
+	parts := make([]string, 0, len(legacyOnboardingFacets))
+	for _, id := range legacyOnboardingFacets {
 		template := facets[id]
 		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
 		if err != nil {

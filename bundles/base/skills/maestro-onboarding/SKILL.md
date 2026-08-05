@@ -56,6 +56,33 @@ nuance com menos esforço do que digitar. Esclareça que o Maestro mostrará uma
 síntese ou transcrição para revisão antes de propor qualquer gravação local;
 áudio não é ingerido, enviado ou persistido automaticamente.
 
+## What the interview is calibrating
+
+The interview is a guided construction of the owner's **professional self** —
+not a personality test and not a request to import another system's private
+memory. The complete track covers eight explicit, reviewable facets:
+
+- `professional-role`: the work the owner is accountable for and where Maestro
+  should create leverage;
+- `communication-style`: how the owner wants reasoning, detail, language and
+  recommendations presented;
+- `voice`: how the owner's external work should sound;
+- `preferences`: tools, formats, rhythms and collaboration habits;
+- `motivations`: the professional impact and outcomes that make work matter;
+- `quality-bar`: what must be checked before something is called ready,
+  including QA, evidence and finish level;
+- `decision-rules`: principles, trade-offs and decisions that remain with the
+  owner;
+- `working-boundaries`: scope, confidentiality, sources, people and external
+  communication that require authorization.
+
+The quick track covers `professional-role`, `communication-style`,
+`quality-bar` and `working-boundaries`. It is a useful operating baseline, but
+it intentionally leaves voice, preferences, motivations and decision rules for
+later refinement. Psychological/personality material, personal history, faith,
+assessments and visual identity are not inferred or imported by either track;
+they require a separate, explicit local consent path.
+
 ## After the owner chooses
 
 1. Confirm the exact selected track once and persist it only with:
@@ -66,10 +93,14 @@ síntese ou transcrição para revisão antes de propor qualquer gravação loca
 
 2. Ask one interview question at a time. Use the next question returned by
    `bcgos owner onboarding status`; do not invent extra mandatory questions.
-3. Before proposing any write to a facet, show the concise draft and obtain the
+3. After each answer, reflect back a concise interpretation and ask whether it
+   is accurate. Only then propose the corresponding facet draft. This is the
+   quality loop for onboarding: the owner corrects meaning before anything is
+   written.
+4. Before proposing any write to a facet, show the concise draft and obtain the
    owner's agreement. Never claim that an answer has been saved or that the
    track is complete until the local review is confirmed.
-4. When the status becomes `review_required`, show the owner the profile
+5. When the status becomes `review_required`, show the owner the profile
    facets that were included in the selected track. Ask for an explicit review,
    then use the exact digest returned by the status command:
 

@@ -20,6 +20,11 @@ const expansionStaleAfter = 180 * 24 * time.Hour
 const maximumExpansionFacetBytes = 12 << 10
 const maximumExpansionFacetLines = 120
 
+// SelfFacetCount is the canonical number of professional-self facets used by
+// the longitudinal expansion contract. Runtime-neutral packets use this
+// value instead of duplicating a stale literal.
+func SelfFacetCount() int { return len(onboardingFacets) }
+
 type FacetConfirmation struct {
 	SHA256      string    `json:"sha256"`
 	ConfirmedAt time.Time `json:"confirmed_at"`
@@ -70,6 +75,8 @@ var expansionQuestions = map[string]InterviewStep{
 	"communication-style": {Facet: "communication-style", Question: "Como você quer que o Maestro trabalhe e converse com você — idioma, tom, nível de detalhe, formato e quando desafiar?", AudioPrompt: "Como você prefere conversar, receber respostas e ser desafiado?"},
 	"voice":               {Facet: "voice", Question: "Quando algo sai em seu nome, como deve soar — e o que nunca deve parecer?", AudioPrompt: "Como sua voz deve soar, e o que ela nunca deve parecer?"},
 	"preferences":         {Facet: "preferences", Question: "Quais ferramentas, formatos, rituais e formas de colaboração aumentam ou reduzem sua qualidade e velocidade?", AudioPrompt: "O que ajuda ou atrapalha sua qualidade e velocidade de trabalho?"},
+	"motivations":         {Facet: "motivations", Question: "Que impacto e resultados tornam um trabalho realmente importante para você e devem orientar minhas prioridades?", AudioPrompt: "Que impacto e resultados tornam seu trabalho importante?"},
+	"quality-bar":         {Facet: "quality-bar", Question: "O que precisa ser verificado antes de chamarmos algo de pronto — critérios, QA, evidências e acabamento?", AudioPrompt: "O que precisa ser verificado antes de considerar algo pronto?"},
 	"decision-rules":      {Facet: "decision-rules", Question: "Quando há um trade-off real, quais princípios pesam mais e quais sinais fazem você mudar de direção?", AudioPrompt: "Quais princípios guiam seus trade-offs e o que faz você mudar de ideia?"},
 	"working-boundaries":  {Facet: "working-boundaries", Question: "Quais limites de confidencialidade, escopo, autonomia e escalada o Maestro nunca deve cruzar?", AudioPrompt: "Quais limites o Maestro nunca deve cruzar?"},
 }

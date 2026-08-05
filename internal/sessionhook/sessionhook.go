@@ -177,7 +177,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 	case "required", "in_progress":
 		trackChoice := ""
 		if packet.Owner.Onboarding.Track == "selection_required" {
-			trackChoice = "Explain the two explicit choices before asking: `quick` is about 7 minutes and establishes only role, collaboration style and boundaries; it starts useful work sooner but leaves voice, preferences and decision rules to later refinement. `complete` is about 25 minutes and establishes all six facets for a more personalized starting point. After the owner chooses, record exactly that choice with `bcgos owner onboarding select --track quick|complete --confirm`."
+			trackChoice = "Explain the two explicit choices before asking: `quick` is about 7 minutes and establishes role, communication style, quality bar and boundaries; it starts useful work sooner but leaves voice, preferences, motivations and decision rules to later refinement. `complete` is about 25 minutes and establishes all eight professional self facets for a more personalized starting point. Personality, psychological material, personal history and visual identity are not inferred or imported by default. After the owner chooses, record exactly that choice with `bcgos owner onboarding select --track quick|complete --confirm`."
 		}
 		lines = append(lines,
 			"ONBOARDING IS NOT COMPLETE. Start the conversation as Maestro and conduct the owner interview before proposing work.",

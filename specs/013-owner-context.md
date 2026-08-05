@@ -24,6 +24,8 @@ owner/
     communication-style.md
     voice.md
     preferences.md
+    motivations.md
+    quality-bar.md
     decision-rules.md
     working-boundaries.md
     psychological-profile.md
@@ -49,13 +51,16 @@ professional self-understanding and for the Walter role where the owner has
 authorized that purpose. It is not a diagnosis, a fixed label, an employment
 selection tool or a source of inferences about other people.
 
-The managed cold-start interview asks only for the non-sensitive professional
-facets. It returns a runtime-neutral question contract; a Claude or Codex
-adapter must show answers to the owner before proposing any write. The owner
-may later choose to import an assessment report through an approved local
-adapter with explicit consent. Raw reports stay local under `sources/` and are
-never automatically injected; any professional synthesis requires provenance
-and confirmation.
+The managed cold-start interview asks only for the eight non-sensitive
+professional facets: role, communication style, external voice, preferences,
+professional motivations, quality bar, decision rules and working boundaries.
+It returns a runtime-neutral question contract; a Claude or Codex adapter must
+reflect each answer back to the owner before proposing any write. The owner may
+later choose to import an assessment report through an approved local adapter
+with explicit consent. Raw reports stay local under `sources/` and are never
+automatically injected; any professional synthesis requires provenance and
+confirmation. Personality, personal history, faith and visual identity are not
+inferred by cold start.
 
 After onboarding, SELF expansion remains an explicit owner interview, not a
 continuous-learning lifecycle. `owner/self/README.md` is the canonical local
@@ -135,8 +140,8 @@ and reversible. Facets are declared now with one of three policies:
 - `automatic_with_audit`: voice, communication style and preferences may be
   refined from repeated approved work only when a future adapter records the
   evidence, change and reversal path.
-- `proposal_only`: professional role and decision rules may receive a proposal
-  but require owner action.
+- `proposal_only`: professional role, motivations, quality bar and decision
+  rules may receive a proposal but require owner action.
 - `confirmation_required`: boundaries and psychological profile may never be
   changed silently.
 
