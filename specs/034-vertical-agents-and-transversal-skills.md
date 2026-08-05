@@ -30,3 +30,10 @@ and starts a bounded new Case attempt.
 The PA Expert registry is the only practice-advisory authority. FPA/IPA
 canon is versioned and digest-bound; an empty registry fails advisory routing
 closed rather than inventing an expert.
+
+The base Case-method policy includes local `ingest-content` and explicit
+`find-prior-work` routing. Their method selection remains pointer-only:
+`ingest-content` still requires an authorized source and verified local pack;
+`find-prior-work` still requires explicit retrieval intent and an enrolled
+local index. Neither method changes the Maestro depth decision or creates a
+Case-to-SharePoint delegation edge.

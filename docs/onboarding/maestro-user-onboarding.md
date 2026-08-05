@@ -216,6 +216,14 @@ O contexto do owner é local, inspecionável e limitado às facetas autorizadas.
 O atlas navega fontes derivadas e governadas; ele não deve ser preenchido com
 segredos, dumps de conversa ou conteúdo de cliente sem política e consentimento.
 
+Depois da entrevista do owner, o Maestro pergunta se a pessoa quer configurar
+o primeiro cliente/caso ou começar limpo. Se ela optar por configurar, deve
+indicar somente as pastas locais e as raízes SharePoint exatas daquele projeto
+que poderão ser propostas como fontes. Nesta etapa o Maestro registra ponteiro,
+propósito e escopo para revisão: não lê, copia, envia, percorre nem ingere o
+conteúdo. Uma raiz de projeto também não inscreve automaticamente o material na
+wiki organizacional de prior-work; esse é um fluxo separado e explícito.
+
 ### Passo 5 — Faça uma primeira tarefa pequena
 
 Escolha uma tarefa que possa ser verificada em menos de uma hora: organizar um

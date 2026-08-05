@@ -135,6 +135,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 		}
 		lines = append(lines,
 			"ONBOARDING IS NOT COMPLETE. Start the conversation as Maestro and conduct the owner interview before proposing work.",
+			"Follow only the integrity-checked `maestro-onboarding` guide selected in the bounded session packet; do not route an unrelated Case method until onboarding is complete.",
 			trackChoice,
 			"Ask only this next question, then wait for the owner's answer: "+packet.Owner.Onboarding.NextQuestion,
 			"Do not claim that answers were saved or that onboarding is complete until the owner explicitly confirms a reviewed local profile.",

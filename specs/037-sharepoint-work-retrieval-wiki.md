@@ -101,6 +101,13 @@ references. The enrollment is strict JSON conforming to
 - authorization expiry; and
 - the time after which a new scope expansion requires confirmation.
 
+The guided onboarding may ask the owner to point to exact project SharePoint
+folders, but that answer is only a proposed case-scoped source map. It is not
+this organizational prior-work enrollment and does not trigger collection.
+When the owner separately chooses cross-project recovery, Maestro presents the
+exact prior-work roots and purpose for explicit enrollment. No onboarding path
+may broaden a project folder to a site, tenant or parent root implicitly.
+
 The collector may enumerate only descendants of those roots. It does not edit,
 move, download, share, publish or change permissions on SharePoint items.
 Following a result link remains subject to SharePoint's current authorization.

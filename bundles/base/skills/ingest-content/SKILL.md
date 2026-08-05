@@ -41,6 +41,8 @@ data boundaries or bypasses release verification.
 
 ## Current delivery boundary
 
-This skill defines the product route. The managed Docling runtime pack and the
-`bcgos ingest` command are not installed yet, so the runtime must report the
-capability as unavailable rather than emulate ingestion.
+This skill defines the product route. The deterministic `bcgos ingest` command
+and its fail-closed selector are implemented, but a managed verified Docling or
+MarkItDown runtime pack may still be absent from the active release. In that
+state the command must report the capability as `unavailable` rather than
+installing a dependency ad hoc or emulating ingestion.

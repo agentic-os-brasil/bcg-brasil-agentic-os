@@ -5,8 +5,11 @@ package sessionctx
 
 import (
 	"errors"
+	"path"
 	"sort"
+	"strings"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentcatalog"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
@@ -226,7 +229,7 @@ func (packet Packet) Validate() error {
 		return errors.New("session context packet selects too many skills")
 	}
 	for _, selected := range packet.Skills.Selected {
-		if selected.ID == "" || selected.Reason == "" || selected.Pointer == "" {
+		if !validSelectedSkill(selected) {
 			return errors.New("session context packet has an invalid selected skill pointer")
 		}
 	}
@@ -258,6 +261,24 @@ func (packet Packet) Validate() error {
 		return errors.New("ready session context packet has omissions")
 	}
 	return nil
+}
+
+func validSelectedSkill(selected SkillSelection) bool {
+	if !agentcatalog.ValidAgentID(selected.ID) {
+		return false
+	}
+	switch selected.Reason {
+	case "explicit_skill_reference", "lexical_intent", "deterministic_onboarding_state":
+	default:
+		return false
+	}
+	cleaned := path.Clean(strings.TrimSpace(selected.Pointer))
+	if cleaned == "." || path.IsAbs(cleaned) || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return false
+	}
+	claudePointer := path.Join(".claude", "skills", selected.ID, "SKILL.md")
+	codexPointer := path.Join(".codex", "skills", selected.ID, "SKILL.md")
+	return cleaned == claudePointer || cleaned == codexPointer
 }
 
 func hasOmission(omissions []Omission, source string) bool {

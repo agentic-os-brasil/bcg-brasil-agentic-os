@@ -53,6 +53,13 @@ The projection is local workspace materialization, not a capability claim:
 native runtime capabilities remain `unavailable` until the conformance protocol
 produces qualifying evidence.
 
+The installed projection is also the source of the first-use guide. Until the
+reviewed owner onboarding is complete, lifecycle hooks select only the exact,
+hash-checked `maestro-onboarding` pointer and suppress unrelated Case methods.
+This startup precedence does not grant tools, data access, agent authority or
+native-runtime evidence. Once onboarding is confirmed, ordinary governed
+method selection resumes from the same verified projection.
+
 The runtime still requires its ordinary local trust/review behavior. An
 installed configuration is not proof that a runtime executed the hook; later
 doctor and conformance work will report that distinction. See Spec 021 for the

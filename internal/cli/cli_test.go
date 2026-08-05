@@ -579,6 +579,7 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 			if err := agentidentity.Save(dataRoot, agentidentity.Profile{SchemaVersion: 1, OwnerID: "owner-enrolled", Confirmed: true, UpdatedAt: time.Now().UTC(), Selections: []agentidentity.Selection{{Role: "maestro", DisplayName: "Maestro", Emoji: "🎼", OwnerID: "owner-enrolled", OwnershipScope: "system"}}}); err != nil {
 				t.Fatal(err)
 			}
+			completeQuickOwnerOnboarding(t, dataRoot)
 			output.Reset()
 			if code := runAdapter([]string{"install", "--runtime", runtimeName, workspacePath}, &output, &output); code != ExitOK {
 				t.Fatalf("adapter install = %d %s", code, output.String())
@@ -613,6 +614,88 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 				t.Fatalf("replay = %d %s", code, output.String())
 			}
 		})
+	}
+}
+
+func TestLifecycleKeepsPendingOnboardingOnTheGovernedGuide(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+			workspacePath := t.TempDir()
+			var output bytes.Buffer
+			if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+				t.Fatal(output.String())
+			}
+			output.Reset()
+			if code := runAdapterWithDataRoot([]string{"install", "--runtime", runtimeName, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+				t.Fatalf("adapter install = %d %s", code, output.String())
+			}
+
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "session-start", "--adapter-source", "maestro", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
+				!strings.Contains(output.String(), "maestro-onboarding") ||
+				!strings.Contains(output.String(), "deterministic_onboarding_state") {
+				t.Fatalf("session start did not select the governed onboarding guide = %d %s", code, output.String())
+			}
+
+			prompt := `{"session_id":"session-a","prompt":"Please use $case-kickoff before onboarding"}`
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
+				!strings.Contains(output.String(), "maestro-onboarding") ||
+				strings.Contains(output.String(), "case-kickoff") {
+				t.Fatalf("pending onboarding routed an unrelated Case method = %d %s", code, output.String())
+			}
+		})
+	}
+}
+
+func TestContextRoutingCanSelectGovernedIngestionAndPriorWorkMethods(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+			workspacePath := t.TempDir()
+			var output bytes.Buffer
+			if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+				t.Fatal(output.String())
+			}
+			completeQuickOwnerOnboarding(t, dataRoot)
+			output.Reset()
+			if code := runAdapterWithDataRoot([]string{"install", "--runtime", runtimeName, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+				t.Fatalf("adapter install = %d %s", code, output.String())
+			}
+
+			prompt := `{"session_id":"session-a","prompt":"Use $find-prior-work and $ingest-content for these authorized sources"}`
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
+				!strings.Contains(output.String(), "find-prior-work") ||
+				!strings.Contains(output.String(), "ingest-content") {
+				t.Fatalf("governed source methods were not routed = %d %s", code, output.String())
+			}
+		})
+	}
+}
+
+func completeQuickOwnerOnboarding(t *testing.T, root string) {
+	t.Helper()
+	if _, err := ownerctx.Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	status, err := ownerctx.SelectOnboardingTrack(root, ownerctx.OnboardingTrackQuick)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, facetID := range status.Onboarding.Remaining {
+		facet := status.Facets[facetID]
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(facet.Path)), []byte("# "+facetID+"\n\nOwner-reviewed value.\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status, err = ownerctx.Inspect(root)
+	if err != nil || status.Onboarding.State != "review_required" {
+		t.Fatalf("onboarding review state = %#v, %v", status.Onboarding, err)
+	}
+	if _, err := ownerctx.ConfirmOnboarding(root, status.Onboarding.ReviewDigest); err != nil {
+		t.Fatal(err)
 	}
 }
 
