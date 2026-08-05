@@ -66,7 +66,7 @@ var Version = "0.0.0-dev"
 const maximumOwnerFacetBytes = 1 << 20
 const maximumWorkspaceAgentBytes = 1 << 20
 const maximumWorkContractBytes = 32 << 10
-const maximumOrchestrationStateBytes = 64 << 10
+const maximumOrchestrationStateBytes = agentorchestration.MaximumDurableStateBytes
 const installedOrchestrationStatePath = ".bcgos/maestro-orchestration-state.json"
 
 var enqueueHookPresenceWake = func(workspaceID string) error {
@@ -2667,18 +2667,13 @@ func resolveHookOrchestrationState(inspection workspace.Inspection, pointer stri
 		if openErr != nil {
 			return hookOrchestrationState{}, fmt.Errorf("open orchestration state: %w", openErr)
 		}
-		decoder := json.NewDecoder(io.LimitReader(file, maximumOrchestrationStateBytes+1))
-		decoder.DisallowUnknownFields()
-		var snapshot agentorchestration.StateSnapshot
-		decodeErr := decoder.Decode(&snapshot)
+		body, readErr := io.ReadAll(io.LimitReader(file, maximumOrchestrationStateBytes+1))
+		decodeErr := readErr
 		if decodeErr == nil {
-			var trailing any
-			if trailingErr := decoder.Decode(&trailing); !errors.Is(trailingErr, io.EOF) {
-				if trailingErr == nil {
-					decodeErr = errors.New("orchestration state contains multiple JSON values")
-				} else {
-					decodeErr = trailingErr
-				}
+			if int64(len(body)) > maximumOrchestrationStateBytes {
+				decodeErr = errors.New("orchestration state exceeds the bounded JSON limit")
+			} else {
+				_, decodeErr = agentorchestration.DecodeStateSnapshot(body)
 			}
 		}
 		closeErr := file.Close()
@@ -3310,7 +3305,12 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 // workspace state, owner registry and agent scaffolds are created, but no
 // onboarding answer or external content is inferred or ingested.
 func bootstrapAdapterDependencies(root, workspacePath string) error {
-	result, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root})
+	inspection, err := workspace.Inspect(workspacePath, root)
+	if err != nil {
+		return fmt.Errorf("inspect workspace before bootstrap: %w", err)
+	}
+	allowSynchronized := inspection.State == "warning" && inspection.WorkspaceID != "" && inspection.MetadataStatus == "valid"
+	result, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root, AllowSynchronizedRoot: allowSynchronized})
 	if err != nil {
 		return fmt.Errorf("bootstrap workspace: %w", err)
 	}

@@ -3,9 +3,37 @@ package agentorchestration
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
+
+func TestDurableStateRejectsUnknownFieldsNullPermissiveModesAndOversizedJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		body []byte
+		mode os.FileMode
+	}{
+		{name: "unknown field", body: []byte(`{"unknown":true}` + "\n"), mode: 0o600},
+		{name: "null snapshot", body: []byte("null\n"), mode: 0o600},
+		{name: "permissive mode", body: []byte("{}\n"), mode: 0o644},
+		{name: "oversized snapshot", body: []byte(`{"policy_sha256":"` + strings.Repeat("x", MaximumDurableStateBytes) + `"}` + "\n"), mode: 0o600},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "maestro-orchestration-state.json")
+			if err := os.WriteFile(path, test.body, test.mode); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := NewDurableStateStore(path, "recovery-cap"); err == nil {
+				t.Fatal("invalid durable state was accepted")
+			}
+			if err := EnsureDurableState(path, "recovery-cap"); err == nil {
+				t.Fatal("invalid durable state was accepted by ensure")
+			}
+		})
+	}
+}
 
 func TestEnsureDurableStateRepairsEmptyFileAndRejectsSymlink(t *testing.T) {
 	directory := t.TempDir()

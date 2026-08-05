@@ -259,7 +259,7 @@ func Verify(options Options) (Report, error) {
 }
 
 func verifyOrchestrationState(workspacePath string) error {
-	path, err := regularFile(workspacePath, filepath.Join(".bcgos", "maestro-orchestration-state.json"), maximumConfigurationBytes, false)
+	path, err := regularFile(workspacePath, filepath.Join(".bcgos", "maestro-orchestration-state.json"), agentorchestration.MaximumDurableStateBytes, false)
 	if err != nil {
 		return err
 	}
@@ -274,8 +274,8 @@ func verifyOrchestrationState(workspacePath string) error {
 	if err != nil {
 		return err
 	}
-	var snapshot agentorchestration.StateSnapshot
-	if err := decodeStrict(body, &snapshot); err != nil {
+	snapshot, err := agentorchestration.DecodeStateSnapshot(body)
+	if err != nil {
 		return fmt.Errorf("decode durable orchestration state: %w", err)
 	}
 	return agentorchestration.ValidateStateSnapshot(snapshot)

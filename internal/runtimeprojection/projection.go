@@ -391,7 +391,15 @@ func layout(runtimeName, workspace string) (runtimeLayout, error) {
 	if err != nil {
 		return runtimeLayout{}, err
 	}
-	if info, err := os.Lstat(absolute); err != nil {
+	if info, err := os.Lstat(absolute); errors.Is(err, os.ErrNotExist) {
+		// The adapter is also a supported installation entry point. A new
+		// workspace may not exist yet, but every existing ancestor must already
+		// be a canonical directory so creation cannot be redirected through a
+		// symlink. bootstrapAdapterDependencies creates the final path later.
+		if err := validateMissingWorkspaceAncestors(absolute); err != nil {
+			return runtimeLayout{}, err
+		}
+	} else if err != nil {
 		return runtimeLayout{}, err
 	} else if info.Mode()&os.ModeSymlink != 0 {
 		return runtimeLayout{}, errors.New("workspace must not be a symlink")
@@ -402,6 +410,25 @@ func layout(runtimeName, workspace string) (runtimeLayout, error) {
 		return runtimeLayout{orientation: "CLAUDE.md", root: filepath.Join(".claude", "skills"), runtimeName: "Claude Code"}, nil
 	}
 	return runtimeLayout{orientation: "AGENTS.md", root: filepath.Join(".codex", "skills"), runtimeName: "Codex"}, nil
+}
+
+func validateMissingWorkspaceAncestors(path string) error {
+	for current := path; ; current = filepath.Dir(current) {
+		info, err := os.Lstat(current)
+		if err == nil {
+			if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+				return errors.New("workspace parent must be a canonical non-symlink directory")
+			}
+			return nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return errors.New("workspace parent does not exist")
+		}
+	}
 }
 
 func rejectSymlinkComponents(workspace, relative string) error {

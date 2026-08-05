@@ -230,6 +230,13 @@ func createJSON(path string, value registry) error {
 }
 
 func loadRegistry(path string) (registry, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return registry{}, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return registry{}, errors.New("workspace agent registry must be a regular non-symlink file")
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return registry{}, err

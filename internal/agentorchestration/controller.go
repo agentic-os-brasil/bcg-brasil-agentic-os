@@ -3,12 +3,14 @@
 package agentorchestration
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -85,6 +87,12 @@ type StateStore struct {
 	persistMu      sync.Mutex
 }
 
+// MaximumDurableStateBytes is the shared bound for the workspace-local
+// orchestration snapshot. Every writer, readiness check and hook reader must
+// enforce the same ceiling so bootstrap cannot succeed with a state that a
+// later lifecycle invocation rejects.
+const MaximumDurableStateBytes = 64 << 10
+
 func NewStateStore(recoveryCapability string) (*StateStore, error) {
 	if recoveryCapability == "" {
 		return nil, errors.New("orchestration state store requires a recovery capability")
@@ -103,17 +111,24 @@ func NewDurableStateStore(path, recoveryCapability string) (*StateStore, error) 
 		return nil, errors.New("orchestration state store requires a recovery capability")
 	}
 	store := &StateStore{persistPath: path, recoverySHA256: sha256.Sum256([]byte(recoveryCapability))}
-	data, err := os.ReadFile(path)
+	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return store, nil
 	}
+	if err != nil {
+		return nil, fmt.Errorf("inspect durable orchestration state: %w", err)
+	}
+	if err := validateDurableStateFileInfo(info); err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read durable orchestration state: %w", err)
 	}
 	if len(data) == 0 {
 		return store, nil
 	}
-	if err := json.Unmarshal(data, &store.state); err != nil {
+	if err := decodeStateSnapshot(data, &store.state); err != nil {
 		return nil, fmt.Errorf("decode durable orchestration state: %w", err)
 	}
 	if err := validateSnapshot(store.state); err != nil {
@@ -133,8 +148,8 @@ func EnsureDurableState(path, recoveryCapability string) error {
 	// at valid JSON.
 	info, err := os.Lstat(path)
 	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return errors.New("orchestration state target is not a regular non-symlink file")
+		if err := validateDurableStateFileInfo(info); err != nil {
+			return err
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect durable orchestration state: %w", err)
@@ -154,8 +169,8 @@ func EnsureDurableState(path, recoveryCapability string) error {
 	defer func() { _ = unlock() }()
 	info, err = os.Lstat(path)
 	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return errors.New("orchestration state target is not a regular non-symlink file")
+		if err := validateDurableStateFileInfo(info); err != nil {
+			return err
 		}
 		if info.Size() > 0 {
 			return nil
@@ -164,6 +179,50 @@ func EnsureDurableState(path, recoveryCapability string) error {
 		return fmt.Errorf("inspect durable orchestration state: %w", err)
 	}
 	return store.persistLocked()
+}
+
+func validateDurableStateFileInfo(info os.FileInfo) error {
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return errors.New("orchestration state target is not a regular non-symlink file")
+	}
+	if info.Size() > MaximumDurableStateBytes {
+		return errors.New("orchestration state exceeds the bounded JSON limit")
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return errors.New("orchestration state must be owner-only (0600 or stricter)")
+	}
+	return nil
+}
+
+func decodeStateSnapshot(data []byte, target *StateSnapshot) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return errors.New("orchestration state must be a JSON object")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("orchestration state contains multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+// DecodeStateSnapshot applies the canonical bounded-state JSON contract to a
+// read-only payload. Runtime adapters use it instead of maintaining a second
+// decoder with subtly different null/unknown-field/trailing-data semantics.
+func DecodeStateSnapshot(data []byte) (StateSnapshot, error) {
+	var snapshot StateSnapshot
+	if err := decodeStateSnapshot(data, &snapshot); err != nil {
+		return StateSnapshot{}, err
+	}
+	return snapshot, nil
 }
 
 // ValidateStateSnapshot exposes the same structural invariant used by the
@@ -258,7 +317,7 @@ func (store *StateStore) refreshLocked() error {
 	if store.persistPath == "" {
 		return nil
 	}
-	data, err := os.ReadFile(store.persistPath)
+	info, err := os.Lstat(store.persistPath)
 	if errors.Is(err, os.ErrNotExist) {
 		if store.state.BranchID != "" {
 			return errors.New("durable orchestration state disappeared")
@@ -268,11 +327,18 @@ func (store *StateStore) refreshLocked() error {
 	if err != nil {
 		return err
 	}
+	if err := validateDurableStateFileInfo(info); err != nil {
+		return err
+	}
+	data, err := os.ReadFile(store.persistPath)
+	if err != nil {
+		return err
+	}
 	if len(data) == 0 {
 		return nil
 	}
 	var state StateSnapshot
-	if err := json.Unmarshal(data, &state); err != nil {
+	if err := decodeStateSnapshot(data, &state); err != nil {
 		return err
 	}
 	if err := validateSnapshot(state); err != nil {
