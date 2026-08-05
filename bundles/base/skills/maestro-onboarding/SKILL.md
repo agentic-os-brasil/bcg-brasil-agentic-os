@@ -153,6 +153,11 @@ professional baseline; do not emulate ingestion from conversation.
   identity is known. Offer the complete track later only when it is useful;
   never nag or silently upgrade it.
 - A confirmed **complete** track has the full initial professional baseline.
+- The workspace bootstrap is always first. Never ask for, resolve or ingest a
+  SharePoint source before the new workspace has been initialized and the
+  Maestro session is running inside that workspace. The source question below
+  is deliberately a post-bootstrap onboarding step because all derived
+  content must be read and organized from within the workspace.
 - After either track is confirmed, inspect the deterministic project-source
   state with `<maestro-cli> prior-work source status --workspace <workspace>`. If it is
   `selection_required`, ask exactly one question and wait: **“Você quer indicar

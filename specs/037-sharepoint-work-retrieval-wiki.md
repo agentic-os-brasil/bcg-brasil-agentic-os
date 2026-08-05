@@ -80,9 +80,12 @@ at Session Start, searched for ordinary questions or traversed speculatively.
 
 ## Guided project-source selection
 
-After the owner interview is confirmed, Session Start asks once whether the
-owner wants to point Maestro to SharePoint folders authorized for the current
-project or defer. This is source setup, not collection.
+After the owner interview is confirmed **inside an already initialized
+workspace**, Session Start asks once whether the owner wants to point Maestro
+to SharePoint folders authorized for the current project or defer. The
+installer never asks for or resolves this source before creating the workspace.
+This is source setup, not collection; all derived content is later read and
+organized inside the workspace that owns the selection.
 
 An accepted selection:
 

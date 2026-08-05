@@ -545,8 +545,8 @@
       await pause(760);
       showRuntimeHandoff();
       showStatus(payload.source_registered
-        ? `Workspace pronto em ${payload.workspace_path}. Claude Code é o caminho principal; a fonte foi registrada para ingestão verificada.`
-        : `Workspace pronto em ${payload.workspace_path}. Claude Code está configurado; a primeira sessão ainda precisa observar os hooks.`);
+        ? `Workspace pronto em ${payload.workspace_path}. A fonte será lida e organizada dentro dele, após a autorização no onboarding.`
+        : `Workspace pronto em ${payload.workspace_path}. Claude Code está configurado; a primeira sessão conduzirá o onboarding dentro do workspace.`);
     } catch (error) {
       setWorkspaceProvisioning('');
       showStatus(error.message);

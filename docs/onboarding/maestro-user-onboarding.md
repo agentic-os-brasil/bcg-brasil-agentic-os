@@ -271,9 +271,11 @@ psicológico.
 
 ### Passo 4.1 — Escolha as fontes SharePoint do projeto
 
-Depois que a entrevista do owner estiver revisada e confirmada, o Maestro
-pergunta uma vez se você quer indicar as pastas autorizadas do SharePoint deste
-projeto ou começar sem essa fonte. Você pode adiar sem perder funcionalidade;
+Depois que a entrevista do owner estiver revisada e confirmada **dentro do
+workspace recém-criado**, o Maestro pergunta uma vez se você quer indicar as
+pastas autorizadas do SharePoint deste projeto ou começar sem essa fonte. O
+instalador não pede essa fonte antes de criar o workspace: o conteúdo derivado
+será lido e organizado dentro dele. Você pode adiar sem perder funcionalidade;
 essa escolha fica registrada e o Maestro não repete a pergunta em toda sessão.
 
 Para inspecionar o estado:
