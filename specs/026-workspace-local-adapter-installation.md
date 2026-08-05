@@ -3,8 +3,11 @@
 Status: complete five-event lifecycle configuration implemented for Claude and
 Codex; native runtime qualification remains separate.
 
-`bcgos adapter install --runtime claude|codex [workspace]` adds only
-Maestro-owned commands to the runtime's workspace-local configuration. Both
+`bcgos adapter install --runtime claude|codex [workspace]` first ensures the
+workspace-local installation dependencies (`workspace.json`, durable
+orchestration state, owner registry, workspace-agent dossier and signed agent
+scaffold) exist idempotently, then adds only Maestro-owned commands to the
+runtime's workspace-local configuration. Both
 Claude and Codex receive `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
 `PostToolUse` and `Stop` entries mapped to the canonical lifecycle. Claude uses
 `.claude/settings.local.json`; Codex uses `.codex/hooks.json`. This avoids
@@ -52,6 +55,11 @@ user approval.
 The projection is local workspace materialization, not a capability claim:
 native runtime capabilities remain `unavailable` until the conformance protocol
 produces qualifying evidence.
+
+The dependency bootstrap is data-free and does not select an onboarding track,
+write owner answers, ingest a memory source or install an external runtime.
+Malformed or symlinked state fails before adapter files are written; a valid
+existing state is preserved.
 
 The installed projection is also the source of the first-use guide. Until the
 reviewed owner onboarding is complete, lifecycle hooks select only the exact,

@@ -640,7 +640,7 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 			}
 			completeQuickOwnerOnboarding(t, dataRoot)
 			output.Reset()
-			if code := runAdapter([]string{"install", "--runtime", runtimeName, workspacePath}, &output, &output); code != ExitOK {
+			if code := runAdapterWithDataRoot([]string{"install", "--runtime", runtimeName, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
 				t.Fatalf("adapter install = %d %s", code, output.String())
 			}
 
@@ -800,9 +800,16 @@ func completeQuickOwnerOnboarding(t *testing.T, root string) {
 
 func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 	workspacePath := t.TempDir()
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
 	var output bytes.Buffer
-	if code := runAdapter([]string{"install", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "installed"`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "installed"`) {
 		t.Fatalf("install = %d %s", code, output.String())
+	}
+	if _, err := os.Stat(filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")); err != nil {
+		t.Fatalf("orchestration state was not bootstrapped: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataRoot, "owner", "registry.json")); err != nil {
+		t.Fatalf("owner context was not bootstrapped: %v", err)
 	}
 	if body, err := os.ReadFile(filepath.Join(workspacePath, "AGENTS.md")); err != nil || !strings.Contains(string(body), "Memória e persistência") {
 		t.Fatalf("runtime orientation = %q, %v", body, err)
@@ -811,7 +818,7 @@ func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 		t.Fatalf("installed skill = %q, %v", body, err)
 	}
 	output.Reset()
-	if code := runAdapter([]string{"uninstall", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "removed"`) {
+	if code := runAdapterWithDataRoot([]string{"uninstall", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "removed"`) {
 		t.Fatalf("remove = %d %s", code, output.String())
 	}
 }

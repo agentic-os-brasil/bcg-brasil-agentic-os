@@ -3266,6 +3266,27 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 	return runAdapterWithDataRoot(args, out, errOut, defaultDataRoot)
 }
 
+// bootstrapAdapterDependencies makes the standalone adapter command safe to
+// use as an installation entry point too. It is idempotent and data-free: the
+// workspace state, owner registry and agent scaffolds are created, but no
+// onboarding answer or external content is inferred or ingested.
+func bootstrapAdapterDependencies(root, workspacePath string) error {
+	result, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root})
+	if err != nil {
+		return fmt.Errorf("bootstrap workspace: %w", err)
+	}
+	if _, err := ownerctx.Initialize(root); err != nil {
+		return fmt.Errorf("bootstrap owner context: %w", err)
+	}
+	if _, err := workspaceagent.Initialize(root, result.WorkspaceID); err != nil {
+		return fmt.Errorf("bootstrap workspace agent: %w", err)
+	}
+	if _, err := agentscaffold.Scaffold(root, agentscaffold.WorkspaceRequest(result.WorkspaceID)); err != nil {
+		return fmt.Errorf("bootstrap agent scaffold: %w", err)
+	}
+	return nil
+}
+
 func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 || (args[0] != "install" && args[0] != "uninstall" && args[0] != "status" && args[0] != "verify") {
 		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status|verify> --runtime claude|codex [workspace-path]")
@@ -3373,6 +3394,9 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 			return reportError(errOut, err)
 		}
 		if err = runtimeprojection.ValidateInstallForTracks(*runtimeName, path, tracks); err != nil {
+			return reportError(errOut, err)
+		}
+		if err = bootstrapAdapterDependencies(root, path); err != nil {
 			return reportError(errOut, err)
 		}
 		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)
