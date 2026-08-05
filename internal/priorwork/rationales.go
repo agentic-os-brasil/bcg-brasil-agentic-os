@@ -134,13 +134,26 @@ func MaterializeRationales(workspacePath string, batch RationaleBatch, folderURL
 	if err := ValidateRationaleBatch(batch); err != nil {
 		return RationaleReport{}, err
 	}
+	if !time.Now().UTC().Before(enrollment.AuthorizationExpiresAt) || batch.Receipt.EmittedAt.After(enrollment.AuthorizationExpiresAt) {
+		return RationaleReport{}, errors.New("prior-work enrollment authorization has expired")
+	}
+	if batch.Snapshot.TenantRef != enrollment.TenantRef || !rootsEqual(batch.Snapshot.Roots, enrollment.Roots) {
+		return RationaleReport{}, errors.New("snapshot tenant or roots do not match enrollment")
+	}
 	if err := VerifyImportReceipt(batch.Receipt, batch.Snapshot, enrollment); err != nil {
 		return RationaleReport{}, err
+	}
+	selectionFingerprint, err := rationaleSelectionFingerprint(batch.WorkspaceID, folderURLs)
+	if err != nil {
+		return RationaleReport{}, err
+	}
+	if batch.SourceSelectionFingerprint != selectionFingerprint {
+		return RationaleReport{}, errors.New("rationale batch does not bind the selected SharePoint folders")
 	}
 	if err := validateRationaleFolders(batch.Rationales, folderURLs); err != nil {
 		return RationaleReport{}, err
 	}
-	workspacePath, err := filepath.Abs(workspacePath)
+	workspacePath, err = filepath.Abs(workspacePath)
 	if err != nil {
 		return RationaleReport{}, err
 	}
@@ -162,7 +175,7 @@ func MaterializeRationales(workspacePath string, batch RationaleBatch, folderURL
 		return RationaleReport{}, errors.New("rationale batch does not bind the initialized workspace manifest")
 	}
 	target := filepath.Join(workspacePath, "brain", "knowledge", "sharepoint-rationales")
-	if err := ensureRealDirectory(target); err != nil {
+	if err := ensureWorkspaceDirectory(workspacePath, filepath.Join("brain", "knowledge", "sharepoint-rationales")); err != nil {
 		return RationaleReport{}, err
 	}
 	sorted := append([]Rationale(nil), batch.Rationales...)
@@ -192,6 +205,21 @@ func MaterializeRationales(workspacePath string, batch RationaleBatch, folderURL
 		RationaleCount: len(sorted), Priority: "source_modified_descending",
 		SourceAuthority: "sharepoint", LocalProjection: "derived_rationales_with_source_pointers", Items: items,
 	}, nil
+}
+
+func rationaleSelectionFingerprint(workspaceID string, folderURLs []string) (string, error) {
+	canonical, err := canonicalFolderURLs(folderURLs)
+	if err != nil {
+		return "", err
+	}
+	return sourceSelectionFingerprint(sourceSelection{
+		SchemaVersion: 1,
+		WorkspaceID:   workspaceID,
+		State:         SourceSelected,
+		Source:        "sharepoint",
+		Purpose:       "prior_work_retrieval",
+		FolderURLs:    canonical,
+	})
 }
 
 func validateRationaleFolders(rationales []Rationale, folders []string) error {
@@ -258,10 +286,38 @@ func yamlScalar(value string) string {
 	return `"` + strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), `"`, `\"`) + `"`
 }
 
-func ensureRealDirectory(path string) error {
-	if err := os.MkdirAll(path, 0o700); err != nil {
+func ensureWorkspaceDirectory(workspacePath, relative string) error {
+	rootInfo, err := os.Lstat(workspacePath)
+	if err != nil {
 		return err
 	}
+	if rootInfo.Mode()&os.ModeSymlink != 0 || !rootInfo.IsDir() {
+		return errors.New("rationale workspace path must be a real directory")
+	}
+	current := workspacePath
+	for _, part := range strings.Split(filepath.Clean(relative), string(filepath.Separator)) {
+		if part == "" || part == "." {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, statErr := os.Lstat(current)
+		if errors.Is(statErr, os.ErrNotExist) {
+			if err := os.Mkdir(current, 0o700); err != nil {
+				return err
+			}
+			continue
+		}
+		if statErr != nil {
+			return statErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return errors.New("rationale workspace path must not traverse symlinks")
+		}
+	}
+	return nil
+}
+
+func ensureRealDirectory(path string) error {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return err

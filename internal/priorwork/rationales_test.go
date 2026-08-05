@@ -13,6 +13,7 @@ import (
 
 func TestMaterializeRationalesPrioritizesRecentItemsAndKeepsProvenance(t *testing.T) {
 	enrollment := testEnrollment()
+	enrollment.AuthorizationExpiresAt = time.Now().UTC().Add(time.Hour)
 	first := suzanoDeck()
 	first.SourceURL = "https://bcgbr.sharepoint.com/sites/consulting/Shared%20Documents/Projects/older.pptx"
 	first.Name = "Older rationale.pptx"
@@ -33,8 +34,14 @@ func TestMaterializeRationalesPrioritizesRecentItemsAndKeepsProvenance(t *testin
 		t.Fatal(err)
 	}
 	receipt.Signature = base64.StdEncoding.EncodeToString(ed25519.Sign(testCollectorPrivateKey, body))
+	workspaceID := strings.Repeat("a", 32)
+	selectedFolders := []string{"https://bcgbr.sharepoint.com/sites/consulting/Shared%20Documents/Projects"}
+	selectionFingerprint, err := rationaleSelectionFingerprint(workspaceID, selectedFolders)
+	if err != nil {
+		t.Fatal(err)
+	}
 	batch := RationaleBatch{
-		SchemaVersion: 1, WorkspaceID: strings.Repeat("a", 32), SourceSelectionFingerprint: strings.Repeat("b", 64),
+		SchemaVersion: 1, WorkspaceID: workspaceID, SourceSelectionFingerprint: selectionFingerprint,
 		Snapshot: snapshot, Receipt: receipt,
 		Rationales: []Rationale{
 			{ItemRef: first.ItemRef, Root: first.Root, SourceURL: first.SourceURL, Name: first.Name, ModifiedAt: first.ModifiedAt, ContentDigest: strings.Repeat("1", 64), Text: "Older derived rationale."},
@@ -48,7 +55,7 @@ func TestMaterializeRationalesPrioritizesRecentItemsAndKeepsProvenance(t *testin
 	if err := os.WriteFile(filepath.Join(workspace, ".bcgos", "workspace.json"), []byte(`{"schema_version":1,"workspace_id":"`+strings.Repeat("a", 32)+`"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	report, err := MaterializeRationales(workspace, batch, []string{"https://bcgbr.sharepoint.com/sites/consulting/Shared%20Documents/Projects"}, enrollment)
+	report, err := MaterializeRationales(workspace, batch, selectedFolders, enrollment)
 	if err != nil {
 		t.Fatal(err)
 	}
