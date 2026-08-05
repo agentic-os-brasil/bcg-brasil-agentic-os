@@ -18,6 +18,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorworksync"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 const maximumPriorWorkQueryBytes = 64 << 10
@@ -30,12 +31,12 @@ func runPriorWork(
 	dataRoot func() (string, error),
 ) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos prior-work <actor|enroll|status|import|find|sync-due>")
+		fmt.Fprintln(errOut, "usage: bcgos prior-work <actor|source|enroll|status|import|find|sync-due>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos prior-work <actor|enroll|status|import|find|sync-due>")
+		fmt.Fprintln(out, "usage: bcgos prior-work <actor|source|enroll|status|import|find|sync-due>")
 		return ExitOK
 	case "actor":
 		if len(args) != 1 {
@@ -53,6 +54,8 @@ func runPriorWork(
 		}{SchemaVersion: 1, ActorRef: actor, Binding: "local_os_principal"})
 	case "enroll":
 		return runPriorWorkEnroll(args[1:], in, out, errOut, dataRoot)
+	case "source":
+		return runPriorWorkSource(args[1:], in, out, errOut, dataRoot)
 	case "status":
 		return runPriorWorkStatus(args[1:], out, errOut, dataRoot)
 	case "import":
@@ -64,6 +67,97 @@ func runPriorWork(
 	default:
 		fmt.Fprintf(errOut, "unknown prior-work command %q\n", args[0])
 		return ExitUsage
+	}
+}
+
+func runPriorWorkSource(
+	args []string,
+	in io.Reader,
+	out io.Writer,
+	errOut io.Writer,
+	dataRoot func() (string, error),
+) int {
+	if len(args) == 0 || (args[0] != "status" && args[0] != "select" && args[0] != "defer") {
+		fmt.Fprintln(errOut, "usage: bcgos prior-work source <status|select|defer> --workspace PATH")
+		return ExitUsage
+	}
+	action := args[0]
+	flags := flag.NewFlagSet("prior-work source "+action, flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	workspacePath := flags.String("workspace", "", "initialized Maestro workspace path")
+	stdin := flags.Bool("stdin", false, "read exact SharePoint folder selection from standard input")
+	confirm := flags.Bool("confirm", false, "confirm the reviewed source choice")
+	if err := flags.Parse(args[1:]); err != nil {
+		return ExitUsage
+	}
+	if flags.NArg() != 0 || strings.TrimSpace(*workspacePath) == "" {
+		fmt.Fprintln(errOut, priorWorkSourceUsage(action))
+		return ExitUsage
+	}
+	switch action {
+	case "status":
+		if *stdin || *confirm {
+			fmt.Fprintln(errOut, priorWorkSourceUsage(action))
+			return ExitUsage
+		}
+	case "select":
+		if !*stdin || !*confirm {
+			fmt.Fprintln(errOut, priorWorkSourceUsage(action))
+			return ExitUsage
+		}
+	case "defer":
+		if *stdin || !*confirm {
+			fmt.Fprintln(errOut, priorWorkSourceUsage(action))
+			return ExitUsage
+		}
+	}
+	root, err := dataRoot()
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	inspection, err := workspace.Inspect(*workspacePath, root)
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	if inspection.WorkspaceID == "" || (inspection.State != "ready" && inspection.State != "warning") {
+		return writePriorWorkError(errOut, errors.New("guided SharePoint source selection requires an initialized Maestro workspace"))
+	}
+	store := priorWorkSourceSelectionStore(root)
+	var status priorwork.SourceSelectionStatus
+	switch action {
+	case "status":
+		status, err = store.Status(inspection.WorkspaceID)
+	case "defer":
+		if err = ensurePriorWorkEnrollmentParent(store.Root); err != nil {
+			break
+		}
+		status, err = store.Defer(inspection.WorkspaceID)
+	case "select":
+		var input priorwork.SourceSelectionInput
+		input, err = priorwork.ParseSourceSelectionInput(in)
+		if err == nil {
+			err = ensurePriorWorkEnrollmentParent(store.Root)
+		}
+		if err == nil {
+			status, err = store.Select(inspection.WorkspaceID, input.FolderURLs)
+		}
+	}
+	if err != nil {
+		return writePriorWorkError(errOut, err)
+	}
+	return writePriorWorkJSON(out, status)
+}
+
+func priorWorkSourceUsage(action string) string {
+	switch action {
+	case "status":
+		return "usage: bcgos prior-work source status --workspace PATH"
+	case "select":
+		return "usage: bcgos prior-work source select --workspace PATH --stdin --confirm"
+	case "defer":
+		return "usage: bcgos prior-work source defer --workspace PATH --confirm"
+	default:
+		return "usage: bcgos prior-work source <status|select|defer> --workspace PATH"
 	}
 }
 
@@ -340,10 +434,30 @@ func priorWorkStore(dataRoot func() (string, error)) (priorwork.Store, error) {
 		return priorwork.Store{}, errors.New("prior-work enrollment authority trust anchor is unavailable")
 	}
 	return priorwork.Store{
-		Root:                     filepath.Join(root, "atlases", "organization", "sharepoint-work"),
+		Root:                     priorWorkRoot(root),
 		EnrollmentAuthorityKeyID: keyID,
 		EnrollmentAuthority:      publicKey,
 	}, nil
+}
+
+func priorWorkRoot(dataRoot string) string {
+	return filepath.Join(dataRoot, "atlases", "organization", "sharepoint-work")
+}
+
+func priorWorkSourceSelectionStore(dataRoot string) priorwork.SourceSelectionStore {
+	return priorwork.SourceSelectionStore{Root: priorWorkRoot(dataRoot)}
+}
+
+func priorWorkSourceStatus(dataRoot, workspaceID string) (priorwork.SourceSelectionStatus, error) {
+	if strings.TrimSpace(workspaceID) == "" {
+		return priorwork.SourceSelectionStatus{
+			SchemaVersion: 1, State: priorwork.SourceSelectionUnavailable,
+			SourceAuthority: "sharepoint", LocalProjection: "metadata_and_source_pointers_only",
+			AuthorizationState: "unavailable", CollectionRuntime: "claude",
+			CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy",
+		}, nil
+	}
+	return priorWorkSourceSelectionStore(dataRoot).Status(workspaceID)
 }
 
 func ensurePriorWorkEnrollmentParent(storeRoot string) error {

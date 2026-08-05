@@ -2277,6 +2277,10 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
+	if err != nil {
+		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
+	}
 	activeExecution := execution.ActivePointer{State: execution.ActivePointerUnavailable}
 	if inspection.WorkspaceID != "" {
 		activeExecution, err = (execution.Store{Root: root}).ActivePointer(inspection.WorkspaceID)
@@ -2286,9 +2290,10 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 	}
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner,
-		Atlas:     atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
-		Execution: activeExecution,
-		Memory:    sessionMemorySource(root, inspection.WorkspaceID),
+		Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		Execution:        activeExecution,
+		Memory:           sessionMemorySource(root, inspection.WorkspaceID),
+		SharePointSource: sharePointSource,
 	})
 	if err := packet.Validate(); err != nil {
 		return reportError(errOut, err)
@@ -2329,7 +2334,11 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Memory: sessionMemorySource(root, inspection.WorkspaceID)})
+	sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
+	if err != nil {
+		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
+	}
+	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Memory: sessionMemorySource(root, inspection.WorkspaceID), SharePointSource: sharePointSource})
 	result, err := sessionresolve.Resolve(root, *pointer, *purpose, packet, *budget)
 	if err != nil {
 		return reportError(errOut, err)
@@ -2551,10 +2560,15 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
+	if err != nil {
+		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
+	}
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner,
-		Atlas:  atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
-		Memory: sessionMemorySource(root, inspection.WorkspaceID),
+		Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		Memory:           sessionMemorySource(root, inspection.WorkspaceID),
+		SharePointSource: sharePointSource,
 	})
 	if err := enrichOnboardingGuide(&packet, *runtimeName, inspection.WorkspacePath); err != nil {
 		return reportError(errOut, err)
@@ -2682,10 +2696,15 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if err != nil {
 			return reportError(errOut, err)
 		}
+		sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
+		if err != nil {
+			return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
+		}
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner,
-			Atlas:  atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
-			Memory: sessionMemorySource(root, inspection.WorkspaceID),
+			Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+			Memory:           sessionMemorySource(root, inspection.WorkspaceID),
+			SharePointSource: sharePointSource,
 		})
 		if action == "context-injection" {
 			if err := enrichContextPacket(&packet, "codex", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
@@ -2842,10 +2861,15 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if err != nil {
 			return reportError(errOut, err)
 		}
+		sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
+		if err != nil {
+			return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
+		}
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner,
-			Atlas:  atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
-			Memory: sessionMemorySource(root, inspection.WorkspaceID),
+			Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+			Memory:           sessionMemorySource(root, inspection.WorkspaceID),
+			SharePointSource: sharePointSource,
 		})
 		if action == "context-injection" {
 			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {

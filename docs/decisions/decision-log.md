@@ -776,3 +776,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: An explicitly enrolled Canary can now close the deterministic loop from context-injection skill-route capture to idle L1 synthesis and bounded next-session continuity. Corrupt, incomplete, missing-policy or over-budget memory remains excluded without blocking the session. Weekly deep L2/L3/lifetime synthesis, model-backed Walter review and native Claude/Codex qualification remain separate unavailable capabilities until their own activation evidence exists.
 - Refs: MEMO; IDLE; DLIT; specs/006-memory-persistence.md; specs/015-session-context-packet.md; specs/025-native-session-start-hook.md; bundles/base/memory/runtime.json; internal/memory; internal/sessionctx; internal/sessionhook; internal/cli
 - Supersedes: none
+
+## GSPR - Separate guided SharePoint source selection from collection authority
+
+- Date: 2026-08-04
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A new Maestro workspace must help its owner point to the exact SharePoint folders authorized for that project without treating a conversational choice, a copied link or a Codex session as permission to enumerate or ingest content.
+- Decision: After owner onboarding, Maestro offers one explicit, workspace-bound SharePoint source choice. A confirmed selection records only canonical folder pointers in private local state and preserves SharePoint as source authority; it grants no enrollment, collection or content-retention authority. Session Start may expose only bounded selection state and a safe next step. Claude remains the only V1 collector after signed enrollment and native qualification; Codex may never collect or emulate the connection and may query only an already verified local pointer index.
+- Consequences: The user can defer or revise the project source choice without hidden discovery. Selected folders remain exact and reviewable, source content is never copied during onboarding, and local output remains metadata and SharePoint pointers only. An authority-signed enrollment still binds opaque roots before collection, so selection and availability must be reported separately.
+- Refs: specs/037-sharepoint-work-retrieval-wiki.md; specs/013-owner-context.md; bundles/base/skills/maestro-onboarding/SKILL.md; internal/priorwork
+- Supersedes: none

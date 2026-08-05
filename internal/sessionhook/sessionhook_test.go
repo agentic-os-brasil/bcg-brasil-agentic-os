@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -78,8 +79,22 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 		t.Fatalf("pending directive = %q", got)
 	}
 	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Count: 1}}}
-	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || strings.Contains(got, "Prepare kickoff") {
+	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || !strings.Contains(got, "Você quer indicar as pastas autorizadas do SharePoint deste projeto agora") || strings.Contains(got, "Prepare kickoff") {
 		t.Fatalf("active directive = %q", got)
+	}
+	selected := active
+	selected.SharePointSource = sessionctx.SharePointSource{
+		State: priorwork.SourceSelected, FolderCount: 2, SourceAuthority: "sharepoint",
+		LocalProjection: "metadata_and_source_pointers_only", AuthorizationState: "pending_signed_enrollment",
+		CollectionRuntime: "claude", CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy",
+	}
+	if got := sessionDirective(selected); !strings.Contains(got, "exact SharePoint folder selection") || !strings.Contains(got, "Only Claude") || !strings.Contains(got, "Codex") || strings.Contains(got, "SharePoint folder URL") {
+		t.Fatalf("selected directive = %q", got)
+	}
+	deferred := active
+	deferred.SharePointSource = sessionctx.SharePointSource{State: priorwork.SourceDeferred, SourceAuthority: "sharepoint", LocalProjection: "metadata_and_source_pointers_only", CollectionRuntime: "claude", CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy"}
+	if got := sessionDirective(deferred); strings.Contains(got, "Você quer indicar as pastas autorizadas") || !strings.Contains(got, "was deferred") {
+		t.Fatalf("deferred directive = %q", got)
 	}
 	reviewDigest := strings.Repeat("a", 64)
 	review := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "review_required", ReviewDigest: reviewDigest}}}

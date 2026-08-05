@@ -9,6 +9,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
@@ -211,5 +212,40 @@ func TestSelectedSkillPointersUseClosedReasonsAndCannotEscapeTheRuntimeProjectio
 		if err := packet.Validate(); err == nil {
 			t.Fatalf("unsafe selected skill pointer validated: %#v", selection)
 		}
+	}
+}
+
+func TestSessionPacketCarriesOnlyBoundedSharePointSourceGuidance(t *testing.T) {
+	packet := Build(Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: strings.Repeat("a", 32)},
+		Owner: ownerctx.Status{Initialized: true, Onboarding: ownerctx.OnboardingStatus{
+			State: "complete", Track: ownerctx.OnboardingTrackQuick,
+		}},
+		SharePointSource: priorwork.SourceSelectionStatus{
+			SchemaVersion: 1, State: priorwork.SourceSelected, FolderCount: 2,
+			Pointer:         "source-selections/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/versions/source-deadbeef.json",
+			SourceAuthority: "sharepoint", LocalProjection: "metadata_and_source_pointers_only",
+			AuthorizationState: "pending_signed_enrollment", CollectionRuntime: "claude",
+			CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy",
+		},
+	})
+	if err := packet.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if packet.SharePointSource.State != priorwork.SourceSelected || packet.SharePointSource.FolderCount != 2 || packet.SharePointSource.CollectionRuntime != "claude" || packet.SharePointSource.CodexCollectionState != "unavailable/corporate_policy" {
+		t.Fatalf("source guidance = %#v", packet.SharePointSource)
+	}
+	body, err := json.Marshal(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "sharepoint.com") || strings.Contains(string(body), "Authorized-Folder") {
+		t.Fatalf("session packet exposed SharePoint source details: %s", body)
+	}
+
+	packet.SharePointSource.CollectionRuntime = "codex"
+	if err := packet.Validate(); err == nil {
+		t.Fatal("session packet accepted Codex as the SharePoint collection runtime")
 	}
 }
