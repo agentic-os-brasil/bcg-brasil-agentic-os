@@ -53,6 +53,34 @@ Top-level `bcgos status` embeds the same projection rather than inventing a
 coarser capability label. Corrupt or ambiguous source state fails closed and
 becomes an explicit unavailable/action-required result.
 
+## Bounded growth and retention ownership
+
+Continuous-use status has no append, receipt or history store. Every read
+rebuilds one disposable projection from the current committed authorities. Its
+serialized form is capped at 4 KiB and contains only closed enums and booleans,
+fixed count fields, one portable active-work pointer, at most two runtime rows,
+at most five unique lifecycle event IDs per runtime and unique actions from the
+six-command closed registry. Calibration tracks, evidence reasons, commands and
+action explanations are exact closed values. Unknown or caller-expanded text
+fails validation before the packet reaches Session Start.
+
+Historical detail remains behind its owning boundary:
+
+- Owner Context owns its current onboarding and task projection;
+- the Execution Ledger owns immutable revisions, checkpoints and explicit
+  history/export;
+- the memory engine owns capture retention, deterministic compaction and
+  versioned L1/L2/L3/lifetime rollups; and
+- lifecycle and maintenance receipt stores own receipt retention. Their exact
+  long-term retention policy remains a separate maintenance decision; until
+  accepted, continuous-use consumes only bounded presence, counts and the
+  unique closed event set, never receipt identities, timestamps or bodies.
+
+Continuous-use performs no retention or compaction itself and cannot copy
+historical detail into Session Start. Growth in a ledger, capture journal or
+receipt store therefore does not increase the shape or cardinality of this
+projection.
+
 ## Lifecycle behavior
 
 Session Start reads the projection only. It may state onboarding/calibration,
@@ -102,6 +130,9 @@ Local contract tests are reported separately from all four lifecycle fields.
   checkpoint state; multiple active items fail closed as ambiguous;
 - Session Start shows the same deterministic state and never exposes execution
   content;
+- maximal valid status remains within 4 KiB, while caller-defined labels,
+  reasons, commands and historical/receipt bodies fail closed before Session
+  Start;
 - context injection stores no prompt and only attested selected-skill IDs;
 - adapter receipts can set only `adapter_observed`; native remains unavailable;
 - top-level and Maestro status use the same projection;

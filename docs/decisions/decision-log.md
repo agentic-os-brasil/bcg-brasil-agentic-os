@@ -809,3 +809,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
  - Consequences: Maestro can re-orient deterministically across sessions without a competing work or memory authority, raw transcript retention, client leakage or repeated onboarding. An active item with no checkpoint becomes a visible checkpoint requirement; a valid checkpoint becomes an explicit bounded resume action. Direct hook execution and receipts remain adapter observation only, while native qualification still requires fresh attended runtime evidence. Weekly deep dreaming, lifetime promotion, model-backed checkpoint synthesis and canonical Owner Context facet changes remain outside this capability.
  - Refs: specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/015-session-context-packet.md; specs/019-nonblocking-hook-execution.md; specs/025-native-session-start-hook.md; specs/029-execution-ledger-v1.md; specs/044-continuous-use.md; internal/continuoususe
 - Supersedes: none
+
+## CUBD - Bound continuous-use state independently of history growth
+
+- Date: 2026-08-05
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A derived continuity status could remain content-safe yet still grow across sessions if it copied receipt lists, historical explanations, timestamps or caller-provided labels into Session Start. That would turn orientation state into another history channel and gradually consume the startup context budget.
+- Decision: Continuous-use status is a disposable projection with no append store and a 4 KiB serialization ceiling. It accepts only closed calibration/evidence enums and reason codes, fixed count fields, one opaque work pointer, two runtime rows, five unique lifecycle event IDs per runtime and unique commands from the six-action registry. Arbitrary reason, command, label, receipt/history or body text fails validation before Session Start. Retention and compaction remain owned by Owner Context, the versioned Execution Ledger, the memory engine and the lifecycle/maintenance receipt stores; continuous use consumes only bounded current-state projections from them.
+- Consequences: Ledger revisions, memory journals and receipt stores may grow or compact according to their own governed policies without growing Maestro's continuous status. Historical detail remains available only through explicit ledger/export, memory rollup or receipt inspection boundaries and cannot accumulate in Session Start state.
+- Refs: CONT; specs/015-session-context-packet.md; specs/044-continuous-use.md; internal/continuoususe; internal/sessionctx; internal/sessionhook
+- Supersedes: none

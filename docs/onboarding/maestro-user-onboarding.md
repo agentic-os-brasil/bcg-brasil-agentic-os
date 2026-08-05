@@ -321,6 +321,10 @@ Um runtime configurado ou um receipt local pode aparecer como `configured` ou
 permanece explícito até existir evidência nativa atendida para a versão exata.
 Nenhuma sessão fabrica checkpoint, injeta transcript ou promove memória para
 deep dreaming/lifetime automaticamente.
+Esse status não acumula sessões nem receipts: ele é recalculado em um formato
+fechado de até 4 KiB. O histórico continua no ledger versionado, e retenção e
+compactação continuam sob responsabilidade do ledger, da memória e dos stores
+de receipts correspondentes.
 
 Boas práticas:
 

@@ -4,6 +4,7 @@
 package continuoususe
 
 import (
+	"encoding/json"
 	"errors"
 	"sort"
 )
@@ -25,8 +26,27 @@ const (
 	ActionRepairWorkspace      = "repair_workspace"
 	ActionInspectContinuity    = "inspect_continuity"
 
+	ReasonNativePending            = "native_qualification_pending_or_unavailable"
+	ReasonContextInjectionPending  = "native_context_injection_pending"
+	ReasonSchedulerPending         = "native_scheduler_qualification_pending"
+	ReasonRuntimeProjectionMissing = "runtime_projection_or_bindings_not_installed"
+	ReasonNativeSessionPending     = "native_session_qualification_pending"
+	ReasonRuntimeNotConfigured     = "qualified_runtime_not_configured"
+	ReasonSourceUnavailable        = "continuous_use_source_unavailable"
+
+	MaximumSerializedStatusBytes = 4 << 10
+
 	activeExecutionPointer = "bcgos://execution/active"
 )
+
+var actionTemplates = map[string]NextAction{
+	ActionCompleteCalibration:  {ID: ActionCompleteCalibration, Command: "bcgos owner onboarding status", Reason: "finish or confirm the deterministic owner calibration before routing ordinary work"},
+	ActionCheckpointActiveWork: {ID: ActionCheckpointActiveWork, Command: "bcgos work next --active --workspace <workspace>", Reason: "resolve the active item, then write a bounded checkpoint before the next handoff"},
+	ActionResumeActiveWork:     {ID: ActionResumeActiveWork, Command: "bcgos work next --active --workspace <workspace>", Reason: "resolve the bounded checkpoint and resume through a new fenced attempt"},
+	ActionResolveAmbiguousWork: {ID: ActionResolveAmbiguousWork, Command: "bcgos work inspect --workspace <workspace> --item <id>", Reason: "multiple active items require an explicit item selection"},
+	ActionRepairWorkspace:      {ID: ActionRepairWorkspace, Command: "bcgos doctor <workspace>", Reason: "workspace readiness must be restored before continuity can be trusted"},
+	ActionInspectContinuity:    {ID: ActionInspectContinuity, Command: "bcgos maestro status <workspace>", Reason: "inspect the bounded continuity projection after source state changes"},
+}
 
 type Source struct {
 	WorkspaceState        string
@@ -143,39 +163,39 @@ func Build(source Source) (Status, error) {
 	}
 	sort.Slice(status.Runtimes, func(left, right int) bool { return status.Runtimes[left].Runtime < status.Runtimes[right].Runtime })
 	status.Signals = SignalEvidence{
-		CapabilityEvidence: evidence(anyRuntimeConfigured, source.AttestedSignalFiles > 0, false, "native context-injection evidence is pending"),
+		CapabilityEvidence: evidence(anyRuntimeConfigured, source.AttestedSignalFiles > 0, false, ReasonContextInjectionPending),
 		AttestedFiles:      source.AttestedSignalFiles,
 	}
-	status.Maintenance = evidence(source.MaintenanceConfigured, source.MaintenanceObserved, false, "native scheduler qualification is pending")
+	status.Maintenance = evidence(source.MaintenanceConfigured, source.MaintenanceObserved, false, ReasonSchedulerPending)
 
 	if source.WorkspaceState != "ready" && source.WorkspaceState != "warning" {
 		status.State = StateUnavailable
-		status.NextActions = append(status.NextActions, NextAction{ID: ActionRepairWorkspace, Command: "bcgos doctor <workspace>", Reason: "workspace readiness must be restored before continuity can be trusted"})
+		status.NextActions = append(status.NextActions, actionTemplates[ActionRepairWorkspace])
 	}
 	if source.CalibrationState != "complete" {
 		if status.State != StateUnavailable {
 			status.State = StateActionRequired
 		}
-		status.NextActions = append(status.NextActions, NextAction{ID: ActionCompleteCalibration, Command: "bcgos owner onboarding status", Reason: "finish or confirm the deterministic owner calibration before routing ordinary work"})
+		status.NextActions = append(status.NextActions, actionTemplates[ActionCompleteCalibration])
 	}
 	switch source.OpenWorkState {
 	case "ambiguous":
 		if status.State != StateUnavailable {
 			status.State = StateActionRequired
 		}
-		status.NextActions = append(status.NextActions, NextAction{ID: ActionResolveAmbiguousWork, Command: "bcgos work inspect --workspace <workspace> --item <id>", Reason: "multiple active items require an explicit item selection"})
+		status.NextActions = append(status.NextActions, actionTemplates[ActionResolveAmbiguousWork])
 	case "available":
 		if source.CheckpointState == "missing" {
 			if status.State != StateUnavailable {
 				status.State = StateActionRequired
 			}
-			status.NextActions = append(status.NextActions, NextAction{ID: ActionCheckpointActiveWork, Command: "bcgos work next --active --workspace <workspace>", Reason: "resolve the active item, then write a bounded checkpoint before the next handoff"})
+			status.NextActions = append(status.NextActions, actionTemplates[ActionCheckpointActiveWork])
 		} else {
-			status.NextActions = append(status.NextActions, NextAction{ID: ActionResumeActiveWork, Command: "bcgos work next --active --workspace <workspace>", Reason: "resolve the bounded checkpoint and resume through a new fenced attempt"})
+			status.NextActions = append(status.NextActions, actionTemplates[ActionResumeActiveWork])
 		}
 	}
 	if len(status.NextActions) == 0 {
-		status.NextActions = []NextAction{{ID: ActionInspectContinuity, Command: "bcgos maestro status <workspace>", Reason: "continuous use is ready; inspect again after meaningful state changes"}}
+		status.NextActions = []NextAction{actionTemplates[ActionInspectContinuity]}
 	}
 	if err := status.Validate(); err != nil {
 		return Status{}, err
@@ -246,17 +266,17 @@ func (status Status) Validate() error {
 	if len(status.NextActions) == 0 {
 		return errors.New("continuous-use status is missing a safe next action")
 	}
-	validActions := map[string]bool{
-		ActionCompleteCalibration: true, ActionCheckpointActiveWork: true,
-		ActionResumeActiveWork: true, ActionResolveAmbiguousWork: true,
-		ActionRepairWorkspace: true, ActionInspectContinuity: true,
-	}
 	seenActions := map[string]bool{}
 	for _, action := range status.NextActions {
-		if !validActions[action.ID] || seenActions[action.ID] || action.Command == "" || action.Reason == "" {
+		expected, valid := actionTemplates[action.ID]
+		if !valid || seenActions[action.ID] || action != expected {
 			return errors.New("continuous-use next action is invalid or duplicated")
 		}
 		seenActions[action.ID] = true
+	}
+	body, err := json.Marshal(status)
+	if err != nil || len(body) > MaximumSerializedStatusBytes {
+		return errors.New("continuous-use status exceeds its fixed serialization budget")
 	}
 	return nil
 }
@@ -278,7 +298,13 @@ func validateEvidence(value CapabilityEvidence) error {
 	if value.State != expectedState || value.Unavailable == value.NativeQualified {
 		return errors.New("continuous-use capability evidence is inconsistent")
 	}
-	if value.NativeQualified && value.Reason != "" || !value.NativeQualified && value.Reason == "" {
+	validReasons := map[string]bool{
+		ReasonNativePending: true, ReasonContextInjectionPending: true,
+		ReasonSchedulerPending: true, ReasonRuntimeProjectionMissing: true,
+		ReasonNativeSessionPending: true, ReasonRuntimeNotConfigured: true,
+		ReasonSourceUnavailable: true,
+	}
+	if value.NativeQualified && value.Reason != "" || !value.NativeQualified && !validReasons[value.Reason] {
 		return errors.New("continuous-use capability evidence reason is inconsistent")
 	}
 	return nil
@@ -286,7 +312,7 @@ func validateEvidence(value CapabilityEvidence) error {
 
 func evidence(configured, observed, qualified bool, reason string) CapabilityEvidence {
 	if !qualified && reason == "" {
-		reason = "native qualification evidence is pending or unavailable"
+		reason = ReasonNativePending
 	}
 	result := CapabilityEvidence{
 		State: EvidenceUnavailable, Configured: configured, AdapterObserved: observed,
@@ -312,8 +338,10 @@ func validateSource(source Source) error {
 	default:
 		return errors.New("continuous-use calibration state is invalid")
 	}
-	if source.CalibrationTrack == "" {
-		return errors.New("continuous-use calibration track is required")
+	switch source.CalibrationTrack {
+	case "selection_required", "quick", "complete":
+	default:
+		return errors.New("continuous-use calibration track is invalid")
 	}
 	switch source.OpenTasksState {
 	case "available", "empty", "unavailable":

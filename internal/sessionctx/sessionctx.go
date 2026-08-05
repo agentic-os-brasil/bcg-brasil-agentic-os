@@ -242,12 +242,12 @@ func Build(sources Sources) Packet {
 				OpenWork:    continuoususe.OpenWork{State: execution.ActivePointerUnavailable, CheckpointState: execution.CheckpointUnavailable},
 				Memory:      continuoususe.MemoryStatus{State: "unavailable"},
 				Signals: continuoususe.SignalEvidence{CapabilityEvidence: continuoususe.CapabilityEvidence{
-					State: continuoususe.EvidenceUnavailable, Unavailable: true, Reason: "continuous-use source state is unavailable",
+					State: continuoususe.EvidenceUnavailable, Unavailable: true, Reason: continuoususe.ReasonSourceUnavailable,
 				}},
 				Maintenance: continuoususe.CapabilityEvidence{
-					State: continuoususe.EvidenceUnavailable, Unavailable: true, Reason: "continuous-use source state is unavailable",
+					State: continuoususe.EvidenceUnavailable, Unavailable: true, Reason: continuoususe.ReasonSourceUnavailable,
 				},
-				NextActions: []continuoususe.NextAction{{ID: continuoususe.ActionInspectContinuity, Command: "bcgos maestro status <workspace>", Reason: "continuous-use source state is unavailable"}},
+				NextActions: []continuoususe.NextAction{{ID: continuoususe.ActionInspectContinuity, Command: "bcgos maestro status <workspace>", Reason: "inspect the bounded continuity projection after source state changes"}},
 			}
 		}
 	}

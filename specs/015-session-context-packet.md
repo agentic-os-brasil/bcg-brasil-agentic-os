@@ -117,3 +117,6 @@ qualifying native-session protocol succeeds.
   can no longer mutate the item.
 - continuous-use evidence ordering is revalidated after serialization; a
   forged native-qualified flag or non-portable execution pointer fails closed.
+- the continuous-use subprojection remains within its independent 4 KiB
+  ceiling and rejects arbitrary labels, action text, receipt/history bodies or
+  cardinality growth before Session Start serialization.

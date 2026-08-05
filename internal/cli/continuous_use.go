@@ -122,12 +122,12 @@ func continuousRuntimeEvidence(root string, inspection workspace.Inspection) []c
 	result := make([]continuoususe.RuntimeSource, 0, 2)
 	for _, runtimeName := range []string{"claude", "codex"} {
 		configured := false
-		reason := "exact runtime projection and lifecycle bindings are not installed"
+		reason := continuoususe.ReasonRuntimeProjectionMissing
 		adapterStatus, adapterErr := adaptercfg.Inspect(runtimeName, inspection.WorkspacePath)
 		projectionStatus, projectionErr := runtimeprojection.Inspect(runtimeName, inspection.WorkspacePath)
 		if adapterErr == nil && projectionErr == nil && adapterStatus.State == "installed" && projectionStatus.State == "installed" {
 			configured = true
-			reason = "qualifying native-session evidence is pending"
+			reason = continuoususe.ReasonNativeSessionPending
 		}
 		summary, summaryErr := lifecycle.DiagnoseRuntime(root, inspection.WorkspaceID, runtimeName)
 		observed := summaryErr == nil && summary.State == "observed"
@@ -139,7 +139,7 @@ func continuousRuntimeEvidence(root string, inspection workspace.Inspection) []c
 		}
 		if nativeQualified && !configured {
 			nativeQualified = false
-			reason = "the previously qualified runtime is not currently configured for this workspace"
+			reason = continuoususe.ReasonRuntimeNotConfigured
 		}
 		result = append(result, continuoususe.RuntimeSource{
 			Runtime: runtimeName, Configured: configured, AdapterObserved: observed,

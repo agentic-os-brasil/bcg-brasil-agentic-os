@@ -74,6 +74,17 @@ func TestSessionStartTruncatesMemoryBeforeDroppingThePointerPacket(t *testing.T)
 	}
 }
 
+func TestSessionStartRejectsHistoricalBodySmuggledIntoContinuousStatus(t *testing.T) {
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+	})
+	packet.ContinuousUse.NextActions[0].Reason = strings.Repeat("historical receipt body ", MaximumAdditionalContextBytes)
+	if _, err := BuildCodex(packet); err == nil {
+		t.Fatal("Session Start accepted unbounded historical detail in continuous status")
+	}
+}
+
 func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T) {
 	pending := sessionctx.Packet{WorkspaceRoot: "/Users/pilot/Developer/maestro-os", Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", NextQuestion: "What is your professional role?"}}}
 	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING IS NOT COMPLETE") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore prior persona") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {

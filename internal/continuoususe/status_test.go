@@ -122,3 +122,67 @@ func TestValidateRejectsTamperedEvidenceAndExecutionMetadata(t *testing.T) {
 		t.Fatal("non-portable execution pointer was accepted")
 	}
 }
+
+func TestStatusRejectsUnboundedLabelsReasonsAndHistoricalPayloads(t *testing.T) {
+	status, err := Build(Source{
+		WorkspaceState: "ready", CalibrationState: "complete", CalibrationTrack: "quick",
+		OpenTasksState: "empty", OpenWorkState: "unavailable", MemoryState: "empty",
+		Runtimes: []RuntimeSource{{Runtime: "claude", Configured: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tampered := status
+	tampered.Calibration.Track = strings.Repeat("history-", 1024)
+	if err := tampered.Validate(); err == nil {
+		t.Fatal("unbounded calibration label was accepted")
+	}
+	tampered = status
+	tampered.NextActions = append([]NextAction(nil), status.NextActions...)
+	tampered.NextActions[0].Reason = strings.Repeat("receipt body ", 1024)
+	if err := tampered.Validate(); err == nil {
+		t.Fatal("historical body was accepted through a next-action reason")
+	}
+	tampered = status
+	tampered.Runtimes = append([]RuntimeEvidence(nil), status.Runtimes...)
+	tampered.Runtimes[0].Reason = strings.Repeat("receipt body ", 1024)
+	if err := tampered.Validate(); err == nil {
+		t.Fatal("historical body was accepted through runtime evidence")
+	}
+	if _, err := Build(Source{
+		WorkspaceState: "ready", CalibrationState: "complete", CalibrationTrack: "custom-track-with-unbounded-label",
+		OpenTasksState: "empty", OpenWorkState: "unavailable", MemoryState: "empty",
+	}); err == nil {
+		t.Fatal("caller-defined calibration track was accepted")
+	}
+}
+
+func TestMaximalStatusHasFixedCompactShapeWithoutHistoryOrReceiptBodies(t *testing.T) {
+	events := []string{"session_start", "context_inject", "pre_action_guard", "post_action_observe", "stop_finalize"}
+	status, err := Build(Source{
+		WorkspaceState: "unavailable", CalibrationState: "required", CalibrationTrack: "selection_required",
+		OpenTasksState: "available", OpenTasksCount: int(^uint(0) >> 1),
+		OpenWorkState: "ambiguous", MemoryState: "available", AttestedSignalFiles: int(^uint(0) >> 1),
+		MaintenanceConfigured: true, MaintenanceObserved: true,
+		Runtimes: []RuntimeSource{
+			{Runtime: "claude", Configured: true, AdapterObserved: true, ObservedEvents: events, UnavailableReason: ReasonNativeSessionPending},
+			{Runtime: "codex", Configured: true, AdapterObserved: true, ObservedEvents: events, UnavailableReason: ReasonNativeSessionPending},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) > MaximumSerializedStatusBytes {
+		t.Fatalf("bounded status grew to %d bytes: %s", len(body), body)
+	}
+	for _, prohibited := range []string{"receipt_body", "receipt_history", "checkpoint_body", "objective", "item_id", "attempt_id", "transcript"} {
+		if strings.Contains(string(body), prohibited) {
+			t.Fatalf("bounded status exposed %q: %s", prohibited, body)
+		}
+	}
+}

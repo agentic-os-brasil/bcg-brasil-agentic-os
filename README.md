@@ -164,6 +164,9 @@ active-work pointer, checkpoint presence, generated-memory state, attested
 capture-v2 count, maintenance state and one safe next action. Session Start
 renders the same bounded status. It never injects an execution item ID,
 objective, checkpoint body, transcript, client content or local path.
+The status is rebuilt on every read, capped at 4 KiB and has no receipt/history
+store: growing ledgers and journals remain behind their versioned authorities
+and cannot grow Session Start state.
 
 For work that crosses sessions, write an explicit bounded checkpoint and pause.
 The next session can resolve it with `bcgos work next --active --workspace
