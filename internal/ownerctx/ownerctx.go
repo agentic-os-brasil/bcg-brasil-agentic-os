@@ -264,7 +264,7 @@ func Initialize(root string) (Status, error) {
 			changed = true
 		}
 		if changed {
-			if err := writePrivateJSON(path, value); err != nil {
+			if err := writeOwnerRegistry(root, value); err != nil {
 				return Status{}, err
 			}
 		}
@@ -426,7 +426,7 @@ func SelectOnboardingTrack(root, track string) (Status, error) {
 	value.OnboardingTrack = track
 	value.OnboardingConfirmedAt = ""
 	value.OnboardingConfirmedSHA256 = ""
-	if err := writePrivateJSON(filepath.Join(root, "owner", "registry.json"), value); err != nil {
+	if err := writeOwnerRegistry(root, value); err != nil {
 		return Status{}, err
 	}
 	return Inspect(root)
@@ -482,7 +482,7 @@ func ConfirmOnboarding(root, expectedDigest string) (Status, error) {
 	}
 	value.OnboardingConfirmedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	value.OnboardingConfirmedSHA256 = status.ReviewDigest
-	if err := writePrivateJSON(filepath.Join(root, "owner", "registry.json"), value); err != nil {
+	if err := writeOwnerRegistry(root, value); err != nil {
 		return Status{}, err
 	}
 	return Inspect(root)

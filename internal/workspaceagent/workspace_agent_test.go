@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -47,6 +48,9 @@ func TestInspectRequiresAllProtectedDependencies(t *testing.T) {
 }
 
 func TestRegistryRejectsPermissiveAndTrailingJSON(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not enforced on Windows")
+	}
 	root := t.TempDir()
 	if _, err := Initialize(root, "ws-123"); err != nil {
 		t.Fatal(err)

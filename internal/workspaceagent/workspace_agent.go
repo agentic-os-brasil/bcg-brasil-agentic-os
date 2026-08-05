@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -203,7 +204,7 @@ func capabilities() map[string]string {
 
 func pointer(root, relative string) Pointer {
 	info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(relative)))
-	return Pointer{Path: relative, Available: err == nil && info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0 && info.Mode().Perm()&0o077 == 0}
+	return Pointer{Path: relative, Available: err == nil && info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0 && (runtime.GOOS == "windows" || info.Mode().Perm()&0o077 == 0)}
 }
 
 func requiredPointer(root, relative string) (Pointer, error) {
@@ -219,7 +220,7 @@ func requiredPointer(root, relative string) (Pointer, error) {
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return Pointer{}, errors.New("workspace agent dependency must be a regular non-symlink file")
 	}
-	if info.Mode().Perm()&0o077 != 0 {
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		return Pointer{}, errors.New("workspace agent dependency must be owner-only (0600 or stricter)")
 	}
 	return p, nil
@@ -268,7 +269,7 @@ func loadRegistry(path string) (registry, error) {
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return registry{}, errors.New("workspace agent registry must be a regular non-symlink file")
 	}
-	if info.Size() <= 0 || info.Size() > maximumWorkspaceAgentRegistryBytes || info.Mode().Perm()&0o077 != 0 {
+	if info.Size() <= 0 || info.Size() > maximumWorkspaceAgentRegistryBytes || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
 		return registry{}, errors.New("workspace agent registry must be a bounded owner-only file")
 	}
 	file, err := os.Open(path)
