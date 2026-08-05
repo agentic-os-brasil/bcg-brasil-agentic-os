@@ -2288,6 +2288,7 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 		Profile: profileState, Workspace: inspection, Owner: owner,
 		Atlas:     atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 		Execution: activeExecution,
+		Memory:    sessionMemorySource(root, inspection.WorkspaceID),
 	})
 	if err := packet.Validate(); err != nil {
 		return reportError(errOut, err)
@@ -2328,7 +2329,7 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID})})
+	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Memory: sessionMemorySource(root, inspection.WorkspaceID)})
 	result, err := sessionresolve.Resolve(root, *pointer, *purpose, packet, *budget)
 	if err != nil {
 		return reportError(errOut, err)
@@ -2552,7 +2553,8 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	}
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner,
-		Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		Atlas:  atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		Memory: sessionMemorySource(root, inspection.WorkspaceID),
 	})
 	if err := enrichOnboardingGuide(&packet, *runtimeName, inspection.WorkspacePath); err != nil {
 		return reportError(errOut, err)
@@ -2682,7 +2684,8 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		}
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner,
-			Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+			Atlas:  atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+			Memory: sessionMemorySource(root, inspection.WorkspaceID),
 		})
 		if action == "context-injection" {
 			if err := enrichContextPacket(&packet, "codex", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
@@ -2841,7 +2844,8 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		}
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner,
-			Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+			Atlas:  atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+			Memory: sessionMemorySource(root, inspection.WorkspaceID),
 		})
 		if action == "context-injection" {
 			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
