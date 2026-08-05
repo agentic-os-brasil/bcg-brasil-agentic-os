@@ -383,6 +383,12 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	statePath := filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")
+	// Workspace bootstrap now creates the initial valid state eagerly. Remove
+	// it here so this test can inject the malicious symlink it is meant to
+	// reject.
+	if err := os.Remove(statePath); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Symlink(outside, statePath); err != nil {
 		t.Fatal(err)
 	}
@@ -402,6 +408,29 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 	code = runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
 	if code == ExitOK || !strings.Contains(output.String(), "decode orchestration state") {
 		t.Fatalf("malformed state accepted: exit=%d output=%s", code, output.String())
+	}
+}
+
+func TestInstalledHookRejectsMissingOrchestrationStateWithRemediation(t *testing.T) {
+	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspacePath, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	if err := os.Remove(filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
+	if code == ExitOK || !strings.Contains(output.String(), "orchestration state is missing") || !strings.Contains(output.String(), "bcgos init") {
+		t.Fatalf("missing state accepted without remediation: exit=%d output=%s", code, output.String())
 	}
 }
 
@@ -611,7 +640,7 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 			}
 			completeQuickOwnerOnboarding(t, dataRoot)
 			output.Reset()
-			if code := runAdapter([]string{"install", "--runtime", runtimeName, workspacePath}, &output, &output); code != ExitOK {
+			if code := runAdapterWithDataRoot([]string{"install", "--runtime", runtimeName, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
 				t.Fatalf("adapter install = %d %s", code, output.String())
 			}
 
@@ -769,11 +798,31 @@ func completeQuickOwnerOnboarding(t *testing.T, root string) {
 	}
 }
 
+func TestAdapterInstallBootstrapsARequestedNewWorkspacePath(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "new-workspace")
+	var output bytes.Buffer
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("new workspace adapter install = %d %s", code, output.String())
+	}
+	if _, err := os.Stat(filepath.Join(workspacePath, ".bcgos", "workspace.json")); err != nil {
+		t.Fatalf("new workspace manifest missing: %v", err)
+	}
+}
+
 func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 	workspacePath := t.TempDir()
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
 	var output bytes.Buffer
-	if code := runAdapter([]string{"install", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "installed"`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "installed"`) {
 		t.Fatalf("install = %d %s", code, output.String())
+	}
+	if _, err := os.Stat(filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")); err != nil {
+		t.Fatalf("orchestration state was not bootstrapped: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataRoot, "owner", "registry.json")); err != nil {
+		t.Fatalf("owner context was not bootstrapped: %v", err)
 	}
 	if body, err := os.ReadFile(filepath.Join(workspacePath, "AGENTS.md")); err != nil || !strings.Contains(string(body), "Memória e persistência") {
 		t.Fatalf("runtime orientation = %q, %v", body, err)
@@ -782,8 +831,97 @@ func TestAdapterCommandsInstallAndRemoveOnlyOwnedEntry(t *testing.T) {
 		t.Fatalf("installed skill = %q, %v", body, err)
 	}
 	output.Reset()
-	if code := runAdapter([]string{"uninstall", "--runtime", "codex", workspacePath}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "removed"`) {
+	if code := runAdapterWithDataRoot([]string{"uninstall", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "removed"`) {
 		t.Fatalf("remove = %d %s", code, output.String())
+	}
+}
+
+func TestAdapterInstallRepairsMissingStateBeforeSessionHook(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	statePath := filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")
+	if err := os.Remove(statePath); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("adapter install did not repair state: %d %s", code, output.String())
+	}
+	if _, err := os.Stat(statePath); err != nil {
+		t.Fatalf("repaired state missing: %v", err)
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"claude", "session-start", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) {
+		t.Fatalf("session hook after repair = %d %s", code, output.String())
+	}
+}
+
+func TestAdapterInstallPreservesAuthorizedSynchronizedWorkspace(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "OneDrive", "workspace")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: dataRoot, AllowSynchronizedRoot: true}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("authorized synchronized install = %d %s", code, output.String())
+	}
+}
+
+func TestAdapterInstallRejectsRedirectedBootstrapRegistries(t *testing.T) {
+	tests := []struct {
+		name string
+		path func(dataRoot string, workspacePath string) string
+	}{
+		{name: "owner", path: func(dataRoot, _ string) string { return filepath.Join(dataRoot, "owner", "registry.json") }},
+		{name: "workspace agent", path: func(dataRoot, workspacePath string) string {
+			inspection, err := workspace.Inspect(workspacePath, dataRoot)
+			if err != nil {
+				return ""
+			}
+			return filepath.Join(dataRoot, "workspaces", inspection.WorkspaceID, "agent", "agent.json")
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+			workspacePath := t.TempDir()
+			var output bytes.Buffer
+			if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+				t.Fatal(output.String())
+			}
+			registryPath := test.path(dataRoot, workspacePath)
+			if registryPath == "" {
+				t.Fatal("test registry path is empty")
+			}
+			outside := filepath.Join(t.TempDir(), "registry.json")
+			body, err := os.ReadFile(registryPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(outside, body, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Remove(registryPath); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(outside, registryPath); err != nil {
+				t.Skipf("symlink unavailable: %v", err)
+			}
+			output.Reset()
+			if code := runAdapterWithDataRoot([]string{"install", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK {
+				t.Fatalf("redirected %s registry was accepted: %s", test.name, output.String())
+			}
+		})
 	}
 }
 
@@ -1994,6 +2132,24 @@ func TestDoctorExplainsUninitializedWorkspace(t *testing.T) {
 	code := runDoctor([]string{filepath.Join(root, "not-initialized")}, &output, &output, func() (string, error) { return filepath.Join(root, "local", "BCGOS"), nil }, func(string) bool { return false })
 	if code != ExitOK || !strings.Contains(output.String(), `"state": "action_required"`) || !strings.Contains(output.String(), "bcgos init") {
 		t.Fatalf("doctor exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestDoctorExplainsMissingRuntimeDependencies(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	if err := os.Remove(filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, func(string) bool { return true }); code != ExitOK ||
+		!strings.Contains(output.String(), `"id": "runtime_dependencies"`) || !strings.Contains(output.String(), `"state": "action_required"`) || !strings.Contains(output.String(), "bcgos init") {
+		t.Fatalf("doctor did not expose missing dependencies: exit=%d output=%s", code, output.String())
 	}
 }
 

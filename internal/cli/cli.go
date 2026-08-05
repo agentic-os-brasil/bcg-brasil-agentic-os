@@ -66,7 +66,7 @@ var Version = "0.0.0-dev"
 const maximumOwnerFacetBytes = 1 << 20
 const maximumWorkspaceAgentBytes = 1 << 20
 const maximumWorkContractBytes = 32 << 10
-const maximumOrchestrationStateBytes = 64 << 10
+const maximumOrchestrationStateBytes = agentorchestration.MaximumDurableStateBytes
 const installedOrchestrationStatePath = ".bcgos/maestro-orchestration-state.json"
 
 var enqueueHookPresenceWake = func(workspaceID string) error {
@@ -487,6 +487,9 @@ func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 	}
 	if err != nil {
 		return reportError(errOut, err)
+	}
+	if _, err := ownerctx.Initialize(root); err != nil {
+		return reportError(errOut, fmt.Errorf("bootstrap owner context: %w", err))
 	}
 	agent, err := workspaceagent.Initialize(root, result.WorkspaceID)
 	if err != nil {
@@ -1359,6 +1362,37 @@ type doctorCheck struct {
 	Message string `json:"message"`
 }
 
+func runtimeDependencyCheck(root string, inspection workspace.Inspection) (doctorCheck, string) {
+	if inspection.WorkspaceID == "" {
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: "workspace dependencies are unavailable until bcgos init completes"}, "Run bcgos init <local-workspace-path>."
+	}
+	if _, err := resolveHookOrchestrationState(inspection, installedOrchestrationStatePath); err != nil {
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to repair the local runtime bootstrap."
+	}
+	owner, err := ownerctx.Inspect(root)
+	if err != nil || !owner.Initialized {
+		if err == nil {
+			err = errors.New("owner context is not initialized")
+		}
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to create the owner context."
+	}
+	workspaceAgent, err := workspaceagent.Inspect(root, inspection.WorkspaceID)
+	if err != nil || !workspaceAgent.Initialized {
+		if err == nil {
+			err = errors.New("workspace agent is not initialized")
+		}
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to create the workspace agent."
+	}
+	status, err := agentscaffold.Inspect(root, agentscaffold.WorkspaceRequest(inspection.WorkspaceID).AgentID)
+	if err != nil || !status.Initialized {
+		if err == nil {
+			err = errors.New("workspace agent scaffold is not initialized")
+		}
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to create the agent scaffold."
+	}
+	return doctorCheck{ID: "runtime_dependencies", State: "pass", Message: "durable state, owner context and agent scaffolds are ready"}, ""
+}
+
 func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, error), available func(string) bool) int {
 	path, code := oneOptionalPath("doctor", args, errOut)
 	if code != ExitOK {
@@ -1372,6 +1406,7 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	dependencyCheck, dependencyAction := runtimeDependencyCheck(root, inspection)
 	profileState, err := resolveProfile(root, "", false)
 	if err != nil {
 		return reportError(errOut, err)
@@ -1408,6 +1443,7 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 	releaseCapability := defaultReleaseCapability()
 	checks := []doctorCheck{
 		workspaceCheck,
+		dependencyCheck,
 		{ID: "local_data", State: "pass", Message: "private BCGOS data is separated from the workspace"},
 		interactionProfileCheck(profileState),
 		runtimeCheck("claude_code", "claude", available),
@@ -1430,6 +1466,12 @@ func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, er
 			state = "action_required"
 		}
 		nextActions = append(nextActions, "Install or open Claude Code or Codex before starting an assisted session.")
+	}
+	if dependencyAction != "" {
+		if state == "ready" {
+			state = "action_required"
+		}
+		nextActions = append(nextActions, dependencyAction)
 	}
 	if len(nextActions) == 0 {
 		nextActions = append(nextActions, "Open Claude Code or Codex in this workspace to begin guided onboarding.")
@@ -2618,22 +2660,20 @@ func resolveHookOrchestrationState(inspection workspace.Inspection, pointer stri
 		if stateInfo.Size() <= 0 || stateInfo.Size() > maximumOrchestrationStateBytes {
 			return hookOrchestrationState{}, errors.New("orchestration state must be a non-empty bounded JSON file")
 		}
+		if stateInfo.Mode().Perm()&0o077 != 0 {
+			return hookOrchestrationState{}, errors.New("orchestration state must be owner-only (0600 or stricter)")
+		}
 		file, openErr := os.Open(statePath)
 		if openErr != nil {
 			return hookOrchestrationState{}, fmt.Errorf("open orchestration state: %w", openErr)
 		}
-		decoder := json.NewDecoder(io.LimitReader(file, maximumOrchestrationStateBytes+1))
-		decoder.DisallowUnknownFields()
-		var snapshot agentorchestration.StateSnapshot
-		decodeErr := decoder.Decode(&snapshot)
+		body, readErr := io.ReadAll(io.LimitReader(file, maximumOrchestrationStateBytes+1))
+		decodeErr := readErr
 		if decodeErr == nil {
-			var trailing any
-			if trailingErr := decoder.Decode(&trailing); !errors.Is(trailingErr, io.EOF) {
-				if trailingErr == nil {
-					decodeErr = errors.New("orchestration state contains multiple JSON values")
-				} else {
-					decodeErr = trailingErr
-				}
+			if int64(len(body)) > maximumOrchestrationStateBytes {
+				decodeErr = errors.New("orchestration state exceeds the bounded JSON limit")
+			} else {
+				_, decodeErr = agentorchestration.DecodeStateSnapshot(body)
 			}
 		}
 		closeErr := file.Close()
@@ -2643,7 +2683,9 @@ func resolveHookOrchestrationState(inspection workspace.Inspection, pointer stri
 		if closeErr != nil {
 			return hookOrchestrationState{}, fmt.Errorf("close orchestration state: %w", closeErr)
 		}
-	} else if !errors.Is(statErr, os.ErrNotExist) {
+	} else if errors.Is(statErr, os.ErrNotExist) {
+		return hookOrchestrationState{}, errors.New("orchestration state is missing; run bcgos init for this workspace before opening the runtime")
+	} else {
 		return hookOrchestrationState{}, fmt.Errorf("inspect orchestration state: %w", statErr)
 	}
 	store, err := agentorchestration.NewDurableStateStore(statePath, lifecycle.IdempotencyKey("hook-store-reader", inspection.WorkspaceID))
@@ -3258,6 +3300,32 @@ func runAdapter(args []string, out, errOut io.Writer) int {
 	return runAdapterWithDataRoot(args, out, errOut, defaultDataRoot)
 }
 
+// bootstrapAdapterDependencies makes the standalone adapter command safe to
+// use as an installation entry point too. It is idempotent and data-free: the
+// workspace state, owner registry and agent scaffolds are created, but no
+// onboarding answer or external content is inferred or ingested.
+func bootstrapAdapterDependencies(root, workspacePath string) error {
+	inspection, err := workspace.Inspect(workspacePath, root)
+	if err != nil {
+		return fmt.Errorf("inspect workspace before bootstrap: %w", err)
+	}
+	allowSynchronized := inspection.State == "warning" && inspection.WorkspaceID != "" && inspection.MetadataStatus == "valid"
+	result, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root, AllowSynchronizedRoot: allowSynchronized})
+	if err != nil {
+		return fmt.Errorf("bootstrap workspace: %w", err)
+	}
+	if _, err := ownerctx.Initialize(root); err != nil {
+		return fmt.Errorf("bootstrap owner context: %w", err)
+	}
+	if _, err := workspaceagent.Initialize(root, result.WorkspaceID); err != nil {
+		return fmt.Errorf("bootstrap workspace agent: %w", err)
+	}
+	if _, err := agentscaffold.Scaffold(root, agentscaffold.WorkspaceRequest(result.WorkspaceID)); err != nil {
+		return fmt.Errorf("bootstrap agent scaffold: %w", err)
+	}
+	return nil
+}
+
 func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 || (args[0] != "install" && args[0] != "uninstall" && args[0] != "status" && args[0] != "verify") {
 		fmt.Fprintln(errOut, "usage: bcgos adapter <install|uninstall|status|verify> --runtime claude|codex [workspace-path]")
@@ -3365,6 +3433,9 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 			return reportError(errOut, err)
 		}
 		if err = runtimeprojection.ValidateInstallForTracks(*runtimeName, path, tracks); err != nil {
+			return reportError(errOut, err)
+		}
+		if err = bootstrapAdapterDependencies(root, path); err != nil {
 			return reportError(errOut, err)
 		}
 		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)

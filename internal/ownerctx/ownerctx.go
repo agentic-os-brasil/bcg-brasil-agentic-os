@@ -274,10 +274,17 @@ func Initialize(root string) (Status, error) {
 
 func Inspect(root string) (Status, error) {
 	path := filepath.Join(root, "owner", "registry.json")
-	file, err := os.ReadFile(path)
+	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return emptyStatus(), nil
 	}
+	if err != nil {
+		return Status{}, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return Status{}, errors.New("owner context registry must be a regular non-symlink file")
+	}
+	file, err := os.ReadFile(path)
 	if err != nil {
 		return Status{}, err
 	}
