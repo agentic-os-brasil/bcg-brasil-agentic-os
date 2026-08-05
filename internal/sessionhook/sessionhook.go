@@ -107,7 +107,7 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 		// verbose warning. Do not fail the session or truncate JSON mid-document:
 		// return a valid, explicit omission that directs the runtime to the normal
 		// packet command instead.
-		return "Maestro bounded session context omitted: packet exceeded the native hook output budget. Use `bcgos session packet` for the complete pointer-only packet.", nil
+		return "Maestro bounded session context omitted: packet exceeded the native hook output budget. Use " + commandFor(packet, "bcgos session packet") + " for the complete pointer-only packet.", nil
 	}
 	if semanticEvent == "session_start" && packet.Memory.State == "available" && len(packet.Memory.Sections) > 0 {
 		memoryContext := renderMemoryContext(packet.Memory)
@@ -222,7 +222,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 		case priorwork.SourceDeferred:
 			lines = append(lines, "Guided SharePoint source setup was deferred by the owner. Do not ask again automatically; offer it only when the owner requests prior-work or project-source setup.")
 		case priorwork.SourceSelectionUnavailable:
-			lines = append(lines, "Guided SharePoint source status is unavailable. Say this plainly and point to `bcgos prior-work source status --workspace <workspace>`; do not discover or collect any SharePoint content.")
+			lines = append(lines, "Guided SharePoint source status is unavailable. Say this plainly and point to "+commandFor(packet, "bcgos prior-work source status --workspace <workspace>")+"; do not discover or collect any SharePoint content.")
 		}
 	}
 	lines = appendContinuousUseDirective(lines, packet)

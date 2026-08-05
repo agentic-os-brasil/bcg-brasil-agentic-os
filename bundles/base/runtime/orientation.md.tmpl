@@ -88,15 +88,17 @@ fluxo afetado, explique a lacuna e ofereça uma alternativa segura.
 
 O SessionStart injeta o caminho exato do CLI instalado para a sessão. Use esse
 caminho nos comandos de onboarding; não presuma que `bcgos` esteja no `PATH`.
+Nos exemplos abaixo, `<maestro-cli>` é um placeholder: substitua-o pelo caminho
+exato recebido no SessionStart; nunca execute o placeholder literalmente.
 
 ```text
-bcgos status <workspace>
-bcgos doctor <workspace>
-bcgos profile show
-bcgos skills index
-bcgos session packet <workspace>
-bcgos memory status --data-dir <data-dir> --workspace <id>
-bcgos adapter status --runtime {{RUNTIME_ID}} <workspace>
+<maestro-cli> status <workspace>
+<maestro-cli> doctor <workspace>
+<maestro-cli> profile show
+<maestro-cli> skills index
+<maestro-cli> session packet <workspace>
+<maestro-cli> memory status --data-dir <data-dir> --workspace <id>
+<maestro-cli> adapter status --runtime {{RUNTIME_ID}} <workspace>
 ```
 
 Use o caminho exato injetado na sessão quando o estado estiver confuso. Um estado `unavailable`

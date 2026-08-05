@@ -121,6 +121,12 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	if got := sessionDirective(deferred); strings.Contains(got, "Você quer indicar as pastas autorizadas") || !strings.Contains(got, "was deferred") {
 		t.Fatalf("deferred directive = %q", got)
 	}
+	unavailable := active
+	unavailable.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
+	unavailable.SharePointSource = sessionctx.SharePointSource{State: priorwork.SourceSelectionUnavailable}
+	if got := sessionDirective(unavailable); !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" prior-work source status`) || strings.Contains(got, "`bcgos prior-work source status") {
+		t.Fatalf("unavailable source directive = %q", got)
+	}
 	reviewDigest := strings.Repeat("a", 64)
 	review := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "review_required", ReviewDigest: reviewDigest}}}
 	if got := sessionDirective(review); !strings.Contains(got, "--digest "+reviewDigest+" --confirm") || !strings.Contains(got, "Only after the owner confirms") {
