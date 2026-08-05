@@ -1495,9 +1495,9 @@ func TestAgentIdentityInterviewAndPersonalizationAreExplicit(t *testing.T) {
 		!strings.Contains(output.String(), `"client_account_agent"`) {
 		t.Fatalf("identity interview = %d, output = %s", code, output.String())
 	}
-	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"updated_at":"2026-07-28T00:00:00Z","capability_tracks":["software-engineering"],"selections":[{"role":"client_account_agent","agent_id":"client-account-agent-acme","display_name":"Compass","emoji":"🧭","owner_id":"daniel","ownership_scope":"account"},{"role":"case_agent","agent_id":"case-agent-pricing","display_name":"Forge","emoji":"⚙️","owner_id":"daniel","ownership_scope":"case"}]}`
+	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"updated_at":"2026-07-28T00:00:00Z","capability_tracks":["software-engineering"],"selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"daniel","ownership_scope":"system"},{"role":"client_account_agent","agent_id":"client-account-agent-acme","display_name":"Compass","emoji":"🧭","owner_id":"daniel","ownership_scope":"account"},{"role":"case_agent","agent_id":"case-agent-pricing","display_name":"Forge","emoji":"⚙️","owner_id":"daniel","ownership_scope":"case"}]}`
 	output.Reset()
-	if code := runAgentWithInput([]string{"personalize", "--stdin"}, strings.NewReader(profile), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"display_name": "Compass"`) {
+	if code := draftAndConfirmAgentProfile(t, dataRoot, profile, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "applied"`) {
 		t.Fatalf("identity personalize = %d, output = %s", code, output.String())
 	}
 	output.Reset()
@@ -1515,7 +1515,7 @@ func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
 	}
 	var output bytes.Buffer
 	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"capability_tracks":["software-engineering"],"selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"daniel","ownership_scope":"system"}]}`
-	if code := runAgentWithInput([]string{"personalize", "--stdin"}, strings.NewReader(profile), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+	if code := draftAndConfirmAgentProfile(t, dataRoot, profile, &output); code != ExitOK {
 		t.Fatalf("personalize = %d %s", code, output.String())
 	}
 	output.Reset()
@@ -1538,7 +1538,7 @@ func TestInterviewSelectionActivatesDataProjection(t *testing.T) {
 	}
 	var output bytes.Buffer
 	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"capability_tracks":["data-science"],"selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"daniel","ownership_scope":"system"}]}`
-	if code := runAgentWithInput([]string{"personalize", "--stdin"}, strings.NewReader(profile), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+	if code := draftAndConfirmAgentProfile(t, dataRoot, profile, &output); code != ExitOK {
 		t.Fatalf("data personalize = %d %s", code, output.String())
 	}
 	output.Reset()
@@ -1550,6 +1550,21 @@ func TestInterviewSelectionActivatesDataProjection(t *testing.T) {
 			t.Fatalf("data selection did not project all skills; missing %s: %v", skillID, err)
 		}
 	}
+}
+
+func draftAndConfirmAgentProfile(t *testing.T, dataRoot, profile string, output *bytes.Buffer) int {
+	t.Helper()
+	output.Reset()
+	code := runAgentWithInput([]string{"personalize", "draft", "--stdin", "--consent", "--no-client-data"}, strings.NewReader(profile), output, output, func() (string, error) { return dataRoot, nil })
+	if code != ExitOK {
+		return code
+	}
+	var draft agentidentity.ProfileDraft
+	if err := json.Unmarshal(output.Bytes(), &draft); err != nil {
+		t.Fatalf("decode identity draft: %v (%s)", err, output.String())
+	}
+	output.Reset()
+	return runAgentWithInput([]string{"personalize", "confirm", "--id", draft.ID, "--digest", draft.ReviewDigest, "--confirm"}, strings.NewReader(""), output, output, func() (string, error) { return dataRoot, nil })
 }
 
 func TestDarwinHeadlessHousekeepingUsesTheScopedAgentContract(t *testing.T) {

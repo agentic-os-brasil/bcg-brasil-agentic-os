@@ -275,7 +275,7 @@ func narrativePreferenceTags(preference string) []string {
 }
 
 func (profile Profile) Validate() error {
-	if profile.SchemaVersion != SchemaVersion || !safeID(profile.OwnerID) || !profile.Confirmed || profile.UpdatedAt.IsZero() || len(profile.Selections) == 0 {
+	if profile.SchemaVersion != SchemaVersion || !safeID(profile.OwnerID) || !profile.Confirmed || profile.UpdatedAt.IsZero() || len(profile.Selections) == 0 || len(profile.Selections) > 128 || len(profile.CapabilityTracks) > 16 {
 		return errors.New("agent personalization profile is incomplete")
 	}
 	seenTracks := map[string]bool{}

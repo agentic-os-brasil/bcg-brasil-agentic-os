@@ -20,6 +20,8 @@ attach an ephemeral, bounded generated memory context.
   appear in the reviewed session-safe allowlist;
 - a pointer to current operating state, deterministic onboarding progress and
   an explicit unchecked-task count when the owner-local state is readable;
+- the canonical `owner/self/README.md` pointer plus SELF expansion state,
+  counts and at most one next facet ID;
 - an opaque active-execution pointer only when exactly one running or paused
   execution item can be resolved;
 - managed, owner and workspace atlas availability and pointers;
@@ -44,6 +46,11 @@ digest of the reviewable non-sensitive facets so an explicit confirmation can
 be bound to the exact version shown. It never includes the facet bodies.
 Before that confirmation, prompt hooks suppress unrelated Case methods instead
 of letting a lexical prompt silently bypass the deterministic first-use flow.
+Ongoing expansion never places a question token, question body, audio prompt,
+draft ID, review digest or facet body in Session Context. Counts are
+non-negative, sum to the closed six-facet set, and `next_facet` must belong to
+the reviewed session-safe allowlist. Review-required expansion exposes only a
+count.
 
 The active execution capability has three states:
 
@@ -96,6 +103,8 @@ qualifying native-session protocol succeeds.
 - Session Start may carry bounded generated memory, while `UserPromptSubmit`
   never repeats it and corrupt state fails closed without raw fallback.
 - packet references never reveal absolute local filesystem paths.
+- malformed SELF index pointers, counts, lifecycle states or next facets fail
+  validation closed;
 - agent definitions remain pointer-only and runtime activation remains
   explicitly unavailable until orchestration enforcement exists.
 - Claude and Codex receive equivalent bridge envelopes while native injection

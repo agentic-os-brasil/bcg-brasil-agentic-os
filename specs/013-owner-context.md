@@ -19,6 +19,7 @@ Owner context lives only in user-local BCGOS application storage:
 owner/
   registry.json
   self/
+    README.md
     professional-role.md
     communication-style.md
     voice.md
@@ -30,6 +31,9 @@ owner/
     work-state.md
   observations/
     observations.jsonl
+  interview/
+    confirmations.json
+    drafts/
   self/projections/
     self-<canonical-digest-prefix>.json
   sources/
@@ -52,6 +56,55 @@ may later choose to import an assessment report through an approved local
 adapter with explicit consent. Raw reports stay local under `sources/` and are
 never automatically injected; any professional synthesis requires provenance
 and confirmation.
+
+After onboarding, SELF expansion remains an explicit owner interview, not a
+continuous-learning lifecycle. `owner/self/README.md` is the canonical local
+index for the six non-sensitive professional facets. The deterministic status
+classifies each facet as `unknown`, `current` or `stale` (a confirmed body was
+changed or its confirmation is older than 180 days), then exposes exactly one
+next facet. `bcgos owner expand next` returns one text question, one short
+audio-ready rendering and a token bound to the question version and current
+facet SHA-256.
+
+An answer becomes only a private draft after `--consent` and the owner's
+`--no-client-data` attestation. That attestation is an explicit owner claim,
+not an automatic content classifier. The review digest binds the full
+authority-bearing envelope: kind, facet, question/version, question token,
+base revision, proposed body and both attestations. Confirmation fails closed
+for an off-sequence question, a changed envelope, a closed draft or a changed
+base. Successful confirmation writes through the existing audited refinement
+core and updates only the matching facet confirmation. It never updates the
+psychological profile, derives an answer from conversation or triggers L1-L3,
+prompt history, observations, Darwin or a general continuous lifecycle.
+
+SELF is bounded current truth, not an append-only diary. Every expansion body
+must contain exactly one concise `## Current` section, fit within 12 KiB and
+120 lines, and pass duplicate-paragraph and transcript-shape rejection. An
+unchanged canonical digest is rejected as a duplicate. Previous bodies remain
+versioned under `owner/refinement/versions/<facet>/` and are referenced by the
+audit receipt instead of being appended to the current page. The owner still
+reviews every durable promotion. Draft confirmation first persists a
+`prepared` transition; canonical application, confirmation metadata and draft
+closure are then idempotently recoverable after a crash. Draft states are the
+closed set `drafted`, `prepared`, `applied`, and ID/path/digest mismatches fail
+closed.
+The interview surface permits only one open draft and retains at most the
+latest applied draft for each of the six facets; authoritative prior bodies
+remain in the separate refinement audit/version surface. This bounds
+interview-state growth without appending history to current SELF.
+Draft creation and confirmation/compaction share one cross-process local
+transition lock, so two runtimes cannot both pass the one-open-draft check.
+
+The V1 question set is exact and versioned:
+
+| Facet | Text question | Audio-ready wording |
+| --- | --- | --- |
+| `professional-role` | Hoje, qual é o seu papel profissional, pelo que você é responsável e que resultado prova que você está indo bem? | Conte seu papel, suas responsabilidades e como você mede sucesso. |
+| `communication-style` | Como você quer que o Maestro trabalhe e converse com você — idioma, tom, nível de detalhe, formato e quando desafiar? | Como você prefere conversar, receber respostas e ser desafiado? |
+| `voice` | Quando algo sai em seu nome, como deve soar — e o que nunca deve parecer? | Como sua voz deve soar, e o que ela nunca deve parecer? |
+| `preferences` | Quais ferramentas, formatos, rituais e formas de colaboração aumentam ou reduzem sua qualidade e velocidade? | O que ajuda ou atrapalha sua qualidade e velocidade de trabalho? |
+| `decision-rules` | Quando há um trade-off real, quais princípios pesam mais e quais sinais fazem você mudar de direção? | Quais princípios guiam seus trade-offs e o que faz você mudar de ideia? |
+| `working-boundaries` | Quais limites de confidencialidade, escopo, autonomia e escalada o Maestro nunca deve cruzar? | Quais limites o Maestro nunca deve cruzar? |
 
 Session Start derives one deterministic onboarding state from those facets:
 `required`, `in_progress`, `review_required` or `complete`. Answered facets do
@@ -105,6 +158,10 @@ interview` exposes the cold-start questions without persisting an answer.
 `bcgos owner onboarding status` exposes only bounded progress and the digest
 needed at the review boundary; `bcgos owner onboarding confirm --digest
 <review_digest> --confirm` records the explicit reviewed-facet version.
+`bcgos owner expand status|next` is bounded and body-free;
+`bcgos owner expand draft --question-token <sha256> --stdin --consent
+--no-client-data`, `review --id <id>` and `confirm --id <id> --digest <sha256>
+--confirm` implement the ongoing one-question review boundary.
 `bcgos owner refine submit --facet <facet> --evidence <summary> --stdin`
 accepts a proposed body through standard input, applies only an eligible
 policy, and returns an opaque receipt. `apply --confirm <proposal-id>` and

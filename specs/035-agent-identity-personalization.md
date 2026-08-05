@@ -1,6 +1,6 @@
 # Spec 035 - Agent identity, personalization and ownership
 
-Status: proposed implementation; deterministic CLI interview, strict profile
+Status: deterministic one-question CLI interview, review-bound strict profile
 validation and signed instance identity are implemented. Names and emojis are
 presentation metadata and never become authority.
 
@@ -59,16 +59,39 @@ legacy signed artifact is silently reinterpreted.
 
 ```text
 bcgos agent interview
-bcgos agent personalize --stdin
+bcgos agent personalize draft --stdin --consent --no-client-data
+bcgos agent personalize review --id <draft-id>
+bcgos agent personalize confirm --id <draft-id> --digest <sha256> --confirm
 bcgos agent identity
 ```
 
-`interview` is read-only. `personalize` accepts one strict profile and requires
-confirmation. `identity` returns the confirmed profile or the interview
+`interview` is read-only and returns exactly one next question for Maestro,
+Walter or Darwin while retaining the richer transparent catalog. A profile is
+only a private draft until review and explicit confirmation. Its digest binds
+the complete proposed profile, question-contract version, current profile
+revision, consent and no-client-data attestation. Stale revisions, altered
+envelopes and closed drafts fail without overwriting the confirmed profile.
+The attestation is owner-asserted; it is not a client-data classifier.
+Identity drafts use the closed `drafted -> prepared -> applied` lifecycle.
+`prepared` is persisted before the canonical profile commit, so a retry can
+distinguish an unchanged base from an already-applied exact profile and close
+idempotently. State, ID, digest and draft path are validated as one envelope.
+Only one identity draft may be open, and confirmation compacts older applied
+identity drafts to the latest receipt. Profiles are bounded to 128 scoped
+selections and 16 capability tracks in addition to the strict input byte bound.
+The scan/create and confirm/compaction boundaries share one cross-process local
+transition lock; concurrent runtimes cannot create two open drafts.
+`identity` returns the confirmed profile or the interview
 schema when no profile exists, together with the resolved managed identities
 for Maestro, Walter and Darwin. Agent scaffolding resolves identity from the
 profile, signs name/avatar/owner/scope into the immutable instance manifest,
 and continues to enforce the catalog role and scope independently.
+
+The three main-agent questions are exact and ordered:
+
+1. Maestro: “Como você quer chamar o agente que fala com você e rege o trabalho profissional — e qual emoji deve representá-lo?”
+2. Walter: “Como você quer chamar o revisor interno que faz o pressure-test antes de algo importante chegar a você — e qual emoji combina com esse papel?”
+3. Darwin: “Como você quer chamar o agente que observa saúde, drift e evolução do sistema — e qual emoji deve representá-lo?”
 
 ## Acceptance criteria
 
@@ -82,3 +105,7 @@ and continues to enforce the catalog role and scope independently.
    role fields.
 6. PA Expert version and canon remain centrally owned despite local display
    customization.
+7. The main-agent interview asks one question at a time and every write crosses
+   a review-digest plus base-revision confirmation gate.
+8. Confirmation recovers idempotently from every write failure after the
+   canonical profile commit; malformed lifecycle metadata fails closed.

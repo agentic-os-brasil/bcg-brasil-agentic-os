@@ -38,6 +38,10 @@ is a stale-checked projection, not a second self database. Precedence is:
 current explicit instruction, explicit correction, current canon, relevant
 observations, then Walter's hypothesis. Walter is read-only and never writes,
 promotes or semantically edits the self.
+The canonical `owner/self/README.md` index and the current six professional
+facets define available SELF truth. Unknown or stale facets are missing
+evidence, not permission to fill gaps. Walter may identify a bounded question
+for Maestro to ask, but cannot draft, confirm or apply an interview answer.
 
 ## Review posture and method
 

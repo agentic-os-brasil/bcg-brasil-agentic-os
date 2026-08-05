@@ -63,10 +63,14 @@ never be a default suggestion because it can evoke surveillance and loss of
 control. No reference, name or emoji changes the role's scope, grants,
 authority or review requirement.
 
-Before writing, show the complete proposed profile and ask for one explicit
-confirmation. Persist only the confirmed strict JSON profile through
-`bcgos agent personalize --stdin`. A missing confirmation, unknown role,
+Ask exactly the `next_question` returned by `bcgos agent interview`; do not
+batch the Maestro, Walter and Darwin questions. Before writing, create a draft,
+show the complete proposed profile and ask for one explicit confirmation:
+`bcgos agent personalize draft --stdin --consent --no-client-data`, then
+`review --id <id>` and `confirm --id <id> --digest <sha256> --confirm`. A
+missing confirmation, stale base revision, changed review envelope, unknown role,
 invalid emoji or ownership-scope mismatch must fail closed.
 
 Personalization is local owner data. It is never copied into managed templates,
 client context, telemetry or PA Expert advisory packets.
+`--no-client-data` is the owner's attestation, not an automatic classifier.
