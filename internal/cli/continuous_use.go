@@ -70,14 +70,14 @@ func continuousMemoryStatus(root, workspaceID string) (string, int) {
 	if err != nil {
 		return "unavailable", 0
 	}
-	report, err := (&memory.Engine{Root: filepath.Join(root, "memory"), Policy: policy}).Status(workspaceID)
+	report, err := (&memory.Engine{Root: filepath.Join(root, "memory"), Policy: policy}).ContinuityStatus(workspaceID)
 	if err != nil {
 		return "unavailable", 0
 	}
 	switch report.State {
-	case "ready":
+	case "available":
 		return "available", report.AttestedCaptureFiles
-	case "empty", "captured":
+	case "empty":
 		return "empty", report.AttestedCaptureFiles
 	default:
 		return "unavailable", report.AttestedCaptureFiles
@@ -102,16 +102,14 @@ func continuousMaintenanceStatus(root, workspaceID string) (bool, bool) {
 	if !configured {
 		return false, false
 	}
+	store := maintenance.Store{Root: filepath.Join(root, "maintenance", "receipts")}
 	for _, jobID := range []string{maintenance.MemoryCheckpointJobID, maintenance.MemoryLightDreamJobID} {
-		directory := filepath.Join(root, "maintenance", "receipts", "workspaces", workspaceID, "receipts", jobID)
-		entries, readErr := os.ReadDir(directory)
+		count, readErr := store.BoundedValidatedReceiptCount(workspaceID, jobID)
 		if readErr != nil {
-			continue
+			return true, false
 		}
-		for _, entry := range entries {
-			if !entry.IsDir() && entry.Type()&os.ModeSymlink == 0 && filepath.Ext(entry.Name()) == ".json" {
-				return true, true
-			}
+		if count > 0 {
+			return true, true
 		}
 	}
 	return true, false

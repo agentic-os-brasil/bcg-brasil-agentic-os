@@ -81,6 +81,14 @@ historical detail into Session Start. Growth in a ledger, capture journal or
 receipt store therefore does not increase the shape or cardinality of this
 projection.
 
+Source reads are bounded before aggregation: lifecycle diagnostics inspect at
+most 64 strict, 8 KiB receipts; capture-v2 inspects at most seven 64 KiB daily
+files and 64 HMAC-verified envelopes; maintenance inspects at most 64 strict
+receipts without creating a directory; and generated-memory availability reads
+only the newest of at most 32 bounded commit watermarks. Any overflow, empty,
+truncated, symlinked, malformed or identity-mismatched record degrades that
+source to unavailable rather than scanning farther.
+
 ## Lifecycle behavior
 
 Session Start reads the projection only. It may state onboarding/calibration,
@@ -105,7 +113,9 @@ checkpoint synthesis, wiki work or worker wait.
 - `configured`: the exact managed runtime projection and five lifecycle
   bindings are installed and integrity-checked for the workspace.
 - `adapter_observed`: a bounded local adapter command emitted an allowlisted
-  receipt. It is not proof that the native runtime invoked the hook.
+  validated receipt, or a capture-v2 envelope passed its workspace-local HMAC
+  attestation. Empty, forged, truncated or over-budget files do not count. It
+  is not proof that the native runtime invoked the hook.
 - `native_qualified`: a fresh attended supported-runtime session produced the
   accepted native evidence for the exact installed adapter and lifecycle.
 - `unavailable`: the evidence needed for the next layer is missing, invalid or

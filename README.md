@@ -167,6 +167,9 @@ objective, checkpoint body, transcript, client content or local path.
 The status is rebuilt on every read, capped at 4 KiB and has no receipt/history
 store: growing ledgers and journals remain behind their versioned authorities
 and cannot grow Session Start state.
+Its evidence readers are also bounded and fail closed: capture-v2 requires its
+workspace-local HMAC, while lifecycle and maintenance receipts are strictly
+validated before they can report `adapter_observed`.
 
 For work that crosses sessions, write an explicit bounded checkpoint and pause.
 The next session can resolve it with `bcgos work next --active --workspace

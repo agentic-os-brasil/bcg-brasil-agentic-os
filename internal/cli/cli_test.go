@@ -22,6 +22,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
@@ -93,6 +94,35 @@ func TestMemoryCaptureFailsClosedWithoutSanitizedAttestation(t *testing.T) {
 	code := RunWithInput([]string{"memory", "capture", "--data-dir", t.TempDir(), "--workspace", "case-a", "--kind", "note", "--stdin"}, strings.NewReader("raw"), &output, &output)
 	if code == 0 || !strings.Contains(output.String(), "--sanitized") {
 		t.Fatalf("capture exit = %d, output = %s", code, output.String())
+	}
+}
+
+func TestContinuousStatusFailsClosedForForgedCaptureAndMaintenanceReceipts(t *testing.T) {
+	root := t.TempDir()
+	workspaceID := "0123456789abcdef0123456789abcdef"
+	captureDirectory := filepath.Join(root, "memory", "workspaces", workspaceID, "l1", "attested-captures")
+	if err := os.MkdirAll(captureDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(captureDirectory, "2026-08-05.jsonl"), []byte(`{"schema_version":2`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if state, count := continuousMemoryStatus(root, workspaceID); state != "unavailable" || count != 0 {
+		t.Fatalf("forged capture continuity state=%q count=%d", state, count)
+	}
+	enrollment := maintenance.CanaryEnrollment{SchemaVersion: maintenance.EnrollmentSchemaVersion, WorkspaceID: workspaceID, AgentID: "darwin", Home: "/tmp", Executable: "/bin/true", UID: "501", Timezone: "UTC", LaunchAgentLabel: "com.bcg.maestro.maintenance", Mode: "filesystem_only", EnrolledAt: time.Now().UTC(), Activated: []maintenance.Activation{{JobID: maintenance.MemoryCheckpointJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryCheckpointJobID)}, {JobID: maintenance.MemoryLightDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryLightDreamJobID)}}}
+	if err := maintenance.SaveCanaryEnrollment(root, enrollment); err != nil {
+		t.Fatal(err)
+	}
+	receiptDirectory := filepath.Join(root, "maintenance", "receipts", "workspaces", workspaceID, "receipts", maintenance.MemoryCheckpointJobID)
+	if err := os.MkdirAll(receiptDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(receiptDirectory, "forged--empty.json"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if configured, observed := continuousMaintenanceStatus(root, workspaceID); !configured || observed {
+		t.Fatalf("forged maintenance receipt configured=%t observed=%t", configured, observed)
 	}
 }
 

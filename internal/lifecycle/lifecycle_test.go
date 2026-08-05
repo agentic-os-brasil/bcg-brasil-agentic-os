@@ -118,3 +118,29 @@ func TestDiagnoseRuntimeSeparatesAdapterObservationByRuntime(t *testing.T) {
 		t.Fatal("unknown runtime diagnostic was accepted")
 	}
 }
+
+func TestDiagnoseRuntimeFailsClosedForTruncatedOrUnboundedReceiptHistory(t *testing.T) {
+	root := t.TempDir()
+	receiptRoot := filepath.Join(root, "runtime", "receipts", testWorkspaceID)
+	if err := os.MkdirAll(receiptRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(receiptRoot, "stop_finalize-"+IdempotencyKey("truncated")+".json"), []byte(`{"schema_version":1`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DiagnoseRuntime(root, testWorkspaceID, "claude"); err == nil {
+		t.Fatal("truncated lifecycle receipt was accepted as adapter evidence")
+	}
+	if err := os.RemoveAll(receiptRoot); err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index <= MaximumDiagnosticReceiptEntries; index++ {
+		receipt := Receipt{SchemaVersion: 1, Runtime: "claude", Event: StopFinalize, State: "observed", Provenance: AdapterCommand, IdempotencyKey: IdempotencyKey("bounded", string(rune(index)))}
+		if _, err := Record(root, testWorkspaceID, receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := DiagnoseRuntime(root, testWorkspaceID, "claude"); err == nil {
+		t.Fatal("unbounded lifecycle receipt history was accepted")
+	}
+}

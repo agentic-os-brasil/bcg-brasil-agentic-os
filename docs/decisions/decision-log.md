@@ -820,3 +820,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Ledger revisions, memory journals and receipt stores may grow or compact according to their own governed policies without growing Maestro's continuous status. Historical detail remains available only through explicit ledger/export, memory rollup or receipt inspection boundaries and cannot accumulate in Session Start state.
 - Refs: CONT; specs/015-session-context-packet.md; specs/044-continuous-use.md; internal/continuoususe; internal/sessionctx; internal/sessionhook
 - Supersedes: none
+
+## CUEV - Treat continuity evidence as bounded authenticated or validated input
+
+- Date: 2026-08-05
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A compact output alone is insufficient if rendering status enumerates unbounded receipt or capture history, or marks adapter observation from an empty or forged file. That would permit local history growth to consume startup resources and let malformed evidence alter the projection.
+- Decision: Continuous use reads only bounded source projections. Capture-v2 counts only after strict decode, workspace binding and workspace-local HMAC verification. Lifecycle and maintenance observations count only strict, identity-bound validated receipts. Every reader has a small directory/file/entry ceiling and performs no directory creation; overflow, truncation, empty files, symlinks, malformed JSON or identity mismatch fail closed to unavailable/not-observed.
+- Consequences: `adapter_observed` is evidence of a validated local adapter boundary, not filesystem-file presence and not native qualification. Retention policies may evolve in the source stores, but must preserve or publish a bounded current watermark for continuity to remain observable.
+- Refs: CUBD; specs/006-memory-persistence.md; specs/009-scheduler-catch-up.md; specs/019-nonblocking-hook-execution.md; specs/044-continuous-use.md; internal/memory; internal/lifecycle; internal/maintenance
+- Supersedes: none

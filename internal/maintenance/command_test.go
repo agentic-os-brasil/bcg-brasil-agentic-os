@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -42,6 +43,40 @@ func TestReceiptStoreKeepsRetriesAsSeparateAttempts(t *testing.T) {
 	receipts, err := store.Receipts("workspace-1", "memory-daily")
 	if err != nil || len(receipts) != 2 {
 		t.Fatalf("retry receipts=%#v err=%v", receipts, err)
+	}
+}
+
+func TestBoundedValidatedReceiptsRejectsForgedAndUnboundedHistory(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	store := Store{Root: t.TempDir()}
+	receipt := Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: testOccurrenceDigest, CommandID: "cmd-bounded-1", JobID: "memory-daily", WorkspaceID: "workspace-1", Trigger: TriggerDaily, State: ReceiptSucceeded, RecordedAt: now, Deadline: now.Add(time.Minute), ReasonCode: ReasonCompleted}
+	if err := store.AppendReceipt(receipt); err != nil {
+		t.Fatal(err)
+	}
+	if count, err := store.BoundedValidatedReceiptCount("workspace-1", "memory-daily"); err != nil || count != 1 {
+		t.Fatalf("validated count=%d err=%v", count, err)
+	}
+	path := filepath.Join(store.Root, "workspaces", "workspace-1", "receipts", "memory-daily", "forged--empty.json")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.BoundedValidatedReceiptCount("workspace-1", "memory-daily"); err == nil {
+		t.Fatal("empty forged maintenance receipt was accepted")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index <= MaximumContinuityReceiptEntries; index++ {
+		candidate := receipt
+		candidate.AttemptID = fmt.Sprintf("%032x", index+1)
+		candidate.OccurrenceDigest = fmt.Sprintf("%064x", index+1)
+		candidate.CommandID = fmt.Sprintf("cmd-bounded-%d", index+2)
+		if err := store.AppendReceipt(candidate); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.BoundedValidatedReceiptCount("workspace-1", "memory-daily"); err == nil {
+		t.Fatal("unbounded maintenance receipt history was accepted")
 	}
 }
 
