@@ -3167,6 +3167,12 @@ func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, 
 // unrelated contextual methods. The guide does not grant tools, data access or
 // native runtime authority.
 func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath string) error {
+	// Native hooks invoke this process by the installed absolute path. Carry it
+	// into the human-facing directive so skills never have to rely on the
+	// runtime's PATH, which is often different inside a desktop app.
+	if executable, err := os.Executable(); err == nil && filepath.IsAbs(executable) {
+		packet.MaestroCLIPath = executable
+	}
 	if packet.Owner.Onboarding.State == "complete" {
 		return nil
 	}

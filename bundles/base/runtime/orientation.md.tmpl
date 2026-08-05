@@ -86,6 +86,9 @@ fluxo afetado, explique a lacuna e ofereça uma alternativa segura.
 
 ## 6. Comandos úteis
 
+O SessionStart injeta o caminho exato do CLI instalado para a sessão. Use esse
+caminho nos comandos de onboarding; não presuma que `bcgos` esteja no `PATH`.
+
 ```text
 bcgos status <workspace>
 bcgos doctor <workspace>
@@ -96,7 +99,7 @@ bcgos memory status --data-dir <data-dir> --workspace <id>
 bcgos adapter status --runtime {{RUNTIME_ID}} <workspace>
 ```
 
-Use `bcgos doctor` quando o estado estiver confuso. Um estado `unavailable`
+Use o caminho exato injetado na sessão quando o estado estiver confuso. Um estado `unavailable`
 deve permanecer visível até que exista evidência suficiente para qualificá-lo.
 
 ## 7. Atualizações
