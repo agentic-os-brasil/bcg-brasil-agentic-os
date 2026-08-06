@@ -8,7 +8,7 @@ administrator permissions. The experience explains the next action in plain
 language, while the release verifier and `bcgos-bootstrap` remain the only
 authorities allowed to verify, activate or roll back bytes.
 
-## Four screens
+## Core screens and workspace journeys
 
 1. **Boas-vindas** — one sentence of value, the user-space/no-admin promise and
    three trust cues.
@@ -16,17 +16,20 @@ authorities allowed to verify, activate or roll back bytes.
    path are shown before any write.
 3. **Instalação** — the exact per-user destination and the atomic activation
    plan are explained. The user confirms once.
-4. **Seu workspace** — creates one new local workspace at
-   `~/Developer/maestro-os`. Before creation, the user may nominate an existing
-   memory folder. That source remains untouched and is registered as a pending
-   local intake; no document is read, copied or uploaded by the installer.
-5. **Pronto** — returns the person to work, rather than to an application
-   folder. The first-use projection is Claude, because a workspace may carry
-   one managed runtime projection at a time. Codex in the ChatGPT desktop app
-   remains an explicit compatible target through the documented
-   `codex://new?path=<absolute-path>` deep link. Switching a workspace between
-   Claude and Codex is an explicit adapter migration, not a second concurrent
-   install. The `doctor` command remains a support action.
+4. **Próximo movimento** — the user chooses one explicit journey: update the
+   Maestro, migrate an existing Maestro workspace, or import an external
+   folder. A clean workspace remains an explicit fourth option and uses the
+   existing workspace readiness path.
+5. **Análise e plano** — the transactional core returns a typed classification plus the
+   mapped, excluded, ambiguous and capability-unavailable items. It also says
+   whether the existing workspace is preserved and which version/migration is
+   required. Selecting a folder is only a temporary analysis pointer; it is
+   never called ingestion.
+6. **Confirmação, staging e receipt** — confirmation is bound to the exact
+   plan and approval. The transactional core must report staging, validation and rollback state;
+   the UI shows “Pronto” only for a valid, committed receipt. An invalid or
+   unavailable capability fails closed and never offers an unsigned or implicit
+   fallback.
 
 The **Ver como funciona** action opens a compact in-product explainer with the
 same three contract movements — check, install, conduct — so a non-technical
@@ -36,7 +39,7 @@ disabled for users who prefer reduced motion.
 
 The first screen also exposes the connection state immediately: `MODO NÃO
 CONECTADO` for a static visual inspection, `ENSAIO TÉCNICO` for `--simulate`,
-and `RELEASE CONECTADO` for a real bridge session. The primary action follows
+and `RELEASE CONECTADO` for a real core session. The primary action follows
 that state (`Abrir fluxo visual`, `Simular instalação`, or `Instalar no meu
 perfil`) so the user never has to infer whether a click will mutate anything.
 
@@ -53,12 +56,12 @@ The visual progression is also a keyboard and assistive-technology contract:
   quiet presentation for pointer users.
 
 These affordances describe the same gated flow; they do not create a second
-installation path or bypass the bridge's verification rules.
+installation path or bypass the core's verification rules.
 
 ## Runtime handoff
 
 The visual shell is intentionally not a trust implementation. The executable
-bridge must:
+installer core must:
 
 1. materialize the signed release in a staging directory;
 2. call the stable, native-signed `bcgos-bootstrap` with the exact release
@@ -74,16 +77,37 @@ does not modify the global `PATH`, workspace content or credentials.
 
 After a connected install, the wizard detects compatible runtimes locally. It
 never accepts a browser-provided workspace path: it creates and verifies the
-canonical local workspace, then launches only a detected runtime. A separately
-selected memory source is recorded under `.bcgos/import-intake.json` with
-state `pending_verified_pack`; it is not itself used as a workspace. The
-first-command card uses the exact
-`cli_path` returned by the bridge as a support action. On macOS it copies
+canonical local workspace, then launches only a detected runtime. The new
+transactional workspace-flow core exposes these endpoints:
+
+- `POST /api/workspace-flow/select` selects `update`, `workspace_migration` or
+  `external_import`; native folder selection is kept server-side.
+- `POST /api/workspace-flow/analyze` returns the typed classification and plan
+  without mutation. External import calls `internal/workspaceimport` for
+  inspect/plan and reports mapped, excluded, ambiguous and unavailable items.
+- `POST /api/workspace-flow/confirm` accepts the exact plan digest plus
+  `action=IMPORT`, binds `approved_by` and `approval_plan_id` to that plan, and
+  returns a receipt containing `staging=completed`, `validation=completed` and
+  `rollback=available`.
+- `POST /api/workspace-flow/rollback` accepts `action=ROLLBACK` and the exact
+  receipt ID. Source, target and rollback effects are separate fields.
+
+External import preserves its source, writes only bounded allowlisted target
+entries after confirmation, and can roll them back. A Maestro workspace is
+classified by `internal/workspacemigration`, but public migration execution is
+`pending_core_activation`/`unavailable` until bootstrapper authority is wired;
+the UI blocks confirmation with HTTP 503 and does not execute a fixture.
+Capability gaps, conflicts, invalid plans, changed sources and replay/tamper
+conditions fail closed. `--simulate` uses sanitized fixtures only and is the
+sole fixture path. A pointer-only source is reported as
+`pointer_recorded_pending_analysis` / `not_ingested_pointer_only`, never as
+ingestion. The first-command card uses the exact
+`cli_path` returned by the installer core as a support action. On macOS it copies
 `"<installed-cli>" doctor`; on Windows PowerShell it copies `&
 "<installed-cli>" doctor`. Static preview and disconnected mode remain
 non-installing.
 
-Workspace creation alone is not the final runtime-readiness claim. The bridge
+Workspace creation alone is not the final runtime-readiness claim. The installer core
 reports adapter configuration, readiness verification and scheduler activation
 as separate states, alongside the exact `workspace_path` and a diagnostic
 command bound to that path. It returns `ready_for_runtime=true` only after the
@@ -93,7 +117,7 @@ respective checks; a failure returns an error and never marks the workspace
 ready. A generated workspace or a present orientation file is therefore not
 mistaken for observed hooks, verified readiness or an active scheduler.
 
-If an earlier first install was interrupted, the connected bridge may preserve
+If an earlier first install was interrupted, the connected core may preserve
 the installer-owned managed root and its bound install state in a deterministic
 plan-digest recovery location before retrying. It never replaces a healthy
 installation, never overwrites an earlier recovery and never auto-recovers an
@@ -140,7 +164,7 @@ For a real package candidate, the macOS factory is
 [`dev/release/build-macos-installer.sh`](../dev/release/build-macos-installer.sh).
 Unlike the rehearsal DMG, it requires the exact release directory, authority
 registry and native bootstrapper as explicit inputs and passes them to the
-bridge. It remains `unsigned-candidate` until the protected Developer ID and
+installer core. It remains `unsigned-candidate` until the protected Developer ID and
 notarization steps run.
 
 macOS does not permit a mounted DMG to auto-execute an installer app. The DMG

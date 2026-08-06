@@ -21,8 +21,14 @@
   let installedCLIPath = '';
   let runtimeTargets = [];
   let defaultWorkspace = '';
+  let installedVersion = '';
+  let workspaceFlowSelection = null;
+  let workspaceFlowAnalysis = null;
+  let workspaceFlowReceipt = null;
+  let workspaceFlowScene = null;
   let verificationRun = 0;
   const platform = /Win/i.test(navigator.userAgent) ? 'Windows' : /Mac/i.test(navigator.userAgent) ? 'macOS' : 'seu dispositivo';
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
   platformLabel.textContent = platform;
   destination.textContent = platform === 'Windows' ? '%LOCALAPPDATA%\\BCGOS' : platform === 'macOS' ? '~/Library/Application Support/BCGOS' : '~/.local/share/bcgos';
@@ -119,7 +125,7 @@
   }
 
   function pause(milliseconds) {
-    return new Promise(resolve => window.setTimeout(resolve, milliseconds));
+    return new Promise(resolve => window.setTimeout(resolve, reducedMotion ? 0 : milliseconds));
   }
 
   function runOnboardingDemo() {
@@ -219,6 +225,303 @@
     document.querySelector('#workspace-setup').hidden = true;
     document.querySelector('#runtime-handoff').hidden = false;
     updateFinishCopy();
+  }
+
+  function escapeHTML(value) {
+    return String(value || '').replace(/[&<>'"]/g, character => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    }[character]));
+  }
+
+  function flowModeLabel(mode) {
+    return {
+      update: 'Atualizar o Maestro',
+      workspace_migration: 'Migrar um workspace Maestro',
+      external_import: 'Importar uma pasta externa'
+    }[mode] || 'Continuar';
+  }
+
+  function flowClassificationLabel(classification) {
+    return {
+      maestro_update: 'Atualização do Maestro',
+      maestro_workspace: 'Workspace Maestro',
+      external_folder: 'Pasta externa'
+    }[classification] || classification || 'Fonte analisada';
+  }
+
+  function flowListMarkup(title, items, emptyCopy) {
+    const rows = Array.isArray(items) && items.length
+      ? items.map(item => `<li><code>${escapeHTML(item.path)}</code><span>${escapeHTML(item.reason)}</span></li>`).join('')
+      : `<li class="is-empty"><span>${escapeHTML(emptyCopy)}</span></li>`;
+    return `<article class="flow-classification"><h3>${escapeHTML(title)}</h3><ul>${rows}</ul></article>`;
+  }
+
+  function isValidWorkspaceReceipt(receipt, expectedStatus) {
+    if (!receipt?.valid || !receipt.ready || receipt.status !== expectedStatus || !receipt.receipt_id || !receipt.operation) return false;
+    const required = { staging: 'completed', validation: 'completed', rollback: 'available' };
+    const seen = new Set();
+    for (const stage of Array.isArray(receipt.stages) ? receipt.stages : []) {
+      if (!(stage.id in required) || seen.has(stage.id) || stage.status !== required[stage.id] || !String(stage.detail || '').trim()) continue;
+      seen.add(stage.id);
+    }
+    return Object.keys(required).every(id => seen.has(id));
+  }
+
+  function isValidWorkspaceFlowReceipt(receipt, expectedStatus = 'committed') {
+    if (!isValidWorkspaceReceipt(receipt, expectedStatus)) return false;
+    return receipt.source_effect === 'preserved'
+      && (receipt.operation !== 'external_import' || receipt.target_effect === 'bounded_import_committed')
+      && (receipt.operation !== 'external_import' || receipt.rollback_effect === 'available_from_import_receipt')
+      && String(receipt.target_effect || '').trim()
+      && String(receipt.rollback_effect || '').trim()
+      && receipt.approval_action === 'IMPORT'
+      && receipt.approved_by
+      && receipt.approval_plan_id === receipt.plan_id
+      && receipt.plan_id
+      && receipt.plan_digest;
+  }
+
+  function isValidWorkspaceFlowRollback(receipt) {
+    return Boolean(receipt?.valid && !receipt.ready && receipt.status === 'rolled_back' && receipt.receipt_id
+      && receipt.source_effect === 'preserved' && receipt.target_effect === 'bounded_import_rolled_back' && receipt.rollback_effect === 'completed'
+      && receipt.approval_action === 'ROLLBACK' && receipt.plan_id && receipt.plan_digest);
+  }
+
+  function createWorkspaceFlowScene() {
+    if (workspaceFlowScene) return workspaceFlowScene;
+    const legacySetup = document.querySelector('#workspace-setup');
+    if (legacySetup) legacySetup.hidden = true;
+    workspaceFlowScene = document.createElement('div');
+    workspaceFlowScene.id = 'workspace-flow';
+    workspaceFlowScene.className = 'workspace-flow';
+    workspaceFlowScene.innerHTML = `
+      <div id="workspace-flow-choice" class="workspace-flow-choice" aria-labelledby="workspace-flow-title">
+        <span class="eyebrow">ETAPA 04 · PRÓXIMO MOVIMENTO</span>
+        <h1 id="workspace-flow-title" tabindex="-1">Escolha o próximo caminho.<br><em>Sem misturar as coisas.</em></h1>
+        <p class="lead">Atualização, migração de um workspace Maestro e importação de uma pasta externa são jornadas diferentes. O Maestro explica cada uma antes de pedir confirmação.</p>
+        <div class="flow-options" aria-label="Caminhos disponíveis">
+          <button class="flow-option" type="button" data-action="workspace-flow" data-flow-mode="update" data-requires-installed="true">
+            <span class="flow-option-number">01</span><span><b>Atualizar o Maestro</b><small id="flow-update-copy">Preserva o workspace e mostra a migração de versão necessária.</small><em id="flow-update-version"></em></span><span class="arrow">↗</span>
+          </button>
+          <button class="flow-option" type="button" data-action="workspace-flow" data-flow-mode="workspace_migration">
+            <span class="flow-option-number">02</span><span><b>Migrar um workspace Maestro</b><small>Escolha um workspace existente para analisar identidade, manifesto e projeção.</small></span><span class="arrow">↗</span>
+          </button>
+          <button class="flow-option" type="button" data-action="workspace-flow" data-flow-mode="external_import">
+            <span class="flow-option-number">03</span><span><b>Importar uma pasta externa</b><small>A pasta vira uma fonte analisada; não é tratada como workspace e não é ingerida só por ser selecionada.</small></span><span class="arrow">↗</span>
+          </button>
+          <button class="flow-option flow-option-secondary" type="button" data-action="create-clean-workspace">
+            <span class="flow-option-number">04</span><span><b>Começar com um workspace novo</b><small>Cria o workspace padrão local e só mostra pronto quando o receipt de readiness for válido.</small></span><span class="arrow">↗</span>
+          </button>
+        </div>
+        <div class="flow-boundary"><span>REGRA DE SEGURANÇA</span><p>Selecionar uma pasta apenas cria um ponteiro temporário. A análise local bounded lê metadados e calcula o plano; nada é copiado ou mutado até IMPORT.</p></div>
+        <div class="callout runtime-error" id="workspace-flow-error" role="alert" hidden><span>!</span><p></p></div>
+        <div class="runtime-statusline" id="workspace-flow-feedback" role="status" aria-live="polite" hidden><span class="pulse"></span><p></p></div>
+      </div>
+      <div id="workspace-flow-analysis" class="workspace-flow-analysis" hidden aria-labelledby="workspace-flow-analysis-title"></div>
+      <div id="workspace-flow-result" class="workspace-flow-result" hidden aria-labelledby="workspace-flow-result-title"></div>`;
+    document.querySelector('#runtime-handoff')?.before(workspaceFlowScene);
+    renderWorkspaceFlowChoices();
+    return workspaceFlowScene;
+  }
+
+  function renderWorkspaceFlowChoices() {
+    const scene = createWorkspaceFlowScene();
+    if (!scene) return;
+    const update = scene.querySelector('[data-flow-mode="update"]');
+    if (update) {
+      update.hidden = !installed;
+      update.disabled = !runtime || !installed;
+    }
+    scene.querySelectorAll('[data-flow-mode]:not([data-flow-mode="update"])').forEach(button => {
+      button.disabled = !runtime;
+    });
+    const clean = scene.querySelector('[data-action="create-clean-workspace"]');
+    if (clean) clean.disabled = !runtime;
+    const version = scene.querySelector('#flow-update-version');
+    if (version) version.textContent = installedVersion ? `Versão atual detectada: ${installedVersion}` : 'A versão atual será lida pelo core transacional conectado.';
+  }
+
+  function setWorkspaceFlowFeedback(message, isError = false) {
+    const error = document.querySelector('#workspace-flow-error');
+    const feedback = document.querySelector('#workspace-flow-feedback');
+    if (error) {
+      error.hidden = !isError || !message;
+      error.querySelector('p').textContent = isError ? message || '' : '';
+    }
+    if (feedback) {
+      feedback.hidden = isError || !message;
+      feedback.querySelector('p').textContent = !isError ? message || '' : '';
+    }
+  }
+
+  function setWorkspaceFlowPhase(phase) {
+    document.querySelectorAll('#workspace-flow-analysis [data-flow-phase]').forEach(step => {
+      const active = step.dataset.flowPhase === phase;
+      step.classList.toggle('is-active', active);
+      step.classList.toggle('is-done', ['analysis', 'plan', 'confirm', 'staging', 'validation', 'rollback'].indexOf(step.dataset.flowPhase) < ['analysis', 'plan', 'confirm', 'staging', 'validation', 'rollback'].indexOf(phase));
+    });
+  }
+
+  function renderWorkspaceFlowAnalysis(analysis) {
+    workspaceFlowAnalysis = analysis;
+    const choice = document.querySelector('#workspace-flow-choice');
+    const target = document.querySelector('#workspace-flow-analysis');
+    if (!target) return;
+    if (choice) choice.hidden = true;
+    target.hidden = false;
+    const blocked = analysis.state === 'blocked';
+    const capabilities = (analysis.capabilities_unavailable || []).map(capability => `<li><b>${escapeHTML(capability.id)} · ${escapeHTML(capability.state)}</b><span>${escapeHTML(capability.message)}</span></li>`).join('');
+    const blockers = (analysis.blockers || []).map(blocker => `<li><b>${escapeHTML(blocker.code)}</b><span>${escapeHTML(blocker.message)}</span></li>`).join('');
+    const effects = `<div class="flow-effects" aria-label="Efeitos do plano"><article><span>FONTE</span><b>${escapeHTML(analysis.source_effect || 'não informado')}</b></article><article><span>ALVO</span><b>${escapeHTML(analysis.target_effect || 'não informado')}</b></article><article><span>ROLLBACK</span><b>${escapeHTML(analysis.rollback_effect || 'não informado')}</b></article></div>`;
+    target.innerHTML = `
+      <span class="eyebrow">${blocked ? 'ANÁLISE BLOQUEADA' : 'ANÁLISE CONCLUÍDA'} · ${escapeHTML(flowClassificationLabel(analysis.classification))}</span>
+      <h1 id="workspace-flow-analysis-title" tabindex="-1">${blocked ? 'Não é possível prosseguir.' : 'Este é o plano.'}<br><em>${blocked ? 'O bloqueio fica explícito.' : 'Você decide se ele segue.'}</em></h1>
+      <p class="lead">${escapeHTML(analysis.summary)}</p>
+      <div class="flow-analysis-meta"><span>FONTE</span><b>${escapeHTML(analysis.source?.label || 'Fonte selecionada')}</b><small>${escapeHTML(analysis.source_effect === 'preserved' ? 'A origem permanece preservada; a análise é somente leitura.' : 'Efeito na origem não autorizado.')}</small></div>
+      ${effects}
+      ${analysis.migration_required ? `<div class="flow-version-callout"><b>${escapeHTML(analysis.installed_version || 'versão atual')}</b><span>→</span><b>${escapeHTML(analysis.target_version || 'versão alvo')}</b><small>${escapeHTML(analysis.migration_summary || 'Migração necessária antes de concluir.')}</small></div>` : ''}
+      <div class="flow-classifications">${flowListMarkup('Mapeados', analysis.mapped, 'Nenhum item mapeado nesta análise.')}${flowListMarkup('Excluídos', analysis.excluded, 'Nenhum item excluído nesta análise.')}${flowListMarkup('Ambíguos', analysis.ambiguous, 'Nenhum item ambíguo nesta análise.')}</div>
+      <article class="flow-capability"><h3>Capability unavailable</h3><p>O que ainda não está disponível fica explícito e não vira uma promessa de ingestão.</p><ul>${capabilities || '<li><span>Nenhuma capability indisponível foi reportada.</span></li>'}</ul></article>
+      ${blocked ? `<article class="flow-blockers" role="alert"><h3>Bloqueios</h3><ul>${blockers || '<li><span>O core não autorizou esta jornada.</span></li>'}</ul></article>` : ''}
+      <div class="flow-confirm-boundary"><span>${analysis.plan_digest ? `PLANO · ${escapeHTML(analysis.plan_digest)}` : 'PLANO INDISPONÍVEL'}</span><p>${blocked ? 'Nenhum staging, confirmação ou instalação ocorrerá enquanto houver bloqueios.' : 'O plano será confirmado antes do staging. A origem permanece preservada e o rollback continua disponível.'}</p></div>
+      <div class="panel-actions"><button class="quiet" type="button" data-action="workspace-flow-back">Escolher outra fonte</button>${analysis.can_confirm ? '<button class="primary" type="button" data-action="confirm-workspace-flow"><span>Confirmar e preparar</span><span class="arrow">↗</span></button>' : '<button class="primary" type="button" disabled aria-disabled="true"><span>Confirmação indisponível</span></button>'}</div>
+      <div class="callout runtime-error" id="workspace-flow-analysis-error" role="alert" hidden><span>!</span><p></p></div>`;
+    setWorkspaceFlowPhase('plan');
+    const heading = target.querySelector('h1');
+    if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
+  }
+
+  function renderWorkspaceFlowProgress(mode, errorMessage = '') {
+    const target = document.querySelector('#workspace-flow-analysis');
+    if (!target) return;
+    const title = mode === 'confirm' ? 'Preparando com rastreabilidade.' : 'Analisando a fonte sem tocar nela.';
+    const failure = errorMessage
+      ? `<div class="callout runtime-error" role="alert"><span>!</span><p>${escapeHTML(errorMessage)}</p></div><div class="panel-actions"><button class="quiet" type="button" data-action="workspace-flow-back">Escolher outra fonte</button></div>`
+      : '';
+    target.hidden = false;
+    target.innerHTML = `<span class="eyebrow">MAESTRO EM MOVIMENTO</span><h1 id="workspace-flow-analysis-title" tabindex="-1">${title}<br><em>cada estado fica visível.</em></h1><div class="flow-phase-track" role="list" aria-label="Estado da jornada"><div data-flow-phase="analysis" role="listitem"><b>01</b><span>Análise</span><small>classificar a fonte</small></div><div data-flow-phase="plan" role="listitem"><b>02</b><span>Plano</span><small>explicar o escopo</small></div><div data-flow-phase="confirm" role="listitem"><b>03</b><span>Confirmação</span><small>uma decisão explícita</small></div><div data-flow-phase="staging" role="listitem"><b>04</b><span>Staging</span><small>preparar sem substituir</small></div><div data-flow-phase="validation" role="listitem"><b>05</b><span>Validação</span><small>conferir o resultado</small></div><div data-flow-phase="rollback" role="listitem"><b>06</b><span>Rollback</span><small>manter a volta disponível</small></div></div><div class="flow-progress-note${errorMessage ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHTML(errorMessage || (mode === 'confirm' ? 'Aguardando o receipt válido do core transacional.' : 'A análise local bounded está lendo metadados e preparando o plano.'))}</div>${failure}`;
+    setWorkspaceFlowPhase(mode === 'confirm' ? 'staging' : 'analysis');
+    const heading = target.querySelector('h1');
+    if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
+  }
+
+  function renderWorkspaceFlowReceipt(receipt) {
+    const target = document.querySelector('#workspace-flow-result');
+    if (!target) return;
+    document.querySelector('#workspace-flow-analysis').hidden = true;
+    target.hidden = false;
+    const stages = (receipt.stages || []).map(stage => `<li><b>${escapeHTML(stage.id)}</b><span>${escapeHTML(stage.status)}</span><small>${escapeHTML(stage.detail)}</small></li>`).join('');
+    const rolledBack = receipt.status === 'rolled_back';
+    const resultCopy = rolledBack
+      ? 'O rollback foi concluído pelo core e o alvo voltou ao estado anterior deste receipt.'
+      : receipt.operation === 'external_import'
+      ? 'A importação bounded foi concluída no alvo. Conversão e ingestão de documentos continuam separadas e itens não disponíveis permanecem excluídos ou em quarentena.'
+      : receipt.operation === 'workspace_migration'
+      ? 'A migração do workspace foi confirmada pelo core autorizado e a origem permanece preservada.'
+      : receipt.operation === 'new_workspace'
+      ? `O workspace ${escapeHTML(receipt.workspace_path || 'local')} foi preparado e validado pelo installer.`
+      : 'A atualização do Maestro foi confirmada; o workspace continua fora da transação.';
+    target.innerHTML = `<span class="eyebrow">RECEIPT VÁLIDO · ${escapeHTML(receipt.receipt_id)}</span><h1 id="workspace-flow-result-title" tabindex="-1">${rolledBack ? 'Rollback concluído.' : 'Pronto para o próximo passo.'}<br><em>${rolledBack ? 'o alvo foi revertido.' : 'com a volta preservada.'}</em></h1><p class="lead">${resultCopy}</p><div class="flow-receipt-card"><span>RECEIPT</span><code>${escapeHTML(receipt.receipt_id)}</code><strong>STATUS · ${escapeHTML(receipt.status)}</strong><ul>${stages}</ul></div><div class="flow-effects" aria-label="Efeitos confirmados"><article><span>FONTE</span><b>${escapeHTML(receipt.source_effect)}</b></article><article><span>ALVO</span><b>${escapeHTML(receipt.target_effect)}</b></article><article><span>ROLLBACK</span><b>${escapeHTML(receipt.rollback_effect)}</b></article></div><div class="flow-boundary"><span>${rolledBack ? 'ROLLBACK CONFIRMADO' : 'FONTE PRESERVADA'}</span><p>${rolledBack ? 'Nenhum novo import pode reutilizar a confirmação consumida.' : 'O wizard só mostra pronto porque o receipt está válido, vinculado ao plano e confirma staging, validação e rollback.'}</p></div><div class="panel-actions">${!rolledBack && receipt.operation === 'external_import' ? '<button class="quiet" type="button" data-action="rollback-workspace-flow">Reverter este import</button>' : ''}<button class="quiet" type="button" data-action="close">Fechar instalador</button></div>`;
+    const heading = target.querySelector('h1');
+    if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
+  }
+
+  async function startWorkspaceFlow(mode) {
+    createWorkspaceFlowScene();
+    setWorkspaceFlowFeedback('');
+    if (!runtime) {
+      setWorkspaceFlowFeedback('Esta é uma prévia visual: o modo conectado selecionará a fonte e fará a análise local bounded sem mutação.', true);
+      return;
+    }
+    const choices = document.querySelectorAll('[data-flow-mode]');
+    choices.forEach(choice => { choice.disabled = true; });
+    renderWorkspaceFlowProgress('analysis');
+    setWorkspaceFlowPhase('analysis');
+    try {
+      const selectionResponse = await fetch('/api/workspace-flow/select', requestOptions('POST', { mode }));
+      const selection = await selectionResponse.json();
+      if (!selectionResponse.ok) throw new Error(selection.error || 'Não foi possível selecionar esta fonte.');
+      workspaceFlowSelection = selection;
+      await pause(320);
+      const analysisResponse = await fetch('/api/workspace-flow/analyze', requestOptions('POST', { flow_id: selection.flow_id }));
+      const analysis = await analysisResponse.json();
+      renderWorkspaceFlowAnalysis(analysis);
+      if (!analysisResponse.ok && analysis.state !== 'blocked') throw new Error(analysis.error || 'A análise não pôde ser concluída.');
+    } catch (error) {
+      const target = document.querySelector('#workspace-flow-analysis');
+      if (target) target.hidden = true;
+      document.querySelector('#workspace-flow-choice').hidden = false;
+      setWorkspaceFlowFeedback(error.message, true);
+    } finally {
+      choices.forEach(choice => { choice.disabled = !runtime || (choice.dataset.requiresInstalled === 'true' && !installed); });
+    }
+  }
+
+  async function confirmWorkspaceFlow() {
+    if (!workspaceFlowSelection || !workspaceFlowAnalysis?.plan_digest) return;
+    const button = document.querySelector('[data-action="confirm-workspace-flow"]');
+    if (button) button.disabled = true;
+    renderWorkspaceFlowProgress('confirm');
+    try {
+      const response = await fetch('/api/workspace-flow/confirm', requestOptions('POST', { flow_id: workspaceFlowSelection.flow_id, plan_digest: workspaceFlowAnalysis.plan_digest, action: 'IMPORT' }));
+      const receipt = await response.json();
+      if (!response.ok) throw new Error(receipt.error || 'A confirmação foi interrompida com segurança.');
+      if (!isValidWorkspaceFlowReceipt(receipt, 'committed')) throw new Error('O core não retornou um receipt de import válido; o wizard não pode mostrar pronto.');
+      workspaceFlowReceipt = receipt;
+      renderWorkspaceFlowReceipt(receipt);
+      setWorkspaceFlowFeedback('');
+    } catch (error) {
+      renderWorkspaceFlowProgress('confirm', error.message);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function rollbackWorkspaceFlow() {
+    const receipt = workspaceFlowReceipt;
+    if (!workspaceFlowSelection || !receipt?.receipt_id || !workspaceFlowAnalysis?.plan_digest) return;
+    renderWorkspaceFlowProgress('confirm');
+    try {
+      const response = await fetch('/api/workspace-flow/rollback', requestOptions('POST', { flow_id: workspaceFlowSelection.flow_id, plan_digest: workspaceFlowAnalysis.plan_digest, receipt_id: receipt.receipt_id, action: 'ROLLBACK' }));
+      const rolledBack = await response.json();
+      if (!response.ok) throw new Error(rolledBack.error || 'O rollback foi bloqueado com segurança.');
+      if (!isValidWorkspaceFlowRollback(rolledBack)) throw new Error('O core não retornou um receipt de rollback válido.');
+      workspaceFlowReceipt = rolledBack;
+      renderWorkspaceFlowReceipt(rolledBack);
+    } catch (error) {
+      renderWorkspaceFlowProgress('confirm', error.message);
+    }
+  }
+
+  async function createCleanWorkspace() {
+    createWorkspaceFlowScene();
+    if (!runtime) {
+      setWorkspaceFlowFeedback('Esta é uma prévia visual: o modo conectado criará o workspace e emitirá o receipt de readiness.', true);
+      return;
+    }
+    renderWorkspaceFlowProgress('confirm');
+    try {
+      const response = await fetch('/api/create-workspace', requestOptions('POST', { import_existing: false }));
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível criar o workspace.');
+      const receipt = payload.receipt;
+      if (!isValidWorkspaceReceipt(receipt, 'ready')) throw new Error('O core não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
+      renderWorkspaceFlowReceipt(receipt);
+    } catch (error) {
+      renderWorkspaceFlowProgress('confirm', error.message);
+    }
+  }
+
+  function resetWorkspaceFlow() {
+    workspaceFlowSelection = null;
+    workspaceFlowAnalysis = null;
+    workspaceFlowReceipt = null;
+    const scene = createWorkspaceFlowScene();
+    scene.querySelector('#workspace-flow-choice').hidden = false;
+    scene.querySelector('#workspace-flow-analysis').hidden = true;
+    scene.querySelector('#workspace-flow-result').hidden = true;
+    setWorkspaceFlowFeedback('');
+    renderWorkspaceFlowChoices();
   }
 
   function renderActivation(activation) {
@@ -328,7 +631,7 @@
       welcome: 'Etapa 1 de 4: boas-vindas. Escolha instalar o Maestro no seu perfil.',
       check: 'Etapa 2 de 4: verificação. Confira o release antes de qualquer mudança.',
       install: 'Etapa 3 de 4: instalação. O Maestro ficará no seu espaço de usuário.',
-      finish: 'Etapa 4 de 4: pronto. O Maestro está preparado para o primeiro comando.'
+      finish: 'Etapa 4 de 4: próximo passo. Escolha uma jornada e aguarde um receipt válido.'
     };
     if (stageAnnouncement) stageAnnouncement.textContent = announcements[name] || '';
     // Each installer step occupies the same app scene. Reset scroll roots so
@@ -343,6 +646,10 @@
     if (name === 'check') setProgress('verify');
     if (name === 'install') setProgress('install');
     if (name === 'finish') setProgress('complete');
+    if (name === 'finish') {
+      createWorkspaceFlowScene();
+      renderWorkspaceFlowChoices();
+    }
     if (name === 'check' && !verified) {
       verificationRun += 1;
       resetChecks();
@@ -371,6 +678,7 @@
       simulation = state.mode === 'simulation';
       installed = Boolean(state.installed) && !simulation;
       installedCLIPath = state.cli_path || '';
+      installedVersion = state.installed_version || '';
       defaultWorkspace = state.workspace_default || '';
       if (workspaceDefault && defaultWorkspace) workspaceDefault.textContent = defaultWorkspace;
       renderRuntimeTargets(state.runtimes);
@@ -386,6 +694,7 @@
         resetChecks();
       }
       if (installed) setFirstCommand(installedCLIPath);
+      renderWorkspaceFlowChoices();
     } catch (_) {
       // Opening index.html directly is a deliberate, non-mutating preview.
     }
@@ -538,6 +847,7 @@
       const response = await fetch('/api/create-workspace', requestOptions('POST', { import_existing: importExisting }));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível criar seu workspace.');
+      if (!isValidWorkspaceReceipt(payload.receipt, 'ready')) throw new Error('O core não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
       defaultWorkspace = payload.workspace_path || defaultWorkspace;
       renderActivation(payload.activation);
       renderRuntimeTargets(runtimeTargets);
@@ -545,8 +855,8 @@
       await pause(760);
       showRuntimeHandoff();
       showStatus(payload.source_registered
-        ? `Workspace pronto em ${payload.workspace_path}. A fonte será lida e organizada dentro dele, após a autorização no onboarding.`
-        : `Workspace pronto em ${payload.workspace_path}. Claude Code está configurado; a primeira sessão conduzirá o onboarding dentro do workspace.`);
+        ? `Workspace pronto em ${payload.workspace_path}. A fonte foi registrada apenas como ponteiro; nenhuma ingestão ocorreu.`
+        : `Workspace pronto em ${payload.workspace_path}. Claude Code está configurado; a primeira sessão ainda precisa observar os hooks.`);
     } catch (error) {
       setWorkspaceProvisioning('');
       showStatus(error.message);
@@ -609,6 +919,11 @@
     }
     if (action === 'verify') await verifyRelease();
     if (action === 'install') await installRelease();
+    if (action === 'workspace-flow') await startWorkspaceFlow(event.target.closest('[data-flow-mode]')?.dataset.flowMode);
+    if (action === 'confirm-workspace-flow') await confirmWorkspaceFlow();
+    if (action === 'rollback-workspace-flow') await rollbackWorkspaceFlow();
+    if (action === 'workspace-flow-back') resetWorkspaceFlow();
+    if (action === 'create-clean-workspace') await createCleanWorkspace();
     if (action === 'create-workspace') await createWorkspace(event.target.closest('[data-action="create-workspace"]'));
     if (action === 'replay-demo') runOnboardingDemo();
     if (action === 'open-data') await openDataFolder();

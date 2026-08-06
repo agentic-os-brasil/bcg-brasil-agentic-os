@@ -32,6 +32,9 @@ func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
 		{"install rejects get", http.MethodGet, "/api/install", http.StatusMethodNotAllowed},
 		{"open data rejects get", http.MethodGet, "/api/open-data", http.StatusMethodNotAllowed},
 		{"create workspace rejects get", http.MethodGet, "/api/create-workspace", http.StatusMethodNotAllowed},
+		{"workspace flow select rejects get", http.MethodGet, "/api/workspace-flow/select", http.StatusMethodNotAllowed},
+		{"workspace flow analyze rejects get", http.MethodGet, "/api/workspace-flow/analyze", http.StatusMethodNotAllowed},
+		{"workspace flow confirm rejects get", http.MethodGet, "/api/workspace-flow/confirm", http.StatusMethodNotAllowed},
 		{"launch runtime rejects get", http.MethodGet, "/api/launch-runtime", http.StatusMethodNotAllowed},
 		{"close rejects get", http.MethodGet, "/api/close", http.StatusMethodNotAllowed},
 	}
