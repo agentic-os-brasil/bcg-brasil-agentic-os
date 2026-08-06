@@ -12,6 +12,12 @@ import (
 
 const workspaceFlowSchemaVersion = 1
 
+const (
+	workspaceFlowSourceMutationNone               = "none"
+	workspaceFlowSourceMutationNoneUntilConfirmed = "none_until_confirmed"
+	workspaceFlowSourceMutationPointerOnly        = "pointer_recorded_pending_analysis"
+)
+
 type workspaceFlowMode string
 
 const (
@@ -177,7 +183,7 @@ func (backend fixtureWorkspaceFlowBackend) Confirm(_ context.Context, selection 
 	receipt.SchemaVersion = workspaceFlowSchemaVersion
 	receipt.FlowID = selection.FlowID
 	receipt.PlanDigest = planDigest
-	receipt.SourceMutation = "none_until_confirmed"
+	receipt.SourceMutation = workspaceFlowSourceMutationNone
 	return receipt, nil
 }
 
@@ -243,25 +249,55 @@ func validateWorkspaceFlowAnalysis(analysis workspaceFlowAnalysis, selection wor
 	if analysis.State != "plan_ready" || strings.TrimSpace(analysis.PlanDigest) == "" || !analysis.ConfirmationRequired {
 		return errors.New("análise do workspace não produziu um plano confirmável")
 	}
+	if analysis.Source.Kind != selection.Source.Kind || analysis.Source.PathChosen != selection.Source.PathChosen {
+		return errors.New("análise do workspace não está vinculada à fonte selecionada")
+	}
+	if analysis.SourceMutation != workspaceFlowSourceMutationNoneUntilConfirmed {
+		return errors.New("análise do workspace reportou mutação antes da confirmação")
+	}
 	return nil
+}
+
+func workspaceFlowOperationForMode(mode workspaceFlowMode) string {
+	switch mode {
+	case workspaceFlowModeUpdate:
+		return "maestro_update"
+	case workspaceFlowModeWorkspaceMigration:
+		return "workspace_migration"
+	case workspaceFlowModeExternalImport:
+		return "external_import"
+	default:
+		return ""
+	}
 }
 
 func validateWorkspaceFlowReceipt(receipt workspaceFlowReceipt, selection workspaceFlowSelection, planDigest string) error {
 	if receipt.SchemaVersion != workspaceFlowSchemaVersion || receipt.FlowID != selection.FlowID || receipt.PlanDigest != planDigest {
 		return errors.New("receipt do workspace não está vinculado à seleção ou ao plano")
 	}
+	if receipt.Operation != workspaceFlowOperationForMode(selection.Mode) {
+		return errors.New("receipt do workspace não corresponde à operação confirmada")
+	}
 	if !receipt.Valid || !receipt.Ready || receipt.Status != "committed" || strings.TrimSpace(receipt.ReceiptID) == "" {
 		return errors.New("receipt do workspace é inválido; a jornada não pode mostrar pronto")
 	}
-	for _, id := range []string{"staging", "validation", "rollback"} {
-		found := false
-		for _, stage := range receipt.Stages {
-			if stage.ID == id && strings.TrimSpace(stage.Status) != "" {
-				found = true
-				break
-			}
+	if receipt.SourceMutation != workspaceFlowSourceMutationNone {
+		return errors.New("receipt do workspace não confirma que a origem permaneceu intacta")
+	}
+	expectedStages := map[string]string{"staging": "completed", "validation": "completed", "rollback": "available"}
+	seen := make(map[string]bool, len(expectedStages))
+	for _, stage := range receipt.Stages {
+		expectedStatus, known := expectedStages[stage.ID]
+		if !known || seen[stage.ID] {
+			continue
 		}
-		if !found {
+		seen[stage.ID] = true
+		if stage.Status != expectedStatus || strings.TrimSpace(stage.Detail) == "" {
+			return fmt.Errorf("receipt do workspace tem estado inválido na etapa %q", stage.ID)
+		}
+	}
+	for id := range expectedStages {
+		if !seen[id] {
 			return fmt.Errorf("receipt do workspace não explica a etapa %q", id)
 		}
 	}

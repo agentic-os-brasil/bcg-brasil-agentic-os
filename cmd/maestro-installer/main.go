@@ -755,7 +755,7 @@ func wizardHandler(options options) http.Handler {
 		workspaceReceipt := workspaceFlowReceipt{
 			SchemaVersion: workspaceFlowSchemaVersion, ReceiptID: receiptID, Operation: "new_workspace",
 			Status: activation.State, Valid: activation.State == "ready" && result.WorkspaceID != "", Ready: activation.State == "ready" && result.WorkspaceID != "",
-			WorkspacePath: result.WorkspacePath, SourceMutation: map[bool]string{true: "pointer_recorded_pending_analysis", false: "none"}[sourcePath != ""],
+			WorkspacePath: result.WorkspacePath, SourceMutation: map[bool]string{true: workspaceFlowSourceMutationPointerOnly, false: workspaceFlowSourceMutationNone}[sourcePath != ""],
 			Stages: []workspaceFlowStage{
 				{ID: "staging", Status: "completed", Detail: "estrutura do workspace preparada no destino escolhido"},
 				{ID: "validation", Status: map[bool]string{true: "completed", false: "failed"}[activation.State == "ready"], Detail: "readiness do workspace conferido pelo installer"},
@@ -764,7 +764,7 @@ func wizardHandler(options options) http.Handler {
 		}
 		writeHTTPJSON(writer, map[string]any{
 			"status": activation.State, "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID,
-			"source_registered": sourcePath != "", "source_state": map[bool]string{true: "pointer_recorded_pending_analysis", false: "not_requested"}[sourcePath != ""],
+			"source_registered": sourcePath != "", "source_state": map[bool]string{true: workspaceFlowSourceMutationPointerOnly, false: "not_requested"}[sourcePath != ""],
 			"ingestion_state": map[bool]string{true: "not_ingested_pointer_only", false: "not_requested"}[sourcePath != ""],
 			"adapter_state":   activation.Lifecycle.State, "readiness_state": activation.State, "scheduler_state": activation.Maintenance.State,
 			"ready_for_runtime": activation.State == "ready", "diagnostic_command": workspaceDiagnosticCommand(options, result.WorkspacePath),
@@ -1417,7 +1417,7 @@ func writeImportIntent(workspacePath, sourcePath string) error {
 	value, err := json.MarshalIndent(map[string]any{
 		"schema_version": 1,
 		"source_path":    sourcePath,
-		"state":          "pointer_recorded_pending_analysis",
+		"state":          workspaceFlowSourceMutationPointerOnly,
 		"notice":         "Source was selected by the owner. No files have been read, copied or uploaded; this is not ingestion.",
 	}, "", "  ")
 	if err != nil {

@@ -118,7 +118,15 @@ func TestWorkspaceFlowUpdatePlanPreservesWorkspaceAndNamesMigration(t *testing.T
 func TestWorkspaceFlowRejectsInvalidReceiptBeforeReady(t *testing.T) {
 	backend := stubWorkspaceFlowBackend{
 		analysis: workspaceFlowAnalysis{SchemaVersion: 1, State: "plan_ready", FlowID: "flow-1", PlanDigest: "digest-1"},
-		receipt:  workspaceFlowReceipt{SchemaVersion: 1, FlowID: "flow-1", Status: "rolled_back", Valid: false},
+		receipt: workspaceFlowReceipt{
+			SchemaVersion: 1, FlowID: "flow-1", Operation: "maestro_update", SourceMutation: workspaceFlowSourceMutationNone,
+			Status: "committed", Valid: true, Ready: true,
+			Stages: []workspaceFlowStage{
+				{ID: "staging", Status: "completed", Detail: "staged"},
+				{ID: "validation", Status: "failed", Detail: "validation failed"},
+				{ID: "rollback", Status: "available", Detail: "rollback available"},
+			},
+		},
 	}
 	handler := wizardHandler(options{sessionToken: "test-token", workspaceFlow: backend})
 	selection := postWorkspaceFlow(t, handler, "/api/workspace-flow/select", `{"mode":"update"}`)
@@ -131,6 +139,53 @@ func TestWorkspaceFlowRejectsInvalidReceiptBeforeReady(t *testing.T) {
 	}
 	if !strings.Contains(confirmed.Body.String(), "receipt") || strings.Contains(confirmed.Body.String(), `"ready":true`) {
 		t.Fatalf("invalid receipt response = %s", confirmed.Body.String())
+	}
+}
+
+func TestWorkspaceFlowRejectsAnalysisThatClaimsMutationBeforeConfirmation(t *testing.T) {
+	handler := wizardHandler(options{
+		sessionToken: "test-token",
+		chooseWorkspaceSource: func(workspaceFlowMode) (string, error) {
+			return "/Users/pilot/External-notes", nil
+		},
+		workspaceFlow: stubWorkspaceFlowBackend{analysis: workspaceFlowAnalysis{PlanDigest: "unsafe", SourceMutation: "ingested"}},
+	})
+	selected := postWorkspaceFlow(t, handler, "/api/workspace-flow/select", `{"mode":"external_import"}`)
+	var selection workspaceFlowSelectionResponse
+	decodeWorkspaceFlow(t, selected, &selection)
+	analyzed := postWorkspaceFlow(t, handler, "/api/workspace-flow/analyze", `{"flow_id":"`+selection.FlowID+`"}`)
+	if analyzed.Code != http.StatusConflict || !strings.Contains(analyzed.Body.String(), "mutação") {
+		t.Fatalf("unsafe analysis response = %d %s", analyzed.Code, analyzed.Body.String())
+	}
+}
+
+func TestWorkspaceFlowRejectsReceiptForDifferentOperation(t *testing.T) {
+	handler := wizardHandler(options{
+		sessionToken: "test-token",
+		workspaceFlow: stubWorkspaceFlowBackend{
+			analysis: workspaceFlowAnalysis{PlanDigest: "op-plan"},
+			receipt: workspaceFlowReceipt{
+				Operation: workspaceFlowOperationForMode(workspaceFlowModeExternalImport),
+				Valid:     true,
+				Ready:     true,
+				Status:    "committed",
+				Stages: []workspaceFlowStage{
+					{ID: "staging", Status: "completed", Detail: "staged"},
+					{ID: "validation", Status: "completed", Detail: "validated"},
+					{ID: "rollback", Status: "available", Detail: "rollback available"},
+				},
+			},
+		},
+	})
+	selected := postWorkspaceFlow(t, handler, "/api/workspace-flow/select", `{"mode":"update"}`)
+	var selection workspaceFlowSelectionResponse
+	decodeWorkspaceFlow(t, selected, &selection)
+	analyzed := postWorkspaceFlow(t, handler, "/api/workspace-flow/analyze", `{"flow_id":"`+selection.FlowID+`"}`)
+	var analysis workspaceFlowAnalysis
+	decodeWorkspaceFlow(t, analyzed, &analysis)
+	confirmed := postWorkspaceFlow(t, handler, "/api/workspace-flow/confirm", `{"flow_id":"`+selection.FlowID+`","plan_digest":"`+analysis.PlanDigest+`"}`)
+	if confirmed.Code != http.StatusConflict || !strings.Contains(confirmed.Body.String(), "operação") {
+		t.Fatalf("wrong operation response = %d %s", confirmed.Code, confirmed.Body.String())
 	}
 }
 
@@ -168,6 +223,10 @@ func (stub stubWorkspaceFlowBackend) Analyze(_ context.Context, selection worksp
 	analysis.SchemaVersion = workspaceFlowSchemaVersion
 	analysis.FlowID = selection.FlowID
 	analysis.Mode = selection.Mode
+	analysis.Source = selection.Source
+	if analysis.SourceMutation == "" {
+		analysis.SourceMutation = workspaceFlowSourceMutationNoneUntilConfirmed
+	}
 	analysis.State = "plan_ready"
 	analysis.ConfirmationRequired = true
 	return analysis, nil
@@ -178,6 +237,12 @@ func (stub stubWorkspaceFlowBackend) Confirm(_ context.Context, selection worksp
 	receipt.SchemaVersion = workspaceFlowSchemaVersion
 	receipt.FlowID = selection.FlowID
 	receipt.PlanDigest = planDigest
+	if receipt.Operation == "" {
+		receipt.Operation = workspaceFlowOperationForMode(selection.Mode)
+	}
+	if receipt.SourceMutation == "" {
+		receipt.SourceMutation = workspaceFlowSourceMutationNone
+	}
 	return receipt, nil
 }
 

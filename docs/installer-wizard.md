@@ -86,7 +86,9 @@ workspace-flow bridge exposes these endpoints:
   without mutating a workspace or reading an external folder when the backend
   is unavailable.
 - `POST /api/workspace-flow/confirm` accepts only the exact plan digest and
-  returns a receipt containing staging, validation and rollback states.
+  returns a receipt containing `staging=completed`, `validation=completed` and
+  `rollback=available`; the operation must match the selected journey and the
+  receipt must confirm `source_mutation=none` before the wizard can show ready.
 
 The current repository intentionally supplies an `unavailable` backend for
 real runs because `internal/workspaceimport` and `internal/workspacemigration`

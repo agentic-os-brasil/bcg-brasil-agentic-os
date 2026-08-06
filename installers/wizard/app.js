@@ -255,6 +255,17 @@
     return `<article class="flow-classification"><h3>${escapeHTML(title)}</h3><ul>${rows}</ul></article>`;
   }
 
+  function isValidWorkspaceReceipt(receipt, expectedStatus) {
+    if (!receipt?.valid || !receipt.ready || receipt.status !== expectedStatus || !receipt.receipt_id || !receipt.operation) return false;
+    const required = { staging: 'completed', validation: 'completed', rollback: 'available' };
+    const seen = new Set();
+    for (const stage of Array.isArray(receipt.stages) ? receipt.stages : []) {
+      if (!(stage.id in required) || seen.has(stage.id) || stage.status !== required[stage.id] || !String(stage.detail || '').trim()) continue;
+      seen.add(stage.id);
+    }
+    return Object.keys(required).every(id => seen.has(id));
+  }
+
   function createWorkspaceFlowScene() {
     if (workspaceFlowScene) return workspaceFlowScene;
     const legacySetup = document.querySelector('#workspace-setup');
@@ -267,7 +278,7 @@
         <span class="eyebrow">ETAPA 04 · PRÓXIMO MOVIMENTO</span>
         <h1 id="workspace-flow-title" tabindex="-1">Escolha o próximo caminho.<br><em>Sem misturar as coisas.</em></h1>
         <p class="lead">Atualização, migração de um workspace Maestro e importação de uma pasta externa são jornadas diferentes. O Maestro explica cada uma antes de pedir confirmação.</p>
-        <div class="flow-options" role="list" aria-label="Caminhos disponíveis">
+        <div class="flow-options" aria-label="Caminhos disponíveis">
           <button class="flow-option" type="button" data-action="workspace-flow" data-flow-mode="update" data-requires-installed="true">
             <span class="flow-option-number">01</span><span><b>Atualizar o Maestro</b><small id="flow-update-copy">Preserva o workspace e mostra a migração de versão necessária.</small><em id="flow-update-version"></em></span><span class="arrow">↗</span>
           </button>
@@ -354,12 +365,15 @@
     if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
   }
 
-  function renderWorkspaceFlowProgress(mode) {
+  function renderWorkspaceFlowProgress(mode, errorMessage = '') {
     const target = document.querySelector('#workspace-flow-analysis');
     if (!target) return;
     const title = mode === 'confirm' ? 'Preparando com rastreabilidade.' : 'Analisando a fonte sem tocar nela.';
+    const failure = errorMessage
+      ? `<div class="callout runtime-error" role="alert"><span>!</span><p>${escapeHTML(errorMessage)}</p></div><div class="panel-actions"><button class="quiet" type="button" data-action="workspace-flow-back">Escolher outra fonte</button></div>`
+      : '';
     target.hidden = false;
-    target.innerHTML = `<span class="eyebrow">MAESTRO EM MOVIMENTO</span><h1 id="workspace-flow-analysis-title" tabindex="-1">${title}<br><em>cada estado fica visível.</em></h1><div class="flow-phase-track" role="list" aria-label="Estado da jornada"><div data-flow-phase="analysis" role="listitem"><b>01</b><span>Análise</span><small>classificar a fonte</small></div><div data-flow-phase="plan" role="listitem"><b>02</b><span>Plano</span><small>explicar o escopo</small></div><div data-flow-phase="confirm" role="listitem"><b>03</b><span>Confirmação</span><small>uma decisão explícita</small></div><div data-flow-phase="staging" role="listitem"><b>04</b><span>Staging</span><small>preparar sem substituir</small></div><div data-flow-phase="validation" role="listitem"><b>05</b><span>Validação</span><small>conferir o resultado</small></div><div data-flow-phase="rollback" role="listitem"><b>06</b><span>Rollback</span><small>manter a volta disponível</small></div></div><div class="flow-progress-note" role="status" aria-live="polite">${mode === 'confirm' ? 'Aguardando o receipt válido do bridge.' : 'A pasta ainda não foi lida; o bridge está preparando a análise.'}</div>`;
+    target.innerHTML = `<span class="eyebrow">MAESTRO EM MOVIMENTO</span><h1 id="workspace-flow-analysis-title" tabindex="-1">${title}<br><em>cada estado fica visível.</em></h1><div class="flow-phase-track" role="list" aria-label="Estado da jornada"><div data-flow-phase="analysis" role="listitem"><b>01</b><span>Análise</span><small>classificar a fonte</small></div><div data-flow-phase="plan" role="listitem"><b>02</b><span>Plano</span><small>explicar o escopo</small></div><div data-flow-phase="confirm" role="listitem"><b>03</b><span>Confirmação</span><small>uma decisão explícita</small></div><div data-flow-phase="staging" role="listitem"><b>04</b><span>Staging</span><small>preparar sem substituir</small></div><div data-flow-phase="validation" role="listitem"><b>05</b><span>Validação</span><small>conferir o resultado</small></div><div data-flow-phase="rollback" role="listitem"><b>06</b><span>Rollback</span><small>manter a volta disponível</small></div></div><div class="flow-progress-note${errorMessage ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHTML(errorMessage || (mode === 'confirm' ? 'Aguardando o receipt válido do bridge.' : 'A pasta ainda não foi lida; o bridge está preparando a análise.'))}</div>${failure}`;
     setWorkspaceFlowPhase(mode === 'confirm' ? 'staging' : 'analysis');
     const heading = target.querySelector('h1');
     if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
@@ -426,18 +440,11 @@
       const response = await fetch('/api/workspace-flow/confirm', requestOptions('POST', { flow_id: workspaceFlowSelection.flow_id, plan_digest: workspaceFlowAnalysis.plan_digest }));
       const receipt = await response.json();
       if (!response.ok) throw new Error(receipt.error || 'A confirmação foi interrompida com segurança.');
-      if (!receipt.valid || !receipt.ready || receipt.status !== 'committed' || !receipt.receipt_id) throw new Error('O bridge não retornou um receipt válido; o wizard não pode mostrar pronto.');
+      if (!isValidWorkspaceReceipt(receipt, 'committed')) throw new Error('O bridge não retornou um receipt válido; o wizard não pode mostrar pronto.');
       renderWorkspaceFlowReceipt(receipt);
       setWorkspaceFlowFeedback('');
     } catch (error) {
-      const target = document.querySelector('#workspace-flow-analysis');
-      if (target) target.hidden = false;
-      renderWorkspaceFlowProgress('confirm');
-      const note = target?.querySelector('.flow-progress-note');
-      if (note) {
-        note.textContent = error.message;
-        note.classList.add('is-error');
-      }
+      renderWorkspaceFlowProgress('confirm', error.message);
     } finally {
       if (button) button.disabled = false;
     }
@@ -455,17 +462,10 @@
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível criar o workspace.');
       const receipt = payload.receipt;
-      if (!receipt?.valid || !receipt.ready || receipt.status !== 'ready' || !receipt.receipt_id) throw new Error('O bridge não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
+      if (!isValidWorkspaceReceipt(receipt, 'ready')) throw new Error('O bridge não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
       renderWorkspaceFlowReceipt(receipt);
     } catch (error) {
-      const target = document.querySelector('#workspace-flow-analysis');
-      if (target) target.hidden = false;
-      renderWorkspaceFlowProgress('confirm');
-      const note = target?.querySelector('.flow-progress-note');
-      if (note) {
-        note.textContent = error.message;
-        note.classList.add('is-error');
-      }
+      renderWorkspaceFlowProgress('confirm', error.message);
     }
   }
 
@@ -803,15 +803,13 @@
       const response = await fetch('/api/create-workspace', requestOptions('POST', { import_existing: importExisting }));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível criar seu workspace.');
+      if (!isValidWorkspaceReceipt(payload.receipt, 'ready')) throw new Error('O bridge não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
       defaultWorkspace = payload.workspace_path || defaultWorkspace;
       renderActivation(payload.activation);
       renderRuntimeTargets(runtimeTargets);
       setWorkspaceProvisioning('ready');
       await pause(760);
       showRuntimeHandoff();
-      if (!payload.receipt?.valid || !payload.receipt?.ready || payload.receipt?.status !== 'ready' || !payload.receipt?.receipt_id) {
-        throw new Error('O bridge não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
-      }
       showStatus(payload.source_registered
         ? `Workspace pronto em ${payload.workspace_path}. A fonte foi registrada apenas como ponteiro; nenhuma ingestão ocorreu.`
         : `Workspace pronto em ${payload.workspace_path}. Claude Code está configurado; a primeira sessão ainda precisa observar os hooks.`);

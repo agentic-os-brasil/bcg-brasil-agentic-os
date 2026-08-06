@@ -63,7 +63,7 @@
       "status": "committed",
       "valid": true,
       "ready": true,
-      "source_mutation": "none_until_confirmed",
+      "source_mutation": "none",
       "stages": [
         {"id": "staging", "status": "completed", "detail": "payload e manifesto preparados fora do workspace"},
         {"id": "validation", "status": "completed", "detail": "versão e migração verificadas"},
@@ -77,7 +77,7 @@
       "status": "committed",
       "valid": true,
       "ready": true,
-      "source_mutation": "none_until_confirmed",
+      "source_mutation": "none",
       "stages": [
         {"id": "staging", "status": "completed", "detail": "migração preparada sem substituir a origem"},
         {"id": "validation", "status": "completed", "detail": "manifesto e escopo do workspace validados"},
@@ -91,7 +91,7 @@
       "status": "committed",
       "valid": true,
       "ready": true,
-      "source_mutation": "none_until_confirmed",
+      "source_mutation": "none",
       "stages": [
         {"id": "staging", "status": "completed", "detail": "ponteiro e itens elegíveis preparados em staging"},
         {"id": "validation", "status": "completed", "detail": "classificações e capacidade local conferidas"},
