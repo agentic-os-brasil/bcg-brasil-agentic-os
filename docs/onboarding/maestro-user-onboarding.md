@@ -127,11 +127,17 @@ antes de propor qualquer gravação local. O objetivo é construir um self
 profissional corrigível — não inferir personalidade nem importar silenciosamente
 o conteúdo de outro sistema.
 
-O percurso completo cobre oito facetas: papel profissional, estilo de
+As duas jornadas começam por identidade básica: como o owner prefere ser
+chamado e qual contexto pessoal, se houver, ele autoriza o Maestro a respeitar
+no trabalho. “Nenhum por enquanto” é uma resposta válida; não se pede história
+pessoal, saúde, fé ou outros identificadores por padrão.
+
+O percurso completo cobre depois oito facetas: papel profissional, estilo de
 comunicação, preferências de trabalho, voz externa, motivações profissionais,
 barra de qualidade/QA, regras de decisão e limites de trabalho. A jornada curta
-cobre papel, comunicação, preferências e barra de qualidade; começa mais rápido,
-mas demora mais para absorver voz, motivações, regras de decisão e limites.
+cobre identidade, contexto pessoal autorizado, papel, comunicação, preferências
+e barra de qualidade; começa mais rápido, mas demora mais para absorver voz,
+motivações, regras de decisão e limites de trabalho.
 
 Personality/psychological profile, história pessoal, fé, avaliações e identidade
 visual ficam fora da entrevista padrão. Só entram por uma etapa local,
@@ -139,7 +145,7 @@ explicitamente autorizada, com finalidade e revisão próprias.
 
 Isso não significa que o Maestro conheça apenas o cargo. Depois da revisão do
 percurso escolhido, ele pode oferecer camadas opcionais — propósito e não
-negociáveis, contexto pessoal autorizado, personalidade/avaliações ou identidade
+negociáveis, contexto pessoal ampliado, personalidade/avaliações ou identidade
 visual — sempre com finalidade, fonte, leitores e retenção explícitos. Essas
 camadas não são necessárias para começar um trabalho profissional, não entram em
 contexto de cliente por padrão e permanecem `unavailable` quando não houver um
@@ -147,8 +153,9 @@ adaptador local qualificado.
 
 Escolha entre:
 
-- **Curta — cerca de 7 minutos:** baseline operacional para começar com segurança.
-- **Completa — cerca de 25 minutos:** perfil profissional mais fiel para
+- **Curta — cerca de 10 minutos:** baseline operacional com identidade e limites
+  pessoais mínimos para começar com segurança.
+- **Completa — cerca de 30 minutos:** perfil profissional mais fiel para
   recomendações, comunicação e revisão de qualidade desde o início.
 
 Em ambos os casos, o Maestro resume o que entendeu, espera sua correção e só
