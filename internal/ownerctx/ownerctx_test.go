@@ -273,7 +273,7 @@ func TestInitializeCreatesProfessionalFacetsAndInterviewWithoutSensitiveDefaultR
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"professional-role", "communication-style", "voice", "preferences", "motivations", "quality-bar", "decision-rules", "working-boundaries", "psychological-profile"} {
+	for _, id := range []string{"owner-identity", "personal-context", "professional-role", "communication-style", "voice", "preferences", "motivations", "quality-bar", "decision-rules", "working-boundaries", "psychological-profile"} {
 		facet, ok := status.Facets[id]
 		if !ok || !facet.Available {
 			t.Fatalf("facet %q = %#v", id, facet)
@@ -283,11 +283,16 @@ func TestInitializeCreatesProfessionalFacetsAndInterviewWithoutSensitiveDefaultR
 		t.Fatalf("unexpected refinement policy: %#v", status.Facets)
 	}
 	interview := ColdStartInterview()
-	if len(interview.Steps) != len(onboardingFacets) || interview.Steps[0].Facet != "professional-role" {
+	if len(interview.Steps) != len(completeOnboardingFacets) || interview.Steps[0].Facet != "owner-identity" {
 		t.Fatalf("interview = %#v", interview)
 	}
-	if interview.Steps[5].Facet != "quality-bar" || !strings.Contains(interview.Steps[5].Question, "QA") {
-		t.Fatalf("quality bar question = %#v", interview.Steps[5])
+	if interview.Steps[1].Facet != "personal-context" || !strings.Contains(interview.Steps[1].Question, "nenhum por enquanto") {
+		t.Fatalf("personal context question = %#v", interview.Steps[1])
+	}
+	for _, step := range interview.Steps {
+		if step.Facet == "quality-bar" && !strings.Contains(step.Question, "QA") {
+			t.Fatalf("quality bar question = %#v", step)
+		}
 	}
 	for _, step := range interview.Steps {
 		if step.Facet == "psychological-profile" {
@@ -308,7 +313,7 @@ func TestOnboardingRequiresExplicitConfirmationAndCountsOnlyExplicitOpenTasks(t 
 	if _, err := SelectOnboardingTrack(root, OnboardingTrackComplete); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range onboardingFacets {
+	for _, id := range completeOnboardingFacets {
 		template := facets[id]
 		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)), []byte(template.Body+"\nOwner-confirmed detail.\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -348,7 +353,7 @@ func TestQuickOnboardingIsAnExplicitBoundedBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	quickInterview := QuickStartInterview()
-	wantFacets := []string{"professional-role", "communication-style", "preferences", "quality-bar"}
+	wantFacets := []string{"owner-identity", "personal-context", "professional-role", "communication-style", "preferences", "quality-bar"}
 	if len(quickInterview.Steps) != len(wantFacets) {
 		t.Fatalf("quick interview steps = %#v", quickInterview.Steps)
 	}
@@ -358,7 +363,7 @@ func TestQuickOnboardingIsAnExplicitBoundedBaseline(t *testing.T) {
 		}
 	}
 	status, err := SelectOnboardingTrack(root, OnboardingTrackQuick)
-	if err != nil || status.Onboarding.Track != OnboardingTrackQuick || status.Onboarding.EstimatedMinutes != 7 || len(status.Onboarding.Remaining) != len(quickOnboardingFacets) {
+	if err != nil || status.Onboarding.Track != OnboardingTrackQuick || status.Onboarding.EstimatedMinutes != 10 || len(status.Onboarding.Remaining) != len(quickOnboardingFacets) {
 		t.Fatalf("quick status = %#v err=%v", status, err)
 	}
 	for _, id := range quickOnboardingFacets {
@@ -377,6 +382,52 @@ func TestQuickOnboardingIsAnExplicitBoundedBaseline(t *testing.T) {
 	status, err = SelectOnboardingTrack(root, OnboardingTrackComplete)
 	if err != nil || status.Onboarding.State != "in_progress" || status.Onboarding.NextQuestion.Facet != "voice" {
 		t.Fatalf("upgrade status = %#v err=%v", status, err)
+	}
+}
+
+func TestConfirmedPreIdentityQuickProfileIsNotSilentlyReopened(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SelectOnboardingTrack(root, OnboardingTrackQuick); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range legacyQuickOnboardingFacets {
+		template := facets[id]
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)), []byte(template.Body+"\nLegacy quick answer.\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	registryPath := filepath.Join(root, "owner", "registry.json")
+	body, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value registry
+	if err := json.Unmarshal(body, &value); err != nil {
+		t.Fatal(err)
+	}
+	value.OnboardingConfirmedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	value.OnboardingConfirmedSHA256 = onboardingDigestForFacets(root, OnboardingTrackQuick, legacyQuickOnboardingFacets)
+	value.OnboardingTrack = OnboardingTrackQuick
+	body, err = json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(registryPath, append(body, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Inspect(root)
+	if err != nil || status.Onboarding.State != "complete" || status.Onboarding.Track != OnboardingTrackQuick {
+		t.Fatalf("legacy quick status = %#v err=%v", status, err)
+	}
+	if _, err := SelectOnboardingTrack(root, OnboardingTrackQuick); err != nil {
+		t.Fatal(err)
+	}
+	status, err = Inspect(root)
+	if err != nil || status.Onboarding.State != "in_progress" || status.Onboarding.NextQuestion.Facet != "owner-identity" {
+		t.Fatalf("fresh quick selection status = %#v err=%v", status, err)
 	}
 }
 
