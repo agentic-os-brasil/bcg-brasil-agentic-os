@@ -391,6 +391,10 @@ bcgos maintenance status
 bcgos maintenance catalog
 bcgos maintenance wake --trigger presence
 bcgos ingest --workspace <path> --source <local-file> --adapter markitdown
+bcgos workspace import inspect --source <external-workspace>
+bcgos workspace import plan --source <external-workspace> --destination <maestro-workspace> --out <plan.json>
+bcgos workspace import approve --plan <plan.json> --approved-by <owner> --confirm IMPORT --out <approval.json>
+bcgos workspace import execute --plan <plan.json> --approval <approval.json>
 bcgos prior-work actor
 bcgos prior-work source status --workspace <path>
 bcgos prior-work source select --workspace <path> --stdin --confirm

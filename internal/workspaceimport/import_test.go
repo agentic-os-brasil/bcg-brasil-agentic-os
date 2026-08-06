@@ -1,0 +1,581 @@
+package workspaceimport
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func writeFixture(t *testing.T, root, name, body string) string {
+	t.Helper()
+	path := filepath.Join(root, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestInspectClassifiesSyntheticSourcesWithoutReadingBodies(t *testing.T) {
+	tests := []struct {
+		name      string
+		marker    string
+		wantClass string
+		wantState string
+	}{
+		{name: "native", marker: ".bcgos/workspace.json", wantClass: ClassificationMaestroNative, wantState: "blocked"},
+		{name: "legacy", marker: "maestro.json", wantClass: ClassificationMaestroLegacy, wantState: "ready"},
+		{name: "kowalski", marker: "kowalski.json", wantClass: ClassificationKowalski, wantState: "ready"},
+		{name: "foreign", marker: "notes.md", wantClass: ClassificationForeign, wantState: "ready"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFixture(t, root, test.marker, "synthetic fixture body")
+			inspection, err := Inspect(root, Limits{MaxEntries: 20, MaxDepth: 5, MaxFileBytes: 1024, MaxTotalBytes: 4096})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if inspection.Classification != test.wantClass || inspection.State != test.wantState || !inspection.ReadOnly || !inspection.Bounded {
+				t.Fatalf("inspection = %#v", inspection)
+			}
+			foundFile := false
+			for _, entry := range inspection.Entries {
+				if entry.Kind == "file" && entry.Size > 0 {
+					foundFile = true
+				}
+			}
+			if test.wantClass != ClassificationMaestroNative && !foundFile {
+				t.Fatalf("metadata inventory did not retain file size: %#v", inspection.Entries)
+			}
+		})
+	}
+}
+
+func TestInspectNeverFollowsSymlink(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	writeFixture(t, outside, "secret.txt", "synthetic secret must not be read")
+	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	inspection, err := Inspect(root, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.SymlinkCount != 1 || len(inspection.Entries) != 1 || inspection.Entries[0].Kind != "symlink" || !inspection.Entries[0].Unsafe {
+		t.Fatalf("symlink inventory = %#v", inspection)
+	}
+	for _, entry := range inspection.Entries {
+		if strings.Contains(entry.RelativePath, "secret") {
+			t.Fatalf("symlink target was traversed: %#v", inspection.Entries)
+		}
+	}
+}
+
+func TestInspectIsBounded(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 5; i++ {
+		writeFixture(t, root, filepath.Join("nested", string(rune('a'+i))+".md"), "fixture")
+	}
+	inspection, err := Inspect(root, Limits{MaxEntries: 2, MaxDepth: 2, MaxFileBytes: 1024, MaxTotalBytes: 4096})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.State != "bounded" || inspection.EntryCount > 2 || len(inspection.Warnings) == 0 {
+		t.Fatalf("bounded inspection = %#v", inspection)
+	}
+}
+
+func TestBuildPlanQuarantinesDocumentsAndReportsConflicts(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, "brief.md", "synthetic markdown")
+	writeFixture(t, source, "brief.docx", "synthetic document bytes")
+	writeFixture(t, source, "binary.bin", "synthetic binary")
+	writeFixture(t, destination, "brief.md", "existing destination")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Conflicts) != 1 || plan.Conflicts[0].Path != "brief.md" {
+		t.Fatalf("conflicts = %#v", plan.Conflicts)
+	}
+	var document, binary PlanEntry
+	for _, entry := range plan.Entries {
+		if entry.SourcePath == "brief.docx" {
+			document = entry
+		}
+		if entry.SourcePath == "binary.bin" {
+			binary = entry
+		}
+	}
+	if document.Action != ActionQuarantine || document.Availability != "unavailable" || !strings.Contains(document.Reason, "runtime") {
+		t.Fatalf("document entry = %#v", document)
+	}
+	if binary.Action != ActionQuarantine || binary.Availability != "unsupported" {
+		t.Fatalf("binary entry = %#v", binary)
+	}
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "conflicts") {
+		t.Fatalf("conflicted plan accepted: %v", err)
+	}
+}
+
+func TestNativeWorkspacePlanFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, ".bcgos/workspace.json", `{"schema_version":1}`)
+	writeFixture(t, source, "brain/note.md", "synthetic native content")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Classification != ClassificationMaestroNative {
+		t.Fatalf("classification = %q", plan.Classification)
+	}
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "native") {
+		t.Fatalf("native plan accepted: %v", err)
+	}
+}
+
+func TestExecuteIsStagedIdempotentAndRollbackLeavesSource(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sourceFile := writeFixture(t, source, "brain/note.md", "synthetic migration fixture")
+	original, err := os.ReadFile(sourceFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Entries) != 1 {
+		t.Fatalf("plan entries = %#v", plan.Entries)
+	}
+	if _, err := Approve(plan, "synthetic-owner", "wrong"); err == nil {
+		t.Fatal("approval without exact confirmation succeeded")
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := Execute(dataRoot, plan, approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.State != "executed" || len(receipt.Copied) != 1 {
+		t.Fatalf("receipt = %#v", receipt)
+	}
+	imported, err := os.ReadFile(filepath.Join(destination, "brain", "note.md"))
+	if err != nil || string(imported) != string(original) {
+		t.Fatalf("imported = %q, err=%v", imported, err)
+	}
+	repeated, err := Execute(dataRoot, plan, approval)
+	if err != nil || repeated.RunID != receipt.RunID || repeated.RecordedAt != receipt.RecordedAt {
+		t.Fatalf("idempotent receipt = %#v, err=%v", repeated, err)
+	}
+	if after, err := os.ReadFile(sourceFile); err != nil || string(after) != string(original) {
+		t.Fatalf("source changed: %q, err=%v", after, err)
+	}
+	rolled, err := Rollback(dataRoot, plan, receipt, ConfirmRollback)
+	if err != nil || rolled.State != PlanStateRolledBack {
+		t.Fatalf("rollback = %#v, err=%v", rolled, err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "brain", "note.md")); !os.IsNotExist(err) {
+		t.Fatalf("rollback left destination file: %v", err)
+	}
+	if after, err := os.ReadFile(sourceFile); err != nil || string(after) != string(original) {
+		t.Fatalf("rollback changed source: %q, err=%v", after, err)
+	}
+}
+
+func TestPlanDigestAndSourceMetadataAreImmutable(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	file := writeFixture(t, source, "note.md", "one")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("two"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Execute(dataRoot, plan, approval); err == nil || !strings.Contains(err.Error(), "metadata") {
+		t.Fatalf("changed source was accepted: %v", err)
+	}
+	plan.PlanDigest = strings.Repeat("0", 64)
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "digest") {
+		t.Fatalf("tampered plan was accepted: %v", err)
+	}
+}
+
+func TestExecuteRejectsSymlinkedSourceParentAndPersistsFailedReceipt(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, "brain/note.md", "source fixture")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	writeFixture(t, outside, "note.md", "outside fixture")
+	if err := os.Rename(filepath.Join(source, "brain"), filepath.Join(source, "brain-original")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(source, "brain")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	receipt, err := Execute(dataRoot, plan, approval)
+	if err == nil || receipt.State != "failed" {
+		t.Fatalf("symlinked source parent accepted: receipt=%#v err=%v", receipt, err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "brain", "note.md")); !os.IsNotExist(err) {
+		t.Fatalf("failed execution created destination: %v", err)
+	}
+	stored, err := ReadReceipt(filepath.Join(dataRoot, "workspace-import", "receipts", receipt.RunID+".json"))
+	if err != nil || stored.State != "failed" {
+		t.Fatalf("failed receipt not persisted: receipt=%#v err=%v", stored, err)
+	}
+}
+
+func TestExecuteRejectsContentMutationWithStableMetadata(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	file := writeFixture(t, source, "note.md", "one")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("two"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(file, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Execute(dataRoot, plan, approval); err == nil || !strings.Contains(err.Error(), "content") {
+		t.Fatalf("content mutation with stable metadata was accepted: %v", err)
+	}
+}
+
+func TestRollbackRefusesChangedDestination(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, "note.md", "original")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := Execute(dataRoot, plan, approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destination, "note.md"), []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Rollback(dataRoot, plan, receipt, ConfirmRollback); err == nil || !strings.Contains(err.Error(), "changed") {
+		t.Fatalf("rollback removed changed destination: %v", err)
+	}
+	if body, err := os.ReadFile(filepath.Join(destination, "note.md")); err != nil || string(body) != "tampered" {
+		t.Fatalf("tampered destination was removed: %q err=%v", body, err)
+	}
+}
+
+func TestExecuteAnchorsDestinationParentDuringAdversarialSwap(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(filepath.Join(destination, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, "nested/note.md", "synthetic destination swap fixture")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	nested := filepath.Join(destination, "nested")
+	secureCommitParentHook = func(parent string) {
+		if parent != nested {
+			return
+		}
+		secureCommitParentHook = nil
+		if err := os.Rename(nested, filepath.Join(destination, "nested-original")); err != nil {
+			t.Fatalf("swap destination parent: %v", err)
+		}
+		if err := os.Symlink(outside, nested); err != nil {
+			t.Fatalf("install destination parent symlink: %v", err)
+		}
+	}
+	defer func() { secureCommitParentHook = nil }()
+	receipt, err := Execute(dataRoot, plan, approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.State != PlanStateExecuted {
+		t.Fatalf("receipt = %#v", receipt)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "note.md")); !os.IsNotExist(err) {
+		t.Fatalf("destination parent swap escaped into outside tree: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "nested-original", "nested", "note.md")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected anchored destination layout: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "nested-original", "note.md")); err != nil {
+		t.Fatalf("anchored destination file missing: %v", err)
+	}
+	if err := os.Remove(nested); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(destination, "nested-original"), nested); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Rollback(dataRoot, plan, receipt, ConfirmRollback); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExecuteRejectsForgedAndCorruptTerminalReceipts(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, "note.md", "receipt fixture")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := Execute(dataRoot, plan, approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiptPath := filepath.Join(dataRoot, "workspace-import", "receipts", receipt.RunID+".json")
+	for _, mutate := range []func(*Receipt){
+		func(forged *Receipt) { forged.PlanID = "wimp-" + strings.Repeat("0", 16) },
+		func(forged *Receipt) { forged.RollbackPaths = []string{"unexpected.md"} },
+		func(forged *Receipt) { forged.RollbackDigests[forged.RollbackPaths[0]] = strings.Repeat("0", 64) },
+	} {
+		forged := receipt
+		forged.RollbackDigests = map[string]string{}
+		for path, digest := range receipt.RollbackDigests {
+			forged.RollbackDigests[path] = digest
+		}
+		mutate(&forged)
+		if err := writeJSONAtomic(receiptPath, forged); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Execute(dataRoot, plan, approval); err == nil || !strings.Contains(err.Error(), "receipt") {
+			t.Fatalf("forged receipt accepted: %v", err)
+		}
+		if err := writeJSONAtomic(receiptPath, receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(receiptPath, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Execute(dataRoot, plan, approval); err == nil || !strings.Contains(err.Error(), "receipt") {
+		t.Fatalf("corrupt receipt accepted: %v", err)
+	}
+}
+
+func TestExecuteRecoversPreparedJournalAfterCrashWindow(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, "note.md", "crash recovery fixture")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := "run-" + plan.PlanDigest[:16]
+	stageRoot := filepath.Join(dataRoot, "workspace-import", "staging", runID)
+	writeFixture(t, stageRoot, "note.md", "crash recovery fixture")
+	journal := buildJournal(plan, stageRoot, runID)
+	if err := writeJournal(journalPath(dataRoot, runID), journal); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := Execute(dataRoot, plan, approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.State != PlanStateExecuted {
+		t.Fatalf("recovered receipt = %#v", receipt)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "note.md")); err != nil {
+		t.Fatalf("recovered destination missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(stageRoot, "note.md")); !os.IsNotExist(err) {
+		t.Fatalf("recovery left staged file: %v", err)
+	}
+	if after, err := os.ReadFile(filepath.Join(source, "note.md")); err != nil || string(after) != "crash recovery fixture" {
+		t.Fatalf("recovery changed source: %q err=%v", after, err)
+	}
+}
+
+func TestExecuteRecoversCommitBeforeReceiptWindow(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, "note.md", "commit window fixture")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := "run-" + plan.PlanDigest[:16]
+	stageRoot := filepath.Join(dataRoot, "workspace-import", "staging", runID)
+	writeFixture(t, stageRoot, "note.md", "commit window fixture")
+	writeFixture(t, destination, "note.md", "commit window fixture")
+	journal := buildJournal(plan, stageRoot, runID)
+	if err := writeJournal(journalPath(dataRoot, runID), journal); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := Execute(dataRoot, plan, approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.State != PlanStateExecuted {
+		t.Fatalf("recovered commit-window receipt = %#v", receipt)
+	}
+	if _, err := os.Stat(filepath.Join(stageRoot, "note.md")); !os.IsNotExist(err) {
+		t.Fatalf("recovery left duplicate stage: %v", err)
+	}
+}
+
+func TestExecuteUsesPlanDigestLease(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, "note.md", "lease fixture")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	executeLockHook = func() {
+		close(entered)
+		<-release
+	}
+	defer func() { executeLockHook = nil }()
+	firstResult := make(chan error, 1)
+	go func() {
+		_, firstErr := Execute(dataRoot, plan, approval)
+		firstResult <- firstErr
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first execution did not acquire lease")
+	}
+	secondResult := make(chan error, 1)
+	go func() {
+		_, secondErr := Execute(dataRoot, plan, approval)
+		secondResult <- secondErr
+	}()
+	select {
+	case secondErr := <-secondResult:
+		if secondErr == nil || !strings.Contains(secondErr.Error(), "already executing") {
+			t.Fatalf("concurrent execution was not rejected: %v", secondErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("concurrent execution did not fail closed on lease")
+	}
+	close(release)
+	if firstErr := <-firstResult; firstErr != nil {
+		t.Fatal(firstErr)
+	}
+}
