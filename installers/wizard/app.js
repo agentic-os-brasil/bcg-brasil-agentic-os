@@ -147,7 +147,11 @@
     }[selectedIntent] || ['Vou começar agora — estou muito empolgado. 🎼', 'Escolha uma direção; o Maestro conduzirá a próxima etapa sem tocar nos seus arquivos.'];
     if (intentMessage) intentMessage.textContent = copy[0];
     if (intentSubcopy) intentSubcopy.textContent = copy[1];
-    document.querySelectorAll('[data-intent]').forEach(button => button.classList.toggle('is-selected', button.dataset.intent === selectedIntent));
+    document.querySelectorAll('[data-intent]').forEach(button => {
+      const selected = button.dataset.intent === selectedIntent;
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
   }
 
   function setProgressBar(kind, value, label) {
@@ -263,8 +267,14 @@
 
   function showRuntimeHandoff() {
     document.querySelector('#workspace-setup').hidden = true;
-    document.querySelector('#runtime-handoff').hidden = false;
+    const handoff = document.querySelector('#runtime-handoff');
+    handoff.hidden = false;
     updateFinishCopy();
+    alignActiveScene(handoff);
+    window.requestAnimationFrame(() => {
+      handoff.scrollTop = 0;
+      handoff.querySelector('h1')?.focus({ preventScroll: true });
+    });
   }
 
   function escapeHTML(value) {
