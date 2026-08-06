@@ -143,13 +143,15 @@ attestation is not cryptographic principal authentication.
 | ✅ Local continuity loop | `bcgos maestro status` derives calibration, open work/checkpoint presence, attested signals, memory, maintenance and runtime evidence from their existing local authorities. An explicitly enrolled macOS Canary may run deterministic three-hour L1/checkpoint work while idle. Model-backed deep dreaming, lifetime promotion, Walter weekly review and native qualification remain unavailable. |
 | ✅ Local ingestion | Provider-neutral contract, Docling-first fallback selector, bounded MarkItDown adapter and fail-closed `bcgos ingest`; conversion remains unavailable until an approved managed runtime pack is verified. |
 | ✅ Governed prior-work retrieval | Enrollment, signed snapshot import, deterministic local indexing, explicit search, freshness, revocation and scheduling are implemented and locally validated. Native Claude collection remains unavailable pending a qualifying trial; Codex collection is prohibited by corporate policy. |
-| 🛡️ Versioned workspace migration | Immutable plans, bounded managed-file snapshots, governed hook/skill reprojection and rollback are implemented locally. The public execution surface remains fail-closed until a trusted stable-bootstrapper verifier, safe managed-target primitives and an explicit workspace target are wired. |
+| 🛡️ Workspace import and migration boundaries | Transactional external import and versioned migration cores, plus installer analysis/receipt UX, are implemented and locally tested. External import requires explicit `IMPORT`/`ROLLBACK` approval and keeps unsupported formats unavailable; native workspace migration remains unavailable pending trusted stable-bootstrapper activation and managed-target authority. |
 
 > **Truth in labeling.** `v0.1.0` is the product target and contract/canary
 > baseline, not a claim that native runtime activation, telemetry, a signed
 > end-user release or a user pilot is available. Pilot distribution, native
 > schedulers and hosted bridge operation remain release operations with their
-> own evidence.
+> own evidence. The repository `VERSION` remains `0.0.0` as a factory-dev
+> marker; release candidates receive an explicit semantic version (the current
+> target is `0.1.0`), and no published `v0.1.0` artifact is claimed here.
 
 ### Continuous use after installation
 
@@ -205,14 +207,22 @@ from lifecycle evidence alone:
   gates; **pilot-ready** additionally requires clean-device acceptance,
   support/incident ownership and the pilot gate.
 
-**Evidence snapshot:** `as_of: 2026-08-05` · source baseline:
-`677885b5cd8ae587fe940cb485d71f18934dbddf` (merged PR #187) · test evidence:
-the full local development harness was run for the merged SELF, continuous-use
-and onboarding changes; hosted CI is not configured and is not inferred from
-that local evidence · runtime evidence: no reproducible in-repo runtime-version
-artifact or fresh native-session receipt for Claude or Codex · release/pilot
-evidence: no organization-signed artifact, clean-device acceptance,
-support/incident owner or pilot-gate record in this snapshot.
+**Evidence snapshot:** `as_of: 2026-08-06` · source baseline:
+`b3d85edeac16816ccca8b69cf887a7d674786710` (`origin/main`, including the
+workspace import, migration and installer-flow changes) · local evidence:
+`go run ./dev/harness validate`, `wiki validate` and `wiki verify` pass.
+`validate --full` reaches contracts, gofmt and `go vet`, but its full unit-test
+pass is not green in this sandbox (IPv6 listener restriction, one MarkItDown
+timeout and one timing-sensitive Walter lease); focused reruns passed the first
+two and a three-run Walter rerun, so the full gate remains environmentally
+inconclusive rather than claimed green · hosted CI evidence: none; the
+repository workflows remain disabled and billing or hosted status is not
+inferred from local passes · runtime evidence: no fresh attended Claude/Codex
+native-session receipt or reproducible in-repo runtime-version artifact ·
+release/pilot evidence: no organization-signed or notarized artifact, Windows
+device acceptance, clean-device acceptance, support/incident owner or pilot-gate
+record. `native_qualified`, CI-green, release-ready and pilot-ready are
+therefore not declared.
 
 ### Maturity ladder
 
@@ -396,6 +406,7 @@ bcgos workspace import inspect --source <external-workspace>
 bcgos workspace import plan --source <external-workspace> --destination <maestro-workspace> --out <plan.json>
 bcgos workspace import approve --plan <plan.json> --approved-by <owner> --confirm IMPORT --out <approval.json>
 bcgos workspace import execute --plan <plan.json> --approval <approval.json>
+bcgos workspace-migration status --runtime <claude|codex> [workspace]
 bcgos prior-work actor
 bcgos prior-work source status --workspace <path>
 bcgos prior-work source select --workspace <path> --stdin --confirm

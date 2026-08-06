@@ -15,7 +15,7 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/wiki-entrypoint
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 4e94811c1050f1c9a3c25b05023bec8b5f5887f9dd509519c5bdf938af0818ff
+x-bcgos-source-fingerprint: 847e507bde003b5d4269d8b0594f6224c917c573521895a6afd04c93d902a2ab
 x-bcgos-freshness: fresh
 x-bcgos-status: active
 x-bcgos-generator-version: bcgos-managed-wiki/0.2
@@ -86,7 +86,12 @@ generation and validation gate.
 
 ## Current evidence boundary
 
-The managed atlas compiler is implemented and deterministic. Managed content is
-locally reviewable and distributable as a bundle, while private atlas
-compilation, runtime-native navigation and pilot distribution remain separate
-qualification and release gates.
+The managed atlas compiler is implemented and deterministic. For the current
+source baseline (`as_of: 2026-08-06`, commit
+`b3d85edeac16816ccca8b69cf887a7d674786710`), the local harness records
+`wiki validate` and `wiki verify` as reproducible evidence. Managed content is
+locally reviewable and distributable as a bundle; private-atlas compilation,
+runtime-native navigation and pilot distribution remain separate qualification
+and release gates. A generated atlas page or a local wiki pass does not prove
+hosted CI, native qualification, signing/notarization, Windows acceptance or
+pilot readiness.

@@ -3,6 +3,15 @@
 This repository is the product factory. Pilot users receive immutable release
 artifacts; they do not clone the source repository.
 
+## Factory version versus product target
+
+`VERSION` is intentionally `0.0.0`: it identifies the source factory/dev
+checkout and is not a distributable Maestro release. Release tooling requires an
+explicit `MAJOR.MINOR.PATCH` value on the command line and binds that value into
+the candidate manifest and artifacts. `0.1.0` is the current product and
+contract/canary target only; no published, signed or pilot-ready `v0.1.0`
+artifact is implied by this repository state.
+
 ## State model
 
 1. **Source snapshot** - a reviewed commit that passes the full development
@@ -190,6 +199,23 @@ signed bootstrapper seed must install the approved registry before a provider
 release can become trusted.
 
 No production path may convert `unavailable` into an unsigned override.
+
+## Evidence freshness (2026-08-06)
+
+The current source baseline is `b3d85edeac16816ccca8b69cf887a7d674786710`
+(`origin/main`). The local contributor-harness and managed-wiki gates are the
+evidence surface for this snapshot: `validate`, `wiki validate` and `wiki
+verify` pass. `validate --full` reaches contracts, formatting and `go vet`, but
+its sandbox full-test pass is environmentally inconclusive because of an IPv6
+listener restriction, a transient MarkItDown timeout and a timing-sensitive
+Walter lease; focused reruns passed those cases. Hosted CI is not claimed:
+the workflow files in this checkout are disabled, so billing or hosted-run
+state cannot be inferred from local passes. The installer workspace-flow and
+import/migration tests are repository evidence, not fresh Claude/Codex native
+qualification. Windows has no single cross-architecture universal `.exe`;
+x64/ARM64 device behavior (or an architecture-detecting installer), Authenticode, macOS
+Developer ID/notarization, production Ed25519 custody, clean-device acceptance,
+support ownership and pilot approval remain open release gates.
 
 ## Release decision checklist
 
