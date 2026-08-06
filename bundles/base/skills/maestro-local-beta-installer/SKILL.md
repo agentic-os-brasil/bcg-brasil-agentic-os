@@ -86,6 +86,8 @@ path. Keep all paths absolute when invoking the packaging script.
 ### 1. Candidate
 
 ```sh
+set -euo pipefail
+
 go run ./dev/release candidate \
   --version "$VERSION" --channel canary \
   --output "$ROOT/dist/release-candidate-$VERSION"
@@ -97,6 +99,8 @@ platform CLIs, base bundle, manifest and release notes.
 ### 2. Test-only manifest signature
 
 ```sh
+set -euo pipefail
+
 go run ./dev/release sign \
   --candidate "$ROOT/dist/release-candidate-$VERSION" \
   --output "$ROOT/dist/signed-release-$VERSION" \
@@ -115,6 +119,8 @@ do not generate a new key silently and do not weaken verification.
 ### 3. Current native bridge and correctly seeded bootstrapper
 
 ```sh
+set -euo pipefail
+
 mkdir -p "$ROOT/dist/native-$VERSION"
 REGISTRY_SHA256="$(shasum -a 256 "$REGISTRY" | awk '{print $1}')"
 GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath \
@@ -141,6 +147,8 @@ must not be bypassed with guessed publication inputs.
 ### 4. Icon assets
 
 ```sh
+set -euo pipefail
+
 go run ./dev/release icons \
   --source "$ROOT/installers/wizard/assets/maestro-app-icon.svg" \
   --output "$ROOT/dist/icons-$VERSION"
@@ -150,6 +158,8 @@ ICON_SHA256="$(shasum -a 256 "$ROOT/dist/icons-$VERSION/maestro-app-icon.icns" |
 ### 5. Real macOS package
 
 ```sh
+set -euo pipefail
+
 sh "$ROOT/dev/release/build-macos-installer.sh" \
   --version "$VERSION" --arch arm64 \
   --bridge "$ROOT/dist/native-$VERSION/maestro-installer" \
