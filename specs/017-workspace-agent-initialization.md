@@ -8,16 +8,17 @@ unavailable.
 
 ## Objective
 
-Create a useful Case Agent without turning its workspace state into an untraceable
+Create a useful Case Agent without turning its case workspace state into an untraceable
 context blob. Creation combines a user interview, authorized external research
 and a small attested public economic snapshot; all substantive context remains
 workspace-scoped, versioned and attributable.
 
 ## Creation flow
 
-`bcgos init` registers the workspace boundary first. It then offers a guided
-Case Agent setup (the `workspace-agent` command remains a compatibility
-surface) that collects only the information needed to establish
+`bcgos init` registers the workspace boundary first. It then offers the
+canonical `case-agent-setup` skill. The current `workspace-agent` CLI command
+remains a compatibility surface for the same `case_agent` role and collects
+only the information needed to establish
 the mandate:
 
 1. client/account and project label;
@@ -86,7 +87,7 @@ source provenance for every retained claim. This is a governance boundary, not
 automated content detection. It must never receive client data,
 workspace-derived queries, metadata, synthesis or automatic write-back.
 
-A workspace agent can request a filtered snapshot and records the snapshot
+A Case Agent can request a filtered snapshot and records the snapshot
 version it used. The snapshot does not grant access to any other workspace.
 
 ## Refresh and promotion
@@ -144,8 +145,13 @@ Economic snapshots require an immutable independent-public-source attestation
 and per-claim source provenance. They live outside workspace roots; a workspace
 stores only their immutable ID.
 
-The canonical `workspace-agent-setup` skill conducts the conversation and may
-use a runtime web-search/browser tool only after approval and when an
+The canonical `case-agent-setup` skill conducts the conversation and may use a
+runtime web-search/browser tool only after approval and when an
 enforceable workspace/pre-action guard is present. It reports unavailable
 otherwise. The CLI does not embed a search provider or credential and does not
 claim OS-level filesystem isolation.
+
+The retired `workspace-agent-setup` skill ID remains distributed only as an
+explicit migration alias. It redirects callers to `case-agent-setup`, never
+creates a `workspace_agent` or `practice_agent`, and must not appear in newly
+persisted role identities.

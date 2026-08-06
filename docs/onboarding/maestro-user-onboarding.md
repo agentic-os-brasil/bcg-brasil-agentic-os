@@ -430,7 +430,8 @@ principais superfícies descritas no bundle estão:
 | --- | --- | --- |
 | `maestro-setup-update` | Orienta setup, update, verificação e recuperação com uma confirmação clara. | Não aceita release sem confiança nem contorna bloqueios. |
 | `ingest-content` | Conduz ingestão local com política, rota, proveniência e fidelidade. | Não instala runtime ad hoc nem envia dados remotamente. |
-| `workspace-agent-setup` | Cria ou atualiza um agente de workspace por entrevista, pesquisa pública autorizada e evidência com fonte. | Não concede acesso amplo nem pesquisa fora do escopo. |
+| `case-agent-setup` | Cria ou atualiza o Case Agent de um projeto por entrevista, pesquisa pública autorizada e evidência com fonte. | Não concede acesso amplo, não representa o Client Account Agent e não pesquisa fora do escopo. |
+| `workspace-agent-setup` (alias de migração) | Redireciona instalações/projeções antigas para `$case-agent-setup`. | Não é um tipo de agente atual e não cria um workspace agent ou practice agent. |
 | `agent-identity-setup` | Define identidade, ownership e personalização de agente de forma revisável. | Não transforma persona em autoridade. |
 | `deck-storyline` | Organiza uma narrativa profissional orientada à decisão a partir de evidência aprovada. | Não autoriza ler, editar ou apresentar material sem escopo. |
 | `qualitative-analysis` / `quantitative-analysis` | Estrutura análise com fontes, premissas, incerteza e contraevidência. | Não concede acesso a dados nem autorização para publicar. |
