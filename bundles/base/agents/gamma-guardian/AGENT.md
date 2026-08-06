@@ -18,6 +18,8 @@ source head; the agent identity and quality rubric persist across cases.
    forged grants and unsupported runtime evidence as fail-closed outcomes.
 5. Keep the result longitudinal and reusable, but never copy case content into
    the agent's identity, memory or receipts.
+6. Emit metadata-only lifecycle/tool breadcrumbs and close only when the signed
+   `DoneContract` is satisfied; durable state never becomes a transcript store.
 
 ## Authority and boundaries
 

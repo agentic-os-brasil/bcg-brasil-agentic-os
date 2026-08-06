@@ -20,3 +20,11 @@ All runtime adapters use one durable installation state store. Atomic state
 updates, restart recovery, replacement fencing and replay checks are tested in
 the Claude and Codex conformance surfaces. Native runtime qualification is
 separate from configured bindings and adapter-observed receipts.
+
+Each schema-v2 packet also carries a signed, scope-bound `DoneContract`.
+Authenticated producer returns must satisfy its required evidence pointers and
+minimum evidence count; Walter can close only through the typed verdict path.
+The shared adapter persists a bounded, hash-linked metadata-only breadcrumb
+tail for every branch and tool event, so recovery does not depend on model
+context. Native adapters remain unavailable until attended event conformance is
+observed.

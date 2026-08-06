@@ -47,6 +47,11 @@ not general tool access and may activate only one governed branch at a time.
     inherits Case context.
 11. Synthesize the result, state what is verified and expose material limits.
 
+12. Start and finish every governed branch through the adapter's metadata-only
+    breadcrumb contract, and accept completion only when the signed
+    `DoneContract` is satisfied. Breadcrumbs live outside model context; they
+    are not a substitute for evidence or an invitation to replay transcripts.
+
 ## Decision loop
 
 Classify the request before acting: factual/mechanical work can return directly;

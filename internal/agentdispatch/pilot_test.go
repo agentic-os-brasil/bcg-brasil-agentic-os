@@ -2,6 +2,8 @@ package agentdispatch
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +56,33 @@ func TestPilotAcceptsOnlyAuthenticatedTargetReturnForBothRuntimes(t *testing.T) 
 				t.Fatalf("unexpected completed receipt: %#v", completed)
 			}
 		})
+	}
+}
+
+func TestPilotEnforcesSignedDoneContractEvidence(t *testing.T) {
+	pilot := newTestPilot(t, "claude")
+	required := "bcgos://workspace/alpha/dossier/evidence.json"
+	dispatch, _, err := pilot.Delegate(Intent{
+		WorkspaceID: "alpha", Objective: "Produce the bounded evidence-backed answer.",
+		DoneContract: DoneContract{SchemaVersion: 1, Policy: DoneAuthenticatedReturn,
+			RequiredEvidenceRefs: []string{required}, MinimumEvidenceRefs: 1}, TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := newTestExecutor(t, "claude", "workspace-agent-alpha", "workspace-alpha-cap", time.Now())
+	missing := ReturnBody{Summary: "Answer without the required evidence."}
+	if _, err := executor.SealReturn(dispatch, missing); err == nil {
+		t.Fatal("executor accepted a return that did not satisfy the done contract")
+	}
+	complete := ReturnBody{Summary: "Answer with the required evidence.", EvidenceRefs: []string{required}}
+	envelope, err := executor.SealReturn(dispatch, complete)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := pilot.Return(envelope, complete)
+	if err != nil || receipt.State != StateCompleted || receipt.DoneContractSHA256 == "" {
+		t.Fatalf("done contract completion = %#v err=%v", receipt, err)
 	}
 }
 
@@ -773,6 +802,150 @@ func TestPilotResultStateIsExplicitlyProcessLocal(t *testing.T) {
 	receipt, err := restarted.Return(envelope, body)
 	if err == nil || receipt.FailureCode != "delegation_unavailable_after_restart" {
 		t.Fatalf("process-local state was presented as recovered: %#v, %v", receipt, err)
+	}
+}
+
+func TestPilotDurableRecoveryCompletesAfterPilotRestart(t *testing.T) {
+	now := time.Date(2026, 7, 25, 18, 0, 0, 0, time.UTC)
+	dispatcher := newTestDispatcherForRuntime(t, "claude")
+	dispatcher.now = func() time.Time { return now }
+	root := t.TempDir()
+	pilot, err := NewDurablePilot(dispatcher, testInstances(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pilot.now = func() time.Time { return now }
+	dispatch, receipt, err := pilot.Delegate(Intent{
+		WorkspaceID: "alpha", Objective: "Assess one bounded source.", TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recovery := pilot.Recovery(); recovery.State != RecoveryAvailable {
+		t.Fatalf("durable recovery not advertised: %#v", recovery)
+	}
+
+	executor := newTestExecutor(t, "claude", "workspace-agent-alpha", "workspace-alpha-cap", now)
+	body := ReturnBody{Summary: "Bounded result."}
+	envelope, err := executor.SealReturn(dispatch, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restarted, err := NewDurablePilot(dispatcher, testInstances(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted.now = func() time.Time { return now }
+	recovered, err := restarted.Return(envelope, body)
+	if err != nil || recovered.State != StateCompleted || recovered.DelegationID != receipt.DelegationID {
+		t.Fatalf("durable return after restart = %#v, %v", recovered, err)
+	}
+	if current, ok := restarted.Inspect(receipt.DelegationID); !ok || current.State != StateCompleted {
+		t.Fatalf("recovered receipt missing: %#v, present=%t", current, ok)
+	}
+
+	replayed, err := restarted.Return(envelope, body)
+	if err == nil || replayed.FailureCode != "envelope_replayed" {
+		t.Fatalf("durable nonce replay was accepted: %#v, %v", replayed, err)
+	}
+}
+
+func TestPilotDurableRecoveryPersistsWalterAndProducerTogether(t *testing.T) {
+	now := time.Date(2026, 7, 25, 18, 0, 0, 0, time.UTC)
+	dispatcher := newTestDispatcherForRuntime(t, "claude")
+	dispatcher.now = func() time.Time { return now }
+	root := t.TempDir()
+	pilot, err := NewDurablePilot(dispatcher, testInstances(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pilot.now = func() time.Time { return now }
+	dispatch, source, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Prepare one material recommendation.", ReviewTrigger: ReviewMaterialRecommendation, TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer := newTestExecutor(t, "claude", "workspace-agent-alpha", "workspace-alpha-cap", now)
+	body := ReturnBody{Summary: "Bounded recommendation."}
+	envelope, err := producer.SealReturn(dispatch, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending, err := pilot.Return(envelope, body); err != nil || pending.State != StatePendingReview {
+		t.Fatalf("pending material return = %#v err=%v", pending, err)
+	}
+	reviewDispatch, _, err := pilot.RequireWalterReview(source.DelegationID, WalterReviewRequest{
+		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test the recommendation.",
+		Audience: "sponsor", Recommendation: "Use the recommendation.", DefinitionOfDone: "The recommendation is evidence-backed.", TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	walter := newTestExecutor(t, "claude", "walter", "walter-cap", now)
+	verdict := WalterReviewBody{PreservesIntent: true, Verdict: WalterApproved, EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/evidence.md"}}
+	reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, verdict)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed, err := pilot.ReturnWalterReview(reviewEnvelope, verdict)
+	if err != nil || completed.State != StateCompleted {
+		t.Fatalf("Walter completion = %#v err=%v", completed, err)
+	}
+	restarted, err := NewDurablePilot(dispatcher, testInstances(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := restarted.Inspect(source.DelegationID); !ok || got.State != StateCompleted || got.Review == nil || got.Review.State != ReviewApproved {
+		t.Fatalf("producer was not atomically recovered with Walter: %#v present=%t", got, ok)
+	}
+	if got, ok := restarted.Inspect(completed.DelegationID); !ok || got.State != StateCompleted || got.Review == nil || got.Review.State != ReviewApproved {
+		t.Fatalf("Walter was not atomically recovered with producer: %#v present=%t", got, ok)
+	}
+}
+
+func TestPilotDurableRecoveryRejectsTamperedRecord(t *testing.T) {
+	dispatcher := newTestDispatcherForRuntime(t, "claude")
+	root := t.TempDir()
+	pilot, err := NewDurablePilot(dispatcher, testInstances(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, receipt, err := pilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Assess one bounded source.", TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, receipt.DelegationID+".json")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload[len(payload)-2] ^= 1
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewDurablePilot(dispatcher, testInstances(), root); err == nil {
+		t.Fatal("tampered durable record was accepted")
+	}
+	trailingRoot := t.TempDir()
+	trailingDispatcher := newTestDispatcherForRuntime(t, "claude")
+	trailingPilot, err := NewDurablePilot(trailingDispatcher, testInstances(), trailingRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, trailingReceipt, err := trailingPilot.Delegate(Intent{WorkspaceID: "alpha", Objective: "Assess one bounded source.", TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trailingPath := filepath.Join(trailingRoot, trailingReceipt.DelegationID+".json")
+	trailingPayload, err := os.ReadFile(trailingPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(trailingPath, append(trailingPayload, []byte("\n{}\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewDurablePilot(trailingDispatcher, testInstances(), trailingRoot); err == nil {
+		t.Fatal("trailing JSON durable record was accepted")
 	}
 }
 

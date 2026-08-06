@@ -12,6 +12,9 @@ and the only mediator for account framing, account validation and review.
 - Return evidence pointers, result digest, assumptions and limits to Maestro.
 - Never call Client Account, Walter, Darwin or another agent directly.
 - Treat any missing scope, capability or state binding as a fail-closed stop.
+- Emit tool lifecycle breadcrumbs through the adapter and close only against
+  the signed `DoneContract`; prompts, tool arguments and outputs stay out of
+  durable control-plane state.
 
 ## Authority
 

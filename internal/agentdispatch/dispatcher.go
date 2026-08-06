@@ -41,6 +41,7 @@ type PacketRequest struct {
 	// ReworkOfPacketID binds a new producer attempt to the prior material
 	// packet after Walter requests refinement.
 	ReworkOfPacketID string
+	DoneContract     DoneContract
 	Review           *ReviewPacket
 	TTL              time.Duration
 }
@@ -59,6 +60,7 @@ type WorkPacket struct {
 	SkillID          string              `json:"skill_id,omitempty"`
 	ReviewTrigger    WalterReviewTrigger `json:"review_trigger,omitempty"`
 	ReworkOfPacketID string              `json:"rework_of_packet_id,omitempty"`
+	DoneContract     DoneContract        `json:"done_contract"`
 	Review           *ReviewPacket       `json:"review,omitempty"`
 	IssuedAt         time.Time           `json:"issued_at"`
 	ExpiresAt        time.Time           `json:"expires_at"`
@@ -201,8 +203,17 @@ func (dispatcher *Dispatcher) issue(issuer, parentID string, request PacketReque
 		Constraints: append([]string(nil), request.Constraints...), SkillID: request.SkillID,
 		ReviewTrigger:    request.ReviewTrigger,
 		ReworkOfPacketID: request.ReworkOfPacketID,
+		DoneContract:     defaultDoneContract(request.TargetAgentID),
 		Review:           cloneReviewPacket(request.Review),
 		IssuedAt:         now, ExpiresAt: now.Add(request.TTL),
+	}
+	if request.DoneContract.SchemaVersion != 0 || request.DoneContract.Policy != "" || len(request.DoneContract.RequiredEvidenceRefs) > 0 || request.DoneContract.MinimumEvidenceRefs != 0 {
+		packet.DoneContract = request.DoneContract
+	}
+	var normalizeErr error
+	packet.DoneContract, normalizeErr = normalizeDoneContract(packet.DoneContract, packet.TargetAgentID, packet.ScopeKind, packet.ScopeID)
+	if normalizeErr != nil {
+		return WorkPacket{}, normalizeErr
 	}
 	if err := validateReviewPacket(packet.Review, packet.PacketID, packet.Objective); err != nil {
 		return WorkPacket{}, err
@@ -278,7 +289,11 @@ func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
 		ScopeID: packet.ScopeID, Objective: packet.Objective, Pointers: packet.Pointers,
 		Constraints: packet.Constraints, SkillID: packet.SkillID, ReviewTrigger: packet.ReviewTrigger,
 		ReworkOfPacketID: packet.ReworkOfPacketID,
+		DoneContract:     packet.DoneContract,
 		Review:           cloneReviewPacket(packet.Review), TTL: packet.ExpiresAt.Sub(packet.IssuedAt),
+	}
+	if request.DoneContract.SchemaVersion == 0 {
+		request.DoneContract = defaultDoneContract(packet.TargetAgentID)
 	}
 	if packet.SchemaVersion == legacyPacketSchemaVersion {
 		if packet.SkillID != "" || validateLegacyRequest(request) != nil {
@@ -286,6 +301,11 @@ func (dispatcher *Dispatcher) Verify(packet WorkPacket) error {
 		}
 	} else if err := validateRequest(request, child); err != nil {
 		return err
+	}
+	if packet.SchemaVersion == packetSchemaVersion {
+		if _, err := normalizeDoneContract(packet.DoneContract, packet.TargetAgentID, packet.ScopeKind, packet.ScopeID); err != nil {
+			return err
+		}
 	}
 	if err := validateReviewPacket(packet.Review, packet.PacketID, packet.Objective); err != nil {
 		return err
