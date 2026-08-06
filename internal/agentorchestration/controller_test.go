@@ -160,6 +160,37 @@ func TestSharedStateReplacementAndRecoveryFenceTheBranch(t *testing.T) {
 	}
 }
 
+func TestRecoverStalePreservesBreadcrumbContinuity(t *testing.T) {
+	catalog := loadCatalog(t)
+	adapter, err := NewAdapter("claude", catalog, testAuthorizations(), mustStore(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 6, 12, 0, 0, 0, time.UTC)
+	adapter.now = func() time.Time { return now }
+	if decision := adapter.StartBranch("maestro", "maestro-cap", "case-agent-alpha", "run-stale", "alpha", "case"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	if decision := adapter.GuardTool("case-agent-alpha", "case-cap", "run-stale", "", "alpha", "case", "workspace_reader", "read", "bcgos://case/alpha/input.md"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	before := adapter.Snapshot()
+	adapter.now = func() time.Time { return now.Add(2 * time.Hour) }
+	if !adapter.RecoverStale(time.Minute, "recovery-cap") {
+		t.Fatal("stale branch was not recovered")
+	}
+	after := adapter.Snapshot()
+	if after.BreadcrumbSeq != before.BreadcrumbSeq || len(after.BreadcrumbTail) != len(before.BreadcrumbTail) {
+		t.Fatalf("stale recovery lost breadcrumb continuity: before=%#v after=%#v", before, after)
+	}
+	if decision := adapter.StartBranch("maestro", "maestro-cap", "case-agent-alpha", "run-next", "alpha", "case"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	if got := adapter.Snapshot(); got.BreadcrumbSeq != before.BreadcrumbSeq+1 {
+		t.Fatalf("next branch reused breadcrumb sequence: got=%d want=%d", got.BreadcrumbSeq, before.BreadcrumbSeq+1)
+	}
+}
+
 func TestAdaptersRejectUnknownEventsAndInvalidAuthorizations(t *testing.T) {
 	catalog := loadCatalog(t)
 	if _, err := NewAdapter("unknown", catalog, testAuthorizations(), mustStore(t)); err == nil {

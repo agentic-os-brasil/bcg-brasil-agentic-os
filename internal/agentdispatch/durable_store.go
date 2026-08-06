@@ -1,6 +1,7 @@
 package agentdispatch
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,8 +13,10 @@ import (
 )
 
 const (
-	durablePilotSchemaVersion = 1
-	maxDurablePilotRecordSize = 128 * 1024
+	durablePilotSchemaVersion      = 1
+	maxDurablePilotRecordSize      = 128 * 1024
+	durablePilotTransactionName    = ".pilot-recovery-transaction.json"
+	maxDurablePilotTransactionSize = maxDurablePilotRecordSize*2 + 4096
 )
 
 // pilotRecoveryStore is the private, owner-local recovery boundary for Pilot.
@@ -84,6 +87,42 @@ func (store *pilotRecoveryStore) path(id string) string {
 	return filepath.Join(store.root, id+".json")
 }
 
+func (store *pilotRecoveryStore) transactionPath() string {
+	return filepath.Join(store.root, durablePilotTransactionName)
+}
+
+type durablePilotTransaction struct {
+	SchemaVersion int                  `json:"schema_version"`
+	Records       []durablePilotRecord `json:"records"`
+}
+
+func encodeStrictJSON(value any, maximum int) ([]byte, error) {
+	body, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maximum {
+		return nil, errors.New("durable recovery payload exceeds its bounded size")
+	}
+	return body, nil
+}
+
+func decodeStrictJSON(body []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra json.RawMessage
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return errors.New("durable recovery payload contains trailing JSON")
+		}
+		return err
+	}
+	return nil
+}
+
 func (store *pilotRecoveryStore) write(record pilotRecord) error {
 	if store == nil {
 		return nil
@@ -139,15 +178,132 @@ func (store *pilotRecoveryStore) write(record pilotRecord) error {
 	return nil
 }
 
+// writeBatch uses a small owner-local journal so a Walter leaf and its producer
+// projection are recovered together after a process or filesystem interruption.
+// The journal is replayed before normal records are loaded and is removed only
+// after every record has been durably written.
+func (store *pilotRecoveryStore) writeBatch(records ...pilotRecord) error {
+	if len(records) == 0 {
+		return nil
+	}
+	payload := durablePilotTransaction{SchemaVersion: durablePilotSchemaVersion}
+	for _, record := range records {
+		encoded := durablePilotRecord{
+			SchemaVersion: durablePilotSchemaVersion,
+			Receipt:       cloneReceipt(record.receipt),
+			Packet:        record.packet,
+			Errand:        record.errand,
+			ErrandState:   record.errandState,
+			PendingTool:   record.pendingTool,
+			UsedNonces:    append([]string(nil), record.consumedNonces...),
+		}
+		payload.Records = append(payload.Records, encoded)
+	}
+	body, err := encodeStrictJSON(payload, maxDurablePilotTransactionSize)
+	if err != nil {
+		return fmt.Errorf("pilot recovery transaction encode: %w", err)
+	}
+	if err := writeDurableFile(store.transactionPath(), body); err != nil {
+		return err
+	}
+	for _, record := range records {
+		if err := store.write(record); err != nil {
+			return err
+		}
+	}
+	if err := os.Remove(store.transactionPath()); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("pilot recovery transaction cleanup: %w", err)
+	}
+	return syncDirectory(store.root)
+}
+
+func writeDurableFile(path string, body []byte) error {
+	directory := filepath.Dir(path)
+	tmp, err := os.CreateTemp(directory, ".pilot-recovery-*.tmp")
+	if err != nil {
+		return fmt.Errorf("pilot recovery temp: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return fmt.Errorf("pilot recovery temp permissions: %w", err)
+	}
+	if _, err := tmp.Write(body); err != nil {
+		tmp.Close()
+		return fmt.Errorf("pilot recovery temp write: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("pilot recovery temp sync: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("pilot recovery temp close: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("pilot recovery file activate: %w", err)
+	}
+	return syncDirectory(directory)
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("pilot recovery directory open: %w", err)
+	}
+	defer directory.Close()
+	if err := directory.Sync(); err != nil {
+		return fmt.Errorf("pilot recovery directory sync: %w", err)
+	}
+	return nil
+}
+
+func (store *pilotRecoveryStore) replayTransaction(dispatcher *Dispatcher) error {
+	body, err := os.ReadFile(store.transactionPath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("pilot recovery transaction read: %w", err)
+	}
+	if len(body) > maxDurablePilotTransactionSize {
+		return errors.New("pilot recovery transaction exceeds its bounded size")
+	}
+	var transaction durablePilotTransaction
+	if err := decodeStrictJSON(body, &transaction); err != nil || transaction.SchemaVersion != durablePilotSchemaVersion || len(transaction.Records) == 0 || len(transaction.Records) > 2 {
+		return errors.New("pilot recovery transaction is invalid")
+	}
+	records := make([]pilotRecord, 0, len(transaction.Records))
+	for _, payload := range transaction.Records {
+		record, err := hydrateDurableRecord(payload, dispatcher)
+		if err != nil {
+			return err
+		}
+		records = append(records, record)
+	}
+	for _, record := range records {
+		if err := store.write(record); err != nil {
+			return err
+		}
+	}
+	if err := os.Remove(store.transactionPath()); err != nil {
+		return fmt.Errorf("pilot recovery transaction cleanup: %w", err)
+	}
+	return syncDirectory(store.root)
+}
+
 func (store *pilotRecoveryStore) load(dispatcher *Dispatcher) (map[string]pilotRecord, map[string]bool, error) {
 	records := make(map[string]pilotRecord)
 	used := make(map[string]bool)
+	if err := store.replayTransaction(dispatcher); err != nil {
+		return nil, nil, err
+	}
 	entries, err := os.ReadDir(store.root)
 	if err != nil {
 		return nil, nil, fmt.Errorf("pilot recovery directory read: %w", err)
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || entry.Name() == durablePilotTransactionName {
 			continue
 		}
 		id := strings.TrimSuffix(entry.Name(), ".json")
@@ -168,35 +324,14 @@ func (store *pilotRecoveryStore) load(dispatcher *Dispatcher) (map[string]pilotR
 		}
 		limited := io.LimitReader(file, maxDurablePilotRecordSize+1)
 		var payload durablePilotRecord
-		decoder := json.NewDecoder(limited)
-		decoder.DisallowUnknownFields()
-		decodeErr := decoder.Decode(&payload)
-		var extra struct{}
-		if decodeErr == nil {
-			decodeErr = decoder.Decode(&extra)
-			if decodeErr == io.EOF {
-				decodeErr = nil
-			}
-		}
+		body, readErr := io.ReadAll(limited)
 		closeErr := file.Close()
-		if decodeErr != nil || closeErr != nil {
+		if readErr != nil || closeErr != nil || len(body) > maxDurablePilotRecordSize || decodeStrictJSON(body, &payload) != nil {
 			return nil, nil, errors.New("pilot recovery record is not canonical JSON")
 		}
-		if payload.SchemaVersion != durablePilotSchemaVersion || payload.Receipt.DelegationID != id || payload.Receipt.SchemaVersion != 1 {
-			return nil, nil, errors.New("pilot recovery record schema is invalid")
-		}
-		record := pilotRecord{receipt: payload.Receipt, packet: payload.Packet, errand: payload.Errand,
-			errandState: payload.ErrandState, pendingTool: payload.PendingTool,
-			consumedNonces: append([]string(nil), payload.UsedNonces...)}
-		if record.packet.PacketID != "" {
-			if record.packet.PacketID != id || verifyPacketForRecovery(dispatcher, record.packet) != nil ||
-				digestBody(record.packet) != record.receipt.PacketSHA256 ||
-				digestBody(record.packet.DoneContract) != record.receipt.DoneContractSHA256 {
-				return nil, nil, errors.New("pilot recovery packet failed authentication")
-			}
-			if record.receipt.TargetAgentID != record.packet.TargetAgentID || record.receipt.ScopeKind != record.packet.ScopeKind || record.receipt.ScopeID != record.packet.ScopeID {
-				return nil, nil, errors.New("pilot recovery packet and receipt are inconsistent")
-			}
+		record, err := hydrateDurableRecord(payload, dispatcher)
+		if err != nil || record.receipt.DelegationID != id {
+			return nil, nil, errors.New("pilot recovery record schema or authentication is invalid")
 		}
 		for _, nonce := range record.consumedNonces {
 			if !validPacketID(nonce) || used[nonce] {
@@ -207,6 +342,37 @@ func (store *pilotRecoveryStore) load(dispatcher *Dispatcher) (map[string]pilotR
 		records[id] = record
 	}
 	return records, used, nil
+}
+
+func hydrateDurableRecord(payload durablePilotRecord, dispatcher *Dispatcher) (pilotRecord, error) {
+	if payload.SchemaVersion != durablePilotSchemaVersion || payload.Receipt.SchemaVersion != 1 || !validPacketID(payload.Receipt.DelegationID) ||
+		payload.Receipt.OwnerAgentID != "maestro" || payload.Receipt.Runtime == "" || !validState(payload.Receipt.State) {
+		return pilotRecord{}, errors.New("pilot recovery record schema or receipt invariants are invalid")
+	}
+	record := pilotRecord{receipt: payload.Receipt, packet: payload.Packet, errand: payload.Errand,
+		errandState: payload.ErrandState, pendingTool: payload.PendingTool,
+		consumedNonces: append([]string(nil), payload.UsedNonces...)}
+	if record.packet.PacketID == "" {
+		if record.receipt.State != StateFailed && record.receipt.State != StateUnavailable {
+			return pilotRecord{}, errors.New("pilot recovery record without a packet has an invalid state")
+		}
+		return record, nil
+	}
+	if record.packet.PacketID != record.receipt.DelegationID || verifyPacketForRecovery(dispatcher, record.packet) != nil ||
+		digestBody(record.packet) != record.receipt.PacketSHA256 || digestBody(record.packet.DoneContract) != record.receipt.DoneContractSHA256 ||
+		record.receipt.TargetAgentID != record.packet.TargetAgentID || record.receipt.ScopeKind != record.packet.ScopeKind || record.receipt.ScopeID != record.packet.ScopeID {
+		return pilotRecord{}, errors.New("pilot recovery packet failed authentication")
+	}
+	return record, nil
+}
+
+func validState(state State) bool {
+	switch state {
+	case StateDelegated, StatePendingReview, StateCompleted, StateFailed, StateUnavailable:
+		return true
+	default:
+		return false
+	}
 }
 
 // verifyPacketForRecovery authenticates the immutable packet contract without
