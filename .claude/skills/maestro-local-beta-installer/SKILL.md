@@ -1,6 +1,6 @@
 ---
 name: maestro-local-beta-installer
-description: Prepare and verify a real local-beta Maestro installer from the source repository without confusing it with a rehearsal or production release.
+description: Clean Maestro-owned surfaces, then prepare and verify a real local-beta installer without confusing it with a rehearsal or production release.
 ---
 
 # Canonical development skill

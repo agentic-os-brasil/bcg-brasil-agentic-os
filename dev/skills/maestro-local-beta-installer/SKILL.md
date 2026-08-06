@@ -1,18 +1,44 @@
 ---
 name: maestro-local-beta-installer
-description: Build and verify a real local-beta Maestro installer from a merged source snapshot, using a test-only Ed25519 authority and the native macOS packaging path instead of the rehearsal simulator.
+description: Clean Maestro-owned installation surfaces, then build and verify a real local-beta installer from a merged source snapshot using a test-only Ed25519 authority and the native macOS packaging path instead of the rehearsal simulator.
 ---
 
 # Maestro Local-Beta Installer
 
-Use this skill when the owner asks to produce the next local-beta installer
-that must execute the real verify -> install -> workspace flow. This is a
-packaging direction, not a production-release authorization and not a
+Use this skill when the owner asks to clean and produce the next local-beta
+installer that must execute the real verify -> install -> workspace flow. This
+is a packaging direction, not a production-release authorization and not a
 substitute for Developer ID signing or notarization.
 
 Resolve the canonical `interaction-profile` before presenting the procedure.
 It controls how much implementation detail to show, but never weakens the
 release, signing, consent or cleanup gates below.
+
+## Operating contract
+
+This is the single entry point for a **clean local-beta generation**. Unless
+the owner explicitly chooses `preserve`, the workflow is always:
+
+1. resolve the exact clean-install manifest;
+2. show the manifest and obtain explicit owner confirmation;
+3. snapshot and unload Maestro-owned maintenance surfaces;
+4. move those surfaces to a recoverable backup and verify the boundary is clean;
+5. build and verify the local-beta artifact;
+6. hand off the DMG, checksum, receipts and backup location.
+
+Do not start packaging while an old Maestro installation remains active. The
+cleanup is part of generation, but it is never an implicit authorization to
+delete or replace paths. If an exact path cannot be resolved, stop and report
+it rather than broadening the target with a glob or `rm -rf`.
+
+The skill has three explicit modes:
+
+- `clean_standard`: clean the intended Maestro workspace, the Maestro
+  application-support root and the Maestro LaunchAgent.
+- `clean_migration`: `clean_standard` plus the legacy `BCGOS` application-
+  support root, only when the owner explicitly includes that path.
+- `preserve`: do not touch an existing installation; use only when the owner
+  explicitly requests an in-place/update validation.
 
 ## Status vocabulary
 
@@ -52,10 +78,13 @@ request to "clean everything" is not enough.
 Before touching anything:
 
 1. Resolve and print the exact paths that exist; exclude the source repository,
-   Canary evidence workspace, unrelated Kowalski maintenance and client data.
-2. Show the owner the target list and obtain confirmation for that list.
-3. Create a timestamped backup directory and record the current LaunchAgent
-   state (including `launchctl print` output) inside it.
+   Canary evidence workspace, unrelated maintenance and client data.
+2. Show the owner the target list, the selected mode and the legacy-root
+   inclusion decision; obtain confirmation for that exact list.
+3. Create a timestamped backup directory **outside every active target** and
+   record the current LaunchAgent state (including `launchctl print` output)
+   inside it. A backup nested under `~/Library/Application Support/Maestro`
+   is invalid because it would be moved with the root it backs up.
 
 After moving each target, verify that it exists inside the backup and that the
 active path is absent. Stop and report if any verification fails. Keep the
@@ -71,10 +100,33 @@ The Maestro-owned active surfaces are:
   `~/Library/LaunchAgents/com.bcg.maestro.maintenance.plist`;
 - prior build outputs under the isolated release worktree.
 
-Unload the LaunchAgent before moving its plist. Do not touch the source
-repository, the Canary evidence workspace, unrelated Kowalski maintenance or
+Unload the LaunchAgent before moving its plist. Move each existing target to
+the backup using an explicit path; never use a recursive wildcard. Do not touch
+the source repository, the Canary evidence workspace, unrelated maintenance or
 client/project data. Prefer moving targets to a timestamped temporary backup
 over irreversible deletion.
+
+### Clean manifest and receipt
+
+Before confirmation, render a manifest with absolute paths and existence state,
+for example:
+
+```text
+mode: clean_standard
+workspace: /Users/<owner>/Developer/maestro-os [exists|absent]
+maestro_root: /Users/<owner>/Library/Application Support/Maestro [exists|absent]
+launch_agent: /Users/<owner>/Library/LaunchAgents/com.bcg.maestro.maintenance.plist [exists|absent]
+legacy_bcgos: excluded (select clean_migration to include)
+```
+
+The cleanup receipt must contain: selected mode, exact targets, backup path,
+LaunchAgent label, pre-clean `launchctl print` result, moved paths and
+post-clean existence checks. The receipt is evidence of cleanup only; it does
+not qualify hooks, signing, notarization or runtime behavior.
+
+After the move, verify both sides for every target: the active path is absent,
+the backup path exists, and the backup contains the expected metadata. If any
+check fails, stop before candidate generation and restore from the backup.
 
 ## Build sequence
 
@@ -179,13 +231,15 @@ release manifest itself is verified by the test-only Ed25519 registry.
 
 ## Verification and handoff
 
-1. Verify the DMG with `hdiutil imageinfo` and record its SHA-256.
-2. Optionally copy the DMG to `~/Downloads` only after the checksum is
+1. Confirm the cleanup receipt is complete and keep the backup until the clean
+   install has been validated or the owner explicitly releases it.
+2. Verify the DMG with `hdiutil imageinfo` and record its SHA-256.
+3. Optionally copy the DMG to `~/Downloads` only after the checksum is
    recorded. Do not copy the seed or private key.
-3. Open the DMG and run the installer on the clean user account. Confirm the
+4. Open the DMG and run the installer on the clean user account. Confirm the
    wizard reaches the real install path, creates the new workspace, wires the
    selected runtime and starts the guided onboarding prompt.
-4. Preserve the checksum, version, registry issuer/key ID and observed
+5. Preserve the checksum, version, registry issuer/key ID and observed
    install receipts as local evidence. Do not call the result native-qualified,
    signed, notarized, published or pilot-ready without the corresponding
    attended evidence.
