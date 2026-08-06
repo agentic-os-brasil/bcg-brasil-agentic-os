@@ -1,7 +1,8 @@
 # Spec 047 — Agent breadcrumbs and deterministic done contracts
 
-Status: implemented in the runtime-neutral control plane; native Claude and
-Codex event qualification remains a separate availability gate.
+Status: implemented in the runtime-neutral control plane, including bounded
+durable Pilot recovery; native Claude and Codex event qualification remains a
+separate availability gate.
 
 ## Objective
 
@@ -26,6 +27,23 @@ workspace execution ledger and is exposed only through explicit export.
 
 The digest chain and sequence are validated on every durable-state read. A
 malformed, oversized, non-contiguous or tampered tail fails closed.
+
+## Durable Pilot recovery
+
+When Maestro constructs `NewDurablePilot` with an explicit owner-local recovery root, the
+runtime persists the bounded packet body, receipt, errand state and consumed
+nonce set in owner-only files using an atomic temporary-write, fsync and rename
+sequence. These files are a private recovery boundary: they are not public
+receipts, prompt context, execution-ledger records or model memory, and they
+never contain capability credentials. On restart, every record is parsed with
+strict schema validation, packet signature/digest checks and nonce uniqueness;
+any malformed or tampered record prevents recovery rather than being ignored.
+
+The process-local constructor intentionally remains `unavailable`. A durable
+Pilot reports `available` only after this authenticated load, and active returns
+still pass the live expiry, scope, target and done-contract checks. Terminal
+records may be inspected after their original TTL without extending the packet's
+authority.
 
 ## Done contract
 

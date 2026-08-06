@@ -10,16 +10,19 @@ does not promote a product capability from `unavailable`.
 | Only registered targets and role edges may start work | Catalog validation and controller conformance reject unknown targets and disallowed edges | Native dispatch never bypasses the controller | unavailable |
 | Scope and tool/resource grants are exact and default-deny | Controller tests reject cross-scope pointers, forged scope, unknown tool operations and unbound prefixes | Native tool events carry the same canonical resource and scope values | unavailable |
 | One direct spoke is active at a time; depth is one and children are forbidden | Shared state and controller tests reject parallel branches, child packets and nested delegation | Adapter uses one durable shared state store across restarts/processes | unavailable |
-| Delegation state can recover safely | Snapshot restore validates policy, root, child and recovery capability; stale recovery is capability-gated | Durable atomic persistence plus restart/partition conformance | unavailable |
+| Delegation state can recover safely | `Pilot` can persist owner-local packet state and nonce replay state atomically; restart tests authenticate and complete a prior return, while tamper and unavailable paths fail closed | Native adapter supplies the same recovery root and proves restart/partition conformance | runtime-neutral available; native unavailable |
 
 | Packets and completion authority are bounded | Dispatcher and pilot tests verify signed packets, scope inheritance, target-authenticated execution envelopes, nonce replay rejection and finish authority | Adapter delivers only authenticated packets/envelopes without exposing capabilities | unavailable |
 | High-leverage output receives Walter's calm advisory review | The typed Maestro plan resolves `walter_required` independently from Account consultation; low-leverage skips carry a reason and evidence, while Walter verdicts require concrete refinements for load-bearing gaps and reserve `hold` for exceptional blockers | Native adapter emits the sealed packet and observes Walter's typed verdict in the same governed session | unavailable |
 | Direct skill selection stays with the active owner | Dispatcher tests require a signed active root packet, matching agent capability and no active child | Native agent execution proves the same root/capability binding | unavailable |
 | Claude/Codex semantic parity | Shared controller fixtures execute both event vocabularies and denial cases | Native session conformance from installed Claude and Codex adapters | unavailable |
 
-The pilot exposes the restart boundary programmatically as `Pilot.Recovery()`
-with state `unavailable`; a `delegated` receipt is never a claim that its packet
-can be completed after process restart.
+The pilot exposes the restart boundary programmatically as `Pilot.Recovery()`.
+The process-local constructor remains `unavailable`; the durable constructor
+requires an explicit owner-local recovery root and returns `available` only
+after every stored packet and nonce state authenticates. A `delegated` receipt
+without that durable boundary is never a claim that its packet can be completed
+after process restart.
 
 ## Durable breadcrumbs and done authority
 
@@ -37,9 +40,11 @@ pointers and a minimum evidence count; Walter uses the closed
 contract, and public receipts pin its digest. A prose return, missing evidence
 or generic Walter return cannot promote a dispatch to `completed`.
 
-This is deterministic runtime-neutral enforcement, not proof of native hook
-delivery. Native Claude/Codex qualification remains unavailable until an
-attended adapter conformance run observes the same events and receipts.
+This is deterministic runtime-neutral enforcement, including an explicit
+private recovery store for packet bodies and replay state. It is not proof of
+native hook delivery. Native Claude/Codex qualification remains unavailable
+until an attended adapter conformance run observes the same events and
+receipts.
 
 ## Abuse cases covered locally
 
@@ -66,8 +71,8 @@ attended adapter conformance run observes the same events and receipts.
 
 ## Explicitly unavailable
 
-Neither `adapters/claude/` nor `adapters/codex/` installs native product event
-wiring for agent orchestration or durable dispatch-state persistence. Their
-README files describe the required mapping and evidence only. The canonical
-capability manifest therefore keeps `agent_orchestration` unavailable for both
-runtimes; no local fixture, CLI bridge or development hook changes that state.
+Neither `adapters/claude/` nor `adapters/codex/` yet wires the runtime-neutral
+Pilot recovery root into native product lifecycle events. Their README files
+describe the required mapping and evidence only. The canonical capability
+manifest therefore keeps `agent_orchestration` unavailable for both runtimes;
+no local fixture, CLI bridge or development hook changes that state.

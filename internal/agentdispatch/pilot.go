@@ -25,24 +25,25 @@ const (
 	errandTool              = "errand_store"
 )
 
-// Pilot is an intentionally process-local bridge around Dispatcher. Dispatch
-// packets and result bodies are ephemeral adapter messages. Only metadata-only
-// receipts are inspectable, and a new process cannot complete an old dispatch
-// until a separate safe recovery protocol is implemented.
+// Pilot is the bounded bridge around Dispatcher. Dispatch packets and result
+// bodies remain ephemeral adapter messages; when a recovery root is supplied,
+// the private packet state needed for authenticated restart recovery is stored
+// separately from public receipts and the execution ledger.
 type Pilot struct {
 	dispatcher *Dispatcher
 	runtime    string
 	instances  map[string]Instance
 	now        func() time.Time
+	store      *pilotRecoveryStore
 
 	mu         sync.Mutex
 	records    map[string]pilotRecord
 	usedNonces map[string]bool
 }
 
-// RecoveryReport is the explicit boundary for restart recovery. The pilot
-// currently retains packets and nonce state only in process memory; callers
-// must not infer recoverability from a delegated receipt after restart.
+// RecoveryReport is the explicit boundary for restart recovery. A durable
+// Pilot is available only after its private records have authenticated; a
+// process-local Pilot remains intentionally unavailable after restart.
 type RecoveryReport struct {
 	State  string `json:"state"`
 	Reason string `json:"reason"`
@@ -50,15 +51,18 @@ type RecoveryReport struct {
 
 const (
 	RecoveryUnavailable        = "unavailable"
-	RecoveryReasonProcessLocal = "dispatch packets and nonce state are process-local; durable recovery protocol is not implemented"
+	RecoveryAvailable          = "available"
+	RecoveryReasonProcessLocal = "dispatch packets and nonce state are process-local; construct Pilot with a recovery root"
+	RecoveryReasonDurable      = "private dispatch packets and nonce replay state authenticated from the owner-local recovery store"
 )
 
 type pilotRecord struct {
-	receipt     Receipt
-	packet      WorkPacket
-	errand      *ErrandContract
-	errandState errandState
-	pendingTool *ErrandToolEnvelope
+	receipt        Receipt
+	packet         WorkPacket
+	errand         *ErrandContract
+	errandState    errandState
+	pendingTool    *ErrandToolEnvelope
+	consumedNonces []string
 }
 
 type Instance struct {
@@ -361,7 +365,11 @@ func (executor *Executor) seal(dispatch Dispatch, outcome ExecutionOutcome, resu
 	return envelope, err
 }
 
-func NewPilot(dispatcher *Dispatcher, instances []Instance) (*Pilot, error) {
+// NewPilot keeps the process-local constructor compatible with existing
+// adapters. Supplying one recovery root enables durable restart recovery; the
+// root is owner-local and must not be a public receipt or execution-ledger
+// directory.
+func NewPilot(dispatcher *Dispatcher, instances []Instance, recoveryRoots ...string) (*Pilot, error) {
 	if dispatcher == nil {
 		return nil, errors.New("pilot orchestration requires a dispatcher")
 	}
@@ -389,16 +397,42 @@ func NewPilot(dispatcher *Dispatcher, instances []Instance) (*Pilot, error) {
 			ParentAgentID: "maestro", Available: true,
 		}
 	}
-	return &Pilot{
+	var store *pilotRecoveryStore
+	if len(recoveryRoots) > 1 {
+		return nil, errors.New("pilot accepts at most one recovery root")
+	}
+	if len(recoveryRoots) == 1 {
+		var err error
+		store, err = newPilotRecoveryStore(recoveryRoots[0])
+		if err != nil {
+			return nil, err
+		}
+	}
+	pilot := &Pilot{
 		dispatcher: dispatcher, runtime: dispatcher.gate.Runtime(), instances: registered,
-		now: time.Now, records: make(map[string]pilotRecord), usedNonces: make(map[string]bool),
-	}, nil
+		now: time.Now, store: store, records: make(map[string]pilotRecord), usedNonces: make(map[string]bool),
+	}
+	if store != nil {
+		records, used, err := store.load(dispatcher)
+		if err != nil {
+			return nil, err
+		}
+		pilot.records, pilot.usedNonces = records, used
+	}
+	return pilot, nil
 }
 
-// Recovery reports the capability boundary without probing or simulating a
-// persistence layer. A future durable store must replace this explicit state
-// with authenticated metadata recovery before old packets can be completed.
+// NewDurablePilot is the explicit product-facing constructor. The recovery
+// root must be a private directory owned by the active workspace; credentials,
+// model context and execution-ledger authority never belong in this store.
+func NewDurablePilot(dispatcher *Dispatcher, instances []Instance, recoveryRoot string) (*Pilot, error) {
+	return NewPilot(dispatcher, instances, recoveryRoot)
+}
+
 func (pilot *Pilot) Recovery() RecoveryReport {
+	if pilot.store != nil {
+		return RecoveryReport{State: RecoveryAvailable, Reason: RecoveryReasonDurable}
+	}
 	return RecoveryReport{State: RecoveryUnavailable, Reason: RecoveryReasonProcessLocal}
 }
 
@@ -460,6 +494,9 @@ func (pilot *Pilot) RequireWalterReview(sourceDelegationID string, request Walte
 	if err == nil {
 		producer := pilot.records[source.receipt.DelegationID]
 		producer.receipt.Review = reviewSummary(&review, ReviewDispatched)
+		if persistErr := pilot.persistRecordLocked(producer); persistErr != nil {
+			return Dispatch{}, Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, persistErr
+		}
 		pilot.records[source.receipt.DelegationID] = producer
 	}
 	return dispatch, receipt, err
@@ -579,9 +616,13 @@ func (pilot *Pilot) start(instance Instance, request PacketRequest, errand *Erra
 		copy := *errand
 		privateErrand = &copy
 	}
-	pilot.records[receipt.DelegationID] = pilotRecord{
+	record := pilotRecord{
 		receipt: receipt, packet: packet, errand: privateErrand,
 	}
+	if err := pilot.persistRecordLocked(record); err != nil {
+		return Dispatch{}, Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
+	}
+	pilot.records[receipt.DelegationID] = record
 	return Dispatch{Runtime: pilot.runtime, Packet: packet, Errand: errand}, cloneReceipt(receipt), nil
 }
 
@@ -615,10 +656,16 @@ func (pilot *Pilot) GuardErrandTool(envelope ErrandToolEnvelope) agentorchestrat
 	if !decision.Allowed {
 		return decision
 	}
+	original := record
 	copy := envelope
 	record.pendingTool = &copy
 	record.errandState = nextState
-	pilot.usedNonces[envelope.Nonce] = true
+	pilot.consumeNonceLocked(&record, envelope.Nonce)
+	if err := pilot.persistRecordLocked(record); err != nil {
+		pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
+		pilot.records[envelope.PacketID] = original
+		return agentorchestration.Decision{Allowed: false, Code: "durable_state_unavailable"}
+	}
 	pilot.records[envelope.PacketID] = record
 	return decision
 }
@@ -661,8 +708,14 @@ func (pilot *Pilot) ObserveErrandTool(envelope ErrandToolEnvelope) agentorchestr
 			return agentorchestration.Decision{Allowed: false, Code: "tool_sequence_denied"}
 		}
 	}
+	original := record
 	record.pendingTool = nil
-	pilot.usedNonces[envelope.Nonce] = true
+	pilot.consumeNonceLocked(&record, envelope.Nonce)
+	if err := pilot.persistRecordLocked(record); err != nil {
+		pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
+		pilot.records[envelope.PacketID] = original
+		return agentorchestration.Decision{Allowed: false, Code: "durable_state_unavailable"}
+	}
 	pilot.records[envelope.PacketID] = record
 	return agentorchestration.Decision{Allowed: true, Code: "allowed"}
 }
@@ -694,7 +747,14 @@ func (pilot *Pilot) Return(envelope ExecutionEnvelope, body ReturnBody) (Receipt
 	if record.packet.ReviewTrigger != "" {
 		state = StatePendingReview
 	}
-	return pilot.complete(record, envelope, "", state), nil
+	original := record
+	receipt := pilot.complete(record, envelope, "", state)
+	if err := pilot.persistRecordLocked(pilot.records[receipt.DelegationID]); err != nil {
+		pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
+		pilot.records[receipt.DelegationID] = original
+		return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
+	}
+	return receipt, nil
 }
 
 // ReturnWalterReview authenticates and closes the Walter leaf with a bounded
@@ -728,12 +788,18 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 	case WalterHold:
 		state = ReviewHold
 	}
+	original := verified
 	receipt := pilot.complete(verified, envelope, "", StateCompleted, state)
 	if receipt.Review != nil {
 		receipt.Review.ObjectionCount = len(normalized.Objections)
 	}
 	updated := pilot.records[receipt.DelegationID]
 	updated.receipt = receipt
+	if err := pilot.persistRecordLocked(updated); err != nil {
+		pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
+		pilot.records[receipt.DelegationID] = original
+		return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
+	}
 	pilot.records[receipt.DelegationID] = updated
 	if sourceID := verified.packet.Review.SourcePacketID; sourceID != "" {
 		for delegationID, producer := range pilot.records {
@@ -744,6 +810,9 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 			if normalized.Verdict == WalterApproved {
 				producer.receipt.State = StateCompleted
 				producer.receipt.CompletedAt = pilot.now().UTC()
+			}
+			if err := pilot.persistRecordLocked(producer); err != nil {
+				return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
 			}
 			pilot.records[delegationID] = producer
 			break
@@ -772,6 +841,7 @@ func (pilot *Pilot) Fail(envelope ExecutionEnvelope, body FailureBody) (Receipt,
 		return pilot.rejectEnvelope(envelope, "completion_denied", fmt.Errorf("orchestration guard denied failure close: %s", decision.Code))
 	}
 	if record.packet.Review != nil {
+		original := record
 		receipt := pilot.complete(record, envelope, normalized.Code, StateFailed, ReviewUnavailable)
 		// A Walter branch may fail after dispatch. Project only the review
 		// availability state back to the producer; failure never approves it.
@@ -781,13 +851,28 @@ func (pilot *Pilot) Fail(envelope ExecutionEnvelope, body FailureBody) (Receipt,
 					continue
 				}
 				producer.receipt.Review.State = ReviewUnavailable
+				if err := pilot.persistRecordLocked(producer); err != nil {
+					return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
+				}
 				pilot.records[delegationID] = producer
 				break
 			}
 		}
+		if err := pilot.persistRecordLocked(pilot.records[receipt.DelegationID]); err != nil {
+			pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
+			pilot.records[receipt.DelegationID] = original
+			return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
+		}
 		return receipt, nil
 	}
-	return pilot.complete(record, envelope, normalized.Code, StateFailed), nil
+	original := record
+	receipt := pilot.complete(record, envelope, normalized.Code, StateFailed)
+	if err := pilot.persistRecordLocked(pilot.records[receipt.DelegationID]); err != nil {
+		pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
+		pilot.records[receipt.DelegationID] = original
+		return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
+	}
+	return receipt, nil
 }
 
 func (pilot *Pilot) Inspect(delegationID string) (Receipt, bool) {
@@ -890,9 +975,31 @@ func (pilot *Pilot) complete(record pilotRecord, envelope ExecutionEnvelope, fai
 	if receipt.Review != nil && len(reviewState) > 0 && reviewState[0] != "" {
 		receipt.Review.State = reviewState[0]
 	}
-	pilot.records[receipt.DelegationID] = pilotRecord{receipt: receipt, packet: record.packet}
-	pilot.usedNonces[envelope.Nonce] = true
+	record.receipt = receipt
+	record.pendingTool = nil
+	pilot.consumeNonceLocked(&record, envelope.Nonce)
+	pilot.records[receipt.DelegationID] = record
 	return cloneReceipt(receipt)
+}
+
+func (pilot *Pilot) consumeNonceLocked(record *pilotRecord, nonce string) {
+	if pilot.usedNonces[nonce] {
+		return
+	}
+	pilot.usedNonces[nonce] = true
+	record.consumedNonces = append(record.consumedNonces, nonce)
+}
+
+func deleteNonce(nonces map[string]bool, nonce string) map[string]bool {
+	delete(nonces, nonce)
+	return nonces
+}
+
+func (pilot *Pilot) persistRecordLocked(record pilotRecord) error {
+	if pilot.store == nil {
+		return nil
+	}
+	return pilot.store.write(record)
 }
 
 func (pilot *Pilot) rejectEnvelope(envelope ExecutionEnvelope, code string, cause error) (Receipt, error) {
@@ -930,7 +1037,11 @@ func (pilot *Pilot) recordFailure(scopeKind, targetID, scopeID, code string, sta
 		Runtime: pilot.runtime, ScopeKind: scopeKind, ScopeID: scopeID, State: state,
 		FailureCode: code, CompletedAt: pilot.now().UTC(),
 	}
-	pilot.records[id] = pilotRecord{receipt: receipt}
+	record := pilotRecord{receipt: receipt}
+	if err := pilot.persistRecordLocked(record); err != nil {
+		return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
+	}
+	pilot.records[id] = record
 	return cloneReceipt(receipt), errors.New(code)
 }
 
@@ -947,6 +1058,9 @@ func (pilot *Pilot) recordReviewFailure(source pilotRecord, request WalterReview
 		}
 		record := pilot.records[receipt.DelegationID]
 		record.receipt = receipt
+		if persistErr := pilot.persistRecordLocked(record); persistErr != nil {
+			return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, persistErr
+		}
 		pilot.records[receipt.DelegationID] = record
 	}
 	return cloneReceipt(receipt), err
