@@ -150,6 +150,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: specs/005-development-harness.md; .claude/README.md; dev/skills/start-contributing/SKILL.md
 - Supersedes: none
 
+## WSMG - Migrate managed workspace surfaces only after core activation
+
+- Date: 2026-08-05
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A versioned Maestro update may change the managed runtime projection and hooks inside an existing workspace, while the workspace also contains user-authored orientation and professional material. Updating those surfaces before the corresponding managed core is active, or without a recoverable boundary, can leave the workspace bound to the wrong product version.
+- Decision: Treat workspace migration as a separate, versioned transaction. Build an immutable plan from a bounded workspace inspection, require exact confirmation bound to authenticated stable-bootstrapper evidence that the target core is active, snapshot only bounded managed files, apply through governed adapter and runtime-projection preflights, validate readiness, and restore the snapshot on every failed or interrupted execution. Legacy, incomplete, conflicted or authority-less workspaces fail closed and remain pending/unavailable; external import remains a separate capability.
+- Consequences: Core update activation and workspace migration cannot be silently merged into one mutation. The local migration manager is transactionally implemented and testable, but the current release CLI cannot execute it until the post-bootstrap authority supplies authenticated core-activation evidence and an explicit workspace target. Update plans therefore expose a pending, unavailable migration contract.
+- Refs: specs/045-workspace-migration.md; internal/workspacemigration; internal/updateplan; internal/updateservice
+- Supersedes: none
+
 ## WIZR - Give the signed installer one branded, user-space wizard
 
 - Date: 2026-07-29

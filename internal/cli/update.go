@@ -38,14 +38,31 @@ type releaseUpdateService interface {
 }
 
 type releaseUpdateResult struct {
-	SchemaVersion        int              `json:"schema_version"`
-	Capability           string           `json:"capability"`
-	State                string           `json:"state"`
-	Reason               string           `json:"reason,omitempty"`
-	ConfirmationRequired bool             `json:"confirmation_required"`
-	PlanID               string           `json:"plan_id,omitempty"`
-	Plan                 *updateplan.Plan `json:"plan,omitempty"`
-	NextAction           string           `json:"next_action,omitempty"`
+	SchemaVersion        int                       `json:"schema_version"`
+	Capability           string                    `json:"capability"`
+	State                string                    `json:"state"`
+	Reason               string                    `json:"reason,omitempty"`
+	ConfirmationRequired bool                      `json:"confirmation_required"`
+	PlanID               string                    `json:"plan_id,omitempty"`
+	Plan                 *updateplan.Plan          `json:"plan,omitempty"`
+	WorkspaceMigration   *workspaceMigrationResult `json:"workspace_migration,omitempty"`
+	NextAction           string                    `json:"next_action,omitempty"`
+}
+
+type workspaceMigrationResult struct {
+	Required  bool   `json:"required"`
+	Version   int    `json:"version"`
+	State     string `json:"state"`
+	Execution string `json:"execution"`
+	Reason    string `json:"reason"`
+}
+
+func workspaceMigrationForPlan(plan updateplan.Plan) *workspaceMigrationResult {
+	return &workspaceMigrationResult{
+		Required: plan.WorkspaceMigrationRequired, Version: plan.WorkspaceMigrationVersion,
+		State: plan.WorkspaceMigrationState, Execution: plan.WorkspaceMigrationExecution,
+		Reason: "post-bootstrap workspace target and authenticated core-activation authority are not wired into bcgos update",
+	}
 }
 
 type releaseCapabilityInspection struct {
@@ -174,7 +191,8 @@ func runUpdate(args []string, out, errOut io.Writer, service releaseUpdateServic
 		return writeJSON(out, releaseUpdateResult{
 			SchemaVersion: 1, Capability: "private_release_update", State: "available",
 			ConfirmationRequired: true, PlanID: plan.ID, Plan: &plan,
-			NextAction: "review the exact plan, then run bcgos update --confirm " + plan.ID,
+			WorkspaceMigration: workspaceMigrationForPlan(plan),
+			NextAction:         "review the exact plan, then run bcgos update --confirm " + plan.ID,
 		}, errOut)
 	case len(args) == 2 && args[0] == "--confirm" && updatePlanIDPattern.MatchString(args[1]):
 		pending, err := service.Confirm(args[1])
@@ -183,7 +201,7 @@ func runUpdate(args []string, out, errOut io.Writer, service releaseUpdateServic
 		}
 		return writeJSON(out, releaseUpdateResult{
 			SchemaVersion: 1, Capability: "private_release_update", State: "activation_started",
-			PlanID:     pending.Plan.ID,
+			PlanID: pending.Plan.ID, WorkspaceMigration: workspaceMigrationForPlan(pending.Plan),
 			NextAction: "the stable bootstrapper will activate the confirmed update after this CLI exits",
 		}, errOut)
 	default:
