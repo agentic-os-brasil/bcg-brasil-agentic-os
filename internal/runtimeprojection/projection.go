@@ -697,7 +697,7 @@ func renderOrientation(layout runtimeLayout, catalog skillsindex.Catalog) (strin
 	var block strings.Builder
 	block.WriteString("<!-- BCGOS:INSTALLED-SKILLS:BEGIN -->\n")
 	for _, skill := range catalog.Skills {
-		fmt.Fprintf(&block, "- `$%s` — %s; usar quando: %s; fonte: `%s/%s/SKILL.md`\n", skill.ID, skill.DisplayName, skill.Trigger, layout.root, skill.ID)
+		fmt.Fprintf(&block, "- `/%s` — %s; usar quando: %s; fonte: `%s/%s/SKILL.md`\n", skill.ID, skill.DisplayName, skill.Trigger, layout.root, skill.ID)
 	}
 	block.WriteString("<!-- BCGOS:INSTALLED-SKILLS:END -->")
 	body := strings.ReplaceAll(template, "{{RUNTIME}}", layout.runtimeName)

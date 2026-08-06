@@ -549,7 +549,7 @@ func renderOrientation(runtimeName string, skills []skillsindex.Skill) (string, 
 		skillsRoot, runtimeLabel = ".claude/skills", "Claude Code"
 	}
 	for _, skill := range skills {
-		fmt.Fprintf(&block, "- `$%s` — %s; usar quando: %s; fonte: `%s/%s/SKILL.md`\n", skill.ID, skill.DisplayName, skill.Trigger, skillsRoot, skill.ID)
+		fmt.Fprintf(&block, "- `/%s` — %s; usar quando: %s; fonte: `%s/%s/SKILL.md`\n", skill.ID, skill.DisplayName, skill.Trigger, skillsRoot, skill.ID)
 	}
 	block.WriteString("<!-- BCGOS:INSTALLED-SKILLS:END -->")
 	body := strings.ReplaceAll(template, "{{RUNTIME}}", runtimeLabel)
