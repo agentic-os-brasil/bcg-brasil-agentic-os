@@ -13,31 +13,36 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/rolemigration"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspacemigration"
 )
 
 type Plan struct {
-	SchemaVersion        int    `json:"schema_version"`
-	ID                   string `json:"id"`
-	State                string `json:"state"`
-	FromRelease          string `json:"from_release"`
-	FromChannel          string `json:"from_channel"`
-	FromCLIVersion       string `json:"from_cli_version"`
-	FromBundleVersion    string `json:"from_bundle_version"`
-	ToRelease            string `json:"to_release"`
-	Channel              string `json:"channel"`
-	CLIVersion           string `json:"cli_version"`
-	BundleVersion        string `json:"bundle_version"`
-	CLIArtifact          string `json:"cli_artifact"`
-	BundleArtifact       string `json:"bundle_artifact"`
-	TargetOS             string `json:"target_os"`
-	TargetArch           string `json:"target_arch"`
-	Provider             string `json:"provider"`
-	ProviderReleaseID    int64  `json:"provider_release_id"`
-	ManifestSHA256       string `json:"manifest_sha256"`
-	RoleMigrationID      string `json:"role_migration_id,omitempty"`
-	CatalogSHA256        string `json:"catalog_sha256,omitempty"`
-	PolicySHA256         string `json:"policy_sha256,omitempty"`
-	ConfirmationRequired bool   `json:"confirmation_required"`
+	SchemaVersion               int    `json:"schema_version"`
+	ID                          string `json:"id"`
+	State                       string `json:"state"`
+	FromRelease                 string `json:"from_release"`
+	FromChannel                 string `json:"from_channel"`
+	FromCLIVersion              string `json:"from_cli_version"`
+	FromBundleVersion           string `json:"from_bundle_version"`
+	ToRelease                   string `json:"to_release"`
+	Channel                     string `json:"channel"`
+	CLIVersion                  string `json:"cli_version"`
+	BundleVersion               string `json:"bundle_version"`
+	CLIArtifact                 string `json:"cli_artifact"`
+	BundleArtifact              string `json:"bundle_artifact"`
+	TargetOS                    string `json:"target_os"`
+	TargetArch                  string `json:"target_arch"`
+	Provider                    string `json:"provider"`
+	ProviderReleaseID           int64  `json:"provider_release_id"`
+	ManifestSHA256              string `json:"manifest_sha256"`
+	RoleMigrationID             string `json:"role_migration_id,omitempty"`
+	CatalogSHA256               string `json:"catalog_sha256,omitempty"`
+	PolicySHA256                string `json:"policy_sha256,omitempty"`
+	WorkspaceMigrationRequired  bool   `json:"workspace_migration_required"`
+	WorkspaceMigrationVersion   int    `json:"workspace_migration_version"`
+	WorkspaceMigrationState     string `json:"workspace_migration_state"`
+	WorkspaceMigrationExecution string `json:"workspace_migration_execution"`
+	ConfirmationRequired        bool   `json:"confirmation_required"`
 }
 
 type SourceBinding struct {
@@ -113,7 +118,11 @@ func Build(
 		Provider: source.Provider, ProviderReleaseID: source.ProviderReleaseID,
 		ManifestSHA256: source.ManifestSHA256, ConfirmationRequired: true,
 		RoleMigrationID: roleBinding.ID, CatalogSHA256: roleBinding.CatalogSHA256,
-		PolicySHA256: roleBinding.PolicySHA256,
+		PolicySHA256:                roleBinding.PolicySHA256,
+		WorkspaceMigrationRequired:  true,
+		WorkspaceMigrationVersion:   workspacemigration.SchemaVersion,
+		WorkspaceMigrationState:     "pending_core_activation",
+		WorkspaceMigrationExecution: "unavailable",
 	}
 	identifier, err := computePlanID(plan)
 	if err != nil {
@@ -127,6 +136,10 @@ func Validate(plan Plan) error {
 	if plan.SchemaVersion != 2 ||
 		plan.State != "available" ||
 		!plan.ConfirmationRequired ||
+		!plan.WorkspaceMigrationRequired ||
+		plan.WorkspaceMigrationVersion != workspacemigration.SchemaVersion ||
+		plan.WorkspaceMigrationState != "pending_core_activation" ||
+		plan.WorkspaceMigrationExecution != "unavailable" ||
 		plan.Provider != "github" ||
 		plan.ProviderReleaseID <= 0 ||
 		len(plan.ManifestSHA256) != 64 ||

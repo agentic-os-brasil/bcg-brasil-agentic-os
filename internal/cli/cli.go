@@ -52,6 +52,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillrouting"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspacemigration"
 )
 
 const (
@@ -93,12 +94,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|workspace-migration|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|workspace-migration|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -125,6 +126,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runWorkspaceAgentWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "workspace":
 		return runWorkspaceImport(args[1:], out, errOut, defaultDataRoot)
+	case "workspace-migration":
+		return runWorkspaceMigration(args[1:], out, errOut, defaultDataRoot)
 	case "atlas":
 		return runAtlas(args[1:], out, errOut, defaultDataRoot)
 	case "prior-work":
@@ -1351,6 +1354,7 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 			"continuous_use":         continuous.State,
 			"private_release_auth":   releaseCapability.State,
 			"updates":                releaseCapability.State,
+			"workspace_migration":    workspacemigration.CapabilityStatus().State + "_" + workspacemigration.CapabilityStatus().Execution,
 			"case_agent_setup":       "supported",
 			"workspace_research":     "managed_skill_runtime_dependent",
 			"public_economic_rollup": "supported",
