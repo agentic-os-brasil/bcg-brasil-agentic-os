@@ -23,7 +23,7 @@ Canary.
 | `qualitative-analysis` | bounded qualitative synthesis | Keep; interview guide prepares evidence collection |
 | `quantitative-analysis` | bounded quantitative analysis | Keep; no overlap with planning methods |
 | `unit-test-wave` | engineering test planning | Keep; separate domain |
-| `workspace-agent-setup` | workspace initialization | Keep; `case-kickoff` plans the case, it does not initialize a workspace |
+| `case-agent-setup` | Case Agent initialization | Keep; `case-kickoff` plans the case, it does not initialize the Case Agent |
 | `xfail-bug-capture` | test-exposed bug capture | Keep; separate domain |
 
 ## Reviewed source-method candidates

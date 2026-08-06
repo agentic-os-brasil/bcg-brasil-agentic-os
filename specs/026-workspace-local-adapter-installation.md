@@ -5,7 +5,7 @@ Codex; native runtime qualification remains separate.
 
 `bcgos adapter install --runtime claude|codex [workspace]` first ensures the
 workspace-local installation dependencies (`workspace.json`, durable
-orchestration state, owner registry, workspace-agent dossier and signed agent
+orchestration state, owner registry, Case Agent dossier and signed agent
 scaffold) exist idempotently, then adds only Maestro-owned commands to the
 runtime's workspace-local configuration. Both
 Claude and Codex receive `SessionStart`, `UserPromptSubmit`, `PreToolUse`,

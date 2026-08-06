@@ -125,7 +125,7 @@ reports adapter configuration, readiness verification and scheduler activation
 as separate states, alongside the exact `workspace_path` and a diagnostic
 command bound to that path. It returns `ready_for_runtime=true` only after the
 workspace, selected Claude/Codex projection, durable orchestration state,
-owner context, workspace-agent scaffold and per-user scheduler pass their
+owner context, Case Agent dossier/scaffold and per-user scheduler pass their
 respective checks; a failure returns an error and never marks the workspace
 ready. A generated workspace or a present orientation file is therefore not
 mistaken for observed hooks, verified readiness or an active scheduler.

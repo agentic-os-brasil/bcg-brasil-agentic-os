@@ -29,8 +29,8 @@ tracks; self-consistent but rewritten local manifests are not accepted.
 Readiness also requires the installation dependencies that make the first
 session deterministic: a protected, strict-JSON
 `.bcgos/maestro-orchestration-state.json` snapshot, an initialized owner
-context/onboarding registry, the workspace-agent dossier and the signed
-workspace-agent scaffold. `bcgos init` materializes these surfaces
+context/onboarding registry, the Case Agent dossier and the signed Case Agent
+scaffold. `bcgos init` materializes these surfaces
 idempotently; an interrupted or legacy installation fails with a precise
 check rather than being presented as ready. The verifier does not install
 external Claude Code, Codex or provider packs: those remain explicit runtime

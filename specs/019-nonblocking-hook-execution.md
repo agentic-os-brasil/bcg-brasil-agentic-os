@@ -64,7 +64,8 @@ absolute denial.
 
 Non-shell external tool protection uses an exact namespace/tool-ID allowlist
 for the supported GitHub, Outlook email, Teams and Slack mutations. Internal,
-collaboration and workspace-agent messaging with a similar method suffix is not
+collaboration and the legacy `workspace-agent` compatibility messaging with a
+similar method suffix is not
 classified as external publication by substring.
 
 ## Executable policy
