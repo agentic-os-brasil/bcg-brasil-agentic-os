@@ -532,6 +532,40 @@ func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *
 	}
 }
 
+func TestInstalledGuardAllowsObservedReadOnlyDiagnosticsWithBoundedShellSyntax(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := []string{
+		fmt.Sprintf(`%q skills index 2>/dev/null | head -60`, executable),
+		`ls /Users/example/Developer/maestro-os/owner/self/ 2>/dev/null || echo "dir not found"`,
+	}
+	for _, runtimeName := range []string{"claude", "codex"} {
+		for _, command := range commands {
+			t.Run(runtimeName+"/"+command, func(t *testing.T) {
+				body, err := json.Marshal(map[string]any{"session_id": "session-a", "tool_name": "Bash", "tool_input": map[string]string{"command": command}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				var output bytes.Buffer
+				rootCalled := false
+				code := runHookWithInput(
+					[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", "/workspace-that-must-not-be-inspected"},
+					bytes.NewReader(body), &output, &output,
+					func() (string, error) {
+						rootCalled = true
+						return "", errors.New("read-only diagnostic must not inspect workspace state")
+					},
+				)
+				if code != ExitOK || rootCalled || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+					t.Fatalf("guard = %d rootCalled=%v output=%s", code, rootCalled, output.String())
+				}
+			})
+		}
+	}
+}
+
 func TestInstalledGuardRejectsHomonymousBCGOSDiagnosticWhenStateCannotBeValidated(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
@@ -1099,6 +1133,15 @@ func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
 	output.Reset()
 	if code := runOwner([]string{"onboarding", "select", "--track", "quick", "--confirm"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"estimated_minutes": 7`) {
 		t.Fatalf("quick onboarding selection = %d, output = %s", code, output.String())
+	}
+	statusOutput := output.String()
+	output.Reset()
+	if code := runOwner([]string{"onboarding", "review"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || output.String() == "" || !strings.Contains(output.String(), `"track": "quick"`) || output.String() != statusOutput {
+		t.Fatalf("onboarding review alias = %d, output = %s (status = %s)", code, output.String(), statusOutput)
+	}
+	output.Reset()
+	if code := runOwner([]string{"onboarding", "confirm", "--confirm"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitUsage || !strings.Contains(output.String(), "pass its review_digest") {
+		t.Fatalf("missing onboarding digest guidance = %d, output = %s", code, output.String())
 	}
 	output.Reset()
 	if code := runOwner([]string{"interview", "quick"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"preferences"`) || strings.Contains(output.String(), `"decision-rules"`) {

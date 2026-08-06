@@ -176,6 +176,9 @@ func sessionDirective(packet sessionctx.Packet) string {
 	if packet.MaestroCLIPath != "" {
 		lines = append(lines, "Use the exact installed Maestro CLI executable at "+quoteCLIPath(packet.MaestroCLIPath)+" for every bcgos command below. Do not invoke a bare `bcgos` command or depend on PATH.")
 	}
+	if packet.OwnerContextRoot != "" {
+		lines = append(lines, "The canonical owner context is private to this installation at "+packet.OwnerContextRoot+"/owner. Do not create, edit or inspect an owner/ directory inside the workspace; use the exact owner commands below so onboarding state, review digests and audit receipts remain authoritative.")
+	}
 	switch packet.Owner.Onboarding.State {
 	case "required", "in_progress":
 		trackChoice := ""

@@ -90,6 +90,35 @@ func TestReadOnlyBCGOSDiagnosticsUseAClosedSimpleCommandGrammar(t *testing.T) {
 	}
 }
 
+func TestReadOnlyDiagnosticsAllowObservedBoundedShellForms(t *testing.T) {
+	installed := filepath.Join(t.TempDir(), "Maestro", "bin", "bcgos")
+	if err := os.MkdirAll(filepath.Dir(installed), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installed, []byte("installed"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	bcgos := fmt.Sprintf("%q skills index 2>/dev/null | head -60", installed)
+	if !IsReadOnlyBCGOSDiagnostic("Bash", json.RawMessage(fmt.Sprintf(`{"command":%q}`, bcgos)), installed) {
+		t.Fatalf("bounded skills index pipeline was not recognized: %s", bcgos)
+	}
+	lsCommand := `ls /Users/example/Developer/maestro-os/owner/self/ 2>/dev/null || echo "dir not found"`
+	if !IsReadOnlyBoundedDiagnostic("Bash", json.RawMessage(fmt.Sprintf(`{"command":%q}`, lsCommand))) {
+		t.Fatalf("bounded ls diagnostic was not recognized: %s", lsCommand)
+	}
+	denied := []string{
+		fmt.Sprintf("%q skills index 2>/dev/null | head -60; touch /tmp/marker", installed),
+		`ls /Users/example/Developer/maestro-os/owner/self/ || rm -rf /`,
+		fmt.Sprintf("%q skills index 2>/dev/null | head -1000", installed),
+	}
+	for _, command := range denied {
+		raw := json.RawMessage(fmt.Sprintf(`{"command":%q}`, command))
+		if IsReadOnlyBCGOSDiagnostic("Bash", raw, installed) || IsReadOnlyBoundedDiagnostic("Bash", raw) {
+			t.Fatalf("unsafe diagnostic was recognized as read-only: %s", command)
+		}
+	}
+}
+
 func TestStoreRejectsPermissiveRoot(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Chmod(root, 0o755); err != nil {

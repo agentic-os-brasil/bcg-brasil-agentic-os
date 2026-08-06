@@ -64,20 +64,62 @@ func IsReadOnlyBCGOSDiagnostic(toolName string, raw json.RawMessage, installedEx
 	if toolName != "Bash" || rejectDuplicateKeys(raw) != nil {
 		return false
 	}
-	var input map[string]any
-	if len(raw) == 0 || json.Unmarshal(raw, &input) != nil {
-		return false
-	}
-	command, ok := input["command"].(string)
-	if !ok || strings.TrimSpace(command) == "" {
+	command, ok := commandFromRaw(raw)
+	if !ok {
 		return false
 	}
 	fields, err := splitSimpleCommand(command)
-	if err != nil || len(fields) == 0 || !sameInstalledExecutable(fields[0], installedExecutable) {
+	if err != nil {
+		return isReadOnlyBCGOSPipeline(command, installedExecutable)
+	}
+	return isReadOnlyBCGOSFields(fields, installedExecutable)
+}
+
+// IsReadOnlyBoundedDiagnostic recognizes a tiny local read-only shell subset
+// used by the bootstrap/onboarding flow. It is intentionally separate from
+// the BCGOS executable allowlist because diagnostics such as ls inspect a
+// workspace path without invoking Maestro state or mutating anything.
+func IsReadOnlyBoundedDiagnostic(toolName string, raw json.RawMessage) bool {
+	if toolName != "Bash" || rejectDuplicateKeys(raw) != nil {
+		return false
+	}
+	command, ok := commandFromRaw(raw)
+	if !ok {
+		return false
+	}
+	if isFacetDigestCommand(command) {
+		return true
+	}
+	primary, suffix, ok := splitReadOnlySuffix(command)
+	if !ok {
+		return false
+	}
+	fields, err := splitSimpleCommand(primary)
+	if err != nil || len(fields) != 2 || !isReadOnlyLS(fields[0]) ||
+		strings.HasPrefix(fields[1], "-") || !filepath.IsAbs(fields[1]) {
+		return false
+	}
+	return suffix == "" || suffix == `2>/dev/null || echo "dir not found"`
+}
+
+func commandFromRaw(raw json.RawMessage) (string, bool) {
+	var input map[string]any
+	if len(raw) == 0 || json.Unmarshal(raw, &input) != nil {
+		return "", false
+	}
+	command, ok := input["command"].(string)
+	return strings.TrimSpace(command), ok && strings.TrimSpace(command) != ""
+}
+
+func isReadOnlyBCGOSFields(fields []string, installedExecutable string) bool {
+	if len(fields) == 0 || !sameInstalledExecutable(fields[0], installedExecutable) {
 		return false
 	}
 	arguments := fields[1:]
 	if len(arguments) == 1 && (arguments[0] == "help" || arguments[0] == "--help" || arguments[0] == "-h" || arguments[0] == "version") {
+		return true
+	}
+	if len(arguments) == 2 && arguments[0] == "skills" && arguments[1] == "index" {
 		return true
 	}
 	if len(arguments) >= 1 && (arguments[0] == "doctor" || arguments[0] == "status") {
@@ -87,6 +129,46 @@ func IsReadOnlyBCGOSDiagnostic(toolName string, raw json.RawMessage, installedEx
 		return true
 	}
 	return len(arguments) == 3 && arguments[0] == "owner" && arguments[1] == "onboarding" && arguments[2] == "status"
+}
+
+func isReadOnlyBCGOSPipeline(command, installedExecutable string) bool {
+	primary, suffix, ok := splitReadOnlySuffix(command)
+	if !ok || suffix != "2>/dev/null | head -60" {
+		return false
+	}
+	fields, err := splitSimpleCommand(primary)
+	if err != nil {
+		return false
+	}
+	return len(fields) == 3 && fields[1] == "skills" && fields[2] == "index" &&
+		sameInstalledExecutable(fields[0], installedExecutable)
+}
+
+func splitReadOnlySuffix(command string) (string, string, bool) {
+	command = strings.TrimSpace(command)
+	for _, suffix := range []string{`2>/dev/null | head -60`, `2>/dev/null || echo "dir not found"`} {
+		marker := " " + suffix
+		if strings.HasSuffix(command, marker) {
+			primary := strings.TrimSpace(strings.TrimSuffix(command, marker))
+			return primary, suffix, primary != ""
+		}
+	}
+	return command, "", command != ""
+}
+
+func isReadOnlyLS(value string) bool {
+	return value == "ls" || value == "/bin/ls" || value == "/usr/bin/ls"
+}
+
+func isFacetDigestCommand(command string) bool {
+	const prefix = `cd "`
+	const suffix = `" && shasum -a 256 owner/self/professional-role.md owner/self/communication-style.md owner/self/preferences.md owner/self/quality-bar.md | shasum -a 256 | awk '{print $1}'`
+	if !strings.HasPrefix(command, prefix) || !strings.HasSuffix(command, suffix) {
+		return false
+	}
+	workspace := strings.TrimSuffix(strings.TrimPrefix(command, prefix), suffix)
+	return filepath.IsAbs(workspace) && workspace != "" &&
+		!strings.ContainsAny(workspace, "\"';&|<>$`()[]{}*?\n\r")
 }
 
 func sameInstalledExecutable(candidate, installed string) bool {

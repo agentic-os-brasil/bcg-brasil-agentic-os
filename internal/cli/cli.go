@@ -2074,12 +2074,12 @@ func runOwnerExpand(args []string, in io.Reader, out, errOut io.Writer, root str
 }
 
 func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
-	if len(args) == 0 || (args[0] != "status" && args[0] != "select" && args[0] != "confirm") {
-		fmt.Fprintln(errOut, "usage: bcgos owner onboarding <status|select --track quick|complete --confirm|confirm --confirm>")
+	if len(args) == 0 || (args[0] != "status" && args[0] != "review" && args[0] != "select" && args[0] != "confirm") {
+		fmt.Fprintln(errOut, "usage: bcgos owner onboarding <status|review|select --track quick|complete --confirm|confirm --digest SHA256 --confirm>")
 		return ExitUsage
 	}
 	switch args[0] {
-	case "status":
+	case "status", "review":
 		if len(args) != 1 {
 			fmt.Fprintln(errOut, "usage: bcgos owner onboarding status")
 			return ExitUsage
@@ -2108,6 +2108,9 @@ func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
 		confirmed := flags.Bool("confirm", false, "confirm the reviewed onboarding profile")
 		if flags.Parse(args[1:]) != nil || rejectPositionals(flags, errOut) || !*confirmed || strings.TrimSpace(*reviewDigest) == "" {
 			fmt.Fprintln(errOut, "usage: bcgos owner onboarding confirm --digest SHA256 --confirm")
+			if *confirmed && strings.TrimSpace(*reviewDigest) == "" {
+				fmt.Fprintln(errOut, "run bcgos owner onboarding status and pass its review_digest; the digest prevents confirming a profile that changed after review")
+			}
 			return ExitUsage
 		}
 		status, err := ownerctx.ConfirmOnboarding(root, *reviewDigest)
@@ -2122,6 +2125,10 @@ func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
 func isReadOnlyInstalledBCGOSDiagnostic(toolName string, raw json.RawMessage) bool {
 	executable, err := os.Executable()
 	return err == nil && actionconfirmation.IsReadOnlyBCGOSDiagnostic(toolName, raw, executable)
+}
+
+func isReadOnlyBoundedDiagnostic(toolName string, raw json.RawMessage) bool {
+	return isReadOnlyInstalledBCGOSDiagnostic(toolName, raw) || actionconfirmation.IsReadOnlyBoundedDiagnostic(toolName, raw)
 }
 
 func runOwnerPromptHistory(args []string, in io.Reader, out, errOut io.Writer, root string) int {
@@ -2490,7 +2497,7 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 	}
 	packet := sessionctx.Build(sessionctx.Sources{
-		Profile: profileState, Workspace: inspection, Owner: owner,
+		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 		Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 		Execution:        activePointerFromContinuity(activeExecution),
 		Memory:           sessionMemorySource(root, inspection.WorkspaceID),
@@ -2544,7 +2551,7 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 	if err != nil {
 		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 	}
-	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Execution: activePointerFromContinuity(activeExecution), Memory: sessionMemorySource(root, inspection.WorkspaceID), SharePointSource: sharePointSource, ContinuousUse: continuous})
+	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Execution: activePointerFromContinuity(activeExecution), Memory: sessionMemorySource(root, inspection.WorkspaceID), SharePointSource: sharePointSource, ContinuousUse: continuous})
 	result, err := sessionresolve.Resolve(root, *pointer, *purpose, packet, *budget)
 	if err != nil {
 		return reportError(errOut, err)
@@ -2775,7 +2782,7 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 	}
 	packet := sessionctx.Build(sessionctx.Sources{
-		Profile: profileState, Workspace: inspection, Owner: owner,
+		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 		Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 		Execution:        activePointerFromContinuity(activeExecution),
 		Memory:           sessionMemorySource(root, inspection.WorkspaceID),
@@ -2837,6 +2844,9 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		native = parsed
 	}
 	if action == "pre-action-guard" {
+		if isReadOnlyBoundedDiagnostic(native.ToolName, native.ToolInputJSON()) {
+			return writeJSON(out, codexadapter.GuardOutput{}, errOut)
+		}
 		response, err := codexadapter.Guard(native)
 		if err != nil {
 			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
@@ -2849,9 +2859,6 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			return writeJSON(out, codexadapter.ExternalActionDenial(noncanonicalExternalDenial), errOut)
 		}
 		if protected == nil && strings.TrimSpace(*orchestrationState) == "" {
-			return writeJSON(out, response, errOut)
-		}
-		if protected == nil && isReadOnlyInstalledBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
 			return writeJSON(out, response, errOut)
 		}
 		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
@@ -2917,7 +2924,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 		}
 		packet := sessionctx.Build(sessionctx.Sources{
-			Profile: profileState, Workspace: inspection, Owner: owner,
+			Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 			Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 			Execution:        activePointerFromContinuity(activeExecution),
 			Memory:           sessionMemorySource(root, inspection.WorkspaceID),
@@ -3006,6 +3013,9 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 	// The safety decision depends only on the bounded native payload. It must
 	// not be weakened by missing, malformed or slow workspace state.
 	if action == "pre-action-guard" {
+		if isReadOnlyBoundedDiagnostic(native.ToolName, native.ToolInputJSON()) {
+			return writeJSON(out, claudeadapter.GuardOutput{}, errOut)
+		}
 		response, err := claudeadapter.Guard(native)
 		if err != nil {
 			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
@@ -3018,9 +3028,6 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			return writeJSON(out, claudeadapter.ExternalActionDenial(noncanonicalExternalDenial), errOut)
 		}
 		if protected == nil && strings.TrimSpace(*orchestrationState) == "" {
-			return writeJSON(out, response, errOut)
-		}
-		if protected == nil && isReadOnlyInstalledBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
 			return writeJSON(out, response, errOut)
 		}
 		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
@@ -3088,7 +3095,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 		}
 		packet := sessionctx.Build(sessionctx.Sources{
-			Profile: profileState, Workspace: inspection, Owner: owner,
+			Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 			Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 			Execution:        activePointerFromContinuity(activeExecution),
 			Memory:           sessionMemorySource(root, inspection.WorkspaceID),

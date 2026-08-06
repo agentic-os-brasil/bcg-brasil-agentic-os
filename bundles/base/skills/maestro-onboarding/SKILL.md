@@ -35,6 +35,24 @@ the command succeeded.
 4. Do not start a professional task, read a selected memory source, execute an
    unrelated skill or grant runtime trust globally.
 
+The canonical owner context is private to the Maestro installation's data root,
+outside the workspace. The SessionStart directive prints that exact root. Never
+create or edit `owner/` or `owner/self/` inside the workspace: those files are
+not authoritative and will not advance the CLI state. Do not write facet files
+with a shell/editor as a shortcut. Submit an owner-reviewed proposal through
+the bounded command below, then apply the returned proposal only when the
+owner has explicitly agreed:
+
+```sh
+<maestro-cli> owner refine submit --facet <facet-id> --evidence "owner onboarding answer" --stdin
+# stdin: the concise reviewed Markdown body
+<maestro-cli> owner refine apply <proposal-id> --confirm
+```
+
+The onboarding track and final profile confirmation remain separate gates. The
+CLI registry, review digest and audit receipt are the source of truth; a
+workspace-local Markdown file alone is never evidence of completion.
+
 ## Opening response
 
 Respond in Brazilian Portuguese with this compact, welcoming shape:
@@ -163,6 +181,13 @@ professional baseline; do not emulate ingestion from conversation.
    ```sh
    <maestro-cli> owner onboarding confirm --digest SHA256 --confirm
    ```
+
+   Never try to manufacture this digest with `shasum`, `cat | openssl`, `awk`
+   or shell command substitution. Those commands are intentionally outside the
+   bounded hook grammar. If the digest is missing or stale, run
+   `<maestro-cli> owner onboarding status` again and use its current
+   `review_digest`. `owner onboarding review` is accepted as a read-only alias
+   for `status` when a runtime presents that wording.
 
 ## Completion and follow-through
 
