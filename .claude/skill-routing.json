@@ -7,6 +7,7 @@
     "start_or_resume_work": "start-work",
     "implement_change": "develop-change",
     "evolve_memory_persistence": "evolve-memory",
+    "build_local_beta_installer": "maestro-local-beta-installer",
     "record_durable_decision": "record-decision",
     "prepare_human_review": "prepare-pr",
     "recover_unclear_git_state": "recover-work"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maestro Local-Beta Installer"
+  short_description: "Build and verify the real local-beta macOS installer flow"
+  default_prompt: "Use $maestro-local-beta-installer to build and verify the current Maestro local-beta installer without using the rehearsal simulator."
