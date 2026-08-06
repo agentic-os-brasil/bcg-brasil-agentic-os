@@ -24,6 +24,7 @@
   let installedVersion = '';
   let workspaceFlowSelection = null;
   let workspaceFlowAnalysis = null;
+  let workspaceFlowReceipt = null;
   let workspaceFlowScene = null;
   let verificationRun = 0;
   const platform = /Win/i.test(navigator.userAgent) ? 'Windows' : /Mac/i.test(navigator.userAgent) ? 'macOS' : 'seu dispositivo';
@@ -266,6 +267,26 @@
     return Object.keys(required).every(id => seen.has(id));
   }
 
+  function isValidWorkspaceFlowReceipt(receipt, expectedStatus = 'committed') {
+    if (!isValidWorkspaceReceipt(receipt, expectedStatus)) return false;
+    return receipt.source_effect === 'preserved'
+      && (receipt.operation !== 'external_import' || receipt.target_effect === 'bounded_import_committed')
+      && (receipt.operation !== 'external_import' || receipt.rollback_effect === 'available_from_import_receipt')
+      && String(receipt.target_effect || '').trim()
+      && String(receipt.rollback_effect || '').trim()
+      && receipt.approval_action === 'IMPORT'
+      && receipt.approved_by
+      && receipt.approval_plan_id === receipt.plan_id
+      && receipt.plan_id
+      && receipt.plan_digest;
+  }
+
+  function isValidWorkspaceFlowRollback(receipt) {
+    return Boolean(receipt?.valid && !receipt.ready && receipt.status === 'rolled_back' && receipt.receipt_id
+      && receipt.source_effect === 'preserved' && receipt.target_effect === 'bounded_import_rolled_back' && receipt.rollback_effect === 'completed'
+      && receipt.approval_action === 'ROLLBACK' && receipt.plan_id && receipt.plan_digest);
+  }
+
   function createWorkspaceFlowScene() {
     if (workspaceFlowScene) return workspaceFlowScene;
     const legacySetup = document.querySelector('#workspace-setup');
@@ -292,7 +313,7 @@
             <span class="flow-option-number">04</span><span><b>Começar com um workspace novo</b><small>Cria o workspace padrão local e só mostra pronto quando o receipt de readiness for válido.</small></span><span class="arrow">↗</span>
           </button>
         </div>
-        <div class="flow-boundary"><span>REGRA DE SEGURANÇA</span><p>Selecionar uma pasta apenas cria um ponteiro temporário para análise. Nada é lido, copiado ou enviado antes de um plano e uma confirmação.</p></div>
+        <div class="flow-boundary"><span>REGRA DE SEGURANÇA</span><p>Selecionar uma pasta apenas cria um ponteiro temporário. A análise local bounded lê metadados e calcula o plano; nada é copiado ou mutado até IMPORT.</p></div>
         <div class="callout runtime-error" id="workspace-flow-error" role="alert" hidden><span>!</span><p></p></div>
         <div class="runtime-statusline" id="workspace-flow-feedback" role="status" aria-live="polite" hidden><span class="pulse"></span><p></p></div>
       </div>
@@ -317,7 +338,7 @@
     const clean = scene.querySelector('[data-action="create-clean-workspace"]');
     if (clean) clean.disabled = !runtime;
     const version = scene.querySelector('#flow-update-version');
-    if (version) version.textContent = installedVersion ? `Versão atual detectada: ${installedVersion}` : 'A versão atual será lida pelo bridge conectado.';
+    if (version) version.textContent = installedVersion ? `Versão atual detectada: ${installedVersion}` : 'A versão atual será lida pelo core transacional conectado.';
   }
 
   function setWorkspaceFlowFeedback(message, isError = false) {
@@ -348,17 +369,22 @@
     if (!target) return;
     if (choice) choice.hidden = true;
     target.hidden = false;
-    const capabilities = (analysis.capabilities_unavailable || []).map(capability => `<li><b>${escapeHTML(capability.id)}</b><span>${escapeHTML(capability.message)}</span></li>`).join('');
+    const blocked = analysis.state === 'blocked';
+    const capabilities = (analysis.capabilities_unavailable || []).map(capability => `<li><b>${escapeHTML(capability.id)} · ${escapeHTML(capability.state)}</b><span>${escapeHTML(capability.message)}</span></li>`).join('');
+    const blockers = (analysis.blockers || []).map(blocker => `<li><b>${escapeHTML(blocker.code)}</b><span>${escapeHTML(blocker.message)}</span></li>`).join('');
+    const effects = `<div class="flow-effects" aria-label="Efeitos do plano"><article><span>FONTE</span><b>${escapeHTML(analysis.source_effect || 'não informado')}</b></article><article><span>ALVO</span><b>${escapeHTML(analysis.target_effect || 'não informado')}</b></article><article><span>ROLLBACK</span><b>${escapeHTML(analysis.rollback_effect || 'não informado')}</b></article></div>`;
     target.innerHTML = `
-      <span class="eyebrow">ANÁLISE CONCLUÍDA · ${escapeHTML(flowClassificationLabel(analysis.classification))}</span>
-      <h1 id="workspace-flow-analysis-title" tabindex="-1">Este é o plano.<br><em>Você decide se ele segue.</em></h1>
+      <span class="eyebrow">${blocked ? 'ANÁLISE BLOQUEADA' : 'ANÁLISE CONCLUÍDA'} · ${escapeHTML(flowClassificationLabel(analysis.classification))}</span>
+      <h1 id="workspace-flow-analysis-title" tabindex="-1">${blocked ? 'Não é possível prosseguir.' : 'Este é o plano.'}<br><em>${blocked ? 'O bloqueio fica explícito.' : 'Você decide se ele segue.'}</em></h1>
       <p class="lead">${escapeHTML(analysis.summary)}</p>
-      <div class="flow-analysis-meta"><span>FONTE</span><b>${escapeHTML(analysis.source?.label || 'Fonte selecionada')}</b><small>${escapeHTML(analysis.source_mutation === 'none_until_confirmed' ? 'Nenhuma alteração ocorreu durante a análise.' : analysis.source_mutation)}</small></div>
+      <div class="flow-analysis-meta"><span>FONTE</span><b>${escapeHTML(analysis.source?.label || 'Fonte selecionada')}</b><small>${escapeHTML(analysis.source_effect === 'preserved' ? 'A origem permanece preservada; a análise é somente leitura.' : 'Efeito na origem não autorizado.')}</small></div>
+      ${effects}
       ${analysis.migration_required ? `<div class="flow-version-callout"><b>${escapeHTML(analysis.installed_version || 'versão atual')}</b><span>→</span><b>${escapeHTML(analysis.target_version || 'versão alvo')}</b><small>${escapeHTML(analysis.migration_summary || 'Migração necessária antes de concluir.')}</small></div>` : ''}
       <div class="flow-classifications">${flowListMarkup('Mapeados', analysis.mapped, 'Nenhum item mapeado nesta análise.')}${flowListMarkup('Excluídos', analysis.excluded, 'Nenhum item excluído nesta análise.')}${flowListMarkup('Ambíguos', analysis.ambiguous, 'Nenhum item ambíguo nesta análise.')}</div>
       <article class="flow-capability"><h3>Capability unavailable</h3><p>O que ainda não está disponível fica explícito e não vira uma promessa de ingestão.</p><ul>${capabilities || '<li><span>Nenhuma capability indisponível foi reportada.</span></li>'}</ul></article>
-      <div class="flow-confirm-boundary"><span>PLANO · ${escapeHTML(analysis.plan_digest)}</span><p>O plano será confirmado antes do staging. A origem permanece preservada e o rollback continua disponível.</p></div>
-      <div class="panel-actions"><button class="quiet" type="button" data-action="workspace-flow-back">Escolher outra fonte</button><button class="primary" type="button" data-action="confirm-workspace-flow"><span>Confirmar e preparar</span><span class="arrow">↗</span></button></div>
+      ${blocked ? `<article class="flow-blockers" role="alert"><h3>Bloqueios</h3><ul>${blockers || '<li><span>O core não autorizou esta jornada.</span></li>'}</ul></article>` : ''}
+      <div class="flow-confirm-boundary"><span>${analysis.plan_digest ? `PLANO · ${escapeHTML(analysis.plan_digest)}` : 'PLANO INDISPONÍVEL'}</span><p>${blocked ? 'Nenhum staging, confirmação ou instalação ocorrerá enquanto houver bloqueios.' : 'O plano será confirmado antes do staging. A origem permanece preservada e o rollback continua disponível.'}</p></div>
+      <div class="panel-actions"><button class="quiet" type="button" data-action="workspace-flow-back">Escolher outra fonte</button>${analysis.can_confirm ? '<button class="primary" type="button" data-action="confirm-workspace-flow"><span>Confirmar e preparar</span><span class="arrow">↗</span></button>' : '<button class="primary" type="button" disabled aria-disabled="true"><span>Confirmação indisponível</span></button>'}</div>
       <div class="callout runtime-error" id="workspace-flow-analysis-error" role="alert" hidden><span>!</span><p></p></div>`;
     setWorkspaceFlowPhase('plan');
     const heading = target.querySelector('h1');
@@ -373,7 +399,7 @@
       ? `<div class="callout runtime-error" role="alert"><span>!</span><p>${escapeHTML(errorMessage)}</p></div><div class="panel-actions"><button class="quiet" type="button" data-action="workspace-flow-back">Escolher outra fonte</button></div>`
       : '';
     target.hidden = false;
-    target.innerHTML = `<span class="eyebrow">MAESTRO EM MOVIMENTO</span><h1 id="workspace-flow-analysis-title" tabindex="-1">${title}<br><em>cada estado fica visível.</em></h1><div class="flow-phase-track" role="list" aria-label="Estado da jornada"><div data-flow-phase="analysis" role="listitem"><b>01</b><span>Análise</span><small>classificar a fonte</small></div><div data-flow-phase="plan" role="listitem"><b>02</b><span>Plano</span><small>explicar o escopo</small></div><div data-flow-phase="confirm" role="listitem"><b>03</b><span>Confirmação</span><small>uma decisão explícita</small></div><div data-flow-phase="staging" role="listitem"><b>04</b><span>Staging</span><small>preparar sem substituir</small></div><div data-flow-phase="validation" role="listitem"><b>05</b><span>Validação</span><small>conferir o resultado</small></div><div data-flow-phase="rollback" role="listitem"><b>06</b><span>Rollback</span><small>manter a volta disponível</small></div></div><div class="flow-progress-note${errorMessage ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHTML(errorMessage || (mode === 'confirm' ? 'Aguardando o receipt válido do bridge.' : 'A pasta ainda não foi lida; o bridge está preparando a análise.'))}</div>${failure}`;
+    target.innerHTML = `<span class="eyebrow">MAESTRO EM MOVIMENTO</span><h1 id="workspace-flow-analysis-title" tabindex="-1">${title}<br><em>cada estado fica visível.</em></h1><div class="flow-phase-track" role="list" aria-label="Estado da jornada"><div data-flow-phase="analysis" role="listitem"><b>01</b><span>Análise</span><small>classificar a fonte</small></div><div data-flow-phase="plan" role="listitem"><b>02</b><span>Plano</span><small>explicar o escopo</small></div><div data-flow-phase="confirm" role="listitem"><b>03</b><span>Confirmação</span><small>uma decisão explícita</small></div><div data-flow-phase="staging" role="listitem"><b>04</b><span>Staging</span><small>preparar sem substituir</small></div><div data-flow-phase="validation" role="listitem"><b>05</b><span>Validação</span><small>conferir o resultado</small></div><div data-flow-phase="rollback" role="listitem"><b>06</b><span>Rollback</span><small>manter a volta disponível</small></div></div><div class="flow-progress-note${errorMessage ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHTML(errorMessage || (mode === 'confirm' ? 'Aguardando o receipt válido do core transacional.' : 'A análise local bounded está lendo metadados e preparando o plano.'))}</div>${failure}`;
     setWorkspaceFlowPhase(mode === 'confirm' ? 'staging' : 'analysis');
     const heading = target.querySelector('h1');
     if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
@@ -385,14 +411,17 @@
     document.querySelector('#workspace-flow-analysis').hidden = true;
     target.hidden = false;
     const stages = (receipt.stages || []).map(stage => `<li><b>${escapeHTML(stage.id)}</b><span>${escapeHTML(stage.status)}</span><small>${escapeHTML(stage.detail)}</small></li>`).join('');
-    const resultCopy = receipt.operation === 'external_import'
-      ? 'A fonte foi preparada para a próxima etapa local. Isso não é uma alegação de ingestão.'
+    const rolledBack = receipt.status === 'rolled_back';
+    const resultCopy = rolledBack
+      ? 'O rollback foi concluído pelo core e o alvo voltou ao estado anterior deste receipt.'
+      : receipt.operation === 'external_import'
+      ? 'A importação bounded foi concluída no alvo. Conversão e ingestão de documentos continuam separadas e itens não disponíveis permanecem excluídos ou em quarentena.'
       : receipt.operation === 'workspace_migration'
-      ? 'A migração do workspace foi confirmada pelo bridge e a origem permanece preservada.'
+      ? 'A migração do workspace foi confirmada pelo core autorizado e a origem permanece preservada.'
       : receipt.operation === 'new_workspace'
       ? `O workspace ${escapeHTML(receipt.workspace_path || 'local')} foi preparado e validado pelo installer.`
       : 'A atualização do Maestro foi confirmada; o workspace continua fora da transação.';
-    target.innerHTML = `<span class="eyebrow">RECEIPT VÁLIDO · ${escapeHTML(receipt.receipt_id)}</span><h1 id="workspace-flow-result-title" tabindex="-1">Pronto para o próximo passo.<br><em>com a volta preservada.</em></h1><p class="lead">${resultCopy}</p><div class="flow-receipt-card"><span>RECEIPT</span><code>${escapeHTML(receipt.receipt_id)}</code><strong>STATUS · ${escapeHTML(receipt.status)}</strong><ul>${stages}</ul></div><div class="flow-boundary"><span>FONTE PRESERVADA</span><p>O wizard só pode mostrar este estado porque o receipt está válido, vinculado ao plano e confirma staging, validação e rollback.</p></div><div class="panel-actions"><button class="quiet" type="button" data-action="close">Fechar instalador</button></div>`;
+    target.innerHTML = `<span class="eyebrow">RECEIPT VÁLIDO · ${escapeHTML(receipt.receipt_id)}</span><h1 id="workspace-flow-result-title" tabindex="-1">${rolledBack ? 'Rollback concluído.' : 'Pronto para o próximo passo.'}<br><em>${rolledBack ? 'o alvo foi revertido.' : 'com a volta preservada.'}</em></h1><p class="lead">${resultCopy}</p><div class="flow-receipt-card"><span>RECEIPT</span><code>${escapeHTML(receipt.receipt_id)}</code><strong>STATUS · ${escapeHTML(receipt.status)}</strong><ul>${stages}</ul></div><div class="flow-effects" aria-label="Efeitos confirmados"><article><span>FONTE</span><b>${escapeHTML(receipt.source_effect)}</b></article><article><span>ALVO</span><b>${escapeHTML(receipt.target_effect)}</b></article><article><span>ROLLBACK</span><b>${escapeHTML(receipt.rollback_effect)}</b></article></div><div class="flow-boundary"><span>${rolledBack ? 'ROLLBACK CONFIRMADO' : 'FONTE PRESERVADA'}</span><p>${rolledBack ? 'Nenhum novo import pode reutilizar a confirmação consumida.' : 'O wizard só mostra pronto porque o receipt está válido, vinculado ao plano e confirma staging, validação e rollback.'}</p></div><div class="panel-actions">${!rolledBack && receipt.operation === 'external_import' ? '<button class="quiet" type="button" data-action="rollback-workspace-flow">Reverter este import</button>' : ''}<button class="quiet" type="button" data-action="close">Fechar instalador</button></div>`;
     const heading = target.querySelector('h1');
     if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
   }
@@ -401,7 +430,7 @@
     createWorkspaceFlowScene();
     setWorkspaceFlowFeedback('');
     if (!runtime) {
-      setWorkspaceFlowFeedback('Esta é uma prévia visual: o bridge conectado selecionará a fonte e fará a análise sem mutação.', true);
+      setWorkspaceFlowFeedback('Esta é uma prévia visual: o modo conectado selecionará a fonte e fará a análise local bounded sem mutação.', true);
       return;
     }
     const choices = document.querySelectorAll('[data-flow-mode]');
@@ -416,11 +445,8 @@
       await pause(320);
       const analysisResponse = await fetch('/api/workspace-flow/analyze', requestOptions('POST', { flow_id: selection.flow_id }));
       const analysis = await analysisResponse.json();
-      if (!analysisResponse.ok) {
-        const suffix = analysis.code === 'capability_unavailable' ? ' A seleção foi preservada apenas como ponteiro de análise; nada foi ingerido.' : '';
-        throw new Error((analysis.error || 'A análise não pôde ser concluída.') + suffix);
-      }
       renderWorkspaceFlowAnalysis(analysis);
+      if (!analysisResponse.ok && analysis.state !== 'blocked') throw new Error(analysis.error || 'A análise não pôde ser concluída.');
     } catch (error) {
       const target = document.querySelector('#workspace-flow-analysis');
       if (target) target.hidden = true;
@@ -437,10 +463,11 @@
     if (button) button.disabled = true;
     renderWorkspaceFlowProgress('confirm');
     try {
-      const response = await fetch('/api/workspace-flow/confirm', requestOptions('POST', { flow_id: workspaceFlowSelection.flow_id, plan_digest: workspaceFlowAnalysis.plan_digest }));
+      const response = await fetch('/api/workspace-flow/confirm', requestOptions('POST', { flow_id: workspaceFlowSelection.flow_id, plan_digest: workspaceFlowAnalysis.plan_digest, action: 'IMPORT' }));
       const receipt = await response.json();
       if (!response.ok) throw new Error(receipt.error || 'A confirmação foi interrompida com segurança.');
-      if (!isValidWorkspaceReceipt(receipt, 'committed')) throw new Error('O bridge não retornou um receipt válido; o wizard não pode mostrar pronto.');
+      if (!isValidWorkspaceFlowReceipt(receipt, 'committed')) throw new Error('O core não retornou um receipt de import válido; o wizard não pode mostrar pronto.');
+      workspaceFlowReceipt = receipt;
       renderWorkspaceFlowReceipt(receipt);
       setWorkspaceFlowFeedback('');
     } catch (error) {
@@ -450,10 +477,26 @@
     }
   }
 
+  async function rollbackWorkspaceFlow() {
+    const receipt = workspaceFlowReceipt;
+    if (!workspaceFlowSelection || !receipt?.receipt_id || !workspaceFlowAnalysis?.plan_digest) return;
+    renderWorkspaceFlowProgress('confirm');
+    try {
+      const response = await fetch('/api/workspace-flow/rollback', requestOptions('POST', { flow_id: workspaceFlowSelection.flow_id, plan_digest: workspaceFlowAnalysis.plan_digest, receipt_id: receipt.receipt_id, action: 'ROLLBACK' }));
+      const rolledBack = await response.json();
+      if (!response.ok) throw new Error(rolledBack.error || 'O rollback foi bloqueado com segurança.');
+      if (!isValidWorkspaceFlowRollback(rolledBack)) throw new Error('O core não retornou um receipt de rollback válido.');
+      workspaceFlowReceipt = rolledBack;
+      renderWorkspaceFlowReceipt(rolledBack);
+    } catch (error) {
+      renderWorkspaceFlowProgress('confirm', error.message);
+    }
+  }
+
   async function createCleanWorkspace() {
     createWorkspaceFlowScene();
     if (!runtime) {
-      setWorkspaceFlowFeedback('Esta é uma prévia visual: o bridge conectado criará o workspace e emitirá o receipt de readiness.', true);
+      setWorkspaceFlowFeedback('Esta é uma prévia visual: o modo conectado criará o workspace e emitirá o receipt de readiness.', true);
       return;
     }
     renderWorkspaceFlowProgress('confirm');
@@ -462,7 +505,7 @@
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível criar o workspace.');
       const receipt = payload.receipt;
-      if (!isValidWorkspaceReceipt(receipt, 'ready')) throw new Error('O bridge não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
+      if (!isValidWorkspaceReceipt(receipt, 'ready')) throw new Error('O core não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
       renderWorkspaceFlowReceipt(receipt);
     } catch (error) {
       renderWorkspaceFlowProgress('confirm', error.message);
@@ -472,6 +515,7 @@
   function resetWorkspaceFlow() {
     workspaceFlowSelection = null;
     workspaceFlowAnalysis = null;
+    workspaceFlowReceipt = null;
     const scene = createWorkspaceFlowScene();
     scene.querySelector('#workspace-flow-choice').hidden = false;
     scene.querySelector('#workspace-flow-analysis').hidden = true;
@@ -803,7 +847,7 @@
       const response = await fetch('/api/create-workspace', requestOptions('POST', { import_existing: importExisting }));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível criar seu workspace.');
-      if (!isValidWorkspaceReceipt(payload.receipt, 'ready')) throw new Error('O bridge não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
+      if (!isValidWorkspaceReceipt(payload.receipt, 'ready')) throw new Error('O core não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
       defaultWorkspace = payload.workspace_path || defaultWorkspace;
       renderActivation(payload.activation);
       renderRuntimeTargets(runtimeTargets);
@@ -877,6 +921,7 @@
     if (action === 'install') await installRelease();
     if (action === 'workspace-flow') await startWorkspaceFlow(event.target.closest('[data-flow-mode]')?.dataset.flowMode);
     if (action === 'confirm-workspace-flow') await confirmWorkspaceFlow();
+    if (action === 'rollback-workspace-flow') await rollbackWorkspaceFlow();
     if (action === 'workspace-flow-back') resetWorkspaceFlow();
     if (action === 'create-clean-workspace') await createCleanWorkspace();
     if (action === 'create-workspace') await createWorkspace(event.target.closest('[data-action="create-workspace"]'));

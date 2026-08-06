@@ -9,8 +9,10 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -540,6 +542,17 @@ func wizardHandler(options options) http.Handler {
 		stateMu.Lock()
 		workspaceAnalyses[flowID] = analysis
 		stateMu.Unlock()
+		if analysis.State == "blocked" {
+			status := http.StatusConflict
+			for _, blocker := range analysis.Blockers {
+				if strings.Contains(blocker.Code, "unavailable") {
+					status = http.StatusServiceUnavailable
+					break
+				}
+			}
+			writeHTTPJSONStatus(writer, status, analysis)
+			return
+		}
 		writeHTTPJSON(writer, analysis)
 	})
 	mux.HandleFunc("/api/workspace-flow/confirm", func(writer http.ResponseWriter, request *http.Request) {
@@ -555,7 +568,7 @@ func wizardHandler(options options) http.Handler {
 			return
 		}
 		defer options.lifecycle.endMutation()
-		flowID, planDigest, err := decodeWorkspaceFlowConfirmation(writer, request)
+		flowID, planDigest, action, err := decodeWorkspaceFlowConfirmation(writer, request)
 		if err != nil {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
@@ -568,16 +581,56 @@ func wizardHandler(options options) http.Handler {
 			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": "analise a fonte antes de confirmar", "ready": false})
 			return
 		}
+		if !analysis.CanConfirm || analysis.ApprovalAction != workspaceFlowApprovalImport {
+			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": "este plano está bloqueado e não pode ser confirmado", "code": "blocked", "ready": false})
+			return
+		}
 		if planDigest != analysis.PlanDigest {
 			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": "o plano mudou; execute a análise novamente", "ready": false})
 			return
 		}
-		receipt, err := workspaceFlow.Confirm(request.Context(), selection, planDigest)
+		receipt, err := workspaceFlow.Confirm(request.Context(), selection, planDigest, action)
 		if err != nil {
 			writeWorkspaceFlowError(writer, err)
 			return
 		}
 		if err := validateWorkspaceFlowReceipt(receipt, selection, planDigest); err != nil {
+			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": err.Error(), "code": "invalid_receipt", "ready": false})
+			return
+		}
+		writeHTTPJSON(writer, receipt)
+	})
+	mux.HandleFunc("/api/workspace-flow/rollback", func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if !authorizeMutation(writer, request, options) {
+			return
+		}
+		if options.lifecycle != nil && !options.lifecycle.beginMutation() {
+			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": "o instalador está sendo encerrado"})
+			return
+		}
+		defer options.lifecycle.endMutation()
+		flowID, planDigest, receiptID, action, err := decodeWorkspaceFlowRollback(writer, request)
+		if err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		stateMu.Lock()
+		selection, selected := workspaceSelections[flowID]
+		stateMu.Unlock()
+		if !selected {
+			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": "a seleção do workspace expirou; escolha a fonte novamente", "ready": false})
+			return
+		}
+		receipt, err := workspaceFlow.Rollback(request.Context(), selection, planDigest, receiptID, action)
+		if err != nil {
+			writeWorkspaceFlowError(writer, err)
+			return
+		}
+		if err := validateWorkspaceFlowRollbackReceipt(receipt, selection, planDigest, receiptID); err != nil {
 			writeHTTPJSONStatus(writer, http.StatusConflict, map[string]any{"error": err.Error(), "code": "invalid_receipt", "ready": false})
 			return
 		}
@@ -755,7 +808,7 @@ func wizardHandler(options options) http.Handler {
 		workspaceReceipt := workspaceFlowReceipt{
 			SchemaVersion: workspaceFlowSchemaVersion, ReceiptID: receiptID, Operation: "new_workspace",
 			Status: activation.State, Valid: activation.State == "ready" && result.WorkspaceID != "", Ready: activation.State == "ready" && result.WorkspaceID != "",
-			WorkspacePath: result.WorkspacePath, SourceMutation: map[bool]string{true: workspaceFlowSourceMutationPointerOnly, false: workspaceFlowSourceMutationNone}[sourcePath != ""],
+			WorkspacePath: result.WorkspacePath, SourceEffect: workspaceFlowSourcePreserved, TargetEffect: map[bool]string{true: "workspace_created_and_pointer_recorded", false: "workspace_created"}[sourcePath != ""], RollbackEffect: "available_from_workspace_receipt",
 			Stages: []workspaceFlowStage{
 				{ID: "staging", Status: "completed", Detail: "estrutura do workspace preparada no destino escolhido"},
 				{ID: "validation", Status: map[bool]string{true: "completed", false: "failed"}[activation.State == "ready"], Detail: "readiness do workspace conferido pelo installer"},
@@ -764,7 +817,7 @@ func wizardHandler(options options) http.Handler {
 		}
 		writeHTTPJSON(writer, map[string]any{
 			"status": activation.State, "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID,
-			"source_registered": sourcePath != "", "source_state": map[bool]string{true: workspaceFlowSourceMutationPointerOnly, false: "not_requested"}[sourcePath != ""],
+			"source_registered": sourcePath != "", "source_state": map[bool]string{true: "pointer_recorded_pending_analysis", false: "not_requested"}[sourcePath != ""],
 			"ingestion_state": map[bool]string{true: "not_ingested_pointer_only", false: "not_requested"}[sourcePath != ""],
 			"adapter_state":   activation.Lifecycle.State, "readiness_state": activation.State, "scheduler_state": activation.Maintenance.State,
 			"ready_for_runtime": activation.State == "ready", "diagnostic_command": workspaceDiagnosticCommand(options, result.WorkspacePath),
@@ -942,28 +995,76 @@ func decodeWorkspaceFlowID(writer http.ResponseWriter, request *http.Request) (s
 	return body.FlowID, nil
 }
 
-func decodeWorkspaceFlowConfirmation(writer http.ResponseWriter, request *http.Request) (string, string, error) {
+func decodeWorkspaceFlowConfirmation(writer http.ResponseWriter, request *http.Request) (string, string, string, error) {
 	request.Body = http.MaxBytesReader(writer, request.Body, 4<<10)
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
 	var body struct {
 		FlowID     string `json:"flow_id"`
 		PlanDigest string `json:"plan_digest"`
+		Action     string `json:"action"`
 	}
 	if err := decoder.Decode(&body); err != nil {
-		return "", "", fmt.Errorf("não foi possível entender a confirmação do workspace: %w", err)
+		return "", "", "", fmt.Errorf("não foi possível entender a confirmação do workspace: %w", err)
 	}
-	if strings.TrimSpace(body.FlowID) == "" || strings.TrimSpace(body.PlanDigest) == "" {
-		return "", "", fmt.Errorf("a confirmação precisa conter flow_id e plan_digest")
+	if err := requireJSONEOF(decoder); err != nil {
+		return "", "", "", fmt.Errorf("confirmação do workspace inválida: %w", err)
 	}
-	return body.FlowID, body.PlanDigest, nil
+	if strings.TrimSpace(body.FlowID) == "" || strings.TrimSpace(body.PlanDigest) == "" || body.Action != workspaceFlowApprovalImport {
+		return "", "", "", fmt.Errorf("a confirmação precisa conter flow_id, plan_digest e action=IMPORT")
+	}
+	return body.FlowID, body.PlanDigest, body.Action, nil
+}
+
+func decodeWorkspaceFlowRollback(writer http.ResponseWriter, request *http.Request) (string, string, string, string, error) {
+	request.Body = http.MaxBytesReader(writer, request.Body, 4<<10)
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	var body struct {
+		FlowID     string `json:"flow_id"`
+		PlanDigest string `json:"plan_digest"`
+		ReceiptID  string `json:"receipt_id"`
+		Action     string `json:"action"`
+	}
+	if err := decoder.Decode(&body); err != nil {
+		return "", "", "", "", fmt.Errorf("não foi possível entender o rollback do workspace: %w", err)
+	}
+	if err := requireJSONEOF(decoder); err != nil {
+		return "", "", "", "", fmt.Errorf("rollback do workspace inválido: %w", err)
+	}
+	if strings.TrimSpace(body.FlowID) == "" || strings.TrimSpace(body.PlanDigest) == "" || strings.TrimSpace(body.ReceiptID) == "" || body.Action != workspaceFlowApprovalRollback {
+		return "", "", "", "", fmt.Errorf("o rollback precisa conter flow_id, plan_digest, receipt_id e action=ROLLBACK")
+	}
+	return body.FlowID, body.PlanDigest, body.ReceiptID, body.Action, nil
+}
+
+func requireJSONEOF(decoder *json.Decoder) error {
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return errors.New("apenas um objeto JSON é permitido")
+		}
+		return fmt.Errorf("dados após o objeto JSON: %w", err)
+	}
+	return nil
 }
 
 func writeWorkspaceFlowError(writer http.ResponseWriter, err error) {
 	if capabilityErr, ok := err.(*workspaceFlowCapabilityError); ok {
 		writeHTTPJSONStatus(writer, http.StatusServiceUnavailable, map[string]any{
 			"error": err.Error(), "code": "capability_unavailable", "capability": capabilityErr.Capability,
-			"ready": false, "source_mutation": "none",
+			"ready": false, "source_effect": workspaceFlowSourcePreserved, "target_effect": workspaceFlowTargetNone, "rollback_effect": workspaceFlowRollbackNotCreated,
+		})
+		return
+	}
+	if backendErr, ok := err.(*workspaceFlowBackendError); ok {
+		status := backendErr.Status
+		if status == 0 {
+			status = http.StatusConflict
+		}
+		writeHTTPJSONStatus(writer, status, map[string]any{
+			"error": backendErr.Message, "code": backendErr.Code, "ready": false,
+			"source_effect": workspaceFlowSourcePreserved, "target_effect": workspaceFlowTargetNone, "rollback_effect": workspaceFlowRollbackNotCreated,
 		})
 		return
 	}
@@ -1417,7 +1518,7 @@ func writeImportIntent(workspacePath, sourcePath string) error {
 	value, err := json.MarshalIndent(map[string]any{
 		"schema_version": 1,
 		"source_path":    sourcePath,
-		"state":          workspaceFlowSourceMutationPointerOnly,
+		"state":          workspaceFlowPointerState,
 		"notice":         "Source was selected by the owner. No files have been read, copied or uploaded; this is not ingestion.",
 	}, "", "  ")
 	if err != nil {
