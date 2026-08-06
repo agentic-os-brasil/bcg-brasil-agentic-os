@@ -360,6 +360,28 @@ func TestWorkspaceFlowRejectsAnalysisThatClaimsMutationBeforeConfirmation(t *tes
 	}
 }
 
+func TestWorkspaceFlowRejectsConfirmableAnalysisWithUnavailableCapability(t *testing.T) {
+	backend := &forgedCapabilityWorkspaceFlowBackend{}
+	handler := wizardHandler(options{
+		sessionToken: "test-token",
+		chooseWorkspaceSource: func(workspaceFlowMode) (string, error) {
+			return "/Users/pilot/External-notes", nil
+		},
+		workspaceFlow: backend,
+	})
+	selected := postWorkspaceFlow(t, handler, "/api/workspace-flow/select", `{"mode":"external_import"}`)
+	var selection workspaceFlowSelectionResponse
+	decodeWorkspaceFlow(t, selected, &selection)
+	analyzed := postWorkspaceFlow(t, handler, "/api/workspace-flow/analyze", `{"flow_id":"`+selection.FlowID+`"}`)
+	if analyzed.Code != http.StatusConflict || !strings.Contains(analyzed.Body.String(), "capability unavailable") {
+		t.Fatalf("forged capability analysis = %d %s", analyzed.Code, analyzed.Body.String())
+	}
+	confirmed := postWorkspaceFlow(t, handler, "/api/workspace-flow/confirm", `{"flow_id":"`+selection.FlowID+`","plan_digest":"forged-plan","action":"IMPORT"}`)
+	if confirmed.Code != http.StatusConflict || backend.confirmCalls != 0 || !strings.Contains(confirmed.Body.String(), "analise a fonte") {
+		t.Fatalf("forged capability confirmation = %d calls=%d body=%s", confirmed.Code, backend.confirmCalls, confirmed.Body.String())
+	}
+}
+
 func TestWorkspaceFlowRejectsReceiptForDifferentOperation(t *testing.T) {
 	handler := wizardHandler(options{
 		sessionToken: "test-token",
@@ -417,6 +439,29 @@ func TestImportIntentIsPointerOnlyAndNeverClaimsIngestion(t *testing.T) {
 type stubWorkspaceFlowBackend struct {
 	analysis workspaceFlowAnalysis
 	receipt  workspaceFlowReceipt
+}
+
+type forgedCapabilityWorkspaceFlowBackend struct {
+	confirmCalls int
+}
+
+func (backend *forgedCapabilityWorkspaceFlowBackend) Analyze(_ context.Context, selection workspaceFlowSelection) (workspaceFlowAnalysis, error) {
+	return workspaceFlowAnalysis{
+		SchemaVersion: workspaceFlowSchemaVersion, FlowID: selection.FlowID, Mode: selection.Mode, Source: selection.Source,
+		State: "plan_ready", Classification: "external_folder", SourceEffect: workspaceFlowSourcePreserved,
+		TargetEffect: workspaceFlowTargetImport, RollbackEffect: workspaceFlowRollbackImport, PlanID: "forged-plan-id", PlanDigest: "forged-plan",
+		ConfirmationRequired: true, ApprovalAction: workspaceFlowApprovalImport, CanConfirm: true,
+		CapabilitiesUnavailable: []workspaceFlowCapability{{ID: "docling", State: "unavailable", Message: "conversion runtime unavailable"}},
+	}, nil
+}
+
+func (backend *forgedCapabilityWorkspaceFlowBackend) Confirm(_ context.Context, _ workspaceFlowSelection, _, _ string) (workspaceFlowReceipt, error) {
+	backend.confirmCalls++
+	return workspaceFlowReceipt{}, nil
+}
+
+func (backend *forgedCapabilityWorkspaceFlowBackend) Rollback(context.Context, workspaceFlowSelection, string, string, string) (workspaceFlowReceipt, error) {
+	return workspaceFlowReceipt{}, nil
 }
 
 func (stub stubWorkspaceFlowBackend) Analyze(_ context.Context, selection workspaceFlowSelection) (workspaceFlowAnalysis, error) {

@@ -624,6 +624,9 @@ func validateWorkspaceFlowAnalysis(analysis workspaceFlowAnalysis, selection wor
 	if analysis.SourceEffect != workspaceFlowSourcePreserved {
 		return errors.New("análise do workspace reportou efeito inválido na origem")
 	}
+	if analysis.State != "blocked" && len(analysis.CapabilitiesUnavailable) > 0 {
+		return errors.New("análise do workspace tem capability unavailable e não pode ser confirmável")
+	}
 	if analysis.State == "blocked" {
 		if analysis.CanConfirm || len(analysis.Blockers) == 0 {
 			return errors.New("análise bloqueada precisa impedir confirmação e explicar o bloqueio")
