@@ -142,7 +142,7 @@ func TestSessionDirectiveProtectsCanonicalOwnerContextRoot(t *testing.T) {
 		Owner:            sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", Track: "selection_required", NextQuestion: "Você prefere a entrevista curta ou a completa?"}},
 	}
 	got := sessionDirective(packet)
-	if !strings.Contains(got, "canonical owner context is private") || !strings.Contains(got, "/Users/pilot/Library/Application Support/BCGOS/owner") || !strings.Contains(got, "Do not create, edit or inspect an owner/") {
+	if !strings.Contains(got, "canonical owner context is private") || !strings.Contains(got, "/Users/pilot/Library/Application Support/BCGOS/owner/self/") || !strings.Contains(got, "owner onboarding answer --facet") || !strings.Contains(got, "Do not create, edit or inspect an owner/") {
 		t.Fatalf("directive did not anchor the private owner context: %s", got)
 	}
 	if strings.Contains(got, "Kowalski") {

@@ -1981,7 +1981,7 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		}
 		return writeJSON(out, status, errOut)
 	case "onboarding":
-		return runOwnerOnboarding(args[1:], out, errOut, root)
+		return runOwnerOnboarding(args[1:], in, out, errOut, root)
 	case "expand":
 		return runOwnerExpand(args[1:], in, out, errOut, root)
 	case "refine":
@@ -2073,9 +2073,9 @@ func runOwnerExpand(args []string, in io.Reader, out, errOut io.Writer, root str
 	}
 }
 
-func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
-	if len(args) == 0 || (args[0] != "status" && args[0] != "review" && args[0] != "select" && args[0] != "confirm") {
-		fmt.Fprintln(errOut, "usage: bcgos owner onboarding <status|review|select --track quick|complete --confirm|confirm --digest SHA256 --confirm>")
+func runOwnerOnboarding(args []string, in io.Reader, out, errOut io.Writer, root string) int {
+	if len(args) == 0 || (args[0] != "status" && args[0] != "review" && args[0] != "select" && args[0] != "answer" && args[0] != "confirm") {
+		fmt.Fprintln(errOut, "usage: bcgos owner onboarding <status|review|select --track quick|complete --confirm|answer --facet ID (--body TEXT|--stdin) --confirm|confirm --digest SHA256 --confirm>")
 		return ExitUsage
 	}
 	switch args[0] {
@@ -2098,6 +2098,40 @@ func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
 			return ExitUsage
 		}
 		status, err := ownerctx.SelectOnboardingTrack(root, *track)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status.Onboarding, errOut)
+	case "answer":
+		flags := newFlagSet("owner onboarding answer", errOut)
+		facet := flags.String("facet", "", "owner facet being answered")
+		evidence := flags.String("evidence", "owner onboarding answer", "short provenance summary")
+		body := flags.String("body", "", "concise reviewed Markdown body")
+		stdin := flags.Bool("stdin", false, "read the concise reviewed Markdown body from standard input")
+		confirmed := flags.Bool("confirm", false, "confirm that the owner approved this facet body")
+		if flags.Parse(args[1:]) != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*facet) == "" || !*confirmed || (*stdin && strings.TrimSpace(*body) != "") || (!*stdin && strings.TrimSpace(*body) == "") {
+			fmt.Fprintln(errOut, "usage: bcgos owner onboarding answer --facet ID (--body TEXT|--stdin) --confirm")
+			return ExitUsage
+		}
+		proposedBody := *body
+		if *stdin {
+			readBody, err := io.ReadAll(io.LimitReader(in, maximumOwnerFacetBytes+1))
+			if err != nil || len(readBody) > maximumOwnerFacetBytes {
+				return reportError(errOut, errors.New("owner onboarding answer exceeds 1 MiB"))
+			}
+			proposedBody = string(readBody)
+		}
+		if strings.TrimSpace(proposedBody) == "" {
+			return reportError(errOut, errors.New("owner onboarding answer body is required"))
+		}
+		proposal, err := ownerctx.SubmitRefinement(root, ownerctx.RefinementInput{Facet: *facet, Evidence: *evidence, ProposedBody: proposedBody})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if _, err := ownerctx.ApplyRefinement(root, proposal.ID, true); err != nil {
+			return reportError(errOut, err)
+		}
+		status, err := ownerctx.Inspect(root)
 		if err != nil {
 			return reportError(errOut, err)
 		}

@@ -36,18 +36,20 @@ the command succeeded.
    unrelated skill or grant runtime trust globally.
 
 The canonical owner context is private to the Maestro installation's data root,
-outside the workspace. The SessionStart directive prints that exact root. Never
-create or edit `owner/` or `owner/self/` inside the workspace: those files are
-not authoritative and will not advance the CLI state. Do not write facet files
-with a shell/editor as a shortcut. Submit an owner-reviewed proposal through
-the bounded command below, then apply the returned proposal only when the
-owner has explicitly agreed:
+outside the workspace. The SessionStart directive prints that exact root and
+the canonical `owner/self/` destination. Never create or edit `owner/` or
+`owner/self/` inside the workspace: those files are not authoritative and will
+not advance the CLI state. After the owner approves the concise reflection,
+save it with the one-shot bounded command below. It writes the correct facet,
+records the audit receipt and returns the next deterministic interview state:
 
 ```sh
-<maestro-cli> owner refine submit --facet <facet-id> --evidence "owner onboarding answer" --stdin
-# stdin: the concise reviewed Markdown body
-<maestro-cli> owner refine apply <proposal-id> --confirm
+<maestro-cli> owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm
 ```
+
+Use `--stdin` instead of `--body` when the runtime can provide standard input.
+The lower-level `owner refine submit/apply` pair remains available for more
+complex or separately reviewed refinements.
 
 The onboarding track and final profile confirmation remain separate gates. The
 CLI registry, review digest and audit receipt are the source of truth; a

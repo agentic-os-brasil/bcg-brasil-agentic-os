@@ -1144,6 +1144,10 @@ func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
 		t.Fatalf("missing onboarding digest guidance = %d, output = %s", code, output.String())
 	}
 	output.Reset()
+	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "professional-role", "--body", "# Professional role\n\nPartner responsável por transformação.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "in_progress"`) || !strings.Contains(output.String(), `"communication-style"`) {
+		t.Fatalf("one-shot onboarding answer = %d, output = %s", code, output.String())
+	}
+	output.Reset()
 	if code := runOwner([]string{"interview", "quick"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"preferences"`) || strings.Contains(output.String(), `"decision-rules"`) {
 		t.Fatalf("quick interview = %d, output = %s", code, output.String())
 	}
