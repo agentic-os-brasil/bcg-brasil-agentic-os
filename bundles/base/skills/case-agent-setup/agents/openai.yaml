@@ -1,0 +1,4 @@
+interface:
+  display_name: "Case Agent Setup"
+  short_description: "Interview and research one project case safely"
+  default_prompt: "Use $case-agent-setup to create or refresh this Case Agent with reviewed, sourced context."

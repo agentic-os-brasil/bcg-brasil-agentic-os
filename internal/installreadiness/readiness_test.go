@@ -51,6 +51,17 @@ func TestVerifyAcceptsOnlyCanonicalConfiguredCodexInstall(t *testing.T) {
 	if len(wantEvents) != 0 {
 		t.Fatalf("missing lifecycle events: %#v", wantEvents)
 	}
+	checks := make(map[string]Check, len(report.Checks))
+	for _, check := range report.Checks {
+		checks[check.ID] = check
+	}
+	if checks["case_agent"].CanonicalRole != "case_agent" || checks["case_agent"].IdentityCompatibility != "" {
+		t.Fatalf("Case Agent readiness check is not canonical: %#v", checks["case_agent"])
+	}
+	if checks["agent_scaffold"].CanonicalRole != "case_agent" || checks["agent_scaffold"].IdentityCompatibility != "migration_compatibility" ||
+		!strings.Contains(checks["agent_scaffold"].Message, "legacy workspace-agent ID") {
+		t.Fatalf("legacy scaffold was not explicitly marked as migration compatibility: %#v", checks["agent_scaffold"])
+	}
 }
 
 func TestVerifyAcceptsOnlyCanonicalConfiguredClaudeInstall(t *testing.T) {

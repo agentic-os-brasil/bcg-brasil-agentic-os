@@ -2,7 +2,9 @@
 
 Status: deterministic one-question CLI interview, review-bound strict profile
 validation and signed instance identity are implemented. Names and emojis are
-presentation metadata and never become authority.
+presentation metadata and never become authority. Gamma Guardian is a
+system-known managed identity with optional presentation customization; its
+runtime/native qualification remains a separate evidence gate.
 
 ## Purpose
 
@@ -23,10 +25,10 @@ customize them, and explicitly confirms the result before it is persisted.
 | `pa_expert` | versioned Functional/Industrial Practice advice from the PA Expert registry | PA Expert registry |
 | `quality_guardian` | longitudinal code-quality and architecture evaluation | quality longitudinal |
 
-The interview may also personalize scoped practice and specialist agents when
-they are created. Every agent has one emoji-avatar. The avatar is a display
-contract only: it cannot grant tools, widen scope, change delegation, or
-replace a signed role contract.
+The interview may also personalize explicitly scoped specialist agents when
+they are created. Gamma is not a practice-chain identity. Every agent has one
+emoji-avatar. The avatar is a display contract only: it cannot grant tools,
+widen scope, change delegation, or replace a signed role contract.
 
 ## Ownership versus authority
 
@@ -37,8 +39,9 @@ so a name cannot silently become global across clients or projects. The owner
 does not own the underlying role authority. Maestro
 remains the system hub; Client Account remains the account relationship layer;
 Case remains the project execution owner; Walter remains a review role; Darwin
-is the governance surgeon but is limited to `health/maestro-system`; and PA
-expert canon/version remain centrally curated by the PA Expert registry.
+is the governance surgeon but is limited to `health/maestro-system`; Gamma is a
+read-only quality/QA spoke owned by Maestro; and PA expert canon/version remain
+centrally curated by the PA Expert registry.
 
 Profiles are stored locally at `agents/personalization.json`, are strict JSON,
 must be explicitly confirmed, and are written atomically with restrictive
@@ -83,7 +86,8 @@ The scan/create and confirm/compaction boundaries share one cross-process local
 transition lock; concurrent runtimes cannot create two open drafts.
 `identity` returns the confirmed profile or the interview
 schema when no profile exists, together with the resolved managed identities
-for Maestro, Walter and Darwin. Agent scaffolding resolves identity from the
+for Maestro, Walter, Darwin and Gamma Guardian. Agent scaffolding resolves
+identity from the
 profile, signs name/avatar/owner/scope into the immutable instance manifest,
 and continues to enforce the catalog role and scope independently.
 
@@ -105,7 +109,10 @@ The three main-agent questions are exact and ordered:
    role fields.
 6. PA Expert version and canon remain centrally owned despite local display
    customization.
-7. The main-agent interview asks one question at a time and every write crosses
+7. Gamma Guardian is recognizable by its managed default (`Gamma Guardian`,
+   `🧪`, `quality_longitudinal`) even when runtime/native qualification is
+   unavailable; customization changes presentation only.
+8. The main-agent interview asks one question at a time and every write crosses
    a review-digest plus base-revision confirmation gate.
-8. Confirmation recovers idempotently from every write failure after the
+9. Confirmation recovers idempotently from every write failure after the
    canonical profile commit; malformed lifecycle metadata fails closed.

@@ -15,7 +15,7 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/release-distribution
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 4e94811c1050f1c9a3c25b05023bec8b5f5887f9dd509519c5bdf938af0818ff
+x-bcgos-source-fingerprint: c971241aee185459ed2cba432c26ec1b7e8c56198c24e52e7750ca435ca79858
 x-bcgos-freshness: fresh
 x-bcgos-status: active
 x-bcgos-generator-version: bcgos-managed-wiki/0.2
@@ -37,6 +37,15 @@ This managed concept is generated from the reviewed repository source `docs/rele
 
 This repository is the product factory. Pilot users receive immutable release
 artifacts; they do not clone the source repository.
+
+## Factory version versus product target
+
+`VERSION` is intentionally `0.0.0`: it identifies the source factory/dev
+checkout and is not a distributable Maestro release. Release tooling requires an
+explicit `MAJOR.MINOR.PATCH` value on the command line and binds that value into
+the candidate manifest and artifacts. `0.1.0` is the current product and
+contract/canary target only; no published, signed or pilot-ready `v0.1.0`
+artifact is implied by this repository state.
 
 ## State model
 
@@ -225,6 +234,24 @@ signed bootstrapper seed must install the approved registry before a provider
 release can become trusted.
 
 No production path may convert `unavailable` into an unsigned override.
+
+## Evidence freshness (2026-08-06)
+
+The source comparison point is `43e86494b2e32ca8eccece843514b75d2c98ffa7`
+(`origin/main` at review start). The local contributor-harness and managed-wiki gates are the
+evidence surface for this snapshot: `validate`, `wiki validate` and `wiki
+verify` pass. On the candidate branch at `012c08f`, a fresh
+`validate --full` also passed contracts, formatting, `go vet` and the complete
+offline unit-test suite. This remains branch-local evidence only: the source
+baseline above is the pre-merge comparison point for this documentation refresh.
+Hosted CI is not claimed: the workflow files in this
+checkout are disabled, so billing or hosted-run state cannot be inferred from
+local passes. The installer workspace-flow and import/migration tests are
+repository evidence, not fresh Claude/Codex native qualification. Windows has
+no single cross-architecture universal `.exe`;
+x64/ARM64 device behavior (or an architecture-detecting installer), Authenticode, macOS
+Developer ID/notarization, production Ed25519 custody, clean-device acceptance,
+support ownership and pilot approval remain open release gates.
 
 ## Release decision checklist
 

@@ -62,6 +62,66 @@ func TestBaseSkillCatalogIsClosedByDistributionAllowlist(t *testing.T) {
 	}
 }
 
+func TestCaseAgentSetupUsesCanonicalSkillAndExplicitLegacyAlias(t *testing.T) {
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", "..", ".."))
+	body, err := os.ReadFile(filepath.Join(root, "bundles", "base", "skills", "catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalog struct {
+		Skills []struct {
+			ID            string `json:"id"`
+			DisplayName   string `json:"display_name"`
+			DefaultPrompt string `json:"default_prompt"`
+		} `json:"skills"`
+	}
+	if err := json.Unmarshal(body, &catalog); err != nil {
+		t.Fatal(err)
+	}
+	var canonical, alias *struct {
+		ID            string
+		DisplayName   string
+		DefaultPrompt string
+	}
+	for index := range catalog.Skills {
+		skill := &catalog.Skills[index]
+		switch skill.ID {
+		case "case-agent-setup":
+			canonical = &struct {
+				ID            string
+				DisplayName   string
+				DefaultPrompt string
+			}{skill.ID, skill.DisplayName, skill.DefaultPrompt}
+		case "workspace-agent-setup":
+			alias = &struct {
+				ID            string
+				DisplayName   string
+				DefaultPrompt string
+			}{skill.ID, skill.DisplayName, skill.DefaultPrompt}
+		}
+	}
+	if canonical == nil || canonical.DisplayName != "Case Agent Setup" || canonical.DefaultPrompt != "Use $case-agent-setup to create or refresh this Case Agent with reviewed, sourced context." {
+		t.Fatalf("canonical case-agent-setup entry missing or user-facing contract drifted: %#v", canonical)
+	}
+	if alias == nil || alias.DisplayName != "Legacy Case Agent Setup Alias" || alias.DefaultPrompt == "" || alias.DefaultPrompt == "Use $workspace-agent-setup to create or refresh this workspace agent with reviewed, sourced context." {
+		t.Fatalf("workspace-agent-setup is not an explicit migration alias: %#v", alias)
+	}
+	for _, relative := range []string{
+		"bundles/base/skills/case-agent-setup/SKILL.md",
+		"bundles/base/skills/case-agent-setup/agents/openai.yaml",
+		"bundles/base/skills/workspace-agent-setup/SKILL.md",
+		"bundles/base/skills/workspace-agent-setup/agents/openai.yaml",
+	} {
+		if _, err := os.Stat(filepath.Join(root, relative)); err != nil {
+			t.Fatalf("skill migration artifact %s is missing: %v", relative, err)
+		}
+	}
+}
+
 func TestTechCoreSkillCatalogIsClosedByDistributionAllowlist(t *testing.T) {
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {
