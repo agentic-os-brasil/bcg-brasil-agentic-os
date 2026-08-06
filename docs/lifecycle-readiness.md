@@ -9,8 +9,8 @@ promotes a capability by implication.
 
 | Field | Value |
 | --- | --- |
-| `as_of` | `2026-08-02` |
-| `base_commit` | `61c66dfecbdc21bff6137398243236232fd14988` — current PR #150 head; this documentation follow-up is stacked on that parent |
+| `as_of` | `2026-08-06` |
+| `base_commit` | `b3d85edeac16816ccca8b69cf887a7d674786710` — `origin/main` baseline at the snapshot; this documentation refresh is pending integration and must not be read as if its commit were already on `main` |
 | Repository evidence | Configured adapters, local contract fixtures and the non-invasive lifecycle probe are present; no model session was started for this documentation update. |
 | Runtime evidence | No reproducible in-repo runtime-version artifact or fresh native-session observation is attached for either runtime; prior external version observations are not treated as current snapshot evidence. |
 | Scheduler evidence | No live `launchctl` observation is attached. Filesystem/plist installation and scheduler loaded/enabled state remain separate claims. |

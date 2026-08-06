@@ -9,9 +9,10 @@ The evidence classes are separate as well: a rendered plist is **configured**;
 the deterministic worker and repository fixtures are **local contract**
 evidence; a live `launchctl` result qualifies only the macOS scheduler. It does
 not qualify Claude/Codex lifecycle invocation or the owning Darwin runtime.
-Evidence snapshot: `as_of: 2026-08-05` · source baseline:
-`677885b5cd8ae587fe940cb485d71f18934dbddf` (merged PR #187) · live `launchctl`
-output: not captured in this snapshot · release/pilot evidence: not present.
+Evidence snapshot: `as_of: 2026-08-06` · source baseline:
+`b3d85edeac16816ccca8b69cf887a7d674786710` (`origin/main` at the snapshot;
+the documentation refresh is pending integration) · live `launchctl` output:
+not captured in this snapshot · release/pilot evidence: not present.
 
 The installer never uses sudo or shell interpolation and writes atomically into
 the current user's `Library/LaunchAgents` path. On macOS, the attended lifecycle

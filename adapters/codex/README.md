@@ -10,9 +10,10 @@ Codex runtime; this does not prove that Codex trusted or invoked them. Native
 observation is still pending, and Codex must not inherit Claude-specific
 development hooks as a product capability.
 
-Evidence snapshot: `as_of: 2026-08-05` · source baseline:
-`677885b5cd8ae587fe940cb485d71f18934dbddf` (merged PR #187) · runtime evidence:
-no reproducible in-repo runtime-version artifact or fresh native-session
+Evidence snapshot: `as_of: 2026-08-06` · source baseline:
+`b3d85edeac16816ccca8b69cf887a7d674786710` (`origin/main` at the snapshot;
+the documentation refresh is pending integration) · runtime evidence: no
+reproducible in-repo runtime-version artifact or fresh native-session
 observation is attached. This adapter is configured and has local contract
 coverage, but is not `native-qualified`, `release-ready` or `pilot-ready`.
 

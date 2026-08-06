@@ -11,9 +11,10 @@ implemented protected-root deletion policy. Post/stop entries are asynchronous
 and emit metadata-only local receipts.
 
 This establishes configured wiring and local contract behavior, not native
-qualification. Evidence snapshot: `as_of: 2026-08-05` · source baseline:
-`677885b5cd8ae587fe940cb485d71f18934dbddf` (merged PR #187) · runtime evidence:
-no reproducible in-repo runtime-version artifact or qualifying fresh session is
+qualification. Evidence snapshot: `as_of: 2026-08-06` · source baseline:
+`b3d85edeac16816ccca8b69cf887a7d674786710` (`origin/main` at the snapshot;
+the documentation refresh is pending integration) · runtime evidence: no
+reproducible in-repo runtime-version artifact or qualifying fresh session is
 attached. This adapter is not `native-qualified`, `release-ready` or
 `pilot-ready`.
 
