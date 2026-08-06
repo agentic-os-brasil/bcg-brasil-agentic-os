@@ -170,7 +170,7 @@ var removeExecutionMarkerFunc = removeExecutionMarker
 var errExecutionUnavailable = errors.New("workspace migration execution is unavailable until stable-bootstrapper authority wiring is active")
 
 func CapabilityStatus() Status {
-	return Status{SchemaVersion: SchemaVersion, Capability: "workspace_migration", State: "pending_core_activation", Execution: "unavailable", Reason: "post-bootstrap workspace target and authenticated core-activation authority are not wired into bcgos update"}
+	return Status{SchemaVersion: SchemaVersion, Capability: "workspace_migration", State: "pending_core_activation", Execution: "unavailable", Reason: "post-bootstrap workspace target and trusted core-activation verifier are not wired into bcgos update"}
 }
 
 func Inspect(options PlanOptions) (Inspection, error) {

@@ -61,7 +61,7 @@ func workspaceMigrationForPlan(plan updateplan.Plan) *workspaceMigrationResult {
 	return &workspaceMigrationResult{
 		Required: plan.WorkspaceMigrationRequired, Version: plan.WorkspaceMigrationVersion,
 		State: plan.WorkspaceMigrationState, Execution: plan.WorkspaceMigrationExecution,
-		Reason: "post-bootstrap workspace target and authenticated core-activation authority are not wired into bcgos update",
+		Reason: "post-bootstrap workspace target and trusted core-activation verifier are not wired into bcgos update",
 	}
 }
 

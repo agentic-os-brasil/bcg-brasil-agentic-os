@@ -1,4 +1,4 @@
-# Spec 045 - Versioned Maestro workspace migration
+# Spec 046 - Versioned Maestro workspace migration
 
 Status: transactional local contract implemented; post-bootstrap execution
 authority is not activated.
@@ -35,7 +35,7 @@ under owner-local update data and is never written into the workspace before
 confirmation.
 
 Confirmation is a separate record bound to the exact plan ID and to evidence
-from the stable bootstrapper that the target core is already active. The
+from a trusted stable-bootstrapper verifier that the target core is already active. The
 `CoreActivation` fields are currently only a wire shape: they are not an
 authentication mechanism, and a caller cannot turn a boolean, digest-shaped
 string or environment variable into trusted evidence. Until the bootstrapper
@@ -45,7 +45,7 @@ is exercised by synthetic tests.
 
 The current `bcgos update` service can carry the migration contract in its
 pending update plan, but cannot provide a post-bootstrap workspace target and
-authenticated activation evidence. It therefore reports
+trusted activation evidence. It therefore reports
 `pending_core_activation` with execution `unavailable` and does not mutate a
 workspace.
 
