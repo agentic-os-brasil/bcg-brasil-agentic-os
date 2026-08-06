@@ -44,7 +44,24 @@ put a private key, seed, certificate or credential in Git, a bundle or a DMG.
 
 ## Clean-install preparation
 
-Remove only Maestro-owned active surfaces, preserving a recoverable backup:
+Remove only Maestro-owned active surfaces, preserving a recoverable backup.
+This is a destructive-boundary operation and requires an explicit owner
+confirmation naming the resolved targets before any `bootout` or move. A vague
+request to "clean everything" is not enough.
+
+Before touching anything:
+
+1. Resolve and print the exact paths that exist; exclude the source repository,
+   Canary evidence workspace, unrelated Kowalski maintenance and client data.
+2. Show the owner the target list and obtain confirmation for that list.
+3. Create a timestamped backup directory and record the current LaunchAgent
+   state (including `launchctl print` output) inside it.
+
+After moving each target, verify that it exists inside the backup and that the
+active path is absent. Stop and report if any verification fails. Keep the
+backup path in the handoff so rollback is possible.
+
+The Maestro-owned active surfaces are:
 
 - the intended user workspace, for example `~/Developer/maestro-os`;
 - `~/Library/Application Support/Maestro`;
@@ -63,7 +80,8 @@ over irreversible deletion.
 
 Set `ROOT` to the current merged worktree, `VERSION` to the chosen release,
 `REGISTRY` to the test-only public registry and `SEED` to the protected local
-seed. Keep all paths absolute when invoking the packaging script.
+seed. Set `PUBLICATION_REPOSITORY` only when using the protected seeded build
+path. Keep all paths absolute when invoking the packaging script.
 
 ### 1. Candidate
 
@@ -94,17 +112,31 @@ go run ./dev/release verify-signed \
 The second command must pass. If the seed does not match the registry, stop;
 do not generate a new key silently and do not weaken verification.
 
-### 3. Current native bridge and bootstrapper
+### 3. Current native bridge and correctly seeded bootstrapper
 
 ```sh
 mkdir -p "$ROOT/dist/native-$VERSION"
+REGISTRY_SHA256="$(shasum -a 256 "$REGISTRY" | awk '{print $1}')"
 GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath \
   -o "$ROOT/dist/native-$VERSION/maestro-installer" \
   ./cmd/maestro-installer
 GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath \
+  -ldflags "-X main.Version=$VERSION -X main.AuthorityRegistrySHA256=$REGISTRY_SHA256" \
   -o "$ROOT/dist/native-$VERSION/bcgos-bootstrap_${VERSION}_darwin_arm64" \
   ./cmd/bcgos-bootstrap
+
+BOOTSTRAPPER="$ROOT/dist/native-$VERSION/bcgos-bootstrap_${VERSION}_darwin_arm64"
+SEED_STATUS="$($BOOTSTRAPPER seed-status)"
+printf '%s\n' "$SEED_STATUS" | grep -F "\"bootstrapper_version\":\"$VERSION\"" >/dev/null
+printf '%s\n' "$SEED_STATUS" | grep -F "\"authority_registry_sha256\":\"$REGISTRY_SHA256\"" >/dev/null
 ```
+
+Do not replace this with a plain `go build ./cmd/bcgos-bootstrap`. The plain
+build embeds `0.0.0-dev` and an empty registry digest; the real installer
+rejects that bootstrapper against every non-placeholder signed manifest.
+The protected `dev/release seeded-binaries` command is an alternative only
+when an approved provider configuration is available; its unavailable state
+must not be bypassed with guessed publication inputs.
 
 ### 4. Icon assets
 
@@ -124,7 +156,7 @@ sh "$ROOT/dev/release/build-macos-installer.sh" \
   --wizard-dir "$ROOT/installers/wizard" \
   --release-dir "$ROOT/dist/signed-release-$VERSION" \
   --authority-registry "$REGISTRY" \
-  --bootstrapper "$ROOT/dist/native-$VERSION/bcgos-bootstrap_${VERSION}_darwin_arm64" \
+  --bootstrapper "$BOOTSTRAPPER" \
   --icon "$ROOT/dist/icons-$VERSION/maestro-app-icon.icns" \
   --icon-sha256 "$ICON_SHA256" \
   --output "$ROOT/dist/Maestro-Installer-${VERSION}-local-beta.dmg"
