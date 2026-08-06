@@ -93,6 +93,7 @@ type Plan struct {
 	ExpectedBundle           string   `json:"expected_bundle"`
 	Executable               string   `json:"executable"`
 	CapabilityTracks         []string `json:"capability_tracks,omitempty"`
+	ManagedPaths             []string `json:"managed_paths"`
 	ConfirmationRequired     bool     `json:"confirmation_required"`
 	SnapshotMaxFiles         int      `json:"snapshot_max_files"`
 	SnapshotMaxFileSize      int64    `json:"snapshot_max_file_size"`
@@ -164,6 +165,9 @@ type Status struct {
 
 var installAdapter = adaptercfg.Install
 var installProjection = runtimeprojection.InstallForTracks
+var removeExecutionMarkerFunc = removeExecutionMarker
+
+var errExecutionUnavailable = errors.New("workspace migration execution is unavailable until stable-bootstrapper authority wiring is active")
 
 func CapabilityStatus() Status {
 	return Status{SchemaVersion: SchemaVersion, Capability: "workspace_migration", State: "pending_core_activation", Execution: "unavailable", Reason: "post-bootstrap workspace target and authenticated core-activation authority are not wired into bcgos update"}
@@ -198,7 +202,7 @@ func Inspect(options PlanOptions) (Inspection, error) {
 	if projectionErr == nil {
 		result.ProjectionState = projection.State
 	}
-	result.SourceDigest, err = sourceDigest(options.Runtime, path)
+	result.SourceDigest, err = sourceDigest(options)
 	if err != nil {
 		return Inspection{}, err
 	}
@@ -257,6 +261,11 @@ func BuildPlan(options PlanOptions) (Plan, error) {
 	} else if err := validatePreflight(plan); err != nil {
 		plan.Execution, plan.Reason = "unavailable", err.Error()
 	}
+	managed, err := managedPaths(options)
+	if err != nil {
+		return Plan{}, err
+	}
+	plan.ManagedPaths = managed
 	plan.ID, err = planID(plan)
 	if err != nil {
 		return Plan{}, err
@@ -271,7 +280,14 @@ func StagePlan(dataRoot string, plan Plan) error {
 	return writeJSON(planPath(dataRoot, plan.ID), plan, 0o600)
 }
 
+// Confirm is intentionally unavailable until the stable bootstrapper supplies
+// a trusted activation verifier. CoreActivation is a wire shape only; its
+// caller-provided fields cannot establish authentication.
 func Confirm(dataRoot, id string, core CoreActivation, now time.Time) (Confirmation, error) {
+	return Confirmation{}, errExecutionUnavailable
+}
+
+func confirmInternal(dataRoot, id string, core CoreActivation, now time.Time) (Confirmation, error) {
 	plan, err := loadPlan(dataRoot, id)
 	if err != nil {
 		return Confirmation{}, err
@@ -312,15 +328,35 @@ func Confirm(dataRoot, id string, core CoreActivation, now time.Time) (Confirmat
 	return confirmation, nil
 }
 
+// Apply is intentionally unavailable until the stable bootstrapper supplies
+// a trusted activation verifier and safe managed-target primitives.
 func Apply(dataRoot, id string, core CoreActivation, now time.Time) (Receipt, error) {
+	return Receipt{}, errExecutionUnavailable
+}
+
+func applyInternal(dataRoot, id string, core CoreActivation, now time.Time) (Receipt, error) {
 	plan, err := loadPlan(dataRoot, id)
 	if err != nil {
 		return Receipt{}, err
 	}
 	root := planRoot(dataRoot, id)
+	if receipt, receiptErr := readReceipt(filepath.Join(root, "receipt.json"), plan.ID); receiptErr == nil {
+		if receipt.State == "applied" {
+			if err := removeExecutionMarkerFunc(root); err != nil {
+				return receipt, err
+			}
+			return receipt, nil
+		}
+	} else if !errors.Is(receiptErr, os.ErrNotExist) {
+		return Receipt{}, receiptErr
+	}
 	if existing, readErr := readExecution(filepath.Join(root, "execution.json")); readErr == nil && existing.State == "applying" {
-		if _, recoverErr := Recover(dataRoot, id, now); recoverErr != nil {
+		recovered, recoverErr := recoverInternal(dataRoot, id, now)
+		if recoverErr != nil {
 			return Receipt{}, recoverErr
+		}
+		if recovered.State == "applied" {
+			return recovered, nil
 		}
 	} else if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
 		return Receipt{}, readErr
@@ -345,11 +381,14 @@ func Apply(dataRoot, id string, core CoreActivation, now time.Time) (Receipt, er
 	if err := validatePreflight(plan); err != nil {
 		return Receipt{}, err
 	}
+	if _, err := readSnapshotForPlan(confirmation.SnapshotPath, plan); err != nil {
+		return Receipt{}, err
+	}
 	if err := writeJSON(filepath.Join(root, "execution.json"), execution{SchemaVersion: SchemaVersion, PlanID: plan.ID, State: "applying", SnapshotPath: confirmation.SnapshotPath, StartedAt: now.UTC()}, 0o600); err != nil {
 		return Receipt{}, err
 	}
 	fail := func(cause error) (Receipt, error) {
-		restoreErr := restoreSnapshot(confirmation.SnapshotPath)
+		restoreErr := restoreSnapshotForPlan(confirmation.SnapshotPath, plan)
 		receipt := Receipt{SchemaVersion: SchemaVersion, PlanID: plan.ID, State: "rolled_back", Restored: restoreErr == nil, Reason: cause.Error(), CompletedAt: now.UTC()}
 		if restoreErr != nil {
 			receipt.Reason += "; snapshot restore failed: " + restoreErr.Error()
@@ -374,15 +413,35 @@ func Apply(dataRoot, id string, core CoreActivation, now time.Time) (Receipt, er
 	if err := writeJSON(filepath.Join(root, "receipt.json"), receipt, 0o600); err != nil {
 		return fail(fmt.Errorf("write workspace migration receipt: %w", err))
 	}
-	_ = os.Remove(filepath.Join(root, "execution.json"))
+	if err := removeExecutionMarkerFunc(root); err != nil {
+		return receipt, fmt.Errorf("workspace migration applied but terminalization failed: %w", err)
+	}
 	return receipt, nil
 }
 
+// Recover is intentionally unavailable on the public surface until the
+// bootstrapper owns the safe restore authority.
 func Recover(dataRoot, id string, now time.Time) (Receipt, error) {
+	return Receipt{}, errExecutionUnavailable
+}
+
+func recoverInternal(dataRoot, id string, now time.Time) (Receipt, error) {
 	if !planIDPattern.MatchString(id) {
 		return Receipt{}, errors.New("workspace migration plan ID is invalid")
 	}
+	plan, err := loadPlan(dataRoot, id)
+	if err != nil {
+		return Receipt{}, err
+	}
 	root := planRoot(dataRoot, id)
+	if receipt, receiptErr := readReceipt(filepath.Join(root, "receipt.json"), id); receiptErr == nil {
+		if err := removeExecutionMarkerFunc(root); err != nil {
+			return receipt, err
+		}
+		return receipt, nil
+	} else if !errors.Is(receiptErr, os.ErrNotExist) {
+		return Receipt{}, receiptErr
+	}
 	execution, err := readExecution(filepath.Join(root, "execution.json"))
 	if errors.Is(err, os.ErrNotExist) {
 		return Receipt{SchemaVersion: SchemaVersion, PlanID: id, State: "no_interrupted_execution", CompletedAt: now.UTC()}, nil
@@ -390,23 +449,35 @@ func Recover(dataRoot, id string, now time.Time) (Receipt, error) {
 	if err != nil {
 		return Receipt{}, err
 	}
-	if execution.State != "applying" {
+	if execution.PlanID != plan.ID || execution.SnapshotPath != filepath.Join(root, "snapshot.json") || execution.State != "applying" {
 		return Receipt{}, errors.New("workspace migration execution marker is invalid")
 	}
-	if err := restoreSnapshot(execution.SnapshotPath); err != nil {
+	if err := restoreSnapshotForPlan(execution.SnapshotPath, plan); err != nil {
 		return Receipt{}, fmt.Errorf("restore interrupted workspace migration: %w", err)
 	}
 	receipt := Receipt{SchemaVersion: SchemaVersion, PlanID: id, State: "rolled_back", Restored: true, Reason: "interrupted execution restored from bounded snapshot", CompletedAt: now.UTC()}
 	if err := writeJSON(filepath.Join(root, "receipt.json"), receipt, 0o600); err != nil {
 		return Receipt{}, err
 	}
-	_ = os.Remove(filepath.Join(root, "execution.json"))
+	if err := removeExecutionMarkerFunc(root); err != nil {
+		return receipt, fmt.Errorf("workspace migration rollback completed but terminalization failed: %w", err)
+	}
 	return receipt, nil
 }
 
 func ValidatePlan(plan Plan) error {
-	if plan.SchemaVersion != SchemaVersion || !planIDPattern.MatchString(plan.ID) || plan.State != "available" || plan.Runtime != "claude" && plan.Runtime != "codex" || plan.WorkspacePath == "" || plan.WorkspaceID == "" || plan.ExpectedWorkspaceSchema != ExpectedWorkspaceSchema || plan.ExpectedProjectionSchema != runtimeprojection.SchemaVersion || !versionPattern.MatchString(plan.ExpectedRelease) || !versionPattern.MatchString(plan.ExpectedBundle) || !digestPattern.MatchString(plan.SourceDigest) || !plan.ConfirmationRequired || plan.SnapshotMaxFiles != MaxSnapshotFiles || plan.SnapshotMaxFileSize != MaxSnapshotFileSize || plan.SnapshotMaxBytes != MaxSnapshotBytes {
+	if plan.SchemaVersion != SchemaVersion || !planIDPattern.MatchString(plan.ID) || plan.State != "available" || plan.Runtime != "claude" && plan.Runtime != "codex" || plan.WorkspacePath == "" || plan.WorkspaceID == "" || plan.ExpectedWorkspaceSchema != ExpectedWorkspaceSchema || plan.ExpectedProjectionSchema != runtimeprojection.SchemaVersion || !versionPattern.MatchString(plan.ExpectedRelease) || !versionPattern.MatchString(plan.ExpectedBundle) || !digestPattern.MatchString(plan.SourceDigest) || len(plan.ManagedPaths) == 0 || len(plan.ManagedPaths) > MaxSnapshotFiles || !plan.ConfirmationRequired || plan.SnapshotMaxFiles != MaxSnapshotFiles || plan.SnapshotMaxFileSize != MaxSnapshotFileSize || plan.SnapshotMaxBytes != MaxSnapshotBytes {
 		return errors.New("workspace migration plan contract is invalid")
+	}
+	seenPaths := make(map[string]bool, len(plan.ManagedPaths))
+	for _, path := range plan.ManagedPaths {
+		if filepath.Clean(path) != path || !filepath.IsAbs(path) || seenPaths[path] {
+			return errors.New("workspace migration plan managed paths are invalid")
+		}
+		seenPaths[path] = true
+		if _, err := managedPathSafetyRoot(plan.Runtime, plan.WorkspacePath, path); err != nil {
+			return err
+		}
 	}
 	expected, err := planID(plan)
 	if err != nil {
@@ -420,7 +491,7 @@ func ValidatePlan(plan Plan) error {
 
 func validateCore(plan Plan, core CoreActivation) error {
 	if core.Authority != StableBootstrapper || !core.Activated || core.Release != plan.ExpectedRelease || core.BundleVersion != plan.ExpectedBundle || core.ManagedRoot == "" || !digestPattern.MatchString(core.StateDigest) {
-		return errors.New("workspace migration requires authenticated active core evidence from the stable bootstrapper")
+		return errors.New("workspace migration requires active core evidence from the stable bootstrapper")
 	}
 	return nil
 }
@@ -450,16 +521,20 @@ func validateReadiness(plan Plan, dataRoot string) error {
 }
 
 func makeSnapshotEntries(plan Plan) ([]snapshotEntry, int64, error) {
-	paths, err := managedPaths(plan.Runtime, plan.WorkspacePath)
-	if err != nil {
-		return nil, 0, err
-	}
+	paths := append([]string(nil), plan.ManagedPaths...)
 	if len(paths) > MaxSnapshotFiles {
 		return nil, 0, errors.New("workspace migration snapshot exceeds file limit")
 	}
 	entries := make([]snapshotEntry, 0, len(paths))
 	var total int64
 	for _, path := range paths {
+		safetyRoot, rootErr := managedPathSafetyRoot(plan.Runtime, plan.WorkspacePath, path)
+		if rootErr != nil {
+			return nil, 0, rootErr
+		}
+		if err := ensureNoSymlinkParents(safetyRoot, path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, 0, err
+		}
 		info, err := os.Lstat(path)
 		if errors.Is(err, os.ErrNotExist) {
 			entries = append(entries, snapshotEntry{Path: path})
@@ -487,22 +562,82 @@ func makeSnapshotEntries(plan Plan) ([]snapshotEntry, int64, error) {
 	return entries, total, nil
 }
 
-func restoreSnapshot(path string) error {
+func restoreSnapshotForPlan(path string, plan Plan) error {
 	var value snapshot
 	if err := readJSON(path, &value); err != nil {
 		return err
 	}
-	if value.SchemaVersion != SchemaVersion || value.WorkspacePath == "" || (value.Runtime != "claude" && value.Runtime != "codex") || len(value.Entries) > MaxSnapshotFiles || value.TotalBytes > MaxSnapshotBytes {
+	if err := validateSnapshotForPlan(value, plan); err != nil {
+		return err
+	}
+	return restoreSnapshotValue(value)
+}
+
+func readSnapshotForPlan(path string, plan Plan) (snapshot, error) {
+	var value snapshot
+	if err := readJSON(path, &value); err != nil {
+		return snapshot{}, err
+	}
+	if err := validateSnapshotForPlan(value, plan); err != nil {
+		return snapshot{}, err
+	}
+	return value, nil
+}
+
+func validateSnapshotForPlan(value snapshot, plan Plan) error {
+	if value.SchemaVersion != SchemaVersion || value.PlanID != plan.ID || value.WorkspacePath != plan.WorkspacePath || value.Runtime != plan.Runtime || value.WorkspaceDigest != plan.SourceDigest || len(value.Entries) > MaxSnapshotFiles || value.TotalBytes < 0 || value.TotalBytes > MaxSnapshotBytes {
 		return errors.New("workspace migration snapshot is invalid")
 	}
-	allowed, skillsRoot, err := managedPathSet(value.Runtime, value.WorkspacePath)
+	exclude, err := adaptercfg.LocalConfigExcludePath(value.Runtime, value.WorkspacePath)
+	if err != nil {
+		return err
+	}
+	expected := make(map[string]bool, len(plan.ManagedPaths))
+	for _, path := range plan.ManagedPaths {
+		expected[path] = true
+	}
+	seenEntries := make(map[string]bool, len(value.Entries))
+	var total int64
+	for _, entry := range value.Entries {
+		cleanEntry := filepath.Clean(entry.Path)
+		insideWorkspace := pathWithin(value.WorkspacePath, cleanEntry)
+		isGitExclude := exclude != "" && cleanEntry == filepath.Clean(exclude)
+		if seenEntries[cleanEntry] || cleanEntry != entry.Path || !filepath.IsAbs(entry.Path) || !insideWorkspace && !isGitExclude || !expected[cleanEntry] {
+			return errors.New("workspace migration snapshot contains an unmanaged path")
+		}
+		seenEntries[cleanEntry] = true
+		if !entry.Exists {
+			if entry.Digest != "" || len(entry.Body) != 0 || entry.Mode != 0 {
+				return errors.New("workspace migration snapshot absent entry is invalid")
+			}
+			continue
+		}
+		if int64(len(entry.Body)) > MaxSnapshotFileSize || entry.Digest != digest(entry.Body) {
+			return errors.New("workspace migration snapshot entry is invalid")
+		}
+		total += int64(len(entry.Body))
+		if total > MaxSnapshotBytes {
+			return errors.New("workspace migration snapshot exceeds byte limit")
+		}
+	}
+	if total != value.TotalBytes {
+		return errors.New("workspace migration snapshot byte total is invalid")
+	}
+	return nil
+}
+
+func restoreSnapshotValue(value snapshot) error {
+	exclude, err := adaptercfg.LocalConfigExcludePath(value.Runtime, value.WorkspacePath)
 	if err != nil {
 		return err
 	}
 	for _, entry := range value.Entries {
-		cleanEntry := filepath.Clean(entry.Path)
-		if !allowed[cleanEntry] && !managedSkillPath(cleanEntry, skillsRoot) {
-			return errors.New("workspace migration snapshot contains an unmanaged path")
+		root := value.WorkspacePath
+		if entry.Path == exclude {
+			root = filepath.Dir(filepath.Dir(exclude))
+		}
+		if err := ensureNoSymlinkParents(root, entry.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
 		}
 		if !entry.Exists {
 			if info, statErr := os.Lstat(entry.Path); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
@@ -512,9 +647,6 @@ func restoreSnapshot(path string) error {
 				return err
 			}
 			continue
-		}
-		if int64(len(entry.Body)) > MaxSnapshotFileSize || entry.Digest != digest(entry.Body) {
-			return errors.New("workspace migration snapshot entry is invalid")
 		}
 		if info, statErr := os.Lstat(entry.Path); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
 			return errors.New("workspace migration refuses to replace a symlink during restore")
@@ -529,96 +661,152 @@ func restoreSnapshot(path string) error {
 	return nil
 }
 
-func managedPathSet(runtimeName, workspacePath string) (map[string]bool, string, error) {
-	paths := map[string]bool{}
-	orientation := "AGENTS.md"
-	adapter := filepath.Join(workspacePath, ".codex", "hooks.json")
-	skillsRoot := filepath.Join(workspacePath, ".codex", "skills")
-	if runtimeName == "claude" {
-		orientation = "CLAUDE.md"
-		adapter = filepath.Join(workspacePath, ".claude", "settings.local.json")
-		skillsRoot = filepath.Join(workspacePath, ".claude", "skills")
+func managedPathSafetyRoot(runtimeName, workspacePath, path string) (string, error) {
+	if pathWithin(workspacePath, path) {
+		return filepath.Clean(workspacePath), nil
 	}
-	paths[filepath.Join(workspacePath, orientation)] = true
-	paths[adapter] = true
-	paths[filepath.Join(workspacePath, runtimeprojection.ManifestRelativePath)] = true
-	paths[filepath.Join(workspacePath, runtimeprojection.PolicyRelativePath)] = true
-	// Skill entries are one managed file below the runtime's skill root. The
-	// snapshot itself remains the authority for which exact files are restored.
-	paths[skillsRoot] = true
-	return paths, skillsRoot, nil
+	exclude, err := adaptercfg.LocalConfigExcludePath(runtimeName, workspacePath)
+	if err != nil {
+		return "", err
+	}
+	if exclude != "" && filepath.Clean(exclude) == filepath.Clean(path) {
+		return filepath.Dir(filepath.Dir(filepath.Clean(exclude))), nil
+	}
+	return "", errors.New("managed path is outside the workspace and approved Git exclude target")
 }
 
-func managedSkillPath(path, root string) bool {
-	relative, err := filepath.Rel(root, path)
-	if err != nil || relative == "." || filepath.IsAbs(relative) || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return false
-	}
-	parts := strings.Split(relative, string(filepath.Separator))
-	return len(parts) == 2 && parts[1] == "SKILL.md" && parts[0] != "." && parts[0] != ".."
+func pathWithin(root, path string) bool {
+	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	return err == nil && relative != ".." && !filepath.IsAbs(relative) && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
-func managedPaths(runtimeName, workspacePath string) ([]string, error) {
-	orientation := "AGENTS.md"
-	adapter := filepath.Join(workspacePath, ".codex", "hooks.json")
-	skillsRoot := filepath.Join(workspacePath, ".codex", "skills")
-	if runtimeName == "claude" {
-		orientation = "CLAUDE.md"
-		adapter = filepath.Join(workspacePath, ".claude", "settings.local.json")
-		skillsRoot = filepath.Join(workspacePath, ".claude", "skills")
+// ensureNoSymlinkParents is a defense-in-depth check for the internal engine.
+// The exported execution APIs remain unavailable until the bootstrapper can
+// replace this check-and-use sequence with no-follow handles.
+func ensureNoSymlinkParents(root, target string) error {
+	root = filepath.Clean(root)
+	target = filepath.Clean(target)
+	if !filepath.IsAbs(root) || !filepath.IsAbs(target) || !pathWithin(root, target) {
+		return errors.New("managed path is outside its safety root")
 	}
-	paths := []string{filepath.Join(workspacePath, orientation), adapter, filepath.Join(workspacePath, runtimeprojection.ManifestRelativePath), filepath.Join(workspacePath, runtimeprojection.PolicyRelativePath)}
+	rootInfo, err := os.Lstat(root)
+	if err != nil {
+		return err
+	}
+	if rootInfo.Mode()&os.ModeSymlink != 0 || !rootInfo.IsDir() {
+		return errors.New("managed path safety root is not a canonical directory")
+	}
+	relative, err := filepath.Rel(root, filepath.Dir(target))
+	if err != nil {
+		return err
+	}
+	current := root
+	if relative == "." {
+		return nil
+	}
+	for _, component := range strings.Split(relative, string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return fmt.Errorf("refusing to follow symlink or non-directory parent %s", current)
+		}
+	}
+	return nil
+}
+
+func managedPaths(options PlanOptions) ([]string, error) {
+	runtimeName, workspacePath := options.Runtime, options.WorkspacePath
+	paths := fixedManagedPaths(runtimeName, workspacePath)
 	manifestPath := filepath.Join(workspacePath, runtimeprojection.ManifestRelativePath)
-	body, err := os.ReadFile(manifestPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return paths, nil
+	if safetyRoot, rootErr := managedPathSafetyRoot(runtimeName, workspacePath, manifestPath); rootErr != nil {
+		return nil, rootErr
+	} else if err := ensureNoSymlinkParents(safetyRoot, manifestPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
+	body, err := os.ReadFile(manifestPath)
+	if err == nil {
+		var manifest struct {
+			SchemaVersion   int               `json:"schema_version"`
+			Runtime         string            `json:"runtime"`
+			OrientationPath string            `json:"orientation_path"`
+			OrientationHash string            `json:"orientation_hash"`
+			SkillHashes     map[string]string `json:"skill_hashes"`
+			PolicyPath      string            `json:"policy_path,omitempty"`
+			PolicyHash      string            `json:"policy_hash,omitempty"`
+		}
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&manifest); err != nil {
+			return nil, fmt.Errorf("decode managed projection manifest: %w", err)
+		}
+		skillsRoot := filepath.Join(workspacePath, ".codex", "skills")
+		if runtimeName == "claude" {
+			skillsRoot = filepath.Join(workspacePath, ".claude", "skills")
+		}
+		for id := range manifest.SkillHashes {
+			if filepath.Clean(id) != id || id == "." || id == ".." || strings.ContainsAny(id, `/\\`) {
+				return nil, fmt.Errorf("managed projection skill ID is unsafe: %q", id)
+			}
+			paths = append(paths, filepath.Join(skillsRoot, id, "SKILL.md"))
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	planned, err := runtimeprojection.PlannedManagedPaths(runtimeName, workspacePath, options.CapabilityTracks)
 	if err != nil {
 		return nil, err
 	}
-	var manifest struct {
-		SchemaVersion   int               `json:"schema_version"`
-		Runtime         string            `json:"runtime"`
-		OrientationPath string            `json:"orientation_path"`
-		OrientationHash string            `json:"orientation_hash"`
-		SkillHashes     map[string]string `json:"skill_hashes"`
-		PolicyPath      string            `json:"policy_path,omitempty"`
-		PolicyHash      string            `json:"policy_hash,omitempty"`
+	paths = append(paths, planned...)
+	if exclude, err := adaptercfg.LocalConfigExcludePath(runtimeName, workspacePath); err != nil {
+		return nil, err
+	} else if exclude != "" {
+		paths = append(paths, exclude)
 	}
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&manifest); err != nil {
-		return nil, fmt.Errorf("decode managed projection manifest: %w", err)
-	}
-	for id := range manifest.SkillHashes {
-		if filepath.Clean(id) != id || id == "." || id == ".." || strings.ContainsAny(id, `/\\`) {
-			return nil, fmt.Errorf("managed projection skill ID is unsafe: %q", id)
-		}
-		paths = append(paths, filepath.Join(skillsRoot, id, "SKILL.md"))
-	}
+	paths = uniquePaths(paths)
 	sort.Strings(paths)
 	return paths, nil
 }
 
-func sourceDigest(runtimeName, workspacePath string) (string, error) {
-	paths, err := managedPaths(runtimeName, workspacePath)
+func fixedManagedPaths(runtimeName, workspacePath string) []string {
+	orientation := "AGENTS.md"
+	adapter := filepath.Join(workspacePath, ".codex", "hooks.json")
+	if runtimeName == "claude" {
+		orientation = "CLAUDE.md"
+		adapter = filepath.Join(workspacePath, ".claude", "settings.local.json")
+	}
+	return []string{filepath.Join(workspacePath, orientation), adapter, filepath.Join(workspacePath, runtimeprojection.ManifestRelativePath), filepath.Join(workspacePath, runtimeprojection.PolicyRelativePath)}
+}
+
+func sourceDigest(options PlanOptions) (string, error) {
+	paths, err := managedPaths(options)
 	if err != nil {
 		// A malformed legacy projection still needs a deterministic inspection
 		// digest, but it can never become executable. Hash only the fixed
 		// managed entry points; do not attempt to interpret untrusted skill IDs.
-		paths = []string{
-			filepath.Join(workspacePath, "AGENTS.md"),
-			filepath.Join(workspacePath, ".codex", "hooks.json"),
-			filepath.Join(workspacePath, runtimeprojection.ManifestRelativePath),
-			filepath.Join(workspacePath, runtimeprojection.PolicyRelativePath),
+		paths = fixedManagedPaths(options.Runtime, options.WorkspacePath)
+		if planned, plannedErr := runtimeprojection.PlannedManagedPaths(options.Runtime, options.WorkspacePath, options.CapabilityTracks); plannedErr == nil {
+			paths = append(paths, planned...)
 		}
-		if runtimeName == "claude" {
-			paths[0] = filepath.Join(workspacePath, "CLAUDE.md")
-			paths[1] = filepath.Join(workspacePath, ".claude", "settings.local.json")
+		if exclude, excludeErr := adaptercfg.LocalConfigExcludePath(options.Runtime, options.WorkspacePath); excludeErr == nil && exclude != "" {
+			paths = append(paths, exclude)
 		}
+		paths = uniquePaths(paths)
 	}
 	h := sha256.New()
 	for _, path := range paths {
+		safetyRoot, rootErr := managedPathSafetyRoot(options.Runtime, options.WorkspacePath, path)
+		if rootErr != nil {
+			return "", rootErr
+		}
+		if parentErr := ensureNoSymlinkParents(safetyRoot, path); parentErr != nil && !errors.Is(parentErr, os.ErrNotExist) {
+			return "", parentErr
+		}
 		body, err := os.ReadFile(path)
 		if errors.Is(err, os.ErrNotExist) {
 			fmt.Fprintf(h, "%s\x00absent\x00", path)
@@ -632,6 +820,19 @@ func sourceDigest(runtimeName, workspacePath string) (string, error) {
 		h.Write([]byte{0})
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func uniquePaths(paths []string) []string {
+	seen := make(map[string]bool, len(paths))
+	unique := make([]string, 0, len(paths))
+	for _, path := range paths {
+		clean := filepath.Clean(path)
+		if !seen[clean] {
+			seen[clean] = true
+			unique = append(unique, clean)
+		}
+	}
+	return unique
 }
 
 func hasManagedMarker(path string) bool {
@@ -675,7 +876,11 @@ func planID(plan Plan) (string, error) {
 }
 
 func planRoot(dataRoot, id string) string {
-	return filepath.Join(dataRoot, "updates", "workspace-migrations", id)
+	absolute, err := filepath.Abs(filepath.Clean(dataRoot))
+	if err != nil {
+		absolute = filepath.Clean(dataRoot)
+	}
+	return filepath.Join(absolute, "updates", "workspace-migrations", id)
 }
 
 func planPath(dataRoot, id string) string {
@@ -769,6 +974,30 @@ func readExecution(path string) (execution, error) {
 		return execution{}, errors.New("workspace migration execution is invalid")
 	}
 	return value, nil
+}
+
+func readReceipt(path, planID string) (Receipt, error) {
+	var value Receipt
+	if err := readJSON(path, &value); err != nil {
+		return Receipt{}, err
+	}
+	if value.SchemaVersion != SchemaVersion || value.PlanID != planID || (value.State != "applied" && value.State != "rolled_back") || value.CompletedAt.IsZero() || value.CompletedAt.Location() != time.UTC {
+		return Receipt{}, errors.New("workspace migration receipt is invalid")
+	}
+	return value, nil
+}
+
+func removeExecutionMarker(root string) error {
+	path := filepath.Join(root, "execution.json")
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if _, err := os.Lstat(path); err == nil {
+		return errors.New("workspace migration execution marker remains after terminalization")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 func digest(body []byte) string {

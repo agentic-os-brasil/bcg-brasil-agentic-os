@@ -864,3 +864,13 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Maestro and legacy workspace migration can be rehearsed and executed only through a closed, reviewable plan. Symlinks, path escapes, conflicts, exclusions, unsupported formats and unavailable Docling/MarkItDown routes remain visible rather than silently imported. The implementation proves local contract behavior with synthetic fixtures only; native runtime qualification, signed external collectors and production policy remain separate gates.
 - Refs: specs/002-data-boundaries.md; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md; specs/045-workspace-import-core.md; internal/workspaceimport; schemas/workspace-import-*.schema.json
 - Supersedes: none
+## WSMR - Keep workspace migration execution fail-closed until authority wiring
+
+ - Date: 2026-08-05
+ - Status: accepted
+ - Owner: Daniel Scardini
+ - Context: The migration engine can exercise bounded snapshots, governed projection and rollback in synthetic tests, but the current `CoreActivation` payload is caller-constructible and path-based file operations cannot provide an atomic no-follow guarantee across supported runtimes.
+ - Decision: Keep exported workspace migration execution unavailable until the stable bootstrapper supplies a trusted verifier and safe managed-target primitives. Internal engine tests must bind execution markers and snapshots to the canonical plan root and exact plan/workspace/runtime/source digest. Snapshot scope includes the bounded union of old and prospective managed skills plus the adapter's Git local-exclude side effect. Applied receipts are terminal and take precedence over leftover execution markers; marker removal is verified.
+ - Consequences: `bcgos update` remains honestly `pending_core_activation`/`unavailable`; no caller can turn shape-valid fields into authentication or mutate a workspace through the public package surface. The internal contract remains ready for future bootstrapper wiring and adversarially tested without claiming runtime qualification.
+ - Refs: WSMG; specs/045-workspace-migration.md; internal/workspacemigration; internal/runtimeprojection; internal/adaptercfg
+ - Supersedes: none

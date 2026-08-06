@@ -117,6 +117,36 @@ func ValidateInstallForTracks(runtimeName, workspace string, tracks []string) er
 	return nil
 }
 
+// PlannedManagedPaths returns the bounded runtime-projection targets for a
+// track selection without reading or writing their contents. Callers that
+// coordinate a larger transaction use it to snapshot both the current and
+// prospective managed skill set before projection starts.
+func PlannedManagedPaths(runtimeName, workspace string, tracks []string) ([]string, error) {
+	layout, err := layout(runtimeName, workspace)
+	if err != nil {
+		return nil, err
+	}
+	for _, relative := range []string{layout.orientation, layout.root, ManifestRelativePath, PolicyRelativePath} {
+		if err := rejectSymlinkComponents(workspace, relative); err != nil {
+			return nil, err
+		}
+	}
+	catalog, err := catalogForTracks(tracks)
+	if err != nil {
+		return nil, err
+	}
+	paths := []string{
+		filepath.Join(workspace, layout.orientation),
+		filepath.Join(workspace, ManifestRelativePath),
+		filepath.Join(workspace, PolicyRelativePath),
+	}
+	for _, skill := range catalog.Skills {
+		paths = append(paths, filepath.Join(workspace, layout.root, skill.ID, "SKILL.md"))
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
 // ValidateUninstall performs the projection preflight without removing files.
 func ValidateUninstall(runtimeName, workspace string) error {
 	status, err := Inspect(runtimeName, workspace)
