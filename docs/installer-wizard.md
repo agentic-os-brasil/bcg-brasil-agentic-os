@@ -8,7 +8,7 @@ administrator permissions. The experience explains the next action in plain
 language, while the release verifier and `bcgos-bootstrap` remain the only
 authorities allowed to verify, activate or roll back bytes.
 
-## Four screens
+## Core screens and workspace journeys
 
 1. **Boas-vindas** — one sentence of value, the user-space/no-admin promise and
    three trust cues.
@@ -16,17 +16,20 @@ authorities allowed to verify, activate or roll back bytes.
    path are shown before any write.
 3. **Instalação** — the exact per-user destination and the atomic activation
    plan are explained. The user confirms once.
-4. **Seu workspace** — creates one new local workspace at
-   `~/Developer/maestro-os`. Before creation, the user may nominate an existing
-   memory folder. That source remains untouched and is registered as a pending
-   local intake; no document is read, copied or uploaded by the installer.
-5. **Pronto** — returns the person to work, rather than to an application
-   folder. The first-use projection is Claude, because a workspace may carry
-   one managed runtime projection at a time. Codex in the ChatGPT desktop app
-   remains an explicit compatible target through the documented
-   `codex://new?path=<absolute-path>` deep link. Switching a workspace between
-   Claude and Codex is an explicit adapter migration, not a second concurrent
-   install. The `doctor` command remains a support action.
+4. **Próximo movimento** — the user chooses one explicit journey: update the
+   Maestro, migrate an existing Maestro workspace, or import an external
+   folder. A clean workspace remains an explicit fourth option and uses the
+   existing workspace readiness path.
+5. **Análise e plano** — the bridge returns a typed classification plus the
+   mapped, excluded, ambiguous and capability-unavailable items. It also says
+   whether the existing workspace is preserved and which version/migration is
+   required. Selecting a folder is only a temporary analysis pointer; it is
+   never called ingestion.
+6. **Confirmação, staging e receipt** — confirmation is bound to the exact
+   plan digest. The bridge must report staging, validation and rollback state;
+   the UI shows “Pronto” only for a valid, committed receipt. An invalid or
+   unavailable bridge fails closed and never offers an unsigned or implicit
+   fallback.
 
 The **Ver como funciona** action opens a compact in-product explainer with the
 same three contract movements — check, install, conduct — so a non-technical
@@ -74,10 +77,24 @@ does not modify the global `PATH`, workspace content or credentials.
 
 After a connected install, the wizard detects compatible runtimes locally. It
 never accepts a browser-provided workspace path: it creates and verifies the
-canonical local workspace, then launches only a detected runtime. A separately
-selected memory source is recorded under `.bcgos/import-intake.json` with
-state `pending_verified_pack`; it is not itself used as a workspace. The
-first-command card uses the exact
+canonical local workspace, then launches only a detected runtime. The new
+workspace-flow bridge exposes these endpoints:
+
+- `POST /api/workspace-flow/select` selects `update`, `workspace_migration` or
+  `external_import`; native folder selection is kept server-side.
+- `POST /api/workspace-flow/analyze` returns the typed classification and plan
+  without mutating a workspace or reading an external folder when the backend
+  is unavailable.
+- `POST /api/workspace-flow/confirm` accepts only the exact plan digest and
+  returns a receipt containing staging, validation and rollback states.
+
+The current repository intentionally supplies an `unavailable` backend for
+real runs because `internal/workspaceimport` and `internal/workspacemigration`
+are not part of this change. `--simulate` uses sanitized fixtures only, so it
+can demonstrate the complete journey without pretending that a local
+Docling/runtime pack or migration engine exists. A pointer-only source is
+reported as `pointer_recorded_pending_analysis` / `not_ingested_pointer_only`,
+never as ingestion. The first-command card uses the exact
 `cli_path` returned by the bridge as a support action. On macOS it copies
 `"<installed-cli>" doctor`; on Windows PowerShell it copies `&
 "<installed-cli>" doctor`. Static preview and disconnected mode remain
