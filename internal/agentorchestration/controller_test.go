@@ -1,6 +1,11 @@
 package agentorchestration
 
 import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,6 +57,51 @@ func TestAdaptersKeepToolAccessBoundToTheActiveRoot(t *testing.T) {
 				t.Fatalf("Maestro received tool access: %#v", decision)
 			}
 		})
+	}
+}
+
+func TestAdaptersPersistMetadataOnlyBreadcrumbsAcrossRestart(t *testing.T) {
+	catalog := loadCatalog(t)
+	path := filepath.Join(t.TempDir(), ".bcgos", "maestro-orchestration-state.json")
+	store, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := NewAdapter("claude", catalog, testAuthorizations(), store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision := adapter.StartBranch("maestro", "maestro-cap", "case-agent-alpha", "run-breadcrumb", "alpha", "case"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	if decision := adapter.GuardTool("case-agent-alpha", "case-cap", "run-breadcrumb", "", "alpha", "case", "workspace_reader", "read", "bcgos://case/alpha/input.md"); !decision.Allowed {
+		t.Fatal(decision)
+	}
+	snapshot := adapter.Snapshot()
+	if snapshot.BreadcrumbSeq != 2 || len(snapshot.BreadcrumbTail) != 2 || snapshot.BreadcrumbTail[1].Tool != "workspace_reader" || snapshot.BreadcrumbTail[1].ResourceSHA256 == "" {
+		t.Fatalf("breadcrumb tail = %#v", snapshot.BreadcrumbTail)
+	}
+	encoded, _ := json.Marshal(snapshot.BreadcrumbTail)
+	if strings.Contains(string(encoded), "input.md") {
+		t.Fatalf("breadcrumb leaked resource path: %s", encoded)
+	}
+	restarted, err := NewDurableStateStore(path, "recovery-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := restarted.Snapshot(); got.BreadcrumbSeq != 2 || len(got.BreadcrumbTail) != 2 || got.BreadcrumbTail[0].Digest == "" {
+		t.Fatalf("restarted breadcrumbs = %#v", got.BreadcrumbTail)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = bytes.Replace(data, []byte(`"decision_code": "allowed"`), []byte(`"decision_code": "tampered"`), 1)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewDurableStateStore(path, "recovery-cap"); err == nil {
+		t.Fatal("tampered breadcrumb chain was accepted")
 	}
 }
 

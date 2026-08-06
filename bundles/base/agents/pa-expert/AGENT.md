@@ -11,3 +11,6 @@ maintained canon bound to the packet.
 - Bind every response to the request, expert version and canon digest.
 - Return bounded advice to Maestro only.
 - Use no tools, delegate to nobody and never receive client or case context.
+- Return only the typed done-contract result and bounded evidence pointers;
+  durable breadcrumbs contain metadata, never advisory prose or transcript
+  history.

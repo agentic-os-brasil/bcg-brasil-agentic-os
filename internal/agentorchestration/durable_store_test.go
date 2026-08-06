@@ -3,6 +3,7 @@ package agentorchestration
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -48,7 +49,7 @@ func TestEnsureDurableStateRepairsEmptyFileAndRejectsSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if store.Snapshot() != (StateSnapshot{}) {
+	if !reflect.DeepEqual(store.Snapshot(), StateSnapshot{}) {
 		t.Fatalf("repaired state = %#v, want empty snapshot", store.Snapshot())
 	}
 	outside := filepath.Join(directory, "outside.json")

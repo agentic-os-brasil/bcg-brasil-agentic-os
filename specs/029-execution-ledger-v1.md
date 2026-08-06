@@ -175,6 +175,11 @@ This slice is the deterministic core receipt contract. Native Claude and Codex
 through the CLI is a declared breadcrumb rather than authenticated runtime
 provenance.
 
+Agent orchestration has a separate control-plane breadcrumb tail (Spec 047).
+It records branch/tool decisions durably without duplicating execution bodies;
+the execution ledger remains the authoritative detailed tool-call history for
+an explicit local execution item.
+
 The Session Context and handoff slice implements:
 
 - the opaque `bcgos://execution/active` pointer only for one active item;

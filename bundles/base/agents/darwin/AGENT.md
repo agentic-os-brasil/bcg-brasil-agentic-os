@@ -81,6 +81,10 @@ Weekly proposals focus on reliability, recovery and drift. Monthly proposals
 may compare agent/PA Expert/skill/policy versions, but remain inert until
 independently approved and activated through a separate qualified path.
 
+Darwin also emits metadata-only maintenance breadcrumbs and closes repairs
+only against the signed `DoneContract`; the durable tail never stores health
+packet bodies or transcript context.
+
 ## Identity
 
 - Agent ID: `darwin`

@@ -68,16 +68,42 @@ type authorization struct {
 }
 
 type StateSnapshot struct {
-	PolicySHA256    string    `json:"policy_sha256"`
-	BranchID        string    `json:"branch_id"`
-	ScopeID         string    `json:"scope_id"`
-	ScopeKind       string    `json:"scope_kind"`
-	RootID          string    `json:"root_id"`
-	ChildID         string    `json:"child_id,omitempty"`
-	ChildDispatchID string    `json:"child_dispatch_id,omitempty"`
-	Updated         time.Time `json:"updated"`
-	FenceEpoch      uint64    `json:"fence_epoch"`
+	PolicySHA256    string       `json:"policy_sha256"`
+	BranchID        string       `json:"branch_id"`
+	ScopeID         string       `json:"scope_id"`
+	ScopeKind       string       `json:"scope_kind"`
+	RootID          string       `json:"root_id"`
+	ChildID         string       `json:"child_id,omitempty"`
+	ChildDispatchID string       `json:"child_dispatch_id,omitempty"`
+	Updated         time.Time    `json:"updated"`
+	FenceEpoch      uint64       `json:"fence_epoch"`
+	BreadcrumbSeq   uint64       `json:"breadcrumb_seq"`
+	BreadcrumbTail  []Breadcrumb `json:"breadcrumb_tail,omitempty"`
 }
+
+// Breadcrumb is the bounded, durable control-plane trace for one accepted or
+// denied orchestration event. It deliberately contains no prompt, arguments,
+// output, error body or resource path. The tail is rehydration evidence, not
+// model context; callers must request it explicitly.
+type Breadcrumb struct {
+	SchemaVersion  int       `json:"schema_version"`
+	Sequence       uint64    `json:"sequence"`
+	Event          string    `json:"event"`
+	ActorID        string    `json:"actor_id"`
+	TargetID       string    `json:"target_id,omitempty"`
+	BranchID       string    `json:"branch_id,omitempty"`
+	DispatchID     string    `json:"dispatch_id,omitempty"`
+	Tool           string    `json:"tool,omitempty"`
+	Operation      string    `json:"operation,omitempty"`
+	ResourceSHA256 string    `json:"resource_sha256,omitempty"`
+	Allowed        bool      `json:"allowed"`
+	DecisionCode   string    `json:"decision_code"`
+	OccurredAt     time.Time `json:"occurred_at"`
+	PreviousDigest string    `json:"previous_digest,omitempty"`
+	Digest         string    `json:"digest"`
+}
+
+const MaximumBreadcrumbTail = 64
 
 type StateStore struct {
 	mu             sync.Mutex
@@ -251,6 +277,113 @@ func validateSnapshot(snapshot StateSnapshot) error {
 	if (snapshot.ChildID == "") != (snapshot.ChildDispatchID == "") || (snapshot.ChildID != "" && snapshot.RootID == "") {
 		return errors.New("orchestration snapshot has a child without a root")
 	}
+	if len(snapshot.BreadcrumbTail) > MaximumBreadcrumbTail {
+		return errors.New("orchestration breadcrumb tail exceeds its bounded limit")
+	}
+	var previous string
+	for index, breadcrumb := range snapshot.BreadcrumbTail {
+		if err := validateBreadcrumb(breadcrumb); err != nil {
+			return err
+		}
+		if index > 0 && breadcrumb.Sequence != snapshot.BreadcrumbTail[index-1].Sequence+1 {
+			return errors.New("orchestration breadcrumb sequence is not contiguous")
+		}
+		if index > 0 && breadcrumb.PreviousDigest != previous {
+			return errors.New("orchestration breadcrumb chain is not linked")
+		}
+		previous = breadcrumb.Digest
+	}
+	if len(snapshot.BreadcrumbTail) > 0 && snapshot.BreadcrumbSeq != snapshot.BreadcrumbTail[len(snapshot.BreadcrumbTail)-1].Sequence {
+		return errors.New("orchestration breadcrumb sequence is not current")
+	}
+	return nil
+}
+
+func validateBreadcrumb(breadcrumb Breadcrumb) error {
+	if breadcrumb.SchemaVersion != 1 || breadcrumb.Sequence == 0 ||
+		!breadcrumbEvents[breadcrumb.Event] ||
+		!agentcatalog.ValidAgentID(breadcrumb.ActorID) ||
+		(breadcrumb.TargetID != "" && !agentcatalog.ValidAgentID(breadcrumb.TargetID)) ||
+		!validBreadcrumbToken(breadcrumb.BranchID, 128) || !validBreadcrumbToken(breadcrumb.DispatchID, 128) ||
+		!validBreadcrumbToken(breadcrumb.Tool, 64) || !validBreadcrumbToken(breadcrumb.Operation, 64) ||
+		!validBreadcrumbToken(breadcrumb.DecisionCode, 96) ||
+		breadcrumb.OccurredAt.IsZero() || !validDigest(breadcrumb.Digest) {
+		return errors.New("orchestration breadcrumb is invalid")
+	}
+	if breadcrumb.PreviousDigest != "" && !validDigest(breadcrumb.PreviousDigest) {
+		return errors.New("orchestration breadcrumb previous digest is invalid")
+	}
+	if breadcrumb.ResourceSHA256 != "" && !validDigest(breadcrumb.ResourceSHA256) {
+		return errors.New("orchestration breadcrumb resource digest is invalid")
+	}
+	if breadcrumb.Digest != breadcrumbDigest(breadcrumb) {
+		return errors.New("orchestration breadcrumb digest is invalid")
+	}
+	return nil
+}
+
+func validBreadcrumbToken(value string, maximum int) bool {
+	if value == "" {
+		return true
+	}
+	if len(value) > maximum {
+		return false
+	}
+	for index, char := range value {
+		if !(char >= 'A' && char <= 'Z' || char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '_' || char == '-' || char == '.') || index == 0 && char == '.' {
+			return false
+		}
+	}
+	return true
+}
+
+func validDigest(value string) bool {
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func breadcrumbDigest(breadcrumb Breadcrumb) string {
+	digest := breadcrumb.Digest
+	breadcrumb.Digest = ""
+	body, _ := json.Marshal(breadcrumb)
+	breadcrumb.Digest = digest
+	return digestBytes(body)
+}
+
+func digestBytes(value []byte) string {
+	digest := sha256.Sum256(value)
+	return hex.EncodeToString(digest[:])
+}
+
+func appendBreadcrumb(state *StateSnapshot, event string, native NativeEvent, decision Decision, occurredAt time.Time) error {
+	sequence := state.BreadcrumbSeq + 1
+	previous := ""
+	if len(state.BreadcrumbTail) > 0 {
+		previous = state.BreadcrumbTail[len(state.BreadcrumbTail)-1].Digest
+	}
+	resourceDigest := ""
+	if native.Resource != "" {
+		resourceDigest = digestBytes([]byte(native.Resource))
+	}
+	breadcrumb := Breadcrumb{
+		SchemaVersion: 1, Sequence: sequence, Event: event, ActorID: native.ActorID,
+		TargetID: native.TargetID, BranchID: native.BranchID, DispatchID: native.DispatchID,
+		Tool: native.Tool, Operation: native.Operation, ResourceSHA256: resourceDigest,
+		Allowed: decision.Allowed, DecisionCode: decision.Code, OccurredAt: occurredAt.UTC(),
+		PreviousDigest: previous,
+	}
+	breadcrumb.Digest = breadcrumbDigest(breadcrumb)
+	if err := validateBreadcrumb(breadcrumb); err != nil {
+		return err
+	}
+	state.BreadcrumbSeq = sequence
+	state.BreadcrumbTail = append(state.BreadcrumbTail, breadcrumb)
+	if len(state.BreadcrumbTail) > MaximumBreadcrumbTail {
+		state.BreadcrumbTail = append([]Breadcrumb(nil), state.BreadcrumbTail[len(state.BreadcrumbTail)-MaximumBreadcrumbTail:]...)
+	}
 	return nil
 }
 
@@ -352,7 +485,9 @@ func (store *StateStore) Snapshot() StateSnapshot {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	_ = store.refreshLocked()
-	return store.state
+	snapshot := store.state
+	snapshot.BreadcrumbTail = append([]Breadcrumb(nil), store.state.BreadcrumbTail...)
+	return snapshot
 }
 
 type Adapter struct {
@@ -389,6 +524,10 @@ var adapterEvents = map[string]map[string]string{
 		"collaboration_child_stop":   "child_finish",
 		"collaboration_branch_stop":  "branch_finish",
 	},
+}
+
+var breadcrumbEvents = map[string]bool{
+	"branch_start": true, "child_start": true, "tool_request": true, "child_finish": true, "branch_finish": true,
 }
 
 var roleScopeKinds = map[string]map[string]bool{
@@ -638,10 +777,14 @@ func (adapter *Adapter) Handle(event NativeEvent) Decision {
 	}
 	if decision.Allowed {
 		adapter.store.state.Updated = adapter.now().UTC()
-		if err := adapter.store.persistLocked(); err != nil {
-			adapter.store.state = previous
-			return denied("state_persist_failed")
-		}
+	}
+	if err := appendBreadcrumb(&adapter.store.state, semanticEvent, event, decision, adapter.now()); err != nil {
+		adapter.store.state = previous
+		return denied("breadcrumb_invalid")
+	}
+	if err := adapter.store.persistLocked(); err != nil {
+		adapter.store.state = previous
+		return denied("state_persist_failed")
 	}
 	return decision
 }
@@ -804,7 +947,8 @@ func (adapter *Adapter) startBranch(event NativeEvent, actor authorization) Deci
 	adapter.store.state = StateSnapshot{
 		PolicySHA256: adapter.store.state.PolicySHA256, BranchID: event.BranchID,
 		ScopeID: event.Scope, ScopeKind: target.scopeKind, RootID: event.TargetID,
-		FenceEpoch: adapter.store.state.FenceEpoch + 1,
+		FenceEpoch:    adapter.store.state.FenceEpoch + 1,
+		BreadcrumbSeq: adapter.store.state.BreadcrumbSeq, BreadcrumbTail: append([]Breadcrumb(nil), adapter.store.state.BreadcrumbTail...),
 	}
 	return allowed()
 }
@@ -876,7 +1020,10 @@ func (adapter *Adapter) finishBranch(event NativeEvent) Decision {
 	if event.BranchID != state.BranchID || event.ActorID != state.RootID {
 		return denied("actor_denied")
 	}
-	adapter.store.state = StateSnapshot{PolicySHA256: state.PolicySHA256, FenceEpoch: state.FenceEpoch}
+	adapter.store.state = StateSnapshot{
+		PolicySHA256: state.PolicySHA256, FenceEpoch: state.FenceEpoch,
+		BreadcrumbSeq: state.BreadcrumbSeq, BreadcrumbTail: append([]Breadcrumb(nil), state.BreadcrumbTail...),
+	}
 	return allowed()
 }
 

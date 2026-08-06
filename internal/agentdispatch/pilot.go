@@ -90,6 +90,7 @@ type Intent struct {
 	Objective     string
 	Pointers      []string
 	Constraints   []string
+	DoneContract  DoneContract
 	ReviewTrigger WalterReviewTrigger
 	TTL           time.Duration
 }
@@ -177,20 +178,21 @@ const (
 // Receipt is safe for public status surfaces: it contains identity, timing,
 // state and digests only. Work packet, result and failure prose never enter it.
 type Receipt struct {
-	SchemaVersion int            `json:"schema_version"`
-	DelegationID  string         `json:"delegation_id"`
-	OwnerAgentID  string         `json:"owner_agent_id"`
-	TargetAgentID string         `json:"target_agent_id,omitempty"`
-	Runtime       string         `json:"runtime,omitempty"`
-	ScopeKind     string         `json:"scope_kind,omitempty"`
-	ScopeID       string         `json:"scope_id,omitempty"`
-	State         State          `json:"state"`
-	PacketSHA256  string         `json:"packet_sha256,omitempty"`
-	ResultSHA256  string         `json:"result_sha256,omitempty"`
-	FailureCode   string         `json:"failure_code,omitempty"`
-	Review        *ReviewSummary `json:"review,omitempty"`
-	IssuedAt      time.Time      `json:"issued_at,omitempty"`
-	CompletedAt   time.Time      `json:"completed_at,omitempty"`
+	SchemaVersion      int            `json:"schema_version"`
+	DelegationID       string         `json:"delegation_id"`
+	OwnerAgentID       string         `json:"owner_agent_id"`
+	TargetAgentID      string         `json:"target_agent_id,omitempty"`
+	Runtime            string         `json:"runtime,omitempty"`
+	ScopeKind          string         `json:"scope_kind,omitempty"`
+	ScopeID            string         `json:"scope_id,omitempty"`
+	State              State          `json:"state"`
+	PacketSHA256       string         `json:"packet_sha256,omitempty"`
+	DoneContractSHA256 string         `json:"done_contract_sha256,omitempty"`
+	ResultSHA256       string         `json:"result_sha256,omitempty"`
+	FailureCode        string         `json:"failure_code,omitempty"`
+	Review             *ReviewSummary `json:"review,omitempty"`
+	IssuedAt           time.Time      `json:"issued_at,omitempty"`
+	CompletedAt        time.Time      `json:"completed_at,omitempty"`
 }
 
 type ReturnBody struct {
@@ -255,6 +257,9 @@ func (executor *Executor) SealReturn(dispatch Dispatch, body ReturnBody) (Execut
 	if err := validateReturnBody(body, dispatch.Packet.ScopeKind, dispatch.Packet.ScopeID); err != nil {
 		return ExecutionEnvelope{}, err
 	}
+	if err := doneContractSatisfied(dispatch.Packet.DoneContract, normalizeReturnBody(body), dispatch.Packet.TargetAgentID); err != nil {
+		return ExecutionEnvelope{}, err
+	}
 	return executor.seal(dispatch, ExecutionSucceeded, digestBody(normalizeReturnBody(body)))
 }
 
@@ -265,6 +270,13 @@ func (executor *Executor) SealWalterReview(dispatch Dispatch, body WalterReviewB
 	if dispatch.Runtime != executor.runtime || dispatch.Packet.TargetAgentID != executor.targetID ||
 		executor.targetID != "walter" || dispatch.Packet.Review == nil {
 		return ExecutionEnvelope{}, errors.New("executor is not authorized for this Walter review")
+	}
+	doneContract := dispatch.Packet.DoneContract
+	if doneContract.SchemaVersion == 0 {
+		doneContract = defaultDoneContract("walter")
+	}
+	if doneContract.Policy != DoneTypedWalterVerdict {
+		return ExecutionEnvelope{}, errors.New("Walter dispatch has no typed verdict done contract")
 	}
 	normalized := normalizeWalterReviewBody(body)
 	if err := validateWalterReviewBody(normalized, *dispatch.Packet.Review); err != nil {
@@ -472,6 +484,7 @@ func (pilot *Pilot) Delegate(intent Intent) (Dispatch, Receipt, error) {
 	return pilot.start(instance, PacketRequest{
 		TargetAgentID: targetID, ScopeKind: "workspace", ScopeID: intent.WorkspaceID,
 		Objective: intent.Objective, Pointers: intent.Pointers, Constraints: intent.Constraints,
+		DoneContract:  intent.DoneContract,
 		ReviewTrigger: intent.ReviewTrigger, TTL: intent.TTL,
 	}, nil)
 }
@@ -505,6 +518,7 @@ func (pilot *Pilot) Rework(sourceDelegationID string, intent Intent) (Dispatch, 
 		TargetAgentID: source.packet.TargetAgentID, ScopeKind: source.packet.ScopeKind,
 		ScopeID: source.packet.ScopeID, Objective: intent.Objective, Pointers: intent.Pointers,
 		Constraints: intent.Constraints, ReviewTrigger: intent.ReviewTrigger,
+		DoneContract:     intent.DoneContract,
 		ReworkOfPacketID: source.packet.PacketID, TTL: intent.TTL,
 	}, nil)
 }
@@ -556,7 +570,8 @@ func (pilot *Pilot) start(instance Instance, request PacketRequest, errand *Erra
 		SchemaVersion: 1, DelegationID: packet.PacketID, OwnerAgentID: "maestro",
 		TargetAgentID: instance.AgentID, Runtime: pilot.runtime,
 		ScopeKind: instance.ScopeKind, ScopeID: instance.ScopeID,
-		State: StateDelegated, PacketSHA256: packetSHA256, IssuedAt: packet.IssuedAt,
+		State: StateDelegated, PacketSHA256: packetSHA256,
+		DoneContractSHA256: digestBody(packet.DoneContract), IssuedAt: packet.IssuedAt,
 	}
 	receipt.Review = reviewSummary(request.Review, ReviewDispatched)
 	var privateErrand *ErrandContract
@@ -665,6 +680,9 @@ func (pilot *Pilot) Return(envelope ExecutionEnvelope, body ReturnBody) (Receipt
 	record, err := pilot.verifyEnvelope(envelope, ExecutionSucceeded, digestBody(normalized))
 	if err != nil {
 		return pilot.rejectEnvelope(envelope, envelopeFailureCode(err), err)
+	}
+	if err := doneContractSatisfied(record.packet.DoneContract, normalized, record.packet.TargetAgentID); err != nil {
+		return pilot.rejectEnvelope(envelope, "done_contract_unsatisfied", err)
 	}
 	if record.errand != nil && record.errandState != errandGranted {
 		return pilot.rejectEnvelope(envelope, "errand_incomplete", errors.New("errand grant has not completed successfully"))

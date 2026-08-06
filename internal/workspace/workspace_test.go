@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -70,7 +71,7 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 	if err := json.Unmarshal(stateBody, &state); err != nil {
 		t.Fatalf("initial orchestration state is not valid JSON: %v", err)
 	}
-	if state != (agentorchestration.StateSnapshot{}) {
+	if !reflect.DeepEqual(state, agentorchestration.StateSnapshot{}) {
 		t.Fatalf("initial orchestration state should be an empty snapshot: %#v", state)
 	}
 	if info, err := os.Stat(statePath); err != nil || info.Mode().Perm() != 0o600 {

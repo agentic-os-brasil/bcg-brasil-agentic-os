@@ -117,3 +117,6 @@ different contracts; neither one grants tools, scope or external authority.
   verdict; it never stores raw prompt, client content or generated output.
 - Do not treat `approved` as execution-ledger completion; only the separate
   authenticated adapter contract can authorize that transition.
+- The Walter branch emits metadata-only breadcrumbs and can close only through
+  the signed `typed_walter_verdict` done contract; an ordinary prose return is
+  never completion evidence.

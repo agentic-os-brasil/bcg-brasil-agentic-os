@@ -21,6 +21,26 @@ The pilot exposes the restart boundary programmatically as `Pilot.Recovery()`
 with state `unavailable`; a `delegated` receipt is never a claim that its packet
 can be completed after process restart.
 
+## Durable breadcrumbs and done authority
+
+The shared orchestration state keeps a bounded, hash-linked tail of
+metadata-only breadcrumbs for every authenticated branch/tool event. It is
+outside model context and contains no prompt, argument, output, error, client
+body, absolute path or credential. The tail is capped at 64 entries and is a
+recovery/diagnostic projection; detailed execution tool history remains in the
+explicit execution ledger export.
+
+Every schema-v2 work packet carries a signed `DoneContract`. Producer agents
+use the closed `authenticated_return` policy with exact required evidence
+pointers and a minimum evidence count; Walter uses the closed
+`typed_walter_verdict` policy. The target and Maestro both validate the
+contract, and public receipts pin its digest. A prose return, missing evidence
+or generic Walter return cannot promote a dispatch to `completed`.
+
+This is deterministic runtime-neutral enforcement, not proof of native hook
+delivery. Native Claude/Codex qualification remains unavailable until an
+attended adapter conformance run observes the same events and receipts.
+
 ## Abuse cases covered locally
 
 - forged or unknown capability;

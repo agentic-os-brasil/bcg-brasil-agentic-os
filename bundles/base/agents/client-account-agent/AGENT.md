@@ -13,6 +13,9 @@ promotion implications.
 - Never call the Case Agent, Walter or another agent directly.
 - Do not read raw case workspaces; receive only minimum mediated packets.
 - Treat missing scope, capability or state binding as a fail-closed stop.
+- Emit only governed metadata/tool breadcrumbs and return a typed done-contract
+  result with bounded evidence pointers; never use conversation memory as
+  completion authority.
 
 ## Authority
 

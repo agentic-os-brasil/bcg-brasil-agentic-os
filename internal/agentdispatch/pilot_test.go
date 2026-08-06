@@ -57,6 +57,33 @@ func TestPilotAcceptsOnlyAuthenticatedTargetReturnForBothRuntimes(t *testing.T) 
 	}
 }
 
+func TestPilotEnforcesSignedDoneContractEvidence(t *testing.T) {
+	pilot := newTestPilot(t, "claude")
+	required := "bcgos://workspace/alpha/dossier/evidence.json"
+	dispatch, _, err := pilot.Delegate(Intent{
+		WorkspaceID: "alpha", Objective: "Produce the bounded evidence-backed answer.",
+		DoneContract: DoneContract{SchemaVersion: 1, Policy: DoneAuthenticatedReturn,
+			RequiredEvidenceRefs: []string{required}, MinimumEvidenceRefs: 1}, TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := newTestExecutor(t, "claude", "workspace-agent-alpha", "workspace-alpha-cap", time.Now())
+	missing := ReturnBody{Summary: "Answer without the required evidence."}
+	if _, err := executor.SealReturn(dispatch, missing); err == nil {
+		t.Fatal("executor accepted a return that did not satisfy the done contract")
+	}
+	complete := ReturnBody{Summary: "Answer with the required evidence.", EvidenceRefs: []string{required}}
+	envelope, err := executor.SealReturn(dispatch, complete)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := pilot.Return(envelope, complete)
+	if err != nil || receipt.State != StateCompleted || receipt.DoneContractSHA256 == "" {
+		t.Fatalf("done contract completion = %#v err=%v", receipt, err)
+	}
+}
+
 func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
