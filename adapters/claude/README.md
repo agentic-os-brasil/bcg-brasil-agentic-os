@@ -12,8 +12,8 @@ and emit metadata-only local receipts.
 
 This establishes configured wiring and local contract behavior, not native
 qualification. Evidence snapshot: `as_of: 2026-08-06` · source baseline:
-`b3d85edeac16816ccca8b69cf887a7d674786710` (`origin/main` at the snapshot;
-the documentation refresh is pending integration) · runtime evidence: no
+`43e86494b2e32ca8eccece843514b75d2c98ffa7` (`origin/main` at review start;
+candidate refresh at `012c08f`) · runtime evidence: no
 reproducible in-repo runtime-version artifact or qualifying fresh session is
 attached. This adapter is not `native-qualified`, `release-ready` or
 `pilot-ready`.

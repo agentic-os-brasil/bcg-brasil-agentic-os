@@ -10,8 +10,8 @@ the deterministic worker and repository fixtures are **local contract**
 evidence; a live `launchctl` result qualifies only the macOS scheduler. It does
 not qualify Claude/Codex lifecycle invocation or the owning Darwin runtime.
 Evidence snapshot: `as_of: 2026-08-06` · source baseline:
-`b3d85edeac16816ccca8b69cf887a7d674786710` (`origin/main` at the snapshot;
-the documentation refresh is pending integration) · live `launchctl` output:
+`43e86494b2e32ca8eccece843514b75d2c98ffa7` (`origin/main` at review start;
+candidate refresh at `012c08f`) · live `launchctl` output:
 not captured in this snapshot · release/pilot evidence: not present.
 
 The installer never uses sudo or shell interpolation and writes atomically into

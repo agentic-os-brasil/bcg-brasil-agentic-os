@@ -208,14 +208,15 @@ from lifecycle evidence alone:
   support/incident ownership and the pilot gate.
 
 **Evidence snapshot:** `as_of: 2026-08-06` · source baseline:
-`b3d85edeac16816ccca8b69cf887a7d674786710` (`origin/main`, including the
+`43e86494b2e32ca8eccece843514b75d2c98ffa7` (`origin/main` at review start,
+including the
 workspace import, migration and installer-flow changes) · local evidence:
 `go run ./dev/harness validate`, `wiki validate` and `wiki verify` pass.
-On the integration branch at `af95381`, a fresh `go run ./dev/harness
+On the candidate branch at `012c08f`, a fresh `go run ./dev/harness
 validate --full` also passed contracts, formatting, `go vet` and the complete
 offline unit-test suite. This is branch-local evidence only: the source
-baseline above remains `origin/main` while this documentation refresh is
-pending integration, and hosted CI evidence is none; the
+baseline above is the pre-merge comparison point for this documentation
+refresh, and hosted CI evidence is none; the
 repository workflows remain disabled and billing or hosted status is not
 inferred from local passes · runtime evidence: no fresh attended Claude/Codex
 native-session receipt or reproducible in-repo runtime-version artifact ·

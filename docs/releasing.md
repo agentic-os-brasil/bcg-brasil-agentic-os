@@ -202,14 +202,14 @@ No production path may convert `unavailable` into an unsigned override.
 
 ## Evidence freshness (2026-08-06)
 
-The current source baseline is `b3d85edeac16816ccca8b69cf887a7d674786710`
-(`origin/main`). The local contributor-harness and managed-wiki gates are the
+The source comparison point is `43e86494b2e32ca8eccece843514b75d2c98ffa7`
+(`origin/main` at review start). The local contributor-harness and managed-wiki gates are the
 evidence surface for this snapshot: `validate`, `wiki validate` and `wiki
-verify` pass. On the integration branch at `af95381`, a fresh
+verify` pass. On the candidate branch at `012c08f`, a fresh
 `validate --full` also passed contracts, formatting, `go vet` and the complete
 offline unit-test suite. This remains branch-local evidence only: the source
-baseline above is still `origin/main` while this documentation refresh is
-pending integration. Hosted CI is not claimed: the workflow files in this
+baseline above is the pre-merge comparison point for this documentation refresh.
+Hosted CI is not claimed: the workflow files in this
 checkout are disabled, so billing or hosted-run state cannot be inferred from
 local passes. The installer workspace-flow and import/migration tests are
 repository evidence, not fresh Claude/Codex native qualification. Windows has

@@ -51,7 +51,7 @@ generation and validation gate.
 
 The managed atlas compiler is implemented and deterministic. For the current
 source baseline (`as_of: 2026-08-06`, commit
-`b3d85edeac16816ccca8b69cf887a7d674786710`), the local harness records
+`43e86494b2e32ca8eccece843514b75d2c98ffa7`), the local harness records
 `wiki validate` and `wiki verify` as reproducible evidence. Managed content is
 locally reviewable and distributable as a bundle; private-atlas compilation,
 runtime-native navigation and pilot distribution remain separate qualification
