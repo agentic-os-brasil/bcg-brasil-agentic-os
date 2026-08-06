@@ -117,6 +117,9 @@ func TestClaudeCodeWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 	if value.Scheme != "claude" || value.Host != "code" || value.Path != "/new" || value.Query().Get("folder") != workspacePath || prompt != maestroClaudeKickoffPrompt {
 		t.Fatalf("deep link = %q", value.String())
 	}
+	if !strings.Contains(prompt, "Olá, Maestro! 🎼\n\n") || !strings.Contains(prompt, "\n\n🧭 Para começar") {
+		t.Fatalf("kickoff prompt should preserve paragraph structure: %q", prompt)
+	}
 }
 
 func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testing.T) {
