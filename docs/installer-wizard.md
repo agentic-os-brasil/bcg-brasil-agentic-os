@@ -190,7 +190,11 @@ macOS does not permit a mounted DMG to auto-execute an installer app. The DMG
 therefore remains a transport container: opening it mounts the volume, then
 the user opens **Maestro Installer.app**. A production one-click delivery
 should use a signed/notarized launcher or a signed `.pkg`, rather than relying
-on DMG autorun behavior.
+on DMG autorun behavior. The local-beta app launcher starts the local bridge
+detached, writes its bounded diagnostic log under the user's temporary
+directory and exits the short-lived Finder process immediately; this prevents
+macOS from displaying the app as “not responding” while the browser wizard
+continues to run on its loopback endpoint.
 
 ### Musical references
 

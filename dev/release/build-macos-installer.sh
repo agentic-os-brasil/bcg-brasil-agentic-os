@@ -205,11 +205,17 @@ cat > "$app/Contents/MacOS/Maestro Installer" <<EOF
 #!/bin/sh
 set -eu
 contents_dir=\$(CDPATH= cd -- "\$(dirname -- "\$0")/.." && pwd)
-exec "\$contents_dir/Resources/maestro-installer" \\
+log_root="\${TMPDIR:-/tmp}/maestro-installer"
+mkdir -p "\$log_root"
+log_file="\$log_root/installer-\$\$.log"
+nohup "\$contents_dir/Resources/maestro-installer" \\
   --wizard-dir "\$contents_dir/Resources/wizard" \\
   --release-dir "\$contents_dir/Resources/release" \\
   --authority-registry "\$contents_dir/Resources/authority-registry.json" \\
-  --bootstrapper "\$contents_dir/Resources/$bootstrap_name"
+  --bootstrapper "\$contents_dir/Resources/$bootstrap_name" \\
+  >"\$log_file" 2>&1 < /dev/null &
+printf '%s\n' "\$!" > "\$log_root/last-launch.pid"
+exit 0
 EOF
 chmod 755 "$app/Contents/MacOS/Maestro Installer"
 
