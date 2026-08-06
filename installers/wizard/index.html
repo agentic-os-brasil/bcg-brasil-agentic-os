@@ -39,6 +39,10 @@
           <span class="platform" id="platform-label">Detectando plataforma</span>
           <button class="help" type="button" data-action="help" aria-label="Ajuda">?</button>
         </header>
+        <div class="intent-strip" id="intent-strip" role="status" aria-live="polite" aria-atomic="true">
+          <span class="intent-beacon" aria-hidden="true"></span>
+          <div><span class="intent-kicker">SEU PRÓXIMO MOVIMENTO</span><b id="intent-message">Vou começar agora — estou muito empolgado. 🎼</b><small id="intent-subcopy">Escolha uma direção; o Maestro conduzirá a próxima etapa sem tocar nos seus arquivos.</small></div>
+        </div>
 
         <section class="panel panel-welcome is-visible" data-panel="welcome" aria-labelledby="welcome-title">
           <div class="hero-copy">
@@ -48,6 +52,11 @@
             <div class="hero-actions">
               <button class="primary" type="button" data-next="check"><span id="welcome-action-label">Abrir fluxo visual</span><span class="arrow">↗</span></button>
               <button class="quiet" type="button" data-action="details">Ver como funciona</button>
+            </div>
+            <div class="intent-paths" aria-label="Escolha como quer começar">
+              <button type="button" class="intent-path is-selected" data-intent="fresh"><span>🎼</span><b>Vou começar agora</b><small>estou muito empolgado</small></button>
+              <button type="button" class="intent-path" data-intent="import"><span>🧠</span><b>Já tenho um workspace</b><small>ou second brain para ingerir</small></button>
+              <button type="button" class="intent-path" data-intent="update"><span>🔄</span><b>Estou atualizando</b><small>vou direcionar onde continuar</small></button>
             </div>
             <div class="micro-proof"><span class="checkmark">✓</span> Sem administrador · seus projetos continuam onde estão</div>
           </div>
@@ -72,6 +81,10 @@
         <section class="panel panel-check" data-panel="check" aria-labelledby="check-title" hidden>
           <div class="section-heading"><span class="eyebrow">ETAPA 02 · VERIFICAÇÃO</span><h1 id="check-title" tabindex="-1">Vamos conferir<br><em>antes de tocar.</em></h1><p>O Maestro só continua quando o release, a assinatura e o destino da instalação estiverem coerentes.</p></div>
           <div class="signal-track" data-progress role="list" aria-label="Percurso da instalação"><div class="signal-step is-active" data-progress-step="verify" role="listitem"><span>01</span><b>Conferir</b><small>release e destino</small></div><div class="signal-step" data-progress-step="install" role="listitem"><span>02</span><b>Instalar</b><small>no seu perfil</small></div><div class="signal-step" data-progress-step="complete" role="listitem"><span>03</span><b>Pronto</b><small>primeiro comando</small></div></div>
+          <div class="verification-progress" id="verification-progress" role="status" aria-live="polite">
+            <div class="progress-copy"><span>PROGRESSO DA VERIFICAÇÃO</span><b id="verification-progress-label">Pronto para conferir o release</b><strong id="verification-progress-value">0%</strong></div>
+            <div class="progress-track" role="progressbar" aria-label="Progresso da verificação" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="verification-progress-bar"></span></div>
+          </div>
           <div class="check-list">
             <div class="check-item" data-check="release"><span class="check-icon">◌</span><div><b>Release autorizado</b><small>Confirmando a versão recebida</small></div><strong aria-live="polite">aguardando</strong></div>
             <div class="check-item" data-check="signature"><span class="check-icon">◌</span><div><b>Assinatura e integridade</b><small>O conteúdo não foi alterado</small></div><strong aria-live="polite">aguardando</strong></div>
@@ -85,6 +98,10 @@
         <section class="panel panel-install" data-panel="install" aria-labelledby="install-title" hidden>
           <div class="section-heading"><span class="eyebrow">ETAPA 03 · SEU ESPAÇO</span><h1 id="install-title" tabindex="-1">Preparar o palco<br><em>para o trabalho.</em></h1><p>Escolha apenas onde o Maestro deve viver. Seus arquivos e workspaces ficam separados e intocados.</p></div>
           <div class="signal-track" data-progress role="list" aria-label="Percurso da instalação"><div class="signal-step" data-progress-step="verify" role="listitem"><span>01</span><b>Conferir</b><small>release e destino</small></div><div class="signal-step is-active" data-progress-step="install" role="listitem"><span>02</span><b>Instalar</b><small>no seu perfil</small></div><div class="signal-step" data-progress-step="complete" role="listitem"><span>03</span><b>Pronto</b><small>primeiro comando</small></div></div>
+          <div class="installation-progress" id="installation-progress" role="status" aria-live="polite">
+            <div class="progress-copy"><span>PROGRESSO DA INSTALAÇÃO</span><b id="installation-progress-label">Aguardando sua confirmação</b><strong id="installation-progress-value">0%</strong></div>
+            <div class="progress-track" role="progressbar" aria-label="Progresso da instalação" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="installation-progress-bar"></span></div>
+          </div>
           <div class="destination"><label for="install-destination">Local de instalação</label><div class="path-field"><span id="install-destination">Detectando seu perfil…</span><button type="button" data-action="copy-path" aria-label="Copiar local">⧉</button></div><small>O caminho é exclusivo do seu usuário. Não altera o computador inteiro.</small></div>
           <div class="install-note"><span class="note-icon">✦</span><div><b>O que será feito</b><ul><li>validar o release uma última vez</li><li>ativar o core em uma transação atômica</li><li>manter seus dados locais fora da atualização</li></ul></div></div>
           <div class="callout runtime-error" id="runtime-error-install" role="alert" hidden><span>!</span><p></p></div><div class="runtime-statusline" id="runtime-install-status" role="status" aria-live="polite" hidden><span class="pulse"></span><p></p></div>

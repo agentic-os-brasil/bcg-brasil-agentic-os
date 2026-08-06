@@ -10,6 +10,8 @@
   const workspaceDefault = document.querySelector('#workspace-default');
   const commandHint = document.querySelector('#command-hint');
   const stageAnnouncement = document.querySelector('#stage-announcement');
+  const intentMessage = document.querySelector('#intent-message');
+  const intentSubcopy = document.querySelector('#intent-subcopy');
   const mode = document.body.dataset.mode || 'preview';
   const sessionToken = new URLSearchParams(window.location.search).get('session') || '';
   let runtime = false;
@@ -27,6 +29,7 @@
   let workspaceFlowReceipt = null;
   let workspaceFlowScene = null;
   let verificationRun = 0;
+  let selectedIntent = 'fresh';
   const platform = /Win/i.test(navigator.userAgent) ? 'Windows' : /Mac/i.test(navigator.userAgent) ? 'macOS' : 'seu dispositivo';
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -67,11 +70,18 @@
     resetChecks();
     // The API is atomic, but the UI gives each contract a visible handoff so
     // the owner can follow the verification before the next scene opens.
-    for (const name of checkNames) {
+    const labels = {
+      release: 'Conferindo release autorizado',
+      signature: 'Validando assinatura e integridade',
+      space: 'Confirmando espaço de usuário',
+    };
+    for (const [index, name] of checkNames.entries()) {
       if (run !== verificationRun) return;
       setCheckState(name, 'checking');
+      setProgressBar('verification', 12 + index * 24, labels[name]);
       await pause(340);
     }
+    setProgressBar('verification', 84, 'Aguardando confirmação do core');
   }
 
   function showError(panel, message) {
@@ -126,6 +136,36 @@
 
   function pause(milliseconds) {
     return new Promise(resolve => window.setTimeout(resolve, reducedMotion ? 0 : milliseconds));
+  }
+
+  function setIntent(intent) {
+    selectedIntent = intent || 'fresh';
+    const copy = {
+      fresh: ['Vou começar agora — estou muito empolgado. 🎼', 'Escolha uma direção; o Maestro conduzirá a próxima etapa sem tocar nos seus arquivos.'],
+      import: ['Já tenho um workspace/second brain para o Maestro ingerir. 🧠', 'Primeiro criamos o workspace do Maestro; depois você autoriza uma fonte para análise local bounded.'],
+      update: ['Estou atualizando meu Maestro — vou direcionar onde continuar. 🔄', 'A atualização preserva seu workspace e só avança depois de explicar o plano.'],
+    }[selectedIntent] || ['Vou começar agora — estou muito empolgado. 🎼', 'Escolha uma direção; o Maestro conduzirá a próxima etapa sem tocar nos seus arquivos.'];
+    if (intentMessage) intentMessage.textContent = copy[0];
+    if (intentSubcopy) intentSubcopy.textContent = copy[1];
+    document.querySelectorAll('[data-intent]').forEach(button => button.classList.toggle('is-selected', button.dataset.intent === selectedIntent));
+  }
+
+  function setProgressBar(kind, value, label) {
+    const prefix = kind === 'install' ? 'installation' : 'verification';
+    const bar = document.querySelector(`#${prefix}-progress-bar`);
+    const track = bar?.closest('[role="progressbar"]');
+    const valueNode = document.querySelector(`#${prefix}-progress-value`);
+    const labelNode = document.querySelector(`#${prefix}-progress-label`);
+    const bounded = Math.max(0, Math.min(100, Math.round(value)));
+    if (bar) bar.style.width = `${bounded}%`;
+    if (track) track.setAttribute('aria-valuenow', String(bounded));
+    if (valueNode) valueNode.textContent = `${bounded}%`;
+    if (labelNode && label) labelNode.textContent = label;
+  }
+
+  function resetProgressBars() {
+    setProgressBar('verification', 0, 'Pronto para conferir o release');
+    setProgressBar('install', 0, 'Aguardando sua confirmação');
   }
 
   function runOnboardingDemo() {
@@ -583,7 +623,8 @@
         button.className = index === 0 ? 'primary' : 'quiet runtime-secondary';
         button.dataset.action = 'launch-runtime';
         button.dataset.runtime = target.id;
-        button.innerHTML = `<span>${target.label}</span><span class="arrow">↗</span>`;
+        const label = target.id === 'claude' ? 'Abrir no Claude Code Desktop' : target.label;
+        button.innerHTML = `<span>${label}</span><span class="arrow">↗</span>`;
         actions.append(button);
       });
     }
@@ -643,7 +684,10 @@
       const heading = activePanel?.querySelector('h1');
       if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
     }
-    if (name === 'check') setProgress('verify');
+    if (name === 'check') {
+      setProgress('verify');
+      if (!verified) setProgressBar('verification', 0, 'Pronto para conferir o release');
+    }
     if (name === 'install') setProgress('install');
     if (name === 'finish') setProgress('complete');
     if (name === 'finish') {
@@ -704,11 +748,13 @@
     showError('check', '');
     showRuntimeStage('check', 'Conferindo release, assinatura e destino…');
     if (installed) {
+      setProgressBar('verification', 100, 'Maestro já está instalado neste perfil');
       show('finish');
       showStatus('Maestro já está instalado neste perfil. Nenhuma alteração foi necessária.');
       return;
     }
     if (!runtime) {
+      setProgressBar('verification', 100, 'Prévia visual concluída');
       show('install');
       showRuntimeStage('check', '');
       return;
@@ -716,6 +762,7 @@
     const button = document.querySelector('[data-action="verify"]');
     button.disabled = true;
     setButtonLabel(button, 'Conferindo…');
+    setProgressBar('verification', 8, 'Iniciando verificação local');
     try {
       const run = ++verificationRun;
       const progress = animateCheckProgress(run);
@@ -724,6 +771,7 @@
       if (!response.ok) throw new Error(payload.error || 'Não foi possível verificar este release.');
       await progress;
       markChecks(simulation ? 'simulated' : 'ready');
+      setProgressBar('verification', 100, simulation ? 'Ensaio técnico conferido' : 'Release conferido com sucesso');
       verified = true;
       planDigest = payload.plan_digest || '';
       setProgress('install');
@@ -731,6 +779,7 @@
     } catch (error) {
       verificationRun += 1;
       markChecks('error');
+      setProgressBar('verification', 0, 'Verificação interrompida — veja o motivo abaixo');
       showError('check', error.message);
     } finally {
       showRuntimeStage('check', '');
@@ -743,11 +792,13 @@
     showError('install', '');
     showRuntimeStage('install', 'Preparando a instalação no seu perfil…');
     if (installed) {
+      setProgressBar('install', 100, 'Maestro já está instalado neste perfil');
       show('finish');
       showStatus('Maestro já está instalado neste perfil. Nenhuma alteração foi necessária.');
       return;
     }
     if (!runtime) {
+      setProgressBar('install', 100, 'Prévia visual concluída');
       show('finish');
       showRuntimeStage('install', '');
       return;
@@ -760,12 +811,16 @@
     const button = document.querySelector('[data-action="install"]');
     button.disabled = true;
     setButtonLabel(button, 'Instalando…');
+	setProgressBar('install', 12, 'Preparando o destino no seu perfil');
 	  document.body.classList.add('is-installing');
     try {
+	  setProgressBar('install', 38, 'Ativando o core em uma transação atômica');
       const response = await fetch('/api/install', requestOptions('POST', { plan_digest: planDigest }));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'A instalação foi interrompida com segurança.');
+	  setProgressBar('install', 86, 'Conferindo receipt da instalação');
       setProgress('complete');
+      setProgressBar('install', 100, simulation ? 'Ensaio concluído com segurança' : 'Instalação concluída no seu perfil');
       show('finish');
       if (simulation) setSimulationCommandHint();
       else setFirstCommand(payload.cli_path);
@@ -773,6 +828,7 @@
         ? `Ensaio concluído. Sandbox de dados: ${payload.data_root}`
         : `Instalação concluída. Dados do usuário: ${payload.data_root}`);
     } catch (error) {
+      setProgressBar('install', 0, 'Instalação interrompida — nada foi marcado como pronto');
       showError('install', error.message);
     } finally {
       showRuntimeStage('install', '');
@@ -901,6 +957,11 @@
     const next = event.target.closest('[data-next]');
     const previous = event.target.closest('[data-prev]');
     const action = event.target.closest('[data-action]')?.dataset.action;
+    const intent = event.target.closest('[data-intent]')?.dataset.intent;
+    if (intent) {
+      setIntent(intent);
+      return;
+    }
     if (next) {
       if (installed) {
         show('finish');
@@ -934,6 +995,8 @@
   });
 
   renderRuntimeTargets();
+  resetProgressBars();
+  setIntent('fresh');
   discoverRuntime();
   alignActiveScene(document.querySelector('[data-panel].is-visible'));
 })();
