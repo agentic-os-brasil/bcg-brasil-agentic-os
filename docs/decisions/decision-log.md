@@ -841,4 +841,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Decision: Create one optional `tech-core` bundle, depending on `base`, containing the six requested quality skills (`coverage-diagnose`, `decision-log-entry`, `pr-quality-loop`, `pr-review`, `unit-test-wave` and `xfail-bug-capture`), the existing engineering delivery skills and the existing data-practice skills. The base bundle remains professional/consulting-focused; confirmed technical tracks activate the complete Tech Core catalog without granting tools or authority.
 - Consequences: `bcgos bundles plan` resolves one technical dependency for software-engineering, technical-explorer, data-engineering and data-science. Gamma quality methods are unavailable in a base-only profile and become direct methods only after Tech Core selection. Release allowlists, embedded catalogs, projection code, policies, tests and documentation must use the new canonical bundle identity.
 - Refs: specs/035-professional-capability-bundles.md; specs/036-base-engineering-quality.md; bundles/catalog/catalog.json; bundles/tech-core/skills/catalog.json
+
+## WIMP - Make external workspace import transactional and metadata-safe
+
+- Date: 2026-08-05
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: External workspace sources can contain native Maestro state, legacy Maestro material, Kowalski artifacts, unrelated files and unsupported formats. A declarative intake list is not sufficient to prevent symlink escapes, accidental document ingestion, partial publication or replayed approvals.
+- Decision: Add a separate Workspace Import Core with bounded read-only inspection, explicit source classification, metadata-only inventory, immutable digest-bound origin-to-destination plans, explicit approval and a staged execution transaction. Execution never mutates the source, refuses native workspace migration, quarantines unsupported or unavailable entries, writes metadata-only receipts, is idempotent for the same plan digest, and preserves a rollback receipt and last-known-good destination state. Document conversion remains owned by the existing ingestion contract and unavailable runtime packs stay unavailable.
+- Consequences: Maestro and legacy workspace migration can be rehearsed and executed only through a closed, reviewable plan. Symlinks, path escapes, conflicts, exclusions, unsupported formats and unavailable Docling/MarkItDown routes remain visible rather than silently imported. The implementation proves local contract behavior with synthetic fixtures only; native runtime qualification, signed external collectors and production policy remain separate gates.
+- Refs: specs/002-data-boundaries.md; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md; specs/045-workspace-import-core.md; internal/workspaceimport; schemas/workspace-import-*.schema.json
 - Supersedes: none

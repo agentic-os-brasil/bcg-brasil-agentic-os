@@ -273,6 +273,66 @@ func TestIngestReportsUnavailableWithoutVerifiedRuntimePack(t *testing.T) {
 	}
 }
 
+func TestWorkspaceImportCLIRequiresApprovalAndExecutesSyntheticPlanTransactionally(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "external")
+	destination := filepath.Join(root, "maestro")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(source, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "notes.md"), []byte("synthetic workspace note"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "brief.docx"), []byte("synthetic document"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	planPath := filepath.Join(root, "plan.json")
+	approvalPath := filepath.Join(root, "approval.json")
+	var output bytes.Buffer
+	data := func() (string, error) { return dataRoot, nil }
+	if code := runWorkspaceImport([]string{"import", "inspect", "--source", source}, &output, &output, data); code != ExitOK || !strings.Contains(output.String(), `"read_only": true`) {
+		t.Fatalf("inspect exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWorkspaceImport([]string{"import", "plan", "--source", source, "--destination", destination, "--out", planPath}, &output, &output, data); code != ExitOK || !strings.Contains(output.String(), `"plan_digest"`) {
+		t.Fatalf("plan exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWorkspaceImport([]string{"import", "approve", "--plan", planPath, "--approval", filepath.Join(root, "unused.json"), "--approved-by", "synthetic-owner", "--confirm", "NOPE"}, &output, &output, data); code == ExitOK {
+		t.Fatal("approval without exact confirmation succeeded")
+	}
+	output.Reset()
+	if code := runWorkspaceImport([]string{"import", "approve", "--plan", planPath, "--out", approvalPath, "--approved-by", "synthetic-owner", "--confirm", "IMPORT"}, &output, &output, data); code != ExitOK {
+		t.Fatalf("approval exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWorkspaceImport([]string{"import", "execute", "--plan", planPath, "--approval", approvalPath}, &output, &output, data); code != ExitOK || !strings.Contains(output.String(), `"state": "executed"`) || !strings.Contains(output.String(), `"quarantined"`) {
+		t.Fatalf("execute exit = %d, output = %s", code, output.String())
+	}
+	if body, err := os.ReadFile(filepath.Join(destination, "notes.md")); err != nil || string(body) != "synthetic workspace note" {
+		t.Fatalf("copied note = %q, err=%v", body, err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "brief.docx")); !os.IsNotExist(err) {
+		t.Fatalf("document was copied outside quarantine: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(dataRoot, "workspace-import", "receipts"))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("receipts = %#v, err=%v", entries, err)
+	}
+	receiptPath := filepath.Join(dataRoot, "workspace-import", "receipts", entries[0].Name())
+	output.Reset()
+	if code := runWorkspaceImport([]string{"import", "rollback", "--plan", planPath, "--receipt", receiptPath, "--confirm", "ROLLBACK"}, &output, &output, data); code != ExitOK || !strings.Contains(output.String(), `"state": "rolled_back"`) {
+		t.Fatalf("rollback exit = %d, output = %s", code, output.String())
+	}
+	if _, err := os.Stat(filepath.Join(destination, "notes.md")); !os.IsNotExist(err) {
+		t.Fatalf("rollback left note: %v", err)
+	}
+}
+
 func TestPrivateReleaseCommandsFailClosedWithoutApprovedSecureStore(t *testing.T) {
 	tests := map[string][]string{
 		"auth status":    {"auth", "status"},

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:workspace-import-plan:v1",
+  "title": "Maestro immutable workspace import plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "origin", "destination", "classification", "classification_reason", "created_at", "entries", "plan_digest", "state", "limits"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "plan_id": {"type": "string", "pattern": "^wimp-[a-f0-9]{16}$"},
+    "origin": {"type": "string", "minLength": 1},
+    "destination": {"type": "string", "minLength": 1},
+    "classification": {"enum": ["maestro_native", "maestro_legacy", "kowalski", "foreign", "unsupported"]},
+    "classification_reason": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}},
+    "exclusions": {"type": "array", "items": {"$ref": "#/$defs/reason"}},
+    "conflicts": {"type": "array", "items": {"$ref": "#/$defs/reason"}},
+    "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "state": {"enum": ["planned", "approved", "executed", "rolled_back"]},
+    "limits": {"$ref": "workspace-import-inspection.schema.json#/$defs/limits"}
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_path", "destination_path", "action", "availability"],
+      "properties": {
+        "source_path": {"type": "string", "pattern": "^(?!/)(?!.*(^|/)\.\.(?:/|$)).+$"},
+        "destination_path": {"type": "string", "pattern": "^(?!/)(?!.*(^|/)\.\.(?:/|$)).+$"},
+        "action": {"enum": ["copy", "quarantine", "exclude"]},
+        "availability": {"enum": ["available", "unavailable", "unsupported"]},
+        "reason": {"type": "string", "minLength": 1},
+        "size": {"type": "integer", "minimum": 0},
+        "mode": {"type": "integer", "minimum": 0},
+        "modified_unix": {"type": "integer"}
+      }
+    },
+    "reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "reason"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "reason": {"type": "string", "minLength": 1}}
+    }
+  }
+}

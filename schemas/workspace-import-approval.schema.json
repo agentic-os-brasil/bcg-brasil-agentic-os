@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:workspace-import-approval:v1",
+  "title": "Maestro workspace import explicit approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "plan_digest", "approved_by", "approved_at", "confirmation"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "plan_id": {"type": "string", "pattern": "^wimp-[a-f0-9]{16}$"},
+    "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "approved_by": {"type": "string", "minLength": 1},
+    "approved_at": {"type": "string", "format": "date-time"},
+    "confirmation": {"const": "IMPORT"}
+  }
+}

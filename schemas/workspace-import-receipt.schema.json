@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:workspace-import-receipt:v1",
+  "title": "Maestro workspace import metadata-only execution receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "plan_id", "plan_digest", "state", "recorded_at"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "pattern": "^run-[a-f0-9]{16}$"},
+    "plan_id": {"type": "string", "pattern": "^wimp-[a-f0-9]{16}$"},
+    "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "state": {"enum": ["staging", "executed", "rolled_back", "failed"]},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "copied": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "quarantined": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "excluded": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "rollback_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "error": {"type": "string", "minLength": 1}
+  }
+}

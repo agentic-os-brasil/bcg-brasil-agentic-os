@@ -93,12 +93,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
@@ -123,6 +123,8 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runAgentWithInput(args[1:], in, out, errOut, defaultDataRoot)
 	case "workspace-agent":
 		return runWorkspaceAgentWithInput(args[1:], in, out, errOut, defaultDataRoot)
+	case "workspace":
+		return runWorkspaceImport(args[1:], out, errOut, defaultDataRoot)
 	case "atlas":
 		return runAtlas(args[1:], out, errOut, defaultDataRoot)
 	case "prior-work":

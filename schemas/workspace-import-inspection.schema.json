@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:workspace-import-inspection:v1",
+  "title": "Maestro workspace import metadata-only inspection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "state", "classification", "classification_reason", "entry_count", "file_count", "directory_count", "symlink_count", "total_bytes", "entries", "limits", "read_only", "bounded"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "state": {"enum": ["ready", "blocked", "bounded", "unsupported"]},
+    "classification": {"enum": ["maestro_native", "maestro_legacy", "kowalski", "foreign", "unsupported"]},
+    "classification_reason": {"type": "string", "minLength": 1},
+    "entry_count": {"type": "integer", "minimum": 0},
+    "file_count": {"type": "integer", "minimum": 0},
+    "directory_count": {"type": "integer", "minimum": 0},
+    "symlink_count": {"type": "integer", "minimum": 0},
+    "total_bytes": {"type": "integer", "minimum": 0},
+    "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}},
+    "warnings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "limits": {"$ref": "#/$defs/limits"},
+    "read_only": {"const": true},
+    "bounded": {"const": true}
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(^|/)\.\.(?:/|$)).+$"},
+        "kind": {"enum": ["file", "directory", "symlink", "unsupported"]},
+        "size": {"type": "integer", "minimum": 0},
+        "mode": {"type": "integer", "minimum": 0},
+        "modified_unix": {"type": "integer"},
+        "unsafe": {"const": true}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_entries", "max_depth", "max_file_bytes", "max_total_bytes"],
+      "properties": {
+        "max_entries": {"type": "integer", "minimum": 1},
+        "max_depth": {"type": "integer", "minimum": 1},
+        "max_file_bytes": {"type": "integer", "minimum": 1},
+        "max_total_bytes": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}
