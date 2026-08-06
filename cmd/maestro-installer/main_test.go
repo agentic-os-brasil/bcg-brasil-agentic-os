@@ -102,8 +102,12 @@ func TestCodexWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.Scheme != "codex" || value.Host != "new" || value.Query().Get("path") != workspacePath || value.Query().Get("prompt") != maestroCodexKickoffPrompt {
+	prompt := value.Query().Get("prompt")
+	if value.Scheme != "codex" || value.Host != "new" || value.Query().Get("path") != workspacePath || prompt != maestroCodexKickoffPrompt {
 		t.Fatalf("deep link = %q", value.String())
+	}
+	if !strings.Contains(prompt, "Olá, Maestro! 🎼\n\n") || !strings.Contains(prompt, "\n\n🧭 Para começar") {
+		t.Fatalf("kickoff prompt should preserve paragraph structure: %q", prompt)
 	}
 }
 
@@ -116,6 +120,9 @@ func TestClaudeCodeWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 	prompt := value.Query().Get("q")
 	if value.Scheme != "claude" || value.Host != "code" || value.Path != "/new" || value.Query().Get("folder") != workspacePath || prompt != maestroClaudeKickoffPrompt {
 		t.Fatalf("deep link = %q", value.String())
+	}
+	if !strings.Contains(prompt, "Olá, Maestro! 🎼\n\n") || !strings.Contains(prompt, "\n\n🧭 Para começar") {
+		t.Fatalf("kickoff prompt should preserve paragraph structure: %q", prompt)
 	}
 }
 
