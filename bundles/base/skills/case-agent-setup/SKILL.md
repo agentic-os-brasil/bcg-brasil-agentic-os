@@ -12,8 +12,8 @@ borrow context from another case or from the Client Account Agent.
 ## Command surface
 
 `$case-agent-setup` is the canonical user-facing skill. The current CLI still
-exposes the legacy `bcgos workspace-agent` command as a compatibility surface
-for this same `case_agent` role. Do not present `workspace-agent` as a current
+exposes the legacy `bcgos workspace-agent` command as the **compatibility CLI
+for canonical `case_agent`**. Do not present `workspace-agent` as a current
 agent type, and do not claim a `bcgos case-agent` executable until a runtime
 adapter implements it. If the required adapter or guard is absent, report the
 capability as `unavailable`.
@@ -25,6 +25,10 @@ much technical detail is shown during setup, but never changes approval,
 classification, provenance or case isolation requirements.
 
 ## First useful result
+
+Every `bcgos workspace-agent ...` invocation in this section is the
+**compatibility CLI for canonical `case_agent`**; it is not a second agent
+identity.
 
 1. Resolve the active case workspace with `bcgos status`. Stop if it is missing,
    ambiguous or different from the workspace shown to the user.
@@ -58,6 +62,10 @@ brief is not a connection or collection grant. External research and source
 processing remain separate approved flows below.
 
 ## Optional public research
+
+Every `bcgos workspace-agent ...` invocation in this section is the
+**compatibility CLI for canonical `case_agent`**; it is not a second agent
+identity.
 1. Propose a minimized public research plan. Use only hostname allowlist entries
    and never include confidential project names, stakeholder names, unpublished
    strategy or client-provided facts in query themes.

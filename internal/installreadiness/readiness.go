@@ -67,9 +67,11 @@ type Report struct {
 }
 
 type Check struct {
-	ID      string `json:"id"`
-	State   string `json:"state"`
-	Message string `json:"message"`
+	ID                    string `json:"id"`
+	State                 string `json:"state"`
+	Message               string `json:"message"`
+	CanonicalRole         string `json:"canonical_role,omitempty"`
+	IdentityCompatibility string `json:"identity_compatibility,omitempty"`
 }
 
 type LifecycleBinding struct {
@@ -222,20 +224,36 @@ func Verify(options Options) (Report, error) {
 	workspaceAgent, err := workspaceagent.Inspect(dataRoot, inspection.WorkspaceID)
 	if err != nil || !workspaceAgent.Initialized {
 		if err == nil {
-			err = errors.New("workspace agent is not initialized")
+			err = errors.New("Case Agent is not initialized")
 		}
-		return fail("workspace_agent", err)
+		return fail("case_agent", err)
 	}
-	pass("workspace_agent", "workspace agent state and dossier are initialized")
-	agentID := agentscaffold.WorkspaceRequest(inspection.WorkspaceID).AgentID
+	passRole := func(id, message, canonicalRole, compatibility string) {
+		report.Checks = append(report.Checks, Check{ID: id, State: "pass", Message: message, CanonicalRole: canonicalRole, IdentityCompatibility: compatibility})
+	}
+	passRole("case_agent", "canonical Case Agent state and dossier are initialized", "case_agent", "")
+	canonicalAgentID := "case-agent-" + inspection.WorkspaceID
+	agentID := canonicalAgentID
+	identityCompatibility := ""
 	agentStub, err := agentscaffold.Inspect(dataRoot, agentID)
+	if errors.Is(err, os.ErrNotExist) {
+		// Existing installations may still carry the retired workspace-agent ID.
+		// It remains accepted only as an explicit migration compatibility identity.
+		agentID = agentscaffold.WorkspaceRequest(inspection.WorkspaceID).AgentID
+		identityCompatibility = "migration_compatibility"
+		agentStub, err = agentscaffold.Inspect(dataRoot, agentID)
+	}
 	if err != nil || !agentStub.Initialized {
 		if err == nil {
-			err = errors.New("workspace agent scaffold is not initialized")
+			err = errors.New("Case Agent scaffold is not initialized")
 		}
 		return fail("agent_scaffold", err)
 	}
-	pass("agent_scaffold", "signed workspace-agent scaffold is initialized")
+	message := "signed canonical Case Agent scaffold is initialized"
+	if identityCompatibility != "" {
+		message += "; legacy workspace-agent ID " + agentID + " is retained for migration compatibility"
+	}
+	passRole("agent_scaffold", message, "case_agent", identityCompatibility)
 
 	if err := verifyProjection(runtimeName, workspacePath, options.CapabilityTracks); err != nil {
 		return fail("runtime_projection", err)

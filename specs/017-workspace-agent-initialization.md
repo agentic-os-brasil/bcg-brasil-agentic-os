@@ -121,8 +121,8 @@ findings flow upward automatically.
 
 `bcgos init` creates the compact Case Agent control plane and atomically
 materializes its governed local stub from the managed `case_agent` template.
-The current CLI retains the `workspace-agent` command as a compatibility
-surface and supports:
+The current CLI retains the `workspace-agent` command as the compatibility CLI
+for canonical `case_agent` and supports:
 
 ```text
 bcgos workspace-agent interview [workspace-path]

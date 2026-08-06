@@ -1385,14 +1385,14 @@ func runtimeDependencyCheck(root string, inspection workspace.Inspection) (docto
 	workspaceAgent, err := workspaceagent.Inspect(root, inspection.WorkspaceID)
 	if err != nil || !workspaceAgent.Initialized {
 		if err == nil {
-			err = errors.New("workspace agent is not initialized")
+			err = errors.New("Case Agent is not initialized")
 		}
-		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to create the workspace agent."
+		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to create the canonical Case Agent."
 	}
 	status, err := agentscaffold.Inspect(root, agentscaffold.WorkspaceRequest(inspection.WorkspaceID).AgentID)
 	if err != nil || !status.Initialized {
 		if err == nil {
-			err = errors.New("workspace agent scaffold is not initialized")
+			err = errors.New("Case Agent scaffold is not initialized")
 		}
 		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to create the agent scaffold."
 	}
@@ -3338,7 +3338,7 @@ func bootstrapAdapterDependencies(root, workspacePath string) error {
 		return fmt.Errorf("bootstrap owner context: %w", err)
 	}
 	if _, err := workspaceagent.Initialize(root, result.WorkspaceID); err != nil {
-		return fmt.Errorf("bootstrap workspace agent: %w", err)
+		return fmt.Errorf("bootstrap canonical Case Agent (legacy workspace-agent compatibility CLI): %w", err)
 	}
 	if _, err := agentscaffold.Scaffold(root, agentscaffold.WorkspaceRequest(result.WorkspaceID)); err != nil {
 		return fmt.Errorf("bootstrap agent scaffold: %w", err)
