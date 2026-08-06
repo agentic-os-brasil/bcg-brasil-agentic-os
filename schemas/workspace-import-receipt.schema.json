@@ -16,6 +16,10 @@
     "quarantined": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "excluded": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "rollback_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "rollback_digests": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    },
     "error": {"type": "string", "minLength": 1}
   }
 }

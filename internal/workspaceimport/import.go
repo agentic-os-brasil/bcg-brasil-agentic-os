@@ -103,6 +103,7 @@ type PlanEntry struct {
 	Size            int64  `json:"size,omitempty"`
 	Mode            uint32 `json:"mode,omitempty"`
 	ModifiedUnix    int64  `json:"modified_unix,omitempty"`
+	ContentDigest   string `json:"content_digest"`
 }
 
 type Plan struct {
@@ -131,17 +132,18 @@ type Approval struct {
 }
 
 type Receipt struct {
-	SchemaVersion int      `json:"schema_version"`
-	RunID         string   `json:"run_id"`
-	PlanID        string   `json:"plan_id"`
-	PlanDigest    string   `json:"plan_digest"`
-	State         string   `json:"state"`
-	RecordedAt    string   `json:"recorded_at"`
-	Copied        []string `json:"copied,omitempty"`
-	Quarantined   []string `json:"quarantined,omitempty"`
-	Excluded      []string `json:"excluded,omitempty"`
-	RollbackPaths []string `json:"rollback_paths,omitempty"`
-	Error         string   `json:"error,omitempty"`
+	SchemaVersion   int               `json:"schema_version"`
+	RunID           string            `json:"run_id"`
+	PlanID          string            `json:"plan_id"`
+	PlanDigest      string            `json:"plan_digest"`
+	State           string            `json:"state"`
+	RecordedAt      string            `json:"recorded_at"`
+	Copied          []string          `json:"copied,omitempty"`
+	Quarantined     []string          `json:"quarantined,omitempty"`
+	Excluded        []string          `json:"excluded,omitempty"`
+	RollbackPaths   []string          `json:"rollback_paths,omitempty"`
+	RollbackDigests map[string]string `json:"rollback_digests,omitempty"`
+	Error           string            `json:"error,omitempty"`
 }
 
 func normalizeLimits(limits Limits) (Limits, error) {
@@ -369,8 +371,9 @@ func migratableText(path string) bool {
 	return false
 }
 
-// BuildPlan derives an immutable plan from a bounded inspection. It does not
-// read source file bodies, create destination directories, or change either
+// BuildPlan derives an immutable plan from a bounded inspection. It hashes
+// each allowlisted source file so execution can fail closed if content changes
+// after approval. It does not create destination directories or change either
 // tree.
 func BuildPlan(source, destination string, limits Limits) (Plan, error) {
 	limits, err := normalizeLimits(limits)
@@ -430,7 +433,11 @@ func BuildPlan(source, destination string, limits Limits) (Plan, error) {
 			plan.Conflicts = append(plan.Conflicts, Conflict{Path: destRel, Reason: "destination path cannot be inspected"})
 			continue
 		}
-		entry := PlanEntry{SourcePath: item.RelativePath, DestinationPath: destRel, Size: item.Size, Mode: item.Mode, ModifiedUnix: item.ModifiedUnix, Action: ActionCopy, Availability: "available"}
+		contentDigest, digestErr := digestSourceFile(origin, item.RelativePath, item.Size, item.ModifiedUnix, limits.MaxFileBytes)
+		if digestErr != nil {
+			return Plan{}, fmt.Errorf("digest source %s: %w", item.RelativePath, digestErr)
+		}
+		entry := PlanEntry{SourcePath: item.RelativePath, DestinationPath: destRel, Size: item.Size, Mode: item.Mode, ModifiedUnix: item.ModifiedUnix, Action: ActionCopy, Availability: "available", ContentDigest: contentDigest}
 		if documentExtension(item.RelativePath) {
 			entry.Action, entry.Availability, entry.Reason = ActionQuarantine, "unavailable", "document conversion runtime is unavailable; migration does not ingest documents"
 		} else if !migratableText(item.RelativePath) {
@@ -477,6 +484,11 @@ func ValidatePlan(plan Plan) error {
 	}
 	if len(plan.Conflicts) > 0 {
 		return errors.New("workspace import plan has unresolved conflicts")
+	}
+	for _, entry := range plan.Entries {
+		if entry.Action != ActionExclude && !isSHA256(entry.ContentDigest) {
+			return fmt.Errorf("workspace import entry %s has no valid content digest", entry.SourcePath)
+		}
 	}
 	return nil
 }
@@ -581,13 +593,57 @@ func SaveApproval(path string, approval Approval) error {
 	return writeJSONAtomic(path, approval)
 }
 
-func copyBounded(source, destination string, expectedSize, expectedModified, maxBytes int64) error {
-	info, err := os.Lstat(source)
+func isSHA256(value string) bool {
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func digestSourceFile(root, relative string, expectedSize, expectedModified, maxBytes int64) (string, error) {
+	file, err := openSourceFileSecure(root, relative)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	if info.Size() != expectedSize || info.ModTime().UnixNano() != expectedModified {
+		return "", errors.New("source metadata changed while planning")
+	}
+	if info.Size() > maxBytes {
+		return "", errors.New("source file exceeds import limit")
+	}
+	hasher := sha256.New()
+	written, err := io.Copy(hasher, io.LimitReader(file, maxBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if written != expectedSize {
+		return "", errors.New("source changed while hashing")
+	}
+	finalInfo, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	if finalInfo.Size() != expectedSize || finalInfo.ModTime().UnixNano() != expectedModified {
+		return "", errors.New("source metadata changed while hashing")
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func copyBounded(sourceRoot, sourceRelative, destination string, expectedSize, expectedModified, maxBytes int64, expectedDigest string) error {
+	in, err := openSourceFileSecure(sourceRoot, sourceRelative)
 	if err != nil {
 		return err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return errors.New("source changed to an unsafe filesystem entry")
+	defer in.Close()
+	info, err := in.Stat()
+	if err != nil {
+		return err
 	}
 	if info.Size() != expectedSize || info.ModTime().UnixNano() != expectedModified {
 		return errors.New("source metadata changed after planning")
@@ -595,17 +651,13 @@ func copyBounded(source, destination string, expectedSize, expectedModified, max
 	if expectedSize > maxBytes {
 		return errors.New("source file exceeds import limit")
 	}
-	in, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
 	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
-	written, err := io.CopyN(out, in, maxBytes+1)
+	hasher := sha256.New()
+	written, err := io.Copy(out, io.LimitReader(io.TeeReader(in, hasher), maxBytes+1))
 	if err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
@@ -614,6 +666,16 @@ func copyBounded(source, destination string, expectedSize, expectedModified, max
 	}
 	if written != expectedSize {
 		return errors.New("source changed while staging")
+	}
+	if hex.EncodeToString(hasher.Sum(nil)) != expectedDigest {
+		return errors.New("source content changed after planning")
+	}
+	finalInfo, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	if finalInfo.Size() != expectedSize || finalInfo.ModTime().UnixNano() != expectedModified {
+		return errors.New("source metadata changed while staging")
 	}
 	return out.Sync()
 }
@@ -674,8 +736,46 @@ func ensureParent(root, path string) error {
 	return nil
 }
 
+type committedImport struct {
+	root   string
+	rel    string
+	digest string
+}
+
+func digestDestinationFile(root, relative string, maxBytes int64) (string, error) {
+	file, err := openSourceFileSecure(root, relative)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hasher := sha256.New()
+	written, err := io.Copy(hasher, io.LimitReader(file, maxBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if written > maxBytes {
+		return "", errors.New("destination file exceeds import limit")
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func removeCreatedExpected(root, relative, expectedDigest string, maxBytes int64) error {
+	actual, err := digestDestinationFile(root, relative, maxBytes)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if actual != expectedDigest {
+		return errors.New("refusing rollback: destination changed after execution")
+	}
+	return removeSourceFileSecure(root, relative)
+}
+
 // Execute applies an approved plan through a private staging directory. A
-// repeated execution of the same plan returns the existing receipt.
+// repeated execution of the same plan returns the existing receipt. Every
+// post-staging failure is recorded before the transaction is cleaned up.
 func Execute(dataRoot string, plan Plan, approval Approval) (Receipt, error) {
 	if err := ValidateApproval(plan, approval); err != nil {
 		return Receipt{}, err
@@ -687,7 +787,9 @@ func Execute(dataRoot string, plan Plan, approval Approval) (Receipt, error) {
 	runID := "run-" + plan.PlanDigest[:16]
 	receiptPath := filepath.Join(root, "workspace-import", "receipts", runID+".json")
 	if existing, readErr := ReadReceipt(receiptPath); readErr == nil {
-		return existing, nil
+		if existing.State == PlanStateExecuted || existing.State == PlanStateRolledBack {
+			return existing, nil
+		}
 	}
 	if _, err := cleanDirectory(plan.Origin, "source", true); err != nil {
 		return Receipt{}, err
@@ -695,89 +797,113 @@ func Execute(dataRoot string, plan Plan, approval Approval) (Receipt, error) {
 	if _, err := cleanDirectory(plan.Destination, "destination", true); err != nil {
 		return Receipt{}, err
 	}
-	receipt := Receipt{SchemaVersion: SchemaVersion, RunID: runID, PlanID: plan.PlanID, PlanDigest: plan.PlanDigest, State: "staging", RecordedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	receipt := Receipt{SchemaVersion: SchemaVersion, RunID: runID, PlanID: plan.PlanID, PlanDigest: plan.PlanDigest, State: "staging", RecordedAt: time.Now().UTC().Format(time.RFC3339Nano), RollbackDigests: map[string]string{}}
 	stageRoot := filepath.Join(root, "workspace-import", "staging", runID)
+	if err := writeJSONAtomic(receiptPath, receipt); err != nil {
+		return receipt, err
+	}
 	if err := os.MkdirAll(stageRoot, 0o700); err != nil {
-		return Receipt{}, err
+		receipt.State, receipt.Error = "failed", err.Error()
+		_ = writeJSONAtomic(receiptPath, receipt)
+		return receipt, err
 	}
 	cleanupStage := true
-	committed := []string{}
-	succeeded := false
+	committed := []committedImport{}
 	defer func() {
 		if cleanupStage {
 			_ = safeRemove(stageRoot)
 		}
-		if !succeeded {
-			for index := len(committed) - 1; index >= 0; index-- {
-				_ = removeCreated(committed[index])
+	}()
+	abort := func(cause error) (Receipt, error) {
+		cleanupErrors := []error{}
+		for index := len(committed) - 1; index >= 0; index-- {
+			item := committed[index]
+			if err := removeCreatedExpected(item.root, item.rel, item.digest, plan.Limits.MaxFileBytes); err != nil {
+				cleanupErrors = append(cleanupErrors, err)
 			}
 		}
-	}()
+		receipt.State, receipt.Error = "failed", cause.Error()
+		if len(cleanupErrors) > 0 {
+			receipt.Error = errors.Join(cause, errors.Join(cleanupErrors...)).Error()
+		}
+		receipt.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		if persistErr := writeJSONAtomic(receiptPath, receipt); persistErr != nil {
+			return receipt, errors.Join(cause, persistErr)
+		}
+		return receipt, cause
+	}
 	for _, entry := range plan.Entries {
-		source, err := pathSafe(plan.Origin, entry.SourcePath)
+		_, err := pathSafe(plan.Origin, entry.SourcePath)
 		if err != nil {
-			receipt.State, receipt.Error = "failed", err.Error()
-			return receipt, err
+			return abort(err)
 		}
 		stage, err := pathSafe(stageRoot, entry.DestinationPath)
 		if err != nil {
-			receipt.State, receipt.Error = "failed", err.Error()
-			return receipt, err
+			return abort(err)
 		}
 		if entry.Action == ActionExclude {
 			receipt.Excluded = append(receipt.Excluded, entry.SourcePath)
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(stage), 0o700); err != nil {
-			receipt.State, receipt.Error = "failed", err.Error()
-			return receipt, err
+			return abort(err)
 		}
-		if err := copyBounded(source, stage, entry.Size, entry.ModifiedUnix, plan.Limits.MaxFileBytes); err != nil {
-			receipt.State, receipt.Error = "failed", err.Error()
-			return receipt, err
+		if err := copyBounded(plan.Origin, entry.SourcePath, stage, entry.Size, entry.ModifiedUnix, plan.Limits.MaxFileBytes, entry.ContentDigest); err != nil {
+			return abort(err)
 		}
 		if entry.Action == ActionQuarantine {
 			receipt.Quarantined = append(receipt.Quarantined, entry.SourcePath)
 		} else {
 			receipt.Copied = append(receipt.Copied, entry.SourcePath)
 		}
+		if err := writeJSONAtomic(receiptPath, receipt); err != nil {
+			return abort(err)
+		}
 	}
 	for _, entry := range plan.Entries {
 		if entry.Action == ActionExclude {
 			continue
 		}
-		stage, _ := pathSafe(stageRoot, entry.DestinationPath)
-		destination, _ := pathSafe(plan.Destination, entry.DestinationPath)
+		stage, err := pathSafe(stageRoot, entry.DestinationPath)
+		if err != nil {
+			return abort(err)
+		}
+		destination, err := pathSafe(plan.Destination, entry.DestinationPath)
+		if err != nil {
+			return abort(err)
+		}
 		if entry.Action == ActionQuarantine {
-			destination, _ = pathSafe(plan.Destination, filepath.ToSlash(filepath.Join(".bcgos", "import-quarantine", runID, entry.DestinationPath)))
+			destination, err = pathSafe(plan.Destination, filepath.ToSlash(filepath.Join(".bcgos", "import-quarantine", runID, entry.DestinationPath)))
+			if err != nil {
+				return abort(err)
+			}
 		}
 		if _, err := os.Lstat(destination); err == nil {
-			receipt.State, receipt.Error = "failed", "destination changed after approval"
-			return receipt, errors.New(receipt.Error)
+			return abort(errors.New("destination changed after approval"))
 		} else if !errors.Is(err, os.ErrNotExist) {
-			receipt.State, receipt.Error = "failed", err.Error()
-			return receipt, err
+			return abort(err)
 		}
 		if err := ensureParent(plan.Destination, filepath.Dir(destination)); err != nil {
-			receipt.State, receipt.Error = "failed", err.Error()
-			return receipt, err
+			return abort(err)
 		}
 		if err := os.Rename(stage, destination); err != nil {
-			receipt.State, receipt.Error = "failed", err.Error()
-			return receipt, err
+			return abort(err)
 		}
-		committed = append(committed, destination)
 		rollbackPath := entry.DestinationPath
 		if entry.Action == ActionQuarantine {
 			rollbackPath = filepath.ToSlash(filepath.Join(".bcgos", "import-quarantine", runID, entry.DestinationPath))
 		}
+		committed = append(committed, committedImport{root: plan.Destination, rel: rollbackPath, digest: entry.ContentDigest})
 		receipt.RollbackPaths = append(receipt.RollbackPaths, rollbackPath)
+		receipt.RollbackDigests[rollbackPath] = entry.ContentDigest
+		if err := writeJSONAtomic(receiptPath, receipt); err != nil {
+			return abort(err)
+		}
 	}
 	receipt.State = "executed"
 	if err := writeJSONAtomic(receiptPath, receipt); err != nil {
-		return receipt, err
+		return abort(err)
 	}
-	succeeded = true
 	return receipt, nil
 }
 
@@ -800,11 +926,11 @@ func Rollback(dataRoot string, plan Plan, receipt Receipt, confirmation string) 
 		return Receipt{}, err
 	}
 	for _, relative := range receipt.RollbackPaths {
-		target, err := pathSafe(plan.Destination, relative)
-		if err != nil {
-			return Receipt{}, err
+		digest := receipt.RollbackDigests[relative]
+		if !isSHA256(digest) {
+			return Receipt{}, errors.New("receipt has no immutable digest for rollback path")
 		}
-		if err := removeCreated(target); err != nil {
+		if err := removeCreatedExpected(plan.Destination, relative, digest, plan.Limits.MaxFileBytes); err != nil {
 			return Receipt{}, err
 		}
 	}

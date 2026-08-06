@@ -28,7 +28,9 @@ opens source file bodies during inspection.
 Inspection is read-only and bounded by entry count, depth, per-file bytes and
 total bytes. It records relative paths, kind, size, mode and modification
 metadata. Symlinks and special files are recorded as unsafe and never followed.
-The source and destination are separate non-symlink directories.
+The source and destination are separate non-symlink directories. Each planned
+regular file also receives a bounded SHA-256 content digest; the plan still
+contains no source body.
 
 `plan` derives a sorted, immutable origin-to-destination plan with a SHA-256
 digest over the complete canonical plan body. Existing destination paths are
@@ -45,9 +47,10 @@ runtime pack is inferred or activated by this feature.
 
 Approval binds the plan ID and digest and requires the exact explicit
 confirmation token `IMPORT`. Execution revalidates the plan, source metadata
-and destination boundaries. It stages regular-file copies under the private
-Maestro data root, then atomically renames them into the destination. The
-source is never modified.
+and content digests, and opens source components through no-follow directory
+descriptors so parent symlink swaps fail closed. It stages regular-file copies
+under the private Maestro data root, then atomically renames them into the
+destination. The source is never modified.
 
 Execution writes a metadata-only receipt containing IDs, digest, relative paths
 and state. A repeated execution of the same plan returns the existing receipt.
@@ -55,7 +58,9 @@ Quarantined files land under a run-specific `.bcgos/import-quarantine` path and
 remain clearly unavailable/unsupported; they are not converted or indexed.
 Failure removes files committed by the incomplete transaction. Explicit
 rollback requires the original plan, receipt and the exact `ROLLBACK` token,
-and removes only paths created by that receipt.
+and removes only paths created by that receipt after verifying their recorded
+content digest. Changed destination files are preserved and rollback fails
+closed. Staging and commit failures are persisted as `failed` receipts.
 
 ## Boundaries and evidence
 

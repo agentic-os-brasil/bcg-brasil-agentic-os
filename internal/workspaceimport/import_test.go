@@ -234,3 +234,105 @@ func TestPlanDigestAndSourceMetadataAreImmutable(t *testing.T) {
 		t.Fatalf("tampered plan was accepted: %v", err)
 	}
 }
+
+func TestExecuteRejectsSymlinkedSourceParentAndPersistsFailedReceipt(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, "brain/note.md", "source fixture")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	writeFixture(t, outside, "note.md", "outside fixture")
+	if err := os.Rename(filepath.Join(source, "brain"), filepath.Join(source, "brain-original")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(source, "brain")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	receipt, err := Execute(dataRoot, plan, approval)
+	if err == nil || receipt.State != "failed" {
+		t.Fatalf("symlinked source parent accepted: receipt=%#v err=%v", receipt, err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "brain", "note.md")); !os.IsNotExist(err) {
+		t.Fatalf("failed execution created destination: %v", err)
+	}
+	stored, err := ReadReceipt(filepath.Join(dataRoot, "workspace-import", "receipts", receipt.RunID+".json"))
+	if err != nil || stored.State != "failed" {
+		t.Fatalf("failed receipt not persisted: receipt=%#v err=%v", stored, err)
+	}
+}
+
+func TestExecuteRejectsContentMutationWithStableMetadata(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	file := writeFixture(t, source, "note.md", "one")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("two"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(file, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Execute(dataRoot, plan, approval); err == nil || !strings.Contains(err.Error(), "content") {
+		t.Fatalf("content mutation with stable metadata was accepted: %v", err)
+	}
+}
+
+func TestRollbackRefusesChangedDestination(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	dataRoot := filepath.Join(root, "data")
+	if err := os.MkdirAll(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, source, "note.md", "original")
+	plan, err := BuildPlan(source, destination, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := Approve(plan, "synthetic-owner", ConfirmImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := Execute(dataRoot, plan, approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destination, "note.md"), []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Rollback(dataRoot, plan, receipt, ConfirmRollback); err == nil || !strings.Contains(err.Error(), "changed") {
+		t.Fatalf("rollback removed changed destination: %v", err)
+	}
+	if body, err := os.ReadFile(filepath.Join(destination, "note.md")); err != nil || string(body) != "tampered" {
+		t.Fatalf("tampered destination was removed: %q err=%v", body, err)
+	}
+}

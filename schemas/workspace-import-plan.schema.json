@@ -24,7 +24,7 @@
     "entry": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source_path", "destination_path", "action", "availability"],
+      "required": ["source_path", "destination_path", "action", "availability", "content_digest"],
       "properties": {
         "source_path": {"type": "string", "pattern": "^(?!/)(?!.*(^|/)\.\.(?:/|$)).+$"},
         "destination_path": {"type": "string", "pattern": "^(?!/)(?!.*(^|/)\.\.(?:/|$)).+$"},
@@ -33,7 +33,8 @@
         "reason": {"type": "string", "minLength": 1},
         "size": {"type": "integer", "minimum": 0},
         "mode": {"type": "integer", "minimum": 0},
-        "modified_unix": {"type": "integer"}
+        "modified_unix": {"type": "integer"},
+        "content_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
       }
     },
     "reason": {
