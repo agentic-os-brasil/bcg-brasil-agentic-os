@@ -101,12 +101,30 @@ func Guard(input NativeInput) (GuardOutput, error) {
 	}
 	destructive, err := destructiveRootRemoval(input.ToolInput.Command)
 	if err != nil {
+		// The guard owns one narrow invariant: protected-root removal. Shell
+		// operators in an otherwise ordinary command belong to Claude's own
+		// permission flow and must not turn the entire session into a prison.
+		// Keep fail-closed behavior for commands that could still be removals.
+		if !looksLikeRemovalCommand(input.ToolInput.Command) {
+			return GuardOutput{}, nil
+		}
 		return GuardOutput{}, err
 	}
 	if !destructive {
 		return GuardOutput{}, nil
 	}
 	return denial("Maestro denied an unambiguous recursive forced deletion of a protected filesystem root. Nothing was changed. Review the target and retry with a narrower path."), nil
+}
+
+func looksLikeRemovalCommand(command string) bool {
+	for _, field := range strings.Fields(command) {
+		field = strings.Trim(field, "(){}[];|&<>")
+		switch field {
+		case "rm", "/bin/rm", "/usr/bin/rm":
+			return true
+		}
+	}
+	return false
 }
 
 func FailClosedDenial() GuardOutput {

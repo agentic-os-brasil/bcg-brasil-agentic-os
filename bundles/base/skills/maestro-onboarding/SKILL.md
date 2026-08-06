@@ -35,6 +35,11 @@ the command succeeded.
 4. Do not start a professional task, read a selected memory source, execute an
    unrelated skill or grant runtime trust globally.
 
+Onboarding is not a global Bash lock. Ordinary commands remain with the host
+runtime's normal permission flow; only protected mutations and destructive
+roots require Maestro's guard. Use a directory listing tool for directories,
+not a file-read operation.
+
 The canonical owner context is private to the Maestro installation's data root,
 outside the workspace. The SessionStart directive prints that exact root and
 the canonical `owner/self/` destination. Never create or edit `owner/` or

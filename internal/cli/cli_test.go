@@ -462,8 +462,8 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 	output.Reset()
 	input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"echo safe"}}`
 	code := runHookWithInput([]string{"codex", "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, strings.NewReader(input), &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) || !strings.Contains(output.String(), "Nothing was changed") {
-		t.Fatalf("symlink guard = %d %s", code, output.String())
+	if code != ExitOK || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+		t.Fatalf("ordinary command was blocked by unrelated symlink state: %d %s", code, output.String())
 	}
 	if err := os.Remove(statePath); err != nil {
 		t.Fatal(err)
@@ -563,6 +563,21 @@ func TestInstalledGuardAllowsObservedReadOnlyDiagnosticsWithBoundedShellSyntax(t
 				}
 			})
 		}
+	}
+}
+
+func TestInstalledGuardDoesNotBlockOrdinaryBashWhenOrchestrationStateIsUnavailable(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"ls /Users/example/Developer/other-workspace 2>/dev/null | grep -i darwin"}}`
+			var output bytes.Buffer
+			code := runHookWithInput([]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/missing-state.json", "/workspace-that-must-not-be-inspected"}, strings.NewReader(input), &output, &output, func() (string, error) {
+				return "", errors.New("ordinary Bash must not inspect orchestration state")
+			})
+			if code != ExitOK || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("ordinary diagnostic was blocked: exit=%d output=%s", code, output.String())
+			}
+		})
 	}
 }
 

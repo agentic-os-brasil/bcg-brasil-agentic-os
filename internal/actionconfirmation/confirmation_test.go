@@ -119,6 +119,22 @@ func TestReadOnlyDiagnosticsAllowObservedBoundedShellForms(t *testing.T) {
 	}
 }
 
+func TestLooksLikeBCGOSDiagnosticSeparatesUntrustedBinaryFromOrdinaryBash(t *testing.T) {
+	for _, command := range []string{
+		`/tmp/attacker/bcgos doctor`,
+		`/Users/example/bin/bcgos skills index 2>/dev/null | head -60`,
+	} {
+		if !LooksLikeBCGOSDiagnostic("Bash", json.RawMessage(fmt.Sprintf(`{"command":%q}`, command))) {
+			t.Fatalf("expected diagnostic classification: %s", command)
+		}
+	}
+	for _, command := range []string{`echo safe`, `ls /Users/example/Developer/other-workspace | grep -i darwin`} {
+		if LooksLikeBCGOSDiagnostic("Bash", json.RawMessage(fmt.Sprintf(`{"command":%q}`, command))) {
+			t.Fatalf("ordinary Bash was classified as a Maestro diagnostic: %s", command)
+		}
+	}
+}
+
 func TestStoreRejectsPermissiveRoot(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Chmod(root, 0o755); err != nil {

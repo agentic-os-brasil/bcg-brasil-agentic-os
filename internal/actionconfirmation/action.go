@@ -102,6 +102,29 @@ func IsReadOnlyBoundedDiagnostic(toolName string, raw json.RawMessage) bool {
 	return suffix == "" || suffix == `2>/dev/null || echo "dir not found"`
 }
 
+// LooksLikeBCGOSDiagnostic identifies a command that claims to inspect Maestro
+// state but does not prove that it invokes the installed executable. It lets
+// the hook return a specific remediation instead of blocking unrelated local
+// Bash commands when orchestration state is unavailable.
+func LooksLikeBCGOSDiagnostic(toolName string, raw json.RawMessage) bool {
+	if toolName != "Bash" || rejectDuplicateKeys(raw) != nil {
+		return false
+	}
+	command, ok := commandFromRaw(raw)
+	if !ok {
+		return false
+	}
+	primary, _, ok := splitReadOnlySuffix(command)
+	if !ok {
+		return false
+	}
+	fields, err := splitSimpleCommand(primary)
+	if err != nil || len(fields) < 2 {
+		return false
+	}
+	return filepath.Base(fields[0]) == "bcgos"
+}
+
 func commandFromRaw(raw json.RawMessage) (string, bool) {
 	var input map[string]any
 	if len(raw) == 0 || json.Unmarshal(raw, &input) != nil {
