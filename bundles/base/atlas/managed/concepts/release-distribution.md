@@ -15,7 +15,7 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/release-distribution
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 847e507bde003b5d4269d8b0594f6224c917c573521895a6afd04c93d902a2ab
+x-bcgos-source-fingerprint: c4881e915831c73d32fd0d5d4fb13b0fd3f6825ab38cb6f2e77398869a2097f6
 x-bcgos-freshness: fresh
 x-bcgos-status: active
 x-bcgos-generator-version: bcgos-managed-wiki/0.2
@@ -240,14 +240,15 @@ No production path may convert `unavailable` into an unsigned override.
 The current source baseline is `b3d85edeac16816ccca8b69cf887a7d674786710`
 (`origin/main`). The local contributor-harness and managed-wiki gates are the
 evidence surface for this snapshot: `validate`, `wiki validate` and `wiki
-verify` pass. `validate --full` reaches contracts, formatting and `go vet`, but
-its sandbox full-test pass is environmentally inconclusive because of an IPv6
-listener restriction, a transient MarkItDown timeout and a timing-sensitive
-Walter lease; focused reruns passed those cases. Hosted CI is not claimed:
-the workflow files in this checkout are disabled, so billing or hosted-run
-state cannot be inferred from local passes. The installer workspace-flow and
-import/migration tests are repository evidence, not fresh Claude/Codex native
-qualification. Windows has no single cross-architecture universal `.exe`;
+verify` pass. On the integration branch at `af95381`, a fresh
+`validate --full` also passed contracts, formatting, `go vet` and the complete
+offline unit-test suite. This remains branch-local evidence only: the source
+baseline above is still `origin/main` while this documentation refresh is
+pending integration. Hosted CI is not claimed: the workflow files in this
+checkout are disabled, so billing or hosted-run state cannot be inferred from
+local passes. The installer workspace-flow and import/migration tests are
+repository evidence, not fresh Claude/Codex native qualification. Windows has
+no single cross-architecture universal `.exe`;
 x64/ARM64 device behavior (or an architecture-detecting installer), Authenticode, macOS
 Developer ID/notarization, production Ed25519 custody, clean-device acceptance,
 support ownership and pilot approval remain open release gates.

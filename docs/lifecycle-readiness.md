@@ -53,7 +53,7 @@ writing a receipt or changing runtime configuration.
 | Readiness class | Snapshot status |
 | --- | --- |
 | Configured | Yes — workspace-local adapter wiring is represented. |
-| Local contract-tested | Repository fixtures and deterministic boundaries are present; this update did not rerun them, so no fresh test pass is claimed. |
+| Local contract-tested | Repository fixtures and deterministic boundaries are present; `go run ./dev/harness validate --full` passed on integration branch `af95381` (branch-local evidence, not hosted CI). |
 | Adapter-observed | No — no bounded `adapter_command` receipt or equivalent diagnostic signal is attached in this snapshot. |
 | Native-qualified | No — no fresh qualifying native-session observation for Claude or Codex. |
 | Release-ready | No — signing, publication and release-gate evidence are absent. |

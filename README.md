@@ -211,11 +211,11 @@ from lifecycle evidence alone:
 `b3d85edeac16816ccca8b69cf887a7d674786710` (`origin/main`, including the
 workspace import, migration and installer-flow changes) · local evidence:
 `go run ./dev/harness validate`, `wiki validate` and `wiki verify` pass.
-`validate --full` reaches contracts, gofmt and `go vet`, but its full unit-test
-pass is not green in this sandbox (IPv6 listener restriction, one MarkItDown
-timeout and one timing-sensitive Walter lease); focused reruns passed the first
-two and a three-run Walter rerun, so the full gate remains environmentally
-inconclusive rather than claimed green · hosted CI evidence: none; the
+On the integration branch at `af95381`, a fresh `go run ./dev/harness
+validate --full` also passed contracts, formatting, `go vet` and the complete
+offline unit-test suite. This is branch-local evidence only: the source
+baseline above remains `origin/main` while this documentation refresh is
+pending integration, and hosted CI evidence is none; the
 repository workflows remain disabled and billing or hosted status is not
 inferred from local passes · runtime evidence: no fresh attended Claude/Codex
 native-session receipt or reproducible in-repo runtime-version artifact ·
