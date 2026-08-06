@@ -226,6 +226,14 @@
       "path": "skills/interaction-profile/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/maestro-local-beta-installer/SKILL.md",
+      "path": "skills/maestro-local-beta-installer/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/maestro-local-beta-installer/agents/openai.yaml",
+      "path": "skills/maestro-local-beta-installer/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/maestro-setup-update/SKILL.md",
       "path": "skills/maestro-setup-update/SKILL.md"
     },

@@ -65,6 +65,13 @@
       "relative_path": "skills/interaction-profile/SKILL.md"
     },
     {
+      "id": "maestro-local-beta-installer",
+      "display_name": "Maestro Local-Beta Installer",
+      "trigger": "Build and verify the real local-beta macOS installer flow",
+      "default_prompt": "Use $maestro-local-beta-installer to build and verify the current Maestro local-beta installer without using the rehearsal simulator.",
+      "relative_path": "skills/maestro-local-beta-installer/SKILL.md"
+    },
+    {
       "id": "maestro-onboarding",
       "display_name": "Maestro Onboarding",
       "trigger": "Start a guided owner interview with quick or complete tracks",
