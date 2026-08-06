@@ -1766,7 +1766,7 @@ func TestWorkspaceAgentCommandsCreateAndExposeTheGuidedInterview(t *testing.T) {
 	dataRoot := filepath.Join(root, "local", "BCGOS")
 	workspacePath := filepath.Join(root, "workspace")
 	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"case_agent"`) || !strings.Contains(output.String(), `"workspace-agent-`) || !strings.Contains(output.String(), `"agent_stub"`) || !strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"case_agent"`) || !strings.Contains(output.String(), `"workspace-agent-`) || !strings.Contains(output.String(), `"identity_compatibility": "migration_compatibility"`) || !strings.Contains(output.String(), `"agent_stub"`) || !strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
 		t.Fatalf("init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
