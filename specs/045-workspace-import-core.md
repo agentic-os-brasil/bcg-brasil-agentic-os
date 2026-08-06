@@ -52,8 +52,13 @@ descriptors so parent symlink swaps fail closed. It stages regular-file copies
 under the private Maestro data root, then atomically renames them into the
 destination. The source is never modified.
 
-Execution writes a metadata-only receipt containing IDs, digest, relative paths
-and state. A repeated execution of the same plan returns the existing receipt.
+Before any destination commit, execution writes a durable metadata-only journal
+of every intended stage-to-destination move. A per-plan lock prevents concurrent
+executions. After a crash, the journal reconciles staged files and destination
+digests before producing the terminal receipt. Execution writes a receipt
+containing IDs, digests, relative paths and state. A repeated execution of the
+same plan returns the existing receipt only after strict identity, path and
+digest validation.
 Quarantined files land under a run-specific `.bcgos/import-quarantine` path and
 remain clearly unavailable/unsupported; they are not converted or indexed.
 Failure removes files committed by the incomplete transaction. Explicit

@@ -146,6 +146,30 @@ type Receipt struct {
 	Error           string            `json:"error,omitempty"`
 }
 
+type JournalEntry struct {
+	SourcePath      string `json:"source_path"`
+	StagePath       string `json:"stage_path"`
+	DestinationPath string `json:"destination_path"`
+	Action          string `json:"action"`
+	ContentDigest   string `json:"content_digest"`
+}
+
+type Journal struct {
+	SchemaVersion int            `json:"schema_version"`
+	RunID         string         `json:"run_id"`
+	PlanID        string         `json:"plan_id"`
+	PlanDigest    string         `json:"plan_digest"`
+	State         string         `json:"state"`
+	RecordedAt    string         `json:"recorded_at"`
+	Entries       []JournalEntry `json:"entries"`
+	Committed     []string       `json:"committed,omitempty"`
+}
+
+// Test seams remain nil in production. They make the filesystem and lease
+// boundaries observable without injecting real workspace data.
+var secureCommitParentHook func(string)
+var executeLockHook func()
+
 func normalizeLimits(limits Limits) (Limits, error) {
 	defaults := DefaultLimits()
 	if limits.MaxEntries == 0 {
@@ -503,6 +527,296 @@ func ValidateApproval(plan Plan, approval Approval) error {
 	return nil
 }
 
+func expectedReceiptPaths(plan Plan) (copied, quarantined, excluded []string, rollback map[string]string, err error) {
+	rollback = map[string]string{}
+	for _, entry := range plan.Entries {
+		switch entry.Action {
+		case ActionCopy:
+			copied = append(copied, entry.SourcePath)
+		case ActionQuarantine:
+			quarantined = append(quarantined, entry.SourcePath)
+		case ActionExclude:
+			excluded = append(excluded, entry.SourcePath)
+		default:
+			return nil, nil, nil, nil, fmt.Errorf("receipt validation encountered unsupported plan action %q", entry.Action)
+		}
+		if entry.Action != ActionExclude {
+			rollbackPath := entry.DestinationPath
+			if entry.Action == ActionQuarantine {
+				rollbackPath = filepath.ToSlash(filepath.Join(".bcgos", "import-quarantine", "run-"+plan.PlanDigest[:16], entry.DestinationPath))
+			}
+			if _, exists := rollback[rollbackPath]; exists {
+				return nil, nil, nil, nil, fmt.Errorf("duplicate rollback path in plan: %s", rollbackPath)
+			}
+			rollback[rollbackPath] = entry.ContentDigest
+		}
+	}
+	return copied, quarantined, excluded, rollback, nil
+}
+
+func validateReceiptPathList(label string, expected, actual []string) error {
+	if len(expected) != len(actual) {
+		return fmt.Errorf("receipt %s paths do not match the plan", label)
+	}
+	seen := make(map[string]struct{}, len(actual))
+	for _, path := range actual {
+		if _, exists := seen[path]; exists {
+			return fmt.Errorf("receipt %s contains duplicate path %q", label, path)
+		}
+		seen[path] = struct{}{}
+	}
+	for _, path := range expected {
+		if _, exists := seen[path]; !exists {
+			return fmt.Errorf("receipt %s is missing path %q", label, path)
+		}
+	}
+	return nil
+}
+
+// ValidateReceipt proves that a terminal receipt belongs to this exact plan
+// and describes exactly the entries and digests that execution committed.
+func ValidateReceipt(plan Plan, receipt Receipt) error {
+	if err := ValidatePlan(plan); err != nil {
+		return err
+	}
+	if receipt.SchemaVersion != SchemaVersion || receipt.RunID != "run-"+plan.PlanDigest[:16] || receipt.PlanID != plan.PlanID || receipt.PlanDigest != plan.PlanDigest {
+		return errors.New("receipt identity does not match the immutable workspace import plan")
+	}
+	if receipt.State != PlanStateExecuted && receipt.State != PlanStateRolledBack {
+		return errors.New("receipt is not a terminal workspace import receipt")
+	}
+	if strings.TrimSpace(receipt.Error) != "" {
+		return errors.New("terminal receipt cannot contain an error")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, receipt.RecordedAt); err != nil {
+		return errors.New("receipt recorded_at is invalid")
+	}
+	copied, quarantined, excluded, rollback, err := expectedReceiptPaths(plan)
+	if err != nil {
+		return err
+	}
+	if err := validateReceiptPathList("copied", copied, receipt.Copied); err != nil {
+		return err
+	}
+	if err := validateReceiptPathList("quarantined", quarantined, receipt.Quarantined); err != nil {
+		return err
+	}
+	if err := validateReceiptPathList("excluded", excluded, receipt.Excluded); err != nil {
+		return err
+	}
+	if err := validateReceiptPathList("rollback", mapKeys(rollback), receipt.RollbackPaths); err != nil {
+		return err
+	}
+	if len(receipt.RollbackDigests) != len(rollback) {
+		return errors.New("receipt rollback digests do not match the plan")
+	}
+	for path, expectedDigest := range rollback {
+		actualDigest, exists := receipt.RollbackDigests[path]
+		if !exists || actualDigest != expectedDigest || !isSHA256(actualDigest) {
+			return fmt.Errorf("receipt rollback digest does not match path %q", path)
+		}
+	}
+	for path := range receipt.RollbackDigests {
+		if _, exists := rollback[path]; !exists {
+			return fmt.Errorf("receipt contains an unknown rollback path %q", path)
+		}
+	}
+	return nil
+}
+
+func mapKeys(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func journalPath(root, runID string) string {
+	return filepath.Join(root, "workspace-import", "journal", runID+".json")
+}
+
+func buildJournal(plan Plan, stageRoot, runID string) Journal {
+	journal := Journal{SchemaVersion: SchemaVersion, RunID: runID, PlanID: plan.PlanID, PlanDigest: plan.PlanDigest, State: "prepared", RecordedAt: time.Now().UTC().Format(time.RFC3339Nano), Entries: []JournalEntry{}, Committed: []string{}}
+	for _, entry := range plan.Entries {
+		if entry.Action == ActionExclude {
+			continue
+		}
+		destinationPath := entry.DestinationPath
+		if entry.Action == ActionQuarantine {
+			destinationPath = filepath.ToSlash(filepath.Join(".bcgos", "import-quarantine", runID, entry.DestinationPath))
+		}
+		journal.Entries = append(journal.Entries, JournalEntry{SourcePath: entry.SourcePath, StagePath: entry.DestinationPath, DestinationPath: destinationPath, Action: entry.Action, ContentDigest: entry.ContentDigest})
+	}
+	return journal
+}
+
+func ValidateJournal(plan Plan, journal Journal) error {
+	if err := ValidatePlan(plan); err != nil {
+		return err
+	}
+	if journal.SchemaVersion != SchemaVersion || journal.RunID != "run-"+plan.PlanDigest[:16] || journal.PlanID != plan.PlanID || journal.PlanDigest != plan.PlanDigest {
+		return errors.New("journal identity does not match the immutable workspace import plan")
+	}
+	switch journal.State {
+	case "prepared", "committing", "failed", "reconciled":
+	default:
+		return errors.New("journal has an unsupported state")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, journal.RecordedAt); err != nil {
+		return errors.New("journal recorded_at is invalid")
+	}
+	expected := buildJournal(plan, filepath.Join("/", "workspace-import", "staging", journal.RunID), journal.RunID)
+	if len(journal.Entries) != len(expected.Entries) {
+		return errors.New("journal entries do not match the plan")
+	}
+	for index, entry := range expected.Entries {
+		if journal.Entries[index] != entry {
+			return fmt.Errorf("journal entry %d does not match the plan", index)
+		}
+	}
+	committed := make(map[string]struct{}, len(journal.Committed))
+	for _, path := range journal.Committed {
+		if _, exists := committed[path]; exists {
+			return fmt.Errorf("journal contains duplicate committed path %q", path)
+		}
+		committed[path] = struct{}{}
+	}
+	allowed := map[string]struct{}{}
+	for _, entry := range journal.Entries {
+		allowed[entry.DestinationPath] = struct{}{}
+	}
+	for path := range committed {
+		if _, exists := allowed[path]; !exists {
+			return fmt.Errorf("journal contains unknown committed path %q", path)
+		}
+	}
+	return nil
+}
+
+func writeJournal(path string, journal Journal) error {
+	if err := writeJSONAtomic(path, journal); err != nil {
+		return err
+	}
+	return syncDirectoryPath(filepath.Dir(path))
+}
+
+func journalHasCommitted(journal Journal, path string) bool {
+	for _, committed := range journal.Committed {
+		if committed == path {
+			return true
+		}
+	}
+	return false
+}
+
+func reconcilePendingJournal(root string, plan Plan) error {
+	runID := "run-" + plan.PlanDigest[:16]
+	path := journalPath(root, runID)
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("workspace import journal is a symlink")
+	}
+	var journal Journal
+	if err := readJSON(path, &journal); err != nil {
+		return fmt.Errorf("workspace import journal is invalid: %w", err)
+	}
+	if err := ValidateJournal(plan, journal); err != nil {
+		return fmt.Errorf("workspace import journal failed validation: %w", err)
+	}
+	if journal.State == "failed" {
+		return nil
+	}
+	receiptPath := filepath.Join(root, "workspace-import", "receipts", runID+".json")
+	if receiptInfo, statErr := os.Lstat(receiptPath); statErr == nil {
+		if receiptInfo.Mode()&os.ModeSymlink != 0 {
+			return errors.New("workspace import receipt is a symlink during journal recovery")
+		}
+		var existing Receipt
+		if err := readJSON(receiptPath, &existing); err != nil {
+			return fmt.Errorf("workspace import receipt is invalid during journal recovery: %w", err)
+		}
+		if existing.State == PlanStateExecuted || existing.State == PlanStateRolledBack {
+			if err := ValidateReceipt(plan, existing); err != nil {
+				return fmt.Errorf("workspace import receipt failed validation during journal recovery: %w", err)
+			}
+			journal.State = "reconciled"
+			journal.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			return writeJournal(path, journal)
+		}
+	}
+	journal.State = "committing"
+	journal.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if err := writeJournal(path, journal); err != nil {
+		return err
+	}
+	stageRoot := filepath.Join(root, "workspace-import", "staging", runID)
+	for _, entry := range journal.Entries {
+		destinationDigest, destinationExists, err := digestFileSecure(plan.Destination, entry.DestinationPath, plan.Limits.MaxFileBytes)
+		if err != nil {
+			return fmt.Errorf("reconcile destination %s: %w", entry.DestinationPath, err)
+		}
+		stageDigest, stageExists, err := digestFileSecure(stageRoot, entry.StagePath, plan.Limits.MaxFileBytes)
+		if err != nil {
+			return fmt.Errorf("reconcile stage %s: %w", entry.StagePath, err)
+		}
+		if destinationExists {
+			if destinationDigest != entry.ContentDigest {
+				return fmt.Errorf("reconcile found changed destination %s", entry.DestinationPath)
+			}
+			if stageExists {
+				if stageDigest != entry.ContentDigest {
+					return fmt.Errorf("reconcile found changed stage %s", entry.StagePath)
+				}
+				if err := removeFileIfDigestSecure(stageRoot, entry.StagePath, entry.ContentDigest, plan.Limits.MaxFileBytes); err != nil {
+					return fmt.Errorf("reconcile stage cleanup %s: %w", entry.StagePath, err)
+				}
+			}
+		} else {
+			if !stageExists || stageDigest != entry.ContentDigest {
+				return fmt.Errorf("reconcile cannot prove staged content for %s", entry.StagePath)
+			}
+			installed, err := secureCommitFile(stageRoot, entry.StagePath, plan.Destination, entry.DestinationPath)
+			if installed {
+				stageExists = false
+			}
+			if err != nil {
+				return fmt.Errorf("reconcile commit %s: %w", entry.DestinationPath, err)
+			}
+			if !installed {
+				return fmt.Errorf("reconcile did not install %s", entry.DestinationPath)
+			}
+		}
+		if !journalHasCommitted(journal, entry.DestinationPath) {
+			journal.Committed = append(journal.Committed, entry.DestinationPath)
+			journal.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			if err := writeJournal(path, journal); err != nil {
+				return err
+			}
+		}
+	}
+	copied, quarantined, excluded, rollback, err := expectedReceiptPaths(plan)
+	if err != nil {
+		return err
+	}
+	receipt := Receipt{SchemaVersion: SchemaVersion, RunID: runID, PlanID: plan.PlanID, PlanDigest: plan.PlanDigest, State: PlanStateExecuted, RecordedAt: time.Now().UTC().Format(time.RFC3339Nano), Copied: copied, Quarantined: quarantined, Excluded: excluded, RollbackPaths: mapKeys(rollback), RollbackDigests: rollback}
+	if err := ValidateReceipt(plan, receipt); err != nil {
+		return err
+	}
+	if err := writeJSONAtomic(receiptPath, receipt); err != nil {
+		return err
+	}
+	journal.State = "reconciled"
+	journal.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	return writeJournal(path, journal)
+}
+
 func writeJSONAtomic(path string, value any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
@@ -742,35 +1056,8 @@ type committedImport struct {
 	digest string
 }
 
-func digestDestinationFile(root, relative string, maxBytes int64) (string, error) {
-	file, err := openSourceFileSecure(root, relative)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	hasher := sha256.New()
-	written, err := io.Copy(hasher, io.LimitReader(file, maxBytes+1))
-	if err != nil {
-		return "", err
-	}
-	if written > maxBytes {
-		return "", errors.New("destination file exceeds import limit")
-	}
-	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
 func removeCreatedExpected(root, relative, expectedDigest string, maxBytes int64) error {
-	actual, err := digestDestinationFile(root, relative, maxBytes)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if actual != expectedDigest {
-		return errors.New("refusing rollback: destination changed after execution")
-	}
-	return removeSourceFileSecure(root, relative)
+	return removeFileIfDigestSecure(root, relative, expectedDigest, maxBytes)
 }
 
 // Execute applies an approved plan through a private staging directory. A
@@ -784,12 +1071,43 @@ func Execute(dataRoot string, plan Plan, approval Approval) (Receipt, error) {
 	if err != nil {
 		return Receipt{}, err
 	}
+	lock, err := acquirePlanLock(root, plan.PlanDigest)
+	if err != nil {
+		return Receipt{}, err
+	}
+	defer lock.release()
+	if executeLockHook != nil {
+		executeLockHook()
+	}
 	runID := "run-" + plan.PlanDigest[:16]
 	receiptPath := filepath.Join(root, "workspace-import", "receipts", runID+".json")
-	if existing, readErr := ReadReceipt(receiptPath); readErr == nil {
-		if existing.State == PlanStateExecuted || existing.State == PlanStateRolledBack {
-			return existing, nil
+	if err := reconcilePendingJournal(root, plan); err != nil {
+		return Receipt{}, err
+	}
+	if info, statErr := os.Lstat(receiptPath); statErr == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return Receipt{}, errors.New("existing workspace import receipt is a symlink")
 		}
+		existing, readErr := ReadReceipt(receiptPath)
+		if readErr != nil {
+			return Receipt{}, fmt.Errorf("existing workspace import receipt is invalid: %w", readErr)
+		}
+		if existing.SchemaVersion != SchemaVersion || existing.RunID != runID || existing.PlanID != plan.PlanID || existing.PlanDigest != plan.PlanDigest {
+			return Receipt{}, errors.New("existing workspace import receipt identity does not match the plan")
+		}
+		switch existing.State {
+		case PlanStateExecuted, PlanStateRolledBack:
+			if err := ValidateReceipt(plan, existing); err != nil {
+				return Receipt{}, fmt.Errorf("existing workspace import receipt failed validation: %w", err)
+			}
+			return existing, nil
+		case "staging", "failed":
+			// A same-plan non-terminal receipt may be resumed.
+		default:
+			return Receipt{}, errors.New("existing workspace import receipt has an unsupported state")
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return Receipt{}, statErr
 	}
 	if _, err := cleanDirectory(plan.Origin, "source", true); err != nil {
 		return Receipt{}, err
@@ -809,6 +1127,8 @@ func Execute(dataRoot string, plan Plan, approval Approval) (Receipt, error) {
 	}
 	cleanupStage := true
 	committed := []committedImport{}
+	journal := Journal{}
+	journalFile := journalPath(root, runID)
 	defer func() {
 		if cleanupStage {
 			_ = safeRemove(stageRoot)
@@ -825,6 +1145,11 @@ func Execute(dataRoot string, plan Plan, approval Approval) (Receipt, error) {
 		receipt.State, receipt.Error = "failed", cause.Error()
 		if len(cleanupErrors) > 0 {
 			receipt.Error = errors.Join(cause, errors.Join(cleanupErrors...)).Error()
+		}
+		if journal.RunID != "" {
+			journal.State = "failed"
+			journal.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			_ = writeJournal(journalFile, journal)
 		}
 		receipt.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		if persistErr := writeJSONAtomic(receiptPath, receipt); persistErr != nil {
@@ -860,40 +1185,33 @@ func Execute(dataRoot string, plan Plan, approval Approval) (Receipt, error) {
 			return abort(err)
 		}
 	}
+	journal = buildJournal(plan, stageRoot, runID)
+	if err := writeJournal(journalFile, journal); err != nil {
+		return abort(err)
+	}
 	for _, entry := range plan.Entries {
 		if entry.Action == ActionExclude {
 			continue
-		}
-		stage, err := pathSafe(stageRoot, entry.DestinationPath)
-		if err != nil {
-			return abort(err)
-		}
-		destination, err := pathSafe(plan.Destination, entry.DestinationPath)
-		if err != nil {
-			return abort(err)
-		}
-		if entry.Action == ActionQuarantine {
-			destination, err = pathSafe(plan.Destination, filepath.ToSlash(filepath.Join(".bcgos", "import-quarantine", runID, entry.DestinationPath)))
-			if err != nil {
-				return abort(err)
-			}
-		}
-		if _, err := os.Lstat(destination); err == nil {
-			return abort(errors.New("destination changed after approval"))
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return abort(err)
-		}
-		if err := ensureParent(plan.Destination, filepath.Dir(destination)); err != nil {
-			return abort(err)
-		}
-		if err := os.Rename(stage, destination); err != nil {
-			return abort(err)
 		}
 		rollbackPath := entry.DestinationPath
 		if entry.Action == ActionQuarantine {
 			rollbackPath = filepath.ToSlash(filepath.Join(".bcgos", "import-quarantine", runID, entry.DestinationPath))
 		}
-		committed = append(committed, committedImport{root: plan.Destination, rel: rollbackPath, digest: entry.ContentDigest})
+		installed, commitErr := secureCommitFile(stageRoot, entry.DestinationPath, plan.Destination, rollbackPath)
+		if installed {
+			committed = append(committed, committedImport{root: plan.Destination, rel: rollbackPath, digest: entry.ContentDigest})
+			if !journalHasCommitted(journal, rollbackPath) {
+				journal.Committed = append(journal.Committed, rollbackPath)
+				journal.State = "committing"
+				journal.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
+				if err := writeJournal(journalFile, journal); err != nil {
+					return abort(err)
+				}
+			}
+		}
+		if commitErr != nil {
+			return abort(commitErr)
+		}
 		receipt.RollbackPaths = append(receipt.RollbackPaths, rollbackPath)
 		receipt.RollbackDigests[rollbackPath] = entry.ContentDigest
 		if err := writeJSONAtomic(receiptPath, receipt); err != nil {
@@ -901,8 +1219,16 @@ func Execute(dataRoot string, plan Plan, approval Approval) (Receipt, error) {
 		}
 	}
 	receipt.State = "executed"
-	if err := writeJSONAtomic(receiptPath, receipt); err != nil {
+	if err := ValidateReceipt(plan, receipt); err != nil {
 		return abort(err)
+	}
+	if err := writeJSONAtomic(receiptPath, receipt); err != nil {
+		return receipt, err
+	}
+	journal.State = "reconciled"
+	journal.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if err := writeJournal(journalFile, journal); err != nil {
+		return receipt, err
 	}
 	return receipt, nil
 }
@@ -913,30 +1239,33 @@ func Rollback(dataRoot string, plan Plan, receipt Receipt, confirmation string) 
 	if confirmation != ConfirmRollback {
 		return Receipt{}, errors.New("explicit ROLLBACK confirmation is required")
 	}
-	if receipt.SchemaVersion != SchemaVersion || (receipt.State != "executed" && receipt.State != PlanStateRolledBack) || receipt.PlanDigest != plan.PlanDigest {
-		return Receipt{}, errors.New("receipt is not rollbackable")
+	if err := ValidateReceipt(plan, receipt); err != nil {
+		return Receipt{}, fmt.Errorf("receipt is not rollbackable: %w", err)
 	}
 	if receipt.State == PlanStateRolledBack {
 		return receipt, nil
 	}
-	if _, err := cleanDirectory(dataRoot, "data root", true); err != nil {
+	root, err := cleanDirectory(dataRoot, "data root", true)
+	if err != nil {
 		return Receipt{}, err
 	}
+	lock, err := acquirePlanLock(root, plan.PlanDigest)
+	if err != nil {
+		return Receipt{}, err
+	}
+	defer lock.release()
 	if _, err := cleanDirectory(plan.Destination, "destination", true); err != nil {
 		return Receipt{}, err
 	}
 	for _, relative := range receipt.RollbackPaths {
 		digest := receipt.RollbackDigests[relative]
-		if !isSHA256(digest) {
-			return Receipt{}, errors.New("receipt has no immutable digest for rollback path")
-		}
 		if err := removeCreatedExpected(plan.Destination, relative, digest, plan.Limits.MaxFileBytes); err != nil {
 			return Receipt{}, err
 		}
 	}
 	receipt.State = PlanStateRolledBack
 	receipt.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	receiptPath := filepath.Join(dataRoot, "workspace-import", "receipts", receipt.RunID+".json")
+	receiptPath := filepath.Join(root, "workspace-import", "receipts", receipt.RunID+".json")
 	if err := writeJSONAtomic(receiptPath, receipt); err != nil {
 		return Receipt{}, err
 	}
