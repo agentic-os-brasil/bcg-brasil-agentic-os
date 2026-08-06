@@ -841,6 +841,7 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Decision: Create one optional `tech-core` bundle, depending on `base`, containing the six requested quality skills (`coverage-diagnose`, `decision-log-entry`, `pr-quality-loop`, `pr-review`, `unit-test-wave` and `xfail-bug-capture`), the existing engineering delivery skills and the existing data-practice skills. The base bundle remains professional/consulting-focused; confirmed technical tracks activate the complete Tech Core catalog without granting tools or authority.
 - Consequences: `bcgos bundles plan` resolves one technical dependency for software-engineering, technical-explorer, data-engineering and data-science. Gamma quality methods are unavailable in a base-only profile and become direct methods only after Tech Core selection. Release allowlists, embedded catalogs, projection code, policies, tests and documentation must use the new canonical bundle identity.
 - Refs: specs/035-professional-capability-bundles.md; specs/036-base-engineering-quality.md; bundles/catalog/catalog.json; bundles/tech-core/skills/catalog.json
+- Supersedes: none
 
 ## WIMP - Make external workspace import transactional and metadata-safe
 
