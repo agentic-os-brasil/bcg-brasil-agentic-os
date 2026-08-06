@@ -31,6 +31,19 @@ authorities allowed to verify, activate or roll back bytes.
    unavailable capability fails closed and never offers an unsigned or implicit
    fallback.
 
+The welcome scene also makes the owner's intent explicit with three reversible
+directions: starting fresh, bringing an existing workspace/second brain for a
+later bounded import, or updating an existing Maestro installation. Selecting
+one changes the guidance copy only; it never reads, copies or ingests a source
+without the subsequent workspace and approval gates.
+
+Verification and installation expose a determinate progress bar tied to the
+wizard's observed phases. It starts at zero, advances through release,
+integrity and user-space checks, then reaches 100% only after the connected
+core returns successfully. While the request is in flight, the bar holds at an
+explicit waiting state instead of implying that a background operation has
+finished.
+
 The **Ver como funciona** action opens a compact in-product explainer with the
 same three contract movements — check, install, conduct — so a non-technical
 person can understand the flow without leaving the installer. The shell uses
@@ -116,6 +129,12 @@ owner context, workspace-agent scaffold and per-user scheduler pass their
 respective checks; a failure returns an error and never marks the workspace
 ready. A generated workspace or a present orientation file is therefore not
 mistaken for observed hooks, verified readiness or an active scheduler.
+
+The final handoff presents **Abrir no Claude Code Desktop** as the primary
+action when the app is detected. The launcher opens the Claude bundle with the
+workspace deep link and the Maestro onboarding prompt, then asks macOS to
+activate that app in front of the installer. Codex remains an explicit
+secondary path when available.
 
 If an earlier first install was interrupted, the connected core may preserve
 the installer-owned managed root and its bound install state in a deterministic
