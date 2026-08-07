@@ -36,6 +36,15 @@ func TestCodexGuardLeavesOrdinaryShellPipelinesToNativePermissionFlow(t *testing
 	}
 }
 
+func TestCodexGuardLeavesIncompleteMetadataToNativePermissionFlow(t *testing.T) {
+	for _, input := range []NativeInput{{}, {ToolName: "Bash"}} {
+		output, err := Guard(input)
+		if err != nil || output.HookSpecificOutput != nil {
+			t.Fatalf("incomplete metadata was blocked: output=%#v err=%v", output, err)
+		}
+	}
+}
+
 func TestCodexNativePayloadFailsClosed(t *testing.T) {
 	if _, err := ParseReader(strings.NewReader(`{"session_id":`)); err == nil {
 		t.Fatal("malformed Codex payload was accepted")

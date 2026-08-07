@@ -65,6 +65,15 @@ func TestGuardLeavesNormalCommandsToClaudePermissionFlow(t *testing.T) {
 	}
 }
 
+func TestGuardLeavesIncompleteMetadataToClaudePermissionFlow(t *testing.T) {
+	for _, input := range []NativeInput{{}, {ToolName: "Bash"}} {
+		output, err := Guard(input)
+		if err != nil || output.HookSpecificOutput != nil {
+			t.Fatalf("incomplete metadata was blocked: output=%#v err=%v", output, err)
+		}
+	}
+}
+
 func TestGuardReportsEvaluationFailureForMalformedSimpleCommand(t *testing.T) {
 	for _, command := range []string{
 		`rm -rf "/`,
@@ -93,7 +102,7 @@ func TestFailClosedDenialUsesNativeClaudeShapeWithoutEchoingInput(t *testing.T) 
 	if output.HookSpecificOutput == nil ||
 		output.HookSpecificOutput.HookEventName != "PreToolUse" ||
 		output.HookSpecificOutput.PermissionDecision != "deny" ||
-		!strings.Contains(output.HookSpecificOutput.PermissionDecisionReason, "could not evaluate") {
+		!strings.Contains(output.HookSpecificOutput.PermissionDecisionReason, "could not verify") {
 		t.Fatalf("output = %#v", output)
 	}
 }
