@@ -15,7 +15,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
-func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
+func TestBuildReturnsBoundedPointersAndOmitsUnapprovedSensitiveOwnerFacets(t *testing.T) {
 	continuous, err := continuoususe.Build(continuoususe.Source{WorkspaceState: "ready", CalibrationState: "complete", CalibrationTrack: "quick", OpenTasksState: "empty", OpenWorkState: "available", WorkState: "paused", CheckpointState: "available", MemoryState: "available"})
 	if err != nil {
 		t.Fatal(err)
@@ -26,6 +26,8 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 			State: "ready", WorkspacePath: "/work/case-a", WorkspaceID: "workspace-a", BrainReadable: true,
 		},
 		Owner: ownerctx.Status{Initialized: true, Facets: map[string]ownerctx.Facet{
+			"owner-identity":        {Pointer: ownerctx.Pointer{Path: "owner/self/owner-identity.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}, Sensitivity: "identity"},
+			"personal-context":      {Pointer: ownerctx.Pointer{Path: "owner/self/personal-context.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}, Sensitivity: "sensitive"},
 			"voice":                 {Pointer: ownerctx.Pointer{Path: "owner/self/voice.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}},
 			"motivations":           {Pointer: ownerctx.Pointer{Path: "owner/self/motivations.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}},
 			"quality-bar":           {Pointer: ownerctx.Pointer{Path: "owner/self/quality-bar.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}},
@@ -44,6 +46,12 @@ func TestBuildReturnsBoundedPointersAndOmitsSensitiveOwnerFacets(t *testing.T) {
 	}
 	if _, ok := packet.Owner.Facets["voice"]; !ok {
 		t.Fatalf("session-readable facet missing: %#v", packet.Owner.Facets)
+	}
+	if _, ok := packet.Owner.Facets["owner-identity"]; !ok {
+		t.Fatalf("owner identity pointer missing: %#v", packet.Owner.Facets)
+	}
+	if _, ok := packet.Owner.Facets["personal-context"]; !ok {
+		t.Fatalf("authorized personal context pointer missing: %#v", packet.Owner.Facets)
 	}
 	if _, ok := packet.Owner.Facets["motivations"]; !ok {
 		t.Fatalf("motivations facet missing: %#v", packet.Owner.Facets)
@@ -154,6 +162,11 @@ func TestBuildFailsClosedForSensitiveSessionReadableFacet(t *testing.T) {
 		Profile:   profile.State{Profile: "standard", Source: "configured"},
 		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
 		Owner: ownerctx.Status{Initialized: true, Facets: map[string]ownerctx.Facet{
+			"personal-context": {
+				Pointer:     ownerctx.Pointer{Path: "owner/self/personal-context.md", Available: true, State: "available"},
+				Readers:     []string{"session", "walter"},
+				Sensitivity: "sensitive",
+			},
 			"psychological-profile": {
 				Pointer:     ownerctx.Pointer{Path: "owner/self/psychological-profile.md", Available: true, State: "available"},
 				Readers:     []string{"session", "walter"},
@@ -162,6 +175,9 @@ func TestBuildFailsClosedForSensitiveSessionReadableFacet(t *testing.T) {
 		}},
 		Atlas: atlas.Status{Managed: atlas.Pointer{State: "unavailable"}},
 	})
+	if _, ok := packet.Owner.Facets["personal-context"]; !ok {
+		t.Fatalf("authorized sensitive context should be pointer-only in packet: %#v", packet.Owner.Facets)
+	}
 	if _, ok := packet.Owner.Facets["psychological-profile"]; ok {
 		t.Fatalf("sensitive session-readable facet leaked into packet: %#v", packet.Owner.Facets)
 	}
