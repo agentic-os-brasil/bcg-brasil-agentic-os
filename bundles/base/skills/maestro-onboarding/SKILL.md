@@ -53,6 +53,11 @@ records the audit receipt and returns the next deterministic interview state:
 ```
 
 Use `--stdin` instead of `--body` when the runtime can provide standard input.
+Use this command only after an onboarding track has been selected and only for
+the facet named by the current `owner onboarding status` response. The CLI
+rejects answers before track selection, out of order, outside the selected
+track, after review/confirmation, and over 1 MiB. Use the lower-level refine
+route for a later self correction.
 The lower-level `owner refine submit/apply` pair remains available for more
 complex or separately reviewed refinements.
 

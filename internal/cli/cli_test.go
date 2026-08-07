@@ -1112,6 +1112,10 @@ func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
 		t.Fatalf("owner interview exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
+	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "professional-role", "--body", "# Role\n\nToo early.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK {
+		t.Fatalf("onboarding answer was accepted before track selection: %s", output.String())
+	}
+	output.Reset()
 	if code := runOwner([]string{"onboarding", "select", "--track", "quick", "--confirm"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"estimated_minutes": 7`) {
 		t.Fatalf("quick onboarding selection = %d, output = %s", code, output.String())
 	}
@@ -1127,6 +1131,14 @@ func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
 	output.Reset()
 	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "professional-role", "--body", "# Professional role\n\nPartner responsável por transformação.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "in_progress"`) || !strings.Contains(output.String(), `"communication-style"`) {
 		t.Fatalf("one-shot onboarding answer = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "voice", "--body", "# Voice\n\nOut of order.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK {
+		t.Fatalf("out-of-order or out-of-track onboarding answer was accepted: %s", output.String())
+	}
+	output.Reset()
+	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "communication-style", "--body", strings.Repeat("x", maximumOwnerFacetBytes+1), "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK || !strings.Contains(output.String(), "exceeds 1 MiB") {
+		t.Fatalf("oversized onboarding answer body = %d, output = %s", code, output.String())
 	}
 	output.Reset()
 	if code := runOwner([]string{"interview", "quick"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"preferences"`) || strings.Contains(output.String(), `"decision-rules"`) {

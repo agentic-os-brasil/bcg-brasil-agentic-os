@@ -2121,8 +2121,24 @@ func runOwnerOnboarding(args []string, in io.Reader, out, errOut io.Writer, root
 			}
 			proposedBody = string(readBody)
 		}
+		if len([]byte(proposedBody)) > maximumOwnerFacetBytes {
+			return reportError(errOut, errors.New("owner onboarding answer exceeds 1 MiB"))
+		}
 		if strings.TrimSpace(proposedBody) == "" {
 			return reportError(errOut, errors.New("owner onboarding answer body is required"))
+		}
+		onboardingStatus, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if onboardingStatus.Onboarding.Track != ownerctx.OnboardingTrackQuick && onboardingStatus.Onboarding.Track != ownerctx.OnboardingTrackComplete {
+			return reportError(errOut, errors.New("select an onboarding track before answering a facet"))
+		}
+		if onboardingStatus.Onboarding.State != "required" && onboardingStatus.Onboarding.State != "in_progress" {
+			return reportError(errOut, errors.New("owner onboarding answer is only available while the interview is in progress"))
+		}
+		if onboardingStatus.Onboarding.NextQuestion.Facet == "" || onboardingStatus.Onboarding.NextQuestion.Facet != *facet {
+			return reportError(errOut, fmt.Errorf("owner onboarding expects the next facet %q", onboardingStatus.Onboarding.NextQuestion.Facet))
 		}
 		proposal, err := ownerctx.SubmitRefinement(root, ownerctx.RefinementInput{Facet: *facet, Evidence: *evidence, ProposedBody: proposedBody})
 		if err != nil {
