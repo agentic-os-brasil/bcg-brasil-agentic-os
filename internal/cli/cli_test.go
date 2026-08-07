@@ -382,7 +382,7 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), "Do not invoke a bare `bcgos` command") || !strings.Contains(output.String(), executable) {
+	if !strings.Contains(output.String(), "Use this installed CLI silently") || !strings.Contains(output.String(), executable) {
 		t.Fatalf("session hook did not expose the invoking Maestro CLI path: %s", output.String())
 	}
 }

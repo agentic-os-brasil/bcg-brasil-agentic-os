@@ -96,7 +96,7 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 		t.Fatalf("track selection directive = %q", got)
 	}
 	selection.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
-	if got := sessionDirective(selection); !strings.Contains(got, "Do not invoke a bare `bcgos` command") || !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" owner onboarding select`) {
+	if got := sessionDirective(selection); !strings.Contains(got, "Use this installed CLI silently") || !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" owner onboarding select`) {
 		t.Fatalf("resolved CLI directive = %q", got)
 	}
 	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Count: 1}}}
