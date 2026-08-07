@@ -16,10 +16,11 @@ authorities allowed to verify, activate or roll back bytes.
    path are shown before any write.
 3. **Instalação** — the exact per-user destination and the atomic activation
    plan are explained. The user confirms once.
-4. **Próximo movimento** — the user chooses one explicit journey: update the
-   Maestro, migrate an existing Maestro workspace, or import an external
-   folder. A clean workspace remains an explicit fourth option and uses the
-   existing workspace readiness path.
+4. **Seu workspace** — the intent selected on the welcome screen becomes the
+   single primary action after installation: create a clean workspace, create
+   one and choose an authorized source, or inspect an update. Advanced
+   migration/import journeys remain available behind an explicit secondary
+   link, rather than repeating the same choice a second time.
 5. **Análise e plano** — the transactional core returns a typed classification plus the
    mapped, excluded, ambiguous and capability-unavailable items. It also says
    whether the existing workspace is preserved and which version/migration is
@@ -190,7 +191,11 @@ macOS does not permit a mounted DMG to auto-execute an installer app. The DMG
 therefore remains a transport container: opening it mounts the volume, then
 the user opens **Maestro Installer.app**. A production one-click delivery
 should use a signed/notarized launcher or a signed `.pkg`, rather than relying
-on DMG autorun behavior.
+on DMG autorun behavior. The local-beta app launcher starts the local bridge
+detached, writes its bounded diagnostic log under the user's temporary
+directory and exits the short-lived Finder process immediately; this prevents
+macOS from displaying the app as “not responding” while the browser wizard
+continues to run on its loopback endpoint.
 
 ### Musical references
 
