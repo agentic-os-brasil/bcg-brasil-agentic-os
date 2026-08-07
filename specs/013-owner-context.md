@@ -132,7 +132,7 @@ Session Start derives one deterministic onboarding state from those facets:
 not make onboarding complete by themselves. The `review_required` projection
 exposes a SHA-256 `review_digest`; `bcgos owner onboarding confirm --digest
 <review_digest> --confirm` records only that exact reviewed version of the
-non-sensitive facets. A missing, malformed or stale digest fails closed without
+facets in the selected track. A missing, malformed or stale digest fails closed without
 changing owner state, and any later facet change invalidates the confirmation.
 The runtime asks only the next unanswered question, then waits; after all
 answers exist it requests explicit review rather than silently activating the
@@ -159,7 +159,9 @@ and reversible. Facets are declared now with one of three policies:
 - `proposal_only`: professional role, motivations, quality bar and decision
   rules may receive a proposal but require owner action.
 - `confirmation_required`: owner identity, authorized personal context,
-  boundaries and psychological profile may never be changed silently.
+  boundaries and psychological profile may never be changed silently. This is
+  an evolution boundary, not a work gate: `personal-context` may remain empty,
+  and later revisions use the existing proposal/apply/revert receipts.
 
 The current CLI implements the local enforcement core: a producer submits a
 proposed facet body with an evidence summary; an eligible facet applies
@@ -170,6 +172,11 @@ checks that the facet has not changed since that audit, journals its own event,
 and refuses to erase newer work. The core does not observe work or synthesize a
 proposal itself: lifecycle and model adapters remain separate producers and are
 reported as unavailable.
+
+The Session Context Packet exposes `owner-identity` and an authorized
+`personal-context` only as bounded pointers, never as bodies. This keeps the
+runtime useful immediately while the owner can refine, replace or redact the
+optional context later through the ownerctx lifecycle.
 
 ## Runtime behavior
 
