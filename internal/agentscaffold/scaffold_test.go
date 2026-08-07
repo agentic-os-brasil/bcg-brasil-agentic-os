@@ -46,6 +46,24 @@ func TestWorkspaceScaffoldIsConcreteDataFreeAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestLegacyWorkspaceIDPersistsCanonicalCaseRoleWithMigrationMarker(t *testing.T) {
+	root := t.TempDir()
+	initializeWorkspaceScope(t, root, "ws-canonical")
+	status, err := Scaffold(root, WorkspaceRequest("ws-canonical"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Instance.Role != "case_agent" {
+		t.Fatalf("legacy request persisted non-canonical role: %#v", status.Instance)
+	}
+	if status.Instance.AgentID != "workspace-agent-ws-canonical" || status.Instance.IdentityCompatibility != "migration_compatibility" {
+		t.Fatalf("legacy ID was not marked as migration compatibility: %#v", status.Instance)
+	}
+	if identityCompatibility("case-agent-ws-canonical") != "" {
+		t.Fatal("canonical Case Agent ID was marked as legacy")
+	}
+}
+
 func TestScaffoldUsesConfirmedAgentPersonalizationWithoutChangingAuthority(t *testing.T) {
 	root := t.TempDir()
 	initializeWorkspaceScope(t, root, "ws-personalized")

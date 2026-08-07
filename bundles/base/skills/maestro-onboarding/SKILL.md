@@ -88,8 +88,8 @@ first identity question in the same message.
 
 | Opção | Tempo estimado | O que estabelece | Implicação |
 | --- | --- | --- | --- |
-| **Curta** | **~7 minutos** | Papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites serão refinados em conversas futuras; as sugestões iniciais serão menos personalizadas. |
-| **Completa** | **~25 minutos** | As oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e define qualidade. |
+| **Curta** | **~10 minutos** | Seu nome preferido, um limite explícito para contexto pessoal, papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites de trabalho serão refinados em conversas futuras; o contexto pessoal pode ser “nenhum por enquanto”. |
+| **Completa** | **~30 minutos** | Identidade básica, contexto pessoal autorizado e as oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e quais limites pessoais autorizou. |
 
 Ask only: **“Você prefere a entrevista curta ou a completa?”**
 
@@ -105,7 +105,14 @@ síntese ou transcrição para revisão antes de propor qualquer gravação loca
 
 The interview is a guided construction of the owner's **professional self** —
 not a personality test and not a request to import another system's private
-memory. The complete track covers eight explicit, reviewable facets:
+memory. Both tracks begin with two explicit, reviewable identity facets:
+
+- `owner-identity`: the name the owner wants Maestro to use. No unnecessary
+  identifiers are requested.
+- `personal-context`: an optional, purpose-bound statement of personal context
+  the owner authorizes Maestro to respect at work. “None for now” is valid.
+
+The complete track then covers eight explicit, reviewable professional facets:
 
 - `professional-role`: the work the owner is accountable for and where Maestro
   should create leverage;
@@ -121,12 +128,25 @@ memory. The complete track covers eight explicit, reviewable facets:
 - `working-boundaries`: scope, confidentiality, sources, people and external
   communication that require authorization.
 
-The quick track covers `professional-role`, `communication-style`,
-`preferences` and `quality-bar`. It is a useful operating baseline, but it
-intentionally leaves external voice, motivations, decision rules and working
-boundaries for later refinement. Psychological/personality material, personal
-history, faith, assessments and visual identity are not inferred or imported by
-either track; they require a separate, explicit local consent path.
+The quick track covers those two identity facets plus
+`professional-role`, `communication-style`, `preferences` and `quality-bar`.
+It is a useful operating baseline, but it intentionally leaves external voice,
+motivations, decision rules and working boundaries for later refinement. The
+personal-context question is a consent boundary, not a request to disclose
+family, health, faith or private history: the owner may decline or share only
+the minimum necessary. Psychological/personality material, assessments and
+visual identity are not inferred or imported by either track; they require a
+separate, explicit local consent path.
+
+After confirmation, `owner-identity` and an authorized `personal-context` are
+available to the session only as bounded pointers. The runtime never serializes
+their bodies into the Session Context Packet. This keeps the first-use flow
+useful without turning onboarding into a permanent data contract: the owner can
+answer “none for now”, revise the context later, or refine it through the
+existing ownerctx proposal/apply/revert flow. Refinement is additive and
+owner-controlled; a missing optional context does not block work. A generic
+`purpose=session` read still excludes the sensitive context; a caller must use
+the explicit `owner-personal-context` purpose after the owner has authorized it.
 
 ## Sugestão técnica orientada pela função
 
@@ -154,9 +174,9 @@ these optional layers when they are useful:
 - **Propósito e não negociáveis** — values, long-term direction and personal
   constraints that the owner explicitly wants the professional system to
   respect. Keep this private and out of client/case packets by default.
-- **Contexto pessoal autorizado** — only the minimum family, faith or life
-  context the owner deliberately chooses to share, with a declared purpose and
-  reader scope. It is never required for ordinary professional work.
+- **Contexto pessoal ampliado** — anything beyond the short baseline the owner
+  deliberately chooses to share, with a declared purpose and reader scope. It
+  is never required for ordinary professional work.
 - **Personalidade ou avaliação** — a local owner-authored synthesis or an
   explicitly selected assessment source. Never diagnose, infer or turn a score
   into an agent rule; a source that cannot be reviewed remains unavailable.
@@ -245,10 +265,10 @@ professional baseline; do not emulate ingestion from conversation.
     collection remains `unavailable/corporate_policy` and no fallback is
     allowed. The local rationale layer is a derived convenience, never a
     replacement for the SharePoint source.
-- Immediately after confirmation, always invite the owner to name the first
-  two internal agents now or defer them: **“Quer dar nome e avatar ao Walter e
-  ao Darwin agora, ou prefere deixar isso para depois?”** This is an invitation,
-  never a required extra interview step.
+- Immediately after confirmation, always invite the owner to name the internal
+  agents now or defer them: **“Quer dar nome e avatar ao Walter, ao Darwin e ao
+  Gamma Guardian agora, ou prefere deixar isso para depois?”** This is an
+  invitation, never a required extra interview step.
 - Present these initial suggestions with their short stories:
   - **Walter 🦉** — suggested name: `Walter`. He is the owner's calm alter
     ego: a senior advisor that asks whether the intrinsic reason behind a
@@ -262,6 +282,14 @@ professional baseline; do not emulate ingestion from conversation.
     explicitly asks for a reference-based alternative, examples include `TARS`
     (resiliência pragmática), `Ariadne` (arquitetura de complexidade), `EVE`
     (sinais de futuro) and `Data` (aprendizado contínuo).
+  - **Gamma Guardian 🧪** — suggested name: `Gamma Guardian`. It is the
+    system-known longitudinal quality/QA guardian: a direct Maestro spoke that
+    reviews bounded workspace heads and returns advisory evidence, never a
+    naysayer, Case child, merge authority or native-runtime qualification. The
+    owner may customize its display name and emoji, but not its
+    `quality_guardian` role, `quality_longitudinal` scope, read-only boundary or
+    Maestro routing. If an adapter or independent runtime evidence is absent,
+    Gamma reports `UNAVAILABLE`/`BLOCKED`; it does not infer readiness.
 - The full repertoire lives in `/agent-identity-setup`. Before suggesting a
   reference-based name, ask one optional question: **“Que presença você quer
   desses agentes: guia sereno, estrategista, parceiro firme, advisor técnico,
@@ -271,12 +299,14 @@ professional baseline; do not emulate ingestion from conversation.
   profile from past conversations. `HAL` remains available only if the owner
   chooses it deliberately; never suggest it by default.
 - Explain that names and emoji-avatars are entirely customizable now or later;
-  they never alter an agent's authority. The owner can also create any number
+  they never alter an agent's authority. Gamma's identity is known by the
+  system even when its runtime is unavailable. The owner can also create any
+  number
   of named **Client Account Agents** and **Case Agents** whenever a real
   account or case is ready, through `/agent-identity-setup` and an explicitly
   confirmed local profile.
 - Only after this invitation may you suggest another next skill, chosen for the
-  owner's stated need. Examples: `/workspace-agent-setup`, `/case-kickoff`,
+  owner's stated need. Examples: `/case-agent-setup`, `/case-kickoff`,
   `/ingest-content` or `/meeting-to-work-items`.
 - Suggesting a skill is not executing it. Explain its purpose and wait for the
   owner to choose it.

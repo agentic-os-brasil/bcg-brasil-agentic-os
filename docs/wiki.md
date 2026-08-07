@@ -49,7 +49,12 @@ generation and validation gate.
 
 ## Current evidence boundary
 
-The managed atlas compiler is implemented and deterministic. Managed content is
-locally reviewable and distributable as a bundle, while private atlas
-compilation, runtime-native navigation and pilot distribution remain separate
-qualification and release gates.
+The managed atlas compiler is implemented and deterministic. For the current
+source baseline (`as_of: 2026-08-06`, commit
+`43e86494b2e32ca8eccece843514b75d2c98ffa7`), the local harness records
+`wiki validate` and `wiki verify` as reproducible evidence. Managed content is
+locally reviewable and distributable as a bundle; private-atlas compilation,
+runtime-native navigation and pilot distribution remain separate qualification
+and release gates. A generated atlas page or a local wiki pass does not prove
+hosted CI, native qualification, signing/notarization, Windows acceptance or
+pilot readiness.

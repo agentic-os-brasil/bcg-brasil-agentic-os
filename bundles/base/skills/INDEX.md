@@ -5,6 +5,7 @@
 | Skill | Use when | Pointer |
 |---|---|---|
 | Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
+| Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
 | Case Kickoff | Build a bounded first-days plan from approved case scope | `skills/case-kickoff/SKILL.md` |
 | Deck Review | Review supplied slide text for storyline and evidence risks | `skills/deck-review/SKILL.md` |
 | Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/deck-storyline/SKILL.md` |
@@ -21,4 +22,4 @@
 | Qualitative Analysis | Synthesize bounded qualitative evidence into themes and implications | `skills/qualitative-analysis/SKILL.md` |
 | Quantitative Analysis | Analyze bounded quantitative evidence with explicit assumptions and checks | `skills/quantitative-analysis/SKILL.md` |
 | Slide Summary | Map supplied deck text into slide messages and a narrative arc | `skills/slide-summary/SKILL.md` |
-| Workspace Agent Setup | Interview and research one project workspace safely | `skills/workspace-agent-setup/SKILL.md` |
+| Legacy Case Agent Setup Alias | Migrate the retired workspace-agent setup name | `skills/workspace-agent-setup/SKILL.md` |

@@ -52,35 +52,36 @@ type Request struct {
 }
 
 type Instance struct {
-	SchemaVersion     int       `json:"schema_version"`
-	AgentID           string    `json:"agent_id"`
-	Role              string    `json:"role"`
-	ScopeKind         string    `json:"scope_kind"`
-	ScopeID           string    `json:"scope_id"`
-	ParentAgentID     string    `json:"parent_agent_id"`
-	ParentRole        string    `json:"parent_role"`
-	AccountAgentID    string    `json:"account_agent_id,omitempty"`
-	Owner             string    `json:"owner,omitempty"`
-	Mandate           string    `json:"mandate,omitempty"`
-	CanonPath         string    `json:"canon_path,omitempty"`
-	CanonSHA256       string    `json:"canon_sha256,omitempty"`
-	ExpertKind        string    `json:"expert_kind,omitempty"`
-	ExpertVersion     string    `json:"expert_version,omitempty"`
-	ExpertLifecycle   string    `json:"expert_lifecycle,omitempty"`
-	DisplayName       string    `json:"display_name"`
-	Emoji             string    `json:"emoji"`
-	OwnerID           string    `json:"owner_id"`
-	OwnershipScope    string    `json:"ownership_scope"`
-	InputContract     string    `json:"input_contract"`
-	ToolAccess        string    `json:"tool_access"`
-	MayDelegate       bool      `json:"may_delegate"`
-	DefinitionPath    string    `json:"definition_path"`
-	DefinitionSHA256  string    `json:"definition_sha256"`
-	StateSHA256       string    `json:"state_sha256"`
-	RegistrationState string    `json:"registration_state"`
-	RuntimeState      string    `json:"runtime_state"`
-	CreatedAt         time.Time `json:"created_at"`
-	HMACSHA256        string    `json:"hmac_sha256"`
+	SchemaVersion         int       `json:"schema_version"`
+	AgentID               string    `json:"agent_id"`
+	Role                  string    `json:"role"`
+	IdentityCompatibility string    `json:"identity_compatibility,omitempty"`
+	ScopeKind             string    `json:"scope_kind"`
+	ScopeID               string    `json:"scope_id"`
+	ParentAgentID         string    `json:"parent_agent_id"`
+	ParentRole            string    `json:"parent_role"`
+	AccountAgentID        string    `json:"account_agent_id,omitempty"`
+	Owner                 string    `json:"owner,omitempty"`
+	Mandate               string    `json:"mandate,omitempty"`
+	CanonPath             string    `json:"canon_path,omitempty"`
+	CanonSHA256           string    `json:"canon_sha256,omitempty"`
+	ExpertKind            string    `json:"expert_kind,omitempty"`
+	ExpertVersion         string    `json:"expert_version,omitempty"`
+	ExpertLifecycle       string    `json:"expert_lifecycle,omitempty"`
+	DisplayName           string    `json:"display_name"`
+	Emoji                 string    `json:"emoji"`
+	OwnerID               string    `json:"owner_id"`
+	OwnershipScope        string    `json:"ownership_scope"`
+	InputContract         string    `json:"input_contract"`
+	ToolAccess            string    `json:"tool_access"`
+	MayDelegate           bool      `json:"may_delegate"`
+	DefinitionPath        string    `json:"definition_path"`
+	DefinitionSHA256      string    `json:"definition_sha256"`
+	StateSHA256           string    `json:"state_sha256"`
+	RegistrationState     string    `json:"registration_state"`
+	RuntimeState          string    `json:"runtime_state"`
+	CreatedAt             time.Time `json:"created_at"`
+	HMACSHA256            string    `json:"hmac_sha256"`
 }
 
 type OperationalState struct {
@@ -111,6 +112,13 @@ func WorkspaceRequest(workspaceID string) Request {
 		ScopeKind: "workspace", ScopeID: workspaceID,
 		ParentAgent: "maestro", ParentRole: "hub",
 	}
+}
+
+func identityCompatibility(agentID string) string {
+	if strings.HasPrefix(agentID, "workspace-agent-") {
+		return "migration_compatibility"
+	}
+	return ""
 }
 
 func Scaffold(dataRoot string, request Request) (Status, error) {
@@ -184,7 +192,8 @@ func Scaffold(dataRoot string, request Request) (Status, error) {
 
 	instance := Instance{
 		SchemaVersion: 1, AgentID: request.AgentID, Role: request.Role,
-		ScopeKind: request.ScopeKind, ScopeID: request.ScopeID,
+		IdentityCompatibility: identityCompatibility(request.AgentID),
+		ScopeKind:             request.ScopeKind, ScopeID: request.ScopeID,
 		ParentAgentID: request.ParentAgent, ParentRole: request.ParentRole,
 		AccountAgentID: request.AccountAgentID,
 		Owner:          request.Owner, Mandate: strings.TrimSpace(request.Mandate),
@@ -479,7 +488,7 @@ func validateRequest(catalog agentcatalog.Catalog, request Request) (agentcatalo
 func validateResolvedBindings(root *os.Root, integrityKey []byte, catalog agentcatalog.Catalog, request Request) error {
 	if catalog.CanonicalRole(request.Role) == "case_agent" && request.ScopeKind == "workspace" {
 		if !managedAgentHasRole(catalog, request.ParentAgent, request.ParentRole) {
-			return errors.New("workspace agent scaffold parent is not the registered Maestro hub")
+			return errors.New("Case Agent scaffold parent is not the registered Maestro hub")
 		}
 		return validateWorkspaceScope(root, request.ScopeID)
 	}
@@ -585,8 +594,17 @@ func validateWorkspaceScope(root *os.Root, workspaceID string) error {
 }
 
 func matchesRequest(instance Instance, request Request, contract agentcatalog.RoleContract, templateSHA256 string) bool {
+	compatibility := identityCompatibility(request.AgentID)
+	compatibilityMatches := instance.IdentityCompatibility == compatibility
+	// Pre-marker legacy instances remain valid compatibility artifacts. They
+	// cannot be rewritten in place, but readiness reports them as migration
+	// compatibility based on the legacy ID prefix.
+	if compatibility == "migration_compatibility" && instance.IdentityCompatibility == "" {
+		compatibilityMatches = true
+	}
 	return instance.AgentID == request.AgentID &&
 		instance.Role == request.Role &&
+		compatibilityMatches &&
 		instance.ScopeKind == request.ScopeKind &&
 		instance.ScopeID == request.ScopeID &&
 		instance.ParentAgentID == request.ParentAgent &&

@@ -9,8 +9,8 @@ promotes a capability by implication.
 
 | Field | Value |
 | --- | --- |
-| `as_of` | `2026-08-02` |
-| `base_commit` | `61c66dfecbdc21bff6137398243236232fd14988` — current PR #150 head; this documentation follow-up is stacked on that parent |
+| `as_of` | `2026-08-06` |
+| `base_commit` | `43e86494b2e32ca8eccece843514b75d2c98ffa7` — `origin/main` comparison point at review start; candidate evidence was run on `012c08f` and is not hosted CI evidence |
 | Repository evidence | Configured adapters, local contract fixtures and the non-invasive lifecycle probe are present; no model session was started for this documentation update. |
 | Runtime evidence | No reproducible in-repo runtime-version artifact or fresh native-session observation is attached for either runtime; prior external version observations are not treated as current snapshot evidence. |
 | Scheduler evidence | No live `launchctl` observation is attached. Filesystem/plist installation and scheduler loaded/enabled state remain separate claims. |
@@ -53,7 +53,7 @@ writing a receipt or changing runtime configuration.
 | Readiness class | Snapshot status |
 | --- | --- |
 | Configured | Yes — workspace-local adapter wiring is represented. |
-| Local contract-tested | Repository fixtures and deterministic boundaries are present; this update did not rerun them, so no fresh test pass is claimed. |
+| Local contract-tested | Repository fixtures and deterministic boundaries are present; `go run ./dev/harness validate --full` passed on candidate branch `012c08f` (branch-local evidence, not hosted CI). |
 | Adapter-observed | No — no bounded `adapter_command` receipt or equivalent diagnostic signal is attached in this snapshot. |
 | Native-qualified | No — no fresh qualifying native-session observation for Claude or Codex. |
 | Release-ready | No — signing, publication and release-gate evidence are absent. |

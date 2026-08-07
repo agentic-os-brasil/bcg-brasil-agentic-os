@@ -20,6 +20,8 @@ owner/
   registry.json
   self/
     README.md
+    owner-identity.md
+    personal-context.md
     professional-role.md
     communication-style.md
     voice.md
@@ -51,23 +53,28 @@ professional self-understanding and for the Walter role where the owner has
 authorized that purpose. It is not a diagnosis, a fixed label, an employment
 selection tool or a source of inferences about other people.
 
-The managed cold-start interview asks only for the eight non-sensitive
-professional facets: role, communication style, external voice, preferences,
-professional motivations, quality bar, decision rules and working boundaries.
-It returns a runtime-neutral question contract; a Claude or Codex adapter must
-reflect each answer back to the owner before proposing any write. The owner may
-later choose to import an assessment report through an approved local adapter
-with explicit consent. Raw reports stay local under `sources/` and are never
-automatically injected; any professional synthesis requires provenance and
-confirmation. Personality, personal history, faith and visual identity are not
-inferred by cold start.
+The managed cold-start interview first asks for two bounded identity facets:
+the name the owner prefers to use and an optional, purpose-bound personal
+context that the owner explicitly authorizes Maestro to respect at work. The
+owner may answer `none for now`; no unnecessary identifiers, personal history,
+health, faith or personality material is requested by default. The complete
+track then asks the eight non-sensitive professional facets: role,
+communication style, external voice, preferences, professional motivations,
+quality bar, decision rules and working boundaries. It returns a
+runtime-neutral question contract; a Claude or Codex adapter must reflect each
+answer back to the owner before proposing any write. The owner may later choose
+to import an assessment report through an approved local adapter with explicit
+consent. Raw reports stay local under `sources/` and are never automatically
+injected; any professional synthesis requires provenance and confirmation.
 
 After onboarding, SELF expansion remains an explicit owner interview, not a
 continuous-learning lifecycle. `owner/self/README.md` is the canonical local
-index for the eight non-sensitive professional facets. The deterministic status
-classifies each facet as `unknown`, `current` or `stale` (a confirmed body was
-changed or its confirmation is older than 180 days), then exposes exactly one
-next facet. `bcgos owner expand next` returns one text question, one short
+index for the eight non-sensitive professional facets plus the two bounded
+identity/context facets. Onboarding status covers all ten, while the
+deterministic SELF expansion status classifies each professional facet as
+`unknown`, `current` or `stale` (a confirmed body was changed or its
+confirmation is older than 180 days), then exposes exactly one next facet.
+`bcgos owner expand next` returns one text question, one short
 audio-ready rendering and a token bound to the question version and current
 facet SHA-256.
 
@@ -94,13 +101,20 @@ closure are then idempotently recoverable after a crash. Draft states are the
 closed set `drafted`, `prepared`, `applied`, and ID/path/digest mismatches fail
 closed.
 The interview surface permits only one open draft and retains at most the
-latest applied draft for each of the eight facets; authoritative prior bodies
+latest applied draft for each of the eight professional facets; authoritative prior bodies
 remain in the separate refinement audit/version surface. This bounds
 interview-state growth without appending history to current SELF.
 Draft creation and confirmation/compaction share one cross-process local
 transition lock, so two runtimes cannot both pass the one-open-draft check.
 
-The V1 question set is exact and versioned:
+The V1 question set is exact and versioned. Both tracks begin with these two
+identity/context questions; the professional subset below is the complete-track
+portion:
+
+| Facet | Text question | Audio-ready wording |
+| --- | --- | --- |
+| `owner-identity` | Como você prefere ser chamado pelo Maestro? Se quiser, diga também como devo pronunciar seu nome; não preciso de outros identificadores. | Como você prefere ser chamado pelo Maestro? |
+| `personal-context` | Existe algum contexto pessoal — por exemplo família, energia, valores ou limites de vida — que você autoriza o Maestro a respeitar no trabalho? Compartilhe apenas o mínimo necessário ou responda “nenhum por enquanto”. | Que contexto pessoal, se houver, você autoriza o Maestro a respeitar no trabalho? Pode dizer nenhum por enquanto. |
 
 | Facet | Text question | Audio-ready wording |
 | --- | --- | --- |
@@ -118,7 +132,7 @@ Session Start derives one deterministic onboarding state from those facets:
 not make onboarding complete by themselves. The `review_required` projection
 exposes a SHA-256 `review_digest`; `bcgos owner onboarding confirm --digest
 <review_digest> --confirm` records only that exact reviewed version of the
-non-sensitive facets. A missing, malformed or stale digest fails closed without
+facets in the selected track. A missing, malformed or stale digest fails closed without
 changing owner state, and any later facet change invalidates the confirmation.
 The runtime asks only the next unanswered question, then waits; after all
 answers exist it requests explicit review rather than silently activating the
@@ -144,8 +158,10 @@ and reversible. Facets are declared now with one of three policies:
   evidence, change and reversal path.
 - `proposal_only`: professional role, motivations, quality bar and decision
   rules may receive a proposal but require owner action.
-- `confirmation_required`: boundaries and psychological profile may never be
-  changed silently.
+- `confirmation_required`: owner identity, authorized personal context,
+  boundaries and psychological profile may never be changed silently. This is
+  an evolution boundary, not a work gate: `personal-context` may remain empty,
+  and later revisions use the existing proposal/apply/revert receipts.
 
 The current CLI implements the local enforcement core: a producer submits a
 proposed facet body with an evidence summary; an eligible facet applies
@@ -156,6 +172,13 @@ checks that the facet has not changed since that audit, journals its own event,
 and refuses to erase newer work. The core does not observe work or synthesize a
 proposal itself: lifecycle and model adapters remain separate producers and are
 reported as unavailable.
+
+The Session Context Packet exposes `owner-identity` and an authorized
+`personal-context` only as bounded pointers, never as bodies. This keeps the
+runtime useful immediately while the owner can refine, replace or redact the
+optional context later through the ownerctx lifecycle. Generic session reads
+cannot resolve the sensitive body; an explicit `owner-personal-context`
+purpose is required after owner authorization.
 
 ## Runtime behavior
 

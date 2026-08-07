@@ -788,36 +788,45 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 	case WalterHold:
 		state = ReviewHold
 	}
-	original := verified
+	originalWalter := verified
 	receipt := pilot.complete(verified, envelope, "", StateCompleted, state)
 	if receipt.Review != nil {
 		receipt.Review.ObjectionCount = len(normalized.Objections)
 	}
 	updated := pilot.records[receipt.DelegationID]
 	updated.receipt = receipt
-	if err := pilot.persistRecordLocked(updated); err != nil {
-		pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
-		pilot.records[receipt.DelegationID] = original
-		return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
-	}
-	pilot.records[receipt.DelegationID] = updated
+	producerID := ""
+	var originalProducer, producerUpdated pilotRecord
 	if sourceID := verified.packet.Review.SourcePacketID; sourceID != "" {
 		for delegationID, producer := range pilot.records {
 			if producer.packet.PacketID != sourceID {
 				continue
 			}
+			producerID, originalProducer = delegationID, producer
 			producer.receipt.Review = reviewSummary(verified.packet.Review, state)
 			if normalized.Verdict == WalterApproved {
 				producer.receipt.State = StateCompleted
 				producer.receipt.CompletedAt = pilot.now().UTC()
 			}
-			if err := pilot.persistRecordLocked(producer); err != nil {
-				return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
-			}
-			pilot.records[delegationID] = producer
+			producerUpdated = producer
 			break
 		}
 	}
+	if producerID != "" {
+		records := []pilotRecord{updated, producerUpdated}
+		if err := pilot.persistRecordsLocked(records...); err != nil {
+			pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
+			pilot.records[receipt.DelegationID] = originalWalter
+			pilot.records[producerID] = originalProducer
+			return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
+		}
+		pilot.records[producerID] = producerUpdated
+	} else if err := pilot.persistRecordLocked(updated); err != nil {
+		pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
+		pilot.records[receipt.DelegationID] = originalWalter
+		return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
+	}
+	pilot.records[receipt.DelegationID] = updated
 	return cloneReceipt(receipt), nil
 }
 
@@ -1000,6 +1009,13 @@ func (pilot *Pilot) persistRecordLocked(record pilotRecord) error {
 		return nil
 	}
 	return pilot.store.write(record)
+}
+
+func (pilot *Pilot) persistRecordsLocked(records ...pilotRecord) error {
+	if pilot.store == nil {
+		return nil
+	}
+	return pilot.store.writeBatch(records...)
 }
 
 func (pilot *Pilot) rejectEnvelope(envelope ExecutionEnvelope, code string, cause error) (Receipt, error) {

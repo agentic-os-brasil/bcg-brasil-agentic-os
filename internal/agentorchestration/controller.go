@@ -902,7 +902,12 @@ func (adapter *Adapter) RecoverStale(maxAge time.Duration, recoveryCapability st
 	if state.BranchID == "" || state.Updated.IsZero() || adapter.now().UTC().Sub(state.Updated) <= maxAge {
 		return false
 	}
-	adapter.store.state = StateSnapshot{PolicySHA256: state.PolicySHA256, FenceEpoch: state.FenceEpoch}
+	adapter.store.state = StateSnapshot{
+		PolicySHA256:   state.PolicySHA256,
+		FenceEpoch:     state.FenceEpoch,
+		BreadcrumbSeq:  state.BreadcrumbSeq,
+		BreadcrumbTail: append([]Breadcrumb(nil), state.BreadcrumbTail...),
+	}
 	if err := adapter.store.persistLocked(); err != nil {
 		adapter.store.state = state
 		return false

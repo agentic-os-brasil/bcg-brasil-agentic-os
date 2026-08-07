@@ -1,7 +1,7 @@
 # Workspace boundary assurance — Maestro
 
 **Date:** 2026-07-27
-**Scope:** workspace bootstrap, workspace agents, research approval, context
+**Scope:** workspace bootstrap, Case Agents, research approval, context
 promotion, owner context, interaction profile and Atlas.
 
 ## Verdict
@@ -18,8 +18,8 @@ runtime enforcement where that adapter does not exist.
 | Managed core | product distribution | code, safe templates, contracts | never receives client or owner data | release allowlist; no workspace fallback |
 | Owner context | local owner | SELF facets and operating pointers | never copied to workspace or shared context | policy-bound refinement, audit and revert |
 | Interaction profile | local owner | communication preference only | never grants authority, provider access or memory persistence | invalid configuration falls back to standard |
-| Workspace / case | owning workspace agent | raw artifacts, dossier, stakeholder/project context, research evidence | one reviewed `account_safe` curated fact with authority for source workspace **and** destination account | source-root checks, provenance receipt, expiry and revocation |
-| Account context | account agent | opaque, approved promotion record only | cannot enumerate/browse workspace sources | known promotion ID plus `read_account`; revoked/expired records fail closed |
+| Case / project | Case Agent | raw artifacts, dossier, stakeholder/project context, research evidence | one reviewed `account_safe` curated fact with authority for source case **and** destination account | source-root checks, provenance receipt, expiry and revocation |
+| Account context | Client Account Agent | opaque, approved promotion record only | cannot enumerate/browse case sources | known promotion ID plus `read_account`; revoked/expired records fail closed |
 | Public economic rollup | independent public layer | attested public claims and sources | never accepts workspace-derived inputs | independent-public attestation required |
 
 ## Covered adversarial boundaries
@@ -40,7 +40,7 @@ runtime enforcement where that adapter does not exist.
 ## Safe bootstrap
 
 `bcgos init` first registers a path-bound workspace identity, then creates the
-workspace-agent control plane and only then exposes optional human Atlas
+Case Agent control plane and only then exposes optional human Atlas
 bootstrap. Atlas initialization independently re-checks the registered
 identity, so callers of the internal package cannot substitute a workspace ID.
 The compact operational state retains IDs, lifecycle, current objective,

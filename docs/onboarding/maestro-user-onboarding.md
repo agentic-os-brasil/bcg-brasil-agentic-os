@@ -127,11 +127,17 @@ antes de propor qualquer gravação local. O objetivo é construir um self
 profissional corrigível — não inferir personalidade nem importar silenciosamente
 o conteúdo de outro sistema.
 
-O percurso completo cobre oito facetas: papel profissional, estilo de
+As duas jornadas começam por identidade básica: como o owner prefere ser
+chamado e qual contexto pessoal, se houver, ele autoriza o Maestro a respeitar
+no trabalho. “Nenhum por enquanto” é uma resposta válida; não se pede história
+pessoal, saúde, fé ou outros identificadores por padrão.
+
+O percurso completo cobre depois oito facetas: papel profissional, estilo de
 comunicação, preferências de trabalho, voz externa, motivações profissionais,
 barra de qualidade/QA, regras de decisão e limites de trabalho. A jornada curta
-cobre papel, comunicação, preferências e barra de qualidade; começa mais rápido,
-mas demora mais para absorver voz, motivações, regras de decisão e limites.
+cobre identidade, contexto pessoal autorizado, papel, comunicação, preferências
+e barra de qualidade; começa mais rápido, mas demora mais para absorver voz,
+motivações, regras de decisão e limites de trabalho.
 
 Personality/psychological profile, história pessoal, fé, avaliações e identidade
 visual ficam fora da entrevista padrão. Só entram por uma etapa local,
@@ -139,7 +145,7 @@ explicitamente autorizada, com finalidade e revisão próprias.
 
 Isso não significa que o Maestro conheça apenas o cargo. Depois da revisão do
 percurso escolhido, ele pode oferecer camadas opcionais — propósito e não
-negociáveis, contexto pessoal autorizado, personalidade/avaliações ou identidade
+negociáveis, contexto pessoal ampliado, personalidade/avaliações ou identidade
 visual — sempre com finalidade, fonte, leitores e retenção explícitos. Essas
 camadas não são necessárias para começar um trabalho profissional, não entram em
 contexto de cliente por padrão e permanecem `unavailable` quando não houver um
@@ -147,8 +153,9 @@ adaptador local qualificado.
 
 Escolha entre:
 
-- **Curta — cerca de 7 minutos:** baseline operacional para começar com segurança.
-- **Completa — cerca de 25 minutos:** perfil profissional mais fiel para
+- **Curta — cerca de 10 minutos:** baseline operacional com identidade e limites
+  pessoais mínimos para começar com segurança.
+- **Completa — cerca de 30 minutos:** perfil profissional mais fiel para
   recomendações, comunicação e revisão de qualidade desde o início.
 
 Em ambos os casos, o Maestro resume o que entendeu, espera sua correção e só
@@ -430,7 +437,8 @@ principais superfícies descritas no bundle estão:
 | --- | --- | --- |
 | `maestro-setup-update` | Orienta setup, update, verificação e recuperação com uma confirmação clara. | Não aceita release sem confiança nem contorna bloqueios. |
 | `ingest-content` | Conduz ingestão local com política, rota, proveniência e fidelidade. | Não instala runtime ad hoc nem envia dados remotamente. |
-| `workspace-agent-setup` | Cria ou atualiza um agente de workspace por entrevista, pesquisa pública autorizada e evidência com fonte. | Não concede acesso amplo nem pesquisa fora do escopo. |
+| `case-agent-setup` | Cria ou atualiza o Case Agent de um projeto por entrevista, pesquisa pública autorizada e evidência com fonte. | Não concede acesso amplo, não representa o Client Account Agent e não pesquisa fora do escopo. |
+| `workspace-agent-setup` (alias de migração) | Redireciona instalações/projeções antigas para `$case-agent-setup`. | Não é um tipo de agente atual e não cria um workspace agent ou practice agent. |
 | `agent-identity-setup` | Define identidade, ownership e personalização de agente de forma revisável. | Não transforma persona em autoridade. |
 | `deck-storyline` | Organiza uma narrativa profissional orientada à decisão a partir de evidência aprovada. | Não autoriza ler, editar ou apresentar material sem escopo. |
 | `qualitative-analysis` / `quantitative-analysis` | Estrutura análise com fontes, premissas, incerteza e contraevidência. | Não concede acesso a dados nem autorização para publicar. |

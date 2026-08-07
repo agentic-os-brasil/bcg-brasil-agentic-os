@@ -462,8 +462,8 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 	output.Reset()
 	input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"echo safe"}}`
 	code := runHookWithInput([]string{"codex", "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, strings.NewReader(input), &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
-		t.Fatalf("ordinary command was blocked by unrelated symlink state: %d %s", code, output.String())
+	if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) || !strings.Contains(output.String(), "Nothing was changed") {
+		t.Fatalf("symlink guard = %d %s", code, output.String())
 	}
 	if err := os.Remove(statePath); err != nil {
 		t.Fatal(err)
@@ -532,22 +532,7 @@ func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *
 	}
 }
 
-func TestInstalledGuardDoesNotBlockOrdinaryBashWhenOrchestrationStateIsUnavailable(t *testing.T) {
-	for _, runtimeName := range []string{"claude", "codex"} {
-		t.Run(runtimeName, func(t *testing.T) {
-			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"ls /Users/example/Developer/other-workspace 2>/dev/null | grep -i darwin"}}`
-			var output bytes.Buffer
-			code := runHookWithInput([]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/missing-state.json", "/workspace-that-must-not-be-inspected"}, strings.NewReader(input), &output, &output, func() (string, error) {
-				return "", errors.New("ordinary Bash must not inspect orchestration state")
-			})
-			if code != ExitOK || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
-				t.Fatalf("ordinary diagnostic was blocked: exit=%d output=%s", code, output.String())
-			}
-		})
-	}
-}
-
-func TestInstalledGuardDefersHomonymousBCGOSDiagnosticToNativeRuntime(t *testing.T) {
+func TestInstalledGuardRejectsHomonymousBCGOSDiagnosticWhenStateCannotBeValidated(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
 			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"/tmp/attacker/bcgos doctor"}}`
@@ -557,7 +542,7 @@ func TestInstalledGuardDefersHomonymousBCGOSDiagnosticToNativeRuntime(t *testing
 				strings.NewReader(input), &output, &output,
 				func() (string, error) { return "", errors.New("invalid orchestration state") },
 			)
-			if code != ExitOK || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+			if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) || !strings.Contains(output.String(), "Nothing was changed") {
 				t.Fatalf("guard = %d output=%s", code, output.String())
 			}
 		})
@@ -1112,24 +1097,15 @@ func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
 		t.Fatalf("owner interview exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "professional-role", "--body", "# Role\n\nToo early.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK {
+	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "owner-identity", "--body", "# Identity\n\nToo early.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK {
 		t.Fatalf("onboarding answer was accepted before track selection: %s", output.String())
 	}
 	output.Reset()
-	if code := runOwner([]string{"onboarding", "select", "--track", "quick", "--confirm"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"estimated_minutes": 7`) {
+	if code := runOwner([]string{"onboarding", "select", "--track", "quick", "--confirm"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"estimated_minutes": 10`) {
 		t.Fatalf("quick onboarding selection = %d, output = %s", code, output.String())
 	}
-	statusOutput := output.String()
 	output.Reset()
-	if code := runOwner([]string{"onboarding", "review"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || output.String() == "" || !strings.Contains(output.String(), `"track": "quick"`) || output.String() != statusOutput {
-		t.Fatalf("onboarding review alias = %d, output = %s (status = %s)", code, output.String(), statusOutput)
-	}
-	output.Reset()
-	if code := runOwner([]string{"onboarding", "confirm", "--confirm"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitUsage || !strings.Contains(output.String(), "pass its review_digest") {
-		t.Fatalf("missing onboarding digest guidance = %d, output = %s", code, output.String())
-	}
-	output.Reset()
-	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "professional-role", "--body", "# Professional role\n\nPartner responsável por transformação.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "in_progress"`) || !strings.Contains(output.String(), `"communication-style"`) {
+	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "owner-identity", "--body", "# Identity\n\nDaniel.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "in_progress"`) || !strings.Contains(output.String(), `"personal-context"`) {
 		t.Fatalf("one-shot onboarding answer = %d, output = %s", code, output.String())
 	}
 	output.Reset()
@@ -1137,11 +1113,11 @@ func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
 		t.Fatalf("out-of-order or out-of-track onboarding answer was accepted: %s", output.String())
 	}
 	output.Reset()
-	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "communication-style", "--body", strings.Repeat("x", maximumOwnerFacetBytes+1), "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK || !strings.Contains(output.String(), "exceeds 1 MiB") {
+	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "personal-context", "--body", strings.Repeat("x", maximumOwnerFacetBytes+1), "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK || !strings.Contains(output.String(), "exceeds 1 MiB") {
 		t.Fatalf("oversized onboarding answer body = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runOwner([]string{"interview", "quick"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"preferences"`) || strings.Contains(output.String(), `"decision-rules"`) {
+	if code := runOwner([]string{"interview", "quick"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"owner-identity"`) || !strings.Contains(output.String(), `"personal-context"`) || !strings.Contains(output.String(), `"preferences"`) || strings.Contains(output.String(), `"decision-rules"`) {
 		t.Fatalf("quick interview = %d, output = %s", code, output.String())
 	}
 }
@@ -1806,7 +1782,7 @@ func TestWorkspaceAgentCommandsCreateAndExposeTheGuidedInterview(t *testing.T) {
 	dataRoot := filepath.Join(root, "local", "BCGOS")
 	workspacePath := filepath.Join(root, "workspace")
 	var output bytes.Buffer
-	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"case_agent"`) || !strings.Contains(output.String(), `"workspace-agent-`) || !strings.Contains(output.String(), `"agent_stub"`) || !strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"case_agent"`) || !strings.Contains(output.String(), `"workspace-agent-`) || !strings.Contains(output.String(), `"identity_compatibility": "migration_compatibility"`) || !strings.Contains(output.String(), `"agent_stub"`) || !strings.Contains(output.String(), `"runtime_state": "unavailable"`) {
 		t.Fatalf("init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
@@ -1850,7 +1826,7 @@ func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
 		t.Fatalf("personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 30`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 31`) {
 		t.Fatalf("optional adapter install = %d %s", code, output.String())
 	}
 	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence"} {
@@ -1873,7 +1849,7 @@ func TestInterviewSelectionActivatesDataProjection(t *testing.T) {
 		t.Fatalf("data personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 30`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 31`) {
 		t.Fatalf("data adapter install = %d %s", code, output.String())
 	}
 	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence", "data-pipeline-quality", "data-science-evaluation", "reproducible-data-run"} {

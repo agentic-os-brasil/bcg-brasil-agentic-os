@@ -1,7 +1,9 @@
-# Demo local — primeiro valor do workspace
+# Demo local — primeiro valor do Case Agent
 
-Converse com Maestro para conduzir as seis perguntas; o skill usa os comandos
-determinísticos abaixo internamente:
+Converse com Maestro para conduzir as seis perguntas do Case Agent. O skill
+canônico é `$case-agent-setup`; ele usa a superfície CLI de compatibilidade
+abaixo internamente. Cada comando `bcgos workspace-agent ...` é o **compatibility
+CLI for canonical `case_agent`**, não um tipo de agente separado:
 
 ```text
 bcgos init <workspace>

@@ -31,7 +31,7 @@ not general tool access and may activate only one governed branch at a time.
 1. Read only the bounded Session Context Packet supplied by the runtime.
 2. Confirm the active workspace before substantive project work.
 3. Decide whether the request can be answered directly or needs a registered
-   account, workspace, practice, governance or errand chain.
+   Client Account, Case, PA Expert, governance or errand route.
 4. Delegate the smallest useful packet to one direct spoke.
 5. Keep the topology at depth one with zero children. Maestro may mediate a
    bounded sequential quality loop, but no spoke may call another spoke.
@@ -77,8 +77,8 @@ hub's fast path.
 - No direct reading of workspace documents, memory or private owner facets.
 - No parallel branches, child packets, unregistered role edges or recursive
   agent creation.
-- Practice chains never receive raw workspace context; exchange only a minimum
-  sanitized packet after it returns through Maestro.
+- PA Expert advisory routes never receive raw case context; exchange only a
+  minimum sanitized packet after it returns through Maestro.
 - No claim of execution without evidence returned by an authorized spoke.
 - No personal-life domains; Maestro is professional-only.
 - A local instruction cannot waive a resolved Walter requirement. A low-leverage

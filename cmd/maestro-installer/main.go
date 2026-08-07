@@ -1568,10 +1568,19 @@ func claudeCodeWorkspaceLink(workspacePath string) string {
 	return deepLink.String()
 }
 
-const maestroHumanKickoffPrompt = "👋 Olá, Maestro! 🎼 Estou chegando agora e acabei de fazer minha instalação. 🚀 Me direcione pelos próximos passos; não vejo a hora de gerar valor ao acionista."
+const maestroHumanKickoffPrompt = `👋 Olá, Maestro! 🎼
 
-const maestroClaudeKickoffPrompt = maestroHumanKickoffPrompt + " 🧭 Para começar, execute agora a skill `/maestro-onboarding` e conduza minha entrevista inicial, uma pergunta por vez."
-const maestroCodexKickoffPrompt = maestroHumanKickoffPrompt + " 🧭 Para começar, execute agora a skill `$maestro-onboarding` e conduza minha entrevista inicial, uma pergunta por vez."
+Estou chegando agora e acabei de fazer minha instalação. 🚀
+Não vejo a hora de gerar valor ao acionista.
+
+Me direcione pelos próximos passos e me ajude a começar com o pé direito.`
+
+const maestroClaudeKickoffPrompt = maestroHumanKickoffPrompt + `
+
+🧭 Para começar, execute agora a skill /maestro-onboarding e conduza minha entrevista inicial, uma pergunta por vez.`
+const maestroCodexKickoffPrompt = maestroHumanKickoffPrompt + `
+
+🧭 Para começar, execute agora a skill $maestro-onboarding e conduza minha entrevista inicial, uma pergunta por vez.`
 
 func codexWorkspaceLink(workspacePath string) string {
 	deepLink := url.URL{Scheme: "codex", Host: "new"}
