@@ -662,14 +662,16 @@
     const actions = document.querySelector('#runtime-actions');
     const copy = document.querySelector('#runtime-launch-copy');
     if (!actions || !copy) return;
-    runtimeTargets = Array.isArray(targets) ? targets : [];
+    runtimeTargets = (Array.isArray(targets) ? targets : [])
+      .slice()
+      .sort((a, b) => Number(b.id === 'claude') - Number(a.id === 'claude'));
     actions.replaceChildren();
     if (!runtime) {
       copy.textContent = 'No instalador conectado, o Maestro detecta os runtimes disponíveis e abre o workspace no lugar certo.';
     } else if (!runtimeTargets.length) {
       copy.textContent = 'Nenhum runtime compatível foi detectado. Instale Claude Code ou Codex e abra este instalador novamente.';
     } else {
-      copy.textContent = 'Claude Code é o caminho principal e abre este workspace no contexto certo. Codex continua disponível como alternativa; cada runtime pede sua própria revisão de hooks.';
+      copy.textContent = 'Seu workspace está pronto. Abra o Claude Code para começar.';
       runtimeTargets.forEach((target, index) => {
         const button = document.createElement('button');
         button.type = 'button';
