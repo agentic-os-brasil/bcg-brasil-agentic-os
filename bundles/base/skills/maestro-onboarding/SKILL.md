@@ -58,8 +58,8 @@ first identity question in the same message.
 
 | Opção | Tempo estimado | O que estabelece | Implicação |
 | --- | --- | --- | --- |
-| **Curta** | **~7 minutos** | Papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites serão refinados em conversas futuras; as sugestões iniciais serão menos personalizadas. |
-| **Completa** | **~25 minutos** | As oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e define qualidade. |
+| **Curta** | **~10 minutos** | Seu nome preferido, um limite explícito para contexto pessoal, papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites de trabalho serão refinados em conversas futuras; o contexto pessoal pode ser “nenhum por enquanto”. |
+| **Completa** | **~30 minutos** | Identidade básica, contexto pessoal autorizado e as oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e quais limites pessoais autorizou. |
 
 Ask only: **“Você prefere a entrevista curta ou a completa?”**
 
@@ -75,7 +75,14 @@ síntese ou transcrição para revisão antes de propor qualquer gravação loca
 
 The interview is a guided construction of the owner's **professional self** —
 not a personality test and not a request to import another system's private
-memory. The complete track covers eight explicit, reviewable facets:
+memory. Both tracks begin with two explicit, reviewable identity facets:
+
+- `owner-identity`: the name the owner wants Maestro to use. No unnecessary
+  identifiers are requested.
+- `personal-context`: an optional, purpose-bound statement of personal context
+  the owner authorizes Maestro to respect at work. “None for now” is valid.
+
+The complete track then covers eight explicit, reviewable professional facets:
 
 - `professional-role`: the work the owner is accountable for and where Maestro
   should create leverage;
@@ -91,12 +98,25 @@ memory. The complete track covers eight explicit, reviewable facets:
 - `working-boundaries`: scope, confidentiality, sources, people and external
   communication that require authorization.
 
-The quick track covers `professional-role`, `communication-style`,
-`preferences` and `quality-bar`. It is a useful operating baseline, but it
-intentionally leaves external voice, motivations, decision rules and working
-boundaries for later refinement. Psychological/personality material, personal
-history, faith, assessments and visual identity are not inferred or imported by
-either track; they require a separate, explicit local consent path.
+The quick track covers those two identity facets plus
+`professional-role`, `communication-style`, `preferences` and `quality-bar`.
+It is a useful operating baseline, but it intentionally leaves external voice,
+motivations, decision rules and working boundaries for later refinement. The
+personal-context question is a consent boundary, not a request to disclose
+family, health, faith or private history: the owner may decline or share only
+the minimum necessary. Psychological/personality material, assessments and
+visual identity are not inferred or imported by either track; they require a
+separate, explicit local consent path.
+
+After confirmation, `owner-identity` and an authorized `personal-context` are
+available to the session only as bounded pointers. The runtime never serializes
+their bodies into the Session Context Packet. This keeps the first-use flow
+useful without turning onboarding into a permanent data contract: the owner can
+answer “none for now”, revise the context later, or refine it through the
+existing ownerctx proposal/apply/revert flow. Refinement is additive and
+owner-controlled; a missing optional context does not block work. A generic
+`purpose=session` read still excludes the sensitive context; a caller must use
+the explicit `owner-personal-context` purpose after the owner has authorized it.
 
 ## Sugestão técnica orientada pela função
 
@@ -124,9 +144,9 @@ these optional layers when they are useful:
 - **Propósito e não negociáveis** — values, long-term direction and personal
   constraints that the owner explicitly wants the professional system to
   respect. Keep this private and out of client/case packets by default.
-- **Contexto pessoal autorizado** — only the minimum family, faith or life
-  context the owner deliberately chooses to share, with a declared purpose and
-  reader scope. It is never required for ordinary professional work.
+- **Contexto pessoal ampliado** — anything beyond the short baseline the owner
+  deliberately chooses to share, with a declared purpose and reader scope. It
+  is never required for ordinary professional work.
 - **Personalidade ou avaliação** — a local owner-authored synthesis or an
   explicitly selected assessment source. Never diagnose, infer or turn a score
   into an agent rule; a source that cannot be reviewed remains unavailable.

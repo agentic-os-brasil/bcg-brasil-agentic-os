@@ -45,7 +45,9 @@ type Status struct {
 }
 
 // ExpansionStatus is a bounded projection of the eight non-sensitive SELF
-// facets. It contains no answer, draft body or interview token.
+// facets. It contains no answer, draft body or interview token. The two
+// onboarding identity/context facets are intentionally not part of this
+// longitudinal professional-self expansion loop.
 type ExpansionStatus struct {
 	State       string `json:"state"`
 	Total       int    `json:"total"`
@@ -119,6 +121,8 @@ type facetTemplate struct {
 }
 
 var facets = map[string]facetTemplate{
+	"owner-identity":        {facetRecord{"owner/self/owner-identity.md", "identity", []string{"session", "walter"}, "confirmation_required"}, "# Owner identity\n\n## Current\n\nRegistre como o owner prefere ser chamado. Nao inclua identificadores desnecessarios.\n"},
+	"personal-context":      {facetRecord{"owner/self/personal-context.md", "sensitive", []string{"session", "walter"}, "confirmation_required"}, "# Authorized personal context\n\n## Current\n\nOpcional. Registre somente o contexto pessoal que o owner autoriza, com finalidade, leitores e limite de retencao claros. O owner pode declarar que nao quer compartilhar contexto pessoal agora.\n"},
 	"professional-role":     {facetRecord{"owner/self/professional-role.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Professional role\n\n## Current\n\nDescreva responsabilidades, contexto profissional e resultados pelos quais voce responde.\n"},
 	"communication-style":   {facetRecord{"owner/self/communication-style.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Communication style\n\n## Current\n\nDescreva como prefere colaborar com o Agentic OS: tom, nivel de detalhe, idioma e formato.\n"},
 	"voice":                 {facetRecord{"owner/self/voice.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Voice\n\n## Current\n\nDescreva como voce quer falar com o mundo em entregas externas: emails, documentos, propostas e apresentacoes.\n"},
@@ -142,6 +146,11 @@ estas paginas.
 
 ## Facetas
 
+- [Owner identity](owner-identity.md) — como o owner prefere ser chamado; sem
+  identificadores desnecessarios.
+- [Authorized personal context](personal-context.md) — contexto pessoal
+  opcional, com finalidade, leitores e limites de retencao explicitamente
+  autorizados.
 - [Professional role](professional-role.md) — papel, responsabilidades e
   resultados que definem sucesso.
 - [Communication style](communication-style.md) — idioma, tom, detalhe,
@@ -171,7 +180,10 @@ acumulado como prosa: revisoes anteriores ficam em
 auditoria. Facetas repetitivas, transcript-like ou acima dos limites fechados
 falham antes de virar draft.
 
-` + "`psychological-profile.md`" + ` e opcional, sensivel e exclusivo de Walter; ele
+` + "`personal-context.md`" + ` e opcional e sensivel. O owner pode responder
+"nenhum por enquanto"; qualquer conteudo persistido deve declarar finalidade,
+leitores e limite de retencao. ` + "`psychological-profile.md`" + ` e opcional,
+sensivel e exclusivo de Walter; ele
 nao integra entrevistas de expansao, o indice de sessao ou recomendacoes
 deterministicas. A confirmacao ` + "`no_client_data`" + ` e uma declaracao do owner,
 nao um classificador automatico de conteudo.
@@ -184,7 +196,17 @@ const (
 
 var onboardingFacets = []string{"professional-role", "communication-style", "preferences", "voice", "motivations", "quality-bar", "decision-rules", "working-boundaries"}
 
-var quickOnboardingFacets = []string{"professional-role", "communication-style", "preferences", "quality-bar"}
+var onboardingIdentityFacets = []string{"owner-identity", "personal-context"}
+
+var quickOnboardingFacets = append(append([]string(nil), onboardingIdentityFacets...), "professional-role", "communication-style", "preferences", "quality-bar")
+
+var completeOnboardingFacets = append(append([]string(nil), onboardingIdentityFacets...), onboardingFacets...)
+
+// These are the pre-identity track contracts. A previously confirmed profile
+// must not be reopened merely because the additive identity questions were
+// introduced; a fresh track selection opts into the richer contract.
+var legacyQuickOnboardingFacets = []string{"professional-role", "communication-style", "preferences", "quality-bar"}
+var legacyCompleteOnboardingFacets = append([]string(nil), onboardingFacets...)
 
 // legacyOnboardingFacets is frozen at the schema-v2 contract. It must never
 // grow with the current interview, otherwise an already confirmed legacy
@@ -198,8 +220,8 @@ type onboardingTrackDefinition struct {
 }
 
 var onboardingTracks = map[string]onboardingTrackDefinition{
-	OnboardingTrackQuick:    {ID: OnboardingTrackQuick, EstimatedMinutes: 7, Facets: quickOnboardingFacets},
-	OnboardingTrackComplete: {ID: OnboardingTrackComplete, EstimatedMinutes: 25, Facets: onboardingFacets},
+	OnboardingTrackQuick:    {ID: OnboardingTrackQuick, EstimatedMinutes: 10, Facets: quickOnboardingFacets},
+	OnboardingTrackComplete: {ID: OnboardingTrackComplete, EstimatedMinutes: 30, Facets: completeOnboardingFacets},
 }
 
 func Initialize(root string) (Status, error) {
@@ -331,8 +353,10 @@ func ColdStartInterview() Interview {
 }
 
 // QuickStartInterview captures the minimum operational self needed to begin
-// safely. The owner may upgrade to the complete track later; it never infers
-// the omitted external voice, motivations, decision rules or boundaries.
+// safely, including the owner's preferred name and an explicit personal-
+// context boundary. The owner may upgrade to the complete track later; it
+// never infers the omitted external voice, motivations, decision rules or
+// boundaries.
 func QuickStartInterview() Interview {
 	return interviewForTrack(OnboardingTrackQuick)
 }
@@ -343,6 +367,8 @@ func interviewForTrack(track string) Interview {
 		return Interview{}
 	}
 	allSteps := map[string]InterviewStep{
+		"owner-identity":      {Facet: "owner-identity", Question: "Como voce prefere ser chamado pelo Maestro? Se quiser, diga tambem como devo pronunciar seu nome; nao preciso de outros identificadores.", AudioPrompt: "Como voce prefere ser chamado pelo Maestro?"},
+		"personal-context":    {Facet: "personal-context", Question: "Existe algum contexto pessoal — por exemplo familia, energia, valores ou limites de vida — que voce autoriza o Maestro a respeitar no trabalho? Compartilhe apenas o minimo necessario ou responda ‘nenhum por enquanto’.", AudioPrompt: "Que contexto pessoal, se houver, voce autoriza o Maestro a respeitar no trabalho? Pode dizer nenhum por enquanto."},
 		"professional-role":   {Facet: "professional-role", Question: "Para eu entender quem voce e no trabalho: qual e seu papel, que resultados precisa gerar e onde o Maestro deve criar mais alavancagem?"},
 		"communication-style": {Facet: "communication-style", Question: "Como voce prefere que eu pense e comunique com voce: conclusao primeiro ou raciocinio detalhado, mais direto ou mais exploratorio, e em qual idioma?"},
 		"voice":               {Facet: "voice", Question: "Quando eu preparar algo para outras pessoas, que voz devo preservar: tom, nivel de firmeza, linguagem e o que definitivamente nao pode aparecer?"},
@@ -360,7 +386,7 @@ func interviewForTrack(track string) Interview {
 		Kind:             "cold_start",
 		Track:            definition.ID,
 		EstimatedMinutes: definition.EstimatedMinutes,
-		Instructions:     "Conduza uma conversa com uma pergunta por vez. Depois de cada resposta, resuma o que entendeu e confirme se esta correto antes de sugerir a faceta correspondente. A entrevista cobre somente o self profissional: papel, comunicacao, voz, preferencias, motivacoes, qualidade/QA, regras de decisao e limites. Nao infira personalidade, psicologia, historia pessoal, fe ou preferencias visuais; essas fontes so entram por uma importacao local explicitamente autorizada.",
+		Instructions:     "Conduza uma conversa com uma pergunta por vez. Depois de cada resposta, resuma o que entendeu e confirme se esta correto antes de sugerir a faceta correspondente. Comece pela identidade basica do owner e pelo contexto pessoal que ele autorizar; ‘nenhum por enquanto’ e uma resposta valida. Depois cubra o self profissional: papel, comunicacao, voz, preferencias, motivacoes, qualidade/QA, regras de decisao e limites. Nao infira personalidade, psicologia, historia pessoal, fe ou preferencias visuais; qualquer camada alem do contexto explicitamente autorizado exige uma etapa local separada.",
 		Steps:            steps,
 	}
 	/*
@@ -374,7 +400,7 @@ func emptyStatus() Status {
 }
 
 func onboardingSelectionRequired() OnboardingStatus {
-	return OnboardingStatus{State: "required", Track: "selection_required", Remaining: append([]string(nil), onboardingFacets...), NextQuestion: InterviewStep{Facet: "onboarding-track", Question: "Você prefere a entrevista curta (cerca de 7 minutos: papel, comunicação, preferências e qualidade/QA) ou a completa (cerca de 25 minutos: as oito facetas do seu self profissional)?"}}
+	return OnboardingStatus{State: "required", Track: "selection_required", Remaining: append([]string(nil), completeOnboardingFacets...), NextQuestion: InterviewStep{Facet: "onboarding-track", Question: "Você prefere a entrevista curta (cerca de 10 minutos: seu nome, contexto pessoal autorizado, papel, comunicação, preferências e qualidade/QA) ou a completa (cerca de 30 minutos: identidade, contexto autorizado e as oito facetas do seu self profissional)?"}}
 }
 
 func onboarding(root string, available map[string]Facet, track, confirmedAt, confirmedDigest string) OnboardingStatus {
@@ -395,6 +421,13 @@ func onboarding(root string, available map[string]Facet, track, confirmedAt, con
 			return OnboardingStatus{State: "complete", Track: definition.ID, EstimatedMinutes: definition.EstimatedMinutes}
 		}
 		return OnboardingStatus{State: "review_required", Track: definition.ID, EstimatedMinutes: definition.EstimatedMinutes, ReviewDigest: currentDigest}
+	}
+	// Preserve a profile confirmed under the pre-identity contract. This is an
+	// additive migration: a later explicit track selection will require the new
+	// identity/context questions, but an update must not silently invalidate a
+	// reviewed owner profile.
+	if confirmedAt != "" && legacyDigestMatches(root, definition.ID, confirmedDigest) {
+		return OnboardingStatus{State: "complete", Track: definition.ID, EstimatedMinutes: definition.EstimatedMinutes}
 	}
 	state := "in_progress"
 	if len(remaining) == len(definition.Facets) {
@@ -515,6 +548,33 @@ func onboardingDigest(root string, definition onboardingTrackDefinition) string 
 	parts := make([]string, 0, len(definition.Facets)+1)
 	parts = append(parts, "track\x00"+definition.ID)
 	for _, id := range definition.Facets {
+		template := facets[id]
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
+		if err != nil {
+			return ""
+		}
+		parts = append(parts, id+"\x00"+string(body))
+	}
+	return digest(strings.Join(parts, "\x00"))
+}
+
+func legacyDigestMatches(root, track, confirmedDigest string) bool {
+	var ids []string
+	switch track {
+	case OnboardingTrackQuick:
+		ids = legacyQuickOnboardingFacets
+	case OnboardingTrackComplete:
+		ids = legacyCompleteOnboardingFacets
+	default:
+		return false
+	}
+	return secureDigestEqual(confirmedDigest, onboardingDigestForFacets(root, track, ids))
+}
+
+func onboardingDigestForFacets(root, track string, ids []string) string {
+	parts := make([]string, 0, len(ids)+1)
+	parts = append(parts, "track\x00"+track)
+	for _, id := range ids {
 		template := facets[id]
 		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(template.Record.Path)))
 		if err != nil {

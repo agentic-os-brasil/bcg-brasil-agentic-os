@@ -2516,7 +2516,7 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 	purpose := flags.String("purpose", "", "authorized purpose")
 	budget := flags.Int("budget-bytes", 0, "maximum body bytes")
 	if err := flags.Parse(args); err != nil || *pointer == "" || *purpose == "" || flags.NArg() > 1 {
-		fmt.Fprintln(errOut, "usage: bcgos session resolve --pointer <pointer> --purpose session --budget-bytes <1..8192> [workspace-path]")
+		fmt.Fprintln(errOut, "usage: bcgos session resolve --pointer <pointer> --purpose session|owner-personal-context --budget-bytes <1..8192> [workspace-path]")
 		return ExitUsage
 	}
 	root, err := dataRoot()

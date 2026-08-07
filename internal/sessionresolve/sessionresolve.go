@@ -15,6 +15,12 @@ import (
 
 const MaximumBytes = 8192
 
+const (
+	SessionPurpose              = "session"
+	OwnerPersonalContextPurpose = "owner-personal-context"
+	personalContextPointer      = "owner/self/personal-context.md"
+)
+
 type Result struct {
 	Pointer string `json:"pointer"`
 	Purpose string `json:"purpose"`
@@ -23,17 +29,26 @@ type Result struct {
 }
 
 func Resolve(dataRoot, pointer, purpose string, packet sessionctx.Packet, budget int) (Result, error) {
-	if purpose != "session" {
-		return Result{}, errors.New("only purpose=session is currently authorized")
+	if purpose != SessionPurpose && purpose != OwnerPersonalContextPurpose {
+		return Result{}, errors.New("purpose must be session or owner-personal-context")
 	}
 	if budget <= 0 || budget > MaximumBytes {
 		return Result{}, fmt.Errorf("budget must be between 1 and %d bytes", MaximumBytes)
 	}
 	if pointer == packet.Owner.OperatingState.Path && pointer != "" && packet.Owner.OperatingState.Available {
+		if purpose != SessionPurpose {
+			return Result{}, errors.New("operating state is only authorized for purpose=session")
+		}
 		return read(dataRoot, pointer, purpose, budget)
 	}
 	for _, facet := range packet.Owner.Facets {
 		if facet.Path == pointer && facet.Available {
+			if pointer == personalContextPointer && purpose != OwnerPersonalContextPurpose {
+				return Result{}, errors.New("personal context requires purpose=owner-personal-context")
+			}
+			if pointer != personalContextPointer && purpose == OwnerPersonalContextPurpose {
+				return Result{}, errors.New("purpose=owner-personal-context is limited to personal context")
+			}
 			return read(dataRoot, pointer, purpose, budget)
 		}
 	}

@@ -23,11 +23,37 @@ import (
 const skillsCatalogPointer = "bundles/base/skills/catalog.json"
 const agentsCatalogPointer = "bundles/base/agents/catalog.json"
 
-// sessionSafeFacets is intentionally an allowlist rather than an inference
+// sessionPointerFacets is intentionally an allowlist rather than an inference
 // from a mutable local registry. Adding a facet to session context requires a
 // reviewed change here and contract tests, even when its registry reader list
-// says "session".
-var sessionSafeFacets = map[string]struct{}{
+// says "session". The packet contains pointers only; adapters still decide
+// whether an authorized source may be read later.
+var sessionPointerFacets = map[string]struct{}{
+	"owner-identity":      {},
+	"personal-context":    {},
+	"professional-role":   {},
+	"communication-style": {},
+	"voice":               {},
+	"preferences":         {},
+	"motivations":         {},
+	"quality-bar":         {},
+	"decision-rules":      {},
+	"working-boundaries":  {},
+}
+
+// Sensitive facets remain pointer-only. Their inclusion here is not a grant
+// to read or serialize the body; it lets a runtime know that an owner-approved
+// context source exists and can be refined later through ownerctx's audited
+// proposal/apply/revert flow. Other sensitive facets (for example Walter-only
+// psychological material) are intentionally absent.
+var sessionSensitivePointerFacets = map[string]struct{}{
+	"personal-context": {},
+}
+
+// sessionExpansionFacets is the longitudinal professional-self loop. Identity
+// and optional personal context are initialized at onboarding but are not
+// forced into the ongoing expansion queue.
+var sessionExpansionFacets = map[string]struct{}{
 	"professional-role":   {},
 	"communication-style": {},
 	"voice":               {},
@@ -367,7 +393,7 @@ func (packet Packet) Validate() error {
 				return errors.New("current SELF expansion summary is inconsistent")
 			}
 		case "action_required":
-			if _, ok := sessionSafeFacets[expansion.NextFacet]; !ok || expansion.ReviewCount != 0 {
+			if _, ok := sessionExpansionFacets[expansion.NextFacet]; !ok || expansion.ReviewCount != 0 {
 				return errors.New("action-required SELF expansion summary is inconsistent")
 			}
 		case "review_required":
@@ -542,9 +568,15 @@ func executionPointer(value execution.ActivePointer) Pointer {
 func sessionFacets(facets map[string]ownerctx.Facet) map[string]Pointer {
 	result := make(map[string]Pointer)
 	for id, facet := range facets {
-		if _, safe := sessionSafeFacets[id]; safe && facet.Sensitivity != "sensitive" && hasReader(facet.Readers, "session") {
-			result[id] = pointer(facet.Pointer)
+		if _, safe := sessionPointerFacets[id]; !safe || !hasReader(facet.Readers, "session") {
+			continue
 		}
+		if facet.Sensitivity == "sensitive" {
+			if _, pointerOnly := sessionSensitivePointerFacets[id]; !pointerOnly {
+				continue
+			}
+		}
+		result[id] = pointer(facet.Pointer)
 	}
 	return result
 }
