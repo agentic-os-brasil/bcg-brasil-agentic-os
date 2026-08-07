@@ -247,7 +247,7 @@ func TestSensitiveAndProposalOnlyRefinementsRequireConfirmation(t *testing.T) {
 	if _, err := Initialize(root); err != nil {
 		t.Fatal(err)
 	}
-	for _, facet := range []string{"decision-rules", "psychological-profile"} {
+	for _, facet := range []string{"decision-rules", "personal-context", "psychological-profile"} {
 		receipt, err := SubmitRefinement(root, RefinementInput{Facet: facet, Evidence: "owner-provided source", ProposedBody: "# Revised\n"})
 		if err != nil {
 			t.Fatalf("submit %s: %v", facet, err)
