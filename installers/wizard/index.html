@@ -22,9 +22,8 @@
         </div>
         <nav class="steps" aria-label="Progresso">
           <button class="step is-current" data-step="welcome" type="button" aria-current="step"><span>01</span><b>Boas-vindas</b><small>O que vai acontecer</small></button>
-          <button class="step" data-step="check" type="button" disabled><span>02</span><b>Verificação</b><small>Release e dispositivo</small></button>
-          <button class="step" data-step="install" type="button" disabled><span>03</span><b>Instalação</b><small>Seu espaço de trabalho</small></button>
-          <button class="step" data-step="finish" type="button" disabled><span>04</span><b>Pronto</b><small>Abrir Claude</small></button>
+          <button class="step" data-step="check" type="button" disabled><span>02</span><b>Como começar</b><small>Nova ou atualização</small></button>
+          <button class="step" data-step="finish" type="button" disabled><span>03</span><b>Seu contexto</b><small>Limpo ou importado</small></button>
         </nav>
         <div class="rail-footer"><span class="pulse"></span><span>Instalação em espaço de usuário</span></div>
       </aside>
@@ -50,7 +49,7 @@
             <h1 id="welcome-title" tabindex="-1">Maestro no seu PC.<br><em>Sem interromper seu trabalho.</em></h1>
             <p class="lead">Instale no seu perfil. Seus projetos ficam onde estão.</p>
             <div class="hero-actions">
-              <button class="primary" type="button" data-next="check"><span id="welcome-action-label">Abrir fluxo visual</span><span class="arrow">↗</span></button>
+              <button class="primary" type="button" data-next="check"><span id="welcome-action-label">Começar</span><span class="arrow">↗</span></button>
               <button class="quiet" type="button" data-action="details">Ver como funciona</button>
             </div>
             <div class="intent-paths" aria-label="Escolha como quer começar">
@@ -79,7 +78,8 @@
         </section>
 
         <section class="panel panel-check" data-panel="check" aria-labelledby="check-title" hidden>
-          <div class="section-heading"><span class="eyebrow">ETAPA 02 · VERIFICAÇÃO</span><h1 id="check-title" tabindex="-1">Vamos conferir<br><em>antes de tocar.</em></h1><p>Só avançamos quando release, assinatura e destino estão coerentes.</p></div>
+          <div class="section-heading"><span class="eyebrow">ETAPA 02 · COMO COMEÇAR</span><h1 id="check-title" tabindex="-1">Como você<br><em>quer começar?</em></h1><p>Escolha uma instalação nova ou uma atualização. O Maestro prepara o caminho certo para você.</p></div>
+          <div class="setup-choice" role="group" aria-labelledby="setup-choice-title"><span class="choice-label" id="setup-choice-title">ESCOLHA UMA OPÇÃO · OBRIGATÓRIO</span><small class="choice-hint" id="choice-hint">Selecione uma opção para continuar.</small><div class="intent-paths setup-intent-paths" aria-label="Tipo de instalação"><button type="button" class="intent-path" data-intent="fresh" aria-pressed="false"><span>✨</span><b>Nova instalação</b><small>começar com um workspace novo</small></button><button type="button" class="intent-path" data-intent="update" aria-pressed="false"><span>🔄</span><b>Atualizar</b><small>preservar o workspace existente</small></button></div></div>
           <div class="signal-track" data-progress role="list" aria-label="Percurso da instalação"><div class="signal-step is-active" data-progress-step="verify" role="listitem"><span>01</span><b>Conferir</b><small>release e destino</small></div><div class="signal-step" data-progress-step="install" role="listitem"><span>02</span><b>Instalar</b><small>no seu perfil</small></div><div class="signal-step" data-progress-step="complete" role="listitem"><span>03</span><b>Pronto</b><small>primeiro comando</small></div></div>
           <div class="verification-progress" id="verification-progress" role="status" aria-live="polite">
             <div class="progress-copy"><span>PROGRESSO DA VERIFICAÇÃO</span><b id="verification-progress-label">Pronto para conferir o release</b><strong id="verification-progress-value">0%</strong></div>
@@ -92,7 +92,7 @@
           </div>
           <div class="preview-banner" id="preview-banner" role="status"><span>MODO NÃO CONECTADO</span><p>Conectado, o release é conferido antes de qualquer mudança.</p></div><div class="callout"><span>i</span><p>Se algo falhar, nada será instalado.</p></div>
           <div class="callout runtime-error" id="runtime-error-check" role="alert" hidden><span>!</span><p></p></div><div class="runtime-statusline" id="runtime-check-status" role="status" aria-live="polite" hidden><span class="pulse"></span><p></p></div>
-          <div class="panel-actions"><button class="quiet" type="button" data-prev="welcome">Voltar</button><button class="primary" type="button" data-action="verify"><span>Verificar release</span><span class="arrow">↗</span></button></div>
+          <div class="panel-actions"><button class="quiet" type="button" data-prev="welcome">Voltar</button><button class="primary" type="button" data-action="verify"><span>Continuar</span><span class="arrow">↗</span></button></div>
         </section>
 
         <section class="panel panel-install" data-panel="install" aria-labelledby="install-title" hidden>
@@ -116,7 +116,7 @@
     </div>
     <dialog class="modal" id="help-modal"><button class="modal-close" data-action="close-help" aria-label="Fechar">×</button><span class="eyebrow">AJUDA RÁPIDA</span><h2>O Maestro não precisa de administrador.</h2><p>A instalação usa apenas uma pasta do seu perfil. A assinatura do release e o rollback ficam sob responsabilidade do bootstrapper verificado.</p><button class="primary" data-action="close-help">Entendi</button></dialog>
     <dialog class="modal flow-modal" id="flow-modal"><button class="modal-close" data-action="close-flow" aria-label="Fechar">×</button><span class="eyebrow">COMO FUNCIONA</span><h2>Uma instalação em três movimentos.</h2><p class="flow-intro">Pense no Maestro como a montagem de um palco: primeiro conferimos o instrumento, depois o colocamos no lugar e só então abrimos a apresentação.</p><div class="flow-grid"><article><span class="flow-number">01</span><div><b>Confere</b><small>release, assinatura e destino</small></div></article><article><span class="flow-number">02</span><div><b>Instala</b><small>no seu perfil, sem administrador</small></div></article><article><span class="flow-number">03</span><div><b>Conduz</b><small>você escolhe o primeiro workspace</small></div></article></div><button class="primary" data-action="close-flow">Entendi, começar</button></dialog>
-    <div class="sr-only" id="stage-announcement" aria-live="polite" aria-atomic="true">Etapa 1 de 4: boas-vindas. Escolha instalar o Maestro no seu perfil.</div>
+    <div class="sr-only" id="stage-announcement" aria-live="polite" aria-atomic="true">Etapa 1 de 3: visão geral. Entenda o que o Maestro prepara para você.</div>
     <script src="app.js"></script>
   </body>
 </html>
