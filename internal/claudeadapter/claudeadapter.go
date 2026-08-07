@@ -90,21 +90,19 @@ func ParseReader(input io.Reader) (NativeInput, error) {
 // Guard makes no allow decision: allowing implicitly would bypass Claude's own
 // permission flow. It only denies an unequivocal protected-root deletion.
 func Guard(input NativeInput) (GuardOutput, error) {
-	if input.ToolName != "Bash" {
+	command := strings.TrimSpace(input.ToolInput.Command)
+	if command == "" {
+		// Incomplete metadata is not a Maestro safety decision. Let Claude's
+		// own permission/runtime layer handle it.
 		return GuardOutput{}, nil
 	}
-	if strings.TrimSpace(input.ToolInput.Command) == "" {
-		// A payload without a shell command is not a Maestro safety decision.
-		// Let Claude's own permission/runtime layer handle incomplete metadata.
-		return GuardOutput{}, nil
-	}
-	destructive, err := destructiveRootRemoval(input.ToolInput.Command)
+	destructive, err := destructiveRootRemoval(command)
 	if err != nil {
 		// The guard owns one narrow invariant: protected-root removal. Shell
 		// operators in an otherwise ordinary command belong to Claude's own
 		// permission flow and must not turn the entire session into a prison.
 		// Keep fail-closed behavior for commands that could still be removals.
-		if !looksLikeRemovalCommand(input.ToolInput.Command) {
+		if !looksLikeRemovalCommand(command) {
 			return GuardOutput{}, nil
 		}
 		return GuardOutput{}, err

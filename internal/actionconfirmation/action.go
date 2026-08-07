@@ -28,17 +28,25 @@ func Canonicalize(toolName string, raw json.RawMessage) (*Action, error) {
 			return nil, nil
 		}
 	}
+	if toolName == "Bash" && (len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null"))) {
+		return nil, nil
+	}
 	if err := rejectDuplicateKeys(raw); err != nil {
 		return nil, errors.New("tool input is not canonical JSON")
 	}
 	var input map[string]any
 	if len(raw) == 0 || json.Unmarshal(raw, &input) != nil {
+		if toolName == "Bash" {
+			return nil, nil
+		}
 		return nil, errors.New("tool input is not canonical JSON")
 	}
 	if toolName == "Bash" {
 		command, ok := input["command"].(string)
 		if !ok || strings.TrimSpace(command) == "" {
-			return nil, errors.New("Bash command is required")
+			// A valid hook envelope with incomplete shell metadata belongs to
+			// the host runtime's normal permission flow, not Maestro's block.
+			return nil, nil
 		}
 		return canonicalShellAction(command)
 	}

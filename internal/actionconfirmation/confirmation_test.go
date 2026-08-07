@@ -16,6 +16,11 @@ func testBinding(action Action) Binding {
 }
 
 func TestCanonicalizeProtectsExternalMutationButNotOrdinaryLocalWork(t *testing.T) {
+	for _, raw := range []json.RawMessage{nil, json.RawMessage(`null`), json.RawMessage(`{}`), json.RawMessage(`{"command":""}`)} {
+		if got, err := Canonicalize("Bash", raw); err != nil || got != nil {
+			t.Fatalf("incomplete Bash metadata = %#v, %v", got, err)
+		}
+	}
 	protected, err := Canonicalize("Bash", json.RawMessage(`{"command":"git push origin refs/heads/topic"}`))
 	if err != nil || protected == nil || protected.Action != "git.push" || protected.Target != "origin:refs/heads/topic" || len(protected.InputDigest) != 64 {
 		t.Fatalf("Canonicalize protected = %#v, %v", protected, err)

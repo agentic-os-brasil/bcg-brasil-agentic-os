@@ -83,15 +83,13 @@ func ParseReader(input io.Reader) (NativeInput, error) {
 }
 
 func Guard(input NativeInput) (GuardOutput, error) {
-	if input.ToolName != "Bash" {
-		return GuardOutput{}, nil
-	}
-	if strings.TrimSpace(input.ToolInput.Command) == "" {
+	command := strings.TrimSpace(input.ToolInput.Command)
+	if command == "" {
 		// Incomplete metadata is handed back to Codex's own permission/runtime
 		// flow. Maestro only makes a synchronous decision for a protected root.
 		return GuardOutput{}, nil
 	}
-	destructive, err := lifecycleguard.ProtectedRootRemoval(input.ToolInput.Command)
+	destructive, err := lifecycleguard.ProtectedRootRemoval(command)
 	if err != nil {
 		return GuardOutput{}, err
 	}
