@@ -114,7 +114,9 @@ their bodies into the Session Context Packet. This keeps the first-use flow
 useful without turning onboarding into a permanent data contract: the owner can
 answer “none for now”, revise the context later, or refine it through the
 existing ownerctx proposal/apply/revert flow. Refinement is additive and
-owner-controlled; a missing optional context does not block work.
+owner-controlled; a missing optional context does not block work. A generic
+`purpose=session` read still excludes the sensitive context; a caller must use
+the explicit `owner-personal-context` purpose after the owner has authorized it.
 
 ## Sugestão técnica orientada pela função
 
