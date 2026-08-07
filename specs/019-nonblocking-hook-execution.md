@@ -46,8 +46,11 @@ to the worker alone. A hook must never contend for it.
 
 `pre_action_guard` is the only synchronous exception. It is limited to an
 in-process deterministic decision over local committed data; it never waits for
-another process to resolve a race. If safety cannot be established immediately,
-the guard denies the action with an actionable explanation.
+another process to resolve a race. If safety cannot be established immediately
+for a command that may cross a protected mutation boundary, the guard denies
+the action with an actionable explanation. Ordinary or incomplete local
+actions remain with the host runtime's normal permission flow; they are not
+converted into Maestro blocks.
 
 External publication and mutation use a short-lived local challenge bound to
 runtime, workspace, locally attested owner actor, native session, canonical

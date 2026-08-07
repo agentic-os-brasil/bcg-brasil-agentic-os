@@ -83,16 +83,13 @@ func ParseReader(input io.Reader) (NativeInput, error) {
 }
 
 func Guard(input NativeInput) (GuardOutput, error) {
-	if !nativeIdentifierPattern.MatchString(input.ToolName) {
-		return GuardOutput{}, errors.New("Codex hook tool name is invalid")
-	}
-	if input.ToolName != "Bash" {
+	command := strings.TrimSpace(input.ToolInput.Command)
+	if command == "" {
+		// Incomplete metadata is handed back to Codex's own permission/runtime
+		// flow. Maestro only makes a synchronous decision for a protected root.
 		return GuardOutput{}, nil
 	}
-	if strings.TrimSpace(input.ToolInput.Command) == "" {
-		return GuardOutput{}, errors.New("Codex Bash command is required")
-	}
-	destructive, err := lifecycleguard.ProtectedRootRemoval(input.ToolInput.Command)
+	destructive, err := lifecycleguard.ProtectedRootRemoval(command)
 	if err != nil {
 		return GuardOutput{}, err
 	}
@@ -103,7 +100,7 @@ func Guard(input NativeInput) (GuardOutput, error) {
 }
 
 func FailClosedDenial() GuardOutput {
-	return denial("Maestro denied this action because the local safety guard could not evaluate the bounded Codex hook input. Nothing was changed. Review the command and retry.")
+	return denial("Maestro could not verify this action safely. Nothing was changed. Review the action and try again.")
 }
 
 func ExternalActionDenial(reason string) GuardOutput {

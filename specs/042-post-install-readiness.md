@@ -62,8 +62,12 @@ components, symlinked state files, oversized state and non-strict JSON fail
 closed. The shared durable store is opened and validated for every installed
 hook that reaches workspace-bound processing. Session/context observations and
 post-action/stop receipts bind to a digest of the validated metadata-only
-snapshot. A safe pre-action request also validates and binds the snapshot;
-an unsafe or unevaluable request is still denied before any workspace access.
+snapshot. A pre-action request that clearly crosses a protected mutation
+boundary also validates and binds the snapshot before authorization; if that
+protected request is unsafe or unevaluable, it is denied before any workspace
+access. Ordinary local actions and incomplete native tool metadata do not enter
+this workspace-bound path and remain with the host runtime's normal permission
+flow.
 None of these bindings authenticates an agent, changes an orchestration branch
 or promotes native capability.
 

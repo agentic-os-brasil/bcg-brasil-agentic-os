@@ -532,6 +532,34 @@ func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *
 	}
 }
 
+func TestPreActionGuardLeavesIncompleteMetadataToNativeFlowAndProtectsRootRemoval(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			for _, input := range []string{
+				`{"session_id":"session-a","tool_name":"Bash","tool_input":{}}`,
+				`{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":""}}`,
+			} {
+				var output bytes.Buffer
+				code := runHookWithInput([]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "/workspace-that-must-not-be-inspected"}, strings.NewReader(input), &output, &output, func() (string, error) {
+					return "", errors.New("incomplete metadata must not inspect workspace state")
+				})
+				if code != ExitOK || strings.Contains(output.String(), `"permissionDecision"`) {
+					t.Fatalf("incomplete metadata was blocked: code=%d output=%s", code, output.String())
+				}
+			}
+
+			var output bytes.Buffer
+			input := `{"session_id":"session-a","tool_name":"UnknownTool","tool_input":{"command":"rm -rf /"}}`
+			code := runHookWithInput([]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "/workspace-that-must-not-be-inspected"}, strings.NewReader(input), &output, &output, func() (string, error) {
+				return "", errors.New("protected-root check must not inspect workspace state")
+			})
+			if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("unknown tool root removal was not denied: code=%d output=%s", code, output.String())
+			}
+		})
+	}
+}
+
 func TestInstalledGuardRejectsHomonymousBCGOSDiagnosticWhenStateCannotBeValidated(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {

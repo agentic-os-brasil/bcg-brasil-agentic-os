@@ -24,10 +24,11 @@ those owned entries.
 ## Fail-closed guard
 
 The pre-action guard reads at most 64 KiB and parses the native payload before
-any workspace or owner inspection. A malformed or oversized payload, missing
-guard field or command-evaluation failure returns a native Claude
-`PreToolUse` denial with an actionable reason and a confirmation that nothing
-was changed. Workspace state can neither bypass nor delay this safety decision.
+any workspace or owner inspection. A malformed or oversized payload still
+returns a native Claude `PreToolUse` denial with an actionable reason and a
+confirmation that nothing was changed. A valid payload with incomplete tool
+metadata is handed to Claude's own permission flow; Maestro does not turn
+missing metadata into a user-facing block.
 
 The implemented policy denies only a recursive forced `rm` whose simple command
 unambiguously targets `/` or the current home root. It canonicalizes the
@@ -36,8 +37,9 @@ explicit executable and target forms required by the policy, including
 The evaluator recognizes a deliberately small simple-command grammar; it
 understands only the explicit HOME expansions above and rejects other parameter
 expansions, globbing, shell operators, substitutions, escapes and unbalanced
-quotes instead of claiming to be a general shell parser. All other
-successfully evaluated actions remain subject to Claude's own permission flow.
+quotes instead of claiming to be a general shell parser when the command could
+be a removal. All other successfully evaluated actions remain subject to
+Claude's own permission flow.
 
 An installed guard may short-circuit workspace-state inspection only for a
 closed, simple-command allowlist of read-only local BCGOS diagnostics: help,

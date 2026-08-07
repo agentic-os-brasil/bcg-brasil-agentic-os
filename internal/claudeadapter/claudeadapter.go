@@ -90,22 +90,19 @@ func ParseReader(input io.Reader) (NativeInput, error) {
 // Guard makes no allow decision: allowing implicitly would bypass Claude's own
 // permission flow. It only denies an unequivocal protected-root deletion.
 func Guard(input NativeInput) (GuardOutput, error) {
-	if !nativeIdentifierPattern.MatchString(input.ToolName) {
-		return GuardOutput{}, errors.New("Claude hook tool name is invalid")
-	}
-	if input.ToolName != "Bash" {
+	command := strings.TrimSpace(input.ToolInput.Command)
+	if command == "" {
+		// Incomplete metadata is not a Maestro safety decision. Let Claude's
+		// own permission/runtime layer handle it.
 		return GuardOutput{}, nil
 	}
-	if strings.TrimSpace(input.ToolInput.Command) == "" {
-		return GuardOutput{}, errors.New("Claude Bash command is required")
-	}
-	destructive, err := destructiveRootRemoval(input.ToolInput.Command)
+	destructive, err := destructiveRootRemoval(command)
 	if err != nil {
 		// The guard owns one narrow invariant: protected-root removal. Shell
 		// operators in an otherwise ordinary command belong to Claude's own
 		// permission flow and must not turn the entire session into a prison.
 		// Keep fail-closed behavior for commands that could still be removals.
-		if !looksLikeRemovalCommand(input.ToolInput.Command) {
+		if !looksLikeRemovalCommand(command) {
 			return GuardOutput{}, nil
 		}
 		return GuardOutput{}, err
@@ -128,7 +125,7 @@ func looksLikeRemovalCommand(command string) bool {
 }
 
 func FailClosedDenial() GuardOutput {
-	return denial("Maestro denied this action because the local safety guard could not evaluate the bounded Claude hook input. Nothing was changed. Review the command and retry.")
+	return denial("Maestro could not verify this action safely. Nothing was changed. Review the action and try again.")
 }
 
 func ExternalActionDenial(reason string) GuardOutput {
