@@ -29,7 +29,7 @@
   let workspaceFlowReceipt = null;
   let workspaceFlowScene = null;
   let verificationRun = 0;
-  let selectedIntent = 'fresh';
+  let selectedIntent = '';
   const platform = /Win/i.test(navigator.userAgent) ? 'Windows' : /Mac/i.test(navigator.userAgent) ? 'macOS' : 'seu dispositivo';
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -139,14 +139,25 @@
   }
 
   function setIntent(intent) {
-    selectedIntent = intent || 'fresh';
+    selectedIntent = intent || '';
     const copy = {
-      fresh: ['Vou começar agora — estou muito empolgado. 🎼', 'Escolha uma direção; o Maestro conduzirá a próxima etapa sem tocar nos seus arquivos.'],
-      import: ['Já tenho um workspace/second brain para o Maestro ingerir. 🧠', 'Primeiro criamos o workspace do Maestro; depois você autoriza uma fonte para análise local bounded.'],
-      update: ['Estou atualizando meu Maestro — vou direcionar onde continuar. 🔄', 'A atualização preserva seu workspace e só avança depois de explicar o plano.'],
-    }[selectedIntent] || ['Vou começar agora — estou muito empolgado. 🎼', 'Escolha uma direção; o Maestro conduzirá a próxima etapa sem tocar nos seus arquivos.'];
+      fresh: ['Nova instalação selecionada. ✨', 'O Maestro vai preparar um workspace novo e local.'],
+      import: ['Fonte externa selecionada. 🧠', 'O Maestro analisará a origem antes de qualquer ingestão.'],
+      update: ['Atualização selecionada. 🔄', 'O workspace existente será preservado enquanto o plano é conferido.'],
+    }[selectedIntent] || ['Escolha como começar. 🎼', 'Selecione uma opção para continuar.'];
     if (intentMessage) intentMessage.textContent = copy[0];
     if (intentSubcopy) intentSubcopy.textContent = copy[1];
+    const choiceHint = document.querySelector('#choice-hint');
+    if (choiceHint) {
+      choiceHint.textContent = selectedIntent ? 'Opção selecionada. Você pode continuar.' : 'Selecione uma opção para continuar.';
+      choiceHint.classList.toggle('is-selected', Boolean(selectedIntent));
+    }
+    const verifyButton = document.querySelector('[data-action="verify"]');
+    if (verifyButton) {
+      verifyButton.disabled = !selectedIntent;
+      verifyButton.setAttribute('aria-disabled', String(!selectedIntent));
+      verifyButton.title = selectedIntent ? '' : 'Selecione uma opção para continuar';
+    }
     document.querySelectorAll('[data-intent]').forEach(button => {
       const selected = button.dataset.intent === selectedIntent;
       button.classList.toggle('is-selected', selected);
@@ -255,7 +266,7 @@
       ? { badge: 'ENSAIO TÉCNICO', action: 'Simular instalação', footer: 'ensaio técnico conectado' }
       : connectedMode === 'runtime'
       ? { badge: 'RELEASE CONECTADO', action: 'Instalar no meu perfil', footer: 'instalação conectada' }
-      : { badge: 'MODO NÃO CONECTADO', action: 'Abrir fluxo visual', footer: 'modo de apresentação' };
+      : { badge: 'MODO NÃO CONECTADO', action: 'Começar', footer: 'modo de apresentação' };
     document.body.dataset.runtimeMode = connectedMode;
     if (connectionBadge) {
       connectionBadge.textContent = copy.badge;
@@ -358,26 +369,21 @@
     workspaceFlowScene.className = 'workspace-flow';
     workspaceFlowScene.innerHTML = `
       <div id="workspace-flow-choice" class="workspace-flow-choice" aria-labelledby="workspace-flow-title">
-        <span class="eyebrow">ETAPA 04 · SEU WORKSPACE</span>
-        <h1 id="workspace-flow-title" tabindex="-1">Seu caminho está definido.<br><em>Agora vamos preparar.</em></h1>
-        <p class="lead" id="workspace-flow-lead">A escolha feita no início orienta esta etapa. O Maestro só pede uma nova decisão quando ela realmente muda o efeito sobre seus dados.</p>
-        <div id="intent-primary-slot" class="intent-primary-slot"></div>
-        <div class="flow-options" id="advanced-flow-options" aria-label="Outras jornadas disponíveis">
+        <span class="eyebrow">ETAPA 03 · SEU CONTEXTO</span>
+        <h1 id="workspace-flow-title" tabindex="-1">Trazer contexto?<br><em>Você decide.</em></h1>
+        <p class="lead">Toda instalação começa em um workspace novo. Se quiser, o Maestro pode analisar uma pasta de outro second brain antes de trazer qualquer conteúdo.</p>
+        <div class="flow-options" aria-label="Caminhos disponíveis">
           <button class="flow-option" type="button" data-action="workspace-flow" data-flow-mode="update" data-requires-installed="true">
-            <span class="flow-option-number">01</span><span><b>Atualizar o Maestro</b><small id="flow-update-copy">Preserva o workspace e mostra a migração de versão necessária.</small><em id="flow-update-version"></em></span><span class="arrow">↗</span>
-          </button>
-          <button class="flow-option" type="button" data-action="workspace-flow" data-flow-mode="workspace_migration">
-            <span class="flow-option-number">02</span><span><b>Migrar um workspace Maestro</b><small>Escolha um workspace existente para analisar identidade, manifesto e projeção.</small></span><span class="arrow">↗</span>
+            <span class="flow-option-number">01</span><span><b>Atualizar workspace</b><small id="flow-update-copy">Preserva o workspace existente.</small><em id="flow-update-version"></em></span><span class="arrow">↗</span>
           </button>
           <button class="flow-option" type="button" data-action="workspace-flow" data-flow-mode="external_import">
-            <span class="flow-option-number">03</span><span><b>Importar uma pasta externa</b><small>A pasta vira uma fonte analisada; não é tratada como workspace e não é ingerida só por ser selecionada.</small></span><span class="arrow">↗</span>
+            <span class="flow-option-number">01</span><span><b>Trazer outro second brain</b><small>Escolha uma pasta para análise local antes de autorizar a ingestão.</small></span><span class="arrow">↗</span>
           </button>
           <button class="flow-option flow-option-secondary" type="button" data-action="create-clean-workspace">
-            <span class="flow-option-number">04</span><span><b>Começar com um workspace novo</b><small>Cria o workspace padrão local e só mostra pronto quando o receipt de readiness for válido.</small></span><span class="arrow">↗</span>
+            <span class="flow-option-number">02</span><span><b>Começar limpo</b><small>Cria o workspace padrão local.</small></span><span class="arrow">↗</span>
           </button>
         </div>
-        <button class="quiet advanced-flow-toggle" id="advanced-flow-toggle" type="button" data-action="show-advanced-flow">Ver outras jornadas</button>
-        <div class="flow-boundary"><span>REGRA DE SEGURANÇA</span><p>Selecionar uma pasta apenas cria um ponteiro temporário. A análise local bounded lê metadados e calcula o plano; nada é copiado ou mutado até IMPORT.</p></div>
+        <div class="flow-boundary"><span>VOCÊ MANTÉM O CONTROLE</span><p>Selecionar uma pasta apenas registra um ponteiro temporário. Nada é copiado ou ingerido até sua confirmação.</p></div>
         <div class="callout runtime-error" id="workspace-flow-error" role="alert" hidden><span>!</span><p></p></div>
         <div class="runtime-statusline" id="workspace-flow-feedback" role="status" aria-live="polite" hidden><span class="pulse"></span><p></p></div>
       </div>
@@ -391,35 +397,21 @@
   function renderWorkspaceFlowChoices() {
     const scene = createWorkspaceFlowScene();
     if (!scene) return;
-    const slot = scene.querySelector('#intent-primary-slot');
-    const advanced = scene.querySelector('#advanced-flow-options');
-    const toggle = scene.querySelector('#advanced-flow-toggle');
-    const lead = scene.querySelector('#workspace-flow-lead');
-    const intentCopy = {
-      fresh: ['Criar meu workspace Maestro', 'Workspace novo e local; nada de outras pastas será lido nesta etapa.', false],
-      import: ['Criar workspace e escolher fonte', 'Seu workspace vem primeiro. Depois você escolhe a pasta que será registrada para análise bounded.', true],
-      update: ['Verificar atualização', 'O Maestro confere a versão instalada e mostra o plano antes de alterar qualquer coisa.', false],
-    }[selectedIntent] || ['Criar meu workspace Maestro', 'Workspace novo e local; nada de outras pastas será lido nesta etapa.', false];
-    if (slot) {
-      slot.innerHTML = `<button class="primary intent-primary-action" type="button" data-action="${selectedIntent === 'update' && installed ? 'workspace-flow' : 'create-workspace'}" ${selectedIntent === 'update' && installed ? 'data-flow-mode="update"' : `data-import="${intentCopy[2]}"`}><span>${intentCopy[0]}</span><span class="arrow">↗</span></button><small>${intentCopy[1]}</small>`;
-    }
-    if (lead) lead.textContent = selectedIntent === 'import'
-      ? 'Você já sinalizou que tem uma fonte de memória. O Maestro cria o workspace primeiro e só depois abre a escolha autorizada.'
-      : selectedIntent === 'update'
-      ? 'Você escolheu atualizar. O Maestro mantém o workspace e mostra o plano de mudança antes de agir.'
-      : 'Você escolheu começar agora. O Maestro cria o workspace local e só mostra pronto depois do receipt de readiness.';
-    if (advanced) advanced.hidden = true;
-    if (toggle) toggle.hidden = false;
     const update = scene.querySelector('[data-flow-mode="update"]');
     if (update) {
-      update.hidden = !installed;
-      update.disabled = !runtime || !installed;
+      update.hidden = selectedIntent !== 'update';
+      update.disabled = runtime && !installed;
     }
-    scene.querySelectorAll('[data-flow-mode]:not([data-flow-mode="update"])').forEach(button => {
-      button.disabled = !runtime;
-    });
+    const external = scene.querySelector('[data-flow-mode="external_import"]');
+    if (external) {
+      external.hidden = selectedIntent === 'update';
+      external.disabled = false;
+    }
     const clean = scene.querySelector('[data-action="create-clean-workspace"]');
-    if (clean) clean.disabled = !runtime;
+    if (clean) {
+      clean.hidden = selectedIntent === 'update';
+      clean.disabled = false;
+    }
     const version = scene.querySelector('#flow-update-version');
     if (version) version.textContent = installedVersion ? `Versão atual detectada: ${installedVersion}` : 'A versão atual será lida pelo core transacional conectado.';
   }
@@ -662,14 +654,23 @@
     const actions = document.querySelector('#runtime-actions');
     const copy = document.querySelector('#runtime-launch-copy');
     if (!actions || !copy) return;
-    runtimeTargets = Array.isArray(targets) ? targets : [];
+    runtimeTargets = (Array.isArray(targets) ? targets : [])
+      .slice()
+      .sort((a, b) => Number(b.id === 'claude') - Number(a.id === 'claude'));
     actions.replaceChildren();
     if (!runtime) {
-      copy.textContent = 'No instalador conectado, o Maestro detecta os runtimes disponíveis e abre o workspace no lugar certo.';
+      copy.textContent = 'No instalador conectado, o Maestro abrirá o Claude Code Desktop no workspace certo.';
+      const previewClaude = document.createElement('button');
+      previewClaude.type = 'button';
+      previewClaude.className = 'primary';
+      previewClaude.dataset.action = 'launch-runtime';
+      previewClaude.dataset.runtime = 'claude';
+      previewClaude.innerHTML = '<span>Abrir no Claude Code Desktop</span><span class="arrow">↗</span>';
+      actions.append(previewClaude);
     } else if (!runtimeTargets.length) {
       copy.textContent = 'Nenhum runtime compatível foi detectado. Instale Claude Code ou Codex e abra este instalador novamente.';
     } else {
-      copy.textContent = 'Claude Code é o caminho principal e abre este workspace no contexto certo. Codex continua disponível como alternativa; cada runtime pede sua própria revisão de hooks.';
+      copy.textContent = 'Seu workspace está pronto. Abra o Claude Code para começar.';
       runtimeTargets.forEach((target, index) => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -693,10 +694,12 @@
     if (!panel) return;
     panel.dataset.fitsViewport = 'false';
     panel.scrollTop = 0;
+    panel.scrollTo?.(0, 0);
     window.requestAnimationFrame(() => {
       // The panel, rather than the document, owns overflow on desktop. First
       // reset that real scroll root, then center only scenes that actually fit.
       panel.scrollTop = 0;
+      panel.scrollTo?.(0, 0);
       panel.dataset.fitsViewport = panel.scrollHeight <= panel.clientHeight + 1 ? 'true' : 'false';
     });
   }
@@ -711,8 +714,8 @@
       panel.hidden = !visible;
       panel.classList.toggle('is-visible', visible);
     });
-    const order = ['welcome', 'check', 'install', 'finish'];
-    const index = order.indexOf(name);
+    const visualOrder = { welcome: 0, check: 1, install: 1, finish: 2 };
+    const index = visualOrder[name] ?? 0;
     steps.forEach((step, position) => {
       const active = position === index;
       step.classList.toggle('is-current', active);
@@ -722,20 +725,27 @@
       else step.removeAttribute('aria-current');
     });
     const announcements = {
-      welcome: 'Etapa 1 de 4: boas-vindas. Escolha instalar o Maestro no seu perfil.',
-      check: 'Etapa 2 de 4: verificação. Confira o release antes de qualquer mudança.',
-      install: 'Etapa 3 de 4: instalação. O Maestro ficará no seu espaço de usuário.',
-      finish: 'Etapa 4 de 4: seu workspace. Siga o caminho escolhido e aguarde um receipt válido.'
+      welcome: 'Etapa 1 de 3: visão geral. Entenda o que o Maestro prepara para você.',
+      check: 'Etapa 2 de 3: como começar. Escolha uma nova instalação ou uma atualização.',
+      install: 'Etapa 2 de 3: ativação. O Maestro ficará no seu espaço de usuário.',
+      finish: 'Etapa 3 de 3: seu contexto. Comece limpo ou traga outro second brain.'
     };
     if (stageAnnouncement) stageAnnouncement.textContent = announcements[name] || '';
     // Each installer step occupies the same app scene. Reset scroll roots so
     // navigation never leaves the following step peeking under the current one.
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
     const activePanel = document.querySelector(`[data-panel="${name}"]`);
     alignActiveScene(activePanel);
     if (focusHeading) {
       const heading = activePanel?.querySelector('h1');
-      if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
+      if (heading) window.requestAnimationFrame(() => {
+        activePanel.scrollTop = 0;
+        activePanel.scrollTo?.(0, 0);
+        heading.focus({ preventScroll: true });
+        activePanel.scrollTop = 0;
+      });
     }
     if (name === 'check') {
       setProgress('verify');
@@ -749,7 +759,7 @@
       document.querySelector('#runtime-handoff').hidden = true;
       renderWorkspaceFlowChoices();
     }
-    if (name === 'check' && !verified) {
+    if (name === 'check' && !verified && selectedIntent) {
       verificationRun += 1;
       resetChecks();
       if (mode === 'preview' && !runtime) {
@@ -801,6 +811,11 @@
 
   async function verifyRelease() {
     showError('check', '');
+    if (!selectedIntent) {
+      showError('check', 'Selecione Nova instalação ou Atualizar para continuar.');
+      document.querySelector('.setup-choice')?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      return;
+    }
     showRuntimeStage('check', 'Conferindo release, assinatura e destino…');
     if (installed) {
       setProgressBar('verification', 100, 'Maestro já está instalado neste perfil');
@@ -1052,7 +1067,7 @@
 
   renderRuntimeTargets();
   resetProgressBars();
-  setIntent('fresh');
+  setIntent();
   discoverRuntime();
   alignActiveScene(document.querySelector('[data-panel].is-visible'));
 })();

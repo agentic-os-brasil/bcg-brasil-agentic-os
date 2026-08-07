@@ -235,3 +235,105 @@ body:before{opacity:.16;background-size:72px 72px;mask-image:linear-gradient(90d
 @media(max-width:1060px) and (min-width:981px){.shell{grid-template-columns:1fr}.rail{display:none}.content{padding:0 36px 24px}.panel{padding-top:48px}.panel-welcome{grid-template-columns:1fr}.hero-art{height:300px;order:-1}}
 @media(max-width:580px){.content{padding:0 18px 20px}.intent-strip{padding:8px 10px}.intent-strip b{font-size:10px}.intent-paths{grid-template-columns:1fr}.intent-path{border-right:0;border-bottom:1px solid rgba(137,190,177,.1)}.intent-path:last-child{border-bottom:0}.signal-track{grid-template-columns:1fr}.signal-step{border-right:0;border-bottom:1px solid rgba(137,190,177,.1);grid-template-columns:30px 1fr}.signal-step:last-child{border-bottom:0}.signal-step small{grid-column:2}.hero-copy h1,.section-heading h1,.panel-finish h1{font-size:40px}}
 .intent-primary-slot{display:grid;justify-items:start;gap:9px;margin-top:27px;padding-bottom:18px;border-bottom:1px solid rgba(137,190,177,.12)}.intent-primary-slot small{max-width:58ch;color:#759189;font-size:10px;line-height:1.45}.intent-primary-action{min-width:246px}.advanced-flow-toggle{margin-top:14px;color:#66847b;font-size:10px}.advanced-flow-toggle:hover{color:var(--ink)}
+
+/* Compact guided mode: larger type, fewer competing words, same runtime states. */
+.rail-copy p,.intent-strip small,.intent-path small,.trust-row span,.signal-step small,
+.check-item small,.destination small,.install-note ul,.preview-banner p,.command-hint,
+.finish-footnote,.demo-disclaimer,.demo-node small,.demo-outcome,.memory-question p{display:none}
+.rail-copy h2{font-size:27px;line-height:1.08}
+.section-heading h1,.panel-finish h1{font-size:clamp(54px,6.4vw,88px);line-height:.96}
+.hero-copy h1{font-size:clamp(54px,6.4vw,88px);line-height:.96}
+.section-heading p,.lead{font-size:17px;line-height:1.45;max-width:620px}
+.panel{padding-top:54px}
+.intent-strip{margin-top:8px}
+.hero-actions,.panel-actions{margin-top:22px}
+.intent-paths{margin-top:14px}
+.trust-row{margin-top:16px}
+.signal-track{margin-top:18px}
+.verification-progress,.installation-progress{margin-top:16px}
+.check-list,.destination{margin-top:20px}
+.install-note{margin-top:14px}
+.onboarding-demo,.memory-question{margin-top:18px}
+.panel-finish .lead{max-width:560px}
+.runtime-launch p{font-size:14px}
+.runtime-launch .primary{min-width:290px;min-height:58px;font-size:14px}
+.runtime-launch .finish-actions{gap:16px}
+.activation-summary{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:18px}
+.activation-summary article{padding:12px}
+.activation-summary small{display:none}
+.runtime-status:not([hidden]){font-size:12px}
+@media(max-width:700px){.activation-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:580px){
+  .panel{padding-top:38px}
+  .hero-copy h1,.section-heading h1,.panel-finish h1{font-size:46px}
+  .section-heading p,.lead{font-size:16px}
+  .runtime-launch .primary{width:100%;min-width:0}
+  .runtime-launch .finish-actions{align-items:stretch}
+  .activation-summary{grid-template-columns:1fr}
+}
+
+/* Three-movement onboarding: explain, choose the route, then choose context. */
+.panel-welcome .intent-paths{display:none}
+.signal-track{display:none}
+.setup-choice{max-width:760px;margin-top:28px}
+.choice-label{display:block;margin-bottom:10px;color:#7bbeb0;font:800 10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.15em}
+.choice-hint{display:block;margin:-2px 0 12px;color:#a8c1b8;font-size:16px;line-height:1.4}
+.choice-hint.is-selected{color:var(--teal)}
+.primary:disabled{cursor:not-allowed;opacity:.42;filter:saturate(.35);transform:none;box-shadow:none}
+.setup-intent-paths{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));max-width:760px;margin-top:0;border:1px solid rgba(137,190,177,.16)}
+.setup-intent-paths .intent-path{min-height:82px;padding:16px 14px;border-right:1px solid rgba(137,190,177,.14);background:rgba(7,34,31,.3)}
+.setup-intent-paths .intent-path:last-child{border-right:0}
+.setup-intent-paths .intent-path b{font-size:15px}
+.setup-intent-paths .intent-path small{display:block;font-size:16px;line-height:1.35;color:#91aaa2}
+.section-heading p,.lead,.callout p,.flow-option small,.flow-boundary p,.runtime-launch p{font-size:16px;line-height:1.5}
+.flow-option b{font-size:16px}
+.flow-option small{margin-top:6px;color:#91aaa2}
+.workspace-flow .lead{max-width:720px}
+@media(max-width:580px){
+  .setup-intent-paths{grid-template-columns:1fr}
+  .setup-intent-paths .intent-path{border-right:0;border-bottom:1px solid rgba(137,190,177,.14)}
+  .setup-intent-paths .intent-path:last-child{border-bottom:0}
+  .section-heading p,.lead,.callout p,.flow-option small,.flow-boundary p,.runtime-launch p{font-size:16px}
+}
+
+/* The three top-level movements read as a flywheel, not a linear checklist. */
+@media(min-width:981px){
+  .steps{position:relative;display:block;height:274px;margin-top:48px;isolation:isolate}
+  .steps:before{content:"";position:absolute;inset:20px 4px 10px;border:1px solid rgba(49,224,181,.2);border-radius:50%;transform:rotate(-18deg);box-shadow:0 0 0 18px rgba(49,224,181,.025),0 0 0 42px rgba(49,224,181,.018),inset 0 0 24px rgba(49,224,181,.04)}
+  .steps:after{content:"";position:absolute;left:-18px;top:136px;width:245px;height:1px;background:linear-gradient(90deg,transparent,rgba(49,224,181,.55),transparent);transform:rotate(-24deg);transform-origin:center;animation:flywheel-sweep 5.5s ease-in-out infinite;pointer-events:none}
+  .step{position:absolute;left:18px;width:184px;min-height:48px;padding:8px 9px 8px 0;grid-template-columns:34px 1fr;border:0;border-radius:999px;background:rgba(3,18,17,.62);backdrop-filter:blur(4px);z-index:1;transition:transform .25s ease,background .25s ease,box-shadow .25s ease}
+  .step:nth-child(1){top:8px;left:18px}
+  .step:nth-child(2){top:108px;left:32px}
+  .step:nth-child(3){top:208px;left:12px}
+  .step:before{display:none}
+  .step:after{display:none}
+  .step>*{position:relative;z-index:1}
+  .step span{padding:0 0 0 9px;align-self:center}
+  .step b{font-size:12px}
+  .step small{font-size:10px}
+  .step.is-current{background:rgba(7,48,42,.78);box-shadow:0 0 0 1px rgba(49,224,181,.48),0 0 24px rgba(49,224,181,.12)}
+  .step.is-current:after{content:"";display:block;position:absolute;inset:-6px;border:1px solid rgba(49,224,181,.2);border-radius:999px;background:transparent;box-shadow:0 0 18px rgba(49,224,181,.1);pointer-events:none}
+  .step.is-done{background:rgba(7,33,30,.5)}
+  .step:hover:not(:disabled){transform:translateX(4px);background:rgba(7,48,42,.64)}
+}
+@keyframes flywheel-sweep{0%,18%{opacity:0;transform:translateX(-18px) rotate(-24deg)}45%,62%{opacity:.9;transform:translateX(12px) rotate(-24deg)}100%{opacity:0;transform:translateX(38px) rotate(-24deg)}}
+@media(prefers-reduced-motion:reduce){.steps:after{animation:none!important}}
+
+/* Stronger microtype and a side-by-side Maestro mark for the context scene. */
+.kicker,.eyebrow,.choice-label{font-size:11px}
+.step b{font-size:13px}
+.step small{font-size:13px}
+.rail-footer{font-size:11px}
+.finish-mark{position:absolute;top:42px;left:0;width:88px;height:88px;display:grid;place-items:center;z-index:2}
+.finish-mark img{width:82px;height:82px}
+.panel-finish{text-align:left}
+.panel-finish #workspace-setup,.panel-finish #workspace-flow,.panel-finish #runtime-handoff{padding-left:116px}
+.flow-option-number{font-size:11px}
+.workspace-path span,.runtime-launch-label{font-size:10px}
+@media(max-width:580px){
+  .finish-mark{top:34px;left:0;width:70px;height:70px}
+  .finish-mark img{width:66px;height:66px}
+  .panel-finish #workspace-setup,.panel-finish #workspace-flow,.panel-finish #runtime-handoff{padding-left:88px}
+  .kicker,.eyebrow,.choice-label{font-size:10px}
+  .step b,.step small{font-size:12px}
+}
