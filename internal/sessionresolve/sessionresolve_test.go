@@ -35,6 +35,27 @@ func TestResolveRejectsUnexposedAndOversizedPointers(t *testing.T) {
 	}
 }
 
+func TestResolveKeepsPersonalContextOutOfGenericSessionReads(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "owner", "self", "personal-context.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("private context"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	packet := sessionctx.Packet{Owner: sessionctx.Owner{Facets: map[string]sessionctx.Pointer{
+		"personal-context": {Path: "owner/self/personal-context.md", Available: true},
+	}}}
+	if _, err := Resolve(root, "owner/self/personal-context.md", SessionPurpose, packet, 64); err == nil {
+		t.Fatal("generic session purpose resolved sensitive personal context")
+	}
+	result, err := Resolve(root, "owner/self/personal-context.md", OwnerPersonalContextPurpose, packet, 64)
+	if err != nil || result.State != "available" || result.Body != "private context" {
+		t.Fatalf("explicit personal-context result = %#v, err = %v", result, err)
+	}
+}
+
 func TestResolveRejectsAuthorizedPointerWhenItIsSymlinkedOutsideRoot(t *testing.T) {
 	root, outside := t.TempDir(), filepath.Join(t.TempDir(), "outside.md")
 	if err := os.WriteFile(outside, []byte("outside"), 0o600); err != nil {
