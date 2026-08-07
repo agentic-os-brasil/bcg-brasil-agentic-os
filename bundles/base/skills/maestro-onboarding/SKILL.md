@@ -108,6 +108,14 @@ the minimum necessary. Psychological/personality material, assessments and
 visual identity are not inferred or imported by either track; they require a
 separate, explicit local consent path.
 
+After confirmation, `owner-identity` and an authorized `personal-context` are
+available to the session only as bounded pointers. The runtime never serializes
+their bodies into the Session Context Packet. This keeps the first-use flow
+useful without turning onboarding into a permanent data contract: the owner can
+answer “none for now”, revise the context later, or refine it through the
+existing ownerctx proposal/apply/revert flow. Refinement is additive and
+owner-controlled; a missing optional context does not block work.
+
 ## Sugestão técnica orientada pela função
 
 Depois que o owner responder qual é sua função, use a recomendação determinística
