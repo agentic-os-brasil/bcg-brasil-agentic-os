@@ -174,7 +174,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 		lines = append(lines, "The only active workspace root is: "+packet.WorkspaceRoot+". Keep all professional context and actions scoped to this root; do not switch to another workspace.")
 	}
 	if packet.MaestroCLIPath != "" {
-		lines = append(lines, "Use the exact installed Maestro CLI executable at "+quoteCLIPath(packet.MaestroCLIPath)+" for every bcgos command below. Do not invoke a bare `bcgos` command or depend on PATH.")
+		lines = append(lines, "Use this installed CLI silently at "+quoteCLIPath(packet.MaestroCLIPath)+". Never show it or mention PATH unless asked.")
 	}
 	if packet.OwnerContextRoot != "" {
 		lines = append(lines, "The canonical owner context is private to this installation at "+packet.OwnerContextRoot+"/owner; onboarding facets are saved under "+packet.OwnerContextRoot+"/owner/self/. Do not create, edit or inspect an owner/ directory inside the workspace; use the exact owner commands below so onboarding state, review digests and audit receipts remain authoritative.")
@@ -183,19 +183,18 @@ func sessionDirective(packet sessionctx.Packet) string {
 	case "required", "in_progress":
 		trackChoice := ""
 		if packet.Owner.Onboarding.Track == "selection_required" {
-			trackChoice = "Explain the two explicit choices before asking: `quick` is about 10 minutes and establishes the owner's preferred name, an optional authorized personal-context boundary, role, communication style, work preferences and quality bar; it starts useful work sooner but leaves external voice, motivations, decision rules and working boundaries to later refinement. `complete` is about 30 minutes and establishes identity, authorized context and all eight professional self facets for a more personalized starting point. The owner may answer `none for now` for personal context; personality, psychological material, personal history and visual identity are not inferred or imported by default. After the owner chooses, record exactly that choice with " + commandFor(packet, "bcgos owner onboarding select --track quick|complete --confirm") + "."
+			trackChoice = "Offer `quick` (~10 min: identity, authorized context, role, communication, preferences and quality) or `complete` (~30 min: all professional self facets). Quick starts sooner but leaves detail for later. Record the choice with " + commandFor(packet, "bcgos owner onboarding select --track quick|complete --confirm") + ". Do not infer personal history or psychology."
 		}
 		lines = append(lines,
 			"ONBOARDING IS NOT COMPLETE. Start the conversation as Maestro and conduct the owner interview before proposing work.",
 			"Follow only the integrity-checked `maestro-onboarding` guide selected in the bounded session packet; do not route an unrelated Case method until onboarding is complete.",
 		)
-		if packet.Owner.Onboarding.Track == "quick" || packet.Owner.Onboarding.Track == "complete" {
-			lines = append(lines, "After the owner approves the current concise reflection, save it with "+commandFor(packet, `bcgos owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm`)+". This writes the canonical owner/self facet and returns the next question; do not edit a workspace-local file.")
-		}
 		lines = append(lines,
+			"Save approved answers with "+commandFor(packet, `bcgos owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm`)+"; order is flexible and pending facets remain visible.",
 			trackChoice,
-			"Ask only this next question, then wait for the owner's answer: "+packet.Owner.Onboarding.NextQuestion,
-			"Do not claim that answers were saved or that onboarding is complete until the owner explicitly confirms a reviewed local profile.",
+			"Start with this next question, then wait for the owner's answer: "+packet.Owner.Onboarding.NextQuestion,
+			"Accept out-of-order answers; return to the next pending facet without repetition.",
+			"Do not claim saved or complete until the owner confirms the reviewed profile.",
 		)
 	case "review_required":
 		lines = append(lines,

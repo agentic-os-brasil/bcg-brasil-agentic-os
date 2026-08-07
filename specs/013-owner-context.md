@@ -134,9 +134,11 @@ exposes a SHA-256 `review_digest`; `bcgos owner onboarding confirm --digest
 <review_digest> --confirm` records only that exact reviewed version of the
 facets in the selected track. A missing, malformed or stale digest fails closed without
 changing owner state, and any later facet change invalidates the confirmation.
-The runtime asks only the next unanswered question, then waits; after all
-answers exist it requests explicit review rather than silently activating the
-profile.
+The runtime suggests the next unanswered question, then waits; if the owner
+answers a different known onboarding facet, it records that answer and keeps
+the unanswered facet in the pending list rather than forcing the owner to
+repeat the response in sequence. After all answers exist it requests explicit
+review rather than silently activating the profile.
 
 After that reviewed owner onboarding becomes `complete`, the workspace has a
 separate first-use source step. Session Start asks once whether the owner wants

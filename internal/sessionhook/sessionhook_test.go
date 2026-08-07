@@ -92,11 +92,11 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	}
 	selection := pending
 	selection.Owner.Onboarding.Track = "selection_required"
-	if got := sessionDirective(selection); !strings.Contains(got, "preferred name") || !strings.Contains(got, "authorized personal-context boundary") || !strings.Contains(got, "work preferences") || !strings.Contains(got, "quality bar") || !strings.Contains(got, "all eight professional self facets") || !strings.Contains(got, "not inferred") {
+	if got := sessionDirective(selection); !strings.Contains(got, "quick") || !strings.Contains(got, "complete") || !strings.Contains(got, "authorized context") || !strings.Contains(got, "pending facets") || !strings.Contains(got, "Do not infer") {
 		t.Fatalf("track selection directive = %q", got)
 	}
 	selection.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
-	if got := sessionDirective(selection); !strings.Contains(got, "Do not invoke a bare `bcgos` command") || !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" owner onboarding select`) {
+	if got := sessionDirective(selection); !strings.Contains(got, "Use this installed CLI silently") || !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" owner onboarding select`) {
 		t.Fatalf("resolved CLI directive = %q", got)
 	}
 	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Count: 1}}}
@@ -152,8 +152,8 @@ func TestSessionDirectiveProtectsCanonicalOwnerContextRoot(t *testing.T) {
 	selectionPacket.Owner.Onboarding.Track = "selection_required"
 	selectionPacket.Owner.Onboarding.NextQuestion = "Você prefere a entrevista curta ou a completa?"
 	selection := sessionDirective(selectionPacket)
-	if strings.Contains(selection, "owner onboarding answer --facet") {
-		t.Fatalf("selection state exposed facet write command before track selection: %s", selection)
+	if !strings.Contains(selection, "owner onboarding answer --facet") || !strings.Contains(selection, "order is flexible") {
+		t.Fatalf("selection state did not expose the governed conversational answer route: %s", selection)
 	}
 }
 

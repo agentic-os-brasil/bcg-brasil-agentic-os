@@ -127,10 +127,11 @@ type SelfExpansion struct {
 }
 
 type Onboarding struct {
-	State        string `json:"state"`
-	Track        string `json:"track"`
-	NextQuestion string `json:"next_question,omitempty"`
-	ReviewDigest string `json:"review_digest,omitempty"`
+	State        string   `json:"state"`
+	Track        string   `json:"track"`
+	Remaining    []string `json:"remaining,omitempty"`
+	NextQuestion string   `json:"next_question,omitempty"`
+	ReviewDigest string   `json:"review_digest,omitempty"`
 }
 
 type OpenTasks struct {
@@ -302,7 +303,7 @@ func Build(sources Sources) Packet {
 			Facets:         sessionFacets(sources.Owner.Facets),
 			OperatingState: pointer(sources.Owner.OperatingState),
 			Tasks:          pointer(sources.Owner.Tasks),
-			Onboarding:     Onboarding{State: onboarding.State, Track: onboarding.Track, NextQuestion: onboarding.NextQuestion.Question, ReviewDigest: onboarding.ReviewDigest},
+			Onboarding:     Onboarding{State: onboarding.State, Track: onboarding.Track, Remaining: append([]string(nil), onboarding.Remaining...), NextQuestion: onboarding.NextQuestion.Question, ReviewDigest: onboarding.ReviewDigest},
 			SelfIndex:      pointer(selfIndex),
 			Expansion:      SelfExpansion{State: expansion.State, Total: expansion.Total, Current: expansion.Current, Unknown: expansion.Unknown, Stale: expansion.Stale, NextFacet: expansion.NextFacet, ReviewCount: expansion.ReviewCount},
 			OpenTasks:      OpenTasks{State: openTasks.State, Count: openTasks.Count},

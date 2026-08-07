@@ -382,7 +382,7 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), "Do not invoke a bare `bcgos` command") || !strings.Contains(output.String(), executable) {
+	if !strings.Contains(output.String(), "Use this installed CLI silently") || !strings.Contains(output.String(), executable) {
 		t.Fatalf("session hook did not expose the invoking Maestro CLI path: %s", output.String())
 	}
 }
@@ -1125,8 +1125,8 @@ func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
 		t.Fatalf("owner interview exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "owner-identity", "--body", "# Identity\n\nToo early.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK {
-		t.Fatalf("onboarding answer was accepted before track selection: %s", output.String())
+	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "owner-identity", "--body", "# Identity\n\nToo early.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "selection_required"`) || !strings.Contains(output.String(), "Resposta registrada") {
+		t.Fatalf("onboarding answer before track selection = %d, output = %s", code, output.String())
 	}
 	output.Reset()
 	if code := runOwner([]string{"onboarding", "select", "--track", "quick", "--confirm"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"estimated_minutes": 10`) {
@@ -1137,8 +1137,8 @@ func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
 		t.Fatalf("one-shot onboarding answer = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "voice", "--body", "# Voice\n\nOut of order.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK {
-		t.Fatalf("out-of-order or out-of-track onboarding answer was accepted: %s", output.String())
+	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "communication-style", "--body", "# Communication\n\nDirect.", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "Resposta registrada") {
+		t.Fatalf("out-of-order onboarding answer = %d, output = %s", code, output.String())
 	}
 	output.Reset()
 	if code := runOwnerWithInput([]string{"onboarding", "answer", "--facet", "personal-context", "--body", strings.Repeat("x", maximumOwnerFacetBytes+1), "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK || !strings.Contains(output.String(), "exceeds 1 MiB") {

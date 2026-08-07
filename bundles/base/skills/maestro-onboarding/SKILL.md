@@ -20,9 +20,24 @@ managed install location (`~/Library/Application Support/Maestro/bin/bcgos` on
 macOS or `%LOCALAPPDATA%\\Maestro\\bin\\bcgos.exe` on Windows); use `PATH` only
 as a final fallback. Call the resolved path as
 `<maestro-cli>` in the commands below; this is a placeholder to substitute,
-never a literal command to execute. If no executable can be resolved, stop and
-report the concrete missing path; do not substitute another runtime or pretend
-the command succeeded.
+never a literal command to execute. If no executable can be resolved, do not
+expose a stack trace, exit code, PATH diagnostic or internal adapter name to
+the owner. Say in plain language that the local Maestro core was not found yet,
+explain the one safe next step (for example, reopen the installed Maestro app
+or return to the installer), and wait. Never substitute another runtime or
+pretend the command succeeded.
+
+## Friendly presentation boundary
+
+CLI output, hook receipts and deterministic validation are internal evidence,
+not owner-facing copy. Translate a technical failure into three short parts:
+what the Maestro was trying to do, what the owner can do next, and whether any
+data changed. Do not show raw errors, command lines, absolute paths, digests,
+permission codes or words such as `fail-closed` unless the owner explicitly
+asks for a technical diagnosis. A normal action should continue whenever the
+host runtime can safely decide it; use a brief contextual confirmation only for
+destruction, cross-workspace access, secret exposure, external publication or
+irreversible change.
 
 ## Before the first reply
 
@@ -53,11 +68,12 @@ records the audit receipt and returns the next deterministic interview state:
 ```
 
 Use `--stdin` instead of `--body` when the runtime can provide standard input.
-Use this command only after an onboarding track has been selected and only for
-the facet named by the current `owner onboarding status` response. The CLI
-rejects answers before track selection, out of order, outside the selected
-track, after review/confirmation, and over 1 MiB. Use the lower-level refine
-route for a later self correction.
+Use this command whenever the owner explicitly approves a reviewed onboarding
+answer. The owner may answer before choosing a track or in a different order;
+the CLI records the known onboarding facet, keeps unanswered facets in the
+pending list, and returns the next suggested question. It rejects only unknown
+facets and bodies over 1 MiB. Use the lower-level refine route for a later self
+correction outside onboarding.
 The lower-level `owner refine submit/apply` pair remains available for more
 complex or separately reviewed refinements.
 

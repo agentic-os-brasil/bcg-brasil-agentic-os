@@ -2131,14 +2131,8 @@ func runOwnerOnboarding(args []string, in io.Reader, out, errOut io.Writer, root
 		if err != nil {
 			return reportError(errOut, err)
 		}
-		if onboardingStatus.Onboarding.Track != ownerctx.OnboardingTrackQuick && onboardingStatus.Onboarding.Track != ownerctx.OnboardingTrackComplete {
-			return reportError(errOut, errors.New("select an onboarding track before answering a facet"))
-		}
-		if onboardingStatus.Onboarding.State != "required" && onboardingStatus.Onboarding.State != "in_progress" {
-			return reportError(errOut, errors.New("owner onboarding answer is only available while the interview is in progress"))
-		}
-		if onboardingStatus.Onboarding.NextQuestion.Facet == "" || onboardingStatus.Onboarding.NextQuestion.Facet != *facet {
-			return reportError(errOut, fmt.Errorf("owner onboarding expects the next facet %q", onboardingStatus.Onboarding.NextQuestion.Facet))
+		if !ownerctx.IsOnboardingFacet(*facet) {
+			return reportError(errOut, errors.New("essa faceta não faz parte do onboarding; continue com a próxima pergunta sugerida pelo Maestro"))
 		}
 		proposal, err := ownerctx.SubmitRefinement(root, ownerctx.RefinementInput{Facet: *facet, Evidence: *evidence, ProposedBody: proposedBody})
 		if err != nil {
@@ -2150,6 +2144,11 @@ func runOwnerOnboarding(args []string, in io.Reader, out, errOut io.Writer, root
 		status, err := ownerctx.Inspect(root)
 		if err != nil {
 			return reportError(errOut, err)
+		}
+		if onboardingStatus.Onboarding.State == "complete" || onboardingStatus.Onboarding.State == "review_required" {
+			status.Onboarding.Guidance = "O onboarding já foi revisado; essa resposta foi registrada como refinamento. Revise o novo perfil antes de confirmá-lo novamente."
+		} else if onboardingStatus.Onboarding.Track == "selection_required" || onboardingStatus.Onboarding.NextQuestion.Facet != *facet {
+			status.Onboarding.Guidance = "Resposta registrada. O Maestro vai retomar pela próxima pendência; você não precisa responder na ordem."
 		}
 		return writeJSON(out, status.Onboarding, errOut)
 	case "confirm":
