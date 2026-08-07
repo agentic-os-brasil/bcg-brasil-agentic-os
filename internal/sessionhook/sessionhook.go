@@ -194,7 +194,8 @@ func sessionDirective(packet sessionctx.Packet) string {
 		}
 		lines = append(lines,
 			trackChoice,
-			"Ask only this next question, then wait for the owner's answer: "+packet.Owner.Onboarding.NextQuestion,
+			"Start with this next question, then wait for the owner's answer: "+packet.Owner.Onboarding.NextQuestion,
+			"If the owner answers a different onboarding facet, accept and summarize it, record the unanswered facet in the pending list, then return to the next question. Never make the owner repeat an answer just to preserve order.",
 			"Do not claim that answers were saved or that onboarding is complete until the owner explicitly confirms a reviewed local profile.",
 		)
 	case "review_required":

@@ -68,6 +68,7 @@ type OnboardingStatus struct {
 	Remaining        []string      `json:"remaining,omitempty"`
 	NextQuestion     InterviewStep `json:"next_question,omitempty"`
 	ReviewDigest     string        `json:"review_digest,omitempty"`
+	Guidance         string        `json:"guidance,omitempty"`
 }
 
 // TaskStatus exposes only a bounded list of explicitly marked open items in
@@ -359,6 +360,14 @@ func ColdStartInterview() Interview {
 // boundaries.
 func QuickStartInterview() Interview {
 	return interviewForTrack(OnboardingTrackQuick)
+}
+
+// IsOnboardingFacet reports whether an identifier belongs to the union of
+// supported onboarding tracks. It is intentionally narrower than the full
+// owner facet registry so a conversational answer cannot target a sensitive
+// or unrelated facet by accident.
+func IsOnboardingFacet(id string) bool {
+	return containsFacet(completeOnboardingFacets, id)
 }
 
 func interviewForTrack(track string) Interview {
