@@ -385,6 +385,39 @@ func TestQuickOnboardingIsAnExplicitBoundedBaseline(t *testing.T) {
 	}
 }
 
+func TestBothOnboardingTracksOfferExplicitSourceIntake(t *testing.T) {
+	for _, interview := range []Interview{QuickStartInterview(), ColdStartInterview()} {
+		if interview.SourceIntake.Question == "" || len(interview.SourceIntake.Options) != 3 {
+			t.Fatalf("source intake = %#v", interview.SourceIntake)
+		}
+		byID := make(map[string]InterviewSource, len(interview.SourceIntake.Options))
+		for _, option := range interview.SourceIntake.Options {
+			byID[option.ID] = option
+		}
+		for _, id := range []string{"local-files", "public-sources", "start-without-sources"} {
+			if option, ok := byID[id]; !ok || option.Label == "" || option.Description == "" || len(option.Examples) == 0 || option.Capability == "" {
+				t.Fatalf("missing source option %q in %s interview: %#v", id, interview.Track, interview.SourceIntake.Options)
+			}
+		}
+		local := byID["local-files"]
+		for _, expected := range []string{"CV do BCG", "LinkedIn", "MBTI", "leadership profile"} {
+			found := false
+			for _, example := range local.Examples {
+				if strings.Contains(strings.ToLower(example), strings.ToLower(expected)) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("%s source examples omit %q: %#v", interview.Track, expected, local.Examples)
+			}
+		}
+		if !strings.Contains(interview.SourceIntake.Instructions, "autorizacao") || !strings.Contains(interview.SourceIntake.Instructions, "diagnostico") {
+			t.Fatalf("source intake boundary = %q", interview.SourceIntake.Instructions)
+		}
+	}
+}
+
 func TestConfirmedPreIdentityQuickProfileIsNotSilentlyReopened(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {

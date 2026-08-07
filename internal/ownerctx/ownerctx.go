@@ -84,6 +84,26 @@ type InterviewStep struct {
 	AudioPrompt string `json:"audio_prompt,omitempty"`
 }
 
+// InterviewSource describes a source the owner may volunteer at the start of
+// either onboarding track. It is a prompt contract only: selecting an option
+// never reads a file, fetches a URL or activates an ingestion capability.
+type InterviewSource struct {
+	ID          string   `json:"id"`
+	Label       string   `json:"label"`
+	Description string   `json:"description"`
+	Examples    []string `json:"examples"`
+	Capability  string   `json:"capability"`
+}
+
+// SourceIntake is intentionally shared by the quick and complete tracks. A
+// shorter interview may leave facets for later, but it must not hide the
+// owner's opportunity to provide useful, authorized source material upfront.
+type SourceIntake struct {
+	Question     string            `json:"question"`
+	Instructions string            `json:"instructions"`
+	Options      []InterviewSource `json:"options"`
+}
+
 // Interview is a runtime-neutral prompt contract. Runtimes may present it
 // conversationally, but must not infer or persist answers without user review.
 type Interview struct {
@@ -91,6 +111,7 @@ type Interview struct {
 	Track            string          `json:"track"`
 	EstimatedMinutes int             `json:"estimated_minutes"`
 	Instructions     string          `json:"instructions"`
+	SourceIntake     SourceIntake    `json:"source_intake"`
 	Steps            []InterviewStep `json:"steps"`
 }
 
@@ -395,13 +416,53 @@ func interviewForTrack(track string) Interview {
 		Kind:             "cold_start",
 		Track:            definition.ID,
 		EstimatedMinutes: definition.EstimatedMinutes,
-		Instructions:     "Conduza uma conversa com uma pergunta por vez. Depois de cada resposta, resuma o que entendeu e confirme se esta correto antes de sugerir a faceta correspondente. Comece pela identidade basica do owner e pelo contexto pessoal que ele autorizar; ‘nenhum por enquanto’ e uma resposta valida. Depois cubra o self profissional: papel, comunicacao, voz, preferencias, motivacoes, qualidade/QA, regras de decisao e limites. Nao infira personalidade, psicologia, historia pessoal, fe ou preferencias visuais; qualquer camada alem do contexto explicitamente autorizado exige uma etapa local separada.",
+		Instructions:     "Conduza uma conversa com uma pergunta por vez. Antes da primeira faceta, ofereca a escolha de fontes abaixo e explique que nada sera lido ou buscado sem autorizacao. Depois de cada resposta, resuma o que entendeu e confirme se esta correto antes de sugerir a faceta correspondente. Comece pela identidade basica do owner e pelo contexto pessoal que ele autorizar; ‘nenhum por enquanto’ e uma resposta valida. Depois cubra o self profissional: papel, comunicacao, voz, preferencias, motivacoes, qualidade/QA, regras de decisao e limites. Nao infira personalidade, psicologia, historia pessoal, fe ou preferencias visuais; qualquer camada alem do contexto explicitamente autorizado exige uma etapa local separada.",
+		SourceIntake:     onboardingSourceIntake(),
 		Steps:            steps,
 	}
 	/*
 		The full interview remains the canonical identity route. The quick track
 		is deliberately narrower, not a hidden shortcut through the same data.
 	*/
+}
+
+func onboardingSourceIntake() SourceIntake {
+	return SourceIntake{
+		Question:     "Voce quer enriquecer este onboarding com arquivos seus ou fontes publicas antes da primeira pergunta? Pode enviar um arquivo, indicar uma URL publica ou comecar sem fontes.",
+		Instructions: "Arquivos continuam na origem escolhida e so podem ser lidos por uma rota local qualificada, depois de uma autorizacao clara. Fontes publicas exigem um plano de pesquisa com temas, dominios permitidos e aprovacao antes da busca. CV, LinkedIn e avaliacoes de perfil ajudam a formar um contexto; nao sao diagnostico, autoridade nem substituto da revisao do owner.",
+		Options: []InterviewSource{
+			{
+				ID:          "local-files",
+				Label:       "Enviar arquivos locais",
+				Description: "O Maestro pode analisar arquivos que voce escolher para propor um primeiro perfil revisavel.",
+				Examples: []string{
+					"CV do BCG ou curriculo profissional (PDF/DOCX)",
+					"exportacao do perfil do LinkedIn ou bio profissional",
+					"job description, portfolio, publicacoes ou avaliacao de desempenho",
+					"teste de MBTI, Big Five, leadership profile ou outra avaliacao que voce queira usar",
+				},
+				Capability: "local_ingestion_requires_qualified_adapter",
+			},
+			{
+				ID:          "public-sources",
+				Label:       "Indicar fontes publicas",
+				Description: "O Maestro pode propor uma busca limitada em fontes publicas que voce autorizar.",
+				Examples: []string{
+					"URL publica do LinkedIn",
+					"site pessoal, portfolio ou pagina de autor",
+					"artigos, entrevistas, palestras ou repositorios publicos",
+				},
+				Capability: "external_research_requires_approved_plan",
+			},
+			{
+				ID:          "start-without-sources",
+				Label:       "Comecar sem fontes",
+				Description: "A entrevista comeca apenas com suas respostas e pode ser enriquecida mais tarde.",
+				Examples:    []string{"responder a conversa uma pergunta por vez", "anexar fontes em uma sessao futura"},
+				Capability:  "supported",
+			},
+		},
+	}
 }
 
 func emptyStatus() Status {

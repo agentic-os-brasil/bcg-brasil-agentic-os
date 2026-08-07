@@ -117,6 +117,49 @@ nuance com menos esforço do que digitar. Esclareça que o Maestro mostrará uma
 síntese ou transcrição para revisão antes de propor qualquer gravação local;
 áudio não é ingerido, enviado ou persistido automaticamente.
 
+### 📚 Fontes que podem acelerar o onboarding
+
+Assim que o owner escolher **Curta** ou **Completa**, pergunte antes da
+primeira faceta:
+
+> **Você quer enriquecer este onboarding com arquivos seus ou fontes públicas?**
+> Pode enviar um arquivo, indicar uma URL pública ou começar sem fontes.
+
+Mostre exemplos concretos, sem presumir que a pessoa tenha algum deles:
+
+- **Arquivos locais:** CV do BCG ou currículo profissional, exportação do
+  LinkedIn, bio, job description, portfólio, publicações, avaliação de
+  desempenho, teste de MBTI/Big Five, leadership profile ou outra avaliação de
+  perfil que o owner queira usar;
+- **Fontes públicas:** URL pública do LinkedIn, site pessoal, portfólio,
+  artigos, entrevistas, palestras ou repositórios públicos;
+- **Começar sem fontes:** responder a entrevista uma pergunta por vez e anexar
+  material mais tarde.
+
+Essa escolha existe nas duas trilhas. A trilha **Curta** usa as fontes para
+formar um baseline mais rápido, mas não transforma a conversa em uma trilha
+Completa; voz externa, motivações, regras de decisão e limites continuam
+pendentes. A trilha **Completa** usa as mesmas fontes como evidência auxiliar
+para todas as oito facetas. Em qualquer trilha, o owner revisa a síntese antes
+de qualquer gravação.
+
+Regras de uso:
+
+1. Arquivo local permanece na origem escolhida. Só uma rota local qualificada
+   pode lê-lo, depois de autorização explícita; se a capacidade estiver
+   `unavailable`, continue a entrevista sem simular a extração.
+2. URL ou pesquisa pública exige temas minimizados, domínios permitidos e
+   aprovação do owner antes da busca. Nunca inclua nomes de clientes,
+   estratégia não publicada ou fatos confidenciais no plano de pesquisa.
+3. MBTI, Big Five, leadership profile e outros testes são fontes opcionais de
+   autodescrição, não diagnóstico, rótulo determinístico ou autorização para
+   um agente. Registre finalidade, leitores e retenção antes de usar o
+   resultado.
+
+O contrato estruturado dessa escolha vem em `source_intake` no resultado de
+`bcgos owner interview [quick|complete]`. Não invente uma fonte nem trate um
+arquivo selecionado como lido até haver evidência do adapter correspondente.
+
 ## What the interview is calibrating
 
 The interview is a guided construction of the owner's **professional self** —
@@ -150,9 +193,11 @@ It is a useful operating baseline, but it intentionally leaves external voice,
 motivations, decision rules and working boundaries for later refinement. The
 personal-context question is a consent boundary, not a request to disclose
 family, health, faith or private history: the owner may decline or share only
-the minimum necessary. Psychological/personality material, assessments and
-visual identity are not inferred or imported by either track; they require a
-separate, explicit local consent path.
+the minimum necessary. Psychological/personality material and visual identity
+are not inferred by either track. Um MBTI, Big Five, leadership profile ou
+outro teste fornecido pelo owner pode ser usado como fonte explícita, local e
+revisável, com finalidade e consentimento próprios; o resultado nunca vira
+diagnóstico, regra de agente ou verdade permanente.
 
 After confirmation, `owner-identity` and an authorized `personal-context` are
 available to the session only as bounded pointers. The runtime never serializes
@@ -180,6 +225,25 @@ sem presumir que a função é técnica. Nunca ative o bundle automaticamente: a
 seleção de uma trilha técnica e a confirmação do owner continuam sendo a única
 forma de projetar as skills. O `tech-core` é um bundle único e inclui engineering,
 data, AI e métodos de qualidade.
+
+### Skills de desenvolvimento disponíveis
+
+Depois da pergunta sobre função, confira o catálogo real com
+`bcgos bundles index` e, se fizer sentido, `bcgos bundles recommend --function
+"<resposta declarada pelo owner>"`. No catálogo atual, as skills de
+desenvolvimento do `tech-core` incluem:
+
+- `/spec-driven-delivery` — transformar uma necessidade em contrato revisável;
+- `/test-and-evidence` — escolher testes e evidências proporcionais;
+- `/review-explain-change` — explicar uma mudança para revisão humana;
+- `/pr-review` e `/pr-quality-loop` — revisar e fechar o ciclo de qualidade;
+- métodos de cobertura, onda de testes, captura de bug e qualidade de dados.
+
+Os nomes **AfD** e **CDC** não aparecem como IDs no catálogo atual. Não os
+apresente como instalados nem os substitua por uma sigla inventada; se o owner
+estiver se referindo a práticas específicas com esses nomes, peça o nome
+completo ou a fonte autorizada e registre a necessidade como uma futura skill
+do `tech-core`.
 
 ## Camadas opcionais de identidade
 

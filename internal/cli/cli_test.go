@@ -1145,7 +1145,7 @@ func TestOwnerCommandsExposeFacetsAndColdStartInterview(t *testing.T) {
 		t.Fatalf("oversized onboarding answer body = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runOwner([]string{"interview", "quick"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"owner-identity"`) || !strings.Contains(output.String(), `"personal-context"`) || !strings.Contains(output.String(), `"preferences"`) || strings.Contains(output.String(), `"decision-rules"`) {
+	if code := runOwner([]string{"interview", "quick"}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"track": "quick"`) || !strings.Contains(output.String(), `"source_intake"`) || !strings.Contains(output.String(), "CV do BCG") || !strings.Contains(output.String(), "LinkedIn") || !strings.Contains(output.String(), `"owner-identity"`) || !strings.Contains(output.String(), `"personal-context"`) || !strings.Contains(output.String(), `"preferences"`) || strings.Contains(output.String(), `"decision-rules"`) {
 		t.Fatalf("quick interview = %d, output = %s", code, output.String())
 	}
 }

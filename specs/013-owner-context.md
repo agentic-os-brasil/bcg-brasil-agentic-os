@@ -57,15 +57,28 @@ The managed cold-start interview first asks for two bounded identity facets:
 the name the owner prefers to use and an optional, purpose-bound personal
 context that the owner explicitly authorizes Maestro to respect at work. The
 owner may answer `none for now`; no unnecessary identifiers, personal history,
-health, faith or personality material is requested by default. The complete
-track then asks the eight non-sensitive professional facets: role,
+health or faith is requested by default. Before the first facet in both the
+quick and complete tracks, the contract offers an explicit source-intake choice:
+local files (for example a BCG CV, LinkedIn export, portfolio, performance
+review, MBTI/Big Five result or leadership profile), public sources (for
+example a public LinkedIn page, personal site or publications), or no sources.
+The complete track then asks the eight non-sensitive professional facets: role,
 communication style, external voice, preferences, professional motivations,
 quality bar, decision rules and working boundaries. It returns a
 runtime-neutral question contract; a Claude or Codex adapter must reflect each
-answer back to the owner before proposing any write. The owner may later choose
-to import an assessment report through an approved local adapter with explicit
-consent. Raw reports stay local under `sources/` and are never automatically
-injected; any professional synthesis requires provenance and confirmation.
+answer and any derived source synthesis back to the owner before proposing any
+write. Raw reports stay local under `sources/` and are never automatically
+injected; any professional synthesis requires provenance, purpose, reader
+scope and confirmation.
+
+The `Interview` contract exposes this choice as `source_intake`; selecting an
+option does not read a file, fetch a URL, activate a bundle or change owner
+state. Local-file intake remains unavailable until a qualified local ingestion
+adapter is present. Public-source intake remains a separate approved research
+plan and must not run a query until the owner approves minimized themes and a
+source allowlist. MBTI, Big Five, leadership and other assessments are optional
+autodescription sources, never diagnoses, deterministic labels or authority
+grants.
 
 After onboarding, SELF expansion remains an explicit owner interview, not a
 continuous-learning lifecycle. `owner/self/README.md` is the canonical local
