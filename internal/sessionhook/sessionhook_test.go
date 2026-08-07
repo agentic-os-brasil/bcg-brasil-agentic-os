@@ -152,8 +152,8 @@ func TestSessionDirectiveProtectsCanonicalOwnerContextRoot(t *testing.T) {
 	selectionPacket.Owner.Onboarding.Track = "selection_required"
 	selectionPacket.Owner.Onboarding.NextQuestion = "Você prefere a entrevista curta ou a completa?"
 	selection := sessionDirective(selectionPacket)
-	if strings.Contains(selection, "owner onboarding answer --facet") {
-		t.Fatalf("selection state exposed facet write command before track selection: %s", selection)
+	if !strings.Contains(selection, "owner onboarding answer --facet") || !strings.Contains(selection, "before track selection it records the known answer") {
+		t.Fatalf("selection state did not expose the governed conversational answer route: %s", selection)
 	}
 }
 

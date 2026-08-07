@@ -2145,7 +2145,9 @@ func runOwnerOnboarding(args []string, in io.Reader, out, errOut io.Writer, root
 		if err != nil {
 			return reportError(errOut, err)
 		}
-		if onboardingStatus.Onboarding.Track == "selection_required" || onboardingStatus.Onboarding.NextQuestion.Facet != *facet {
+		if onboardingStatus.Onboarding.State == "complete" || onboardingStatus.Onboarding.State == "review_required" {
+			status.Onboarding.Guidance = "O onboarding já foi revisado; essa resposta foi registrada como refinamento. Revise o novo perfil antes de confirmá-lo novamente."
+		} else if onboardingStatus.Onboarding.Track == "selection_required" || onboardingStatus.Onboarding.NextQuestion.Facet != *facet {
 			status.Onboarding.Guidance = "Resposta registrada. O Maestro vai retomar pela próxima pendência; você não precisa responder na ordem."
 		}
 		return writeJSON(out, status.Onboarding, errOut)
