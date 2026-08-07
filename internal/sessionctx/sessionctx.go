@@ -65,9 +65,13 @@ var sessionExpansionFacets = map[string]struct{}{
 }
 
 type Sources struct {
-	Profile          profile.State
-	Workspace        workspace.Inspection
-	Owner            ownerctx.Status
+	Profile   profile.State
+	Workspace workspace.Inspection
+	Owner     ownerctx.Status
+	// OwnerContextRoot is a local directive anchor only. Owner context is
+	// intentionally stored in the private data root, never inferred from a
+	// workspace-local owner/ directory.
+	OwnerContextRoot string
 	Atlas            atlas.Status
 	Execution        execution.ActivePointer
 	Memory           MemorySource
@@ -222,6 +226,9 @@ type Packet struct {
 	// lifecycle packet. It is a local directive anchor, never bounded context
 	// or persisted owner data.
 	MaestroCLIPath string `json:"-"`
+	// OwnerContextRoot anchors onboarding/refinement commands to the canonical
+	// private data root. It is never serialized into the bounded packet.
+	OwnerContextRoot string `json:"-"`
 }
 
 func Build(sources Sources) Packet {
@@ -317,9 +324,10 @@ func Build(sources Sources) Packet {
 			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: "unavailable",
 			Message: "native agent orchestration requires a runtime adapter with tool and delegation enforcement",
 		},
-		Memory:        buildMemory(sources.Memory),
-		ContinuousUse: continuous,
-		WorkspaceRoot: sources.Workspace.WorkspacePath,
+		Memory:           buildMemory(sources.Memory),
+		ContinuousUse:    continuous,
+		WorkspaceRoot:    sources.Workspace.WorkspacePath,
+		OwnerContextRoot: sources.OwnerContextRoot,
 	}
 	if sources.Workspace.State != "ready" && sources.Workspace.State != "warning" {
 		packet.Omissions = append(packet.Omissions, Omission{Source: "workspace", Reason: "workspace is not ready"})

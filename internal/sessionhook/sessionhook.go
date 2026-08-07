@@ -176,6 +176,9 @@ func sessionDirective(packet sessionctx.Packet) string {
 	if packet.MaestroCLIPath != "" {
 		lines = append(lines, "Use the exact installed Maestro CLI executable at "+quoteCLIPath(packet.MaestroCLIPath)+" for every bcgos command below. Do not invoke a bare `bcgos` command or depend on PATH.")
 	}
+	if packet.OwnerContextRoot != "" {
+		lines = append(lines, "The canonical owner context is private to this installation at "+packet.OwnerContextRoot+"/owner; onboarding facets are saved under "+packet.OwnerContextRoot+"/owner/self/. Do not create, edit or inspect an owner/ directory inside the workspace; use the exact owner commands below so onboarding state, review digests and audit receipts remain authoritative.")
+	}
 	switch packet.Owner.Onboarding.State {
 	case "required", "in_progress":
 		trackChoice := ""
@@ -185,6 +188,11 @@ func sessionDirective(packet sessionctx.Packet) string {
 		lines = append(lines,
 			"ONBOARDING IS NOT COMPLETE. Start the conversation as Maestro and conduct the owner interview before proposing work.",
 			"Follow only the integrity-checked `maestro-onboarding` guide selected in the bounded session packet; do not route an unrelated Case method until onboarding is complete.",
+		)
+		if packet.Owner.Onboarding.Track == "quick" || packet.Owner.Onboarding.Track == "complete" {
+			lines = append(lines, "After the owner approves the current concise reflection, save it with "+commandFor(packet, `bcgos owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm`)+". This writes the canonical owner/self facet and returns the next question; do not edit a workspace-local file.")
+		}
+		lines = append(lines,
 			trackChoice,
 			"Ask only this next question, then wait for the owner's answer: "+packet.Owner.Onboarding.NextQuestion,
 			"Do not claim that answers were saved or that onboarding is complete until the owner explicitly confirms a reviewed local profile.",

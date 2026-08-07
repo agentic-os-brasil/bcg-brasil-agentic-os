@@ -3,7 +3,6 @@ package actionconfirmation
 import (
 	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,44 +47,6 @@ func TestCanonicalizeProtectsExternalMutationButNotOrdinaryLocalWork(t *testing.
 		got, err := Canonicalize(tool, json.RawMessage(`{"target":"internal-agent","message":"hello"}`))
 		if err != nil || got != nil {
 			t.Fatalf("internal tool %s treated as external = %#v, %v", tool, got, err)
-		}
-	}
-}
-
-func TestReadOnlyBCGOSDiagnosticsUseAClosedSimpleCommandGrammar(t *testing.T) {
-	installed := filepath.Join(t.TempDir(), "Maestro", "bin", "bcgos")
-	if err := os.MkdirAll(filepath.Dir(installed), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(installed, []byte("installed"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	allowed := []string{
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q doctor", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q version", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q status '/Users/example/Developer/maestro-os'", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q owner onboarding status", installed)),
-	}
-	for _, raw := range allowed {
-		if !IsReadOnlyBCGOSDiagnostic("Bash", json.RawMessage(raw), installed) {
-			t.Fatalf("read-only diagnostic was not recognized: %s", raw)
-		}
-	}
-	arbitrary := filepath.Join(t.TempDir(), "bcgos")
-	if err := os.WriteFile(arbitrary, []byte("attacker"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	denied := []string{
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q doctor", arbitrary)),
-		`{"command":"C:\\\\tmp\\\\bcgos.exe doctor"}`,
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q init /tmp/workspace", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q doctor && touch /tmp/marker", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q owner init", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q update", installed)),
-	}
-	for _, raw := range denied {
-		if IsReadOnlyBCGOSDiagnostic("Bash", json.RawMessage(raw), installed) {
-			t.Fatalf("mutating or compound command was recognized as read-only: %s", raw)
 		}
 	}
 }

@@ -35,6 +35,36 @@ the command succeeded.
 4. Do not start a professional task, read a selected memory source, execute an
    unrelated skill or grant runtime trust globally.
 
+Onboarding is not a global Bash lock. Ordinary commands remain with the host
+runtime's normal permission flow; only protected mutations and destructive
+roots require Maestro's guard. Use a directory listing tool for directories,
+not a file-read operation.
+
+The canonical owner context is private to the Maestro installation's data root,
+outside the workspace. The SessionStart directive prints that exact root and
+the canonical `owner/self/` destination. Never create or edit `owner/` or
+`owner/self/` inside the workspace: those files are not authoritative and will
+not advance the CLI state. After the owner approves the concise reflection,
+save it with the one-shot bounded command below. It writes the correct facet,
+records the audit receipt and returns the next deterministic interview state:
+
+```sh
+<maestro-cli> owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm
+```
+
+Use `--stdin` instead of `--body` when the runtime can provide standard input.
+Use this command only after an onboarding track has been selected and only for
+the facet named by the current `owner onboarding status` response. The CLI
+rejects answers before track selection, out of order, outside the selected
+track, after review/confirmation, and over 1 MiB. Use the lower-level refine
+route for a later self correction.
+The lower-level `owner refine submit/apply` pair remains available for more
+complex or separately reviewed refinements.
+
+The onboarding track and final profile confirmation remain separate gates. The
+CLI registry, review digest and audit receipt are the source of truth; a
+workspace-local Markdown file alone is never evidence of completion.
+
 ## Opening response
 
 Respond in Brazilian Portuguese with this compact, welcoming shape:
@@ -183,6 +213,13 @@ professional baseline; do not emulate ingestion from conversation.
    ```sh
    <maestro-cli> owner onboarding confirm --digest SHA256 --confirm
    ```
+
+   Never try to manufacture this digest with `shasum`, `cat | openssl`, `awk`
+   or shell command substitution. Those commands are intentionally outside the
+   bounded hook grammar. If the digest is missing or stale, run
+   `<maestro-cli> owner onboarding status` again and use its current
+   `review_digest`. `owner onboarding review` is accepted as a read-only alias
+   for `status` when a runtime presents that wording.
 
 ## Completion and follow-through
 

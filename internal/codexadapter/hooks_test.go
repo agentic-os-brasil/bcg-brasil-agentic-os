@@ -27,6 +27,15 @@ func TestCodexNativePayloadAndOutputsAreAdapterOwned(t *testing.T) {
 	}
 }
 
+func TestCodexGuardLeavesOrdinaryShellPipelinesToNativePermissionFlow(t *testing.T) {
+	output, err := Guard(NativeInput{ToolName: "Bash", ToolInput: struct {
+		Command string `json:"command"`
+	}{Command: "ls /Users/example/Developer/other-workspace 2>/dev/null | grep -i darwin"}})
+	if err != nil || output.HookSpecificOutput != nil {
+		t.Fatalf("ordinary pipeline was blocked: output=%#v err=%v", output, err)
+	}
+}
+
 func TestCodexNativePayloadFailsClosed(t *testing.T) {
 	if _, err := ParseReader(strings.NewReader(`{"session_id":`)); err == nil {
 		t.Fatal("malformed Codex payload was accepted")

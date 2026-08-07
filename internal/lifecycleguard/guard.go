@@ -14,6 +14,9 @@ import (
 func ProtectedRootRemoval(command string) (bool, error) {
 	fields, err := splitSimpleCommand(command)
 	if err != nil {
+		if !looksLikeRemovalCommand(command) {
+			return false, nil
+		}
 		return false, err
 	}
 	for len(fields) > 0 && isLeadingAssignment(fields[0].Value) {
@@ -58,6 +61,17 @@ func ProtectedRootRemoval(command string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func looksLikeRemovalCommand(command string) bool {
+	for _, field := range strings.Fields(command) {
+		field = strings.Trim(field, "(){}[];|&<>")
+		switch field {
+		case "rm", "/bin/rm", "/usr/bin/rm":
+			return true
+		}
+	}
+	return false
 }
 
 func isLeadingAssignment(value string) bool {

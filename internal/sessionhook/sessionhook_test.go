@@ -135,6 +135,28 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	}
 }
 
+func TestSessionDirectiveProtectsCanonicalOwnerContextRoot(t *testing.T) {
+	packet := sessionctx.Packet{
+		WorkspaceRoot:    "/Users/pilot/Developer/maestro-os",
+		OwnerContextRoot: "/Users/pilot/Library/Application Support/BCGOS",
+		Owner:            sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", Track: "quick", NextQuestion: "Qual é o seu papel profissional?"}},
+	}
+	got := sessionDirective(packet)
+	if !strings.Contains(got, "canonical owner context is private") || !strings.Contains(got, "/Users/pilot/Library/Application Support/BCGOS/owner/self/") || !strings.Contains(got, "owner onboarding answer --facet") || !strings.Contains(got, "Do not create, edit or inspect an owner/") {
+		t.Fatalf("directive did not anchor the private owner context: %s", got)
+	}
+	if strings.Contains(got, "Kowalski") {
+		t.Fatalf("directive leaked an unrelated product identity: %s", got)
+	}
+	selectionPacket := packet
+	selectionPacket.Owner.Onboarding.Track = "selection_required"
+	selectionPacket.Owner.Onboarding.NextQuestion = "Você prefere a entrevista curta ou a completa?"
+	selection := sessionDirective(selectionPacket)
+	if strings.Contains(selection, "owner onboarding answer --facet") {
+		t.Fatalf("selection state exposed facet write command before track selection: %s", selection)
+	}
+}
+
 func TestClaudeAndCodexSerializationAreSeparateAdapterCalls(t *testing.T) {
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile:   profile.State{Profile: "standard", Source: "configured"},

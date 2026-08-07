@@ -1981,7 +1981,7 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		}
 		return writeJSON(out, status, errOut)
 	case "onboarding":
-		return runOwnerOnboarding(args[1:], out, errOut, root)
+		return runOwnerOnboarding(args[1:], in, out, errOut, root)
 	case "expand":
 		return runOwnerExpand(args[1:], in, out, errOut, root)
 	case "refine":
@@ -2073,13 +2073,13 @@ func runOwnerExpand(args []string, in io.Reader, out, errOut io.Writer, root str
 	}
 }
 
-func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
-	if len(args) == 0 || (args[0] != "status" && args[0] != "select" && args[0] != "confirm") {
-		fmt.Fprintln(errOut, "usage: bcgos owner onboarding <status|select --track quick|complete --confirm|confirm --confirm>")
+func runOwnerOnboarding(args []string, in io.Reader, out, errOut io.Writer, root string) int {
+	if len(args) == 0 || (args[0] != "status" && args[0] != "review" && args[0] != "select" && args[0] != "answer" && args[0] != "confirm") {
+		fmt.Fprintln(errOut, "usage: bcgos owner onboarding <status|review|select --track quick|complete --confirm|answer --facet ID (--body TEXT|--stdin) --confirm|confirm --digest SHA256 --confirm>")
 		return ExitUsage
 	}
 	switch args[0] {
-	case "status":
+	case "status", "review":
 		if len(args) != 1 {
 			fmt.Fprintln(errOut, "usage: bcgos owner onboarding status")
 			return ExitUsage
@@ -2102,12 +2102,65 @@ func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
 			return reportError(errOut, err)
 		}
 		return writeJSON(out, status.Onboarding, errOut)
+	case "answer":
+		flags := newFlagSet("owner onboarding answer", errOut)
+		facet := flags.String("facet", "", "owner facet being answered")
+		evidence := flags.String("evidence", "owner onboarding answer", "short provenance summary")
+		body := flags.String("body", "", "concise reviewed Markdown body")
+		stdin := flags.Bool("stdin", false, "read the concise reviewed Markdown body from standard input")
+		confirmed := flags.Bool("confirm", false, "confirm that the owner approved this facet body")
+		if flags.Parse(args[1:]) != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*facet) == "" || !*confirmed || (*stdin && strings.TrimSpace(*body) != "") || (!*stdin && strings.TrimSpace(*body) == "") {
+			fmt.Fprintln(errOut, "usage: bcgos owner onboarding answer --facet ID (--body TEXT|--stdin) --confirm")
+			return ExitUsage
+		}
+		proposedBody := *body
+		if *stdin {
+			readBody, err := io.ReadAll(io.LimitReader(in, maximumOwnerFacetBytes+1))
+			if err != nil || len(readBody) > maximumOwnerFacetBytes {
+				return reportError(errOut, errors.New("owner onboarding answer exceeds 1 MiB"))
+			}
+			proposedBody = string(readBody)
+		}
+		if len([]byte(proposedBody)) > maximumOwnerFacetBytes {
+			return reportError(errOut, errors.New("owner onboarding answer exceeds 1 MiB"))
+		}
+		if strings.TrimSpace(proposedBody) == "" {
+			return reportError(errOut, errors.New("owner onboarding answer body is required"))
+		}
+		onboardingStatus, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if onboardingStatus.Onboarding.Track != ownerctx.OnboardingTrackQuick && onboardingStatus.Onboarding.Track != ownerctx.OnboardingTrackComplete {
+			return reportError(errOut, errors.New("select an onboarding track before answering a facet"))
+		}
+		if onboardingStatus.Onboarding.State != "required" && onboardingStatus.Onboarding.State != "in_progress" {
+			return reportError(errOut, errors.New("owner onboarding answer is only available while the interview is in progress"))
+		}
+		if onboardingStatus.Onboarding.NextQuestion.Facet == "" || onboardingStatus.Onboarding.NextQuestion.Facet != *facet {
+			return reportError(errOut, fmt.Errorf("owner onboarding expects the next facet %q", onboardingStatus.Onboarding.NextQuestion.Facet))
+		}
+		proposal, err := ownerctx.SubmitRefinement(root, ownerctx.RefinementInput{Facet: *facet, Evidence: *evidence, ProposedBody: proposedBody})
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		if _, err := ownerctx.ApplyRefinement(root, proposal.ID, true); err != nil {
+			return reportError(errOut, err)
+		}
+		status, err := ownerctx.Inspect(root)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, status.Onboarding, errOut)
 	case "confirm":
 		flags := newFlagSet("owner onboarding confirm", errOut)
 		reviewDigest := flags.String("digest", "", "SHA-256 digest shown by owner onboarding status")
 		confirmed := flags.Bool("confirm", false, "confirm the reviewed onboarding profile")
 		if flags.Parse(args[1:]) != nil || rejectPositionals(flags, errOut) || !*confirmed || strings.TrimSpace(*reviewDigest) == "" {
 			fmt.Fprintln(errOut, "usage: bcgos owner onboarding confirm --digest SHA256 --confirm")
+			if *confirmed && strings.TrimSpace(*reviewDigest) == "" {
+				fmt.Fprintln(errOut, "run bcgos owner onboarding status and pass its review_digest; the digest prevents confirming a profile that changed after review")
+			}
 			return ExitUsage
 		}
 		status, err := ownerctx.ConfirmOnboarding(root, *reviewDigest)
@@ -2117,11 +2170,6 @@ func runOwnerOnboarding(args []string, out, errOut io.Writer, root string) int {
 		return writeJSON(out, status.Onboarding, errOut)
 	}
 	return ExitUsage
-}
-
-func isReadOnlyInstalledBCGOSDiagnostic(toolName string, raw json.RawMessage) bool {
-	executable, err := os.Executable()
-	return err == nil && actionconfirmation.IsReadOnlyBCGOSDiagnostic(toolName, raw, executable)
 }
 
 func runOwnerPromptHistory(args []string, in io.Reader, out, errOut io.Writer, root string) int {
@@ -2490,7 +2538,7 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 	}
 	packet := sessionctx.Build(sessionctx.Sources{
-		Profile: profileState, Workspace: inspection, Owner: owner,
+		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 		Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 		Execution:        activePointerFromContinuity(activeExecution),
 		Memory:           sessionMemorySource(root, inspection.WorkspaceID),
@@ -2544,7 +2592,7 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 	if err != nil {
 		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 	}
-	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Execution: activePointerFromContinuity(activeExecution), Memory: sessionMemorySource(root, inspection.WorkspaceID), SharePointSource: sharePointSource, ContinuousUse: continuous})
+	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Execution: activePointerFromContinuity(activeExecution), Memory: sessionMemorySource(root, inspection.WorkspaceID), SharePointSource: sharePointSource, ContinuousUse: continuous})
 	result, err := sessionresolve.Resolve(root, *pointer, *purpose, packet, *budget)
 	if err != nil {
 		return reportError(errOut, err)
@@ -2775,7 +2823,7 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 	}
 	packet := sessionctx.Build(sessionctx.Sources{
-		Profile: profileState, Workspace: inspection, Owner: owner,
+		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 		Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 		Execution:        activePointerFromContinuity(activeExecution),
 		Memory:           sessionMemorySource(root, inspection.WorkspaceID),
@@ -2848,25 +2896,16 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if canonicalErr != nil {
 			return writeJSON(out, codexadapter.ExternalActionDenial(noncanonicalExternalDenial), errOut)
 		}
-		if protected == nil && strings.TrimSpace(*orchestrationState) == "" {
-			return writeJSON(out, response, errOut)
-		}
-		if protected == nil && isReadOnlyInstalledBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
+		if protected == nil {
 			return writeJSON(out, response, errOut)
 		}
 		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
 		if inspectErr != nil {
-			if protected != nil {
-				return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
-			}
-			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+			return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
 		state, stateErr := resolveHookOrchestrationState(inspection, *orchestrationState)
 		if stateErr != nil {
-			if protected != nil {
-				return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
-			}
-			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+			return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
 		if protected != nil {
 			actorID, actorErr := localConfirmedOwnerActor(root)
@@ -2917,7 +2956,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 		}
 		packet := sessionctx.Build(sessionctx.Sources{
-			Profile: profileState, Workspace: inspection, Owner: owner,
+			Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 			Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 			Execution:        activePointerFromContinuity(activeExecution),
 			Memory:           sessionMemorySource(root, inspection.WorkspaceID),
@@ -3017,25 +3056,16 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if canonicalErr != nil {
 			return writeJSON(out, claudeadapter.ExternalActionDenial(noncanonicalExternalDenial), errOut)
 		}
-		if protected == nil && strings.TrimSpace(*orchestrationState) == "" {
-			return writeJSON(out, response, errOut)
-		}
-		if protected == nil && isReadOnlyInstalledBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
+		if protected == nil {
 			return writeJSON(out, response, errOut)
 		}
 		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
 		if inspectErr != nil {
-			if protected != nil {
-				return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
-			}
-			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+			return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
 		state, stateErr := resolveHookOrchestrationState(inspection, *orchestrationState)
 		if stateErr != nil {
-			if protected != nil {
-				return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
-			}
-			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+			return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
 		if protected != nil {
 			actorID, actorErr := localConfirmedOwnerActor(root)
@@ -3088,7 +3118,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 		}
 		packet := sessionctx.Build(sessionctx.Sources{
-			Profile: profileState, Workspace: inspection, Owner: owner,
+			Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 			Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
 			Execution:        activePointerFromContinuity(activeExecution),
 			Memory:           sessionMemorySource(root, inspection.WorkspaceID),

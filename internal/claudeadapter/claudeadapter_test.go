@@ -51,6 +51,7 @@ func TestGuardLeavesNormalCommandsToClaudePermissionFlow(t *testing.T) {
 		bashInput(`rm -rf '${HOME}'`),
 		bashInput(`rm -rf "~"`),
 		bashInput("go test ./..."),
+		bashInput("ls /Users/example/Developer/other-workspace 2>/dev/null | grep -i darwin"),
 		{ToolName: "Edit"},
 	}
 	for _, input := range tests {
