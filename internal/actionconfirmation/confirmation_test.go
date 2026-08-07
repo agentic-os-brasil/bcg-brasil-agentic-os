@@ -3,7 +3,6 @@ package actionconfirmation
 import (
 	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,89 +47,6 @@ func TestCanonicalizeProtectsExternalMutationButNotOrdinaryLocalWork(t *testing.
 		got, err := Canonicalize(tool, json.RawMessage(`{"target":"internal-agent","message":"hello"}`))
 		if err != nil || got != nil {
 			t.Fatalf("internal tool %s treated as external = %#v, %v", tool, got, err)
-		}
-	}
-}
-
-func TestReadOnlyBCGOSDiagnosticsUseAClosedSimpleCommandGrammar(t *testing.T) {
-	installed := filepath.Join(t.TempDir(), "Maestro", "bin", "bcgos")
-	if err := os.MkdirAll(filepath.Dir(installed), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(installed, []byte("installed"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	allowed := []string{
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q doctor", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q version", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q status '/Users/example/Developer/maestro-os'", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q owner onboarding status", installed)),
-	}
-	for _, raw := range allowed {
-		if !IsReadOnlyBCGOSDiagnostic("Bash", json.RawMessage(raw), installed) {
-			t.Fatalf("read-only diagnostic was not recognized: %s", raw)
-		}
-	}
-	arbitrary := filepath.Join(t.TempDir(), "bcgos")
-	if err := os.WriteFile(arbitrary, []byte("attacker"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	denied := []string{
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q doctor", arbitrary)),
-		`{"command":"C:\\\\tmp\\\\bcgos.exe doctor"}`,
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q init /tmp/workspace", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q doctor && touch /tmp/marker", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q owner init", installed)),
-		fmt.Sprintf(`{"command":%q}`, fmt.Sprintf("%q update", installed)),
-	}
-	for _, raw := range denied {
-		if IsReadOnlyBCGOSDiagnostic("Bash", json.RawMessage(raw), installed) {
-			t.Fatalf("mutating or compound command was recognized as read-only: %s", raw)
-		}
-	}
-}
-
-func TestReadOnlyDiagnosticsAllowObservedBoundedShellForms(t *testing.T) {
-	installed := filepath.Join(t.TempDir(), "Maestro", "bin", "bcgos")
-	if err := os.MkdirAll(filepath.Dir(installed), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(installed, []byte("installed"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	bcgos := fmt.Sprintf("%q skills index 2>/dev/null | head -60", installed)
-	if !IsReadOnlyBCGOSDiagnostic("Bash", json.RawMessage(fmt.Sprintf(`{"command":%q}`, bcgos)), installed) {
-		t.Fatalf("bounded skills index pipeline was not recognized: %s", bcgos)
-	}
-	lsCommand := `ls /Users/example/Developer/maestro-os/owner/self/ 2>/dev/null || echo "dir not found"`
-	if !IsReadOnlyBoundedDiagnostic("Bash", json.RawMessage(fmt.Sprintf(`{"command":%q}`, lsCommand))) {
-		t.Fatalf("bounded ls diagnostic was not recognized: %s", lsCommand)
-	}
-	denied := []string{
-		fmt.Sprintf("%q skills index 2>/dev/null | head -60; touch /tmp/marker", installed),
-		`ls /Users/example/Developer/maestro-os/owner/self/ || rm -rf /`,
-		fmt.Sprintf("%q skills index 2>/dev/null | head -1000", installed),
-	}
-	for _, command := range denied {
-		raw := json.RawMessage(fmt.Sprintf(`{"command":%q}`, command))
-		if IsReadOnlyBCGOSDiagnostic("Bash", raw, installed) || IsReadOnlyBoundedDiagnostic("Bash", raw) {
-			t.Fatalf("unsafe diagnostic was recognized as read-only: %s", command)
-		}
-	}
-}
-
-func TestLooksLikeBCGOSDiagnosticSeparatesUntrustedBinaryFromOrdinaryBash(t *testing.T) {
-	for _, command := range []string{
-		`/tmp/attacker/bcgos doctor`,
-		`/Users/example/bin/bcgos skills index 2>/dev/null | head -60`,
-	} {
-		if !LooksLikeBCGOSDiagnostic("Bash", json.RawMessage(fmt.Sprintf(`{"command":%q}`, command))) {
-			t.Fatalf("expected diagnostic classification: %s", command)
-		}
-	}
-	for _, command := range []string{`echo safe`, `ls /Users/example/Developer/other-workspace | grep -i darwin`} {
-		if LooksLikeBCGOSDiagnostic("Bash", json.RawMessage(fmt.Sprintf(`{"command":%q}`, command))) {
-			t.Fatalf("ordinary Bash was classified as a Maestro diagnostic: %s", command)
 		}
 	}
 }

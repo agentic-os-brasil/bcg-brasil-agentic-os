@@ -532,40 +532,6 @@ func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *
 	}
 }
 
-func TestInstalledGuardAllowsObservedReadOnlyDiagnosticsWithBoundedShellSyntax(t *testing.T) {
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	commands := []string{
-		fmt.Sprintf(`%q skills index 2>/dev/null | head -60`, executable),
-		`ls /Users/example/Developer/maestro-os/owner/self/ 2>/dev/null || echo "dir not found"`,
-	}
-	for _, runtimeName := range []string{"claude", "codex"} {
-		for _, command := range commands {
-			t.Run(runtimeName+"/"+command, func(t *testing.T) {
-				body, err := json.Marshal(map[string]any{"session_id": "session-a", "tool_name": "Bash", "tool_input": map[string]string{"command": command}})
-				if err != nil {
-					t.Fatal(err)
-				}
-				var output bytes.Buffer
-				rootCalled := false
-				code := runHookWithInput(
-					[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", "/workspace-that-must-not-be-inspected"},
-					bytes.NewReader(body), &output, &output,
-					func() (string, error) {
-						rootCalled = true
-						return "", errors.New("read-only diagnostic must not inspect workspace state")
-					},
-				)
-				if code != ExitOK || rootCalled || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
-					t.Fatalf("guard = %d rootCalled=%v output=%s", code, rootCalled, output.String())
-				}
-			})
-		}
-	}
-}
-
 func TestInstalledGuardDoesNotBlockOrdinaryBashWhenOrchestrationStateIsUnavailable(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
@@ -581,7 +547,7 @@ func TestInstalledGuardDoesNotBlockOrdinaryBashWhenOrchestrationStateIsUnavailab
 	}
 }
 
-func TestInstalledGuardRejectsHomonymousBCGOSDiagnosticWhenStateCannotBeValidated(t *testing.T) {
+func TestInstalledGuardDefersHomonymousBCGOSDiagnosticToNativeRuntime(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
 			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"/tmp/attacker/bcgos doctor"}}`
@@ -591,7 +557,7 @@ func TestInstalledGuardRejectsHomonymousBCGOSDiagnosticWhenStateCannotBeValidate
 				strings.NewReader(input), &output, &output,
 				func() (string, error) { return "", errors.New("invalid orchestration state") },
 			)
-			if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) || !strings.Contains(output.String(), "Nothing was changed") {
+			if code != ExitOK || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
 				t.Fatalf("guard = %d output=%s", code, output.String())
 			}
 		})

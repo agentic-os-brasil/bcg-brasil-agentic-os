@@ -2156,15 +2156,6 @@ func runOwnerOnboarding(args []string, in io.Reader, out, errOut io.Writer, root
 	return ExitUsage
 }
 
-func isReadOnlyInstalledBCGOSDiagnostic(toolName string, raw json.RawMessage) bool {
-	executable, err := os.Executable()
-	return err == nil && actionconfirmation.IsReadOnlyBCGOSDiagnostic(toolName, raw, executable)
-}
-
-func isReadOnlyBoundedDiagnostic(toolName string, raw json.RawMessage) bool {
-	return isReadOnlyInstalledBCGOSDiagnostic(toolName, raw) || actionconfirmation.IsReadOnlyBoundedDiagnostic(toolName, raw)
-}
-
 func runOwnerPromptHistory(args []string, in io.Reader, out, errOut io.Writer, root string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(errOut, "usage: bcgos owner prompt-history <config|add|inspect|export|delete|reset>")
@@ -2878,9 +2869,6 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		native = parsed
 	}
 	if action == "pre-action-guard" {
-		if isReadOnlyBoundedDiagnostic(native.ToolName, native.ToolInputJSON()) {
-			return writeJSON(out, codexadapter.GuardOutput{}, errOut)
-		}
 		response, err := codexadapter.Guard(native)
 		if err != nil {
 			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
@@ -2892,22 +2880,16 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		if canonicalErr != nil {
 			return writeJSON(out, codexadapter.ExternalActionDenial(noncanonicalExternalDenial), errOut)
 		}
-		if protected == nil && !actionconfirmation.LooksLikeBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
+		if protected == nil {
 			return writeJSON(out, response, errOut)
 		}
 		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
 		if inspectErr != nil {
-			if protected != nil {
-				return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
-			}
-			return writeJSON(out, codexadapter.ExternalActionDenial(unverifiedDiagnosticDenial), errOut)
+			return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
 		state, stateErr := resolveHookOrchestrationState(inspection, *orchestrationState)
 		if stateErr != nil {
-			if protected != nil {
-				return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
-			}
-			return writeJSON(out, codexadapter.ExternalActionDenial(unverifiedDiagnosticDenial), errOut)
+			return writeJSON(out, codexadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
 		if protected != nil {
 			actorID, actorErr := localConfirmedOwnerActor(root)
@@ -3047,9 +3029,6 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 	// The safety decision depends only on the bounded native payload. It must
 	// not be weakened by missing, malformed or slow workspace state.
 	if action == "pre-action-guard" {
-		if isReadOnlyBoundedDiagnostic(native.ToolName, native.ToolInputJSON()) {
-			return writeJSON(out, claudeadapter.GuardOutput{}, errOut)
-		}
 		response, err := claudeadapter.Guard(native)
 		if err != nil {
 			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
@@ -3061,22 +3040,16 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		if canonicalErr != nil {
 			return writeJSON(out, claudeadapter.ExternalActionDenial(noncanonicalExternalDenial), errOut)
 		}
-		if protected == nil && !actionconfirmation.LooksLikeBCGOSDiagnostic(native.ToolName, native.ToolInputJSON()) {
+		if protected == nil {
 			return writeJSON(out, response, errOut)
 		}
 		root, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
 		if inspectErr != nil {
-			if protected != nil {
-				return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
-			}
-			return writeJSON(out, claudeadapter.ExternalActionDenial(unverifiedDiagnosticDenial), errOut)
+			return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
 		state, stateErr := resolveHookOrchestrationState(inspection, *orchestrationState)
 		if stateErr != nil {
-			if protected != nil {
-				return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
-			}
-			return writeJSON(out, claudeadapter.ExternalActionDenial(unverifiedDiagnosticDenial), errOut)
+			return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
 		}
 		if protected != nil {
 			actorID, actorErr := localConfirmedOwnerActor(root)
@@ -3187,7 +3160,6 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 const (
 	noncanonicalExternalDenial    = "Maestro denied this external mutation because the request is outside the bounded canonical grammar. Nothing was changed. Use an explicit action and target, then retry."
 	unavailableConfirmationDenial = "Maestro denied this external mutation because a user-bound confirmation challenge could not be evaluated. Nothing was changed. Retry from an identified native session."
-	unverifiedDiagnosticDenial    = "Maestro did not run this bcgos diagnostic because the executable is not the installed Maestro CLI. Nothing was changed. Use the exact path from SessionStart or run the diagnostic through the Maestro skill."
 )
 
 func inspectProtectedActionWorkspace(path string, dataRoot func() (string, error)) (string, workspace.Inspection, error) {
