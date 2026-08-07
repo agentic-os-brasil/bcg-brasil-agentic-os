@@ -176,7 +176,9 @@ reported as unavailable.
 The Session Context Packet exposes `owner-identity` and an authorized
 `personal-context` only as bounded pointers, never as bodies. This keeps the
 runtime useful immediately while the owner can refine, replace or redact the
-optional context later through the ownerctx lifecycle.
+optional context later through the ownerctx lifecycle. Generic session reads
+cannot resolve the sensitive body; an explicit `owner-personal-context`
+purpose is required after owner authorization.
 
 ## Runtime behavior
 
