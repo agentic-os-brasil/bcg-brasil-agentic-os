@@ -248,6 +248,30 @@ O perfil muda a quantidade de explicação e sugestões, não muda permissões:
 Nenhum perfil autoriza upload remoto, ignora verificação, pede uma credencial
 em chat ou amplia escopo de acesso.
 
+### Fontes para acelerar o onboarding
+
+Antes da primeira pergunta de identidade, o Maestro oferece a mesma escolha em
+qualquer trilha:
+
+- enviar arquivos locais, como CV do BCG, exportação do LinkedIn, bio,
+  portfólio, job description, publicações, avaliação de desempenho, MBTI/Big
+  Five ou leadership profile;
+- indicar fontes públicas, como LinkedIn público, site pessoal, artigos,
+  entrevistas, palestras ou repositórios;
+- começar sem fontes e anexar material depois.
+
+Essa escolha não transforma uma trilha curta em completa. A curta usa o
+material autorizado para criar um baseline e deixa algumas facetas para depois;
+a completa usa a mesma evidência auxiliar nas oito facetas profissionais.
+Sempre há uma síntese revisável antes de qualquer persistência.
+
+Arquivos permanecem na origem escolhida e só são lidos por um adapter local
+qualificado após autorização explícita. Links públicos exigem um plano de
+pesquisa com temas minimizados, domínios permitidos e aprovação antes da busca.
+Se a capacidade estiver `unavailable`, o onboarding continua sem simular
+extração ou pesquisa. Avaliações de personalidade e liderança são fontes de
+autodescrição, não diagnóstico nem regra determinística de agente.
+
 ### Passo 4 — Inicialize o contexto profissional, se autorizado
 
 ```text

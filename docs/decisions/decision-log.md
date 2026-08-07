@@ -874,3 +874,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
  - Consequences: `bcgos update` remains honestly `pending_core_activation`/`unavailable`; no caller can turn shape-valid fields into authentication or mutate a workspace through the public package surface. The internal contract remains ready for future bootstrapper wiring and adversarially tested without claiming runtime qualification.
 - Refs: WSMG; specs/046-workspace-migration.md; internal/workspacemigration; internal/runtimeprojection; internal/adaptercfg
  - Supersedes: none
+
+## SINT - Offer consented source intake at onboarding start
+
+- Date: 2026-08-07
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A first-time owner can reach a useful professional baseline faster when the onboarding can use material they already have, but a silent upload or public lookup would violate the local-first and consent boundaries. The quick and complete tracks also need to offer the same source choice without making the short track appear complete.
+- Decision: Add a runtime-neutral `source_intake` contract to both onboarding tracks. Before the first facet, the Maestro offers local files (including a BCG CV, LinkedIn export, portfolio, performance review, MBTI/Big Five result or leadership profile), public sources (including a public LinkedIn page, personal site or publications), or no sources. Source selection itself never reads, fetches, activates a bundle or changes owner state. Local extraction requires a qualified adapter; public research requires an approved, minimized plan and source allowlist; assessments remain optional autodescription and never become diagnosis, deterministic labels or authority.
+- Consequences: Onboarding can be solved faster from owner-provided evidence while preserving review, provenance, purpose, reader scope and retention. The short track remains a bounded baseline and the complete track remains the full professional self. The current runtime reports local ingestion or external research as unavailable when their adapters are not qualified. Development skills are checked against the real `tech-core` catalog; AfD and CDC are not presented as installed IDs until their canonical definitions exist.
+- Refs: specs/013-owner-context.md; specs/017-workspace-agent-initialization.md; bundles/base/skills/maestro-onboarding/SKILL.md; bundles/base/skills/ingest-content/SKILL.md; internal/ownerctx/ownerctx.go; internal/ownerctx/ownerctx_test.go
+- Supersedes: none
