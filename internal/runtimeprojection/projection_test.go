@@ -111,6 +111,9 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 			t.Fatalf("orientation missing %q", expected)
 		}
 	}
+	if !strings.Contains(text, "`/dream-memory`") || strings.Contains(text, "`$dream-memory`") {
+		t.Fatalf("orientation skill references should use slash notation: %q", text)
+	}
 	entries, err := os.ReadDir(filepath.Join(workspace, ".claude", "skills"))
 	if err != nil || len(entries) != status.SkillCount {
 		t.Fatalf("projected skills = %d, err = %v", len(entries), err)
