@@ -92,7 +92,7 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	}
 	selection := pending
 	selection.Owner.Onboarding.Track = "selection_required"
-	if got := sessionDirective(selection); !strings.Contains(got, "preferred name") || !strings.Contains(got, "authorized personal-context boundary") || !strings.Contains(got, "work preferences") || !strings.Contains(got, "quality bar") || !strings.Contains(got, "all eight professional self facets") || !strings.Contains(got, "not inferred") {
+	if got := sessionDirective(selection); !strings.Contains(got, "quick") || !strings.Contains(got, "complete") || !strings.Contains(got, "authorized context") || !strings.Contains(got, "pending facets") || !strings.Contains(got, "Do not infer") {
 		t.Fatalf("track selection directive = %q", got)
 	}
 	selection.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
@@ -152,7 +152,7 @@ func TestSessionDirectiveProtectsCanonicalOwnerContextRoot(t *testing.T) {
 	selectionPacket.Owner.Onboarding.Track = "selection_required"
 	selectionPacket.Owner.Onboarding.NextQuestion = "Você prefere a entrevista curta ou a completa?"
 	selection := sessionDirective(selectionPacket)
-	if !strings.Contains(selection, "owner onboarding answer --facet") || !strings.Contains(selection, "before track selection it records the known answer") {
+	if !strings.Contains(selection, "owner onboarding answer --facet") || !strings.Contains(selection, "order is flexible") {
 		t.Fatalf("selection state did not expose the governed conversational answer route: %s", selection)
 	}
 }
