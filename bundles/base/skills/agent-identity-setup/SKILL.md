@@ -78,6 +78,36 @@ show the complete proposed profile and ask for one explicit confirmation:
 missing confirmation, stale base revision, changed review envelope, unknown role,
 invalid emoji or ownership-scope mismatch must fail closed.
 
+The JSON sent to `draft --stdin` is a strict `Profile` envelope. The interview
+field names `agent_names`, `agent_emojis` and `ownership_scope` describe
+questions; they are not top-level JSON keys. Use `bcgos agent interview` as the
+schema source and construct `selections` explicitly:
+
+```json
+{
+  "schema_version": 1,
+  "owner_id": "owner-slug",
+  "confirmed": true,
+  "capability_tracks": [],
+  "selections": [
+    {"role": "maestro", "display_name": "Maestro", "emoji": "🎼", "owner_id": "owner-slug", "ownership_scope": "system"},
+    {"role": "client_account_agent", "agent_id": "client-account-agent-<account-id>", "display_name": "Account Partner", "emoji": "🤝", "owner_id": "owner-slug", "ownership_scope": "account"},
+    {"role": "case_agent", "agent_id": "case-agent-<case-id>", "display_name": "Case Lead", "emoji": "⚙️", "owner_id": "owner-slug", "ownership_scope": "case"},
+    {"role": "walter", "display_name": "Walter", "emoji": "🦉", "owner_id": "owner-slug", "ownership_scope": "governance"},
+    {"role": "darwin", "display_name": "Darwin", "emoji": "🧬", "owner_id": "owner-slug", "ownership_scope": "governance"},
+    {"role": "quality_guardian", "display_name": "Gamma Guardian", "emoji": "🧪", "owner_id": "owner-slug", "ownership_scope": "quality_longitudinal"},
+    {"role": "pa_expert", "display_name": "PA Expert", "emoji": "🧠", "owner_id": "owner-slug", "ownership_scope": "pa_expert_registry"}
+  ]
+}
+```
+
+`client_account_agent` and `case_agent` always require a concrete `agent_id`;
+never invent a global/account/case scope field or put `scope` at the profile
+top level. On a fresh guided interview, submit Maestro first, then Walter,
+then Darwin in separate drafts; retain already-confirmed answers and do not
+batch a future main-agent answer. The CLI remains intentionally strict so an
+ambiguous identity cannot be persisted.
+
 Personalization is local owner data. It is never copied into managed templates,
 client context, telemetry, quality receipts or PA Expert advisory packets.
 `--no-client-data` is the owner's attestation, not an automatic classifier.

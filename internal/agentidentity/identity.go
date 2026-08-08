@@ -48,15 +48,31 @@ type InterviewStep struct {
 	Explanation string `json:"explanation"`
 }
 
-type Interview struct {
-	Kind                 string            `json:"kind"`
+// ProfileInputContract makes the interview self-describing for a runtime
+// agent. The human-facing field names in Steps (for example agent_names) are
+// interview concepts; this contract is the exact strict JSON envelope used
+// by `agent personalize draft`.
+type ProfileInputContract struct {
+	Command              string            `json:"command"`
 	SchemaVersion        int               `json:"schema_version"`
-	Instructions         string            `json:"instructions"`
-	OwnershipExplanation string            `json:"ownership_explanation"`
-	AvatarExplanation    string            `json:"avatar_explanation"`
-	Steps                []InterviewStep   `json:"steps"`
-	Agents               []RoleDescriptor  `json:"agents"`
-	CapabilityTracks     []CapabilityTrack `json:"capability_tracks"`
+	RequiredFields       []string          `json:"required_fields"`
+	OptionalFields       []string          `json:"optional_fields"`
+	SelectionFields      []string          `json:"selection_fields"`
+	AgentIDRequiredRoles []string          `json:"agent_id_required_roles"`
+	OwnershipScopes      map[string]string `json:"ownership_scopes"`
+	Guidance             string            `json:"guidance"`
+}
+
+type Interview struct {
+	Kind                 string               `json:"kind"`
+	SchemaVersion        int                  `json:"schema_version"`
+	Instructions         string               `json:"instructions"`
+	OwnershipExplanation string               `json:"ownership_explanation"`
+	AvatarExplanation    string               `json:"avatar_explanation"`
+	Steps                []InterviewStep      `json:"steps"`
+	Agents               []RoleDescriptor     `json:"agents"`
+	CapabilityTracks     []CapabilityTrack    `json:"capability_tracks"`
+	ProfileInput         ProfileInputContract `json:"profile_input"`
 }
 
 type CapabilityTrack struct {
@@ -158,6 +174,24 @@ func InitialInterview() Interview {
 			{ID: "data-science", DisplayName: "Ciência de dados", Description: "Avaliação de ciência de dados e decisão de promoção baseada em evidência.", Availability: "optional"},
 			{ID: "data-engineering", DisplayName: "Engenharia de dados", Description: "Qualidade e reprodutibilidade de pipelines de dados.", Availability: "optional"},
 			{ID: "ai-engineering", DisplayName: "Engenharia de AI", Description: "Trabalho aplicado de inteligência artificial, modelos e sistemas baseados em AI.", Availability: "optional"},
+		},
+		ProfileInput: ProfileInputContract{
+			Command:              "bcgos agent personalize draft --stdin --consent --no-client-data",
+			SchemaVersion:        SchemaVersion,
+			RequiredFields:       []string{"schema_version", "owner_id", "confirmed", "selections"},
+			OptionalFields:       []string{"capability_tracks"},
+			SelectionFields:      []string{"role", "agent_id", "display_name", "emoji", "owner_id", "ownership_scope"},
+			AgentIDRequiredRoles: []string{"client_account_agent", "case_agent"},
+			OwnershipScopes: map[string]string{
+				"maestro":              "system",
+				"client_account_agent": "account",
+				"case_agent":           "case",
+				"walter":               "governance",
+				"darwin":               "governance",
+				"quality_guardian":     "quality_longitudinal",
+				"pa_expert":            "pa_expert_registry",
+			},
+			Guidance: "Use selections[]; agent_names, agent_emojis, scope and ownership_scope are interview labels, not top-level profile fields. Keep only the current guided main-agent answer (Maestro, then Walter, then Darwin) in each draft.",
 		},
 	}
 }

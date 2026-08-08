@@ -32,11 +32,15 @@ signature, data-separation or acceptance requirements.
    show the suggested names and emoji-avatars, and ask the owner to choose or
    customize them. Explain that ownership and personalization are separate
    from authority. Persist only after explicit confirmation with
-   `bcgos agent personalize --stdin`; malformed, unconfirmed or cross-scope
+   `bcgos agent personalize draft --stdin --consent --no-client-data`, followed
+   by review and digest-bound confirm; malformed, unconfirmed or cross-scope
    profiles fail closed. Ask only the returned `next_question`; stage the
    strict profile with `bcgos agent personalize draft --stdin --consent
    --no-client-data`, show `review --id <id>`, and apply only `confirm --id
-   <id> --digest <sha256> --confirm` after the owner reviews it.
+   <id> --digest <sha256> --confirm` after the owner reviews it. The input
+   must use the canonical `selections[]` envelope returned by
+   `bcgos agent interview`; do not send interview labels such as `agent_names`,
+   `agent_emojis`, `scope` or a top-level `ownership_scope`.
 5. Run `bcgos update --check`. Explain the installed and proposed versions,
    whether CLI and bundle both change, and whether a migration is required.
 6. If an update is available, ask one short confirmation naming the exact
