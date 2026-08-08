@@ -310,8 +310,26 @@ func narrativePreferenceTags(preference string) []string {
 }
 
 func (profile Profile) Validate() error {
-	if profile.SchemaVersion != SchemaVersion || !safeID(profile.OwnerID) || !profile.Confirmed || profile.UpdatedAt.IsZero() || len(profile.Selections) == 0 || len(profile.Selections) > 128 || len(profile.CapabilityTracks) > 16 {
-		return errors.New("agent personalization profile is incomplete")
+	if profile.SchemaVersion != SchemaVersion {
+		return fmt.Errorf("agent personalization schema_version must be %d", SchemaVersion)
+	}
+	if !safeID(profile.OwnerID) {
+		return errors.New("agent personalization owner_id is required and must be a bounded identifier")
+	}
+	if !profile.Confirmed {
+		return errors.New("agent personalization confirmed must be true before persistence")
+	}
+	if profile.UpdatedAt.IsZero() {
+		return errors.New("agent personalization updated_at is required")
+	}
+	if len(profile.Selections) == 0 {
+		return errors.New("at least one selection is required for agent personalization")
+	}
+	if len(profile.Selections) > 128 {
+		return errors.New("agent personalization supports at most 128 selections")
+	}
+	if len(profile.CapabilityTracks) > 16 {
+		return errors.New("agent personalization supports at most 16 capability tracks")
 	}
 	seenTracks := map[string]bool{}
 	for _, track := range profile.CapabilityTracks {

@@ -3,6 +3,7 @@ package agentidentity
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -132,6 +133,38 @@ func TestProfileValidatesCanonicalRolesAndPersistsAtomically(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "agents", "personalization.json")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestProfileValidationIdentifiesTheMissingRootField(t *testing.T) {
+	valid := Profile{
+		SchemaVersion: SchemaVersion,
+		OwnerID:       "daniel",
+		Confirmed:     true,
+		UpdatedAt:     time.Now().UTC(),
+		Selections: []Selection{{
+			Role: "maestro", DisplayName: "Maestro", Emoji: "🎼", OwnerID: "daniel", OwnershipScope: "system",
+		}},
+	}
+	tests := []struct {
+		name string
+		edit func(*Profile)
+		want string
+	}{
+		{name: "schema", edit: func(profile *Profile) { profile.SchemaVersion = 0 }, want: "schema_version must be 1"},
+		{name: "owner", edit: func(profile *Profile) { profile.OwnerID = "" }, want: "owner_id is required"},
+		{name: "confirmation", edit: func(profile *Profile) { profile.Confirmed = false }, want: "confirmed must be true"},
+		{name: "timestamp", edit: func(profile *Profile) { profile.UpdatedAt = time.Time{} }, want: "updated_at is required"},
+		{name: "selections", edit: func(profile *Profile) { profile.Selections = nil }, want: "at least one selection is required"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			profile := valid
+			test.edit(&profile)
+			if err := profile.Validate(); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("validation error = %v, want %q", err, test.want)
+			}
+		})
 	}
 }
 

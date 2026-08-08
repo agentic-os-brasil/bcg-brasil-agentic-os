@@ -21,6 +21,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
@@ -557,6 +558,50 @@ func TestPreActionGuardLeavesIncompleteMetadataToNativeFlowAndProtectsRootRemova
 				t.Fatalf("unknown tool root removal was not denied: code=%d output=%s", code, output.String())
 			}
 		})
+	}
+}
+
+func TestPreActionGuardExplainsHowToRetryChainedRemoval(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"mv note.md archived.md && ls && rm archived.md"}}`
+			var output bytes.Buffer
+			code := runHookWithInput(
+				[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "/workspace-that-must-not-be-inspected"},
+				strings.NewReader(input), &output, &output,
+				func() (string, error) { return "", errors.New("chained removal must not inspect workspace state") },
+			)
+			if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) ||
+				!strings.Contains(output.String(), "Run each shell step separately") ||
+				!strings.Contains(output.String(), "removal") {
+				t.Fatalf("guard did not provide actionable recovery: code=%d output=%s", code, output.String())
+			}
+		})
+	}
+}
+
+func TestLifecycleReceiptCheckExplainsBoundedHistory(t *testing.T) {
+	root := t.TempDir()
+	workspaceID := strings.Repeat("a", 32)
+	for index := 0; index <= lifecycle.MaximumDiagnosticReceiptEntries; index++ {
+		receipt := lifecycle.Receipt{
+			SchemaVersion: 1,
+			Runtime:       "claude",
+			Event:         lifecycle.StopFinalize,
+			State:         "observed",
+			Provenance:    lifecycle.AdapterCommand,
+			IdempotencyKey: lifecycle.IdempotencyKey(
+				"canary-bounded-history", strconv.Itoa(index),
+			),
+		}
+		if _, err := lifecycle.Record(root, workspaceID, receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check := lifecycleReceiptCheck(root, workspaceID)
+	if check.State != "warning" || !strings.Contains(check.Message, "64-entry diagnostic window") ||
+		!strings.Contains(check.Message, "remain local") || !strings.Contains(check.Message, "native qualification") {
+		t.Fatalf("bounded history guidance = %#v", check)
 	}
 }
 
@@ -1777,6 +1822,29 @@ func TestExecutionHandoffAcrossTwoSessionsRecoversAndCompletesFirstSessionArtifa
 	assertExecutionMutationPrivate(t, sessionB.String())
 	if artifact, err := os.ReadFile(recoveredArtifactPath); err != nil || string(artifact) != sessionBFinal {
 		t.Fatalf("recovered artifact = %q, err = %v", artifact, err)
+	}
+}
+
+func TestWorkCreateContractIsDiscoverableWithoutEngineeringReflection(t *testing.T) {
+	var output bytes.Buffer
+	dataRootCalled := false
+	dataRoot := func() (string, error) {
+		dataRootCalled = true
+		return "", errors.New("schema inspection must not require local state")
+	}
+	if code := runWork([]string{"schema"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK || dataRootCalled {
+		t.Fatalf("work schema exit=%d dataRootCalled=%v output=%s", code, dataRootCalled, output.String())
+	}
+	for _, expected := range []string{"initial_next_step", "artifact_snapshot", "command_check", "bcgos://workspace/result.md", "go test", "allowed_refs"} {
+		if !strings.Contains(output.String(), expected) {
+			t.Fatalf("work schema omitted %q: %s", expected, output.String())
+		}
+	}
+
+	output.Reset()
+	if code := runWork([]string{"create", "--help"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK || dataRootCalled ||
+		!strings.Contains(output.String(), "bcgos work schema") || !strings.Contains(output.String(), "artifact_snapshot") {
+		t.Fatalf("work create help is not actionable: exit=%d dataRootCalled=%v output=%s", code, dataRootCalled, output.String())
 	}
 }
 
