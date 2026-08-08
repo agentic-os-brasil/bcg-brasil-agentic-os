@@ -486,6 +486,10 @@
       <div class="flow-confirm-boundary"><span>${analysis.plan_digest ? `PLANO · ${escapeHTML(analysis.plan_digest)}` : 'PLANO INDISPONÍVEL'}</span><p>${blocked ? 'Nenhum staging, confirmação ou instalação ocorrerá enquanto houver bloqueios.' : 'O plano será confirmado antes do staging. A origem permanece preservada e o rollback continua disponível.'}</p></div>
       <div class="panel-actions"><button class="quiet" type="button" data-action="workspace-flow-back">Escolher outra fonte</button>${analysis.can_confirm ? '<button class="primary" type="button" data-action="confirm-workspace-flow"><span>Confirmar e preparar</span><span class="arrow">↗</span></button>' : '<button class="primary" type="button" disabled aria-disabled="true"><span>Confirmação indisponível</span></button>'}</div>
       <div class="callout runtime-error" id="workspace-flow-analysis-error" role="alert" hidden><span>!</span><p></p></div>`;
+    const capabilityHeading = target.querySelector('.flow-capability h3');
+    if (capabilityHeading) capabilityHeading.textContent = 'O que não será feito agora';
+    const capabilityCopy = target.querySelector('.flow-capability p');
+    if (capabilityCopy) capabilityCopy.textContent = 'O Maestro deixa claro o que ainda não está disponível e não promete etapas que não podem ser executadas.';
     setWorkspaceFlowPhase('plan');
     const heading = target.querySelector('h1');
     if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
@@ -494,12 +498,33 @@
   function renderWorkspaceFlowProgress(mode, errorMessage = '') {
     const target = document.querySelector('#workspace-flow-analysis');
     if (!target) return;
-    const title = mode === 'confirm' ? 'Preparando com rastreabilidade.' : 'Analisando a fonte sem tocar nela.';
+    const title = mode === 'confirm' ? 'Vamos preparar seu workspace.' : 'Vamos conferir esta fonte.';
+    const subtitle = mode === 'confirm' ? 'O Maestro está preparando o próximo passo.' : 'Primeiro, vou entender o que você escolheu.';
     const failure = errorMessage
       ? `<div class="callout runtime-error" role="alert"><span>!</span><p>${escapeHTML(errorMessage)}</p></div><div class="panel-actions"><button class="quiet" type="button" data-action="workspace-flow-back">Escolher outra fonte</button></div>`
       : '';
     target.hidden = false;
     target.innerHTML = `<span class="eyebrow">MAESTRO EM MOVIMENTO</span><h1 id="workspace-flow-analysis-title" tabindex="-1">${title}<br><em>cada estado fica visível.</em></h1><div class="flow-phase-track" role="list" aria-label="Estado da jornada"><div data-flow-phase="analysis" role="listitem"><b>01</b><span>Análise</span><small>classificar a fonte</small></div><div data-flow-phase="plan" role="listitem"><b>02</b><span>Plano</span><small>explicar o escopo</small></div><div data-flow-phase="confirm" role="listitem"><b>03</b><span>Confirmação</span><small>uma decisão explícita</small></div><div data-flow-phase="staging" role="listitem"><b>04</b><span>Staging</span><small>preparar sem substituir</small></div><div data-flow-phase="validation" role="listitem"><b>05</b><span>Validação</span><small>conferir o resultado</small></div><div data-flow-phase="rollback" role="listitem"><b>06</b><span>Rollback</span><small>manter a volta disponível</small></div></div><div class="flow-progress-note${errorMessage ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHTML(errorMessage || (mode === 'confirm' ? 'Aguardando o receipt válido do core transacional.' : 'A análise local bounded está lendo metadados e preparando o plano.'))}</div>${failure}`;
+    const headingCopy = target.querySelector('#workspace-flow-analysis-title');
+    if (headingCopy) headingCopy.innerHTML = `${title}<br><em>${subtitle}</em>`;
+    const phaseCopy = [
+      ['Conferir', 'entender a escolha'],
+      ['Explicar', 'mostrar o que será feito'],
+      ['Confirmar', 'uma decisão explícita'],
+      ['Preparar', 'sem substituir a origem'],
+      ['Conferir', 'validar o resultado'],
+      ['Voltar', 'manter a opção segura'],
+    ];
+    target.querySelectorAll('[data-flow-phase]').forEach((step, index) => {
+      const [label, detail] = phaseCopy[index] || [];
+      if (label) step.querySelector('span').textContent = label;
+      if (detail) step.querySelector('small').textContent = detail;
+    });
+    target.querySelector('.flow-phase-track')?.setAttribute('aria-label', 'Etapas do preparo');
+    const progressNote = target.querySelector('.flow-progress-note');
+    if (progressNote && !errorMessage) progressNote.textContent = mode === 'confirm'
+      ? 'Confirmando a preparação do seu workspace.'
+      : 'Lendo apenas as informações necessárias para preparar o próximo passo.';
     setWorkspaceFlowPhase(mode === 'confirm' ? 'staging' : 'analysis');
     const heading = target.querySelector('h1');
     if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
@@ -737,6 +762,7 @@
     panels.forEach(panel => {
       const visible = panel.dataset.panel === name;
       panel.hidden = !visible;
+      panel.setAttribute('aria-hidden', String(!visible));
       panel.classList.toggle('is-visible', visible);
     });
     const visualOrder = { welcome: 0, check: 1, install: 1, finish: 2 };
@@ -1092,6 +1118,7 @@
     if (action === 'close') await closeInstaller();
   });
 
+  panels.forEach(panel => panel.setAttribute('aria-hidden', String(!panel.classList.contains('is-visible'))));
   renderRuntimeTargets();
   resetProgressBars();
   setIntent();
