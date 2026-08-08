@@ -21,6 +21,7 @@ param(
     [string]$ResourceCompilerSHA256,
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory,
+    [string]$ArchiveOutput = "",
     [string]$ResourceCompiler = "windres"
 )
 
@@ -139,6 +140,14 @@ if ($compilerDigest -ne $ResourceCompilerSHA256) {
 $packageOutput = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $packageOutput) {
     throw "Output directory already exists: $packageOutput"
+}
+$packageParent = Split-Path -Parent $packageOutput
+if ([string]::IsNullOrWhiteSpace($ArchiveOutput)) {
+    $ArchiveOutput = Join-Path $packageParent "Maestro-Installer-$Version-windows-amd64-portable-unsigned.zip"
+}
+$archiveOutput = [IO.Path]::GetFullPath($ArchiveOutput)
+if (Test-Path -LiteralPath $archiveOutput) {
+    throw "Portable archive already exists: $archiveOutput"
 }
 New-Item -ItemType Directory -Path $packageOutput -Force | Out-Null
 $outputCreated = $true
@@ -290,6 +299,18 @@ candidato continua sem Authenticode e não é uma release apta para piloto.
     @"
 @echo off
 setlocal
+set "ROOT=%~dp0"
+"%ROOT%maestro-installer.exe" --wizard-dir "%ROOT%wizard" --release-dir "%ROOT%release" --authority-registry "%ROOT%authority-registry.json" --bootstrapper "%ROOT%$($bootstrapperItem.Name)"
+if errorlevel 1 (
+  echo.
+  echo A instalacao nao foi concluida. Consulte a mensagem acima.
+  pause
+  exit /b 1
+)
+"@ | Set-Content -LiteralPath (Join-Path $packageOutput "Install-Maestro.cmd") -Encoding ascii
+    @"
+@echo off
+setlocal
 set "SIMULATION_ROOT=%TEMP%\Maestro-Install-Rehearsal-%RANDOM%"
 "%~dp0maestro-installer.exe" --simulate --wizard-dir "%~dp0wizard" --simulation-root "%SIMULATION_ROOT%"
 if errorlevel 1 (
@@ -302,8 +323,15 @@ echo.
 echo Sandbox criada em: %SIMULATION_ROOT%
 pause
 "@ | Set-Content -LiteralPath (Join-Path $packageOutput "Run-Maestro-Rehearsal.cmd") -Encoding ascii
+    Compress-Archive -LiteralPath $packageOutput -DestinationPath $archiveOutput -CompressionLevel Optimal
+    if (-not (Test-Path -LiteralPath $archiveOutput)) {
+        throw "Portable Windows archive was not created."
+    }
+    $archiveDigest = (Get-FileHash -LiteralPath $archiveOutput -Algorithm SHA256).Hash.ToLowerInvariant()
     $succeeded = $true
     Write-Output "unsigned Windows installer candidate: $outputFull"
+    Write-Output "portable archive: $archiveOutput"
+    Write-Output "portable archive sha256: $archiveDigest"
     Write-Output "provenance: $provenancePath"
 }
 finally {
@@ -312,6 +340,7 @@ finally {
     Remove-Item -LiteralPath $stagingRoot -Recurse -Force -ErrorAction SilentlyContinue
     if (-not $succeeded -and $outputCreated) {
         Remove-Item -LiteralPath $packageOutput -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $archiveOutput -Force -ErrorAction SilentlyContinue
     }
     if ($null -eq $previousGOOS) { Remove-Item Env:GOOS -ErrorAction SilentlyContinue } else { $env:GOOS = $previousGOOS }
     if ($null -eq $previousGOARCH) { Remove-Item Env:GOARCH -ErrorAction SilentlyContinue } else { $env:GOARCH = $previousGOARCH }

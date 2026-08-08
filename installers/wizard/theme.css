@@ -296,6 +296,59 @@ body:before{opacity:.16;background-size:72px 72px;mask-image:linear-gradient(90d
   .section-heading p,.lead,.callout p,.flow-option small,.flow-boundary p,.runtime-launch p{font-size:16px}
 }
 
+/* Final interaction pass: one decisive choice, no mystery click, no scroll. */
+.panel{
+  --panel-zoom:1;
+  zoom:var(--panel-zoom);
+  overflow:hidden;
+  scrollbar-width:none;
+}
+.panel::-webkit-scrollbar{display:none}
+.panel[data-fits-viewport="fitted"]{display:block!important;justify-content:initial!important}
+.setup-intent-paths .intent-path{
+  position:relative;
+  cursor:pointer;
+  border:1px solid transparent;
+  border-right:1px solid rgba(137,190,177,.14);
+  transition:transform .24s cubic-bezier(.23,1,.32,1),background .24s ease,border-color .24s ease,box-shadow .24s ease;
+}
+.setup-intent-paths .intent-path:last-child{border-right:1px solid transparent}
+.setup-intent-paths .intent-path:hover,.setup-intent-paths .intent-path:focus-visible{
+  border-color:rgba(49,224,181,.52);
+  background:rgba(7,51,44,.58);
+  transform:translateY(-2px)!important;
+}
+.setup-intent-paths .intent-path.is-selected{
+  border-color:var(--teal);
+  background:linear-gradient(120deg,rgba(49,224,181,.18),rgba(7,51,44,.74));
+  box-shadow:inset 0 0 0 1px rgba(49,224,181,.2),0 0 28px rgba(49,224,181,.14);
+  transform:translateY(-2px)!important;
+}
+.setup-intent-paths .intent-path.is-selected:after{
+  content:"✓ SELECIONADO";
+  position:absolute;
+  right:12px;
+  top:10px;
+  color:var(--teal);
+  font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;
+  letter-spacing:.1em;
+}
+.setup-intent-paths .intent-path.is-selected b{color:#dffdf3}
+.setup-intent-paths .intent-path.is-selected small{color:#b4d9cd}
+
+/* The compact product frame keeps every title readable while reserving room
+   for the actual action and its status. */
+.hero-copy h1,.section-heading h1,.panel-finish h1,
+.workspace-flow-choice h1,.workspace-flow-analysis h1,.workspace-flow-result h1{
+  font-size:clamp(40px,4.8vw,64px)!important;
+}
+.rail h2{font-size:24px}
+.modal h2{font-size:24px}
+@media(max-width:580px){
+  .hero-copy h1,.section-heading h1,.panel-finish h1,
+  .workspace-flow-choice h1,.workspace-flow-analysis h1,.workspace-flow-result h1{font-size:38px!important}
+}
+
 /* The three top-level movements read as a flywheel, not a linear checklist. */
 @media(min-width:981px){
   .steps{position:relative;display:block;height:274px;margin-top:48px;isolation:isolate}
