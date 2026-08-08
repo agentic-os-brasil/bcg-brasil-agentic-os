@@ -390,3 +390,25 @@ body:before{opacity:.16;background-size:72px 72px;mask-image:linear-gradient(90d
   .kicker,.eyebrow,.choice-label{font-size:10px}
   .step b,.step small{font-size:12px}
 }
+
+/* One scene at a time: every step owns the same viewport and never becomes a
+   second column when the grid has more than one panel. */
+.content{grid-template-rows:82px auto minmax(0,1fr) auto}
+.topbar{grid-row:1;grid-column:1}
+.intent-strip{grid-row:2;grid-column:1;width:min(100%,930px)}
+.scene-viewport{position:relative;grid-row:3;grid-column:1;min-height:0;overflow:hidden}
+.footer{grid-row:4;grid-column:1}
+.scene-viewport>.panel{position:absolute;inset:0;width:min(100%,930px);max-width:none;height:100%;margin:0 auto;overflow:hidden}
+.scene-viewport>.panel:not(.is-visible){display:none!important}
+.scene-viewport>.panel.is-visible{display:block!important}
+.scene-viewport>.panel.panel-welcome.is-visible{display:grid!important}
+.scene-viewport>.panel.is-visible:not(.panel-welcome)[data-fits-viewport="true"]{display:flex!important;flex-direction:column;justify-content:center}
+
+@media(max-width:980px){
+  .content{display:grid;grid-template-rows:64px auto minmax(0,1fr) auto;height:auto;min-height:100vh;overflow:visible}
+  .scene-viewport{min-height:calc(100vh - 64px);overflow:visible}
+  .scene-viewport>.panel{position:relative;inset:auto;width:100%;height:auto;min-height:0;overflow:visible;margin:0 auto;padding-top:48px}
+  .scene-viewport>.panel:not(.is-visible){display:none!important}
+  .scene-viewport>.panel.is-visible{display:block!important}
+  .scene-viewport>.panel.panel-welcome.is-visible{display:grid!important}
+}
