@@ -14,6 +14,7 @@ import (
 	devharness "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/harness"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasepack"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/releasereadiness"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installerbundle"
 )
 
 func main() {
@@ -43,8 +44,55 @@ func main() {
 		verifySigned(root, os.Args[2:])
 	case "readiness":
 		readiness(root, os.Args[2:])
+	case "self-contained":
+		selfContained(root, os.Args[2:])
 	default:
 		usage()
+	}
+}
+
+func selfContained(root string, args []string) {
+	flags := flag.NewFlagSet("self-contained", flag.ExitOnError)
+	base := flags.String("base", "", "outer Windows wrapper executable")
+	source := flags.String("source", "", "complete validated installer package directory")
+	output := flags.String("output", "", "new self-contained executable path")
+	_ = flags.Parse(args)
+	if *base == "" || *source == "" || *output == "" || flags.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./dev/release self-contained --base FILE --source DIRECTORY --output FILE")
+		os.Exit(2)
+	}
+	basePath := absoluteFromRoot(root, *base)
+	sourcePath := absoluteFromRoot(root, *source)
+	outputPath := absoluteFromRoot(root, *output)
+	outputParent := filepath.Dir(outputPath)
+	temporary, err := os.MkdirTemp(outputParent, ".maestro-installer-payload-")
+	if err != nil {
+		fatal(err)
+	}
+	defer os.RemoveAll(temporary)
+	payloadPath := filepath.Join(temporary, "payload.tar.gz")
+	payloadFile, err := os.OpenFile(payloadPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		fatal(err)
+	}
+	_, packErr := installerbundle.PackDirectory(sourcePath, payloadFile)
+	closeErr := payloadFile.Close()
+	if packErr != nil {
+		fatal(packErr)
+	}
+	if closeErr != nil {
+		fatal(closeErr)
+	}
+	payloadInfo, err := installerbundle.AppendPayload(basePath, payloadPath, outputPath)
+	if err != nil {
+		fatal(err)
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{
+		"output":  outputPath,
+		"payload": payloadInfo,
+		"status":  "unsigned-candidate",
+	}); err != nil {
+		fatal(err)
 	}
 }
 
@@ -277,7 +325,7 @@ func optionalAbsoluteFromRoot(root, value string) string {
 func usage() {
 	fmt.Fprintln(
 		os.Stderr,
-		"usage: go run ./dev/release <binary|icons|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness> [options]",
+		"usage: go run ./dev/release <binary|icons|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness|self-contained> [options]",
 	)
 	os.Exit(2)
 }

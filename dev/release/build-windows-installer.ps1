@@ -22,7 +22,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory,
     [string]$ArchiveOutput = "",
-    [string]$ResourceCompiler = "windres"
+    [string]$ResourceCompiler = "windres",
+    [switch]$Windowed
 )
 
 Set-StrictMode -Version Latest
@@ -277,7 +278,12 @@ try {
     $env:GOARCH = "amd64"
     Push-Location $root
     try {
-    & $go.Source build -mod=readonly -buildvcs=false -trimpath -o $outputFull ./cmd/maestro-installer
+        $goBuildArguments = @("build", "-mod=readonly", "-buildvcs=false", "-trimpath")
+        if ($Windowed) {
+            $goBuildArguments += @("-ldflags", "-H=windowsgui")
+        }
+        $goBuildArguments += @("-o", $outputFull, "./cmd/maestro-installer")
+        & $go.Source @goBuildArguments
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $outputFull)) {
             throw "Windows Maestro installer build failed."
         }
