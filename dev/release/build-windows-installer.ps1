@@ -124,6 +124,43 @@ if ($bootstrapperVersionMatch.Groups["version"].Value -ne $Version) {
 $bootstrapperDigest = (Get-FileHash -LiteralPath $bootstrapperItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$requiredBundleFiles = @(
+    "skills/maestro-setup-update/SKILL.md",
+    "skills/maestro-setup-update/agents/openai.yaml"
+)
+$requiredBundleProvenance = [Collections.Generic.List[object]]::new()
+foreach ($relativePath in $requiredBundleFiles) {
+    $sourcePath = Join-Path $root (Join-Path "bundles\base" ($relativePath -replace '/', '\'))
+    $sourceItem = Get-Item -LiteralPath $sourcePath -ErrorAction Stop
+    if ($sourceItem.PSIsContainer -or ($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Required installer skill input must be a regular non-reparse file: $relativePath"
+    }
+    $requiredBundleProvenance.Add([ordered]@{
+        path = $relativePath
+        source_sha256 = (Get-FileHash -LiteralPath $sourceItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    })
+}
+$bundleArtifacts = @($releaseManifest.artifacts | Where-Object {
+    $_.kind -eq "bundle" -and $_.os -eq "any" -and $_.arch -eq "any"
+})
+if ($bundleArtifacts.Count -ne 1) {
+    throw "Release manifest must contain exactly one platform-neutral bundle artifact."
+}
+$bundlePath = Join-Path $releaseItem.FullName $bundleArtifacts[0].name
+$bundleItem = Get-Item -LiteralPath $bundlePath -ErrorAction Stop
+if ($bundleItem.PSIsContainer -or ($bundleItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw "Release bundle must be a regular non-reparse file."
+}
+$tar = Get-Command "tar" -CommandType Application -ErrorAction Stop
+$bundleEntries = @(& $tar.Source -tzf $bundleItem.FullName 2>$null | ForEach-Object { $_.ToString() })
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to inspect the release bundle with tar."
+}
+foreach ($relativePath in $requiredBundleFiles) {
+    if ($bundleEntries -notcontains $relativePath) {
+        throw "Release bundle is missing the required installer skill file: $relativePath"
+    }
+}
 $buildPackageDir = Join-Path $root "cmd\maestro-installer"
 $go = Get-Command "go" -CommandType Application -ErrorAction Stop
 $compiler = Get-Command $ResourceCompiler -CommandType Application -ErrorAction Stop
@@ -263,6 +300,7 @@ try {
         authority_registry_sha256 = $registryDigest
         bootstrapper = $bootstrapperItem.Name
         bootstrapper_sha256 = $bootstrapperDigest
+        required_bundle_files = $requiredBundleProvenance
         installable_inputs = "bundled"
         rehearsal_launcher = "Run-Maestro-Rehearsal.cmd"
         resource_compiler = $compilerPath
@@ -275,12 +313,17 @@ try {
     $provenancePath = "$outputFull.provenance.json"
     $provenance | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $provenancePath -Encoding utf8
     @"
-Maestro installer candidate — unsigned
+Maestro Windows installer candidate — unsigned
 
-Abra Run-Maestro-Rehearsal.cmd para iniciar o ensaio técnico. Ele chama o
-wizard com --simulate, usa apenas o seu perfil de usuário e não pede
-administrador. Esta versão ainda não possui Authenticode; use somente para
-ensaio técnico.
+Abra maestro-installer.exe para iniciar a instalação visual. O pacote precisa
+ser mantido completo: wizard/, release/, authority-registry.json e o
+bcgos-bootstrap_<versao>_windows_amd64.exe devem permanecer ao lado do
+executável. Run-Maestro-Rehearsal.cmd inicia apenas um ensaio técnico com
+--simulate, usa somente o perfil do usuário e não pede administrador.
+
+Esta versão ainda não possui Authenticode; use somente como candidato técnico.
+O arquivo bcgos_<versao>_windows_amd64.exe dentro de release/ é o runtime CLI,
+não um instalador e não deve ser enviado separadamente.
 
 O executável também carrega o release/, o authority-registry.json e o
 bootstrapper nativo que foram fornecidos ao empacotador. O caminho real só

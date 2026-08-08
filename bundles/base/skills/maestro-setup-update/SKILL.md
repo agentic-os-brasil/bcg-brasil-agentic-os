@@ -14,6 +14,32 @@ Resolve the canonical `interaction-profile` before starting. Use it to control
 technical detail and pacing, never to weaken authentication, confirmation,
 signature, data-separation or acceptance requirements.
 
+## Windows installer boundary
+
+For a first installation on Windows, the user-facing entrypoint is the
+`maestro-installer.exe` from the complete `Maestro-Windows-Installer` package.
+The package is a transportable folder or archive and must carry these sibling
+inputs together:
+
+- `wizard/`;
+- `release/` with the exact signed release set;
+- `authority-registry.json`; and
+- exactly one versioned `bcgos-bootstrap_<version>_windows_amd64.exe`.
+
+The file named `bcgos_<version>_windows_amd64.exe` is the installed runtime
+CLI, not an installer. Never offer it as a first-install download, never tell
+the user to double-click it, and never fall back to it when the visual
+installer package is incomplete. If `maestro-installer.exe` is missing any
+required sibling input, report `installer_package_incomplete` and stop before
+asking for credentials, changing a managed root or suggesting a raw CLI
+command.
+
+The `maestro-setup-update` skill is part of the signed base bundle and is
+installed by the visual installer; it is not distributed as a separate skill
+file. A successful package handoff therefore means “open
+`maestro-installer.exe`”, while the CLI becomes available only after the
+installer has completed and its final self-check has passed.
+
 ## Workflow
 
 1. Ask only which outcome the user wants: first setup, update, repair or

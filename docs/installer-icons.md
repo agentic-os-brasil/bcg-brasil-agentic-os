@@ -82,6 +82,13 @@ the native bootstrapper, the canonical `.ico`, `README-UNSIGNED.md` and the
 `Run-Maestro-Rehearsal.cmd` launcher and the provenance file. Temporary
 source/object files are removed in a `finally` block, and a partially created
 output directory is removed if any step fails.
+
+The resulting directory is the Windows installer export. Send that complete
+directory as one archive and direct the recipient to open
+`maestro-installer.exe`; do not send the nested
+`release/bcgos_<version>_windows_amd64.exe` as if it were an installer. The
+signed base bundle inside `release/` carries the product skills, including
+`maestro-setup-update`, so no separate skill export is required.
 The provenance file records the installer/bridge digest, wizard tree digest,
 icon, compiler, approved compiler fingerprint, resource-object digests, the
 packaged wizard and release roots, registry and bootstrapper digests, the
