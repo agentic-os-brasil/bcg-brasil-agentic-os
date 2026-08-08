@@ -326,6 +326,9 @@ func resolveDefaultsAt(options *options, packageRoot, platform, architecture, ho
 		}
 		options.bootstrapper = matches[0]
 	}
+	if err := validateInstallerPackageInputs(options); err != nil {
+		return err
+	}
 	if options.managedRoot == "" || options.dataRoot == "" {
 		paths, pathErr := installer.DefaultPaths(platform, home, localAppData)
 		if pathErr != nil {
@@ -336,6 +339,40 @@ func resolveDefaultsAt(options *options, packageRoot, platform, architecture, ho
 		}
 		if options.dataRoot == "" {
 			options.dataRoot = paths.DataRoot
+		}
+	}
+	return nil
+}
+
+func validateInstallerPackageInputs(options *options) error {
+	if options == nil {
+		return fmt.Errorf("installer options are required")
+	}
+	for _, input := range []struct {
+		path      string
+		label     string
+		directory bool
+	}{
+		{options.wizardDir, "wizard directory", true},
+		{options.releaseDir, "release directory", true},
+		{options.authorityRegistry, "authority registry", false},
+		{options.bootstrapper, "native bootstrapper", false},
+	} {
+		info, err := os.Lstat(input.path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("installer_package_incomplete: %s is missing", input.label)
+			}
+			return fmt.Errorf("installer_package_incomplete: inspect %s: %w", input.label, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("installer_package_incomplete: %s must not be a symlink", input.label)
+		}
+		if input.directory && !info.IsDir() {
+			return fmt.Errorf("installer_package_incomplete: %s is not a directory", input.label)
+		}
+		if !input.directory && !info.Mode().IsRegular() {
+			return fmt.Errorf("installer_package_incomplete: %s is not a regular file", input.label)
 		}
 	}
 	return nil
