@@ -539,8 +539,33 @@ func TestSimulationInstallRejectsWrongPlanDigest(t *testing.T) {
 func TestResolveDefaultsRequiresOneNativeBootstrapper(t *testing.T) {
 	root := t.TempDir()
 	options := options{wizardDir: filepath.Join(root, "wizard"), releaseDir: filepath.Join(root, "release"), authorityRegistry: filepath.Join(root, "registry.json")}
+	if err := os.MkdirAll(options.wizardDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(options.releaseDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(options.authorityRegistry, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := resolveDefaultsAt(&options, root, runtime.GOOS, runtime.GOARCH, "/Users/pilot", ""); err == nil {
 		t.Fatal("resolveDefaults accepted a package without a native bootstrapper")
+	}
+}
+
+func TestResolveDefaultsRejectsIncompleteInstallerPackage(t *testing.T) {
+	root := t.TempDir()
+	bootstrapper := filepath.Join(root, "bcgos-bootstrap_0.1.0_"+runtime.GOOS+"_"+runtime.GOARCH)
+	if runtime.GOOS == "windows" {
+		bootstrapper += ".exe"
+	}
+	if err := os.WriteFile(bootstrapper, []byte("seed"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	options := options{}
+	err := resolveDefaultsAt(&options, root, runtime.GOOS, runtime.GOARCH, "/Users/pilot", "")
+	if err == nil || !strings.Contains(err.Error(), "installer_package_incomplete") {
+		t.Fatalf("resolveDefaults accepted an incomplete package: %v", err)
 	}
 }
 
@@ -590,6 +615,15 @@ func TestResolveDefaultsUsesUserSpaceRootsWhenPackageIsComplete(t *testing.T) {
 	}
 	bootstrapper := filepath.Join(root, "bcgos-bootstrap_0.1.0_"+platform+"_"+runtime.GOARCH+suffix)
 	if err := os.WriteFile(bootstrapper, []byte("seed"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "wizard"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "release"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "authority-registry.json"), []byte("{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	options := options{}
