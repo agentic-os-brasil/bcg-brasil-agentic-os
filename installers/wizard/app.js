@@ -754,6 +754,19 @@
     });
   }
 
+  // The scene viewport is intentionally clipped on desktop so transitions do
+  // not expose adjacent steps. Recompute the fit when the host window changes
+  // size; otherwise a resize could leave the action row outside the viewport.
+  let resizeTimer;
+  function realignActiveScene() {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      alignActiveScene(document.querySelector('[data-panel].is-visible'));
+    }, 80);
+  }
+  window.addEventListener('resize', realignActiveScene, { passive: true });
+  window.addEventListener('orientationchange', realignActiveScene, { passive: true });
+
   function show(name, { focusHeading = true } = {}) {
     // Errors are scoped to one action. A new scene always starts clean so an
     // empty error container can never survive a successful transition.
