@@ -30,6 +30,7 @@
   let workspaceFlowScene = null;
   let verificationRun = 0;
   let selectedIntent = '';
+  let intentTransitionBusy = false;
   const platform = /Win/i.test(navigator.userAgent) ? 'Windows' : /Mac/i.test(navigator.userAgent) ? 'macOS' : 'seu dispositivo';
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -165,10 +166,24 @@
     });
   }
 
-  function selectIntent(intent) {
+  async function selectIntent(intent, { autoStart = false } = {}) {
+    if (intentTransitionBusy) return;
     setIntent(intent);
     if (installed) {
       show('finish');
+      return;
+    }
+    if (autoStart) {
+      intentTransitionBusy = true;
+      try {
+        // Make the verification scene the active, visible owner of progress
+        // and errors before the network/core call begins. A failed preflight
+        // must leave the user with an actionable message and retry path.
+        show('check', { focusHeading: false });
+        await verifyRelease({ autoInstall: true });
+      } finally {
+        intentTransitionBusy = false;
+      }
       return;
     }
     show('check');
@@ -693,6 +708,7 @@
   function alignActiveScene(panel) {
     if (!panel) return;
     panel.dataset.fitsViewport = 'false';
+    panel.style.setProperty('--panel-zoom', '1');
     panel.scrollTop = 0;
     panel.scrollTo?.(0, 0);
     window.requestAnimationFrame(() => {
@@ -700,7 +716,16 @@
       // reset that real scroll root, then center only scenes that actually fit.
       panel.scrollTop = 0;
       panel.scrollTo?.(0, 0);
-      panel.dataset.fitsViewport = panel.scrollHeight <= panel.clientHeight + 1 ? 'true' : 'false';
+      const available = Math.max(panel.clientHeight - 8, 1);
+      const contentHeight = Math.max(panel.scrollHeight, 1);
+      const fit = Math.min(1, available / contentHeight);
+      // Keep every scene inside the viewport. Do not clamp the scale upward:
+      // a smaller complete scene is safer than a hidden action or a scrollbar.
+      const zoom = Math.max(0.1, Number(fit.toFixed(3)));
+      panel.style.setProperty('--panel-zoom', String(zoom));
+      panel.dataset.fitsViewport = zoom >= 0.999 ? 'true' : 'fitted';
+      panel.scrollTop = 0;
+      panel.scrollTo?.(0, 0);
     });
   }
 
@@ -809,7 +834,7 @@
     }
   }
 
-  async function verifyRelease() {
+  async function verifyRelease({ autoInstall = false } = {}) {
     showError('check', '');
     if (!selectedIntent) {
       showError('check', 'Selecione Nova instalação ou Atualizar para continuar.');
@@ -827,6 +852,7 @@
       setProgressBar('verification', 100, 'Prévia visual concluída');
       show('install');
       showRuntimeStage('check', '');
+      if (autoInstall) await installRelease();
       return;
     }
     const button = document.querySelector('[data-action="verify"]');
@@ -846,6 +872,7 @@
       planDigest = payload.plan_digest || '';
       setProgress('install');
       show('install');
+      if (autoInstall) await installRelease();
     } catch (error) {
       verificationRun += 1;
       markChecks('error');
@@ -853,7 +880,7 @@
       showError('check', error.message);
     } finally {
       showRuntimeStage('check', '');
-      setButtonLabel(button, 'Verificar release');
+      setButtonLabel(button, 'Iniciar instalação');
       button.disabled = false;
     }
   }
@@ -1029,7 +1056,7 @@
     const action = event.target.closest('[data-action]')?.dataset.action;
     const intent = event.target.closest('[data-intent]')?.dataset.intent;
     if (intent) {
-      selectIntent(intent);
+      await selectIntent(intent, { autoStart: true });
       return;
     }
     if (next) {

@@ -8,7 +8,7 @@ description: Clean Maestro-owned installation surfaces, then build and verify a 
 Use this skill when the owner asks to clean and produce the next local-beta
 installer that must execute the real verify -> install -> workspace flow. This
 is a packaging direction, not a production-release authorization and not a
-substitute for Developer ID signing or notarization.
+substitute for Developer ID signing, notarization or Authenticode signing.
 
 Resolve the canonical `interaction-profile` before presenting the procedure.
 It controls how much implementation detail to show, but never weakens the
@@ -56,11 +56,12 @@ put a private key, seed, certificate or credential in Git, a bundle or a DMG.
 ## Preconditions
 
 1. Start from the merged `main` snapshot and confirm a clean worktree.
-2. Choose one immutable `MAJOR.MINOR.PATCH` version. The explicit CLI version,
-   `VERSION`, candidate manifest and output filename must agree before an
-   official release is claimed. A repository placeholder such as `0.0.0` may
-   be used only for a controlled local test with the chosen version passed
-   explicitly; record the mismatch and fix it before publication.
+2. Choose one immutable `MAJOR.MINOR.PATCH` version. Never reuse a version
+   already present in `dist/`, a release manifest or a delivered handoff. The
+   explicit CLI version, `VERSION`, candidate manifest and every output filename
+   must agree before an official release is claimed. A repository placeholder
+   such as `0.0.0` may be used only for a controlled local test with the chosen
+   version passed explicitly; record the mismatch and fix it before publication.
 3. Use a separate test-only authority registry and matching Ed25519 seed. The
    registry issuer/key ID must be marked beta/test-only and must never be used
    by a production workflow. Read the public registry; do not print or commit
@@ -229,17 +230,62 @@ signatures, wrong architectures and changed package inputs. It emits an
 `unsigned macOS installer candidate`; that label is correct even though the
 release manifest itself is verified by the test-only Ed25519 registry.
 
+### 6. Windows portable package (canonical Windows handoff)
+
+The Windows factory must produce **one versioned portable ZIP** containing the
+complete package. A bare executable copied beside `dist/` is not a valid
+Windows installer: the bridge needs `wizard/`, `release/`, the authority
+registry and the versioned bootstrapper next to it. Publishing that bare `.exe`
+causes the exact “flash and close” failure when a user double-clicks it.
+
+Run the factory with an explicit archive destination:
+
+```powershell
+.\dev\release\build-windows-installer.ps1 `
+  -Version $Version `
+  -Icon $Icon -IconSHA256 $IconSHA256 `
+  -WizardDir $WizardDir `
+  -ReleaseDirectory $ReleaseDirectory `
+  -AuthorityRegistry $Registry `
+  -Bootstrapper $Bootstrapper `
+  -OutputDirectory "$Root\dist\maestro-installer-windows-$Version-portable-unsigned" `
+  -ArchiveOutput "$Root\dist\Maestro-Installer-$Version-windows-amd64-portable-unsigned.zip" `
+  -ResourceCompilerSHA256 $WindresSHA256
+```
+
+The archive contains `maestro-installer.exe`, the exact verified inputs and
+two explicit launchers:
+
+- `Install-Maestro.cmd` — real verify → install → workspace wizard;
+- `Run-Maestro-Rehearsal.cmd` — `--simulate` only, never a product install.
+
+The user-facing handoff is the ZIP. The user extracts it and double-clicks
+`Install-Maestro.cmd`; they must not open `bcgos-bootstrap_*.exe` or binaries
+inside `release/`. Do not publish a standalone copy named
+`Maestro-Installer-<VERSION>-windows-amd64.exe` unless a future factory makes
+it genuinely self-contained and records that contract. A Windows DMG is never
+valid; DMG is macOS-only.
+
+After generation, verify the archive contains exactly one top-level package
+directory, the two launchers and the complete `wizard/` and `release/` trees.
+Record the ZIP SHA-256 and label the candidate unsigned/not Authenticode-signed.
+
 ## Verification and handoff
 
 1. Confirm the cleanup receipt is complete and keep the backup until the clean
    install has been validated or the owner explicitly releases it.
 2. Verify the DMG with `hdiutil imageinfo` and record its SHA-256.
-3. Optionally copy the DMG to `~/Downloads` only after the checksum is
+3. Verify the Windows portable ZIP with `unzip -t` (or `Expand-Archive`),
+   record its SHA-256 and provide the extraction/launch instructions above.
+4. Optionally copy the DMG to `~/Downloads` only after the checksum is
    recorded. Do not copy the seed or private key.
-4. Open the DMG and run the installer on the clean user account. Confirm the
+5. Open the DMG and run the installer on the clean user account. Confirm the
    wizard reaches the real install path, creates the new workspace, wires the
    selected runtime and starts the guided onboarding prompt.
-5. Preserve the checksum, version, registry issuer/key ID and observed
+6. On a Windows device, extract the ZIP and run `Install-Maestro.cmd`. Confirm
+   the wizard remains open, reaches the real install path, creates the new
+   workspace and preserves a visible error/log if any preflight fails.
+7. Preserve the checksum, version, registry issuer/key ID and observed
    install receipts as local evidence. Do not call the result native-qualified,
    signed, notarized, published or pilot-ready without the corresponding
    attended evidence.
