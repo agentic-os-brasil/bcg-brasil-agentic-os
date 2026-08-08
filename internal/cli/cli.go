@@ -185,11 +185,28 @@ type workCreateRequest struct {
 
 func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos work <create|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
+		fmt.Fprintln(errOut, "usage: bcgos work <schema|create|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
 		return ExitUsage
 	}
 	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(out, "usage: bcgos work <create|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
+		fmt.Fprintln(out, "usage: bcgos work <schema|create|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
+		return ExitOK
+	}
+	if args[0] == "schema" {
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "usage: bcgos work schema")
+			return ExitUsage
+		}
+		return writeJSON(out, workCreateSchema(), errOut)
+	}
+	if args[0] == "create" && len(args) == 2 && (args[1] == "help" || args[1] == "--help" || args[1] == "-h") {
+		fmt.Fprintln(out, `usage: bcgos work create --workspace PATH --stdin
+
+Read the accepted JSON contract with: bcgos work schema
+
+Completion criteria:
+  artifact_snapshot  requires target_ref listed in allowed_refs
+  command_check      accepts only the bounded commands shown by bcgos work schema`)
 		return ExitOK
 	}
 	root, err := dataRoot()
@@ -373,6 +390,35 @@ func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func()
 	default:
 		fmt.Fprintf(errOut, "unknown work command %q\n", args[0])
 		return ExitUsage
+	}
+}
+
+func workCreateSchema() map[string]any {
+	return map[string]any{
+		"schema_version": 1,
+		"command":        "bcgos work create --workspace PATH --stdin",
+		"required":       []string{"objective", "initial_next_step", "criteria", "allowed_refs"},
+		"criterion_types": []map[string]any{
+			{
+				"type":     string(execution.CriterionArtifactSnapshot),
+				"required": []string{"id", "type", "target_ref"},
+				"rule":     "target_ref must also appear in allowed_refs",
+			},
+			{
+				"type":             string(execution.CriterionCommandCheck),
+				"required":         []string{"id", "type", "command"},
+				"allowed_commands": [][]string{{"go", "version"}, {"go", "test", "./..."}, {"go", "vet", "./..."}},
+				"examples":         []string{"go version", "go test ./...", "go vet ./..."},
+			},
+		},
+		"example": workCreateRequest{
+			Objective:       "Prepare one reviewable deliverable.",
+			InitialNextStep: "Draft the result in result.md.",
+			Criteria: []execution.Criterion{{
+				ID: "delivery", Type: execution.CriterionArtifactSnapshot, TargetRef: "bcgos://workspace/result.md",
+			}},
+			AllowedRefs: []string{"bcgos://workspace/result.md"},
+		},
 	}
 }
 
@@ -2886,7 +2932,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 	if action == "pre-action-guard" {
 		response, err := codexadapter.Guard(native)
 		if err != nil {
-			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
+			return writeJSON(out, codexadapter.ComplexRemovalDenial(), errOut)
 		}
 		if response.HookSpecificOutput != nil {
 			return writeJSON(out, response, errOut)
@@ -3046,7 +3092,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 	if action == "pre-action-guard" {
 		response, err := claudeadapter.Guard(native)
 		if err != nil {
-			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
+			return writeJSON(out, claudeadapter.ComplexRemovalDenial(), errOut)
 		}
 		if response.HookSpecificOutput != nil {
 			return writeJSON(out, response, errOut)
@@ -3639,6 +3685,9 @@ func lifecycleReceiptCheck(dataRoot, workspaceID string) doctorCheck {
 	}
 	summary, err := lifecycle.Diagnose(dataRoot, workspaceID)
 	if err != nil {
+		if strings.Contains(err.Error(), "lifecycle receipt history exceeds diagnostic scan bound") {
+			return doctorCheck{ID: "lifecycle_receipts", State: "warning", Message: fmt.Sprintf("lifecycle receipt history exceeds the %d-entry diagnostic window; receipts remain local and no native qualification was inferred. This affects the bounded diagnosis only, not hook execution", lifecycle.MaximumDiagnosticReceiptEntries)}
+		}
 		return doctorCheck{ID: "lifecycle_receipts", State: "warning", Message: "lifecycle receipt diagnostics could not be read: " + err.Error()}
 	}
 	switch summary.State {

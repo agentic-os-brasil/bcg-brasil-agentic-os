@@ -128,6 +128,10 @@ func FailClosedDenial() GuardOutput {
 	return denial("Maestro could not verify this action safely. Nothing was changed. Review the action and try again.")
 }
 
+func ComplexRemovalDenial() GuardOutput {
+	return denial("Maestro could not safely verify a removal inside a chained or complex shell command. Nothing was changed. Run each shell step separately so the removal target can be checked, then retry.")
+}
+
 func ExternalActionDenial(reason string) GuardOutput {
 	return denial(reason)
 }

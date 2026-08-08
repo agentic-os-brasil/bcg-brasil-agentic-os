@@ -419,6 +419,7 @@ bcgos prior-work find --explicit --stdin --limit 5
 bcgos prior-work sync-due --runtime <claude|codex>
 bcgos session packet [workspace]
 bcgos maestro status [workspace]
+bcgos work schema
 bcgos work create --workspace <path> --stdin
 bcgos work start --workspace <path> --item <id> --revision <n>
 bcgos work checkpoint --workspace <path> --item <id> --revision <n> --attempt <id> --stdin

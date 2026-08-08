@@ -376,6 +376,7 @@ create → start → checkpoint → evidence → pause
 Comandos disponíveis na superfície do CLI:
 
 ```text
+bcgos work schema
 bcgos work create --workspace <workspace> --stdin
 bcgos work start --workspace <workspace> --item <id> --revision <n>
 bcgos work checkpoint --workspace <workspace> --item <id> --revision <n> --attempt <id> --stdin
@@ -384,6 +385,30 @@ bcgos work pause --workspace <workspace> --item <id> --revision <n> --attempt <i
 bcgos work resume --workspace <workspace> --item <id> --revision <n>
 bcgos work inspect --workspace <workspace> --item <id>
 bcgos work export --workspace <workspace> --item <id>
+```
+
+Antes do primeiro `create`, rode `bcgos work schema`. O comando não lê o
+workspace nem o estado do usuário: ele mostra os campos aceitos, os dois tipos
+de critério (`artifact_snapshot` e `command_check`), os comandos de validação
+permitidos e um exemplo copiável. O mesmo resumo aparece em
+`bcgos work create --help`; não é necessário descobrir o contrato por tentativa
+e erro ou consultar o código-fonte.
+
+Exemplo mínimo para uma entrega em arquivo:
+
+```json
+{
+  "objective": "Preparar uma entrega revisável.",
+  "initial_next_step": "Escrever o resultado em result.md.",
+  "criteria": [
+    {
+      "id": "delivery",
+      "type": "artifact_snapshot",
+      "target_ref": "bcgos://workspace/result.md"
+    }
+  ],
+  "allowed_refs": ["bcgos://workspace/result.md"]
+}
 ```
 
 Ao abrir uma nova sessão, o Maestro apresenta a mesma projeção de
