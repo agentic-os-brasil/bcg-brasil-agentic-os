@@ -1841,6 +1841,29 @@ func TestAgentIdentityInterviewAndPersonalizationAreExplicit(t *testing.T) {
 	}
 }
 
+func TestAgentIdentityFullRosterUsesCanonicalProfileEnvelope(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	var output bytes.Buffer
+	profiles := []string{
+		`{"schema_version":1,"owner_id":"rafa-menezes","confirmed":true,"capability_tracks":["technical-explorer","software-engineering","data-science","data-engineering","ai-engineering"],"selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"rafa-menezes","ownership_scope":"system"},{"role":"client_account_agent","agent_id":"client-account-agent-rafa-menezes","display_name":"Account Partner","emoji":"🤝","owner_id":"rafa-menezes","ownership_scope":"account"},{"role":"case_agent","agent_id":"case-agent-rafa-menezes","display_name":"Case Lead","emoji":"⚙️","owner_id":"rafa-menezes","ownership_scope":"case"},{"role":"quality_guardian","display_name":"Gamma Guardian","emoji":"🧪","owner_id":"rafa-menezes","ownership_scope":"quality_longitudinal"},{"role":"pa_expert","display_name":"PA Expert","emoji":"🧠","owner_id":"rafa-menezes","ownership_scope":"pa_expert_registry"}]}`,
+		`{"schema_version":1,"owner_id":"rafa-menezes","confirmed":true,"capability_tracks":["technical-explorer","software-engineering","data-science","data-engineering","ai-engineering"],"selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"rafa-menezes","ownership_scope":"system"},{"role":"client_account_agent","agent_id":"client-account-agent-rafa-menezes","display_name":"Account Partner","emoji":"🤝","owner_id":"rafa-menezes","ownership_scope":"account"},{"role":"case_agent","agent_id":"case-agent-rafa-menezes","display_name":"Case Lead","emoji":"⚙️","owner_id":"rafa-menezes","ownership_scope":"case"},{"role":"walter","display_name":"Walter","emoji":"🦉","owner_id":"rafa-menezes","ownership_scope":"governance"},{"role":"quality_guardian","display_name":"Gamma Guardian","emoji":"🧪","owner_id":"rafa-menezes","ownership_scope":"quality_longitudinal"},{"role":"pa_expert","display_name":"PA Expert","emoji":"🧠","owner_id":"rafa-menezes","ownership_scope":"pa_expert_registry"}]}`,
+		`{"schema_version":1,"owner_id":"rafa-menezes","confirmed":true,"capability_tracks":["technical-explorer","software-engineering","data-science","data-engineering","ai-engineering"],"selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"rafa-menezes","ownership_scope":"system"},{"role":"client_account_agent","agent_id":"client-account-agent-rafa-menezes","display_name":"Account Partner","emoji":"🤝","owner_id":"rafa-menezes","ownership_scope":"account"},{"role":"case_agent","agent_id":"case-agent-rafa-menezes","display_name":"Case Lead","emoji":"⚙️","owner_id":"rafa-menezes","ownership_scope":"case"},{"role":"walter","display_name":"Walter","emoji":"🦉","owner_id":"rafa-menezes","ownership_scope":"governance"},{"role":"darwin","display_name":"Darwin","emoji":"🧬","owner_id":"rafa-menezes","ownership_scope":"governance"},{"role":"quality_guardian","display_name":"Gamma Guardian","emoji":"🧪","owner_id":"rafa-menezes","ownership_scope":"quality_longitudinal"},{"role":"pa_expert","display_name":"PA Expert","emoji":"🧠","owner_id":"rafa-menezes","ownership_scope":"pa_expert_registry"}]}`,
+	}
+	for index, profile := range profiles {
+		if code := draftAndConfirmAgentProfile(t, dataRoot, profile, &output); code != ExitOK ||
+			!strings.Contains(output.String(), `"state": "applied"`) {
+			t.Fatalf("identity roster step %d = %d, output = %s", index+1, code, output.String())
+		}
+	}
+	output.Reset()
+	if code := runAgentWithInput([]string{"identity"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
+		!strings.Contains(output.String(), `"role": "quality_guardian"`) ||
+		!strings.Contains(output.String(), `"display_name": "Account Partner"`) {
+		t.Fatalf("full identity status = %d, output = %s", code, output.String())
+	}
+}
+
 func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

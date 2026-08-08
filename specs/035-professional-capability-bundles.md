@@ -56,7 +56,8 @@ its skill metadata, its interaction-profile reference and generated catalog.
 `bcgos bundles index` exposes the compact source inventory. `bcgos bundles
 plan --track <track[,track...]>` resolves the selected bundles and dependencies
 without changing local state. `bcgos agent interview` exposes the same tracks;
-`bcgos agent personalize --stdin` persists a confirmed selection, and the next
+`bcgos agent personalize draft --stdin --consent --no-client-data`, followed by
+review and digest-bound confirm, persists a confirmed selection, and the next
 adapter installation projects the selected optional skills and a managed,
 selection-scoped policy at `.bcgos/agent-skill-policy.json`. The policy admits
 the selected methods and their dependencies for the Case Agent; methods from

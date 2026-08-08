@@ -15,6 +15,11 @@ func TestInitialInterviewExplainsNamesAvatarsAndOwnership(t *testing.T) {
 	if interview.OwnershipExplanation == "" || interview.AvatarExplanation == "" {
 		t.Fatal("interview omitted ownership or avatar explanation")
 	}
+	if interview.ProfileInput.Command == "" || interview.ProfileInput.SchemaVersion != SchemaVersion ||
+		len(interview.ProfileInput.RequiredFields) != 4 || len(interview.ProfileInput.SelectionFields) != 6 ||
+		interview.ProfileInput.OwnershipScopes["quality_guardian"] != "quality_longitudinal" {
+		t.Fatalf("interview omitted the canonical profile input contract: %#v", interview.ProfileInput)
+	}
 	if len(interview.CapabilityTracks) < 4 || interview.CapabilityTracks[0].ID == "" {
 		t.Fatalf("interview omitted capability track selection: %#v", interview.CapabilityTracks)
 	}

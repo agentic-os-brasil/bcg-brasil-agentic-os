@@ -68,6 +68,16 @@ bcgos agent personalize confirm --id <draft-id> --digest <sha256> --confirm
 bcgos agent identity
 ```
 
+`bcgos agent interview` also returns `profile_input`, the machine-readable
+schema for the strict draft envelope. The envelope uses `selections[]`; the
+human-facing interview labels `agent_names`, `agent_emojis` and
+`ownership_scope` are not top-level profile fields. Account and case selections
+must include a concrete `agent_id`, and the canonical scopes are `system`,
+`account`, `case`, `governance`, `quality_longitudinal` and
+`pa_expert_registry`. A fresh guided interview submits one main-agent answer
+per draft in the order Maestro → Walter → Darwin; previously confirmed answers
+are carried forward rather than batching future questions.
+
 `interview` is read-only and returns exactly one next question for Maestro,
 Walter or Darwin while retaining the richer transparent catalog. A profile is
 only a private draft until review and explicit confirmation. Its digest binds
