@@ -370,6 +370,52 @@ func TestConfigureWorkspaceRuntimeDoesNotDeclareReadyWhenLaunchdIsNotNative(t *t
 	}
 }
 
+func TestConfigureWorkspaceRuntimeOnWindowsCompletesWithoutMacOSMaintenance(t *testing.T) {
+	root := t.TempDir()
+	managedRoot := filepath.Join(root, "managed")
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	cliPath := filepath.Join(managedRoot, "bin", "bcgos")
+	if err := os.MkdirAll(filepath.Dir(cliPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cliPath, []byte("test"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	initialized, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: dataRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls [][]string
+	runner := commandRunnerFunc(func(_ context.Context, executable string, arguments []string) ([]byte, error) {
+		calls = append(calls, append([]string{executable}, arguments...))
+		switch len(calls) {
+		case 1:
+			return []byte(`{"state":"initialized"}`), nil
+		case 2, 4:
+			return []byte(`{"runtime":"claude","state":"installed","projection":{"state":"installed"}}`), nil
+		case 3:
+			return []byte(`{"workspace":{"state":"ready","workspace_id":"` + initialized.WorkspaceID + `","workspace_path":"` + workspacePath + `"}}`), nil
+		case 5:
+			return []byte(`{"runtime":"claude","state":"verified"}`), nil
+		default:
+			return nil, errors.New("unexpected maintenance command on Windows")
+		}
+	})
+	activation, err := configureWorkspaceRuntimeForPlatform(options{managedRoot: managedRoot, commandRunner: runner}, workspacePath, "windows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 5 {
+		t.Fatalf("calls = %#v; Windows must stop after adapter verification", calls)
+	}
+	if activation.State != "ready" || activation.Lifecycle.State != "configured" ||
+		activation.Maintenance.State != "unavailable_windows_native_qualification_pending" ||
+		activation.Maintenance.NativeObserved || activation.Maintenance.Schedule != "not_configured" {
+		t.Fatalf("Windows activation = %#v", activation)
+	}
+}
+
 func TestWizardStateReportsOnlyARegularInstalledCLI(t *testing.T) {
 	managedRoot := filepath.Join(t.TempDir(), "managed")
 	cliPath := filepath.Join(managedRoot, "bin", "bcgos")
@@ -397,6 +443,22 @@ func TestWizardStateReportsOnlyARegularInstalledCLI(t *testing.T) {
 	}
 	if !state.Installed || state.CLIPath != cliPath {
 		t.Fatalf("installed state = %#v, want %q", state, cliPath)
+	}
+}
+
+func TestWizardStateDisclosesControlledWindowsLocalBeta(t *testing.T) {
+	handler := wizardHandler(options{nativeTrustMode: installer.NativeTrustWindowsLocalBeta})
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/state", nil))
+	var state struct {
+		Trust     string `json:"trust"`
+		LocalBeta bool   `json:"local_beta"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.Trust != "windows_local_beta" || !state.LocalBeta {
+		t.Fatalf("local beta state = %#v", state)
 	}
 }
 
@@ -566,6 +628,50 @@ func TestResolveDefaultsRejectsIncompleteInstallerPackage(t *testing.T) {
 	err := resolveDefaultsAt(&options, root, runtime.GOOS, runtime.GOARCH, "/Users/pilot", "")
 	if err == nil || !strings.Contains(err.Error(), "installer_package_incomplete") {
 		t.Fatalf("resolveDefaults accepted an incomplete package: %v", err)
+	}
+}
+
+func TestResolveBuildTrustProfile(t *testing.T) {
+	tests := []struct {
+		name, profile, issuer, keyID, registrySHA, bootstrapperSHA string
+		wantMode                                                   installer.NativeTrustMode
+		wantErr                                                    bool
+	}{
+		{name: "strict defaults", profile: "strict", wantMode: installer.NativeTrustStrict},
+		{name: "empty defaults", wantMode: installer.NativeTrustStrict},
+		{name: "partial beta fails closed", profile: "windows-local-beta", issuer: "beta", wantErr: true},
+		{name: "strict rejects pins", profile: "strict", issuer: "beta", wantErr: true},
+		{
+			name: "complete beta", profile: "windows-local-beta", issuer: "maestro-beta-local", keyID: "beta-20260805",
+			registrySHA: strings.Repeat("a", 64), bootstrapperSHA: strings.Repeat("b", 64),
+			wantMode: installer.NativeTrustWindowsLocalBeta,
+		},
+		{name: "unknown profile", profile: "skip-signature", wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mode, _, err := resolveBuildTrustProfile(test.profile, test.issuer, test.keyID, test.registrySHA, test.bootstrapperSHA)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("resolveBuildTrustProfile() error = %v, wantErr %v", err, test.wantErr)
+			}
+			if !test.wantErr && mode != test.wantMode {
+				t.Fatalf("mode = %q, want %q", mode, test.wantMode)
+			}
+		})
+	}
+}
+
+func TestInstallerOptionsCarryBuildTrustProfile(t *testing.T) {
+	input := options{
+		nativeTrustMode: installer.NativeTrustWindowsLocalBeta,
+		localBetaPins: installer.LocalBetaPins{
+			AuthorityRegistrySHA256: strings.Repeat("a", 64), BootstrapperSHA256: strings.Repeat("b", 64),
+			Issuer: "maestro-beta-local", KeyID: "beta-20260805",
+		},
+	}
+	got := installerOptions(input)
+	if got.NativeTrustMode != installer.NativeTrustWindowsLocalBeta || got.LocalBetaPins.Issuer != "maestro-beta-local" {
+		t.Fatalf("installer options lost build trust profile: %#v", got)
 	}
 }
 

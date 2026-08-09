@@ -87,16 +87,16 @@ func TestSessionStartRejectsHistoricalBodySmuggledIntoContinuousStatus(t *testin
 
 func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T) {
 	pending := sessionctx.Packet{WorkspaceRoot: "/Users/pilot/Developer/maestro-os", Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", NextQuestion: "What is your professional role?"}}}
-	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING IS NOT COMPLETE") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore prior persona") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {
+	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING REQUIRED") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore conflicting persona") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {
 		t.Fatalf("pending directive = %q", got)
 	}
 	selection := pending
 	selection.Owner.Onboarding.Track = "selection_required"
-	if got := sessionDirective(selection); !strings.Contains(got, "quick") || !strings.Contains(got, "complete") || !strings.Contains(got, "authorized context") || !strings.Contains(got, "pending facets") || !strings.Contains(got, "Do not infer") {
+	if got := sessionDirective(selection); !strings.Contains(got, "quick") || !strings.Contains(got, "complete") || !strings.Contains(got, "~10 min") || !strings.Contains(got, "~30 min") || !strings.Contains(got, "Do not infer") {
 		t.Fatalf("track selection directive = %q", got)
 	}
 	selection.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
-	if got := sessionDirective(selection); !strings.Contains(got, "Use this installed CLI silently") || !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" owner onboarding select`) {
+	if got := sessionDirective(selection); !strings.Contains(got, "Use the installed CLI silently") || !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" owner onboarding select`) {
 		t.Fatalf("resolved CLI directive = %q", got)
 	}
 	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Count: 1}}}
@@ -142,7 +142,7 @@ func TestSessionDirectiveProtectsCanonicalOwnerContextRoot(t *testing.T) {
 		Owner:            sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", Track: "quick", NextQuestion: "Qual é o seu papel profissional?"}},
 	}
 	got := sessionDirective(packet)
-	if !strings.Contains(got, "canonical owner context is private") || !strings.Contains(got, "/Users/pilot/Library/Application Support/BCGOS/owner/self/") || !strings.Contains(got, "owner onboarding answer --facet") || !strings.Contains(got, "Do not create, edit or inspect an owner/") {
+	if !strings.Contains(got, "Private owner context") || !strings.Contains(got, "/Users/pilot/Library/Application Support/BCGOS/owner") || !strings.Contains(got, "owner onboarding answer --facet") || !strings.Contains(got, "Never use workspace/owner") {
 		t.Fatalf("directive did not anchor the private owner context: %s", got)
 	}
 	if strings.Contains(got, "Kowalski") {

@@ -270,6 +270,12 @@
       banner.querySelector('p').textContent = 'Este fluxo simula a instalação em uma pasta isolada. Nenhum release assinado será declarado ou publicado.';
       return;
     }
+    if (state?.local_beta) {
+      banner.hidden = false;
+      banner.querySelector('span').textContent = 'BETA CONTROLADO';
+      banner.querySelector('p').textContent = 'Este instalador ainda não possui Authenticode. A assinatura Ed25519 e os hashes exatos do pacote continuam sendo verificados; o Windows pode mostrar o SmartScreen.';
+      return;
+    }
     banner.hidden = true;
   }
 
@@ -683,7 +689,7 @@
       summary = document.createElement('div');
       summary.id = 'activation-summary';
       summary.className = 'activation-summary';
-      summary.innerHTML = '<article><span>HOOKS DO WORKSPACE</span><strong id="activation-hooks">CONFIGURADO</strong><small id="activation-hook-events"></small></article><article><span>REVISÃO DOS HOOKS</span><strong id="activation-hook-review">REVISÃO DO OWNER NECESSÁRIA</strong><small id="activation-hook-review-detail">O Codex pede a confirmação dos comandos locais antes da primeira execução. O instalador não grava confiança global em seu nome.</small></article><article><span>MANUTENÇÃO LOCAL</span><strong id="activation-maintenance">OBSERVADO NO LAUNCHD</strong><small id="activation-maintenance-detail"></small></article><article><span>SESSÃO NATIVA CODEX</span><strong id="activation-native-session">AGUARDANDO PRIMEIRA SESSÃO</strong><small>Configuração não é evidência de que o runtime já executou os hooks.</small></article><article><span>JOBS COM MODELO</span><strong id="activation-model">INDISPONÍVEL</strong><small>Nenhum modelo será executado pela manutenção agendada.</small></article>';
+      summary.innerHTML = '<article><span>HOOKS DO WORKSPACE</span><strong id="activation-hooks">CONFIGURADO</strong><small id="activation-hook-events"></small></article><article><span>REVISÃO DOS HOOKS</span><strong id="activation-hook-review">REVISÃO DO OWNER NECESSÁRIA</strong><small id="activation-hook-review-detail">O runtime pode pedir a confirmação dos comandos locais antes da primeira execução. O instalador não grava confiança global em seu nome.</small></article><article><span>MANUTENÇÃO LOCAL</span><strong id="activation-maintenance">VERIFICANDO</strong><small id="activation-maintenance-detail"></small></article><article><span>PRIMEIRA SESSÃO</span><strong id="activation-native-session">AGUARDANDO</strong><small>Configuração não é evidência de que o runtime já executou os hooks.</small></article><article><span>JOBS COM MODELO</span><strong id="activation-model">INDISPONÍVEL</strong><small>Nenhum modelo será executado pela manutenção agendada.</small></article>';
       document.querySelector('#runtime-handoff .next-command')?.before(summary);
     }
     const lifecycle = activation.lifecycle || {};
@@ -702,12 +708,15 @@
     document.querySelector('#activation-hook-review-detail').textContent = reviewRequired
       ? 'Ao abrir o Codex, revise os cinco comandos locais quando ele solicitar. O instalador nunca grava confiança global em seu nome.'
       : 'A revisão de confiança dos hooks segue o estado reportado pelo runtime.';
+    const windowsMaintenanceUnavailable = runtimePlatform === 'windows' && maintenance.state === 'unavailable_windows_native_qualification_pending';
     document.querySelector('#activation-maintenance').textContent = maintenance.native_observed
       ? 'OBSERVADO NO LAUNCHD'
-      : 'NÃO OBSERVADO';
+      : windowsMaintenanceUnavailable ? 'AINDA NÃO DISPONÍVEL NO WINDOWS' : 'NÃO OBSERVADO';
     document.querySelector('#activation-maintenance-detail').textContent = maintenance.native_observed
       ? 'Carregado no login e verificado a cada 15 minutos para recuperar manutenção local pendente.'
-      : 'A manutenção agendada ainda não foi carregada pelo macOS.';
+      : windowsMaintenanceUnavailable
+        ? 'O Maestro está pronto para uso; tarefas agendadas ainda não são ativadas nesta versão.'
+        : 'A manutenção agendada ainda não foi carregada pelo macOS.';
     document.querySelector('#activation-native-session').textContent = lifecycle.native_observed === 'unavailable_pending_first_session'
       ? 'AGUARDANDO PRIMEIRA SESSÃO'
       : String(lifecycle.native_observed || 'NÃO OBSERVADO').replaceAll('_', ' ').toUpperCase();

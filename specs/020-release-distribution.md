@@ -125,6 +125,25 @@ Missing authority is reported as `unavailable`; no production command accepts
 an unsigned override. The existing unsigned trial acknowledgement remains
 confined to `installers/trial`.
 
+A controlled Windows Canary may install real user-space product bytes before
+organization-owned Authenticode custody exists only through the
+packaging-time `windows-local-beta` profile defined by decision `CARY`. This is
+not a production override and is not selectable by an end user. The compiled
+bridge must pin the exact test-only issuer/key identity, authority-registry
+SHA-256 and bootstrapper SHA-256; require an Ed25519-authenticated `canary`
+manifest with the same identity; and accept only the native status
+`NotSigned`. Any partial profile, different channel or identity, digest drift,
+invalid native-signature state or verification failure remains fail-closed.
+The resulting single-file EXE is an unsigned controlled-beta candidate and
+requires controlled delivery plus an independently published SHA-256. It does
+not satisfy native signing, clean-device, pilot or production gates.
+
+After adapter verification, the Windows wizard completes workspace and
+onboarding activation without invoking macOS `launchctl`. Until the native
+Task Scheduler adapter is qualified, maintenance is reported as unavailable
+and unscheduled; this honest limitation must not roll back an otherwise valid
+Windows installation or be presented as active automation.
+
 ## Acceptance evidence
 
 - Schema and Go semantic validation agree on every v1 example.
