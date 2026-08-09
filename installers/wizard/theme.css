@@ -403,6 +403,9 @@ body:before{opacity:.16;background-size:72px 72px;mask-image:linear-gradient(90d
 .scene-viewport>.panel.is-visible{display:block!important}
 .scene-viewport>.panel.panel-welcome.is-visible{display:grid!important}
 .scene-viewport>.panel.is-visible:not(.panel-welcome)[data-fits-viewport="true"]{display:flex!important;flex-direction:column;justify-content:center}
+.scene-viewport>.panel.is-flow-scroll{overflow-y:auto;overflow-x:hidden}
+.workspace-flow-analysis:not([hidden]),.workspace-flow-result:not([hidden]){animation:workspace-scene-arrival .48s cubic-bezier(.23,1,.32,1) both}
+@keyframes workspace-scene-arrival{from{opacity:0;transform:translateY(18px);filter:blur(3px)}to{opacity:1;transform:none;filter:none}}
 
 @media(max-width:980px){
   .content{display:grid;grid-template-rows:64px auto minmax(0,1fr) auto;height:auto;min-height:100vh;overflow:visible}
