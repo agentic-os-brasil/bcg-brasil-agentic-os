@@ -305,6 +305,9 @@
     document.querySelector('#workspace-setup').hidden = true;
     const flow = document.querySelector('#workspace-flow');
     if (flow) flow.hidden = true;
+    const finishPanel = document.querySelector('[data-panel="finish"]');
+    finishPanel?.classList.remove('is-flow-scroll');
+    finishPanel?.removeAttribute('data-scroll-scene');
     const handoff = document.querySelector('#runtime-handoff');
     handoff.hidden = false;
     updateFinishCopy();
@@ -468,6 +471,9 @@
     const target = document.querySelector('#workspace-flow-analysis');
     if (!target) return;
     if (choice) choice.hidden = true;
+    const finishPanel = document.querySelector('[data-panel="finish"]');
+    finishPanel?.classList.add('is-flow-scroll');
+    finishPanel?.setAttribute('data-scroll-scene', 'true');
     target.hidden = false;
     const blocked = analysis.state === 'blocked';
     const capabilities = (analysis.capabilities_unavailable || []).map(capability => `<li><b>${escapeHTML(capability.id)} · ${escapeHTML(capability.state)}</b><span>${escapeHTML(capability.message)}</span></li>`).join('');
@@ -493,11 +499,20 @@
     setWorkspaceFlowPhase('plan');
     const heading = target.querySelector('h1');
     if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
+    alignActiveScene(finishPanel);
   }
 
   function renderWorkspaceFlowProgress(mode, errorMessage = '') {
+    const choice = document.querySelector('#workspace-flow-choice');
     const target = document.querySelector('#workspace-flow-analysis');
     if (!target) return;
+    // Progress is a new wizard scene, not an additional block below the
+    // choice screen. Keep the scene scrollable when its phase track is taller
+    // than the viewport instead of clipping the action and status rows.
+    if (choice) choice.hidden = true;
+    const finishPanel = document.querySelector('[data-panel="finish"]');
+    finishPanel?.classList.add('is-flow-scroll');
+    finishPanel?.setAttribute('data-scroll-scene', 'true');
     const title = mode === 'confirm' ? 'Vamos preparar seu workspace.' : 'Vamos conferir esta fonte.';
     const subtitle = mode === 'confirm' ? 'O Maestro está preparando o próximo passo.' : 'Primeiro, vou entender o que você escolheu.';
     const failure = errorMessage
@@ -528,11 +543,15 @@
     setWorkspaceFlowPhase(mode === 'confirm' ? 'staging' : 'analysis');
     const heading = target.querySelector('h1');
     if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
+    alignActiveScene(finishPanel);
   }
 
   function renderWorkspaceFlowReceipt(receipt) {
     const target = document.querySelector('#workspace-flow-result');
     if (!target) return;
+    const finishPanel = document.querySelector('[data-panel="finish"]');
+    finishPanel?.classList.add('is-flow-scroll');
+    finishPanel?.setAttribute('data-scroll-scene', 'true');
     document.querySelector('#workspace-flow-analysis').hidden = true;
     target.hidden = false;
     const stages = (receipt.stages || []).map(stage => `<li><b>${escapeHTML(stage.id)}</b><span>${escapeHTML(stage.status)}</span><small>${escapeHTML(stage.detail)}</small></li>`).join('');
@@ -549,6 +568,7 @@
     target.innerHTML = `<span class="eyebrow">RECEIPT VÁLIDO · ${escapeHTML(receipt.receipt_id)}</span><h1 id="workspace-flow-result-title" tabindex="-1">${rolledBack ? 'Rollback concluído.' : 'Pronto para o próximo passo.'}<br><em>${rolledBack ? 'o alvo foi revertido.' : 'com a volta preservada.'}</em></h1><p class="lead">${resultCopy}</p><div class="flow-receipt-card"><span>RECEIPT</span><code>${escapeHTML(receipt.receipt_id)}</code><strong>STATUS · ${escapeHTML(receipt.status)}</strong><ul>${stages}</ul></div><div class="flow-effects" aria-label="Efeitos confirmados"><article><span>FONTE</span><b>${escapeHTML(receipt.source_effect)}</b></article><article><span>ALVO</span><b>${escapeHTML(receipt.target_effect)}</b></article><article><span>ROLLBACK</span><b>${escapeHTML(receipt.rollback_effect)}</b></article></div><div class="flow-boundary"><span>${rolledBack ? 'ROLLBACK CONFIRMADO' : 'FONTE PRESERVADA'}</span><p>${rolledBack ? 'Nenhum novo import pode reutilizar a confirmação consumida.' : 'O wizard só mostra pronto porque o receipt está válido, vinculado ao plano e confirma staging, validação e rollback.'}</p></div><div class="panel-actions">${!rolledBack && receipt.operation === 'external_import' ? '<button class="quiet" type="button" data-action="rollback-workspace-flow">Reverter este import</button>' : ''}<button class="quiet" type="button" data-action="close">Fechar instalador</button></div>`;
     const heading = target.querySelector('h1');
     if (heading) window.requestAnimationFrame(() => heading.focus({ preventScroll: true }));
+    alignActiveScene(finishPanel);
   }
 
   async function startWorkspaceFlow(mode) {
@@ -576,6 +596,9 @@
       const target = document.querySelector('#workspace-flow-analysis');
       if (target) target.hidden = true;
       document.querySelector('#workspace-flow-choice').hidden = false;
+      const finishPanel = document.querySelector('[data-panel="finish"]');
+      finishPanel?.classList.remove('is-flow-scroll');
+      finishPanel?.removeAttribute('data-scroll-scene');
       setWorkspaceFlowFeedback(error.message, true);
     } finally {
       choices.forEach(choice => { choice.disabled = !runtime || (choice.dataset.requiresInstalled === 'true' && !installed); });
@@ -642,11 +665,15 @@
     workspaceFlowAnalysis = null;
     workspaceFlowReceipt = null;
     const scene = createWorkspaceFlowScene();
+    const finishPanel = document.querySelector('[data-panel="finish"]');
+    finishPanel?.classList.remove('is-flow-scroll');
+    finishPanel?.removeAttribute('data-scroll-scene');
     scene.querySelector('#workspace-flow-choice').hidden = false;
     scene.querySelector('#workspace-flow-analysis').hidden = true;
     scene.querySelector('#workspace-flow-result').hidden = true;
     setWorkspaceFlowFeedback('');
     renderWorkspaceFlowChoices();
+    alignActiveScene(finishPanel);
   }
 
   function renderActivation(activation) {
@@ -736,6 +763,10 @@
     panel.style.setProperty('--panel-zoom', '1');
     panel.scrollTop = 0;
     panel.scrollTo?.(0, 0);
+    if (panel.dataset.scrollScene === 'true') {
+      panel.dataset.fitsViewport = 'fitted';
+      return;
+    }
     window.requestAnimationFrame(() => {
       // The panel, rather than the document, owns overflow on desktop. First
       // reset that real scroll root, then center only scenes that actually fit.
@@ -818,6 +849,9 @@
     if (name === 'install') setProgress('install');
     if (name === 'finish') setProgress('complete');
     if (name === 'finish') {
+      const finishPanel = document.querySelector('[data-panel="finish"]');
+      finishPanel?.classList.remove('is-flow-scroll');
+      finishPanel?.removeAttribute('data-scroll-scene');
       const flow = createWorkspaceFlowScene();
       flow.hidden = false;
       document.querySelector('#runtime-handoff').hidden = true;
