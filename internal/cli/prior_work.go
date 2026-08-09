@@ -18,6 +18,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorworksync"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/setupauth"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -216,6 +217,24 @@ func runPriorWorkSource(
 	}
 	if err != nil {
 		return writePriorWorkError(errOut, err)
+	}
+	if action == "select" {
+		identity, identityErr := currentSetupIdentity()
+		if identityErr != nil {
+			status.AuthorizationState = "setup_binding_pending"
+			return writePriorWorkJSON(out, status)
+		}
+		_, bindErr := (setupauth.Store{Root: root}).BindSelectedSource(setupauth.Request{
+			WorkspaceID: inspection.WorkspaceID, WorkspacePath: inspection.WorkspacePath, SourceFingerprint: status.Fingerprint,
+		}, identity)
+		if bindErr != nil {
+			// Source selection is already a durable, reviewed owner choice. A
+			// missing, expired or identity-mismatched local setup grant must not
+			// turn that successful choice into a false total failure. Keep the
+			// exact pointers selected and expose one honest, repairable pending
+			// state; Session Start will renew the broad setup grant once.
+			status.AuthorizationState = "setup_binding_pending"
+		}
 	}
 	return writePriorWorkJSON(out, status)
 }
