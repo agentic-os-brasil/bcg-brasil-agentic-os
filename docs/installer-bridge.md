@@ -112,6 +112,16 @@ factory step. It embeds the hash-verified `.ico` as a PE resource through the
 approved `windres` tool and writes unsigned provenance; Authenticode remains a
 later protected-environment step.
 
+For the end-user Windows handoff, use
+[`build-windows-singlefile-installer.ps1`](../dev/release/build-windows-singlefile-installer.ps1).
+It first creates the same validated complete package, builds a thin wrapper
+with the Maestro icon, appends a deterministic digest-bound payload and emits
+one `Maestro-Installer-<version>-windows-amd64.exe`. Double-clicking that file
+extracts only to a private temporary directory, launches the existing bridge,
+propagates its exit status and cleans the temporary package. The wrapper is
+not a second installer implementation and does not bypass release or
+Authenticode verification.
+
 ## External CI unblock
 
 The validation workflow is enabled and the PR jobs are configured for hosted

@@ -885,3 +885,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Onboarding can be solved faster from owner-provided evidence while preserving review, provenance, purpose, reader scope and retention. The short track remains a bounded baseline and the complete track remains the full professional self. The current runtime reports local ingestion or external research as unavailable when their adapters are not qualified. Development skills are checked against the real `tech-core` catalog; AfD and CDC are not presented as installed IDs until their canonical definitions exist.
 - Refs: specs/013-owner-context.md; specs/017-workspace-agent-initialization.md; bundles/base/skills/maestro-onboarding/SKILL.md; bundles/base/skills/ingest-content/SKILL.md; internal/ownerctx/ownerctx.go; internal/ownerctx/ownerctx_test.go
 - Supersedes: none
+
+## SFXI - Ship a single self-extracting Windows installer
+
+- Date: 2026-08-08
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The Windows installer bridge currently requires a complete sibling package, which is technically correct but makes end-user distribution depend on a ZIP or a copied directory. The user-facing product should be one double-clickable executable with the Maestro icon while preserving the existing signed-release and user-space installation boundaries.
+- Decision: Add a self-contained Windows installer wrapper that carries the already validated installer package as a deterministic tar.gz payload with a versioned authenticated footer. The wrapper extracts only into a fresh temporary user directory, verifies the payload digest and archive safety, launches the existing `maestro-installer.exe` bridge with its normal conventional package layout, propagates its exit status, and cleans the temporary directory after the bridge exits. The wrapper never replaces release verification, never embeds secrets, never changes PATH and never claims native trust. The current complete-directory factory remains available as an inspection/debug artifact; the single-file output is the end-user handoff.
+- Consequences: Canary users receive one `.exe` instead of a ZIP, while the inner bridge and release authority remain unchanged. The outer executable still requires organization-owned Authenticode before production distribution; an unsigned output remains an engineering candidate. The first supported native target remains Windows amd64, with additional architecture-specific outputs added explicitly rather than treating one binary as universal. Archive traversal, symlink, duplicate-entry, size and tamper tests become release gates.
+- Refs: specs/001-cli-distribution.md; specs/020-release-distribution.md; docs/installer-package.md; internal/installerbundle; cmd/maestro-installer-singlefile; dev/release/build-windows-singlefile-installer.ps1
+- Supersedes: none

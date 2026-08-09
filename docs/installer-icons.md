@@ -104,6 +104,13 @@ user-profile sandbox and opens the visual installation flow. This is a
 technical rehearsal only: the package remains unsigned until the approved
 Authenticode step runs.
 
+For the end-user handoff, use
+`dev/release/build-windows-singlefile-installer.ps1` with the same verified
+inputs and `-OutputFile <absolute-path>.exe`. It builds the wrapper with the
+same `.ico`, embeds the complete package and emits one
+`Maestro-Installer-<version>-windows-amd64.exe`. The wrapper remains an
+unsigned candidate until Authenticode is applied.
+
 ## Current evidence boundary
 
 The visual branch proves the icon and theme render in the dependency-free

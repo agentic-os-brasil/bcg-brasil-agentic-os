@@ -16,10 +16,12 @@ signature, data-separation or acceptance requirements.
 
 ## Windows installer boundary
 
-For a first installation on Windows, the user-facing entrypoint is the
-`maestro-installer.exe` from the complete `Maestro-Windows-Installer` package.
-The package is a transportable folder or archive and must carry these sibling
-inputs together:
+For a first installation on Windows, the recommended user-facing entrypoint
+is the single `Maestro-Installer-<version>-windows-amd64.exe` produced by the
+self-contained factory. It carries the complete validated package internally,
+extracts it into a temporary user directory and opens the same visual bridge.
+The factory/debug form remains a transportable folder or archive and must
+carry these sibling inputs together:
 
 - `wizard/`;
 - `release/` with the exact signed release set;
@@ -36,9 +38,10 @@ command.
 
 The `maestro-setup-update` skill is part of the signed base bundle and is
 installed by the visual installer; it is not distributed as a separate skill
-file. A successful package handoff therefore means “open
-`maestro-installer.exe`”, while the CLI becomes available only after the
-installer has completed and its final self-check has passed.
+file. A successful single-file handoff therefore means “double-click the
+Maestro Installer `.exe`”; for the debug package, open
+`maestro-installer.exe`. In both cases, the CLI becomes available only after
+the installer has completed and its final self-check has passed.
 
 ## Workflow
 
