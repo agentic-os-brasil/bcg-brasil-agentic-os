@@ -17,6 +17,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/setupauth"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -71,12 +72,13 @@ type Sources struct {
 	// OwnerContextRoot is a local directive anchor only. Owner context is
 	// intentionally stored in the private data root, never inferred from a
 	// workspace-local owner/ directory.
-	OwnerContextRoot string
-	Atlas            atlas.Status
-	Execution        execution.ActivePointer
-	Memory           MemorySource
-	SharePointSource priorwork.SourceSelectionStatus
-	ContinuousUse    continuoususe.Status
+	OwnerContextRoot   string
+	Atlas              atlas.Status
+	Execution          execution.ActivePointer
+	Memory             MemorySource
+	SharePointSource   priorwork.SourceSelectionStatus
+	SetupAuthorization setupauth.Status
+	ContinuousUse      continuoususe.Status
 }
 
 // MemorySource is assembled by the local runtime boundary. Build never reads
@@ -200,6 +202,11 @@ type SharePointSource struct {
 	CodexCollectionState string `json:"codex_collection_state"`
 }
 
+type SetupAuthorization struct {
+	State         string `json:"state"`
+	PolicyVersion string `json:"policy_version,omitempty"`
+}
+
 type Omission struct {
 	Source string `json:"source"`
 	Reason string `json:"reason"`
@@ -214,6 +221,7 @@ type Packet struct {
 	Atlas              Atlas                `json:"atlas"`
 	Execution          ExecutionContext     `json:"execution"`
 	SharePointSource   SharePointSource     `json:"sharepoint_source"`
+	SetupAuthorization SetupAuthorization   `json:"setup_authorization"`
 	Skills             Skills               `json:"skills"`
 	Agents             Agents               `json:"agents"`
 	Memory             Memory               `json:"memory"`
@@ -264,6 +272,10 @@ func Build(sources Sources) Packet {
 			AuthorizationState: "not_selected", CollectionRuntime: "claude",
 			CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy",
 		}
+	}
+	setupAuthorization := sources.SetupAuthorization
+	if setupAuthorization.State == "" {
+		setupAuthorization = setupauth.Status{SchemaVersion: setupauth.SchemaVersion, State: "unavailable", PolicyVersion: setupauth.PolicyVersion}
 	}
 	continuous := sources.ContinuousUse
 	if continuous.SchemaVersion == 0 {
@@ -320,7 +332,8 @@ func Build(sources Sources) Packet {
 			AuthorizationState: sharePointSource.AuthorizationState, CollectionRuntime: sharePointSource.CollectionRuntime,
 			CollectionState: sharePointSource.CollectionState, CodexCollectionState: sharePointSource.CodexCollectionState,
 		},
-		Skills: Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
+		SetupAuthorization: SetupAuthorization{State: setupAuthorization.State, PolicyVersion: setupAuthorization.PolicyVersion},
+		Skills:             Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
 		Agents: Agents{
 			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: "unavailable",
 			Message: "native agent orchestration requires a runtime adapter with tool and delegation enforcement",
@@ -417,6 +430,15 @@ func (packet Packet) Validate() error {
 	}
 	if err := validateSharePointSource(packet.SharePointSource); err != nil {
 		return err
+	}
+	switch packet.SetupAuthorization.State {
+	case setupauth.StateActive:
+		if packet.SetupAuthorization.PolicyVersion != setupauth.PolicyVersion {
+			return errors.New("session context packet has an invalid setup authorization policy")
+		}
+	case setupauth.StateAuthorizationRequired, setupauth.StateScopeChanged, setupauth.StateIdentityChanged, setupauth.StateExpired, "unavailable":
+	default:
+		return errors.New("session context packet has an invalid setup authorization state")
 	}
 	if len(packet.Skills.Selected) > 2 {
 		return errors.New("session context packet selects too many skills")

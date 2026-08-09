@@ -94,15 +94,17 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|workspace-migration|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(errOut, "usage: bcgos <init|setup|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|workspace-migration|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|workspace-migration|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(out, "usage: bcgos <init|setup|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|workspace-migration|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
+	case "setup":
+		return runSetup(args[1:], out, errOut, defaultDataRoot, currentSetupIdentity)
 	case "doctor":
 		return runDoctor(args[1:], out, errOut, defaultDataRoot, commandAvailable)
 	case "status":
@@ -2596,11 +2598,12 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 	}
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
-		Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
-		Execution:        activePointerFromContinuity(activeExecution),
-		Memory:           sessionMemorySource(root, inspection.WorkspaceID),
-		SharePointSource: sharePointSource,
-		ContinuousUse:    continuous,
+		Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		Execution:          activePointerFromContinuity(activeExecution),
+		Memory:             sessionMemorySource(root, inspection.WorkspaceID),
+		SharePointSource:   sharePointSource,
+		SetupAuthorization: setupAuthorizationForPacket(root, inspection),
+		ContinuousUse:      continuous,
 	})
 	if err := packet.Validate(); err != nil {
 		return reportError(errOut, err)
@@ -2649,7 +2652,7 @@ func runSessionResolve(args []string, out, errOut io.Writer, dataRoot func() (st
 	if err != nil {
 		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
 	}
-	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Execution: activePointerFromContinuity(activeExecution), Memory: sessionMemorySource(root, inspection.WorkspaceID), SharePointSource: sharePointSource, ContinuousUse: continuous})
+	packet := sessionctx.Build(sessionctx.Sources{Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root, Atlas: atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}), Execution: activePointerFromContinuity(activeExecution), Memory: sessionMemorySource(root, inspection.WorkspaceID), SharePointSource: sharePointSource, SetupAuthorization: setupAuthorizationForPacket(root, inspection), ContinuousUse: continuous})
 	result, err := sessionresolve.Resolve(root, *pointer, *purpose, packet, *budget)
 	if err != nil {
 		return reportError(errOut, err)
@@ -2881,11 +2884,12 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	}
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
-		Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
-		Execution:        activePointerFromContinuity(activeExecution),
-		Memory:           sessionMemorySource(root, inspection.WorkspaceID),
-		SharePointSource: sharePointSource,
-		ContinuousUse:    continuous,
+		Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+		Execution:          activePointerFromContinuity(activeExecution),
+		Memory:             sessionMemorySource(root, inspection.WorkspaceID),
+		SharePointSource:   sharePointSource,
+		SetupAuthorization: setupAuthorizationForPacket(root, inspection),
+		ContinuousUse:      continuous,
 	})
 	if err := enrichOnboardingGuide(&packet, *runtimeName, inspection.WorkspacePath); err != nil {
 		return reportError(errOut, err)
@@ -3014,11 +3018,12 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 		}
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
-			Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
-			Execution:        activePointerFromContinuity(activeExecution),
-			Memory:           sessionMemorySource(root, inspection.WorkspaceID),
-			SharePointSource: sharePointSource,
-			ContinuousUse:    continuous,
+			Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+			Execution:          activePointerFromContinuity(activeExecution),
+			Memory:             sessionMemorySource(root, inspection.WorkspaceID),
+			SharePointSource:   sharePointSource,
+			SetupAuthorization: setupAuthorizationForPacket(root, inspection),
+			ContinuousUse:      continuous,
 		})
 		if action == "context-injection" {
 			if err := enrichContextPacket(&packet, "codex", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
@@ -3176,11 +3181,12 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		}
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
-			Atlas:            atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
-			Execution:        activePointerFromContinuity(activeExecution),
-			Memory:           sessionMemorySource(root, inspection.WorkspaceID),
-			SharePointSource: sharePointSource,
-			ContinuousUse:    continuous,
+			Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
+			Execution:          activePointerFromContinuity(activeExecution),
+			Memory:             sessionMemorySource(root, inspection.WorkspaceID),
+			SharePointSource:   sharePointSource,
+			SetupAuthorization: setupAuthorizationForPacket(root, inspection),
+			ContinuousUse:      continuous,
 		})
 		if action == "context-injection" {
 			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {

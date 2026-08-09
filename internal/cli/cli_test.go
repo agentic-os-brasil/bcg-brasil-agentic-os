@@ -27,9 +27,33 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/setupauth"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillrouting"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+func TestSetupAuthorizationIsOneAndDoneForTheSameWorkspace(t *testing.T) {
+	dataRoot := t.TempDir()
+	workspacePath := filepath.Join(t.TempDir(), "maestro-workspace")
+	resolve := func() (string, error) { return dataRoot, nil }
+	identity := func() (setupauth.Identity, error) { return setupauth.DeriveIdentity("owner", "device"), nil }
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, resolve); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runSetup([]string{"authorize", "--workspace", workspacePath}, &output, &output, resolve, identity); code != ExitUsage || !strings.Contains(output.String(), "--confirm") {
+		t.Fatalf("unconfirmed setup exit=%d output=%s", code, output.String())
+	}
+	output.Reset()
+	if code := runSetup([]string{"authorize", "--workspace", workspacePath, "--confirm"}, &output, &output, resolve, identity); code != ExitOK || !strings.Contains(output.String(), `"state": "active"`) {
+		t.Fatalf("authorized setup exit=%d output=%s", code, output.String())
+	}
+	output.Reset()
+	if code := runSetup([]string{"status", "--workspace", workspacePath}, &output, &output, resolve, identity); code != ExitOK || !strings.Contains(output.String(), `"state": "active"`) {
+		t.Fatalf("setup status exit=%d output=%s", code, output.String())
+	}
+}
 
 func TestCanaryReportCommandIsLocalOnly(t *testing.T) {
 	root := t.TempDir()
