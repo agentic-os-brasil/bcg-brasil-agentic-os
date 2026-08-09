@@ -1345,18 +1345,7 @@ func runtimeCLIPath(runtimeID string) (string, bool) {
 }
 
 func chooseWorkspace() (string, error) {
-	if runtime.GOOS != "darwin" {
-		return "", fmt.Errorf("a seleção gráfica de workspace ainda está disponível apenas no macOS")
-	}
-	output, err := exec.Command("osascript", "-e", `POSIX path of (choose folder with prompt "Escolha um workspace Maestro")`).Output()
-	if err != nil {
-		return "", fmt.Errorf("a seleção foi cancelada ou não pôde ser aberta")
-	}
-	path := strings.TrimSpace(string(output))
-	if path == "" {
-		return "", fmt.Errorf("nenhum workspace foi selecionado")
-	}
-	return path, nil
+	return chooseFolder("Escolha um workspace Maestro", "nenhum workspace foi selecionado")
 }
 
 func defaultWorkspaceFor(options options) string {
@@ -1379,18 +1368,41 @@ func defaultWorkspacePath(options options) (string, error) {
 }
 
 func chooseImportSource() (string, error) {
-	if runtime.GOOS != "darwin" {
-		return "", fmt.Errorf("a seleção gráfica de memórias ainda está disponível apenas no macOS")
+	return chooseFolder("Escolha a fonte que o Maestro deve analisar", "nenhuma pasta de memórias foi selecionada")
+}
+
+func chooseFolder(prompt, emptyMessage string) (string, error) {
+	command, arguments, err := folderChooserCommand(runtime.GOOS, prompt)
+	if err != nil {
+		return "", err
 	}
-	output, err := exec.Command("osascript", "-e", `POSIX path of (choose folder with prompt "Escolha a fonte que o Maestro deve analisar")`).Output()
+	output, err := exec.Command(command, arguments...).Output()
 	if err != nil {
 		return "", fmt.Errorf("a seleção foi cancelada ou não pôde ser aberta")
 	}
 	path := strings.TrimSpace(string(output))
 	if path == "" {
-		return "", fmt.Errorf("nenhuma pasta de memórias foi selecionada")
+		return "", fmt.Errorf("%s", emptyMessage)
 	}
 	return path, nil
+}
+
+func folderChooserCommand(platform, prompt string) (string, []string, error) {
+	switch platform {
+	case "darwin":
+		return "osascript", []string{"-e", `POSIX path of (choose folder with prompt "` + prompt + `")`}, nil
+	case "windows":
+		// FolderBrowserDialog keeps the source selection local to the user's
+		// machine. The installer receives only the chosen path and still does
+		// not read, copy, or ingest any source until the governed next step.
+		script := "Add-Type -AssemblyName System.Windows.Forms; " +
+			"$dialog = New-Object System.Windows.Forms.FolderBrowserDialog; " +
+			"$dialog.Description = '" + strings.ReplaceAll(prompt, "'", "''") + "'; " +
+			"if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.SelectedPath) }"
+		return "powershell.exe", []string{"-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-Command", script}, nil
+	default:
+		return "", nil, fmt.Errorf("a seleção gráfica de pasta ainda não está disponível neste sistema")
+	}
 }
 
 func validateMemorySource(sourcePath, workspacePath string) error {

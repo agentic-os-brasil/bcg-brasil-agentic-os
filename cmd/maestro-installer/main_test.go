@@ -50,6 +50,25 @@ func TestWizardHandlerKeepsStateReadOnlyAndActionsPostOnly(t *testing.T) {
 	}
 }
 
+func TestFolderChooserCommandSupportsWindowsAndKeepsPromptLocal(t *testing.T) {
+	command, arguments, err := folderChooserCommand("windows", "Escolha a fonte do Maestro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command != "powershell.exe" {
+		t.Fatalf("command = %q, want powershell.exe", command)
+	}
+	joined := strings.Join(arguments, " ")
+	for _, want := range []string{"-STA", "System.Windows.Forms.FolderBrowserDialog", "Escolha a fonte do Maestro", "SelectedPath"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("windows chooser arguments do not contain %q: %s", want, joined)
+		}
+	}
+	if _, _, err := folderChooserCommand("linux", "Escolha"); err == nil {
+		t.Fatal("unsupported platform unexpectedly returned a chooser")
+	}
+}
+
 func TestWizardLaunchRuntimeChoosesReadyWorkspaceAndUsesApprovedTarget(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "data")
