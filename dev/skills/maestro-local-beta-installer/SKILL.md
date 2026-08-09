@@ -230,15 +230,17 @@ signatures, wrong architectures and changed package inputs. It emits an
 `unsigned macOS installer candidate`; that label is correct even though the
 release manifest itself is verified by the test-only Ed25519 registry.
 
-### 6. Windows portable package (canonical Windows handoff)
+### 6. Windows controlled local-beta package
 
-The Windows factory must produce **one versioned portable ZIP** containing the
-complete package. A bare executable copied beside `dist/` is not a valid
-Windows installer: the bridge needs `wizard/`, `release/`, the authority
-registry and the versioned bootstrapper next to it. Publishing that bare `.exe`
-causes the exact “flash and close” failure when a user double-clicks it.
+The canonical Windows user handoff is the self-contained EXE. The complete
+portable folder/ZIP remains a factory/debug artifact and is useful for
+inspection, but users do not need to preserve sibling files or choose a
+launcher. Never send a bare inner `maestro-installer.exe` or a runtime binary
+from `release/`.
 
-Run the factory with an explicit archive destination:
+Resolve the exact beta issuer/key and independently approved SHA-256 pins from
+the selected registry and bootstrapper. Do not silently create a new beta
+identity when a seed does not match. First build the inspectable package:
 
 ```powershell
 .\dev\release\build-windows-installer.ps1 `
@@ -248,43 +250,72 @@ Run the factory with an explicit archive destination:
   -ReleaseDirectory $ReleaseDirectory `
   -AuthorityRegistry $Registry `
   -Bootstrapper $Bootstrapper `
-  -OutputDirectory "$Root\dist\maestro-installer-windows-$Version-portable-unsigned" `
-  -ArchiveOutput "$Root\dist\Maestro-Installer-$Version-windows-amd64-portable-unsigned.zip" `
-  -ResourceCompilerSHA256 $WindresSHA256
+  -OutputDirectory "$Root\dist\maestro-installer-windows-$Version-portable-local-beta-unsigned" `
+  -ArchiveOutput "$Root\dist\Maestro-Installer-$Version-windows-amd64-portable-local-beta-unsigned.zip" `
+  -ResourceCompilerSHA256 $WindresSHA256 `
+  -LocalBeta `
+  -LocalBetaIssuer $BetaIssuer `
+  -LocalBetaKeyID $BetaKeyID `
+  -LocalBetaAuthorityRegistrySHA256 $RegistrySHA256 `
+  -LocalBetaBootstrapperSHA256 $BootstrapperSHA256
 ```
 
-The archive contains `maestro-installer.exe`, the exact verified inputs and
-two explicit launchers:
+The factory must reject any non-`canary` manifest, issuer/key drift, registry or
+bootstrapper digest drift, and every Authenticode status other than exactly
+`NotSigned`. It compiles the pins into the inner bridge; no user-selectable
+`--skip-signature` or `--local-beta` runtime flag is allowed.
+
+The debug archive contains `maestro-installer.exe`, the exact verified inputs
+and two explicit launchers:
 
 - `Install-Maestro.cmd` — real verify → install → workspace wizard;
 - `Run-Maestro-Rehearsal.cmd` — `--simulate` only, never a product install.
 
-The user-facing handoff is the ZIP. The user extracts it and double-clicks
-`Install-Maestro.cmd`; they must not open `bcgos-bootstrap_*.exe` or binaries
-inside `release/`. Do not publish a standalone copy named
-`Maestro-Installer-<VERSION>-windows-amd64.exe` unless a future factory makes
-it genuinely self-contained and records that contract. A Windows DMG is never
-valid; DMG is macOS-only.
+Then build the single-file end-user artifact from the same exact inputs:
 
-After generation, verify the archive contains exactly one top-level package
-directory, the two launchers and the complete `wizard/` and `release/` trees.
-Record the ZIP SHA-256 and label the candidate unsigned/not Authenticode-signed.
+```powershell
+.\dev\release\build-windows-singlefile-installer.ps1 `
+  -Version $Version `
+  -Icon $Icon -IconSHA256 $IconSHA256 `
+  -WizardDir $WizardDir `
+  -ReleaseDirectory $ReleaseDirectory `
+  -AuthorityRegistry $Registry `
+  -Bootstrapper $Bootstrapper `
+  -ResourceCompilerSHA256 $WindresSHA256 `
+  -OutputFile "$Root\dist\Maestro-Installer-$Version-windows-amd64-local-beta-unsigned.exe" `
+  -LocalBeta `
+  -LocalBetaIssuer $BetaIssuer `
+  -LocalBetaKeyID $BetaKeyID `
+  -LocalBetaAuthorityRegistrySHA256 $RegistrySHA256 `
+  -LocalBetaBootstrapperSHA256 $BootstrapperSHA256
+```
+
+The user receives the EXE plus its independently published SHA-256. They
+double-click only that EXE. A Windows DMG is never valid; DMG is macOS-only.
+
+After generation, verify the debug archive contains exactly one top-level
+package directory, the two launchers and the complete `wizard/` and `release/`
+trees. Verify the SFX payload/extraction, its provenance and adjacent checksum.
+Label both candidates unsigned/not Authenticode-signed and never pilot-ready.
 
 ## Verification and handoff
 
 1. Confirm the cleanup receipt is complete and keep the backup until the clean
    install has been validated or the owner explicitly releases it.
 2. Verify the DMG with `hdiutil imageinfo` and record its SHA-256.
-3. Verify the Windows portable ZIP with `unzip -t` (or `Expand-Archive`),
-   record its SHA-256 and provide the extraction/launch instructions above.
+3. Verify the Windows portable ZIP with `unzip -t` (or `Expand-Archive`) as
+   debug evidence. Record the SFX SHA-256 and publish that checksum through a
+   channel separate from the EXE.
 4. Optionally copy the DMG to `~/Downloads` only after the checksum is
    recorded. Do not copy the seed or private key.
 5. Open the DMG and run the installer on the clean user account. Confirm the
    wizard reaches the real install path, creates the new workspace, wires the
    selected runtime and starts the guided onboarding prompt.
-6. On a Windows device, extract the ZIP and run `Install-Maestro.cmd`. Confirm
-   the wizard remains open, reaches the real install path, creates the new
-   workspace and preserves a visible error/log if any preflight fails.
+6. On a Windows device, run the single-file EXE. Confirm the wizard remains
+   open, identifies the controlled beta, reaches the real install path, creates
+   the new workspace and preserves a visible error/log if any preflight fails.
+   SmartScreen, WDAC or AppLocker may stop execution before Maestro starts;
+   record that separately rather than weakening the installer.
 7. Preserve the checksum, version, registry issuer/key ID and observed
    install receipts as local evidence. Do not call the result native-qualified,
    signed, notarized, published or pilot-ready without the corresponding

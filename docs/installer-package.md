@@ -35,6 +35,38 @@ exits. This wrapper does not replace release-manifest or native-signature
 verification. Its output is still `unsigned-candidate` until the approved
 Authenticode step is completed.
 
+### Controlled Windows local beta
+
+Decision `CARY` permits one narrower pre-pilot package profile while the
+organization-owned Authenticode identity is unavailable. The profile is
+selected only by the Windows factory with `-LocalBeta`; there is no installer
+runtime flag that can enable it. The factory requires and compiles into the
+inner bridge all four public bindings:
+
+- the exact test-only release issuer and key ID;
+- the SHA-256 of the separate beta authority registry;
+- the SHA-256 of the versioned Windows bootstrapper;
+- the authenticated release channel `canary`.
+
+On Windows, the factory requires `Get-AuthenticodeSignature` to report exactly
+`NotSigned` for the supplied bootstrapper. On a non-Windows build host where
+that cmdlet is unavailable, it parses a well-formed PE optional header and
+accepts only a zero offset and zero size in the certificate-table data-directory
+entry. A present/malformed certificate table, `HashMismatch`, `NotTrusted`,
+`UnknownError` and every other status fail closed. The release manifest and
+artifacts still require their normal Ed25519 verification, and the copied
+installed bootstrapper is verified again by the bridge against the compiled
+profile.
+
+The end-user output is exactly
+`Maestro-Installer-<version>-windows-amd64-local-beta-unsigned.exe`, accompanied
+by its provenance JSON and a `<exe>.sha256` file. The portable folder and ZIP
+remain inspection/debug artifacts and are not the cohort handoff. The EXE is
+still unsigned: compiled pins establish intra-package consistency, not
+publisher identity. SmartScreen, WDAC or AppLocker may block it before Maestro
+starts, so the cohort receives it through a controlled channel and verifies the
+checksum published independently.
+
 The signed base bundle carried in `release/` includes the
 `maestro-setup-update` skill. It is installed as part of the bundle and is not
 exported as a loose skill file.

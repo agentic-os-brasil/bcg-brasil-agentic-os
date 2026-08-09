@@ -57,6 +57,27 @@ func DefaultPaths(platform, home, localAppData string) (Paths, error) {
 type nativeVerifier func(context.Context, string) error
 type commandRunner func(context.Context, string, ...string) ([]byte, error)
 
+// NativeTrustMode controls the platform-signature policy applied to the
+// bootstrapper. The zero value is normalized to NativeTrustStrict. The local
+// beta exception is intentionally Windows-only and remains bound to exact
+// package identities and digests through LocalBetaPins.
+type NativeTrustMode string
+
+const (
+	NativeTrustStrict           NativeTrustMode = "strict"
+	NativeTrustWindowsLocalBeta NativeTrustMode = "windows-local-beta"
+)
+
+// LocalBetaPins are public, package-specific trust inputs compiled into a
+// controlled local-beta installer bridge. They are not credentials. All four
+// values are mandatory in Windows local-beta mode and forbidden in strict mode.
+type LocalBetaPins struct {
+	AuthorityRegistrySHA256 string
+	BootstrapperSHA256      string
+	Issuer                  string
+	KeyID                   string
+}
+
 // Options controls a signed first install. ReleaseDir and Bootstrapper must
 // come from the same immutable release package. AuthorityRegistry is the
 // public registry that the seeded bootstrapper is compiled to pin.
@@ -72,6 +93,8 @@ type Options struct {
 	VerifyNative       nativeVerifier
 	Run                commandRunner
 	ExpectedPlanDigest string
+	NativeTrustMode    NativeTrustMode
+	LocalBetaPins      LocalBetaPins
 }
 
 // Plan is the result shown by the wizard before it allows the one install
@@ -88,7 +111,11 @@ type Plan struct {
 	AuthorityRegistry   string `json:"authority_registry"`
 	ManifestSHA256      string `json:"manifest_sha256"`
 	RegistrySHA256      string `json:"registry_sha256"`
+	BootstrapperSHA256  string `json:"bootstrapper_sha256"`
 	BootstrapperVersion string `json:"bootstrapper_version"`
+	ReleaseIssuer       string `json:"release_issuer"`
+	ReleaseKeyID        string `json:"release_key_id"`
+	NativeTrustMode     string `json:"native_trust_mode"`
 	PlanDigest          string `json:"plan_digest"`
 }
 
@@ -202,21 +229,30 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 	if err := validateRegular(options.AuthorityRegistry, 1<<20); err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, fmt.Errorf("validate authority registry: %w", err)
 	}
-	if err := options.VerifyNative(context.Background(), options.Bootstrapper); err != nil {
-		return Plan{}, releaseverify.VerifiedRelease{}, fmt.Errorf("native bootstrapper trust check: %w", err)
-	}
-	status, err := readSeedStatus(context.Background(), options.Bootstrapper, options.Run)
-	if err != nil {
-		return Plan{}, releaseverify.VerifiedRelease{}, err
-	}
 	registryDigest, err := fileSHA256(options.AuthorityRegistry)
 	if err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, err
 	}
-	if status.SchemaVersion != 1 || status.Product != "maestro" ||
-		status.BootstrapperVersion != verified.Manifest.Release ||
-		status.AuthorityRegistrySHA256 != registryDigest {
-		return Plan{}, releaseverify.VerifiedRelease{}, errors.New("bootstrapper seed does not bind this release and authority registry")
+	bootstrapperDigest, err := fileSHA256(options.Bootstrapper)
+	if err != nil {
+		return Plan{}, releaseverify.VerifiedRelease{}, err
+	}
+	if err := validateNativeTrustPolicy(options, verified, registryDigest, bootstrapperDigest); err != nil {
+		return Plan{}, releaseverify.VerifiedRelease{}, err
+	}
+	if err := options.VerifyNative(context.Background(), options.Bootstrapper); err != nil {
+		return Plan{}, releaseverify.VerifiedRelease{}, fmt.Errorf("native bootstrapper trust check: %w", err)
+	}
+	bootstrapperVersion := verified.Manifest.Release
+	if options.NativeTrustMode == NativeTrustStrict {
+		status, seedErr := readSeedStatus(context.Background(), options.Bootstrapper, options.Run)
+		if seedErr != nil {
+			return Plan{}, releaseverify.VerifiedRelease{}, seedErr
+		}
+		if !seedStatusMatches(status, verified.Manifest.Release, registryDigest) {
+			return Plan{}, releaseverify.VerifiedRelease{}, errors.New("bootstrapper seed does not bind this release and authority registry")
+		}
+		bootstrapperVersion = status.BootstrapperVersion
 	}
 	plan := Plan{
 		Release:             verified.Manifest.Release,
@@ -230,7 +266,11 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 		AuthorityRegistry:   filepath.Clean(options.AuthorityRegistry),
 		ManifestSHA256:      verified.ManifestSHA256,
 		RegistrySHA256:      registryDigest,
-		BootstrapperVersion: status.BootstrapperVersion,
+		BootstrapperSHA256:  bootstrapperDigest,
+		BootstrapperVersion: bootstrapperVersion,
+		ReleaseIssuer:       verified.Manifest.Issuer.ID,
+		ReleaseKeyID:        verified.Manifest.Issuer.KeyID,
+		NativeTrustMode:     string(options.NativeTrustMode),
 	}
 	plan.PlanDigest = PlanDigest(plan)
 	return plan, verified, nil
@@ -287,12 +327,20 @@ func Install(ctx context.Context, options Options) (Result, error) {
 		}
 		return Result{}, err
 	}
+	installedBootstrapperDigest, err := fileSHA256(installedBootstrapper)
+	if err != nil || installedBootstrapperDigest != plan.BootstrapperSHA256 {
+		cleanup()
+		if err == nil {
+			err = errors.New("installed bootstrapper changed during staging")
+		}
+		return Result{}, err
+	}
 	if err := options.VerifyNative(ctx, installedBootstrapper); err != nil {
 		cleanup()
 		return Result{}, fmt.Errorf("installed bootstrapper trust check: %w", err)
 	}
 	status, err := readSeedStatus(ctx, installedBootstrapper, runCommand(options.Run))
-	if err != nil || status.AuthorityRegistrySHA256 != plan.RegistrySHA256 || status.BootstrapperVersion != plan.Release {
+	if err != nil || !seedStatusMatches(status, plan.Release, plan.RegistrySHA256) {
 		cleanup()
 		if err == nil {
 			err = errors.New("installed bootstrapper seed binding changed during staging")
@@ -438,6 +486,13 @@ func prepareManagedRoot(ctx context.Context, plan Plan, options Options) (manage
 
 func verifyExistingInstallTrust(ctx context.Context, plan Plan, options Options) error {
 	bootstrapper := installedBootstrapperPath(plan.ManagedRoot, plan.TargetOS)
+	bootstrapperDigest, err := fileSHA256(bootstrapper)
+	if err != nil {
+		return fmt.Errorf("hash installed bootstrapper: %w", err)
+	}
+	if bootstrapperDigest != plan.BootstrapperSHA256 {
+		return errors.New("installed bootstrapper does not match the confirmed release package")
+	}
 	if err := options.VerifyNative(ctx, bootstrapper); err != nil {
 		return fmt.Errorf("installed bootstrapper trust check: %w", err)
 	}
@@ -453,7 +508,7 @@ func verifyExistingInstallTrust(ctx context.Context, plan Plan, options Options)
 	if err != nil {
 		return err
 	}
-	if status.AuthorityRegistrySHA256 != plan.RegistrySHA256 || status.BootstrapperVersion != plan.Release {
+	if !seedStatusMatches(status, plan.Release, plan.RegistrySHA256) {
 		return errors.New("installed bootstrapper seed does not match the confirmed release package")
 	}
 	return nil
@@ -754,6 +809,9 @@ func runCommand(run commandRunner) commandRunner {
 }
 
 func withDefaults(options Options) Options {
+	if options.NativeTrustMode == "" {
+		options.NativeTrustMode = NativeTrustStrict
+	}
 	if options.Clock == nil {
 		options.Clock = time.Now
 	}
@@ -767,9 +825,77 @@ func withDefaults(options Options) Options {
 		options.Run = execCommand
 	}
 	if options.VerifyNative == nil {
-		options.VerifyNative = nativeSignatureCheck
+		mode := options.NativeTrustMode
+		options.VerifyNative = func(ctx context.Context, path string) error {
+			return nativeSignatureCheck(ctx, path, mode)
+		}
 	}
 	return options
+}
+
+func validateNativeTrustPolicy(options Options, verified releaseverify.VerifiedRelease, registryDigest, bootstrapperDigest string) error {
+	switch options.NativeTrustMode {
+	case NativeTrustStrict:
+		if !emptyLocalBetaPins(options.LocalBetaPins) {
+			return errors.New("local-beta pins are forbidden in strict native trust mode")
+		}
+		return nil
+	case NativeTrustWindowsLocalBeta:
+		pins := options.LocalBetaPins
+		if options.TargetOS != "windows" {
+			return errors.New("windows local-beta native trust mode requires a Windows target")
+		}
+		if verified.Manifest.Channel != "canary" {
+			return errors.New("windows local-beta native trust mode requires the canary channel")
+		}
+		if !isLowerSHA256(pins.AuthorityRegistrySHA256) || !isLowerSHA256(pins.BootstrapperSHA256) ||
+			pins.Issuer == "" || pins.KeyID == "" {
+			return errors.New("windows local-beta native trust mode requires complete canonical package pins")
+		}
+		if !hasBetaAuthorityMarker(pins.Issuer) || !hasBetaAuthorityMarker(pins.KeyID) {
+			return errors.New("windows local-beta authority issuer and key ID must be explicitly beta or test-only")
+		}
+		if verified.Manifest.Issuer.ID != pins.Issuer || verified.Manifest.Issuer.KeyID != pins.KeyID {
+			return errors.New("signed release issuer does not match the pinned local-beta authority")
+		}
+		if registryDigest != pins.AuthorityRegistrySHA256 {
+			return errors.New("authority registry does not match the pinned local-beta package")
+		}
+		if bootstrapperDigest != pins.BootstrapperSHA256 {
+			return errors.New("bootstrapper does not match the pinned local-beta package")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported native trust mode %q", options.NativeTrustMode)
+	}
+}
+
+func emptyLocalBetaPins(pins LocalBetaPins) bool {
+	return pins.AuthorityRegistrySHA256 == "" && pins.BootstrapperSHA256 == "" && pins.Issuer == "" && pins.KeyID == ""
+}
+
+func isLowerSHA256(value string) bool {
+	if len(value) != sha256.Size*2 || strings.ToLower(value) != value {
+		return false
+	}
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size
+}
+
+func hasBetaAuthorityMarker(value string) bool {
+	for _, token := range strings.FieldsFunc(strings.ToLower(value), func(character rune) bool {
+		return character == '.' || character == '_' || character == '-'
+	}) {
+		if token == "beta" || token == "test" || token == "testonly" || token == "localbeta" {
+			return true
+		}
+	}
+	return false
+}
+
+func seedStatusMatches(status seedStatus, release, registryDigest string) bool {
+	return status.SchemaVersion == 1 && status.Product == "maestro" &&
+		status.BootstrapperVersion == release && status.AuthorityRegistrySHA256 == registryDigest
 }
 
 func readSeedStatus(ctx context.Context, path string, run commandRunner) (seedStatus, error) {
@@ -790,22 +916,40 @@ func readSeedStatus(ctx context.Context, path string, run commandRunner) (seedSt
 	return status, nil
 }
 
-func nativeSignatureCheck(ctx context.Context, path string) error {
+func nativeSignatureCheck(ctx context.Context, path string, mode NativeTrustMode) error {
 	switch runtime.GOOS {
 	case "darwin":
+		if mode != NativeTrustStrict {
+			return errors.New("local-beta native trust exception is unavailable on macOS")
+		}
 		if _, err := exec.CommandContext(ctx, "codesign", "--verify", "--strict", "--verbose=2", path).CombinedOutput(); err != nil {
 			return errors.New("codesign rejected the bootstrapper")
 		}
 		return nil
 	case "windows":
-		command := fmt.Sprintf("$s = Get-AuthenticodeSignature -LiteralPath '%s'; if ($s.Status -ne 'Valid') { exit 1 }", strings.ReplaceAll(path, "'", "''"))
-		if _, err := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command).CombinedOutput(); err != nil {
-			return errors.New("Authenticode rejected the bootstrapper")
+		command := fmt.Sprintf("$ErrorActionPreference = 'Stop'; $s = Get-AuthenticodeSignature -LiteralPath '%s'; [Console]::Out.Write([string]$s.Status)", strings.ReplaceAll(path, "'", "''"))
+		output, err := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command).CombinedOutput()
+		if err != nil {
+			return errors.New("Authenticode status could not be established for the bootstrapper")
 		}
-		return nil
+		return validateAuthenticodeStatus(output, mode)
 	default:
 		return errors.New("native signature verification is unavailable on this platform")
 	}
+}
+
+func validateAuthenticodeStatus(output []byte, mode NativeTrustMode) error {
+	status := strings.TrimSpace(string(output))
+	if status == "" || strings.ContainsAny(status, "\r\n") {
+		return errors.New("Authenticode returned an invalid bootstrapper status")
+	}
+	if status == "Valid" && mode == NativeTrustStrict {
+		return nil
+	}
+	if status == "NotSigned" && mode == NativeTrustWindowsLocalBeta {
+		return nil
+	}
+	return fmt.Errorf("Authenticode rejected the bootstrapper with status %s", status)
 }
 
 func execCommand(ctx context.Context, path string, args ...string) ([]byte, error) {

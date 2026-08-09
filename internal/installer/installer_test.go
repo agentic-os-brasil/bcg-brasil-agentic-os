@@ -16,7 +16,106 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releasecontract"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 )
+
+func TestValidateAuthenticodeStatusAllowsOnlyTheGovernedLocalBetaException(t *testing.T) {
+	tests := []struct {
+		name   string
+		mode   NativeTrustMode
+		status string
+		ok     bool
+	}{
+		{name: "strict valid", mode: NativeTrustStrict, status: "Valid", ok: true},
+		{name: "strict unsigned", mode: NativeTrustStrict, status: "NotSigned"},
+		{name: "local beta valid signature is outside the exact beta contract", mode: NativeTrustWindowsLocalBeta, status: "Valid"},
+		{name: "local beta unsigned", mode: NativeTrustWindowsLocalBeta, status: "NotSigned", ok: true},
+		{name: "local beta hash mismatch", mode: NativeTrustWindowsLocalBeta, status: "HashMismatch"},
+		{name: "local beta untrusted", mode: NativeTrustWindowsLocalBeta, status: "NotTrusted"},
+		{name: "local beta unknown", mode: NativeTrustWindowsLocalBeta, status: "UnknownError"},
+		{name: "local beta unsupported", mode: NativeTrustWindowsLocalBeta, status: "NotSupported"},
+		{name: "empty", mode: NativeTrustWindowsLocalBeta, status: ""},
+		{name: "multiple lines", mode: NativeTrustWindowsLocalBeta, status: "NotSigned\nValid"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateAuthenticodeStatus([]byte(test.status), test.mode)
+			if test.ok && err != nil {
+				t.Fatalf("validateAuthenticodeStatus() error = %v", err)
+			}
+			if !test.ok && err == nil {
+				t.Fatal("validateAuthenticodeStatus() accepted an unsafe status")
+			}
+		})
+	}
+}
+
+func TestValidateNativeTrustPolicyRequiresExactWindowsLocalBetaPins(t *testing.T) {
+	digestA := strings.Repeat("a", 64)
+	digestB := strings.Repeat("b", 64)
+	base := Options{
+		TargetOS: "windows", TargetArch: "amd64", NativeTrustMode: NativeTrustWindowsLocalBeta,
+		LocalBetaPins: LocalBetaPins{
+			AuthorityRegistrySHA256: digestA, BootstrapperSHA256: digestB,
+			Issuer: "maestro-beta-local", KeyID: "beta-20260805",
+		},
+	}
+	verified := releaseverify.VerifiedRelease{Manifest: releasecontract.Manifest{
+		Release: "0.1.21", Channel: "canary",
+		Issuer: releasecontract.Issuer{ID: "maestro-beta-local", KeyID: "beta-20260805"},
+	}}
+	tests := []struct {
+		name          string
+		mutateOptions func(*Options)
+		mutateRelease func(*releaseverify.VerifiedRelease)
+		registry      string
+		bootstrapper  string
+		ok            bool
+	}{
+		{name: "exact", registry: digestA, bootstrapper: digestB, ok: true},
+		{name: "registry mismatch", registry: strings.Repeat("c", 64), bootstrapper: digestB},
+		{name: "bootstrapper mismatch", registry: digestA, bootstrapper: strings.Repeat("c", 64)},
+		{name: "non windows", registry: digestA, bootstrapper: digestB, mutateOptions: func(options *Options) { options.TargetOS = "darwin" }},
+		{name: "stable channel", registry: digestA, bootstrapper: digestB, mutateRelease: func(release *releaseverify.VerifiedRelease) { release.Manifest.Channel = "stable" }},
+		{name: "beta channel", registry: digestA, bootstrapper: digestB, mutateRelease: func(release *releaseverify.VerifiedRelease) { release.Manifest.Channel = "beta" }},
+		{name: "issuer mismatch", registry: digestA, bootstrapper: digestB, mutateRelease: func(release *releaseverify.VerifiedRelease) { release.Manifest.Issuer.ID = "other-beta" }},
+		{name: "key mismatch", registry: digestA, bootstrapper: digestB, mutateRelease: func(release *releaseverify.VerifiedRelease) { release.Manifest.Issuer.KeyID = "beta-other" }},
+		{name: "production identity", registry: digestA, bootstrapper: digestB, mutateOptions: func(options *Options) {
+			options.LocalBetaPins.Issuer = "maestro-production"
+			options.LocalBetaPins.KeyID = "release-20260805"
+		}, mutateRelease: func(release *releaseverify.VerifiedRelease) {
+			release.Manifest.Issuer.ID = "maestro-production"
+			release.Manifest.Issuer.KeyID = "release-20260805"
+		}},
+		{name: "partial pins", registry: digestA, bootstrapper: digestB, mutateOptions: func(options *Options) { options.LocalBetaPins.KeyID = "" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			options := base
+			release := verified
+			if test.mutateOptions != nil {
+				test.mutateOptions(&options)
+			}
+			if test.mutateRelease != nil {
+				test.mutateRelease(&release)
+			}
+			err := validateNativeTrustPolicy(options, release, test.registry, test.bootstrapper)
+			if test.ok && err != nil {
+				t.Fatalf("validateNativeTrustPolicy() error = %v", err)
+			}
+			if !test.ok && err == nil {
+				t.Fatal("validateNativeTrustPolicy() accepted an unsafe policy")
+			}
+		})
+	}
+
+	strictWithPins := base
+	strictWithPins.NativeTrustMode = NativeTrustStrict
+	if err := validateNativeTrustPolicy(strictWithPins, verified, digestA, digestB); err == nil {
+		t.Fatal("strict mode accepted local-beta pins")
+	}
+}
 
 func TestDefaultPathsKeepManagedAndOwnerDataSeparate(t *testing.T) {
 	tests := []struct {
@@ -177,6 +276,151 @@ func TestInstallDelegatesOnlyAfterFullSeedBinding(t *testing.T) {
 	}
 }
 
+func TestPrepareWindowsLocalBetaBindsPinsWithoutExecutingSourceSeedStatus(t *testing.T) {
+	fixture := newWindowsLocalBetaFixture(t)
+	seedStatusCalled := false
+	options := fixture.options(func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) == 1 && args[0] == "seed-status" {
+			seedStatusCalled = true
+		}
+		return nil, fmt.Errorf("source bootstrapper must not execute during local-beta prepare")
+	})
+	plan, _, err := Prepare(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seedStatusCalled {
+		t.Fatal("Prepare executed seed-status from an unsigned source bootstrapper")
+	}
+	if plan.NativeTrustMode != string(NativeTrustWindowsLocalBeta) ||
+		plan.RegistrySHA256 != fixture.registryDigest ||
+		plan.BootstrapperSHA256 != fixture.bootstrapperDigest ||
+		plan.ReleaseIssuer != fixture.issuer || plan.ReleaseKeyID != fixture.authorityKey ||
+		plan.BootstrapperVersion != "0.1.0" || plan.PlanDigest == "" {
+		t.Fatalf("local-beta plan did not bind governed trust inputs: %#v", plan)
+	}
+}
+
+func TestInstallWindowsLocalBetaRejectsBootstrapperChangedAfterPrepareBeforeExecution(t *testing.T) {
+	fixture := newWindowsLocalBetaFixture(t)
+	nativeChecks := 0
+	installCalled := false
+	options := fixture.options(func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "install" {
+			installCalled = true
+		}
+		return nil, fmt.Errorf("bootstrapper must not execute")
+	})
+	options.VerifyNative = func(_ context.Context, path string) error {
+		nativeChecks++
+		if nativeChecks == 1 {
+			return os.WriteFile(path, []byte("substituted unsigned bootstrapper"), 0o600)
+		}
+		return nil
+	}
+	_, err := Install(context.Background(), options)
+	if err == nil || !strings.Contains(err.Error(), "installed bootstrapper changed during staging") {
+		t.Fatalf("Install() error = %v, want staged bootstrapper digest rejection", err)
+	}
+	if installCalled {
+		t.Fatal("Install delegated to a substituted bootstrapper")
+	}
+}
+
+func TestInstallWindowsLocalBetaChecksCopiedSeedBeforeDelegation(t *testing.T) {
+	fixture := newWindowsLocalBetaFixture(t)
+	seedPath := ""
+	installCalled := false
+	run := func(_ context.Context, path string, args ...string) ([]byte, error) {
+		if len(args) == 1 && args[0] == "seed-status" {
+			seedPath = path
+			return []byte(fmt.Sprintf(`{"schema_version":1,"product":"maestro","bootstrapper_version":"0.1.0","authority_registry_sha256":"%s"}`, fixture.registryDigest)), nil
+		}
+		if len(args) > 0 && args[0] == "install" {
+			installCalled = true
+			if err := os.MkdirAll(filepath.Join(fixture.managedRoot, "bin"), 0o700); err != nil {
+				return nil, err
+			}
+			writeInstallerFile(t, filepath.Join(fixture.managedRoot, "bin", "bcgos.exe"), []byte("bcgos"))
+			if err := os.MkdirAll(filepath.Join(fixture.managedRoot, "bundles", "0.1.0"), 0o700); err != nil {
+				return nil, err
+			}
+			state := installtx.State{
+				SchemaVersion: 2, ManagedRoot: fixture.managedRoot, Release: "0.1.0", Channel: "canary",
+				CLIVersion: "0.1.0", BundleVersion: "0.1.0", TargetOS: "windows", TargetArch: "amd64",
+				ActivatedAt: time.Date(2026, 8, 2, 20, 0, 0, 0, time.UTC),
+			}
+			if err := installtx.WriteState(fixture.dataRoot, state); err != nil {
+				return nil, err
+			}
+			return []byte("installed"), nil
+		}
+		if filepath.Base(path) == "bcgos.exe" && len(args) == 1 && args[0] == "version" {
+			return []byte("bcgos 0.1.0\n"), nil
+		}
+		return nil, fmt.Errorf("unexpected command %s %v", path, args)
+	}
+	result, err := Install(context.Background(), fixture.options(run))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !installCalled || result.Disposition != "installed" {
+		t.Fatalf("local-beta installation was not delegated after checks: %#v", result)
+	}
+	wantSeedPath := filepath.Join(fixture.managedRoot, "bcgos-bootstrap.exe")
+	if seedPath != wantSeedPath {
+		t.Fatalf("seed-status path = %q, want copied bootstrapper %q", seedPath, wantSeedPath)
+	}
+}
+
+func TestInstallWindowsLocalBetaRejectsInvalidCopiedSeedBeforeDelegation(t *testing.T) {
+	fixture := newWindowsLocalBetaFixture(t)
+	installCalled := false
+	run := func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) == 1 && args[0] == "seed-status" {
+			return []byte(fmt.Sprintf(`{"schema_version":2,"product":"maestro","bootstrapper_version":"0.1.0","authority_registry_sha256":"%s"}`, fixture.registryDigest)), nil
+		}
+		if len(args) > 0 && args[0] == "install" {
+			installCalled = true
+		}
+		return nil, fmt.Errorf("must not delegate")
+	}
+	_, err := Install(context.Background(), fixture.options(run))
+	if err == nil || !strings.Contains(err.Error(), "installed bootstrapper seed binding changed") {
+		t.Fatalf("Install() error = %v, want copied seed rejection", err)
+	}
+	if installCalled {
+		t.Fatal("Install delegated after an invalid copied seed status")
+	}
+}
+
+func TestPrepareWindowsLocalBetaStillRequiresValidEd25519Release(t *testing.T) {
+	fixture := newWindowsLocalBetaFixture(t)
+	signaturePath := filepath.Join(fixture.releaseDir, "release-manifest.json.sig")
+	signature, err := os.ReadFile(signaturePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature[0] ^= 0xff
+	if err := os.WriteFile(signaturePath, signature, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	nativeCalled := false
+	options := fixture.options(func(context.Context, string, ...string) ([]byte, error) {
+		return nil, fmt.Errorf("must not run")
+	})
+	options.VerifyNative = func(context.Context, string) error {
+		nativeCalled = true
+		return nil
+	}
+	if _, _, err := Prepare(options); err == nil || !strings.Contains(err.Error(), "release manifest signature verification failed") {
+		t.Fatalf("Prepare() error = %v, want Ed25519 rejection", err)
+	}
+	if nativeCalled {
+		t.Fatal("native trust check ran before Ed25519 release rejection")
+	}
+}
+
 func TestInstallPreservesAHealthyExistingInstallation(t *testing.T) {
 	fixture := newInstallerRecoveryFixture(t)
 	writeCompleteInstalledFixture(t, fixture)
@@ -200,6 +444,23 @@ func TestInstallPreservesAHealthyExistingInstallation(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(fixture.managedRoot, "bin", "bcgos")); err != nil {
 		t.Fatalf("healthy CLI changed: %v", err)
+	}
+}
+
+func TestInstallDoesNotPreserveExistingInstallationWithBootstrapperDigestDrift(t *testing.T) {
+	fixture := newInstallerRecoveryFixture(t)
+	writeCompleteInstalledFixture(t, fixture)
+	writeInstallerFile(t, filepath.Join(fixture.managedRoot, "bcgos-bootstrap"), []byte("changed bootstrapper"))
+	installCalled := false
+	run := fixture.runner(t, func() error {
+		installCalled = true
+		return fmt.Errorf("stop after trust-driven recovery")
+	}, func() ([]byte, error) {
+		return []byte("bcgos 0.1.0\n"), nil
+	})
+	_, err := Install(context.Background(), fixture.options(run))
+	if err == nil || !installCalled {
+		t.Fatalf("Install() error = %v, installCalled=%t; digest-drifted installation was preserved", err, installCalled)
 	}
 }
 
@@ -321,6 +582,67 @@ type installerRecoveryFixture struct {
 	managedRoot, dataRoot, registryDigest  string
 }
 
+type windowsLocalBetaFixture struct {
+	releaseDir, bootstrapper, registryPath                   string
+	managedRoot, dataRoot                                    string
+	registryDigest, bootstrapperDigest, issuer, authorityKey string
+}
+
+func newWindowsLocalBetaFixture(t *testing.T) windowsLocalBetaFixture {
+	t.Helper()
+	root := t.TempDir()
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, keyID := "maestro-beta-local", "beta-20260805"
+	registryBody := []byte(fmt.Sprintf(`{"schema_version":1,"product":"maestro","authorities":[{"issuer":"%s","key_id":"%s","algorithm":"ed25519","public_key":"%s","status":"active","valid_from":"2026-01-01T00:00:00Z","valid_until":"2030-01-01T00:00:00Z"}]}`,
+		issuer, keyID, base64.StdEncoding.EncodeToString(privateKey.Public().(ed25519.PublicKey))))
+	registryPath := filepath.Join(root, "authority-registry.json")
+	writeInstallerFile(t, registryPath, registryBody)
+	registryDigest, err := fileSHA256(registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	releaseDir := filepath.Join(root, "release")
+	writeSignedReleaseFixtureFor(t, releaseDir, privateKey, signedReleaseFixtureOptions{
+		channel: "canary", issuer: issuer, keyID: keyID, targetOS: "windows", targetArch: "amd64",
+	})
+	bootstrapper := filepath.Join(root, "bcgos-bootstrap_0.1.0_windows_amd64.exe")
+	writeInstallerFile(t, bootstrapper, []byte("unsigned but package-pinned Windows bootstrapper"))
+	bootstrapperDigest, err := fileSHA256(bootstrapper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	managedRoot, err := canonicalInstallRoot(filepath.Join(root, "Maestro"), "managed root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataRoot, err := canonicalInstallRoot(filepath.Join(root, "BCGOS"), "owner-data root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return windowsLocalBetaFixture{
+		releaseDir: releaseDir, bootstrapper: bootstrapper, registryPath: registryPath,
+		managedRoot: managedRoot, dataRoot: dataRoot, registryDigest: registryDigest,
+		bootstrapperDigest: bootstrapperDigest, issuer: issuer, authorityKey: keyID,
+	}
+}
+
+func (fixture windowsLocalBetaFixture) options(run commandRunner) Options {
+	return Options{
+		ReleaseDir: fixture.releaseDir, Bootstrapper: fixture.bootstrapper,
+		AuthorityRegistry: fixture.registryPath, ManagedRoot: fixture.managedRoot, DataRoot: fixture.dataRoot,
+		TargetOS: "windows", TargetArch: "amd64", NativeTrustMode: NativeTrustWindowsLocalBeta,
+		LocalBetaPins: LocalBetaPins{
+			AuthorityRegistrySHA256: fixture.registryDigest, BootstrapperSHA256: fixture.bootstrapperDigest,
+			Issuer: fixture.issuer, KeyID: fixture.authorityKey,
+		},
+		Clock:        func() time.Time { return time.Date(2026, 8, 2, 20, 0, 0, 0, time.UTC) },
+		VerifyNative: func(context.Context, string) error { return nil }, Run: run,
+	}
+}
+
 func newInstallerRecoveryFixture(t *testing.T) installerRecoveryFixture {
 	t.Helper()
 	root := t.TempDir()
@@ -416,7 +738,11 @@ func writeCompleteInstalledFixture(t *testing.T, fixture installerRecoveryFixtur
 	t.Helper()
 	writeInstalledState(t, fixture.dataRoot, fixture.managedRoot)
 	writeInstallerFile(t, filepath.Join(fixture.managedRoot, "bin", "bcgos"), []byte("healthy"))
-	writeInstallerFile(t, filepath.Join(fixture.managedRoot, "bcgos-bootstrap"), []byte("bootstrapper"))
+	bootstrapper, err := os.ReadFile(fixture.bootstrapper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeInstallerFile(t, filepath.Join(fixture.managedRoot, "bcgos-bootstrap"), bootstrapper)
 	registry, err := os.ReadFile(fixture.registryPath)
 	if err != nil {
 		t.Fatal(err)
@@ -428,6 +754,16 @@ func writeCompleteInstalledFixture(t *testing.T, fixture installerRecoveryFixtur
 }
 
 func writeSignedReleaseFixture(t *testing.T, directory string, privateKey ed25519.PrivateKey) {
+	writeSignedReleaseFixtureFor(t, directory, privateKey, signedReleaseFixtureOptions{
+		channel: "canary", issuer: "release", keyID: "key-1", targetOS: "darwin", targetArch: "arm64",
+	})
+}
+
+type signedReleaseFixtureOptions struct {
+	channel, issuer, keyID, targetOS, targetArch string
+}
+
+func writeSignedReleaseFixtureFor(t *testing.T, directory string, privateKey ed25519.PrivateKey, options signedReleaseFixtureOptions) {
 	t.Helper()
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		t.Fatal(err)
@@ -436,7 +772,7 @@ func writeSignedReleaseFixture(t *testing.T, directory string, privateKey ed2551
 		kind, osName, arch, name string
 		body                     []byte
 	}{
-		{"cli", "darwin", "arm64", "bcgos_0.1.0_darwin_arm64", []byte("bcgos 0.1.0")},
+		{"cli", options.targetOS, options.targetArch, "bcgos_0.1.0_" + options.targetOS + "_" + options.targetArch + map[bool]string{true: ".exe", false: ""}[options.targetOS == "windows"], []byte("bcgos 0.1.0")},
 		{"bundle", "any", "any", "maestro-base_0.1.0.tar.gz", []byte("base bundle")},
 	}
 	notes := []byte("# Maestro 0.1.0\n")
@@ -451,8 +787,8 @@ func writeSignedReleaseFixture(t *testing.T, directory string, privateKey ed2551
 	}
 	noteDigest := sha256.Sum256(notes)
 	manifest := map[string]any{
-		"schema_version": 1, "product": "maestro", "release": "0.1.0", "channel": "canary",
-		"issuer":    map[string]string{"id": "release", "key_id": "key-1"},
+		"schema_version": 1, "product": "maestro", "release": "0.1.0", "channel": options.channel,
+		"issuer":    map[string]string{"id": options.issuer, "key_id": options.keyID},
 		"cli":       map[string]string{"version": "0.1.0", "compatible_bundle": ">=0.1.0 <0.2.0"},
 		"bundle":    map[string]string{"version": "0.1.0", "compatible_cli": ">=0.1.0 <0.2.0"},
 		"artifacts": manifestArtifacts, "migrations": []any{},

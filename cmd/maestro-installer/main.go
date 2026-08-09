@@ -1,6 +1,6 @@
 // Command maestro-installer is the visual, user-space entry point for a
-// signed release package. It never installs unsigned bytes; all trust-bearing
-// work is delegated to internal/installer and the seeded bootstrapper.
+// signed release package. Release content always remains Ed25519 verified;
+// native trust is either strict or a factory-pinned Windows Canary profile.
 package main
 
 import (
@@ -32,6 +32,16 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 )
 
+// These values are immutable package metadata. Release factories may replace
+// them with -ldflags; there is deliberately no runtime flag that weakens trust.
+var (
+	BuildTrustProfile                = "strict"
+	BuildLocalBetaIssuer             = ""
+	BuildLocalBetaKeyID              = ""
+	BuildLocalBetaRegistrySHA256     = ""
+	BuildLocalBetaBootstrapperSHA256 = ""
+)
+
 type options struct {
 	releaseDir            string
 	bootstrapper          string
@@ -58,6 +68,8 @@ type options struct {
 	configureWorkspace    func(options, string) (workspaceActivation, error)
 	commandRunner         commandRunner
 	workspaceFlow         workspaceFlowBackend
+	nativeTrustMode       installer.NativeTrustMode
+	localBetaPins         installer.LocalBetaPins
 }
 
 type runtimeTarget struct {
@@ -175,6 +187,16 @@ func (lifecycle *wizardLifecycle) waitDrained(ctx context.Context) error {
 
 func main() {
 	options := parseOptions()
+	mode, pins, err := resolveBuildTrustProfile(
+		BuildTrustProfile, BuildLocalBetaIssuer, BuildLocalBetaKeyID,
+		BuildLocalBetaRegistrySHA256, BuildLocalBetaBootstrapperSHA256,
+	)
+	if err != nil {
+		writeError(err)
+		os.Exit(2)
+	}
+	options.nativeTrustMode = mode
+	options.localBetaPins = pins
 	if options.preview {
 		if err := resolvePreviewDefaults(&options); err != nil {
 			writeError(err)
@@ -196,11 +218,7 @@ func main() {
 		os.Exit(2)
 	}
 	if options.headless {
-		result, err := installer.Install(context.Background(), installer.Options{
-			ReleaseDir: options.releaseDir, Bootstrapper: options.bootstrapper,
-			AuthorityRegistry: options.authorityRegistry, ManagedRoot: options.managedRoot,
-			DataRoot: options.dataRoot, TargetOS: runtime.GOOS, TargetArch: runtime.GOARCH,
-		})
+		result, err := installer.Install(context.Background(), installerOptions(options))
 		if err != nil {
 			writeError(err)
 			os.Exit(1)
@@ -213,6 +231,42 @@ func main() {
 		os.Exit(2)
 	}
 	serveWizard(options)
+}
+
+func resolveBuildTrustProfile(profile, issuer, keyID, registrySHA256, bootstrapperSHA256 string) (installer.NativeTrustMode, installer.LocalBetaPins, error) {
+	profile = strings.TrimSpace(profile)
+	if profile == "" {
+		profile = string(installer.NativeTrustStrict)
+	}
+	pins := installer.LocalBetaPins{
+		AuthorityRegistrySHA256: registrySHA256,
+		BootstrapperSHA256:      bootstrapperSHA256,
+		Issuer:                  issuer,
+		KeyID:                   keyID,
+	}
+	switch installer.NativeTrustMode(profile) {
+	case installer.NativeTrustStrict:
+		if issuer != "" || keyID != "" || registrySHA256 != "" || bootstrapperSHA256 != "" {
+			return "", installer.LocalBetaPins{}, errors.New("strict build trust profile must not carry local-beta pins")
+		}
+		return installer.NativeTrustStrict, installer.LocalBetaPins{}, nil
+	case installer.NativeTrustWindowsLocalBeta:
+		if strings.TrimSpace(issuer) == "" || strings.TrimSpace(keyID) == "" ||
+			!isCanonicalSHA256(registrySHA256) || !isCanonicalSHA256(bootstrapperSHA256) {
+			return "", installer.LocalBetaPins{}, errors.New("windows-local-beta build trust profile requires issuer, key ID and exact lowercase registry/bootstrapper SHA-256 pins")
+		}
+		return installer.NativeTrustWindowsLocalBeta, pins, nil
+	default:
+		return "", installer.LocalBetaPins{}, fmt.Errorf("unsupported build trust profile %q", profile)
+	}
+}
+
+func isCanonicalSHA256(value string) bool {
+	if len(value) != 64 || value != strings.ToLower(value) {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }
 
 func parseOptions() options {
@@ -387,6 +441,8 @@ func installerOptions(options options) installer.Options {
 		DataRoot:          options.dataRoot,
 		TargetOS:          runtime.GOOS,
 		TargetArch:        runtime.GOARCH,
+		NativeTrustMode:   options.nativeTrustMode,
+		LocalBetaPins:     options.localBetaPins,
 	}
 }
 
@@ -455,12 +511,19 @@ func wizardHandler(options options) http.Handler {
 			return
 		}
 		installedCLI := installedCLIPath(options)
+		trust := "pending"
+		if options.simulate {
+			trust = "simulation"
+		} else if options.nativeTrustMode == installer.NativeTrustWindowsLocalBeta {
+			trust = "windows_local_beta"
+		}
 		writeHTTPJSON(writer, map[string]any{
 			"platform": runtime.GOOS, "architecture": runtime.GOARCH,
 			"release_dir": options.releaseDir, "managed_root": options.managedRoot,
-			"data_root": options.dataRoot, "trust": map[bool]string{true: "simulation", false: "pending"}[options.simulate],
-			"mode":      map[bool]string{true: "simulation", false: "runtime"}[options.simulate],
-			"installed": installedCLI != "", "cli_path": installedCLI, "installed_version": installedReleaseVersion(options),
+			"data_root": options.dataRoot, "trust": trust,
+			"local_beta": options.nativeTrustMode == installer.NativeTrustWindowsLocalBeta,
+			"mode":       map[bool]string{true: "simulation", false: "runtime"}[options.simulate],
+			"installed":  installedCLI != "", "cli_path": installedCLI, "installed_version": installedReleaseVersion(options),
 			"runtimes":          availableRuntimeTargets(options),
 			"workspace_default": defaultWorkspaceFor(options),
 			"workspace_flow": map[string]any{
@@ -1395,6 +1458,10 @@ func initializeDefaultWorkspace(options options, workspacePath string) (workspac
 }
 
 func configureWorkspaceRuntime(options options, workspacePath string) (workspaceActivation, error) {
+	return configureWorkspaceRuntimeForPlatform(options, workspacePath, runtime.GOOS)
+}
+
+func configureWorkspaceRuntimeForPlatform(options options, workspacePath, platform string) (workspaceActivation, error) {
 	runtimeName, err := primaryRuntime(options)
 	if err != nil {
 		return workspaceActivation{}, err
@@ -1460,6 +1527,30 @@ func configureWorkspaceRuntime(options options, workspacePath string) (workspace
 	if _, err := run(adapterVerifyArguments); err != nil {
 		return workspaceActivation{}, err
 	}
+	lifecycle := lifecycleActivation{
+		Runtime:        runtimeName,
+		State:          "configured",
+		Events:         []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
+		StartSession:   "configured",
+		HookReview:     "owner_review_required",
+		NativeObserved: "unavailable_pending_first_session",
+	}
+	if platform == "windows" {
+		return workspaceActivation{
+			State:       "ready",
+			WorkspaceID: status.Workspace.WorkspaceID,
+			Lifecycle:   lifecycle,
+			Maintenance: maintenanceActivation{
+				State:          "unavailable_windows_native_qualification_pending",
+				Schedule:       "not_configured",
+				NativeObserved: false,
+				ModelBacked:    "unavailable",
+			},
+		}, nil
+	}
+	if platform != "darwin" {
+		return workspaceActivation{}, fmt.Errorf("a manutenção nativa ainda não é suportada em %s", platform)
+	}
 	maintenanceArguments := []string{"maintenance", "canary", "install-macos", "--workspace-path", workspacePath, "--executable", cliPath, "--confirm", "--launchctl"}
 	maintenanceOutput, err := run(maintenanceArguments)
 	if err != nil {
@@ -1487,14 +1578,7 @@ func configureWorkspaceRuntime(options options, workspacePath string) (workspace
 	return workspaceActivation{
 		State:       "ready",
 		WorkspaceID: status.Workspace.WorkspaceID,
-		Lifecycle: lifecycleActivation{
-			Runtime:        runtimeName,
-			State:          "configured",
-			Events:         []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
-			StartSession:   "configured",
-			HookReview:     "owner_review_required",
-			NativeObserved: "unavailable_pending_first_session",
-		},
+		Lifecycle:   lifecycle,
 		Maintenance: maintenanceActivation{
 			State:          maintenanceStatus.LaunchAgent.State,
 			Schedule:       "run_at_load_and_every_15_minutes",
