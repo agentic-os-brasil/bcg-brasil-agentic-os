@@ -9,6 +9,9 @@
   const firstCommand = document.querySelector('#first-command');
   const workspaceDefault = document.querySelector('#workspace-default');
   const commandHint = document.querySelector('#command-hint');
+  const runtimeReadyModal = document.querySelector('#runtime-ready-modal');
+  const runtimeReadyWorkspace = document.querySelector('#runtime-ready-workspace');
+  const runtimeReadyHint = document.querySelector('#runtime-ready-hint');
   const stageAnnouncement = document.querySelector('#stage-announcement');
   const intentMessage = document.querySelector('#intent-message');
   const intentSubcopy = document.querySelector('#intent-subcopy');
@@ -322,6 +325,10 @@
       handoff.scrollTop = 0;
       handoff.querySelector('h1')?.focus({ preventScroll: true });
     });
+    if (runtimeReadyWorkspace) runtimeReadyWorkspace.textContent = defaultWorkspace || '~/Developer/maestro-os';
+    window.setTimeout(() => {
+      if (runtime && runtimeReadyModal && !runtimeReadyModal.open) runtimeReadyModal.showModal();
+    }, reducedMotion ? 0 : 420);
   }
 
   function escapeHTML(value) {
@@ -733,6 +740,15 @@
     runtimeTargets = (Array.isArray(targets) ? targets : [])
       .slice()
       .sort((a, b) => Number(b.id === 'claude') - Number(a.id === 'claude'));
+    const modalClaude = runtimeReadyModal?.querySelector('[data-action="launch-runtime"][data-runtime="claude"]');
+    const claudeAvailable = runtimeTargets.some(target => target.id === 'claude');
+    if (modalClaude) {
+      modalClaude.disabled = runtime && !claudeAvailable;
+      modalClaude.setAttribute('aria-disabled', String(runtime && !claudeAvailable));
+    }
+    if (runtimeReadyHint) runtimeReadyHint.textContent = runtime && !claudeAvailable
+      ? 'Claude Code Desktop não foi detectado. Instale-o e reabra o instalador para continuar.'
+      : 'O prompt e o workspace serão enviados automaticamente.';
     actions.replaceChildren();
     if (!runtime) {
       copy.textContent = 'No instalador conectado, o Maestro abrirá o Claude Code Desktop no workspace certo.';
@@ -1058,6 +1074,7 @@
       if (!response.ok) throw new Error(payload.error || 'Não foi possível abrir o runtime.');
       const runtimeName = runtimeID === 'claude' ? 'Claude Code' : 'Codex no ChatGPT';
       showStatus(`${runtimeName} foi iniciado em ${payload.workspace_path}. O Maestro continua disponível no seu perfil.`);
+      if (runtimeReadyModal?.open) runtimeReadyModal.close();
     } catch (error) {
       showStatus(error.message);
     } finally {
@@ -1157,6 +1174,7 @@
       show('check', { focusHeading: false });
       document.querySelector('[data-action="verify"]').focus();
     }
+    if (action === 'close-runtime-ready') runtimeReadyModal?.close();
     if (action === 'verify') await verifyRelease();
     if (action === 'install') await installRelease();
     if (action === 'workspace-flow') await startWorkspaceFlow(event.target.closest('[data-flow-mode]')?.dataset.flowMode);

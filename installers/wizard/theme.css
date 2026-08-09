@@ -272,6 +272,20 @@ body:before{opacity:.16;background-size:72px 72px;mask-image:linear-gradient(90d
   .activation-summary{grid-template-columns:1fr}
 }
 
+.runtime-ready-modal{width:min(560px,calc(100vw - 32px));max-width:560px;padding:34px 36px 30px;text-align:center;overflow:hidden;background:radial-gradient(circle at 50% 0,rgba(49,224,181,.16),transparent 42%),linear-gradient(145deg,#082420,#061917 72%);border-color:rgba(49,224,181,.48);box-shadow:0 26px 90px rgba(0,0,0,.68),0 0 54px rgba(49,224,181,.12)}
+.runtime-ready-modal::backdrop{background:rgba(0,12,11,.78);backdrop-filter:blur(12px) saturate(.78)}
+.runtime-ready-mark{position:relative;display:grid;place-items:center;width:68px;height:68px;margin:0 auto 18px;border:1px solid rgba(49,224,181,.38);border-radius:50%;background:rgba(2,17,16,.76);box-shadow:0 0 32px rgba(49,224,181,.18)}
+.runtime-ready-mark span{position:relative;z-index:2;font-size:27px}.runtime-ready-mark i{position:absolute;inset:-7px;border:1px solid rgba(49,224,181,.24);border-radius:50%;border-left-color:transparent;animation:runtime-ready-orbit 7s linear infinite}
+.runtime-ready-modal h2{margin:12px 0 8px;font-size:34px}.runtime-ready-modal>p{max-width:46ch;margin:0 auto 20px;color:#a9c6c0}
+.runtime-ready-prompt,.runtime-ready-workspace{border:1px solid rgba(49,224,181,.18);background:rgba(2,20,18,.64);text-align:left}.runtime-ready-prompt{display:grid;gap:5px;padding:15px 17px}
+.runtime-ready-prompt span,.runtime-ready-workspace span{color:#79caba;font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em}.runtime-ready-prompt b{color:#edfff9;font:500 15px/1.35 Georgia,serif}.runtime-ready-prompt small{color:#829e98;font-size:11px;line-height:1.45}
+.runtime-ready-workspace{display:flex;align-items:center;gap:13px;margin-top:9px;padding:11px 15px}.runtime-ready-workspace code{min-width:0;overflow:hidden;color:var(--teal);font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.runtime-ready-launch{width:100%;justify-content:center;margin-top:18px}.runtime-ready-hint{display:block;margin-top:10px;color:#78928d;font-size:10px}.runtime-ready-later{margin-top:14px}
+.runtime-ready-modal[open]{animation:runtime-ready-in .5s cubic-bezier(.16,1,.3,1) both}.runtime-ready-modal[open] .runtime-ready-prompt{animation:runtime-ready-rise .45s .12s cubic-bezier(.16,1,.3,1) both}.runtime-ready-modal[open] .runtime-ready-launch{animation:runtime-ready-rise .45s .2s cubic-bezier(.16,1,.3,1) both}
+@keyframes runtime-ready-in{from{opacity:0;transform:translateY(18px) scale(.96);filter:blur(5px)}to{opacity:1;transform:none;filter:none}}@keyframes runtime-ready-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes runtime-ready-orbit{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.runtime-ready-modal[open],.runtime-ready-modal[open] .runtime-ready-prompt,.runtime-ready-modal[open] .runtime-ready-launch,.runtime-ready-mark i{animation:none}}
+@media(max-width:620px){.runtime-ready-modal{padding:28px 20px 23px}.runtime-ready-modal h2{font-size:29px}.runtime-ready-launch{font-size:12px}}
+
 /* Three-movement onboarding: explain, choose the route, then choose context. */
 .panel-welcome .intent-paths{display:none}
 .signal-track{display:none}

@@ -148,6 +148,41 @@ func TestClaudeCodeWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeLaunchLinkSupportsWindowsDesktopHandoff(t *testing.T) {
+	workspacePath := `C:\Users\pilot\Developer\maestro-os`
+	link, supported := claudeCodeLaunchLink("windows", workspacePath)
+	if !supported {
+		t.Fatal("Windows Claude Desktop handoff should be supported")
+	}
+	parsed, err := url.Parse(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Scheme != "claude" || parsed.Host != "code" || parsed.Query().Get("folder") != workspacePath || parsed.Query().Get("q") != maestroClaudeKickoffPrompt {
+		t.Fatalf("windows deep link = %q", link)
+	}
+	if _, supported := claudeCodeLaunchLink("linux", workspacePath); supported {
+		t.Fatal("unsupported platform unexpectedly received a Claude Desktop handoff")
+	}
+}
+
+func TestWindowsClaudeDesktopCandidatesIncludePerUserInstall(t *testing.T) {
+	candidates := windowsClaudeDesktopCandidates(`C:\Users\pilot\AppData\Local`, `C:\Program Files`, `C:\Program Files (x86)`)
+	want := filepath.Join(`C:\Users\pilot\AppData\Local`, "Programs", "Claude", "Claude.exe")
+	if !containsString(candidates, want) {
+		t.Fatalf("candidates = %q, want %q", candidates, want)
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "data")

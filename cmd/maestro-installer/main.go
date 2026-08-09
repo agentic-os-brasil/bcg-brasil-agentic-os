@@ -1293,7 +1293,7 @@ func runtimeIsAvailable(options options, runtimeID string) bool {
 }
 
 func runtimeAvailable(runtimeID string) bool {
-	if runtimeID == "claude" && runtime.GOOS == "darwin" {
+	if runtimeID == "claude" {
 		return claudeDesktopAvailable()
 	}
 	if _, ok := runtimeCLIPath(runtimeID); ok {
@@ -1311,20 +1311,60 @@ func runtimeAvailable(runtimeID string) bool {
 }
 
 func claudeDesktopAvailable() bool {
-	return claudeDesktopPath() != ""
+	if claudeDesktopPath() != "" {
+		return true
+	}
+	return runtime.GOOS == "windows" && windowsProtocolRegistered("claude")
 }
 
 func claudeDesktopPath() string {
-	if runtime.GOOS != "darwin" {
-		return ""
-	}
-	for _, root := range []string{"/Applications", filepath.Join(os.Getenv("HOME"), "Applications")} {
-		path := filepath.Join(root, "Claude.app")
-		if info, err := os.Stat(path); err == nil && info.IsDir() {
-			return path
+	switch runtime.GOOS {
+	case "darwin":
+		for _, root := range []string{"/Applications", filepath.Join(os.Getenv("HOME"), "Applications")} {
+			path := filepath.Join(root, "Claude.app")
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				return path
+			}
+		}
+	case "windows":
+		for _, path := range windowsClaudeDesktopCandidates(os.Getenv("LOCALAPPDATA"), os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)")) {
+			if info, err := os.Stat(path); err == nil && !info.IsDir() {
+				return path
+			}
 		}
 	}
 	return ""
+}
+
+func windowsClaudeDesktopCandidates(localAppData, programFiles, programFilesX86 string) []string {
+	roots := []string{localAppData, programFiles, programFilesX86}
+	candidates := make([]string, 0, len(roots)*2)
+	for _, root := range roots {
+		if strings.TrimSpace(root) == "" {
+			continue
+		}
+		candidates = append(candidates,
+			filepath.Join(root, "Programs", "Claude", "Claude.exe"),
+			filepath.Join(root, "Claude", "Claude.exe"),
+		)
+	}
+	return candidates
+}
+
+func windowsProtocolRegistered(scheme string) bool {
+	if runtime.GOOS != "windows" || strings.TrimSpace(scheme) == "" {
+		return false
+	}
+	for _, key := range []string{
+		`HKCU\Software\Classes\` + scheme + `\shell\open\command`,
+		`HKLM\Software\Classes\` + scheme + `\shell\open\command`,
+	} {
+		output, err := exec.Command("reg.exe", "query", key).Output()
+		if err == nil && strings.TrimSpace(string(output)) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func runtimeCLIPath(runtimeID string) (string, bool) {
@@ -1664,14 +1704,21 @@ func launchRuntime(runtimeID, workspacePath string) error {
 	if !runtimeAvailable(runtimeID) {
 		return fmt.Errorf("%s não está instalado", runtimeID)
 	}
-	if runtime.GOOS == "darwin" && runtimeID == "claude" {
-		link := claudeCodeWorkspaceLink(workspacePath)
-		if app := claudeDesktopPath(); app != "" {
-			// Passing the deep link to the explicit app bundle both opens the
-			// correct workspace and asks macOS to activate Claude in front of
-			// the installer window.
-			return exec.Command("open", "-a", app, link).Start()
+	if runtimeID == "claude" {
+		link, supported := claudeCodeLaunchLink(runtime.GOOS, workspacePath)
+		if !supported {
+			return fmt.Errorf("o Claude Code Desktop ainda não possui launcher suportado neste sistema")
 		}
+		if runtime.GOOS == "darwin" {
+			if app := claudeDesktopPath(); app != "" {
+				// Passing the deep link to the explicit app bundle both opens the
+				// correct workspace and asks macOS to activate Claude in front of
+				// the installer window.
+				return exec.Command("open", "-a", app, link).Start()
+			}
+		}
+		// On Windows the registered claude:// protocol is the desktop handoff;
+		// it keeps the prepared workspace and onboarding prompt together.
 		return openPath(link)
 	}
 	if runtime.GOOS == "darwin" && runtimeID == "codex" && chatGPTAppAvailable() {
@@ -1690,6 +1737,13 @@ func launchRuntime(runtimeID, workspacePath string) error {
 		return fmt.Errorf("%s não tem um launcher local", runtimeID)
 	}
 	return openCLIInWorkspace(cliPath, workspacePath)
+}
+
+func claudeCodeLaunchLink(platform, workspacePath string) (string, bool) {
+	if platform != "darwin" && platform != "windows" {
+		return "", false
+	}
+	return claudeCodeWorkspaceLink(workspacePath), true
 }
 
 func claudeCodeWorkspaceLink(workspacePath string) string {
