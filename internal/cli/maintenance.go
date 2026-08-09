@@ -389,7 +389,10 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 	if enrollmentErr == nil && !homeProvided {
 		*home = enrollment.Home
 	}
-	lifecycle.Native = *launchctlRequested
+	// A native enrollment is the durable record of the owner's prior opt-in.
+	// Status may therefore inspect launchctl read-only without another flag;
+	// lifecycle mutations still require the explicit --launchctl authority.
+	lifecycle.Native = shouldObserveNativeEnrollment(action, *launchctlRequested, enrollment, enrollmentErr, *home, currentHome)
 	fileStatus, fileErr := macosadapter.ReadStatus(*home, canaryLaunchAgentLabel)
 	if fileErr != nil {
 		return reportError(errOut, fileErr)
@@ -691,10 +694,10 @@ func maintenanceStatus(catalog maintenance.Catalog) map[string]any {
 		result["lifecycle_status"] = map[string]any{"state": "current_user_unavailable", "native_qualified": false}
 		return result
 	}
-	// The aggregate status command is read-only and filesystem-only. Native
-	// launchctl inspection is available solely through the explicit
-	// `maintenance canary status --launchctl` surface.
-	lifecycle := macosadapter.Lifecycle{Runner: macosadapter.ExecCommandRunner{}, UID: uid, CurrentHome: currentHome, Timeout: 15 * time.Second, Native: false}
+	// Native enrollment already records attended opt-in. Aggregate status may
+	// inspect that service read-only so it does not misreport a loaded scheduler
+	// as pending merely because the caller omitted an implementation flag.
+	lifecycle := macosadapter.Lifecycle{Runner: macosadapter.ExecCommandRunner{}, UID: uid, CurrentHome: currentHome, Timeout: 15 * time.Second, Native: enrollment.Mode == "native" && samePathCLI(enrollment.Home, currentHome)}
 	if _, executableErr := macosadapter.ResolveExecutable(enrollment.Executable); executableErr != nil {
 		result["lifecycle_status"] = map[string]any{"state": "executable_binding_invalid", "native_qualified": false}
 		return result
@@ -711,6 +714,13 @@ func maintenanceStatus(catalog maintenance.Catalog) map[string]any {
 	}
 	result["maintenance"] = maintenanceRuntimeStatus(root, catalog, enrollment)
 	return result
+}
+
+func shouldObserveNativeEnrollment(action string, requested bool, enrollment maintenance.CanaryEnrollment, enrollmentErr error, home, currentHome string) bool {
+	if requested {
+		return true
+	}
+	return action == "status" && enrollmentErr == nil && enrollment.Mode == "native" && samePathCLI(enrollment.Home, home) && samePathCLI(home, currentHome)
 }
 
 func schedulerJobsForTrigger(trigger string) []scheduler.Job {

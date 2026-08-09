@@ -3,6 +3,7 @@
 package workspace
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,9 +13,12 @@ import (
 	"os"
 	pathpkg "path"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
 var ErrSynchronizedWorkspace = errors.New("workspace appears to be inside a synchronized directory")
@@ -48,6 +52,14 @@ type manifest struct {
 	SchemaVersion int    `json:"schema_version"`
 	WorkspaceID   string `json:"workspace_id"`
 }
+
+type binding struct {
+	SchemaVersion int    `json:"schema_version"`
+	WorkspaceID   string `json:"workspace_id"`
+	WorkspacePath string `json:"workspace_path"`
+}
+
+var workspaceIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 const rootReadme = `# Maestro workspace
 
@@ -195,8 +207,48 @@ func Initialize(options Options) (Result, error) {
 	if err := ensureVisibleSurface(workspacePath); err != nil {
 		return Result{}, err
 	}
+	if err := ensureBinding(dataRoot, binding{SchemaVersion: 1, WorkspaceID: id, WorkspacePath: workspacePath}); err != nil {
+		return Result{}, fmt.Errorf("bind workspace ID to its initialized path: %w", err)
+	}
 
 	return Result{State: "initialized", WorkspacePath: workspacePath, WorkspaceID: id, DataRoot: dataRoot, Synchronized: synchronized, ExistingWorkspace: existing}, nil
+}
+
+// ResolveReference accepts either a filesystem path or an opaque workspace ID.
+// ID resolution is intentionally registry-backed: it never searches the user's
+// filesystem, and it revalidates the path-bound workspace manifest before use.
+func ResolveReference(reference, dataRoot string) (string, error) {
+	if !workspaceIDPattern.MatchString(reference) {
+		return reference, nil
+	}
+	absoluteDataRoot, err := canonicalBindingRoot(dataRoot)
+	if err != nil {
+		return "", err
+	}
+	if err := validateBindingTree(absoluteDataRoot, reference); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", errors.New("workspace ID is not registered on this device; run bcgos init <workspace-path> once to bind it")
+		}
+		return "", fmt.Errorf("workspace ID binding cannot be trusted: %w", err)
+	}
+	value, err := readBinding(filepath.Join(absoluteDataRoot, "workspaces", reference, "binding.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", errors.New("workspace ID is not registered on this device; run bcgos init <workspace-path> once to bind it")
+	}
+	if err != nil {
+		return "", fmt.Errorf("workspace ID binding cannot be trusted: %w", err)
+	}
+	if value.WorkspaceID != reference || workspaceID(value.WorkspacePath) != reference {
+		return "", errors.New("workspace ID binding does not match its registered path")
+	}
+	inspection, err := Inspect(value.WorkspacePath, absoluteDataRoot)
+	if err != nil {
+		return "", err
+	}
+	if inspection.WorkspaceID != reference || inspection.MetadataStatus != "valid" {
+		return "", errors.New("workspace ID binding no longer points to a valid initialized workspace")
+	}
+	return inspection.WorkspacePath, nil
 }
 
 func Inspect(workspacePath, dataRoot string) (Inspection, error) {
@@ -369,6 +421,12 @@ func writeManifest(path string, value manifest) error {
 	if err != nil {
 		return err
 	}
+	complete := false
+	defer func() {
+		if !complete {
+			_ = os.Remove(path)
+		}
+	}()
 	encoder := json.NewEncoder(file)
 	if err := encoder.Encode(value); err != nil {
 		_ = file.Close()
@@ -378,5 +436,105 @@ func writeManifest(path string, value manifest) error {
 		_ = file.Close()
 		return err
 	}
-	return file.Close()
+	if err := file.Close(); err != nil {
+		return err
+	}
+	complete = true
+	return nil
+}
+
+func ensureBinding(dataRoot string, value binding) error {
+	dataRoot, err := canonicalBindingRoot(dataRoot)
+	if err != nil {
+		return err
+	}
+	directory := filepath.Join(dataRoot, "workspaces", value.WorkspaceID)
+	for _, privateDirectory := range []string{dataRoot, filepath.Join(dataRoot, "workspaces"), directory} {
+		if err := scheduler.EnsurePrivateDirectory(privateDirectory); err != nil {
+			return err
+		}
+	}
+	path := filepath.Join(directory, "binding.json")
+	existing, err := readBinding(path)
+	if err == nil {
+		if existing != value {
+			return errors.New("an existing workspace ID binding points somewhere else")
+		}
+		return nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	body, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	body = append(body, '\n')
+	return scheduler.WriteNewPrivateFile(path, body)
+}
+
+func readBinding(path string) (binding, error) {
+	body, err := scheduler.ReadPrivateFile(path, 64<<10)
+	if err != nil {
+		return binding{}, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	var value binding
+	if err := decoder.Decode(&value); err != nil {
+		return binding{}, err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return binding{}, errors.New("workspace binding contains trailing data")
+	}
+	if value.SchemaVersion != 1 || !workspaceIDPattern.MatchString(value.WorkspaceID) || !filepath.IsAbs(value.WorkspacePath) || workspaceID(value.WorkspacePath) != value.WorkspaceID {
+		return binding{}, errors.New("workspace binding is invalid")
+	}
+	return value, nil
+}
+
+func validateBindingTree(dataRoot, workspaceID string) error {
+	for _, directory := range []string{dataRoot, filepath.Join(dataRoot, "workspaces"), filepath.Join(dataRoot, "workspaces", workspaceID)} {
+		if err := scheduler.ValidatePrivateDirectory(directory); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func canonicalBindingRoot(path string) (string, error) {
+	absolute, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(absolute)
+	if err != nil {
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return "", errors.New("BCGOS data root must be a non-symlink directory")
+	}
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", err
+	}
+	if filepath.Clean(resolved) == filepath.Clean(absolute) {
+		return absolute, nil
+	}
+	// macOS exposes /var and /tmp as fixed system aliases into /private. Test
+	// and temporary roots legitimately use those aliases; no other symlinked
+	// ancestor is accepted as authority for workspace bindings.
+	if runtime.GOOS == "darwin" {
+		for _, alias := range []string{"/var", "/tmp"} {
+			privateAlias := filepath.Join("/private", strings.TrimPrefix(alias, "/"))
+			if sameOrNested(alias, absolute) && sameOrNested(privateAlias, resolved) {
+				relative, relErr := filepath.Rel(alias, absolute)
+				if relErr == nil && filepath.Clean(resolved) == filepath.Clean(filepath.Join(privateAlias, relative)) {
+					return resolved, nil
+				}
+			}
+		}
+	}
+	return "", errors.New("BCGOS data root cannot traverse symlinked ancestors")
 }

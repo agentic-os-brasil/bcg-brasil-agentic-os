@@ -32,6 +32,26 @@ func TestGuidedIdentityAndDigestBoundProfileReview(t *testing.T) {
 	}
 }
 
+func TestGuidedIdentityAcceptsCanonicalManagedAgentID(t *testing.T) {
+	root := t.TempDir()
+	profile := Profile{SchemaVersion: SchemaVersion, OwnerID: "daniel", Confirmed: true, UpdatedAt: time.Now().UTC(), Selections: []Selection{{Role: "maestro", AgentID: "maestro", DisplayName: "Maestro", Emoji: "🎼", OwnerID: "daniel", OwnershipScope: "system"}}}
+	draft, err := DraftProfile(root, profile, true, true)
+	if err != nil {
+		t.Fatalf("canonical managed agent ID was rejected: %v", err)
+	}
+	if draft.Profile.Selections[0].AgentID != "maestro" {
+		t.Fatalf("managed identity lost its canonical agent ID: %#v", draft.Profile.Selections[0])
+	}
+}
+
+func TestGuidedIdentityRejectsMismatchedManagedAgentID(t *testing.T) {
+	root := t.TempDir()
+	profile := Profile{SchemaVersion: SchemaVersion, OwnerID: "daniel", Confirmed: true, UpdatedAt: time.Now().UTC(), Selections: []Selection{{Role: "maestro", AgentID: "other", DisplayName: "Maestro", Emoji: "🎼", OwnerID: "daniel", OwnershipScope: "system"}}}
+	if _, err := DraftProfile(root, profile, true, true); err == nil {
+		t.Fatal("mismatched managed agent ID was accepted as the Maestro answer")
+	}
+}
+
 func TestConcurrentIdentityDraftCreationAllowsExactlyOneOpenDraft(t *testing.T) {
 	root := t.TempDir()
 	profile := Profile{SchemaVersion: SchemaVersion, OwnerID: "daniel", Confirmed: true, UpdatedAt: time.Now().UTC(), Selections: []Selection{{Role: "maestro", DisplayName: "Maestro", Emoji: "🎼", OwnerID: "daniel", OwnershipScope: "system"}}}

@@ -36,7 +36,7 @@ client name, path or generated output enters the continuous-use projection.
 
 ## Projection contract
 
-`bcgos maestro status [workspace]` returns one versioned projection containing:
+`bcgos maestro status [workspace-path-or-id]` returns one versioned projection containing:
 
 - calibration state and track, with one deterministic next action;
 - open-work state: `available`, `unavailable` or `ambiguous`, plus only the

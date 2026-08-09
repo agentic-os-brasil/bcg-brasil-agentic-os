@@ -141,13 +141,25 @@ func draftProfileLocked(root string, profile Profile, consent, noClientData bool
 }
 
 func profileSelection(profile Profile, role string) (Selection, bool) {
+	role = CanonicalRole(role)
+	managedID := managedAgentID(role)
 	for _, selection := range profile.Selections {
-		if CanonicalRole(selection.Role) == role && selection.AgentID == "" {
+		if CanonicalRole(selection.Role) == role && (selection.AgentID == "" || managedID != "" && selection.AgentID == managedID) {
 			selection.Role = CanonicalRole(selection.Role)
 			return selection, true
 		}
 	}
 	return Selection{}, false
+}
+
+func managedAgentID(role string) string {
+	role = CanonicalRole(role)
+	for _, target := range managedTargets {
+		if target.Role == role {
+			return target.AgentID
+		}
+	}
+	return ""
 }
 
 func ReviewProfileDraft(root, id string) (ProfileDraft, error) {

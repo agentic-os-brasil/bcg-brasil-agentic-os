@@ -193,9 +193,9 @@ Depois de confirmar o caminho:
 
 ```text
 bcgos init <workspace>
-bcgos status <workspace>
-bcgos doctor <workspace>
-bcgos maestro status <workspace>
+bcgos status <workspace-path-or-id>
+bcgos doctor <workspace-path-or-id>
+bcgos maestro status <workspace-path-or-id>
 ```
 
 O `init` deve ser idempotente: executar novamente não pode apagar ou substituir
@@ -412,7 +412,7 @@ Exemplo mínimo para uma entrega em arquivo:
 ```
 
 Ao abrir uma nova sessão, o Maestro apresenta a mesma projeção de
-`bcgos maestro status <workspace>`. Se houver um único trabalho ativo, ele
+`bcgos maestro status <workspace-path-or-id>`. Se houver um único trabalho ativo, ele
 mostra apenas `bcgos://execution/active`, o estado e se existe checkpoint. Para
 ler a próxima ação privada, resolva o ponteiro explicitamente:
 
