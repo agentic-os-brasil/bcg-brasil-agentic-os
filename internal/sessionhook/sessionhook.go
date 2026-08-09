@@ -245,6 +245,15 @@ func sessionDirective(packet sessionctx.Packet) string {
 		)
 	case "complete":
 		lines = append(lines, "Maestro is active in this workspace. Briefly state that at the start of the session.")
+		setupActive := packet.SetupAuthorization.State == "active"
+		if !setupActive {
+			lines = append(lines,
+				"ONE-AND-DONE SETUP AUTHORIZATION IS REQUIRED. Ask one plain-language question covering local, allowlisted, idempotent and reversible preparation, diagnostics, repair, retry and recovery for this workspace. State that external, privileged, destructive, secret-bearing and cross-tenant actions remain outside the grant.",
+				"After the owner agrees once, run "+commandFor(packet, "bcgos setup authorize --workspace <workspace> --confirm")+" silently. Do not ask separate permission for init, status, doctor, adapter setup, verification or reversible repair. If the owner declines, continue with already-ready capabilities and do not nag.",
+			)
+		} else {
+			lines = append(lines, "One-and-done setup authorization is active. Diagnose, retry, repair and resume allowlisted local setup silently; show concise progress and one outcome summary, never command-by-command permission prompts.")
+		}
 		switch packet.Owner.OpenTasks.State {
 		case "available":
 			lines = append(lines, fmt.Sprintf("Open tasks: %d explicitly registered item(s). Their titles are not injected automatically; open the owner-local work state only when the owner asks.", packet.Owner.OpenTasks.Count))
@@ -261,14 +270,18 @@ func sessionDirective(packet sessionctx.Packet) string {
 		case priorwork.SourceSelectionRequired:
 			lines = append(lines,
 				"GUIDED SHAREPOINT SETUP IS PENDING. Before proposing the first project task, ask only: ‘Você quer indicar as pastas autorizadas do SharePoint deste projeto agora ou prefere começar sem essa fonte?’ Then wait.",
-				"If the owner chooses folders, use the managed Maestro onboarding route to review and record only exact canonical folder pointers. Do not discover broadly or read anything before the separate explicit rationale-ingestion authorization. If the owner defers, record that choice and do not ask again automatically.",
+				"If the owner chooses folders, use the managed Maestro onboarding route to review and record only exact canonical folder pointers. Do not discover broadly or read anything before the single bounded setup authorization is active. If the owner defers, record that choice and do not ask again automatically.",
 			)
 		case priorwork.SourceSelected:
 			lines = append(lines,
 				fmt.Sprintf("A confirmed exact SharePoint folder selection exists for this workspace (%d folder(s)); the URLs remain behind the private local pointer and are not injected here.", packet.SharePointSource.FolderCount),
-				"The selection itself does not authorize a read. Before the first project task, ask whether the owner authorizes a bounded pass over the most recent materials: ‘Posso ler os materiais mais recentes dessas pastas e criar racionais internos rastreáveis no workspace?’ Explain that the pass creates derived racionais under brain/knowledge/sharepoint-rationales, preserves the SharePoint link and modification date on each one, and never copies raw document bodies.",
-				"Only Claude may collect after signed enrollment and native qualification; Codex collection is unavailable/corporate_policy and no fallback is allowed. If authorized and available, use "+commandFor(packet, "bcgos prior-work rationale ingest --workspace <workspace> --stdin --confirm")+". Newest source modifications are materialized first with a stable item-reference tie-breaker. SharePoint remains authoritative.",
+				"If signed Claude enrollment or native collection is unavailable, keep Maestro useful, report one consolidated external action pending, and continue unrelated local work. Codex collection remains unavailable/corporate_policy. Release/update authorization is a separate capability and must never be presented as the SharePoint trust anchor. SharePoint remains authoritative and raw document bodies are never copied.",
 			)
+			if setupActive {
+				lines = append(lines, "The active one-and-done setup authorization covers the bounded derived projection for this unchanged selection. Do not ask for another read, command, status or diagnostic confirmation; resume the bounded collection automatically when its real enrollment and runtime dependencies are available.")
+			} else {
+				lines = append(lines, "Do not ask a separate SharePoint-read question. The single setup authorization above is the only local authorization request and will cover the bounded projection for this exact selected-source fingerprint.")
+			}
 		case priorwork.SourceDeferred:
 			lines = append(lines, "Guided SharePoint source setup was deferred by the owner. Do not ask again automatically; offer it only when the owner requests prior-work or project-source setup.")
 		case priorwork.SourceSelectionUnavailable:

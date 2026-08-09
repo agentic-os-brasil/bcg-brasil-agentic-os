@@ -329,10 +329,10 @@ bcgos prior-work source defer --workspace <workspace> --confirm
 ```
 
 Essa primeira etapa registra somente ponteiros exatos em armazenamento privado
-local; selecionar não é o mesmo que autorizar leitura. Em seguida, o Maestro
-pergunta explicitamente se pode ler os materiais mais recentes dessas pastas e
-criar racionais internos rastreáveis. Com essa autorização, um coletor Claude
-qualificado lê apenas o escopo aprovado e envia um lote assinado para:
+local. Com um passe one-and-done ativo, a seleção vincula o fingerprint exato a
+esse passe e o Maestro não pergunta novamente por comando, diagnóstico ou
+leitura do mesmo escopo. Um coletor Claude qualificado lê apenas o escopo
+aprovado e envia um lote assinado para:
 
 ```text
 bcgos prior-work rationale ingest --workspace <workspace> --stdin --confirm

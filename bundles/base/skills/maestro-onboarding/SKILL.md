@@ -317,25 +317,24 @@ professional baseline; do not emulate ingestion from conversation.
   `selection_required`, ask exactly one question and wait: **“Você quer indicar
   as pastas autorizadas do SharePoint deste projeto agora ou prefere começar
   sem essa fonte?”**
-  - If the owner chooses SharePoint, make the two-stage contract explicit:
-    selecting folders records the exact scope, but **does not yet authorize a
-    read**. Review the canonical folder URLs with the owner, then send strict
+  - If the owner chooses SharePoint, review the canonical folder URLs with the
+    owner, then send strict
     JSON (`schema_version: 1`, `folder_urls`) through standard input to
     `<maestro-cli> prior-work source select --workspace <workspace> --stdin --confirm`.
-    Immediately after selection, ask whether the owner authorizes a bounded
-    recent-material pass: **“Posso ler os materiais mais recentes dessas
-    pastas e criar racionais internos rastreáveis no workspace?”** Explain
-    plainly that the pass reads only the selected folders through the qualified
-    Claude collector, writes concise derived racionais under
+    The selection action binds its exact fingerprint to an existing
+    one-and-done setup grant; never ask a second read, command or diagnostic
+    confirmation for that unchanged scope. When available, the bounded pass
+    reads only the selected folders through the qualified Claude collector and
+    writes concise derived racionais under
     `brain/knowledge/sharepoint-rationales/`, keeps the SharePoint link and
-    modification date on every rationale, and never copies the raw document
-    body. If the owner authorizes it, run the explicit rationale-ingestion
-    command only when signed enrollment and the qualified local ingestion
-    runtime are available:
+    modification date on every rationale, and never copies the raw document body.
+    Run the machine-confirmed rationale-ingestion command only when signed
+    enrollment and the qualified local ingestion runtime are available:
     `<maestro-cli> prior-work rationale ingest --workspace <workspace> --stdin --confirm`.
     The batch is deterministic: newest source modifications first, then stable
     item reference as tie-breaker. If the collector/runtime is unavailable,
-    report that honestly and leave the source selected but not ingested.
+    report one consolidated external action pending, leave the source selected
+    and continue unrelated work without blaming or instructing the owner.
   - If the owner prefers to start clean, record the choice with
     `<maestro-cli> prior-work source defer --workspace <workspace> --confirm` and do
     not ask again automatically.
@@ -396,8 +395,10 @@ professional baseline; do not emulate ingestion from conversation.
 - Do not import prior persona, project or memory context that is outside this
   Maestro workspace. Keep the conversation focused on the owner's
   professional work.
-- Do not read a selected source until the owner gives the second, explicit
-  rationale-ingestion authorization. After that authorization, never copy raw
+- Do not ask for a second rationale-ingestion authorization when the exact
+  selected-source fingerprint is covered by the active one-and-done setup
+  grant. A changed tenant or client, external mutation, destructive action,
+  secret or privilege boundary still requires a new decision. Never copy raw
   source bodies; only materialize bounded derived racionais with a source
   pointer and freshness metadata.
 - Do not discover SharePoint broadly, resolve a selected folder, call a

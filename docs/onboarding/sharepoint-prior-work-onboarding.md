@@ -88,13 +88,15 @@ Start.
 
 Essa escolha não substitui a matrícula das seções seguintes. O owner informa a
 intenção e o escopo exato; a autoridade aprovada ainda precisa resolver os
-ponteiros em roots opacos e assinar o enrollment. Depois da seleção, existe um
-segundo consentimento: autorizar a leitura limitada dos materiais mais recentes
-para gerar racionais derivados no workspace. Cada racional preserva o ponteiro
+ponteiros em roots opacos e assinar o enrollment. Quando existe um passe COFS
+one-and-done ativo, a seleção vincula seu fingerprint exato ao passe e não há
+uma segunda pergunta técnica ou de leitura para o mesmo escopo. Cada racional preserva o ponteiro
 SharePoint e a data da fonte; nenhum corpo bruto é armazenado localmente. A
 ordenação é determinística (mais recente primeiro, depois `item_ref`). Até que
 o enrollment assinado, o coletor Claude qualificado e o runtime local estejam
 disponíveis, collection continua `unavailable` e o workspace não é alterado.
+Essa indisponibilidade é uma ação externa pendente e não bloqueia o restante do
+Maestro. `private_release_auth` pertence somente à distribuição e atualização.
 
 ## 3. Arquitetura e separação de responsabilidades
 

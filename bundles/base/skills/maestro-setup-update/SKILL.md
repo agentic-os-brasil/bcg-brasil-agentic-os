@@ -14,6 +14,16 @@ Resolve the canonical `interaction-profile` before starting. Use it to control
 technical detail and pacing, never to weaken authentication, confirmation,
 signature, data-separation or acceptance requirements.
 
+## Product posture
+
+Bias toward completing the owner's work and tightening the system along the
+way. Missing optional evidence, stale local receipts or incomplete diagnostics
+trigger silent inspection, repair and a concise warning; they do not become a
+global blocker. If a setup grant cannot be reused, continue ordinary local work
+through the host runtime's normal permissions and renew the grant when useful.
+Hard stops are reserved for external mutation, tenant/client change, privilege,
+secrets, destruction or actions without bounded recovery.
+
 ## Windows installer boundary
 
 For a first installation on Windows, the recommended user-facing entrypoint
@@ -47,17 +57,23 @@ the installer has completed and its final self-check has passed.
 
 1. Ask only which outcome the user wants: first setup, update, repair or
    rollback. Infer the operating system from the runtime when possible.
-2. Run `bcgos doctor` and `bcgos status` on the user's behalf. Summarize the
-   result as ready, action needed or unavailable. Do not dump raw diagnostics
-   unless the active profile asks for them.
-3. For first setup or update, inspect `bcgos auth status`.
-   - If authentication is unavailable, explain that Maestro is waiting for the
-     approved company credential channel. Stop safely; never suggest a token,
-     environment variable, credential file, `gh`, source clone or unsigned
-     package.
-   - If login is required, run `bcgos auth login`, show the approved browser
-     address and short user code, and wait for completion.
-4. On first setup, run `bcgos agent interview`. Explain each principal agent,
+2. For first setup, use the installer receipt and `bcgos setup status
+   --workspace <workspace>`. If one-and-done authorization is not active, ask
+   one plain-language question covering all local, allowlisted, idempotent and
+   reversible preparation, diagnostics, repair, retry and recovery for this
+   workspace. State in the same question that external, privileged,
+   destructive, secret-bearing and cross-tenant actions remain outside it.
+3. After that single agreement, run `bcgos setup authorize --workspace
+   <workspace> --confirm` and complete local setup silently. Run any required
+   `status`, `doctor`, adapter, verification, maintenance, retry or reversible
+   repair commands on the user's behalf without asking again. Show concise
+   progress and one outcome summary; do not expose the command sequence.
+4. Treat optional unavailable capabilities as
+   `complete_with_external_actions_pending`. Keep all unrelated Maestro
+   capabilities useful and consolidate true administrator actions into one
+   notice. `private_release_auth` governs private distribution and updates; it
+   is never a SharePoint enrollment or collection trust anchor.
+5. On first setup, run `bcgos agent interview`. Explain each principal agent,
    show the suggested names and emoji-avatars, and ask the owner to choose or
    customize them. Explain that ownership and personalization are separate
    from authority. Persist only after explicit confirmation with
@@ -70,17 +86,23 @@ the installer has completed and its final self-check has passed.
    must use the canonical `selections[]` envelope returned by
    `bcgos agent interview`; do not send interview labels such as `agent_names`,
    `agent_emojis`, `scope` or a top-level `ownership_scope`.
-5. Run `bcgos update --check`. Explain the installed and proposed versions,
+6. For an update only, inspect `bcgos auth status`. If authentication is
+   unavailable, report the approved company release channel as an external
+   action pending; do not degrade local setup, onboarding or SharePoint source
+   selection. Never suggest a token, environment variable, credential file,
+   `gh`, source clone or unsigned package. If login is required, run `bcgos
+   auth login`, show the approved browser address and short user code, and wait.
+7. Run `bcgos update --check`. Explain the installed and proposed versions,
    whether CLI and bundle both change, and whether a migration is required.
-6. If an update is available, ask one short confirmation naming the exact
+8. If an update is available, ask one short confirmation naming the exact
    target version and impact. Do not confirm on the user's behalf and do not
    reuse confirmation for a different plan ID.
-7. After confirmation, run `bcgos update --confirm <plan-id>`. Let the stable
+9. After confirmation, run `bcgos update --confirm <plan-id>`. Let the stable
    bootstrapper wait for the CLI to exit, activate and self-check. Do not try to
    replace the running executable directly.
-8. Run `bcgos status` and `bcgos doctor` again. Report the active versions and
+10. Run final verification silently. Report the active versions and
    whether rollback remains available.
-9. If activation fails, explain that the last-known-good version was restored.
+11. If activation fails, explain that the last-known-good version was restored.
    Offer explicit rollback only when a valid previous state exists.
 
 ## Communication contract
@@ -88,7 +110,9 @@ the installer has completed and its final self-check has passed.
 - Lead with what the user can safely do now.
 - Translate `unavailable` into the missing company approval or capability;
   never present it as the user's fault.
-- Use one confirmation immediately before an update or rollback.
+- Use one setup authorization, then no repeated confirmation for local
+  diagnostics or reversible repair. Updates and rollbacks retain their exact
+  plan-bound confirmation because they change installed release state.
 - Never call an unsigned candidate a release or an isolated CI run a corporate
   device acceptance.
 - Never expose credential, device or release-signing material.
