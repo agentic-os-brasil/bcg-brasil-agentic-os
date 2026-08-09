@@ -1399,7 +1399,7 @@ func folderChooserCommand(platform, prompt string) (string, []string, error) {
 			"$dialog = New-Object System.Windows.Forms.FolderBrowserDialog; " +
 			"$dialog.Description = '" + strings.ReplaceAll(prompt, "'", "''") + "'; " +
 			"if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.SelectedPath) }"
-		return "powershell.exe", []string{"-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-Command", script}, nil
+		return "powershell.exe", []string{"-NoProfile", "-STA", "-Command", script}, nil
 	default:
 		return "", nil, fmt.Errorf("a seleção gráfica de pasta ainda não está disponível neste sistema")
 	}

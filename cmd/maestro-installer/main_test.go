@@ -64,6 +64,9 @@ func TestFolderChooserCommandSupportsWindowsAndKeepsPromptLocal(t *testing.T) {
 			t.Fatalf("windows chooser arguments do not contain %q: %s", want, joined)
 		}
 	}
+	if strings.Contains(joined, "ExecutionPolicy") || strings.Contains(joined, "Bypass") {
+		t.Fatalf("windows chooser must preserve the local PowerShell execution policy: %s", joined)
+	}
 	if _, _, err := folderChooserCommand("linux", "Escolha"); err == nil {
 		t.Fatal("unsupported platform unexpectedly returned a chooser")
 	}
