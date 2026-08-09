@@ -223,6 +223,8 @@ func TestBuildOmitsOversizedPacketInsteadOfExpandingHookOutput(t *testing.T) {
 		},
 		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
 	})
+	packet.Owner.Onboarding = sessionctx.Onboarding{State: "required", Track: "selection_required", NextQuestion: "What is your professional role?"}
+	packet.Skills.Selected = []sessionctx.SkillSelection{{ID: "maestro-onboarding", Reason: "deterministic_onboarding_state", Pointer: ".codex/skills/maestro-onboarding/SKILL.md"}}
 	output, err := BuildCodex(packet)
 	if err != nil {
 		t.Fatal(err)
@@ -230,7 +232,11 @@ func TestBuildOmitsOversizedPacketInsteadOfExpandingHookOutput(t *testing.T) {
 	if len(output.HookSpecificOutput.AdditionalContext) > MaximumAdditionalContextBytes {
 		t.Fatalf("context was %d bytes", len(output.HookSpecificOutput.AdditionalContext))
 	}
-	if !strings.Contains(output.HookSpecificOutput.AdditionalContext, "omitted") {
+	if !strings.Contains(output.HookSpecificOutput.AdditionalContext, "omitted") ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO SESSION PROTOCOL") ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "ONBOARDING IS NOT COMPLETE") ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "deterministic_onboarding_state") ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "What is your professional role?") {
 		t.Fatalf("context = %q", output.HookSpecificOutput.AdditionalContext)
 	}
 }

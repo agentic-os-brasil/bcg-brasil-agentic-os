@@ -73,11 +73,13 @@ bcgos maintenance wake \
   [--workspace ID] [--attended]
 
 bcgos maintenance canary install-macos \
-  --confirm [--home PATH] [--workspace ID]
-bcgos maintenance canary status [--home PATH] [--workspace ID]
-bcgos maintenance canary pause --confirm [--home PATH] [--workspace ID]
-bcgos maintenance canary resume --confirm [--home PATH] [--workspace ID]
-bcgos maintenance canary uninstall --confirm [--home PATH] [--workspace ID]
+  --workspace-path PATH \
+  --executable PATH \
+  --confirm [--home PATH] [--launchctl]
+bcgos maintenance canary status [--home PATH] [--launchctl]
+bcgos maintenance canary pause --confirm [--home PATH] [--launchctl]
+bcgos maintenance canary resume --confirm [--home PATH] [--launchctl]
+bcgos maintenance canary uninstall --confirm [--home PATH] [--launchctl]
 bcgos maintenance canary recover-quarantine \
   --job-id ID \
   --scheduled-for RFC3339 \
@@ -89,17 +91,44 @@ bcgos maintenance canary recover-quarantine \
 `install-macos` with a non-current `--home` is filesystem-only; it cannot load
 the real user's LaunchAgent domain.
 
+When the exact current-user enrollment records `mode: native`, `status` and the
+aggregate maintenance projection inspect launchctl read-only without requiring
+another flag. `--launchctl` remains mandatory for lifecycle mutations. A
+`last_receipt: null` result is not a scheduler failure when `due_count` is zero;
+native lifecycle qualification comes from the exact loaded/enabled binding,
+while job execution evidence requires a due occurrence and terminal receipt.
+
 `maintenance wake` currently has no `--home` flag and always resolves the
 current user's data root. Therefore a fixture-home enrollment is suitable for
 filesystem lifecycle evidence, but not for an end-to-end fixture worker wake.
 Do not present that fixture as a runtime result.
 
-Do not run `bcgos maintenance wake --trigger event` in a Canary. The current
-CLI accepts that syntax but has no `--event-id` and
+Do not treat `bcgos maintenance wake --trigger event --event-id ID` as scheduled
+job evidence in a Canary. The CLI validates the event identity, but
 `internal/cli/maintenance.go:schedulerJobsForTrigger("event")` returns no
 concrete scheduler job. The expected result is no event execution evidence;
-record the path as `unavailable`/STOP until an event job and event identifier
-surface exist.
+record the path as `unavailable`/STOP until an event job is bound to the route.
+
+## Interpreting the v0.1.20 product Canary
+
+The acceptance run must distinguish a reproducible defect from an intentionally
+unavailable capability:
+
+- agent identity personalization must accept the canonical managed IDs emitted
+  by `bcgos agent identity` (`maestro`, `walter`, `darwin`) as well as the
+  documented omitted-ID form;
+- top-level `status`, `doctor` and `maestro status` accept either a workspace
+  path or an ID bound by `bcgos init`; ID resolution is private, fail-closed and
+  never searches user files;
+- Docling/MarkItDown ingestion remains a release gap, not a successful base
+  capability, until Q-037 is closed and a verified platform pack is installed;
+- native agent orchestration remains unavailable under Spec 033 until a new
+  accepted promotion decision and attended adapter evidence exist;
+- a native LaunchAgent enrollment must be evaluated through its loaded/enabled
+  binding; filesystem-only status must not be interpreted as proof that the
+  service is unloaded; and
+- lifecycle receipts prove observed events, while native qualification remains
+  a separate attended runtime gate.
 
 The direct deterministic Darwin contract is a separate surface:
 

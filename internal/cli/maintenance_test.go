@@ -41,6 +41,20 @@ func TestCanaryLaunchAgentRequestsNativeIdleObservation(t *testing.T) {
 	}
 }
 
+func TestNativeEnrollmentStatusIsObservedWithoutMutationAuthority(t *testing.T) {
+	home := filepath.Join(string(filepath.Separator), "Users", "example")
+	enrollment := maintenance.CanaryEnrollment{Mode: "native", Home: home}
+	if !shouldObserveNativeEnrollment("status", false, enrollment, nil, home, home) {
+		t.Fatal("native status did not reuse the durable attended enrollment")
+	}
+	if shouldObserveNativeEnrollment("pause", false, enrollment, nil, home, home) {
+		t.Fatal("native mutation was authorized without --launchctl")
+	}
+	if shouldObserveNativeEnrollment("status", false, enrollment, nil, filepath.Join(home, "other"), home) {
+		t.Fatal("native status crossed the enrolled home boundary")
+	}
+}
+
 func TestCheckpointAndLightDreamHandlersAreOperableButDeepDreamRemainsUnavailable(t *testing.T) {
 	enrollment := maintenance.CanaryEnrollment{Activated: []maintenance.Activation{{JobID: maintenance.MemoryCheckpointJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryCheckpointJobID)}, {JobID: maintenance.MemoryLightDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryLightDreamJobID)}}}
 	handlers, qualification, activated := maintenanceHandlers(t.TempDir(), "maestro-system", enrollment, true)

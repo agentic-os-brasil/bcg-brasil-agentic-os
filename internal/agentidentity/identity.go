@@ -191,7 +191,7 @@ func InitialInterview() Interview {
 				"quality_guardian":     "quality_longitudinal",
 				"pa_expert":            "pa_expert_registry",
 			},
-			Guidance: "Use selections[]; agent_names, agent_emojis, scope and ownership_scope are interview labels, not top-level profile fields. Keep only the current guided main-agent answer (Maestro, then Walter, then Darwin) in each draft.",
+			Guidance: "Use selections[]; agent_names, agent_emojis, scope and ownership_scope are interview labels, not top-level profile fields. Keep only the current guided main-agent answer (Maestro, then Walter, then Darwin) in each draft. For these managed agents, agent_id may be omitted or set to the canonical ID shown by bcgos agent identity: maestro, walter or darwin.",
 		},
 	}
 }

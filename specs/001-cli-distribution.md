@@ -38,11 +38,19 @@ existing brain README and never creates a client, project or people taxonomy
 before that taxonomy is accepted. Private configuration, memory, scheduler
 state and logs are created under the local data root, not under the workspace.
 
-`bcgos status [path]` returns machine-readable workspace state, version and
-declared capability availability. `bcgos doctor [path]` returns actionable
+`bcgos status [path-or-workspace-id]` returns machine-readable workspace state, version and
+declared capability availability. `bcgos doctor [path-or-workspace-id]` returns actionable
 checks for workspace integrity, local-data separation and Claude Code/Codex
 presence. A missing runtime is reported, not silently installed; unavailable
 bundles and updates are declared rather than emulated.
+
+Opaque workspace IDs resolve only through the private per-user binding written
+by `bcgos init`. Resolution never scans the user's filesystem and revalidates
+the path-bound workspace manifest before returning status. Binding directories
+and files use the shared descriptor-anchored no-follow private-path boundary;
+symlinks/reparse points, relaxed Unix permissions and tampered bindings fail
+closed. An older workspace without a binding must be initialized once by path
+before its ID can be used.
 
 `bcgos skills index` returns the compact managed skills catalog used for
 capability discovery. It contains navigation pointers only; an agent reads a

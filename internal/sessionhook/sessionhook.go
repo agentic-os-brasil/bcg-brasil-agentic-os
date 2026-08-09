@@ -103,11 +103,13 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 	directive := contextDirective(semanticEvent, packet)
 	context := directive + "\n\nMaestro bounded session context (pointers only; unavailable sources are explicit):\n" + string(body)
 	if len(context) > MaximumAdditionalContextBytes {
-		// A hook must remain available even when a future packet gains an unusually
-		// verbose warning. Do not fail the session or truncate JSON mid-document:
-		// return a valid, explicit omission that directs the runtime to the normal
-		// packet command instead.
-		return "Maestro bounded session context omitted: packet exceeded the native hook output budget. Use " + commandFor(packet, "bcgos session packet") + " for the complete pointer-only packet.", nil
+		// Preserve the operating/onboarding directive even when the pointer packet
+		// grows beyond the native budget. Dropping both would leave a fresh session
+		// without Maestro identity or its governed next question. The JSON envelope
+		// is omitted whole rather than truncated mid-document.
+		note := "Maestro bounded session context omitted: packet exceeded the native hook output budget. Use " + commandFor(packet, "bcgos session packet") + " for the complete pointer-only packet."
+		available := MaximumAdditionalContextBytes - len(note) - 2
+		return preserveDirectiveEdges(directive, available) + "\n\n" + note, nil
 	}
 	if semanticEvent == "session_start" && packet.Memory.State == "available" && len(packet.Memory.Sections) > 0 {
 		memoryContext := renderMemoryContext(packet.Memory)
@@ -127,6 +129,40 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 		}
 	}
 	return context, nil
+}
+
+func preserveDirectiveEdges(value string, maximum int) string {
+	if maximum <= 0 {
+		return ""
+	}
+	if len(value) <= maximum {
+		return value
+	}
+	marker := "\n[Maestro directive compacted at native hook budget]\n"
+	if maximum <= len(marker) {
+		bounded, _ := truncateUTF8Bytes(marker, maximum)
+		return bounded
+	}
+	remaining := maximum - len(marker)
+	headBudget := remaining * 2 / 3
+	tailBudget := remaining - headBudget
+	head, _ := truncateUTF8Bytes(value, headBudget)
+	tail := truncateUTF8Tail(value, tailBudget)
+	return head + marker + tail
+}
+
+func truncateUTF8Tail(value string, maximum int) string {
+	if maximum <= 0 {
+		return ""
+	}
+	if len(value) <= maximum {
+		return value
+	}
+	start := len(value) - maximum
+	for start < len(value) && value[start]&0xc0 == 0x80 {
+		start++
+	}
+	return value[start:]
 }
 
 func renderMemoryContext(value sessionctx.Memory) string {
@@ -189,6 +225,12 @@ func sessionDirective(packet sessionctx.Packet) string {
 			"ONBOARDING IS NOT COMPLETE. Start the conversation as Maestro and conduct the owner interview before proposing work.",
 			"Follow only the integrity-checked `maestro-onboarding` guide selected in the bounded session packet; do not route an unrelated Case method until onboarding is complete.",
 		)
+		for _, selected := range packet.Skills.Selected {
+			if selected.ID == "maestro-onboarding" {
+				lines = append(lines, "Governed startup method: "+selected.ID+"; selection_reason="+selected.Reason+"; pointer="+selected.Pointer+".")
+				break
+			}
+		}
 		lines = append(lines,
 			"Save approved answers with "+commandFor(packet, `bcgos owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm`)+"; order is flexible and pending facets remain visible.",
 			trackChoice,

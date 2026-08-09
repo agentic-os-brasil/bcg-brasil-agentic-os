@@ -461,7 +461,7 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	output.Reset()
-	input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"echo safe"}}`
+	input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"git push origin refs/heads/topic"}}`
 	code := runHookWithInput([]string{"codex", "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, strings.NewReader(input), &output, &output, func() (string, error) { return dataRoot, nil })
 	if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) || !strings.Contains(output.String(), "Nothing was changed") {
 		t.Fatalf("symlink guard = %d %s", code, output.String())
@@ -605,18 +605,22 @@ func TestLifecycleReceiptCheckExplainsBoundedHistory(t *testing.T) {
 	}
 }
 
-func TestInstalledGuardRejectsHomonymousBCGOSDiagnosticWhenStateCannotBeValidated(t *testing.T) {
+func TestInstalledGuardLeavesHomonymousLocalCommandToNativePermissionFlow(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
 			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"/tmp/attacker/bcgos doctor"}}`
 			var output bytes.Buffer
+			rootCalled := false
 			code := runHookWithInput(
 				[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", "/workspace-that-must-not-be-inspected"},
 				strings.NewReader(input), &output, &output,
-				func() (string, error) { return "", errors.New("invalid orchestration state") },
+				func() (string, error) {
+					rootCalled = true
+					return "", errors.New("ordinary local commands must not inspect orchestration state")
+				},
 			)
-			if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) || !strings.Contains(output.String(), "Nothing was changed") {
-				t.Fatalf("guard = %d output=%s", code, output.String())
+			if code != ExitOK || rootCalled || strings.Contains(output.String(), `"permissionDecision"`) {
+				t.Fatalf("guard = %d rootCalled=%v output=%s", code, rootCalled, output.String())
 			}
 		})
 	}
@@ -1898,7 +1902,7 @@ func TestAgentIdentityInterviewAndPersonalizationAreExplicit(t *testing.T) {
 		!strings.Contains(output.String(), `"client_account_agent"`) {
 		t.Fatalf("identity interview = %d, output = %s", code, output.String())
 	}
-	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"updated_at":"2026-07-28T00:00:00Z","capability_tracks":["software-engineering"],"selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"daniel","ownership_scope":"system"},{"role":"client_account_agent","agent_id":"client-account-agent-acme","display_name":"Compass","emoji":"🧭","owner_id":"daniel","ownership_scope":"account"},{"role":"case_agent","agent_id":"case-agent-pricing","display_name":"Forge","emoji":"⚙️","owner_id":"daniel","ownership_scope":"case"}]}`
+	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"updated_at":"2026-07-28T00:00:00Z","capability_tracks":["software-engineering"],"selections":[{"role":"maestro","agent_id":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"daniel","ownership_scope":"system"},{"role":"client_account_agent","agent_id":"client-account-agent-acme","display_name":"Compass","emoji":"🧭","owner_id":"daniel","ownership_scope":"account"},{"role":"case_agent","agent_id":"case-agent-pricing","display_name":"Forge","emoji":"⚙️","owner_id":"daniel","ownership_scope":"case"}]}`
 	output.Reset()
 	if code := draftAndConfirmAgentProfile(t, dataRoot, profile, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "applied"`) {
 		t.Fatalf("identity personalize = %d, output = %s", code, output.String())
@@ -2331,9 +2335,24 @@ func TestProductStatusAndDoctorDescribeReadyWorkspace(t *testing.T) {
 	if code := runProductStatus([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) || !strings.Contains(output.String(), `"brain_readable": true`) || !strings.Contains(output.String(), `"profile": "standard"`) || !strings.Contains(output.String(), `"continuous_use"`) || !strings.Contains(output.String(), `"configured"`) || !strings.Contains(output.String(), `"adapter_observed"`) || !strings.Contains(output.String(), `"native_qualified"`) || !strings.Contains(output.String(), `"unavailable"`) {
 		t.Fatalf("status exit = %d, output = %s", code, output.String())
 	}
+	var initialized struct {
+		WorkspaceID string `json:"workspace_id"`
+	}
+	manifestBody, err := os.ReadFile(filepath.Join(workspacePath, ".bcgos", "workspace.json"))
+	if err != nil || json.Unmarshal(manifestBody, &initialized) != nil || initialized.WorkspaceID == "" {
+		t.Fatalf("workspace ID unavailable: body=%s err=%v", manifestBody, err)
+	}
+	output.Reset()
+	if code := runProductStatus([]string{initialized.WorkspaceID}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) || !strings.Contains(output.String(), workspacePath) {
+		t.Fatalf("status by workspace ID exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
+	if code := runDoctor([]string{initialized.WorkspaceID}, &output, &output, func() (string, error) { return dataRoot, nil }, func(string) bool { return false }); code != ExitOK || !strings.Contains(output.String(), `"state": "ready"`) {
+		t.Fatalf("doctor by workspace ID exit = %d, output = %s", code, output.String())
+	}
 
 	output.Reset()
-	if code := runMaestroWithInput([]string{"status", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"calibration"`) || !strings.Contains(output.String(), `"complete_calibration"`) || strings.Contains(output.String(), "professional-role.md") {
+	if code := runMaestroWithInput([]string{"status", initialized.WorkspaceID}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"calibration"`) || !strings.Contains(output.String(), `"complete_calibration"`) || strings.Contains(output.String(), "professional-role.md") {
 		t.Fatalf("Maestro status exit = %d, output = %s", code, output.String())
 	}
 

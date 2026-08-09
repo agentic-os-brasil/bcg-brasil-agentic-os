@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -62,6 +63,17 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 	if inspection.State != "ready" || inspection.WorkspaceID != result.WorkspaceID || !inspection.BrainReadable {
 		t.Fatalf("Inspect() = %#v", inspection)
 	}
+	resolved, err := ResolveReference(result.WorkspaceID, dataRoot)
+	if err != nil {
+		t.Fatalf("ResolveReference(workspace ID) error = %v", err)
+	}
+	if resolved != workspacePath {
+		t.Fatalf("ResolveReference(workspace ID) = %q, want %q", resolved, workspacePath)
+	}
+	bindingPath := filepath.Join(dataRoot, "workspaces", result.WorkspaceID, "binding.json")
+	if info, err := os.Lstat(bindingPath); err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+		t.Fatalf("workspace binding must be a private regular file: info=%v err=%v", info, err)
+	}
 	statePath := filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")
 	stateBody, err := os.ReadFile(statePath)
 	if err != nil {
@@ -103,6 +115,110 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 	stateBodyAfter, err := os.ReadFile(statePath)
 	if err != nil || string(stateBodyAfter) != string(stateBody) {
 		t.Fatalf("re-initialization changed orchestration state = %q, error = %v", stateBodyAfter, err)
+	}
+}
+
+func TestResolveReferenceExplainsUnregisteredWorkspaceID(t *testing.T) {
+	root := t.TempDir()
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(root, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := ResolveReference("0123456789abcdef0123456789abcdef", root)
+	if err == nil || !strings.Contains(err.Error(), "bcgos init") {
+		t.Fatalf("unregistered workspace ID error = %v", err)
+	}
+}
+
+func TestResolveReferenceRejectsSymlinkedBinding(t *testing.T) {
+	root := t.TempDir()
+	id := "0123456789abcdef0123456789abcdef"
+	directory := filepath.Join(root, "workspaces", id)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "target.json")
+	if err := os.WriteFile(target, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(directory, "binding.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveReference(id, root); err == nil {
+		t.Fatal("symlinked workspace binding was accepted")
+	}
+}
+
+func TestResolveReferenceRejectsSymlinkedBindingAncestor(t *testing.T) {
+	root := t.TempDir()
+	id := "0123456789abcdef0123456789abcdef"
+	target := filepath.Join(root, "redirected")
+	if err := os.MkdirAll(filepath.Join(target, id), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, "workspaces")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveReference(id, root); err == nil {
+		t.Fatal("symlinked workspace binding ancestor was accepted")
+	}
+}
+
+func TestResolveReferenceRejectsRelaxedBindingPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows privacy is enforced through the native data-root ACL")
+	}
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "Developer", "workspace")
+	dataRoot := filepath.Join(root, "AppData", "BCGOS")
+	result, err := Initialize(Options{WorkspacePath: workspacePath, DataRoot: dataRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindingPath := filepath.Join(dataRoot, "workspaces", result.WorkspaceID, "binding.json")
+	if err := os.Chmod(bindingPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveReference(result.WorkspaceID, dataRoot); err == nil {
+		t.Fatal("world-readable workspace binding was accepted")
+	}
+}
+
+func TestResolveReferenceRejectsRelaxedBindingDirectoryPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows privacy is enforced through the native data-root ACL")
+	}
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "Developer", "workspace")
+	dataRoot := filepath.Join(root, "AppData", "BCGOS")
+	result, err := Initialize(Options{WorkspacePath: workspacePath, DataRoot: dataRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := filepath.Join(dataRoot, "workspaces", result.WorkspaceID)
+	if err := os.Chmod(directory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveReference(result.WorkspaceID, dataRoot); err == nil {
+		t.Fatal("relaxed workspace binding directory was accepted")
+	}
+}
+
+func TestResolveReferenceRejectsTamperedWorkspaceBinding(t *testing.T) {
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "Developer", "workspace")
+	dataRoot := filepath.Join(root, "AppData", "BCGOS")
+	result, err := Initialize(Options{WorkspacePath: workspacePath, DataRoot: dataRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindingPath := filepath.Join(dataRoot, "workspaces", result.WorkspaceID, "binding.json")
+	if err := os.WriteFile(bindingPath, []byte(`{"schema_version":1,"workspace_id":"`+result.WorkspaceID+`","workspace_path":"`+filepath.Join(root, "elsewhere")+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveReference(result.WorkspaceID, dataRoot); err == nil {
+		t.Fatal("tampered workspace binding was accepted")
 	}
 }
 

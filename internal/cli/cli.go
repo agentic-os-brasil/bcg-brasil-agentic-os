@@ -1356,11 +1356,15 @@ func decodeWorkspaceAgentJSON(in io.Reader, target any) error {
 }
 
 func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
-	path, code := oneOptionalPath("status", args, errOut)
+	reference, code := oneOptionalPath("status", args, errOut)
 	if code != ExitOK {
 		return code
 	}
 	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	path, err := workspace.ResolveReference(reference, root)
 	if err != nil {
 		return reportError(errOut, err)
 	}
@@ -1446,11 +1450,15 @@ func runtimeDependencyCheck(root string, inspection workspace.Inspection) (docto
 }
 
 func runDoctor(args []string, out, errOut io.Writer, dataRoot func() (string, error), available func(string) bool) int {
-	path, code := oneOptionalPath("doctor", args, errOut)
+	reference, code := oneOptionalPath("doctor", args, errOut)
 	if code != ExitOK {
 		return code
 	}
 	root, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	path, err := workspace.ResolveReference(reference, root)
 	if err != nil {
 		return reportError(errOut, err)
 	}
@@ -1803,11 +1811,15 @@ func rollbackDispatch(root string, chain maestro.ChainState, chainCreated bool, 
 
 func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) >= 1 && args[0] == "status" {
-		path, code := oneOptionalPath("maestro status", args[1:], errOut)
+		reference, code := oneOptionalPath("maestro status", args[1:], errOut)
 		if code != ExitOK {
 			return code
 		}
 		root, err := dataRoot()
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		path, err := workspace.ResolveReference(reference, root)
 		if err != nil {
 			return reportError(errOut, err)
 		}
