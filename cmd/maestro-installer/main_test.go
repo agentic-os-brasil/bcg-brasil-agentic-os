@@ -227,8 +227,11 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 				Maintenance: maintenanceActivation{State: "active_loaded_enabled", NativeObserved: true, ModelBacked: "unavailable"},
 			}, nil
 		},
+		authorizeSetup: func(options, string) (workspaceSetupAuthorization, error) {
+			return workspaceSetupAuthorization{State: "active", GrantDigest: strings.Repeat("a", 64)}, nil
+		},
 	})
-	request := httptest.NewRequest(http.MethodPost, "/api/create-workspace", strings.NewReader(`{"import_existing":false}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/create-workspace", strings.NewReader(`{"import_existing":false,"authorize_setup":true}`))
 	request.Header.Set("X-Maestro-Session", "test-token")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
@@ -298,8 +301,11 @@ func TestWizardDefersSourceSelectionUntilWorkspaceBootstrapCompletes(t *testing.
 		configureWorkspace: func(options, string) (workspaceActivation, error) {
 			return workspaceActivation{State: "ready", Lifecycle: lifecycleActivation{State: "configured"}, Maintenance: maintenanceActivation{State: "active_loaded_enabled"}}, nil
 		},
+		authorizeSetup: func(options, string) (workspaceSetupAuthorization, error) {
+			return workspaceSetupAuthorization{State: "active", GrantDigest: strings.Repeat("b", 64)}, nil
+		},
 	})
-	request := httptest.NewRequest(http.MethodPost, "/api/create-workspace", strings.NewReader(`{"import_existing":true}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/create-workspace", strings.NewReader(`{"import_existing":true,"authorize_setup":true}`))
 	request.Header.Set("X-Maestro-Session", "test-token")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
