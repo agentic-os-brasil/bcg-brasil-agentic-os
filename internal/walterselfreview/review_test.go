@@ -473,7 +473,7 @@ func TestWeeklyReviewResumesAfterProposalCommitCrash(t *testing.T) {
 
 func TestSlowModelLeaseRenewsAndStaleWorkerCannotBeTakenOver(t *testing.T) {
 	request := testRequest(t)
-	store := ReceiptStore{Root: t.TempDir(), LeaseDuration: 60 * time.Millisecond, LockWait: 40 * time.Millisecond}
+	store := ReceiptStore{Root: t.TempDir(), LeaseDuration: 500 * time.Millisecond, LockWait: 100 * time.Millisecond}
 	adapter := &blockingAdapter{started: make(chan struct{}), release: make(chan struct{}), proposal: testProposal(request)}
 	resultCh := make(chan error, 1)
 	go func() {
@@ -481,7 +481,23 @@ func TestSlowModelLeaseRenewsAndStaleWorkerCannotBeTakenOver(t *testing.T) {
 		resultCh <- err
 	}()
 	<-adapter.started
-	time.Sleep(180 * time.Millisecond)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		receipts, err := store.read(filepath.Join(store.Root, "weekly-receipts.jsonl"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(receipts) >= 2 {
+			latest, found := latestReceipt(receipts, request.OccurrenceID)
+			if found && latest.LeaseUntil.After(time.Now().UTC()) {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("renewal loop did not produce a live renewed lease")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if _, err := store.Reserve(request, time.Now().UTC()); !errors.Is(err, ErrOccurrenceBusy) {
 		t.Fatalf("slow model lease was not renewed; reserve err=%v", err)
 	}
