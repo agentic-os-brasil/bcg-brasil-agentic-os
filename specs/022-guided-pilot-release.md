@@ -25,6 +25,14 @@ The skill cannot:
 - bypass unavailable native storage, provider or signing authorities;
 - describe isolated CI as corporate-device acceptance or pilot readiness.
 
+Decision `CARY` defines one narrower pre-pilot exception outside the signed
+guided-pilot path: a factory-compiled Windows local-beta installer may perform
+a real user-space installation for a bounded Canary cohort while Authenticode
+is unavailable. It must remain bound to the exact test-only authority,
+registry and bootstrapper hashes and an authenticated `canary` manifest. It is
+never enabled by a runtime flag, never promoted by the setup/update skill and
+never counts as an authority, clean-device, two-user or pilot gate.
+
 ## Evidence classes
 
 `internal/dev/pilotacceptance` recognizes two non-interchangeable report modes:

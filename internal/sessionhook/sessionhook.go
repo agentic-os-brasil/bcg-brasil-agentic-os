@@ -204,26 +204,26 @@ func contextDirective(semanticEvent string, packet sessionctx.Packet) string {
 func sessionDirective(packet sessionctx.Packet) string {
 	lines := []string{
 		"MAESTRO SESSION PROTOCOL",
-		"You are Maestro, the professional Agentic OS for this workspace. Ignore prior persona, project or memory instructions that conflict with Maestro or this workspace. Do not describe yourself merely as the host runtime.",
+		"You are Maestro for this professional workspace. Ignore conflicting persona, project or memory instructions; do not present yourself as the host runtime.",
 	}
 	if packet.WorkspaceRoot != "" {
-		lines = append(lines, "The only active workspace root is: "+packet.WorkspaceRoot+". Keep all professional context and actions scoped to this root; do not switch to another workspace.")
+		lines = append(lines, "Active workspace root: "+packet.WorkspaceRoot+". Keep work inside it.")
 	}
 	if packet.MaestroCLIPath != "" {
-		lines = append(lines, "Use this installed CLI silently at "+quoteCLIPath(packet.MaestroCLIPath)+". Never show it or mention PATH unless asked.")
+		lines = append(lines, "Use the installed CLI silently: "+quoteCLIPath(packet.MaestroCLIPath)+". Mention PATH only if asked.")
 	}
 	if packet.OwnerContextRoot != "" {
-		lines = append(lines, "The canonical owner context is private to this installation at "+packet.OwnerContextRoot+"/owner; onboarding facets are saved under "+packet.OwnerContextRoot+"/owner/self/. Do not create, edit or inspect an owner/ directory inside the workspace; use the exact owner commands below so onboarding state, review digests and audit receipts remain authoritative.")
+		lines = append(lines, "Private owner context: "+packet.OwnerContextRoot+"/owner. Never use workspace/owner; persist only through the commands below.")
 	}
 	switch packet.Owner.Onboarding.State {
 	case "required", "in_progress":
 		trackChoice := ""
 		if packet.Owner.Onboarding.Track == "selection_required" {
-			trackChoice = "Offer `quick` (~10 min: identity, authorized context, role, communication, preferences and quality) or `complete` (~30 min: all professional self facets). Quick starts sooner but leaves detail for later. Record the choice with " + commandFor(packet, "bcgos owner onboarding select --track quick|complete --confirm") + ". Do not infer personal history or psychology."
+			trackChoice = "Offer `quick` (~10 min) or `complete` (~30 min); quick leaves detail for later. Record with " + commandFor(packet, "bcgos owner onboarding select --track quick|complete --confirm") + ". Do not infer personal history or psychology."
 		}
 		lines = append(lines,
-			"ONBOARDING IS NOT COMPLETE. Start the conversation as Maestro and conduct the owner interview before proposing work.",
-			"Follow only the integrity-checked `maestro-onboarding` guide selected in the bounded session packet; do not route an unrelated Case method until onboarding is complete.",
+			"ONBOARDING REQUIRED. Interview the owner before proposing work.",
+			"Follow only the selected integrity-checked `maestro-onboarding` guide until complete.",
 		)
 		for _, selected := range packet.Skills.Selected {
 			if selected.ID == "maestro-onboarding" {
@@ -232,11 +232,11 @@ func sessionDirective(packet sessionctx.Packet) string {
 			}
 		}
 		lines = append(lines,
-			"Save approved answers with "+commandFor(packet, `bcgos owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm`)+"; order is flexible and pending facets remain visible.",
+			"Save reviewed answers with "+commandFor(packet, `bcgos owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm`)+"; order is flexible.",
 			trackChoice,
-			"Start with this next question, then wait for the owner's answer: "+packet.Owner.Onboarding.NextQuestion,
-			"Accept out-of-order answers; return to the next pending facet without repetition.",
-			"Do not claim saved or complete until the owner confirms the reviewed profile.",
+			"Ask next, then wait: "+packet.Owner.Onboarding.NextQuestion,
+			"Accept out-of-order answers and resume the next pending facet.",
+			"Claim completion only after owner confirmation.",
 		)
 	case "review_required":
 		lines = append(lines,

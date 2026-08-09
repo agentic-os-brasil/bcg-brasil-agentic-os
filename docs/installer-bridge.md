@@ -33,6 +33,16 @@ quarantine, and an invalid state, symlinked path or unrecognized top-level file
 fails closed without changing either root. The bridge never mutates the global
 `PATH`, never accepts an unsigned override and never deletes owner data.
 
+The only exception to strict native trust is the factory-compiled
+`windows-local-beta` profile defined by decision `CARY`. It is not a
+command-line option. The compiled bridge pins the exact beta issuer/key ID,
+registry SHA-256 and bootstrapper SHA-256, then accepts `NotSigned` only for an
+Ed25519-authenticated `canary` manifest with those same bindings. A normal
+build continues to require Authenticode `Valid`. A partial profile, a different
+channel or authority, any digest drift, or any invalid Authenticode status
+fails closed before installation. The same native check is repeated after the
+bootstrapper is copied into the managed root.
+
 The bootstrapper's activation success is not accepted on process exit alone.
 The bridge repeats the CLI version diagnostic and then requires a coherent
 durable state plus the expected managed structure. A failure after state commit
@@ -121,6 +131,15 @@ extracts only to a private temporary directory, launches the existing bridge,
 propagates its exit status and cleans the temporary package. The wrapper is
 not a second installer implementation and does not bypass release or
 Authenticode verification.
+
+For the controlled Canary profile, call that factory with `-LocalBeta`, the
+exact beta issuer/key and the separately approved registry/bootstrapper SHA-256
+pins. The mandatory output basename is
+`Maestro-Installer-<version>-windows-amd64-local-beta-unsigned.exe`. The factory
+passes the profile into the inner package build; the wrapper itself still only
+extracts and delegates. It also emits provenance and an adjacent SHA-256 file
+for independent distribution. This package is engineering/local-beta evidence,
+not a signed release or a completed pilot gate.
 
 ## External CI unblock
 

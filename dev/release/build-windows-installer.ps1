@@ -23,11 +23,43 @@ param(
     [string]$OutputDirectory,
     [string]$ArchiveOutput = "",
     [string]$ResourceCompiler = "windres",
-    [switch]$Windowed
+    [switch]$Windowed,
+    [switch]$LocalBeta,
+    [string]$LocalBetaIssuer = "",
+    [string]$LocalBetaKeyID = "",
+    [string]$LocalBetaAuthorityRegistrySHA256 = "",
+    [string]$LocalBetaBootstrapperSHA256 = ""
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "windows-native-signature.ps1")
+
+$localBetaIdentityPattern = '^[a-z0-9][a-z0-9._-]{0,127}$'
+$sha256Pattern = '^[a-f0-9]{64}$'
+$localBetaValues = @(
+    $LocalBetaIssuer,
+    $LocalBetaKeyID,
+    $LocalBetaAuthorityRegistrySHA256,
+    $LocalBetaBootstrapperSHA256
+)
+if ($LocalBeta) {
+    if ([string]::IsNullOrWhiteSpace($LocalBetaIssuer) -or
+        [string]::IsNullOrWhiteSpace($LocalBetaKeyID) -or
+        [string]::IsNullOrWhiteSpace($LocalBetaAuthorityRegistrySHA256) -or
+        [string]::IsNullOrWhiteSpace($LocalBetaBootstrapperSHA256)) {
+        throw "LocalBeta requires issuer, key ID, authority-registry SHA-256 and bootstrapper SHA-256 pins."
+    }
+    if ($LocalBetaIssuer -notmatch $localBetaIdentityPattern -or $LocalBetaKeyID -notmatch $localBetaIdentityPattern) {
+        throw "LocalBeta issuer and key ID must be bounded lowercase identifiers."
+    }
+    if ($LocalBetaAuthorityRegistrySHA256 -notmatch $sha256Pattern -or $LocalBetaBootstrapperSHA256 -notmatch $sha256Pattern) {
+        throw "LocalBeta authority-registry and bootstrapper pins must be lowercase SHA-256 values."
+    }
+}
+elseif (@($localBetaValues | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -ne 0) {
+    throw "LocalBeta issuer, key ID and digest pins are valid only with -LocalBeta."
+}
 
 function Require-AbsolutePath([string]$Path, [string]$Label) {
     if (-not [IO.Path]::IsPathRooted($Path)) {
@@ -107,11 +139,39 @@ catch {
 if ($releaseManifest.product -ne "maestro" -or $releaseManifest.release -ne $Version) {
     throw "Release manifest identity does not match -Version $Version."
 }
+if ($LocalBeta) {
+    if ($releaseManifest.channel -ne "canary") {
+        throw "LocalBeta requires a canary release manifest."
+    }
+    if ($releaseManifest.issuer.id -ne $LocalBetaIssuer -or $releaseManifest.issuer.key_id -ne $LocalBetaKeyID) {
+        throw "LocalBeta release manifest issuer does not match the pinned test-only authority."
+    }
+}
 $registryItem = Get-Item -LiteralPath $AuthorityRegistry -ErrorAction Stop
 if ($registryItem.PSIsContainer -or ($registryItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
     throw "AuthorityRegistry must be a regular non-reparse file."
 }
+if ($registryItem.Length -gt 1MB) {
+    throw "AuthorityRegistry exceeds the 1 MiB packaging bound."
+}
 $registryDigest = (Get-FileHash -LiteralPath $registryItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($LocalBeta) {
+    if ($registryDigest -ne $LocalBetaAuthorityRegistrySHA256) {
+        throw "LocalBeta authority-registry SHA-256 does not match the approved pin."
+    }
+    try {
+        $registryDocument = Get-Content -LiteralPath $registryItem.FullName -Raw -ErrorAction Stop | ConvertFrom-Json
+    }
+    catch {
+        throw "LocalBeta authority registry is not valid JSON: $($_.Exception.Message)"
+    }
+    $matchingAuthorities = @($registryDocument.authorities | Where-Object {
+        $_.issuer -eq $LocalBetaIssuer -and $_.key_id -eq $LocalBetaKeyID
+    })
+    if ($registryDocument.product -ne "maestro" -or $matchingAuthorities.Count -ne 1 -or $matchingAuthorities[0].status -ne "active") {
+        throw "LocalBeta authority registry must contain the exact active test-only issuer/key identity."
+    }
+}
 $bootstrapperItem = Get-Item -LiteralPath $Bootstrapper -ErrorAction Stop
 if ($bootstrapperItem.PSIsContainer -or ($bootstrapperItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
     throw "Bootstrapper must be a regular non-reparse file."
@@ -124,6 +184,16 @@ if ($bootstrapperVersionMatch.Groups["version"].Value -ne $Version) {
     throw "Bootstrapper version does not match -Version $Version."
 }
 $bootstrapperDigest = (Get-FileHash -LiteralPath $bootstrapperItem.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($LocalBeta -and $bootstrapperDigest -ne $LocalBetaBootstrapperSHA256) {
+    throw "LocalBeta bootstrapper SHA-256 does not match the approved pin."
+}
+$bootstrapperAuthenticodeStatus = "not-evaluated-by-factory"
+if ($LocalBeta) {
+    $bootstrapperAuthenticodeStatus = Get-MaestroAuthenticodeStatus $bootstrapperItem.FullName
+    if ($bootstrapperAuthenticodeStatus -ne "NotSigned") {
+        throw "LocalBeta bootstrapper Authenticode status must be exactly NotSigned; got $bootstrapperAuthenticodeStatus."
+    }
+}
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $requiredBundleFiles = @(
@@ -210,7 +280,11 @@ if (Test-Path -LiteralPath $packageOutput) {
 }
 $packageParent = Split-Path -Parent $packageOutput
 if ([string]::IsNullOrWhiteSpace($ArchiveOutput)) {
-    $ArchiveOutput = Join-Path $packageParent "Maestro-Installer-$Version-windows-amd64-portable-unsigned.zip"
+    $archiveName = "Maestro-Installer-$Version-windows-amd64-portable-unsigned.zip"
+    if ($LocalBeta) {
+        $archiveName = "Maestro-Installer-$Version-windows-amd64-portable-local-beta-unsigned.zip"
+    }
+    $ArchiveOutput = Join-Path $packageParent $archiveName
 }
 $archiveOutput = [IO.Path]::GetFullPath($ArchiveOutput)
 if (Test-Path -LiteralPath $archiveOutput) {
@@ -279,8 +353,19 @@ try {
     Push-Location $root
     try {
         $goBuildArguments = @("build", "-mod=readonly", "-buildvcs=false", "-trimpath")
+        $linkerFlags = [Collections.Generic.List[string]]::new()
         if ($Windowed) {
-            $goBuildArguments += @("-ldflags", "-H=windowsgui")
+            $linkerFlags.Add("-H=windowsgui")
+        }
+        if ($LocalBeta) {
+            $linkerFlags.Add("-X main.BuildTrustProfile=windows-local-beta")
+            $linkerFlags.Add("-X main.BuildLocalBetaIssuer=$LocalBetaIssuer")
+            $linkerFlags.Add("-X main.BuildLocalBetaKeyID=$LocalBetaKeyID")
+            $linkerFlags.Add("-X main.BuildLocalBetaRegistrySHA256=$LocalBetaAuthorityRegistrySHA256")
+            $linkerFlags.Add("-X main.BuildLocalBetaBootstrapperSHA256=$LocalBetaBootstrapperSHA256")
+        }
+        if ($linkerFlags.Count -gt 0) {
+            $goBuildArguments += @("-ldflags", ($linkerFlags -join " "))
         }
         $goBuildArguments += @("-o", $outputFull, "./cmd/maestro-installer")
         & $go.Source @goBuildArguments
@@ -328,11 +413,21 @@ try {
 	}
 
     $resourceDigest = (Get-FileHash -LiteralPath $sysoPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $distributionProfile = "strict"
+    $nativeSignature = "pending"
+    if ($LocalBeta) {
+        $distributionProfile = "windows-local-beta"
+        $nativeSignature = "not-signed-controlled-canary"
+    }
     $provenance = [ordered]@{
         product = "maestro-installer"
         version = $Version
         target_os = "windows"
         target_arch = "amd64"
+        distribution_profile = $distributionProfile
+        release_channel = [string]$releaseManifest.channel
+        release_issuer = [string]$releaseManifest.issuer.id
+        release_key_id = [string]$releaseManifest.issuer.key_id
         bridge_sha256 = $installerDigest
         icon = $iconItem.Name
         icon_sha256 = $iconDigest
@@ -344,6 +439,9 @@ try {
         authority_registry_sha256 = $registryDigest
         bootstrapper = $bootstrapperItem.Name
         bootstrapper_sha256 = $bootstrapperDigest
+        bootstrapper_authenticode_status = $bootstrapperAuthenticodeStatus
+        local_beta_authority_registry_sha256 = $(if ($LocalBeta) { $LocalBetaAuthorityRegistrySHA256 } else { "" })
+        local_beta_bootstrapper_sha256 = $(if ($LocalBeta) { $LocalBetaBootstrapperSHA256 } else { "" })
         required_bundle_files = $requiredBundleProvenance
         installable_inputs = "bundled"
         rehearsal_launcher = "Run-Maestro-Rehearsal.cmd"
@@ -351,13 +449,31 @@ try {
         resource_compiler_sha256 = $compilerDigest
         resource_compiler_approved_sha256 = $ResourceCompilerSHA256
         resource_object_sha256 = $resourceDigest
-        native_signature = "pending"
+        native_signature = $nativeSignature
         status = "unsigned-candidate"
     }
     $provenancePath = "$outputFull.provenance.json"
     $provenance | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $provenancePath -Encoding utf8
+    $readmeTitle = "Maestro Windows installer candidate - unsigned"
+    $readmeTrust = @"
+Esta versão ainda não possui Authenticode; use somente como candidato técnico.
+"@
+    if ($LocalBeta) {
+        $readmeTitle = "Maestro Windows Canary controlado - beta local sem Authenticode"
+        $readmeTrust = @"
+Este pacote $Version usa o perfil compilado windows-local-beta. O release e seus
+artefatos continuam autenticados pela autoridade Ed25519 beta fixada, e o
+bootstrapper precisa corresponder aos hashes registrados no pacote. Somente o
+status Authenticode NotSigned e aceito; uma assinatura invalida continua sendo
+bloqueada.
+
+O Windows SmartScreen, WDAC ou AppLocker pode impedir a abertura antes que o
+Maestro execute. Distribua este EXE somente ao grupo Canary controlado e
+confira o SHA-256 publicado por um canal independente.
+"@
+    }
     @"
-Maestro Windows installer candidate — unsigned
+$readmeTitle
 
 Abra maestro-installer.exe para iniciar a instalação visual. O pacote precisa
 ser mantido completo: wizard/, release/, authority-registry.json e o
@@ -365,7 +481,7 @@ bcgos-bootstrap_<versao>_windows_amd64.exe devem permanecer ao lado do
 executável. Run-Maestro-Rehearsal.cmd inicia apenas um ensaio técnico com
 --simulate, usa somente o perfil do usuário e não pede administrador.
 
-Esta versão ainda não possui Authenticode; use somente como candidato técnico.
+$readmeTrust
 O arquivo bcgos_<versao>_windows_amd64.exe dentro de release/ é o runtime CLI,
 não um instalador e não deve ser enviado separadamente.
 
@@ -407,7 +523,12 @@ pause
     }
     $archiveDigest = (Get-FileHash -LiteralPath $archiveOutput -Algorithm SHA256).Hash.ToLowerInvariant()
     $succeeded = $true
-    Write-Output "unsigned Windows installer candidate: $outputFull"
+    if ($LocalBeta) {
+        Write-Output "unsigned controlled local-beta Windows installer candidate: $outputFull"
+    }
+    else {
+        Write-Output "unsigned Windows installer candidate: $outputFull"
+    }
     Write-Output "portable archive: $archiveOutput"
     Write-Output "portable archive sha256: $archiveDigest"
     Write-Output "provenance: $provenancePath"

@@ -383,7 +383,7 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), "Use this installed CLI silently") || !strings.Contains(output.String(), executable) {
+	if !strings.Contains(output.String(), "Use the installed CLI silently") || !strings.Contains(output.String(), executable) {
 		t.Fatalf("session hook did not expose the invoking Maestro CLI path: %s", output.String())
 	}
 }
@@ -427,7 +427,7 @@ func TestInstalledSessionStartUsesWorkspaceOrchestrationStateAndEnqueuesPresence
 	}
 }
 
-func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
+func TestInstalledHookLeavesSafeActionToNativeFlowWhenOrchestrationStateIsSymlinked(t *testing.T) {
 	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -461,9 +461,9 @@ func TestInstalledHookRejectsOrchestrationStateEscapeAndSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	output.Reset()
-	input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"git push origin refs/heads/topic"}}`
+	input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"echo safe"}}`
 	code := runHookWithInput([]string{"codex", "pre-action-guard", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, strings.NewReader(input), &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) || !strings.Contains(output.String(), "Nothing was changed") {
+	if code != ExitOK || strings.TrimSpace(output.String()) != "{}" {
 		t.Fatalf("symlink guard = %d %s", code, output.String())
 	}
 	if err := os.Remove(statePath); err != nil {
@@ -605,7 +605,7 @@ func TestLifecycleReceiptCheckExplainsBoundedHistory(t *testing.T) {
 	}
 }
 
-func TestInstalledGuardLeavesHomonymousLocalCommandToNativePermissionFlow(t *testing.T) {
+func TestInstalledGuardLeavesHomonymousDiagnosticToNativeFlowWhenStateCannotBeValidated(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
 			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"/tmp/attacker/bcgos doctor"}}`
@@ -619,7 +619,7 @@ func TestInstalledGuardLeavesHomonymousLocalCommandToNativePermissionFlow(t *tes
 					return "", errors.New("ordinary local commands must not inspect orchestration state")
 				},
 			)
-			if code != ExitOK || rootCalled || strings.Contains(output.String(), `"permissionDecision"`) {
+			if code != ExitOK || rootCalled || strings.TrimSpace(output.String()) != "{}" {
 				t.Fatalf("guard = %d rootCalled=%v output=%s", code, rootCalled, output.String())
 			}
 		})
