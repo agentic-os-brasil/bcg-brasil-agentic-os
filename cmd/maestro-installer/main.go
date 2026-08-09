@@ -66,6 +66,7 @@ type options struct {
 	chooseWorkspaceSource func(workspaceFlowMode) (string, error)
 	workspacePath         func() (string, error)
 	configureWorkspace    func(options, string) (workspaceActivation, error)
+	authorizeSetup        func(options, string) (workspaceSetupAuthorization, error)
 	commandRunner         commandRunner
 	workspaceFlow         workspaceFlowBackend
 	nativeTrustMode       installer.NativeTrustMode
@@ -98,6 +99,11 @@ type workspaceActivation struct {
 	WorkspaceID string                `json:"workspace_id"`
 	Lifecycle   lifecycleActivation   `json:"lifecycle"`
 	Maintenance maintenanceActivation `json:"maintenance"`
+}
+
+type workspaceSetupAuthorization struct {
+	State       string `json:"state"`
+	GrantDigest string `json:"grant_digest,omitempty"`
 }
 
 type lifecycleActivation struct {
@@ -859,9 +865,14 @@ func wizardHandler(options options) http.Handler {
 		defer options.lifecycle.endMutation()
 		var payload struct {
 			ImportExisting bool `json:"import_existing"`
+			AuthorizeSetup bool `json:"authorize_setup"`
 		}
 		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": "não foi possível entender sua escolha de memória"})
+			return
+		}
+		if !payload.AuthorizeSetup {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": "confirme uma vez que o Maestro pode preparar, diagnosticar e reparar o setup local reversível"})
 			return
 		}
 		workspacePath, err := defaultWorkspacePath(options)
@@ -872,6 +883,15 @@ func wizardHandler(options options) http.Handler {
 		result, activation, err := initializeDefaultWorkspace(options, workspacePath)
 		if err != nil {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		authorize := options.authorizeSetup
+		if authorize == nil {
+			authorize = authorizeWorkspaceSetup
+		}
+		setupAuthorization, err := authorize(options, workspacePath)
+		if err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("o workspace ficou pronto, mas a autorização one-and-done não foi registrada: %v", err)})
 			return
 		}
 		var sourcePath string
@@ -921,7 +941,7 @@ func wizardHandler(options options) http.Handler {
 			"ingestion_state": map[bool]string{true: "not_ingested_pointer_only", false: "not_requested"}[sourcePath != ""],
 			"adapter_state":   activation.Lifecycle.State, "readiness_state": activation.State, "scheduler_state": activation.Maintenance.State,
 			"ready_for_runtime": activation.State == "ready", "diagnostic_command": workspaceDiagnosticCommand(options, result.WorkspacePath),
-			"activation": activation, "receipt": workspaceReceipt,
+			"activation": activation, "setup_authorization": setupAuthorization, "receipt": workspaceReceipt,
 		})
 	})
 	mux.HandleFunc("/api/launch-runtime", func(writer http.ResponseWriter, request *http.Request) {
@@ -1511,6 +1531,36 @@ func initializeDefaultWorkspace(options options, workspacePath string) (workspac
 
 func configureWorkspaceRuntime(options options, workspacePath string) (workspaceActivation, error) {
 	return configureWorkspaceRuntimeForPlatform(options, workspacePath, runtime.GOOS)
+}
+
+func authorizeWorkspaceSetup(options options, workspacePath string) (workspaceSetupAuthorization, error) {
+	cliPath := installedCLIPath(options)
+	if cliPath == "" {
+		return workspaceSetupAuthorization{}, fmt.Errorf("o executável instalado do Maestro não foi encontrado")
+	}
+	runner := options.commandRunner
+	if runner == nil {
+		runner = execCommandRunner{}
+	}
+	runtimeName, err := primaryRuntime(options)
+	if err != nil {
+		return workspaceSetupAuthorization{}, err
+	}
+	arguments := []string{"setup", "apply", "--workspace", workspacePath, "--runtime", runtimeName, "--executable", cliPath, "--confirm"}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	output, err := runner.Run(ctx, cliPath, arguments)
+	if err != nil {
+		return workspaceSetupAuthorization{}, commandStepError(cliPath, arguments, output, err)
+	}
+	var report struct {
+		State         string                      `json:"state"`
+		Authorization workspaceSetupAuthorization `json:"authorization"`
+	}
+	if err := json.Unmarshal(output, &report); err != nil || (report.State != "complete" && report.State != "complete_with_external_actions_pending") || report.Authorization.State != "active" || strings.TrimSpace(report.Authorization.GrantDigest) == "" {
+		return workspaceSetupAuthorization{}, readinessError(cliPath, arguments, "o receipt de autorização one-and-done é inválido")
+	}
+	return report.Authorization, nil
 }
 
 func configureWorkspaceRuntimeForPlatform(options options, workspacePath, platform string) (workspaceActivation, error) {
