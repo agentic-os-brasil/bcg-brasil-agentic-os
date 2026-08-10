@@ -29,6 +29,12 @@ func TestValidateAuthenticodeStatusAllowsOnlyTheGovernedLocalBetaException(t *te
 	}{
 		{name: "strict valid", mode: NativeTrustStrict, status: "Valid", ok: true},
 		{name: "strict unsigned", mode: NativeTrustStrict, status: "NotSigned"},
+		{name: "canary simple unsigned", mode: NativeTrustCanarySimple, status: "NotSigned", ok: true},
+		{name: "canary simple valid", mode: NativeTrustCanarySimple, status: "Valid", ok: true},
+		{name: "canary simple hash mismatch is diagnostic", mode: NativeTrustCanarySimple, status: "HashMismatch", ok: true},
+		{name: "canary simple untrusted is diagnostic", mode: NativeTrustCanarySimple, status: "NotTrusted", ok: true},
+		{name: "canary simple unknown is diagnostic", mode: NativeTrustCanarySimple, status: "UnknownError", ok: true},
+		{name: "canary simple unsupported is diagnostic", mode: NativeTrustCanarySimple, status: "NotSupported", ok: true},
 		{name: "local beta valid signature is outside the exact beta contract", mode: NativeTrustWindowsLocalBeta, status: "Valid"},
 		{name: "local beta unsigned", mode: NativeTrustWindowsLocalBeta, status: "NotSigned", ok: true},
 		{name: "local beta hash mismatch", mode: NativeTrustWindowsLocalBeta, status: "HashMismatch"},

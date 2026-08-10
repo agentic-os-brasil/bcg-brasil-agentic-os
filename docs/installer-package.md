@@ -54,6 +54,12 @@ exits. This wrapper does not replace release-manifest or native-signature
 verification. Its output is still `unsigned-candidate` until the approved
 Authenticode step is completed.
 
+For an explicitly owner-directed `canary-simple` test, the platform's
+Authenticode status is diagnostic and does not block the installation. Empty or
+malformed status output is still rejected. The `strict` profile continues to
+require `Valid`, and the pinned `windows-local-beta` profile continues to
+require its exact `NotSigned` exception and package digests.
+
 ### Controlled Windows local beta
 
 Decision `CARY` permits one narrower pre-pilot package profile while the

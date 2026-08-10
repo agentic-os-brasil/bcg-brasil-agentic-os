@@ -980,6 +980,13 @@ func validateAuthenticodeStatus(output []byte, mode NativeTrustMode) error {
 	if status == "" || strings.ContainsAny(status, "\r\n") {
 		return errors.New("Authenticode returned an invalid bootstrapper status")
 	}
+	if mode == NativeTrustCanarySimple {
+		// Canary-simple is an explicit owner-directed local diagnostic profile:
+		// platform status must not block the test. Release Ed25519 verification
+		// and package integrity remain enforced separately. Strict and pinned
+		// local-beta profiles retain their narrower trust contracts below.
+		return nil
+	}
 	if status == "Valid" && mode == NativeTrustStrict {
 		return nil
 	}
