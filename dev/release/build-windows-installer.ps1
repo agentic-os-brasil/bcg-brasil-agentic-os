@@ -24,6 +24,7 @@ param(
     [string]$ArchiveOutput = "",
     [string]$ResourceCompiler = "windres",
     [switch]$Windowed,
+    [switch]$CanarySimple,
     [switch]$LocalBeta,
     [string]$LocalBetaIssuer = "",
     [string]$LocalBetaKeyID = "",
@@ -56,6 +57,9 @@ if ($LocalBeta) {
     if ($LocalBetaAuthorityRegistrySHA256 -notmatch $sha256Pattern -or $LocalBetaBootstrapperSHA256 -notmatch $sha256Pattern) {
         throw "LocalBeta authority-registry and bootstrapper pins must be lowercase SHA-256 values."
     }
+}
+if ($CanarySimple -and $LocalBeta) {
+    throw "CanarySimple and LocalBeta cannot be combined."
 }
 elseif (@($localBetaValues | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -ne 0) {
     throw "LocalBeta issuer, key ID and digest pins are valid only with -LocalBeta."
@@ -285,7 +289,10 @@ if (Test-Path -LiteralPath $packageOutput) {
 $packageParent = Split-Path -Parent $packageOutput
 if ([string]::IsNullOrWhiteSpace($ArchiveOutput)) {
     $archiveName = "Maestro-Installer-$Version-windows-amd64-portable-unsigned.zip"
-    if ($LocalBeta) {
+    if ($CanarySimple) {
+        $archiveName = "Maestro-Installer-$Version-windows-amd64-portable-canary-simple-unsigned.zip"
+    }
+    elseif ($LocalBeta) {
         $archiveName = "Maestro-Installer-$Version-windows-amd64-portable-local-beta-unsigned.zip"
     }
     $ArchiveOutput = Join-Path $packageParent $archiveName
@@ -361,7 +368,10 @@ try {
         if ($Windowed) {
             $linkerFlags.Add("-H=windowsgui")
         }
-        if ($LocalBeta) {
+        if ($CanarySimple) {
+            $linkerFlags.Add("-X main.BuildTrustProfile=canary-simple")
+        }
+        elseif ($LocalBeta) {
             $linkerFlags.Add("-X main.BuildTrustProfile=windows-local-beta")
             $linkerFlags.Add("-X main.BuildLocalBetaIssuer=$LocalBetaIssuer")
             $linkerFlags.Add("-X main.BuildLocalBetaKeyID=$LocalBetaKeyID")
@@ -417,9 +427,13 @@ try {
 	}
 
     $resourceDigest = (Get-FileHash -LiteralPath $sysoPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $distributionProfile = "strict"
-    $nativeSignature = "pending"
-    if ($LocalBeta) {
+$distributionProfile = "strict"
+$nativeSignature = "pending"
+if ($CanarySimple) {
+    $distributionProfile = "canary-simple"
+    $nativeSignature = "not-signed-controlled-canary"
+}
+elseif ($LocalBeta) {
         $distributionProfile = "windows-local-beta"
         $nativeSignature = "not-signed-controlled-canary"
     }
