@@ -133,7 +133,7 @@ func TestDiagnoseRuntimeFailsClosedForTruncatedReceipt(t *testing.T) {
 	}
 }
 
-func TestDiagnoseRuntimeReturnsNMostRecentOnOverflow(t *testing.T) {
+func TestDiagnoseRuntimeFailsClosedOnOverflow(t *testing.T) {
 	root := t.TempDir()
 	total := MaximumDiagnosticReceiptEntries + 5
 	for index := 0; index < total; index++ {
@@ -146,11 +146,7 @@ func TestDiagnoseRuntimeReturnsNMostRecentOnOverflow(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	summary, err := DiagnoseRuntime(root, testWorkspaceID, "claude")
-	if err != nil {
-		t.Fatalf("overflow should succeed and return N most recent: %v", err)
-	}
-	if summary.Observed != MaximumDiagnosticReceiptEntries {
-		t.Fatalf("expected %d observed receipts, got %d", MaximumDiagnosticReceiptEntries, summary.Observed)
+	if _, err := DiagnoseRuntime(root, testWorkspaceID, "claude"); err == nil || !strings.Contains(err.Error(), "bounded diagnostic limit") {
+		t.Fatalf("overflow must fail closed, err = %v", err)
 	}
 }

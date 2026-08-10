@@ -28,9 +28,9 @@ const (
 	// receipt. It deliberately does not claim that a qualifying native runtime
 	// session invoked that command.
 	AdapterCommand = "adapter_command"
-	// MaximumDiagnosticReceiptEntries is the number of most-recent receipts
-	// retained for a diagnostic projection. Older receipts beyond this window
-	// are silently dropped; overflow is never an error.
+	// MaximumDiagnosticReceiptEntries bounds one diagnostic receipt scan. A
+	// larger directory fails closed: a partial directory order is not evidence
+	// of the most-recent lifecycle activity.
 	MaximumDiagnosticReceiptEntries = 512
 	maximumReceiptBytes             = 8 << 10
 )
@@ -176,7 +176,10 @@ func diagnose(dataRoot, workspaceID, runtime string) (Summary, error) {
 	if err != nil && !errors.Is(err, io.EOF) {
 		return Summary{}, fmt.Errorf("read bounded receipt root: %w", err)
 	}
-	// Parse only a bounded directory window, then keep the N most recent valid receipts.
+	if len(entries) > MaximumDiagnosticReceiptEntries {
+		return Summary{}, errors.New("lifecycle receipt scan exceeds bounded diagnostic limit")
+	}
+	// The complete bounded directory window is safe to sort by receipt time.
 	var allReceipts []Receipt
 	for _, entry := range entries {
 		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !strings.HasSuffix(entry.Name(), ".json") {
@@ -195,13 +198,10 @@ func diagnose(dataRoot, workspaceID, runtime string) (Summary, error) {
 		}
 		allReceipts = append(allReceipts, receipt)
 	}
-	// Sort by OccurredAt descending (most recent first), then truncate to window.
+	// Sort by OccurredAt descending for deterministic summary selection.
 	sort.Slice(allReceipts, func(i, j int) bool {
 		return allReceipts[i].OccurredAt.After(allReceipts[j].OccurredAt)
 	})
-	if len(allReceipts) > MaximumDiagnosticReceiptEntries {
-		allReceipts = allReceipts[:MaximumDiagnosticReceiptEntries]
-	}
 	events := map[string]bool{}
 	provenance := map[string]bool{}
 	var latest Receipt

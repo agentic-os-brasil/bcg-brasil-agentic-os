@@ -36,9 +36,9 @@ func Build(runtime string, packet sessionctx.Packet) (Envelope, error) {
 		State:                packet.State,
 		Packet:               packet,
 		AvailabilityState:    "enabled",
-		AdapterDeliveryState: "operational",
+		AdapterDeliveryState: "configured",
 		NativeEvidenceState:  "native_qualification_pending",
 		InjectionState:       "unavailable",
-		Message:              "bounded session envelope is operational; native evidence is tracked separately",
+		Message:              "bounded session envelope is configured; adapter and native evidence are tracked separately",
 	}, nil
 }

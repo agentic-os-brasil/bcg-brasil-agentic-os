@@ -91,11 +91,10 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 		return "", err
 	}
 	envelope.Event = semanticEvent
-	// This serializer is invoked by an adapter or its direct conformance
-	// command. The manifest still owns capability state, so report emitted
-	// payload separately from qualifying native-session evidence.
-	envelope.AdapterDeliveryState = "operational"
-	envelope.Message = "bounded adapter payload emitted; runtime contract is operational while native evidence is tracked separately"
+	// Serialization proves only that this deterministic code path can render a
+	// payload. It is not evidence that a runtime loaded or delivered the hook.
+	envelope.AdapterDeliveryState = "configured"
+	envelope.Message = "bounded adapter payload rendered; adapter and native evidence are tracked separately"
 	body, err := json.Marshal(envelope)
 	if err != nil {
 		return "", fmt.Errorf("encode session envelope: %w", err)

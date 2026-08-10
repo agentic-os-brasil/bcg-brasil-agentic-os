@@ -28,7 +28,7 @@ func TestBuildCreatesEquivalentBoundedEnvelopeForClaudeAndCodex(t *testing.T) {
 	if codex.Runtime != "codex" || !reflect.DeepEqual(codex.Packet, claude.Packet) || codex.State != claude.State {
 		t.Fatalf("cross-runtime envelope differs: claude=%#v codex=%#v", claude, codex)
 	}
-	if claude.AvailabilityState != "enabled" || claude.AdapterDeliveryState != "operational" || claude.NativeEvidenceState != "native_qualification_pending" || claude.InjectionState != "unavailable" || claude.Message == "" {
+	if claude.AvailabilityState != "enabled" || claude.AdapterDeliveryState != "configured" || claude.NativeEvidenceState != "native_qualification_pending" || claude.InjectionState != "unavailable" || claude.Message == "" {
 		t.Fatalf("envelope must separate availability from native evidence: %#v", claude)
 	}
 }

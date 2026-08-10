@@ -290,10 +290,16 @@ func validateEvidence(value CapabilityEvidence) error {
 		ReasonSourceUnavailable: true,
 	}
 	switch {
-	case value.State == EvidenceOperational:
-		// operational is product availability, while native evidence remains separate.
-		// Evidence ordering is still enforced so telemetry cannot claim impossible proof.
-		if !value.Configured || value.Unavailable || value.Reason != "" || value.NativeQualified && !value.AdapterObserved {
+	case value.State == EvidenceConfigured:
+		if !value.Configured || value.AdapterObserved || value.NativeQualified || value.Unavailable || value.Reason != "" {
+			return errors.New("continuous-use capability evidence is inconsistent")
+		}
+	case value.State == EvidenceAdapterObserved:
+		if !value.Configured || !value.AdapterObserved || value.NativeQualified || value.Unavailable || value.Reason != "" {
+			return errors.New("continuous-use capability evidence is inconsistent")
+		}
+	case value.State == EvidenceNativeQualified:
+		if !value.Configured || !value.AdapterObserved || !value.NativeQualified || value.Unavailable || value.Reason != "" {
 			return errors.New("continuous-use capability evidence is inconsistent")
 		}
 	case value.State == EvidenceUnavailable:
@@ -309,11 +315,15 @@ func validateEvidence(value CapabilityEvidence) error {
 }
 
 func evidence(configured, observed, qualified bool, reason string) CapabilityEvidence {
+	if qualified {
+		return CapabilityEvidence{State: EvidenceNativeQualified, Configured: true, AdapterObserved: true, NativeQualified: true}
+	}
+	if observed {
+		return CapabilityEvidence{State: EvidenceAdapterObserved, Configured: configured, AdapterObserved: true}
+	}
 	if configured {
 		return CapabilityEvidence{
-			State: EvidenceOperational, Configured: true,
-			AdapterObserved: observed, NativeQualified: qualified,
-			Unavailable: false, Reason: "",
+			State: EvidenceConfigured, Configured: true,
 		}
 	}
 	if reason == "" {
