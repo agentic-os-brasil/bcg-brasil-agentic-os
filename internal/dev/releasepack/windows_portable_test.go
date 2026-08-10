@@ -94,6 +94,8 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	orientation := string(entries[root+"workspace/CLAUDE.md"])
 	for _, required := range []string{
 		"Nao peca para a pessoa digitar ou executar comandos",
+		"Antes de pedir confirmacao, confirme silenciosamente que o sistema e Windows",
+		"Se nao for Windows, pare antes da ativacao",
 		"Peca uma unica confirmacao curta",
 		`cmd.exe /d /c "..\managed\activate-maestro.cmd"`,
 		"releia este CLAUDE.md",
@@ -106,9 +108,10 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 		}
 	}
 	confirmation := strings.Index(orientation, "Peca uma unica confirmacao curta")
+	platformCheck := strings.Index(orientation, "Antes de pedir confirmacao, confirme silenciosamente que o sistema e Windows")
 	activationCommand := strings.Index(orientation, `cmd.exe /d /c "..\managed\activate-maestro.cmd"`)
-	if confirmation < 0 || activationCommand < 0 || confirmation > activationCommand {
-		t.Fatal("portable CLAUDE.md must require confirmation before internal activation")
+	if platformCheck < 0 || confirmation < 0 || activationCommand < 0 || platformCheck > confirmation || confirmation > activationCommand {
+		t.Fatal("portable CLAUDE.md must check Windows and require confirmation before internal activation")
 	}
 	for name := range entries {
 		if strings.Contains(strings.ToLower(name), "wizard") || strings.HasSuffix(strings.ToLower(name), "maestro-installer.exe") {
@@ -129,6 +132,22 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	}
 	if second.SHA256 != result.SHA256 {
 		t.Fatalf("portable archive is not deterministic: %s != %s", second.SHA256, result.SHA256)
+	}
+}
+
+func TestPortableActivationComparesVersionWithoutFindstr(t *testing.T) {
+	script := string(portableActivationScript("0.1.25"))
+	for _, required := range []string{
+		`set "VERSION_OUTPUT=%TEMP%\maestro-version-%RANDOM%-%RANDOM%.txt"`,
+		`set /p "ACTUAL_VERSION="<"%VERSION_OUTPUT%"`,
+		`if not "%ACTUAL_VERSION%"=="bcgos 0.1.25"`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("activation script is missing robust version check %q:\n%s", required, script)
+		}
+	}
+	if strings.Contains(strings.ToLower(script), "findstr") {
+		t.Fatal("activation script must not use findstr for exact CLI version matching")
 	}
 }
 
