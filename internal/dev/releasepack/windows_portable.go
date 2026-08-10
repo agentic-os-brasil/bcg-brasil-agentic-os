@@ -421,8 +421,17 @@ func portableActivationScript(version string) []byte {
 		"  \"%MANAGED%\\bcgos-bootstrap.exe\" install --verified-directory \"%ROOT%\\release\" --data-root \"%DATA%\"\r\n" +
 		"  if errorlevel 1 exit /b 1\r\n" +
 		")\r\n" +
-		"\"%MANAGED%\\bin\\bcgos.exe\" version | findstr /x /c:\"bcgos " + version + "\" >nul\r\n" +
+		"set \"VERSION_OUTPUT=%TEMP%\\maestro-version-%RANDOM%-%RANDOM%.txt\"\r\n" +
+		"\"%MANAGED%\\bin\\bcgos.exe\" version >\"%VERSION_OUTPUT%\"\r\n" +
 		"if errorlevel 1 (\r\n" +
+		"  del /q \"%VERSION_OUTPUT%\" >nul 2>&1\r\n" +
+		"  echo The active bcgos version could not be read.\r\n" +
+		"  exit /b 1\r\n" +
+		")\r\n" +
+		"set \"ACTUAL_VERSION=\"\r\n" +
+		"set /p \"ACTUAL_VERSION=\"<\"%VERSION_OUTPUT%\"\r\n" +
+		"del /q \"%VERSION_OUTPUT%\" >nul 2>&1\r\n" +
+		"if not \"%ACTUAL_VERSION%\"==\"bcgos " + version + "\" (\r\n" +
 		"  echo The active bcgos version does not match this portable package.\r\n" +
 		"  exit /b 1\r\n" +
 		")\r\n" +
@@ -449,14 +458,16 @@ Voce esta na pasta de trabalho correta do Maestro. Conduza a pessoa em portugues
 
 ## Regra de primeiro uso
 
-1. Em toda primeira mensagem, verifique silenciosamente se .bcgos/runtime-projection.json existe.
-2. Se existir, releia este CLAUDE.md e siga o bloco gerenciado do Maestro. Se a orientacao atual indicar que o onboarding ainda esta incompleto, use a skill maestro-onboarding e continue uma pergunta por vez. Se ele ja estiver concluido, atenda ao pedido normal da pessoa e nao repita o onboarding.
-3. Se nao existir, explique em uma frase que voce pode preparar o Maestro nesta pasta. Peca uma unica confirmacao curta antes de qualquer ativacao, por exemplo: "Posso preparar o Maestro agora?".
-4. Nao peca para a pessoa digitar ou executar comandos, abrir terminal ou localizar arquivos .cmd.
-5. Somente depois de uma resposta afirmativa clara, execute internamente, a partir desta pasta: cmd.exe /d /c "..\managed\activate-maestro.cmd".
-6. A permissao nativa do Claude Code ou do Windows pode aparecer. Explique que a pessoa deve aprovar somente se reconhecer este pacote Maestro; isso nao e uma segunda autorizacao do produto.
-7. Se a ativacao terminar com sucesso, releia este CLAUDE.md porque a projecao gerenciada foi acrescentada, informe que a preparacao terminou e invoque a skill maestro-onboarding.
-8. Se falhar, nao improvise instalacao, nao baixe substitutos e nao altere a estrutura. Resuma o erro em linguagem simples, confirme que nenhum trabalho da pessoa foi apagado e oriente-a a procurar o responsavel pelo piloto.
+1. Antes de pedir confirmacao, confirme silenciosamente que o sistema e Windows usando o contexto da sessao ou uma verificacao somente leitura.
+2. Se nao for Windows, pare antes da ativacao. Explique que este pacote funciona somente em Windows amd64 e nao tente executar, converter ou substituir seus binarios.
+3. No Windows, verifique silenciosamente se .bcgos/runtime-projection.json existe.
+4. Se existir, releia este CLAUDE.md e siga o bloco gerenciado do Maestro. Se a orientacao atual indicar que o onboarding ainda esta incompleto, use a skill maestro-onboarding e continue uma pergunta por vez. Se ele ja estiver concluido, atenda ao pedido normal da pessoa e nao repita o onboarding.
+5. Se nao existir, explique em uma frase que voce pode preparar o Maestro nesta pasta. Peca uma unica confirmacao curta antes de qualquer ativacao, por exemplo: "Posso preparar o Maestro agora?".
+6. Nao peca para a pessoa digitar ou executar comandos, abrir terminal ou localizar arquivos .cmd.
+7. Somente depois de uma resposta afirmativa clara, execute internamente, a partir desta pasta: cmd.exe /d /c "..\managed\activate-maestro.cmd".
+8. A permissao nativa do Claude Code ou do Windows pode aparecer. Explique que a pessoa deve aprovar somente se reconhecer este pacote Maestro; isso nao e uma segunda autorizacao do produto.
+9. Se a ativacao terminar com sucesso, releia este CLAUDE.md porque a projecao gerenciada foi acrescentada, informe que a preparacao terminou e invoque a skill maestro-onboarding.
+10. Se falhar, nao improvise instalacao, nao baixe substitutos e nao altere a estrutura. Resuma o erro em linguagem simples, confirme que nenhum trabalho da pessoa foi apagado e oriente-a a procurar o responsavel pelo piloto.
 
 A ativacao e idempotente: se uma tentativa anterior tiver terminado parcialmente, use o mesmo fluxo apos nova confirmacao e deixe o ativador verificar, reparar ou concluir o estado existente.
 `)
