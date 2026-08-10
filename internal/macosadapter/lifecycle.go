@@ -18,6 +18,11 @@ import (
 
 const maxRunnerOutput = 8192
 
+const (
+	nativeKickstartAttempts = 3
+	nativeKickstartBackoff  = 250 * time.Millisecond
+)
+
 // launchctlPath is deliberately absolute. A Finder-launched macOS app and a
 // restricted/headless shell may have different PATH values, but the native
 // lifecycle must not become environment-dependent.
@@ -163,12 +168,42 @@ func (lifecycle Lifecycle) Install(ctx context.Context, home string, spec Spec, 
 		_ = Uninstall(home, spec.Label)
 		return LaunchAgentStatus{State: "partial_bootstrap_failed", Path: filesystemStatus.Path, Label: spec.Label, Diagnostic: "launchctl bootstrap failed"}, err
 	}
-	if err := lifecycle.run(ctx, []string{"kickstart", "-k", "gui/" + lifecycle.UID + "/" + spec.Label}); err != nil {
+	if err := lifecycle.kickstartWithRecovery(ctx, home, spec.Label); err != nil {
 		_ = lifecycle.run(ctx, []string{"bootout", "gui/" + lifecycle.UID + "/" + spec.Label})
 		_ = Uninstall(home, spec.Label)
 		return LaunchAgentStatus{State: "partial_kickstart_failed", Path: filesystemStatus.Path, Label: spec.Label, Diagnostic: "launchctl kickstart failed"}, err
 	}
 	return lifecycle.Status(ctx, home, spec.Label)
+}
+
+// kickstartWithRecovery tolerates the short interval in which launchd has
+// accepted a plist but has not finished publishing the service. On macOS,
+// launchctl can return signal: killed during that handoff even though the
+// service is already loaded, or become ready on the next kickstart. Confirm
+// the native state before rolling back and retry only the idempotent kickstart
+// operation with a bounded backoff.
+func (lifecycle Lifecycle) kickstartWithRecovery(ctx context.Context, home, label string) error {
+	var lastErr error
+	for attempt := 0; attempt < nativeKickstartAttempts; attempt++ {
+		if attempt > 0 {
+			timer := time.NewTimer(nativeKickstartBackoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+		lastErr = lifecycle.run(ctx, []string{"kickstart", "-k", "gui/" + lifecycle.UID + "/" + label})
+		if lastErr == nil {
+			return nil
+		}
+		status, statusErr := lifecycle.Status(ctx, home, label)
+		if statusErr == nil && status.Loaded && status.Enabled {
+			return nil
+		}
+	}
+	return lastErr
 }
 
 func (lifecycle Lifecycle) Status(ctx context.Context, home, label string) (LaunchAgentStatus, error) {
