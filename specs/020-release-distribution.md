@@ -127,7 +127,7 @@ confined to `installers/trial`.
 
 A controlled Windows Canary may install real user-space product bytes before
 organization-owned Authenticode custody exists only through a packaging-time
-local-beta profile defined by decisions `CARY` and `PZIP`. This is not a
+local-beta profile defined by decisions `CARY` and `PONB`. This is not a
 production override and is not selectable by an end user. The current cohort
 handoff is `windows-portable-local-beta`: its factory requires an
 Ed25519-authenticated `canary` manifest, exact active issuer/key registry,
@@ -137,11 +137,22 @@ different channel or identity, digest drift, invalid native-signature state or
 verification failure remains fail-closed.
 
 The deterministic ZIP carries the complete closed signed release, the pinned
-registry and bootstrapper under the conventional managed-root seed, one empty
-workspace, bounded provenance and one activation command. It contains no
-wizard or installer bridge. The activation command delegates first install to
-the stable bootstrapper and then invokes the existing one-and-done Claude setup
-against the fixed packaged workspace. The ZIP and its executables remain
+registry and bootstrapper under the conventional managed-root seed, one seeded
+workspace, bounded provenance and one internal activation command. It contains
+no wizard, installer bridge or user-facing activation command. The workspace
+ships a first-use `CLAUDE.md`: the owner opens that folder in Claude Code and
+sends a natural-language message. Claude explains the bounded preparation,
+asks for the one setup confirmation and, only after an affirmative answer,
+invokes the internal activation command. The owner is never instructed to use
+a terminal or run a command. Native Claude Code or Windows permission prompts
+remain visible and cannot be bypassed.
+
+The internal activation command delegates first install to the stable
+bootstrapper and then invokes the existing one-and-done Claude setup against
+the fixed packaged workspace. Runtime projection preserves the seed
+orientation and appends the managed Maestro block and skills, so the first-use
+guide hands off to the ordinary onboarding without creating a second workspace
+structure. The ZIP and its executables remain
 unsigned controlled-beta candidates and require controlled delivery plus an
 independently published ZIP SHA-256. This does not satisfy native signing,
 clean-device, pilot or production gates. Moving the package after activation

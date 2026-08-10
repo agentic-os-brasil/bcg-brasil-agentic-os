@@ -68,6 +68,14 @@ This startup precedence does not grant tools, data access, agent authority or
 native-runtime evidence. Once onboarding is confirmed, ordinary governed
 method selection resumes from the same verified projection.
 
+A portable Windows package may seed user-authored first-use guidance before
+adapter installation. The guidance may ask for one conversational setup
+confirmation and direct Claude Code to invoke a package-internal deterministic
+activator, but it must never ask the owner to type or run a command. The normal
+projection preserves that seed text, appends only the marked managed block and
+then becomes the authority for subsequent onboarding. The seed cannot grant
+tools, suppress native host permissions or substitute for readiness checks.
+
 The runtime still requires its ordinary local trust/review behavior. An
 installed configuration is not proof that a runtime executed the hook; later
 doctor and conformance work will report that distinction. See Spec 021 for the

@@ -207,10 +207,11 @@ func BuildWindowsPortable(options WindowsPortableOptions) (WindowsPortableResult
 	}
 	provenanceBody = append(provenanceBody, '\n')
 	files := map[string][]byte{
-		"Activate-Maestro.cmd":     portableActivationScript(options.Version),
-		"README-PORTABLE.md":       portableReadme(options.Version),
-		"portable-provenance.json": provenanceBody,
-		"workspace/README.md":      []byte("# Maestro workspace\n\nOpen this workspace folder in Claude Desktop after running Activate-Maestro.cmd once.\n"),
+		"README-PORTABLE.md":           portableReadme(options.Version),
+		"managed/activate-maestro.cmd": portableActivationScript(options.Version),
+		"portable-provenance.json":     provenanceBody,
+		"workspace/CLAUDE.md":          portableClaudeOnboarding(),
+		"workspace/README.md":          []byte("# Workspace Maestro\n\nAbra esta pasta no Claude Code e envie uma mensagem para comecar. O Claude conduz a preparacao e o onboarding.\n"),
 	}
 	for relative, body := range files {
 		if err := copyRegularBytes(body, filepath.Join(root, filepath.FromSlash(relative)), 0o600); err != nil {
@@ -404,12 +405,12 @@ func portableActivationScript(version string) []byte {
 		"  echo LOCALAPPDATA is unavailable. Maestro was not activated.\r\n" +
 		"  exit /b 1\r\n" +
 		")\r\n" +
-		"set \"ROOT=%~dp0\"\r\n" +
-		"set \"MANAGED=%ROOT%managed\"\r\n" +
+		"for %%I in (\"%~dp0..\") do set \"ROOT=%%~fI\"\r\n" +
+		"set \"MANAGED=%ROOT%\\managed\"\r\n" +
 		"set \"DATA=%LOCALAPPDATA%\\BCGOS\"\r\n" +
-		"set \"WORKSPACE=%ROOT%workspace\"\r\n" +
+		"set \"WORKSPACE=%ROOT%\\workspace\"\r\n" +
 		"if not exist \"%MANAGED%\\bin\\bcgos.exe\" (\r\n" +
-		"  \"%MANAGED%\\bcgos-bootstrap.exe\" install --verified-directory \"%ROOT%release\" --data-root \"%DATA%\"\r\n" +
+		"  \"%MANAGED%\\bcgos-bootstrap.exe\" install --verified-directory \"%ROOT%\\release\" --data-root \"%DATA%\"\r\n" +
 		"  if errorlevel 1 exit /b 1\r\n" +
 		")\r\n" +
 		"\"%MANAGED%\\bin\\bcgos.exe\" version | findstr /x /c:\"bcgos " + version + "\" >nul\r\n" +
@@ -421,16 +422,36 @@ func portableActivationScript(version string) []byte {
 		"if errorlevel 1 exit /b 1\r\n" +
 		"\"%MANAGED%\\bin\\bcgos.exe\" adapter verify --runtime claude \"%WORKSPACE%\"\r\n" +
 		"if errorlevel 1 exit /b 1\r\n" +
-		"echo Maestro is ready. Open the workspace folder in Claude Desktop.\r\n")
+		"echo Maestro is ready. Return to Claude Code to continue onboarding.\r\n")
 }
 
 func portableReadme(version string) []byte {
-	return []byte("# Maestro Portable " + version + " for Windows\n\n" +
-		"Extract this complete directory to a fixed user-writable location and do not move it after activation. " +
-		"Run `Activate-Maestro.cmd` once, then open the workspace folder in Claude Desktop every day. " +
-		"Claude uses the installed absolute `bcgos.exe` path and the projected managed skills; no terminal or wizard is part of daily use.\n\n" +
-		"This is an unsigned controlled Canary package. Verify the separately delivered SHA-256 before activation. " +
-		"SmartScreen, WDAC or AppLocker may still block unsigned executables.\n")
+	return []byte("# Maestro Portable " + version + " para Windows\n\n" +
+		"1. Extraia a pasta completa para um local fixo em que voce possa gravar arquivos.\n" +
+		"2. Abra a pasta `workspace` no Claude Code.\n" +
+		"3. Envie uma mensagem como `Quero comecar`. O Claude explica e conduz o restante.\n\n" +
+		"Nao abra terminal e nao execute arquivos `.cmd`. Na primeira preparacao, o Claude pedira uma confirmacao curta e o Windows ou o Claude Code podera mostrar uma permissao nativa para voce aprovar. Depois disso, use sempre a mesma pasta `workspace`; nao mova a pasta completa depois da ativacao.\n\n" +
+		"Este e um pacote Canary controlado e sem assinatura Authenticode. Antes da entrega, o responsavel pelo piloto deve conferir o SHA-256 enviado separadamente. SmartScreen, WDAC ou AppLocker ainda podem bloquear executaveis sem assinatura.\n")
+}
+
+func portableClaudeOnboarding() []byte {
+	return []byte(`# Maestro Portable - primeiro uso
+
+Voce esta na pasta de trabalho correta do Maestro. Conduza a pessoa em portugues claro, sem presumir conhecimento tecnico.
+
+## Regra de primeiro uso
+
+1. Em toda primeira mensagem, verifique silenciosamente se .bcgos/runtime-projection.json existe.
+2. Se existir, releia este CLAUDE.md e siga o bloco gerenciado do Maestro. Se a orientacao atual indicar que o onboarding ainda esta incompleto, use a skill maestro-onboarding e continue uma pergunta por vez. Se ele ja estiver concluido, atenda ao pedido normal da pessoa e nao repita o onboarding.
+3. Se nao existir, explique em uma frase que voce pode preparar o Maestro nesta pasta. Peca uma unica confirmacao curta antes de qualquer ativacao, por exemplo: "Posso preparar o Maestro agora?".
+4. Nao peca para a pessoa digitar ou executar comandos, abrir terminal ou localizar arquivos .cmd.
+5. Somente depois de uma resposta afirmativa clara, execute internamente, a partir desta pasta: cmd.exe /d /c "..\managed\activate-maestro.cmd".
+6. A permissao nativa do Claude Code ou do Windows pode aparecer. Explique que a pessoa deve aprovar somente se reconhecer este pacote Maestro; isso nao e uma segunda autorizacao do produto.
+7. Se a ativacao terminar com sucesso, releia este CLAUDE.md porque a projecao gerenciada foi acrescentada, informe que a preparacao terminou e invoque a skill maestro-onboarding.
+8. Se falhar, nao improvise instalacao, nao baixe substitutos e nao altere a estrutura. Resuma o erro em linguagem simples, confirme que nenhum trabalho da pessoa foi apagado e oriente-a a procurar o responsavel pelo piloto.
+
+A ativacao e idempotente: se uma tentativa anterior tiver terminado parcialmente, use o mesmo fluxo apos nova confirmacao e deixe o ativador verificar, reparar ou concluir o estado existente.
+`)
 }
 
 func readBootstrapperSeedStatus(path string) (BootstrapperSeedStatus, error) {
