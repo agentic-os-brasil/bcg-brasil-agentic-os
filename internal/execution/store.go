@@ -77,6 +77,7 @@ const (
 	MaximumCheckpointBlockerBytes  = 256
 	MaximumCheckpointArtifactRefs  = 8
 	MaximumNextProjectionBytes     = 2048
+	MaximumListItems               = 128
 )
 
 type Criterion struct {
@@ -193,6 +194,20 @@ type Item struct {
 	Attempt    *Attempt         `json:"attempt,omitempty"`
 	Checkpoint *Checkpoint      `json:"checkpoint,omitempty"`
 	Evidence   *EvidenceReceipt `json:"evidence,omitempty"`
+}
+
+// Summary is the metadata-only projection used by `bcgos work list`. It is
+// intentionally safe to show during session orientation: objective text,
+// checkpoint bodies and artifact references remain behind explicit inspect or
+// next commands.
+type Summary struct {
+	ItemID          string    `json:"item_id"`
+	WorkspaceID     string    `json:"workspace_id"`
+	State           ItemState `json:"state"`
+	StateRevision   int       `json:"state_revision"`
+	ActiveAttemptID string    `json:"active_attempt_id,omitempty"`
+	CheckpointState string    `json:"checkpoint_state"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type Export struct {
@@ -692,6 +707,9 @@ func (store Store) activeItemIDs(workspaceID string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(entries) > MaximumListItems {
+		return nil, fmt.Errorf("execution item listing exceeds %d item bound", MaximumListItems)
+	}
 	active := make([]string, 0, 1)
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -732,6 +750,52 @@ func (store Store) Inspect(workspaceID, itemID string) (Item, error) {
 		return Item{}, err
 	}
 	return store.inspectUnlocked(workspaceID, itemID)
+}
+
+// List returns bounded metadata for every valid execution item in a
+// workspace. A malformed item fails closed instead of being silently omitted.
+func (store Store) List(workspaceID string) ([]Summary, error) {
+	if err := validateStoreRoot(store.Root); err != nil {
+		return nil, err
+	}
+	if err := validateID("workspace", workspaceID); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(store.itemsRoot(workspaceID))
+	if errors.Is(err, os.ErrNotExist) {
+		return []Summary{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) > MaximumListItems {
+		return nil, fmt.Errorf("execution item listing exceeds %d item bound", MaximumListItems)
+	}
+	items := make([]Summary, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if err := validateID("item", entry.Name()); err != nil {
+			return nil, fmt.Errorf("invalid execution item directory %q: %w", entry.Name(), err)
+		}
+		item, err := store.Inspect(workspaceID, entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("inspect execution item %s: %w", entry.Name(), err)
+		}
+		checkpointState := CheckpointMissing
+		if item.Checkpoint != nil {
+			checkpointState = CheckpointAvailable
+		}
+		items = append(items, Summary{
+			ItemID: item.State.ItemID, WorkspaceID: item.State.WorkspaceID,
+			State: item.State.State, StateRevision: item.State.StateRevision,
+			ActiveAttemptID: item.State.ActiveAttemptID,
+			CheckpointState: checkpointState, UpdatedAt: item.State.UpdatedAt,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ItemID < items[j].ItemID })
+	return items, nil
 }
 
 func (store Store) inspectUnlocked(workspaceID, itemID string) (Item, error) {

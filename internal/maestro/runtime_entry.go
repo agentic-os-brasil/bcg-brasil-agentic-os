@@ -26,6 +26,8 @@ type DispatchBoundaryReceipt struct {
 	BindingChainDigest   string `json:"binding_chain_digest"`
 	State                Stage  `json:"state"`
 	Outcome              string `json:"outcome"`
+	OrchestrationStage   Stage  `json:"orchestration_stage,omitempty"`
+	AgentEventCount      int    `json:"agent_event_count,omitempty"`
 }
 
 type DispatchRecoveryMarker struct {

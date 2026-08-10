@@ -378,6 +378,7 @@ Comandos disponíveis na superfície do CLI:
 ```text
 bcgos work schema
 bcgos work create --workspace <workspace> --stdin
+bcgos work list --workspace <workspace>
 bcgos work start --workspace <workspace> --item <id> --revision <n>
 bcgos work checkpoint --workspace <workspace> --item <id> --revision <n> --attempt <id> --stdin
 bcgos work evidence --workspace <workspace> --item <id> --revision <n> --attempt <id> --criterion <id>
@@ -385,6 +386,7 @@ bcgos work pause --workspace <workspace> --item <id> --revision <n> --attempt <i
 bcgos work resume --workspace <workspace> --item <id> --revision <n>
 bcgos work inspect --workspace <workspace> --item <id>
 bcgos work export --workspace <workspace> --item <id>
+bcgos owner agent list
 ```
 
 Antes do primeiro `create`, rode `bcgos work schema`. O comando não lê o
@@ -411,6 +413,14 @@ Exemplo mínimo para uma entrega em arquivo:
 }
 ```
 
+`work list` retorna somente metadados bounded (ID, estado, revisão, tentativa
+ativa e presença de checkpoint); o objetivo e o corpo do checkpoint continuam
+protegidos por `inspect`/`next`. O checkpoint exige `--stdin` de forma explícita
+para evitar que uma chamada vazia seja confundida com continuidade persistida.
+`owner agent list` é uma consulta read-only dos agentes gerenciados e informa
+se cada papel foi apenas resolvido pela identidade ou se há um scaffold
+registrado; listar não cria nem ativa agentes.
+
 Ao abrir uma nova sessão, o Maestro apresenta a mesma projeção de
 `bcgos maestro status <workspace-path-or-id>`. Se houver um único trabalho ativo, ele
 mostra apenas `bcgos://execution/active`, o estado e se existe checkpoint. Para
@@ -423,6 +433,10 @@ bcgos work next --active --workspace <workspace>
 Um runtime configurado ou um receipt local pode aparecer como `configured` ou
 `adapter_observed`; isso não significa `native_qualified`. `unavailable`
 permanece explícito até existir evidência nativa atendida para a versão exata.
+O contador `attested_capture_files` mede apenas capturas de memória que foram
+explicitamente atestadas e persistidas pelo produtor autorizado. Contexto base
+injetado por SessionStart, `CLAUDE.md` ou skills não cria captura atestada e,
+portanto, não deve elevar esse contador.
 Nenhuma sessão fabrica checkpoint, injeta transcript ou promove memória para
 deep dreaming/lifetime automaticamente.
 Esse status não acumula sessões nem receipts: ele é recalculado em um formato
@@ -443,6 +457,12 @@ Boas práticas:
 
 O ledger é uma memória operacional auditável. Ele não é uma licença para
 persistir tudo, nem substitui revisão humana em decisões de alto risco.
+
+O guard de remoção permanece deliberadamente conservador: um `rm` isolado e
+bounded pode ser avaliado, mas remoções encadeadas ou shell complexo podem ser
+negadas quando a análise não consegue provar o alvo com segurança. Reexecute a
+operação em uma chamada simples e confirme o caminho; isso é uma limitação de
+análise do guard, não uma falha de instalação.
 
 ## 7. Ingestão de documentos e fontes
 
