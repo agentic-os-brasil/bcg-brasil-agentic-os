@@ -951,3 +951,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The owner journey becomes extract, open `workspace/`, send a message and confirm once; daily use remains opening the same workspace and speaking normally. The internal activator stays deterministic, idempotent and independently testable, and setup failure cannot trigger improvised downloads or alternate structures. The package still cannot move after activation, and its unsigned ZIP/executables retain the controlled-delivery, out-of-band SHA-256, SmartScreen/WDAC/AppLocker and non-production limitations inherited from PZIP.
 - Refs: CARY; COFS; specs/020-release-distribution.md; specs/026-workspace-local-adapter-installation.md; docs/installer-package.md; docs/windows-pilot-distribution.md; internal/dev/releasepack/windows_portable.go; internal/dev/releasepack/windows_portable_test.go
 - Supersedes: PZIP
+
+## PONB-1 - Keep the portable artifact Windows-only
+
+- Date: 2026-08-10
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The portable package is a Windows distribution surface; using a macOS build host to emulate PE/AuthentiCode inspection creates a weaker proof than the real Windows factory. macOS already has a dedicated DMG journey.
+- Decision: The portable Windows factory runs only on Windows and fails closed elsewhere with explicit DMG guidance. macOS users must install through the Maestro DMG; the ZIP is not a macOS installer. The Windows factory performs the native seed and Authenticode checks on Windows.
+- Consequences: Windows portable packaging is validated on the target OS, while macOS distribution remains the DMG. Documentation and skills must keep the surfaces separate. The portable package remains a controlled unsigned Canary until organization-owned signing and clean-device evidence exist.
+- Refs: PONB; specs/020-release-distribution.md; docs/installer-package.md; dev/skills/release-export/SKILL.md; internal/dev/releasepack/windows_portable.go
+- Supersedes: PONB (portable workspace naming remains `maestro-os`)

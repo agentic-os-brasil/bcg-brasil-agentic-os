@@ -32,10 +32,10 @@ ZIPs, executáveis, chaves, certificados, tokens ou dados de usuário na `main`.
 
 ## Exportar o ZIP portátil Windows
 
-Execute a partir da raiz do repositório. Em Windows, a factory executa
-`seed-status` e usa `Get-AuthenticodeSignature`. Em macOS/Linux, ela não tenta
-executar o PE: valida de forma bounded os valores linker-bound do seed e lê a
-certificate table do PE, mantendo a exigência de `NotSigned` para o Canary:
+Execute a partir da raiz do repositório. Esta factory é Windows-only: em macOS
+ou Linux ela falha explicitamente e orienta usar o DMG do Maestro. No Windows,
+ela executa `seed-status` e usa `Get-AuthenticodeSignature`, mantendo a
+exigência de `NotSigned` para o Canary:
 
 ```sh
 dev/skills/release-export/scripts/export-release.sh \

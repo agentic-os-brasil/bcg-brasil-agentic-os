@@ -67,6 +67,9 @@ type windowsPortableProvenance struct {
 }
 
 func BuildWindowsPortable(options WindowsPortableOptions) (WindowsPortableResult, error) {
+	if runtime.GOOS != "windows" {
+		return WindowsPortableResult{}, errors.New("portable-windows export is Windows-only; use the macOS DMG on macOS")
+	}
 	if !portableVersionPattern.MatchString(options.Version) {
 		return WindowsPortableResult{}, errors.New("portable version must be MAJOR.MINOR.PATCH")
 	}
@@ -215,8 +218,8 @@ func BuildWindowsPortable(options WindowsPortableOptions) (WindowsPortableResult
 		"README-PORTABLE.md":           portableReadme(options.Version),
 		"managed/activate-maestro.cmd": portableActivationScript(options.Version),
 		"portable-provenance.json":     provenanceBody,
-		"maestro-os/CLAUDE.md":          portableClaudeOnboarding(),
-		"maestro-os/README.md":          []byte("# Maestro OS\n\nAbra esta pasta no Claude Code e envie uma mensagem para comecar. O Claude conduz a preparacao e o onboarding.\n"),
+		"maestro-os/CLAUDE.md":         portableClaudeOnboarding(),
+		"maestro-os/README.md":         []byte("# Maestro OS\n\nAbra esta pasta no Claude Code e envie uma mensagem para comecar. O Claude conduz a preparacao e o onboarding.\n"),
 	}
 	for relative, body := range files {
 		if err := copyRegularBytes(body, filepath.Join(root, filepath.FromSlash(relative)), 0o600); err != nil {

@@ -67,15 +67,14 @@ inner bridge all four public bindings:
 - the SHA-256 of the versioned Windows bootstrapper;
 - the authenticated release channel `canary`.
 
-On Windows, the factory requires `Get-AuthenticodeSignature` to report exactly
-`NotSigned` for the supplied bootstrapper. On a non-Windows build host where
-that cmdlet is unavailable, it parses a well-formed PE optional header and
-accepts only a zero offset and zero size in the certificate-table data-directory
-entry. A present/malformed certificate table, `HashMismatch`, `NotTrusted`,
-`UnknownError` and every other status fail closed. The release manifest and
-artifacts still require their normal Ed25519 verification, and the copied
-installed bootstrapper is verified again by the bridge against the compiled
-profile.
+The portable Windows factory runs only on Windows and requires
+`Get-AuthenticodeSignature` to report exactly `NotSigned` for the supplied
+bootstrapper. On macOS, use the Maestro DMG instead; the Windows ZIP is not a
+macOS installer. A present/malformed certificate table, `HashMismatch`,
+`NotTrusted`, `UnknownError` and every other status fail closed. The release
+manifest and artifacts still require their normal Ed25519 verification, and
+the copied installed bootstrapper is verified again by the bridge against the
+compiled profile.
 
 The controlled-Canary output is exactly
 `Maestro-Portable-<version>-windows-amd64-local-beta-unsigned.zip`, accompanied
