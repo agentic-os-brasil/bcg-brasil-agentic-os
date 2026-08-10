@@ -73,16 +73,38 @@
     return 'value' in target ? target.value : target.textContent || '';
   }
 
+  async function copyText(value) {
+    if (!value) throw new Error('empty copy value');
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return;
+      }
+    } catch (_) { /* The installer may run from a file or restricted webview. */ }
+    const area = document.createElement('textarea');
+    area.value = value;
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+    document.body.append(area);
+    area.select();
+    area.setSelectionRange(0, area.value.length);
+    const copied = document.execCommand('copy');
+    area.remove();
+    if (!copied) throw new Error('copy unavailable');
+  }
+
   async function copyHandoffValue(button) {
     const target = document.getElementById(button?.dataset.copyTarget || '');
     const value = handoffValue(target).trim();
     if (!value) return;
     try {
-      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
-      await navigator.clipboard.writeText(value);
+      await copyText(value);
       document.querySelector('#launch-note').textContent = button.dataset.copyTarget === 'handoff-prompt' ? 'Prompt copiado.' : 'Caminho do workspace copiado.';
+      button.classList.add('is-copied');
+      button.setAttribute('aria-label', 'Copiado');
+      window.setTimeout(() => { button.classList.remove('is-copied'); button.removeAttribute('aria-label'); }, 1800);
     } catch (_) {
-      document.querySelector('#launch-note').textContent = 'Não foi possível copiar automaticamente. Selecione o valor e copie manualmente.';
+      document.querySelector('#launch-note').textContent = 'A cópia automática não está disponível nesta janela. Selecione o valor e copie manualmente.';
     }
   }
 
