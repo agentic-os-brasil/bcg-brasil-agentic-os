@@ -117,6 +117,79 @@ func TestValidateNativeTrustPolicyRequiresExactWindowsLocalBetaPins(t *testing.T
 	}
 }
 
+// TestPreProductionAuthorityMarkerAcceptsCanaryFamily locks in the broader
+// pre-production marker set. Two contracts:
+//
+//  1. Canary/dev/preview/local/rc pins pass — the local-beta trust mode does
+//     not force the literal token "beta" or "test" in the issuer/keyID name.
+//     A legitimate factory signing the canary channel would otherwise be
+//     blocked by its own naming convention.
+//  2. Real production identities still fail closed. The marker set stays
+//     narrow enough that anything that looks like a shipping release
+//     (`maestro-production`, `release-20260805`, bare hashes) is rejected.
+func TestPreProductionAuthorityMarkerAcceptsCanaryFamily(t *testing.T) {
+	digestA := strings.Repeat("a", 64)
+	digestB := strings.Repeat("b", 64)
+	acceptedPairs := []struct {
+		issuer string
+		keyID  string
+	}{
+		{"maestro-canary", "canary-20260810"},
+		{"maestro-preview", "preview-20260810"},
+		{"maestro-dev-local", "dev-20260810"},
+		{"local-signing-authority", "local-20260810"},
+		{"maestro-rc", "rc-1"},
+	}
+	for _, pair := range acceptedPairs {
+		t.Run("accept/"+pair.issuer+"/"+pair.keyID, func(t *testing.T) {
+			options := Options{
+				TargetOS: "windows", TargetArch: "amd64", NativeTrustMode: NativeTrustWindowsLocalBeta,
+				LocalBetaPins: LocalBetaPins{
+					AuthorityRegistrySHA256: digestA, BootstrapperSHA256: digestB,
+					Issuer: pair.issuer, KeyID: pair.keyID,
+				},
+			}
+			release := releaseverify.VerifiedRelease{Manifest: releasecontract.Manifest{
+				Release: "0.1.21", Channel: "canary",
+				Issuer: releasecontract.Issuer{ID: pair.issuer, KeyID: pair.keyID},
+			}}
+			if err := validateNativeTrustPolicy(options, release, digestA, digestB); err != nil {
+				t.Fatalf("pre-production pin was rejected: %v", err)
+			}
+		})
+	}
+	rejectedPairs := []struct {
+		issuer string
+		keyID  string
+	}{
+		{"maestro-production", "release-20260805"},
+		{"maestro-signed", "release-20260805"},
+		{"maestro", "20260805"},
+	}
+	for _, pair := range rejectedPairs {
+		t.Run("reject/"+pair.issuer+"/"+pair.keyID, func(t *testing.T) {
+			options := Options{
+				TargetOS: "windows", TargetArch: "amd64", NativeTrustMode: NativeTrustWindowsLocalBeta,
+				LocalBetaPins: LocalBetaPins{
+					AuthorityRegistrySHA256: digestA, BootstrapperSHA256: digestB,
+					Issuer: pair.issuer, KeyID: pair.keyID,
+				},
+			}
+			release := releaseverify.VerifiedRelease{Manifest: releasecontract.Manifest{
+				Release: "0.1.21", Channel: "canary",
+				Issuer: releasecontract.Issuer{ID: pair.issuer, KeyID: pair.keyID},
+			}}
+			err := validateNativeTrustPolicy(options, release, digestA, digestB)
+			if err == nil {
+				t.Fatal("production-looking pin passed local-beta trust check")
+			}
+			if !strings.Contains(err.Error(), "pre-production marker") {
+				t.Fatalf("error should point the operator at the marker set, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestDefaultPathsKeepManagedAndOwnerDataSeparate(t *testing.T) {
 	tests := []struct {
 		platform, home, local string
