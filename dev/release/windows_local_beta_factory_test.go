@@ -47,6 +47,57 @@ func TestWindowsFactoriesRejectIncompleteLocalBetaProfileBeforeInputs(t *testing
 	}
 }
 
+func TestWindowsFactoriesAcceptCompleteLocalBetaProfileBeforeInputs(t *testing.T) {
+	pwsh, err := exec.LookPath("pwsh")
+	if err != nil {
+		if runtime.GOOS == "windows" {
+			pwsh, err = exec.LookPath("powershell.exe")
+		}
+		if err != nil {
+			t.Skip("PowerShell is unavailable")
+		}
+	}
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name       string
+		script     string
+		outputFlag string
+		outputPath string
+	}{
+		{name: "directory factory", script: "build-windows-installer.ps1", outputFlag: "-OutputDirectory", outputPath: filepath.Join(root, "missing-output")},
+		{name: "single-file factory", script: "build-windows-singlefile-installer.ps1", outputFlag: "-OutputFile", outputPath: filepath.Join(root, "missing-output.exe")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			arguments := []string{
+				"-NoProfile", "-NonInteractive", "-File",
+				filepath.Join(root, "dev", "release", test.script),
+				"-Version", "0.1.25",
+				"-Icon", filepath.Join(root, "missing.ico"),
+				"-IconSHA256", strings.Repeat("0", 64),
+				"-WizardDir", filepath.Join(root, "installers", "wizard"),
+				"-ReleaseDirectory", filepath.Join(root, "missing-release"),
+				"-AuthorityRegistry", filepath.Join(root, "missing-registry.json"),
+				"-Bootstrapper", filepath.Join(root, "missing-bootstrapper.exe"),
+				"-ResourceCompilerSHA256", strings.Repeat("0", 64),
+				test.outputFlag, test.outputPath,
+				"-LocalBeta",
+				"-LocalBetaIssuer", "maestro-canary-local",
+				"-LocalBetaKeyID", "local-20260810",
+				"-LocalBetaAuthorityRegistrySHA256", strings.Repeat("1", 64),
+				"-LocalBetaBootstrapperSHA256", strings.Repeat("2", 64),
+			}
+			output, err := exec.Command(pwsh, arguments...).CombinedOutput()
+			normalizedOutput := strings.Join(strings.Fields(string(output)), " ")
+			if err == nil || !strings.Contains(normalizedOutput, "missing.ico") || strings.Contains(normalizedOutput, "valid only with -LocalBeta") {
+				t.Fatalf("complete local-beta profile: err=%v output=%s", err, output)
+			}
+		})
+	}
+}
+
 func TestCrossPlatformPECertificateInspectionDistinguishesNotSigned(t *testing.T) {
 	pwsh, err := exec.LookPath("pwsh")
 	if err != nil {
