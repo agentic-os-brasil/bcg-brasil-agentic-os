@@ -78,6 +78,16 @@ type runtimeTarget struct {
 	Label string `json:"label"`
 }
 
+type workspaceHandoff struct {
+	WorkspacePath    string            `json:"workspace_path"`
+	WorkspaceID      string            `json:"workspace_id"`
+	Prompt           string            `json:"prompt"`
+	DeepLinks        map[string]string `json:"deeplinks"`
+	RuntimePaths     map[string]string `json:"runtime_paths"`
+	RuntimeAvailable map[string]bool   `json:"runtime_available"`
+	Diagnostics      []string          `json:"diagnostics"`
+}
+
 type commandRunner interface {
 	Run(context.Context, string, []string) ([]byte, error)
 }
@@ -964,8 +974,10 @@ func wizardHandler(options options) http.Handler {
 				{ID: "rollback", Status: "available", Detail: "o workspace e a origem permanecem fora da atualização do core"},
 			},
 		}
+		handoff := workspaceHandoffFor(result.WorkspacePath, result.WorkspaceID)
 		writeHTTPJSON(writer, map[string]any{
 			"status": activation.State, "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID,
+			"prompt": handoff.Prompt, "deeplinks": handoff.DeepLinks, "handoff": handoff,
 			"source_registered": sourcePath != "", "source_state": map[bool]string{true: "pointer_recorded_pending_analysis", false: "not_requested"}[sourcePath != ""],
 			"ingestion_state": map[bool]string{true: "not_ingested_pointer_only", false: "not_requested"}[sourcePath != ""],
 			"adapter_state":   activation.Lifecycle.State, "readiness_state": activation.State, "scheduler_state": activation.Maintenance.State,
@@ -1318,6 +1330,41 @@ func availableRuntimeTargets(options options) []runtimeTarget {
 		targets = append(targets, runtimeTarget{ID: "codex", Label: label})
 	}
 	return targets
+}
+
+func workspaceHandoffFor(workspacePath, workspaceID string) workspaceHandoff {
+	claudeLink := claudeCodeWorkspaceLink(workspacePath)
+	codexLink := codexWorkspaceLink(workspacePath)
+	claudePath := claudeDesktopPath()
+	available := map[string]bool{
+		"claude_desktop":      claudeDesktopAvailable(),
+		"claude_code_desktop": claudeDesktopAvailable(),
+		"codex":               runtimeAvailable("codex"),
+	}
+	diagnostics := make([]string, 0, 3)
+	if !available["claude_desktop"] {
+		diagnostics = append(diagnostics, "Claude Desktop não foi detectado; o link continua disponível para uma tentativa manual.")
+	}
+	if !available["codex"] {
+		diagnostics = append(diagnostics, "Codex não foi detectado; isso não impede concluir o setup.")
+	}
+	return workspaceHandoff{
+		WorkspacePath: workspacePath,
+		WorkspaceID:   workspaceID,
+		Prompt:        maestroClaudeKickoffPrompt,
+		DeepLinks: map[string]string{
+			"claude_desktop":      claudeLink,
+			"claude_code_desktop": claudeLink,
+			"codex":               codexLink,
+		},
+		RuntimePaths: map[string]string{
+			"claude_desktop":      claudePath,
+			"claude_code_desktop": claudeLink,
+			"codex":               codexLink,
+		},
+		RuntimeAvailable: available,
+		Diagnostics:      diagnostics,
+	}
 }
 
 func chatGPTAppAvailable() bool {

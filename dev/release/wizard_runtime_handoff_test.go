@@ -44,6 +44,43 @@ func TestWizardKeepsTheCanarySimplePathLinear(t *testing.T) {
 	}
 }
 
+func TestWizardRendersTheFinalWorkspaceHandoffPage(t *testing.T) {
+	root := filepath.Join("..", "..", "installers", "wizard")
+	index, err := os.ReadFile(filepath.Join(root, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := os.ReadFile(filepath.Join(root, "app.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		`id="workspace-handoff"`,
+		`id="handoff-workspace-path"`,
+		`id="handoff-prompt"`,
+		`id="handoff-runtime-claude-desktop"`,
+		`id="handoff-runtime-claude-code"`,
+		`id="handoff-diagnostic"`,
+		`data-action="copy-handoff"`,
+	} {
+		if !strings.Contains(string(index), required) {
+			t.Fatalf("final workspace handoff is missing %q", required)
+		}
+	}
+	for _, required := range []string{
+		"renderWorkspaceHandoff(prepared)",
+		"payload.deeplinks",
+		"handoff-prompt",
+		"handoff-workspace-path",
+		"copyHandoffValue",
+		"handoff-diagnostic",
+	} {
+		if !strings.Contains(string(app), required) {
+			t.Fatalf("final workspace handoff behavior is missing %q", required)
+		}
+	}
+}
+
 func TestWizardHidesTechnicalReleaseDetailsFromTheUserPath(t *testing.T) {
 	body, err := os.ReadFile(filepath.Join("..", "..", "installers", "wizard", "app.js"))
 	if err != nil {

@@ -68,6 +68,69 @@
     return { ...installed, ...workspace };
   }
 
+  function handoffValue(target) {
+    if (!target) return '';
+    return 'value' in target ? target.value : target.textContent || '';
+  }
+
+  async function copyHandoffValue(button) {
+    const target = document.getElementById(button?.dataset.copyTarget || '');
+    const value = handoffValue(target).trim();
+    if (!value) return;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(value);
+      document.querySelector('#launch-note').textContent = button.dataset.copyTarget === 'handoff-prompt' ? 'Prompt copiado.' : 'Caminho do workspace copiado.';
+    } catch (_) {
+      document.querySelector('#launch-note').textContent = 'Não foi possível copiar automaticamente. Selecione o valor e copie manualmente.';
+    }
+  }
+
+  function renderWorkspaceHandoff(payload = {}) {
+    const root = document.querySelector('#workspace-handoff');
+    if (!root) return;
+    const handoff = payload.handoff || {};
+    const path = payload.workspace_path || handoff.workspace_path || workspacePath;
+    const prompt = payload.prompt || handoff.prompt || '';
+    const pathNode = document.querySelector('#handoff-workspace-path');
+    const promptNode = document.querySelector('#handoff-prompt');
+    if (pathNode) pathNode.textContent = path || 'Caminho ainda não detectado';
+    if (promptNode) promptNode.value = prompt || 'Prompt ainda não disponível nesta prévia.';
+    const links = payload.deeplinks || handoff.deeplinks || {};
+    const paths = payload.runtime_paths || handoff.runtime_paths || {};
+    const availability = payload.runtime_available || handoff.runtime_available || {};
+    const targets = [
+      ['claude_desktop', 'handoff-runtime-claude-desktop'],
+      ['claude_code_desktop', 'handoff-runtime-claude-code'],
+      ['codex', 'handoff-runtime-codex'],
+    ];
+    targets.forEach(([id, cardID]) => {
+      const card = document.getElementById(cardID);
+      if (!card) return;
+      const pathNode = card.querySelector('[data-handoff-path]');
+      const statusNode = card.querySelector('[data-handoff-status]');
+      const linkNode = card.querySelector('[data-handoff-link]');
+      if (pathNode) pathNode.textContent = paths[id] || links[id] || 'Caminho não detectado';
+      if (statusNode) {
+        const available = availability[id] === true;
+        statusNode.textContent = available ? 'Detectado neste computador.' : 'Não detectado; isso não bloqueia o handoff.';
+        statusNode.classList.toggle('is-available', available);
+        statusNode.classList.toggle('is-unavailable', !available);
+      }
+      if (linkNode) {
+        linkNode.href = links[id] || '#';
+        linkNode.hidden = !links[id];
+        linkNode.setAttribute('aria-disabled', String(!links[id]));
+      }
+    });
+    const diagnostics = Array.isArray(handoff.diagnostics) ? handoff.diagnostics : [];
+    const diagnostic = document.querySelector('#handoff-diagnostic');
+    if (diagnostic) diagnostic.textContent = diagnostics.length
+      ? `Diagnóstico secundário: ${diagnostics.join(' ')}`
+      : 'Diagnóstico secundário: runtimes não detectados não bloqueiam este handoff.';
+    root.hidden = false;
+  }
+
   async function start(choice) {
     if (busy) return;
     busy = true;
@@ -90,7 +153,8 @@
       progress(42, 'Preparando o Maestro', 'install');
       await pause(180);
       progress(62, 'Instalando', 'install');
-      await prepareWorkspace();
+      const prepared = await prepareWorkspace();
+      renderWorkspaceHandoff(prepared);
       progress(100, 'Tudo pronto', 'workspace');
       document.querySelector('#launch-note').textContent = '';
       show('complete');
@@ -133,12 +197,14 @@
     }
   }
 
-  document.addEventListener('click', event => {
+  document.addEventListener('click', async event => {
     const choice = event.target.closest('[data-choice]');
     if (choice) start(choice.dataset.choice);
     if (event.target.closest('[data-action="retry"]')) start('new');
     const launch = event.target.closest('[data-action="open-claude"]');
     if (launch) openClaude(launch);
+    const copy = event.target.closest('[data-action="copy-handoff"]');
+    if (copy) await copyHandoffValue(copy);
   });
 
   announcement.textContent = 'Escolha uma nova instalação ou uma atualização.';
