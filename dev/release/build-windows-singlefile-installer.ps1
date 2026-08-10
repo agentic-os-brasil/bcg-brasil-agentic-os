@@ -22,6 +22,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutputFile,
     [string]$ResourceCompiler = "windres",
+    [switch]$CanarySimple,
     [switch]$LocalBeta,
     [string]$LocalBetaIssuer = "",
     [string]$LocalBetaKeyID = "",
@@ -126,8 +127,9 @@ try {
         -ResourceCompilerSHA256 $ResourceCompilerSHA256 `
         -ResourceCompiler $ResourceCompiler `
         -Windowed `
-        -OutputDirectory $packageDirectory `
-        -LocalBeta:$LocalBeta `
+    -OutputDirectory $packageDirectory `
+    -CanarySimple:$CanarySimple `
+    -LocalBeta:$LocalBeta `
         -LocalBetaIssuer $LocalBetaIssuer `
         -LocalBetaKeyID $LocalBetaKeyID `
         -LocalBetaAuthorityRegistrySHA256 $LocalBetaAuthorityRegistrySHA256 `
