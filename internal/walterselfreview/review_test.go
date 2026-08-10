@@ -473,6 +473,9 @@ func TestWeeklyReviewResumesAfterProposalCommitCrash(t *testing.T) {
 
 func TestSlowModelLeaseRenewsAndStaleWorkerCannotBeTakenOver(t *testing.T) {
 	request := testRequest(t)
+	// Keep the lease comfortably above filesystem scheduling jitter. The test
+	// still spans multiple renewal intervals, but does not turn a loaded CI
+	// worker into a false fencing failure.
 	store := ReceiptStore{Root: t.TempDir(), LeaseDuration: 500 * time.Millisecond, LockWait: 100 * time.Millisecond}
 	adapter := &blockingAdapter{started: make(chan struct{}), release: make(chan struct{}), proposal: testProposal(request)}
 	resultCh := make(chan error, 1)
