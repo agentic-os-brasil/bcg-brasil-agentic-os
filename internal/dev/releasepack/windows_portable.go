@@ -3,6 +3,7 @@ package releasepack
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -157,7 +158,11 @@ func BuildWindowsPortable(options WindowsPortableOptions) (WindowsPortableResult
 	}
 	seedStatus := options.BootstrapperSeedStatus
 	if seedStatus == nil {
-		seedStatus = readBootstrapperSeedStatus
+		expectedVersion := options.Version
+		expectedRegistry := options.AuthorityRegistrySHA256
+		seedStatus = func(path string) (BootstrapperSeedStatus, error) {
+			return readBootstrapperSeedStatus(path, expectedVersion, expectedRegistry)
+		}
 	}
 	seed, err := seedStatus(options.Bootstrapper)
 	if err != nil {
@@ -454,15 +459,35 @@ A ativacao e idempotente: se uma tentativa anterior tiver terminado parcialmente
 `)
 }
 
-func readBootstrapperSeedStatus(path string) (BootstrapperSeedStatus, error) {
-	if runtime.GOOS != "windows" {
-		return BootstrapperSeedStatus{}, errors.New("Windows portable packaging requires a Windows factory to inspect the bootstrapper seed")
+func readBootstrapperSeedStatus(path, expectedVersion, expectedRegistry string) (BootstrapperSeedStatus, error) {
+	if runtime.GOOS == "windows" {
+		output, err := exec.Command(path, "seed-status").Output()
+		if err != nil {
+			return BootstrapperSeedStatus{}, err
+		}
+		return parseBootstrapperSeedStatus(output)
 	}
-	output, err := exec.Command(path, "seed-status").Output()
+	// A Windows bootstrapper cannot execute on macOS/Linux. The version and
+	// registry digest are linker-bound into the PE and are checked as bounded
+	// byte strings here; the Windows factory still executes seed-status.
+	info, err := os.Lstat(path)
 	if err != nil {
 		return BootstrapperSeedStatus{}, err
 	}
-	return parseBootstrapperSeedStatus(output)
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return BootstrapperSeedStatus{}, errors.New("bootstrapper seed must be a regular file")
+	}
+	if info.Size() <= 0 || info.Size() > 256<<20 {
+		return BootstrapperSeedStatus{}, errors.New("bootstrapper seed exceeds the inspection bound")
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return BootstrapperSeedStatus{}, err
+	}
+	if !bytes.Contains(body, []byte(expectedVersion)) || !bytes.Contains(body, []byte(expectedRegistry)) {
+		return BootstrapperSeedStatus{}, errors.New("bootstrapper seed does not contain the expected linker-bound version and registry digest")
+	}
+	return BootstrapperSeedStatus{Version: expectedVersion, AuthorityRegistrySHA256: expectedRegistry}, nil
 }
 
 func parseBootstrapperSeedStatus(output []byte) (BootstrapperSeedStatus, error) {
@@ -489,7 +514,7 @@ func parseBootstrapperSeedStatus(output []byte) (BootstrapperSeedStatus, error) 
 
 func windowsAuthenticodeStatus(path string) (string, error) {
 	if runtime.GOOS != "windows" {
-		return "", errors.New("Windows portable packaging requires a Windows factory to inspect Authenticode")
+		return peCertificateTableStatus(path)
 	}
 	escaped := strings.ReplaceAll(path, "'", "''")
 	command := "$ErrorActionPreference='Stop'; $s=Get-AuthenticodeSignature -LiteralPath '" + escaped + "'; [Console]::Out.Write([string]$s.Status)"
@@ -498,4 +523,95 @@ func windowsAuthenticodeStatus(path string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+func peCertificateTableStatus(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	if info.Size() < 64 {
+		return "", errors.New("bootstrapper is too small to be a well-formed PE file")
+	}
+	read16 := func(offset int64) (uint16, error) {
+		if offset < 0 || offset > info.Size()-2 {
+			return 0, errors.New("PE field lies outside the bootstrapper")
+		}
+		var body [2]byte
+		if _, err := file.ReadAt(body[:], offset); err != nil {
+			return 0, err
+		}
+		return binary.LittleEndian.Uint16(body[:]), nil
+	}
+	read32 := func(offset int64) (uint32, error) {
+		if offset < 0 || offset > info.Size()-4 {
+			return 0, errors.New("PE field lies outside the bootstrapper")
+		}
+		var body [4]byte
+		if _, err := file.ReadAt(body[:], offset); err != nil {
+			return 0, err
+		}
+		return binary.LittleEndian.Uint32(body[:]), nil
+	}
+	var dos [2]byte
+	if _, err := file.ReadAt(dos[:], 0); err != nil || dos != [2]byte{'M', 'Z'} {
+		return "", errors.New("bootstrapper is missing the PE DOS signature")
+	}
+	peOffset, err := read32(0x3c)
+	if err != nil || int64(peOffset) < 64 || int64(peOffset) > info.Size()-24 {
+		return "", errors.New("bootstrapper has an invalid PE header offset")
+	}
+	var signature [4]byte
+	if _, err := file.ReadAt(signature[:], int64(peOffset)); err != nil || signature != [4]byte{'P', 'E', 0, 0} {
+		return "", errors.New("bootstrapper is missing the PE signature")
+	}
+	optionalSize, err := read16(int64(peOffset) + 20)
+	if err != nil {
+		return "", err
+	}
+	optionalOffset := int64(peOffset) + 24
+	if optionalSize == 0 || optionalOffset+int64(optionalSize) > info.Size() {
+		return "", errors.New("bootstrapper has an invalid PE optional header")
+	}
+	magic, err := read16(optionalOffset)
+	if err != nil {
+		return "", err
+	}
+	dataDirectoryOffset := int64(0)
+	switch magic {
+	case 0x10b:
+		dataDirectoryOffset = 96
+	case 0x20b:
+		dataDirectoryOffset = 112
+	default:
+		return "", errors.New("bootstrapper uses an unsupported PE optional-header format")
+	}
+	certificateEntryOffset := dataDirectoryOffset + 4*8
+	if int64(optionalSize) < certificateEntryOffset+8 {
+		return "", errors.New("bootstrapper PE optional header lacks the certificate-table entry")
+	}
+	numberOfDirectories, err := read32(optionalOffset + dataDirectoryOffset - 4)
+	if err != nil || numberOfDirectories < 5 {
+		return "", errors.New("bootstrapper PE optional header lacks the certificate-table directory")
+	}
+	certificateOffset, err := read32(optionalOffset + certificateEntryOffset)
+	if err != nil {
+		return "", err
+	}
+	certificateSize, err := read32(optionalOffset + certificateEntryOffset + 4)
+	if err != nil {
+		return "", err
+	}
+	if certificateOffset == 0 && certificateSize == 0 {
+		return "NotSigned", nil
+	}
+	if certificateOffset == 0 || certificateSize == 0 || int64(certificateOffset)+int64(certificateSize) > info.Size() {
+		return "", errors.New("bootstrapper PE certificate-table entry is malformed")
+	}
+	return "CertificatePresent", nil
 }

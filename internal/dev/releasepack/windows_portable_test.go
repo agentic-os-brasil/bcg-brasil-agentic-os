@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -224,6 +226,73 @@ func TestParseBootstrapperSeedStatusRejectsTrailingJSON(t *testing.T) {
 		!strings.Contains(err.Error(), "bootstrapper seed status contains multiple JSON values") {
 		t.Fatalf("parseBootstrapperSeedStatus() error = %v, want trailing JSON rejection", err)
 	}
+}
+
+func TestReadBootstrapperSeedStatusUsesLinkerBoundValuesOutsideWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("non-Windows fallback is the behavior under test")
+	}
+	path := filepath.Join(t.TempDir(), "bcgos-bootstrap.exe")
+	registry := strings.Repeat("a", 64)
+	if err := os.WriteFile(path, []byte("PE payload 0.2.0 "+registry), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	status, err := readBootstrapperSeedStatus(path, "0.2.0", registry)
+	if err != nil {
+		t.Fatalf("readBootstrapperSeedStatus() error = %v", err)
+	}
+	if status.Version != "0.2.0" || status.AuthorityRegistrySHA256 != registry {
+		t.Fatalf("unexpected seed status: %#v", status)
+	}
+	if err := os.WriteFile(path, []byte("PE payload 0.2.0"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readBootstrapperSeedStatus(path, "0.2.0", registry); err == nil || !strings.Contains(err.Error(), "linker-bound") {
+		t.Fatalf("readBootstrapperSeedStatus() error = %v, want linker-bound mismatch", err)
+	}
+}
+
+func TestPECertificateTableStatusDistinguishesUnsignedAndPresent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bcgos-bootstrap.exe")
+	body := syntheticPE64(0, 0)
+	if err := os.WriteFile(path, body, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	status, err := peCertificateTableStatus(path)
+	if err != nil || status != "NotSigned" {
+		t.Fatalf("unsigned PE status = %q, err=%v", status, err)
+	}
+	body = syntheticPE64(480, 16)
+	if err := os.WriteFile(path, body, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	status, err = peCertificateTableStatus(path)
+	if err != nil || status != "CertificatePresent" {
+		t.Fatalf("certificate-table PE status = %q, err=%v", status, err)
+	}
+	body = syntheticPE64(480, 0)
+	if err := os.WriteFile(path, body, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := peCertificateTableStatus(path); err == nil || !strings.Contains(err.Error(), "certificate-table entry is malformed") {
+		t.Fatalf("malformed certificate-table status error = %v", err)
+	}
+}
+
+func syntheticPE64(certificateOffset, certificateSize uint32) []byte {
+	body := make([]byte, 512)
+	body[0], body[1] = 'M', 'Z'
+	peOffset := uint32(0x80)
+	binary.LittleEndian.PutUint32(body[0x3c:], peOffset)
+	copy(body[peOffset:], []byte{'P', 'E', 0, 0})
+	binary.LittleEndian.PutUint16(body[peOffset+4:], 0x8664)
+	binary.LittleEndian.PutUint16(body[peOffset+20:], 240)
+	optional := peOffset + 24
+	binary.LittleEndian.PutUint16(body[optional:], 0x20b)
+	binary.LittleEndian.PutUint32(body[optional+108:], 16)
+	binary.LittleEndian.PutUint32(body[optional+112+4*8:], certificateOffset)
+	binary.LittleEndian.PutUint32(body[optional+112+4*8+4:], certificateSize)
+	return body
 }
 
 func testDigest(body []byte) string {
