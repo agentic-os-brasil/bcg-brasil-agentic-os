@@ -119,3 +119,21 @@ func TestWindowsSingleFileFactoryDeclaresPinnedLocalBetaInputs(t *testing.T) {
 		}
 	}
 }
+
+func TestWindowsFactoryRequiresTheOnboardingGuidesInTheReleaseBundle(t *testing.T) {
+	body, err := os.ReadFile("build-windows-installer.ps1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	for _, required := range []string{
+		"skills/maestro-onboarding/SKILL.md",
+		"skills/maestro-onboarding/agents/openai.yaml",
+		"skills/interaction-profile/SKILL.md",
+		"skills/interaction-profile/agents/openai.yaml",
+	} {
+		if !strings.Contains(source, required) {
+			t.Fatalf("Windows factory must require onboarding artifact %q", required)
+		}
+	}
+}

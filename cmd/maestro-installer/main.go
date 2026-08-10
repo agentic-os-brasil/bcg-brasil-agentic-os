@@ -517,6 +517,11 @@ func wizardHandler(options options) http.Handler {
 		} else if options.nativeTrustMode == installer.NativeTrustWindowsLocalBeta {
 			trust = "windows_local_beta"
 		}
+		configuredRuntime, runtimeErr := primaryRuntime(options)
+		if runtimeErr != nil {
+			writeHTTPJSONStatus(writer, http.StatusInternalServerError, map[string]string{"error": runtimeErr.Error()})
+			return
+		}
 		writeHTTPJSON(writer, map[string]any{
 			"platform": runtime.GOOS, "architecture": runtime.GOARCH,
 			"release_dir": options.releaseDir, "managed_root": options.managedRoot,
@@ -524,6 +529,7 @@ func wizardHandler(options options) http.Handler {
 			"local_beta": options.nativeTrustMode == installer.NativeTrustWindowsLocalBeta,
 			"mode":       map[bool]string{true: "simulation", false: "runtime"}[options.simulate],
 			"installed":  installedCLI != "", "cli_path": installedCLI, "installed_version": installedReleaseVersion(options),
+			"primary_runtime":   configuredRuntime,
 			"runtimes":          availableRuntimeTargets(options),
 			"workspace_default": defaultWorkspaceFor(options),
 			"workspace_flow": map[string]any{
@@ -1293,6 +1299,9 @@ func runtimeIsAvailable(options options, runtimeID string) bool {
 }
 
 func runtimeAvailable(runtimeID string) bool {
+	if !runtimeLaunchSupported(runtime.GOOS, runtimeID) {
+		return false
+	}
 	if runtimeID == "claude" {
 		return claudeDesktopAvailable()
 	}
@@ -1308,6 +1317,20 @@ func runtimeAvailable(runtimeID string) bool {
 		}
 	}
 	return chatGPTAppAvailable()
+}
+
+// runtimeLaunchSupported is deliberately narrower than CLI discovery. The
+// wizard advertises a graphical handoff, so a CLI that cannot be opened by the
+// current platform must not become an enabled target.
+func runtimeLaunchSupported(platform, runtimeID string) bool {
+	switch runtimeID {
+	case "claude":
+		return platform == "darwin" || platform == "windows"
+	case "codex":
+		return platform == "darwin"
+	default:
+		return false
+	}
 }
 
 func claudeDesktopAvailable() bool {
@@ -1764,7 +1787,13 @@ Me direcione pelos próximos passos e me ajude a começar com o pé direito.`
 
 const maestroClaudeKickoffPrompt = maestroHumanKickoffPrompt + `
 
-🧭 Para começar, execute agora a skill /maestro-onboarding e conduza minha entrevista inicial, uma pergunta por vez.`
+🧭 Para começar, leia primeiro CLAUDE.md e depois siga o guia instalado de
+Maestro Onboarding que ele identifica. Conduza minha entrevista inicial uma
+pergunta por vez.
+
+Se um desses arquivos não existir, não crie AGENTS.md, skills ou qualquer
+estrutura substituta. Explique brevemente que a preparação local está incompleta
+e peça para eu retornar ao instalador para reparar o workspace.`
 const maestroCodexKickoffPrompt = maestroHumanKickoffPrompt + `
 
 🧭 Para começar, execute agora a skill $maestro-onboarding e conduza minha entrevista inicial, uma pergunta por vez.`

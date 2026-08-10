@@ -197,6 +197,10 @@ if ($LocalBeta) {
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $requiredBundleFiles = @(
+    "skills/maestro-onboarding/SKILL.md",
+    "skills/maestro-onboarding/agents/openai.yaml",
+    "skills/interaction-profile/SKILL.md",
+    "skills/interaction-profile/agents/openai.yaml",
     "skills/maestro-setup-update/SKILL.md",
     "skills/maestro-setup-update/agents/openai.yaml"
 )

@@ -25,6 +25,8 @@
   let installed = false;
   let installedCLIPath = '';
   let runtimeTargets = [];
+  let configuredRuntime = 'claude';
+  let preparedRuntime = 'claude';
   let defaultWorkspace = '';
   let installedVersion = '';
   let workspaceFlowSelection = null;
@@ -327,7 +329,7 @@
     });
     if (runtimeReadyWorkspace) runtimeReadyWorkspace.textContent = defaultWorkspace || '~/Developer/maestro-os';
     window.setTimeout(() => {
-      if (runtime && runtimeReadyModal && !runtimeReadyModal.open) runtimeReadyModal.showModal();
+      if (runtime && preparedRuntime === 'claude' && runtimeReadyModal && !runtimeReadyModal.open) runtimeReadyModal.showModal();
     }, reducedMotion ? 0 : 420);
   }
 
@@ -739,7 +741,8 @@
     if (!actions || !copy) return;
     runtimeTargets = (Array.isArray(targets) ? targets : [])
       .slice()
-      .sort((a, b) => Number(b.id === 'claude') - Number(a.id === 'claude'));
+      .filter(target => !runtime || target.id === preparedRuntime)
+      .sort((a, b) => Number(b.id === preparedRuntime) - Number(a.id === preparedRuntime));
     const modalClaude = runtimeReadyModal?.querySelector('[data-action="launch-runtime"][data-runtime="claude"]');
     const claudeAvailable = runtimeTargets.some(target => target.id === 'claude');
     if (modalClaude) {
@@ -762,7 +765,9 @@
     } else if (!runtimeTargets.length) {
       copy.textContent = 'Nenhum runtime compatível foi detectado. Instale Claude Code ou Codex e abra este instalador novamente.';
     } else {
-      copy.textContent = 'Seu workspace está pronto. Abra o Claude Code para começar.';
+      copy.textContent = preparedRuntime === 'codex'
+        ? 'Seu workspace está pronto. Abra o Codex para começar.'
+        : 'Seu workspace está pronto. Abra o Claude Code para começar.';
       runtimeTargets.forEach((target, index) => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -912,6 +917,8 @@
       installedCLIPath = state.cli_path || '';
       installedVersion = state.installed_version || '';
       defaultWorkspace = state.workspace_default || '';
+      configuredRuntime = state.primary_runtime || 'claude';
+      preparedRuntime = configuredRuntime;
       if (workspaceDefault && defaultWorkspace) workspaceDefault.textContent = defaultWorkspace;
       renderRuntimeTargets(state.runtimes);
       document.body.dataset.mode = 'runtime';
@@ -1101,6 +1108,7 @@
       if (!response.ok) throw new Error(payload.error || 'Não foi possível criar seu workspace.');
       if (!isValidWorkspaceReceipt(payload.receipt, 'ready')) throw new Error('O core não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
       defaultWorkspace = payload.workspace_path || defaultWorkspace;
+      preparedRuntime = payload.activation?.lifecycle?.runtime || configuredRuntime;
       renderActivation(payload.activation);
       renderRuntimeTargets(runtimeTargets);
       setWorkspaceProvisioning('ready');
