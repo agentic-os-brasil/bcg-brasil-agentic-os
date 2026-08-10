@@ -239,18 +239,23 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	var response struct {
-		Status            string `json:"status"`
-		WorkspacePath     string `json:"workspace_path"`
-		AdapterState      string `json:"adapter_state"`
-		ReadinessState    string `json:"readiness_state"`
-		SchedulerState    string `json:"scheduler_state"`
-		ReadyForRuntime   bool   `json:"ready_for_runtime"`
-		DiagnosticCommand string `json:"diagnostic_command"`
+		Status            string            `json:"status"`
+		WorkspacePath     string            `json:"workspace_path"`
+		WorkspaceID       string            `json:"workspace_id"`
+		Prompt            string            `json:"prompt"`
+		DeepLinks         map[string]string `json:"deeplinks"`
+		AdapterState      string            `json:"adapter_state"`
+		ReadinessState    string            `json:"readiness_state"`
+		SchedulerState    string            `json:"scheduler_state"`
+		ReadyForRuntime   bool              `json:"ready_for_runtime"`
+		DiagnosticCommand string            `json:"diagnostic_command"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Status != "ready" || response.WorkspacePath != workspacePath ||
+	if response.Status != "ready" || response.WorkspacePath != workspacePath || response.WorkspaceID == "" ||
+		response.Prompt != maestroClaudeKickoffPrompt ||
+		response.DeepLinks["claude_desktop"] == "" || response.DeepLinks["claude_code_desktop"] == "" || response.DeepLinks["codex"] == "" ||
 		response.AdapterState != "configured" || response.ReadinessState != "ready" ||
 		response.SchedulerState != "active_loaded_enabled" || !response.ReadyForRuntime ||
 		!strings.Contains(response.DiagnosticCommand, workspacePath) {
