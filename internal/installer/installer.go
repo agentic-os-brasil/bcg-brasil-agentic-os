@@ -64,7 +64,7 @@ type commandRunner func(context.Context, string, ...string) ([]byte, error)
 type NativeTrustMode string
 
 const (
-	NativeTrustStrict           NativeTrustMode = "strict"
+	NativeTrustStrict NativeTrustMode = "strict"
 	// NativeTrustCanarySimple keeps the signed release-manifest verification but
 	// deliberately omits platform certificate and factory-pin gates for the
 	// controlled Windows Canary installer.
