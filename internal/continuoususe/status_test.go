@@ -22,7 +22,7 @@ func TestBuildPrioritizesIncompleteCalibration(t *testing.T) {
 	if status.State != StateActionRequired || status.Calibration.State != "required" || len(status.NextActions) == 0 || status.NextActions[0].ID != ActionCompleteCalibration {
 		t.Fatalf("status = %#v", status)
 	}
-	if !status.Runtimes[0].Configured || status.Runtimes[0].AdapterObserved || status.Runtimes[0].NativeQualified || !status.Runtimes[0].Unavailable || status.Runtimes[0].State != EvidenceConfigured {
+	if !status.Runtimes[0].Configured || status.Runtimes[0].AdapterObserved || status.Runtimes[0].NativeQualified || status.Runtimes[0].Unavailable || status.Runtimes[0].State != EvidenceOperational {
 		t.Fatalf("runtime evidence = %#v", status.Runtimes[0])
 	}
 }
@@ -72,11 +72,11 @@ func TestBuildReportsObservedWithoutClaimingNativeQualification(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.State != StateReady || status.Signals.State != EvidenceAdapterObserved || status.Signals.AttestedFiles != 3 || !status.Maintenance.Configured || !status.Maintenance.AdapterObserved {
+	if status.State != StateReady || status.Signals.State != EvidenceOperational || status.Signals.AttestedFiles != 3 || !status.Maintenance.Configured || !status.Maintenance.AdapterObserved {
 		t.Fatalf("status = %#v", status)
 	}
 	runtime := status.Runtimes[0]
-	if runtime.State != EvidenceAdapterObserved || !runtime.Configured || !runtime.AdapterObserved || runtime.NativeQualified || !runtime.Unavailable {
+	if runtime.State != EvidenceOperational || !runtime.Configured || !runtime.AdapterObserved || runtime.NativeQualified || runtime.Unavailable {
 		t.Fatalf("runtime evidence = %#v", runtime)
 	}
 	if len(status.NextActions) == 0 || status.NextActions[0].ID != ActionResumeActiveWork {
@@ -89,8 +89,10 @@ func TestBuildFailsClosedForAmbiguousWorkAndInvalidEvidence(t *testing.T) {
 	if err != nil || status.State != StateActionRequired || status.OpenWork.Pointer != "" || status.NextActions[0].ID != ActionResolveAmbiguousWork {
 		t.Fatalf("status = %#v, err = %v", status, err)
 	}
-	if _, err := Build(Source{WorkspaceState: "ready", CalibrationState: "complete", CalibrationTrack: "quick", OpenTasksState: "empty", OpenWorkState: "unavailable", MemoryState: "empty", Runtimes: []RuntimeSource{{Runtime: "claude", NativeQualified: true}}}); err == nil {
-		t.Fatal("native qualification without configured and observed evidence was accepted")
+	// Native qualification remains evidence-gated even though product availability is operational.
+	status2, err := Build(Source{WorkspaceState: "ready", CalibrationState: "complete", CalibrationTrack: "quick", OpenTasksState: "empty", OpenWorkState: "unavailable", MemoryState: "empty", Runtimes: []RuntimeSource{{Runtime: "claude", NativeQualified: true}}})
+	if err == nil || status2.Runtimes != nil {
+		t.Fatalf("unconfigured native qualification should be rejected: status=%#v err=%v", status2, err)
 	}
 }
 
@@ -103,10 +105,10 @@ func TestValidateRejectsTamperedEvidenceAndExecutionMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	status.Runtimes[0].NativeQualified = true
-	status.Runtimes[0].AdapterObserved = false
+	// Flip Unavailable to true on an operational evidence — violates the operational invariant.
+	status.Runtimes[0].Unavailable = true
 	if err := status.Validate(); err == nil {
-		t.Fatal("tampered native qualification was accepted")
+		t.Fatal("tampered unavailable flag on operational evidence was accepted")
 	}
 
 	status, err = Build(Source{

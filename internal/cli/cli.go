@@ -3770,9 +3770,6 @@ func lifecycleReceiptCheck(dataRoot, workspaceID string) doctorCheck {
 	}
 	summary, err := lifecycle.Diagnose(dataRoot, workspaceID)
 	if err != nil {
-		if strings.Contains(err.Error(), "lifecycle receipt history exceeds diagnostic scan bound") {
-			return doctorCheck{ID: "lifecycle_receipts", State: "warning", Message: fmt.Sprintf("lifecycle receipt history exceeds the %d-entry diagnostic window; receipts remain local and no native qualification was inferred. This affects the bounded diagnosis only, not hook execution", lifecycle.MaximumDiagnosticReceiptEntries)}
-		}
 		return doctorCheck{ID: "lifecycle_receipts", State: "warning", Message: "lifecycle receipt diagnostics could not be read: " + err.Error()}
 	}
 	switch summary.State {
