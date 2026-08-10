@@ -440,7 +440,7 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	}
 	output.Reset()
 	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"injection_state\":\"unavailable\"`) || !strings.Contains(output.String(), `\"memory\":{\"state\":\"empty\"`) || strings.Contains(output.String(), "memory context injection requires a runtime adapter") {
+	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"availability_state\":\"enabled\"`) || !strings.Contains(output.String(), `\"memory\":{\"state\":\"empty\"`) || strings.Contains(output.String(), "memory context injection requires a runtime adapter") {
 		t.Fatalf("hook exit = %d, output = %s", code, output.String())
 	}
 	executable, err := os.Executable()
@@ -1365,8 +1365,8 @@ func TestMaestroDispatchBoundaryRecordsPromptPlansAndPersistsMetadataOnlyChain(t
 	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, strings.NewReader(input), &output, &output, dataRoot); code != ExitOK {
 		t.Fatalf("Maestro dispatch = %d: %s", code, output.String())
 	}
-	if strings.Contains(output.String(), "prepare case alpha") || !strings.Contains(output.String(), "dispatch_boundary_model_unavailable") || !strings.Contains(output.String(), `"durable_dispatch_epoch": 1`) {
-		t.Fatalf("dispatch boundary leaked body or missed unavailable result: %s", output.String())
+	if strings.Contains(output.String(), "prepare case alpha") || !strings.Contains(output.String(), "dispatch_boundary_model_pending_input") || !strings.Contains(output.String(), `"durable_dispatch_epoch": 1`) {
+		t.Fatalf("dispatch boundary leaked body or missed pending-input result: %s", output.String())
 	}
 	chains, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "chains", "*.json"))
 	if err != nil || len(chains) != 1 {
@@ -1808,7 +1808,7 @@ func TestSessionBridgeProducesTheSameBoundedAdapterInputForEachRuntime(t *testin
 		t.Fatalf("workspace init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runSession([]string{"bridge", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"event": "session_start"`) || !strings.Contains(output.String(), `"runtime": "claude"`) || !strings.Contains(output.String(), `"injection_state": "unavailable"`) {
+	if code := runSession([]string{"bridge", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"event": "session_start"`) || !strings.Contains(output.String(), `"runtime": "claude"`) || !strings.Contains(output.String(), `"availability_state": "enabled"`) {
 		t.Fatalf("Claude bridge exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()

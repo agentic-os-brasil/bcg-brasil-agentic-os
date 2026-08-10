@@ -40,8 +40,9 @@ capability to native-qualified, release-ready or pilot-ready.
 | `signed_release` | Approved authorities published one immutable authenticated release set. | Pilot readiness. |
 | `pilot_ready` | Clean-device, support, incident and two-user evidence closes the pilot gate. | Production promotion. |
 
-Any state may be `unavailable`, `failed` or `stopped`. Those states are
-evidence outcomes, not reasons to infer the next state.
+Only a genuinely absent or disabled capability may be `unavailable`; failed or
+stopped runs remain explicit and recoverable. These are evidence outcomes, not
+reasons to infer the next state or block an enabled path.
 
 The state vocabulary and ledger fields in this document are currently an
 operator contract, not a repository-emitted or repository-validated record.

@@ -52,7 +52,8 @@ it must not repeat the greeting, memory bodies or interview on every prompt.
 Both payloads expose
 `adapter_delivery_state=adapter_payload_emitted` while retaining
 `injection_state=unavailable`, so successful serialization is visible without
-being mislabeled as native qualification.
+being mislabeled as native qualification. The field reports native evidence,
+not product availability; configured context injection remains enabled.
 
 While onboarding is `required`, `in_progress` or `review_required`, the
 lifecycle selects the installed, integrity-checked `maestro-onboarding` pointer

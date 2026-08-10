@@ -2017,7 +2017,7 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 		return reportError(errOut, err)
 	}
 	chainBody, _ := json.Marshal(chain)
-	outcome := "dispatch_boundary_model_unavailable"
+	outcome := "dispatch_boundary_model_pending_input"
 	if orchestrated {
 		outcome = "orchestration_contract_pending"
 		if chain.Stage == maestro.StageFinal {

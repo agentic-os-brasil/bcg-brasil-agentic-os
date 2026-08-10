@@ -918,3 +918,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Installer and runtime setup share one durable authorization/receipt instead of exposing command-by-command checks. Internal commands may retain machine-facing confirmation flags while the owner experiences one conversational authorization. Session Start resumes or repairs setup silently, never repeats a valid SharePoint read authorization, and consolidates true corporate dependencies into one external-action notice. Tests must reject cross-workspace, cross-principal, cross-device, changed-source and out-of-policy grant reuse without turning those mismatches into a global work blocker; authorization is tightened progressively while ordinary local work remains available.
 - Refs: CLIF; UPDT; SPWK; SINT; PREA; specs/013-owner-context.md; specs/021-private-release-provider.md; specs/037-sharepoint-work-retrieval-wiki.md; specs/042-post-install-readiness.md; specs/048-one-and-done-setup.md; internal/setupauth; internal/sessionhook; cmd/maestro-installer
 - Supersedes: none
+
+## LIVA - Keep released capabilities enabled while evidence remains observable
+
+- Date: 2026-08-10
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The installed Maestro can already execute its released contracts, hooks, skills and local orchestration. Treating missing native-attestation or model-observation receipts as `unavailable` makes a working product appear blocked and creates friction for Canary validation.
+- Decision: Released capabilities remain enabled and callable by default. Runtime evidence is reported independently as `configured`, `adapter_observed` or `native_qualification_pending`; it must not gate an enabled path. `unavailable` is reserved for a capability that is genuinely absent, disabled by policy, or failed to initialize. Only real safety, integrity, authorization or configuration errors may stop execution.
+- Consequences: User-facing status and onboarding can describe the installed Maestro as active while still exposing evidence gaps honestly. Tests and receipts must verify both behavior and evidence separately; native qualification, signing and external providers remain evidence/release concerns rather than implicit runtime blockers. Existing fail-closed behavior for malformed, unsafe or absent dependencies remains unchanged.
+- Refs: specs/005-development-harness.md; docs/lifecycle-readiness.md; docs/agent-orchestration-assurance.md; internal/sessionstart; internal/sessionhook; cmd/maestro-installer
+- Supersedes: none
