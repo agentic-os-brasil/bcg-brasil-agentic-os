@@ -199,7 +199,7 @@ func (lifecycle Lifecycle) kickstartWithRecovery(ctx context.Context, home, labe
 			return nil
 		}
 		status, statusErr := lifecycle.Status(ctx, home, label)
-		if statusErr == nil && status.Loaded && status.Enabled {
+		if statusErr == nil && status.NativeQualified {
 			return nil
 		}
 	}

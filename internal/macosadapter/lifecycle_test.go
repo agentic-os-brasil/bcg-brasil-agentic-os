@@ -123,6 +123,21 @@ func TestLaunchAgentNativeInstallRecoversTransientKickstart(t *testing.T) {
 	}
 }
 
+func TestLaunchAgentNativeInstallRollsBackMismatchedTransientKickstart(t *testing.T) {
+	home := t.TempDir()
+	runner := &mismatchedKickstartRunner{}
+	lifecycle := Lifecycle{Runner: runner, UID: "501", CurrentHome: home, Native: true}
+	spec := Spec{Label: "com.bcg.maestro.maintenance", Program: "/usr/local/bin/bcgos", StartInterval: 900}
+	status, err := lifecycle.Install(context.Background(), home, spec, true)
+	if err == nil || status.State != "partial_kickstart_failed" || runner.kickstarts != nativeKickstartAttempts {
+		t.Fatalf("install status=%#v err=%v kickstarts=%d", status, err, runner.kickstarts)
+	}
+	fileStatus, readErr := ReadStatus(home, spec.Label)
+	if readErr != nil || fileStatus.State != "not_installed" {
+		t.Fatalf("rollback status=%#v err=%v", fileStatus, readErr)
+	}
+}
+
 func TestLaunchAgentReinstallReconcilesLoadedService(t *testing.T) {
 	home := t.TempDir()
 	fake := &fakeLaunchctl{}
@@ -228,6 +243,24 @@ func (runner *transientKickstartRunner) Run(ctx context.Context, name string, ar
 			return CommandResult{ExitCode: -1}, errors.New("signal: killed")
 		}
 		runner.loaded = true
+	}
+	return runner.fakeLaunchctl.Run(ctx, name, args)
+}
+
+type mismatchedKickstartRunner struct {
+	fakeLaunchctl
+	kickstarts int
+}
+
+func (runner *mismatchedKickstartRunner) Run(ctx context.Context, name string, args []string) (CommandResult, error) {
+	if len(args) > 0 && args[0] == "bootstrap" {
+		result, err := runner.fakeLaunchctl.Run(ctx, name, args)
+		runner.printProgram = "/usr/bin/other"
+		return result, err
+	}
+	if len(args) > 0 && args[0] == "kickstart" {
+		runner.kickstarts++
+		return CommandResult{ExitCode: -1}, errors.New("signal: killed")
 	}
 	return runner.fakeLaunchctl.Run(ctx, name, args)
 }
