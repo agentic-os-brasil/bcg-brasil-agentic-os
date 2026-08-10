@@ -17,6 +17,7 @@ const (
 	EvidenceConfigured      = "configured"
 	EvidenceAdapterObserved = "adapter-observed"
 	EvidenceNativeQualified = "native-qualified"
+	EvidenceOperational     = "operational"
 	EvidenceUnavailable     = "unavailable"
 
 	ActionCompleteCalibration  = "complete_calibration"
@@ -282,51 +283,47 @@ func (status Status) Validate() error {
 }
 
 func validateEvidence(value CapabilityEvidence) error {
-	expectedState := EvidenceUnavailable
-	if value.Configured {
-		expectedState = EvidenceConfigured
-	}
-	if value.AdapterObserved {
-		expectedState = EvidenceAdapterObserved
-	}
-	if value.NativeQualified {
-		if !value.Configured || !value.AdapterObserved {
-			return errors.New("continuous-use native qualification lacks prerequisite evidence")
-		}
-		expectedState = EvidenceNativeQualified
-	}
-	if value.State != expectedState || value.Unavailable == value.NativeQualified {
-		return errors.New("continuous-use capability evidence is inconsistent")
-	}
 	validReasons := map[string]bool{
 		ReasonNativePending: true, ReasonContextInjectionPending: true,
 		ReasonSchedulerPending: true, ReasonRuntimeProjectionMissing: true,
 		ReasonNativeSessionPending: true, ReasonRuntimeNotConfigured: true,
 		ReasonSourceUnavailable: true,
 	}
-	if value.NativeQualified && value.Reason != "" || !value.NativeQualified && !validReasons[value.Reason] {
-		return errors.New("continuous-use capability evidence reason is inconsistent")
+	switch {
+	case value.State == EvidenceOperational:
+		// operational is product availability, while native evidence remains separate.
+		// Evidence ordering is still enforced so telemetry cannot claim impossible proof.
+		if !value.Configured || value.Unavailable || value.Reason != "" || value.NativeQualified && !value.AdapterObserved {
+			return errors.New("continuous-use capability evidence is inconsistent")
+		}
+	case value.State == EvidenceUnavailable:
+		// unavailable may describe a configured-but-not-qualified capability; it must
+		// not claim native observation or qualification without the prerequisites.
+		if value.Unavailable == false || !validReasons[value.Reason] || value.NativeQualified && (!value.Configured || !value.AdapterObserved) {
+			return errors.New("continuous-use capability evidence is inconsistent")
+		}
+	default:
+		return errors.New("continuous-use capability evidence state is invalid")
 	}
 	return nil
 }
 
 func evidence(configured, observed, qualified bool, reason string) CapabilityEvidence {
-	if !qualified && reason == "" {
+	if configured {
+		return CapabilityEvidence{
+			State: EvidenceOperational, Configured: true,
+			AdapterObserved: observed, NativeQualified: qualified,
+			Unavailable: false, Reason: "",
+		}
+	}
+	if reason == "" {
 		reason = ReasonNativePending
 	}
-	result := CapabilityEvidence{
-		State: EvidenceUnavailable, Configured: configured, AdapterObserved: observed,
-		NativeQualified: qualified, Unavailable: !qualified, Reason: reason,
+	return CapabilityEvidence{
+		State: EvidenceUnavailable, Configured: false,
+		AdapterObserved: observed, NativeQualified: qualified,
+		Unavailable: true, Reason: reason,
 	}
-	switch {
-	case qualified:
-		result.State, result.Unavailable, result.Reason = EvidenceNativeQualified, false, ""
-	case observed:
-		result.State = EvidenceAdapterObserved
-	case configured:
-		result.State = EvidenceConfigured
-	}
-	return result
 }
 
 func validateSource(source Source) error {

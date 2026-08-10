@@ -119,7 +119,7 @@ func TestDiagnoseRuntimeSeparatesAdapterObservationByRuntime(t *testing.T) {
 	}
 }
 
-func TestDiagnoseRuntimeFailsClosedForTruncatedOrUnboundedReceiptHistory(t *testing.T) {
+func TestDiagnoseRuntimeFailsClosedForTruncatedReceipt(t *testing.T) {
 	root := t.TempDir()
 	receiptRoot := filepath.Join(root, "runtime", "receipts", testWorkspaceID)
 	if err := os.MkdirAll(receiptRoot, 0o700); err != nil {
@@ -131,16 +131,26 @@ func TestDiagnoseRuntimeFailsClosedForTruncatedOrUnboundedReceiptHistory(t *test
 	if _, err := DiagnoseRuntime(root, testWorkspaceID, "claude"); err == nil {
 		t.Fatal("truncated lifecycle receipt was accepted as adapter evidence")
 	}
-	if err := os.RemoveAll(receiptRoot); err != nil {
-		t.Fatal(err)
-	}
-	for index := 0; index <= MaximumDiagnosticReceiptEntries; index++ {
-		receipt := Receipt{SchemaVersion: 1, Runtime: "claude", Event: StopFinalize, State: "observed", Provenance: AdapterCommand, IdempotencyKey: IdempotencyKey("bounded", string(rune(index)))}
+}
+
+func TestDiagnoseRuntimeReturnsNMostRecentOnOverflow(t *testing.T) {
+	root := t.TempDir()
+	total := MaximumDiagnosticReceiptEntries + 5
+	for index := 0; index < total; index++ {
+		receipt := Receipt{
+			SchemaVersion: 1, Runtime: "claude", Event: StopFinalize, State: "observed",
+			Provenance: AdapterCommand, IdempotencyKey: IdempotencyKey("bounded", string(rune(index))),
+			OccurredAt: time.Now().Add(time.Duration(index) * time.Second),
+		}
 		if _, err := Record(root, testWorkspaceID, receipt); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := DiagnoseRuntime(root, testWorkspaceID, "claude"); err == nil {
-		t.Fatal("unbounded lifecycle receipt history was accepted")
+	summary, err := DiagnoseRuntime(root, testWorkspaceID, "claude")
+	if err != nil {
+		t.Fatalf("overflow should succeed and return N most recent: %v", err)
+	}
+	if summary.Observed != MaximumDiagnosticReceiptEntries {
+		t.Fatalf("expected %d observed receipts, got %d", MaximumDiagnosticReceiptEntries, summary.Observed)
 	}
 }

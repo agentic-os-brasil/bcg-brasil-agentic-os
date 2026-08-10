@@ -251,6 +251,11 @@ func resolveBuildTrustProfile(profile, issuer, keyID, registrySHA256, bootstrapp
 		KeyID:                   keyID,
 	}
 	switch installer.NativeTrustMode(profile) {
+	case installer.NativeTrustCanarySimple:
+		if issuer != "" || keyID != "" || registrySHA256 != "" || bootstrapperSHA256 != "" {
+			return "", installer.LocalBetaPins{}, errors.New("canary-simple build trust profile must not carry local-beta pins")
+		}
+		return installer.NativeTrustCanarySimple, installer.LocalBetaPins{}, nil
 	case installer.NativeTrustStrict:
 		if issuer != "" || keyID != "" || registrySHA256 != "" || bootstrapperSHA256 != "" {
 			return "", installer.LocalBetaPins{}, errors.New("strict build trust profile must not carry local-beta pins")
