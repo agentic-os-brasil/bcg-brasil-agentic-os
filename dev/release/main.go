@@ -46,8 +46,39 @@ func main() {
 		readiness(root, os.Args[2:])
 	case "self-contained":
 		selfContained(root, os.Args[2:])
+	case "portable-windows":
+		portableWindows(root, os.Args[2:])
 	default:
 		usage()
+	}
+}
+
+func portableWindows(root string, args []string) {
+	flags := flag.NewFlagSet("portable-windows", flag.ExitOnError)
+	version := flags.String("version", "", "immutable MAJOR.MINOR.PATCH release version")
+	release := flags.String("release-directory", "", "exact signed release directory")
+	registry := flags.String("authority-registry", "", "approved public authority registry")
+	registrySHA256 := flags.String("authority-registry-sha256", "", "exact lowercase authority-registry SHA-256 pin")
+	bootstrapper := flags.String("bootstrapper", "", "versioned Windows amd64 bootstrapper")
+	bootstrapperSHA256 := flags.String("bootstrapper-sha256", "", "exact lowercase bootstrapper SHA-256 pin")
+	output := flags.String("output", "", "new Windows portable ZIP path")
+	_ = flags.Parse(args)
+	if *version == "" || *release == "" || *registry == "" || *registrySHA256 == "" ||
+		*bootstrapper == "" || *bootstrapperSHA256 == "" || *output == "" || flags.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./dev/release portable-windows --version MAJOR.MINOR.PATCH --release-directory DIR --authority-registry FILE --authority-registry-sha256 SHA256 --bootstrapper FILE --bootstrapper-sha256 SHA256 --output ZIP")
+		os.Exit(2)
+	}
+	result, err := releasepack.BuildWindowsPortable(releasepack.WindowsPortableOptions{
+		Version: *version, ReleaseDirectory: absoluteFromRoot(root, *release),
+		AuthorityRegistry: absoluteFromRoot(root, *registry), AuthorityRegistrySHA256: *registrySHA256,
+		Bootstrapper: absoluteFromRoot(root, *bootstrapper), BootstrapperSHA256: *bootstrapperSHA256,
+		Output: absoluteFromRoot(root, *output), Clock: time.Now,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+		fatal(err)
 	}
 }
 
@@ -325,7 +356,7 @@ func optionalAbsoluteFromRoot(root, value string) string {
 func usage() {
 	fmt.Fprintln(
 		os.Stderr,
-		"usage: go run ./dev/release <binary|icons|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness|self-contained> [options]",
+		"usage: go run ./dev/release <binary|icons|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness|self-contained|portable-windows> [options]",
 	)
 	os.Exit(2)
 }

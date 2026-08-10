@@ -126,20 +126,29 @@ an unsigned override. The existing unsigned trial acknowledgement remains
 confined to `installers/trial`.
 
 A controlled Windows Canary may install real user-space product bytes before
-organization-owned Authenticode custody exists only through the
-packaging-time `windows-local-beta` profile defined by decision `CARY`. This is
-not a production override and is not selectable by an end user. The compiled
-bridge must pin the exact test-only issuer/key identity, authority-registry
-SHA-256 and bootstrapper SHA-256; require an Ed25519-authenticated `canary`
-manifest with the same identity; and accept only the native status
-`NotSigned`. Any partial profile, different channel or identity, digest drift,
-invalid native-signature state or verification failure remains fail-closed.
-The resulting single-file EXE is an unsigned controlled-beta candidate and
-requires controlled delivery plus an independently published SHA-256. It does
-not satisfy native signing, clean-device, pilot or production gates.
+organization-owned Authenticode custody exists only through a packaging-time
+local-beta profile defined by decisions `CARY` and `PZIP`. This is not a
+production override and is not selectable by an end user. The current cohort
+handoff is `windows-portable-local-beta`: its factory requires an
+Ed25519-authenticated `canary` manifest, exact active issuer/key registry,
+exact registry and bootstrapper SHA-256 pins, a version-matched seeded Windows
+amd64 bootstrapper and native status exactly `NotSigned`. Any partial profile,
+different channel or identity, digest drift, invalid native-signature state or
+verification failure remains fail-closed.
 
-After adapter verification, the Windows wizard completes workspace and
-onboarding activation without invoking macOS `launchctl`. Until the native
+The deterministic ZIP carries the complete closed signed release, the pinned
+registry and bootstrapper under the conventional managed-root seed, one empty
+workspace, bounded provenance and one activation command. It contains no
+wizard or installer bridge. The activation command delegates first install to
+the stable bootstrapper and then invokes the existing one-and-done Claude setup
+against the fixed packaged workspace. The ZIP and its executables remain
+unsigned controlled-beta candidates and require controlled delivery plus an
+independently published ZIP SHA-256. This does not satisfy native signing,
+clean-device, pilot or production gates. Moving the package after activation
+is unsupported because the adapter contract binds the absolute installed CLI.
+
+After adapter verification, Windows portable activation completes workspace
+and onboarding activation without invoking macOS `launchctl`. Until the native
 Task Scheduler adapter is qualified, maintenance is reported as unavailable
 and unscheduled; this honest limitation must not roll back an otherwise valid
 Windows installation or be presented as active automation.
