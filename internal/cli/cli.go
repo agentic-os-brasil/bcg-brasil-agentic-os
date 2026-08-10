@@ -187,11 +187,11 @@ type workCreateRequest struct {
 
 func runWork(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos work <schema|create|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
+		fmt.Fprintln(errOut, "usage: bcgos work <schema|create|list|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
 		return ExitUsage
 	}
 	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(out, "usage: bcgos work <schema|create|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
+		fmt.Fprintln(out, "usage: bcgos work <schema|create|list|start|checkpoint|pause|resume|next|evidence|complete|inspect|export|delete>")
 		return ExitOK
 	}
 	if args[0] == "schema" {
@@ -243,6 +243,22 @@ Completion criteria:
 			return reportError(errOut, err)
 		}
 		return writeJSON(out, execution.Receipt(item), errOut)
+	case "list":
+		flags := newFlagSet("work list", errOut)
+		workspacePath := flags.String("workspace", "", "initialized workspace path")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*workspacePath) == "" {
+			fmt.Fprintln(errOut, "usage: bcgos work list --workspace PATH")
+			return ExitUsage
+		}
+		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		items, err := store.List(workspaceID)
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, items, errOut)
 	case "start", "checkpoint", "pause", "resume", "next", "inspect", "export", "delete":
 		flags := newFlagSet("work "+args[0], errOut)
 		workspacePath := flags.String("workspace", "", "initialized workspace path")
@@ -270,7 +286,10 @@ Completion criteria:
 			}
 			return writeJSON(out, execution.Receipt(item), errOut)
 		case "checkpoint":
-			_ = stdin
+			if !*stdin {
+				fmt.Fprintln(errOut, "usage: bcgos work checkpoint --workspace PATH --item ID --revision N --attempt ID --stdin")
+				return ExitUsage
+			}
 			body, err := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
 			if err != nil {
 				return reportError(errOut, err)
@@ -1647,23 +1666,24 @@ func splitTracks(value string) []string {
 }
 
 type maestroDispatchRequest struct {
-	AuthenticatedOwner bool               `json:"authenticated_owner"`
-	OwnerID            string             `json:"owner_id"`
-	DispatchID         string             `json:"dispatch_id"`
-	OccurrenceID       string             `json:"occurrence_id"`
-	Prompt             string             `json:"prompt"`
-	Language           string             `json:"language"`
-	Source             string             `json:"source"`
-	SessionID          string             `json:"session_id"`
-	WorkingLanguage    string             `json:"working_language"`
-	CurrentLanguage    string             `json:"current_language"`
-	DraftOutput        string             `json:"draft_output"`
-	Audience           string             `json:"audience"`
-	Consequence        string             `json:"consequence"`
-	Reversibility      string             `json:"reversibility"`
-	RelevanceKeys      []string           `json:"relevance_keys"`
-	SelfSignal         *maestroSelfSignal `json:"self_signal,omitempty"`
-	Plan               maestro.Input      `json:"plan"`
+	AuthenticatedOwner bool                 `json:"authenticated_owner"`
+	OwnerID            string               `json:"owner_id"`
+	DispatchID         string               `json:"dispatch_id"`
+	OccurrenceID       string               `json:"occurrence_id"`
+	Prompt             string               `json:"prompt"`
+	Language           string               `json:"language"`
+	Source             string               `json:"source"`
+	SessionID          string               `json:"session_id"`
+	WorkingLanguage    string               `json:"working_language"`
+	CurrentLanguage    string               `json:"current_language"`
+	DraftOutput        string               `json:"draft_output"`
+	Audience           string               `json:"audience"`
+	Consequence        string               `json:"consequence"`
+	Reversibility      string               `json:"reversibility"`
+	RelevanceKeys      []string             `json:"relevance_keys"`
+	SelfSignal         *maestroSelfSignal   `json:"self_signal,omitempty"`
+	AgentEvents        []maestro.AgentEvent `json:"agent_events,omitempty"`
+	Plan               maestro.Input        `json:"plan"`
 }
 
 // maestroSelfSignal is optional and deliberately narrow. A prompt or a
@@ -1915,6 +1935,14 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	orchestrated := false
+	if len(request.AgentEvents) > 0 {
+		chain, err = maestro.ExecuteAgentEvents(plan, request.AgentEvents, maestro.DefaultLoopPolicy)
+		if err != nil {
+			return reportError(errOut, fmt.Errorf("execute deterministic agent orchestration: %w", err))
+		}
+		orchestrated = true
+	}
 	// Initialization is the only local bootstrap mutation. No prompt or
 	// durable chain is written until plan, snapshot and sealed packet checks
 	// have all succeeded.
@@ -1989,7 +2017,14 @@ func runMaestroWithInput(args []string, in io.Reader, out, errOut io.Writer, dat
 		return reportError(errOut, err)
 	}
 	chainBody, _ := json.Marshal(chain)
-	receipt := maestro.DispatchBoundaryReceipt{SchemaVersion: 1, PlanDigest: plan.PlanDigest, ChainDigest: maestro.SHA256Hex(string(chainBody)), PacketDigest: packet.PacketDigest, PromptDigest: promptDigest, DraftDigest: draftDigest, AccountConsultation: plan.AccountConsultationRequired, WalterRequired: plan.RequiresWalter, HistoryCount: len(packet.PriorPrompts), DispatchID: durableState.DispatchID, DurableDispatchEpoch: durableState.Epoch, BindingChainDigest: durableState.BindingChainDigest, State: chain.Stage, Outcome: "dispatch_boundary_model_unavailable"}
+	outcome := "dispatch_boundary_model_unavailable"
+	if orchestrated {
+		outcome = "orchestration_contract_pending"
+		if chain.Stage == maestro.StageFinal {
+			outcome = "orchestration_contract_complete"
+		}
+	}
+	receipt := maestro.DispatchBoundaryReceipt{SchemaVersion: 1, PlanDigest: plan.PlanDigest, ChainDigest: maestro.SHA256Hex(string(chainBody)), PacketDigest: packet.PacketDigest, PromptDigest: promptDigest, DraftDigest: draftDigest, AccountConsultation: plan.AccountConsultationRequired, WalterRequired: plan.RequiresWalter, HistoryCount: len(packet.PriorPrompts), DispatchID: durableState.DispatchID, DurableDispatchEpoch: durableState.Epoch, BindingChainDigest: durableState.BindingChainDigest, State: chain.Stage, Outcome: outcome, OrchestrationStage: chain.Stage, AgentEventCount: len(request.AgentEvents)}
 	return writeJSON(out, receipt, errOut)
 }
 
@@ -1999,7 +2034,7 @@ func runOwner(args []string, out, errOut io.Writer, dataRoot func() (string, err
 
 func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview [quick|complete]|onboarding|expand|refine|self|prompt-history>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|agent|interview [quick|complete]|onboarding|expand|refine|self|prompt-history>")
 		return ExitUsage
 	}
 	root, err := dataRoot()
@@ -2007,6 +2042,38 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		return reportError(errOut, err)
 	}
 	switch args[0] {
+	case "agent":
+		if len(args) != 2 || args[1] != "list" {
+			fmt.Fprintln(errOut, "usage: bcgos owner agent list")
+			return ExitUsage
+		}
+		profile, profileErr := agentidentity.Load(root)
+		if errors.Is(profileErr, os.ErrNotExist) {
+			profile = agentidentity.Profile{}
+		} else if profileErr != nil {
+			return reportError(errOut, profileErr)
+		}
+		type managedAgent struct {
+			Selection agentidentity.Selection `json:"selection"`
+			State     string                  `json:"state"`
+			Runtime   string                  `json:"runtime_state,omitempty"`
+		}
+		managed := make([]managedAgent, 0)
+		for _, selection := range agentidentity.ResolveManaged(profile) {
+			entry := managedAgent{Selection: selection, State: "not_instantiated"}
+			status, inspectErr := agentscaffold.Inspect(root, selection.AgentID)
+			if inspectErr == nil {
+				entry.State = "registered"
+				entry.Runtime = status.Instance.RuntimeState
+			} else if !errors.Is(inspectErr, os.ErrNotExist) {
+				return reportError(errOut, inspectErr)
+			}
+			managed = append(managed, entry)
+		}
+		return writeJSON(out, struct {
+			SchemaVersion int            `json:"schema_version"`
+			ManagedAgents []managedAgent `json:"managed_agents"`
+		}{SchemaVersion: 1, ManagedAgents: managed}, errOut)
 	case "init":
 		if len(args) != 1 {
 			fmt.Fprintln(errOut, "usage: bcgos owner init")
@@ -2051,7 +2118,7 @@ func runOwnerWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 	case "prompt-history":
 		return runOwnerPromptHistory(args[1:], in, out, errOut, root)
 	default:
-		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|interview [quick|complete]|onboarding|expand|refine|self|prompt-history>")
+		fmt.Fprintln(errOut, "usage: bcgos owner <init|status|agent|interview [quick|complete]|onboarding|expand|refine|self|prompt-history>")
 		return ExitUsage
 	}
 }

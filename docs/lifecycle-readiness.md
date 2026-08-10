@@ -25,6 +25,13 @@ supported-runtime observation. The first four are lifecycle evidence classes;
 `release-ready` and `pilot-ready` are delivery gates and do not follow from
 them.
 
+The diagnostic surface is intentionally explicit about negative evidence:
+`adapter-observed` is derived from a validated bounded `adapter_command`
+receipt for the requested runtime and workspace, while `attested_capture_files`
+counts only HMAC-attested memory capture files. A SessionStart payload or a
+managed `CLAUDE.md` can prove configuration and context projection, but it is
+not a memory capture and cannot be promoted to adapter or native evidence.
+
 ```mermaid
 flowchart LR
     Configured --> ContractTested["local contract-tested"]

@@ -571,6 +571,7 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 		return result
 	}
 	last := map[string]any{}
+	var lastAttemptedAt time.Time
 	schedulerAuditIncomplete := 0
 	for _, receipt := range receipts {
 		if receipt.State == scheduler.Unavailable {
@@ -579,7 +580,8 @@ func maintenanceRuntimeStatus(root string, catalog maintenance.Catalog, enrollme
 		if receipt.Error == "recovery_committed_audit_incomplete" {
 			schedulerAuditIncomplete++
 		}
-		if receipt.AttemptedAt.After(time.Time{}) {
+		if receipt.AttemptedAt.After(lastAttemptedAt) {
+			lastAttemptedAt = receipt.AttemptedAt
 			last = map[string]any{"job_id": receipt.JobID, "state": receipt.State, "scheduled_for": receipt.ScheduledFor.UTC(), "attempted_at": receipt.AttemptedAt.UTC()}
 		}
 	}

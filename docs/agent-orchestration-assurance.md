@@ -46,6 +46,24 @@ native hook delivery. Native Claude/Codex qualification remains unavailable
 until an attended adapter conformance run observes the same events and
 receipts.
 
+## Deterministic adapter bridge
+
+`bcgos maestro dispatch --stdin` accepts an optional bounded `agent_events`
+array. Each event contains only an agent identity, a closed decision and (when
+the agent returns work) a content digest. Maestro applies the events through
+the same `ChainState.Advance` transition authority used by the planner tests,
+persisting only the metadata-only chain and typed receipts. An account-assisted
+Case therefore has one enforced order: Client Account framing → Case → Client
+Account validation → Walter (when required). A direct low-leverage Case can
+finish without either consultation, while a material Case cannot skip Walter.
+
+An absent event array remains `dispatch_boundary_model_unavailable`; the CLI
+never fabricates an agent invocation. The bridge is deterministic contract
+evidence and a handoff seam for Claude/Codex adapters. It does not by itself
+promote `agent_orchestration` to `native-qualified`; that still requires a
+fresh installed-runtime session proving that the native adapter emitted and
+authenticated the corresponding events.
+
 ## Abuse cases covered locally
 
 - forged or unknown capability;
