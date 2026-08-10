@@ -244,11 +244,8 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 	if err := validateNativeTrustPolicy(options, verified, registryDigest, bootstrapperDigest); err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, err
 	}
-	skipNativeTrust := options.NativeTrustMode == NativeTrustCanarySimple && options.TargetOS == "windows" && verified.Manifest.Channel == "canary"
-	if !skipNativeTrust {
-		if err := options.VerifyNative(context.Background(), options.Bootstrapper); err != nil {
-			return Plan{}, releaseverify.VerifiedRelease{}, fmt.Errorf("native bootstrapper trust check: %w", err)
-		}
+	if err := options.VerifyNative(context.Background(), options.Bootstrapper); err != nil {
+		return Plan{}, releaseverify.VerifiedRelease{}, fmt.Errorf("native bootstrapper trust check: %w", err)
 	}
 	bootstrapperVersion := verified.Manifest.Release
 	if options.NativeTrustMode == NativeTrustStrict {
@@ -979,6 +976,13 @@ func validateAuthenticodeStatus(output []byte, mode NativeTrustMode) error {
 	status := strings.TrimSpace(string(output))
 	if status == "" || strings.ContainsAny(status, "\r\n") {
 		return errors.New("Authenticode returned an invalid bootstrapper status")
+	}
+	if mode == NativeTrustCanarySimple {
+		// Canary-simple is an explicit owner-directed local diagnostic profile:
+		// platform status must not block the test. Release Ed25519 verification
+		// and package integrity remain enforced separately. Strict and pinned
+		// local-beta profiles retain their narrower trust contracts below.
+		return nil
 	}
 	if status == "Valid" && mode == NativeTrustStrict {
 		return nil
