@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestWizardOffersClaudeOnboardingModalAfterWorkspaceCreation(t *testing.T) {
+func TestWizardKeepsTheCanarySimplePathLinear(t *testing.T) {
 	root := filepath.Join("..", "..", "installers", "wizard")
 	index, err := os.ReadFile(filepath.Join(root, "index.html"))
 	if err != nil {
@@ -18,39 +18,48 @@ func TestWizardOffersClaudeOnboardingModalAfterWorkspaceCreation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, required := range []string{
-		`id="runtime-ready-modal"`,
-		`data-action="launch-runtime" data-runtime="claude"`,
-		"Abrir o Maestro no Claude Code Desktop",
-		"guia de onboarding já instalado",
+		`data-choice="new"`,
+		`data-choice="update"`,
+		`data-screen="progress"`,
+		`data-screen="complete"`,
+		`data-action="open-claude"`,
+		"Abrir Claude Desktop",
+		"Tentar novamente",
 	} {
 		if !strings.Contains(string(index), required) {
-			t.Fatalf("wizard handoff modal is missing %q", required)
+			t.Fatalf("wizard simple path is missing %q", required)
 		}
 	}
 	for _, required := range []string{
-		"runtimeReadyModal.showModal()",
-		"runtimeReadyWorkspace.textContent = defaultWorkspace",
-		"if (runtimeReadyModal?.open) runtimeReadyModal.close()",
+		"/api/simple-install",
+		"/api/verify",
+		"/api/install",
+		"/api/create-workspace",
+		"/api/launch-runtime",
+		"terminalFailure",
 	} {
 		if !strings.Contains(string(app), required) {
-			t.Fatalf("wizard handoff behavior is missing %q", required)
+			t.Fatalf("wizard simple behavior is missing %q", required)
 		}
 	}
 }
 
-func TestWizardShowsClaudeModalOnlyForAClaudePreparedWorkspace(t *testing.T) {
+func TestWizardHidesTechnicalReleaseDetailsFromTheUserPath(t *testing.T) {
 	body, err := os.ReadFile(filepath.Join("..", "..", "installers", "wizard", "app.js"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(body)
-	for _, required := range []string{
-		"let configuredRuntime = 'claude'",
-		"preparedRuntime === 'claude'",
-		"payload.activation?.lifecycle?.runtime || configuredRuntime",
+	for _, forbidden := range []string{
+		"local_beta",
+		"Authenticode",
+		"canary qualification",
+		"issuer",
+		"release authorization",
+		"runtime-ready-modal",
 	} {
-		if !strings.Contains(source, required) {
-			t.Fatalf("runtime-aware handoff is missing %q", required)
+		if strings.Contains(strings.ToLower(source), strings.ToLower(forbidden)) {
+			t.Fatalf("wizard user path exposes technical detail %q", forbidden)
 		}
 	}
 }
