@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/MAESTRO-v0.1.0%20target-243047?style=for-the-badge&labelColor=0B1020" alt="Maestro v0.1.0 target">
-  <img src="https://img.shields.io/badge/STATUS-contract--validated-12B886?style=for-the-badge&labelColor=0B1020" alt="Contract validated; runtime qualification pending">
+  <img src="https://img.shields.io/badge/STATUS-enabled--contracts-12B886?style=for-the-badge&labelColor=0B1020" alt="Released contracts enabled; runtime evidence tracked separately">
   <img src="https://img.shields.io/badge/PRIVACY-bounded%20by%20design-5B8DEF?style=for-the-badge&labelColor=0B1020" alt="Privacy bounded by design">
   <img src="https://img.shields.io/badge/RUNTIME-Claude--first%20%C2%B7%20Codex--compatible-F4B942?style=for-the-badge&labelColor=0B1020" alt="Claude-first and Codex-compatible">
 </p>
@@ -90,7 +90,7 @@ children. An account-assisted Case uses `Maestro → Client Account → Maestro 
 Case → Maestro → Client Account validation → Maestro`; a direct
 execution-only Case omits only the pre-brief and converges at `Maestro`. Both
 paths record whether Walter is required, skipped for low leverage or still
-unavailable before delivery. Claude and Codex share the same controller and
+pending native evidence before delivery. Claude and Codex share the same controller and
 durable installation-state contract; capability reporting distinguishes
 configured, local contract-tested, adapter-observed and native-qualified
 evidence. A native runtime must be qualified before this contract is described
@@ -102,7 +102,7 @@ consequence, reversibility and a `UserSelfSnapshot` projection. Walter's
 intrinsic-intent assessment is a hypothesis with evidence and confidence, not
 mind-reading. Owner Context facets remain the sole self authority. At the
 reachable local dispatch boundary, Maestro evaluates each submitted interaction
-and returns metadata-only dispatch state while model execution is unavailable.
+and returns metadata-only dispatch state while model evidence is pending.
 It persists only material, owner-attested signals as normalized local metadata;
 prompts, client documents and generated output never become self evidence. The
 local CLI exposes inspection/export and owner-confirmed rejection/redaction,
@@ -126,7 +126,12 @@ attestation is not cryptographic principal authentication.
 
 ## What is ready
 
-### 🏅 Toward the v0.1.0 pilot — contract layer validated
+### 🏅 Toward the v0.1.0 pilot — released contracts enabled
+
+Released contracts stay enabled once configured. Native qualification, hosted
+provider evidence, signing and publication are tracked separately and do not
+turn a working local contract into a blocked runtime. `unavailable` is reserved
+for a genuinely absent, disabled or failed capability.
 
 | Capability | What it means today |
 | --- | --- |
@@ -135,7 +140,7 @@ attestation is not cryptographic principal authentication.
 | ✅ Professional context | A canonical SELF index, eight professional facets, one-question expansion, agent identity drafts, skills index, human atlas and bounded session pointers stay inspectable and local. The quick onboarding track establishes role, communication, quality bar and boundaries; the complete track covers all eight facets. |
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
 | ✅ Governed completion | High-stakes work can require a separately authenticated Walter review before completion. |
-| ✅ Bounded delegation contract | The deterministic core can dispatch a narrow packet to the right agent; native runtime activation remains unavailable until adapter qualification. |
+| ✅ Bounded delegation contract | The deterministic core can dispatch a narrow packet to the right agent; native runtime evidence is tracked separately from the enabled contract. |
 | ✅ Professional capability bundles | The base bundle serves professional work; a confirmed technical selection activates the unified Tech Core bundle with engineering, data and quality skills. |
 | ✅ Canary contract | The local store can aggregate typed outcomes, capability failures, interventions and receipt metadata — native telemetry remains unavailable and no work content is exported. |
 | ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |

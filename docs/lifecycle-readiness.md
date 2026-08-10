@@ -2,8 +2,8 @@
 
 This is the current evidence boundary for Claude and Codex lifecycle hooks.
 It deliberately separates repository configuration, direct contract tests,
-adapter-observed receipts and native-session qualification. No row below
-promotes a capability by implication.
+adapter-observed receipts and native-session qualification. Evidence labels do
+not disable a capability that is already configured and released.
 
 ## Evidence snapshot
 
@@ -38,7 +38,7 @@ flowchart LR
     ContractTested --> AdapterObserved["adapter-observed"]
     AdapterObserved --> NativeQualified["native-qualified"]
     NativeQualified --> Promote["capability may be promoted"]
-    Blocked["blocked / unavailable"] -.->|no silent fallback| Configured
+    EvidencePending["native evidence pending"] -.->|diagnostic only| Configured
 ```
 
 ## Current matrix
@@ -51,9 +51,10 @@ flowchart LR
 | `post_action_observe` | configured async + local contract-tested; adapter-observed: not captured; native-qualified: no | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | Fresh native-session observation from a qualifying runtime |
 | `stop_finalize` | configured async + local contract-tested; adapter-observed: not captured; native-qualified: no | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | Fresh native-session observation from a qualifying runtime |
 
-The canonical manifest remains `unavailable` for every lifecycle capability.
-The local probe reports the same matrix without starting a model session,
-writing a receipt or changing runtime configuration.
+The canonical manifest keeps native qualification as a separate evidence field.
+Configured lifecycle behavior remains enabled; the local probe reports the
+evidence boundary without starting a model session, writing a receipt or
+changing runtime configuration.
 
 ## Readiness status
 

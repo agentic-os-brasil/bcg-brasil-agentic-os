@@ -38,6 +38,27 @@ func TestPersistChainStateRecoversExpiredLease(t *testing.T) {
 	}
 }
 
+func TestPersistChainStateAllowsEvidenceRetryAfterPlanningState(t *testing.T) {
+	root := t.TempDir()
+	planDigest := strings.Repeat("f", 64)
+	planning := ChainState{PlanDigest: planDigest, Stage: StageAccountFraming}
+	if _, err := PersistChainState(root, planning); err != nil {
+		t.Fatalf("planning state was not persisted: %v", err)
+	}
+	progressed := planning
+	progressed.Stage = StageCaseExecution
+	progressed.ActiveAgentID = "case-agent"
+	progressed.Receipts = []Receipt{{Sequence: 1, Stage: StageAccountFraming, AgentID: "account-agent", Decision: "approve", PlanDigest: planDigest}}
+	if _, err := PersistChainState(root, progressed); err != nil {
+		t.Fatalf("evidence retry was treated as a conflict: %v", err)
+	}
+	regression := planning
+	regression.Stage = StageAccountFraming
+	if _, err := PersistChainState(root, regression); err == nil {
+		t.Fatal("regressive chain state replaced the evidence-bearing state")
+	}
+}
+
 func TestPersistChainStateRejectsSymlinkedOwnerAncestor(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink privilege is not available on all Windows runners")

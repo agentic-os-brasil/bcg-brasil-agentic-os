@@ -90,7 +90,8 @@ change the capability state reported by `bcgos doctor`.
 The envelope reports adapter delivery separately from native qualification: a
 direct bridge is `contract_only`; an adapter serializer may report
 `adapter_payload_emitted`; `injection_state` remains `unavailable` until the
-qualifying native-session protocol succeeds.
+qualifying native-session protocol succeeds. This evidence field is diagnostic
+only and does not disable the configured context contract.
 
 ## Validation
 

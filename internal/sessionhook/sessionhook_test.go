@@ -206,7 +206,7 @@ func TestClaudeContextInjectionUsesTheSameBoundedPacketWithNativeEventName(t *te
 		t.Fatalf("output = %#v, %v", output, err)
 	}
 	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "wiring is not installed") ||
-		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "capability remains unavailable") {
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "runtime contract remains enabled") {
 		t.Fatalf("adapter output reported the wrong evidence state: %#v", output)
 	}
 	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO SESSION PROTOCOL") ||
@@ -215,7 +215,8 @@ func TestClaudeContextInjectionUsesTheSameBoundedPacketWithNativeEventName(t *te
 		t.Fatalf("prompt hook repeated the startup protocol: %#v", output)
 	}
 	if !strings.Contains(output.HookSpecificOutput.AdditionalContext, `"adapter_delivery_state":"adapter_payload_emitted"`) ||
-		!strings.Contains(output.HookSpecificOutput.AdditionalContext, `"injection_state":"unavailable"`) {
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, `"availability_state":"enabled"`) ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, `"native_evidence_state":"native_qualification_pending"`) {
 		t.Fatalf("adapter output did not separate delivery from qualification: %#v", output)
 	}
 }

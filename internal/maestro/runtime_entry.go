@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
@@ -694,7 +695,13 @@ func PersistChainState(root string, state ChainState) (string, error) {
 		if string(current) == string(storedBody) {
 			return path, nil
 		}
-		return "", errors.New("chain state conflict for plan digest")
+		var previous ChainState
+		if err := json.Unmarshal(current, &previous); err != nil {
+			return "", fmt.Errorf("decode existing chain state: %w", err)
+		}
+		if previous.PlanDigest != state.PlanDigest || !chainStateProgresses(previous, state) {
+			return "", errors.New("chain state conflict for plan digest")
+		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
@@ -737,6 +744,25 @@ func PersistChainState(root string, state ChainState) (string, error) {
 		return "", fmt.Errorf("chain durability failed after rename; chain cleanup completed: %w", err)
 	}
 	return path, nil
+}
+
+// chainStateProgresses permits an evidence-bearing retry to replace the
+// metadata-only planning state written by an earlier dispatch of the same
+// immutable plan. The previous receipt tail must remain an exact prefix; a
+// divergent or regressive write is still rejected as a conflict.
+func chainStateProgresses(previous, next ChainState) bool {
+	if len(next.Receipts) < len(previous.Receipts) {
+		return false
+	}
+	for index := range previous.Receipts {
+		if !reflect.DeepEqual(previous.Receipts[index], next.Receipts[index]) {
+			return false
+		}
+	}
+	if len(next.Receipts) == len(previous.Receipts) {
+		return false
+	}
+	return true
 }
 
 func RemoveChainState(root string, state ChainState) error {
