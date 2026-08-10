@@ -473,7 +473,10 @@ func TestWeeklyReviewResumesAfterProposalCommitCrash(t *testing.T) {
 
 func TestSlowModelLeaseRenewsAndStaleWorkerCannotBeTakenOver(t *testing.T) {
 	request := testRequest(t)
-	store := ReceiptStore{Root: t.TempDir(), LeaseDuration: 60 * time.Millisecond, LockWait: 40 * time.Millisecond}
+	// Keep the lease comfortably above filesystem scheduling jitter. The test
+	// still spans multiple renewal intervals, but does not turn a loaded CI
+	// worker into a false fencing failure.
+	store := ReceiptStore{Root: t.TempDir(), LeaseDuration: 500 * time.Millisecond, LockWait: 100 * time.Millisecond}
 	adapter := &blockingAdapter{started: make(chan struct{}), release: make(chan struct{}), proposal: testProposal(request)}
 	resultCh := make(chan error, 1)
 	go func() {
@@ -481,7 +484,7 @@ func TestSlowModelLeaseRenewsAndStaleWorkerCannotBeTakenOver(t *testing.T) {
 		resultCh <- err
 	}()
 	<-adapter.started
-	time.Sleep(180 * time.Millisecond)
+	time.Sleep(1500 * time.Millisecond)
 	if _, err := store.Reserve(request, time.Now().UTC()); !errors.Is(err, ErrOccurrenceBusy) {
 		t.Fatalf("slow model lease was not renewed; reserve err=%v", err)
 	}
