@@ -244,7 +244,8 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 	if err := validateNativeTrustPolicy(options, verified, registryDigest, bootstrapperDigest); err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, err
 	}
-	if options.NativeTrustMode != NativeTrustCanarySimple {
+	skipNativeTrust := options.NativeTrustMode == NativeTrustCanarySimple && options.TargetOS == "windows" && verified.Manifest.Channel == "canary"
+	if !skipNativeTrust {
 		if err := options.VerifyNative(context.Background(), options.Bootstrapper); err != nil {
 			return Plan{}, releaseverify.VerifiedRelease{}, fmt.Errorf("native bootstrapper trust check: %w", err)
 		}
@@ -847,6 +848,12 @@ func validateNativeTrustPolicy(options Options, verified releaseverify.VerifiedR
 		}
 		return nil
 	case NativeTrustCanarySimple:
+		if options.TargetOS != "windows" {
+			return errors.New("canary-simple native trust mode requires a Windows target")
+		}
+		if verified.Manifest.Channel != "canary" {
+			return errors.New("canary-simple native trust mode requires the canary channel")
+		}
 		if !emptyLocalBetaPins(options.LocalBetaPins) {
 			return errors.New("canary-simple trust mode must not carry local-beta pins")
 		}
