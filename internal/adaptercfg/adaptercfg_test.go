@@ -354,7 +354,7 @@ func TestCodexInstallOwnsCompleteSynchronousLifecycle(t *testing.T) {
 					continue
 				}
 				found = true
-				if entry["timeout"] != float64(2) {
+				if entry["timeout"] != float64(5) {
 					t.Fatalf("%s timeout = %#v", event, entry["timeout"])
 				}
 				if async, _ := entry["async"].(bool); async {
@@ -401,7 +401,7 @@ func TestClaudeInstallOwnsCompleteLifecycleAndKeepsObserveHooksAsync(t *testing.
 					continue
 				}
 				found = true
-				if entry["timeout"] != float64(2) {
+				if entry["timeout"] != float64(5) {
 					t.Fatalf("%s timeout = %#v", event, entry["timeout"])
 				}
 				wantAsync := event == "PostToolUse" || event == "Stop"

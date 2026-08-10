@@ -44,6 +44,73 @@ func TestGuardDeniesCanonicalDestructiveRootVariants(t *testing.T) {
 	}
 }
 
+func TestGuardDeniesCanonicalDestructiveWindowsVariants(t *testing.T) {
+	tests := []string{
+		`rd /s /q C:\`,
+		`rmdir /s /q C:\`,
+		`RD /S /Q C:\`,
+		`rd /s /q "C:\"`,
+		`rd /s /q %USERPROFILE%`,
+		`rmdir /s /q %LOCALAPPDATA%`,
+		`del /f /s /q C:\`,
+		`erase /f /s /q C:\`,
+		`del /f /s /q %USERPROFILE%`,
+		`format C: /y`,
+		`format D:`,
+		`Remove-Item -Recurse -Force C:\`,
+		`Remove-Item -Recurse -Force "C:\"`,
+		`Remove-Item -Recu -For C:\`,
+		`ri -Recurse -Force $env:USERPROFILE`,
+		`Remove-Item -Recurse -Force $HOME`,
+		`Remove-Item -Recurse -Force C:\Windows\System32`,
+	}
+	for _, command := range tests {
+		t.Run(command, func(t *testing.T) {
+			output, err := Guard(bashInput(command))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if output.HookSpecificOutput == nil || output.HookSpecificOutput.PermissionDecision != "deny" {
+				t.Fatalf("guard = %#v", output)
+			}
+			if !strings.Contains(output.HookSpecificOutput.PermissionDecisionReason, "Nothing was changed") {
+				t.Fatalf("denial omitted recovery assurance: %#v", output)
+			}
+		})
+	}
+}
+
+func TestGuardLeavesNormalWindowsRemovalsToClaudePermissionFlow(t *testing.T) {
+	tests := []NativeInput{
+		bashInput(`rd .\node_modules`),
+		bashInput(`rd /s /q .\build`),
+		bashInput(`rmdir .\empty-dir`),
+		bashInput(`del temp.txt`),
+		bashInput(`del /f /s /q .\dist`),
+		bashInput(`erase /q report.log`),
+		bashInput(`Remove-Item .\notes.md`),
+		bashInput(`Remove-Item -Recurse -Force .\build`),
+		bashInput(`Remove-Item -Recurse -Force $PWD\dist`),
+		// Missing the destructive flag combination — must not deny.
+		bashInput(`rd C:\`),
+		bashInput(`del C:\`),
+		bashInput(`Remove-Item C:\`),
+		bashInput(`Remove-Item -Force C:\`),
+		bashInput(`Remove-Item -Recurse C:\`),
+	}
+	for _, input := range tests {
+		t.Run(input.ToolInput.Command, func(t *testing.T) {
+			output, err := Guard(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if output.HookSpecificOutput != nil {
+				t.Fatalf("guard should not grant or deny normal Windows removal: %#v", output)
+			}
+		})
+	}
+}
+
 func TestGuardLeavesNormalCommandsToClaudePermissionFlow(t *testing.T) {
 	tests := []NativeInput{
 		bashInput("rm -rf ./build"),
