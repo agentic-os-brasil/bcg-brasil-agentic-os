@@ -95,6 +95,13 @@ func selfContained(root string, args []string) {
 	basePath := absoluteFromRoot(root, *base)
 	sourcePath := absoluteFromRoot(root, *source)
 	outputPath := absoluteFromRoot(root, *output)
+	if err := installerbundle.ValidateWindowsGUIExecutable(basePath); err != nil {
+		fatal(fmt.Errorf("self-contained base must be a Windows GUI executable: %w", err))
+	}
+	innerBridge := filepath.Join(sourcePath, "maestro-installer.exe")
+	if err := installerbundle.ValidateWindowsGUIExecutable(innerBridge); err != nil {
+		fatal(fmt.Errorf("self-contained package bridge must be a Windows GUI executable: %w", err))
+	}
 	outputParent := filepath.Dir(outputPath)
 	temporary, err := os.MkdirTemp(outputParent, ".maestro-installer-payload-")
 	if err != nil {

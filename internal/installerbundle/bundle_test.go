@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
@@ -53,7 +54,7 @@ func TestPackAppendAndExtractSelfContainedPayload(t *testing.T) {
 	}
 
 	basePath := filepath.Join(root, "base.exe")
-	if err := os.WriteFile(basePath, []byte("base-pe"), 0o755); err != nil {
+	if err := os.WriteFile(basePath, syntheticWindowsPE(2), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	outputPath := filepath.Join(root, "Maestro-Installer.exe")
@@ -82,6 +83,44 @@ func TestPackAppendAndExtractSelfContainedPayload(t *testing.T) {
 	if _, err := os.Stat(extracted); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("cleanup error = %v, want directory removal", err)
 	}
+}
+
+func TestValidateWindowsGUIExecutableRejectsConsoleAndMalformedInputs(t *testing.T) {
+	root := t.TempDir()
+	gui := filepath.Join(root, "gui.exe")
+	if err := os.WriteFile(gui, syntheticWindowsPE(2), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateWindowsGUIExecutable(gui); err != nil {
+		t.Fatalf("ValidateWindowsGUIExecutable(GUI) error = %v", err)
+	}
+	console := filepath.Join(root, "console.exe")
+	if err := os.WriteFile(console, syntheticWindowsPE(3), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateWindowsGUIExecutable(console); err == nil || !strings.Contains(err.Error(), "subsystem 3") {
+		t.Fatalf("ValidateWindowsGUIExecutable(console) error = %v, want subsystem rejection", err)
+	}
+	malformed := filepath.Join(root, "malformed.exe")
+	if err := os.WriteFile(malformed, []byte("not a PE"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateWindowsGUIExecutable(malformed); err == nil || !strings.Contains(err.Error(), "too small") {
+		t.Fatalf("ValidateWindowsGUIExecutable(malformed) error = %v, want size rejection", err)
+	}
+}
+
+func syntheticWindowsPE(subsystem uint16) []byte {
+	body := make([]byte, 512)
+	body[0], body[1] = 'M', 'Z'
+	peOffset := uint32(0x80)
+	binary.LittleEndian.PutUint32(body[0x3c:], peOffset)
+	copy(body[peOffset:], []byte{'P', 'E', 0, 0})
+	binary.LittleEndian.PutUint16(body[peOffset+20:], 240)
+	optional := peOffset + 24
+	binary.LittleEndian.PutUint16(body[optional:], 0x20b)
+	binary.LittleEndian.PutUint16(body[optional+68:], subsystem)
+	return body
 }
 
 func TestExtractRejectsTamperedPayload(t *testing.T) {

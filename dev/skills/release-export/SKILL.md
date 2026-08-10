@@ -75,10 +75,13 @@ go run ./dev/release self-contained \
 
 O `--base` e o `--output` devem ser arquivos diferentes. O comando cria um
 footer autenticado por SHA-256 sobre o payload comprimido, rejeita colisão de
-paths e não substitui a verificação Ed25519, o bootstrapper ou a assinatura
-nativa. Registre no evidence pack o tamanho e o SHA-256 do payload, o SHA-256
-do EXE e o resultado de uma extração/instalação em Windows. O arquivo isolado
-continua `unsigned-candidate` até a etapa Authenticode aprovada.
+paths e exige que o wrapper e o `maestro-installer.exe` interno sejam PE
+Windows GUI (`-H=windowsgui`); uma base CUI é recusada para evitar um EXE que
+apenas pisca e encerra. O comando não substitui a verificação Ed25519, o
+bootstrapper ou a assinatura nativa. Registre no evidence pack o tamanho e o
+SHA-256 do payload, o SHA-256 do EXE e o resultado de uma extração/instalação
+em Windows. O arquivo isolado continua `unsigned-candidate` até a etapa
+Authenticode aprovada.
 
 ## Publicar no GitHub Release
 

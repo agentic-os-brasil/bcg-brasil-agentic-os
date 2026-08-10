@@ -39,8 +39,11 @@ The self-contained installer factory is the single-file option over the same
 validated package contract. Run `go run ./dev/release self-contained` with the
 complete conventional package directory as `--source` and its
 `maestro-installer.exe` as `--base`; do not pass the signed release directory
-or the ZIP directly. The output appends a bounded, digest-bound payload and
-remains an `unsigned-candidate` until Authenticode is applied.
+or the ZIP directly. Both the wrapper and the embedded bridge must be compiled
+as Windows GUI executables (`-H=windowsgui`); the factory rejects a console
+subsystem base instead of emitting an EXE that only flashes a terminal. The
+output appends a bounded, digest-bound payload and remains an
+`unsigned-candidate` until Authenticode is applied.
 
 The self-contained wrapper verifies its payload footer and SHA-256 before
 extracting. Archive entries must be regular files or directories with safe

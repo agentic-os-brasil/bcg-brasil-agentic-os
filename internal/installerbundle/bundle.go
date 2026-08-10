@@ -29,6 +29,80 @@ const (
 	maximumTotalBytes = int64(2 << 30)
 )
 
+// ValidateWindowsGUIExecutable verifies the PE subsystem used by a Windows
+// visual entrypoint. A self-contained installer must not be built from a
+// console-subsystem executable: that produces a transient console window and
+// hides the wizard's startup failure from the owner.
+func ValidateWindowsGUIExecutable(path string) error {
+	file, err := openRegular(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() < 64 {
+		return errors.New("Windows executable is too small to be a PE file")
+	}
+	read16 := func(offset int64) (uint16, error) {
+		if offset < 0 || offset > info.Size()-2 {
+			return 0, errors.New("PE field lies outside the Windows executable")
+		}
+		var body [2]byte
+		if _, err := file.ReadAt(body[:], offset); err != nil {
+			return 0, err
+		}
+		return binary.LittleEndian.Uint16(body[:]), nil
+	}
+	read32 := func(offset int64) (uint32, error) {
+		if offset < 0 || offset > info.Size()-4 {
+			return 0, errors.New("PE field lies outside the Windows executable")
+		}
+		var body [4]byte
+		if _, err := file.ReadAt(body[:], offset); err != nil {
+			return 0, err
+		}
+		return binary.LittleEndian.Uint32(body[:]), nil
+	}
+	var dos [2]byte
+	if _, err := file.ReadAt(dos[:], 0); err != nil || dos != [2]byte{'M', 'Z'} {
+		return errors.New("Windows executable is missing the PE DOS signature")
+	}
+	peOffset, err := read32(0x3c)
+	if err != nil || int64(peOffset) < 64 || int64(peOffset) > info.Size()-24 {
+		return errors.New("Windows executable has an invalid PE header offset")
+	}
+	var signature [4]byte
+	if _, err := file.ReadAt(signature[:], int64(peOffset)); err != nil || signature != [4]byte{'P', 'E', 0, 0} {
+		return errors.New("Windows executable is missing the PE signature")
+	}
+	optionalSize, err := read16(int64(peOffset) + 20)
+	if err != nil {
+		return err
+	}
+	optionalOffset := int64(peOffset) + 24
+	if optionalSize < 70 || optionalOffset+int64(optionalSize) > info.Size() {
+		return errors.New("Windows executable has an invalid PE optional header")
+	}
+	magic, err := read16(optionalOffset)
+	if err != nil {
+		return err
+	}
+	if magic != 0x10b && magic != 0x20b {
+		return errors.New("Windows executable uses an unsupported PE optional-header format")
+	}
+	subsystem, err := read16(optionalOffset + 68)
+	if err != nil {
+		return err
+	}
+	if subsystem != 2 { // IMAGE_SUBSYSTEM_WINDOWS_GUI
+		return fmt.Errorf("Windows executable uses PE subsystem %d; expected Windows GUI (2)", subsystem)
+	}
+	return nil
+}
+
 var payloadMagic = [16]byte{'M', 'A', 'E', 'S', 'T', 'R', 'O', '-', 'S', 'F', 'X', '-', 'V', '1', 0, 0}
 
 // PayloadInfo describes the compressed payload appended to an executable.
