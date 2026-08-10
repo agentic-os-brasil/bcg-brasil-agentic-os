@@ -1,6 +1,6 @@
 ---
 name: release-export
-description: Exportar releases Maestro de forma reproduzível, incluindo o ZIP portátil Windows, checksums, provenance e publicação opcional em GitHub Releases. Usar quando alguém pedir para gerar, empacotar, guardar em releases/, validar ou publicar um release.
+description: Exportar releases Maestro de forma reproduzível, incluindo ZIP portátil Windows, instalador Windows autocontido, checksums, provenance e publicação opcional em GitHub Releases. Usar quando alguém pedir para gerar, empacotar, guardar em releases/, validar ou publicar um release.
 ---
 
 # Exportar releases Maestro
@@ -21,9 +21,13 @@ ZIPs, executáveis, chaves, certificados, tokens ou dados de usuário na `main`.
 5. Exportar para `releases/<versão>/` usando o script desta skill. A factory
    existente (`go run ./dev/release portable-windows`) continua sendo a única
    autoridade para construir o ZIP.
-6. Verificar o ZIP, o checksum, o provenance e a lista de assets antes de
-   qualquer publicação.
-7. Publicar no GitHub somente com `--publish-github --confirm-publish`, depois
+6. Se a entrega exigir um único executável Windows, anexar o payload ao bridge
+   validado com `go run ./dev/release self-contained`. O diretório-fonte deve
+   ser o pacote convencional completo produzido pela factory Windows; nunca
+   usar o diretório de release assinado ou o ZIP como fonte direta.
+7. Verificar o ZIP, o checksum, o provenance, o executável autocontido (quando
+   houver) e a lista de assets antes de qualquer publicação.
+8. Publicar no GitHub somente com `--publish-github --confirm-publish`, depois
    reconsultar a release/tag e guardar a URL, SHA do commit e digests.
 
 ## Exportar o ZIP portátil Windows
@@ -52,6 +56,27 @@ O ZIP é uma Canary controlada e permanece `unsigned-controlled-canary`. A
 factory recusa manifest que não seja `canary`, issuer/key fora do registry,
 drift de digest, bootstrapper incompatível, seed divergente e qualquer status
 Authenticode diferente de exatamente `NotSigned`.
+
+## Empacotar o instalador Windows em um único EXE
+
+O ZIP continua sendo o handoff portátil padrão. Quando o usuário precisa
+receber um único arquivo, use o pacote convencional completo que a factory
+Windows já validou (contendo `maestro-installer.exe`, `wizard/`, `release/`,
+registry e bootstrapper) como payload do wrapper:
+
+```sh
+go run ./dev/release self-contained \
+  --base /abs/path/to/windows-package/maestro-installer.exe \
+  --source /abs/path/to/windows-package \
+  --output /abs/path/to/releases/0.2.0/Maestro-Installer-0.2.0-windows-amd64-self-contained-unsigned.exe
+```
+
+O `--base` e o `--output` devem ser arquivos diferentes. O comando cria um
+footer autenticado por SHA-256 sobre o payload comprimido, rejeita colisão de
+paths e não substitui a verificação Ed25519, o bootstrapper ou a assinatura
+nativa. Registre no evidence pack o tamanho e o SHA-256 do payload, o SHA-256
+do EXE e o resultado de uma extração/instalação em Windows. O arquivo isolado
+continua `unsigned-candidate` até a etapa Authenticode aprovada.
 
 ## Publicar no GitHub Release
 
@@ -85,9 +110,9 @@ ele exporta e valida localmente, mas não altera o GitHub.
   reportar `unavailable`; não substituir por uma função falsa fora dos testes.
 - Se a pasta `releases/<versão>/` já contiver arquivos, parar para evitar
   sobrescrever ou misturar artefatos de runs diferentes.
-- Depois de exportar, a instalação Windows ainda exige extrair o ZIP em caminho
-  fixo e executar `Activate-Maestro.cmd` uma vez. Isso não prova clean-device,
-  endpoint approval, pilot-ready ou produção.
+- Depois de exportar, a instalação Windows ainda exige validar o ZIP ou o EXE
+  autocontido em um caminho fixo e confirmar o fluxo de ativação. Isso não
+  prova clean-device, endpoint approval, pilot-ready ou produção.
 
 ## Evidência mínima de entrega
 
@@ -97,4 +122,6 @@ Registrar separadamente:
 - caminho local e URL do GitHub Release, quando publicado;
 - SHA-256 do ZIP, checksum, provenance, registry e bootstrapper;
 - resultado de `go run ./dev/release verify`/`portable-windows` e `unzip -t`;
+- quando houver EXE autocontido: caminho, SHA-256 do arquivo, tamanho/digest do
+  payload e resultado da extração/instalação;
 - status dos gates externos e qualquer evidência Windows real.
