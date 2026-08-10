@@ -66,6 +66,46 @@ func TestCanaryReportCommandIsLocalOnly(t *testing.T) {
 	}
 }
 
+func TestWorkListAndCheckpointRequireExplicitStdin(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	workspacePath := filepath.Join(t.TempDir(), "case-list")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	contract := `{"objective":"bounded list objective","initial_next_step":"start","criteria":[{"id":"check","type":"command_check","command":["go","version"]}],"allowed_refs":[]}`
+	if code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("create exit = %d: %s", code, output.String())
+	}
+	var created execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runWork([]string{"list", "--workspace", workspacePath}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), created.ItemID) || strings.Contains(output.String(), "bounded list objective") {
+		t.Fatalf("list exit = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--item", created.ItemID, "--revision", "2", "--attempt", "attempt"}, strings.NewReader(`{"summary":"should not write"}`), &output, &output, dataRoot); code != ExitUsage {
+		t.Fatalf("checkpoint without stdin exit = %d: %s", code, output.String())
+	}
+}
+
+func TestOwnerAgentListIsReadOnlyAndStable(t *testing.T) {
+	root := t.TempDir()
+	var output bytes.Buffer
+	if code := runOwnerWithInput([]string{"agent", "list"}, strings.NewReader(""), &output, &output, func() (string, error) { return root, nil }); code != ExitOK {
+		t.Fatalf("owner agent list exit = %d: %s", code, output.String())
+	}
+	if !strings.Contains(output.String(), `"managed_agents"`) || !strings.Contains(output.String(), `"maestro"`) || !strings.Contains(output.String(), `"not_instantiated"`) {
+		t.Fatalf("owner agent list = %s", output.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "agents")); !os.IsNotExist(err) {
+		t.Fatalf("read-only list created agent state: %v", err)
+	}
+}
+
 func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 	dataDir := t.TempDir()
 	var output bytes.Buffer
@@ -758,6 +798,10 @@ func TestClaudeLifecycleHooksRemainUnavailableWhileRecordingMetadataOnlyEvidence
 		}
 	}
 	output.Reset()
+	if code := runMaestroWithInput([]string{"status", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"adapter_observed": true`) || !strings.Contains(output.String(), `"post_action_observe"`) {
+		t.Fatalf("continuous runtime evidence = %d %s", code, output.String())
+	}
+	output.Reset()
 	if code := runDoctor([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }, func(string) bool { return true }); code != ExitOK ||
 		!strings.Contains(output.String(), `"id": "lifecycle_receipts"`) ||
 		!strings.Contains(output.String(), "adapter-command lifecycle receipt") ||
@@ -1370,6 +1414,65 @@ func TestMaestroDispatchBoundaryRecordsPromptPlansAndPersistsMetadataOnlyChain(t
 	secondObservations, err := ownerctx.ListObservations(selfRoot)
 	if err != nil || len(secondObservations) != 1 || secondObservations[0].ID != firstObservationID {
 		t.Fatalf("self-signal retry was not idempotent: %#v, err=%v", secondObservations, err)
+	}
+}
+
+func TestMaestroDispatchExecutesDeterministicAccountCaseWalterLoop(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	digest := func(seed string) string { return maestro.SHA256Hex(seed) }
+	agent := func(id, role, kind, scope, parentKind, parentScope string) maestro.RegisteredAgent {
+		return maestro.RegisteredAgent{
+			ID: id, Role: role, ScopeKind: kind, ScopeID: scope,
+			ParentScopeKind: parentKind, ParentScopeID: parentScope,
+			AuthorizationDigest: digest(id + "-authorization"),
+			CapabilityDigest:    digest(id + "-capability"),
+			StateSnapshotDigest: digest(id + "-state"), Available: true,
+		}
+	}
+	request := maestroDispatchRequest{
+		AuthenticatedOwner: true, OwnerID: "owner", DispatchID: "dispatch-orchestration",
+		Prompt: "prepare strategic case", Language: "en-US", Source: "cli", SessionID: "orchestration-session",
+		Plan: maestro.Input{
+			SchemaVersion: 1, IntentClass: maestro.IntentCase, ScopeKind: "case", ScopeID: "case-alpha",
+			AccountScopeID: "account-alpha", Sensitivity: maestro.SensitivityInternal, Materiality: maestro.MaterialityReview,
+			StrategicImplication: true, ClientImplication: true, HealthIntent: maestro.HealthNone,
+			AvailableAgents: []maestro.RegisteredAgent{
+				agent("account-agent-alpha", "client_account_agent", "account", "account-alpha", "", ""),
+				agent("case-agent-alpha", "case_agent", "case", "case-alpha", "account", "account-alpha"),
+				agent("walter", "reviewer", "review", "review", "", ""),
+			},
+		},
+	}
+	outputDigest := digest("case-output")
+	request.AgentEvents = []maestro.AgentEvent{
+		{AgentID: "account-agent-alpha", Decision: "approve"},
+		{AgentID: "case-agent-alpha", Decision: "return", ContentDigest: outputDigest},
+		{AgentID: "account-agent-alpha", Decision: "approve", ContentDigest: outputDigest},
+		{AgentID: "walter", Decision: "approve", ContentDigest: outputDigest},
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runMaestroWithInput([]string{"dispatch", "--stdin"}, bytes.NewReader(body), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("orchestrated dispatch = %d: %s", code, output.String())
+	}
+	var receipt maestro.DispatchBoundaryReceipt
+	if err := json.Unmarshal(output.Bytes(), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Outcome != "orchestration_contract_complete" || receipt.State != maestro.StageFinal || receipt.OrchestrationStage != maestro.StageFinal || receipt.AgentEventCount != 4 {
+		t.Fatalf("orchestration receipt = %#v", receipt)
+	}
+	chainFiles, err := filepath.Glob(filepath.Join(root, "owner", "maestro", "chains", "*.json"))
+	if err != nil || len(chainFiles) != 1 {
+		t.Fatalf("chain files = %v, err=%v", chainFiles, err)
+	}
+	chainBody, err := os.ReadFile(chainFiles[0])
+	if err != nil || !strings.Contains(string(chainBody), `"stage": "final"`) || !strings.Contains(string(chainBody), `"stage": "walter_review"`) {
+		t.Fatalf("persisted orchestration chain = %s, err=%v", chainBody, err)
 	}
 }
 

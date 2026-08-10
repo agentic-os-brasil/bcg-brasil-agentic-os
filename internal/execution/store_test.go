@@ -3,6 +3,7 @@ package execution
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,6 +76,45 @@ func TestCreateStartInspectAndRestart(t *testing.T) {
 	}
 	if inspected.State != started.State || inspected.Contract.Objective != created.Contract.Objective {
 		t.Fatalf("restart inspection = %#v", inspected)
+	}
+}
+
+func TestListReturnsMetadataOnlyAndStableOrder(t *testing.T) {
+	itemNumber := 0
+	store := Store{Root: t.TempDir(), NewID: func(kind string) (string, error) {
+		if kind == "item" {
+			itemNumber++
+			return fmt.Sprintf("item-%d", itemNumber), nil
+		}
+		return kind + "-id", nil
+	}}
+	first, err := store.Create(testCreateInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondInput := testCreateInput()
+	secondInput.Objective = "A second bounded objective."
+	if _, err := store.Create(secondInput); err != nil {
+		t.Fatal(err)
+	}
+	items, err := store.List(testWorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 || items[0].ItemID > items[1].ItemID {
+		t.Fatalf("items = %#v", items)
+	}
+	for _, item := range items {
+		if item.WorkspaceID != testWorkspaceID || item.State != StateReady || item.StateRevision != 1 || item.CheckpointState != CheckpointMissing {
+			t.Fatalf("summary = %#v", item)
+		}
+	}
+	body, err := json.Marshal(items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), first.Contract.Objective) || strings.Contains(string(body), secondInput.Objective) {
+		t.Fatalf("metadata listing leaked objective: %s", body)
 	}
 }
 

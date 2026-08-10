@@ -1,5 +1,16 @@
 # Maestro Canary operating plan
 
+## Canary 0.1.22 closure boundary
+
+The P0/P1 closure preserves the evidence boundary used by the canary: durable
+execution state is inspectable across process restarts, while lifecycle receipts
+remain adapter diagnostics and never promote a runtime to native qualification.
+The deterministic Maestro bridge accepts typed agent events for an explicit
+account/case/Walter loop; absent model/runtime events remain unavailable rather
+than being synthesized by the CLI.
+The local gate remains separate from native qualification and release trust;
+all three must be reported independently in the canary record.
+
 This is the canonical operating plan for Canary evidence. It separates four
 different claims that must never be collapsed into one status:
 
