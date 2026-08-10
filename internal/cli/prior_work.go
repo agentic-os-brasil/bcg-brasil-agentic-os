@@ -221,19 +221,27 @@ func runPriorWorkSource(
 	if action == "select" {
 		identity, identityErr := currentSetupIdentity()
 		if identityErr != nil {
-			status.AuthorizationState = "setup_binding_pending"
-			return writePriorWorkJSON(out, status)
+			return writePriorWorkError(errOut, fmt.Errorf("selected SharePoint source was recorded, but setup binding could not be evaluated: %w", identityErr))
 		}
-		_, bindErr := (setupauth.Store{Root: root}).BindSelectedSource(setupauth.Request{
+		boundStatus, bindErr := (setupauth.Store{Root: root}).BindSelectedSource(setupauth.Request{
 			WorkspaceID: inspection.WorkspaceID, WorkspacePath: inspection.WorkspacePath, SourceFingerprint: status.Fingerprint,
 		}, identity)
 		if bindErr != nil {
 			// Source selection is already a durable, reviewed owner choice. A
-			// missing, expired or identity-mismatched local setup grant must not
-			// turn that successful choice into a false total failure. Keep the
-			// exact pointers selected and expose one honest, repairable pending
-			// state; Session Start will renew the broad setup grant once.
-			status.AuthorizationState = "setup_binding_pending"
+			// missing, expired or identity/scope-mismatched local setup grant
+			// must not turn that successful choice into a false total failure.
+			// Corruption and I/O errors are different: they remain explicit
+			// operational failures rather than being hidden as a repairable
+			// authorization renewal.
+			switch {
+			case errors.Is(bindErr, setupauth.ErrAuthorizationRequired),
+				boundStatus.State == setupauth.StateIdentityChanged,
+				boundStatus.State == setupauth.StateScopeChanged,
+				boundStatus.State == setupauth.StateExpired:
+				status.AuthorizationState = "setup_binding_pending"
+			default:
+				return writePriorWorkError(errOut, fmt.Errorf("selected SharePoint source was recorded, but setup binding failed: %w", bindErr))
+			}
 		}
 	}
 	return writePriorWorkJSON(out, status)
