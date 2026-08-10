@@ -65,6 +65,10 @@ type NativeTrustMode string
 
 const (
 	NativeTrustStrict           NativeTrustMode = "strict"
+	// NativeTrustCanarySimple keeps the signed release-manifest verification but
+	// deliberately omits platform certificate and factory-pin gates for the
+	// controlled Windows Canary installer.
+	NativeTrustCanarySimple     NativeTrustMode = "canary-simple"
 	NativeTrustWindowsLocalBeta NativeTrustMode = "windows-local-beta"
 )
 
@@ -240,8 +244,10 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 	if err := validateNativeTrustPolicy(options, verified, registryDigest, bootstrapperDigest); err != nil {
 		return Plan{}, releaseverify.VerifiedRelease{}, err
 	}
-	if err := options.VerifyNative(context.Background(), options.Bootstrapper); err != nil {
-		return Plan{}, releaseverify.VerifiedRelease{}, fmt.Errorf("native bootstrapper trust check: %w", err)
+	if options.NativeTrustMode != NativeTrustCanarySimple {
+		if err := options.VerifyNative(context.Background(), options.Bootstrapper); err != nil {
+			return Plan{}, releaseverify.VerifiedRelease{}, fmt.Errorf("native bootstrapper trust check: %w", err)
+		}
 	}
 	bootstrapperVersion := verified.Manifest.Release
 	if options.NativeTrustMode == NativeTrustStrict {
@@ -838,6 +844,11 @@ func validateNativeTrustPolicy(options Options, verified releaseverify.VerifiedR
 	case NativeTrustStrict:
 		if !emptyLocalBetaPins(options.LocalBetaPins) {
 			return errors.New("local-beta pins are forbidden in strict native trust mode")
+		}
+		return nil
+	case NativeTrustCanarySimple:
+		if !emptyLocalBetaPins(options.LocalBetaPins) {
+			return errors.New("canary-simple trust mode must not carry local-beta pins")
 		}
 		return nil
 	case NativeTrustWindowsLocalBeta:
