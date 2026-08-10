@@ -260,6 +260,38 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 	}
 }
 
+func TestWizardLeavesRuntimeConfigurationPendingWhenAuthorizationFails(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	configured := false
+	handler := wizardHandler(options{
+		dataRoot:     dataRoot,
+		sessionToken: "test-token",
+		workspacePath: func() (string, error) {
+			return workspacePath, nil
+		},
+		authorizeSetup: func(options, string) (workspaceSetupAuthorization, error) {
+			return workspaceSetupAuthorization{}, errors.New("approval service unavailable")
+		},
+		configureWorkspace: func(options, string) (workspaceActivation, error) {
+			configured = true
+			return workspaceActivation{State: "ready"}, nil
+		},
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/create-workspace", strings.NewReader(`{"import_existing":false,"authorize_setup":true}`))
+	request.Header.Set("X-Maestro-Session", "test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), `"setup_state":"authorization_pending"`) || configured {
+		t.Fatalf("authorization failure was not recoverable and pre-runtime: status=%d configured=%v body=%s", recorder.Code, configured, recorder.Body.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil || inspection.WorkspaceID == "" {
+		t.Fatalf("bootstrap state should remain inspectable for retry: %#v err=%v", inspection, err)
+	}
+}
+
 func TestWizardDefersSourceSelectionUntilWorkspaceBootstrapCompletes(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "data")
