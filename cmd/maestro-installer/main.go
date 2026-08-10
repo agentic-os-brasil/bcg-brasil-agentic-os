@@ -886,7 +886,7 @@ func wizardHandler(options options) http.Handler {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
 		}
-		result, activation, err := initializeDefaultWorkspace(options, workspacePath)
+		result, err := initializeDefaultWorkspace(options, workspacePath)
 		if err != nil {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
@@ -897,7 +897,25 @@ func wizardHandler(options options) http.Handler {
 		}
 		setupAuthorization, err := authorize(options, workspacePath)
 		if err != nil {
-			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("o workspace ficou pronto, mas a autorização one-and-done não foi registrada: %v", err)})
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{
+				"error":         fmt.Sprintf("o bootstrap local foi preparado, mas a autorização one-and-done não foi registrada: %v", err),
+				"setup_state":   "authorization_pending",
+				"retry_command": workspaceDiagnosticCommand(options, workspacePath),
+			})
+			return
+		}
+		configure := options.configureWorkspace
+		if configure == nil {
+			configure = configureWorkspaceRuntime
+		}
+		activation, err := configure(options, workspacePath)
+		if err != nil {
+			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{
+				"error":               fmt.Sprintf("a autorização foi registrada, mas a configuração runtime ficou pendente: %v", err),
+				"setup_state":         "runtime_configuration_pending",
+				"retry_command":       workspaceDiagnosticCommand(options, workspacePath),
+				"setup_authorization": setupAuthorization,
+			})
 			return
 		}
 		var sourcePath string
@@ -1507,49 +1525,41 @@ func validateMemorySource(sourcePath, workspacePath string) error {
 	return nil
 }
 
-func initializeDefaultWorkspace(options options, workspacePath string) (workspace.Result, workspaceActivation, error) {
+func initializeDefaultWorkspace(options options, workspacePath string) (workspace.Result, error) {
 	if strings.TrimSpace(options.dataRoot) == "" {
-		return workspace.Result{}, workspaceActivation{}, fmt.Errorf("a área de dados do Maestro não está configurada")
+		return workspace.Result{}, fmt.Errorf("a área de dados do Maestro não está configurada")
 	}
 	if info, err := os.Stat(workspacePath); err == nil && info.IsDir() {
 		inspection, inspectErr := workspace.Inspect(workspacePath, options.dataRoot)
 		if inspectErr != nil {
-			return workspace.Result{}, workspaceActivation{}, inspectErr
+			return workspace.Result{}, inspectErr
 		}
 		if inspection.State != "ready" && inspection.State != "warning" {
 			entries, readErr := os.ReadDir(workspacePath)
 			if readErr != nil {
-				return workspace.Result{}, workspaceActivation{}, readErr
+				return workspace.Result{}, readErr
 			}
 			if len(entries) > 0 {
-				return workspace.Result{}, workspaceActivation{}, fmt.Errorf("%s já existe e não é um workspace Maestro; escolha um novo local ou renomeie essa pasta", workspacePath)
+				return workspace.Result{}, fmt.Errorf("%s já existe e não é um workspace Maestro; escolha um novo local ou renomeie essa pasta", workspacePath)
 			}
 		}
 	} else if err != nil && !os.IsNotExist(err) {
-		return workspace.Result{}, workspaceActivation{}, err
+		return workspace.Result{}, err
 	}
 	result, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: options.dataRoot})
 	if err != nil {
-		return workspace.Result{}, workspaceActivation{}, err
+		return workspace.Result{}, err
 	}
 	if _, err := ownerctx.Initialize(options.dataRoot); err != nil {
-		return workspace.Result{}, workspaceActivation{}, fmt.Errorf("bootstrap owner context: %w", err)
+		return workspace.Result{}, fmt.Errorf("bootstrap owner context: %w", err)
 	}
 	if _, err := workspaceagent.Initialize(options.dataRoot, result.WorkspaceID); err != nil {
-		return workspace.Result{}, workspaceActivation{}, err
+		return workspace.Result{}, err
 	}
 	if _, err := agentscaffold.Scaffold(options.dataRoot, agentscaffold.WorkspaceRequest(result.WorkspaceID)); err != nil {
-		return workspace.Result{}, workspaceActivation{}, err
+		return workspace.Result{}, err
 	}
-	configure := options.configureWorkspace
-	if configure == nil {
-		configure = configureWorkspaceRuntime
-	}
-	activation, err := configure(options, workspacePath)
-	if err != nil {
-		return workspace.Result{}, workspaceActivation{}, err
-	}
-	return result, activation, nil
+	return result, nil
 }
 
 func configureWorkspaceRuntime(options options, workspacePath string) (workspaceActivation, error) {
