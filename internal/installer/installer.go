@@ -983,7 +983,7 @@ func validateAuthenticodeStatus(output []byte, mode NativeTrustMode) error {
 	if status == "Valid" && mode == NativeTrustStrict {
 		return nil
 	}
-	if status == "NotSigned" && mode == NativeTrustWindowsLocalBeta {
+	if status == "NotSigned" && (mode == NativeTrustCanarySimple || mode == NativeTrustWindowsLocalBeta) {
 		return nil
 	}
 	return fmt.Errorf("Authenticode rejected the bootstrapper with status %s", status)
