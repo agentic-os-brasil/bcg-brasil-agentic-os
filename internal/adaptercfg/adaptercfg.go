@@ -470,7 +470,7 @@ func hasOwnedBindings(config map[string]any, runtimeName string) bool {
 			for _, raw := range entry["hooks"].([]any) {
 				hook := raw.(map[string]any)
 				if isOwnedEventCommand(runtimeName, binding.NativeEvent, hook["command"]) &&
-					hook["timeout"] == float64(2) &&
+					hook["timeout"] == float64(5) &&
 					asyncMatches(binding.Async, hook["async"]) {
 					found = true
 					break
@@ -509,7 +509,7 @@ func updateOwnedEventHook(groups []any, runtimeName, event, command string, asyn
 				changed = true
 				continue
 			}
-			if hook["command"] != command || hook["timeout"] != float64(2) || !asyncMatches(asynchronous, hook["async"]) {
+			if hook["command"] != command || hook["timeout"] != float64(5) || !asyncMatches(asynchronous, hook["async"]) {
 				changed = true
 			}
 			kept = append(kept, hookEntryFor(command, asynchronous))
@@ -533,7 +533,7 @@ func hookEntry(command string) map[string]any {
 }
 
 func hookEntryFor(command string, asynchronous bool) map[string]any {
-	entry := map[string]any{"type": "command", "command": command, "timeout": 2}
+	entry := map[string]any{"type": "command", "command": command, "timeout": 5}
 	if asynchronous {
 		entry["async"] = true
 	}

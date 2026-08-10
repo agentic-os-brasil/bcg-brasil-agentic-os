@@ -88,12 +88,29 @@ func ParseReader(input io.Reader) (NativeInput, error) {
 }
 
 // Guard makes no allow decision: allowing implicitly would bypass Claude's own
-// permission flow. It only denies an unequivocal protected-root deletion.
+// permission flow. It only denies an unequivocal protected-root deletion on
+// POSIX or Windows. Anything else — normal commands, chained commands, unknown
+// shells — is passed through to Claude's own permission flow.
 func Guard(input NativeInput) (GuardOutput, error) {
 	command := strings.TrimSpace(input.ToolInput.Command)
 	if command == "" {
 		// Incomplete metadata is not a Maestro safety decision. Let Claude's
 		// own permission/runtime layer handle it.
+		return GuardOutput{}, nil
+	}
+	// Windows destructive commands (cmd.exe and PowerShell) live outside the
+	// POSIX simple-command grammar because backslash is a path separator and
+	// PowerShell parameters use different tokenization. Evaluate them first
+	// with a dedicated matcher so the guard is not one-platform-blind.
+	if destructive, matched := destructiveWindowsRemoval(command); matched {
+		if destructive {
+			return denial("Maestro denied an unambiguous recursive forced deletion of a protected filesystem root. Nothing was changed. Review the target and retry with a narrower path."), nil
+		}
+		// The command was recognised as a Windows removal verb but is not against
+		// a protected root. Do not fall through to the POSIX simple-command
+		// grammar: backslash-separated Windows paths are outside that grammar
+		// and would spuriously fail-close. Pass through to Claude's own
+		// permission flow.
 		return GuardOutput{}, nil
 	}
 	destructive, err := destructiveRootRemoval(command)
@@ -116,8 +133,10 @@ func Guard(input NativeInput) (GuardOutput, error) {
 func looksLikeRemovalCommand(command string) bool {
 	for _, field := range strings.Fields(command) {
 		field = strings.Trim(field, "(){}[];|&<>")
-		switch field {
-		case "rm", "/bin/rm", "/usr/bin/rm":
+		switch strings.ToLower(field) {
+		case "rm", "/bin/rm", "/usr/bin/rm",
+			"rd", "rmdir", "del", "erase", "format",
+			"remove-item", "ri":
 			return true
 		}
 	}
@@ -359,4 +378,233 @@ func supportedHomeExpansionLength(value string) int {
 		return 0
 	}
 	return len("$HOME")
+}
+
+// destructiveWindowsRemoval returns (destructive, matched).
+//
+//   - matched=false means "this does not look like a Windows destructive verb";
+//     the caller should continue with the POSIX check.
+//   - matched=true, destructive=false means "recognised as a Windows removal
+//     command, but not against a protected root"; pass through.
+//   - matched=true, destructive=true means "unambiguous protected-root removal";
+//     the caller must deny.
+//
+// The matcher is deliberately conservative: it recognises the standard cmd.exe
+// verbs (rd, rmdir, del, erase, format), the PowerShell Remove-Item cmdlet, and
+// their common aliases. It denies only when both recursive-force semantics and
+// a protected-root target are unambiguous. It does not attempt to interpret
+// PowerShell operators, subexpressions, or splatting.
+func destructiveWindowsRemoval(command string) (bool, bool) {
+	tokens := splitWindowsFields(command)
+	if len(tokens) == 0 {
+		return false, false
+	}
+	head := strings.ToLower(strings.Trim(tokens[0], "&"))
+	// cmd.exe: rd /s /q C:\  |  rmdir /s /q %USERPROFILE%
+	// cmd.exe: del /f /s /q C:\  |  erase /f /s /q C:\
+	// cmd.exe: format C: /y
+	// PowerShell: Remove-Item -Recurse -Force C:\  |  ri -Recurse -Force $env:USERPROFILE
+	switch head {
+	case "rd", "rmdir":
+		return windowsCmdRmdirDestructive(tokens[1:]), true
+	case "del", "erase":
+		return windowsCmdDelDestructive(tokens[1:]), true
+	case "format":
+		return windowsFormatDestructive(tokens[1:]), true
+	case "remove-item", "ri":
+		return windowsRemoveItemDestructive(tokens[1:]), true
+	}
+	return false, false
+}
+
+// splitWindowsFields tokenises a Windows-style command line into fields.
+// It handles double quotes as a single lexical unit and passes single quotes,
+// backticks, and backslashes through verbatim so paths like C:\Users survive.
+// It does not attempt to expand env vars — the token strings are matched
+// literally against the protected-root set below.
+func splitWindowsFields(command string) []string {
+	var (
+		fields  []string
+		current strings.Builder
+		inQuote bool
+	)
+	flush := func() {
+		if current.Len() > 0 {
+			fields = append(fields, current.String())
+			current.Reset()
+		}
+	}
+	for index := 0; index < len(command); index++ {
+		character := command[index]
+		if inQuote {
+			if character == '"' {
+				inQuote = false
+				continue
+			}
+			current.WriteByte(character)
+			continue
+		}
+		switch character {
+		case '"':
+			inQuote = true
+		case ' ', '\t', '\r', '\n':
+			flush()
+		default:
+			current.WriteByte(character)
+		}
+	}
+	flush()
+	return fields
+}
+
+func windowsCmdRmdirDestructive(args []string) bool {
+	recursive, quiet := false, false
+	var targets []string
+	for _, arg := range args {
+		switch strings.ToLower(arg) {
+		case "/s":
+			recursive = true
+		case "/q":
+			quiet = true
+		default:
+			if strings.HasPrefix(arg, "/") {
+				continue
+			}
+			targets = append(targets, arg)
+		}
+	}
+	if !recursive || !quiet {
+		return false
+	}
+	return anyProtectedWindowsRoot(targets)
+}
+
+func windowsCmdDelDestructive(args []string) bool {
+	force, recursive := false, false
+	var targets []string
+	for _, arg := range args {
+		lowered := strings.ToLower(arg)
+		switch lowered {
+		case "/f":
+			force = true
+		case "/s":
+			recursive = true
+		case "/q", "/a", "/p":
+			continue
+		default:
+			if strings.HasPrefix(arg, "/") {
+				continue
+			}
+			targets = append(targets, arg)
+		}
+	}
+	if !force || !recursive {
+		return false
+	}
+	return anyProtectedWindowsRoot(targets)
+}
+
+func windowsFormatDestructive(args []string) bool {
+	// `format C:` and `format C: /y` unambiguously erase a drive.
+	// A single positional drive-letter argument is enough.
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "/") {
+			continue
+		}
+		if isProtectedWindowsRoot(arg) {
+			return true
+		}
+	}
+	return false
+}
+
+func windowsRemoveItemDestructive(args []string) bool {
+	recursive, force := false, false
+	var targets []string
+	for _, arg := range args {
+		trimmed := strings.TrimPrefix(strings.TrimPrefix(arg, "--"), "-")
+		lowered := strings.ToLower(trimmed)
+		switch {
+		case matchesPowerShellFlag(lowered, "recurse"):
+			recursive = true
+		case matchesPowerShellFlag(lowered, "force"):
+			force = true
+		case strings.HasPrefix(arg, "-"):
+			// Any other switch (e.g. -Path, -LiteralPath, -Confirm) is skipped.
+			// Its value, if any, becomes the next token and may still be a
+			// protected root — we let the target loop below catch it.
+			continue
+		default:
+			targets = append(targets, arg)
+		}
+	}
+	if !recursive || !force {
+		return false
+	}
+	return anyProtectedWindowsRoot(targets)
+}
+
+// matchesPowerShellFlag returns true when candidate is a valid PowerShell
+// prefix of expected (case-insensitive), matching PowerShell's own parameter
+// resolution. "recu" is enough for "Recurse".
+func matchesPowerShellFlag(candidate, expected string) bool {
+	if candidate == "" || len(candidate) > len(expected) {
+		return false
+	}
+	return strings.HasPrefix(expected, candidate)
+}
+
+func anyProtectedWindowsRoot(targets []string) bool {
+	for _, target := range targets {
+		if isProtectedWindowsRoot(target) {
+			return true
+		}
+	}
+	return false
+}
+
+// isProtectedWindowsRoot recognises the set of paths whose recursive-forced
+// removal never has a legitimate purpose from an agent. It is deliberately a
+// short list; expanding it further risks false positives on paths users may
+// operate on (e.g. C:\Users\me\Projects should NOT be here).
+func isProtectedWindowsRoot(raw string) bool {
+	// Strip surrounding whitespace and enclosing quotes cmd may leave behind.
+	cleaned := strings.TrimSpace(raw)
+	cleaned = strings.Trim(cleaned, `"'`)
+	if cleaned == "" {
+		return false
+	}
+	// Normalise separators and case for matching.
+	lowered := strings.ToLower(cleaned)
+	lowered = strings.ReplaceAll(lowered, "/", `\`)
+	// Trailing separators (`C:\`, `C:\Windows\`) collapse to `C:` / `c:\windows`.
+	for strings.HasSuffix(lowered, `\`) && lowered != `\` {
+		lowered = strings.TrimSuffix(lowered, `\`)
+	}
+	// Drive root: C:  C:\  D:  D:\ ... Z:\ — a single letter followed by a colon.
+	if len(lowered) >= 2 && lowered[1] == ':' && lowered[0] >= 'a' && lowered[0] <= 'z' &&
+		(len(lowered) == 2 || lowered == string(lowered[0])+":") {
+		return true
+	}
+	// POSIX-ish roots that PowerShell also accepts.
+	switch lowered {
+	case `\`, "/", "~":
+		return true
+	}
+	// Environment expansions that resolve to user or system roots.
+	switch strings.ToLower(cleaned) {
+	case "%userprofile%", "%localappdata%", "%appdata%", "%systemroot%", "%windir%",
+		"%homedrive%%homepath%", "%homedrive%\\%homepath%",
+		"$env:userprofile", "$env:localappdata", "$env:appdata",
+		"$env:systemroot", "$env:windir", "$env:home",
+		"$home":
+		return true
+	}
+	// Well-known system directories.
+	switch lowered {
+	case `c:\windows`, `c:\windows\system32`, `c:\program files`,
+		`c:\program files (x86)`, `c:\programdata`, `c:\users`:
+		return true
+	}
+	return false
 }
