@@ -136,9 +136,10 @@ amd64 bootstrapper and native status exactly `NotSigned`. Any partial profile,
 different channel or identity, digest drift, invalid native-signature state or
 verification failure remains fail-closed.
 
-The deterministic ZIP carries the complete closed signed release, the pinned
+The deterministic ZIP is a Windows-only artifact; macOS users receive the DMG.
+It carries the complete closed signed release, the pinned
 registry and bootstrapper under the conventional managed-root seed, one seeded
-workspace, bounded provenance and one internal activation command. It contains
+`maestro-os/` workspace, bounded provenance and one internal activation command. It contains
 no wizard, installer bridge or user-facing activation command. The workspace
 ships a first-use `CLAUDE.md`: the owner opens that folder in Claude Code and
 sends a natural-language message. Claude explains the bounded preparation,

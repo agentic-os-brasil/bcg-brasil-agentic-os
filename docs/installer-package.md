@@ -16,7 +16,7 @@ For the controlled Windows Canary, the user distributable is now
 `Maestro-Portable-<version>-windows-amd64-local-beta-unsigned.zip`, produced by
 `go run ./dev/release portable-windows`. It contains the exact signed release,
 the pinned stable bootstrapper and authority registry, one fixed workspace,
-provenance, a seed `workspace/CLAUDE.md` and an internal
+provenance, a seed `maestro-os/CLAUDE.md` and an internal
 `managed/activate-maestro.cmd`. It deliberately contains no user-facing
 activation command,
 wizard or `maestro-installer.exe`. The runtime file
@@ -24,7 +24,7 @@ wizard or `maestro-installer.exe`. The runtime file
 the stable bootstrapper verifies and activates it as
 `managed/bin/bcgos.exe`, so it must never be sent as a standalone download.
 
-The owner extracts the package, opens only its `workspace/` folder in Claude
+The owner extracts the package, opens only its `maestro-os/` folder in Claude
 Code and sends a natural-language message such as “Quero começar”. The seed
 `CLAUDE.md` makes Claude explain the preparation, request the one-and-done
 confirmation and execute the internal activator itself. The owner does not use
@@ -39,8 +39,11 @@ The self-contained installer factory is the single-file option over the same
 validated package contract. Run `go run ./dev/release self-contained` with the
 complete conventional package directory as `--source` and its
 `maestro-installer.exe` as `--base`; do not pass the signed release directory
-or the ZIP directly. The output appends a bounded, digest-bound payload and
-remains an `unsigned-candidate` until Authenticode is applied.
+or the ZIP directly. Both the wrapper and the embedded bridge must be compiled
+as Windows GUI executables (`-H=windowsgui`); the factory rejects a console
+subsystem base instead of emitting an EXE that only flashes a terminal. The
+output appends a bounded, digest-bound payload and remains an
+`unsigned-candidate` until Authenticode is applied.
 
 The self-contained wrapper verifies its payload footer and SHA-256 before
 extracting. Archive entries must be regular files or directories with safe
@@ -64,15 +67,14 @@ inner bridge all four public bindings:
 - the SHA-256 of the versioned Windows bootstrapper;
 - the authenticated release channel `canary`.
 
-On Windows, the factory requires `Get-AuthenticodeSignature` to report exactly
-`NotSigned` for the supplied bootstrapper. On a non-Windows build host where
-that cmdlet is unavailable, it parses a well-formed PE optional header and
-accepts only a zero offset and zero size in the certificate-table data-directory
-entry. A present/malformed certificate table, `HashMismatch`, `NotTrusted`,
-`UnknownError` and every other status fail closed. The release manifest and
-artifacts still require their normal Ed25519 verification, and the copied
-installed bootstrapper is verified again by the bridge against the compiled
-profile.
+The portable Windows factory runs only on Windows and requires
+`Get-AuthenticodeSignature` to report exactly `NotSigned` for the supplied
+bootstrapper. On macOS, use the Maestro DMG instead; the Windows ZIP is not a
+macOS installer. A present/malformed certificate table, `HashMismatch`,
+`NotTrusted`, `UnknownError` and every other status fail closed. The release
+manifest and artifacts still require their normal Ed25519 verification, and
+the copied installed bootstrapper is verified again by the bridge against the
+compiled profile.
 
 The controlled-Canary output is exactly
 `Maestro-Portable-<version>-windows-amd64-local-beta-unsigned.zip`, accompanied

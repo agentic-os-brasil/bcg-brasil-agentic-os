@@ -257,10 +257,10 @@ go run ./dev/release portable-windows \
 The factory rejects any non-`canary` manifest, issuer/key drift, registry or
 bootstrapper digest drift, seed drift and every Authenticode status other than
 exactly `NotSigned`. The archive contains one top-level package directory, the
-closed `release/`, `managed/` seed, `workspace/`, provenance, README and
-seed `workspace/CLAUDE.md`; the activator lives internally at
+closed `release/`, `managed/` seed, `maestro-os/`, provenance, README and
+seed `maestro-os/CLAUDE.md`; the activator lives internally at
 `managed/activate-maestro.cmd`. It contains no wizard, installer bridge or
-user-facing activation command. The owner opens `workspace/` in Claude Code,
+user-facing activation command. The owner opens `maestro-os/` in Claude Code,
 sends a natural-language message and confirms preparation once. Claude invokes
 the internal activator and continues the installed `maestro-onboarding` flow.
 
@@ -278,7 +278,7 @@ the internal activator and continues the installed `maestro-onboarding` flow.
    wizard reaches the real install path, creates the new workspace, wires the
    selected runtime and starts the guided onboarding prompt.
 6. On a Windows device, extract the ZIP to its final fixed path, open
-   `workspace/` in Claude Code and send a natural-language kickoff message.
+   `maestro-os/` in Claude Code and send a natural-language kickoff message.
    Confirm Claude asks once before preparation, invokes the internal activator,
    the bootstrapper completes the real install, the managed projection is
    appended to `CLAUDE.md` and `maestro-onboarding` continues conversationally.

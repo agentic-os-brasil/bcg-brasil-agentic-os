@@ -18,6 +18,9 @@ import (
 )
 
 func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("portable-windows factory runs only on Windows; macOS uses the DMG")
+	}
 	options := validWindowsPortableOptions(t)
 	output := options.Output
 	result, err := BuildWindowsPortable(options)
@@ -67,8 +70,8 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 		root + "managed/trust/release-authority-registry.json",
 		root + "release/release-manifest.json",
 		root + "release/release-manifest.json.sig",
-		root + "workspace/CLAUDE.md",
-		root + "workspace/README.md",
+		root + "maestro-os/CLAUDE.md",
+		root + "maestro-os/README.md",
 	} {
 		if _, ok := entries[required]; !ok {
 			t.Fatalf("portable archive is missing %s", required)
@@ -93,7 +96,7 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 			t.Fatalf("activation script is missing %q:\n%s", required, activation)
 		}
 	}
-	orientation := string(entries[root+"workspace/CLAUDE.md"])
+	orientation := string(entries[root+"maestro-os/CLAUDE.md"])
 	for _, required := range []string{
 		"Nao peca para a pessoa digitar ou executar comandos",
 		"Peca uma unica confirmacao curta",
@@ -118,7 +121,7 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 		}
 	}
 	readme := string(entries[root+"README-PORTABLE.md"])
-	for _, required := range []string{"Abra a pasta `workspace` no Claude Code", "Envie uma mensagem", "nao execute arquivos `.cmd`"} {
+	for _, required := range []string{"Abra a pasta `maestro-os` no Claude Code", "Envie uma mensagem", "nao execute arquivos `.cmd`"} {
 		if !strings.Contains(readme, required) {
 			t.Fatalf("portable README does not describe the prompt-first Claude Code journey; missing %q:\n%s", required, readme)
 		}
@@ -173,6 +176,9 @@ func validWindowsPortableOptions(t *testing.T) WindowsPortableOptions {
 }
 
 func TestBuildWindowsPortableRejectsTrustBoundaryViolations(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("portable-windows factory runs only on Windows; macOS uses the DMG")
+	}
 	for _, test := range []struct {
 		name    string
 		mutate  func(*WindowsPortableOptions)
@@ -217,6 +223,16 @@ func TestBuildWindowsPortableRejectsTrustBoundaryViolations(t *testing.T) {
 				t.Fatalf("BuildWindowsPortable() error = %v, want %q", err, test.wantErr)
 			}
 		})
+	}
+}
+
+func TestBuildWindowsPortableRejectsNonWindowsFactory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("non-Windows factory guard is not applicable on Windows")
+	}
+	_, err := BuildWindowsPortable(WindowsPortableOptions{})
+	if err == nil || !strings.Contains(err.Error(), "Windows-only") || !strings.Contains(err.Error(), "DMG") {
+		t.Fatalf("BuildWindowsPortable() error = %v, want Windows-only DMG guidance", err)
 	}
 }
 
