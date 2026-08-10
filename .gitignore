@@ -21,6 +21,11 @@ coverage/
 cover.out
 *.test
 
+# Local release exports are published as immutable GitHub Release assets.
+# Keep the directory visible in the source tree without committing binaries.
+/releases/*
+!/releases/.gitkeep
+
 # Editors and operating systems
 .DS_Store
 Thumbs.db

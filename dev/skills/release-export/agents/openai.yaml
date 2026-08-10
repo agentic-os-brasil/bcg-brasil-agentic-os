@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Export"
+  short_description: "Exportar candidatos e ZIPs de release com publicação controlada"
+  default_prompt: "Use $release-export para gerar, verificar e publicar um release Maestro com evidência."
