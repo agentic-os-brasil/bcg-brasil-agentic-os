@@ -1,21 +1,21 @@
 # Maestro agent-orchestration assurance
 
 This matrix separates enforced runtime-neutral contracts from evidence that a
-native Claude or Codex integration has actually invoked them. A local Go test
-does not promote a product capability from `unavailable`.
+native Claude or Codex integration has actually invoked them. Missing native
+evidence is diagnostic and non-blocking for an enabled, configured contract.
 
 | Implemented contract | Local evidence | Native evidence required | Current state |
 | --- | --- | --- | --- |
-| Agent identity is path-safe, unique and capability-bound | `agentcatalog`, `agentorchestration` and scaffold tests reject malformed, duplicate and forged identities | Installed adapter resolves private capabilities and sends authenticated native events | unavailable |
-| Only registered targets and role edges may start work | Catalog validation and controller conformance reject unknown targets and disallowed edges | Native dispatch never bypasses the controller | unavailable |
-| Scope and tool/resource grants are exact and default-deny | Controller tests reject cross-scope pointers, forged scope, unknown tool operations and unbound prefixes | Native tool events carry the same canonical resource and scope values | unavailable |
-| One direct spoke is active at a time; depth is one and children are forbidden | Shared state and controller tests reject parallel branches, child packets and nested delegation | Adapter uses one durable shared state store across restarts/processes | unavailable |
+| Agent identity is path-safe, unique and capability-bound | `agentcatalog`, `agentorchestration` and scaffold tests reject malformed, duplicate and forged identities | Installed adapter resolves private capabilities and sends authenticated native events | enabled; native evidence pending |
+| Only registered targets and role edges may start work | Catalog validation and controller conformance reject unknown targets and disallowed edges | Native dispatch never bypasses the controller | enabled; native evidence pending |
+| Scope and tool/resource grants are exact and default-deny | Controller tests reject cross-scope pointers, forged scope, unknown tool operations and unbound prefixes | Native tool events carry the same canonical resource and scope values | enabled; native evidence pending |
+| One direct spoke is active at a time; depth is one and children are forbidden | Shared state and controller tests reject parallel branches, child packets and nested delegation | Adapter uses one durable shared state store across restarts/processes | enabled; native evidence pending |
 | Delegation state can recover safely | `Pilot` can persist owner-local packet state and nonce replay state atomically; restart tests authenticate and complete a prior return, while tamper and unavailable paths fail closed | Native adapter supplies the same recovery root and proves restart/partition conformance | runtime-neutral available; native unavailable |
 
-| Packets and completion authority are bounded | Dispatcher and pilot tests verify signed packets, scope inheritance, target-authenticated execution envelopes, nonce replay rejection and finish authority | Adapter delivers only authenticated packets/envelopes without exposing capabilities | unavailable |
-| High-leverage output receives Walter's calm advisory review | The typed Maestro plan resolves `walter_required` independently from Account consultation; low-leverage skips carry a reason and evidence, while Walter verdicts require concrete refinements for load-bearing gaps and reserve `hold` for exceptional blockers | Native adapter emits the sealed packet and observes Walter's typed verdict in the same governed session | unavailable |
-| Direct skill selection stays with the active owner | Dispatcher tests require a signed active root packet, matching agent capability and no active child | Native agent execution proves the same root/capability binding | unavailable |
-| Claude/Codex semantic parity | Shared controller fixtures execute both event vocabularies and denial cases | Native session conformance from installed Claude and Codex adapters | unavailable |
+| Packets and completion authority are bounded | Dispatcher and pilot tests verify signed packets, scope inheritance, target-authenticated execution envelopes, nonce replay rejection and finish authority | Adapter delivers only authenticated packets/envelopes without exposing capabilities | enabled; native evidence pending |
+| High-leverage output receives Walter's calm advisory review | The typed Maestro plan resolves `walter_required` independently from Account consultation; low-leverage skips carry a reason and evidence, while Walter verdicts require concrete refinements for load-bearing gaps and reserve `hold` for exceptional blockers | Native adapter emits the sealed packet and observes Walter's typed verdict in the same governed session | enabled; native evidence pending |
+| Direct skill selection stays with the active owner | Dispatcher tests require a signed active root packet, matching agent capability and no active child | Native agent execution proves the same root/capability binding | enabled; native evidence pending |
+| Claude/Codex semantic parity | Shared controller fixtures execute both event vocabularies and denial cases | Native session conformance from installed Claude and Codex adapters | enabled; native evidence pending |
 
 The pilot exposes the restart boundary programmatically as `Pilot.Recovery()`.
 The process-local constructor remains `unavailable`; the durable constructor
@@ -57,12 +57,13 @@ Case therefore has one enforced order: Client Account framing → Case → Clien
 Account validation → Walter (when required). A direct low-leverage Case can
 finish without either consultation, while a material Case cannot skip Walter.
 
-An absent event array remains `dispatch_boundary_model_unavailable`; the CLI
+An absent event array remains `dispatch_boundary_model_pending_input`; the CLI
 never fabricates an agent invocation. The bridge is deterministic contract
 evidence and a handoff seam for Claude/Codex adapters. It does not by itself
 promote `agent_orchestration` to `native-qualified`; that still requires a
 fresh installed-runtime session proving that the native adapter emitted and
-authenticated the corresponding events.
+authenticated the corresponding events. The pending evidence label never
+blocks a later event-bearing retry for the same plan.
 
 ## Abuse cases covered locally
 
@@ -87,10 +88,11 @@ authenticated the corresponding events.
   missing-the-mark verdict without a concrete fix and exit condition;
 - review prose, audience or uncertainty leaked into the durable receipt.
 
-## Explicitly unavailable
+## Native evidence still pending (non-blocking)
 
 Neither `adapters/claude/` nor `adapters/codex/` yet wires the runtime-neutral
 Pilot recovery root into native product lifecycle events. Their README files
 describe the required mapping and evidence only. The canonical capability
-manifest therefore keeps `agent_orchestration` unavailable for both runtimes;
-no local fixture, CLI bridge or development hook changes that state.
+manifest therefore keeps native qualification pending for both runtimes; no
+local fixture, CLI bridge or development hook changes that evidence state. The
+configured deterministic contract remains enabled.

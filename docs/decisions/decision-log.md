@@ -907,3 +907,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: A bounded cohort may exercise the real Windows installer before corporate signing exists, while mix-and-match package changes and invalid Authenticode states fail closed. Because the outer EXE itself is unsigned, compiled pins prove intra-package consistency rather than origin authenticity; SmartScreen, WDAC or AppLocker may still block execution, and controlled delivery plus an independently published checksum remain mandatory. Promotion still requires organization-owned Authenticode, clean-device evidence and the existing pilot gates.
 - Refs: BETA; SFXI; specs/001-cli-distribution.md; specs/020-release-distribution.md; specs/022-guided-pilot-release.md; internal/installer; cmd/maestro-installer; dev/release/build-windows-installer.ps1; dev/release/build-windows-singlefile-installer.ps1
 - Supersedes: BETA
+
+## LIVA - Keep released capabilities enabled while evidence remains observable
+
+- Date: 2026-08-10
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The installed Maestro can already execute its released contracts, hooks, skills and local orchestration. Treating missing native-attestation or model-observation receipts as `unavailable` makes a working product appear blocked and creates friction for Canary validation.
+- Decision: Released capabilities remain enabled and callable by default. Runtime evidence is reported independently as `configured`, `adapter_observed` or `native_qualification_pending`; it must not gate an enabled path. `unavailable` is reserved for a capability that is genuinely absent, disabled by policy, or failed to initialize. Only real safety, integrity, authorization or configuration errors may stop execution.
+- Consequences: User-facing status and onboarding can describe the installed Maestro as active while still exposing evidence gaps honestly. Tests and receipts must verify both behavior and evidence separately; native qualification, signing and external providers remain evidence/release concerns rather than implicit runtime blockers. Existing fail-closed behavior for malformed, unsafe or absent dependencies remains unchanged.
+- Refs: specs/005-development-harness.md; docs/lifecycle-readiness.md; docs/agent-orchestration-assurance.md; internal/sessionstart; internal/sessionhook; cmd/maestro-installer
+- Supersedes: none

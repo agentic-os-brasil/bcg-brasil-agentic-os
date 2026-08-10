@@ -15,7 +15,9 @@ type Envelope struct {
 	Runtime              string            `json:"runtime"`
 	State                string            `json:"state"`
 	Packet               sessionctx.Packet `json:"packet"`
+	AvailabilityState    string            `json:"availability_state"`
 	AdapterDeliveryState string            `json:"adapter_delivery_state"`
+	NativeEvidenceState  string            `json:"native_evidence_state"`
 	InjectionState       string            `json:"injection_state"`
 	Message              string            `json:"message"`
 }
@@ -33,8 +35,10 @@ func Build(runtime string, packet sessionctx.Packet) (Envelope, error) {
 		Runtime:              runtime,
 		State:                packet.State,
 		Packet:               packet,
+		AvailabilityState:    "enabled",
 		AdapterDeliveryState: "contract_only",
+		NativeEvidenceState:  "native_qualification_pending",
 		InjectionState:       "unavailable",
-		Message:              "native Session Start wiring is not installed; this envelope is a bounded adapter input only",
+		Message:              "Maestro Session Start contract is available; native evidence is tracked separately",
 	}, nil
 }
