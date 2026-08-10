@@ -216,6 +216,46 @@ func TestGuidedSharePointSelectionSurvivesSetupBindingMismatchAsRepairablePendin
 	}
 }
 
+func TestGuidedSharePointSelectionDoesNotHideCorruptSetupGrant(t *testing.T) {
+	dataRoot := t.TempDir()
+	workspacePath := filepath.Join(t.TempDir(), "maestro-project")
+	resolve := func() (string, error) { return dataRoot, nil }
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, resolve); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := currentSetupIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (setupauth.Store{Root: dataRoot}).Authorize(
+		setupauth.Request{WorkspaceID: inspection.WorkspaceID, WorkspacePath: workspacePath}, identity, true,
+	); err != nil {
+		t.Fatal(err)
+	}
+	grantPath := filepath.Join(dataRoot, "setup-authorizations", inspection.WorkspaceID+".json")
+	if err := os.WriteFile(grantPath, []byte(`{"schema_version":1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	selection := `{"schema_version":1,"folder_urls":["https://bcg.sharepoint.com/sites/project/Shared%20Documents/Authorized-Folder"]}`
+	code := runPriorWork(
+		[]string{"source", "select", "--workspace", workspacePath, "--stdin", "--confirm"},
+		strings.NewReader(selection), &output, &output, resolve,
+	)
+	if code != ExitFailure || !strings.Contains(output.String(), "setup binding failed") || !strings.Contains(output.String(), "invalid identity or scope fields") {
+		t.Fatalf("corrupt grant was hidden as pending: exit=%d output=%s", code, output.String())
+	}
+	status, err := priorWorkSourceSelectionStore(dataRoot).Status(inspection.WorkspaceID)
+	if err != nil || status.State != priorwork.SourceSelected {
+		t.Fatalf("durable source selection was lost after grant corruption: %#v err=%v", status, err)
+	}
+}
+
 func TestPriorWorkCLIEndToEndSignedImportAndSuzanoFind(t *testing.T) {
 	dataRoot := t.TempDir()
 	resolve := func() (string, error) { return dataRoot, nil }
