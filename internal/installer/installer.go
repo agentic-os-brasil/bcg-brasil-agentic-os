@@ -853,7 +853,7 @@ func validateNativeTrustPolicy(options Options, verified releaseverify.VerifiedR
 			return errors.New("windows local-beta native trust mode requires complete canonical package pins")
 		}
 		if !hasBetaAuthorityMarker(pins.Issuer) || !hasBetaAuthorityMarker(pins.KeyID) {
-			return errors.New("windows local-beta authority issuer and key ID must be explicitly beta or test-only")
+			return errors.New("windows local-beta authority issuer and key ID must carry a pre-production marker (beta, test, testonly, localbeta, canary, preview, dev, local, or rc)")
 		}
 		if verified.Manifest.Issuer.ID != pins.Issuer || verified.Manifest.Issuer.KeyID != pins.KeyID {
 			return errors.New("signed release issuer does not match the pinned local-beta authority")
@@ -882,11 +882,30 @@ func isLowerSHA256(value string) bool {
 	return err == nil && len(decoded) == sha256.Size
 }
 
+// preProductionAuthorityMarkers enumerates the tokens that flag a
+// Windows-local-beta pin as unmistakably a pre-production identity. The set is
+// broader than a strict beta/test contract so a canary or dev-signing pin
+// (which is what a legitimate factory produces for the canary channel) is not
+// treated as a production issuer. It stays small on purpose so that a real
+// production issuer (e.g. `maestro-production` / `release-YYYYMMDD`) still
+// fails closed and does not slip into the local-beta trust mode.
+var preProductionAuthorityMarkers = map[string]struct{}{
+	"beta":      {},
+	"test":      {},
+	"testonly":  {},
+	"localbeta": {},
+	"canary":    {},
+	"preview":   {},
+	"dev":       {},
+	"local":     {},
+	"rc":        {},
+}
+
 func hasBetaAuthorityMarker(value string) bool {
 	for _, token := range strings.FieldsFunc(strings.ToLower(value), func(character rune) bool {
 		return character == '.' || character == '_' || character == '-'
 	}) {
-		if token == "beta" || token == "test" || token == "testonly" || token == "localbeta" {
+		if _, ok := preProductionAuthorityMarkers[token]; ok {
 			return true
 		}
 	}
