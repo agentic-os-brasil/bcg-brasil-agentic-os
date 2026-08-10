@@ -67,9 +67,6 @@ type windowsPortableProvenance struct {
 }
 
 func BuildWindowsPortable(options WindowsPortableOptions) (WindowsPortableResult, error) {
-	if runtime.GOOS != "windows" {
-		return WindowsPortableResult{}, errors.New("portable-windows export is Windows-only; use the macOS DMG on macOS")
-	}
 	if !portableVersionPattern.MatchString(options.Version) {
 		return WindowsPortableResult{}, errors.New("portable version must be MAJOR.MINOR.PATCH")
 	}

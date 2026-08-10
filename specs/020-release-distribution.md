@@ -136,8 +136,8 @@ amd64 bootstrapper and native status exactly `NotSigned`. Any partial profile,
 different channel or identity, digest drift, invalid native-signature state or
 verification failure remains fail-closed.
 
-The deterministic ZIP is a Windows-only artifact; macOS users receive the DMG.
-It carries the complete closed signed release, the pinned
+The deterministic ZIP is a Windows-only runtime artifact and may be assembled
+on macOS; macOS users receive the DMG for installation. It carries the complete closed signed release, the pinned
 registry and bootstrapper under the conventional managed-root seed, one seeded
 `maestro-os/` workspace, bounded provenance and one internal activation command. It contains
 no wizard, installer bridge or user-facing activation command. The workspace

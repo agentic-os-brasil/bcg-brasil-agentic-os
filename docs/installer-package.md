@@ -67,10 +67,11 @@ inner bridge all four public bindings:
 - the SHA-256 of the versioned Windows bootstrapper;
 - the authenticated release channel `canary`.
 
-The portable Windows factory runs only on Windows and requires
+The portable Windows factory may run on macOS, Linux or Windows to assemble the
+Windows artifact. The resulting ZIP runs only on Windows; macOS users must use
+the Maestro DMG. On Windows, the factory requires
 `Get-AuthenticodeSignature` to report exactly `NotSigned` for the supplied
-bootstrapper. On macOS, use the Maestro DMG instead; the Windows ZIP is not a
-macOS installer. A present/malformed certificate table, `HashMismatch`,
+bootstrapper. A present/malformed certificate table, `HashMismatch`,
 `NotTrusted`, `UnknownError` and every other status fail closed. The release
 manifest and artifacts still require their normal Ed25519 verification, and
 the copied installed bootstrapper is verified again by the bridge against the
