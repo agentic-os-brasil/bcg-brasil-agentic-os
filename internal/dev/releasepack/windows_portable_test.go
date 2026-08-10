@@ -137,6 +137,34 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	}
 }
 
+func TestPortableActivationComparesVersionWithoutFindstr(t *testing.T) {
+	script := string(portableActivationScript("0.1.25"))
+	for _, required := range []string{
+		`set "VERSION_OUTPUT=%TEMP%\maestro-version-%RANDOM%-%RANDOM%.txt"`,
+		`set /p "ACTUAL_VERSION="<"%VERSION_OUTPUT%"`,
+		`if not "%ACTUAL_VERSION%"=="bcgos 0.1.25"`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("activation script is missing robust version check %q:\n%s", required, script)
+		}
+	}
+	if strings.Contains(strings.ToLower(script), "findstr") {
+		t.Fatal("activation script must not use findstr for exact CLI version matching")
+	}
+}
+
+func TestPortableClaudeOnboardingStopsNonWindowsBeforeConfirmation(t *testing.T) {
+	orientation := string(portableClaudeOnboarding())
+	platformCheck := strings.Index(orientation, "Antes de pedir confirmacao, confirme silenciosamente que o sistema e Windows")
+	stop := strings.Index(orientation, "Se nao for Windows, pare antes da ativacao")
+	confirmation := strings.Index(orientation, "Peca uma unica confirmacao curta")
+	activation := strings.Index(orientation, `cmd.exe /d /c "..\managed\activate-maestro.cmd"`)
+	if platformCheck < 0 || stop < 0 || confirmation < 0 || activation < 0 ||
+		platformCheck > stop || stop > confirmation || confirmation > activation {
+		t.Fatal("portable onboarding must stop non-Windows sessions before confirmation and activation")
+	}
+}
+
 func validWindowsPortableOptions(t *testing.T) WindowsPortableOptions {
 	t.Helper()
 	candidate := unsignedCandidateFixture(t)
