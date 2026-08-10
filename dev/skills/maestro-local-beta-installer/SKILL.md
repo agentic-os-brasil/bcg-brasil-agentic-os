@@ -239,7 +239,9 @@ from `release/`.
 
 Resolve the exact beta issuer/key and independently approved SHA-256 pins from
 the selected registry and bootstrapper. Do not silently create a new beta
-identity when a seed does not match. Build on the Windows factory:
+identity when a seed does not match. Build with the release factory. Windows
+executes the PE bootstrapper checks; macOS/Linux use bounded linker-value and
+PE certificate-table checks:
 
 ```sh
 go run ./dev/release portable-windows \

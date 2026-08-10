@@ -32,8 +32,10 @@ ZIPs, executáveis, chaves, certificados, tokens ou dados de usuário na `main`.
 
 ## Exportar o ZIP portátil Windows
 
-Execute a partir da raiz do repositório, preferencialmente numa factory Windows
-porque a inspeção real do seed e do Authenticode requer Windows:
+Execute a partir da raiz do repositório. Em Windows, a factory executa
+`seed-status` e usa `Get-AuthenticodeSignature`. Em macOS/Linux, ela não tenta
+executar o PE: valida de forma bounded os valores linker-bound do seed e lê a
+certificate table do PE, mantendo a exigência de `NotSigned` para o Canary:
 
 ```sh
 dev/skills/release-export/scripts/export-release.sh \
@@ -106,8 +108,8 @@ ele exporta e valida localmente, mas não altera o GitHub.
   autenticado; candidato e release assinado são estados diferentes.
 - Não publicar um artifact se `go run ./dev/harness validate --full`, a
   verificação do release ou a inspeção do ZIP falhar.
-- Se a factory não tiver Windows ou não conseguir inspecionar Authenticode/seed,
-  reportar `unavailable`; não substituir por uma função falsa fora dos testes.
+- Se a factory não conseguir validar o seed linker-bound ou a certificate table
+  do PE, reportar erro e não substituir a verificação por `--skip-signature`.
 - Se a pasta `releases/<versão>/` já contiver arquivos, parar para evitar
   sobrescrever ou misturar artefatos de runs diferentes.
 - Depois de exportar, a instalação Windows ainda exige validar o ZIP ou o EXE
