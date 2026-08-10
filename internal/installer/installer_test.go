@@ -380,6 +380,26 @@ func TestPrepareWindowsLocalBetaBindsPinsWithoutExecutingSourceSeedStatus(t *tes
 	}
 }
 
+func TestPrepareCanarySimpleRunsNativeDiagnosticVerifier(t *testing.T) {
+	fixture := newWindowsLocalBetaFixture(t)
+	nativeChecks := 0
+	options := fixture.options(func(context.Context, string, ...string) ([]byte, error) {
+		return nil, fmt.Errorf("canary-simple source bootstrapper must not execute during prepare")
+	})
+	options.NativeTrustMode = NativeTrustCanarySimple
+	options.LocalBetaPins = LocalBetaPins{}
+	options.VerifyNative = func(context.Context, string) error {
+		nativeChecks++
+		return nil
+	}
+	if _, _, err := Prepare(options); err != nil {
+		t.Fatal(err)
+	}
+	if nativeChecks != 1 {
+		t.Fatalf("canary-simple native diagnostic verifier calls = %d, want 1", nativeChecks)
+	}
+}
+
 func TestInstallWindowsLocalBetaRejectsBootstrapperChangedAfterPrepareBeforeExecution(t *testing.T) {
 	fixture := newWindowsLocalBetaFixture(t)
 	nativeChecks := 0
