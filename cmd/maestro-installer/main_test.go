@@ -146,6 +146,11 @@ func TestClaudeCodeWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 	if !strings.Contains(prompt, "Olá, Maestro! 🎼\n\n") || !strings.Contains(prompt, "\n\n🧭 Para começar") {
 		t.Fatalf("kickoff prompt should preserve paragraph structure: %q", prompt)
 	}
+	if !strings.Contains(prompt, "guia instalado de\nMaestro Onboarding") ||
+		!strings.Contains(prompt, "não crie AGENTS.md") ||
+		strings.Contains(prompt, "execute agora a skill /maestro-onboarding") {
+		t.Fatalf("Claude kickoff must use the materialized guide and reject fabricated fallback files: %q", prompt)
+	}
 }
 
 func TestClaudeCodeLaunchLinkSupportsWindowsDesktopHandoff(t *testing.T) {
