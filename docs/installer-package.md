@@ -35,9 +35,12 @@ to the exact absolute installed CLI path. The extracted directory therefore
 must not move after activation. Owner
 data remains in `%LOCALAPPDATA%\BCGOS`, outside the portable product root.
 
-The self-contained installer factory remains available as an optional future
-wrapper over the same signed release contract, but it is not the current
-controlled-Canary handoff.
+The self-contained installer factory is the single-file option over the same
+validated package contract. Run `go run ./dev/release self-contained` with the
+complete conventional package directory as `--source` and its
+`maestro-installer.exe` as `--base`; do not pass the signed release directory
+or the ZIP directly. The output appends a bounded, digest-bound payload and
+remains an `unsigned-candidate` until Authenticode is applied.
 
 The self-contained wrapper verifies its payload footer and SHA-256 before
 extracting. Archive entries must be regular files or directories with safe
