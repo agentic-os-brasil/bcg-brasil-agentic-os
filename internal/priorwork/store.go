@@ -14,10 +14,20 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
 )
+
+// posixPrivateModeSupported reports whether the current OS honours the POSIX
+// group/other permission bits on directory FileMode values. Windows synthesises
+// Mode().Perm() as 0777 unconditionally (see $GOROOT/src/os/types_windows.go)
+// and Chmod only toggles the readonly attribute, so enforcing a `Perm()&0o077
+// == 0` invariant would fail-close on every legitimate Windows install.
+func posixPrivateModeSupported() bool {
+	return runtime.GOOS != "windows"
+}
 
 var (
 	ErrAlreadyEnrolled    = errors.New("prior-work scope is already enrolled")
@@ -791,17 +801,19 @@ func (store Store) prepareRoot() error {
 	if err != nil {
 		return err
 	}
-	if rootInfo.Mode().Perm()&0o077 != 0 {
-		if err := root.Chmod(".", 0o700); err != nil {
-			return err
+	if posixPrivateModeSupported() {
+		if rootInfo.Mode().Perm()&0o077 != 0 {
+			if err := root.Chmod(".", 0o700); err != nil {
+				return err
+			}
+			rootInfo, err = root.Stat(".")
+			if err != nil {
+				return err
+			}
 		}
-		rootInfo, err = root.Stat(".")
-		if err != nil {
-			return err
+		if rootInfo.Mode().Perm()&0o077 != 0 {
+			return errors.New("prior-work root permissions must not grant group or other access")
 		}
-	}
-	if rootInfo.Mode().Perm()&0o077 != 0 {
-		return errors.New("prior-work root permissions must not grant group or other access")
 	}
 	for _, child := range []string{"barriers", "imports", "snapshots", "versions"} {
 		if err := root.Mkdir(child, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
@@ -827,7 +839,7 @@ func (store Store) prepareRoot() error {
 			_ = opened.Close()
 			return errors.New("prior-work storage path changed during secure open")
 		}
-		if openedInfo.Mode().Perm()&0o077 != 0 {
+		if posixPrivateModeSupported() && openedInfo.Mode().Perm()&0o077 != 0 {
 			if err := opened.Chmod(".", 0o700); err != nil {
 				_ = opened.Close()
 				return err
@@ -839,7 +851,7 @@ func (store Store) prepareRoot() error {
 			}
 		}
 		closeErr := opened.Close()
-		if openedInfo.Mode().Perm()&0o077 != 0 {
+		if posixPrivateModeSupported() && openedInfo.Mode().Perm()&0o077 != 0 {
 			return errors.New("prior-work storage path permissions are not private")
 		}
 		if closeErr != nil {

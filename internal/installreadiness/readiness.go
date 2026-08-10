@@ -442,7 +442,7 @@ func verifyHooks(runtimeName, workspacePath, executable, targetOS string) ([]Lif
 			return nil, fmt.Errorf("%s hook event %s has %d Maestro-owned entries, want exactly one", runtimeName, binding.native, len(owned))
 		}
 		entry := owned[0]
-		if entry["type"] != "command" || entry["command"] != expectedCommand || entry["timeout"] != float64(2) {
+		if entry["type"] != "command" || entry["command"] != expectedCommand || entry["timeout"] != float64(5) {
 			return nil, fmt.Errorf("%s hook event %s does not match the installed CLI contract", runtimeName, binding.native)
 		}
 		if binding.asynchronous {

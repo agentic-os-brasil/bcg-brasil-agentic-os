@@ -462,6 +462,30 @@ func runValidatedCommand(workspaceRoot string, command []string) (int, string, e
 		"TMP=" + cacheRoot,
 		"TMPDIR=" + cacheRoot,
 	}
+	if runtime.GOOS == "windows" {
+		// Windows-specific env vars the Go toolchain and the C runtime rely on
+		// to locate the user profile, system directories, and executable
+		// extensions. Missing these makes commands like `go build` fail with
+		// obscure "command not found" or "GetTempPath" errors on Windows,
+		// especially on locked-down corporate laptops where the user profile
+		// path is redirected under LOCALAPPDATA.
+		windowsCarry := []string{
+			"USERPROFILE",
+			"LOCALAPPDATA",
+			"APPDATA",
+			"SystemRoot",
+			"SystemDrive",
+			"ComSpec",
+			"PATHEXT",
+			"NUMBER_OF_PROCESSORS",
+			"PROCESSOR_ARCHITECTURE",
+		}
+		for _, name := range windowsCarry {
+			if value := os.Getenv(name); value != "" {
+				cmd.Env = append(cmd.Env, name+"="+value)
+			}
+		}
+	}
 	err = cmd.Run()
 	if err == nil {
 		return 0, toolDigest, nil
