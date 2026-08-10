@@ -78,9 +78,10 @@ type workspaceFlowBlocker struct {
 }
 
 type workspaceFlowCapability struct {
-	ID      string `json:"id"`
-	State   string `json:"state"`
-	Message string `json:"message"`
+	ID          string `json:"id"`
+	State       string `json:"state"`
+	Criticality string `json:"criticality"`
+	Message     string `json:"message"`
 }
 
 type workspaceFlowAnalysis struct {
@@ -342,7 +343,7 @@ func (backend *realWorkspaceFlowBackend) analyzeWorkspaceMigration(selection wor
 		base.MigrationSummary = inspection.Reason
 	}
 	status := workspacemigration.CapabilityStatus()
-	base.CapabilitiesUnavailable = []workspaceFlowCapability{{ID: status.Capability, State: status.Execution, Message: status.Reason}}
+	base.CapabilitiesUnavailable = []workspaceFlowCapability{{ID: status.Capability, State: status.Execution, Criticality: "required", Message: status.Reason}}
 	base = backend.withBlocker(base, "capability_unavailable", status.Reason)
 	return base, nil
 }
@@ -421,7 +422,7 @@ func mapImportPlan(plan workspaceimport.Plan) ([]workspaceFlowItem, []workspaceF
 		case workspaceimport.ActionCopy:
 			mapped = append(mapped, workspaceFlowItem{Path: entry.SourcePath, Reason: "será copiado bounded para o target após IMPORT"})
 		case workspaceimport.ActionQuarantine:
-			capabilities = append(capabilities, workspaceFlowCapability{ID: "workspace_import_entry", State: entry.Availability, Message: entry.SourcePath + ": " + entry.Reason})
+			capabilities = append(capabilities, workspaceFlowCapability{ID: "workspace_import_entry", State: entry.Availability, Criticality: "optional", Message: entry.SourcePath + ": " + entry.Reason})
 		}
 	}
 	for _, item := range plan.Exclusions {
@@ -624,9 +625,6 @@ func validateWorkspaceFlowAnalysis(analysis workspaceFlowAnalysis, selection wor
 	if analysis.SourceEffect != workspaceFlowSourcePreserved {
 		return errors.New("análise do workspace reportou efeito inválido na origem")
 	}
-	if analysis.State != "blocked" && len(analysis.CapabilitiesUnavailable) > 0 {
-		return errors.New("análise do workspace tem capability unavailable e não pode ser confirmável")
-	}
 	if analysis.State == "blocked" {
 		if analysis.CanConfirm || len(analysis.Blockers) == 0 {
 			return errors.New("análise bloqueada precisa impedir confirmação e explicar o bloqueio")
@@ -638,6 +636,11 @@ func validateWorkspaceFlowAnalysis(analysis workspaceFlowAnalysis, selection wor
 	}
 	if analysis.TargetEffect == "" || analysis.RollbackEffect == "" {
 		return errors.New("análise do workspace não explica os efeitos no alvo e no rollback")
+	}
+	for _, capability := range analysis.CapabilitiesUnavailable {
+		if capability.Criticality != "optional" {
+			return fmt.Errorf("capacidade indisponível %q precisa bloquear o plano ou ser explicitamente opcional", capability.ID)
+		}
 	}
 	return nil
 }

@@ -664,7 +664,7 @@
     }
     renderWorkspaceFlowProgress('confirm');
     try {
-      const response = await fetch('/api/create-workspace', requestOptions('POST', { import_existing: false }));
+      const response = await fetch('/api/create-workspace', requestOptions('POST', { import_existing: false, authorize_setup: true }));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível criar o workspace.');
       const receipt = payload.receipt;
@@ -1103,7 +1103,7 @@
     setButtonLabel(button, importExisting ? 'Escolha a pasta…' : 'Preparando…');
     setWorkspaceProvisioning('creating');
     try {
-      const response = await fetch('/api/create-workspace', requestOptions('POST', { import_existing: importExisting }));
+      const response = await fetch('/api/create-workspace', requestOptions('POST', { import_existing: importExisting, authorize_setup: true }));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível criar seu workspace.');
       if (!isValidWorkspaceReceipt(payload.receipt, 'ready')) throw new Error('O core não retornou um receipt de readiness válido; o wizard não pode mostrar pronto.');
