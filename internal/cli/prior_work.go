@@ -18,6 +18,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorworksync"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/setupauth"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -216,6 +217,32 @@ func runPriorWorkSource(
 	}
 	if err != nil {
 		return writePriorWorkError(errOut, err)
+	}
+	if action == "select" {
+		identity, identityErr := currentSetupIdentity()
+		if identityErr != nil {
+			return writePriorWorkError(errOut, fmt.Errorf("selected SharePoint source was recorded, but setup binding could not be evaluated: %w", identityErr))
+		}
+		boundStatus, bindErr := (setupauth.Store{Root: root}).BindSelectedSource(setupauth.Request{
+			WorkspaceID: inspection.WorkspaceID, WorkspacePath: inspection.WorkspacePath, SourceFingerprint: status.Fingerprint,
+		}, identity)
+		if bindErr != nil {
+			// Source selection is already a durable, reviewed owner choice. A
+			// missing, expired or identity/scope-mismatched local setup grant
+			// must not turn that successful choice into a false total failure.
+			// Corruption and I/O errors are different: they remain explicit
+			// operational failures rather than being hidden as a repairable
+			// authorization renewal.
+			switch {
+			case errors.Is(bindErr, setupauth.ErrAuthorizationRequired),
+				boundStatus.State == setupauth.StateIdentityChanged,
+				boundStatus.State == setupauth.StateScopeChanged,
+				boundStatus.State == setupauth.StateExpired:
+				status.AuthorizationState = "setup_binding_pending"
+			default:
+				return writePriorWorkError(errOut, fmt.Errorf("selected SharePoint source was recorded, but setup binding failed: %w", bindErr))
+			}
+		}
 	}
 	return writePriorWorkJSON(out, status)
 }

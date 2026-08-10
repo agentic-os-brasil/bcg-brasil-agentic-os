@@ -110,14 +110,11 @@ SharePoint, imports a snapshot or compiles the index.
 
 ## Owner-authorized rationale projection
 
-Folder selection and content reading are separate decisions. After a confirmed
-selection, onboarding asks a second, explicit question before any read:
-
-> Posso ler os materiais mais recentes dessas pastas e criar racionais internos
-> rastreáveis no workspace?
-
-If the owner agrees, a qualified Claude collector may read only the enrolled
-roots and emit a bounded `RationaleBatch` together with the signed metadata
+Folder selection is an explicit scope decision. When an active COFS
+one-and-done setup grant exists, the selection command binds its exact
+fingerprint to that grant and no second read or command confirmation is shown
+for the unchanged scope. A qualified Claude collector may then read only the
+enrolled roots and emit a bounded `RationaleBatch` together with the signed metadata
 snapshot and adapter receipt. The local command validates that the batch binds
 the initialized workspace, the exact selection fingerprint, the enrolled
 Claude key and the selected source URL for every item. It then materializes:
@@ -412,13 +409,14 @@ Claude with the approved SharePoint connection.
     promote the SharePoint collector from `unavailable`; native qualification
     remains separate evidence.
 12. A first-use source selection persists only exact canonical folder pointers,
-    Session Start exposes no URL or project name, and the selection alone cannot
-    authorize enrollment or collection.
+    Session Start exposes no URL or project name, and the selection binds only
+    the bounded projection class of an existing COFS grant; it cannot authorize
+    enrollment, tenant expansion or external mutation.
 13. A deferred choice is remembered and not asked again automatically; a later
     confirmed selection creates a new immutable version without broadening any
     signed enrollment.
-14. With a second explicit owner authorization, a signed Claude batch writes
-    only derived rationales under the workspace path, orders newer source items
+14. With the exact source fingerprint bound to an active COFS grant, a signed
+    Claude batch writes only derived rationales under the workspace path, orders newer source items
     first, preserves a SharePoint pointer per rationale and never writes raw
     source bodies. Missing enrollment, invalid provenance or an unavailable
     runtime leaves the workspace unchanged.

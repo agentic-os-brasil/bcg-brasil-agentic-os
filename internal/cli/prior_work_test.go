@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/priorwork"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/setupauth"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
 var cliCollectorPrivateKey = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x31}, ed25519.SeedSize))
@@ -110,6 +112,17 @@ func TestGuidedSharePointSourceSelectionWorksBeforeEnrollmentTrustIsAvailable(t 
 	if code := runInit([]string{workspacePath}, &output, &output, resolve); code != ExitOK {
 		t.Fatalf("init exit=%d output=%s", code, output.String())
 	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := currentSetupIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (setupauth.Store{Root: dataRoot}).Authorize(setupauth.Request{WorkspaceID: inspection.WorkspaceID, WorkspacePath: workspacePath}, identity, true); err != nil {
+		t.Fatal(err)
+	}
 
 	output.Reset()
 	if code := runPriorWork(
@@ -126,6 +139,14 @@ func TestGuidedSharePointSourceSelectionWorksBeforeEnrollmentTrustIsAvailable(t 
 		strings.NewReader(selection), &output, &output, resolve,
 	); code != ExitOK || !strings.Contains(output.String(), `"state": "selected"`) || !strings.Contains(output.String(), `"authorization_state": "pending_signed_enrollment"`) || strings.Contains(output.String(), "Authorized-Folder") {
 		t.Fatalf("source selection exit=%d output=%s", code, output.String())
+	}
+	selectedStatus, err := priorWorkSourceSelectionStore(dataRoot).Status(inspection.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setupStatus, err := (setupauth.Store{Root: dataRoot}).Status(setupauth.Request{WorkspaceID: inspection.WorkspaceID, WorkspacePath: workspacePath, SourceFingerprint: selectedStatus.Fingerprint}, identity)
+	if err != nil || setupStatus.State != setupauth.StateActive {
+		t.Fatalf("selected source did not extend one-and-done grant: %#v err=%v", setupStatus, err)
 	}
 
 	output.Reset()
@@ -160,6 +181,78 @@ func TestGuidedSharePointSourceSelectionRequiresExplicitReview(t *testing.T) {
 		if code := runPriorWork(args, strings.NewReader(selection), &output, &output, resolve); code != ExitUsage || !strings.Contains(output.String(), "--confirm") {
 			t.Fatalf("args=%v exit=%d output=%s", args, code, output.String())
 		}
+	}
+}
+
+func TestGuidedSharePointSelectionSurvivesSetupBindingMismatchAsRepairablePending(t *testing.T) {
+	dataRoot := t.TempDir()
+	workspacePath := filepath.Join(t.TempDir(), "maestro-project")
+	resolve := func() (string, error) { return dataRoot, nil }
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, resolve); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (setupauth.Store{Root: dataRoot}).Authorize(
+		setupauth.Request{WorkspaceID: inspection.WorkspaceID, WorkspacePath: workspacePath},
+		setupauth.DeriveIdentity("another-principal", "another-device"), true,
+	); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	selection := `{"schema_version":1,"folder_urls":["https://bcg.sharepoint.com/sites/project/Shared%20Documents/Authorized-Folder"]}`
+	if code := runPriorWork(
+		[]string{"source", "select", "--workspace", workspacePath, "--stdin", "--confirm"},
+		strings.NewReader(selection), &output, &output, resolve,
+	); code != ExitOK || !strings.Contains(output.String(), `"state": "selected"`) || !strings.Contains(output.String(), `"authorization_state": "setup_binding_pending"`) || strings.Contains(output.String(), "Authorized-Folder") {
+		t.Fatalf("selection should remain useful with repairable binding pending: exit=%d output=%s", code, output.String())
+	}
+	status, err := priorWorkSourceSelectionStore(dataRoot).Status(inspection.WorkspaceID)
+	if err != nil || status.State != priorwork.SourceSelected || status.FolderCount != 1 {
+		t.Fatalf("durable selection was lost: %#v err=%v", status, err)
+	}
+}
+
+func TestGuidedSharePointSelectionDoesNotHideCorruptSetupGrant(t *testing.T) {
+	dataRoot := t.TempDir()
+	workspacePath := filepath.Join(t.TempDir(), "maestro-project")
+	resolve := func() (string, error) { return dataRoot, nil }
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, resolve); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	inspection, err := workspace.Inspect(workspacePath, dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := currentSetupIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (setupauth.Store{Root: dataRoot}).Authorize(
+		setupauth.Request{WorkspaceID: inspection.WorkspaceID, WorkspacePath: workspacePath}, identity, true,
+	); err != nil {
+		t.Fatal(err)
+	}
+	grantPath := filepath.Join(dataRoot, "setup-authorizations", inspection.WorkspaceID+".json")
+	if err := os.WriteFile(grantPath, []byte(`{"schema_version":1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	selection := `{"schema_version":1,"folder_urls":["https://bcg.sharepoint.com/sites/project/Shared%20Documents/Authorized-Folder"]}`
+	code := runPriorWork(
+		[]string{"source", "select", "--workspace", workspacePath, "--stdin", "--confirm"},
+		strings.NewReader(selection), &output, &output, resolve,
+	)
+	if code != ExitFailure || !strings.Contains(output.String(), "setup binding failed") || !strings.Contains(output.String(), "invalid identity or scope fields") {
+		t.Fatalf("corrupt grant was hidden as pending: exit=%d output=%s", code, output.String())
+	}
+	status, err := priorWorkSourceSelectionStore(dataRoot).Status(inspection.WorkspaceID)
+	if err != nil || status.State != priorwork.SourceSelected {
+		t.Fatalf("durable source selection was lost after grant corruption: %#v err=%v", status, err)
 	}
 }
 
