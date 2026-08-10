@@ -28,9 +28,10 @@ const (
 	// receipt. It deliberately does not claim that a qualifying native runtime
 	// session invoked that command.
 	AdapterCommand = "adapter_command"
-	// MaximumDiagnosticReceiptEntries bounds a read-only diagnostic projection;
-	// excess historical receipts fail closed rather than being enumerated.
-	MaximumDiagnosticReceiptEntries = 64
+	// MaximumDiagnosticReceiptEntries is the number of most-recent receipts
+	// retained for a diagnostic projection. Older receipts beyond this window
+	// are silently dropped; overflow is never an error.
+	MaximumDiagnosticReceiptEntries = 512
 	maximumReceiptBytes             = 8 << 10
 )
 
@@ -175,12 +176,8 @@ func diagnose(dataRoot, workspaceID, runtime string) (Summary, error) {
 	if err != nil && !errors.Is(err, io.EOF) {
 		return Summary{}, fmt.Errorf("read bounded receipt root: %w", err)
 	}
-	if len(entries) > MaximumDiagnosticReceiptEntries {
-		return Summary{}, errors.New("lifecycle receipt history exceeds diagnostic scan bound")
-	}
-	events := map[string]bool{}
-	provenance := map[string]bool{}
-	var latest Receipt
+	// Parse only a bounded directory window, then keep the N most recent valid receipts.
+	var allReceipts []Receipt
 	for _, entry := range entries {
 		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
@@ -196,6 +193,19 @@ func diagnose(dataRoot, workspaceID, runtime string) (Summary, error) {
 		if runtime != "" && receipt.Runtime != runtime {
 			continue
 		}
+		allReceipts = append(allReceipts, receipt)
+	}
+	// Sort by OccurredAt descending (most recent first), then truncate to window.
+	sort.Slice(allReceipts, func(i, j int) bool {
+		return allReceipts[i].OccurredAt.After(allReceipts[j].OccurredAt)
+	})
+	if len(allReceipts) > MaximumDiagnosticReceiptEntries {
+		allReceipts = allReceipts[:MaximumDiagnosticReceiptEntries]
+	}
+	events := map[string]bool{}
+	provenance := map[string]bool{}
+	var latest Receipt
+	for _, receipt := range allReceipts {
 		events[receipt.Event] = true
 		provenance[receipt.Provenance] = true
 		summary.Observed++

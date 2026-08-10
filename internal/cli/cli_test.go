@@ -440,7 +440,7 @@ func TestSessionStartHookOutputsBoundedNativeContext(t *testing.T) {
 	}
 	output.Reset()
 	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"availability_state\":\"enabled\"`) || !strings.Contains(output.String(), `\"memory\":{\"state\":\"empty\"`) || strings.Contains(output.String(), "memory context injection requires a runtime adapter") {
+	if code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) || !strings.Contains(output.String(), `\"runtime\":\"codex\"`) || !strings.Contains(output.String(), `\"availability_state\":\"enabled\"`) || !strings.Contains(output.String(), `\"adapter_delivery_state\":\"operational\"`) || !strings.Contains(output.String(), `\"native_evidence_state\":\"native_qualification_pending\"`) || !strings.Contains(output.String(), `\"memory\":{\"state\":\"empty\"`) || strings.Contains(output.String(), "memory context injection requires a runtime adapter") {
 		t.Fatalf("hook exit = %d, output = %s", code, output.String())
 	}
 	executable, err := os.Executable()
@@ -663,8 +663,8 @@ func TestLifecycleReceiptCheckExplainsBoundedHistory(t *testing.T) {
 		}
 	}
 	check := lifecycleReceiptCheck(root, workspaceID)
-	if check.State != "warning" || !strings.Contains(check.Message, "64-entry diagnostic window") ||
-		!strings.Contains(check.Message, "remain local") || !strings.Contains(check.Message, "native qualification") {
+	if check.State != "pass" || !strings.Contains(check.Message, "512 metadata-safe adapter-command lifecycle receipt") ||
+		!strings.Contains(check.Message, "native-session conformance") {
 		t.Fatalf("bounded history guidance = %#v", check)
 	}
 }
@@ -1808,7 +1808,7 @@ func TestSessionBridgeProducesTheSameBoundedAdapterInputForEachRuntime(t *testin
 		t.Fatalf("workspace init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runSession([]string{"bridge", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"event": "session_start"`) || !strings.Contains(output.String(), `"runtime": "claude"`) || !strings.Contains(output.String(), `"availability_state": "enabled"`) {
+	if code := runSession([]string{"bridge", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"event": "session_start"`) || !strings.Contains(output.String(), `"runtime": "claude"`) || !strings.Contains(output.String(), `"availability_state": "enabled"`) || !strings.Contains(output.String(), `"adapter_delivery_state": "operational"`) || !strings.Contains(output.String(), `"native_evidence_state": "native_qualification_pending"`) {
 		t.Fatalf("Claude bridge exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()

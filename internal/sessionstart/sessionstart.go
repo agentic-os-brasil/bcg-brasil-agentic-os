@@ -36,9 +36,9 @@ func Build(runtime string, packet sessionctx.Packet) (Envelope, error) {
 		State:                packet.State,
 		Packet:               packet,
 		AvailabilityState:    "enabled",
-		AdapterDeliveryState: "contract_only",
+		AdapterDeliveryState: "operational",
 		NativeEvidenceState:  "native_qualification_pending",
 		InjectionState:       "unavailable",
-		Message:              "Maestro Session Start contract is available; native evidence is tracked separately",
+		Message:              "bounded session envelope is operational; native evidence is tracked separately",
 	}, nil
 }
