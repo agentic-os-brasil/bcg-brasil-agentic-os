@@ -5,12 +5,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	devharness "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/dev/harness"
@@ -56,9 +54,6 @@ func main() {
 }
 
 func portableWindows(root string, args []string) {
-	if runtime.GOOS != "windows" {
-		fatal(errors.New("portable-windows export is Windows-only; use the macOS DMG on macOS"))
-	}
 	flags := flag.NewFlagSet("portable-windows", flag.ExitOnError)
 	version := flags.String("version", "", "immutable MAJOR.MINOR.PATCH release version")
 	release := flags.String("release-directory", "", "exact signed release directory")

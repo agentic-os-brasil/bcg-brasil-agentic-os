@@ -32,9 +32,10 @@ ZIPs, executáveis, chaves, certificados, tokens ou dados de usuário na `main`.
 
 ## Exportar o ZIP portátil Windows
 
-Execute a partir da raiz do repositório. Esta factory é Windows-only: em macOS
-ou Linux ela falha explicitamente e orienta usar o DMG do Maestro. No Windows,
-ela executa `seed-status` e usa `Get-AuthenticodeSignature`, mantendo a
+Execute a partir da raiz do repositório. A factory pode ser executada em macOS,
+Linux ou Windows para **gerar** o artefato Windows. O ZIP produzido é Windows-
+only para execução; no macOS, o usuário deve instalar pelo DMG. Em Windows, a
+factory executa `seed-status` e usa `Get-AuthenticodeSignature`, mantendo a
 exigência de `NotSigned` para o Canary:
 
 ```sh

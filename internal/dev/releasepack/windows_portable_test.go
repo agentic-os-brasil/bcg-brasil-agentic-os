@@ -18,9 +18,6 @@ import (
 )
 
 func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("portable-windows factory runs only on Windows; macOS uses the DMG")
-	}
 	options := validWindowsPortableOptions(t)
 	output := options.Output
 	result, err := BuildWindowsPortable(options)
@@ -204,9 +201,6 @@ func validWindowsPortableOptions(t *testing.T) WindowsPortableOptions {
 }
 
 func TestBuildWindowsPortableRejectsTrustBoundaryViolations(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("portable-windows factory runs only on Windows; macOS uses the DMG")
-	}
 	for _, test := range []struct {
 		name    string
 		mutate  func(*WindowsPortableOptions)
@@ -251,16 +245,6 @@ func TestBuildWindowsPortableRejectsTrustBoundaryViolations(t *testing.T) {
 				t.Fatalf("BuildWindowsPortable() error = %v, want %q", err, test.wantErr)
 			}
 		})
-	}
-}
-
-func TestBuildWindowsPortableRejectsNonWindowsFactory(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("non-Windows factory guard is not applicable on Windows")
-	}
-	_, err := BuildWindowsPortable(WindowsPortableOptions{})
-	if err == nil || !strings.Contains(err.Error(), "Windows-only") || !strings.Contains(err.Error(), "DMG") {
-		t.Fatalf("BuildWindowsPortable() error = %v, want Windows-only DMG guidance", err)
 	}
 }
 
