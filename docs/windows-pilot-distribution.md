@@ -6,10 +6,15 @@ safe to hand to a corporate Windows cohort.
 ## Rule for a real pilot
 
 Do **not** distribute an artifact labelled `unsigned-candidate` or
-`windows-local-beta` to a general Windows cohort. The latter binds the Maestro
-release, registry and bootstrapper together with Ed25519 and SHA-256 pins, but
-it deliberately does not claim that Windows or endpoint protection trusts the
-outer executable. It is only a controlled engineering canary.
+`windows-portable-local-beta` to a general Windows cohort. The latter binds the
+Maestro release, registry and bootstrapper together with Ed25519 and SHA-256
+pins, but it deliberately does not claim that Windows or endpoint protection
+trusts the ZIP or its executables. It is only a controlled engineering canary.
+
+Decision `PZIP` makes the verified portable ZIP the current controlled-Canary
+handoff. The owner extracts it once to a fixed path, runs
+`Activate-Maestro.cmd`, and thereafter opens only the packaged `workspace/` in
+Claude Desktop. This changes the delivery surface, not the pilot gates below.
 
 The Windows pilot handoff is ready only when all of the following are true:
 
@@ -65,7 +70,7 @@ the repository alone would not change that eligibility.
 
 | Package profile | Intended use | May be sent to the cohort? |
 | --- | --- | --- |
-| `windows-local-beta` / `unsigned-candidate` | controlled developer diagnosis | No |
+| `windows-portable-local-beta` / `unsigned-candidate` | controlled Canary only | No general cohort |
 | valid BCG Authenticode + Ed25519 release | endpoint review and clean-device pilot test | Not until endpoint approval |
 | valid BCG Authenticode + Endpoint approval + clean-device evidence | managed pilot | Yes |
 

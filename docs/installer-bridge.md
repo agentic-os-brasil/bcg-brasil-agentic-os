@@ -122,7 +122,7 @@ factory step. It embeds the hash-verified `.ico` as a PE resource through the
 approved `windres` tool and writes unsigned provenance; Authenticode remains a
 later protected-environment step.
 
-For the end-user Windows handoff, use
+The visual single-file installer remains available as an optional wrapper via
 [`build-windows-singlefile-installer.ps1`](../dev/release/build-windows-singlefile-installer.ps1).
 It first creates the same validated complete package, builds a thin wrapper
 with the Maestro icon, appends a deterministic digest-bound payload and emits
@@ -132,13 +132,13 @@ propagates its exit status and cleans the temporary package. The wrapper is
 not a second installer implementation and does not bypass release or
 Authenticode verification.
 
-For the controlled Canary profile, call that factory with `-LocalBeta`, the
-exact beta issuer/key and the separately approved registry/bootstrapper SHA-256
-pins. The mandatory output basename is
-`Maestro-Installer-<version>-windows-amd64-local-beta-unsigned.exe`. The factory
-passes the profile into the inner package build; the wrapper itself still only
-extracts and delegates. It also emits provenance and an adjacent SHA-256 file
-for independent distribution. This package is engineering/local-beta evidence,
+For the current controlled Canary handoff, use `go run ./dev/release
+portable-windows` with the exact signed release, registry/bootstrapper SHA-256
+pins and versioned seeded Windows bootstrapper. The mandatory output basename
+is `Maestro-Portable-<version>-windows-amd64-local-beta-unsigned.zip`. It emits
+provenance and an adjacent SHA-256 file, contains no wizard or installer bridge,
+and delegates activation to the stable bootstrapper before applying the normal
+one-and-done Claude setup. This package remains engineering/local-beta evidence,
 not a signed release or a completed pilot gate.
 
 ## External CI unblock
