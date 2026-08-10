@@ -6,8 +6,9 @@ The P0/P1 closure preserves the evidence boundary used by the canary: durable
 execution state is inspectable across process restarts, while lifecycle receipts
 remain adapter diagnostics and never promote a runtime to native qualification.
 The deterministic Maestro bridge accepts typed agent events for an explicit
-account/case/Walter loop; absent model/runtime events remain unavailable rather
-than being synthesized by the CLI.
+account/case/Walter loop; absent model/runtime events remain an explicit pending
+input rather than being synthesized by the CLI. This evidence state does not
+disable the configured contract or block a later event-bearing retry.
 The local gate remains separate from native qualification and release trust;
 all three must be reported independently in the canary record.
 
