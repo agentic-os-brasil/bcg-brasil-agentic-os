@@ -57,6 +57,9 @@ SignPath Foundation is a useful free option only for a fully public,
 OSI-licensed, non-dual-licensed project without proprietary components and
 with its required release, review and signing policy. Maestro must not use that
 route unless the product and its distribution have actually been made eligible.
+The current Maestro repository declares a proprietary, closed-source license,
+so SignPath is **not** an available shortcut for this product today. Publishing
+the repository alone would not change that eligibility.
 
 ## Engineering evidence versus release approval
 
