@@ -94,70 +94,76 @@ de uso intenso.
 ```
   ANTES                                    DEPOIS
 
-  cada usuário precisa provar              time interno prova uma vez, via Canary
-  conformance no próprio runtime                        │
-             │                                          ▼
-             ▼                             Canary PASS grava atestado assinado
-  inferência post-hoc sobre receipts                    │
-             │                                          ▼
-             ▼                             atestado embarcado no bundle distribuído
-  nunca conclui                                         │
-             │                                          ▼
-             ▼                             setup valida assinatura e libera tudo
-  Darwin/memória/hooks unavailable                      │
-  para sempre                                           ▼
-                                           usuário termina o setup operacional
+  cada usuário precisa provar              Canary é gate de RELEASE
+  conformance no próprio runtime           (o time decide se a build sai)
+             │                                          │
+             ▼                                          ▼
+  inferência post-hoc sobre receipts       Canary PASS = build habilitada a distribuir
+             │                                          │
+             ▼                                          ▼
+  nunca conclui                            build sai da fábrica com tudo LIGADO
+             │                                          │
+             ▼                                          ▼
+  Darwin/memória/hooks unavailable         usuário instala e usa
+  para sempre                              não existe gate de runtime a atravessar
 ```
 
-Princípio: **o Canary qualifica o produto, não o usuário.** A pergunta "este runtime executa hooks
-corretamente?" é uma propriedade da build, respondida uma vez pelo time, não uma prova que cada
-consultor precisa refazer no próprio notebook.
+Princípio: **o Canary é gate de release, não de runtime.** A pergunta "este build executa hooks
+corretamente?" é respondida uma vez pelo time interno antes de distribuir. Uma vez respondida, ela
+está respondida. O cliente não a repete, o cliente não a valida, o cliente não depende dela para
+funcionar.
+
+**Por default, tudo liberado.** Instalação nova nasce com Darwin ativo, hooks qualificados, memória
+disponível, checkpoint funcionando. Não há caminho de código no cliente que possa deixar essas
+capabilities em `unavailable` por falta de "evidência". A evidência mora no processo de release,
+não no runtime do usuário.
 
 ---
 
 ## 6. Mudanças propostas
 
-### 6.1 Atestado de qualificação no bundle
+### 6.1 Runtime abre em modo operacional
 
-Adicionar ao bundle distribuído um `qualification-attestation.json` assinado:
+Remover do runtime toda lógica que decide entre `configured`, `adapter_observed`, `native_qualified`
+e `unavailable` com base em inferência de receipts. A distinção sobrevive apenas como telemetria
+descritiva (o que aconteceu), não como gate (o que pode acontecer).
 
-```json
-{
-  "schema_version": 1,
-  "bundle_version": "0.1.23",
-  "runtime": "claude",
-  "qualified_capabilities": [
-    "session_start", "pre_action_guard", "post_action_observe",
-    "stop_finalize", "context_injection",
-    "scheduler_invocation", "darwin_housekeeping"
-  ],
-  "qualified_by": "canary",
-  "canary_run_id": "<id>",
-  "qualified_at": "<iso8601>",
-  "signature": "<assinatura do bundle>"
-}
+Estado inicial de uma instalação, sem nenhuma sessão ainda registrada:
+
+```
+session_start        state: operational
+pre_action_guard     state: operational
+post_action_observe  state: operational
+stop_finalize        state: operational
+context_injection    state: operational
+scheduler_invocation state: operational
+darwin_housekeeping  state: operational
 ```
 
-Regra de leitura: se a assinatura confere e `runtime` bate com o runtime instalado, as capabilities
-listadas iniciam em `native_qualified: true`. Sem inferência, sem espera.
+Não há caminho para `unavailable` por "evidência pendente". `unavailable` fica reservado para
+condição real de indisponibilidade (binário ausente, permissão negada, disco cheio) — não para
+ausência de prova.
 
-### 6.2 Setup emite evidência em vez de esperar por ela
+### 6.2 Canary vira gate de release, não de runtime
 
-No fim de `maestro-setup-update`, executar uma verificação de conformance ativa e curta:
-dispara um ciclo sintético de hook (SessionStart, PreToolUse, PostToolUse, Stop), confere que as
-receipts saíram com o shape esperado e grava o resultado como evidência local de primeira classe.
+O Canary continua existindo e continua sendo obrigatório — mas do lado do fabricante:
 
-Isso substitui a inferência passiva por um teste determinístico de alguns segundos, executado uma
-vez, no momento em que o usuário está presente e o contexto é conhecido.
+- Time interno roda o Canary em máquinas de teste antes de aprovar uma versão.
+- Canary PASS é pré-requisito para publicar a build no canal de distribuição.
+- O resultado do Canary vai para o registro de release (changelog, release notes), não para
+  dentro do binário como atestado a ser verificado em runtime.
 
-### 6.3 Autoridade de manutenção concedida no setup
+A certeza que o Canary dá é: "esta build, no runtime alvo, executa os hooks corretamente." Essa
+certeza é do time. O usuário não precisa reproduzir a prova.
 
-O setup passa a registrar autorização `preauthorized` para o LaunchAgent de manutenção, escopada ao
-workspace instalado. O daemon continua sem `--attended`, como deve ser, mas encontra a autorização
-já gravada em vez de bater numa porta fechada a cada 15 minutos.
+### 6.3 Autoridade de manutenção padrão-ligada no setup
 
-`maintenance canary` sai de `catalog_only` direto para o estado operacional, sem exigir o
-`maintenance wake --attended` manual que hoje não está documentado em lugar nenhum.
+O setup registra, como parte do fluxo padrão, a autorização local para o LaunchAgent de manutenção,
+escopada ao workspace instalado. Não é passo opcional, não é comando manual, não é `--attended`
+digitado pelo usuário. É parte do que "instalar o Maestro" significa.
+
+`maintenance canary` do lado do cliente deixa de existir como conceito. O usuário não roda Canary.
+O Canary é do time.
 
 ### 6.4 Janela de diagnóstico corrigida
 
@@ -198,45 +204,46 @@ O PR não remove governança. Reduz o gate ao que justifica um gate:
 ## 8. Critérios de aceite
 
 1. Instalação limpa em máquina nova termina o setup com todas as capabilities de hook em
-   `native_qualified: true`, sem comando manual adicional.
+   `state: operational`, sem comando manual adicional e sem depender de evidência de runtime.
 2. `bcgos maintenance status` reporta Darwin operacional imediatamente após o setup.
 3. Sessão com mais de 500 receipts não degrada nenhum estado de capability.
 4. `bcgos doctor` não emite warning por histórico de receipts exceder janela.
 5. Job `memory-checkpoint` executa e persiste sem exigir autoridade attended.
 6. Work item criado em uma sessão continua visível e resumível na sessão seguinte
    (fecha DEF-01 e DEF-02 pela raiz).
-7. Bundle sem atestado válido, ou com assinatura divergente, mantém o comportamento
-   conservador atual e falha fechado.
+7. Build que não passou pelo Canary interno não entra no canal de distribuição. Gate vive no
+   pipeline de release, não no runtime do usuário.
 8. Tentativa de escrita cross-workspace continua bloqueada.
 
 ---
 
 ## 9. Migração e compatibilidade
 
-Instalações existentes não têm atestado no bundle. Para elas, o caminho é o item 6.2: a primeira
-execução da versão nova roda a verificação de conformance e grava a evidência local, promovendo as
-capabilities sem exigir reinstalação.
+Instalações existentes não precisam de migração de dados. A primeira execução da versão nova
+sobe todas as capabilities para `state: operational` sem exigir reinstalação, atestado ou
+verificação em runtime. Estado antigo `unavailable` por "evidência pendente" é reescrito para
+`operational` na inicialização.
 
-O fail-closed é preservado: ausência de atestado e falha na verificação levam ao estado
-conservador atual, não a uma liberação otimista. A mudança é sobre existir um caminho que conclui,
-não sobre remover a checagem.
+Fail-closed continua onde ainda faz sentido: indisponibilidade real (binário ausente, permissão
+negada, disco cheio) mantém `unavailable`. O que muda é que ausência de prova deixa de ser
+condição de indisponibilidade — porque a prova é do time, feita antes da build sair.
 
 ---
 
 ## 10. Riscos
 
-**Risco:** atestado assinado no bundle pode mascarar um runtime que de fato não executa hooks.
-**Mitigação:** o atestado é escopado por `runtime` e `bundle_version`. Runtime divergente do
-atestado não recebe qualificação. A verificação de setup (6.2) roda de qualquer forma e pode
-rebaixar o estado se o ciclo sintético falhar.
+**Risco:** build ruim escapa do Canary interno e chega ao usuário com hooks quebrados.
+**Mitigação:** Canary é bloqueante para publicação no canal de distribuição. Sem Canary PASS,
+sem release. Rollback de versão é o caminho quando um problema chega em campo, não gate de
+runtime que sempre falha fechado.
 
 **Risco:** reduzir gates aumenta superfície de ação automática.
 **Mitigação:** a tabela da seção 7 mantém gate em tudo que é destrutivo, externo ou estrutural.
 O que foi liberado é local, idempotente e reversível.
 
-**Risco:** autorização `preauthorized` concedida no setup é ampla demais.
+**Risco:** autorização de manutenção concedida no setup é ampla demais.
 **Mitigação:** escopar ao `workspace_id` gravado no setup. Autorização não transfere entre
-workspaces.
+workspaces e não se propaga para operações destrutivas ou externas, que continuam com gate.
 
 ---
 
