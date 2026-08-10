@@ -958,7 +958,7 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Status: accepted
 - Owner: Daniel Scardini
 - Context: The portable package is a Windows distribution surface; using a macOS build host to emulate PE/AuthentiCode inspection creates a weaker proof than the real Windows factory. macOS already has a dedicated DMG journey.
-- Decision: The portable Windows factory runs only on Windows and fails closed elsewhere with explicit DMG guidance. macOS users must install through the Maestro DMG; the ZIP is not a macOS installer. The Windows factory performs the native seed and Authenticode checks on Windows.
+- Decision: The portable Windows factory runs only on Windows and fails closed elsewhere with explicit DMG guidance. macOS users must install through the Maestro DMG; the ZIP is not a macOS installer. The Windows factory performs the native seed and Authenticode checks on Windows. The PONB conversational journey remains unchanged: the owner opens `maestro-os`, confirms preparation once, and Claude invokes the internal activator without asking the owner to type or run commands.
 - Consequences: Windows portable packaging is validated on the target OS, while macOS distribution remains the DMG. Documentation and skills must keep the surfaces separate, and the packaged workspace remains named `maestro-os`. The portable package remains a controlled unsigned Canary until organization-owned signing and clean-device evidence exist.
 - Refs: PONB; specs/020-release-distribution.md; docs/installer-package.md; dev/skills/release-export/SKILL.md; internal/dev/releasepack/windows_portable.go
 - Supersedes: PONB
