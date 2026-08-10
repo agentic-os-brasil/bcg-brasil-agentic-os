@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,40 +16,8 @@ import (
 )
 
 func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
-	candidate := unsignedCandidateFixture(t)
-	publicKey, privateKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	registryBody := authorityRegistryForKey(t, publicKey)
-	registryPath := filepath.Join(t.TempDir(), "registry.json")
-	if err := os.WriteFile(registryPath, registryBody, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	signed := filepath.Join(t.TempDir(), "signed")
-	if _, err := SignCandidate(SignCandidateOptions{
-		Candidate: candidate, Output: signed, Registry: registryPath,
-		Issuer: "maestro-release", KeyID: "pilot-2026", PrivateKey: privateKey,
-		Clock: func() time.Time { return time.Unix(2000, 0).UTC() },
-	}); err != nil {
-		t.Fatal(err)
-	}
-	bootstrapperBody := []byte("synthetic-windows-bootstrapper")
-	bootstrapper := filepath.Join(t.TempDir(), "bcgos-bootstrap_0.2.0_windows_amd64.exe")
-	if err := os.WriteFile(bootstrapper, bootstrapperBody, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	output := filepath.Join(t.TempDir(), "Maestro-Portable-0.2.0-windows-amd64-local-beta-unsigned.zip")
-	options := WindowsPortableOptions{
-		Version: "0.2.0", ReleaseDirectory: signed,
-		AuthorityRegistry: registryPath, AuthorityRegistrySHA256: testDigest(registryBody),
-		Bootstrapper: bootstrapper, BootstrapperSHA256: testDigest(bootstrapperBody),
-		Output: output, Clock: func() time.Time { return time.Unix(2000, 0).UTC() },
-		BootstrapperSeedStatus: func(string) (BootstrapperSeedStatus, error) {
-			return BootstrapperSeedStatus{Version: "0.2.0", AuthorityRegistrySHA256: testDigest(registryBody)}, nil
-		},
-		NativeSignatureStatus: func(string) (string, error) { return "NotSigned", nil },
-	}
+	options := validWindowsPortableOptions(t)
+	output := options.Output
 	result, err := BuildWindowsPortable(options)
 	if err != nil {
 		t.Fatalf("BuildWindowsPortable() error = %v", err)
@@ -136,26 +105,87 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	}
 }
 
-func TestBuildWindowsPortableRejectsUnpinnedOrSignedBootstrapper(t *testing.T) {
+func validWindowsPortableOptions(t *testing.T) WindowsPortableOptions {
+	t.Helper()
+	candidate := unsignedCandidateFixture(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registryBody := authorityRegistryForKey(t, publicKey)
+	registryPath := filepath.Join(t.TempDir(), "registry.json")
+	if err := os.WriteFile(registryPath, registryBody, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	signed := filepath.Join(t.TempDir(), "signed")
+	if _, err := SignCandidate(SignCandidateOptions{
+		Candidate: candidate, Output: signed, Registry: registryPath,
+		Issuer: "maestro-release", KeyID: "pilot-2026", PrivateKey: privateKey,
+		Clock: func() time.Time { return time.Unix(2000, 0).UTC() },
+	}); err != nil {
+		t.Fatal(err)
+	}
+	bootstrapperBody := []byte("synthetic-windows-bootstrapper")
+	bootstrapper := filepath.Join(t.TempDir(), "bcgos-bootstrap_0.2.0_windows_amd64.exe")
+	if err := os.WriteFile(bootstrapper, bootstrapperBody, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return WindowsPortableOptions{
+		Version: "0.2.0", ReleaseDirectory: signed,
+		AuthorityRegistry: registryPath, AuthorityRegistrySHA256: testDigest(registryBody),
+		Bootstrapper: bootstrapper, BootstrapperSHA256: testDigest(bootstrapperBody),
+		Output: filepath.Join(t.TempDir(), "Maestro-Portable-0.2.0-windows-amd64-local-beta-unsigned.zip"),
+		Clock:  func() time.Time { return time.Unix(2000, 0).UTC() },
+		BootstrapperSeedStatus: func(string) (BootstrapperSeedStatus, error) {
+			return BootstrapperSeedStatus{Version: "0.2.0", AuthorityRegistrySHA256: testDigest(registryBody)}, nil
+		},
+		NativeSignatureStatus: func(string) (string, error) { return "NotSigned", nil },
+	}
+}
+
+func TestBuildWindowsPortableRejectsTrustBoundaryViolations(t *testing.T) {
 	for _, test := range []struct {
-		name      string
-		registry  string
-		bootstrap string
-		native    string
+		name    string
+		mutate  func(*WindowsPortableOptions)
+		wantErr string
 	}{
-		{name: "missing registry pin", bootstrap: strings.Repeat("b", 64), native: "NotSigned"},
-		{name: "missing bootstrapper pin", registry: strings.Repeat("a", 64), native: "NotSigned"},
-		{name: "unexpected native status", registry: strings.Repeat("a", 64), bootstrap: strings.Repeat("b", 64), native: "Valid"},
+		{
+			name: "registry digest drift",
+			mutate: func(options *WindowsPortableOptions) {
+				options.AuthorityRegistrySHA256 = strings.Repeat("0", 64)
+			},
+			wantErr: "portable authority registry does not match its approved pin",
+		},
+		{
+			name: "bootstrapper digest drift",
+			mutate: func(options *WindowsPortableOptions) {
+				options.BootstrapperSHA256 = strings.Repeat("0", 64)
+			},
+			wantErr: "portable bootstrapper does not match its approved pin",
+		},
+		{
+			name: "signed bootstrapper",
+			mutate: func(options *WindowsPortableOptions) {
+				options.NativeSignatureStatus = func(string) (string, error) { return "Valid", nil }
+			},
+			wantErr: "portable local-beta bootstrapper Authenticode status must be exactly NotSigned; got Valid",
+		},
+		{
+			name: "signature verifier failure",
+			mutate: func(options *WindowsPortableOptions) {
+				options.NativeSignatureStatus = func(string) (string, error) {
+					return "", errors.New("signature probe failed")
+				}
+			},
+			wantErr: "inspect portable bootstrapper Authenticode: signature probe failed",
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := BuildWindowsPortable(WindowsPortableOptions{
-				Version: "0.2.0", ReleaseDirectory: "missing", AuthorityRegistry: "missing",
-				AuthorityRegistrySHA256: test.registry, Bootstrapper: "missing",
-				BootstrapperSHA256: test.bootstrap, Output: filepath.Join(t.TempDir(), "portable.zip"),
-				NativeSignatureStatus: func(string) (string, error) { return test.native, nil },
-			})
-			if err == nil {
-				t.Fatal("BuildWindowsPortable() accepted an incomplete trust profile")
+			options := validWindowsPortableOptions(t)
+			test.mutate(&options)
+			_, err := BuildWindowsPortable(options)
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("BuildWindowsPortable() error = %v, want %q", err, test.wantErr)
 			}
 		})
 	}
