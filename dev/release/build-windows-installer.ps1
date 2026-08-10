@@ -290,7 +290,7 @@ $packageParent = Split-Path -Parent $packageOutput
 if ([string]::IsNullOrWhiteSpace($ArchiveOutput)) {
     $archiveName = "Maestro-Installer-$Version-windows-amd64-portable-unsigned.zip"
     if ($CanarySimple) {
-        $linkerFlags.Add("-X main.BuildTrustProfile=canary-simple")
+        $archiveName = "Maestro-Installer-$Version-windows-amd64-portable-canary-simple-unsigned.zip"
     }
     elseif ($LocalBeta) {
         $archiveName = "Maestro-Installer-$Version-windows-amd64-portable-local-beta-unsigned.zip"
@@ -368,7 +368,10 @@ try {
         if ($Windowed) {
             $linkerFlags.Add("-H=windowsgui")
         }
-        if ($LocalBeta) {
+        if ($CanarySimple) {
+            $linkerFlags.Add("-X main.BuildTrustProfile=canary-simple")
+        }
+        elseif ($LocalBeta) {
             $linkerFlags.Add("-X main.BuildTrustProfile=windows-local-beta")
             $linkerFlags.Add("-X main.BuildLocalBetaIssuer=$LocalBetaIssuer")
             $linkerFlags.Add("-X main.BuildLocalBetaKeyID=$LocalBetaKeyID")
@@ -424,9 +427,13 @@ try {
 	}
 
     $resourceDigest = (Get-FileHash -LiteralPath $sysoPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $distributionProfile = "strict"
-    $nativeSignature = "pending"
-    if ($LocalBeta) {
+$distributionProfile = "strict"
+$nativeSignature = "pending"
+if ($CanarySimple) {
+    $distributionProfile = "canary-simple"
+    $nativeSignature = "not-signed-controlled-canary"
+}
+elseif ($LocalBeta) {
         $distributionProfile = "windows-local-beta"
         $nativeSignature = "not-signed-controlled-canary"
     }

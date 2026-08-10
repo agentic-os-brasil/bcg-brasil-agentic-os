@@ -47,6 +47,9 @@ if ($LocalBeta) {
         throw "LocalBeta requires issuer, key ID, authority-registry SHA-256 and bootstrapper SHA-256 pins."
     }
 }
+if ($CanarySimple -and $LocalBeta) {
+    throw "CanarySimple and LocalBeta cannot be combined."
+}
 elseif (@($localBetaValues | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -ne 0) {
     throw "LocalBeta issuer, key ID and digest pins are valid only with -LocalBeta."
 }
@@ -181,9 +184,13 @@ try {
         throw "Self-contained installer checksum already exists: $checksumPath"
     }
     "$installerDigest  $([IO.Path]::GetFileName($outputPath))" | Set-Content -LiteralPath $checksumPath -Encoding ascii
-    $distributionProfile = "strict"
-    $nativeSignature = "pending"
-    if ($LocalBeta) {
+$distributionProfile = "strict"
+$nativeSignature = "pending"
+if ($CanarySimple) {
+    $distributionProfile = "canary-simple"
+    $nativeSignature = "not-signed-controlled-canary"
+}
+elseif ($LocalBeta) {
         $distributionProfile = "windows-local-beta"
         $nativeSignature = "not-signed-controlled-canary"
     }
@@ -198,7 +205,7 @@ try {
         release_key_id = [string]$innerProvenance.release_key_id
         authority_registry_sha256 = [string]$innerProvenance.authority_registry_sha256
         bootstrapper_sha256 = [string]$innerProvenance.bootstrapper_sha256
-        bootstrapper_authenticode_status = $(if ($LocalBeta) { "NotSigned" } else { "not-evaluated-by-factory" })
+    bootstrapper_authenticode_status = $(if ($LocalBeta -or $CanarySimple) { "NotSigned" } else { "not-evaluated-by-factory" })
         installer_sha256 = $installerDigest
         icon = $iconItem.Name
         icon_sha256 = $IconSHA256
