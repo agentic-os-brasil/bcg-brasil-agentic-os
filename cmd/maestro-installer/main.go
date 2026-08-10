@@ -1299,6 +1299,9 @@ func runtimeIsAvailable(options options, runtimeID string) bool {
 }
 
 func runtimeAvailable(runtimeID string) bool {
+	if !runtimeLaunchSupported(runtime.GOOS, runtimeID) {
+		return false
+	}
 	if runtimeID == "claude" {
 		return claudeDesktopAvailable()
 	}
@@ -1314,6 +1317,20 @@ func runtimeAvailable(runtimeID string) bool {
 		}
 	}
 	return chatGPTAppAvailable()
+}
+
+// runtimeLaunchSupported is deliberately narrower than CLI discovery. The
+// wizard advertises a graphical handoff, so a CLI that cannot be opened by the
+// current platform must not become an enabled target.
+func runtimeLaunchSupported(platform, runtimeID string) bool {
+	switch runtimeID {
+	case "claude":
+		return platform == "darwin" || platform == "windows"
+	case "codex":
+		return platform == "darwin"
+	default:
+		return false
+	}
 }
 
 func claudeDesktopAvailable() bool {

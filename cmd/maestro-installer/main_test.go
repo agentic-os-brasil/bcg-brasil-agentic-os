@@ -179,6 +179,18 @@ func TestWindowsClaudeDesktopCandidatesIncludePerUserInstall(t *testing.T) {
 	}
 }
 
+func TestRuntimeLaunchSupportDoesNotAdvertiseCodexOnWindows(t *testing.T) {
+	if runtimeLaunchSupported("windows", "codex") {
+		t.Fatal("Windows Codex must not be offered until a Desktop handoff exists")
+	}
+	if !runtimeLaunchSupported("windows", "claude") {
+		t.Fatal("Windows Claude Desktop handoff should remain supported")
+	}
+	if !runtimeLaunchSupported("darwin", "codex") {
+		t.Fatal("macOS Codex handoff should remain supported")
+	}
+}
+
 func containsString(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
