@@ -58,21 +58,26 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	}
 	root := "Maestro-Portable-0.2.0-windows-amd64/"
 	for _, required := range []string{
-		root + "Activate-Maestro.cmd",
 		root + "README-PORTABLE.md",
 		root + "portable-provenance.json",
+		root + "managed/activate-maestro.cmd",
 		root + "managed/bcgos-bootstrap.exe",
 		root + "managed/trust/release-authority-registry.json",
 		root + "release/release-manifest.json",
 		root + "release/release-manifest.json.sig",
+		root + "workspace/CLAUDE.md",
 		root + "workspace/README.md",
 	} {
 		if _, ok := entries[required]; !ok {
 			t.Fatalf("portable archive is missing %s", required)
 		}
 	}
-	activation := string(entries[root+"Activate-Maestro.cmd"])
+	if _, exists := entries[root+"Activate-Maestro.cmd"]; exists {
+		t.Fatal("portable archive exposes a user-facing activation command")
+	}
+	activation := string(entries[root+"managed/activate-maestro.cmd"])
 	for _, required := range []string{
+		`for %%I in ("%~dp0..") do set "ROOT=%%~fI"`,
 		`%LOCALAPPDATA%\BCGOS`,
 		`LOCALAPPDATA is unavailable`,
 		`bcgos-bootstrap.exe" install`,
@@ -86,13 +91,35 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 			t.Fatalf("activation script is missing %q:\n%s", required, activation)
 		}
 	}
+	orientation := string(entries[root+"workspace/CLAUDE.md"])
+	for _, required := range []string{
+		"Nao peca para a pessoa digitar ou executar comandos",
+		"Peca uma unica confirmacao curta",
+		`cmd.exe /d /c "..\managed\activate-maestro.cmd"`,
+		"releia este CLAUDE.md",
+		"maestro-onboarding",
+		"nao repita o onboarding",
+		"permissao nativa do Claude Code",
+	} {
+		if !strings.Contains(orientation, required) {
+			t.Fatalf("portable CLAUDE.md is missing %q:\n%s", required, orientation)
+		}
+	}
+	confirmation := strings.Index(orientation, "Peca uma unica confirmacao curta")
+	activationCommand := strings.Index(orientation, `cmd.exe /d /c "..\managed\activate-maestro.cmd"`)
+	if confirmation < 0 || activationCommand < 0 || confirmation > activationCommand {
+		t.Fatal("portable CLAUDE.md must require confirmation before internal activation")
+	}
 	for name := range entries {
 		if strings.Contains(strings.ToLower(name), "wizard") || strings.HasSuffix(strings.ToLower(name), "maestro-installer.exe") {
 			t.Fatalf("portable archive retained installer surface %s", name)
 		}
 	}
-	if !bytes.Contains(entries[root+"README-PORTABLE.md"], []byte("open the workspace folder in Claude Desktop")) {
-		t.Fatal("portable README does not describe the daily Claude Desktop journey")
+	readme := string(entries[root+"README-PORTABLE.md"])
+	for _, required := range []string{"Abra a pasta `workspace` no Claude Code", "Envie uma mensagem", "nao execute arquivos `.cmd`"} {
+		if !strings.Contains(readme, required) {
+			t.Fatalf("portable README does not describe the prompt-first Claude Code journey; missing %q:\n%s", required, readme)
+		}
 	}
 	secondOutput := filepath.Join(t.TempDir(), filepath.Base(output))
 	options.Output = secondOutput

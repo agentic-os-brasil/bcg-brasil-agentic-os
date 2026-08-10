@@ -11,10 +11,12 @@ Maestro release, registry and bootstrapper together with Ed25519 and SHA-256
 pins, but it deliberately does not claim that Windows or endpoint protection
 trusts the ZIP or its executables. It is only a controlled engineering canary.
 
-Decision `PZIP` makes the verified portable ZIP the current controlled-Canary
-handoff. The owner extracts it once to a fixed path, runs
-`Activate-Maestro.cmd`, and thereafter opens only the packaged `workspace/` in
-Claude Desktop. This changes the delivery surface, not the pilot gates below.
+Decision `PONB` makes the verified portable ZIP the current controlled-Canary
+handoff. The owner extracts it once to a fixed path, opens the packaged
+`workspace/` in Claude Code and sends a natural-language message. Claude asks
+for one setup confirmation and invokes the package-internal activator; the
+owner is never instructed to type or run a command. This changes the delivery
+surface, not the pilot gates below.
 
 The Windows pilot handoff is ready only when all of the following are true:
 
