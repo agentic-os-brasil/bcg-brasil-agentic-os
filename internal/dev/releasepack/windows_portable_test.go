@@ -191,6 +191,14 @@ func TestBuildWindowsPortableRejectsTrustBoundaryViolations(t *testing.T) {
 	}
 }
 
+func TestParseBootstrapperSeedStatusRejectsTrailingJSON(t *testing.T) {
+	valid := `{"schema_version":1,"product":"maestro","bootstrapper_version":"0.2.0","authority_registry_sha256":"` + strings.Repeat("a", 64) + `"}`
+	if _, err := parseBootstrapperSeedStatus([]byte(valid + "\n{}\n")); err == nil ||
+		!strings.Contains(err.Error(), "bootstrapper seed status contains multiple JSON values") {
+		t.Fatalf("parseBootstrapperSeedStatus() error = %v, want trailing JSON rejection", err)
+	}
+}
+
 func testDigest(body []byte) string {
 	digest := sha256.Sum256(body)
 	return hex.EncodeToString(digest[:])

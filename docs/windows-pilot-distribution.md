@@ -18,11 +18,11 @@ Claude Desktop. This changes the delivery surface, not the pilot gates below.
 
 The Windows pilot handoff is ready only when all of the following are true:
 
-1. Every delivered PE file, including the single-file installer and embedded
+1. Every delivered PE file inside the portable ZIP, including the CLI and
    bootstrapper, has a valid Authenticode signature from the approved BCG
-   publisher.
+   publisher. If a future single-file wrapper is used, it must be signed too.
 2. The signed release manifest, authority registry and package provenance are
-   retained with the immutable SHA-256 of the delivered EXE.
+   retained with the immutable SHA-256 of the delivered ZIP and its PE files.
 3. BCG Endpoint Security has reviewed the exact hashes and confirms the
    Defender for Endpoint outcome. A false-positive submission is not the same
    as an allow decision.
@@ -31,20 +31,23 @@ The Windows pilot handoff is ready only when all of the following are true:
 
 ## Immediate path for the current 40-person cohort
 
-1. Stop circulation of the unsigned EXE that Defender remediated. Do not ask
-   users to disable Defender, add local exclusions or bypass a corporate block.
-2. Give Endpoint Security the single-file EXE, its SHA-256, release manifest,
-   provenance and the exact detection name. They can submit a file or file hash
-   to Microsoft Defender for Endpoint as a **Clean (false positive)** sample
-   and decide the organization-level response.
+1. Stop circulation of the unsigned portable ZIP and any legacy unsigned EXE
+   that Defender remediated. Do not ask users to disable Defender, add local
+   exclusions or bypass a corporate block.
+2. Give Endpoint Security the exact ZIP, its SHA-256, the hashes of its CLI and
+   bootstrapper, release manifest, provenance and the exact detection name.
+   They can submit a file or file hash to Microsoft Defender for Endpoint as a
+   **Clean (false positive)** sample and decide the organization-level response.
 3. In parallel, sign a fresh package with a BCG-owned certificate service.
    Prefer a BCG Azure Artifact Signing account/certificate profile or the
    organization's existing Authenticode service; the signing identity and its
    approval workflow must belong to BCG, not an individual developer.
-4. Rebuild the single-file EXE from the reviewed tag, sign both installer and
-   bootstrapper, generate provenance and submit the exact signed hashes for the
-   endpoint review. Test it on an enrolled BCG Windows device before the cohort
-   download is reopened.
+4. Build a protected-factory successor to the portable local-beta profile from
+   the reviewed tag, sign the CLI and bootstrapper before packaging, generate
+   provenance and submit the exact signed ZIP and PE hashes for endpoint review.
+   Do not weaken the current local-beta factory's exact `NotSigned` contract.
+   Test the successor package on an enrolled BCG Windows device before the
+   cohort download is reopened.
 
 For managed BCG endpoints, Intune/Company Portal is the preferred delivery
 channel after the signed artifact is qualified. The Microsoft Store/LOB path is

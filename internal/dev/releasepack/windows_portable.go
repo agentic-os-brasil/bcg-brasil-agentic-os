@@ -441,6 +441,10 @@ func readBootstrapperSeedStatus(path string) (BootstrapperSeedStatus, error) {
 	if err != nil {
 		return BootstrapperSeedStatus{}, err
 	}
+	return parseBootstrapperSeedStatus(output)
+}
+
+func parseBootstrapperSeedStatus(output []byte) (BootstrapperSeedStatus, error) {
 	decoder := json.NewDecoder(bytes.NewReader(output))
 	decoder.DisallowUnknownFields()
 	var status struct {
@@ -451,6 +455,10 @@ func readBootstrapperSeedStatus(path string) (BootstrapperSeedStatus, error) {
 	}
 	if err := decoder.Decode(&status); err != nil {
 		return BootstrapperSeedStatus{}, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return BootstrapperSeedStatus{}, errors.New("bootstrapper seed status contains multiple JSON values")
 	}
 	if status.SchemaVersion != 1 || status.Product != "maestro" {
 		return BootstrapperSeedStatus{}, errors.New("bootstrapper seed status has an unexpected identity")
