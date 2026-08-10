@@ -205,7 +205,7 @@ elseif ($LocalBeta) {
         release_key_id = [string]$innerProvenance.release_key_id
         authority_registry_sha256 = [string]$innerProvenance.authority_registry_sha256
         bootstrapper_sha256 = [string]$innerProvenance.bootstrapper_sha256
-    bootstrapper_authenticode_status = $(if ($LocalBeta -or $CanarySimple) { "NotSigned" } else { "not-evaluated-by-factory" })
+    bootstrapper_authenticode_status = $(if ($LocalBeta) { "NotSigned" } else { "not-evaluated-by-factory" })
         installer_sha256 = $installerDigest
         icon = $iconItem.Name
         icon_sha256 = $IconSHA256
