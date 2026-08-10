@@ -186,7 +186,7 @@ func BuildWindowsPortable(options WindowsPortableOptions) (WindowsPortableResult
 	if err := os.MkdirAll(filepath.Join(root, "managed", "trust"), 0o700); err != nil {
 		return WindowsPortableResult{}, err
 	}
-	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "maestro-os"), 0o755); err != nil {
 		return WindowsPortableResult{}, err
 	}
 	if err := copyRegularBytes(registryBody, filepath.Join(root, "managed", "trust", "release-authority-registry.json"), 0o600); err != nil {
@@ -215,8 +215,8 @@ func BuildWindowsPortable(options WindowsPortableOptions) (WindowsPortableResult
 		"README-PORTABLE.md":           portableReadme(options.Version),
 		"managed/activate-maestro.cmd": portableActivationScript(options.Version),
 		"portable-provenance.json":     provenanceBody,
-		"workspace/CLAUDE.md":          portableClaudeOnboarding(),
-		"workspace/README.md":          []byte("# Workspace Maestro\n\nAbra esta pasta no Claude Code e envie uma mensagem para comecar. O Claude conduz a preparacao e o onboarding.\n"),
+		"maestro-os/CLAUDE.md":          portableClaudeOnboarding(),
+		"maestro-os/README.md":          []byte("# Maestro OS\n\nAbra esta pasta no Claude Code e envie uma mensagem para comecar. O Claude conduz a preparacao e o onboarding.\n"),
 	}
 	for relative, body := range files {
 		if err := copyRegularBytes(body, filepath.Join(root, filepath.FromSlash(relative)), 0o600); err != nil {
@@ -413,7 +413,7 @@ func portableActivationScript(version string) []byte {
 		"for %%I in (\"%~dp0..\") do set \"ROOT=%%~fI\"\r\n" +
 		"set \"MANAGED=%ROOT%\\managed\"\r\n" +
 		"set \"DATA=%LOCALAPPDATA%\\BCGOS\"\r\n" +
-		"set \"WORKSPACE=%ROOT%\\workspace\"\r\n" +
+		"set \"WORKSPACE=%ROOT%\\maestro-os\"\r\n" +
 		"if not exist \"%MANAGED%\\bin\\bcgos.exe\" (\r\n" +
 		"  \"%MANAGED%\\bcgos-bootstrap.exe\" install --verified-directory \"%ROOT%\\release\" --data-root \"%DATA%\"\r\n" +
 		"  if errorlevel 1 exit /b 1\r\n" +
@@ -433,9 +433,9 @@ func portableActivationScript(version string) []byte {
 func portableReadme(version string) []byte {
 	return []byte("# Maestro Portable " + version + " para Windows\n\n" +
 		"1. Extraia a pasta completa para um local fixo em que voce possa gravar arquivos.\n" +
-		"2. Abra a pasta `workspace` no Claude Code.\n" +
+		"2. Abra a pasta `maestro-os` no Claude Code.\n" +
 		"3. Envie uma mensagem como `Quero comecar`. O Claude explica e conduz o restante.\n\n" +
-		"Nao abra terminal e nao execute arquivos `.cmd`. Na primeira preparacao, o Claude pedira uma confirmacao curta e o Windows ou o Claude Code podera mostrar uma permissao nativa para voce aprovar. Depois disso, use sempre a mesma pasta `workspace`; nao mova a pasta completa depois da ativacao.\n\n" +
+		"Nao abra terminal e nao execute arquivos `.cmd`. Na primeira preparacao, o Claude pedira uma confirmacao curta e o Windows ou o Claude Code podera mostrar uma permissao nativa para voce aprovar. Depois disso, use sempre a mesma pasta `maestro-os`; nao mova a pasta completa depois da ativacao.\n\n" +
 		"Este e um pacote Canary controlado e sem assinatura Authenticode. Antes da entrega, o responsavel pelo piloto deve conferir o SHA-256 enviado separadamente. SmartScreen, WDAC ou AppLocker ainda podem bloquear executaveis sem assinatura.\n")
 }
 

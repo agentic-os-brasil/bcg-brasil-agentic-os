@@ -16,7 +16,7 @@ For the controlled Windows Canary, the user distributable is now
 `Maestro-Portable-<version>-windows-amd64-local-beta-unsigned.zip`, produced by
 `go run ./dev/release portable-windows`. It contains the exact signed release,
 the pinned stable bootstrapper and authority registry, one fixed workspace,
-provenance, a seed `workspace/CLAUDE.md` and an internal
+provenance, a seed `maestro-os/CLAUDE.md` and an internal
 `managed/activate-maestro.cmd`. It deliberately contains no user-facing
 activation command,
 wizard or `maestro-installer.exe`. The runtime file
@@ -24,7 +24,7 @@ wizard or `maestro-installer.exe`. The runtime file
 the stable bootstrapper verifies and activates it as
 `managed/bin/bcgos.exe`, so it must never be sent as a standalone download.
 
-The owner extracts the package, opens only its `workspace/` folder in Claude
+The owner extracts the package, opens only its `maestro-os/` folder in Claude
 Code and sends a natural-language message such as “Quero começar”. The seed
 `CLAUDE.md` makes Claude explain the preparation, request the one-and-done
 confirmation and execute the internal activator itself. The owner does not use

@@ -13,7 +13,7 @@ trusts the ZIP or its executables. It is only a controlled engineering canary.
 
 Decision `PONB` makes the verified portable ZIP the current controlled-Canary
 handoff. The owner extracts it once to a fixed path, opens the packaged
-`workspace/` in Claude Code and sends a natural-language message. Claude asks
+`maestro-os/` in Claude Code and sends a natural-language message. Claude asks
 for one setup confirmation and invokes the package-internal activator; the
 owner is never instructed to type or run a command. This changes the delivery
 surface, not the pilot gates below.
