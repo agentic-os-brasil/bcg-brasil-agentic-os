@@ -54,11 +54,15 @@ exits. This wrapper does not replace release-manifest or native-signature
 verification. Its output is still `unsigned-candidate` until the approved
 Authenticode step is completed.
 
-For an explicitly owner-directed `canary-simple` test, the platform's
-Authenticode status is diagnostic and does not block the installation. Empty or
-malformed status output is still rejected. The `strict` profile continues to
-require `Valid`, and the pinned `windows-local-beta` profile continues to
-require its exact `NotSigned` exception and package digests.
+For an explicitly owner-directed `canary-simple` test, the platform's native
+signature status is diagnostic and does not block the installation. Empty or
+malformed status output is still rejected. On macOS, the profile also allows
+the workspace handoff to proceed while hook evidence is still
+`native_qualification_pending`; the installer reports `native_qualified: false`
+instead of promoting that evidence. The `strict` profile continues to require
+native verification and native qualification, and the pinned
+`windows-local-beta` profile continues to require its exact `NotSigned`
+exception and package digests.
 
 ### Controlled Windows local beta
 

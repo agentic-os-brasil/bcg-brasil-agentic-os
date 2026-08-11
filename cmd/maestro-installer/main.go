@@ -1,6 +1,7 @@
 // Command maestro-installer is the visual, user-space entry point for a
 // signed release package. Release content always remains Ed25519 verified;
-// native trust is either strict or a factory-pinned Windows Canary profile.
+// native trust is either strict, an owner-directed canary-simple diagnostic
+// profile, or a factory-pinned Windows Canary profile.
 package main
 
 import (
@@ -43,34 +44,35 @@ var (
 )
 
 type options struct {
-	releaseDir            string
-	bootstrapper          string
-	authorityRegistry     string
-	managedRoot           string
-	dataRoot              string
-	wizardDir             string
-	headless              bool
-	preview               bool
-	simulate              bool
-	simulationRoot        string
-	primaryRuntime        string
-	sessionToken          string
-	origin                string
-	shutdown              func()
-	shutdownGraceful      func(context.Context) error
-	lifecycle             *wizardLifecycle
-	chooseWorkspace       func() (string, error)
-	launchRuntime         func(runtimeID, workspacePath string) error
-	runtimeTargets        func() []runtimeTarget
-	chooseImportSource    func() (string, error)
-	chooseWorkspaceSource func(workspaceFlowMode) (string, error)
-	workspacePath         func() (string, error)
-	configureWorkspace    func(options, string) (workspaceActivation, error)
-	authorizeSetup        func(options, string) (workspaceSetupAuthorization, error)
-	commandRunner         commandRunner
-	workspaceFlow         workspaceFlowBackend
-	nativeTrustMode       installer.NativeTrustMode
-	localBetaPins         installer.LocalBetaPins
+	releaseDir             string
+	bootstrapper           string
+	authorityRegistry      string
+	managedRoot            string
+	dataRoot               string
+	wizardDir              string
+	headless               bool
+	preview                bool
+	simulate               bool
+	simulationRoot         string
+	primaryRuntime         string
+	sessionToken           string
+	origin                 string
+	shutdown               func()
+	shutdownGraceful       func(context.Context) error
+	lifecycle              *wizardLifecycle
+	chooseWorkspace        func() (string, error)
+	launchRuntime          func(runtimeID, workspacePath string) error
+	runtimeTargets         func() []runtimeTarget
+	chooseImportSource     func() (string, error)
+	chooseWorkspaceSource  func(workspaceFlowMode) (string, error)
+	workspacePath          func() (string, error)
+	configureWorkspace     func(options, string) (workspaceActivation, error)
+	authorizeSetup         func(options, string) (workspaceSetupAuthorization, error)
+	commandRunner          commandRunner
+	workspaceFlow          workspaceFlowBackend
+	nativeTrustMode        installer.NativeTrustMode
+	localBetaPins          installer.LocalBetaPins
+	allowUnqualifiedNative bool
 }
 
 type runtimeTarget struct {
@@ -126,10 +128,11 @@ type lifecycleActivation struct {
 }
 
 type maintenanceActivation struct {
-	State          string `json:"state"`
-	Schedule       string `json:"schedule"`
-	NativeObserved bool   `json:"native_observed"`
-	ModelBacked    string `json:"model_backed"`
+	State           string `json:"state"`
+	Schedule        string `json:"schedule"`
+	NativeObserved  bool   `json:"native_observed"`
+	NativeQualified bool   `json:"native_qualified"`
+	ModelBacked     string `json:"model_backed"`
 }
 
 type wizardLifecycle struct {
@@ -213,6 +216,10 @@ func main() {
 	}
 	options.nativeTrustMode = mode
 	options.localBetaPins = pins
+	// Only the explicitly compiled canary-simple macOS profile may activate
+	// before hook evidence promotes the runtime to native-qualified. Strict
+	// builds keep the qualification gate unchanged.
+	options.allowUnqualifiedNative = BuildTrustProfile == string(installer.NativeTrustCanarySimple) && runtime.GOOS == "darwin"
 	if options.preview {
 		if err := resolvePreviewDefaults(&options); err != nil {
 			writeError(err)
@@ -1759,7 +1766,13 @@ func configureWorkspaceRuntimeForPlatform(options options, workspacePath, platfo
 	if err := json.Unmarshal(maintenanceOutput, &maintenanceStatus); err != nil {
 		return workspaceActivation{}, readinessError(cliPath, maintenanceArguments, "a resposta da manutenção não é JSON válido")
 	}
-	if maintenanceStatus.State != "enrolled" || maintenanceStatus.Enrollment.WorkspaceID != status.Workspace.WorkspaceID || maintenanceStatus.LaunchAgent.State != "active_loaded_enabled" || !maintenanceStatus.LaunchAgent.FilePresent || !maintenanceStatus.LaunchAgent.Loaded || !maintenanceStatus.LaunchAgent.Enabled || !maintenanceStatus.LaunchAgent.NativeQualified {
+	launchAgentReady := maintenanceStatus.State == "enrolled" &&
+		maintenanceStatus.Enrollment.WorkspaceID == status.Workspace.WorkspaceID &&
+		maintenanceStatus.LaunchAgent.State == "active_loaded_enabled" &&
+		maintenanceStatus.LaunchAgent.FilePresent &&
+		maintenanceStatus.LaunchAgent.Loaded &&
+		maintenanceStatus.LaunchAgent.Enabled
+	if !launchAgentReady || (!maintenanceStatus.LaunchAgent.NativeQualified && !options.allowUnqualifiedNative) {
 		return workspaceActivation{}, readinessError(cliPath, maintenanceArguments, "o launchd não ficou ativo, carregado e vinculado a este workspace")
 	}
 	return workspaceActivation{
@@ -1767,10 +1780,11 @@ func configureWorkspaceRuntimeForPlatform(options options, workspacePath, platfo
 		WorkspaceID: status.Workspace.WorkspaceID,
 		Lifecycle:   lifecycle,
 		Maintenance: maintenanceActivation{
-			State:          maintenanceStatus.LaunchAgent.State,
-			Schedule:       "run_at_load_and_every_15_minutes",
-			NativeObserved: true,
-			ModelBacked:    "unavailable",
+			State:           maintenanceStatus.LaunchAgent.State,
+			Schedule:        "run_at_load_and_every_15_minutes",
+			NativeObserved:  true,
+			NativeQualified: maintenanceStatus.LaunchAgent.NativeQualified,
+			ModelBacked:     "unavailable",
 		},
 	}, nil
 }

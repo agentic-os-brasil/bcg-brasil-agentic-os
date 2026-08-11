@@ -487,6 +487,52 @@ func TestConfigureWorkspaceRuntimeDoesNotDeclareReadyWhenLaunchdIsNotNative(t *t
 	}
 }
 
+func TestConfigureWorkspaceRuntimeCanarySimpleActivatesBeforeNativeQualification(t *testing.T) {
+	root := t.TempDir()
+	managedRoot := filepath.Join(root, "managed")
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	cliPath := filepath.Join(managedRoot, "bin", "bcgos")
+	if err := os.MkdirAll(filepath.Dir(cliPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cliPath, []byte("test"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	initialized, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: dataRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := 0
+	runner := commandRunnerFunc(func(_ context.Context, _ string, _ []string) ([]byte, error) {
+		call++
+		switch call {
+		case 1, 2:
+			return []byte(`{"runtime":"claude","state":"installed","projection":{"state":"installed"}}`), nil
+		case 3:
+			return []byte(`{"workspace":{"state":"ready","workspace_id":"` + initialized.WorkspaceID + `"}}`), nil
+		case 4:
+			return []byte(`{"runtime":"claude","state":"installed","projection":{"state":"installed"}}`), nil
+		case 5:
+			return []byte(`{"runtime":"claude","state":"verified"}`), nil
+		case 6:
+			return []byte(`{"state":"enrolled","enrollment":{"workspace_id":"` + initialized.WorkspaceID + `"},"launch_agent":{"state":"active_loaded_enabled","file_present":true,"loaded":true,"enabled":true,"native_qualified":false}}`), nil
+		default:
+			return nil, errors.New("unexpected call")
+		}
+	})
+
+	activation, err := configureWorkspaceRuntimeForPlatform(options{
+		managedRoot: managedRoot, commandRunner: runner, allowUnqualifiedNative: true,
+	}, workspacePath, "darwin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if activation.State != "ready" || !activation.Maintenance.NativeObserved || activation.Maintenance.NativeQualified {
+		t.Fatalf("activation = %#v", activation)
+	}
+}
+
 func TestConfigureWorkspaceRuntimeOnWindowsCompletesWithoutMacOSMaintenance(t *testing.T) {
 	root := t.TempDir()
 	managedRoot := filepath.Join(root, "managed")
@@ -755,6 +801,7 @@ func TestResolveBuildTrustProfile(t *testing.T) {
 		wantErr                                                    bool
 	}{
 		{name: "strict defaults", profile: "strict", wantMode: installer.NativeTrustStrict},
+		{name: "canary simple", profile: "canary-simple", wantMode: installer.NativeTrustCanarySimple},
 		{name: "empty defaults", wantMode: installer.NativeTrustStrict},
 		{name: "partial beta fails closed", profile: "windows-local-beta", issuer: "beta", wantErr: true},
 		{name: "strict rejects pins", profile: "strict", issuer: "beta", wantErr: true},

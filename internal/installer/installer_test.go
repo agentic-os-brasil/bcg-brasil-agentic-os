@@ -123,6 +123,18 @@ func TestValidateNativeTrustPolicyRequiresExactWindowsLocalBetaPins(t *testing.T
 	}
 }
 
+func TestValidateNativeTrustPolicyCanarySimpleAllowsMacOSBeta(t *testing.T) {
+	options := Options{TargetOS: "darwin", TargetArch: "arm64", NativeTrustMode: NativeTrustCanarySimple}
+	verified := releaseverify.VerifiedRelease{Manifest: releasecontract.Manifest{Release: "0.1.25", Channel: "canary"}}
+	if err := validateNativeTrustPolicy(options, verified, "", ""); err != nil {
+		t.Fatalf("canary-simple macOS policy rejected: %v", err)
+	}
+	verified.Manifest.Channel = "stable"
+	if err := validateNativeTrustPolicy(options, verified, "", ""); err == nil {
+		t.Fatal("canary-simple macOS policy accepted a stable release")
+	}
+}
+
 // TestPreProductionAuthorityMarkerAcceptsCanaryFamily locks in the broader
 // pre-production marker set. Two contracts:
 //

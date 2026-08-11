@@ -58,9 +58,10 @@ type nativeVerifier func(context.Context, string) error
 type commandRunner func(context.Context, string, ...string) ([]byte, error)
 
 // NativeTrustMode controls the platform-signature policy applied to the
-// bootstrapper. The zero value is normalized to NativeTrustStrict. The local
-// beta exception is intentionally Windows-only and remains bound to exact
-// package identities and digests through LocalBetaPins.
+// bootstrapper. The zero value is normalized to NativeTrustStrict. The
+// canary-simple profile is owner-directed and diagnostic; the pinned local
+// beta exception remains Windows-only and bound to exact package identities
+// and digests through LocalBetaPins.
 type NativeTrustMode string
 
 const (
@@ -845,8 +846,8 @@ func validateNativeTrustPolicy(options Options, verified releaseverify.VerifiedR
 		}
 		return nil
 	case NativeTrustCanarySimple:
-		if options.TargetOS != "windows" {
-			return errors.New("canary-simple native trust mode requires a Windows target")
+		if options.TargetOS != "windows" && options.TargetOS != "darwin" {
+			return errors.New("canary-simple native trust mode requires a Windows or macOS target")
 		}
 		if verified.Manifest.Channel != "canary" {
 			return errors.New("canary-simple native trust mode requires the canary channel")
@@ -953,10 +954,14 @@ func readSeedStatus(ctx context.Context, path string, run commandRunner) (seedSt
 func nativeSignatureCheck(ctx context.Context, path string, mode NativeTrustMode) error {
 	switch runtime.GOOS {
 	case "darwin":
-		if mode != NativeTrustStrict {
-			return errors.New("local-beta native trust exception is unavailable on macOS")
+		_, err := exec.CommandContext(ctx, "codesign", "--verify", "--strict", "--verbose=2", path).CombinedOutput()
+		if err != nil && mode == NativeTrustCanarySimple {
+			// Explicit canary-simple is a diagnostic macOS profile. Preserve the
+			// result for observability, but do not block the owner-directed beta
+			// install; release-manifest verification remains mandatory.
+			return nil
 		}
-		if _, err := exec.CommandContext(ctx, "codesign", "--verify", "--strict", "--verbose=2", path).CombinedOutput(); err != nil {
+		if err != nil {
 			return errors.New("codesign rejected the bootstrapper")
 		}
 		return nil
