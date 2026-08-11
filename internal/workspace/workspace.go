@@ -549,5 +549,20 @@ func canonicalBindingRoot(path string) (string, error) {
 			}
 		}
 	}
+	if runtime.GOOS == "windows" {
+		// Windows runners may expose the temporary directory through a
+		// reparse-backed alias. Accept only the OS-provided temp alias when the
+		// resolved path preserves the same relative location; arbitrary
+		// symlinked ancestors remain rejected as authority for bindings.
+		temporary, tempErr := filepath.Abs(filepath.Clean(os.TempDir()))
+		physicalTemporary, physicalErr := filepath.EvalSymlinks(temporary)
+		if tempErr == nil && physicalErr == nil && sameOrNested(temporary, absolute) && sameOrNested(physicalTemporary, resolved) {
+			relative, relErr := filepath.Rel(temporary, absolute)
+			expected := filepath.Clean(filepath.Join(physicalTemporary, relative))
+			if relErr == nil && strings.EqualFold(filepath.Clean(resolved), expected) {
+				return resolved, nil
+			}
+		}
+	}
 	return "", errors.New("BCGOS data root cannot traverse symlinked ancestors")
 }

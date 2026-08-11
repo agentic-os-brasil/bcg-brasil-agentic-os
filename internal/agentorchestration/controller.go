@@ -144,7 +144,7 @@ func NewDurableStateStore(path, recoveryCapability string) (*StateStore, error) 
 	if err != nil {
 		return nil, fmt.Errorf("inspect durable orchestration state: %w", err)
 	}
-	if err := validateDurableStateFileInfo(info); err != nil {
+	if err := validateDurableStateFileInfo(path, info); err != nil {
 		return nil, err
 	}
 	data, err := os.ReadFile(path)
@@ -174,7 +174,7 @@ func EnsureDurableState(path, recoveryCapability string) error {
 	// at valid JSON.
 	info, err := os.Lstat(path)
 	if err == nil {
-		if err := validateDurableStateFileInfo(info); err != nil {
+		if err := validateDurableStateFileInfo(path, info); err != nil {
 			return err
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -195,7 +195,7 @@ func EnsureDurableState(path, recoveryCapability string) error {
 	defer func() { _ = unlock() }()
 	info, err = os.Lstat(path)
 	if err == nil {
-		if err := validateDurableStateFileInfo(info); err != nil {
+		if err := validateDurableStateFileInfo(path, info); err != nil {
 			return err
 		}
 		if info.Size() > 0 {
@@ -207,17 +207,17 @@ func EnsureDurableState(path, recoveryCapability string) error {
 	return store.persistLocked()
 }
 
-func validateDurableStateFileInfo(info os.FileInfo) error {
+func validateDurableStateFileInfo(path string, info os.FileInfo) error {
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return errors.New("orchestration state target is not a regular non-symlink file")
 	}
 	if info.Size() > MaximumDurableStateBytes {
 		return errors.New("orchestration state exceeds the bounded JSON limit")
 	}
-	if info.Mode().Perm()&0o077 != 0 {
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		return errors.New("orchestration state must be owner-only (0600 or stricter)")
 	}
-	return nil
+	return validateDurableStateFilePrivacy(path)
 }
 
 func decodeStateSnapshot(data []byte, target *StateSnapshot) error {
@@ -460,7 +460,7 @@ func (store *StateStore) refreshLocked() error {
 	if err != nil {
 		return err
 	}
-	if err := validateDurableStateFileInfo(info); err != nil {
+	if err := validateDurableStateFileInfo(store.persistPath, info); err != nil {
 		return err
 	}
 	data, err := os.ReadFile(store.persistPath)
