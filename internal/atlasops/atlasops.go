@@ -129,6 +129,18 @@ func Open(dataRoot string, now func() time.Time) (*Engine, error) {
 	return &Engine{root: root, dataRoot: dataRoot, now: now}, nil
 }
 
+// authorize enforces a standing grant at the point of effect. A write that
+// names a grant is checked against it here rather than relying on the caller
+// to remember: otherwise revocation only holds for callers who ask, which is
+// not revocation. Attended writes carry the owner's own request and need no
+// further authority.
+func (engine *Engine) authorize(provenance Provenance, operation, page string) error {
+	if provenance.Origin != OriginGrant {
+		return nil
+	}
+	return engine.AuthorizeGrant(provenance.GrantID, operation, page)
+}
+
 // journalDirPath addresses machine state kept beside the corpus. Passing an
 // empty name yields the directory itself.
 func (engine *Engine) journalDirPath(name string) string {
@@ -154,6 +166,9 @@ func (engine *Engine) CreatePage(request CreatePageRequest) (Result, error) {
 	}
 	if len(request.Body) == 0 || len(request.Body) > maximumPageBytes {
 		return Result{}, fmt.Errorf("owner atlas page body must be between 1 and %d bytes", maximumPageBytes)
+	}
+	if err := engine.authorize(request.Provenance, "create-page", relative); err != nil {
+		return Result{}, err
 	}
 
 	operationID := engine.operationID("create-page", relative, request.Provenance.IdempotencyKey)
@@ -215,6 +230,9 @@ func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
 	entry := strings.TrimRight(request.Entry, "\r\n")
 	if strings.TrimSpace(entry) == "" || len(entry) > maximumEntryBytes {
 		return Result{}, fmt.Errorf("owner atlas entry must be between 1 and %d bytes", maximumEntryBytes)
+	}
+	if err := engine.authorize(request.Provenance, "append-entry", relative); err != nil {
+		return Result{}, err
 	}
 
 	operationID := engine.operationID("append-entry", relative, request.Provenance.IdempotencyKey)

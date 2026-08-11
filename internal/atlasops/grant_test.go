@@ -157,6 +157,45 @@ func TestExpiredGrantStopsAuthorizing(t *testing.T) {
 	}
 }
 
+// A grant that is only checked when a caller remembers to ask is not an
+// authority. The operations enforce it at the point of effect.
+func TestWritesCitingAGrantAreEnforcedAtThePointOfEffect(t *testing.T) {
+	engine := testEngine(t)
+	grant, err := engine.CreateGrant(weeklyRetro())
+	if err != nil {
+		t.Fatal(err)
+	}
+	granted := func(key string) Provenance {
+		return Provenance{Origin: OriginGrant, GrantID: grant.GrantID, OccurrenceID: "w33", IdempotencyKey: key}
+	}
+	inside := "development/retros/2026-08-11.md"
+
+	if _, err := engine.CreatePage(CreatePageRequest{Page: inside, Body: "# Retro\n\n## Learning\n", Provenance: granted("k1")}); err != nil {
+		t.Fatalf("write inside the granted segment was refused: %v", err)
+	}
+	if _, err := engine.CreatePage(CreatePageRequest{
+		Page: "learnings/outside.md", Body: "# Outside\n", Provenance: granted("k2"),
+	}); err == nil {
+		t.Fatal("a write outside the granted segment was accepted")
+	}
+
+	if err := engine.RevokeGrant(grant.GrantID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.AppendEntry(AppendEntryRequest{
+		Page: inside, Section: "## Learning", Entry: "- after revocation", Provenance: granted("k3"),
+	}); err == nil {
+		t.Fatal("a write citing a revoked grant was accepted")
+	}
+
+	// An attended write carries the owner's own request and is unaffected.
+	if _, err := engine.AppendEntry(AppendEntryRequest{
+		Page: inside, Section: "## Learning", Entry: "- written by the owner", Provenance: attended("k4"),
+	}); err != nil {
+		t.Fatalf("revoking a grant blocked the owner's own write: %v", err)
+	}
+}
+
 func TestCreateGrantRejectsAnIncompleteBinding(t *testing.T) {
 	engine := testEngine(t)
 	for name, mutate := range map[string]func(*GrantRequest){
