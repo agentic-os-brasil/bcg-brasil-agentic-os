@@ -20,8 +20,11 @@ import (
 func TestManagedRootComesOnlyFromInstalledBootstrapperPath(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "maestro")
 	for name, path := range map[string]string{
-		"root seed":        filepath.Join(root, "bcgos-bootstrap"),
-		"bootstrap folder": filepath.Join(root, "bootstrap", "bcgos-bootstrap.exe"),
+		"root seed":            filepath.Join(root, "bcgos-bootstrap"),
+		"bootstrap folder":     filepath.Join(root, "bootstrap", "bcgos-bootstrap.exe"),
+		"portable Windows":     filepath.Join(root, "windows", "bcgos-bootstrap.exe"),
+		"portable macOS arm":   filepath.Join(root, "macos", "arm64", "bcgos-bootstrap"),
+		"portable macOS Intel": filepath.Join(root, "macos", "amd64", "bcgos-bootstrap"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := managedRootFromExecutablePath(path)
@@ -58,6 +61,18 @@ func TestSeedStatusExposesOnlyPublicTrustBinding(t *testing.T) {
 		status.BootstrapperVersion != "0.2.0" ||
 		status.AuthorityRegistrySHA256 != digest {
 		t.Fatalf("unexpected seed status: %#v", status)
+	}
+}
+
+func TestPortableActivationContractIsExplicit(t *testing.T) {
+	if portableActivationContract != "maestro-portable-activate-v1" {
+		t.Fatalf("unexpected portable activation contract: %q", portableActivationContract)
+	}
+}
+
+func TestPortableActivationFailureIsUserFacing(t *testing.T) {
+	if strings.Contains(strings.ToLower(portableActivationFailureMessage), "cmd") || strings.Contains(portableActivationFailureMessage, "--") {
+		t.Fatalf("portable activation failure leaks command detail: %q", portableActivationFailureMessage)
 	}
 }
 

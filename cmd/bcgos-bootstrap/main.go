@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -22,6 +23,9 @@ import (
 var Version = "0.0.0-dev"
 var AuthorityRegistrySHA256 = ""
 
+const portableActivationContract = "maestro-portable-activate-v1"
+const portableActivationFailureMessage = "A preparação do Maestro não pôde ser concluída neste computador."
+
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -29,6 +33,10 @@ func main() {
 	switch os.Args[1] {
 	case "install":
 		install(os.Args[2:])
+	case "portable-activate":
+		portableActivate(os.Args[2:])
+	case "capabilities":
+		fmt.Println(portableActivationContract)
 	case "activate":
 		activate(os.Args[2:])
 	case "rollback":
@@ -173,6 +181,91 @@ func rollback(args []string) {
 	fmt.Println("Maestro rollback complete")
 }
 
+// portableActivate prepares a portable Maestro archive without routing the
+// operation through cmd.exe, a shell script, or a user-managed terminal. It
+// is deliberately a single native invocation so a supported runtime can call
+// the bootstrapper directly after the user has confirmed setup.
+func portableActivate(args []string) {
+	flags := flag.NewFlagSet("portable-activate", flag.ExitOnError)
+	_ = flags.Parse(args)
+	if flags.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: bcgos-bootstrap portable-activate")
+		os.Exit(2)
+	}
+	managedRoot, err := managedRootForBootstrap()
+	fatalPortableActivation(err)
+	portableRoot, err := portableRootFromManagedRoot(managedRoot)
+	fatalPortableActivation(err)
+	dataRoot, err := portableDataRoot()
+	fatalPortableActivation(err)
+	registry, err := releaseverify.LoadPinnedAuthorityRegistry(
+		filepath.Join(managedRoot, "trust", "release-authority-registry.json"),
+		AuthorityRegistrySHA256,
+		time.Now,
+	)
+	fatalPortableActivation(err)
+	verified, err := releaseverify.VerifyDirectory(filepath.Join(portableRoot, "release"), registry)
+	fatalPortableActivation(err)
+	cliName := "bcgos"
+	if runtime.GOOS == "windows" {
+		cliName += ".exe"
+	}
+	cliPath := filepath.Join(managedRoot, "bin", cliName)
+	if _, err := os.Stat(cliPath); os.IsNotExist(err) {
+		fatalPortableActivation(firstInstall(verified, managedRoot, dataRoot, runtime.GOOS, runtime.GOARCH, nil))
+	} else {
+		fatalPortableActivation(err)
+	}
+	workspacePath := filepath.Join(portableRoot, "maestro-os")
+	fatalPortableActivation(runInstalledCLI(cliPath, "setup", "apply", "--workspace", workspacePath, "--runtime", "claude", "--executable", cliPath, "--confirm"))
+	fatalPortableActivation(runInstalledCLI(cliPath, "adapter", "verify", "--runtime", "claude", workspacePath))
+	fmt.Println("Maestro is ready")
+}
+
+func fatalPortableActivation(err error) {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, portableActivationFailureMessage)
+		os.Exit(1)
+	}
+}
+
+func portableRootFromManagedRoot(managedRoot string) (string, error) {
+	root := filepath.Dir(filepath.Clean(managedRoot))
+	if filepath.Dir(root) == root {
+		return "", errors.New("portable package root cannot be a filesystem root")
+	}
+	for _, required := range []string{"release", "maestro-os"} {
+		info, err := os.Stat(filepath.Join(root, required))
+		if err != nil || !info.IsDir() {
+			return "", errors.New("portable Maestro package is incomplete")
+		}
+	}
+	return root, nil
+}
+
+func portableDataRoot() (string, error) {
+	if runtime.GOOS == "windows" {
+		if local := os.Getenv("LOCALAPPDATA"); local != "" {
+			return filepath.Join(local, "BCGOS"), nil
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(home, "Library", "Application Support", "BCGOS"), nil
+	}
+	return filepath.Join(home, ".local", "share", "BCGOS"), nil
+}
+
+func runInstalledCLI(path string, args ...string) error {
+	if err := exec.Command(path, args...).Run(); err != nil {
+		return errors.New("portable activation command failed")
+	}
+	return nil
+}
+
 func managedRootForBootstrap() (string, error) {
 	executable, err := os.Executable()
 	if err != nil {
@@ -194,6 +287,11 @@ func managedRootFromExecutablePath(executable string) (string, error) {
 	if filepath.Base(root) == "bootstrap" {
 		root = filepath.Dir(root)
 	}
+	if platformRoot := filepath.Base(root); platformRoot == "windows" || platformRoot == "macos" {
+		root = filepath.Dir(root)
+	} else if architectureRoot := filepath.Base(root); (architectureRoot == "arm64" || architectureRoot == "amd64") && filepath.Base(filepath.Dir(root)) == "macos" {
+		root = filepath.Dir(filepath.Dir(root))
+	}
 	if filepath.Dir(filepath.Clean(root)) == filepath.Clean(root) {
 		return "", errors.New("bootstrapper managed root cannot be a filesystem root")
 	}
@@ -203,7 +301,7 @@ func managedRootFromExecutablePath(executable string) (string, error) {
 func usage() {
 	fmt.Fprintln(
 		os.Stderr,
-		"usage: bcgos-bootstrap <install|activate|rollback|version|seed-status> [options]",
+		"usage: bcgos-bootstrap <install|portable-activate|activate|rollback|version|seed-status|capabilities> [options]",
 	)
 	os.Exit(2)
 }
