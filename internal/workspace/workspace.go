@@ -76,7 +76,7 @@ copiado para cá durante a instalação.
 
 ## Mapa
 
-- brain/ — clientes, projetos, conhecimento, pessoas, decisões e tarefas.
+- brain/ — clientes, projetos, conhecimento, pessoas, decisões, tarefas e daily logs.
 - agents/ — stubs navegáveis dos papéis do Maestro.
 - onboarding/ — contrato da entrevista inicial e próximos passos.
 - .bcgos/ e .claude/ — configuração gerenciada do runtime; normalmente
@@ -117,6 +117,7 @@ var visibleSurface = []struct {
 	{"brain/people/README.md", "# Pessoas\n\nUse para informações profissionais que sejam necessárias ao trabalho e tenham contexto e permissão apropriados.\n"},
 	{"brain/decisions/README.md", "# Decisões\n\nRegistre decisões relevantes com racional, evidência, dono e data. A fonte humana continua sendo a autoridade.\n"},
 	{"brain/tasks/README.md", "# Tarefas\n\nO Maestro mostra no início da sessão somente tarefas marcadas explicitamente como abertas no estado operacional do dono. Este diretório é para planos e artefatos de trabalho; não é um backlog inventado.\n"},
+	{"brain/daily/README.md", "# Daily logs\n\nRegistre aqui somente o resumo profissional que você quer revisar: decisões, entregas, riscos, próximos passos e links para as fontes. Um daily log não é transcrição de conversa nem substitui a memória privada do Maestro.\n\nO Maestro mantém as capturas, sonhos, promoções e checkpoints na área privada do workspace; esta pasta continua navegável, revisável e sob seu controle.\n"},
 	{"agents/README.md", "# Agentes\n\nEstes são stubs de papéis. Maestro coordena; nomes, avatares e ownership de Client Account Agents e Case Agents são definidos pelo dono durante o onboarding.\n"},
 	{"agents/maestro.md", "# Maestro 🎼\n\nHub do workspace: entende a intenção, decide profundidade e coordena os loops autorizados.\n"},
 	{"agents/walter.md", "# Walter 🧭\n\nSenior advisor e proxy do self do dono para tarefas de maior leverage. Refina; não é um naysayer.\n"},
@@ -179,6 +180,18 @@ func Initialize(options Options) (Result, error) {
 	}
 
 	id := workspaceID(workspacePath)
+	// Materialize the private workspace roots during installation. This makes
+	// memory and maintenance ready to receive their first attested event without
+	// placing personal history or scheduler receipts in the visible workspace.
+	for _, directory := range []string{
+		filepath.Join(dataRoot, "memory", "workspaces", id),
+		filepath.Join(dataRoot, "maintenance", "scheduler", "workspaces", id),
+		filepath.Join(dataRoot, "maintenance", "receipts", "workspaces", id),
+	} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			return Result{}, fmt.Errorf("bootstrap private workspace state: %w", err)
+		}
+	}
 	metadataRoot := filepath.Join(workspacePath, ".bcgos")
 	if err := os.MkdirAll(metadataRoot, 0o700); err != nil {
 		return Result{}, err
