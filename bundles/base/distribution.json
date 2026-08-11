@@ -322,6 +322,14 @@
       "path": "skills/quantitative-analysis/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/retro/SKILL.md",
+      "path": "skills/retro/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/retro/agents/openai.yaml",
+      "path": "skills/retro/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/case-agent-setup/SKILL.md",
       "path": "skills/case-agent-setup/SKILL.md"
     },
