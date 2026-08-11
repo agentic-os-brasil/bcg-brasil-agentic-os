@@ -399,6 +399,21 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
+func TestPublicCLIHelpExposesOnlyDistributionAndHealthSurface(t *testing.T) {
+	var output bytes.Buffer
+	if code := RunWithInput([]string{"help"}, strings.NewReader(""), &output, &output); code != ExitOK {
+		t.Fatalf("help exit = %d, output = %s", code, output.String())
+	}
+	if output.String() != publicUsage+"\n" {
+		t.Fatalf("public help = %q, want %q", output.String(), publicUsage+"\n")
+	}
+	for _, internalCommand := range []string{"workspace-agent", "workspace-migration", "maintenance", "federation", "ingest", "hook"} {
+		if strings.Contains(output.String(), internalCommand) {
+			t.Fatalf("internal command %q leaked into public help: %s", internalCommand, output.String())
+		}
+	}
+}
+
 func TestIngestReportsUnavailableWithoutVerifiedRuntimePack(t *testing.T) {
 	dataRoot, workspacePath := filepath.Join(t.TempDir(), "BCGOS"), t.TempDir()
 	sourcePath := filepath.Join(workspacePath, "brief.docx")

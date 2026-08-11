@@ -973,3 +973,25 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: A fresh installation can guide a non-technical owner from onboarding into a first tracked deliverable and a real cross-session checkpoint without inventing a second task store or requiring native qualification. The product still does not infer a task from arbitrary text, synthesize checkpoints from hooks or claim continuity before a new runtime session observes the projection.
 - Refs: CONT; specs/029-execution-ledger-v1.md; specs/044-continuous-use.md; docs/onboarding/maestro-user-onboarding.md; internal/execution; internal/sessionctx; internal/runtimeprojection
 - Supersedes: none
+
+## AGNT - Make the runtime agent the work operator
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The installed runtime was exposing `bcgos` compatibility commands and strict JSON submission envelopes as if they were the user workflow. This forced the agent to translate natural conversation into internal fields, created decoder failures and made the deterministic control plane appear to be the product agent.
+- Decision: The runtime agent owns normal work execution. Recipes define the bounded purpose and canonical storage locations; the agent may create and update the resulting workspace artifacts directly through the host runtime. `bcgos` is reduced to distribution lifecycle and exceptional recovery: bootstrap, update, rollback, health and repair. Domain command surfaces such as `workspace-agent value submit` and their conversational JSON decoders are compatibility internals, not the primary work interface.
+- Consequences: Installation and first use become conversational and recipe-first. Existing receipts, path boundaries and recovery artifacts remain available where they protect distribution or destructive operations, but normal case work must not require run IDs, hand-built JSON or deterministic CLI sequencing. Existing compatibility commands remain temporarily callable for migration and older workspaces; new skills and onboarding must not expose them. Removing a deterministic guard is not permission to cross workspaces, expose secrets or perform destructive changes without the host runtime's native confirmation.
+- Refs: specs/001-cli-distribution.md; specs/017-workspace-agent-initialization.md; specs/033-workspace-first-value.md; bundles/base/skills/case-agent-setup/SKILL.md; internal/workspaceagent; internal/cli
+- Supersedes: CLIF
+
+## FREE - Let Maestro govern ordinary work directly
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Moving work ownership to the runtime agent must not replace the old CLI bureaucracy with a new set of conversational gates. The owner explicitly wants Maestro to decide how to organize ordinary work and use the workspace recipes directly.
+- Decision: Maestro may choose the questions, artifacts, sequence and canonical workspace locations needed for ordinary professional work. Skills are recipes, not schemas or mandatory command sequences. An explicit owner request is enough to proceed with ordinary reversible workspace work; the runtime asks again only for genuine ambiguity or destructive, secret-bearing, cross-workspace or external-publication actions. Security and host-native permission boundaries remain intact.
+- Consequences: New agent workflows must not require run IDs, JSON envelopes, command-level confirmations or deterministic step-by-step orchestration. Compatibility ledgers and CLI commands may remain for migration, recovery and evidence, but they are not normal product UX. External research still requires an available approved capability and bounded source handling; removing product friction does not authorize secret access or uncontrolled disclosure.
+- Refs: AGNT; specs/033-workspace-first-value.md; bundles/base/skills/case-agent-setup/SKILL.md; bundles/base/skills/execution-continuity/SKILL.md
+- Supersedes: AGNT

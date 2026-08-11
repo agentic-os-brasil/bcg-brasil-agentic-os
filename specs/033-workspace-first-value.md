@@ -1,6 +1,6 @@
 # Spec 033 - Workspace first-value vertical
 
-Status: accepted for initial implementation.
+Status: accepted for initial implementation; runtime-first transition adopted by AGNT.
 
 ## Objective
 
@@ -15,18 +15,21 @@ questions and balanced bullish/bearish hypotheses. Every thesis contains its
 evidence, assumptions, counter-evidence and invalidation signal.
 
 The plan has one to three actions. Each names an outcome, accountable owner and
-observable completion criterion. The renderer produces a classified Markdown
-decision brief under `brain/deliverables/`; private metadata holds its digest,
-brief/plan references and a compact handoff.
+observable completion criterion. The agent produces a classified Markdown
+decision brief under `brain/deliverables/`, with case context and the working
+plan under `brain/projects/`, decisions under `brain/decisions/` and explicitly
+accepted open work under `brain/tasks/`. Private metadata and the legacy
+deterministic first-value CLI remain compatibility/recovery surfaces; a new
+conversation must not require run IDs, JSON envelopes or `value submit`.
 
 ## Conversation and completion
 
-The managed guide starts a run before the six minimum questions: decision and
-horizon; audience/constraints; useful result; authorized material; balanced
-hypotheses; and next owner/step. A submission is rejected until the contract is
-complete. The compact handoff contains only identifiers, next step, next owner
-and open-question count. A later conversation reads `value status` rather than
-replaying the interview.
+The managed guide asks the six minimum questions: decision and horizon;
+audience/constraints; useful result; authorized material; balanced hypotheses;
+and next owner/step. The agent shows the normalized brief and one-to-three
+action plan, waits for owner approval, then writes the reviewed Markdown
+artifacts. A later conversation reads those artifacts and continues from the
+latest checkpoint rather than replaying the interview.
 
 ## Metrics and limits
 

@@ -9,14 +9,27 @@ Build useful project context while preserving the case workspace as a
 confidentiality boundary. The Case Agent owns this workflow and must never
 borrow context from another case or from the Client Account Agent.
 
-## Command surface
+## Runtime-first surface
 
-`$case-agent-setup` is the canonical user-facing skill. The current CLI still
-exposes the legacy `bcgos workspace-agent` command as the **compatibility CLI
-for canonical `case_agent`**. Do not present `workspace-agent` as a current
-agent type, and do not claim a `bcgos case-agent` executable until a runtime
-adapter implements it. If the required adapter or guard is absent, report the
-capability as `unavailable`.
+`$case-agent-setup` is the user-facing workflow. The agent owns the interview,
+normalization and persistence of the reviewed case result. Do not ask the
+owner to run `bcgos`, create JSON, provide a run ID or translate interview
+fields into a command envelope. The installed `bcgos workspace-agent` surface
+is a compatibility implementation for older workspaces and is not the normal
+execution path for a new case.
+
+Use the workspace recipes and canonical locations already present in the
+workspace:
+
+- `brain/projects/` for case context and working plans;
+- `brain/decisions/` for decision records and rationale;
+- `brain/tasks/` for explicitly accepted open work;
+- `brain/deliverables/` for reviewed outputs;
+- `brain/sources/` for authorized source pointers, never copied client bodies.
+
+Create only the smallest directory or Markdown artifact needed by the case.
+Keep owner context outside the workspace and never invent a second memory or
+task store.
 
 ## Interaction profile
 
@@ -26,35 +39,26 @@ classification, provenance or case isolation requirements.
 
 ## First useful result
 
-Every `bcgos workspace-agent ...` invocation in this section is the
-**compatibility CLI for canonical `case_agent`**; it is not a second agent
-identity.
-
-1. Resolve the active case workspace with `bcgos status`. Stop if it is missing,
-   ambiguous or different from the workspace shown to the user.
-2. Start `bcgos workspace-agent value start <workspace-path>` before the first
-   question. Keep its run ID inside the workflow; do not expose it to a
-   non-technical user. This invocation is the CLI compatibility surface, not a
-   second agent identity.
-3. Run `bcgos workspace-agent interview <workspace-path>` conversationally.
-   The compatibility command operates the canonical `case_agent` role.
-   Ask the six minimum questions: decision/horizon; audience/constraints;
-   useful result; authorized material; balanced hypotheses; and next step.
-   For authorized material, explicitly ask the owner to point to the minimum
-   local folders and SharePoint project roots needed for this case. Keep those
-   roots as reviewed source pointers in the brief; do not enumerate, read,
-   copy or ingest them during setup.
-   Client Account context and PA Expert advice are separate mediated routes,
-   never implicit setup inputs.
-   Show the consolidated brief and one-to-three-action plan before writing.
-4. Persist the reviewed result with `bcgos workspace-agent value submit --run
-   <id> --stdin <workspace-path>`. It creates the classified decision brief,
-   compact handoff and local first-value receipt.
-5. On a correction, record only its kind with `bcgos workspace-agent value
-   intervention --run <id> --kind <brief_correction|plan_correction|artifact_revision>
-   <workspace-path>`.
-6. Later, use `bcgos workspace-agent value status <workspace-path>` to resume
-   from the handoff. Do not repeat the interview or inject its transcript.
+1. Confirm the active workspace from the runtime orientation. Do not infer a
+   workspace from an arbitrary path or conversation fragment.
+2. Use the six prompts as a flexible starting recipe: decision and horizon;
+   audience and constraints; useful result; authorized material; balanced
+   hypotheses; and next step. Maestro decides which questions are needed from
+   the conversation and existing workspace context.
+3. Keep answers as a temporary conversational draft. Resolve ambiguity in the
+   flow; do not reject the conversation because a field name or optional detail
+   is missing.
+4. Show the consolidated brief and one-to-three-action plan in plain language.
+   If the owner has asked to do the work and the next action is ordinary,
+   proceed without an additional command-level confirmation. Ask only for
+   destructive, secret-bearing, cross-workspace or externally publishing work.
+5. Write the decision brief, plan and handoff as readable
+   Markdown in the canonical workspace locations. Include date, owner, scope,
+   evidence pointers, assumptions, open questions and next step. Do not write
+   prompts, transcripts, credentials or client bodies into a control file.
+6. On a correction, edit the reviewed Markdown artifact when the owner asks;
+   preserve prior decision or revision history when it matters. On a later
+   session, inspect the existing artifact and continue from its next step.
 
 The first-value flow does not browse, ingest documents, query a wiki, dream
 memory, refresh economics or create an agent. A SharePoint root named in the
@@ -63,37 +67,25 @@ processing remain separate approved flows below.
 
 ## Optional public research
 
-Every `bcgos workspace-agent ...` invocation in this section is the
-**compatibility CLI for canonical `case_agent`**; it is not a second agent
-identity.
 1. Propose a minimized public research plan. Use only hostname allowlist entries
    and never include confidential project names, stakeholder names, unpublished
    strategy or client-provided facts in query themes.
-2. Persist the proposal with
-   `bcgos workspace-agent research plan --stdin <workspace-path>`. Display the
-   exact purpose, query themes and source allowlist. Continue only after the
-   user explicitly approves it.
-3. Record approval with
-   `bcgos workspace-agent research approve --plan <id> --approved-by <owner> --confirm <workspace-path>`.
-4. Execute external research only when the runtime exposes both an approved
+2. Display the exact purpose, query themes and source allowlist. Continue only
+   after the user explicitly approves it.
+3. Execute external research only when the runtime exposes both an approved
    web-search/browser tool and an enforceable workspace/pre-action guard.
    Otherwise report the research capability as unavailable; never substitute
    an unapproved API, credential or provider, and never claim hard isolation.
-5. Immediately before each external query, consume one immutable budget slot
-   with `bcgos workspace-agent research query --stdin <workspace-path>`. Stop
-   when the approved budget is exhausted.
-6. For every retained claim, call
-   `bcgos workspace-agent research record --stdin <workspace-path>` with the
-   plan ID, exact approved query, HTTPS source URL, retrieval time, claim,
-   evidence strength, validity date and public classification. Reject expired
-   plans/evidence and queries or sources outside the approved plan.
-7. A public macroeconomic snapshot may be imported with
-   `bcgos workspace-agent economic import --stdin --attested-public
-   --attested-by <owner> --confirm-no-workspace-derivation`, then attached by
-   snapshot ID. Every claim must be public and reference a declared source.
+4. Keep approved queries and retained public claims in the reviewed case
+   Markdown artifact with source URL, retrieval date, evidence strength,
+   validity date and classification. Stop when the approved budget is
+   exhausted.
+5. A public macroeconomic snapshot may be written as a reviewed Markdown
+   artifact beside the case decision record. Every claim must be public and
+   reference a declared source.
    The human attestation is a governance boundary, not automated content
    detection; never use workspace queries, metadata or client-derived synthesis.
-8. Return the workspace, briefing version, approved plan, sourced findings,
+6. Return the workspace, briefing version, approved plan, sourced findings,
     economic snapshot version, freshness gaps and unavailable capabilities.
 
 ## Refresh

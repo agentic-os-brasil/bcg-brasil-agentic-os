@@ -70,6 +70,8 @@ const maximumWorkContractBytes = 32 << 10
 const maximumOrchestrationStateBytes = agentorchestration.MaximumDurableStateBytes
 const installedOrchestrationStatePath = ".bcgos/maestro-orchestration-state.json"
 
+const publicUsage = "usage: bcgos <setup|doctor|status|version|update>"
+
 var enqueueHookPresenceWake = func(workspaceID string) error {
 	executable, err := os.Executable()
 	if err != nil {
@@ -94,12 +96,12 @@ func Run(args []string, out, errOut io.Writer) int {
 
 func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos <init|setup|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|workspace-migration|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(errOut, publicUsage)
 		return ExitUsage
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "usage: bcgos <init|setup|doctor|status|version|auth|update|profile|owner|maestro|agent|workspace|workspace-agent|workspace-migration|atlas|prior-work|session|hook|adapter|skills|bundles|memory|maintenance|ingest|federation|canary|work>")
+		fmt.Fprintln(out, publicUsage)
 		return ExitOK
 	case "init":
 		return runInit(args[1:], out, errOut, defaultDataRoot)
