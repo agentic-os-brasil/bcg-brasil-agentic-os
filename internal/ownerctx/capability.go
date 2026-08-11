@@ -6,8 +6,9 @@ import (
 )
 
 // TechCoreRecommendation is a bounded, deterministic suggestion derived only
-// from the function the collaborator explicitly declared. It never activates
-// a bundle; activation still requires an explicit owner selection.
+// from the function the collaborator explicitly declared. It never changes
+// installation state; the included bundle is already available and the
+// recommendation only suggests a routing track.
 type TechCoreRecommendation struct {
 	State           string   `json:"state"`
 	Bundle          string   `json:"bundle"`
@@ -52,7 +53,7 @@ func RecommendTechCore(function string) TechCoreRecommendation {
 		MatchedDomains:  domains,
 		SuggestedTracks: uniqueStrings(tracks),
 		Reason:          "A função declarada tem uma frente técnica de " + strings.Join(domains, ", ") + "; o Tech Core reúne engineering, data e AI em um único bundle.",
-		Question:        "Deseja incluir o bundle Tech Core no seu workspace? A ativação é opcional e explícita.",
+		Question:        "O Tech Core já está incluído no workspace. Deseja registrar a trilha mais aderente para personalizar o roteamento?",
 	}
 }
 
@@ -61,7 +62,7 @@ func askForTechCore() TechCoreRecommendation {
 		State:    "ask",
 		Bundle:   "tech-core",
 		Reason:   "A função declarada não permite recomendar uma frente técnica com segurança.",
-		Question: "Você deseja incluir skills de tecnologia (engineering, data e AI) no seu workspace? A ativação é opcional e explícita.",
+		Question: "O Tech Core (engineering, data e AI) já está incluído. Deseja registrar uma trilha técnica para personalizar o roteamento?",
 	}
 }
 

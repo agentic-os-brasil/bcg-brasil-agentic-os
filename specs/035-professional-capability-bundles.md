@@ -1,9 +1,9 @@
 # Spec 035 - Professional capability bundles
 
 Status: source topology and skill catalogs implemented. Professional methods
-remain in the base bundle; the optional `tech-core` bundle contains engineering,
-data, AI and transversal quality skills and is activated through confirmed
-interview selection.
+remain in the base bundle; the included `tech-core` bundle contains engineering,
+data, AI and transversal quality skills and is projected from the first local
+installation.
 
 ## Objective
 
@@ -24,7 +24,8 @@ authority from that choice.
   dependency list and generated compact skills catalog. Release versioning is
   part of the future activation contract.
 - **Activation:** the separately governed transaction that makes a released
-  optional bundle available in one local installation.
+  optional bundle available in one local installation. Included bundles do not
+  require activation or interview confirmation.
 
 Interaction profile and capability track are independent. A classic consultant
 can select `technical-explorer`; an experienced engineer can retain the
@@ -38,7 +39,7 @@ The source inventory is `bundles/catalog/catalog.json`:
 | Bundle | Included now | Tracks | Depends on |
 | --- | --- | --- | --- |
 | `base` | Yes | `consulting` | none |
-| `tech-core` | Optional — activated by confirmed interview selection | `technical-explorer`, `software-engineering`, `data-science`, `data-engineering`, `ai-engineering` | `base` |
+| `tech-core` | Yes — projected with the default installation | `technical-explorer`, `software-engineering`, `data-science`, `data-engineering`, `ai-engineering` | `base` |
 
 `tech-core` combines six transversal quality methods (`coverage-diagnose`,
 `decision-log-entry`, `pr-quality-loop`, `pr-review`, `unit-test-wave` and
@@ -57,26 +58,27 @@ its skill metadata, its interaction-profile reference and generated catalog.
 plan --track <track[,track...]>` resolves the selected bundles and dependencies
 without changing local state. `bcgos agent interview` exposes the same tracks;
 `bcgos agent personalize draft --stdin --consent --no-client-data`, followed by
-review and digest-bound confirm, persists a confirmed selection, and the next
-adapter installation projects the selected optional skills and a managed,
-selection-scoped policy at `.bcgos/agent-skill-policy.json`. The policy admits
-the selected methods and their dependencies for the Case Agent; methods from
-unselected bundles remain denied even though their source is embedded in the
-verified local distribution.
+review and digest-bound confirm, persists a confirmed selection and a managed,
+selection-scoped policy at `.bcgos/agent-skill-policy.json`. The default policy
+admits the included Tech Core methods immediately; declared tracks can further
+personalize routing. Future optional bundles remain denied until their
+selection is confirmed, even if their source is embedded in the verified local
+distribution.
 
-For `consulting`, the result is `base_only` and its active skills index contains
-only the professional base methods. Plans that require a technical track return
-`optional` and explain that the selection must be confirmed in the interview.
-The plan command must never write a selection, install a package, modify a
-workspace, contact a provider or grant authority.
+For `consulting`, the result includes both `base` and `tech-core`; the active
+skills index is complete from the first projection. Declared technical tracks
+continue to tailor routing and progressive disclosure, but no track selection
+is required to make the bundled methods available. The plan command must never
+write a selection, install a package, modify a workspace, contact a provider or
+grant authority.
 
 The existing `bcgos skills index` remains the index of the active base bundle.
-After a confirmed technical selection, the adapter projection adds every
-`tech-core` method without changing the base catalog or granting tools.
+The adapter projection adds every `tech-core` method by default without
+changing the base catalog or granting tools.
 
 ## Future activation contract
 
-For optional bundles shipped in the signed Canary distribution, onboarding may
+For future optional bundles shipped in the signed distribution, onboarding may
 use the declared professional function to make a bounded recommendation and
 persist a capability-track choice; the local adapter may then project the bundle
 only after explicit confirmation. A later release contract must still define
@@ -90,9 +92,8 @@ all of the following before remote or separately downloaded packs are allowed:
 6. Windows and macOS clean-device acceptance evidence.
 
 The release manifest v1 intentionally excludes remote optional packs. The
-Canary's optional `tech-core` bundle is embedded in the verified local distribution;
-a conversational skill cannot emulate activation from source files or a Git
-clone.
+included `tech-core` bundle is embedded in the verified local distribution; a
+conversational skill cannot emulate activation from source files or a Git clone.
 
 ## Safety invariants
 
@@ -105,9 +106,9 @@ clone.
   data, models, code or releases.
 - Every product skill resolves the canonical `interaction-profile`; it may not
   define a second novice/expert taxonomy.
-- A runtime activates only selected bundles embedded in the verified local
-  distribution; it does not emulate remote installation from source files or a
-  Git clone.
+- A runtime activates included bundles and only explicitly selected optional
+  bundles embedded in the verified local distribution; it does not emulate
+  remote installation from source files or a Git clone.
 - Projection, inspection and removal hash the selection-scoped policy in the
   runtime manifest. A missing, modified, symlinked or unmanaged policy path
   fails closed and preserves the existing file.
@@ -121,7 +122,7 @@ clone.
   `tech-core`, and projection activates the full technical catalog.
 - Track planning resolves `data-science` through `base` and `tech-core`, and
   projection activates the same governed technical catalog.
-- Track planning resolves `consulting` to the base bundle only.
+- Default and `consulting` planning resolve both `base` and `tech-core`.
 - The dispatcher's direct-skill gate admits selected and dependency methods for
   the active Case Agent and rejects an embedded method from an unselected
   bundle.

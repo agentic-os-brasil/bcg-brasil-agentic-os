@@ -222,13 +222,13 @@ func TestVerifyRejectsSymlinksAndMismatchedIdentities(t *testing.T) {
 		}
 	})
 
-	t.Run("capability track mismatch", func(t *testing.T) {
+	t.Run("capability track does not gate included tech core", func(t *testing.T) {
 		fixture := newReadinessFixture(t, nil)
 		options := fixture.options()
 		options.CapabilityTracks = []string{"data-science"}
 		report, err := Verify(options)
-		if err == nil || failedCheck(report) != "runtime_projection" {
-			t.Fatalf("track mismatch report=%#v err=%v", report, err)
+		if err != nil || report.State != "verified" || report.Checks == nil {
+			t.Fatalf("track report=%#v err=%v", report, err)
 		}
 	})
 }

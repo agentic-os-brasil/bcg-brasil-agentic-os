@@ -1,12 +1,12 @@
 # Spec 036 - Tech Core engineering quality methods
 
-Status: implemented in the optional `tech-core` bundle; activation remains
-governed by Spec 035.
+Status: implemented in the included `tech-core` bundle; projection happens by
+default and remains governed by Spec 035.
 
 ## Objective
 
 Ship the quality loop with the technical capability bundle. Professional users
-keep the base consulting surface, while technical users can activate coverage,
+keep the base consulting surface, while every installation receives coverage,
 test, bug-capture and PR methods together with engineering and data practices.
 
 ## Included methods
@@ -33,7 +33,7 @@ output.
 
 These methods are part of `bundles/base/distribution.json` as signed `tech-core`
 content, are generated into `bundles/tech-core/skills/catalog.json` and
-`INDEX.md`, and are available only after confirmed technical track selection.
+`INDEX.md`, and are available from the first local projection.
 
 Development lifecycle hooks are not product skills and remain outside the base
 distribution. They may be supplied as a separate contributor/development pack
@@ -47,5 +47,5 @@ with the same metadata-only and fail-closed principles.
   include exactly the six new skills in sorted order.
 - The base distribution allowlist names both files for each included skill.
 - `go run ./dev/harness validate --full` passes with `tech-core` embedded as
-  optional: a confirmed engineering or data selection projects its full
-  technical catalog without granting tools or authority.
+  included: a default projection exposes its full technical catalog without
+  granting tools or authority.
