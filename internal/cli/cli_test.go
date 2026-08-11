@@ -1997,7 +1997,7 @@ func TestAtlasCommandsBootstrapOnlyPrivateOwnerAndWorkspaceRoots(t *testing.T) {
 		t.Fatalf("workspace init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAtlas([]string{"init", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"managed": {`) || !strings.Contains(output.String(), `"state": "unavailable"`) || !strings.Contains(output.String(), `"workspace": {`) {
+	if code := runAtlas([]string{"init", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"managed": {`) || !strings.Contains(output.String(), `"state": "unavailable"`) || !strings.Contains(output.String(), `"workspace": {`) {
 		t.Fatalf("atlas init exit = %d, output = %s", code, output.String())
 	}
 	if info, err := os.Stat(filepath.Join(workspacePath, "brain", "tasks", "README.md")); err != nil || info.IsDir() {
@@ -2018,7 +2018,7 @@ func TestSessionPacketReportsPointersWithoutOwnerFacetBodies(t *testing.T) {
 		t.Fatalf("owner init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAtlas([]string{"init", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+	if code := runAtlas([]string{"init", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
 		t.Fatalf("atlas init exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
