@@ -124,6 +124,12 @@ func createFiles(root string, files map[string]string) error {
 	return nil
 }
 
+// pointer reports whether a root is usable, not merely present. os.Stat
+// follows links, so a root replaced by a symlink to somewhere else used to
+// report as available; that is exactly the case the no-follow boundary exists
+// to refuse, and a caller cannot act on it safely. A root that exists but does
+// not pass the boundary is reported as unsafe, which is a different fact from
+// a root that was never created.
 func pointer(path string) Pointer {
 	canonical, err := scheduler.CanonicalPrivatePath(path)
 	if err != nil {
