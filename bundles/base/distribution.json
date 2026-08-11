@@ -178,6 +178,14 @@
       "path": "skills/agent-identity-setup/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/bcgos-operator/SKILL.md",
+      "path": "skills/bcgos-operator/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/bcgos-operator/agents/openai.yaml",
+      "path": "skills/bcgos-operator/agents/openai.yaml"
+    },
+    {
       "source": "bundles/tech-core/skills/coverage-diagnose/SKILL.md",
       "path": "bundles/tech-core/skills/coverage-diagnose/SKILL.md"
     },

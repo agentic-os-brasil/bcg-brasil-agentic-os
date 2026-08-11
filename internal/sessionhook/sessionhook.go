@@ -17,7 +17,12 @@ import (
 // to stay within a predictable startup budget. It is deliberately lower than
 // the typical native-hook payload ceilings and is an output limit, not a
 // license to read more source material.
-const MaximumAdditionalContextBytes = 8 << 10
+const MaximumAdditionalContextBytes = 16 << 10
+
+// MaximumMemoryContextBytes preserves the pre-existing generated-memory
+// exposure even though the total SessionStart budget now reserves more room
+// for operating instructions and selected method pointers.
+const MaximumMemoryContextBytes = 8 << 10
 
 type ClaudeOutput struct {
 	HookSpecificOutput ClaudeHookSpecificOutput `json:"hookSpecificOutput"`
@@ -114,6 +119,9 @@ func contextFor(runtime, semanticEvent string, packet sessionctx.Packet) (string
 	if semanticEvent == "session_start" && packet.Memory.State == "available" && len(packet.Memory.Sections) > 0 {
 		memoryContext := renderMemoryContext(packet.Memory)
 		remaining := MaximumAdditionalContextBytes - len(context) - 2
+		if remaining > MaximumMemoryContextBytes {
+			remaining = MaximumMemoryContextBytes
+		}
 		if remaining > 0 {
 			bounded, truncated := truncateUTF8Bytes(memoryContext, remaining)
 			if truncated {
@@ -212,6 +220,15 @@ func sessionDirective(packet sessionctx.Packet) string {
 	}
 	if packet.MaestroCLIPath != "" {
 		lines = append(lines, "Use the installed CLI silently: "+quoteCLIPath(packet.MaestroCLIPath)+". Mention PATH only if asked.")
+	}
+	for _, selected := range packet.Skills.Selected {
+		if selected.ID == "bcgos-operator" {
+			lines = append(lines,
+				"BCGOS OPERATING METHOD: load the integrity-checked bcgos-operator skill before choosing, interpreting or recovering any BCGOS operation.",
+				"Governed operating method: "+selected.ID+"; selection_reason="+selected.Reason+"; pointer="+selected.Pointer+". Use it silently; it grants no additional authority.",
+			)
+			break
+		}
 	}
 	if packet.OwnerContextRoot != "" {
 		lines = append(lines, "Private owner context: "+packet.OwnerContextRoot+"/owner. Never use workspace/owner; persist only through the commands below.")

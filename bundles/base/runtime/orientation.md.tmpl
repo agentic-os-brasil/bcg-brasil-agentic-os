@@ -3,6 +3,7 @@
 > Este arquivo é gerenciado pelo Maestro. Ele orienta o runtime `{{RUNTIME}}`
 > sobre como trabalhar com o BCGOS. O conteúdo profissional do usuário nunca
 > é colocado aqui.
+> Identificador do adapter gerenciado: `{{RUNTIME_ID}}`.
 
 ## 1. O que é o Maestro
 
@@ -23,6 +24,9 @@ credenciais, segredos ou dados fora do workspace autorizado.
 4. Preserve fontes humanas e registre decisões, evidências e próximos passos
    nos locais apropriados.
 5. Se uma capacidade estiver `unavailable`, explique o motivo e não a simule.
+6. Load `/bcgos-operator` at SessionStart e antes de operar setup, status,
+   diagnóstico, update ou recovery do BCGOS. Use-o silenciosamente. Trabalho
+   profissional normal pertence ao runtime agent e à skill de domínio.
 
 O usuário pode pedir: “mostre como você chegou a isso”, “abra a fonte” ou
 “qual é o próximo passo?”. Sempre prefira ponteiros e artefatos navegáveis a
@@ -68,7 +72,8 @@ Quando o owner pedir para registrar uma tarefa, continuar um trabalho ou
 pausar uma entrega ou retomar uma sessão, use `/execution-continuity` como
 receita conversacional. O trabalho novo deve ser representado primeiro em
 `brain/tasks/`, com links para `brain/projects/` ou `brain/deliverables/`; o
-checkpoint bounded fica no artefato revisado. Não use
+checkpoint bounded fica no artefato revisado. Não exponha JSON, run IDs ou
+revisões e não use
 `owner/operating/work-state.md` como substituto e não infira uma tarefa apenas
 de uma frase solta. Em uma nova sessão, leia os artefatos de tarefa e
 checkpoint do workspace e confirme o próximo passo com o owner antes de
@@ -102,19 +107,22 @@ fluxo afetado, explique a lacuna e ofereça uma alternativa segura.
 
 ## 6. Comandos úteis
 
+`/bcgos-operator` é o manual do plano de controle instalado. Consulte-o em vez
+de descobrir comandos por tentativa e erro. O CLI não é o fluxo normal para
+trabalho, onboarding, memória, agents, ingestão ou continuidade.
+
 O SessionStart injeta o caminho exato do CLI instalado para a sessão. Use esse
-caminho nos comandos de onboarding; não presuma que `bcgos` esteja no `PATH`.
+caminho somente para setup, saúde, versão, update e recovery; não presuma que
+`bcgos` esteja no `PATH`.
 Nos exemplos abaixo, `<maestro-cli>` é um placeholder: substitua-o pelo caminho
 exato recebido no SessionStart; nunca execute o placeholder literalmente.
 
 ```text
 <maestro-cli> status <workspace>
 <maestro-cli> doctor <workspace>
-<maestro-cli> profile show
-<maestro-cli> skills index
-<maestro-cli> session packet <workspace>
-<maestro-cli> memory status --data-dir <data-dir> --workspace <id>
-<maestro-cli> adapter status --runtime {{RUNTIME_ID}} <workspace>
+<maestro-cli> setup status --workspace <workspace>
+<maestro-cli> version
+<maestro-cli> update --check
 ```
 
 Use o caminho exato injetado na sessão quando o estado estiver confuso. Um estado `unavailable`

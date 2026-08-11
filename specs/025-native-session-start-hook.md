@@ -22,7 +22,7 @@ native-session evidence exists.
 
 Claude and Codex receive the same packet body, differing only in the explicit
 runtime field. Each native adapter must prove its own output shape and use a
-short explicit timeout. Its output is capped at 8 KiB; an oversized future
+short explicit timeout. Its output is capped at 16 KiB; an oversized future
 packet becomes an explicit omission rather than a failing or slow Session
 Start.
 
@@ -32,20 +32,23 @@ That evidence does not make it a shared Claude/Codex protocol: each serializer
 remains versioned and tested independently.
 
 The same pointer-only envelope serializer serves each runtime's
-`UserPromptSubmit` binding. That binding may add at most two governed installed
-skill pointers and reasons, or a metadata-only `confirmed` state after an exact
+`UserPromptSubmit` binding. That binding preserves the startup operating method
+and may add governed onboarding/task pointers up to the packet's three-pointer
+ceiling, or a metadata-only `confirmed` state after an exact
 pending external-action challenge response. It never injects a skill body,
 stores the submitted prompt, or treats emitted payload as native conformance
 evidence.
 
 Only `SessionStart` carries the full Maestro startup protocol: workspace
-identity, one deterministic onboarding action, and the bounded local open-task
+identity, the deterministic `bcgos-operator` method, an optional onboarding
+action, and the bounded local open-task
 state. It also renders the Spec 044 continuous-use state, including only an
 opaque active-work pointer, checkpoint presence, per-runtime evidence classes
 and the first safe next action. It does not resolve or inject execution
 content. When a valid local memory commit exists, Session Start also carries its
 generated layers in canonical broad-to-recent order within managed per-layer
-budgets and the existing 8 KiB total ceiling. The serialized packet retains
+budgets and an independent 8 KiB memory ceiling inside the 16 KiB total hook
+budget. The serialized packet retains
 only `bcgos://memory/<layer>` pointers and truncation state. `UserPromptSubmit`
 carries a short identity-continuity reminder plus the same pointer-only packet;
 it must not repeat the greeting, memory bodies or interview on every prompt.
@@ -55,11 +58,11 @@ Both payloads expose
 being mislabeled as native qualification. The field reports native evidence,
 not product availability; configured context injection remains enabled.
 
-While onboarding is `required`, `in_progress` or `review_required`, the
-lifecycle selects the installed, integrity-checked `maestro-onboarding` pointer
-with a closed reason code and suppresses unrelated contextual Case methods.
-After onboarding becomes `complete`, ordinary explicit/lexical method routing
-resumes. The selected pointer must remain under the active runtime's managed
+The lifecycle always selects the installed, integrity-checked `bcgos-operator`
+pointer with reason `deterministic_operational_method`. While onboarding is
+`required`, `in_progress` or `review_required`, it also selects
+`maestro-onboarding` with a closed reason code without suppressing a separately
+requested safe Case method. The selected pointers must remain under the active runtime's managed
 `.claude/skills` or `.codex/skills` projection and must match its skill ID;
 absolute, mismatched or caller-invented pointers fail validation.
 

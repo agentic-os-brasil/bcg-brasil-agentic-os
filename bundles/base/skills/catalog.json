@@ -9,6 +9,13 @@
       "relative_path": "skills/agent-identity-setup/SKILL.md"
     },
     {
+      "id": "bcgos-operator",
+      "display_name": "BCGOS Operator",
+      "trigger": "Control Maestro health, updates and recovery",
+      "default_prompt": "Use $bcgos-operator to inspect and operate Maestro setup, health, update or recovery without turning the CLI into the normal work experience.",
+      "relative_path": "skills/bcgos-operator/SKILL.md"
+    },
+    {
       "id": "case-agent-setup",
       "display_name": "Case Agent Setup",
       "trigger": "Interview and research one project case safely",

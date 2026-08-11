@@ -5,6 +5,7 @@
 | Skill | Use when | Pointer |
 |---|---|---|
 | Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
+| BCGOS Operator | Control Maestro health, updates and recovery | `skills/bcgos-operator/SKILL.md` |
 | Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
 | Case Kickoff | Build a bounded first-days plan from approved case scope | `skills/case-kickoff/SKILL.md` |
 | Deck Review | Review supplied slide text for storyline and evidence risks | `skills/deck-review/SKILL.md` |
