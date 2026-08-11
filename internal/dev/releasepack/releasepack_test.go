@@ -47,7 +47,7 @@ func TestBuildBundleRejectsUnsafeSources(t *testing.T) {
 	writeFile(t, root, "dev/secret.txt", "no\n")
 	writeFile(t, root, "bundles/base/ok.txt", "ok\n")
 	if err := os.Symlink(filepath.Join(root, "bundles/base/ok.txt"), filepath.Join(root, "bundles/base/link.txt")); err != nil {
-		t.Fatal(err)
+		t.Skipf("creating a symbolic link is unavailable here: %v", err)
 	}
 	tests := map[string]Allowlist{
 		"development path": {SchemaVersion: 1, Files: []BundleFile{{Source: "dev/secret.txt", Path: "secret.txt"}}},
