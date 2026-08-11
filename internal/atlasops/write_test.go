@@ -215,8 +215,8 @@ func TestAppendEntryRefusesAnAmbiguousSection(t *testing.T) {
 	engine := testEngine(t)
 	page := "development/objectives.md"
 	if _, err := engine.CreatePage(CreatePageRequest{
-		Page: page,
-		Body: "# Objectives\n\n## Lead without the partner\n\n### Evidence\n\n## Sharpen the recommendation\n\n### Evidence\n",
+		Page:       page,
+		Body:       "# Objectives\n\n## Lead without the partner\n\n### Evidence\n\n## Sharpen the recommendation\n\n### Evidence\n",
 		Provenance: attended("k1"),
 	}); err != nil {
 		t.Fatal(err)
