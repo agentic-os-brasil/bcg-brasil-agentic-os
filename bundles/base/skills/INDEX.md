@@ -9,6 +9,7 @@
 | BCGOS Operator | Control Maestro health, updates and recovery | `skills/bcgos-operator/SKILL.md` |
 | Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
 | Case Kickoff | Build a bounded first-days plan from approved case scope | `skills/case-kickoff/SKILL.md` |
+| Deck Drill | Rehearse a deck against the questions the room will ask | `skills/deck-drill/SKILL.md` |
 | Deck Review | Review supplied slide text for storyline and evidence risks | `skills/deck-review/SKILL.md` |
 | Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/deck-storyline/SKILL.md` |
 | Dream Memory | Consolidate daily and weekly professional memory | `skills/dream-memory/SKILL.md` |
@@ -18,6 +19,7 @@
 | Ingest Content | Extract professional documents locally and safely | `skills/ingest-content/SKILL.md` |
 | Interaction Profile | Apply the user's BCGOS communication and disclosure preference | `skills/interaction-profile/SKILL.md` |
 | Preparar Ambiente Maestro | Prepara workspace, runtime e manutenção local | `skills/maestro-environment-setup/SKILL.md` |
+| Investigate | Find the root cause of a wrong or surprising result | `skills/investigate/SKILL.md` |
 | Maestro Onboarding | Start a guided owner interview with quick or complete tracks | `skills/maestro-onboarding/SKILL.md` |
 | Checkup do Maestro | Confere e repara runtime, hooks e Darwin | `skills/maestro-runtime-checkup/SKILL.md` |
 | Maestro Setup and Update | Guide safe setup, updates and recovery conversationally | `skills/maestro-setup-update/SKILL.md` |
@@ -28,4 +30,5 @@
 | Quantitative Analysis | Analyze bounded quantitative evidence with explicit assumptions and checks | `skills/quantitative-analysis/SKILL.md` |
 | Retro | Close the week against your development objectives | `skills/retro/SKILL.md` |
 | Slide Summary | Map supplied deck text into slide messages and a narrative arc | `skills/slide-summary/SKILL.md` |
+| Wayfinder | Structure an open problem into a first move | `skills/wayfinder/SKILL.md` |
 | Legacy Case Agent Setup Alias | Migrate the retired workspace-agent setup name | `skills/workspace-agent-setup/SKILL.md` |

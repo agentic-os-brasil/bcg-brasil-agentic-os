@@ -37,6 +37,13 @@
       "relative_path": "skills/case-kickoff/SKILL.md"
     },
     {
+      "id": "deck-drill",
+      "display_name": "Deck Drill",
+      "trigger": "Rehearse a deck against the questions the room will ask",
+      "default_prompt": "Use $deck-drill to rehearse this deck against the questions my audience will actually ask.",
+      "relative_path": "skills/deck-drill/SKILL.md"
+    },
+    {
       "id": "deck-review",
       "display_name": "Deck Review",
       "trigger": "Review supplied slide text for storyline and evidence risks",
@@ -98,6 +105,13 @@
       "trigger": "Prepara workspace, runtime e manutenção local",
       "default_prompt": "Use $maestro-environment-setup para preparar meu ambiente Maestro e deixar o runtime pronto para trabalhar.",
       "relative_path": "skills/maestro-environment-setup/SKILL.md"
+    },
+    {
+      "id": "investigate",
+      "display_name": "Investigate",
+      "trigger": "Find the root cause of a wrong or surprising result",
+      "default_prompt": "Use $investigate to find why this output is wrong, with the evidence that establishes the cause.",
+      "relative_path": "skills/investigate/SKILL.md"
     },
     {
       "id": "maestro-onboarding",
@@ -168,6 +182,13 @@
       "trigger": "Map supplied deck text into slide messages and a narrative arc",
       "default_prompt": "Use $slide-summary to map the supplied deck text slide by slide without creating a deck.",
       "relative_path": "skills/slide-summary/SKILL.md"
+    },
+    {
+      "id": "wayfinder",
+      "display_name": "Wayfinder",
+      "trigger": "Structure an open problem into a first move",
+      "default_prompt": "Use $wayfinder to break this open question into branches and tell me which one to open first.",
+      "relative_path": "skills/wayfinder/SKILL.md"
     },
     {
       "id": "workspace-agent-setup",
