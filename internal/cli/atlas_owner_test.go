@@ -73,6 +73,58 @@ func TestAtlasOwnerRoundTripThroughTheCLI(t *testing.T) {
 	}
 }
 
+func TestAtlasOwnerSetFieldAndLinkThroughTheCLI(t *testing.T) {
+	run, _ := ownerCLI(t)
+	page := "craft/methods/stakeholder-map.md"
+
+	if _, stderr, code := run("# Method\n\n## Snapshot\n- **Maturity:** draft\n\n## Related\n",
+		"owner", "create-page", "--page", page, "--key", "seed", "--session", "s1", "--stdin"); code != ExitOK {
+		t.Fatalf("seed failed: %s", stderr)
+	}
+
+	set, stderr, code := run("working", "owner", "set-field",
+		"--page", page, "--field", "Maturity", "--key", "m1", "--session", "s1", "--stdin")
+	if code != ExitOK {
+		t.Fatalf("set-field failed: code=%d stderr=%s", code, stderr)
+	}
+	if set["state"] != "written" {
+		t.Fatalf("set-field state = %v, want written", set["state"])
+	}
+
+	linked, stderr, code := run("", "owner", "link",
+		"--page", page, "--section", "## Related",
+		"--target", "learnings/category-owner-layer.md", "--label", "Category owner layer",
+		"--key", "l1", "--session", "s1")
+	if code != ExitOK {
+		t.Fatalf("link failed: code=%d stderr=%s", code, stderr)
+	}
+	if linked["state"] != "written" {
+		t.Fatalf("link state = %v, want written", linked["state"])
+	}
+
+	projection, _, code := run("", "owner", "collect",
+		"--purpose", "confirm both edits", "--reader", "owner_session", "--page", page)
+	if code != ExitOK {
+		t.Fatal("collect failed")
+	}
+	pages, _ := projection["pages"].([]any)
+	content, _ := pages[0].(map[string]any)["content"].(string)
+	if !strings.Contains(content, "**Maturity:** working") {
+		t.Fatalf("field did not persist:\n%s", content)
+	}
+	if !strings.Contains(content, "category-owner-layer.md)") {
+		t.Fatalf("link did not persist:\n%s", content)
+	}
+}
+
+func TestAtlasOwnerSetFieldRefusesContentInArguments(t *testing.T) {
+	run, _ := ownerCLI(t)
+	if _, _, code := run("ignored", "owner", "set-field",
+		"--page", "index.md", "--field", "Status", "--key", "k", "--session", "s1"); code == ExitOK {
+		t.Fatal("set-field accepted a value without --stdin")
+	}
+}
+
 func TestAtlasOwnerWriteRefusesContentInArguments(t *testing.T) {
 	run, _ := ownerCLI(t)
 	if _, stderr, code := run("ignored", "owner", "create-page",

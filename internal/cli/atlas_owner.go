@@ -45,9 +45,93 @@ func runAtlasOwner(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		return runAtlasOwnerCreatePage(args[1:], in, out, errOut, engine)
 	case "append-entry":
 		return runAtlasOwnerAppendEntry(args[1:], in, out, errOut, engine)
+	case "set-field":
+		return runAtlasOwnerSetField(args[1:], in, out, errOut, engine)
+	case "link":
+		return runAtlasOwnerLink(args[1:], out, errOut, engine)
 	}
-	fmt.Fprintln(errOut, "usage: bcgos atlas owner <init|collect|create-page|append-entry>")
+	fmt.Fprintln(errOut, "usage: bcgos atlas owner <init|collect|create-page|append-entry|set-field|link>")
 	return ExitUsage
+}
+
+func runAtlasOwnerSetField(args []string, in io.Reader, out, errOut io.Writer, engine *atlasops.Engine) int {
+	flags := newFlagSet("atlas owner set-field", errOut)
+	page := flags.String("page", "", "page path relative to the owner root")
+	field := flags.String("field", "", "declared field name to set")
+	expect := flags.String("expect-revision", "", "refuse the write if the page moved since this revision")
+	stdin := flags.Bool("stdin", false, "read the field value from standard input")
+	provenanceFlags := addProvenanceFlags(flags)
+	if err := flags.Parse(args); err != nil {
+		return ExitUsage
+	}
+	if rejectPositionals(flags, errOut) {
+		return ExitUsage
+	}
+	if strings.TrimSpace(*page) == "" || strings.TrimSpace(*field) == "" {
+		fmt.Fprintln(errOut, "--page and --field are required")
+		return ExitUsage
+	}
+	provenance, code := provenanceFlags.resolve(errOut)
+	if code != ExitOK {
+		return code
+	}
+	// The value travels through standard input for the same reason a page body
+	// does: a field can hold professional content, and process arguments are
+	// visible to anything that can list processes.
+	value, code := readOwnerBody(in, *stdin, errOut)
+	if code != ExitOK {
+		return code
+	}
+	result, err := engine.SetField(atlasops.SetFieldRequest{
+		Page:             *page,
+		Field:            *field,
+		Value:            strings.TrimSpace(value),
+		ExpectedRevision: *expect,
+		Provenance:       provenance,
+	})
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, result, errOut)
+}
+
+func runAtlasOwnerLink(args []string, out, errOut io.Writer, engine *atlasops.Engine) int {
+	flags := newFlagSet("atlas owner link", errOut)
+	page := flags.String("page", "", "page path relative to the owner root")
+	section := flags.String("section", "", "Markdown heading the reference belongs under")
+	target := flags.String("target", "", "page being referenced, relative to the owner root")
+	label := flags.String("label", "", "link text")
+	expect := flags.String("expect-revision", "", "refuse the write if the page moved since this revision")
+	provenanceFlags := addProvenanceFlags(flags)
+	if err := flags.Parse(args); err != nil {
+		return ExitUsage
+	}
+	if rejectPositionals(flags, errOut) {
+		return ExitUsage
+	}
+	if strings.TrimSpace(*page) == "" || strings.TrimSpace(*section) == "" || strings.TrimSpace(*target) == "" || strings.TrimSpace(*label) == "" {
+		fmt.Fprintln(errOut, "--page, --section, --target and --label are required")
+		return ExitUsage
+	}
+	provenance, code := provenanceFlags.resolve(errOut)
+	if code != ExitOK {
+		return code
+	}
+	// Unlike a page body or a field value, both operands here are structural —
+	// a path inside the owner root and the text of a navigation label — so they
+	// stay as flags rather than forcing standard input for a one-line edge.
+	result, err := engine.Link(atlasops.LinkRequest{
+		Page:             *page,
+		Section:          *section,
+		Target:           *target,
+		Label:            *label,
+		ExpectedRevision: *expect,
+		Provenance:       provenance,
+	})
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, result, errOut)
 }
 
 func openOwnerEngine(dataRoot func() (string, error), errOut io.Writer) (*atlasops.Engine, int) {
