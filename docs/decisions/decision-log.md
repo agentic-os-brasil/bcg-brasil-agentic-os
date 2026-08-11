@@ -962,3 +962,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The build host and runtime target are deliberately separate. Documentation and skills must keep the surfaces distinct, and the packaged workspace remains named `maestro-os`. The portable package remains a controlled unsigned Canary until organization-owned signing and clean-device evidence exist.
 - Refs: PONB; specs/020-release-distribution.md; docs/installer-package.md; dev/skills/release-export/SKILL.md; internal/dev/releasepack/windows_portable.go
 - Supersedes: PONB
+
+## ONCX - Make first-use continuity an installed onboarding method
+
+- Date: 2026-08-10
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Installation created the runtime projection and execution ledger, but the installed onboarding surface did not tell the runtime how to register a bounded task, checkpoint it or resume it. Canary validation consequently looked at the owner work-state pointer, reported no open task and attributed an absent execution item to `native_qualified` evidence.
+- Decision: Ship an `execution-continuity` method in the base bundle, route explicit task/checkpoint/resume language to it and add the same instructions to the managed orientation. The method uses the existing local execution ledger after concise owner confirmation, keeps task bodies and checkpoints bounded, and consumes `work next --active` on a new session. Owner Context `work-state.md` remains a separate authority; runtime qualification evidence never gates local ledger use.
+- Consequences: A fresh installation can guide a non-technical owner from onboarding into a first tracked deliverable and a real cross-session checkpoint without inventing a second task store or requiring native qualification. The product still does not infer a task from arbitrary text, synthesize checkpoints from hooks or claim continuity before a new runtime session observes the projection.
+- Refs: CONT; specs/029-execution-ledger-v1.md; specs/044-continuous-use.md; docs/onboarding/maestro-user-onboarding.md; internal/execution; internal/sessionctx; internal/runtimeprojection
+- Supersedes: none

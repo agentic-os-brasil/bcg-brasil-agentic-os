@@ -209,6 +209,17 @@ owner-controlled; a missing optional context does not block work. A generic
 `purpose=session` read still excludes the sensitive context; a caller must use
 the explicit `owner-personal-context` purpose after the owner has authorized it.
 
+## After onboarding completes
+
+When the owner presents a substantive first deliverable, offer to register it
+through `/execution-continuity`. Onboarding completion does not itself create
+a task, and a task mentioned in conversation is not persisted until the owner
+confirms the bounded objective, next step and completion criterion. Once
+confirmed, the execution ledger provides the active pointer and checkpoint
+that the next native session can observe. Do not use `owner/operating/work-state.md`
+as evidence of an execution item, and do not blame `native_qualified` when the
+local ledger has not yet been created.
+
 ## Sugestão técnica orientada pela função
 
 Depois que o owner responder qual é sua função, use a recomendação determinística

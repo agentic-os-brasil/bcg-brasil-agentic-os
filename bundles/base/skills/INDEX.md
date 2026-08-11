@@ -10,6 +10,7 @@
 | Deck Review | Review supplied slide text for storyline and evidence risks | `skills/deck-review/SKILL.md` |
 | Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/deck-storyline/SKILL.md` |
 | Dream Memory | Consolidate daily and weekly professional memory | `skills/dream-memory/SKILL.md` |
+| Execution Continuity | Registrar tarefas e entregas, preparar versão, criar checkpoints e retomar trabalho entre sessões | `skills/execution-continuity/SKILL.md` |
 | Expert Interview Guide | Structure a bounded interview guide from approved case questions | `skills/expert-interview-guide/SKILL.md` |
 | Find Prior Work | Recover an explicitly requested past deck or work artifact | `skills/find-prior-work/SKILL.md` |
 | Ingest Content | Extract professional documents locally and safely | `skills/ingest-content/SKILL.md` |
