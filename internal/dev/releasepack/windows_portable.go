@@ -171,6 +171,9 @@ func BuildWindowsPortable(options WindowsPortableOptions) (WindowsPortableResult
 	if seed.Version != options.Version || seed.AuthorityRegistrySHA256 != options.AuthorityRegistrySHA256 {
 		return WindowsPortableResult{}, errors.New("portable bootstrapper seed does not match the release and authority registry")
 	}
+	if !bytes.Contains(bootstrapperBody, []byte(universalPortableActivationContract)) {
+		return WindowsPortableResult{}, errors.New("portable bootstrapper does not support direct portable activation")
+	}
 
 	parent := filepath.Dir(options.Output)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
@@ -212,11 +215,10 @@ func BuildWindowsPortable(options WindowsPortableOptions) (WindowsPortableResult
 	}
 	provenanceBody = append(provenanceBody, '\n')
 	files := map[string][]byte{
-		"README-PORTABLE.md":           portableReadme(options.Version),
-		"managed/activate-maestro.cmd": portableActivationScript(options.Version),
-		"portable-provenance.json":     provenanceBody,
-		"maestro-os/CLAUDE.md":         portableClaudeOnboarding(),
-		"maestro-os/README.md":         []byte("# Maestro OS\n\nAbra esta pasta no Claude Code e envie uma mensagem para comecar. O Claude conduz a preparacao e o onboarding.\n"),
+		"README-PORTABLE.md":       portableReadme(options.Version),
+		"portable-provenance.json": provenanceBody,
+		"maestro-os/CLAUDE.md":     portableClaudeOnboarding(),
+		"maestro-os/README.md":     []byte("# Maestro OS\n\nAbra esta pasta no Claude Code e envie uma mensagem para comecar. O Claude conduz a preparacao e o onboarding.\n"),
 	}
 	for relative, body := range files {
 		if err := copyRegularBytes(body, filepath.Join(root, filepath.FromSlash(relative)), 0o600); err != nil {
@@ -407,48 +409,12 @@ func writeDeterministicZip(staging, rootName, output string) error {
 	return os.Rename(temporary, output)
 }
 
-func portableActivationScript(version string) []byte {
-	return []byte("@echo off\r\n" +
-		"setlocal\r\n" +
-		"if \"%LOCALAPPDATA%\"==\"\" (\r\n" +
-		"  echo LOCALAPPDATA is unavailable. Maestro was not activated.\r\n" +
-		"  exit /b 1\r\n" +
-		")\r\n" +
-		"for %%I in (\"%~dp0..\") do set \"ROOT=%%~fI\"\r\n" +
-		"set \"MANAGED=%ROOT%\\managed\"\r\n" +
-		"set \"DATA=%LOCALAPPDATA%\\BCGOS\"\r\n" +
-		"set \"WORKSPACE=%ROOT%\\maestro-os\"\r\n" +
-		"if not exist \"%MANAGED%\\bin\\bcgos.exe\" (\r\n" +
-		"  \"%MANAGED%\\bcgos-bootstrap.exe\" install --verified-directory \"%ROOT%\\release\" --data-root \"%DATA%\"\r\n" +
-		"  if errorlevel 1 exit /b 1\r\n" +
-		")\r\n" +
-		"set \"VERSION_OUTPUT=%TEMP%\\maestro-version-%RANDOM%-%RANDOM%.txt\"\r\n" +
-		"\"%MANAGED%\\bin\\bcgos.exe\" version >\"%VERSION_OUTPUT%\"\r\n" +
-		"if errorlevel 1 (\r\n" +
-		"  del /q \"%VERSION_OUTPUT%\" >nul 2>&1\r\n" +
-		"  echo The active bcgos version could not be read.\r\n" +
-		"  exit /b 1\r\n" +
-		")\r\n" +
-		"set \"ACTUAL_VERSION=\"\r\n" +
-		"set /p \"ACTUAL_VERSION=\"<\"%VERSION_OUTPUT%\"\r\n" +
-		"del /q \"%VERSION_OUTPUT%\" >nul 2>&1\r\n" +
-		"if not \"%ACTUAL_VERSION%\"==\"bcgos " + version + "\" (\r\n" +
-		"  echo The active bcgos version does not match this portable package.\r\n" +
-		"  exit /b 1\r\n" +
-		")\r\n" +
-		"\"%MANAGED%\\bin\\bcgos.exe\" setup apply --workspace \"%WORKSPACE%\" --runtime claude --executable \"%MANAGED%\\bin\\bcgos.exe\" --confirm\r\n" +
-		"if errorlevel 1 exit /b 1\r\n" +
-		"\"%MANAGED%\\bin\\bcgos.exe\" adapter verify --runtime claude \"%WORKSPACE%\"\r\n" +
-		"if errorlevel 1 exit /b 1\r\n" +
-		"echo Maestro is ready. Return to Claude Code to continue onboarding.\r\n")
-}
-
 func portableReadme(version string) []byte {
 	return []byte("# Maestro Portable " + version + " para Windows\n\n" +
 		"1. Extraia a pasta completa para um local fixo em que voce possa gravar arquivos.\n" +
 		"2. Abra a pasta `maestro-os` no Claude Code.\n" +
 		"3. Envie uma mensagem como `Quero comecar`. O Claude explica e conduz o restante.\n\n" +
-		"Nao abra terminal e nao execute arquivos `.cmd`. Na primeira preparacao, o Claude pedira uma confirmacao curta e o Windows ou o Claude Code podera mostrar uma permissao nativa para voce aprovar. Depois disso, use sempre a mesma pasta `maestro-os`; nao mova a pasta completa depois da ativacao.\n\n" +
+		"Nao abra terminal nem execute arquivos internos. Na primeira preparacao, o Claude pedira uma confirmacao curta e o Windows ou o Claude Code podera mostrar uma permissao nativa para voce aprovar. Depois disso, use sempre a mesma pasta `maestro-os`; nao mova a pasta completa depois da ativacao.\n\n" +
 		"Este e um pacote Canary controlado e sem assinatura Authenticode. Antes da entrega, o responsavel pelo piloto deve conferir o SHA-256 enviado separadamente. SmartScreen, WDAC ou AppLocker ainda podem bloquear executaveis sem assinatura.\n")
 }
 
@@ -464,8 +430,8 @@ Voce esta na pasta de trabalho correta do Maestro. Conduza a pessoa em portugues
 3. No Windows, verifique silenciosamente se .bcgos/runtime-projection.json existe.
 4. Se existir, releia este CLAUDE.md e siga o bloco gerenciado do Maestro. Se a orientacao atual indicar que o onboarding ainda esta incompleto, use a skill maestro-onboarding e continue uma pergunta por vez. Se ele ja estiver concluido, atenda ao pedido normal da pessoa e nao repita o onboarding.
 5. Se nao existir, explique em uma frase que voce pode preparar o Maestro nesta pasta. Peca uma unica confirmacao curta antes de qualquer ativacao, por exemplo: "Posso preparar o Maestro agora?".
-6. Nao peca para a pessoa digitar ou executar comandos, abrir terminal ou localizar arquivos .cmd.
-7. Somente depois de uma resposta afirmativa clara, execute internamente, a partir desta pasta: cmd.exe /d /c "..\managed\activate-maestro.cmd".
+6. Nao peca para a pessoa digitar ou executar comandos, abrir terminal ou localizar arquivos internos.
+7. Somente depois de uma resposta afirmativa clara, execute internamente, a partir desta pasta: ..\managed\bcgos-bootstrap.exe portable-activate.
 8. A permissao nativa do Claude Code ou do Windows pode aparecer. Explique que a pessoa deve aprovar somente se reconhecer este pacote Maestro; isso nao e uma segunda autorizacao do produto.
 9. Se a ativacao terminar com sucesso, releia este CLAUDE.md porque a projecao gerenciada foi acrescentada, informe que a preparacao terminou e invoque a skill maestro-onboarding.
 10. Se falhar, nao improvise instalacao, nao baixe substitutos e nao altere a estrutura. Resuma o erro em linguagem simples, confirme que nenhum trabalho da pessoa foi apagado e oriente-a a procurar o responsavel pelo piloto.
