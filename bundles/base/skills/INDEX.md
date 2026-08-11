@@ -26,5 +26,6 @@
 | Gate de QA | Classifica a qualidade de uma mudança com evidência proporcional | `skills/qa-gate/SKILL.md` |
 | Qualitative Analysis | Synthesize bounded qualitative evidence into themes and implications | `skills/qualitative-analysis/SKILL.md` |
 | Quantitative Analysis | Analyze bounded quantitative evidence with explicit assumptions and checks | `skills/quantitative-analysis/SKILL.md` |
+| Retro | Close the week against your development objectives | `skills/retro/SKILL.md` |
 | Slide Summary | Map supplied deck text into slide messages and a narrative arc | `skills/slide-summary/SKILL.md` |
 | Legacy Case Agent Setup Alias | Migrate the retired workspace-agent setup name | `skills/workspace-agent-setup/SKILL.md` |
