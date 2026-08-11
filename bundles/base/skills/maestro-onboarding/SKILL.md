@@ -402,7 +402,7 @@ for a technical explanation.
   - If the owner chooses SharePoint, review the canonical folder URLs with the
     owner, then send strict
     JSON (`schema_version: 1`, `folder_urls`) through standard input to
-    `<maestro-cli> prior-work source select --workspace <workspace> --stdin --confirm`.
+    `<maestro-cli> prior-work source select --workspace <workspace> --stdin`.
     The selection action binds its exact fingerprint to an existing
     one-and-done setup grant; never ask a second read, command or diagnostic
     confirmation for that unchanged scope. When available, the bounded pass
@@ -419,7 +419,7 @@ for a technical explanation.
     now, and continue unrelated work without exposing internal reasons or
     asking the owner to troubleshoot.
   - If the owner prefers to start clean, record the choice with
-    `<maestro-cli> prior-work source defer --workspace <workspace> --confirm` and do
+    `<maestro-cli> prior-work source defer --workspace <workspace>` and do
     not ask again automatically.
   - A selection is not enrollment or collection authority. SharePoint remains
     authoritative; only the approved local collection path can read the

@@ -368,8 +368,8 @@ The intended CLI contract is:
 ```text
 bcgos prior-work actor
 bcgos prior-work source status --workspace <path>
-bcgos prior-work source select --workspace <path> --stdin --confirm
-bcgos prior-work source defer --workspace <path> --confirm
+bcgos prior-work source select --workspace <path> --stdin
+bcgos prior-work source defer --workspace <path>
 bcgos prior-work rationale ingest --workspace <path> --stdin --confirm
 bcgos prior-work enroll --stdin --confirm
 bcgos prior-work status
