@@ -1,95 +1,141 @@
 # Proposal 007 — Owner atlas operations
 
-**Status:** request for decision. Specifies an operation set; ships no segment and no skill.
+**Status:** request for decision. Specifies the preferred transactional
+operation set; ships no segment, skill or runtime capability.
 
-**Original contribution:** Marcelo Petrof Sanches.
+**Original contribution:** Marcelo Petrof Sanches. Refined against the current
+advisory-runtime and owner-sovereignty contracts.
 
-**Depends on:** Proposal 006 (owner scope contract).
+**Depends on:** Proposal 006, Spec 013 and Spec 014.
 
-**Unblocks:** Proposals 008–011, 018–023, 029–030 and 032–033.
+## Objective
 
-## The gap this closes
+Give attended skills and previously authorized rituals a reliable way to read
+and maintain `atlas/owner/` without turning the command layer into a gate on the
+owner's own Markdown.
 
-Spec 014 created the human atlas as a navigation scaffold and was explicit about
-the boundary: it "provides no automatic writing", and "agent/ritual writers
-require separate decisions and tests."
+The owner may always edit the private source directly. Named operations are the
+preferred path when the system needs idempotency, provenance, scheduling,
+conflict detection or recovery.
 
-That decision has held. The consequence is that no ritual can maintain the atlas:
-every skill that would keep a daily log, a retrospective or a learning current is
-blocked on the same missing piece. Proposal 005 deferred `retro`,
-`record-learning` and `record-concept`; none of them can be adopted while the
-atlas is write-only by hand.
+## Operating model
 
-This proposal supplies the separate decision Spec 014 asked for, for owner scope
-only.
+The generative/native layer understands the request, selects relevant context
+and proposes content. The mechanical layer validates the target and applies the
+effect safely:
 
-## Precedent — this is the memory engine's shape
+```text
+owner session or authorized ritual
+  -> relevance selection and synthesis
+  -> named bounded operation
+  -> atomic local effect plus provenance
+```
 
-Canonical memory already solved the same problem. The shipped `dream-memory`
-skill states the rule directly: *"Never write, summarize or promote memory files
-directly from the skill"*, and *"Do not emulate dreaming by editing local memory
-files."* The skill invokes one deterministic operation through the installed
-adapter; the engine performs the write.
-
-Owner atlas operations adopt that contract without variation. A skill never
-touches a file. If the adapter or command is unavailable, the skill reports the
-capability unavailable and stops — it does not fall back to editing Markdown.
+An unavailable operation degrades automation and managed persistence. It does
+not block conversation, read-only reasoning, direct owner edits or preparation
+of a reviewable draft. The runtime must distinguish "proposed" from "written".
 
 ## Operation set
 
-Five named operations. No free-form file write exists at any layer.
-
-| Operation | Behaviour | Idempotency |
+| Operation | Behaviour | Repeat behaviour |
 | --- | --- | --- |
-| `collect` | Return a bounded projection of named pages or a segment index | Read-only |
-| `create-page` | Create a page from its segment template if absent | Second call is a no-op, never an overwrite |
-| `append-entry` | Append a timestamped entry under a named section | Identical entry within the same period is not duplicated |
-| `set-field` | Replace a declared field value | Prior value retained with its provenance |
-| `link` | Add a reference from one page to another | Duplicate link is a no-op |
+| `collect` | Return a bounded, purpose-declared projection of named pages or a segment index | Read-only |
+| `create-page` | Create a free-form page or optionally start from a versioned template | Existing page is preserved |
+| `append-entry` | Append a bounded entry under a stable section | Same idempotency key produces one entry |
+| `set-field` | Set a managed field without rewriting hand-authored prose | Revision conflict returns a reviewable proposal |
+| `link` | Add a typed pointer or reference | Duplicate link is a no-op |
+| `archive` | Move a page out of active navigation without deleting its body | Repeated archive is a no-op |
+| `restore` | Restore an archived page when the target is unoccupied | Existing target produces a conflict |
+| `redact` | Remove a selected body or field and retain metadata-only provenance | Redacted content is not retained in the receipt |
+| `delete` | Permanently remove an owner-selected page after explicit confirmation | Missing page is an idempotent no-op |
+| `export` | Produce an owner-requested local export with declared scope | Does not publish or transmit externally |
 
-Every operation declares its segment. An operation naming a segment outside
-owner scope is rejected by the authorization core, not by convention.
+Segments and templates improve navigation but are not required for the owner to
+create private content. A future managed ritual may restrict itself to declared
+segments; that restriction belongs to the ritual's grant, not to the owner's
+root.
 
-## Invariants
+## Reader and purpose rules
 
-- **Non-destructive.** No operation deletes a page, truncates a section or
-  replaces text the owner wrote by hand. `set-field` touches only declared
-  fields and preserves what it replaced.
-- **Idempotent.** Running the same ritual twice on the same day produces one
-  page and one entry set. This is the property that makes scheduled and manual
-  invocation safe to mix, matching the canonical memory engine.
-- **Provenance on every write.** Each write records the invoking operation, the
-  session and the timestamp. A page can always answer how a line got there.
-- **Bounded reads.** `collect` returns a declared projection, never a whole root.
-  Segment bodies are not returned wholesale to a caller.
-- **Fail closed.** An unavailable adapter, an unknown segment or a template
-  mismatch stops the operation and reports it. Partial writes are not committed.
-- **Owner scope only.** Workspace and client roots are unreachable from this
-  operation set. Proposal 011 addresses those separately and does not inherit
-  these grants.
+Every `collect` call declares its purpose and intended reader. The result is the
+smallest useful projection:
 
-## Why this does not widen any role
+- the owner session may request a named page or bounded index;
+- Maestro may receive task-relevant owner context;
+- Walter may receive a stale-checked self-proxy projection;
+- Case, Client Account and PA Expert agents receive only an explicitly
+  authorized attenuated excerpt or pointer;
+- no caller receives an implicit whole-root dump.
 
-No agent gains a capability here. The operation set is reachable only from the
-command layer through the installed adapter, on behalf of a user-invoked skill.
+Reader selection follows `native_advisory`; it does not create a new role edge,
+tool grant or effect authority.
 
-- Maestro remains a hub with no tools and no direct read of owner facets.
-- No spoke role receives a persistence grant, a new packet type or owner access.
-- Proposal 004's rule that a role must never persist directly is unaffected,
-  because no role persists — the command layer does.
+## Manual and scheduled authority
+
+An attended operation uses the owner's current request. A scheduled occurrence
+uses a standing grant that binds:
+
+- ritual and version;
+- segment or page family;
+- allowed operation set;
+- cadence and catch-up policy;
+- reader and retention policy;
+- creation, expiry, pause and revocation metadata.
+
+Scheduled and manual execution share the same idempotency rules. A scheduler may
+wake the ritual, but it does not invent content authority. Every occurrence
+returns evidence or remains honestly pending/failed.
+
+## Transaction and conflict contract
+
+Each managed write carries:
+
+- stable owner-root, page and operation identifiers;
+- an idempotency key scoped to ritual or attended request;
+- expected source revision or content digest;
+- bounded input size and declared target section/field when applicable;
+- provenance identifying request or standing grant, session/occurrence and
+  timestamp;
+- an atomic journaled transition and terminal result.
+
+Path resolution is canonical and descriptor-anchored/no-follow. Unknown roots,
+path traversal, symlink escapes and cross-root writes are rejected. Concurrent
+or hand-edited changes fail as conflicts rather than being overwritten.
+
+Receipts retain metadata and digests, not deleted or redacted bodies. A permanent
+delete requires an explicit owner confirmation and propagates to derived local
+indexes or projections; it does not silently delete workspace sources.
+
+## Failure posture
+
+Hard failure is reserved for the requested effect when its target is ambiguous,
+outside the owner root, destructive without confirmation, concurrently changed
+or mechanically unsafe. Failure of telemetry, native qualification, optional
+context or scheduling does not block the rest of the owner session.
+
+If the adapter is unavailable:
+
+- direct owner editing remains available;
+- read-only conversation continues with the context already authorized and
+  available to the host;
+- a draft may be prepared for review;
+- no write, schedule or receipt is fabricated.
 
 ## Consequences
 
-- Spec 014's writer gap is closed for owner scope, on the terms Spec 014 set.
-- Rituals become safely repeatable, so scheduled and manual invocation converge
-  on the same result.
-- Proposal 011 may later extend an equivalent operation set to workspace scope,
-  reusing this shape but requiring its own authorization review.
+- Owner-scoped rituals can converge manual and scheduled use on one reliable
+  operation surface.
+- Free-form owner knowledge and managed fields can coexist without one
+  overwriting the other.
+- Workspace/client writers require a separate proposal and do not inherit these
+  grants.
+- Implementation remains pending until the identifiers, registry, journal,
+  path boundary and operation tests above exist.
 
 ## Explicit non-decisions
 
-- no atlas segment, template or page is created by this proposal;
-- no skill is registered, and no ritual is scheduled;
-- no workspace, client account or managed root becomes writable;
-- no memory layer, capture path or eligibility policy is changed;
-- no runtime is reported available by merging this document.
+- no atlas segment, template, page, skill or ritual is installed;
+- no schedule or standing grant is created;
+- no workspace, client account, managed or credential root becomes writable;
+- no memory eligibility or Owner Context promotion rule is changed;
+- no runtime capability is reported available by merging this proposal.

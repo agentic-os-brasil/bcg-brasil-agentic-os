@@ -1,140 +1,174 @@
-# Proposal 006 — Owner scope contract
+# Proposal 006 — Owner atlas scope contract
 
-**Status:** request for decision. Defines an authority; activates no runtime capability.
+**Status:** request for decision. Defines the owner-atlas boundary; activates no
+runtime capability.
 
-**Original contribution:** Marcelo Petrof Sanches.
+**Original contribution:** Marcelo Petrof Sanches. Refined against the current
+advisory-runtime and owner-sovereignty contracts.
 
-**Depends on:** nothing. This proposal is the entry point of the owner layer.
-
-**Unblocks:** Proposals 007–010, 018–023, 028–029 and 032–033 (see *Consequences*).
+**Depends on:** Spec 013 (Owner Context) and Spec 014 (Human atlas bootstrap).
 
 ## Executive summary
 
-Three accepted reconciliations deferred three different features for the same
-stated reason: no owner-private scope exists.
+The owner needs one private, cross-project place for professional trajectory,
+reflections, methods, development and selected learnings. Spec 014 created the
+physical `atlas/owner/` root but deliberately did not authorize agent or ritual
+writers. This proposal defines that missing scope.
 
-| Deferred item | Source | Stated blocker |
+The owner atlas is not another SELF database and is not a client workspace. The
+owner controls its content, may edit the Markdown directly and may authorize
+Maestro to help maintain it. Templates and named operations improve reliability;
+they do not limit what the owner may privately record.
+
+The generative runtime decides what is relevant, proposes synthesis and may
+consult registered agents. The mechanical core protects only the boundaries that
+must remain deterministic: path isolation, atomic writes, provenance,
+revocation, non-overwrite and prevention of unintended cross-scope leakage.
+
+## Relationship to the existing authorities
+
+The three local layers remain distinct:
+
+| Layer | Authority | Typical content |
 | --- | --- | --- |
-| Cross-project people record | Proposal 003 | "requires a future owner-private contract" |
-| `career-keeper` | Proposal 004 | "requires an owner-private professional-development scope, not an account scope" |
-| `retro`, `record-learning` | Proposal 005 | owner-private development authority absent |
+| `owner/self/` | Spec 013 Owner Context | identity, preferences, voice, motivations, decision rules and boundaries |
+| `atlas/owner/` | this proposal over Spec 014 | professional trajectory, retrospectives, methods, development, concepts and owner-authored cross-project learnings |
+| `<workspace>/brain/` | the active workspace | client, account, case, project, stakeholder and deliverable context |
 
-Proposal 003 also enumerated seven requirements that any owner-private contract
-must satisfy. This proposal answers those requirements for the **narrowest
-useful subset**: content the owner authored whose data subject is not a third
-party.
+When content overlaps, `owner/self/` remains the only authority for the owner's
+current identity and working profile. An atlas page may link to a SELF facet or
+record the history behind it, but may not silently override or promote a facet.
+Likewise, an owner reflection about an engagement does not become an authority
+for the client or case.
 
-It deliberately does **not** attempt the hardest case. Third-party colleague
-records stay deferred under Proposal 003's full requirement set.
+## Owner sovereignty
 
-## The narrowing that makes this tractable
+The owner owns the second brain and may read, create, edit, organize, export,
+archive, redact or delete content in `atlas/owner/` directly. In particular:
 
-Proposal 003's requirements were written against a people record — a document
-about someone who is not the owner, who did not consent, and who has correction
-rights. Almost all of the difficulty lives in that fact.
+- free-form Markdown is allowed;
+- segment templates are optional orientation and interoperability aids, not an
+  admission gate;
+- a missing adapter never blocks direct human use, conversation or retrieval of
+  content the owner explicitly asks to use;
+- the system may advise on sensitivity, minimization, retention and audience,
+  but does not replace the owner's judgment about lawful private notes;
+- permanent destructive or external effects still require a clear owner choice.
 
-This proposal admits into owner scope only content that the owner authored and
-**whose data subject is not a third party**:
+Managed operations must never overwrite a hand-edited page silently. They use
+revision checks and return a conflict or a reviewable proposal when the source
+changed underneath them.
 
-| Admitted | Denied |
-| --- | --- |
-| The owner's development objectives, retrospectives and self-assessment | Any page whose subject is a third party |
-| Feedback the owner received, with its source attributed | Feedback about other people; any assessment of a third party |
-| Methods and working preferences the owner authored | Engagement content — findings, figures, deliverables, stakeholder dynamics |
-| The owner's own daily work log, naming the engagements worked on | Cross-workspace aggregation of any kind |
+## Content boundary
 
-A page that would require a second person's consent to exist is out of scope by
-construction, not by policy reminder.
+Owner scope may contain owner-authored professional material, including:
 
-Admitted content takes two shapes, and both are intended. Some pages are **about
-the owner** — objectives, retrospectives, the record of a working day. Others are
-**about the work itself** — a method the owner uses, a preference for how to do
-something, a durable claim about how a kind of engagement tends to go. The second
-shape has no personal data subject at all, which is why it raises none of the
-difficulty Proposal 003 identified. What unites them is negative and is the
-operative test: **no page in owner scope has a third party as its data subject.**
+- objectives, retrospectives, development plans and self-assessment;
+- feedback the owner received, with source and context when the owner chooses;
+- methods, concepts, reusable heuristics and working practices;
+- a daily or periodic work log;
+- the owner's professional history and relationships;
+- sanitized cross-project patterns and learnings authored or approved by the
+  owner.
 
-### Two boundaries that are easy to misread
+Names of colleagues, feedback sources, clients and projects remain personal or
+confidential metadata even when they are not the primary subject. The system
+must label and minimize them appropriately; it must not claim that attribution
+eliminates third-party considerations.
 
-**Source is not subject.** A record of feedback the owner received may name who
-gave it. The subject of that page is the owner's own performance; the giver is
-attribution, which is what makes the record verifiable and useful. This does not
-admit a page *about* that person, an assessment of them, or feedback concerning
-anyone other than the owner. The test is whose conduct the page describes.
+Raw engagement findings, figures, deliverable bodies, credentials, stakeholder
+dynamics and client-confidential source material remain in the workspace that
+owns them. The owner atlas may hold a pointer, identifier or owner-authored
+sanitized synthesis. It does not enumerate workspaces or copy their bodies by
+default.
 
-**Engagement identity is not engagement content.** The owner's own record of
-which engagements they worked on is their professional history, and an
-organization ordinarily maintains it. Owner scope therefore admits the name of a
-client or project as an identifier, so a day can be reconstructed and a career
-trajectory read. It does not admit what was learned inside that engagement:
-findings, figures, deliverable material and stakeholder dynamics stay in the
-workspace that owns them, referenced by link rather than copied.
+Cross-project continuity is an intended use of the owner atlas. Signals may
+enter it through direct owner authorship, an individually approved promotion or
+a previously authorized recurring ritual. Automatic workspace crawling or
+silent promotion remains out of scope.
 
-Both boundaries are narrow on purpose. Widening either one requires amending
-this proposal, not a local exception in a segment proposal.
+## Readers and projections
 
-## Answering Proposal 003's seven requirements
+The private root is never broadcast as ambient context. Access is purpose-bound
+and minimized:
 
-1. **Independent owner scope.** Owner content is stored under the existing
-   local owner atlas root created by Spec 014, distinct from workspace, client
-   account and managed bundle roots. This proposal does not reuse
-   `client_account_agent`, or any account-scoped role, as a global owner.
-2. **Minimal record.** Admission is closed by the table above. Fields outside
-   the accepted segment templates are rejected rather than stored as free text.
-3. **Explicit promotion.** Nothing enters owner scope automatically. Every write
-   originates from a user-invoked operation. There is no workspace enumeration,
-   no cross-bundle link and no automatic memory aggregation.
-4. **Purpose and readers.** The reader set is closed to the owner's own session.
-   Owner content is never placed in a packet sent to a case, account, expert or
-   review role.
-5. **Human rights over the record.** Content is owner-authored and locally
-   stored; the owner may read, correct and delete any page directly. Writes are
-   non-destructive and carry provenance, so correction never silently loses a
-   prior value.
-6. **No reverse leakage.** Owner content is never copied into a workspace or
-   account root. The prohibition is symmetric: workspace and client material is
-   never copied into owner scope either.
-7. **Runtime-neutral enforcement.** Enforcement lives in the shared local
-   authorization core invoked by the command layer, not in prompt instructions.
-   A runtime without that core reports the capability unavailable.
+1. The owner may inspect the full local source directly.
+2. The owner-facing session may request a bounded projection relevant to the
+   current task.
+3. Maestro may receive that bounded projection to route and synthesize work.
+4. Walter may receive a stale-checked, relevance-selected projection when he is
+   acting as the owner's self proxy.
+5. Case, Client Account and PA Expert agents receive only an explicitly
+   authorized, attenuated excerpt or pointer when it is necessary for the task;
+   they never receive the owner root.
 
-## Execution route — no new role is created
+These projections add no tools, data scope or effect authority. They follow the
+current `native_advisory` consultation model. The strict signed-packet backend
+remains available for assurance or unattended execution, but its depth-one
+shape is not a global limit on attended native reasoning.
 
-The role catalogue is a closed list with `max_depth: 1`. Maestro is a hub with
-no tools and no direct read of owner facets. Neither is changed here.
+## Writes and recurring routines
 
-Owner-scope reads and writes are performed by the **command layer**, exactly as
-canonical memory already works: `bcgos memory dream daily` is a deterministic
-operation that a skill invokes through the installed adapter, and the shipped
-skill states plainly that it must never write memory files itself.
+A write requires either:
 
-This proposal adopts that precedent unchanged:
+- an attended owner request for that operation; or
+- a standing grant created by the owner for a named ritual, segment, operation,
+  cadence and retention policy.
+
+Standing grants are inspectable, pausable, revocable and optionally expiring.
+Each occurrence is idempotent and records provenance. Revoking a grant prevents
+future occurrences without erasing owner-authored content.
+
+If the reliable adapter or scheduler is unavailable, only the automation
+degrades. The runtime may still discuss the work, prepare a reviewable draft and
+help the owner edit local content through an available bounded native path. It
+must not claim that a write or scheduled occurrence happened without evidence.
+
+## Execution model — no new role is created
+
+This proposal adds no agent role, edge or persistent tool grant. It uses the
+current separation of responsibilities:
 
 ```text
-skill  →  installed runtime adapter  →  named owner-scope operation  →  write
+owner request or standing grant
+  -> native-advisory reasoning selects or proposes content
+  -> bounded owner-atlas operation performs the local effect
+  -> provenance and result are returned to the owner session
 ```
 
-No role gains a persistence grant. No agent-to-agent edge is added. No agent
-reads owner content. Proposal 007 specifies the operation set.
+The command layer is the preferred transactional path for repeatable writes.
+It is not an authority over what the owner may think, write or retain in the
+owner's own private Markdown.
+
+## Mechanical hard boundaries
+
+The implementation must enforce only boundaries whose failure would create a
+real mechanical or security defect:
+
+- canonical owner root and descriptor-anchored/no-follow path resolution;
+- no implicit write into workspace, account, managed or credential roots;
+- atomic application, revision conflict detection and crash recovery;
+- non-overwrite of hand-authored content;
+- explicit confirmation for irreversible deletion or external publication;
+- provenance and revocation for managed or scheduled writes.
+
+Missing telemetry, stale optional context, absent native qualification or an
+unavailable scheduler are diagnostics, not gates on ordinary owner use.
 
 ## Consequences
 
-- Proposals 008–010 may define owner atlas segments within an authorized scope.
-- Proposals 018–023 may specify skills that read and write those segments
-  through the command layer.
-- Proposal 003's people record stays deferred and unchanged. Admitting it
-  requires its own proposal satisfying requirement 2 and requirement 5 for a
-  non-consenting data subject.
-- An owner-scoped agent role remains unavailable. Should one ever be proposed,
-  it must satisfy Proposal 004's governed rules in full and is not implied by
-  this document.
-- Spec 014 is not superseded. Its bootstrap and its non-overwriting guarantee
-  remain authoritative.
+- Proposal 007 may define the preferred transactional operation set.
+- Future segments and rituals may build on this scope without creating an
+  owner-scoped agent role.
+- Workspace-scoped writers require their own boundary and do not inherit owner
+  grants.
+- Spec 013 remains the sole Owner Context/SELF authority.
+- Spec 014's non-overwriting bootstrap remains authoritative.
 
 ## Explicit non-decisions
 
 - no role is added to, or removed from, the agent catalogue;
-- no agent receives a tool grant, a new packet type or a user channel;
-- no people, task, calendar, email or chat authority is created;
-- no memory layer, promotion rule or eligibility policy is changed;
-- no runtime is reported available by merging this document.
+- no global persistence or external-system grant is created;
+- no client or workspace body is automatically promoted;
+- no ritual, segment, provider or schedule is activated by this document;
+- no runtime capability is reported available by merging this proposal.
