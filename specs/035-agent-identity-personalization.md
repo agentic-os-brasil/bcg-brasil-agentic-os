@@ -66,7 +66,25 @@ bcgos agent personalize draft --stdin --consent --no-client-data
 bcgos agent personalize review --id <draft-id>
 bcgos agent personalize confirm --id <draft-id> --digest <sha256> --confirm
 bcgos agent identity
+bcgos agent identity set --agent quality_guardian --display-name "Gamma Guardian" --emoji "🧪" --confirm --owner-id <id>
 ```
+
+The installed catalog defaults are active even before a local personalization
+profile exists. `bcgos agent identity` reports this as `state=defaults_active`
+and resolves the managed roster, including Gamma's concrete ID
+`gamma-guardian`, from the managed catalog. A local profile is needed only
+when the owner chooses presentation customization. The first explicit
+customization may create that profile with `identity set --owner-id ...
+--confirm`; subsequent customizations must preserve the existing owner ID.
+Aliases `gamma_guardian` and `gamma-guardian` normalize to the canonical role
+`quality_guardian`. Names, emojis and this first-profile convenience remain
+presentation-only and never grant authority.
+
+The installer handoff exposes `agent_identity_state` separately from workspace
+readiness. A clean install reports `defaults_active` and includes the bounded
+managed roster; a confirmed local profile reports `profile_confirmed`. The
+installer must not mark the workspace unavailable merely because the optional
+presentation profile is absent.
 
 `bcgos agent interview` also returns `profile_input`, the machine-readable
 schema for the strict draft envelope. The envelope uses `selections[]`; the

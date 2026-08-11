@@ -148,6 +148,7 @@ func TestClaudeCodeWorkspaceLinkKeepsTheAbsoluteWorkspacePath(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "guia instalado de\nMaestro Onboarding") ||
 		!strings.Contains(prompt, "não crie AGENTS.md") ||
+		!strings.Contains(prompt, "managed_agents") ||
 		strings.Contains(prompt, "execute agora a skill /maestro-onboarding") {
 		t.Fatalf("Claude kickoff must use the materialized guide and reject fabricated fallback files: %q", prompt)
 	}
@@ -239,16 +240,18 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	var response struct {
-		Status            string            `json:"status"`
-		WorkspacePath     string            `json:"workspace_path"`
-		WorkspaceID       string            `json:"workspace_id"`
-		Prompt            string            `json:"prompt"`
-		DeepLinks         map[string]string `json:"deeplinks"`
-		AdapterState      string            `json:"adapter_state"`
-		ReadinessState    string            `json:"readiness_state"`
-		SchedulerState    string            `json:"scheduler_state"`
-		ReadyForRuntime   bool              `json:"ready_for_runtime"`
-		DiagnosticCommand string            `json:"diagnostic_command"`
+		Status             string            `json:"status"`
+		WorkspacePath      string            `json:"workspace_path"`
+		WorkspaceID        string            `json:"workspace_id"`
+		Prompt             string            `json:"prompt"`
+		DeepLinks          map[string]string `json:"deeplinks"`
+		AdapterState       string            `json:"adapter_state"`
+		ReadinessState     string            `json:"readiness_state"`
+		SchedulerState     string            `json:"scheduler_state"`
+		AgentIdentityState string            `json:"agent_identity_state"`
+		ManagedAgents      []map[string]any  `json:"managed_agents"`
+		ReadyForRuntime    bool              `json:"ready_for_runtime"`
+		DiagnosticCommand  string            `json:"diagnostic_command"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
@@ -258,6 +261,7 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 		response.DeepLinks["claude_desktop"] == "" || response.DeepLinks["claude_code_desktop"] == "" || response.DeepLinks["codex"] == "" ||
 		response.AdapterState != "configured" || response.ReadinessState != "ready" ||
 		response.SchedulerState != "active_loaded_enabled" || !response.ReadyForRuntime ||
+		response.AgentIdentityState != "defaults_active" || len(response.ManagedAgents) != 4 ||
 		!strings.Contains(response.DiagnosticCommand, workspacePath) {
 		t.Fatalf("workspace diagnostic = %#v", response)
 	}

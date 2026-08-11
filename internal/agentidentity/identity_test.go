@@ -175,12 +175,30 @@ func TestLegacyRolesResolveToCanonicalRoles(t *testing.T) {
 	if got := CanonicalRole("workspace_agent"); got != "case_agent" {
 		t.Fatalf("workspace alias = %q", got)
 	}
+	for _, alias := range []string{"gamma_guardian", "gamma-guardian"} {
+		if got := CanonicalRole(alias); got != "quality_guardian" {
+			t.Fatalf("Gamma alias %q = %q", alias, got)
+		}
+	}
 	if IsCanonicalRole("practice_agent") || IsCanonicalRole("subject_specialist") {
 		t.Fatal("retired practice roles remain canonical identities")
 	}
 	if _, ok := Default("practice_agent"); ok {
 		t.Fatal("retired practice role still has a default identity")
 	}
+}
+
+func TestResolveManagedUsesGammaManagedAgentIDWhenDefaultsAreActive(t *testing.T) {
+	managed := ResolveManaged(Profile{})
+	for _, selection := range managed {
+		if selection.Role == "quality_guardian" {
+			if selection.AgentID != "gamma-guardian" || selection.DisplayName != "Gamma Guardian" || selection.Emoji != "🧪" {
+				t.Fatalf("Gamma defaults = %#v", selection)
+			}
+			return
+		}
+	}
+	t.Fatal("managed roster omitted quality_guardian")
 }
 
 func TestLoadRejectsTrailingJSON(t *testing.T) {

@@ -749,23 +749,25 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 			return runAgentIdentitySet(args[2:], out, errOut, root)
 		}
 		if len(args) != 1 {
-			fmt.Fprintln(errOut, "usage: bcgos agent identity [set --agent ROLE --display-name NAME --emoji EMOJI --confirm]")
+			fmt.Fprintln(errOut, "usage: bcgos agent identity [set --agent ROLE --display-name NAME --emoji EMOJI --confirm [--owner-id ID] [--agent-id ID]]")
 			return ExitUsage
 		}
 		profile, err := agentidentity.Load(root)
 		if errors.Is(err, os.ErrNotExist) {
 			return writeJSON(out, struct {
+				State         string                    `json:"state"`
 				Interview     agentidentity.Interview   `json:"interview"`
 				ManagedAgents []agentidentity.Selection `json:"managed_agents"`
-			}{Interview: agentidentity.InitialInterview(), ManagedAgents: agentidentity.ResolveManaged(agentidentity.Profile{})}, errOut)
+			}{State: "defaults_active", Interview: agentidentity.InitialInterview(), ManagedAgents: agentidentity.ResolveManaged(agentidentity.Profile{})}, errOut)
 		}
 		if err != nil {
 			return reportError(errOut, err)
 		}
 		return writeJSON(out, struct {
+			State         string                    `json:"state"`
 			Profile       agentidentity.Profile     `json:"profile"`
 			ManagedAgents []agentidentity.Selection `json:"managed_agents"`
-		}{Profile: profile, ManagedAgents: agentidentity.ResolveManaged(profile)}, errOut)
+		}{State: "profile_confirmed", Profile: profile, ManagedAgents: agentidentity.ResolveManaged(profile)}, errOut)
 	case "scaffold", "hire":
 		command := "agent " + args[0]
 		flags := newFlagSet(command, errOut)
@@ -916,13 +918,14 @@ func runAgentIdentitySet(args []string, out, errOut io.Writer, root string) int 
 	flags := newFlagSet("agent identity set", errOut)
 	agentRole := flags.String("agent", "", "managed agent role")
 	agentID := flags.String("agent-id", "", "concrete account or case agent ID")
+	ownerID := flags.String("owner-id", "", "owner identifier when creating the first local profile")
 	displayName := flags.String("display-name", "", "new presentation name")
 	emoji := flags.String("emoji", "", "new presentation emoji")
 	confirmed := flags.Bool("confirm", false, "confirm this presentation-only change")
 	if err := flags.Parse(args); err != nil || rejectPositionals(flags, errOut) ||
 		strings.TrimSpace(*agentRole) == "" || strings.TrimSpace(*displayName) == "" ||
 		strings.TrimSpace(*emoji) == "" || !*confirmed {
-		fmt.Fprintln(errOut, "usage: bcgos agent identity set --agent ROLE --display-name NAME --emoji EMOJI --confirm [--agent-id ID]")
+		fmt.Fprintln(errOut, "usage: bcgos agent identity set --agent ROLE --display-name NAME --emoji EMOJI --confirm [--owner-id ID] [--agent-id ID]")
 		return ExitUsage
 	}
 	role := agentidentity.CanonicalRole(strings.TrimSpace(*agentRole))
@@ -940,10 +943,14 @@ func runAgentIdentitySet(args []string, out, errOut io.Writer, root string) int 
 	}
 	profile, err := agentidentity.Load(root)
 	if errors.Is(err, os.ErrNotExist) {
-		return reportError(errOut, errors.New("complete agent personalization before setting an identity"))
-	}
-	if err != nil {
+		if strings.TrimSpace(*ownerID) == "" {
+			return reportError(errOut, errors.New("first agent identity requires --owner-id; defaults remain active until a presentation is customized"))
+		}
+		profile = agentidentity.Profile{SchemaVersion: agentidentity.SchemaVersion, OwnerID: strings.TrimSpace(*ownerID), Confirmed: true}
+	} else if err != nil {
 		return reportError(errOut, err)
+	} else if strings.TrimSpace(*ownerID) != "" && strings.TrimSpace(*ownerID) != profile.OwnerID {
+		return reportError(errOut, errors.New("--owner-id does not match the existing agent personalization profile"))
 	}
 	concreteID := strings.TrimSpace(*agentID)
 	if role == "client_account_agent" || role == "case_agent" {
@@ -956,8 +963,10 @@ func runAgentIdentitySet(args []string, out, errOut io.Writer, root string) int 
 	}
 	if concreteID == "" {
 		switch role {
-		case "maestro", "walter", "darwin", "quality_guardian":
+		case "maestro", "walter", "darwin":
 			concreteID = role
+		case "quality_guardian":
+			concreteID = "gamma-guardian"
 		}
 	}
 	selectionIndex := -1

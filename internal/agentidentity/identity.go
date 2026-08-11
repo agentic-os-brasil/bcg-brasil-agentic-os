@@ -125,11 +125,14 @@ var safeID = func(value string) bool {
 }
 
 func CanonicalRole(role string) string {
+	role = strings.TrimSpace(strings.ToLower(role))
 	switch role {
 	case "account_agent":
 		return "client_account_agent"
 	case "workspace_agent":
 		return "case_agent"
+	case "gamma_guardian", "gamma-guardian":
+		return "quality_guardian"
 	default:
 		return role
 	}
