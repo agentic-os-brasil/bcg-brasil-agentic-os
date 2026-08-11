@@ -1,6 +1,7 @@
 package releasepack
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +29,8 @@ type UniversalPortableOptions struct {
 }
 
 type UniversalPortableResult struct{ Output, SHA256, Status, Provenance, Checksum string }
+
+const universalPortableActivationContract = "maestro-portable-activate-v1"
 
 func BuildUniversalPortable(options UniversalPortableOptions) (UniversalPortableResult, error) {
 	if !portableVersionPattern.MatchString(options.Version) {
@@ -120,6 +123,9 @@ func BuildUniversalPortable(options UniversalPortableOptions) (UniversalPortable
 		if err != nil || seed.Version != options.Version || seed.AuthorityRegistrySHA256 != options.AuthorityRegistrySHA256 {
 			return UniversalPortableResult{}, fmt.Errorf("portable %s bootstrapper seed does not match the release and authority registry", input.target)
 		}
+		if !bytes.Contains(body, []byte(universalPortableActivationContract)) {
+			return UniversalPortableResult{}, fmt.Errorf("portable %s bootstrapper does not support direct portable activation", input.target)
+		}
 		bodies[input.target] = body
 	}
 	statusProbe := options.WindowsSignatureStatus
@@ -144,7 +150,7 @@ func BuildUniversalPortable(options UniversalPortableOptions) (UniversalPortable
 	defer os.RemoveAll(staging)
 	rootName := "Maestro-Portable-" + options.Version + "-universal"
 	root := filepath.Join(staging, rootName)
-	for _, dir := range []string{filepath.Join(root, "managed", "trust"), filepath.Join(root, "managed", "windows"), filepath.Join(root, "managed", "macos"), filepath.Join(root, "maestro-os")} {
+	for _, dir := range []string{filepath.Join(root, "managed", "trust"), filepath.Join(root, "managed", "windows"), filepath.Join(root, "managed", "macos", "arm64"), filepath.Join(root, "managed", "macos", "amd64"), filepath.Join(root, "maestro-os")} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return UniversalPortableResult{}, err
 		}
@@ -153,8 +159,8 @@ func BuildUniversalPortable(options UniversalPortableOptions) (UniversalPortable
 		body []byte
 		mode os.FileMode
 	}{
-		"managed/trust/release-authority-registry.json": {registryBody, 0o600}, "managed/windows/bcgos-bootstrap.exe": {bodies["windows-amd64"], 0o700}, "managed/macos/bcgos-bootstrap-arm64": {bodies["darwin-arm64"], 0o700}, "managed/macos/bcgos-bootstrap-amd64": {bodies["darwin-amd64"], 0o700},
-		"managed/windows/activate-maestro.cmd": {portableActivationScript(options.Version), 0o600}, "managed/macos/activate-maestro.sh": {portableMacActivationScript(options.Version), 0o700}, "maestro-os/CLAUDE.md": {universalPortableClaudeOnboarding(), 0o600}, "maestro-os/README.md": {[]byte("# Maestro OS\n\nAbra esta pasta no Claude Code e envie uma mensagem para comecar.\n"), 0o600}, "README-PORTABLE.md": {universalPortableReadme(options.Version), 0o600},
+		"managed/trust/release-authority-registry.json": {registryBody, 0o600}, "managed/windows/bcgos-bootstrap.exe": {bodies["windows-amd64"], 0o700}, "managed/macos/arm64/bcgos-bootstrap": {bodies["darwin-arm64"], 0o700}, "managed/macos/amd64/bcgos-bootstrap": {bodies["darwin-amd64"], 0o700},
+		"maestro-os/CLAUDE.md": {universalPortableClaudeOnboarding(), 0o600}, "maestro-os/README.md": {[]byte("# Maestro OS\n\nAbra esta pasta no Claude Code e envie uma mensagem para comecar.\n"), 0o600}, "README-PORTABLE.md": {universalPortableReadme(options.Version), 0o600},
 	}
 	provenance, err := json.MarshalIndent(map[string]any{"schema_version": 1, "product": "maestro", "version": options.Version, "distribution_profile": "universal-portable-local-beta", "targets": []string{"windows-amd64", "darwin-amd64", "darwin-arm64"}, "release_manifest_sha256": verified.ManifestSHA256, "authority_registry_sha256": registryDigest, "status": "unsigned-controlled-canary"}, "", "  ")
 	if err != nil {
@@ -212,11 +218,8 @@ func requireUniversalPortableArtifacts(version string, artifacts []releasecontra
 	return nil
 }
 
-func portableMacActivationScript(version string) []byte {
-	return []byte("#!/bin/sh\nset -eu\nROOT=$(CDPATH= cd -- \"$(dirname -- \"$0\")/../..\" && pwd -P)\ncase $(uname -m) in arm64) BOOT=\"$ROOT/managed/macos/bcgos-bootstrap-arm64\" ;; x86_64) BOOT=\"$ROOT/managed/macos/bcgos-bootstrap-amd64\" ;; *) echo 'Unsupported macOS architecture.' >&2; exit 1 ;; esac\nDATA=\"$HOME/Library/Application Support/BCGOS\"\nWORKSPACE=\"$ROOT/maestro-os\"\nchmod 700 \"$BOOT\"\nif [ ! -x \"$ROOT/managed/bin/bcgos\" ]; then \"$BOOT\" install --verified-directory \"$ROOT/release\" --data-root \"$DATA\"; fi\nCLI=\"$ROOT/managed/bin/bcgos\"\n[ \"$($CLI version)\" = \"bcgos " + version + "\" ] || { echo 'The active bcgos version does not match this portable package.' >&2; exit 1; }\n\"$CLI\" setup apply --workspace \"$WORKSPACE\" --runtime claude --executable \"$CLI\" --confirm\n\"$CLI\" adapter verify --runtime claude \"$WORKSPACE\"\necho 'Maestro is ready. Return to Claude Code to continue onboarding.'\n")
-}
 func universalPortableClaudeOnboarding() []byte {
-	return []byte("# Maestro Portable - primeiro uso\n\nConduza a pessoa sem pedir terminal ou scripts. Detecte silenciosamente Windows ou macOS. Se nao for um deles, pare sem alterar nada.\n\n1. Se a projecao ainda nao existir, explique que pode preparar o Maestro. Peca uma unica confirmacao curta.\n2. Depois da confirmacao: no Windows execute internamente `cmd.exe /d /c ..\\managed\\windows\\activate-maestro.cmd`; no macOS execute internamente `sh ../managed/macos/activate-maestro.sh`.\n3. Nunca execute o ativador da outra plataforma, baixe substitutos ou converta binarios.\n4. Quando terminar, releia este arquivo e continue com `maestro-onboarding`.\n")
+	return []byte("# Maestro Portable - primeiro uso\n\nConduza a pessoa sem pedir terminal ou scripts. Detecte silenciosamente Windows ou macOS. Se nao for um deles, pare sem alterar nada.\n\n1. Se a projecao ainda nao existir, explique que pode preparar o Maestro. Peca uma unica confirmacao curta.\n2. Depois da confirmacao, execute internamente somente o bootstrapper nativo correspondente com o argumento `portable-activate`: no Windows, `..\\managed\\windows\\bcgos-bootstrap.exe portable-activate`; em macOS Apple Silicon, `../managed/macos/arm64/bcgos-bootstrap portable-activate`; em macOS Intel, `../managed/macos/amd64/bcgos-bootstrap portable-activate`.\n3. Nunca use intermediarios, o bootstrapper da outra plataforma, substitutos ou conversoes de binarios.\n4. Quando terminar, releia este arquivo e continue com `maestro-onboarding`. Se a execucao nativa nao estiver disponivel, explique somente que a preparacao nao pode ser concluida neste runtime e ofereca encaminhar para o responsavel pelo piloto.\n")
 }
 func universalPortableReadme(version string) []byte {
 	return []byte("# Maestro Portable " + version + "\n\nExtraia a pasta em local fixo, abra `maestro-os` no Claude Code e envie uma mensagem para comecar. O Claude detecta Windows ou macOS e conduz a preparacao; nao execute os scripts internos. Este e um canario controlado sem assinatura de producao.\n")

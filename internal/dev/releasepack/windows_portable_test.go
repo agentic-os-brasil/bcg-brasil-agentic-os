@@ -62,7 +62,6 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	for _, required := range []string{
 		root + "README-PORTABLE.md",
 		root + "portable-provenance.json",
-		root + "managed/activate-maestro.cmd",
 		root + "managed/bcgos-bootstrap.exe",
 		root + "managed/trust/release-authority-registry.json",
 		root + "release/release-manifest.json",
@@ -74,30 +73,11 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 			t.Fatalf("portable archive is missing %s", required)
 		}
 	}
-	if _, exists := entries[root+"Activate-Maestro.cmd"]; exists {
-		t.Fatal("portable archive exposes a user-facing activation command")
-	}
-	activation := string(entries[root+"managed/activate-maestro.cmd"])
-	for _, required := range []string{
-		`for %%I in ("%~dp0..") do set "ROOT=%%~fI"`,
-		`%LOCALAPPDATA%\BCGOS`,
-		`LOCALAPPDATA is unavailable`,
-		`bcgos-bootstrap.exe" install`,
-		`setup apply --workspace`,
-		`--runtime claude`,
-		`--confirm`,
-		`adapter verify --runtime claude`,
-		`bcgos 0.2.0`,
-	} {
-		if !strings.Contains(activation, required) {
-			t.Fatalf("activation script is missing %q:\n%s", required, activation)
-		}
-	}
 	orientation := string(entries[root+"maestro-os/CLAUDE.md"])
 	for _, required := range []string{
 		"Nao peca para a pessoa digitar ou executar comandos",
 		"Peca uma unica confirmacao curta",
-		`cmd.exe /d /c "..\managed\activate-maestro.cmd"`,
+		`..\managed\bcgos-bootstrap.exe portable-activate`,
 		"releia este CLAUDE.md",
 		"maestro-onboarding",
 		"nao repita o onboarding",
@@ -108,17 +88,17 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 		}
 	}
 	confirmation := strings.Index(orientation, "Peca uma unica confirmacao curta")
-	activationCommand := strings.Index(orientation, `cmd.exe /d /c "..\managed\activate-maestro.cmd"`)
+	activationCommand := strings.Index(orientation, `..\managed\bcgos-bootstrap.exe portable-activate`)
 	if confirmation < 0 || activationCommand < 0 || confirmation > activationCommand {
 		t.Fatal("portable CLAUDE.md must require confirmation before internal activation")
 	}
 	for name := range entries {
-		if strings.Contains(strings.ToLower(name), "wizard") || strings.HasSuffix(strings.ToLower(name), "maestro-installer.exe") {
+		if strings.Contains(strings.ToLower(name), "wizard") || strings.HasSuffix(strings.ToLower(name), "maestro-installer.exe") || strings.HasSuffix(strings.ToLower(name), ".cmd") || strings.HasSuffix(strings.ToLower(name), ".sh") {
 			t.Fatalf("portable archive retained installer surface %s", name)
 		}
 	}
 	readme := string(entries[root+"README-PORTABLE.md"])
-	for _, required := range []string{"Abra a pasta `maestro-os` no Claude Code", "Envie uma mensagem", "nao execute arquivos `.cmd`"} {
+	for _, required := range []string{"Abra a pasta `maestro-os` no Claude Code", "Envie uma mensagem", "Nao abra terminal nem execute arquivos internos"} {
 		if !strings.Contains(readme, required) {
 			t.Fatalf("portable README does not describe the prompt-first Claude Code journey; missing %q:\n%s", required, readme)
 		}
@@ -134,31 +114,26 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	}
 }
 
-func TestPortableActivationComparesVersionWithoutFindstr(t *testing.T) {
-	script := string(portableActivationScript("0.1.25"))
-	for _, required := range []string{
-		`set "VERSION_OUTPUT=%TEMP%\maestro-version-%RANDOM%-%RANDOM%.txt"`,
-		`set /p "ACTUAL_VERSION="<"%VERSION_OUTPUT%"`,
-		`if not "%ACTUAL_VERSION%"=="bcgos 0.1.25"`,
-	} {
-		if !strings.Contains(script, required) {
-			t.Fatalf("activation script is missing robust version check %q:\n%s", required, script)
-		}
-	}
-	if strings.Contains(strings.ToLower(script), "findstr") {
-		t.Fatal("activation script must not use findstr for exact CLI version matching")
-	}
-}
-
 func TestPortableClaudeOnboardingStopsNonWindowsBeforeConfirmation(t *testing.T) {
 	orientation := string(portableClaudeOnboarding())
 	platformCheck := strings.Index(orientation, "Antes de pedir confirmacao, confirme silenciosamente que o sistema e Windows")
 	stop := strings.Index(orientation, "Se nao for Windows, pare antes da ativacao")
 	confirmation := strings.Index(orientation, "Peca uma unica confirmacao curta")
-	activation := strings.Index(orientation, `cmd.exe /d /c "..\managed\activate-maestro.cmd"`)
+	activation := strings.Index(orientation, `..\managed\bcgos-bootstrap.exe portable-activate`)
 	if platformCheck < 0 || stop < 0 || confirmation < 0 || activation < 0 ||
 		platformCheck > stop || stop > confirmation || confirmation > activation {
 		t.Fatal("portable onboarding must stop non-Windows sessions before confirmation and activation")
+	}
+}
+
+func TestBuildWindowsPortableRejectsBootstrapperWithoutDirectActivation(t *testing.T) {
+	options := validWindowsPortableOptions(t)
+	if err := os.WriteFile(options.Bootstrapper, []byte("stale-bootstrapper"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	options.BootstrapperSHA256 = testDigest([]byte("stale-bootstrapper"))
+	if _, err := BuildWindowsPortable(options); err == nil || !strings.Contains(err.Error(), "does not support direct portable activation") {
+		t.Fatalf("BuildWindowsPortable() error = %v, want direct activation rejection", err)
 	}
 }
 
@@ -182,7 +157,7 @@ func validWindowsPortableOptions(t *testing.T) WindowsPortableOptions {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	bootstrapperBody := []byte("synthetic-windows-bootstrapper")
+	bootstrapperBody := []byte("synthetic-windows-bootstrapper-" + universalPortableActivationContract)
 	bootstrapper := filepath.Join(t.TempDir(), "bcgos-bootstrap_0.2.0_windows_amd64.exe")
 	if err := os.WriteFile(bootstrapper, bootstrapperBody, 0o700); err != nil {
 		t.Fatal(err)
