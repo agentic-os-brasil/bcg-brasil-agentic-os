@@ -57,6 +57,7 @@ type macOSPortableProvenance struct {
 	AuthorityRegistrySHA256     string `json:"authority_registry_sha256"`
 	BootstrapperSHA256          string `json:"bootstrapper_sha256"`
 	BootstrapperSignatureStatus string `json:"bootstrapper_codesign_status"`
+	CLISignatureStatus          string `json:"cli_codesign_status"`
 	Status                      string `json:"status"`
 }
 
@@ -125,6 +126,19 @@ func BuildMacOSPortable(options MacOSPortableOptions) (MacOSPortableResult, erro
 	if err := requireMacOSPortableArtifacts(manifest.Release, manifest.Artifacts); err != nil {
 		return MacOSPortableResult{}, err
 	}
+	structural := options.StructuralSignature
+	if structural == nil {
+		structural = macOSStructuralSignatureStatus
+	}
+	native := options.NativeSignature
+	if native == nil {
+		native = macOSNativeSignatureStatus
+	}
+	macCLI := filepath.Join(options.ReleaseDirectory, "bcgos_"+options.Version+"_darwin_arm64")
+	cliStatus, err := requireMacOSAdHocExecutable(macCLI, "CLI", structural, native)
+	if err != nil {
+		return MacOSPortableResult{}, err
+	}
 	expectedBootstrapper := "bcgos-bootstrap_" + options.Version + "_darwin_arm64"
 	if filepath.Base(options.Bootstrapper) != expectedBootstrapper {
 		return MacOSPortableResult{}, fmt.Errorf("portable bootstrapper must be named %s", expectedBootstrapper)
@@ -136,29 +150,9 @@ func BuildMacOSPortable(options MacOSPortableOptions) (MacOSPortableResult, erro
 	if bootstrapperDigest != options.BootstrapperSHA256 {
 		return MacOSPortableResult{}, errors.New("portable bootstrapper does not match its approved pin")
 	}
-	structural := options.StructuralSignature
-	if structural == nil {
-		structural = macOSStructuralSignatureStatus
-	}
-	status, err := structural(options.Bootstrapper)
+	status, err := requireMacOSAdHocExecutable(options.Bootstrapper, "bootstrapper", structural, native)
 	if err != nil {
-		return MacOSPortableResult{}, fmt.Errorf("inspect portable macOS bootstrapper signature structure: %w", err)
-	}
-	if status != "NotSigned" {
-		return MacOSPortableResult{}, fmt.Errorf("portable macOS local-beta bootstrapper must be exactly NotSigned; got %s", status)
-	}
-	if runtime.GOOS == "darwin" {
-		native := options.NativeSignature
-		if native == nil {
-			native = macOSNativeSignatureStatus
-		}
-		status, err = native(options.Bootstrapper)
-		if err != nil {
-			return MacOSPortableResult{}, fmt.Errorf("inspect portable macOS bootstrapper codesign status: %w", err)
-		}
-		if status != "NotSigned" {
-			return MacOSPortableResult{}, fmt.Errorf("portable macOS local-beta bootstrapper codesign status must be exactly NotSigned; got %s", status)
-		}
+		return MacOSPortableResult{}, err
 	}
 	seedStatus := options.BootstrapperSeedStatus
 	if seedStatus == nil {
@@ -209,7 +203,7 @@ func BuildMacOSPortable(options MacOSPortableOptions) (MacOSPortableResult, erro
 		TargetOS: "darwin", TargetArch: "arm64", DistributionProfile: "macos-portable-local-beta",
 		ReleaseManifestSHA256: verified.ManifestSHA256, ReleaseIssuer: manifest.Issuer.ID,
 		ReleaseKeyID: manifest.Issuer.KeyID, AuthorityRegistrySHA256: registryDigest,
-		BootstrapperSHA256: bootstrapperDigest, BootstrapperSignatureStatus: status,
+		BootstrapperSHA256: bootstrapperDigest, BootstrapperSignatureStatus: status, CLISignatureStatus: cliStatus,
 		Status: "unsigned-controlled-canary",
 	}
 	provenanceBody, err := json.MarshalIndent(provenance, "", "  ")
@@ -242,6 +236,27 @@ func BuildMacOSPortable(options MacOSPortableOptions) (MacOSPortableResult, erro
 	}
 	succeeded = true
 	return MacOSPortableResult{Output: options.Output, SHA256: archiveDigest, Status: "unsigned-controlled-canary", Provenance: provenancePath, Checksum: checksumPath}, nil
+}
+
+func requireMacOSAdHocExecutable(path, label string, structural func(string) (string, error), native func(string) (string, error)) (string, error) {
+	status, err := structural(path)
+	if err != nil {
+		return "", fmt.Errorf("inspect portable macOS %s signature structure: %w", label, err)
+	}
+	if status != "CodeSignaturePresent" {
+		return "", fmt.Errorf("portable macOS local-beta %s must carry an ad-hoc code-signature container; got %s", label, status)
+	}
+	if runtime.GOOS != "darwin" {
+		return "AdHocUnverified", nil
+	}
+	status, err = native(path)
+	if err != nil {
+		return "", fmt.Errorf("inspect portable macOS %s codesign status: %w", label, err)
+	}
+	if status != "AdHoc" {
+		return "", fmt.Errorf("portable macOS local-beta %s codesign status must be exactly AdHoc; got %s", label, status)
+	}
+	return status, nil
 }
 
 func requireMacOSPortableArtifacts(version string, artifacts []releasecontract.Artifact) error {
@@ -294,7 +309,7 @@ func macOSPortableReadme(version string) []byte {
 		"2. Abra a pasta `maestro-os` no Claude Code.\n" +
 		"3. Envie uma mensagem como `Quero comecar`. O Claude explica e conduz o restante.\n\n" +
 		"Nao abra terminal nem execute arquivos internos. Na primeira preparacao, o Claude pedira uma confirmacao curta e o macOS ou o Claude Code podera mostrar uma permissao nativa para voce aprovar. Depois disso, use sempre a mesma pasta `maestro-os`; nao mova a pasta completa depois da ativacao.\n\n" +
-		"Este e um pacote Canary controlado sem Developer ID ou notarizacao. Antes da entrega, o responsavel pelo piloto deve conferir o SHA-256 enviado separadamente. Gatekeeper pode bloquear executaveis sem assinatura.\n")
+		"Este e um pacote Canary controlado com assinatura ad-hoc local, sem Developer ID ou notarizacao. Antes da entrega, o responsavel pelo piloto deve conferir o SHA-256 enviado separadamente. Gatekeeper e politicas corporativas ainda podem bloquear executaveis.\n")
 }
 
 func macOSStructuralSignatureStatus(path string) (string, error) {
@@ -306,10 +321,10 @@ func macOSStructuralSignatureStatus(path string) (string, error) {
 	for _, load := range file.Loads {
 		raw := load.Raw()
 		if len(raw) >= 4 && file.ByteOrder.Uint32(raw[:4]) == machOLoadCommandCodeSignature {
-			return "Signed", nil
+			return "CodeSignaturePresent", nil
 		}
 	}
-	return "NotSigned", nil
+	return "NoCodeSignature", nil
 }
 
 func macOSNativeSignatureStatus(path string) (string, error) {
@@ -322,6 +337,9 @@ func macOSNativeSignatureStatus(path string) (string, error) {
 			return "NotSigned", nil
 		}
 		return "", errors.New(strings.TrimSpace(string(output)))
+	}
+	if bytes.Contains(output, []byte("Signature=adhoc")) {
+		return "AdHoc", nil
 	}
 	return "Signed", nil
 }

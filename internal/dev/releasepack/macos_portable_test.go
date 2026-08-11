@@ -74,8 +74,11 @@ func TestBuildMacOSPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	if strings.Contains(orientation, "portable-activate") {
 		t.Fatalf("macOS orientation retained an obsolete or terminal-directed flow: %s", orientation)
 	}
-	if !bytes.Contains(entries[root+"portable-provenance.json"], []byte(`"bootstrapper_codesign_status": "NotSigned"`)) {
-		t.Fatalf("macOS provenance is missing unsigned codesign status: %s", entries[root+"portable-provenance.json"])
+	if !bytes.Contains(entries[root+"portable-provenance.json"], []byte(`"bootstrapper_codesign_status": "AdHoc"`)) {
+		t.Fatalf("macOS provenance is missing ad-hoc codesign status: %s", entries[root+"portable-provenance.json"])
+	}
+	if !bytes.Contains(entries[root+"portable-provenance.json"], []byte(`"cli_codesign_status": "AdHoc"`)) {
+		t.Fatalf("macOS provenance is missing CLI ad-hoc codesign status: %s", entries[root+"portable-provenance.json"])
 	}
 	secondOutput := filepath.Join(t.TempDir(), filepath.Base(result.Output))
 	options.Output = secondOutput
@@ -88,11 +91,29 @@ func TestBuildMacOSPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	}
 }
 
-func TestBuildMacOSPortableRejectsSignedBootstrapper(t *testing.T) {
+func TestBuildMacOSPortableRejectsNonAdHocBootstrapper(t *testing.T) {
 	options := validMacOSPortableOptions(t)
-	options.StructuralSignature = func(string) (string, error) { return "Signed", nil }
-	if _, err := BuildMacOSPortable(options); err == nil || !strings.Contains(err.Error(), "must be exactly NotSigned") {
-		t.Fatalf("BuildMacOSPortable() error = %v, want unsigned rejection", err)
+	options.StructuralSignature = func(path string) (string, error) {
+		if path == options.Bootstrapper {
+			return "Signed", nil
+		}
+		return "CodeSignaturePresent", nil
+	}
+	if _, err := BuildMacOSPortable(options); err == nil || !strings.Contains(err.Error(), "must carry an ad-hoc") {
+		t.Fatalf("BuildMacOSPortable() error = %v, want ad-hoc rejection", err)
+	}
+}
+
+func TestBuildMacOSPortableRejectsNonAdHocCLI(t *testing.T) {
+	options := validMacOSPortableOptions(t)
+	options.StructuralSignature = func(path string) (string, error) {
+		if path == filepath.Join(options.ReleaseDirectory, "bcgos_0.2.0_darwin_arm64") {
+			return "NoCodeSignature", nil
+		}
+		return "CodeSignaturePresent", nil
+	}
+	if _, err := BuildMacOSPortable(options); err == nil || !strings.Contains(err.Error(), "CLI must carry an ad-hoc") {
+		t.Fatalf("BuildMacOSPortable() error = %v, want CLI ad-hoc rejection", err)
 	}
 }
 
@@ -138,10 +159,10 @@ func validMacOSPortableOptions(t *testing.T) MacOSPortableOptions {
 		BootstrapperSeedStatus: func(string) (BootstrapperSeedStatus, error) {
 			return BootstrapperSeedStatus{Version: "0.2.0", AuthorityRegistrySHA256: testDigest(registryBody)}, nil
 		},
-		StructuralSignature: func(string) (string, error) { return "NotSigned", nil },
+		StructuralSignature: func(string) (string, error) { return "CodeSignaturePresent", nil },
 	}
 	if runtime.GOOS == "darwin" {
-		options.NativeSignature = func(string) (string, error) { return "NotSigned", nil }
+		options.NativeSignature = func(string) (string, error) { return "AdHoc", nil }
 	}
 	return options
 }

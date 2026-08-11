@@ -142,7 +142,7 @@ path. Keep all paths absolute when invoking the packaging script.
 set -euo pipefail
 
 go run ./dev/release candidate \
-  --version "$VERSION" --channel canary \
+  --version "$VERSION" --channel canary --macos-adhoc \
   --output "$ROOT/dist/release-candidate-$VERSION"
 ```
 
@@ -186,6 +186,8 @@ GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath \
   ./cmd/bcgos-bootstrap
 
 BOOTSTRAPPER="$ROOT/dist/native-$VERSION/bcgos-bootstrap_${VERSION}_darwin_arm64"
+codesign --force --sign - "$BOOTSTRAPPER"
+codesign -d --verbose=4 "$BOOTSTRAPPER" 2>&1 | grep -F 'Signature=adhoc' >/dev/null
 SEED_STATUS="$($BOOTSTRAPPER seed-status)"
 printf '%s\n' "$SEED_STATUS" | grep -F "\"bootstrapper_version\":\"$VERSION\"" >/dev/null
 printf '%s\n' "$SEED_STATUS" | grep -F "\"authority_registry_sha256\":\"$REGISTRY_SHA256\"" >/dev/null

@@ -124,13 +124,14 @@ func runGoBuild(
 }
 
 type CandidateOptions struct {
-	Root      string
-	Output    string
-	Version   string
-	Channel   string
-	Allowlist string
-	Prebuilt  string
-	Builder   BinaryBuilder
+	Root       string
+	Output     string
+	Version    string
+	Channel    string
+	Allowlist  string
+	Prebuilt   string
+	Builder    BinaryBuilder
+	AdHocMacOS bool
 }
 
 func BuildCandidate(ctx context.Context, options CandidateOptions) (releasecontract.Manifest, error) {
@@ -198,6 +199,14 @@ func BuildCandidate(ctx context.Context, options CandidateOptions) (releasecontr
 		path := filepath.Join(staging, name)
 		if err := options.Builder.Build(ctx, options.Root, path, options.Version, target); err != nil {
 			return releasecontract.Manifest{}, err
+		}
+		if options.AdHocMacOS && target.OS == "darwin" {
+			if runtime.GOOS != "darwin" {
+				return releasecontract.Manifest{}, errors.New("macOS ad-hoc candidate signing requires a macOS host")
+			}
+			if output, err := exec.Command("/usr/bin/codesign", "--force", "--sign", "-", path).CombinedOutput(); err != nil {
+				return releasecontract.Manifest{}, fmt.Errorf("ad-hoc sign candidate %s: %w: %s", target.Arch, err, strings.TrimSpace(string(output)))
+			}
 		}
 		artifact, err := inspectArtifact("cli", target.OS, target.Arch, path)
 		if err != nil {
