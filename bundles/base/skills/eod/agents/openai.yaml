@@ -1,0 +1,4 @@
+interface:
+  display_name: "End of Day"
+  short_description: "Close the day and leave tomorrow a starting point"
+  default_prompt: "Use $eod to close today on my daily page and preview tomorrow's first priority."
