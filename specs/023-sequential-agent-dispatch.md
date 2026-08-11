@@ -1,30 +1,51 @@
-# Spec 023 — Maestro-mediated sequential dispatch
+# Spec 023 — Adaptive Maestro orchestration
 
-Maestro owns every dispatch. It may open one direct spoke at a time at depth
-one. Case, Client Account, PA Expert, Walter, Darwin and a bounded errand
-helper are leaves; none can issue a packet to another agent.
+> **Default posture (AGEN): advisory recipe, not an execution gate.** The
+> deterministic controller remains useful for replay, assurance and synthetic
+> tests. It does not pre-authorize every reasoning or delegation step and its
+> absence must not block attended professional work.
 
-Packets are signed, bounded, expiring and pointer-only. They bind the exact
-target, immutable scope, authorization digest, capability digest, state
-snapshot and plan digest. A second active branch, nested start, forged actor,
-replay or cross-scope pointer fails closed.
+Maestro remains accountable for the user-facing result, but it may choose the
+route and depth at runtime. Registered agents may consult another registered
+agent when that improves the outcome, provided they pass only the minimum
+scope and authority required and return control to the accountable owner.
+Client Account, Case, PA Expert, Walter, Darwin, Gamma Guardian and bounded
+helpers are collaborators rather than mandatory stations in a state machine.
 
-The Maestro planner can choose a direct answer, account-assisted Case,
-direct Case, standalone account/advisory/review/health/errand route or no
-branch. Account framing and post-Case validation are paired: validation exists
-if and only if framing was used. Walter is a separate materiality gate and is
-invoked if and only if the resolved plan requires it; a low-materiality skip
-has a typed reason and evidence.
+## Delegation envelope
 
-All runtime adapters use one durable installation state store. Atomic state
-updates, restart recovery, replacement fencing and replay checks are tested in
-the Claude and Codex conformance surfaces. Native runtime qualification is
-separate from configured bindings and adapter-observed receipts.
+A delegation should identify purpose, target, workspace/account/case scope,
+available tools and data, effect authority, expected return and practical
+budget. Signed packets, digests, expiry and receipts strengthen replay and
+unattended assurance when available. They are not prerequisites for safe work
+inside an attended, host-authorized runtime.
 
-Each schema-v2 packet also carries a signed, scope-bound `DoneContract`.
-Authenticated producer returns must satisfy its required evidence pointers and
-minimum evidence count; Walter can close only through the typed verdict path.
-The shared adapter persists a bounded, hash-linked metadata-only breadcrumb
-tail for every branch and tool event, so recovery does not depend on model
-context. Native adapters remain unavailable until attended event conformance is
-observed.
+Forged identity, replay, cross-client scope escalation and unauthorized effects
+remain invalid. Branch count, order, depth and nesting are planning guidance
+and observable budgets, not validity conditions for otherwise safe work.
+
+## Recommended routes
+
+Maestro may answer directly, call Case directly, use Client Account framing
+before Case, consult PA Experts, request Walter refinement, ask Darwin about
+system health or compose another bounded route. When Client Account framing is
+used, validation of the Case result by the same account agent is the preferred
+default. Walter is a calm senior-advisor option for high-leverage work; ordinary
+work normally skips it without requiring a receipt.
+
+The model chooses from strategic importance, stakeholder implications,
+knowledge need, consequence, reversibility and leverage. These signals improve
+judgment; they do not form a closed admission grammar.
+
+## Evidence and recovery
+
+Adapters may persist bounded, metadata-only breadcrumbs and completion
+evidence. Missing telemetry, receipts, native qualification or a deterministic
+route record reduces observability but cannot invalidate a usable result.
+Strict-assurance or unattended runs may opt into signed `DoneContract` and
+deterministic replay requirements.
+
+The durable installation store remains useful for restart recovery and
+diagnostics. Capability reporting distinguishes configured, observed and
+qualified evidence without turning those states into permission to think or
+delegate.

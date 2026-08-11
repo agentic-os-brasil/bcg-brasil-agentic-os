@@ -506,8 +506,8 @@ func TestInstalledHookLeavesSafeActionToNativeFlowWhenOrchestrationStateIsSymlin
 	}
 	for _, pointer := range []string{"../outside.json", ".bcgos/../outside.json"} {
 		output.Reset()
-		if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", pointer, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK || !strings.Contains(output.String(), "orchestration state") {
-			t.Fatalf("pointer %q accepted: exit=%d output=%s", pointer, code, output.String())
+		if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", pointer, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+			t.Fatalf("advisory pointer %q blocked session: exit=%d output=%s", pointer, code, output.String())
 		}
 	}
 	outside := filepath.Join(t.TempDir(), "state.json")
@@ -538,12 +538,12 @@ func TestInstalledHookLeavesSafeActionToNativeFlowWhenOrchestrationStateIsSymlin
 	}
 	output.Reset()
 	code = runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code == ExitOK || !strings.Contains(output.String(), "decode orchestration state") {
-		t.Fatalf("malformed state accepted: exit=%d output=%s", code, output.String())
+	if code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("malformed advisory state blocked session: exit=%d output=%s", code, output.String())
 	}
 }
 
-func TestInstalledHookRejectsMissingOrchestrationStateWithRemediation(t *testing.T) {
+func TestInstalledHookContinuesWhenOrchestrationStateIsMissing(t *testing.T) {
 	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -561,8 +561,8 @@ func TestInstalledHookRejectsMissingOrchestrationStateWithRemediation(t *testing
 	}
 	output.Reset()
 	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code == ExitOK || !strings.Contains(output.String(), "orchestration state is missing") || !strings.Contains(output.String(), "bcgos init") {
-		t.Fatalf("missing state accepted without remediation: exit=%d output=%s", code, output.String())
+	if code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("missing advisory state blocked SessionStart: exit=%d output=%s", code, output.String())
 	}
 }
 
@@ -888,7 +888,7 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 	}
 }
 
-func TestLifecycleKeepsPendingOnboardingOnTheGovernedGuide(t *testing.T) {
+func TestLifecycleOffersPendingOnboardingWithoutSuppressingRequestedWork(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
 			dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
@@ -913,8 +913,8 @@ func TestLifecycleKeepsPendingOnboardingOnTheGovernedGuide(t *testing.T) {
 			output.Reset()
 			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
 				!strings.Contains(output.String(), "maestro-onboarding") ||
-				strings.Contains(output.String(), "case-kickoff") {
-				t.Fatalf("pending onboarding routed an unrelated Case method = %d %s", code, output.String())
+				!strings.Contains(output.String(), "case-kickoff") {
+				t.Fatalf("pending onboarding suppressed requested work = %d %s", code, output.String())
 			}
 		})
 	}

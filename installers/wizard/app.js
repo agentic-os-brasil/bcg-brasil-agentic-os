@@ -145,12 +145,16 @@
         linkNode.setAttribute('aria-disabled', String(!links[id]));
       }
     });
-    const diagnostics = Array.isArray(handoff.diagnostics) ? handoff.diagnostics : [];
+    const diagnostics = [...new Set([
+      ...(Array.isArray(handoff.diagnostics) ? handoff.diagnostics : []),
+      ...(Array.isArray(payload.warnings) ? payload.warnings : []),
+    ])];
     const diagnostic = document.querySelector('#handoff-diagnostic');
     if (diagnostic) diagnostic.textContent = diagnostics.length
-      ? `Diagnóstico secundário: ${diagnostics.join(' ')}`
-      : 'Diagnóstico secundário: runtimes não detectados não bloqueiam este handoff.';
+      ? `Workspace pronto. ${diagnostics.length} ajuste${diagnostics.length === 1 ? '' : 's'} poderá${diagnostics.length === 1 ? '' : 'ão'} ser concluído${diagnostics.length === 1 ? '' : 's'} durante o uso: ${diagnostics.join(' ')}`
+      : 'Workspace pronto. O Maestro continuará refinando sua configuração durante o uso.';
     root.hidden = false;
+    return diagnostics;
   }
 
   async function start(choice) {
@@ -176,8 +180,8 @@
       await pause(180);
       progress(62, 'Instalando', 'install');
       const prepared = await prepareWorkspace();
-      renderWorkspaceHandoff(prepared);
-      progress(100, 'Tudo pronto', 'workspace');
+      const diagnostics = renderWorkspaceHandoff(prepared) || [];
+      progress(100, diagnostics.length ? 'Pronto para começar' : 'Tudo pronto', 'workspace');
       document.querySelector('#launch-note').textContent = '';
       show('complete');
     } catch (error) {

@@ -1,16 +1,17 @@
 # Spec 018 — Maestro core agents
 
-Maestro is the sole user-facing hub. It owns planning, packet mediation,
-scope binding, receipts and delivery. Maestro has no tools and does not grant
-authority from caller text.
+Maestro is the primary user-facing hub. It owns accountability for planning,
+coordination and delivery. It can use runtime-native delegation when available;
+authority is bounded by the active workspace, the user's request and the host
+runtime rather than by a pre-enumerated route.
 
 The managed core is:
 
 | Agent | Role | User channel | Tools | Delegates |
 | --- | --- | --- | --- | --- |
-| Maestro | `hub` | yes | none | direct spokes only |
-| Case Agent | `case_agent` | no | scoped | no |
-| Client Account Agent | `client_account_agent` | no | scoped | no |
+| Maestro | `hub` | yes | none | registered agents |
+| Case Agent | `case_agent` | no | scoped | scoped consultation |
+| Client Account Agent | `client_account_agent` | no | scoped | scoped consultation |
 | PA Expert | `pa_expert` | no | none | no |
 | Walter | `reviewer` | no | none | no |
 | Darwin | `governance_analyst` | no | scoped maintenance | no |
@@ -26,7 +27,7 @@ the Case Agent. It evaluates one authorized workspace per bounded packet and
 does not inherit Case context. Its rubric is transversal, but its managed agent
 identity remains a direct spoke with no children.
 
-## Deterministic Case topology
+## Recommended Case topology
 
 ```mermaid
 flowchart LR
@@ -46,19 +47,16 @@ flowchart LR
   Maestro --> User
 ```
 
-`post_account_validation_required == pre_account_used` is a typed planner
-invariant. Account-assisted plans must include both framing and validation;
-direct-case plans include neither and have an auditable pre-brief skip reason.
-`walter_invocation == resolved_walter_required` is a separate planner
-invariant. Low-materiality plans carry an explicit Walter-skip reason and
-evidence; materiality uncertainty resolves to Walter.
+When Client Account framing is used, post-Case validation by the same account
+agent is the recommended default. Maestro may adapt the route when another
+composition better serves the task. Walter is selected independently by
+leverage, consequence and the value of a user-proxy refinement.
 
-Every content mutation clears downstream approvals and re-enters Case through
-Maestro. Account and Walter cycles and Case attempts have deterministic
-budgets; exhaustion fails closed with a receipt.
-
-No agent-to-agent call, nesting or second active branch is valid. The native
-runtime may expose legacy event names only to return a deterministic denial.
+Budgets, receipts and route events are observability aids. They should advise
+the model, support recovery and make behavior inspectable, but do not block
+safe attended work merely because evidence is missing. Agents may call other
+registered agents with attenuated scope and must return a concise result to the
+accountable owner.
 
 For high-leverage Walter review, Maestro seals an `IntentReviewPacket` with
 the prompt, route, draft, bounded context, audience, consequence,
