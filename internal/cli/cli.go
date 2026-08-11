@@ -135,7 +135,7 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "workspace-migration":
 		return runWorkspaceMigration(args[1:], out, errOut, defaultDataRoot)
 	case "atlas":
-		return runAtlas(args[1:], out, errOut, defaultDataRoot)
+		return runAtlas(args[1:], in, out, errOut, defaultDataRoot)
 	case "prior-work":
 		return runPriorWork(args[1:], in, out, errOut, defaultDataRoot)
 	case "session":
@@ -2748,9 +2748,19 @@ func runOwnerRefine(args []string, in io.Reader, out, errOut io.Writer, root str
 	}
 }
 
-func runAtlas(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
+func runAtlas(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
+	// The owner atlas spans engagements, so its subcommands resolve from the
+	// data root and never require a workspace.
+	if len(args) > 0 {
+		switch args[0] {
+		case "owner":
+			return runAtlasOwner(args[1:], in, out, errOut, dataRoot)
+		case "grant":
+			return runAtlasGrant(args[1:], out, errOut, dataRoot)
+		}
+	}
 	if len(args) == 0 || (args[0] != "init" && args[0] != "status") {
-		fmt.Fprintln(errOut, "usage: bcgos atlas <init|status> [workspace-path]")
+		fmt.Fprintln(errOut, "usage: bcgos atlas <init|status|owner|grant> [workspace-path]")
 		return ExitUsage
 	}
 	path, code := oneOptionalPath("atlas "+args[0], args[1:], errOut)

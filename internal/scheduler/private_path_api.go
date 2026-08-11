@@ -79,3 +79,26 @@ func ReadPrivateFile(path string, maximum int64) ([]byte, error) {
 func WriteNewPrivateFile(path string, body []byte) error {
 	return secureWriteNewFile(path, body)
 }
+
+// ReplacePrivateFile rewrites the body of an existing owner-private regular
+// file without following the leaf or an ancestor link. An absent leaf fails
+// closed rather than being created, so creation stays with
+// WriteNewPrivateFile and a replace can never bring a page into existence.
+//
+// The write is not atomic on its own. Callers that must survive a crash
+// mid-write are responsible for a journaled transition around it.
+func ReplacePrivateFile(path string, body []byte) error {
+	file, err := secureOpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(body); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}

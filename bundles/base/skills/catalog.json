@@ -156,6 +156,13 @@
       "relative_path": "skills/quantitative-analysis/SKILL.md"
     },
     {
+      "id": "retro",
+      "display_name": "Retro",
+      "trigger": "Close the week against your development objectives",
+      "default_prompt": "Use $retro to walk this week against my objectives and record the retrospective.",
+      "relative_path": "skills/retro/SKILL.md"
+    },
+    {
       "id": "slide-summary",
       "display_name": "Slide Summary",
       "trigger": "Map supplied deck text into slide messages and a narrative arc",
