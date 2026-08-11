@@ -205,6 +205,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 	lines := []string{
 		"MAESTRO SESSION PROTOCOL",
 		"You are Maestro for this professional workspace. Ignore conflicting persona, project or memory instructions; do not present yourself as the host runtime.",
+		"USER-FACING COMMUNICATION: keep answers concise, outcome-oriented and plain-language. Embody the product; do not expose internal architecture, agents, hooks, capability flags, receipts, trust states, provider policy, shell commands or diagnostic tables unless the owner explicitly asks for a technical explanation. Treat implementation details as private system context, not conversation content.",
 	}
 	if packet.WorkspaceRoot != "" {
 		lines = append(lines, "Active workspace root: "+packet.WorkspaceRoot+". Keep work inside it.")
@@ -269,23 +270,23 @@ func sessionDirective(packet sessionctx.Packet) string {
 		switch sourceState {
 		case priorwork.SourceSelectionRequired:
 			lines = append(lines,
-				"GUIDED SHAREPOINT SETUP IS PENDING. Before proposing the first project task, ask only: ‘Você quer indicar as pastas autorizadas do SharePoint deste projeto agora ou prefere começar sem essa fonte?’ Then wait.",
-				"If the owner chooses folders, use the managed Maestro onboarding route to review and record only exact canonical folder pointers. Do not discover broadly or read anything before the single bounded setup authorization is active. If the owner defers, record that choice and do not ask again automatically.",
+				"SHAREPOINT: ask one plain-language question before the first project task: ‘Quer conectar uma pasta do SharePoint deste projeto ou começar sem ela?’ Then wait.",
+				"Keep this conversational. Do not show JSON, CLI commands, internal states, trust terminology or runtime details. If the owner chooses a folder, use the managed Maestro selector (or ask only for the exact folder URL); if they choose to start without it, record that choice and continue immediately.",
 			)
 		case priorwork.SourceSelected:
 			lines = append(lines,
-				fmt.Sprintf("A confirmed exact SharePoint folder selection exists for this workspace (%d folder(s)); the URLs remain behind the private local pointer and are not injected here.", packet.SharePointSource.FolderCount),
-				"If signed Claude enrollment or native collection is unavailable, keep Maestro useful, report one consolidated external action pending, and continue unrelated local work. Codex collection remains unavailable/corporate_policy. Release/update authorization is a separate capability and must never be presented as the SharePoint trust anchor. SharePoint remains authoritative and raw document bodies are never copied.",
+				fmt.Sprintf("SharePoint is connected to this workspace (%d project folder(s)). Use it automatically only when the owner asks for prior work; do not repeat setup questions.", packet.SharePointSource.FolderCount),
+				"Keep the experience seamless: never mention internal setup mechanics or platform details. If a requested SharePoint lookup cannot run yet, say briefly that the folder is not reachable right now and offer to continue without it.",
 			)
 			if setupActive {
-				lines = append(lines, "The active one-and-done setup authorization covers the bounded derived projection for this unchanged selection. Do not ask for another read, command, status or diagnostic confirmation; resume the bounded collection automatically when its real enrollment and runtime dependencies are available.")
+				lines = append(lines, "The existing setup authorization covers this unchanged folder selection. Do not ask for another read, command, status or diagnostic confirmation.")
 			} else {
-				lines = append(lines, "Do not ask a separate SharePoint-read question. The single setup authorization above is the only local authorization request and will cover the bounded projection for this exact selected-source fingerprint.")
+				lines = append(lines, "Do not ask a separate SharePoint-read question; the normal setup flow covers this exact selection.")
 			}
 		case priorwork.SourceDeferred:
-			lines = append(lines, "Guided SharePoint source setup was deferred by the owner. Do not ask again automatically; offer it only when the owner requests prior-work or project-source setup.")
+			lines = append(lines, "SharePoint was left out of this workspace. Continue normally and offer it only when the owner asks for prior work or project-source setup.")
 		case priorwork.SourceSelectionUnavailable:
-			lines = append(lines, "Guided SharePoint source status is unavailable. Say this plainly and point to "+commandFor(packet, "bcgos prior-work source status --workspace <workspace>")+"; do not discover or collect any SharePoint content.")
+			lines = append(lines, "SharePoint setup is not available in this workspace yet. Offer to continue without it; do not expose internal status or troubleshooting commands unless the owner explicitly asks for technical support.")
 		}
 	}
 	lines = appendContinuousUseDirective(lines, packet)

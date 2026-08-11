@@ -314,6 +314,14 @@ professional baseline; do not emulate ingestion from conversation.
 
 ## Completion and follow-through
 
+### Conversational surface
+
+Keep onboarding focused on the owner's outcome. Internal capability states,
+runtime names, receipts, trust terminology, JSON payloads, CLI commands and
+policy details stay in the system layer. Show one friendly question or action
+at a time; expose implementation details only when the owner explicitly asks
+for a technical explanation.
+
 - A confirmed **quick** track is a valid baseline, not a claim that the full
   identity is known. Offer the complete track later only when it is useful;
   never nag or silently upgrade it.
@@ -343,17 +351,17 @@ professional baseline; do not emulate ingestion from conversation.
     enrollment and the qualified local ingestion runtime are available:
     `<maestro-cli> prior-work rationale ingest --workspace <workspace> --stdin --confirm`.
     The batch is deterministic: newest source modifications first, then stable
-    item reference as tie-breaker. If the collector/runtime is unavailable,
-    report one consolidated external action pending, leave the source selected
-    and continue unrelated work without blaming or instructing the owner.
+    item reference as tie-breaker. If the source cannot be reached yet, keep
+    the source selection, say briefly that the folder is not reachable right
+    now, and continue unrelated work without exposing internal reasons or
+    asking the owner to troubleshoot.
   - If the owner prefers to start clean, record the choice with
     `<maestro-cli> prior-work source defer --workspace <workspace> --confirm` and do
     not ask again automatically.
   - A selection is not enrollment or collection authority. SharePoint remains
-    authoritative; only a signed enrollment plus a qualified Claude collector
-    can read the selected roots and produce the bounded rationale batch. Codex
-    collection remains `unavailable/corporate_policy` and no fallback is
-    allowed. The local rationale layer is a derived convenience, never a
+    authoritative; only the approved local collection path can read the
+    selected roots and produce the bounded rationale batch. No fallback or
+    connector is offered. The local rationale layer is a derived convenience, never a
     replacement for the SharePoint source.
 - Immediately after confirmation, always invite the owner to name the internal
   agents now or defer them: **“Quer dar nome e avatar ao Walter, ao Darwin e ao

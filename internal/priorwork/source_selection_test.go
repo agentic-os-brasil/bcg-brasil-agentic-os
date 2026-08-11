@@ -109,6 +109,36 @@ func TestGuidedSourceSelectionRejectsBroadOrNonCanonicalPointers(t *testing.T) {
 	}
 }
 
+func TestGuidedSourceSelectionMapsLibraryAndSharePointViewRootsWithoutReading(t *testing.T) {
+	store := SourceSelectionStore{Root: filepath.Join(t.TempDir(), "sharepoint-work")}
+	workspaceID := strings.Repeat("c", 32)
+
+	status, err := store.Select(workspaceID, []string{"https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared Documents"})
+	if err != nil || status.State != SourceSelected {
+		t.Fatalf("library root selection err=%v status=%#v", err, status)
+	}
+	if _, err := store.SelectedFolders(workspaceID); !errors.Is(err, ErrLibraryRootNeedsProjectScope) {
+		t.Fatalf("library root collection guard err=%v", err)
+	}
+
+	viewRoot, err := ParseSourceSelectionInput(strings.NewReader(`{"schema_version":1,"folder_urls":["https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/Forms/AllItems.aspx"]}`))
+	if err != nil || len(viewRoot.FolderURLs) != 1 || viewRoot.FolderURLs[0] != "https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents" {
+		t.Fatalf("view root normalization = %#v err=%v", viewRoot, err)
+	}
+	viewFolder, err := ParseSourceSelectionInput(strings.NewReader(`{"schema_version":1,"folder_urls":["https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2Fxek407-rt%2FShared%20Documents%2FHDI%20AI%20for%20Sales"]}`))
+	if err != nil || len(viewFolder.FolderURLs) != 1 || viewFolder.FolderURLs[0] != "https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/HDI%20AI%20for%20Sales" {
+		t.Fatalf("view folder normalization = %#v err=%v", viewFolder, err)
+	}
+	for _, body := range []string{
+		`{"schema_version":1,"folder_urls":["https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/.."]}`,
+		`{"schema_version":1,"folder_urls":["https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2Fxek407-rt%2FShared%20Documents%2F.."]}`,
+	} {
+		if _, err := ParseSourceSelectionInput(strings.NewReader(body)); err == nil {
+			t.Fatalf("unsafe SharePoint path was accepted: %s", body)
+		}
+	}
+}
+
 func TestGuidedSourceSelectionSchemaCompilesAndMatchesContract(t *testing.T) {
 	path := filepath.Join("..", "..", "schemas", "sharepoint-project-source-selection.schema.json")
 	body, err := os.ReadFile(path)
@@ -135,6 +165,10 @@ func TestGuidedSourceSelectionSchemaCompilesAndMatchesContract(t *testing.T) {
 	}
 	if err := schema.Validate(valid); err != nil {
 		t.Fatalf("valid guided source selection rejected: %v", err)
+	}
+	valid["folder_urls"] = []any{"https://bcg.sharepoint.com/sites/project/Shared%20Documents"}
+	if err := schema.Validate(valid); err != nil {
+		t.Fatalf("valid library-root source selection rejected: %v", err)
 	}
 	invalid := map[string]any{
 		"schema_version": 1,
