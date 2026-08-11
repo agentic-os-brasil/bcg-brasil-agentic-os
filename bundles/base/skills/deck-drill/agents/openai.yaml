@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deck Drill"
+  short_description: "Rehearse a deck against the questions the room will ask"
+  default_prompt: "Use $deck-drill to rehearse this deck against the questions my audience will actually ask."
