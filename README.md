@@ -72,6 +72,7 @@ can inspect.
 | Explicit SELF expansion | One consented question at a time produces a bounded, reviewable local draft; current truth stays compact and prior revisions remain audit-addressable. |
 
 For the full user journey, read the [Maestro user onboarding](docs/onboarding/maestro-user-onboarding.md).
+For the recommended account-to-case setup, read the [agent activation roadmap](docs/onboarding/agent-activation-roadmap.md).
 For the business-facing evolution path, read the [product evolution roadmap](docs/roadmap/maestro-evolution-roadmap.md).
 
 ### Maestro's bounded routing topology

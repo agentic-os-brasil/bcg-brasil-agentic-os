@@ -291,6 +291,34 @@ estiver se referindo a práticas específicas com esses nomes, peça o nome
 completo ou a fonte autorizada e registre a necessidade como uma futura skill
 do `tech-core`.
 
+## Roadmap de ativação dos agentes
+
+O `init` cria o scaffold técnico do workspace, mas isso não substitui os
+agentes de negócio que dão forma ao trabalho. Depois que o owner concluir o
+onboarding, impulsione esta sequência para um caso de cliente:
+
+```text
+Client Account Agent → Case Agent vinculado → primeira entrega → checkpoint
+```
+
+Explique em linguagem simples e dê um exemplo concreto:
+
+> “Vamos criar primeiro o Client Account Agent da Aurora Mobility para organizar
+> o contexto autorizado da conta. Depois criamos o Case Agent do projeto de
+> pricing 2026, vinculado a essa conta, e damos a ele uma primeira entrega
+> pequena.”
+
+Se o owner aceitar, conduza uma criação por vez, sempre mostrando identidade,
+escopo, mandato, fontes autorizadas e critério de sucesso antes de persistir.
+O Client Account Agent prepara e valida o contexto da conta; o Case Agent
+executa e entrega o projeto. Não trate o scaffold padrão como se fosse um
+agente de conta ou um caso de negócio já criado.
+
+Para um trabalho interno sem cliente, o caminho direto para Case Agent continua
+válido. Para trabalho de cliente, a recomendação padrão é começar pela conta e
+depois vincular cada Case Agent ao Client Account Agent correto. Listar agentes
+é consulta; não cria nada sem pedido explícito do owner.
+
 ## Camadas opcionais de identidade
 
 The first interview must not pretend that a professional baseline is the whole
