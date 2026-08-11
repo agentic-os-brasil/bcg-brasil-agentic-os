@@ -208,6 +208,36 @@ type check struct {
 	run  func() error
 }
 
+// maximumCommandLineLength keeps one invocation well inside the smallest limit
+// any supported platform imposes. Windows caps a CreateProcess command line at
+// 32,767 characters, and the repository's own file list passes that on a
+// checkout with a long path: 408 files at absolute paths measured 79,089
+// characters, so gofmt never ran and every check after it was unreachable.
+const maximumCommandLineLength = 24000
+
+// batchByCommandLineLength splits the file list so no single invocation can
+// exceed the platform limit. A file whose own path is longer than the budget
+// still gets its own batch rather than being silently dropped: skipping a file
+// would make the check quietly stop covering it.
+func batchByCommandLineLength(files []string) [][]string {
+	var batches [][]string
+	var current []string
+	length := 0
+	for _, file := range files {
+		cost := len(file) + 1
+		if len(current) > 0 && length+cost > maximumCommandLineLength {
+			batches = append(batches, current)
+			current, length = nil, 0
+		}
+		current = append(current, file)
+		length += cost
+	}
+	if len(current) > 0 {
+		batches = append(batches, current)
+	}
+	return batches
+}
+
 func checkFormatting(root string) error {
 	var files []string
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
@@ -229,13 +259,18 @@ func checkFormatting(root string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no Go files found")
 	}
-	command := exec.Command("gofmt", append([]string{"-l"}, files...)...)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("run gofmt: %w: %s", err, strings.TrimSpace(string(output)))
+	var unformatted []string
+	for _, batch := range batchByCommandLineLength(files) {
+		output, err := exec.Command("gofmt", append([]string{"-l"}, batch...)...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("run gofmt: %w: %s", err, strings.TrimSpace(string(output)))
+		}
+		if listed := strings.TrimSpace(string(output)); listed != "" {
+			unformatted = append(unformatted, listed)
+		}
 	}
-	if unformatted := strings.TrimSpace(string(output)); unformatted != "" {
-		return fmt.Errorf("unformatted files:\n%s", unformatted)
+	if len(unformatted) > 0 {
+		return fmt.Errorf("unformatted files:\n%s", strings.Join(unformatted, "\n"))
 	}
 	return nil
 }
