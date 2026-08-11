@@ -177,6 +177,7 @@ set -euo pipefail
 mkdir -p "$ROOT/dist/native-$VERSION"
 REGISTRY_SHA256="$(shasum -a 256 "$REGISTRY" | awk '{print $1}')"
 GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath \
+  -ldflags "-X main.BuildTrustProfile=canary-simple" \
   -o "$ROOT/dist/native-$VERSION/maestro-installer" \
   ./cmd/maestro-installer
 GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath \
