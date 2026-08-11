@@ -87,7 +87,7 @@ func TestSessionStartRejectsHistoricalBodySmuggledIntoContinuousStatus(t *testin
 
 func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T) {
 	pending := sessionctx.Packet{WorkspaceRoot: "/Users/pilot/Developer/maestro-os", Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", NextQuestion: "What is your professional role?"}}}
-	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING REQUIRED") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore conflicting persona") || !strings.Contains(got, "USER-FACING COMMUNICATION") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {
+	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING REQUIRED") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore conflicting persona") || !strings.Contains(got, "USER-FACING COMMUNICATION") || !strings.Contains(got, "friendly wrapper around the system") || !strings.Contains(got, "Absorb ordinary system friction") || !strings.Contains(got, "instead of exposing a setup journey") || !strings.Contains(got, "choice changes scope, consequence or final outcome") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {
 		t.Fatalf("pending directive = %q", got)
 	}
 	selection := pending
