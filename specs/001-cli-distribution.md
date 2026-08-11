@@ -28,7 +28,7 @@ bcgos memory context
 bcgos memory dream <daily|weekly>
 ```
 
-`capture`, `status` and `context` call the runtime-neutral memory core. Capture content enters through bounded standard input rather than process arguments and still requires an adapter sanitization attestation. `dream daily` runs the bundled deterministic L1 synthesizer with the bounded managed runtime configuration; `dream weekly` remains machine-readably unavailable until qualified deep synthesis and lifetime eligibility adapters exist. The local data directory remains explicit for manual commands; the enrolled local maintenance adapter resolves the approved user-local data root.
+`capture`, `status` and `context` call the runtime-neutral memory core. Capture content enters through bounded standard input rather than process arguments and still requires an adapter sanitization attestation. `dream daily` runs the bundled deterministic L1 synthesizer; `dream weekly` runs the bundled deterministic L2/L3 rollup and named lifetime-continuity eligibility policy with the bounded managed runtime configuration. Memory commands resolve the installed per-user data root by default; `--data-dir` remains an explicit override for tests and advanced recovery. The enrolled local maintenance adapter uses the same resolved root.
 
 ## Current bootstrap behavior
 
@@ -37,6 +37,18 @@ surface: `.bcgos/workspace.json` and `brain/README.md`. It preserves an
 existing brain README and never creates a client, project or people taxonomy
 before that taxonomy is accepted. Private configuration, memory, scheduler
 state and logs are created under the local data root, not under the workspace.
+
+The visual installer extends that minimal CLI bootstrap after the workspace has
+been validated: it materializes an empty workspace-scoped memory tree under
+`<local BCGOS data>/memory/workspaces/<workspace-id>/`, initializes the
+non-overwriting human atlas and creates the current day's editable daily page.
+It creates no synthetic capture, memory commit, lock or execution evidence.
+The handoff reports both the selected data root and a ready-to-run
+`bcgos memory status --data-dir <selected-root> --workspace <workspace-id>`
+command, so a custom installer root remains exact. Maintenance routines
+are then enrolled against the same workspace identity and data root; their
+absence or degraded host activation remains visible but does not invalidate an
+otherwise usable workspace.
 
 `bcgos status [path-or-workspace-id]` returns machine-readable workspace state, version and
 declared capability availability. `bcgos doctor [path-or-workspace-id]` returns actionable

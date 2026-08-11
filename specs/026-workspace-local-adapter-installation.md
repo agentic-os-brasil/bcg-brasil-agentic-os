@@ -1,15 +1,16 @@
 # Spec 026 - Workspace-local adapter installation
 
-Status: complete five-event lifecycle configuration implemented for Claude and
-Codex; native runtime qualification remains separate.
+Status: seven-event Claude beta and five-event Codex lifecycle configuration
+implemented; native runtime qualification remains separate.
 
 `bcgos adapter install --runtime claude|codex [workspace]` first ensures the
 workspace-local installation dependencies (`workspace.json`, durable
 orchestration state, owner registry, Case Agent dossier and signed agent
 scaffold) exist idempotently, then adds only Maestro-owned commands to the
 runtime's workspace-local configuration. Both
-Claude and Codex receive `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
-`PostToolUse` and `Stop` entries mapped to the canonical lifecycle. Claude uses
+Claude receives `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
+`Stop`, `SubagentStart` and `SubagentStop`; Codex receives the original five
+events. Claude uses
 `.claude/settings.local.json`; Codex uses `.codex/hooks.json`. This avoids
 mutating a user-wide configuration and keeps the adapter scoped to a
 professional workspace.
@@ -35,8 +36,9 @@ workspace Git exclusion file when one exists, so an absolute machine-specific
 executable path is not accidentally committed.
 If that configuration is already tracked by Git, installation fails before any
 write; an ignore rule cannot protect a file already in the index.
-Every installed command has a two-second timeout. Claude `PostToolUse` and
-`Stop` are explicitly asynchronous; the other bindings perform only their
+Every installed command has a five-second timeout. Claude `PostToolUse` is
+explicitly asynchronous. Claude `Stop` is synchronous because
+it owns the native-agent completion gate; the other bindings perform only their
 bounded inline responsibility. No binding starts a worker or makes a
 network/model request.
 
@@ -52,9 +54,10 @@ private workspace-local HMAC key.
 The adapter never converts an environment variable or installation flag into
 user approval.
 
-The projection is local workspace materialization, not a capability claim:
-native runtime capabilities remain `unavailable` until the conformance protocol
-produces qualifying evidence.
+The projection is local workspace materialization. Exact Claude adapter and
+managed-agent inspection enables `operational_beta`; native qualification
+remains independent telemetry until the conformance protocol produces fresh
+evidence.
 
 The dependency bootstrap is data-free and does not select an onboarding track,
 write owner answers, ingest a memory source or install an external runtime.

@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted for an executable shadow slice. Native runtime dispatch remains
-unavailable until separately qualified.
+Retained as an optional strict/shadow assurance profile. Under AGEN, native
+runtime orchestration is usable without this policy and qualification reports
+evidence rather than granting permission.
 
 ## Purpose
 
@@ -18,9 +19,10 @@ governed multi-agent loop. The decision cannot depend only on prompt wording.
 Darwin must be able to observe the chosen route and later recommend calibration
 without changing policy during an episode.
 
-The policy is explicitly experimental and has no implicit posture. Every
-episode must provide `direct`, `balanced` or `deliberative`; an omitted posture
-fails closed rather than silently selecting a depth.
+The policy is explicitly experimental. When selected for a strict/shadow run,
+an episode provides `direct`, `balanced` or `deliberative`. When it is not
+selected, Maestro chooses depth probabilistically from intent and context.
+Missing policy metadata never blocks ordinary attended work.
 
 ## Closed decision envelope
 
@@ -43,7 +45,7 @@ confirmation requirement. A proposed expert is eligible only when its exact
 registry entry is `published`; `draft` and `retired` suggestions fall back to a
 compatible published expert or fail closed.
 
-## Deterministic policy
+## Optional deterministic policy
 
 Policy version `pae-v1-experimental` produces exactly one shadow route. It is a breaking
 policy version: route plans stamped with the previous policy version must be

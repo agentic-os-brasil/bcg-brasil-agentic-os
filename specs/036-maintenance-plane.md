@@ -42,14 +42,15 @@ The jobs are deliberately split by success boundary:
   rejects source-free success and does not read or synthesize memory;
 - `memory-light-dream` has a separate three-hour due contract and a qualified
   deterministic L1-only handler over already-sanitized captures;
-  `memory-deep-dream` remains weekly, model-backed and unavailable until deep
-  synthesis plus lifetime eligibility are qualified;
+  `memory-deep-dream` is a weekly deterministic L2/L3 rollup with named,
+  provenance-checked lifetime eligibility;
 - deterministic checks may eventually run unattended once their local contract
   is qualified;
 - local adapters, including Darwin housekeeping, remain policy-gated; Darwin
   may apply only an allowlisted, reversible repair inside managed state after
   deterministic assessment, guard authorization and post-repair validation;
-- model-backed weekly memory dreaming and Walter self review are never silently enabled;
+- Walter self review is never silently enabled; weekly memory dreaming uses
+  only the bundled deterministic adapter and its explicit eligibility policy;
 - managed-scope jobs cannot write owner or private workspace state.
 
 ## Wake and catch-up

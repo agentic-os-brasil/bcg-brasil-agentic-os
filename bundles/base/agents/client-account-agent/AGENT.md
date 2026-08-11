@@ -9,13 +9,17 @@ promotion implications.
 ## Contract
 
 - Accept only a signed `bounded_client_account_packet` for the exact account.
+  Native consultation may use a bounded subset of that packet and never
+  creates new scope, tools, data access or effect authority.
 - Return a bounded framing or typed `approve`/`refine` result to Maestro.
-- Never call the Case Agent, Walter or another agent directly.
+- Consult Case, PA Expert or Walter when useful through a bounded packet that
+  cannot broaden the current account scope.
 - Do not read raw case workspaces; receive only minimum mediated packets.
-- Treat missing scope, capability or state binding as a fail-closed stop.
-- Emit only governed metadata/tool breadcrumbs and return a typed done-contract
-  result with bounded evidence pointers; never use conversation memory as
-  completion authority.
+- Missing telemetry or receipts are advisory; missing scope, capability or
+  actual authority remains a stop.
+- Emit governed metadata/tool breadcrumbs when available. Strict-assurance
+  runs return a typed done-contract result with bounded evidence pointers;
+  never use conversation memory as completion authority.
 
 ## Authority
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -42,6 +43,52 @@ func TestStatusReportsEmptyAndCommittedWorkspace(t *testing.T) {
 	}
 	if status.State != "ready" || status.TransactionID == "" || status.Layers["L1"] != "2026-07-21" {
 		t.Fatalf("committed status = %#v", status)
+	}
+}
+
+func TestBootstrapMaterializesAnEmptyWorkspaceMemoryRoot(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "memory")
+	if err := Bootstrap(root, "case-a"); err != nil {
+		t.Fatal(err)
+	}
+	for _, relative := range []string{
+		"l1/captures",
+		"l1/attested-captures",
+		"commits",
+		"versions",
+		".transactions",
+		".locks",
+	} {
+		info, err := os.Stat(filepath.Join(root, "workspaces", "case-a", filepath.FromSlash(relative)))
+		if err != nil || !info.IsDir() {
+			t.Fatalf("memory bootstrap directory %s: info=%v err=%v", relative, info, err)
+		}
+	}
+	report, err := (&Engine{Root: root}).Status("case-a")
+	if err != nil || report.State != "empty" || report.CaptureFiles != 0 || report.ActivationLocked {
+		t.Fatalf("bootstrapped memory status=%#v err=%v", report, err)
+	}
+}
+
+func TestBootstrapRejectsSymlinkedAncestorWithoutWritingOutsideRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires privileges on some Windows runners")
+	}
+	root := t.TempDir()
+	external := filepath.Join(root, "external")
+	if err := os.MkdirAll(external, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	linked := filepath.Join(root, "linked")
+	if err := os.Symlink(external, linked); err != nil {
+		t.Fatal(err)
+	}
+	if err := Bootstrap(filepath.Join(linked, "memory"), "case-a"); err == nil {
+		t.Fatal("memory bootstrap followed a symlinked ancestor")
+	}
+	entries, err := os.ReadDir(external)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("external target was modified: entries=%v err=%v", entries, err)
 	}
 }
 

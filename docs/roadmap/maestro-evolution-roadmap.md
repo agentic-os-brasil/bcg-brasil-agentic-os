@@ -85,6 +85,31 @@ retomada reproduzível e ausência de mistura entre workspace e core.
 **Valor vendido:** “o sistema começa pequeno, explica o que está acontecendo e
 não exige que o consultor vire engenheiro de plataforma”.
 
+### Escada de ativação dos agentes
+
+O primeiro onboarding não termina quando o owner responde à entrevista. Para
+que o usuário transforme o Maestro em uma operação de trabalho, a jornada deve
+impulsionar quatro passos visíveis:
+
+1. criar um **Client Account Agent** para cada conta de cliente recorrente;
+2. criar um **Case Agent** para cada projeto ou workstream relevante;
+3. vincular o caso à conta, definir fontes autorizadas, limites e critério de
+   sucesso;
+4. concluir uma primeira entrega pequena e registrar um checkpoint.
+
+Exemplo de convite ao usuário:
+
+> “Você já tem o Maestro preparado. Agora vamos criar o Client Account Agent da
+> Aurora Mobility e, em seguida, o Case Agent do pricing 2026. Assim o contexto
+> da conta fica separado da execução do projeto e você pode retomar o trabalho
+> sem reexplicar tudo.”
+
+O scaffold técnico criado no `init` não deve ser apresentado como esses agentes
+de negócio já configurados. A evidência para fechar essa etapa é uma conta
+registrada, um caso vinculado, uma entrega revisada e uma próxima ação clara.
+Para trabalhos internos sem conta de cliente, o caminho direto para Case Agent
+continua válido.
+
 ### Horizonte 1 — Runtime e distribuição confiáveis
 
 **Resultado:** o produto chega ao dispositivo certo, na versão certa, e pode ser

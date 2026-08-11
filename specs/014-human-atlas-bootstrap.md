@@ -28,6 +28,7 @@ private roots:
   projects/index.md
   people/index.md
   daily/index.md
+  daily/YYYY-MM-DD.md
 ```
 
 The owner root is private user data. The workspace root is scoped to its
@@ -53,6 +54,11 @@ workspace atlas:
 - `daily/template-daily.md` keeps a human work log and explicitly states that
   selected daily signals may join Claude/Codex session signals in L1 only after
   approved sanitization and provenance capture.
+
+Initialization also creates the current local day's page from the daily
+template. The page is an immediately usable human work log, remains editable,
+and is never overwritten on a later initialization. Its existence is not a
+memory capture, receipt or proof that a scheduled routine has executed.
 
 These templates are canonical bootstrap assets, not examples copied from a
 contributor's private brain. A user may edit them after creation; repeated

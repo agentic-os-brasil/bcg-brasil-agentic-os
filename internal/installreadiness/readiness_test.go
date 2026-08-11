@@ -70,14 +70,25 @@ func TestVerifyAcceptsOnlyCanonicalConfiguredClaudeInstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.Runtime != "claude" || !report.Ready || len(report.Lifecycle) != 5 {
+	if report.Runtime != "claude" || !report.Ready || report.CapabilityState != "operational_beta" || len(report.Lifecycle) != 7 {
 		t.Fatalf("unexpected Claude readiness report: %#v", report)
 	}
 	for _, binding := range report.Lifecycle {
 		if !strings.HasPrefix(binding.Command, quoteTestPath(fixture.cli)+" hook claude ") ||
-			!binding.Configured || binding.AdapterObserved || binding.NativeQualified {
+			binding.CapabilityState != "operational_beta" || !binding.Configured || binding.AdapterObserved || binding.NativeQualified {
 			t.Fatalf("unsafe Claude lifecycle binding: %#v", binding)
 		}
+	}
+}
+
+func TestVerifyRejectsMissingManagedClaudeNativeAgent(t *testing.T) {
+	fixture := newReadinessFixtureForRuntime(t, "claude", nil)
+	if err := os.Remove(filepath.Join(fixture.workspace, ".claude", "agents", "pa-expert.md")); err != nil {
+		t.Fatal(err)
+	}
+	report, err := Verify(fixture.options())
+	if err == nil || len(report.Checks) == 0 || report.Checks[len(report.Checks)-1].ID != "native_agents" {
+		t.Fatalf("report=%#v err=%v", report, err)
 	}
 }
 

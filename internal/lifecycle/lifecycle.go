@@ -24,6 +24,8 @@ const (
 	PreActionGuard    = "pre_action_guard"
 	PostActionObserve = "post_action_observe"
 	StopFinalize      = "stop_finalize"
+	SubagentStart     = "subagent_start"
+	SubagentStop      = "subagent_stop"
 	// AdapterCommand means the bounded Maestro adapter command produced this
 	// receipt. It deliberately does not claim that a qualifying native runtime
 	// session invoked that command.
@@ -39,6 +41,7 @@ var (
 	validEvents = map[string]bool{
 		SessionStart: true, ContextInject: true, PreActionGuard: true,
 		PostActionObserve: true, StopFinalize: true,
+		SubagentStart: true, SubagentStop: true,
 	}
 	workspaceIDPattern  = regexp.MustCompile(`^[a-f0-9]{32}$`)
 	idempotencyPattern  = regexp.MustCompile(`^[a-f0-9]{32}$`)
@@ -60,6 +63,7 @@ type Receipt struct {
 	OccurredAt     time.Time `json:"occurred_at"`
 	IdempotencyKey string    `json:"idempotency_key"`
 	ToolName       string    `json:"tool_name,omitempty"`
+	AgentType      string    `json:"agent_type,omitempty"`
 	Diagnostic     string    `json:"diagnostic,omitempty"`
 }
 
@@ -271,6 +275,9 @@ func validateReceipt(receipt Receipt) error {
 	if receipt.ToolName != "" && !metadataNamePattern.MatchString(receipt.ToolName) {
 		return errors.New("invalid receipt tool name")
 	}
+	if receipt.AgentType != "" && !metadataNamePattern.MatchString(receipt.AgentType) {
+		return errors.New("invalid receipt agent type")
+	}
 	if !validDiagnostics[receipt.Diagnostic] {
 		return errors.New("unsupported receipt diagnostic")
 	}
@@ -325,5 +332,6 @@ func sameIdempotentReceipt(left, right Receipt) bool {
 		left.Provenance == right.Provenance &&
 		left.IdempotencyKey == right.IdempotencyKey &&
 		left.ToolName == right.ToolName &&
+		left.AgentType == right.AgentType &&
 		left.Diagnostic == right.Diagnostic
 }

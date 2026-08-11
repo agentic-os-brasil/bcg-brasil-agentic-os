@@ -8,6 +8,13 @@ import (
 	"runtime"
 )
 
+// CanonicalPrivatePath resolves only the platform's fixed temporary-directory
+// alias (for example macOS /var -> /private/var). It never follows an
+// application-controlled symlink and is safe to use before the no-follow walk.
+func CanonicalPrivatePath(path string) (string, error) {
+	return canonicalSchedulerRoot(path)
+}
+
 // EnsurePrivateDirectory creates or opens one directory through the scheduler's
 // descriptor-anchored, no-follow filesystem boundary. On Unix, the resulting
 // directory is normalized to owner-only permissions.

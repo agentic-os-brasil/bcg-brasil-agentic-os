@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## WDRM - Bundle deterministic weekly memory rollups
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A new installation could create daily L1 continuity, but weekly L2/L3 consolidation and lifetime promotion were exposed as unavailable despite the engine already providing atomic, provenance-checked staging.
+- Decision: Ship a runtime-neutral deterministic weekly adapter that rolls up only active generated artifacts within managed bounds. Use the named `deterministic-l3-continuity-v1` policy: lifetime may activate only after the current candidate carries two weekly L3 generations; otherwise retain the candidate result as an ineligible, diagnosable weekly pass.
+- Consequences: The installed CLI and enrolled maintenance handler execute daily and weekly cycles without a remote model. L2/L3 are available with L1 input; lifetime remains versioned, non-overwriting and conservatively delayed until continuity is demonstrated.
+- Refs: specs/001-cli-distribution.md; specs/006-memory-persistence.md; internal/memory/deep_synthesizer.go; internal/maintenance/memory_deep_dream.go
+- Supersedes: none
+
 ## Foundation snapshot - 2026-07-19
 
 This is a frozen milestone for navigation, not a separate decision, live index or status report. The coded entries below remain authoritative; future decisions do not require this table to be rewritten.
@@ -963,6 +974,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: PONB; specs/020-release-distribution.md; docs/installer-package.md; dev/skills/release-export/SKILL.md; internal/dev/releasepack/windows_portable.go
 - Supersedes: PONB
 
+## AGEN - Put probabilistic agency over a minimal deterministic kernel
+
+- Date: 2026-08-10
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro's deterministic workflow, readiness, telemetry and receipt contracts accumulated into admission gates. A locally usable installation could be withheld from the owner because optional evidence, onboarding, scheduler state or a pre-enumerated agent route was incomplete. This prevented Canary use and therefore also prevented the observations needed to improve the product.
+- Decision: The default Maestro runtime is probabilistic and advisory. Maestro and registered agents choose how to reason, plan and compose bounded consultations through the host runtime. Agent contracts define purpose, scope, data/tool/effect authority, expected return and accountability; they do not prescribe every intermediate step. BCGOS keeps a minimal deterministic kernel for release integrity, workspace/path isolation, credential and access boundaries, and concrete irreversible or external effects. Onboarding, setup grants, adapter verification, native qualification, scheduler state, telemetry, breadcrumbs, receipts, Walter routing and deterministic depth profiles advise, diagnose and support replay but never block otherwise safe attended work. Deterministic routes and signed completion contracts remain opt-in strict/shadow assurance for unattended or specially governed runs.
+- Consequences: A verified core plus initialized workspace is ready for handoff even when optional runtime wiring is degraded. Missing evidence reduces observability rather than validity. Session hooks continue the requested task while offering onboarding and repair. Maestro can adapt depth and consultation to intent instead of satisfying a closed flag grammar. Route variance increases, so quality is managed through narrow authority envelopes, bounded context, outcome evidence and later analysis rather than pre-authorizing every thought. The existing deterministic controller remains available for tests, replay and strict runs but is no longer the default admission authority.
+- Refs: COFS; LIVA; specs/018-maestro-core-agents.md; specs/023-sequential-agent-dispatch.md; specs/033-deterministic-agent-activation.md; internal/cli; internal/sessionhook; cmd/maestro-installer
+- Supersedes: MAST
+
 ## ONCX - Make first-use continuity an installed onboarding method
 
 - Date: 2026-08-10
@@ -972,6 +994,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Decision: Ship an `execution-continuity` method in the base bundle, route explicit task/checkpoint/resume language to it and add the same instructions to the managed orientation. The method uses the existing local execution ledger after concise owner confirmation, keeps task bodies and checkpoints bounded, and consumes `work next --active` on a new session. Owner Context `work-state.md` remains a separate authority; runtime qualification evidence never gates local ledger use.
 - Consequences: A fresh installation can guide a non-technical owner from onboarding into a first tracked deliverable and a real cross-session checkpoint without inventing a second task store or requiring native qualification. The product still does not infer a task from arbitrary text, synthesize checkpoints from hooks or claim continuity before a new runtime session observes the projection.
 - Refs: CONT; specs/029-execution-ledger-v1.md; specs/044-continuous-use.md; docs/onboarding/maestro-user-onboarding.md; internal/execution; internal/sessionctx; internal/runtimeprojection
+- Supersedes: none
+
+## CNAB - Enable Claude native agents for the controlled beta
+
+- Date: 2026-08-10
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The deterministic Maestro planner and role contracts exist, but the Claude workspace still exposes them as definitions rather than callable native subagents. Treating native qualification as a prerequisite would keep a working controlled beta artificially disabled.
+- Decision: Project Client Account Agent, Case Agent, Walter, Darwin and PA Expert as Maestro-owned Claude project subagents. Maestro remains the main-session hub and chooses strategic versus direct depth. Native SubagentStart/SubagentStop hooks record metadata and enforce one active specialist, no child delegation, exact workspace scope and the minimum Client Account -> Case -> Client Account round trip whenever the account route is selected. Claude Stop is synchronous and blocks an incomplete selected route. Working native projection is reported as `operational_beta`; native qualification remains separate telemetry. Existing blocks for destructive protected-root operations, unconfirmed external mutation and cross-workspace access remain authoritative.
+- Consequences: The Canary can exercise real model-backed delegation without waiting for qualification receipts to promote product availability. A missing or contradictory adapter/agent projection remains an installation error, while missing beta telemetry does not disable execution. Client Account, Walter, Darwin and PA Expert are tool-free in this beta; Case receives only workspace-local file tools. MarkItDown installation through Claude remains an explicit future item and is not bundled into this activation.
+- Refs: LIVA; specs/040-maestro-native-delegation.md; specs/049-claude-native-agent-beta.md; internal/claudeagents; internal/nativeagentflow; internal/adaptercfg; internal/cli
 - Supersedes: none
 
 ## AGNT - Make the runtime agent the work operator
@@ -995,3 +1028,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: New agent workflows must not require run IDs, JSON envelopes, command-level confirmations or deterministic step-by-step orchestration. Compatibility ledgers and CLI commands may remain for migration, recovery and evidence, but they are not normal product UX. External research still requires an available approved capability and bounded source handling; removing product friction does not authorize secret access or uncontrolled disclosure.
 - Refs: AGNT; specs/033-workspace-first-value.md; bundles/base/skills/case-agent-setup/SKILL.md; bundles/base/skills/execution-continuity/SKILL.md
 - Supersedes: AGNT
+
+## OATL - Activate the owner atlas as the owner's longitudinal professional layer
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Spec 014 created a private owner-atlas root but deliberately left it as a manual navigation scaffold. Maestro needs a useful cross-project layer for professional trajectory, methods, development, retrospectives and selected learnings without duplicating Owner Context, copying client bodies or turning deterministic infrastructure into an authority over the owner's own second brain.
+- Decision: Treat `atlas/owner/` as the owner-controlled longitudinal professional corpus, distinct from canonical `owner/self/` and from workspace/client truth. The owner may author and organize free-form private Markdown; templates and named operations are reliability aids rather than admission gates. Maestro and Walter may consume bounded, purpose-declared projections, while Case, Client Account and PA Expert agents receive only explicitly authorized attenuated context. Attended requests and revocable standing grants may drive manual or scheduled maintenance. The generative `native_advisory` layer selects, reasons and proposes; the deterministic kernel is limited to real mechanical boundaries such as root isolation, atomicity, revision conflict, provenance, revocation and confirmed destructive or external effects.
+- Consequences: Owner Atlas operations, projections, grants, rituals and schedules remain implementation work and cannot be claimed available from this decision alone. Missing adapters, scheduler evidence, telemetry or native qualification degrade automation but do not block ordinary conversation, direct owner editing or reviewable drafts. Raw client/workspace bodies remain in their owning workspace; cross-project continuity uses owner-authored content, pointers or sanitized promotion. Implementation must preserve direct owner CRUD, non-overwrite of hand edits, bounded readers and honest evidence of every managed occurrence.
+- Refs: AGEN; LIVA; specs/013-owner-context.md; specs/014-human-atlas-bootstrap.md; specs/023-sequential-agent-dispatch.md; specs/040-maestro-native-delegation.md; docs/proposals/006-owner-scope-contract/README.md; docs/proposals/007-owner-atlas-operations/README.md
+- Supersedes: none

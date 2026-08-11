@@ -216,7 +216,7 @@ func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 
 	output.Reset()
 	code = Run([]string{"memory", "status", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
-	if code != 0 || !strings.Contains(output.String(), `"state": "captured"`) || !strings.Contains(output.String(), `"dreaming": "daily_light_available_weekly_deep_unavailable"`) {
+	if code != 0 || !strings.Contains(output.String(), `"state": "captured"`) || !strings.Contains(output.String(), `"dreaming": "daily_light_and_weekly_deep_available"`) {
 		t.Fatalf("status exit = %d, output = %s", code, output.String())
 	}
 
@@ -239,6 +239,18 @@ func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 	}
 	if diagnostics, ok := bundle["diagnostics"].([]any); !ok || len(diagnostics) != 4 {
 		t.Fatalf("context diagnostics = %#v", bundle)
+	}
+}
+
+func TestMemoryStatusUsesTheInstalledDataRootByDefault(t *testing.T) {
+	dataDir := t.TempDir()
+	if err := memory.Bootstrap(filepath.Join(dataDir, "memory"), "case-a"); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	code := runMemoryWithDataRoot([]string{"status", "--workspace", "case-a"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataDir, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "empty"`) {
+		t.Fatalf("default data-root status exit=%d output=%s", code, output.String())
 	}
 }
 
@@ -347,7 +359,7 @@ func TestMemoryCLIReportsAllInvalidCommitsAsCorrupt(t *testing.T) {
 	}
 }
 
-func TestMemoryDailyDreamExcludesManualCaptureAndWeeklyRemainsUnavailable(t *testing.T) {
+func TestMemoryDailyDreamExcludesManualCaptureAndWeeklyRunsWithTrustedL1(t *testing.T) {
 	dataDir := t.TempDir()
 	var output bytes.Buffer
 	if code := RunWithInput([]string{"memory", "capture", "--data-dir", dataDir, "--workspace", "case-a", "--kind", "decision", "--stdin", "--sanitized"}, strings.NewReader("owner confirmation required"), &output, &output); code != ExitOK {
@@ -359,8 +371,16 @@ func TestMemoryDailyDreamExcludesManualCaptureAndWeeklyRemainsUnavailable(t *tes
 		t.Fatalf("daily dream exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
+	if err := recordAttestedSkillRoute(dataDir, "claude", "case-a", "session-a", []skillrouting.Selection{{ID: "meeting-close"}}); err != nil {
+		t.Fatal(err)
+	}
+	code = Run([]string{"memory", "dream", "daily", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "succeeded"`) {
+		t.Fatalf("trusted daily dream exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
 	code = Run([]string{"memory", "dream", "weekly", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
-	if code != ExitUnavailable || !strings.Contains(output.String(), `"capability": "memory_deep_dreaming"`) || !strings.Contains(output.String(), `"state": "unavailable"`) {
+	if code != ExitOK || !strings.Contains(output.String(), `"capability": "memory_deep_dreaming"`) || !strings.Contains(output.String(), `"state": "succeeded"`) || !strings.Contains(output.String(), `"L2"`) || !strings.Contains(output.String(), `"L3"`) {
 		t.Fatalf("weekly dream exit = %d, output = %s", code, output.String())
 	}
 }
@@ -609,8 +629,8 @@ func TestInstalledHookLeavesSafeActionToNativeFlowWhenOrchestrationStateIsSymlin
 	}
 	for _, pointer := range []string{"../outside.json", ".bcgos/../outside.json"} {
 		output.Reset()
-		if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", pointer, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK || !strings.Contains(output.String(), "orchestration state") {
-			t.Fatalf("pointer %q accepted: exit=%d output=%s", pointer, code, output.String())
+		if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", pointer, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+			t.Fatalf("advisory pointer %q blocked session: exit=%d output=%s", pointer, code, output.String())
 		}
 	}
 	outside := filepath.Join(t.TempDir(), "state.json")
@@ -641,12 +661,12 @@ func TestInstalledHookLeavesSafeActionToNativeFlowWhenOrchestrationStateIsSymlin
 	}
 	output.Reset()
 	code = runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code == ExitOK || !strings.Contains(output.String(), "decode orchestration state") {
-		t.Fatalf("malformed state accepted: exit=%d output=%s", code, output.String())
+	if code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("malformed advisory state blocked session: exit=%d output=%s", code, output.String())
 	}
 }
 
-func TestInstalledHookRejectsMissingOrchestrationStateWithRemediation(t *testing.T) {
+func TestInstalledHookContinuesWhenOrchestrationStateIsMissing(t *testing.T) {
 	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -664,8 +684,40 @@ func TestInstalledHookRejectsMissingOrchestrationStateWithRemediation(t *testing
 	}
 	output.Reset()
 	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code == ExitOK || !strings.Contains(output.String(), "orchestration state is missing") || !strings.Contains(output.String(), "bcgos init") {
-		t.Fatalf("missing state accepted without remediation: exit=%d output=%s", code, output.String())
+	if code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("missing advisory state blocked SessionStart: exit=%d output=%s", code, output.String())
+	}
+}
+
+func TestInstalledSessionHooksDegradeWhenOptionalContextIsCorrupt(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	if err := os.WriteFile(filepath.Join(dataRoot, "owner", "registry.json"), []byte("{not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspacePath, ".bcgos", "runtime-projection.json"), []byte("{not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "session-start", "--adapter-source", "maestro", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+				t.Fatalf("corrupt optional state blocked SessionStart: exit=%d output=%s", code, output.String())
+			}
+			output.Reset()
+			prompt := `{"session_id":"session-a","prompt":"continue the requested work"}`
+			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "UserPromptSubmit"`) {
+				t.Fatalf("corrupt optional state blocked context injection: exit=%d output=%s", code, output.String())
+			}
+		})
+	}
+	output.Reset()
+	if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("corrupt optional state blocked installed Codex SessionStart binding: exit=%d output=%s", code, output.String())
 	}
 }
 
@@ -1002,7 +1054,7 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 	}
 }
 
-func TestLifecycleKeepsPendingOnboardingOnTheGovernedGuide(t *testing.T) {
+func TestLifecycleOffersPendingOnboardingWithoutSuppressingRequestedWork(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
 			dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
@@ -1027,8 +1079,8 @@ func TestLifecycleKeepsPendingOnboardingOnTheGovernedGuide(t *testing.T) {
 			output.Reset()
 			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
 				!strings.Contains(output.String(), "maestro-onboarding") ||
-				strings.Contains(output.String(), "case-kickoff") {
-				t.Fatalf("pending onboarding routed an unrelated Case method = %d %s", code, output.String())
+				!strings.Contains(output.String(), "case-kickoff") {
+				t.Fatalf("pending onboarding suppressed requested work = %d %s", code, output.String())
 			}
 		})
 	}
@@ -1187,6 +1239,65 @@ func TestAdapterInstallRepairsMissingStateBeforeSessionHook(t *testing.T) {
 	output.Reset()
 	if code := runHookWithInput([]string{"claude", "session-start", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "SessionStart"`) {
 		t.Fatalf("session hook after repair = %d %s", code, output.String())
+	}
+}
+
+func TestClaudeNativeAgentBetaEnforcesStrategicRoundTrip(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"claude", "session-start", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "NATIVE AGENT ROUTING IS OPERATIONAL IN BETA") {
+		t.Fatalf("operational beta session = %d %s", code, output.String())
+	}
+	call := func(action, body string) (int, string) {
+		output.Reset()
+		code := runHookWithInput([]string{"claude", action, workspacePath}, strings.NewReader(body), &output, &output, func() (string, error) { return dataRoot, nil })
+		return code, output.String()
+	}
+	if code, body := call("context-injection", `{"session_id":"session-native","prompt":"prepare strategic case"}`); code != ExitOK || !strings.Contains(body, `"hookEventName": "UserPromptSubmit"`) {
+		t.Fatalf("turn start = %d %s", code, body)
+	}
+	if code, body := call("subagent-start", `{"session_id":"session-native","agent_id":"account-1","agent_type":"client-account-agent"}`); code != ExitOK || !strings.Contains(body, "managed Maestro specialist") {
+		t.Fatalf("account start = %d %s", code, body)
+	}
+	if code, body := call("subagent-stop", `{"session_id":"session-native","agent_id":"account-1","agent_type":"client-account-agent"}`); code != ExitOK {
+		t.Fatalf("account stop = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native"}`); code != ExitOK || !strings.Contains(body, `"decision": "block"`) || !strings.Contains(body, "call Case Agent") {
+		t.Fatalf("missing Case gate = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native","stop_hook_active":true}`); code != ExitOK || !strings.Contains(body, `"continue": true`) || strings.Contains(body, `"decision": "block"`) {
+		t.Fatalf("re-entrant Stop must not loop = %d %s", code, body)
+	}
+	if code, body := call("subagent-start", `{"session_id":"session-native","agent_id":"case-1","agent_type":"case-agent"}`); code != ExitOK {
+		t.Fatalf("case start = %d %s", code, body)
+	}
+	if code, body := call("subagent-stop", `{"session_id":"session-native","agent_id":"case-1","agent_type":"case-agent"}`); code != ExitOK {
+		t.Fatalf("case stop = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native"}`); code != ExitOK || !strings.Contains(body, `"decision": "block"`) || !strings.Contains(body, "return the Case result") {
+		t.Fatalf("missing account validation gate = %d %s", code, body)
+	}
+	if code, body := call("subagent-start", `{"session_id":"session-native","agent_id":"account-2","agent_type":"client-account-agent"}`); code != ExitOK {
+		t.Fatalf("account validation start = %d %s", code, body)
+	}
+	if code, body := call("subagent-stop", `{"session_id":"session-native","agent_id":"account-2","agent_type":"client-account-agent"}`); code != ExitOK {
+		t.Fatalf("account validation stop = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native"}`); code != ExitOK || !strings.Contains(body, `"continue": true`) {
+		t.Fatalf("complete route = %d %s", code, body)
 	}
 }
 

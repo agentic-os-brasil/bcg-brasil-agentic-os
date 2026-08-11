@@ -106,12 +106,15 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 		"Sessão e hooks", "SELF do dono", "Memória e persistência",
 		"Brain, wiki e navegação", "Agents e delegação", "Execução e continuidade",
 		"execution-continuity", "dream-memory",
-		"<maestro-cli> work next --active --workspace <workspace>",
+		"brain/tasks/", "receita conversacional",
 		"<maestro-cli> adapter status --runtime claude",
 	} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("orientation missing %q", expected)
 		}
+	}
+	if strings.Contains(text, "<maestro-cli> work next --active --workspace <workspace>") {
+		t.Fatalf("orientation still exposes the legacy ledger command: %q", text)
 	}
 	if !strings.Contains(text, "`/dream-memory`") || strings.Contains(text, "`$dream-memory`") {
 		t.Fatalf("orientation skill references should use slash notation: %q", text)

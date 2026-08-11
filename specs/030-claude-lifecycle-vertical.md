@@ -1,7 +1,7 @@
 # Spec 030 - Claude lifecycle vertical
 
-Status: implemented behind runtime-neutral contracts; pilot capability
-promotion pending qualifying native-session evidence.
+Status: operational for the controlled Claude beta; native qualification is
+pending telemetry rather than an availability gate.
 
 ## Scope
 
@@ -15,7 +15,9 @@ workspace layout, federation, memory ingestion or worker execution.
 | `context_inject` | `UserPromptSubmit` | same bounded packet; prompt body is not persisted |
 | `pre_action_guard` | `PreToolUse` | deterministic local denial; never grants permission |
 | `post_action_observe` | `PostToolUse` | async metadata-only idempotent receipt |
-| `stop_finalize` | `Stop` | async metadata-only idempotent receipt |
+| `stop_finalize` | `Stop` | synchronous metadata-only receipt plus native-agent completion gate |
+| `subagent_start` | `SubagentStart` | managed identity admission and bounded specialist context |
+| `subagent_stop` | `SubagentStop` | idempotent managed sequence transition |
 
 The workspace-local installer owns exactly these Claude entries. It preserves
 all unrelated hook groups, corrects only Maestro-owned entries and removes only
@@ -63,7 +65,11 @@ validation.
 
 ## Non-blocking receipts
 
-`PostToolUse` and `Stop` are configured with `async: true`. They emit one small
+`PostToolUse` is configured with `async: true`. `Stop` is synchronous so an
+incomplete Client Account -> Case -> Client Account route can return Claude's
+native blocking decision. When Claude re-enters the Stop hook with
+`stop_hook_active=true`, the adapter does not block a second time, preventing
+an infinite completion loop. Both emit one small
 receipt without a worker lock, retry, network request, model call, source-body
 read or prompt/tool payload persistence.
 
@@ -79,11 +85,11 @@ before path construction.
 
 ## Capability and parity rule
 
-The capability manifest stays `unavailable`. Unit and configuration fixtures
-prove the local contract, not that a qualifying Claude version trusted and
-invoked each hook in a fresh native session. Only the pilot conformance protocol
-in Spec 021 can supply that evidence and authorize a later capability
-promotion. The executable cross-runtime matrix in Spec 035 keeps this
+The capability manifest reports the released Claude path as
+`operational_beta` while retaining `native_qualified=false`. Unit and
+configuration fixtures prove the local contract, not a fresh-session
+qualification. Only the pilot conformance protocol in Spec 021 can supply that
+evidence. The executable cross-runtime matrix in Spec 035 keeps this
 distinction testable.
 
 Codex retains the same canonical event vocabulary and bounded serializers.

@@ -60,7 +60,7 @@ The first job vocabulary is:
 
 - `memory-checkpoint`: three-hour metadata-only workspace continuity receipt;
 - `memory-light-dream`: three-hour deterministic light L1 synthesis over already-sanitized captures;
-- `memory-deep-dream`: weekly deep L2/L3/lifetime consolidation, unavailable without a qualified synthesis and eligibility adapter;
+- `memory-deep-dream`: weekly deterministic L2/L3/lifetime consolidation through the bundled continuity eligibility policy;
 - `wiki-reconcile`: reconciliation of source watermarks, outbox receipts and atlas manifests.
 - `sharepoint-work-sync`: refresh of the explicitly enrolled organizational
   work-retrieval catalog through the approved Claude SharePoint adapter.

@@ -15,7 +15,7 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/content-navigation
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: c971241aee185459ed2cba432c26ec1b7e8c56198c24e52e7750ca435ca79858
+x-bcgos-source-fingerprint: 86cf0108b2fb5cc853951aaf3cb4669b1b0d9097a3b0b5ab9929221cc458e94b
 x-bcgos-freshness: fresh
 x-bcgos-status: active
 x-bcgos-generator-version: bcgos-managed-wiki/0.2

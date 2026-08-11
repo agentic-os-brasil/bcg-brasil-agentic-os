@@ -4,11 +4,12 @@ This is the thin product adapter boundary for Claude. Policies, memory and
 capability states remain canonical in `bundles/base/runtime/capabilities.json`.
 
 Current implementation: workspace-local configuration maps Claude
-`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` to
-the canonical lifecycle. Session and context output stay bounded and
+`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`,
+`SubagentStart` and `SubagentStop` to the canonical lifecycle. Session and context output stay bounded and
 pointer-only. The guard fails closed on invalid input and denies only the
-implemented protected-root deletion policy. Post/stop entries are asynchronous
-and emit metadata-only local receipts.
+implemented protected-root, external-action and managed-agent scope policies.
+PostToolUse is asynchronous; Stop is synchronous so it can block an incomplete
+selected strategic route. All observations emit metadata-only local receipts.
 
 This establishes configured wiring and local contract behavior, not native
 qualification. Evidence snapshot: `as_of: 2026-08-06` · source baseline:
@@ -24,8 +25,9 @@ deliberate alternative; a workspace never carries both managed projections at
 once. Installation and verification are configuration evidence only, never
 evidence that Claude has invoked a hook natively.
 
-Every product lifecycle event remains explicitly `unavailable` in the
-capability manifest. `bcgos doctor` diagnoses configuration and receipts
+Released Claude lifecycle and orchestration paths are `operational_beta` in
+the capability manifest while `native_qualified` remains false telemetry.
+`bcgos doctor` diagnoses configuration and receipts
 separately. A receipt is marked `adapter_command`: it proves the bounded
 Maestro command ran, not that Claude invoked it in a qualifying native session.
 The lifecycle probe applies the configured runtime qualification floor and
@@ -75,13 +77,13 @@ flowchart LR
     Catalog["Implemented<br/>managed agent catalog"] --> Adapter["Implemented<br/>shared enforcement"]
     Adapter --> Fixtures["Implemented<br/>cross-runtime fixtures"]
     Fixtures --> Wiring["Configured<br/>Claude-native lifecycle wiring"]
-    Wiring --> Active["Pending<br/>agent orchestration active"]
-    Catalog -.->|current capability| Unavailable["Unavailable<br/>fails closed"]
+    Wiring --> Active["Operational beta<br/>native subagents"]
+    Active -.->|qualification telemetry| Pending["Native-qualified pending"]
 ```
 
 The lifecycle wiring maps `session_start`, `pre_action_guard`,
 `post_action_observe`, `stop_finalize` and `context_inject`, but conformance
-evidence is still required before any capability-state change. Session Start
+evidence is still required before any native-qualification claim. Session Start
 resolves the user-local interaction profile and injects only its bounded ID and
 managed policy pointer; the profile is not derived from or persisted into
 memory.
@@ -90,8 +92,9 @@ Darwin 🧬 is the governance surgeon, not a separate housekeeping agent. The
 runtime-neutral `internal/darwin` contract accepts the same bounded packet in
 interactive and `headless_housekeeping` modes, applies only the signed
 `health/maestro-system` grants and persists metadata-only receipts. Claude
-native invocation of that seam remains unavailable until a qualifying native
-session observes it.
+native invocation of the advisory seam is operational in beta;
+scheduler-backed maintenance execution remains a separate qualification
+surface.
 Darwin maintenance signals use `darwin.maintenance.wake` and map to the same
 `darwin` identity over `health/maestro-system`. The signal is signal-only: the
 qualified local worker owns command validation, occurrence fencing and receipt

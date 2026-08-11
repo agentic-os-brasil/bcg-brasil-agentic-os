@@ -16,6 +16,25 @@
       }
     ]
   },
+  "native_advisory": {
+    "mode": "host_runtime",
+    "max_depth": 2,
+    "max_children_per_agent": 2,
+    "allowed_edges": [
+      {
+        "from_role": "hub",
+        "to_roles": ["case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "quality_guardian", "reviewer"]
+      },
+      {
+        "from_role": "case_agent",
+        "to_roles": ["client_account_agent", "pa_expert", "quality_guardian", "reviewer"]
+      },
+      {
+        "from_role": "client_account_agent",
+        "to_roles": ["case_agent", "pa_expert", "reviewer"]
+      }
+    ]
+  },
   "legacy_aliases": {
     "account_agent": {"canonical_role": "client_account_agent", "status": "compatibility_only"},
     "workspace_agent": {"canonical_role": "case_agent", "status": "compatibility_only"},
