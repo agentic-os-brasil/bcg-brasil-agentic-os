@@ -3,12 +3,40 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/setupauth"
 )
+
+func TestSetupApplyBlocksElevatedProcessBeforeAnyMutation(t *testing.T) {
+	original := ensureUserLevelProcess
+	ensureUserLevelProcess = func() error { return errors.New("elevated Windows process") }
+	t.Cleanup(func() { ensureUserLevelProcess = original })
+
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	code := runSetup([]string{"apply", "--workspace", workspacePath, "--runtime", "claude", "--confirm"}, &output, &output,
+		func() (string, error) { return filepath.Join(root, "data"), nil },
+		func() (setupauth.Identity, error) { return setupauth.DeriveIdentity("pilot", "device"), nil },
+	)
+	if code != ExitFailure {
+		t.Fatalf("code = %d, output = %s", code, output.String())
+	}
+	var report setupApplyReport
+	if err := json.Unmarshal(output.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.State != setupBlocked || len(report.Stages) != 1 || report.Stages[0].ID != "process_identity" {
+		t.Fatalf("report = %#v", report)
+	}
+	if _, err := os.Stat(workspacePath); !os.IsNotExist(err) {
+		t.Fatalf("elevated setup mutated workspace: %v", err)
+	}
+}
 
 func TestSetupApplyRequiresOneConfirmationBeforeFirstMutation(t *testing.T) {
 	root := t.TempDir()

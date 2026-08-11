@@ -17,6 +17,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/processwait"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/updateservice"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/userlevel"
 )
 
 var Version = "0.0.0-dev"
@@ -94,6 +95,9 @@ func firstInstall(
 	managedRoot, dataRoot, targetOS, targetArch string,
 	checkCLI func(path, version string) error,
 ) error {
+	if err := userlevel.EnsureNotElevated(); err != nil {
+		return err
+	}
 	options := installtx.PrepareOptions{
 		Transition: "install", TargetOS: targetOS, TargetArch: targetArch,
 		ManagedRoot: managedRoot, DataRoot: dataRoot,
@@ -109,6 +113,7 @@ func firstInstall(
 }
 
 func activate(args []string) {
+	fatalIf(userlevel.EnsureNotElevated())
 	flags := flag.NewFlagSet("activate", flag.ExitOnError)
 	planID := flags.String("plan-id", "", "exact durable update confirmation plan")
 	dataRoot := flags.String("data-root", "", "owner-data root")
@@ -167,6 +172,7 @@ func activate(args []string) {
 }
 
 func rollback(args []string) {
+	fatalIf(userlevel.EnsureNotElevated())
 	flags := flag.NewFlagSet("rollback", flag.ExitOnError)
 	dataRoot := flags.String("data-root", "", "owner-data root")
 	_ = flags.Parse(args)
