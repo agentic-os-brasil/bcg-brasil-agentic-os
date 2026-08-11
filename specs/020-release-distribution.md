@@ -125,28 +125,36 @@ Missing authority is reported as `unavailable`; no production command accepts
 an unsigned override. The existing unsigned trial acknowledgement remains
 confined to `installers/trial`.
 
-A controlled Windows Canary may install real user-space product bytes before
-organization-owned Authenticode custody exists only through a packaging-time
-local-beta profile defined by decisions `CARY` and `PONB`. This is not a
-production override and is not selectable by an end user. The current cohort
-handoff is `windows-portable-local-beta`: its factory requires an
+A controlled Canary may install real user-space product bytes before
+organization-owned Apple or Microsoft signing custody exists only through a
+packaging-time platform-local-beta profile defined by decisions `CARY`, `PONB`
+and `DZIP`. This is not a production override and is not selectable by an end
+user. The current cohort handoffs are `windows-portable-local-beta` for Windows
+amd64 and `macos-portable-local-beta` for macOS arm64. Each factory requires an
 Ed25519-authenticated `canary` manifest, exact active issuer/key registry,
-exact registry and bootstrapper SHA-256 pins, a version-matched seeded Windows
-amd64 bootstrapper and native status exactly `NotSigned`. Any partial profile,
-different channel or identity, digest drift, invalid native-signature state or
-verification failure remains fail-closed.
+exact registry and target bootstrapper SHA-256 pins and a version-matched
+seeded bootstrapper. Windows additionally requires Authenticode status exactly
+`NotSigned`. macOS requires the bootstrapper and selected CLI to contain no
+`LC_CODE_SIGNATURE`; a native macOS build must also observe `codesign` status
+exactly unsigned. Developer ID, ad-hoc, invalid, partial or structurally
+contradictory signatures are rejected from this unsigned profile. Any partial
+profile, different channel or identity, digest drift, invalid native-signature
+state or verification failure remains fail-closed.
 
-The deterministic ZIP is a Windows-only runtime artifact and may be assembled
-on macOS; macOS users receive the DMG for installation. It carries the complete closed signed release, the pinned
-registry and bootstrapper under the conventional managed-root seed, one seeded
-`maestro-os/` workspace, bounded provenance and one internal activation command. It contains
-no wizard, installer bridge or user-facing activation command. The workspace
-ships a first-use `CLAUDE.md`: the owner opens that folder in Claude Code and
-sends a natural-language message. Claude explains the bounded preparation,
-asks for the one setup confirmation and, only after an affirmative answer,
-invokes the internal activation command. The owner is never instructed to use
-a terminal or run a command. Native Claude Code or Windows permission prompts
-remain visible and cannot be bypassed.
+The factory emits two deterministic target-specific ZIPs, never one universal
+runtime seed. Each carries the same complete closed signed release, pinned
+registry and its one native bootstrapper under the conventional managed-root
+seed, one seeded `maestro-os/` workspace, bounded provenance and one internal
+activation command. Other target artifacts may remain inert inside the closed
+release, but no activator can select, install or execute them. The package
+contains no wizard, installer bridge or user-facing activation command. The
+workspace ships a first-use `CLAUDE.md`: the owner
+opens that folder in Claude Code and sends a natural-language message. Claude
+explains the bounded preparation, asks for the one setup confirmation and,
+only after an affirmative answer, invokes the internal activation command.
+The owner is never instructed to use a terminal or run a command. Native Claude
+Code and operating-system permission prompts remain visible and cannot be
+bypassed.
 
 The internal activation command delegates first install to the stable
 bootstrapper and then invokes the existing one-and-done Claude setup against
@@ -159,11 +167,15 @@ independently published ZIP SHA-256. This does not satisfy native signing,
 clean-device, pilot or production gates. Moving the package after activation
 is unsupported because the adapter contract binds the absolute installed CLI.
 
-After adapter verification, Windows portable activation completes workspace
-and onboarding activation without invoking macOS `launchctl`. Until the native
-Task Scheduler adapter is qualified, maintenance is reported as unavailable
-and unscheduled; this honest limitation must not roll back an otherwise valid
-Windows installation or be presented as active automation.
+After adapter verification, platform-portable activation completes workspace
+and onboarding activation without enrolling a native scheduler under the
+technical setup confirmation. Scheduler enrollment is offered separately only
+when the exact native adapter reports it available and relevant. An unavailable
+adapter creates no owner-facing choice; an unavailable or declined scheduler
+remains honestly unscheduled and must not roll back an otherwise valid
+installation or be presented as active automation. Spec 051 defines target
+closure, product parity, guided next actions and the complete portable
+acceptance contract.
 
 ## Acceptance evidence
 
