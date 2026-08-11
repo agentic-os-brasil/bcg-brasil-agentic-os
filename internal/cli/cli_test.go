@@ -2161,6 +2161,33 @@ func TestAgentIdentityInterviewAndPersonalizationAreExplicit(t *testing.T) {
 	}
 }
 
+func TestAgentIdentitySetIsAnExplicitPresentationOnlyShortcut(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"updated_at":"2026-07-28T00:00:00Z","selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"daniel","ownership_scope":"system"}]}`
+	var output bytes.Buffer
+	if code := draftAndConfirmAgentProfile(t, dataRoot, profile, &output); code != ExitOK {
+		t.Fatalf("personalize = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runAgentWithInput([]string{"identity", "set", "--agent", "walter", "--display-name", "Virgil", "--emoji", "🧭", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"presentation_only": true`) || !strings.Contains(output.String(), `"authority": "unchanged"`) {
+		t.Fatalf("identity set = %d: %s", code, output.String())
+	}
+	stored, err := agentidentity.Load(dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, selection := range stored.Selections {
+		if selection.Role == "walter" {
+			found = selection.DisplayName == "Virgil" && selection.Emoji == "🧭" && selection.OwnerID == stored.OwnerID
+		}
+	}
+	if !found {
+		t.Fatalf("Walter presentation was not persisted: %#v", stored.Selections)
+	}
+}
+
 func TestAgentIdentityFullRosterUsesCanonicalProfileEnvelope(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

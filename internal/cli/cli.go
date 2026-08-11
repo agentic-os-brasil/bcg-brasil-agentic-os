@@ -269,6 +269,9 @@ Completion criteria:
 		attempt := flags.String("attempt", "", "active attempt identity")
 		stdin := flags.Bool("stdin", false, "read checkpoint JSON")
 		active := flags.Bool("active", false, "resolve the active execution item")
+		summary := flags.String("summary", "", "checkpoint summary")
+		nextStep := flags.String("next", "", "checkpoint next step")
+		blocker := flags.String("blocker", "", "checkpoint blocker")
 		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*workspacePath) == "" {
 			return ExitUsage
 		}
@@ -323,13 +326,9 @@ Completion criteria:
 			}
 			return writeJSON(out, execution.Receipt(item), errOut)
 		case "checkpoint":
-			if !*stdin {
-				fmt.Fprintln(errOut, "usage: bcgos work checkpoint --workspace PATH --item ID --revision N --attempt ID --stdin")
+			if !*stdin && (strings.TrimSpace(*summary) == "" || strings.TrimSpace(*nextStep) == "") {
+				fmt.Fprintln(errOut, "usage: bcgos work checkpoint --active --workspace PATH --summary TEXT --next TEXT [--blocker TEXT]")
 				return ExitUsage
-			}
-			body, err := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
-			if err != nil {
-				return reportError(errOut, err)
 			}
 			var input struct {
 				Summary      string   `json:"summary"`
@@ -338,8 +337,18 @@ Completion criteria:
 				Blocker      string   `json:"blocker"`
 				ArtifactRefs []string `json:"artifact_refs"`
 			}
-			if err := json.Unmarshal(body, &input); err != nil {
-				return reportError(errOut, err)
+			if *stdin {
+				body, readErr := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
+				if readErr != nil {
+					return reportError(errOut, readErr)
+				}
+				if err := json.Unmarshal(body, &input); err != nil {
+					return reportError(errOut, err)
+				}
+			} else {
+				input.Summary = *summary
+				input.NextStep = *nextStep
+				input.Blocker = *blocker
 			}
 			if strings.TrimSpace(input.Summary) == "" {
 				input.Summary = input.Note
@@ -736,8 +745,11 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		}
 		return writeJSON(out, draft, errOut)
 	case "identity":
+		if len(args) > 1 && args[1] == "set" {
+			return runAgentIdentitySet(args[2:], out, errOut, root)
+		}
 		if len(args) != 1 {
-			fmt.Fprintln(errOut, "usage: bcgos agent identity")
+			fmt.Fprintln(errOut, "usage: bcgos agent identity [set --agent ROLE --display-name NAME --emoji EMOJI --confirm]")
 			return ExitUsage
 		}
 		profile, err := agentidentity.Load(root)
@@ -898,6 +910,98 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|identity|hire|scaffold|status|plan|declassify|verify|monitor|darwin> [options]")
 		return ExitUsage
 	}
+}
+
+func runAgentIdentitySet(args []string, out, errOut io.Writer, root string) int {
+	flags := newFlagSet("agent identity set", errOut)
+	agentRole := flags.String("agent", "", "managed agent role")
+	agentID := flags.String("agent-id", "", "concrete account or case agent ID")
+	displayName := flags.String("display-name", "", "new presentation name")
+	emoji := flags.String("emoji", "", "new presentation emoji")
+	confirmed := flags.Bool("confirm", false, "confirm this presentation-only change")
+	if err := flags.Parse(args); err != nil || rejectPositionals(flags, errOut) ||
+		strings.TrimSpace(*agentRole) == "" || strings.TrimSpace(*displayName) == "" ||
+		strings.TrimSpace(*emoji) == "" || !*confirmed {
+		fmt.Fprintln(errOut, "usage: bcgos agent identity set --agent ROLE --display-name NAME --emoji EMOJI --confirm [--agent-id ID]")
+		return ExitUsage
+	}
+	role := agentidentity.CanonicalRole(strings.TrimSpace(*agentRole))
+	interview := agentidentity.InitialInterview()
+	var descriptor *agentidentity.RoleDescriptor
+	for index := range interview.Agents {
+		candidate := &interview.Agents[index]
+		if candidate.Role == role {
+			descriptor = candidate
+			break
+		}
+	}
+	if descriptor == nil {
+		return reportError(errOut, fmt.Errorf("unknown agent role %q; run bcgos agent interview", role))
+	}
+	profile, err := agentidentity.Load(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return reportError(errOut, errors.New("complete agent personalization before setting an identity"))
+	}
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	concreteID := strings.TrimSpace(*agentID)
+	if role == "client_account_agent" || role == "case_agent" {
+		if concreteID == "" {
+			return reportError(errOut, fmt.Errorf("agent role %q requires --agent-id", role))
+		}
+	}
+	if concreteID != "" && !safeAgentIdentityID(concreteID) {
+		return reportError(errOut, errors.New("agent-id must contain only letters, digits, dot, dash or underscore"))
+	}
+	if concreteID == "" {
+		switch role {
+		case "maestro", "walter", "darwin", "quality_guardian":
+			concreteID = role
+		}
+	}
+	selectionIndex := -1
+	for index := range profile.Selections {
+		selection := profile.Selections[index]
+		if agentidentity.CanonicalRole(selection.Role) != role {
+			continue
+		}
+		if (role == "client_account_agent" || role == "case_agent") && selection.AgentID != concreteID {
+			continue
+		}
+		selectionIndex = index
+		break
+	}
+	if selectionIndex < 0 {
+		profile.Selections = append(profile.Selections, agentidentity.Selection{Role: role, AgentID: concreteID, DisplayName: *displayName, Emoji: *emoji, OwnerID: profile.OwnerID, OwnershipScope: descriptor.OwnershipScope})
+	} else {
+		profile.Selections[selectionIndex].DisplayName = *displayName
+		profile.Selections[selectionIndex].Emoji = *emoji
+	}
+	profile.UpdatedAt = time.Now().UTC()
+	if err := agentidentity.Save(root, profile); err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, map[string]any{
+		"state":             "applied",
+		"role":              role,
+		"display_name":      *displayName,
+		"emoji":             *emoji,
+		"authority":         "unchanged",
+		"presentation_only": true,
+	}, errOut)
+}
+
+func safeAgentIdentityID(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if !(r == '-' || r == '_' || r == '.' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func runDarwin(args []string, in io.Reader, out, errOut io.Writer, root string) int {
