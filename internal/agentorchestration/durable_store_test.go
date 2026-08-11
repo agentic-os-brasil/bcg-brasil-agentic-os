@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -22,6 +23,9 @@ func TestDurableStateRejectsUnknownFieldsNullPermissiveModesAndOversizedJSON(t *
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if test.name == "permissive mode" && runtime.GOOS == "windows" {
+				t.Skip("Unix mode bits are not an authority on Windows")
+			}
 			path := filepath.Join(t.TempDir(), "maestro-orchestration-state.json")
 			if err := os.WriteFile(path, test.body, test.mode); err != nil {
 				t.Fatal(err)

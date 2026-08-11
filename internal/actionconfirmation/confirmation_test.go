@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -57,6 +58,13 @@ func TestCanonicalizeProtectsExternalMutationButNotOrdinaryLocalWork(t *testing.
 }
 
 func TestStoreRejectsPermissiveRoot(t *testing.T) {
+	// Windows synthesises FileMode from the read-only attribute, so a
+	// permissive directory is indistinguishable from a private one and the
+	// condition under test cannot be created here. The security descriptor is
+	// the platform equivalent and is identical for both.
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix mode bits are not an authority on Windows")
+	}
 	root := t.TempDir()
 	if err := os.Chmod(root, 0o755); err != nil {
 		t.Fatal(err)
@@ -194,7 +202,8 @@ func TestChallengeConsumptionIsAtomicAndPersistsNoRawInput(t *testing.T) {
 		}
 	}
 	keyInfo, err := os.Stat(filepath.Join(root, KeyFileName))
-	if err != nil || keyInfo.Mode().Perm() != 0o600 || keyInfo.Size() != sha256.Size {
+	if err != nil || keyInfo.Size() != sha256.Size ||
+		(runtime.GOOS != "windows" && keyInfo.Mode().Perm() != 0o600) {
 		t.Fatalf("HMAC key = %#v, %v", keyInfo, err)
 	}
 }

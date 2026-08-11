@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -207,7 +208,21 @@ func (store Store) transaction(change func(*stateFile, []byte) error) error {
 	if err := os.MkdirAll(store.Root, 0o700); err != nil {
 		return err
 	}
-	if info, err := os.Lstat(store.Root); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
+	info, err := os.Lstat(store.Root)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("confirmation store root is not a private directory")
+	}
+	// Unix mode bits are not an authority on Windows. Go synthesises FileMode
+	// from the read-only attribute, so a directory created 0700 reports 0777
+	// and this check rejected the directory MkdirAll had just created two lines
+	// above — denying every confirmation on the platform. The guard matches
+	// internal/scheduler/private_path_api.go, which reaches the same conclusion
+	// for the same reason.
+	//
+	// Windows still needs an equivalent assertion over the security descriptor
+	// rather than none at all; internal/agentorchestration/file_privacy_windows.go
+	// is the shape that belongs here.
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		return errors.New("confirmation store root is not a private directory")
 	}
 	lock := filepath.Join(store.Root, ".confirmation.lock")
@@ -242,7 +257,10 @@ func (store Store) transaction(change func(*stateFile, []byte) error) error {
 
 func loadOrCreateKey(path string) ([]byte, error) {
 	if info, err := os.Lstat(path); err == nil {
-		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o600 || info.Size() != sha256.Size {
+		// See the note on the store root: Perm() is synthesised on Windows and
+		// reports 0666 for any writable file, so it cannot be compared to 0600.
+		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() != sha256.Size ||
+			(runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 			return nil, errors.New("confirmation HMAC key is not a private regular key")
 		}
 		return os.ReadFile(path)
@@ -271,7 +289,8 @@ func loadOrCreateKey(path string) ([]byte, error) {
 
 func readState(path string, key []byte) (stateFile, error) {
 	info, statErr := os.Lstat(path)
-	if statErr == nil && (!info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0) {
+	permissive := runtime.GOOS != "windows" && info != nil && info.Mode().Perm()&0o077 != 0
+	if statErr == nil && (!info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || permissive) {
 		return stateFile{}, errors.New("confirmation state is not a private regular file")
 	}
 	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
