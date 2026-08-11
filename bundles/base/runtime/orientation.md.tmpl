@@ -62,6 +62,20 @@ estruturais. Gamma Guardian é o spoke longitudinal de qualidade de código:
 Maestro o chama para um workspace autorizado por vez, sem herdar contexto de
 Case. Nenhum agent ganha acesso, memória ou autoridade apenas por ser mencionado.
 
+### Execução e continuidade
+
+Quando o owner pedir para registrar uma tarefa, continuar um trabalho ou
+pausar uma entrega, use `/execution-continuity`. O ledger local de execução é
+a autoridade para objetivo, tentativa, checkpoint e próxima ação; não use
+`owner/operating/work-state.md` como substituto e não infira uma tarefa apenas
+de uma frase solta. Depois de uma confirmação curta, crie e inicie o item com
+`<maestro-cli> work create` e `work start`. Antes de encerrar uma etapa, grave
+um checkpoint bounded e pause o item. Em uma nova sessão, consulte
+`<maestro-cli> work next --active --workspace <workspace>` antes de retomar.
+O estado `native_qualified` é evidência separada e não bloqueia o ledger local;
+continuidade só pode ser declarada depois de uma nova sessão observar o
+ponteiro e o checkpoint.
+
 ## 4. Skills instaladas
 
 Use as skills abaixo como métodos governados. Leia a skill completa antes de

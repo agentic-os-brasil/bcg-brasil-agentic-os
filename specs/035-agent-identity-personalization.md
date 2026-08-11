@@ -77,6 +77,10 @@ must include a concrete `agent_id`, and the canonical scopes are `system`,
 `pa_expert_registry`. A fresh guided interview submits one main-agent answer
 per draft in the order Maestro → Walter → Darwin; previously confirmed answers
 are carried forward rather than batching future questions.
+If an identity draft is already `drafted` or `prepared`, the interview returns
+`state=review_required`, no new question and the bounded `open_draft_id` needed
+by `bcgos agent personalize review --id`. Invalid or multiple open drafts
+return a blocked interview state instead of inviting another answer.
 
 `interview` is read-only and returns exactly one next question for Maestro,
 Walter or Darwin while retaining the richer transparent catalog. A profile is

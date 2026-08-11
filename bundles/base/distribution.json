@@ -202,6 +202,14 @@
       "path": "skills/dream-memory/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/execution-continuity/SKILL.md",
+      "path": "skills/execution-continuity/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/execution-continuity/agents/openai.yaml",
+      "path": "skills/execution-continuity/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/find-prior-work/SKILL.md",
       "path": "skills/find-prior-work/SKILL.md"
     },

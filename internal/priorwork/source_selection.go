@@ -24,8 +24,9 @@ const (
 )
 
 var (
-	ErrSourceSelectionTooLarge = errors.New("SharePoint source selection exceeds the safe input limit")
-	workspaceIDPattern         = regexp.MustCompile(`^[a-f0-9]{32}$`)
+	ErrSourceSelectionTooLarge      = errors.New("SharePoint source selection exceeds the safe input limit")
+	ErrLibraryRootNeedsProjectScope = errors.New("SharePoint library root needs a project scope before collection")
+	workspaceIDPattern              = regexp.MustCompile(`^[a-f0-9]{32}$`)
 )
 
 // SourceSelectionInput is the only body accepted from a guided runtime. It
@@ -103,6 +104,13 @@ func (store SourceSelectionStore) SelectedFolders(workspaceID string) ([]string,
 	}
 	if err := validateStoredSourceSelection(record, active, workspaceID); err != nil {
 		return nil, err
+	}
+	for _, folder := range record.FolderURLs {
+		if isSharePointLibraryRoot(folder) {
+			// Keep the owner's pointer and let the conversational UI continue,
+			// but never hand a whole document library to a collector implicitly.
+			return nil, ErrLibraryRootNeedsProjectScope
+		}
 	}
 	return append([]string(nil), record.FolderURLs...), nil
 }
@@ -336,21 +344,23 @@ func canonicalFolderURLs(values []string) ([]string, error) {
 			return nil, errors.New("SharePoint folder pointer is empty, oversized or not canonical")
 		}
 		parsed, err := url.Parse(raw)
-		if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Hostname() == "" || parsed.Port() != "" {
-			return nil, errors.New("SharePoint folder pointer must be a canonical HTTPS URL without credentials, query or fragment")
+		if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Fragment != "" || parsed.Hostname() == "" || parsed.Port() != "" {
+			return nil, errors.New("SharePoint folder pointer must use HTTPS without credentials, fragment or a non-standard port")
 		}
 		host := strings.ToLower(parsed.Hostname())
 		if !strings.HasSuffix(host, ".sharepoint.com") {
 			return nil, errors.New("SharePoint folder pointer must use a sharepoint.com origin")
 		}
-		segments := strings.Split(strings.Trim(parsed.EscapedPath(), "/"), "/")
-		if len(segments) < 4 || (strings.ToLower(segments[0]) != "sites" && strings.ToLower(segments[0]) != "teams") {
-			return nil, errors.New("SharePoint folder pointer must identify an exact project folder below a site or team library")
+		pathValue, err := normalizeSharePointPath(parsed)
+		if err != nil {
+			return nil, err
 		}
 		parsed.Scheme = "https"
 		parsed.Host = host
-		parsed.Path = strings.TrimSuffix(parsed.Path, "/")
-		parsed.RawPath = strings.TrimSuffix(parsed.RawPath, "/")
+		parsed.Path = pathValue
+		parsed.RawPath = ""
+		parsed.RawQuery = ""
+		parsed.ForceQuery = false
 		value := parsed.String()
 		if seen[value] {
 			return nil, errors.New("SharePoint source selection contains a duplicate folder pointer")
@@ -360,6 +370,74 @@ func canonicalFolderURLs(values []string) ([]string, error) {
 	}
 	sort.Strings(canonical)
 	return canonical, nil
+}
+
+// normalizeSharePointPath accepts both a library/folder URL and the common
+// SharePoint AllItems.aspx view URL. A library root is retained as an owner
+// pointer, but SelectedFolders refuses to hand that broad scope to collection
+// until a project folder is explicitly narrowed.
+func normalizeSharePointPath(parsed *url.URL) (string, error) {
+	pathValue := strings.TrimSuffix(parsed.Path, "/")
+	viewSuffix := "/Forms/AllItems.aspx"
+	if len(pathValue) >= len(viewSuffix) && strings.EqualFold(pathValue[len(pathValue)-len(viewSuffix):], viewSuffix) {
+		viewRoot := strings.TrimSuffix(pathValue[:len(pathValue)-len(viewSuffix)], "/")
+		pathValue = viewRoot
+		if parsed.RawQuery != "" {
+			query, err := url.ParseQuery(parsed.RawQuery)
+			if err != nil {
+				return "", errors.New("SharePoint view link could not be read")
+			}
+			if len(query["id"]) > 1 {
+				return "", errors.New("SharePoint view link contains multiple folder scopes")
+			}
+			if id := strings.TrimSpace(query.Get("id")); id != "" {
+				target := strings.TrimSuffix(id, "/")
+				rootSegments, err := validatedSharePointPathSegments(viewRoot)
+				if err != nil {
+					return "", err
+				}
+				targetSegments, err := validatedSharePointPathSegments(target)
+				if err != nil {
+					return "", err
+				}
+				for index := 0; index < 3; index++ {
+					if !strings.EqualFold(rootSegments[index], targetSegments[index]) {
+						return "", errors.New("SharePoint view folder must remain inside the displayed site and document library")
+					}
+				}
+				pathValue = target
+			}
+		}
+	} else if parsed.RawQuery != "" {
+		return "", errors.New("SharePoint folder pointer may not contain a query string")
+	}
+	segments, err := validatedSharePointPathSegments(pathValue)
+	if err != nil {
+		return "", err
+	}
+	return "/" + strings.Join(segments, "/"), nil
+}
+
+func validatedSharePointPathSegments(pathValue string) ([]string, error) {
+	segments := strings.Split(strings.Trim(pathValue, "/"), "/")
+	if len(segments) < 3 || (strings.ToLower(segments[0]) != "sites" && strings.ToLower(segments[0]) != "teams") {
+		return nil, errors.New("SharePoint folder pointer must identify a site/team and document library")
+	}
+	for _, segment := range segments {
+		if segment == "" || segment == "." || segment == ".." {
+			return nil, errors.New("SharePoint folder pointer contains an unsafe path segment")
+		}
+	}
+	return segments, nil
+}
+
+func isSharePointLibraryRoot(value string) bool {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	segments := strings.Split(strings.Trim(parsed.EscapedPath(), "/"), "/")
+	return len(segments) == 3 && (strings.EqualFold(segments[0], "sites") || strings.EqualFold(segments[0], "teams"))
 }
 
 func ensurePrivateDirectoryAt(root *os.Root, relative string) error {

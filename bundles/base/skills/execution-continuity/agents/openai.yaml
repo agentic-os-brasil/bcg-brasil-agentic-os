@@ -1,0 +1,3 @@
+display_name: "Execution Continuity"
+short_description: "Registrar tarefas e entregas, preparar versão, criar checkpoints e retomar trabalho entre sessões"
+default_prompt: "Use $execution-continuity para registrar esta tarefa e criar um checkpoint para a próxima sessão."

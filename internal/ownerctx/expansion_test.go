@@ -62,6 +62,25 @@ func TestExpansionAsksOneDeterministicQuestionAndAppliesOnlyReviewedDraft(t *tes
 	}
 }
 
+func TestExpansionStatusExposesTheSingleOpenDraftForResumption(t *testing.T) {
+	root := readyQuickOwner(t)
+	question, err := NextExpansionQuestion(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err := DraftExpansion(root, question.QuestionToken, "# Voice\n\n## Current\n\nDireta e precisa.\n", true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := Inspect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Expansion.State != "review_required" || status.Expansion.ReviewCount != 1 || status.Expansion.OpenDraftID != draft.ID {
+		t.Fatalf("resumable expansion status = %#v, want open draft %q", status.Expansion, draft.ID)
+	}
+}
+
 func TestConcurrentExpansionDraftCreationAllowsExactlyOneOpenDraft(t *testing.T) {
 	root := readyQuickOwner(t)
 	question, err := NextExpansionQuestion(root)

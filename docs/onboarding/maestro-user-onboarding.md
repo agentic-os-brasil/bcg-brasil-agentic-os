@@ -300,6 +300,14 @@ mostra o rascunho inteiro e o digest; só a confirmação exata atualiza a facet
 Ele nunca deduz uma resposta, preenche lacunas sozinho ou altera o perfil
 psicológico.
 
+Se uma sessão for interrompida depois da criação do rascunho, `owner expand
+status` devolve `review_required` e o `open_draft_id`. O Maestro retoma o mesmo
+rascunho com `bcgos owner expand review --id <open_draft_id>`; ele não repete a
+pergunta nem procura arquivos locais. Depois que você revisar e confirmar o
+texto exato, a aplicação usa `bcgos owner expand confirm --id <id> --digest
+<review_digest> --confirm`. Esse digest pertence à expansão SELF e não deve ser
+passado para `owner onboarding confirm`.
+
 ### Passo 4.1 — Escolha as fontes SharePoint do projeto
 
 Depois que a entrevista do owner estiver revisada e confirmada **dentro do
