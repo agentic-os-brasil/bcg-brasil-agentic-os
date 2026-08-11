@@ -107,9 +107,11 @@ it, and the skill never performs that generalization on their behalf.
 7. Confidence, status, `Last used` and the index line are managed by owner
    edit. Report them as an edit the owner still has to make; do not call them
    written.
-8. On a drop, `append-entry` a dated `considered, not promoted` line under the
-   `## Learning candidates` heading of the source daily page, so a later pass
-   does not re-offer it. That is the only write this skill makes to a daily.
+8. On a drop, tell the owner the candidate will be marked so a later pass does
+   not re-offer it, then `append-entry` a dated `considered, not promoted` line
+   under the `## Learning candidates` heading of the source daily page. The
+   owner chose the drop, but the write is still a write and is announced before
+   it happens. That is the only write this skill makes to a daily.
 9. Close with what was promoted and where, what was declined, what was deferred
    to a later pass, and every edit left for the owner.
 

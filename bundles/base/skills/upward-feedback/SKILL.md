@@ -67,8 +67,10 @@ profile; only the explanation and optional detail do.
 
 ## Workflow
 
-1. Establish who the feedback is for, their seniority relative to the owner,
-   and the period it covers. Seniority calibrates register, not candour.
+1. **Ask the owner** who the feedback is for, their seniority relative to the
+   owner, and the period it covers. Never look any of it up: a directory lookup
+   is how a preparation page starts becoming the colleague record this skill
+   exists to prevent. Seniority calibrates register, not candour.
 2. Ask the owner what they already want to say, and start there. They usually
    know; the work is sharpening it, not sourcing it.
 3. Offer concrete moments from the owner's own pages as anchors and ask them to
@@ -90,7 +92,8 @@ profile; only the explanation and optional detail do.
    refuses a heading that appears more than once on a page — name the section's
    own heading rather than a repeated one, or hand the text back as a draft to
    place.
-9. Close by restating that the page is preparation, that delivering the
+9. Close by reporting whether the page was written or came back as a proposal,
+   then restating that the page is preparation, that delivering the
    feedback is the owner's act alone, and what is left for them to decide.
 
 Every run is attended. Nothing here is scheduled, and no standing grant reaches

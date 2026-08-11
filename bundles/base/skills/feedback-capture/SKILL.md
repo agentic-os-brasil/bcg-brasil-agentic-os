@@ -104,12 +104,15 @@ owner edited the page in the meantime.
 6. Reflect back what changed in the objective set, and one concrete way to
    start practising the newest objective this week.
 7. **Self-review pack**, when asked for one before a review: `collect` the
-   evidence already recorded under each objective, the retrospectives, and
-   every project feedback captured since the last review, then assemble one
-   pack from them. It is a projection of pages that already exist — introduce
-   no claim that is not on one of them, and mark a thin objective as thin
-   rather than filling it. Present it in session; write it with `create-page`
-   only if the owner names a page for it.
+   evidence already recorded under each objective, the retrospectives for the
+   cycle, and the project feedback pages **the owner names**. A project
+   feedback path carries a project slug that no date can derive, and there is
+   no folder listing, so the skill cannot know what "all of them" is — the
+   owner supplies the list, and the pack states which pages it was built from
+   and that anything unnamed is not in it. It is a projection of pages that
+   already exist — introduce no claim that is not on one of them, and mark a
+   thin objective as thin rather than filling it. Present it in session; write
+   it with `create-page` only if the owner names a page for it.
 
 Every run is attended. Nothing here is scheduled, and no standing grant reaches
 this segment.
