@@ -1039,3 +1039,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: Owner Atlas operations, projections, grants, rituals and schedules remain implementation work and cannot be claimed available from this decision alone. Missing adapters, scheduler evidence, telemetry or native qualification degrade automation but do not block ordinary conversation, direct owner editing or reviewable drafts. Raw client/workspace bodies remain in their owning workspace; cross-project continuity uses owner-authored content, pointers or sanitized promotion. Implementation must preserve direct owner CRUD, non-overwrite of hand edits, bounded readers and honest evidence of every managed occurrence.
 - Refs: AGEN; LIVA; specs/013-owner-context.md; specs/014-human-atlas-bootstrap.md; specs/023-sequential-agent-dispatch.md; specs/040-maestro-native-delegation.md; docs/proposals/006-owner-scope-contract/README.md; docs/proposals/007-owner-atlas-operations/README.md
 - Supersedes: none
+
+## SPUX - Remove redundant SharePoint source-selection confirmations
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Selecting an exact SharePoint folder was already a bounded, explicit owner action, yet the CLI required a second `--confirm` flag for both selection and deferral. The extra ceremony did not add scope, authorization or recovery protection.
+- Decision: Require the exact source selection through standard input, but do not require a separate confirmation flag. Keep connector authorization, exact selected scope and explicit permission failures as runtime boundaries; do not report an uninstalled or unauthorized collector as available.
+- Consequences: The guided flow is shorter and backward compatible with callers that still supply `--confirm`. Enrollment and receipt workflows are not promoted by the selection command; actual collection remains truthful about the installed connector's state.
+- Refs: AGEN; specs/037-sharepoint-work-retrieval-wiki.md; internal/cli/prior_work.go; bundles/base/skills/maestro-onboarding/SKILL.md
+- Supersedes: none

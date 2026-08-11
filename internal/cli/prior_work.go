@@ -159,7 +159,7 @@ func runPriorWorkSource(
 	flags.SetOutput(errOut)
 	workspacePath := flags.String("workspace", "", "initialized Maestro workspace path")
 	stdin := flags.Bool("stdin", false, "read exact SharePoint folder selection from standard input")
-	confirm := flags.Bool("confirm", false, "confirm the reviewed source choice")
+	confirm := flags.Bool("confirm", false, "accepted for backwards compatibility")
 	if err := flags.Parse(args[1:]); err != nil {
 		return ExitUsage
 	}
@@ -174,12 +174,12 @@ func runPriorWorkSource(
 			return ExitUsage
 		}
 	case "select":
-		if !*stdin || !*confirm {
+		if !*stdin {
 			fmt.Fprintln(errOut, priorWorkSourceUsage(action))
 			return ExitUsage
 		}
 	case "defer":
-		if *stdin || !*confirm {
+		if *stdin {
 			fmt.Fprintln(errOut, priorWorkSourceUsage(action))
 			return ExitUsage
 		}
@@ -252,9 +252,9 @@ func priorWorkSourceUsage(action string) string {
 	case "status":
 		return "usage: bcgos prior-work source status --workspace PATH"
 	case "select":
-		return "usage: bcgos prior-work source select --workspace PATH --stdin --confirm"
+		return "usage: bcgos prior-work source select --workspace PATH --stdin"
 	case "defer":
-		return "usage: bcgos prior-work source defer --workspace PATH --confirm"
+		return "usage: bcgos prior-work source defer --workspace PATH"
 	default:
 		return "usage: bcgos prior-work source <status|select|defer> --workspace PATH"
 	}
