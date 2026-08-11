@@ -39,12 +39,16 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 		filepath.Join(workspacePath, "brain", "organization", "bcg", "people", "README.md"),
 		filepath.Join(workspacePath, "brain", "organization", "bcg", "practices", "README.md"),
 		filepath.Join(workspacePath, "brain", "tasks", "README.md"),
+		filepath.Join(workspacePath, "brain", "daily", "README.md"),
 		filepath.Join(workspacePath, "agents", "maestro.md"),
 		filepath.Join(workspacePath, "agents", "bcg-workspace.md"),
 		filepath.Join(workspacePath, "agents", "client-accounts", "README.md"),
 		filepath.Join(workspacePath, "agents", "client-accounts", "acme-example.md"),
 		filepath.Join(workspacePath, "agents", "cases", "README.md"),
 		filepath.Join(dataRoot, "memory"),
+		filepath.Join(dataRoot, "memory", "workspaces", result.WorkspaceID),
+		filepath.Join(dataRoot, "maintenance", "scheduler", "workspaces", result.WorkspaceID),
+		filepath.Join(dataRoot, "maintenance", "receipts", "workspaces", result.WorkspaceID),
 		filepath.Join(dataRoot, "config"),
 	} {
 		if _, err := os.Stat(path); err != nil {

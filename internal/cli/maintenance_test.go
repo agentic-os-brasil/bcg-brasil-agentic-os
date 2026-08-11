@@ -55,13 +55,13 @@ func TestNativeEnrollmentStatusIsObservedWithoutMutationAuthority(t *testing.T) 
 	}
 }
 
-func TestCheckpointAndLightDreamHandlersAreOperableButDeepDreamRemainsUnavailable(t *testing.T) {
-	enrollment := maintenance.CanaryEnrollment{Activated: []maintenance.Activation{{JobID: maintenance.MemoryCheckpointJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryCheckpointJobID)}, {JobID: maintenance.MemoryLightDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryLightDreamJobID)}}}
+func TestCheckpointAndDreamHandlersAreOperableAfterEnrollment(t *testing.T) {
+	enrollment := maintenance.CanaryEnrollment{Activated: []maintenance.Activation{{JobID: maintenance.MemoryCheckpointJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryCheckpointJobID)}, {JobID: maintenance.MemoryLightDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryLightDreamJobID)}, {JobID: maintenance.MemoryDeepDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryDeepDreamJobID)}}}
 	handlers, qualification, activated := maintenanceHandlers(t.TempDir(), "maestro-system", enrollment, true)
 	if handlers[maintenance.MemoryCheckpointJobID] == nil || qualification[maintenance.MemoryCheckpointJobID] == "" || !containsString(activated, maintenance.MemoryCheckpointJobID) {
 		t.Fatalf("checkpoint not operable: handlers=%#v qualification=%#v activated=%#v", handlers, qualification, activated)
 	}
-	if handlers[maintenance.MemoryLightDreamJobID] == nil || qualification[maintenance.MemoryLightDreamJobID] == "" || handlers[maintenance.MemoryDeepDreamJobID] != nil {
+	if handlers[maintenance.MemoryLightDreamJobID] == nil || qualification[maintenance.MemoryLightDreamJobID] == "" || handlers[maintenance.MemoryDeepDreamJobID] == nil || qualification[maintenance.MemoryDeepDreamJobID] == "" {
 		t.Fatalf("light/deep dream activation drifted: %#v", handlers)
 	}
 }
@@ -120,7 +120,7 @@ func TestMaintenanceStatusReportsWorkerAndNativeEvidence(t *testing.T) {
 	if result["executor_state"] != "runtime_worker_ready_for_explicit_qualified_handlers" || result["catalog_state"] != "catalog_only" || result["native_adapters"] != "macos_adapter_available_windows_unavailable" {
 		t.Fatalf("unexpected status: %#v", result)
 	}
-	if result["idle_eligibility"] != "explicit_evidence_required_unknown_fails_closed" || result["memory_checkpoint"] != "locally_qualified_only_after_canary_enrollment" || result["memory_dreaming"] != "daily_light_locally_qualified_weekly_deep_unavailable" || result["pulse_interval_seconds"] != float64(900) {
+	if result["idle_eligibility"] != "explicit_evidence_required_unknown_fails_closed" || result["memory_checkpoint"] != "locally_qualified_only_after_canary_enrollment" || result["memory_dreaming"] != "daily_light_and_weekly_deep_locally_qualified" || result["pulse_interval_seconds"] != float64(900) {
 		t.Fatalf("continuity capability truth drifted: %#v", result)
 	}
 }

@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## WDRM - Bundle deterministic weekly memory rollups
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A new installation could create daily L1 continuity, but weekly L2/L3 consolidation and lifetime promotion were exposed as unavailable despite the engine already providing atomic, provenance-checked staging.
+- Decision: Ship a runtime-neutral deterministic weekly adapter that rolls up only active generated artifacts within managed bounds. Use the named `deterministic-l3-continuity-v1` policy: lifetime may activate only after the current candidate carries two weekly L3 generations; otherwise retain the candidate result as an ineligible, diagnosable weekly pass.
+- Consequences: The installed CLI and enrolled maintenance handler execute daily and weekly cycles without a remote model. L2/L3 are available with L1 input; lifetime remains versioned, non-overwriting and conservatively delayed until continuity is demonstrated.
+- Refs: specs/001-cli-distribution.md; specs/006-memory-persistence.md; internal/memory/deep_synthesizer.go; internal/maintenance/memory_deep_dream.go
+- Supersedes: none
+
 ## Foundation snapshot - 2026-07-19
 
 This is a frozen milestone for navigation, not a separate decision, live index or status report. The coded entries below remain authoritative; future decisions do not require this table to be rewritten.
