@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -32,6 +33,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/setupauth"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
 )
@@ -1696,33 +1698,29 @@ func configureWorkspaceRuntime(options options, workspacePath string) (workspace
 }
 
 func authorizeWorkspaceSetup(options options, workspacePath string) (workspaceSetupAuthorization, error) {
-	cliPath := installedCLIPath(options)
-	if cliPath == "" {
-		return workspaceSetupAuthorization{}, fmt.Errorf("o executável instalado do Maestro não foi encontrado")
-	}
-	runner := options.commandRunner
-	if runner == nil {
-		runner = execCommandRunner{}
-	}
-	runtimeName, err := primaryRuntime(options)
-	if err != nil {
+	inspection, err := workspace.Inspect(workspacePath, options.dataRoot)
+	if err != nil || inspection.WorkspaceID == "" || inspection.WorkspacePath == "" {
+		if err == nil {
+			err = errors.New("workspace não está pronto para receber a autorização")
+		}
 		return workspaceSetupAuthorization{}, err
 	}
-	arguments := []string{"setup", "apply", "--workspace", workspacePath, "--runtime", runtimeName, "--executable", cliPath, "--confirm"}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	output, err := runner.Run(ctx, cliPath, arguments)
-	if err != nil {
-		return workspaceSetupAuthorization{}, commandStepError(cliPath, arguments, output, err)
+	principal, err := user.Current()
+	if err != nil || strings.TrimSpace(principal.Username) == "" {
+		return workspaceSetupAuthorization{}, errors.New("não foi possível identificar o usuário local para a autorização")
 	}
-	var report struct {
-		State         string                      `json:"state"`
-		Authorization workspaceSetupAuthorization `json:"authorization"`
+	hostname, err := os.Hostname()
+	if err != nil || strings.TrimSpace(hostname) == "" {
+		return workspaceSetupAuthorization{}, errors.New("não foi possível identificar este computador para a autorização")
 	}
-	if err := json.Unmarshal(output, &report); err != nil || (report.State != "complete" && report.State != "complete_with_external_actions_pending") || report.Authorization.State != "active" || strings.TrimSpace(report.Authorization.GrantDigest) == "" {
-		return workspaceSetupAuthorization{}, readinessError(cliPath, arguments, "o receipt de autorização one-and-done é inválido")
+	status, err := (setupauth.Store{Root: options.dataRoot}).Authorize(setupauth.Request{WorkspaceID: inspection.WorkspaceID, WorkspacePath: inspection.WorkspacePath}, setupauth.DeriveIdentity(principal.Username, hostname), true)
+	if err != nil || status.State != setupauth.StateActive || strings.TrimSpace(status.GrantDigest) == "" {
+		if err == nil {
+			err = errors.New("o receipt de autorização one-and-done é inválido")
+		}
+		return workspaceSetupAuthorization{}, err
 	}
-	return report.Authorization, nil
+	return workspaceSetupAuthorization{State: status.State, GrantDigest: status.GrantDigest}, nil
 }
 
 func configureWorkspaceRuntimeForPlatform(options options, workspacePath, platform string) (workspaceActivation, error) {

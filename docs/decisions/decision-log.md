@@ -974,6 +974,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: PONB; specs/020-release-distribution.md; docs/installer-package.md; dev/skills/release-export/SKILL.md; internal/dev/releasepack/windows_portable.go
 - Supersedes: PONB
 
+## UZIP - Deliver one Claude-directed portable test archive
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The existing conversational portable handoff is limited to Windows even though most of its workspace, manifest and Claude interaction are platform-neutral. The owner needs one extract-and-converse path to test both Windows and macOS without being asked to select or run a platform script.
+- Decision: Replace the Windows-only portable boundary with one controlled `universal-portable-local-beta` ZIP. It carries the shared verified release and authority registry plus separately pinned Windows amd64, macOS arm64 and macOS amd64 bootstrap/runtime payloads. Its sole visible entry point is `maestro-os/CLAUDE.md`, which detects the host, requests one confirmation and invokes only the matching internal activator. Each activator preserves native paths and verification; no fallback, emulation or cross-platform binary execution is allowed.
+- Consequences: The delivery experience is one artifact and one Claude conversation, while runtime trust remains platform-specific. The archive is still an unsigned controlled test artifact: Windows policy/Authenticode and macOS Gatekeeper, Developer ID and notarization requirements are not bypassed. Clean-device acceptance remains a separate evidence gate.
+- Refs: PONB; WPOF; specs/001-cli-distribution.md; specs/020-release-distribution.md; docs/installer-package.md; internal/dev/releasepack
+- Supersedes: WPOF
+
 ## AGEN - Put probabilistic agency over a minimal deterministic kernel
 
 - Date: 2026-08-10

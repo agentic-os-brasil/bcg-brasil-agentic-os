@@ -48,8 +48,42 @@ func main() {
 		selfContained(root, os.Args[2:])
 	case "portable-windows":
 		portableWindows(root, os.Args[2:])
+	case "portable-universal":
+		portableUniversal(root, os.Args[2:])
 	default:
 		usage()
+	}
+}
+
+func portableUniversal(root string, args []string) {
+	flags := flag.NewFlagSet("portable-universal", flag.ExitOnError)
+	version := flags.String("version", "", "immutable MAJOR.MINOR.PATCH release version")
+	release := flags.String("release-directory", "", "exact signed release directory")
+	registry := flags.String("authority-registry", "", "approved public authority registry")
+	registrySHA256 := flags.String("authority-registry-sha256", "", "exact lowercase authority-registry SHA-256 pin")
+	windows := flags.String("windows-bootstrapper", "", "versioned Windows amd64 bootstrapper")
+	windowsSHA256 := flags.String("windows-bootstrapper-sha256", "", "exact Windows bootstrapper SHA-256 pin")
+	arm := flags.String("macos-arm64-bootstrapper", "", "versioned macOS arm64 bootstrapper")
+	armSHA256 := flags.String("macos-arm64-bootstrapper-sha256", "", "exact macOS arm64 bootstrapper SHA-256 pin")
+	amd := flags.String("macos-amd64-bootstrapper", "", "versioned macOS amd64 bootstrapper")
+	amdSHA256 := flags.String("macos-amd64-bootstrapper-sha256", "", "exact macOS amd64 bootstrapper SHA-256 pin")
+	output := flags.String("output", "", "new universal portable ZIP path")
+	_ = flags.Parse(args)
+	if *version == "" || *release == "" || *registry == "" || *registrySHA256 == "" || *windows == "" || *windowsSHA256 == "" || *arm == "" || *armSHA256 == "" || *amd == "" || *amdSHA256 == "" || *output == "" || flags.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./dev/release portable-universal --version MAJOR.MINOR.PATCH --release-directory DIR --authority-registry FILE --authority-registry-sha256 SHA256 --windows-bootstrapper FILE --windows-bootstrapper-sha256 SHA256 --macos-arm64-bootstrapper FILE --macos-arm64-bootstrapper-sha256 SHA256 --macos-amd64-bootstrapper FILE --macos-amd64-bootstrapper-sha256 SHA256 --output ZIP")
+		os.Exit(2)
+	}
+	result, err := releasepack.BuildUniversalPortable(releasepack.UniversalPortableOptions{
+		Version: *version, ReleaseDirectory: absoluteFromRoot(root, *release), AuthorityRegistry: absoluteFromRoot(root, *registry), AuthorityRegistrySHA256: *registrySHA256,
+		WindowsBootstrapper: absoluteFromRoot(root, *windows), WindowsBootstrapperSHA256: *windowsSHA256,
+		DarwinARM64Bootstrapper: absoluteFromRoot(root, *arm), DarwinARM64BootstrapperSHA256: *armSHA256,
+		DarwinAMD64Bootstrapper: absoluteFromRoot(root, *amd), DarwinAMD64BootstrapperSHA256: *amdSHA256, Output: absoluteFromRoot(root, *output), Clock: time.Now,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+		fatal(err)
 	}
 }
 
@@ -363,7 +397,7 @@ func optionalAbsoluteFromRoot(root, value string) string {
 func usage() {
 	fmt.Fprintln(
 		os.Stderr,
-		"usage: go run ./dev/release <binary|icons|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness|self-contained|portable-windows> [options]",
+		"usage: go run ./dev/release <binary|icons|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness|self-contained|portable-windows|portable-universal> [options]",
 	)
 	os.Exit(2)
 }
