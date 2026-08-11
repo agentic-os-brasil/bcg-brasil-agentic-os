@@ -995,3 +995,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: A fresh installation can guide a non-technical owner from onboarding into a first tracked deliverable and a real cross-session checkpoint without inventing a second task store or requiring native qualification. The product still does not infer a task from arbitrary text, synthesize checkpoints from hooks or claim continuity before a new runtime session observes the projection.
 - Refs: CONT; specs/029-execution-ledger-v1.md; specs/044-continuous-use.md; docs/onboarding/maestro-user-onboarding.md; internal/execution; internal/sessionctx; internal/runtimeprojection
 - Supersedes: none
+
+## CNAB - Enable Claude native agents for the controlled beta
+
+- Date: 2026-08-10
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The deterministic Maestro planner and role contracts exist, but the Claude workspace still exposes them as definitions rather than callable native subagents. Treating native qualification as a prerequisite would keep a working controlled beta artificially disabled.
+- Decision: Project Client Account Agent, Case Agent, Walter, Darwin and PA Expert as Maestro-owned Claude project subagents. Maestro remains the main-session hub and chooses strategic versus direct depth. Native SubagentStart/SubagentStop hooks record metadata and enforce one active specialist, no child delegation, exact workspace scope and the minimum Client Account -> Case -> Client Account round trip whenever the account route is selected. Claude Stop is synchronous and blocks an incomplete selected route. Working native projection is reported as `operational_beta`; native qualification remains separate telemetry. Existing blocks for destructive protected-root operations, unconfirmed external mutation and cross-workspace access remain authoritative.
+- Consequences: The Canary can exercise real model-backed delegation without waiting for qualification receipts to promote product availability. A missing or contradictory adapter/agent projection remains an installation error, while missing beta telemetry does not disable execution. Client Account, Walter, Darwin and PA Expert are tool-free in this beta; Case receives only workspace-local file tools. MarkItDown installation through Claude remains an explicit future item and is not bundled into this activation.
+- Refs: LIVA; specs/040-maestro-native-delegation.md; specs/049-claude-native-agent-beta.md; internal/claudeagents; internal/nativeagentflow; internal/adaptercfg; internal/cli
+- Supersedes: none

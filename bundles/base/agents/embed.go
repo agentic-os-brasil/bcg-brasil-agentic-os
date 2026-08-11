@@ -19,6 +19,9 @@ var paExpertRegistryJSON []byte
 //go:embed templates/*/AGENT.md
 var templates embed.FS
 
+//go:embed case-agent/AGENT.md client-account-agent/AGENT.md darwin/AGENT.md pa-expert/AGENT.md walter/AGENT.md
+var definitions embed.FS
+
 func Catalog() (agentcatalog.Catalog, error) {
 	return agentcatalog.Parse(bytes.NewReader(catalogJSON))
 }
@@ -60,6 +63,21 @@ func Template(role string) ([]byte, error) {
 		return nil, fmt.Errorf("no managed scaffold template for role %q", role)
 	}
 	body, err := templates.ReadFile("templates/" + role + "/AGENT.md")
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(nil), body...), nil
+}
+
+// Definition returns a canonical managed specialist prompt. Maestro is
+// intentionally absent because the main session owns the hub role.
+func Definition(id string) ([]byte, error) {
+	switch id {
+	case "case-agent", "client-account-agent", "darwin", "pa-expert", "walter":
+	default:
+		return nil, fmt.Errorf("no managed native definition for %q", id)
+	}
+	body, err := definitions.ReadFile(id + "/AGENT.md")
 	if err != nil {
 		return nil, err
 	}

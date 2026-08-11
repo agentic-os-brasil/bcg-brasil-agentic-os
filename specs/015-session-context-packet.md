@@ -1,7 +1,7 @@
 # Spec 015 - Session Context Packet
 
 Status: local packet and runtime-neutral Session Start bridge implemented;
-Claude and Codex native lifecycle adapters remain unavailable.
+Claude is operational for the controlled beta and Codex remains unavailable.
 
 ## Objective
 

@@ -9,7 +9,7 @@ not disable a capability that is already configured and released.
 
 | Field | Value |
 | --- | --- |
-| `as_of` | `2026-08-06` |
+| `as_of` | `2026-08-10` |
 | `base_commit` | `43e86494b2e32ca8eccece843514b75d2c98ffa7` — `origin/main` comparison point at review start; candidate evidence was run on `012c08f` and is not hosted CI evidence |
 | Repository evidence | Configured adapters, local contract fixtures and the non-invasive lifecycle probe are present; no model session was started for this documentation update. |
 | Runtime evidence | No reproducible in-repo runtime-version artifact or fresh native-session observation is attached for either runtime; prior external version observations are not treated as current snapshot evidence. |
@@ -37,7 +37,7 @@ flowchart LR
     Configured --> ContractTested["local contract-tested"]
     ContractTested --> AdapterObserved["adapter-observed"]
     AdapterObserved --> NativeQualified["native-qualified"]
-    NativeQualified --> Promote["capability may be promoted"]
+    NativeQualified --> Qualify["native qualification may be claimed"]
     EvidencePending["native evidence pending"] -.->|diagnostic only| Configured
 ```
 
@@ -45,11 +45,11 @@ flowchart LR
 
 | Event | Claude | Codex | Native promotion blocker |
 | --- | --- | --- | --- |
-| `session_start` | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | Fresh native-session observation from a qualifying runtime |
-| `context_inject` | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | Fresh native-session observation from a qualifying runtime |
-| `pre_action_guard` | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | Fresh native-session observation from a qualifying runtime |
-| `post_action_observe` | configured async + local contract-tested; adapter-observed: not captured; native-qualified: no | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | Fresh native-session observation from a qualifying runtime |
-| `stop_finalize` | configured async + local contract-tested; adapter-observed: not captured; native-qualified: no | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | Fresh native-session observation from a qualifying runtime |
+| `session_start` | operational beta; native-qualified: no | configured + local contract-tested; native-qualified: no | Qualification telemetry only; not a Claude availability gate |
+| `context_inject` | operational beta; native-qualified: no | configured + local contract-tested; native-qualified: no | Qualification telemetry only; not a Claude availability gate |
+| `pre_action_guard` | operational beta; native-qualified: no | configured + local contract-tested; native-qualified: no | Qualification telemetry only; not a Claude availability gate |
+| `post_action_observe` | operational beta, async; native-qualified: no | configured + local contract-tested; native-qualified: no | Qualification telemetry only; not a Claude availability gate |
+| `stop_finalize` | operational beta, synchronous completion gate + local contract-tested; native qualification remains telemetry | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | Beta telemetry for Claude; fresh qualifying observation for Codex |
 
 The canonical manifest keeps native qualification as a separate evidence field.
 Configured lifecycle behavior remains enabled; the local probe reports the
@@ -60,18 +60,18 @@ changing runtime configuration.
 
 | Readiness class | Snapshot status |
 | --- | --- |
-| Configured | Yes — workspace-local adapter wiring is represented. |
+| Configured | Yes — workspace-local Claude adapter and five managed subagents are represented. |
 | Local contract-tested | Repository fixtures and deterministic boundaries are present; `go run ./dev/harness validate --full` passed on candidate branch `012c08f` (branch-local evidence, not hosted CI). |
 | Adapter-observed | No — no bounded `adapter_command` receipt or equivalent diagnostic signal is attached in this snapshot. |
-| Native-qualified | No — no fresh qualifying native-session observation for Claude or Codex. |
+| Native-qualified | No — telemetry remains pending; Claude availability is nevertheless operational in the controlled beta. |
 | Release-ready | No — signing, publication and release-gate evidence are absent. |
 | Pilot-ready | No — clean-device, support/incident ownership and pilot-gate evidence are absent. |
 
 ## Audit findings
 
-- Claude's lifecycle probe applies a configured runtime qualification floor, but
-  this snapshot attaches no reproducible runtime-version artifact; no Claude
-  native trial is promoted without supported-runtime and fresh-session evidence.
+- Claude's exact managed projection enables the controlled beta. The lifecycle
+  probe still applies a qualification floor, but missing qualification evidence
+  does not disable the released path.
 - Codex's adapter configures all five command-hook events, but no
   adapter-observed receipt or native-session observation is attached; none is
   promoted without fresh native-session evidence.
@@ -90,16 +90,16 @@ changing runtime configuration.
    observation for all five events.
 2. Capture native Codex observations for all five configured events, including
    trust review for the workspace-local hook definitions.
-3. Promote a capability only from a reviewed `native-qualified` record with
+3. Set `native_qualified=true` only from a reviewed record with
    runtime/platform identity and bounded event evidence.
 
-Until then, readiness remains contract-validated only; neither runtime is
-pilot-ready for lifecycle activation.
+Until then, Claude is operational for Canary validation but not natively
+qualified or production release-ready; Codex remains outside this activation.
 
 Walter has a separate native qualification recipe in
 [`docs/walter-native-qualification.md`](walter-native-qualification.md). It
-must be completed for the shared Claude/Codex handler and installation-scoped
-review custody before `walter_review` or `agent_orchestration` is promoted.
+must be completed before claiming qualified Walter evidence. It does not gate
+the controlled-beta Walter path.
 
 ## Darwin cadence status
 
@@ -109,7 +109,7 @@ non-blocking occurrence-keyed fenced execution, immutable attempt receipts with
 occurrence-level idempotency, continuous/event gatekeeping and
 daily/weekly/monthly cadence fixtures. Busy is an ephemeral nonterminal result,
 and the shipped catalog-only/unavailable catalog cannot authorize execution.
-These are local contract evidence only. Claude and Codex remain `unavailable`;
-macOS and Windows scheduler templates remain disabled. A live macOS scheduler
-observation would be a separate scheduler gate, not lifecycle native
-qualification.
+These are local contract evidence only. The native Darwin advisory projection
+is operational in the Claude beta, while scheduler-backed housekeeping remains
+a separate capability. A live macOS scheduler observation would be a separate
+scheduler gate, not lifecycle native qualification.

@@ -30,6 +30,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/codexadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/continuoususe"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/darwin"
@@ -41,6 +42,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/nativeagentflow"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
@@ -3251,7 +3253,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 }
 
 func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
-	const usage = "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]"
+	const usage = "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization|subagent-start|subagent-stop> [workspace-path]"
 	if len(args) == 0 {
 		fmt.Fprintln(errOut, usage)
 		return ExitUsage
@@ -3265,14 +3267,14 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		return ExitUsage
 	}
 	switch action {
-	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
+	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization", "subagent-start", "subagent-stop":
 	default:
 		fmt.Fprintln(errOut, usage)
 		return ExitUsage
 	}
 
 	var native claudeadapter.NativeInput
-	if action == "context-injection" || action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" {
+	if action == "context-injection" || action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" || action == "subagent-start" || action == "subagent-stop" {
 		parsed, err := claudeadapter.ParseReader(in)
 		if err != nil {
 			if action == "pre-action-guard" {
@@ -3295,6 +3297,15 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		}
 		if response.HookSpecificOutput != nil {
 			return writeJSON(out, response, errOut)
+		}
+		if native.AgentType != "" {
+			_, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
+			if inspectErr != nil {
+				return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+			}
+			if reason, managed := claudeagents.GuardTool(native.AgentType, native.ToolName, native.ToolInputJSON(), native.CWD, inspection.WorkspacePath); managed && reason != "" {
+				return writeJSON(out, claudeadapter.ExternalActionDenial(reason), errOut)
+			}
 		}
 		protected, canonicalErr := actionconfirmation.Canonicalize(native.ToolName, native.ToolInputJSON())
 		if canonicalErr != nil {
@@ -3337,9 +3348,56 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	state, _ := resolveHookOrchestrationState(inspection, *orchestrationState)
+	state, err := resolveHookOrchestrationState(inspection, *orchestrationState)
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	if action == "subagent-start" || action == "subagent-stop" {
+		event := lifecycle.SubagentStart
+		if action == "subagent-stop" {
+			event = lifecycle.SubagentStop
+		}
+		receipt, receiptErr := claudeadapter.Receipt(event, native)
+		if receiptErr != nil {
+			return reportError(errOut, fmt.Errorf("build Claude subagent receipt: %w", receiptErr))
+		}
+		flow, flowErr := nativeagentflow.New(root, inspection.WorkspaceID)
+		if flowErr != nil {
+			return reportError(errOut, fmt.Errorf("open Claude native-agent flow: %w", flowErr))
+		}
+		if claudeagents.Managed(native.AgentType) {
+			if action == "subagent-start" {
+				flowErr = flow.Start(native.SessionID, native.AgentID, native.AgentType)
+			} else {
+				flowErr = flow.Stop(native.SessionID, native.AgentID, native.AgentType)
+			}
+			if flowErr != nil {
+				return reportError(errOut, fmt.Errorf("enforce Claude native-agent sequence: %w", flowErr))
+			}
+		}
+		receipt.IdempotencyKey = orchestrationBoundKey(receipt.IdempotencyKey, state)
+		if _, recordErr := lifecycle.Record(root, inspection.WorkspaceID, receipt); recordErr != nil {
+			return reportError(errOut, fmt.Errorf("record Claude subagent receipt: %w", recordErr))
+		}
+		if evaluateErr := evaluateAdapterInteraction(root, "claude", string(event), receipt.IdempotencyKey, inspection.WorkspaceID); evaluateErr != nil {
+			return reportError(errOut, fmt.Errorf("evaluate Claude subagent interaction: %w", evaluateErr))
+		}
+		if action == "subagent-start" && claudeagents.Managed(native.AgentType) {
+			return writeJSON(out, claudeadapter.ManagedSubagentStartContext(native.AgentType), errOut)
+		}
+		return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
+	}
 	switch action {
 	case "session-start", "context-injection":
+		if action == "context-injection" && native.SessionID != "" {
+			flow, flowErr := nativeagentflow.New(root, inspection.WorkspaceID)
+			if flowErr != nil {
+				return reportError(errOut, fmt.Errorf("open Claude native-agent flow: %w", flowErr))
+			}
+			if flowErr := flow.BeginTurn(native.SessionID); flowErr != nil {
+				return reportError(errOut, fmt.Errorf("start Claude native-agent turn: %w", flowErr))
+			}
+		}
 		profileState, err := resolveProfile(root, "", false)
 		if err != nil {
 			profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
@@ -3355,6 +3413,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			SharePointSource:   sharePointSource,
 			SetupAuthorization: setupAuthorizationForPacket(root, inspection),
 			ContinuousUse:      continuous,
+			AgentRuntimeState:  claudeAgentRuntimeState(inspection.WorkspacePath),
 		})
 		if action == "context-injection" {
 			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
@@ -3382,6 +3441,19 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		}
 		return writeJSON(out, response, errOut)
 	case "post-action-receipt", "stop-finalization":
+		if action == "stop-finalization" {
+			flow, flowErr := nativeagentflow.New(root, inspection.WorkspaceID)
+			if flowErr != nil {
+				return reportError(errOut, fmt.Errorf("open Claude native-agent flow: %w", flowErr))
+			}
+			ready, reason, flowErr := flow.Finalize(native.SessionID)
+			if flowErr != nil {
+				return reportError(errOut, fmt.Errorf("evaluate Claude native-agent completion: %w", flowErr))
+			}
+			if !ready && !native.StopHookActive {
+				return writeJSON(out, claudeadapter.BlockStop(reason), errOut)
+			}
+		}
 		event := lifecycle.PostActionObserve
 		if action == "stop-finalization" {
 			event = lifecycle.StopFinalize
@@ -3404,6 +3476,14 @@ const (
 	noncanonicalExternalDenial    = "Maestro denied this external mutation because the request is outside the bounded canonical grammar. Nothing was changed. Use an explicit action and target, then retry."
 	unavailableConfirmationDenial = "Maestro denied this external mutation because a user-bound confirmation challenge could not be evaluated. Nothing was changed. Retry from an identified native session."
 )
+
+func claudeAgentRuntimeState(workspacePath string) string {
+	status, err := adaptercfg.Inspect("claude", workspacePath)
+	if err == nil && status.State == "installed" {
+		return "operational_beta"
+	}
+	return "unavailable"
+}
 
 func inspectProtectedActionWorkspace(path string, dataRoot func() (string, error)) (string, workspace.Inspection, error) {
 	root, err := dataRoot()
@@ -3666,47 +3746,6 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 	}
 	var result adapterResult
 	var err error
-	type fileSnapshot struct {
-		path   string
-		exists bool
-		mode   os.FileMode
-		body   []byte
-	}
-	snapshotFile := func(path string) (fileSnapshot, error) {
-		if path == "" {
-			return fileSnapshot{}, nil
-		}
-		info, statErr := os.Lstat(path)
-		if errors.Is(statErr, os.ErrNotExist) {
-			return fileSnapshot{path: path}, nil
-		}
-		if statErr != nil {
-			return fileSnapshot{}, statErr
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return fileSnapshot{}, fmt.Errorf("refusing to snapshot adapter symlink %s", path)
-		}
-		body, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return fileSnapshot{}, readErr
-		}
-		return fileSnapshot{path: path, exists: true, mode: info.Mode().Perm(), body: body}, nil
-	}
-	restoreFile := func(snapshot fileSnapshot) error {
-		if snapshot.path == "" {
-			return nil
-		}
-		if !snapshot.exists {
-			if err := os.Remove(snapshot.path); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-			return nil
-		}
-		if err := os.WriteFile(snapshot.path, snapshot.body, snapshot.mode); err != nil {
-			return err
-		}
-		return nil
-	}
 	switch args[0] {
 	case "install":
 		resolvedExecutable := *executable
@@ -3728,27 +3767,12 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 		if err = bootstrapAdapterDependencies(root, path); err != nil {
 			return reportError(errOut, err)
 		}
-		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)
-		if inspectErr != nil {
-			return reportError(errOut, inspectErr)
-		}
-		excludePath, excludeErr := adaptercfg.LocalConfigExcludePath(*runtimeName, path)
-		if excludeErr != nil {
-			return reportError(errOut, excludeErr)
-		}
-		snapshot, snapshotErr := snapshotFile(priorAdapter.Path)
-		if snapshotErr != nil {
-			return reportError(errOut, snapshotErr)
-		}
-		excludeSnapshot, snapshotErr := snapshotFile(excludePath)
+		adapterSnapshot, snapshotErr := adaptercfg.CaptureState(*runtimeName, path)
 		if snapshotErr != nil {
 			return reportError(errOut, snapshotErr)
 		}
 		restoreAdapterState := func() error {
-			if restoreErr := restoreFile(snapshot); restoreErr != nil {
-				return restoreErr
-			}
-			return restoreFile(excludeSnapshot)
+			return adapterSnapshot.Restore()
 		}
 		previousProjection, _ := runtimeprojection.Inspect(*runtimeName, path)
 		result.Status, err = adaptercfg.Install(*runtimeName, path, resolvedExecutable)
@@ -3774,27 +3798,12 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 		if err = runtimeprojection.ValidateUninstall(*runtimeName, path); err != nil {
 			return reportError(errOut, err)
 		}
-		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)
-		if inspectErr != nil {
-			return reportError(errOut, inspectErr)
-		}
-		excludePath, excludeErr := adaptercfg.LocalConfigExcludePath(*runtimeName, path)
-		if excludeErr != nil {
-			return reportError(errOut, excludeErr)
-		}
-		snapshot, snapshotErr := snapshotFile(priorAdapter.Path)
-		if snapshotErr != nil {
-			return reportError(errOut, snapshotErr)
-		}
-		excludeSnapshot, snapshotErr := snapshotFile(excludePath)
+		adapterSnapshot, snapshotErr := adaptercfg.CaptureState(*runtimeName, path)
 		if snapshotErr != nil {
 			return reportError(errOut, snapshotErr)
 		}
 		restoreAdapterState := func() error {
-			if restoreErr := restoreFile(snapshot); restoreErr != nil {
-				return restoreErr
-			}
-			return restoreFile(excludeSnapshot)
+			return adapterSnapshot.Restore()
 		}
 		result.Status, err = adaptercfg.Uninstall(*runtimeName, path)
 		if err != nil {

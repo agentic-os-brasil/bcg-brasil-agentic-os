@@ -36,7 +36,7 @@ func TestManifestHasEquivalentClaudeAndCodexCapabilities(t *testing.T) {
 	}
 }
 
-func TestClaudeLifecycleRemainsUnavailableOnlyForPendingNativeEvidence(t *testing.T) {
+func TestClaudeLifecycleIsOperationalBetaWhileQualificationRemainsTelemetry(t *testing.T) {
 	manifest, err := baseruntime.Manifest()
 	if err != nil {
 		t.Fatal(err)
@@ -53,10 +53,9 @@ func TestClaudeLifecycleRemainsUnavailableOnlyForPendingNativeEvidence(t *testin
 		if !events[capability.SemanticEvent] || capability.ID == "agent_orchestration" {
 			continue
 		}
-		if capability.State != "unavailable" ||
-			!strings.Contains(capability.Reason, "qualifying native conformance evidence") ||
-			strings.Contains(capability.Reason, "adapter pending") ||
-			strings.Contains(capability.Reason, "no product") {
+		if capability.State != "operational_beta" ||
+			!strings.Contains(capability.Reason, "native qualification remains telemetry") ||
+			capability.NativeQualified {
 			t.Fatalf("Claude lifecycle capability reports stale state: %#v", capability)
 		}
 	}
@@ -117,7 +116,11 @@ func TestReportDoesNotCallDetectedRuntimeReadyWhenRequiredCapabilityIsUnavailabl
 		if err != nil {
 			t.Fatal(err)
 		}
-		if report.State != "capabilities_unavailable" {
+		want := "capabilities_unavailable"
+		if runtime == "claude" {
+			want = "operational_beta"
+		}
+		if report.State != want {
 			t.Fatalf("%s aggregate state = %q", runtime, report.State)
 		}
 	}

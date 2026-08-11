@@ -234,11 +234,11 @@ func TestCanaryInstallBindsExactInitializedWorkspaceAndRunningExecutable(t *test
 	if enrollment.WorkspaceID != initialized.WorkspaceID || enrollment.Executable != resolvedExecutable || enrollment.Mode != "filesystem_only" {
 		t.Fatalf("enrollment=%#v", enrollment)
 	}
-	if len(enrollment.Activated) != 4 {
+	if len(enrollment.Activated) != 5 {
 		t.Fatalf("activated jobs=%#v", enrollment.Activated)
 	}
 	for _, activation := range enrollment.Activated {
-		if activation.JobID == "walter-self-review-weekly" || activation.JobID == maintenance.MemoryDeepDreamJobID {
+		if activation.JobID == "walter-self-review-weekly" {
 			t.Fatalf("model-backed job activated: %#v", activation)
 		}
 	}
@@ -246,7 +246,7 @@ func TestCanaryInstallBindsExactInitializedWorkspaceAndRunningExecutable(t *test
 	for _, activation := range enrollment.Activated {
 		activatedIDs = append(activatedIDs, activation.JobID)
 	}
-	if !containsString(activatedIDs, maintenance.MemoryCheckpointJobID) || !containsString(activatedIDs, maintenance.MemoryLightDreamJobID) {
+	if !containsString(activatedIDs, maintenance.MemoryCheckpointJobID) || !containsString(activatedIDs, maintenance.MemoryLightDreamJobID) || !containsString(activatedIDs, maintenance.MemoryDeepDreamJobID) {
 		t.Fatalf("memory continuity jobs were not activated: %#v", enrollment.Activated)
 	}
 
