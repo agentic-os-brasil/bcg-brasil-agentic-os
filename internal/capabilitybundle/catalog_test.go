@@ -7,7 +7,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/capabilitybundle"
 )
 
-func TestPlanForDataScienceResolvesOptionalDependencies(t *testing.T) {
+func TestPlanForDataScienceIncludesTechCoreByDefault(t *testing.T) {
 	catalog, err := capabilitybundle.Parse(strings.NewReader(validCatalog))
 	if err != nil {
 		t.Fatal(err)
@@ -16,15 +16,15 @@ func TestPlanForDataScienceResolvesOptionalDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.State != capabilitybundle.Optional || len(plan.Bundles) != 2 || plan.Bundles[0].ID != "base" || plan.Bundles[1].ID != "tech-core" {
+	if plan.State != capabilitybundle.Included || len(plan.Bundles) != 2 || plan.Bundles[0].ID != "base" || plan.Bundles[1].ID != "tech-core" {
 		t.Fatalf("plan = %#v", plan)
 	}
-	if !strings.Contains(plan.Reason, "confirmed interview") {
+	if !strings.Contains(plan.Reason, "default distribution") {
 		t.Fatalf("reason = %q", plan.Reason)
 	}
 }
 
-func TestPlanForConsultingKeepsTheBaseBundleOnly(t *testing.T) {
+func TestPlanForConsultingIncludesTechCoreByDefault(t *testing.T) {
 	catalog, err := capabilitybundle.Parse(strings.NewReader(validCatalog))
 	if err != nil {
 		t.Fatal(err)
@@ -33,14 +33,28 @@ func TestPlanForConsultingKeepsTheBaseBundleOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.State != "base_only" || len(plan.Bundles) != 1 || plan.Bundles[0].ID != "base" {
+	if plan.State != capabilitybundle.Included || len(plan.Bundles) != 2 || plan.Bundles[0].ID != "base" || plan.Bundles[1].ID != "tech-core" {
 		t.Fatalf("plan = %#v", plan)
 	}
 }
 
-func TestParseRejectsOptionalBundleThatClaimsActivation(t *testing.T) {
-	broken := strings.Replace(validCatalog, `"availability": "optional", "availability_reason": "release activation is available"`, `"availability": "included", "availability_reason": ""`, 1)
-	if _, err := capabilitybundle.Parse(strings.NewReader(broken)); err == nil || !strings.Contains(err.Error(), "must be optional with a reason") {
+func TestDefaultPlanIncludesTechCoreWithoutTracks(t *testing.T) {
+	catalog, err := capabilitybundle.Parse(strings.NewReader(validCatalog))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := catalog.DefaultPlan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.State != capabilitybundle.Included || len(plan.Bundles) != 2 || plan.Bundles[1].ID != "tech-core" {
+		t.Fatalf("plan = %#v", plan)
+	}
+}
+
+func TestParseRejectsIncludedBundleWithActivationReason(t *testing.T) {
+	broken := strings.Replace(validCatalog, `"id": "tech-core", "display_name": "Tech Core", "availability": "included", "availability_reason": ""`, `"id": "tech-core", "display_name": "Tech Core", "availability": "included", "availability_reason": "release activation is available"`, 1)
+	if _, err := capabilitybundle.Parse(strings.NewReader(broken)); err == nil || !strings.Contains(err.Error(), "must not have an availability reason") {
 		t.Fatalf("Parse() error = %v", err)
 	}
 }
@@ -78,6 +92,6 @@ const validCatalog = `{
   "schema_version": 1,
   "bundles": [
     {"id": "base", "display_name": "Base", "availability": "included", "availability_reason": "", "depends_on": [], "tracks": ["consulting"], "catalog_pointer": "bundles/base/skills/catalog.json"},
-    {"id": "tech-core", "display_name": "Tech Core", "availability": "optional", "availability_reason": "release activation is available", "depends_on": ["base"], "tracks": ["software-engineering", "technical-explorer", "data-engineering", "data-science"], "catalog_pointer": "bundles/tech-core/skills/catalog.json"}
+    {"id": "tech-core", "display_name": "Tech Core", "availability": "included", "availability_reason": "", "depends_on": ["base"], "tracks": ["software-engineering", "technical-explorer", "data-engineering", "data-science"], "catalog_pointer": "bundles/tech-core/skills/catalog.json"}
   ]
 }`

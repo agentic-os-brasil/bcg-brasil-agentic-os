@@ -1191,21 +1191,21 @@ func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 
 func TestBundlesPlanMarksDataPracticeOptional(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "optional"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
+	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "included"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
 	}
 }
 
 func TestBundlesPlanMarksEngineeringCoreOptional(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "software-engineering"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "optional"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
+	if code := Run([]string{"bundles", "plan", "--track", "software-engineering"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "included"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
 	}
 }
 
 func TestBundlesPlanKeepsClassicConsultingOnTheBaseBundle(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "consulting"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "base_only"`) || strings.Contains(output.String(), `"id": "tech-core"`) {
+	if code := Run([]string{"bundles", "plan", "--track", "consulting"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "included"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
 	}
 }
@@ -1221,7 +1221,7 @@ func TestBundlesRecommendUsesDeclaredFunctionAndDoesNotActivate(t *testing.T) {
 	output.Reset()
 	if code := Run([]string{"bundles", "recommend", "--function", "Consultora de estratégia"}, &output, &output); code != ExitOK ||
 		!strings.Contains(output.String(), `"state": "ask"`) ||
-		!strings.Contains(output.String(), "deseja incluir skills de tecnologia") {
+		!strings.Contains(output.String(), "já está incluído") {
 		t.Fatalf("ambiguous recommendation exit = %d, output = %s", code, output.String())
 	}
 }

@@ -265,13 +265,12 @@ do runtime:
 bcgos bundles recommend --function "<resposta declarada pelo owner>"
 ```
 
-Se o resultado for `recommended`, explique que engineering, data ou AI foram
-identificados somente na resposta declarada e pergunte se a pessoa quer incluir
-o bundle opcional `tech-core`. Se o resultado for `ask`, faça a mesma pergunta
-sem presumir que a função é técnica. Nunca ative o bundle automaticamente: a
-seleção de uma trilha técnica e a confirmação do owner continuam sendo a única
-forma de projetar as skills. O `tech-core` é um bundle único e inclui engineering,
-data, AI e métodos de qualidade.
+Use o resultado para ajustar a orientação e a divulgação das capacidades, não
+para decidir se o bundle será instalado. O `tech-core` já vem incluído desde a
+primeira instalação, sem pergunta de ativação ou confirmação adicional. A
+seleção de uma trilha técnica continua sendo opcional e serve apenas para
+roteamento e personalização. O `tech-core` é um bundle único e inclui
+engineering, data, AI e métodos de qualidade.
 
 ### Skills de desenvolvimento disponíveis
 

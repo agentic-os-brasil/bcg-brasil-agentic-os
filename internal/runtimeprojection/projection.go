@@ -20,6 +20,7 @@ import (
 	baseskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/skills"
 	bundlecatalog "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/catalog"
 	techcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/tech-core/skills"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/capabilitybundle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillrouting"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillsindex"
@@ -504,6 +505,12 @@ func canonicalProjection(current manifest) (canonicalProjectionContract, error) 
 	if err != nil {
 		return canonicalProjectionContract{}, err
 	}
+	for index := range base.Skills {
+		base.Skills[index].Bundle = "base"
+	}
+	for index := range tech.Skills {
+		tech.Skills[index].Bundle = "tech-core"
+	}
 	known := make(map[string]skillsindex.Skill, len(base.Skills)+len(tech.Skills))
 	for _, skill := range append(base.Skills, tech.Skills...) {
 		known[skill.ID] = skill
@@ -574,14 +581,19 @@ func catalogForTracks(tracks []string) (skillsindex.Catalog, error) {
 	if err != nil {
 		return skillsindex.Catalog{}, fmt.Errorf("load managed skills catalog: %w", err)
 	}
-	if len(tracks) == 0 {
-		return base, nil
+	for index := range base.Skills {
+		base.Skills[index].Bundle = "base"
 	}
 	catalog, err := bundlecatalog.Catalog()
 	if err != nil {
 		return skillsindex.Catalog{}, err
 	}
-	plan, err := catalog.PlanForTracks(tracks)
+	var plan capabilitybundle.Plan
+	if len(tracks) == 0 {
+		plan, err = catalog.DefaultPlan()
+	} else {
+		plan, err = catalog.PlanForTracks(tracks)
+	}
 	if err != nil {
 		return skillsindex.Catalog{}, err
 	}
@@ -597,6 +609,9 @@ func catalogForTracks(tracks []string) (skillsindex.Catalog, error) {
 		if loadErr != nil {
 			return skillsindex.Catalog{}, fmt.Errorf("load %s skills catalog: %w", bundle.ID, loadErr)
 		}
+		for index := range optional.Skills {
+			optional.Skills[index].Bundle = bundle.ID
+		}
 		base.Skills = append(base.Skills, optional.Skills...)
 	}
 	sort.Slice(base.Skills, func(left, right int) bool { return base.Skills[left].ID < base.Skills[right].ID })
@@ -606,10 +621,11 @@ func catalogForTracks(tracks []string) (skillsindex.Catalog, error) {
 	return base, nil
 }
 
-// PolicyForTracks composes the immutable base policy with exactly the optional
-// methods activated by the confirmed track plan. The returned policy compiles
-// only against the corresponding active catalog, so unselected bundle methods
-// remain denied even if their source is embedded in the release.
+// PolicyForTracks composes the immutable base policy with included methods and
+// exactly the optional methods activated by the confirmed track plan. The
+// returned policy compiles only against the corresponding active catalog, so
+// future unselected bundle methods remain denied even if their source is
+// embedded in the release.
 func PolicyForTracks(tracks []string) (skillpolicy.Policy, skillsindex.Catalog, error) {
 	active, err := catalogForTracks(tracks)
 	if err != nil {

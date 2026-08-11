@@ -25,6 +25,7 @@ type Skill struct {
 	Trigger       string `json:"trigger"`
 	DefaultPrompt string `json:"default_prompt"`
 	RelativePath  string `json:"relative_path"`
+	Bundle        string `json:"-"`
 }
 
 func Build(root string) (Catalog, error) {

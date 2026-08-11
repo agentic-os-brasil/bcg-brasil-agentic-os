@@ -12,7 +12,10 @@ import (
 	"strings"
 )
 
-const Optional = "optional"
+const (
+	Included = "included"
+	Optional = "optional"
+)
 
 type Catalog struct {
 	SchemaVersion int      `json:"schema_version"`
@@ -64,7 +67,7 @@ func LoadFile(path string) (Catalog, error) {
 
 func (catalog Catalog) Validate() error {
 	if catalog.SchemaVersion != 1 || len(catalog.Bundles) < 2 {
-		return errors.New("capability bundle catalog must use schema version 1 and contain base plus optional bundles")
+		return errors.New("capability bundle catalog must use schema version 1 and contain base plus included or optional bundles")
 	}
 	byID := make(map[string]Bundle, len(catalog.Bundles))
 	trackOwners := make(map[string]string)
@@ -76,10 +79,14 @@ func (catalog Catalog) Validate() error {
 			return fmt.Errorf("capability bundle catalog contains duplicate bundle %q", bundle.ID)
 		}
 		if bundle.ID == "base" {
-			if bundle.Availability != "included" || len(bundle.DependsOn) != 0 {
+			if bundle.Availability != Included || strings.TrimSpace(bundle.AvailabilityReason) != "" || len(bundle.DependsOn) != 0 {
 				return errors.New("base capability bundle must be included and have no dependencies")
 			}
-		} else if bundle.Availability != Optional || strings.TrimSpace(bundle.AvailabilityReason) == "" {
+		} else if bundle.Availability != Included && bundle.Availability != Optional {
+			return fmt.Errorf("capability bundle %q must be included or optional", bundle.ID)
+		} else if bundle.Availability == Included && strings.TrimSpace(bundle.AvailabilityReason) != "" {
+			return fmt.Errorf("included capability bundle %q must not have an availability reason", bundle.ID)
+		} else if bundle.Availability == Optional && strings.TrimSpace(bundle.AvailabilityReason) == "" {
 			return fmt.Errorf("optional capability bundle %q must be optional with a reason", bundle.ID)
 		}
 		for _, track := range bundle.Tracks {
@@ -155,7 +162,12 @@ func (catalog Catalog) PlanForTracks(tracks []string) (Plan, error) {
 		}
 		requested[track] = true
 	}
-	selected := map[string]bool{"base": true}
+	selected := make(map[string]bool, len(catalog.Bundles))
+	for _, bundle := range catalog.Bundles {
+		if bundle.Availability == Included {
+			selected[bundle.ID] = true
+		}
+	}
 	for track := range requested {
 		found := false
 		for _, bundle := range catalog.Bundles {
@@ -190,14 +202,63 @@ func (catalog Catalog) PlanForTracks(tracks []string) (Plan, error) {
 	for _, bundle := range catalog.Bundles {
 		if selected[bundle.ID] {
 			plan.Bundles = append(plan.Bundles, bundle)
-			if bundle.Availability == Optional && plan.State == "base_only" {
+			if bundle.Availability == Optional {
 				plan.State = Optional
+			} else if bundle.ID != "base" && plan.State == "base_only" {
+				plan.State = Included
 			}
 		}
 	}
 	sort.Slice(plan.Bundles, func(left, right int) bool { return plan.Bundles[left].ID < plan.Bundles[right].ID })
 	if plan.State == Optional {
 		plan.Reason = "selected optional bundle activates only after explicit confirmed interview selection; it does not grant tools, data scope or authority"
+	} else if plan.State == Included {
+		plan.Reason = "included capability bundles are active from the default distribution; declared tracks tailor routing and disclosure only"
+	}
+	return plan, nil
+}
+
+// DefaultPlan returns the bundle plan used when no owner capability tracks have
+// been recorded yet. Included bundles are active immediately; optional bundles
+// remain excluded until an explicit track selection resolves them.
+func (catalog Catalog) DefaultPlan() (Plan, error) {
+	if err := catalog.Validate(); err != nil {
+		return Plan{}, err
+	}
+	selected := make(map[string]bool, len(catalog.Bundles))
+	for _, bundle := range catalog.Bundles {
+		if bundle.Availability == Included {
+			selected[bundle.ID] = true
+		}
+	}
+	byID := make(map[string]Bundle, len(catalog.Bundles))
+	for _, bundle := range catalog.Bundles {
+		byID[bundle.ID] = bundle
+	}
+	var addDependencies func(string)
+	addDependencies = func(id string) {
+		for _, dependency := range byID[id].DependsOn {
+			if !selected[dependency] {
+				selected[dependency] = true
+				addDependencies(dependency)
+			}
+		}
+	}
+	for id := range selected {
+		addDependencies(id)
+	}
+	plan := Plan{State: "base_only"}
+	for _, bundle := range catalog.Bundles {
+		if selected[bundle.ID] {
+			plan.Bundles = append(plan.Bundles, bundle)
+			if bundle.ID != "base" {
+				plan.State = Included
+			}
+		}
+	}
+	sort.Slice(plan.Bundles, func(left, right int) bool { return plan.Bundles[left].ID < plan.Bundles[right].ID })
+	if plan.State == Included {
+		plan.Reason = "included capability bundles are active from the default distribution; declared tracks tailor routing and disclosure only"
 	}
 	return plan, nil
 }

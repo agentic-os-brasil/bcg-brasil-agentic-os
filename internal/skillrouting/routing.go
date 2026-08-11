@@ -93,13 +93,16 @@ func Route(request Request) ([]Selection, error) {
 	}
 
 	promptTokens := tokenSet(request.Prompt)
-	frequency := map[string]int{}
+	frequency := map[string]map[string]int{}
 	for _, item := range eligible {
+		if frequency[item.skill.Bundle] == nil {
+			frequency[item.skill.Bundle] = map[string]int{}
+		}
 		if selected[item.skill.ID] {
 			continue
 		}
 		for token := range item.tokens {
-			frequency[token]++
+			frequency[item.skill.Bundle][token]++
 		}
 	}
 	for index := range eligible {
@@ -107,7 +110,7 @@ func Route(request Request) ([]Selection, error) {
 			continue
 		}
 		for token := range eligible[index].tokens {
-			if promptTokens[token] && frequency[token] == 1 {
+			if promptTokens[token] && frequency[eligible[index].skill.Bundle][token] == 1 {
 				eligible[index].score++
 			}
 		}
