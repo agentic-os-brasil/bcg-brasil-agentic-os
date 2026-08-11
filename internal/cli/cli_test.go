@@ -94,6 +94,92 @@ func TestWorkListAndCheckpointRequireExplicitStdin(t *testing.T) {
 	}
 }
 
+func TestWorkConvenienceFlagsKeepConversationalCheckpointBounded(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	workspacePath := filepath.Join(t.TempDir(), "case-convenience")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	contract := `{"objective":"continue one bounded task","initial_next_step":"start","criteria":[{"id":"check","type":"command_check","command":["go","version"]}],"allowed_refs":[]}`
+	if code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("create exit = %d: %s", code, output.String())
+	}
+	var created execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runWork([]string{"start", "--workspace", workspacePath, "--id", created.ItemID}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("friendly start exit = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--active", "--revision", "1", "--stdin"}, strings.NewReader(`{"note":"stale checkpoint"}`), &output, &output, dataRoot); code == ExitOK || !strings.Contains(output.String(), execution.ErrRevisionConflict.Error()) {
+		t.Fatalf("active checkpoint accepted stale fence: exit=%d output=%s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--item", created.ItemID, "--active", "--stdin"}, strings.NewReader(`{"note":"ambiguous target"}`), &output, &output, dataRoot); code != ExitUsage || !strings.Contains(output.String(), "cannot be combined") {
+		t.Fatalf("mixed active/item selector exit = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--active", "--stdin"}, strings.NewReader(`{"note":"Validate continuity in the next session."}`), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("friendly checkpoint exit = %d: %s", code, output.String())
+	}
+	var checkpointed execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &checkpointed); err != nil || checkpointed.CheckpointID == "" {
+		t.Fatalf("checkpoint receipt = %#v, err = %v", checkpointed, err)
+	}
+	output.Reset()
+	if code := runWork([]string{"pause", "--workspace", workspacePath, "--active"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("friendly pause exit = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"resume", "--workspace", workspacePath, "--active"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("friendly resume exit = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"next", "--workspace", workspacePath, "--active"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), "Validate continuity in the next session.") || !strings.Contains(output.String(), "Resume from the recorded checkpoint.") {
+		t.Fatalf("friendly next exit = %d: %s", code, output.String())
+	}
+}
+
+func TestWorkActiveConvenienceRejectsAbsentAndAmbiguousItems(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	workspacePath := filepath.Join(t.TempDir(), "case-active-selection")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--active", "--stdin"}, strings.NewReader(`{"note":"no active task"}`), &output, &output, dataRoot); code == ExitOK || !strings.Contains(output.String(), "no active execution item") {
+		t.Fatalf("missing active item was accepted: exit=%d output=%s", code, output.String())
+	}
+	create := func(objective string) execution.MutationReceipt {
+		t.Helper()
+		output.Reset()
+		contract := `{"objective":"` + objective + `","initial_next_step":"start","criteria":[{"id":"check","type":"command_check","command":["go","version"]}],"allowed_refs":[]}`
+		if code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot); code != ExitOK {
+			t.Fatalf("create exit = %d: %s", code, output.String())
+		}
+		var created execution.MutationReceipt
+		if err := json.Unmarshal(output.Bytes(), &created); err != nil {
+			t.Fatal(err)
+		}
+		output.Reset()
+		if code := runWork([]string{"start", "--workspace", workspacePath, "--id", created.ItemID}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+			t.Fatalf("start exit = %d: %s", code, output.String())
+		}
+		return created
+	}
+	create("first active task")
+	create("second active task")
+	output.Reset()
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--active", "--stdin"}, strings.NewReader(`{"note":"ambiguous active task"}`), &output, &output, dataRoot); code == ExitOK || !strings.Contains(output.String(), execution.ErrActiveItemAmbiguous.Error()) {
+		t.Fatalf("ambiguous active item was accepted: exit=%d output=%s", code, output.String())
+	}
+}
+
 func TestOwnerAgentListIsReadOnlyAndStable(t *testing.T) {
 	root := t.TempDir()
 	var output bytes.Buffer

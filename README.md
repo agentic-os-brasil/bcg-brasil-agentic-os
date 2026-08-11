@@ -426,17 +426,26 @@ bcgos session packet [workspace]
 bcgos maestro status [workspace]
 bcgos work schema
 bcgos work create --workspace <path> --stdin
-bcgos work start --workspace <path> --item <id> --revision <n>
-bcgos work checkpoint --workspace <path> --item <id> --revision <n> --attempt <id> --stdin
-bcgos work pause --workspace <path> --item <id> --revision <n> --attempt <id>
+bcgos work start --workspace <path> --id <id>
+bcgos work checkpoint --workspace <path> --active --stdin
+bcgos work pause --workspace <path> --active
+bcgos work resume --workspace <path> --active
 bcgos work next --workspace <path> (--item <id> | --active)
-bcgos work resume --workspace <path> --item <id> --revision <n>
 bcgos work evidence --workspace <path> --item <id> --revision <n> --attempt <id> --criterion <id>
 bcgos work complete --workspace <path> --item <id> --revision <n> --attempt <id>
 bcgos work inspect --workspace <path> --item <id>
 bcgos work export --workspace <path> --item <id>
 bcgos work delete --workspace <path> --item <id> --revision <n> --confirm
 ```
+
+For the normal conversational flow, `--id` is an alias for `--item`, and
+`--active` resolves exactly one running or paused item without making the user
+carry its revision or attempt token. A checkpoint may send `{ "note": "..." }`;
+the CLI records it as the summary and supplies a safe default next step. The
+optimistic-concurrency fence remains active, so a stale value supplied
+explicitly still fails rather than overwriting a newer session. `--active` and
+`--item`/`--id` are mutually exclusive. Destructive deletion continues to
+require an explicit item, revision, and confirmation.
 
 ---
 

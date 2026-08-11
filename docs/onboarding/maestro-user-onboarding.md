@@ -387,15 +387,23 @@ Comandos disponíveis na superfície do CLI:
 bcgos work schema
 bcgos work create --workspace <workspace> --stdin
 bcgos work list --workspace <workspace>
-bcgos work start --workspace <workspace> --item <id> --revision <n>
-bcgos work checkpoint --workspace <workspace> --item <id> --revision <n> --attempt <id> --stdin
+bcgos work start --workspace <workspace> --id <id>
+bcgos work checkpoint --workspace <workspace> --active --stdin
 bcgos work evidence --workspace <workspace> --item <id> --revision <n> --attempt <id> --criterion <id>
-bcgos work pause --workspace <workspace> --item <id> --revision <n> --attempt <id>
-bcgos work resume --workspace <workspace> --item <id> --revision <n>
+bcgos work pause --workspace <workspace> --active
+bcgos work resume --workspace <workspace> --active
 bcgos work inspect --workspace <workspace> --item <id>
 bcgos work export --workspace <workspace> --item <id>
 bcgos owner agent list
 ```
+
+No fluxo cotidiano, o runtime conversa com uma única tarefa ativa: `--active`
+resolve o item, a revisão e a tentativa atuais sem expor esses detalhes. Para
+checkpoint, `{ "note": "..." }` basta; o Maestro registra a nota e mantém um
+próximo passo seguro. Os parâmetros completos continuam disponíveis para
+integrações avançadas e ainda rejeitam revisões ou tentativas desatualizadas.
+`--active` nunca pode ser combinado com `--item`/`--id`; exclusão continua
+exigindo item, revisão e confirmação explícitos.
 
 Antes do primeiro `create`, rode `bcgos work schema`. O comando não lê o
 workspace nem o estado do usuário: ele mostra os campos aceitos, os dois tipos
