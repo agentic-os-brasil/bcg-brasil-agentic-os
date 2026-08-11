@@ -125,9 +125,19 @@ func createFiles(root string, files map[string]string) error {
 }
 
 func pointer(path string) Pointer {
-	info, err := os.Stat(path)
-	if err == nil && info.IsDir() {
-		return Pointer{Path: path, Available: true, State: "available"}
+	canonical, err := scheduler.CanonicalPrivatePath(path)
+	if err != nil {
+		return Pointer{Path: path, State: "unsafe"}
 	}
-	return Pointer{Path: path, State: "missing"}
+	info, err := os.Lstat(canonical)
+	if errors.Is(err, os.ErrNotExist) {
+		return Pointer{Path: path, State: "missing"}
+	}
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return Pointer{Path: path, State: "unsafe"}
+	}
+	if err := scheduler.ValidatePrivateDirectory(canonical); err != nil {
+		return Pointer{Path: path, State: "unsafe"}
+	}
+	return Pointer{Path: path, Available: true, State: "available"}
 }
