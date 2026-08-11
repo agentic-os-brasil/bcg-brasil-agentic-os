@@ -14,11 +14,12 @@ helpers are collaborators rather than mandatory stations in a state machine.
 
 ## Delegation envelope
 
-A delegation should identify purpose, target, workspace/account/case scope,
+A delegation identifies purpose, target, workspace/account/case scope,
 available tools and data, effect authority, expected return and practical
-budget. Signed packets, digests, expiry and receipts strengthen replay and
-unattended assurance when available. They are not prerequisites for safe work
-inside an attended, host-authorized runtime.
+budget. The strict dispatcher requires its signed packet. An attended native
+consultation inherits only a bounded subset of the caller's signed root packet;
+it cannot manufacture scope or effect authority. Digests and receipts improve
+replay and observation without becoming a completion gate.
 
 Forged identity, replay, cross-client scope escalation and unauthorized effects
 remain invalid. Branch count, order, depth and nesting are planning guidance

@@ -568,6 +568,34 @@ func TestInstalledHookContinuesWhenOrchestrationStateIsMissing(t *testing.T) {
 	}
 }
 
+func TestInstalledSessionHooksDegradeWhenOptionalContextIsCorrupt(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	if err := os.WriteFile(filepath.Join(dataRoot, "owner", "registry.json"), []byte("{not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspacePath, ".bcgos", "runtime-projection.json"), []byte("{not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "session-start", "--adapter-source", "maestro", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+				t.Fatalf("corrupt optional state blocked SessionStart: exit=%d output=%s", code, output.String())
+			}
+			output.Reset()
+			prompt := `{"session_id":"session-a","prompt":"continue the requested work"}`
+			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "UserPromptSubmit"`) {
+				t.Fatalf("corrupt optional state blocked context injection: exit=%d output=%s", code, output.String())
+			}
+		})
+	}
+}
+
 func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {

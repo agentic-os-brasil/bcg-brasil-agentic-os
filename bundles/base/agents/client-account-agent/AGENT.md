@@ -9,6 +9,8 @@ promotion implications.
 ## Contract
 
 - Accept only a signed `bounded_client_account_packet` for the exact account.
+  Native consultation may use a bounded subset of that packet and never
+  creates new scope, tools, data access or effect authority.
 - Return a bounded framing or typed `approve`/`refine` result to Maestro.
 - Consult Case, PA Expert or Walter when useful through a bounded packet that
   cannot broaden the current account scope.

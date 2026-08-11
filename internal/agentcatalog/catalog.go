@@ -13,12 +13,23 @@ import (
 )
 
 type Catalog struct {
-	SchemaVersion int                          `json:"schema_version"`
-	Hub           string                       `json:"hub"`
-	Delegation    DelegationPolicy             `json:"delegation"`
-	LegacyAliases map[string]LegacyRoleAlias   `json:"legacy_aliases"`
-	LegacyIDs     map[string]LegacyIDMigration `json:"legacy_ids"`
-	Agents        []Agent                      `json:"agents"`
+	SchemaVersion  int                          `json:"schema_version"`
+	Hub            string                       `json:"hub"`
+	Delegation     DelegationPolicy             `json:"delegation"`
+	NativeAdvisory NativeAdvisoryPolicy         `json:"native_advisory"`
+	LegacyAliases  map[string]LegacyRoleAlias   `json:"legacy_aliases"`
+	LegacyIDs      map[string]LegacyIDMigration `json:"legacy_ids"`
+	Agents         []Agent                      `json:"agents"`
+}
+
+// NativeAdvisoryPolicy describes bounded consultations that a model-backed
+// host runtime may perform. It is deliberately separate from DelegationPolicy,
+// which remains the strict signed-packet replay backend.
+type NativeAdvisoryPolicy struct {
+	Mode                string           `json:"mode"`
+	MaxDepth            int              `json:"max_depth"`
+	MaxChildrenPerAgent int              `json:"max_children_per_agent"`
+	AllowedEdges        []DelegationEdge `json:"allowed_edges"`
 }
 
 // LegacyRoleAlias keeps existing local registrations readable while ensuring
@@ -193,6 +204,12 @@ func (catalog Catalog) Validate() error {
 	if err := validateDelegationEdges(catalog.Delegation.AllowedEdges); err != nil {
 		return err
 	}
+	if catalog.NativeAdvisory.Mode != "host_runtime" || catalog.NativeAdvisory.MaxDepth != 2 || catalog.NativeAdvisory.MaxChildrenPerAgent != 2 {
+		return errors.New("agent catalog must declare the bounded native advisory profile")
+	}
+	if err := validateNativeAdvisoryEdges(catalog.NativeAdvisory.AllowedEdges); err != nil {
+		return err
+	}
 	if len(catalog.Agents) < 3 {
 		return errors.New("agent catalog is missing the Maestro core")
 	}
@@ -279,6 +296,25 @@ func (catalog Catalog) AllowsDelegation(fromRole, toRole string, depth int) bool
 	return false
 }
 
+func (catalog Catalog) AllowsNativeConsultation(fromRole, toRole string, depth int) bool {
+	if depth < 1 || depth > catalog.NativeAdvisory.MaxDepth {
+		return false
+	}
+	fromRole = catalog.CanonicalRole(fromRole)
+	toRole = catalog.CanonicalRole(toRole)
+	for _, edge := range catalog.NativeAdvisory.AllowedEdges {
+		if edge.FromRole != fromRole {
+			continue
+		}
+		for _, allowed := range edge.ToRoles {
+			if allowed == toRole {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (catalog Catalog) roleMayDelegate(role string) bool {
 	role = catalog.CanonicalRole(role)
 	for _, edge := range catalog.Delegation.AllowedEdges {
@@ -302,6 +338,29 @@ func validateDelegationEdges(edges []DelegationEdge) error {
 		for targetIndex, target := range edge.ToRoles {
 			if target != expected.ToRoles[targetIndex] {
 				return errors.New("agent catalog delegation edges must use the canonical sorted role graph")
+			}
+		}
+	}
+	return nil
+}
+
+func validateNativeAdvisoryEdges(edges []DelegationEdge) error {
+	wanted := []DelegationEdge{
+		{FromRole: "hub", ToRoles: []string{"case_agent", "client_account_agent", "errand_helper", "governance_analyst", "pa_expert", "quality_guardian", "reviewer"}},
+		{FromRole: "case_agent", ToRoles: []string{"client_account_agent", "pa_expert", "quality_guardian", "reviewer"}},
+		{FromRole: "client_account_agent", ToRoles: []string{"case_agent", "pa_expert", "reviewer"}},
+	}
+	if len(edges) != len(wanted) {
+		return errors.New("agent catalog native advisory graph is incomplete")
+	}
+	for index, edge := range edges {
+		expected := wanted[index]
+		if edge.FromRole != expected.FromRole || len(edge.ToRoles) != len(expected.ToRoles) {
+			return errors.New("agent catalog native advisory edges must use the canonical sorted role graph")
+		}
+		for targetIndex, target := range edge.ToRoles {
+			if target != expected.ToRoles[targetIndex] {
+				return errors.New("agent catalog native advisory edges must use the canonical sorted role graph")
 			}
 		}
 	}

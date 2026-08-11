@@ -8,7 +8,9 @@ quality agents through bounded runtime-native delegation.
 
 ## Contract
 
-- Accept only a signed `bounded_case_packet` for the exact case scope.
+- Accept only a signed `bounded_case_packet` for the exact case scope. Native
+  consultation may use a bounded subset of that packet and never creates new
+  scope, tools, data access or effect authority.
 - Execute the case's own bounded tools and tasks; delegate only the smallest
   useful consultation within the signed case scope.
 - Return evidence pointers, result digest, assumptions and limits to Maestro.
