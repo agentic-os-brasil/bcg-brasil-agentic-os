@@ -302,6 +302,22 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 	}
 }
 
+func TestAuthorizeWorkspaceSetupRecordsGrantWithoutLaunchingTheCLI(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: dataRoot}); err != nil {
+		t.Fatal(err)
+	}
+	grant, err := authorizeWorkspaceSetup(options{dataRoot: dataRoot}, workspacePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grant.State != "active" || len(grant.GrantDigest) != 64 {
+		t.Fatalf("grant=%#v", grant)
+	}
+}
+
 func TestWizardRendersInstalledDataRootAndMemoryStatusCommand(t *testing.T) {
 	index, err := os.ReadFile(filepath.Join("..", "..", "installers", "wizard", "index.html"))
 	if err != nil {
