@@ -335,8 +335,8 @@ func Build(sources Sources) Packet {
 		SetupAuthorization: SetupAuthorization{State: setupAuthorization.State, PolicyVersion: setupAuthorization.PolicyVersion},
 		Skills:             Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
 		Agents: Agents{
-			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: "unavailable",
-			Message: "native agent orchestration requires a runtime adapter with tool and delegation enforcement",
+			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: "configured",
+			Message: "bounded host-runtime consultation is configured; observation and strict signed dispatch are reported separately",
 		},
 		Memory:           buildMemory(sources.Memory),
 		ContinuousUse:    continuous,
@@ -366,7 +366,7 @@ func (packet Packet) Validate() error {
 	if packet.SchemaVersion != 1 || (packet.State != "ready" && packet.State != "partial") {
 		return errors.New("invalid session context packet header")
 	}
-	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Owner.Onboarding.State == "" || packet.Owner.Onboarding.Track == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "unavailable" || packet.Agents.Message == "" || packet.Memory.Message == "" || packet.ContinuousUse.SchemaVersion != 1 || len(packet.ContinuousUse.NextActions) == 0 {
+	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Owner.Onboarding.State == "" || packet.Owner.Onboarding.Track == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "configured" || packet.Agents.Message == "" || packet.Memory.Message == "" || packet.ContinuousUse.SchemaVersion != 1 || len(packet.ContinuousUse.NextActions) == 0 {
 		return errors.New("session context packet is missing a required bounded source")
 	}
 	if err := packet.ContinuousUse.Validate(); err != nil {

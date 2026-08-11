@@ -2797,20 +2797,11 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 	}
 	profileState, err := resolveProfile(root, "", false)
 	if err != nil {
-		return reportError(errOut, err)
+		profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
 	}
-	owner, err := ownerctx.Inspect(root)
-	if err != nil {
-		return reportError(errOut, err)
-	}
-	sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
-	}
-	continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
-	}
+	owner, _ := ownerctx.Inspect(root)
+	sharePointSource, _ := priorWorkSourceStatus(root, inspection.WorkspaceID)
+	continuous, activeExecution, _ := buildContinuousUseStatus(root, inspection, owner)
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 		Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
@@ -3077,26 +3068,16 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	state, err := resolveHookOrchestrationState(inspection, *orchestrationState)
-	if err != nil {
-		return reportError(errOut, err)
-	}
+	// Orchestration state enriches lifecycle evidence; it is not permission to
+	// begin a session. Missing or stale state removes only that evidence binding.
+	state, _ := resolveHookOrchestrationState(inspection, *orchestrationState)
 	profileState, err := resolveProfile(root, "", false)
 	if err != nil {
-		return reportError(errOut, err)
+		profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
 	}
-	owner, err := ownerctx.Inspect(root)
-	if err != nil {
-		return reportError(errOut, err)
-	}
-	sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
-	}
-	continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
-	}
+	owner, _ := ownerctx.Inspect(root)
+	sharePointSource, _ := priorWorkSourceStatus(root, inspection.WorkspaceID)
+	continuous, activeExecution, _ := buildContinuousUseStatus(root, inspection, owner)
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 		Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
@@ -3122,9 +3103,7 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 		return reportError(errOut, err)
 	}
 	interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey(*runtimeName, string(lifecycle.SessionStart), inspection.WorkspaceID), state)
-	if err := evaluateAdapterInteraction(root, *runtimeName, string(lifecycle.SessionStart), interactionKey, inspection.WorkspaceID); err != nil {
-		return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
-	}
+	_ = evaluateAdapterInteraction(root, *runtimeName, string(lifecycle.SessionStart), interactionKey, inspection.WorkspaceID)
 	signalSessionPresence(state, inspection.WorkspaceID)
 	return writeJSON(out, output, errOut)
 }
@@ -3156,7 +3135,10 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			if action == "pre-action-guard" {
 				return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
 			}
-			return reportError(errOut, err)
+			if action == "post-action-receipt" || action == "stop-finalization" {
+				return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
+			}
+			return writeJSON(out, codexadapter.GuardOutput{}, errOut)
 		}
 		native = parsed
 	}
@@ -3197,9 +3179,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			}
 		}
 		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("codex", string(lifecycle.PreActionGuard), inspection.WorkspaceID, native.ToolName, native.ToolUseID), state)
-		if err := evaluateAdapterInteraction(root, "codex", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID); err != nil {
-			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
-		}
+		_ = evaluateAdapterInteraction(root, "codex", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID)
 		return writeJSON(out, response, errOut)
 	}
 	root, err := dataRoot()
@@ -3210,27 +3190,15 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	state, err := resolveHookOrchestrationState(inspection, *orchestrationState)
-	if err != nil {
-		return reportError(errOut, err)
-	}
+	state, _ := resolveHookOrchestrationState(inspection, *orchestrationState)
 	if action == "session-start" || action == "context-injection" {
 		profileState, err := resolveProfile(root, "", false)
 		if err != nil {
-			return reportError(errOut, err)
+			profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
 		}
-		owner, err := ownerctx.Inspect(root)
-		if err != nil {
-			return reportError(errOut, err)
-		}
-		sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
-		}
-		continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
-		}
+		owner, _ := ownerctx.Inspect(root)
+		sharePointSource, _ := priorWorkSourceStatus(root, inspection.WorkspaceID)
+		continuous, activeExecution, _ := buildContinuousUseStatus(root, inspection, owner)
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 			Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
@@ -3260,9 +3228,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			event = lifecycle.ContextInject
 		}
 		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("codex", event, inspection.WorkspaceID), state)
-		if err := evaluateAdapterInteraction(root, "codex", event, interactionKey, inspection.WorkspaceID); err != nil {
-			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
-		}
+		_ = evaluateAdapterInteraction(root, "codex", event, interactionKey, inspection.WorkspaceID)
 		if action == "session-start" {
 			signalSessionPresence(state, inspection.WorkspaceID)
 		}
@@ -3274,15 +3240,13 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 	}
 	receipt, err := codexadapter.Receipt(event, native)
 	if err != nil {
-		return reportError(errOut, fmt.Errorf("build lifecycle receipt: %w", err))
+		return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
 	}
 	receipt.IdempotencyKey = orchestrationBoundKey(receipt.IdempotencyKey, state)
 	if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
-		return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
+		return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
 	}
-	if err := evaluateAdapterInteraction(root, "codex", string(event), receipt.IdempotencyKey, inspection.WorkspaceID); err != nil {
-		return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
-	}
+	_ = evaluateAdapterInteraction(root, "codex", string(event), receipt.IdempotencyKey, inspection.WorkspaceID)
 	return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
 }
 
@@ -3314,7 +3278,10 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			if action == "pre-action-guard" {
 				return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
 			}
-			return reportError(errOut, fmt.Errorf("parse bounded Claude hook input: %w", err))
+			if action == "post-action-receipt" || action == "stop-finalization" {
+				return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
+			}
+			return writeJSON(out, claudeadapter.GuardOutput{}, errOut)
 		}
 		native = parsed
 	}
@@ -3358,9 +3325,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			}
 		}
 		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("claude", string(lifecycle.PreActionGuard), inspection.WorkspaceID, native.ToolName, native.ToolUseID), state)
-		if err := evaluateAdapterInteraction(root, "claude", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID); err != nil {
-			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
-		}
+		_ = evaluateAdapterInteraction(root, "claude", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID)
 		return writeJSON(out, response, errOut)
 	}
 
@@ -3372,28 +3337,16 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	state, err := resolveHookOrchestrationState(inspection, *orchestrationState)
-	if err != nil {
-		return reportError(errOut, err)
-	}
+	state, _ := resolveHookOrchestrationState(inspection, *orchestrationState)
 	switch action {
 	case "session-start", "context-injection":
 		profileState, err := resolveProfile(root, "", false)
 		if err != nil {
-			return reportError(errOut, err)
+			profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
 		}
-		owner, err := ownerctx.Inspect(root)
-		if err != nil {
-			return reportError(errOut, err)
-		}
-		sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
-		}
-		continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
-		}
+		owner, _ := ownerctx.Inspect(root)
+		sharePointSource, _ := priorWorkSourceStatus(root, inspection.WorkspaceID)
+		continuous, activeExecution, _ := buildContinuousUseStatus(root, inspection, owner)
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 			Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
@@ -3423,9 +3376,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			event = lifecycle.ContextInject
 		}
 		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("claude", event, inspection.WorkspaceID), state)
-		if err := evaluateAdapterInteraction(root, "claude", event, interactionKey, inspection.WorkspaceID); err != nil {
-			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
-		}
+		_ = evaluateAdapterInteraction(root, "claude", event, interactionKey, inspection.WorkspaceID)
 		if action == "session-start" {
 			signalSessionPresence(state, inspection.WorkspaceID)
 		}
@@ -3437,15 +3388,13 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		}
 		receipt, err := claudeadapter.Receipt(event, native)
 		if err != nil {
-			return reportError(errOut, fmt.Errorf("build lifecycle receipt: %w", err))
+			return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
 		}
 		receipt.IdempotencyKey = orchestrationBoundKey(receipt.IdempotencyKey, state)
 		if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
-			return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
+			return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
 		}
-		if err := evaluateAdapterInteraction(root, "claude", string(event), receipt.IdempotencyKey, inspection.WorkspaceID); err != nil {
-			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
-		}
+		_ = evaluateAdapterInteraction(root, "claude", string(event), receipt.IdempotencyKey, inspection.WorkspaceID)
 		return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
 	}
 	panic("unreachable Claude hook action")
@@ -3500,23 +3449,38 @@ func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, 
 	}
 	projection, err := runtimeprojection.Inspect(runtimeName, workspacePath)
 	if err != nil {
-		return fmt.Errorf("inspect runtime projection for contextual routing: %w", err)
+		return nil
 	}
 	if projection.State != "installed" {
 		return nil
 	}
 	if packet.Owner.Onboarding.State != "complete" {
-		return enrichOnboardingGuide(packet, runtimeName, workspacePath)
+		// Onboarding is a useful method, not an admission gate. Keep its pointer
+		// available while still routing the owner's actual request.
+		_ = enrichOnboardingGuide(packet, runtimeName, workspacePath)
 	}
 	catalog, policy, installed, err := runtimeprojection.RoutingInputs(runtimeName, workspacePath)
 	if err != nil {
-		return fmt.Errorf("load governed contextual routing inputs: %w", err)
+		return nil
 	}
 	selected, err := skillrouting.Route(skillrouting.Request{Prompt: prompt, Role: "case_agent", Catalog: catalog, Policy: policy, Installed: installed})
 	if err != nil {
-		return fmt.Errorf("route contextual skills: %w", err)
+		return nil
 	}
 	for _, item := range selected {
+		if len(packet.Skills.Selected) >= skillrouting.MaximumSelections {
+			break
+		}
+		duplicate := false
+		for _, current := range packet.Skills.Selected {
+			if current.ID == item.ID {
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
+			continue
+		}
 		packet.Skills.Selected = append(packet.Skills.Selected, sessionctx.SkillSelection{ID: item.ID, Reason: item.Reason, Pointer: item.Pointer})
 	}
 	// Continuity is intentionally best-effort and metadata-only: a prompt hook
@@ -3525,11 +3489,9 @@ func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, 
 	return nil
 }
 
-// enrichOnboardingGuide is a lifecycle-owned startup rule, not an agent skill
-// grant. While the deterministic owner state is incomplete, it points the
-// runtime to the exact integrity-checked onboarding guide and suppresses
-// unrelated contextual methods. The guide does not grant tools, data access or
-// native runtime authority.
+// enrichOnboardingGuide is a best-effort lifecycle suggestion, not an
+// admission gate. The guide does not grant tools, data access or native
+// authority, and its absence never suppresses the owner's requested work.
 func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath string) error {
 	// Native hooks invoke this process by the installed absolute path. Carry it
 	// into the human-facing directive so skills never have to rely on the
@@ -3542,14 +3504,14 @@ func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath
 	}
 	projection, err := runtimeprojection.Inspect(runtimeName, workspacePath)
 	if err != nil {
-		return fmt.Errorf("inspect runtime projection for onboarding guide: %w", err)
+		return nil
 	}
 	if projection.State != "installed" {
 		return nil
 	}
 	catalog, _, installed, err := runtimeprojection.RoutingInputs(runtimeName, workspacePath)
 	if err != nil {
-		return fmt.Errorf("load governed onboarding guide: %w", err)
+		return nil
 	}
 	known := false
 	for _, skill := range catalog.Skills {
@@ -3559,7 +3521,7 @@ func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath
 		}
 	}
 	if !known {
-		return errors.New("managed onboarding guide is absent from the active skill catalog")
+		return nil
 	}
 	for _, skill := range installed {
 		if skill.ID == "maestro-onboarding" {
@@ -3567,7 +3529,7 @@ func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath
 			return nil
 		}
 	}
-	return errors.New("managed onboarding guide is absent from the integrity-checked runtime projection")
+	return nil
 }
 
 func recordAttestedSkillRoute(root, runtimeName, workspaceID, sessionID string, selected []skillrouting.Selection) error {

@@ -594,8 +594,8 @@ func TestInstalledHookLeavesSafeActionToNativeFlowWhenOrchestrationStateIsSymlin
 	}
 	for _, pointer := range []string{"../outside.json", ".bcgos/../outside.json"} {
 		output.Reset()
-		if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", pointer, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK || !strings.Contains(output.String(), "orchestration state") {
-			t.Fatalf("pointer %q accepted: exit=%d output=%s", pointer, code, output.String())
+		if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", pointer, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+			t.Fatalf("advisory pointer %q blocked session: exit=%d output=%s", pointer, code, output.String())
 		}
 	}
 	outside := filepath.Join(t.TempDir(), "state.json")
@@ -626,12 +626,12 @@ func TestInstalledHookLeavesSafeActionToNativeFlowWhenOrchestrationStateIsSymlin
 	}
 	output.Reset()
 	code = runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code == ExitOK || !strings.Contains(output.String(), "decode orchestration state") {
-		t.Fatalf("malformed state accepted: exit=%d output=%s", code, output.String())
+	if code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("malformed advisory state blocked session: exit=%d output=%s", code, output.String())
 	}
 }
 
-func TestInstalledHookRejectsMissingOrchestrationStateWithRemediation(t *testing.T) {
+func TestInstalledHookContinuesWhenOrchestrationStateIsMissing(t *testing.T) {
 	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -649,8 +649,40 @@ func TestInstalledHookRejectsMissingOrchestrationStateWithRemediation(t *testing
 	}
 	output.Reset()
 	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code == ExitOK || !strings.Contains(output.String(), "orchestration state is missing") || !strings.Contains(output.String(), "bcgos init") {
-		t.Fatalf("missing state accepted without remediation: exit=%d output=%s", code, output.String())
+	if code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("missing advisory state blocked SessionStart: exit=%d output=%s", code, output.String())
+	}
+}
+
+func TestInstalledSessionHooksDegradeWhenOptionalContextIsCorrupt(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	if err := os.WriteFile(filepath.Join(dataRoot, "owner", "registry.json"), []byte("{not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspacePath, ".bcgos", "runtime-projection.json"), []byte("{not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "session-start", "--adapter-source", "maestro", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+				t.Fatalf("corrupt optional state blocked SessionStart: exit=%d output=%s", code, output.String())
+			}
+			output.Reset()
+			prompt := `{"session_id":"session-a","prompt":"continue the requested work"}`
+			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "UserPromptSubmit"`) {
+				t.Fatalf("corrupt optional state blocked context injection: exit=%d output=%s", code, output.String())
+			}
+		})
+	}
+	output.Reset()
+	if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("corrupt optional state blocked installed Codex SessionStart binding: exit=%d output=%s", code, output.String())
 	}
 }
 
@@ -987,7 +1019,7 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 	}
 }
 
-func TestLifecycleKeepsPendingOnboardingOnTheGovernedGuide(t *testing.T) {
+func TestLifecycleOffersPendingOnboardingWithoutSuppressingRequestedWork(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
 			dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
@@ -1012,8 +1044,8 @@ func TestLifecycleKeepsPendingOnboardingOnTheGovernedGuide(t *testing.T) {
 			output.Reset()
 			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
 				!strings.Contains(output.String(), "maestro-onboarding") ||
-				strings.Contains(output.String(), "case-kickoff") {
-				t.Fatalf("pending onboarding routed an unrelated Case method = %d %s", code, output.String())
+				!strings.Contains(output.String(), "case-kickoff") {
+				t.Fatalf("pending onboarding suppressed requested work = %d %s", code, output.String())
 			}
 		})
 	}
