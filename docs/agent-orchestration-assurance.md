@@ -41,10 +41,11 @@ contract, and public receipts pin its digest. A prose return, missing evidence
 or generic Walter return cannot promote a dispatch to `completed`.
 
 This is deterministic runtime-neutral enforcement, including an explicit
-private recovery store for packet bodies and replay state. It is not proof of
-native hook delivery. Native Claude/Codex qualification remains unavailable
-until an attended adapter conformance run observes the same events and
-receipts.
+private recovery store for packet bodies and replay state. Claude additionally
+projects five managed subagents and enforces its minimum selected route through
+native hooks in the controlled beta. That availability is not proof of native
+qualification; qualification remains pending until an attended conformance run
+observes the same events and receipts.
 
 ## Deterministic adapter bridge
 
@@ -90,9 +91,9 @@ blocks a later event-bearing retry for the same plan.
 
 ## Native evidence still pending (non-blocking)
 
-Neither `adapters/claude/` nor `adapters/codex/` yet wires the runtime-neutral
-Pilot recovery root into native product lifecycle events. Their README files
-describe the required mapping and evidence only. The canonical capability
-manifest therefore keeps native qualification pending for both runtimes; no
-local fixture, CLI bridge or development hook changes that evidence state. The
-configured deterministic contract remains enabled.
+Claude now wires a metadata-only native flow for the released Client Account,
+Case, Walter, Darwin and PA Expert beta routes. The deeper runtime-neutral
+Pilot recovery root is not yet a native packet-authentication claim, and Codex
+native projection remains outside this beta. The canonical capability manifest
+therefore reports Claude as `operational_beta` while keeping native
+qualification pending for both runtimes.

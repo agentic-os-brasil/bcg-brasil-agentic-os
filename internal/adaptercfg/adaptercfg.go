@@ -11,10 +11,28 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 )
 
 const adapterSourceMarker = "--adapter-source maestro"
 const orchestrationStateMarker = "--orchestration-state .bcgos/maestro-orchestration-state.json"
+
+var (
+	installClaudeAgents   = claudeagents.Install
+	uninstallClaudeAgents = claudeagents.Uninstall
+	writeRuntimeConfig    = write
+	excludeLocalConfig    = ensureLocalConfigExcluded
+)
+
+var managedClaudeAgentFiles = []string{
+	"client-account-agent.md",
+	"case-agent.md",
+	"walter.md",
+	"darwin.md",
+	"pa-expert.md",
+}
 
 type Status struct {
 	Runtime string `json:"runtime"`
@@ -28,10 +46,143 @@ type binding struct {
 	Async       bool
 }
 
+type stateFileSnapshot struct {
+	path   string
+	exists bool
+	mode   os.FileMode
+	body   []byte
+}
+
+type stateDirectorySnapshot struct {
+	path   string
+	exists bool
+}
+
+// StateSnapshot captures every local surface owned by adapter installation:
+// the runtime settings, Git exclude entry and the exact managed Claude agent
+// files. CLI transactions use it to roll an adapter back when a later runtime
+// projection fails.
+type StateSnapshot struct {
+	files       []stateFileSnapshot
+	directories []stateDirectorySnapshot
+}
+
+// CaptureState is read-only and refuses symlinked transaction surfaces.
+func CaptureState(runtimeName, workspace string) (StateSnapshot, error) {
+	configPath, err := target(runtimeName, workspace)
+	if err != nil {
+		return StateSnapshot{}, err
+	}
+	excludePath, err := LocalConfigExcludePath(runtimeName, workspace)
+	if err != nil {
+		return StateSnapshot{}, err
+	}
+	paths := []string{configPath}
+	if excludePath != "" {
+		paths = append(paths, excludePath)
+	}
+	directories := []string{filepath.Dir(configPath)}
+	if runtimeName == "claude" {
+		agentsRoot := filepath.Join(workspace, ".claude", "agents")
+		directories = append(directories, agentsRoot)
+		for _, name := range managedClaudeAgentFiles {
+			paths = append(paths, filepath.Join(agentsRoot, name))
+		}
+	}
+	snapshot := StateSnapshot{}
+	for _, path := range paths {
+		file, err := captureStateFile(path)
+		if err != nil {
+			return StateSnapshot{}, err
+		}
+		snapshot.files = append(snapshot.files, file)
+	}
+	for _, path := range directories {
+		directory, err := captureStateDirectory(path)
+		if err != nil {
+			return StateSnapshot{}, err
+		}
+		snapshot.directories = append(snapshot.directories, directory)
+	}
+	return snapshot, nil
+}
+
+func captureStateFile(path string) (stateFileSnapshot, error) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return stateFileSnapshot{path: path}, nil
+	}
+	if err != nil {
+		return stateFileSnapshot{}, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return stateFileSnapshot{}, fmt.Errorf("refusing to snapshot non-regular adapter surface %s", path)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return stateFileSnapshot{}, err
+	}
+	return stateFileSnapshot{path: path, exists: true, mode: info.Mode().Perm(), body: body}, nil
+}
+
+func captureStateDirectory(path string) (stateDirectorySnapshot, error) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return stateDirectorySnapshot{path: path}, nil
+	}
+	if err != nil {
+		return stateDirectorySnapshot{}, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return stateDirectorySnapshot{}, fmt.Errorf("refusing to snapshot non-directory adapter surface %s", path)
+	}
+	return stateDirectorySnapshot{path: path, exists: true}, nil
+}
+
+// Restore returns every captured file to its prior bytes and removes only
+// transaction-created empty directories. User-owned neighboring files remain
+// untouched.
+func (snapshot StateSnapshot) Restore() error {
+	var restoreErrors []error
+	for _, file := range snapshot.files {
+		if !file.exists {
+			if err := os.Remove(file.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				restoreErrors = append(restoreErrors, err)
+			}
+			continue
+		}
+		if err := writeBytes(file.path, file.body, file.mode); err != nil {
+			restoreErrors = append(restoreErrors, err)
+		}
+	}
+	for index := len(snapshot.directories) - 1; index >= 0; index-- {
+		directory := snapshot.directories[index]
+		if directory.exists {
+			continue
+		}
+		if err := os.Remove(directory.path); err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, syscall.ENOTEMPTY) {
+			restoreErrors = append(restoreErrors, err)
+		}
+	}
+	return errors.Join(restoreErrors...)
+}
+
+func rollbackState(snapshot StateSnapshot, operation string, original error) error {
+	if restoreErr := snapshot.Restore(); restoreErr != nil {
+		return fmt.Errorf("%s failed and rollback failed: %w (original: %v)", operation, restoreErr, original)
+	}
+	return original
+}
+
 // ValidateInstall performs the read-only checks used by Install. Callers that
 // coordinate another local transaction can use it to fail closed before either
 // side writes.
 func ValidateInstall(runtimeName, workspace, executable string) error {
+	if runtimeName == "claude" {
+		if err := claudeagents.ValidateInstall(workspace); err != nil {
+			return err
+		}
+	}
 	path, err := target(runtimeName, workspace)
 	if err != nil {
 		return err
@@ -62,6 +213,11 @@ func ValidateInstall(runtimeName, workspace, executable string) error {
 
 // ValidateUninstall performs the read-only checks used by Uninstall.
 func ValidateUninstall(runtimeName, workspace string) error {
+	if runtimeName == "claude" {
+		if err := claudeagents.ValidateUninstall(workspace); err != nil {
+			return err
+		}
+	}
 	path, err := target(runtimeName, workspace)
 	if err != nil {
 		return err
@@ -146,6 +302,15 @@ func Install(runtimeName, workspace, executable string) (Status, error) {
 	if err := rejectTrackedConfig(workspace, path); err != nil {
 		return Status{}, err
 	}
+	snapshot, err := CaptureState(runtimeName, workspace)
+	if err != nil {
+		return Status{}, err
+	}
+	if runtimeName == "claude" {
+		if _, err := installClaudeAgents(workspace); err != nil {
+			return Status{}, rollbackState(snapshot, "adapter install", err)
+		}
+	}
 	changed := false
 	for _, binding := range bindings {
 		groups, _ := groupsForEvent(hooks, binding.NativeEvent)
@@ -155,25 +320,39 @@ func Install(runtimeName, workspace, executable string) (Status, error) {
 			changed = true
 		}
 	}
-	if err := ensureLocalConfigExcluded(workspace, path); err != nil {
-		return Status{}, err
+	if err := excludeLocalConfig(workspace, path); err != nil {
+		return Status{}, rollbackState(snapshot, "adapter install", err)
 	}
 	if !changed {
 		return Status{Runtime: runtimeName, Path: path, State: "installed"}, nil
 	}
 	config["hooks"] = hooks
-	if err := write(path, config); err != nil {
-		return Status{}, err
+	if err := writeRuntimeConfig(path, config); err != nil {
+		return Status{}, rollbackState(snapshot, "adapter install", err)
 	}
 	return Status{Runtime: runtimeName, Path: path, State: "installed"}, nil
 }
 
 func Uninstall(runtimeName, workspace string) (Status, error) {
+	if runtimeName == "claude" {
+		if err := claudeagents.ValidateUninstall(workspace); err != nil {
+			return Status{}, err
+		}
+	}
 	path, err := target(runtimeName, workspace)
 	if err != nil {
 		return Status{}, err
 	}
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		snapshot, snapshotErr := CaptureState(runtimeName, workspace)
+		if snapshotErr != nil {
+			return Status{}, snapshotErr
+		}
+		if runtimeName == "claude" {
+			if _, removeErr := uninstallClaudeAgents(workspace); removeErr != nil {
+				return Status{}, rollbackState(snapshot, "adapter uninstall", removeErr)
+			}
+		}
 		return Status{Runtime: runtimeName, Path: path, State: "absent"}, nil
 	} else if err != nil {
 		return Status{}, err
@@ -205,9 +384,18 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 			hooks[binding.NativeEvent] = filtered
 		}
 	}
-	config["hooks"] = hooks
-	if err := write(path, config); err != nil {
+	snapshot, err := CaptureState(runtimeName, workspace)
+	if err != nil {
 		return Status{}, err
+	}
+	config["hooks"] = hooks
+	if err := writeRuntimeConfig(path, config); err != nil {
+		return Status{}, rollbackState(snapshot, "adapter uninstall", err)
+	}
+	if runtimeName == "claude" {
+		if _, err := uninstallClaudeAgents(workspace); err != nil {
+			return Status{}, rollbackState(snapshot, "adapter uninstall", err)
+		}
 	}
 	return Status{Runtime: runtimeName, Path: path, State: "removed"}, nil
 }
@@ -244,6 +432,15 @@ func Inspect(runtimeName, workspace string) (Status, error) {
 		}
 	}
 	if hasOwnedBindings(config, runtimeName) {
+		if runtimeName == "claude" {
+			agents, err := claudeagents.Inspect(workspace)
+			if err != nil {
+				return Status{}, err
+			}
+			if agents.State != "installed" {
+				return Status{Runtime: runtimeName, Path: path, State: "partial"}, nil
+			}
+		}
 		return Status{Runtime: runtimeName, Path: path, State: "installed"}, nil
 	}
 	return Status{Runtime: runtimeName, Path: path, State: "absent"}, nil
@@ -300,7 +497,11 @@ func bindingsFor(runtimeName, executable string, workspacePath ...string) ([]bin
 			{NativeEvent: "UserPromptSubmit", Command: prefix + "claude context-injection " + markers + workspaceArgument},
 			{NativeEvent: "PreToolUse", Command: prefix + "claude pre-action-guard " + markers + workspaceArgument},
 			{NativeEvent: "PostToolUse", Command: prefix + "claude post-action-receipt " + markers + workspaceArgument, Async: true},
-			{NativeEvent: "Stop", Command: prefix + "claude stop-finalization " + markers + workspaceArgument, Async: true},
+			// Stop is synchronous because an incomplete strategic agent route must
+			// be able to return Claude's native blocking decision.
+			{NativeEvent: "Stop", Command: prefix + "claude stop-finalization " + markers + workspaceArgument},
+			{NativeEvent: "SubagentStart", Command: prefix + "claude subagent-start " + markers + workspaceArgument},
+			{NativeEvent: "SubagentStop", Command: prefix + "claude subagent-stop " + markers + workspaceArgument},
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported runtime %q", runtimeName)
@@ -580,6 +781,8 @@ func isOwnedEventCommand(runtimeName, event string, value any) bool {
 		"PreToolUse":       "claude pre-action-guard",
 		"PostToolUse":      "claude post-action-receipt",
 		"Stop":             "claude stop-finalization",
+		"SubagentStart":    "claude subagent-start",
+		"SubagentStop":     "claude subagent-stop",
 	}
 	suffix, exists := commands[event]
 	if !exists {

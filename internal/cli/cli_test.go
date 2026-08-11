@@ -1215,6 +1215,65 @@ func TestAdapterInstallRepairsMissingStateBeforeSessionHook(t *testing.T) {
 	}
 }
 
+func TestClaudeNativeAgentBetaEnforcesStrategicRoundTrip(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"claude", "session-start", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "NATIVE AGENT ROUTING IS OPERATIONAL IN BETA") {
+		t.Fatalf("operational beta session = %d %s", code, output.String())
+	}
+	call := func(action, body string) (int, string) {
+		output.Reset()
+		code := runHookWithInput([]string{"claude", action, workspacePath}, strings.NewReader(body), &output, &output, func() (string, error) { return dataRoot, nil })
+		return code, output.String()
+	}
+	if code, body := call("context-injection", `{"session_id":"session-native","prompt":"prepare strategic case"}`); code != ExitOK || !strings.Contains(body, `"hookEventName": "UserPromptSubmit"`) {
+		t.Fatalf("turn start = %d %s", code, body)
+	}
+	if code, body := call("subagent-start", `{"session_id":"session-native","agent_id":"account-1","agent_type":"client-account-agent"}`); code != ExitOK || !strings.Contains(body, "managed Maestro specialist") {
+		t.Fatalf("account start = %d %s", code, body)
+	}
+	if code, body := call("subagent-stop", `{"session_id":"session-native","agent_id":"account-1","agent_type":"client-account-agent"}`); code != ExitOK {
+		t.Fatalf("account stop = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native"}`); code != ExitOK || !strings.Contains(body, `"decision": "block"`) || !strings.Contains(body, "call Case Agent") {
+		t.Fatalf("missing Case gate = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native","stop_hook_active":true}`); code != ExitOK || !strings.Contains(body, `"continue": true`) || strings.Contains(body, `"decision": "block"`) {
+		t.Fatalf("re-entrant Stop must not loop = %d %s", code, body)
+	}
+	if code, body := call("subagent-start", `{"session_id":"session-native","agent_id":"case-1","agent_type":"case-agent"}`); code != ExitOK {
+		t.Fatalf("case start = %d %s", code, body)
+	}
+	if code, body := call("subagent-stop", `{"session_id":"session-native","agent_id":"case-1","agent_type":"case-agent"}`); code != ExitOK {
+		t.Fatalf("case stop = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native"}`); code != ExitOK || !strings.Contains(body, `"decision": "block"`) || !strings.Contains(body, "return the Case result") {
+		t.Fatalf("missing account validation gate = %d %s", code, body)
+	}
+	if code, body := call("subagent-start", `{"session_id":"session-native","agent_id":"account-2","agent_type":"client-account-agent"}`); code != ExitOK {
+		t.Fatalf("account validation start = %d %s", code, body)
+	}
+	if code, body := call("subagent-stop", `{"session_id":"session-native","agent_id":"account-2","agent_type":"client-account-agent"}`); code != ExitOK {
+		t.Fatalf("account validation stop = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native"}`); code != ExitOK || !strings.Contains(body, `"continue": true`) {
+		t.Fatalf("complete route = %d %s", code, body)
+	}
+}
+
 func TestAdapterInstallPreservesAuthorizedSynchronizedWorkspace(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")

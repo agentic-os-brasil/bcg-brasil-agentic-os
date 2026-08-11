@@ -191,6 +191,21 @@ func TestReceiptHashesValidatedNativeIdentifiers(t *testing.T) {
 	}
 }
 
+func TestSubagentReceiptValidatesAndPersistsOnlyBoundedIdentityMetadata(t *testing.T) {
+	input := NativeInput{SessionID: "session-123", AgentID: "agent-123", AgentType: "case-agent"}
+	receipt, err := Receipt(lifecycle.SubagentStart, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Event != lifecycle.SubagentStart || receipt.AgentType != "case-agent" || strings.Contains(receipt.IdempotencyKey, input.AgentID) {
+		t.Fatalf("receipt=%#v", receipt)
+	}
+	input.AgentID = "../escape"
+	if _, err := Receipt(lifecycle.SubagentStart, input); err == nil {
+		t.Fatal("path-shaped subagent identity was accepted")
+	}
+}
+
 func TestParseReaderPreservesBoundedIdentityPromptAndRawToolInput(t *testing.T) {
 	input, err := ParseReader(strings.NewReader(`{"session_id":"session-a","prompt":"route this","tool_name":"mcp__github__create_pull_request","tool_input":{"repository":"org/repo","title":"private title"}}`))
 	if err != nil {

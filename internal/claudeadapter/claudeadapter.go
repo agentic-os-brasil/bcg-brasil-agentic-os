@@ -20,11 +20,15 @@ const MaximumNativeInputBytes = 64 << 10
 var nativeIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 
 type NativeInput struct {
-	SessionID string `json:"session_id"`
-	Prompt    string `json:"prompt"`
-	ToolUseID string `json:"tool_use_id"`
-	ToolName  string `json:"tool_name"`
-	ToolInput struct {
+	SessionID      string `json:"session_id"`
+	CWD            string `json:"cwd"`
+	Prompt         string `json:"prompt"`
+	ToolUseID      string `json:"tool_use_id"`
+	ToolName       string `json:"tool_name"`
+	AgentID        string `json:"agent_id"`
+	AgentType      string `json:"agent_type"`
+	StopHookActive bool   `json:"stop_hook_active"`
+	ToolInput      struct {
 		Command string `json:"command"`
 	} `json:"tool_input"`
 	rawToolInput json.RawMessage
@@ -63,6 +67,29 @@ type GuardDecision struct {
 
 type FinalizationOutput struct {
 	Continue bool `json:"continue"`
+}
+
+type StopOutput struct {
+	Decision string `json:"decision,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+func BlockStop(reason string) StopOutput {
+	return StopOutput{Decision: "block", Reason: reason}
+}
+
+type SubagentStartOutput struct {
+	HookSpecificOutput struct {
+		HookEventName     string `json:"hookEventName"`
+		AdditionalContext string `json:"additionalContext"`
+	} `json:"hookSpecificOutput"`
+}
+
+func ManagedSubagentStartContext(agentType string) SubagentStartOutput {
+	var output SubagentStartOutput
+	output.HookSpecificOutput.HookEventName = "SubagentStart"
+	output.HookSpecificOutput.AdditionalContext = "You are running as the managed Maestro specialist " + agentType + ". Stay inside the exact delegated packet, never delegate, and return only to Maestro. Native qualification is beta telemetry; the deterministic scope and tool guard is authoritative."
+	return output
 }
 
 func Parse(input []byte) (NativeInput, error) {
@@ -174,6 +201,11 @@ func Receipt(event string, input NativeInput) (lifecycle.Receipt, error) {
 	case lifecycle.StopFinalize:
 		// Stop has no tool-use identity. The session and event form the
 		// idempotent metadata-only key.
+	case lifecycle.SubagentStart, lifecycle.SubagentStop:
+		if !nativeIdentifierPattern.MatchString(input.AgentID) || !nativeIdentifierPattern.MatchString(input.AgentType) {
+			return lifecycle.Receipt{}, errors.New("Claude subagent identity is invalid")
+		}
+		parts = append(parts, input.AgentID, input.AgentType)
 	default:
 		return lifecycle.Receipt{}, fmt.Errorf("unsupported Claude receipt event %q", event)
 	}
@@ -184,6 +216,7 @@ func Receipt(event string, input NativeInput) (lifecycle.Receipt, error) {
 		State:          "observed",
 		Provenance:     lifecycle.AdapterCommand,
 		ToolName:       toolName,
+		AgentType:      input.AgentType,
 		IdempotencyKey: lifecycle.IdempotencyKey(parts...),
 	}, nil
 }

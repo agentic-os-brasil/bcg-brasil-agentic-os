@@ -122,7 +122,10 @@ an occurrence-bound ordered-chain digest and a finished local epoch, but does
 not authenticate an installed native agent or fabricate adapter credentials.
 Host-runtime consultation is configured when the managed agent definitions are
 installed; native evidence reports observation separately. The strict packet
-dispatcher remains unavailable for nested calls. Append-only receipts and an atomic current pointer preserve
+dispatcher remains a separate assurance path for nested calls. In the Claude
+beta, exact managed-agent and hook inspection enables native execution as
+`operational_beta`; qualification is independent telemetry rather than a
+feature gate. Append-only receipts and an atomic current pointer preserve
 history and recover safely across restart, replacement, replay and parallel
 dispatch attempts. Adapter-observed receipts are not native evidence;
 native-qualified status requires fresh runtime evidence.

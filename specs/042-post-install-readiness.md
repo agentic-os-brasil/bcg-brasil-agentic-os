@@ -6,8 +6,8 @@ Status: Claude-first/Codex-compatible configuration verifier implemented; native
 
 Give the signed installer a deterministic, read-only check to run after
 `bcgos init` and `bcgos adapter install --runtime <claude|codex>`. The check proves that
-the installed CLI, initialized workspace, managed runtime projection and five
-workspace-local lifecycle bindings still agree. It never starts a runtime, invokes
+the installed CLI, initialized workspace, managed runtime projection and all
+runtime-specific lifecycle bindings still agree. It never starts a runtime, invokes
 a hook, calls a model or changes global runtime settings.
 
 ## Canonical identities
@@ -47,11 +47,13 @@ Maestro-owned command for each canonical binding:
 | `pre_action_guard` | `PreToolUse` | `hook claude pre-action-guard` | `hook codex pre-action-guard` |
 | `post_action_observe` | `PostToolUse` | `hook claude post-action-receipt` | `hook codex post-action-receipt` |
 | `stop_finalize` | `Stop` | `hook claude stop-finalization` | `hook codex stop-finalization` |
+| `subagent_start` | `SubagentStart` | `hook claude subagent-start` | n/a |
+| `subagent_stop` | `SubagentStop` | `hook claude subagent-stop` | n/a |
 
 Every command uses the exact installed CLI, the `--adapter-source maestro`
-marker and `.bcgos/maestro-orchestration-state.json`. Timeout is two seconds;
-Codex entries are synchronous, while Claude's `PostToolUse` and `Stop` entries
-are asynchronous. Duplicate, legacy, mismatched or
+marker and `.bcgos/maestro-orchestration-state.json`. Timeout is five seconds;
+Codex entries are synchronous. Claude `PostToolUse` is asynchronous and Claude
+`Stop` is synchronous for route completion enforcement. Duplicate, legacy, mismatched or
 Maestro-marked commands on another event fail closed. Unrelated user hooks are
 preserved and ignored by the read-only check.
 
@@ -65,7 +67,6 @@ post-action/stop receipts bind to a digest of the validated metadata-only
 snapshot. A pre-action request that clearly crosses a protected mutation
 boundary also validates and binds the snapshot before authorization; if that
 protected request is unsafe or unevaluable, it is denied before any workspace
-access. Ordinary local actions and incomplete native tool metadata do not enter
 this workspace-bound path and remain with the host runtime's normal permission
 flow.
 None of these bindings authenticates an agent, changes an orchestration branch
@@ -74,10 +75,11 @@ or promotes native capability.
 ## Evidence boundary
 
 The structured report uses `evidence_class=configured` and
-`native_observation=not_observed`. Each canonical capability must still be
-`unavailable`, configured, not adapter-observed and not native-qualified in the
-embedded capability manifest. A promoted or incoherent capability makes the
-post-install check fail; this command cannot create qualification evidence.
+`native_observation=not_observed`. Released Claude capabilities may be
+`operational_beta`, configured, not adapter-observed and not native-qualified
+in the embedded capability manifest. Codex remains unavailable. An incoherent
+evidence claim makes the post-install check fail; this command cannot create
+qualification evidence.
 
 The CLI surface is:
 

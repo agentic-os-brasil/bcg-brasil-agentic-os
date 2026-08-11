@@ -79,6 +79,9 @@ type Sources struct {
 	SharePointSource   priorwork.SourceSelectionStatus
 	SetupAuthorization setupauth.Status
 	ContinuousUse      continuoususe.Status
+	// AgentRuntimeState is derived from exact local adapter and managed-agent
+	// inspection. Native qualification remains separate beta telemetry.
+	AgentRuntimeState string
 }
 
 // MemorySource is assembled by the local runtime boundary. Build never reads
@@ -303,6 +306,14 @@ func Build(sources Sources) Packet {
 			}
 		}
 	}
+	agentRuntimeState := sources.AgentRuntimeState
+	if agentRuntimeState == "" {
+		agentRuntimeState = "unavailable"
+	}
+	agentRuntimeMessage := "native agent orchestration requires an installed runtime adapter with tool and delegation enforcement"
+	if agentRuntimeState == "operational_beta" {
+		agentRuntimeMessage = "managed Claude subagents and deterministic hook enforcement are operational; native qualification is tracked separately as beta telemetry"
+	}
 	packet := Packet{
 		SchemaVersion: 1,
 		State:         "ready",
@@ -335,8 +346,8 @@ func Build(sources Sources) Packet {
 		SetupAuthorization: SetupAuthorization{State: setupAuthorization.State, PolicyVersion: setupAuthorization.PolicyVersion},
 		Skills:             Skills{CatalogPointer: skillsCatalogPointer, State: "available"},
 		Agents: Agents{
-			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: "configured",
-			Message: "bounded host-runtime consultation is configured; observation and strict signed dispatch are reported separately",
+			CatalogPointer: agentsCatalogPointer, Hub: "maestro", DefinitionsState: "available", RuntimeState: agentRuntimeState,
+			Message: agentRuntimeMessage,
 		},
 		Memory:           buildMemory(sources.Memory),
 		ContinuousUse:    continuous,
@@ -366,7 +377,7 @@ func (packet Packet) Validate() error {
 	if packet.SchemaVersion != 1 || (packet.State != "ready" && packet.State != "partial") {
 		return errors.New("invalid session context packet header")
 	}
-	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Owner.Onboarding.State == "" || packet.Owner.Onboarding.Track == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || packet.Agents.RuntimeState != "configured" || packet.Agents.Message == "" || packet.Memory.Message == "" || packet.ContinuousUse.SchemaVersion != 1 || len(packet.ContinuousUse.NextActions) == 0 {
+	if packet.InteractionProfile.ID == "" || packet.InteractionProfile.Source == "" || packet.Workspace.State == "" || packet.Owner.Onboarding.State == "" || packet.Owner.Onboarding.Track == "" || packet.Skills.CatalogPointer != skillsCatalogPointer || packet.Skills.State != "available" || packet.Agents.CatalogPointer != agentsCatalogPointer || packet.Agents.Hub != "maestro" || packet.Agents.DefinitionsState != "available" || (packet.Agents.RuntimeState != "unavailable" && packet.Agents.RuntimeState != "operational_beta") || packet.Agents.Message == "" || packet.Memory.Message == "" || packet.ContinuousUse.SchemaVersion != 1 || len(packet.ContinuousUse.NextActions) == 0 {
 		return errors.New("session context packet is missing a required bounded source")
 	}
 	if err := packet.ContinuousUse.Validate(); err != nil {
