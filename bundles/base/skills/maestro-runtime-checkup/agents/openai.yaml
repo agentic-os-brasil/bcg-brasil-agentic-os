@@ -1,0 +1,4 @@
+interface:
+  display_name: "Checkup do Maestro"
+  short_description: "Confere e repara runtime, hooks e Darwin"
+  default_prompt: "Use $maestro-runtime-checkup para conferir se o Maestro está pronto e reparar o que for seguro."

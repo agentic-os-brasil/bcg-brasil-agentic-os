@@ -2,6 +2,13 @@
   "schema_version": 1,
   "skills": [
     {
+      "id": "account-case-setup",
+      "display_name": "Conta e Projeto",
+      "trigger": "Cria a conta e o Case Agent do projeto",
+      "default_prompt": "Use $account-case-setup para criar a conta e o projeto que vou conduzir no Maestro.",
+      "relative_path": "skills/account-case-setup/SKILL.md"
+    },
+    {
       "id": "agent-identity-setup",
       "display_name": "Agent Identity Setup",
       "trigger": "Name and personalize governed agents",
@@ -86,11 +93,25 @@
       "relative_path": "skills/interaction-profile/SKILL.md"
     },
     {
+      "id": "maestro-environment-setup",
+      "display_name": "Preparar Ambiente Maestro",
+      "trigger": "Prepara workspace, runtime e manutenção local",
+      "default_prompt": "Use $maestro-environment-setup para preparar meu ambiente Maestro e deixar o runtime pronto para trabalhar.",
+      "relative_path": "skills/maestro-environment-setup/SKILL.md"
+    },
+    {
       "id": "maestro-onboarding",
       "display_name": "Maestro Onboarding",
       "trigger": "Start a guided owner interview with quick or complete tracks",
       "default_prompt": "Use $maestro-onboarding to welcome me to Maestro and start the guided interview with a clear choice between the short and complete tracks.",
       "relative_path": "skills/maestro-onboarding/SKILL.md"
+    },
+    {
+      "id": "maestro-runtime-checkup",
+      "display_name": "Checkup do Maestro",
+      "trigger": "Confere e repara runtime, hooks e Darwin",
+      "default_prompt": "Use $maestro-runtime-checkup para conferir se o Maestro está pronto e reparar o que for seguro.",
+      "relative_path": "skills/maestro-runtime-checkup/SKILL.md"
     },
     {
       "id": "maestro-setup-update",

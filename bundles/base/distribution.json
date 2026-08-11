@@ -178,6 +178,14 @@
       "path": "skills/agent-identity-setup/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/account-case-setup/SKILL.md",
+      "path": "skills/account-case-setup/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/account-case-setup/agents/openai.yaml",
+      "path": "skills/account-case-setup/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/bcgos-operator/SKILL.md",
       "path": "skills/bcgos-operator/SKILL.md"
     },
@@ -256,6 +264,22 @@
     {
       "source": "bundles/base/skills/maestro-onboarding/agents/openai.yaml",
       "path": "skills/maestro-onboarding/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/maestro-environment-setup/SKILL.md",
+      "path": "skills/maestro-environment-setup/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/maestro-environment-setup/agents/openai.yaml",
+      "path": "skills/maestro-environment-setup/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/maestro-runtime-checkup/SKILL.md",
+      "path": "skills/maestro-runtime-checkup/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/maestro-runtime-checkup/agents/openai.yaml",
+      "path": "skills/maestro-runtime-checkup/agents/openai.yaml"
     },
     {
       "source": "bundles/tech-core/skills/pr-quality-loop/SKILL.md",
