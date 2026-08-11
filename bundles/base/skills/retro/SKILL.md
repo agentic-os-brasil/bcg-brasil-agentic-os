@@ -56,8 +56,22 @@ a first retrospective has no predecessor, and that is not an error.
 7. Offer to add each strong piece of evidence to the objective it belongs to,
    with `append-entry` under that objective's evidence section. Confirm each
    one separately; nothing enters an objective without the owner agreeing to it.
-8. Report what was written, what was proposed but not written, and anything the
+   If a page declares the same evidence heading more than once, the operation
+   refuses the write rather than guessing which objective was meant — name the
+   objective's own heading instead.
+8. If the week produced a durable claim about how this kind of work goes — not
+   what happened, but what it suggests is generally true — offer to promote it
+   to `owner/learnings/` with `create-page`, one page per claim. State it as a
+   generalization: the engagement may be named as the source, but findings,
+   figures and client material stay in the workspace that owns them.
+9. Report what was written, what was proposed but not written, and anything the
    owner declined.
+
+Promotion in step 8 is **attended only**. A standing grant covers one page
+family, so an occurrence woken under the weekly retro grant can write the
+retrospective but not a learning. That is the right shape rather than a
+limitation to route around: a durable claim about the owner's profession is
+theirs to make, not something a scheduled job should decide on their behalf.
 
 ## Register
 

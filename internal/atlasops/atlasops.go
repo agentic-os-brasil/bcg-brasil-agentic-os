@@ -291,14 +291,24 @@ func (engine *Engine) AppendEntry(request AppendEntryRequest) (Result, error) {
 func insertUnderSection(body, section, entry string) (string, error) {
 	lines := strings.Split(body, "\n")
 	start := -1
+	matches := 0
 	for index, line := range lines {
 		if strings.TrimRight(line, " \t") == section {
-			start = index
-			break
+			matches++
+			if start < 0 {
+				start = index
+			}
 		}
 	}
 	if start < 0 {
 		return "", fmt.Errorf("owner atlas page does not declare the section %q", section)
+	}
+	if matches > 1 {
+		// A page may legitimately repeat a heading — an objectives page with an
+		// evidence section under each objective is the ordinary case. Taking the
+		// first match would file the entry under the wrong objective and report
+		// success, so an ambiguous target is refused instead.
+		return "", fmt.Errorf("owner atlas page declares the section %q %d times; the target is ambiguous", section, matches)
 	}
 	level := len(section) - len(strings.TrimLeft(section, "#"))
 	end := len(lines)

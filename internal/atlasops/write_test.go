@@ -207,6 +207,40 @@ func TestAppendEntryReturnsAProposalOnRevisionConflict(t *testing.T) {
 	}
 }
 
+// A page may legitimately repeat a heading — an objectives page with an
+// evidence section under each objective is the obvious case. Landing on the
+// first match would put the entry under the wrong objective and report success,
+// which is worse than refusing.
+func TestAppendEntryRefusesAnAmbiguousSection(t *testing.T) {
+	engine := testEngine(t)
+	page := "development/objectives.md"
+	if _, err := engine.CreatePage(CreatePageRequest{
+		Page: page,
+		Body: "# Objectives\n\n## Lead without the partner\n\n### Evidence\n\n## Sharpen the recommendation\n\n### Evidence\n",
+		Provenance: attended("k1"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := engine.AppendEntry(AppendEntryRequest{
+		Page:       page,
+		Section:    "### Evidence",
+		Entry:      "- which objective is this?",
+		Provenance: attended("evidence-1"),
+	}); err == nil {
+		t.Fatal("append resolved a heading that appears twice; it must refuse rather than guess an objective")
+	}
+
+	// The page is untouched: an ambiguous target writes nothing.
+	body, err := engine.read(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(body, "which objective") {
+		t.Fatalf("refused append still wrote:\n%s", body)
+	}
+}
+
 func TestAppendEntryRequiresAnExistingSection(t *testing.T) {
 	engine := testEngine(t)
 	page := "development/objectives.md"
