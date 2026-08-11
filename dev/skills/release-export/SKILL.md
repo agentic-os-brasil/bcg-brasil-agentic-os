@@ -61,8 +61,8 @@ O resultado fica em `releases/0.2.0/`:
 Os ZIPs são Canaries controladas e permanecem `unsigned-controlled-canary`.
 A factory recusa manifest que não seja `canary`, issuer/key fora do registry,
 drift de digest, bootstrapper incompatível ou seed divergente. O ZIP Windows
-exige Authenticode exatamente `NotSigned`; o ZIP macOS exige ausência de
-`LC_CODE_SIGNATURE` e confirmação nativa de que o binário não é assinado.
+exige Authenticode exatamente `NotSigned`; o ZIP macOS exige assinatura ad-hoc
+exata e confirmação nativa de `Signature=adhoc`.
 
 ## Empacotar o instalador Windows em um único EXE
 

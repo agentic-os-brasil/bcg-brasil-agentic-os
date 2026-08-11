@@ -158,14 +158,13 @@ they do not substitute for Apple Developer ID/notarization or Windows
 Authenticode.
 
 The Windows local-beta factory accepts native Authenticode status exactly
-`NotSigned`. The macOS local-beta factory likewise accepts only an exactly
-unsigned Mach-O bootstrapper and CLI: no `LC_CODE_SIGNATURE` may be present.
-When built on macOS, the native `codesign` classification must independently
-agree that each executable is not signed. A valid Developer ID signature, an
-ad-hoc signature, an invalid signature, a partial signature or disagreement
-between the structural and native probes is rejected rather than relabeled as
-unsigned. Notarization and Gatekeeper assessment remain external release/device
-evidence and are not inferred from this classification.
+`NotSigned`. The macOS local-beta factory requires an exact ad-hoc Mach-O
+signature container for the bootstrapper and CLI. When built on macOS, native
+`codesign` must independently report `Signature=adhoc`. A valid Developer ID
+signature, an invalid signature, an unsigned executable, a partial signature or
+disagreement between the structural and native probes is rejected. Ad-hoc
+signing prevents Apple Silicon from killing the technical-beta executable; it
+does not establish Apple trust, notarization or corporate acceptance.
 
 If native policy blocks the bootstrapper, Claude stops, explains that nothing
 was installed or lost and gives the one owner/support action required. It

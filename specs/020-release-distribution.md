@@ -134,10 +134,11 @@ amd64 and `macos-portable-local-beta` for macOS arm64. Each factory requires an
 Ed25519-authenticated `canary` manifest, exact active issuer/key registry,
 exact registry and target bootstrapper SHA-256 pins and a version-matched
 seeded bootstrapper. Windows additionally requires Authenticode status exactly
-`NotSigned`. macOS requires the bootstrapper and selected CLI to contain no
-`LC_CODE_SIGNATURE`; a native macOS build must also observe `codesign` status
-exactly unsigned. Developer ID, ad-hoc, invalid, partial or structurally
-contradictory signatures are rejected from this unsigned profile. Any partial
+`NotSigned`. macOS requires the bootstrapper and selected CLI to carry an exact
+ad-hoc code-signature container; a native macOS build must also observe
+`codesign` status exactly `Signature=adhoc`. Developer ID, invalid, unsigned,
+partial or structurally contradictory signatures are rejected from this local
+beta profile. Any partial
 profile, different channel or identity, digest drift, invalid native-signature
 state or verification failure remains fail-closed.
 
