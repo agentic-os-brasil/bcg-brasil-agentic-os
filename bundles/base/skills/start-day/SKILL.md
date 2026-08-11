@@ -68,10 +68,16 @@ of context it can use, and works without any of it.
      scoped to what remains;
    - **near-zero remaining hours** — say so and offer to close the day instead
      of forcing a fresh plan.
-7. Record it: `create-page` for today if absent, then `append-entry` with a
-   timestamped entry. Re-running appends; it never overwrites.
-8. State every optional input that was unavailable. An incomplete briefing is
-   reported as incomplete.
+7. Record **the plan, not the enrichment**: `create-page` for today if absent,
+   then `append-entry` with a timestamped entry carrying the ranked priorities,
+   the reason for each, and the first move. Calendar and mail material shaped
+   the ranking and is not written — meeting titles, participant counts and the
+   names of people waiting on a reply stay out of the page. Durable capture of
+   a meeting or a correspondent is a separate, attended act. Re-running
+   appends; it never overwrites.
+8. State every optional input that was unavailable, and whether the entry was
+   written or came back as a proposal. An incomplete briefing is reported as
+   incomplete, and an unrecorded one is never reported as recorded.
 
 ## Invariants
 
