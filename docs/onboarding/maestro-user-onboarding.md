@@ -410,78 +410,18 @@ primeiro dia.
 
 ## 6. Trabalhos longos: como pausar e retomar
 
-Para trabalhos que atravessam sessões, use o ledger local. O fluxo conceitual é:
+Para trabalhos que atravessam sessões, use `/execution-continuity` como uma
+receita conversacional. O runtime registra a tarefa diretamente em
+`brain/tasks/`, liga-a ao projeto ou entrega correspondente e acrescenta um
+checkpoint bounded quando o owner pausa ou muda a próxima ação. Não exponha
+run IDs, revisões, JSON ou comandos do ledger ao owner durante o fluxo normal.
 
-```text
-create → start → checkpoint → evidence → pause
-                         ↓
-                       resume → inspect → complete/export
-```
-
-Comandos disponíveis na superfície do CLI:
-
-```text
-bcgos work schema
-bcgos work create --workspace <workspace> --stdin
-bcgos work list --workspace <workspace>
-bcgos work start --workspace <workspace> --id <id>
-bcgos work checkpoint --workspace <workspace> --active --stdin
-bcgos work evidence --workspace <workspace> --item <id> --revision <n> --attempt <id> --criterion <id>
-bcgos work pause --workspace <workspace> --active
-bcgos work resume --workspace <workspace> --active
-bcgos work inspect --workspace <workspace> --item <id>
-bcgos work export --workspace <workspace> --item <id>
-bcgos owner agent list
-```
-
-No fluxo cotidiano, o runtime conversa com uma única tarefa ativa: `--active`
-resolve o item, a revisão e a tentativa atuais sem expor esses detalhes. Para
-checkpoint, `{ "note": "..." }` basta; o Maestro registra a nota e mantém um
-próximo passo seguro. Os parâmetros completos continuam disponíveis para
-integrações avançadas e ainda rejeitam revisões ou tentativas desatualizadas.
-`--active` nunca pode ser combinado com `--item`/`--id`; exclusão continua
-exigindo item, revisão e confirmação explícitos.
-
-Antes do primeiro `create`, rode `bcgos work schema`. O comando não lê o
-workspace nem o estado do usuário: ele mostra os campos aceitos, os dois tipos
-de critério (`artifact_snapshot` e `command_check`), os comandos de validação
-permitidos e um exemplo copiável. O mesmo resumo aparece em
-`bcgos work create --help`; não é necessário descobrir o contrato por tentativa
-e erro ou consultar o código-fonte.
-
-Exemplo mínimo para uma entrega em arquivo:
-
-```json
-{
-  "objective": "Preparar uma entrega revisável.",
-  "initial_next_step": "Escrever o resultado em result.md.",
-  "criteria": [
-    {
-      "id": "delivery",
-      "type": "artifact_snapshot",
-      "target_ref": "bcgos://workspace/result.md"
-    }
-  ],
-  "allowed_refs": ["bcgos://workspace/result.md"]
-}
-```
-
-`work list` retorna somente metadados bounded (ID, estado, revisão, tentativa
-ativa e presença de checkpoint); o objetivo e o corpo do checkpoint continuam
-protegidos por `inspect`/`next`. O checkpoint exige `--stdin` de forma explícita
-para evitar que uma chamada vazia seja confundida com continuidade persistida.
-`owner agent list` é uma consulta read-only dos agentes gerenciados e informa
-se cada papel foi apenas resolvido pela identidade ou se há um scaffold
-registrado; listar não cria nem ativa agentes.
-
-Ao abrir uma nova sessão, o Maestro apresenta a mesma projeção de
-`bcgos maestro status <workspace-path-or-id>`. Se houver um único trabalho ativo, ele
-mostra apenas `bcgos://execution/active`, o estado e se existe checkpoint. Para
-ler a próxima ação privada, resolva o ponteiro explicitamente:
-
-```text
-bcgos work next --active --workspace <workspace>
-```
+Ao abrir uma nova sessão, leia os artefatos de tarefa e checkpoint do workspace,
+confirme o escopo e continue pelo último próximo passo revisado. Se não houver
+item ativo, diga isso e ofereça criar um; se houver mais de um, pergunte qual
+deve continuar. A superfície determinística `bcgos work` permanece disponível
+para compatibilidade, recuperação e integrações avançadas, mas não é requisito
+para registrar ou retomar trabalho novo.
 
 Um runtime configurado ou um receipt local pode aparecer como `configured` ou
 `adapter_observed`; isso não significa `native_qualified`. `unavailable`

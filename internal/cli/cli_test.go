@@ -419,6 +419,21 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
+func TestPublicCLIHelpExposesOnlyDistributionAndHealthSurface(t *testing.T) {
+	var output bytes.Buffer
+	if code := RunWithInput([]string{"help"}, strings.NewReader(""), &output, &output); code != ExitOK {
+		t.Fatalf("help exit = %d, output = %s", code, output.String())
+	}
+	if output.String() != publicUsage+"\n" {
+		t.Fatalf("public help = %q, want %q", output.String(), publicUsage+"\n")
+	}
+	for _, internalCommand := range []string{"workspace-agent", "workspace-migration", "maintenance", "federation", "ingest", "hook"} {
+		if strings.Contains(output.String(), internalCommand) {
+			t.Fatalf("internal command %q leaked into public help: %s", internalCommand, output.String())
+		}
+	}
+}
+
 func TestIngestReportsUnavailableWithoutVerifiedRuntimePack(t *testing.T) {
 	dataRoot, workspacePath := filepath.Join(t.TempDir(), "BCGOS"), t.TempDir()
 	sourcePath := filepath.Join(workspacePath, "brief.docx")
@@ -2296,6 +2311,33 @@ func TestAgentIdentitySetIsAnExplicitPresentationOnlyShortcut(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("Walter presentation was not persisted: %#v", stored.Selections)
+	}
+}
+
+func TestAgentIdentityDefaultsRemainActiveAndFirstCustomizationCreatesProfile(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	var output bytes.Buffer
+
+	if code := runAgentWithInput([]string{"identity"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
+		!strings.Contains(output.String(), `"state": "defaults_active"`) ||
+		!strings.Contains(output.String(), `"agent_id": "gamma-guardian"`) {
+		t.Fatalf("default identity status = %d: %s", code, output.String())
+	}
+
+	output.Reset()
+	if code := runAgentWithInput([]string{"identity", "set", "--agent", "gamma_guardian", "--display-name", "Gamma Guardian", "--emoji", "🧪", "--owner-id", "daniel", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
+		!strings.Contains(output.String(), `"role": "quality_guardian"`) ||
+		!strings.Contains(output.String(), `"presentation_only": true`) {
+		t.Fatalf("first identity customization = %d: %s", code, output.String())
+	}
+	profile, err := agentidentity.Load(dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selection, ok := agentidentity.Resolve(profile, "quality_guardian", "gamma-guardian")
+	if !ok || selection.OwnerID != "daniel" || selection.DisplayName != "Gamma Guardian" {
+		t.Fatalf("persisted Gamma identity = %#v, ok=%v", selection, ok)
 	}
 }
 

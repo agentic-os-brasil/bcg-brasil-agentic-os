@@ -317,7 +317,11 @@ func appendContinuousUseDirective(lines []string, packet sessionctx.Packet) []st
 	}
 	if len(status.NextActions) > 0 {
 		next := status.NextActions[0]
-		lines = append(lines, "Optional continuity action: "+commandFor(packet, next.Command)+". It may improve continuity but never blocks the current request.")
+		reason := strings.TrimSpace(next.Reason)
+		if reason == "" {
+			reason = "review the bounded workspace task and checkpoint artifacts"
+		}
+		lines = append(lines, "Optional continuity action: "+reason+". It may improve continuity but never blocks the current request; use the installed continuity method conversationally.")
 	}
 	return lines
 }

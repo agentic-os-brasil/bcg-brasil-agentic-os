@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
@@ -1006,6 +1007,14 @@ func wizardHandler(options options) http.Handler {
 			}
 		}
 		handoff := workspaceHandoffFor(result.WorkspacePath, result.WorkspaceID)
+		identityState := "defaults_active"
+		identityProfile := agentidentity.Profile{}
+		if profile, profileErr := agentidentity.Load(options.dataRoot); profileErr == nil {
+			identityState = "profile_confirmed"
+			identityProfile = profile
+		} else if !errors.Is(profileErr, os.ErrNotExist) {
+			identityState = "unavailable"
+		}
 		handoff.DataRoot = options.dataRoot
 		handoff.MemoryCommand = memoryStatusCommand(options, result.WorkspaceID)
 		handoff.Diagnostics = append(handoff.Diagnostics, warnings...)
@@ -1026,6 +1035,7 @@ func wizardHandler(options options) http.Handler {
 		writeHTTPJSON(writer, map[string]any{
 			"status": status, "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID, "data_root": options.dataRoot,
 			"prompt": handoff.Prompt, "deeplinks": handoff.DeepLinks, "handoff": handoff,
+			"agent_identity_state": identityState, "managed_agents": agentidentity.ResolveManaged(identityProfile),
 			"memory_status_command": handoff.MemoryCommand,
 			"source_registered":     sourceRegistered, "source_state": sourceState,
 			"ingestion_state": ingestionState,
@@ -2012,6 +2022,13 @@ const maestroClaudeKickoffPrompt = maestroHumanKickoffPrompt + `
 🧭 Para começar, leia primeiro CLAUDE.md e depois siga o guia instalado de
 Maestro Onboarding que ele identifica. Conduza minha entrevista inicial uma
 pergunta por vez.
+
+Os nomes padrão dos agents internos já estão ativos no catálogo local (Walter
+🦉, Darwin 🧬 e Gamma Guardian 🧪). Consulte bcgos agent identity antes de
+tentar personalizar qualquer nome. Trate managed_agents como uma projeção
+de defaults, não como um draft para reenviar em lote. Só personalize se o
+owner pedir, uma pergunta por vez, sempre com confirmação explícita; nomes e
+emojis não mudam autoridade.
 
 Se um desses arquivos não existir, não crie AGENTS.md, skills ou qualquer
 estrutura substituta. Explique brevemente que a preparação local está incompleta

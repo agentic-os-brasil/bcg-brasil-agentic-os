@@ -105,7 +105,7 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || !strings.Contains(got, "Mention it only when the current task would benefit") || !strings.Contains(got, "Quer conectar uma pasta do SharePoint deste projeto ou começar sem ela?") || strings.Contains(got, "Prepare kickoff") || strings.Contains(got, "selection_required") || strings.Contains(got, "native_qualified") {
 		t.Fatalf("active directive = %q", got)
 	}
-	if got := sessionDirective(active); !strings.Contains(got, "CONTINUOUS USE") || !strings.Contains(got, "checkpoint") || !strings.Contains(got, "bcgos work next --active") {
+	if got := sessionDirective(active); !strings.Contains(got, "CONTINUOUS USE") || !strings.Contains(got, "checkpoint") || !strings.Contains(got, "Optional continuity action: checkpoint required") || strings.Contains(got, "bcgos work next --active") {
 		t.Fatalf("continuous-use directive = %q", got)
 	}
 	selected := active

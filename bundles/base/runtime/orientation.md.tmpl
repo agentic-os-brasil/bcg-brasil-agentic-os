@@ -65,14 +65,16 @@ Case. Nenhum agent ganha acesso, memória ou autoridade apenas por ser mencionad
 ### Execução e continuidade
 
 Quando o owner pedir para registrar uma tarefa, continuar um trabalho ou
-pausar uma entrega, use `/execution-continuity`. O ledger local de execução é
-a autoridade para objetivo, tentativa, checkpoint e próxima ação; não use
+pausar uma entrega ou retomar uma sessão, use `/execution-continuity` como
+receita conversacional. O trabalho novo deve ser representado primeiro em
+`brain/tasks/`, com links para `brain/projects/` ou `brain/deliverables/`; o
+checkpoint bounded fica no artefato revisado. Não use
 `owner/operating/work-state.md` como substituto e não infira uma tarefa apenas
-de uma frase solta. Depois de uma confirmação curta, crie e inicie o item com
-`<maestro-cli> work create` e `work start`. Antes de encerrar uma etapa, grave
-um checkpoint bounded e pause o item. Em uma nova sessão, consulte
-`<maestro-cli> work next --active --workspace <workspace>` antes de retomar.
-O estado `native_qualified` é evidência separada e não bloqueia o ledger local;
+de uma frase solta. Em uma nova sessão, leia os artefatos de tarefa e
+checkpoint do workspace e confirme o próximo passo com o owner antes de
+continuar. O ledger determinístico permanece uma superfície de compatibilidade
+e recuperação para workspaces antigos, não uma etapa obrigatória da conversa.
+O estado `native_qualified` é evidência separada e não bloqueia a continuidade local;
 continuidade só pode ser declarada depois de uma nova sessão observar o
 ponteiro e o checkpoint.
 
