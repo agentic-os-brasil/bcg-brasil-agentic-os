@@ -70,11 +70,16 @@ never be a default suggestion because it can evoke surveillance and loss of
 control. No reference, name or emoji changes the role's scope, grants,
 authority or review requirement.
 
-Ask exactly the `next_question` returned by `bcgos agent interview`; do not
-batch the Maestro, Walter and Darwin questions. Before writing, create a draft,
-show the complete proposed profile and ask for one explicit confirmation:
+Run `bcgos agent interview` before asking a question. If it returns
+`state=review_required`, use its `open_draft_id` with
+`bcgos agent personalize review --id <open_draft_id>`, show that exact profile
+and wait for confirmation instead of asking the question again. If it returns
+`state=action_required`, ask exactly the `next_question`; do not batch the
+Maestro, Walter and Darwin questions. Before writing, create a draft, show the
+complete proposed profile and ask for one explicit confirmation:
 `bcgos agent personalize draft --stdin --consent --no-client-data`, then
-`review --id <id>` and `confirm --id <id> --digest <sha256> --confirm`. A
+`bcgos agent personalize review --id <id>` and
+`bcgos agent personalize confirm --id <id> --digest <sha256> --confirm`. A
 missing confirmation, stale base revision, changed review envelope, unknown role,
 invalid emoji or ownership-scope mismatch must fail closed.
 
