@@ -99,6 +99,15 @@ func runSetupApply(args []string, out, errOut io.Writer, dataRoot func() (string
 		fmt.Fprintln(errOut, "usage: bcgos setup apply --workspace PATH --runtime claude|codex [--executable PATH] [--confirm]")
 		return ExitUsage
 	}
+	if err := ensureUserLevelProcess(); err != nil {
+		report := setupApplyReport{
+			SchemaVersion: 1, State: setupBlocked, WorkspacePath: *workspacePath, Runtime: *runtimeName,
+			Stages: []setupStage{{ID: "process_identity", Status: setupBlocked, Detail: err.Error()}},
+			Error:  err.Error(),
+		}
+		_ = writeJSON(out, report, errOut)
+		return ExitFailure
+	}
 	report := setupApplyReport{SchemaVersion: 1, State: setupBlocked, WorkspacePath: *workspacePath, Runtime: *runtimeName}
 	finishBlocked := func(stage, detail string) int {
 		report.Stages = append(report.Stages, setupStage{ID: stage, Status: setupBlocked, Detail: detail})

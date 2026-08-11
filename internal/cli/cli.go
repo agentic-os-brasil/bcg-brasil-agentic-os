@@ -601,6 +601,9 @@ func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 		fmt.Fprintln(errOut, "usage: bcgos init [--allow-synced-workspace] [--profile standard|advanced|power] [path]")
 		return ExitUsage
 	}
+	if err := ensureUserLevelProcess(); err != nil {
+		return reportError(errOut, err)
+	}
 	path := "."
 	if flags.NArg() == 1 {
 		path = flags.Arg(0)
@@ -1609,6 +1612,12 @@ func runtimeDependencyCheck(root string, inspection workspace.Inspection) (docto
 		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: "workspace dependencies are unavailable until bcgos init completes"}, "Run bcgos init <local-workspace-path>."
 	}
 	if _, err := resolveHookOrchestrationState(inspection, installedOrchestrationStatePath); err != nil {
+		if errors.Is(err, agentorchestration.ErrDurableStateOwnerMismatch) {
+			return doctorCheck{
+				ID: "runtime_dependencies", State: "action_required",
+				Message: "durable Maestro state belongs to another Windows security principal, commonly an elevated Administrator process; existing files were not changed",
+			}, "Close Maestro and ask support to repair or recreate only the bounded Maestro state from a native, non-elevated Windows session. Do not use Run as administrator or reset the whole workspace."
+		}
 		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to repair the local runtime bootstrap."
 	}
 	owner, err := ownerctx.Inspect(root)
