@@ -75,7 +75,9 @@ of context it can use, and works without any of it.
 
 ## Invariants
 
-- Idempotent per day. Two runs produce one page and no duplicated entry.
+- Append-only per day. The first run creates one page; each subsequent run
+  adds one timestamped briefing so the record remains auditable rather than
+  pretending the earlier briefing never happened.
 - Nothing sourced from optional context is written to the atlas. Enrichment
   composes the briefing and is discarded; durable capture is a separate act.
 - Mail is never read below metadata level.

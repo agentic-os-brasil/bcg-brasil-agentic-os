@@ -60,8 +60,8 @@ not authority over an engagement's record.
 
 ## Invariants
 
-- Idempotent per day. Closing twice appends a second timestamped entry rather
-  than duplicating or overwriting the first.
+- Append-only per day. Closing twice adds a second timestamped entry rather
+  than overwriting the first; the two attended check-ins remain auditable.
 - Nothing is recorded that the owner did not confirm in the conversation.
 - An engagement may be named. Findings, figures and deliverable material stay
   in the workspace that owns them.
