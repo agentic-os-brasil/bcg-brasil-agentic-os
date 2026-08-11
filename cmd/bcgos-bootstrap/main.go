@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -23,8 +22,8 @@ import (
 var Version = "0.0.0-dev"
 var AuthorityRegistrySHA256 = ""
 
-const portableActivationContract = "maestro-portable-activate-v1"
-const portableActivationFailureMessage = "A preparação do Maestro não pôde ser concluída neste computador."
+const portableInstallContract = "maestro-portable-install-v2"
+const portableInstallFailureMessage = "A preparação do Maestro não pôde ser concluída neste computador."
 
 func main() {
 	if len(os.Args) < 2 {
@@ -33,10 +32,10 @@ func main() {
 	switch os.Args[1] {
 	case "install":
 		install(os.Args[2:])
-	case "portable-activate":
-		portableActivate(os.Args[2:])
+	case "portable-install":
+		portableInstall(os.Args[2:])
 	case "capabilities":
-		fmt.Println(portableActivationContract)
+		fmt.Println(portableInstallContract)
 	case "activate":
 		activate(os.Args[2:])
 	case "rollback":
@@ -181,50 +180,47 @@ func rollback(args []string) {
 	fmt.Println("Maestro rollback complete")
 }
 
-// portableActivate prepares a portable Maestro archive without routing the
-// operation through cmd.exe, a shell script, or a user-managed terminal. It
-// is deliberately a single native invocation so a supported runtime can call
-// the bootstrapper directly after the user has confirmed setup.
-func portableActivate(args []string) {
-	flags := flag.NewFlagSet("portable-activate", flag.ExitOnError)
+// portableInstall activates only the verified managed core of a portable
+// Maestro archive. The runtime invokes the installed CLI afterwards for
+// workspace setup and adapter verification, preserving that boundary from the
+// stable bootstrapper.
+func portableInstall(args []string) {
+	flags := flag.NewFlagSet("portable-install", flag.ExitOnError)
 	_ = flags.Parse(args)
 	if flags.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: bcgos-bootstrap portable-activate")
+		fmt.Fprintln(os.Stderr, "usage: bcgos-bootstrap portable-install")
 		os.Exit(2)
 	}
 	managedRoot, err := managedRootForBootstrap()
-	fatalPortableActivation(err)
+	fatalPortableInstall(err)
 	portableRoot, err := portableRootFromManagedRoot(managedRoot)
-	fatalPortableActivation(err)
+	fatalPortableInstall(err)
 	dataRoot, err := portableDataRoot()
-	fatalPortableActivation(err)
+	fatalPortableInstall(err)
 	registry, err := releaseverify.LoadPinnedAuthorityRegistry(
 		filepath.Join(managedRoot, "trust", "release-authority-registry.json"),
 		AuthorityRegistrySHA256,
 		time.Now,
 	)
-	fatalPortableActivation(err)
+	fatalPortableInstall(err)
 	verified, err := releaseverify.VerifyDirectory(filepath.Join(portableRoot, "release"), registry)
-	fatalPortableActivation(err)
+	fatalPortableInstall(err)
 	cliName := "bcgos"
 	if runtime.GOOS == "windows" {
 		cliName += ".exe"
 	}
 	cliPath := filepath.Join(managedRoot, "bin", cliName)
 	if _, err := os.Stat(cliPath); os.IsNotExist(err) {
-		fatalPortableActivation(firstInstall(verified, managedRoot, dataRoot, runtime.GOOS, runtime.GOARCH, nil))
+		fatalPortableInstall(firstInstall(verified, managedRoot, dataRoot, runtime.GOOS, runtime.GOARCH, nil))
 	} else {
-		fatalPortableActivation(err)
+		fatalPortableInstall(err)
 	}
-	workspacePath := filepath.Join(portableRoot, "maestro-os")
-	fatalPortableActivation(runInstalledCLI(cliPath, "setup", "apply", "--workspace", workspacePath, "--runtime", "claude", "--executable", cliPath, "--confirm"))
-	fatalPortableActivation(runInstalledCLI(cliPath, "adapter", "verify", "--runtime", "claude", workspacePath))
-	fmt.Println("Maestro is ready")
+	fmt.Println("Maestro core is ready")
 }
 
-func fatalPortableActivation(err error) {
+func fatalPortableInstall(err error) {
 	if err != nil {
-		fmt.Fprintln(os.Stderr, portableActivationFailureMessage)
+		fmt.Fprintln(os.Stderr, portableInstallFailureMessage)
 		os.Exit(1)
 	}
 }
@@ -257,13 +253,6 @@ func portableDataRoot() (string, error) {
 		return filepath.Join(home, "Library", "Application Support", "BCGOS"), nil
 	}
 	return filepath.Join(home, ".local", "share", "BCGOS"), nil
-}
-
-func runInstalledCLI(path string, args ...string) error {
-	if err := exec.Command(path, args...).Run(); err != nil {
-		return errors.New("portable activation command failed")
-	}
-	return nil
 }
 
 func managedRootForBootstrap() (string, error) {
@@ -301,7 +290,7 @@ func managedRootFromExecutablePath(executable string) (string, error) {
 func usage() {
 	fmt.Fprintln(
 		os.Stderr,
-		"usage: bcgos-bootstrap <install|portable-activate|activate|rollback|version|seed-status|capabilities> [options]",
+		"usage: bcgos-bootstrap <install|portable-install|activate|rollback|version|seed-status|capabilities> [options]",
 	)
 	os.Exit(2)
 }

@@ -12,14 +12,14 @@ consume:
 - the deterministic wizard tree and approved Maestro platform icon (`.icns` or
   `.ico`).
 
-For the controlled Windows Canary, the user distributable is now
-`Maestro-Portable-<version>-windows-amd64-local-beta-unsigned.zip`, produced by
-`go run ./dev/release portable-windows`. It contains the exact signed release,
-the pinned stable bootstrapper and authority registry, one fixed workspace,
-provenance, a seed `maestro-os/CLAUDE.md` and an internal
-`managed/activate-maestro.cmd`. It deliberately contains no user-facing
-activation command,
-wizard or `maestro-installer.exe`. The runtime file
+For the controlled Canary, the user distributables are target-specific:
+`Maestro-Portable-<version>-windows-amd64-local-beta-unsigned.zip` and
+`Maestro-Portable-<version>-macos-arm64-local-beta-unsigned.zip`, produced by
+`go run ./dev/release portable-windows` and `portable-macos`. Each contains the
+exact signed release, the pinned native bootstrapper and authority registry,
+one fixed workspace, provenance and a seed `maestro-os/CLAUDE.md`. It
+deliberately contains no user-facing activation command, wizard or
+`maestro-installer.exe`. The runtime file
 `bcgos_<version>_windows_amd64.exe` remains inside the signed `release/` tree;
 the stable bootstrapper verifies and activates it as
 `managed/bin/bcgos.exe`, so it must never be sent as a standalone download.
@@ -77,12 +77,11 @@ inner bridge all four public bindings:
 - the SHA-256 of the versioned Windows bootstrapper;
 - the authenticated release channel `canary`.
 
-The legacy portable Windows factory may run on macOS, Linux or Windows to
-assemble the Windows artifact. The `portable-universal` factory instead emits
-one controlled test ZIP that carries the Windows amd64, macOS arm64 and macOS
-amd64 native payloads. The owner still opens only `maestro-os/` in Claude Code:
-the seeded `CLAUDE.md` detects the host after one confirmation and invokes only
-the matching internal activator. On Windows, the factory requires
+The portable factories may run on macOS, Linux or Windows to assemble their
+respective artifacts, but they never emit a universal executable package. The
+owner opens only `maestro-os/` in Claude Code. The seeded `CLAUDE.md` checks
+that the current host matches the archive, asks for one confirmation and
+invokes only its matching internal bootstrapper. On Windows, the factory requires
 `Get-AuthenticodeSignature` to report exactly `NotSigned` for the supplied
 bootstrapper. A present/malformed certificate table, `HashMismatch`,
 `NotTrusted`, `UnknownError` and every other status fail closed. The release
@@ -97,11 +96,11 @@ executable remain unsigned: factory pins plus the independently delivered ZIP
 checksum establish the bounded package identity, not publisher identity.
 SmartScreen, WDAC or AppLocker may block execution before Maestro starts.
 
-The universal ZIP is a testing handoff, not a replacement for a production
-macOS installer. It keeps the macOS activator and bootstrapper internal, uses
-`~/Library/Application Support/BCGOS` and fails on unknown architectures. A
-macOS production release still requires Developer ID signing, notarization and
-clean-device acceptance; neither Claude nor the package removes Gatekeeper.
+The macOS ZIP is a controlled local-beta handoff, not a replacement for a
+production macOS installer. It uses `~/Library/Application Support/BCGOS` and
+fails on a non-arm64 host. A production macOS release still requires Developer
+ID signing, notarization and clean-device acceptance; neither Claude nor the
+package removes Gatekeeper.
 
 The signed base bundle carried in `release/` includes the
 `maestro-setup-update` skill. It is installed as part of the bundle and is not

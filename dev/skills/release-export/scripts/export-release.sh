@@ -10,6 +10,8 @@ usage: export-release.sh \
   --authority-registry-sha256 SHA256 \
   --bootstrapper ABS_FILE \
   --bootstrapper-sha256 SHA256 \
+  --macos-bootstrapper ABS_FILE \
+  --macos-bootstrapper-sha256 SHA256 \
   [--output-directory ABS_DIR] [--github-repository OWNER/REPO] \
   [--publish-github --confirm-publish]
 EOF
@@ -26,6 +28,8 @@ authority_registry=""
 authority_registry_sha256=""
 bootstrapper=""
 bootstrapper_sha256=""
+macos_bootstrapper=""
+macos_bootstrapper_sha256=""
 output_directory=""
 github_repository=""
 publish_github=0
@@ -39,6 +43,8 @@ while (($# > 0)); do
     --authority-registry-sha256) authority_registry_sha256="${2:-}"; shift 2 ;;
     --bootstrapper) bootstrapper="${2:-}"; shift 2 ;;
     --bootstrapper-sha256) bootstrapper_sha256="${2:-}"; shift 2 ;;
+    --macos-bootstrapper) macos_bootstrapper="${2:-}"; shift 2 ;;
+    --macos-bootstrapper-sha256) macos_bootstrapper_sha256="${2:-}"; shift 2 ;;
     --output-directory) output_directory="${2:-}"; shift 2 ;;
     --github-repository) github_repository="${2:-}"; shift 2 ;;
     --publish-github) publish_github=1; shift ;;
@@ -50,10 +56,12 @@ done
 
 [[ -n "$version" && -n "$release_directory" && -n "$authority_registry" &&
   -n "$authority_registry_sha256" && -n "$bootstrapper" &&
-  -n "$bootstrapper_sha256" ]] || { usage; die "todos os inputs da factory são obrigatórios"; }
+  -n "$bootstrapper_sha256" && -n "$macos_bootstrapper" &&
+  -n "$macos_bootstrapper_sha256" ]] || { usage; die "todos os inputs da factory são obrigatórios"; }
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "versão deve ser MAJOR.MINOR.PATCH"
 [[ "$authority_registry_sha256" =~ ^[a-f0-9]{64}$ ]] || die "authority registry SHA-256 inválido"
 [[ "$bootstrapper_sha256" =~ ^[a-f0-9]{64}$ ]] || die "bootstrapper SHA-256 inválido"
+[[ "$macos_bootstrapper_sha256" =~ ^[a-f0-9]{64}$ ]] || die "bootstrapper macOS SHA-256 inválido"
 
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "execute na raiz de um checkout Git"
 cd "$root"
@@ -62,7 +70,7 @@ branch="$(git branch --show-current)"
 [[ "$branch" = "main" ]] || die "exportação de release deve partir da branch main"
 source_commit="$(git rev-parse HEAD)"
 
-for input in "$release_directory" "$authority_registry" "$bootstrapper"; do
+for input in "$release_directory" "$authority_registry" "$bootstrapper" "$macos_bootstrapper"; do
   [[ "$input" = /* ]] || die "input precisa ser path absoluto: $input"
   [[ -f "$input" || -d "$input" ]] || die "input ausente: $input"
 done
@@ -81,6 +89,9 @@ fi
 zip_path="$output_directory/Maestro-Portable-${version}-windows-amd64-local-beta-unsigned.zip"
 expected_checksum="$zip_path.sha256"
 expected_provenance="$zip_path.provenance.json"
+macos_zip_path="$output_directory/Maestro-Portable-${version}-macos-arm64-local-beta-unsigned.zip"
+macos_checksum="$macos_zip_path.sha256"
+macos_provenance="$macos_zip_path.provenance.json"
 
 go run ./dev/harness validate --full
 go run ./dev/release portable-windows \
@@ -91,11 +102,21 @@ go run ./dev/release portable-windows \
   --bootstrapper "$bootstrapper" \
   --bootstrapper-sha256 "$bootstrapper_sha256" \
   --output "$zip_path"
+go run ./dev/release portable-macos \
+  --version "$version" \
+  --release-directory "$release_directory" \
+  --authority-registry "$authority_registry" \
+  --authority-registry-sha256 "$authority_registry_sha256" \
+  --bootstrapper "$macos_bootstrapper" \
+  --bootstrapper-sha256 "$macos_bootstrapper_sha256" \
+  --output "$macos_zip_path"
 
 [[ -f "$zip_path" && -f "$expected_checksum" && -f "$expected_provenance" ]] || die "factory não produziu o conjunto completo"
+[[ -f "$macos_zip_path" && -f "$macos_checksum" && -f "$macos_provenance" ]] || die "factory não produziu o conjunto macOS completo"
 
 if command -v unzip >/dev/null 2>&1; then
   unzip -t "$zip_path" >/dev/null || die "ZIP inválido"
+  unzip -t "$macos_zip_path" >/dev/null || die "ZIP macOS inválido"
 else
   echo "release export: unzip indisponível; validação estrutural do ZIP ficou unavailable" >&2
   exit 1
@@ -109,6 +130,12 @@ else
   die "shasum/sha256sum indisponível"
 fi
 grep -F "${actual_zip_sha256}  $(basename "$zip_path")" "$expected_checksum" >/dev/null || die "checksum emitido não corresponde ao ZIP"
+if command -v shasum >/dev/null 2>&1; then
+  actual_macos_sha256="$(shasum -a 256 "$macos_zip_path" | awk '{print $1}')"
+else
+  actual_macos_sha256="$(sha256sum "$macos_zip_path" | awk '{print $1}')"
+fi
+grep -F "${actual_macos_sha256}  $(basename "$macos_zip_path")" "$macos_checksum" >/dev/null || die "checksum macOS emitido não corresponde ao ZIP"
 
 metadata="$output_directory/EXPORT-METADATA.txt"
 {
@@ -116,10 +143,13 @@ metadata="$output_directory/EXPORT-METADATA.txt"
   printf 'source_commit=%s\n' "$source_commit"
   printf 'version=%s\n' "$version"
   printf 'tag=maestro-v%s\n' "$version"
-  printf 'artifact=%s\n' "$(basename "$zip_path")"
-  printf 'artifact_sha256=%s\n' "$actual_zip_sha256"
+  printf 'windows_artifact=%s\n' "$(basename "$zip_path")"
+  printf 'windows_artifact_sha256=%s\n' "$actual_zip_sha256"
+  printf 'macos_artifact=%s\n' "$(basename "$macos_zip_path")"
+  printf 'macos_artifact_sha256=%s\n' "$actual_macos_sha256"
   printf 'authority_registry_sha256=%s\n' "$authority_registry_sha256"
   printf 'bootstrapper_sha256=%s\n' "$bootstrapper_sha256"
+  printf 'macos_bootstrapper_sha256=%s\n' "$macos_bootstrapper_sha256"
   printf 'status=unsigned-controlled-canary\n'
 } > "$metadata"
 
@@ -139,7 +169,7 @@ if ((publish_github)); then
     die "GitHub Release já existe e não pode ser substituído: $tag"
   fi
   notes_file="$release_directory/release-notes-$version.md"
-  args=(release create "$tag" "$zip_path" "$expected_checksum" "$expected_provenance" \
+  args=(release create "$tag" "$zip_path" "$expected_checksum" "$expected_provenance" "$macos_zip_path" "$macos_checksum" "$macos_provenance" \
     --repo "$github_repository" --target "$source_commit" --title "Maestro $version" \
     --prerelease)
   if [[ -f "$notes_file" ]]; then
