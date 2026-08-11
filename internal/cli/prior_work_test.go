@@ -184,6 +184,24 @@ func TestGuidedSharePointSourceSelectionRequiresExplicitReview(t *testing.T) {
 	}
 }
 
+func TestGuidedSharePointSourceSelectionMapsCommonLibraryViewURL(t *testing.T) {
+	dataRoot := t.TempDir()
+	workspacePath := filepath.Join(t.TempDir(), "maestro-project")
+	resolve := func() (string, error) { return dataRoot, nil }
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, resolve); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	selection := `{"schema_version":1,"folder_urls":["https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/Forms/AllItems.aspx"]}`
+	if code := runPriorWork(
+		[]string{"source", "select", "--workspace", workspacePath, "--stdin", "--confirm"},
+		strings.NewReader(selection), &output, &output, resolve,
+	); code != ExitOK || !strings.Contains(output.String(), `"state": "selected"`) {
+		t.Fatalf("library-view selection exit=%d output=%s", code, output.String())
+	}
+}
+
 func TestGuidedSharePointSelectionSurvivesSetupBindingMismatchAsRepairablePending(t *testing.T) {
 	dataRoot := t.TempDir()
 	workspacePath := filepath.Join(t.TempDir(), "maestro-project")
