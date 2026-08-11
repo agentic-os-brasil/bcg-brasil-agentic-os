@@ -4,6 +4,7 @@
 
 | Skill | Use when | Pointer |
 |---|---|---|
+| Conta e Projeto | Cria a conta e o Case Agent do projeto | `skills/account-case-setup/SKILL.md` |
 | Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
 | BCGOS Operator | Control Maestro health, updates and recovery | `skills/bcgos-operator/SKILL.md` |
 | Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
@@ -16,7 +17,9 @@
 | Find Prior Work | Recover an explicitly requested past deck or work artifact | `skills/find-prior-work/SKILL.md` |
 | Ingest Content | Extract professional documents locally and safely | `skills/ingest-content/SKILL.md` |
 | Interaction Profile | Apply the user's BCGOS communication and disclosure preference | `skills/interaction-profile/SKILL.md` |
+| Preparar Ambiente Maestro | Prepara workspace, runtime e manutenção local | `skills/maestro-environment-setup/SKILL.md` |
 | Maestro Onboarding | Start a guided owner interview with quick or complete tracks | `skills/maestro-onboarding/SKILL.md` |
+| Checkup do Maestro | Confere e repara runtime, hooks e Darwin | `skills/maestro-runtime-checkup/SKILL.md` |
 | Maestro Setup and Update | Guide safe setup, updates and recovery conversationally | `skills/maestro-setup-update/SKILL.md` |
 | Meeting Close | Turn meeting notes into a reviewable closure packet | `skills/meeting-close/SKILL.md` |
 | Meeting to Work Items | Extract decisions, tasks and follow-ups from meeting notes | `skills/meeting-to-work-items/SKILL.md` |

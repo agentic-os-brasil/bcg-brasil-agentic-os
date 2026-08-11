@@ -68,6 +68,10 @@ the installer has completed and its final self-check has passed.
    `status`, `doctor`, adapter, verification, maintenance, retry or reversible
    repair commands on the user's behalf without asking again. Show concise
    progress and one outcome summary; do not expose the command sequence.
+   Once the installer and its local preparation complete, hand ordinary
+   workspace readiness and later quiet repairs to `$maestro-environment-setup`
+   and `$maestro-runtime-checkup`; they do not replace this installer/update
+   flow.
 4. Treat optional unavailable capabilities as
    `complete_with_external_actions_pending`. Keep all unrelated Maestro
    capabilities useful and consolidate true administrator actions into one

@@ -17,6 +17,17 @@ Never include secrets, credentials, personal data, client-identifying context or
 - Refs: specs/001-cli-distribution.md; specs/006-memory-persistence.md; internal/memory/deep_synthesizer.go; internal/maintenance/memory_deep_dream.go
 - Supersedes: none
 
+## SETU - Consolidate environment setup through Maestro
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A new workspace could have the right product pieces but still leave the owner to discover setup, runtime hooks, Darwin maintenance and project-agent creation as separate technical procedures.
+- Decision: Treat post-install workspace preparation as one Maestro-led local consolidation. The onboarding flow invokes the existing idempotent setup path after one owner confirmation, then offers a friendly checkup to repair runtime hooks. The visual installer remains the owner of the separate macOS Darwin maintenance enrollment. Ship dedicated product skills for environment setup, checkup and account-to-case creation. MarkItDown belongs in the checkup as an optional managed-pack awareness step: it becomes usable only after a verified pack ships; until then the workspace remains usable and the owner is told only that advanced document support can be added later.
+- Consequences: The normal user journey stays conversational and does not expose command sequences, receipts or infrastructure jargon. Existing `setup apply`, adapter and installer-owned macOS LaunchAgent transactions remain the deterministic mechanisms. Project setup creates the Client Account context before its Case Agent when strategic context matters, while a simple internal task may go directly to Case. No skill may install an ambient Python package or treat an absent MarkItDown pack as a reason to block normal work.
+- Refs: specs/001-cli-distribution.md; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md; bundles/base/skills/maestro-onboarding/SKILL.md; bundles/base/skills/maestro-environment-setup/SKILL.md
+- Supersedes: none
+
 ## Foundation snapshot - 2026-07-19
 
 This is a frozen milestone for navigation, not a separate decision, live index or status report. The coded entries below remain authoritative; future decisions do not require this table to be rewritten.

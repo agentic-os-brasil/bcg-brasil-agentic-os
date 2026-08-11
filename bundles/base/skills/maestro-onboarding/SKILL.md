@@ -50,6 +50,21 @@ irreversible change.
 4. Do not start a professional task, read a selected memory source, execute an
    unrelated skill or grant runtime trust globally.
 
+## Consolidate the environment before the interview
+
+Before the welcome and interview, invoke `$maestro-environment-setup`. Ask the
+owner for its single preparation confirmation, then run the existing
+idempotent setup consolidation for this workspace and active runtime. It
+creates or repairs the local workspace projection and SessionStart/lifecycle
+hooks. The visual installer owns the separate Darwin maintenance enrollment.
+
+Keep this invisible as infrastructure: announce only that Maestro is preparing
+the space, then say whether it is ready to begin. If an optional background or
+document-reading component still needs a managed package, continue the
+interview and ordinary work; never expose an internal state label or turn it
+into a blocker. The environment skill recognizes when advanced document reading
+can be added later; it never installs an ambient Python package.
+
 Onboarding is not a global Bash lock. Ordinary commands remain with the host
 runtime's normal permission flow; only protected mutations and destructive
 roots require Maestro's guard. Use a directory listing tool for directories,

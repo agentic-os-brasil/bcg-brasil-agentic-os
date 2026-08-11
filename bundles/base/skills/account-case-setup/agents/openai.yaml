@@ -1,0 +1,4 @@
+interface:
+  display_name: "Conta e Projeto"
+  short_description: "Cria a conta e o Case Agent do projeto"
+  default_prompt: "Use $account-case-setup para criar a conta e o projeto que vou conduzir no Maestro."
