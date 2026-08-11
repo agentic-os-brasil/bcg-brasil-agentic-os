@@ -223,8 +223,8 @@ func sessionDirective(packet sessionctx.Packet) string {
 			trackChoice = "Offer `quick` (~10 min) or `complete` (~30 min); quick leaves detail for later. Record with " + commandFor(packet, "bcgos owner onboarding select --track quick|complete --confirm") + ". Do not infer personal history or psychology."
 		}
 		lines = append(lines,
-			"ONBOARDING REQUIRED. Interview the owner before proposing work.",
-			"Follow only the selected integrity-checked `maestro-onboarding` guide until complete.",
+			"ONBOARDING AVAILABLE. Offer the guided interview as a useful, resumable calibration, but never make it a prerequisite for work.",
+			"If the owner wants onboarding now, follow the selected integrity-checked `maestro-onboarding` guide. Otherwise continue the requested task immediately and refine the profile over time.",
 		)
 		for _, selected := range packet.Skills.Selected {
 			if selected.ID == "maestro-onboarding" {
@@ -235,9 +235,9 @@ func sessionDirective(packet sessionctx.Packet) string {
 		lines = append(lines,
 			"Save reviewed answers with "+commandFor(packet, `bcgos owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm`)+"; order is flexible.",
 			trackChoice,
-			"Ask next, then wait: "+packet.Owner.Onboarding.NextQuestion,
+			"While the owner is actively onboarding, ask next and then wait: "+packet.Owner.Onboarding.NextQuestion,
 			"Accept out-of-order answers and resume the next pending facet.",
-			"Claim completion only after owner confirmation.",
+			"Never suppress another requested skill or task because onboarding is incomplete. Claim onboarding completion only after owner confirmation.",
 		)
 	case "review_required":
 		lines = append(lines,
@@ -249,7 +249,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 		setupActive := packet.SetupAuthorization.State == "active"
 		if !setupActive {
 			lines = append(lines,
-				"ONE-AND-DONE SETUP AUTHORIZATION IS REQUIRED. Ask one plain-language question covering local, allowlisted, idempotent and reversible preparation, diagnostics, repair, retry and recovery for this workspace. State that external, privileged, destructive, secret-bearing and cross-tenant actions remain outside the grant.",
+				"Optional one-and-done setup is not yet active. Offer one plain-language confirmation when setup or repair is actually useful; do not interrupt unrelated work.",
 				"After the owner agrees once, run "+commandFor(packet, "bcgos setup authorize --workspace <workspace> --confirm")+" silently. Do not ask separate permission for init, status, doctor, adapter setup, verification or reversible repair. If the owner declines, continue with already-ready capabilities and do not nag.",
 			)
 		} else {
@@ -270,8 +270,8 @@ func sessionDirective(packet sessionctx.Packet) string {
 		switch sourceState {
 		case priorwork.SourceSelectionRequired:
 			lines = append(lines,
-				"SHAREPOINT: ask one plain-language question before the first project task: ‘Quer conectar uma pasta do SharePoint deste projeto ou começar sem ela?’ Then wait.",
-				"Keep this conversational. Do not show JSON, CLI commands, internal states, trust terminology or runtime details. If the owner chooses a folder, use the managed Maestro selector (or ask only for the exact folder URL); if they choose to start without it, record that choice and continue immediately.",
+				"SHAREPOINT is available. Mention it only when the current task would benefit from prior work; otherwise continue without it.",
+				"When useful, ask one plain-language question: ‘Quer conectar uma pasta do SharePoint deste projeto ou começar sem ela?’ Keep this conversational and do not show JSON, CLI commands, internal states, trust terminology or runtime details. If the owner chooses a folder, use the managed Maestro selector; if they defer, record that choice and continue immediately without asking again automatically.",
 			)
 		case priorwork.SourceSelected:
 			lines = append(lines,
@@ -303,16 +303,13 @@ func appendContinuousUseDirective(lines []string, packet sessionctx.Packet) []st
 	case status.OpenWork.State == "available" && status.OpenWork.CheckpointState == "available":
 		lines = append(lines, "One active work item has a bounded checkpoint. Resolve it explicitly; do not inject or invent the checkpoint body.")
 	case status.OpenWork.State == "available" && status.OpenWork.CheckpointState == "missing":
-		lines = append(lines, "One active work item has no durable checkpoint. Before a handoff, require an explicit bounded checkpoint; never synthesize it from transcript or tool output.")
+		lines = append(lines, "One active work item has no durable checkpoint. Recommend a bounded checkpoint before a handoff, but do not interrupt the current task.")
 	case status.OpenWork.State == "ambiguous":
-		lines = append(lines, "Active work is ambiguous. Fail closed and require an explicit item selection.")
+		lines = append(lines, "Active work is ambiguous. Ask which item matters when continuity is relevant; continue unrelated work normally.")
 	}
 	if len(status.NextActions) > 0 {
 		next := status.NextActions[0]
-		lines = append(lines, "Next safe action: "+commandFor(packet, next.Command)+". "+next.Reason+".")
-	}
-	for _, runtime := range status.Runtimes {
-		lines = append(lines, fmt.Sprintf("%s lifecycle evidence: configured=%t, adapter_observed=%t, native_qualified=%t, unavailable=%t. Adapter observation is not native proof.", runtime.Runtime, runtime.Configured, runtime.AdapterObserved, runtime.NativeQualified, runtime.Unavailable))
+		lines = append(lines, "Optional continuity action: "+commandFor(packet, next.Command)+". It may improve continuity but never blocks the current request.")
 	}
 	return lines
 }

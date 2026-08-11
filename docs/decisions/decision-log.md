@@ -963,6 +963,17 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Refs: PONB; specs/020-release-distribution.md; docs/installer-package.md; dev/skills/release-export/SKILL.md; internal/dev/releasepack/windows_portable.go
 - Supersedes: PONB
 
+## AGEN - Put probabilistic agency over a minimal deterministic kernel
+
+- Date: 2026-08-10
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro's deterministic workflow, readiness, telemetry and receipt contracts accumulated into admission gates. A locally usable installation could be withheld from the owner because optional evidence, onboarding, scheduler state or a pre-enumerated agent route was incomplete. This prevented Canary use and therefore also prevented the observations needed to improve the product.
+- Decision: The default Maestro runtime is probabilistic and advisory. Maestro and registered agents choose how to reason, plan and compose bounded consultations through the host runtime. Agent contracts define purpose, scope, data/tool/effect authority, expected return and accountability; they do not prescribe every intermediate step. BCGOS keeps a minimal deterministic kernel for release integrity, workspace/path isolation, credential and access boundaries, and concrete irreversible or external effects. Onboarding, setup grants, adapter verification, native qualification, scheduler state, telemetry, breadcrumbs, receipts, Walter routing and deterministic depth profiles advise, diagnose and support replay but never block otherwise safe attended work. Deterministic routes and signed completion contracts remain opt-in strict/shadow assurance for unattended or specially governed runs.
+- Consequences: A verified core plus initialized workspace is ready for handoff even when optional runtime wiring is degraded. Missing evidence reduces observability rather than validity. Session hooks continue the requested task while offering onboarding and repair. Maestro can adapt depth and consultation to intent instead of satisfying a closed flag grammar. Route variance increases, so quality is managed through narrow authority envelopes, bounded context, outcome evidence and later analysis rather than pre-authorizing every thought. The existing deterministic controller remains available for tests, replay and strict runs but is no longer the default admission authority.
+- Refs: COFS; LIVA; specs/018-maestro-core-agents.md; specs/023-sequential-agent-dispatch.md; specs/033-deterministic-agent-activation.md; internal/cli; internal/sessionhook; cmd/maestro-installer
+- Supersedes: MAST
+
 ## ONCX - Make first-use continuity an installed onboarding method
 
 - Date: 2026-08-10

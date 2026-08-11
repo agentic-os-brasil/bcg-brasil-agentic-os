@@ -74,10 +74,10 @@ can inspect.
 For the full user journey, read the [Maestro user onboarding](docs/onboarding/maestro-user-onboarding.md).
 For the business-facing evolution path, read the [product evolution roadmap](docs/roadmap/maestro-evolution-roadmap.md).
 
-### Maestro's bounded routing topology
+### Maestro's adaptive orchestration
 
-Maestro is the only user-facing hub. Its typed planner makes two independent
-decisions before a Case runs: whether the work needs a Client Account's
+Maestro is the primary user-facing hub. It makes two useful, independent
+judgments around a Case: whether the work benefits from a Client Account's
 strategic/stakeholder lens, and whether the resulting work is high-leverage
 enough for Walter's calm Senior Advisor & Refiner review. The first decision is
 based on client strategy, relationship, stakeholder pressure-testing, client
@@ -85,16 +85,14 @@ narrative, cross-case context or promotion signals—not technical size. The
 second is based on consequence, leverage, reversibility, external exposure and
 reputational risk.
 
-The deterministic core models one active spoke at a time, depth one and zero
-children. An account-assisted Case uses `Maestro → Client Account → Maestro →
-Case → Maestro → Client Account validation → Maestro`; a direct
-execution-only Case omits only the pre-brief and converges at `Maestro`. Both
-paths record whether Walter is required, skipped for low leverage or still
-pending native evidence before delivery. Claude and Codex share the same controller and
-durable installation-state contract; capability reporting distinguishes
-configured, local contract-tested, adapter-observed and native-qualified
-evidence. A native runtime must be qualified before this contract is described
-as active execution.
+An account-assisted Case normally uses `Maestro → Client Account → Case →
+Client Account validation → Maestro`; a simple execution may go directly to
+Case. These are recipes, not rails. Maestro and registered agents can adapt the
+route, consult one another and use runtime-native delegation while keeping
+scope and authority narrow. Contracts govern what context and effects a call
+may carry; they do not pre-script reasoning. Telemetry, receipts and native
+qualification describe what was observed and never hold an otherwise usable
+local runtime hostage.
 
 Walter's review packet is an ephemeral, digest-bound `IntentReviewPacket`: it
 contains the literal request, selected route, bounded draft/context, audience,
@@ -139,8 +137,8 @@ for a genuinely absent, disabled or failed capability.
 | ✅ Guided runtime projection | `bcgos adapter install` installs hooks, a concise but complete `CLAUDE.md`/`AGENTS.md`, and the real base skills with idempotent, conflict-safe ownership. |
 | ✅ Professional context | A canonical SELF index, eight professional facets, one-question expansion, agent identity drafts, skills index, human atlas and bounded session pointers stay inspectable and local. The quick onboarding track establishes role, communication, quality bar and boundaries; the complete track covers all eight facets. |
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
-| ✅ Governed completion | High-stakes work can require a separately authenticated Walter review before completion. |
-| ✅ Bounded delegation contract | The deterministic core can dispatch a narrow packet to the right agent; native runtime evidence is tracked separately from the enabled contract. |
+| ✅ Senior-advisor refinement | Maestro can ask Walter to pressure-test high-leverage work as a calm proxy for the owner's intent; ordinary work does not wait on a review receipt. |
+| ✅ Adaptive delegation contract | Runtime-native agents may plan and consult one another using bounded purpose, context and effect envelopes; receipts and deterministic routes remain optional assurance. |
 | ✅ Professional capability bundles | The base bundle serves professional work; a confirmed technical selection activates the unified Tech Core bundle with engineering, data and quality skills. |
 | ✅ Canary contract | The local store can aggregate typed outcomes, capability failures, interventions and receipt metadata — native telemetry remains unavailable and no work content is exported. |
 | ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |

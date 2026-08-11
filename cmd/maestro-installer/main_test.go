@@ -282,7 +282,7 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 	}
 }
 
-func TestWizardLeavesRuntimeConfigurationPendingWhenAuthorizationFails(t *testing.T) {
+func TestWizardKeepsWorkspaceReadyWhenAuthorizationFails(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "data")
 	workspacePath := filepath.Join(root, "Developer", "maestro-os")
@@ -305,12 +305,54 @@ func TestWizardLeavesRuntimeConfigurationPendingWhenAuthorizationFails(t *testin
 	request.Header.Set("X-Maestro-Session", "test-token")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), `"setup_state":"authorization_pending"`) || configured {
-		t.Fatalf("authorization failure was not recoverable and pre-runtime: status=%d configured=%v body=%s", recorder.Code, configured, recorder.Body.String())
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"ready_for_runtime":true`) ||
+		!strings.Contains(recorder.Body.String(), `"setup_state":"ready_with_warnings"`) || !strings.Contains(recorder.Body.String(), "approval service unavailable") || !configured {
+		t.Fatalf("authorization failure blocked the usable workspace: status=%d configured=%v body=%s", recorder.Code, configured, recorder.Body.String())
 	}
 	inspection, err := workspace.Inspect(workspacePath, dataRoot)
 	if err != nil || inspection.WorkspaceID == "" {
 		t.Fatalf("bootstrap state should remain inspectable for retry: %#v err=%v", inspection, err)
+	}
+}
+
+func TestWizardKeepsWorkspaceReadyWhenRuntimeConfigurationAndReceiptFail(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	handler := wizardHandler(options{
+		dataRoot:     dataRoot,
+		sessionToken: "test-token",
+		workspacePath: func() (string, error) {
+			return workspacePath, nil
+		},
+		authorizeSetup: func(options, string) (workspaceSetupAuthorization, error) {
+			return workspaceSetupAuthorization{State: "active", GrantDigest: strings.Repeat("a", 64)}, nil
+		},
+		configureWorkspace: func(options, string) (workspaceActivation, error) {
+			return workspaceActivation{}, errors.New("adapter verify unavailable")
+		},
+		newReceiptID: func() (string, error) {
+			return "", errors.New("entropy unavailable")
+		},
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/create-workspace", strings.NewReader(`{"import_existing":false,"authorize_setup":true}`))
+	request.Header.Set("X-Maestro-Session", "test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"ready_for_runtime":true`) ||
+		!strings.Contains(recorder.Body.String(), `"receipt_state":"pending"`) ||
+		!strings.Contains(recorder.Body.String(), "adapter verify unavailable") || !strings.Contains(recorder.Body.String(), "entropy unavailable") {
+		t.Fatalf("advisory setup failures blocked handoff: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response struct {
+		Handoff  workspaceHandoff `json:"handoff"`
+		Warnings []string         `json:"warnings"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Handoff.WorkspacePath != workspacePath || response.Handoff.Prompt == "" || len(response.Warnings) != 2 || len(response.Handoff.Diagnostics) < 2 {
+		t.Fatalf("handoff = %#v warnings=%#v", response.Handoff, response.Warnings)
 	}
 }
 
@@ -351,6 +393,73 @@ func TestWizardDefersSourceSelectionUntilWorkspaceBootstrapCompletes(t *testing.
 	}
 	if _, err := os.Stat(filepath.Join(workspacePath, ".bcgos", "import-intake.json")); err != nil {
 		t.Fatalf("post-bootstrap source pointer missing: %v", err)
+	}
+}
+
+func TestWizardKeepsWorkspaceReadyWhenSourceSelectionFails(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	handler := wizardHandler(options{
+		dataRoot:     dataRoot,
+		sessionToken: "test-token",
+		workspacePath: func() (string, error) {
+			return workspacePath, nil
+		},
+		chooseImportSource: func() (string, error) {
+			return "", errors.New("chooser unavailable")
+		},
+		configureWorkspace: func(options, string) (workspaceActivation, error) {
+			return workspaceActivation{State: "ready"}, nil
+		},
+		authorizeSetup: func(options, string) (workspaceSetupAuthorization, error) {
+			return workspaceSetupAuthorization{State: "active", GrantDigest: strings.Repeat("b", 64)}, nil
+		},
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/create-workspace", strings.NewReader(`{"import_existing":true,"authorize_setup":true}`))
+	request.Header.Set("X-Maestro-Session", "test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"ready_for_runtime":true`) ||
+		!strings.Contains(recorder.Body.String(), `"source_registered":false`) || !strings.Contains(recorder.Body.String(), "chooser unavailable") {
+		t.Fatalf("source chooser failure blocked handoff: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestWizardKeepsWorkspaceReadyWhenImportIntentWriteFails(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	sourcePath := filepath.Join(root, "prior-material")
+	if err := os.MkdirAll(sourcePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	handler := wizardHandler(options{
+		dataRoot:     dataRoot,
+		sessionToken: "test-token",
+		workspacePath: func() (string, error) {
+			return workspacePath, nil
+		},
+		chooseImportSource: func() (string, error) {
+			if err := os.MkdirAll(filepath.Join(workspacePath, ".bcgos", "import-intake.json"), 0o700); err != nil {
+				return "", err
+			}
+			return sourcePath, nil
+		},
+		configureWorkspace: func(options, string) (workspaceActivation, error) {
+			return workspaceActivation{State: "ready"}, nil
+		},
+		authorizeSetup: func(options, string) (workspaceSetupAuthorization, error) {
+			return workspaceSetupAuthorization{State: "active", GrantDigest: strings.Repeat("b", 64)}, nil
+		},
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/create-workspace", strings.NewReader(`{"import_existing":true,"authorize_setup":true}`))
+	request.Header.Set("X-Maestro-Session", "test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"ready_for_runtime":true`) ||
+		!strings.Contains(recorder.Body.String(), `"source_registered":false`) || !strings.Contains(recorder.Body.String(), "intenção de ingestão") {
+		t.Fatalf("import intent failure blocked handoff: status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -398,7 +507,7 @@ func TestConfigureWorkspaceRuntimeRunsIdempotentReadinessAndNativeMaintenance(t 
 		if err != nil {
 			t.Fatal(err)
 		}
-		if activation.State != "ready" || activation.Lifecycle.State != "configured" || activation.Lifecycle.StartSession != "configured" || activation.Lifecycle.HookReview != "owner_review_required" || activation.Lifecycle.NativeObserved != "unavailable_pending_first_session" {
+		if activation.State != "ready" || activation.Lifecycle.State != "configured" || activation.Lifecycle.StartSession != "configured" || activation.Lifecycle.HookReview != "owner_review_required" || activation.Lifecycle.NativeObserved != "pending_first_session" {
 			t.Fatalf("lifecycle activation = %#v", activation)
 		}
 		if activation.Maintenance.State != "active_loaded_enabled" || !activation.Maintenance.NativeObserved || activation.Maintenance.ModelBacked != "unavailable" {
@@ -424,6 +533,47 @@ func TestConfigureWorkspaceRuntimeRunsIdempotentReadinessAndNativeMaintenance(t 
 	}
 }
 
+func TestConfigureWorkspaceRuntimeReportsAdapterVerifyFailureAndContinuesMaintenance(t *testing.T) {
+	root := t.TempDir()
+	managedRoot := filepath.Join(root, "managed")
+	dataRoot := filepath.Join(root, "data")
+	workspacePath := filepath.Join(root, "Developer", "maestro-os")
+	cliPath := filepath.Join(managedRoot, "bin", "bcgos")
+	if err := os.MkdirAll(filepath.Dir(cliPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cliPath, []byte("test"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	initialized, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: dataRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := 0
+	runner := commandRunnerFunc(func(_ context.Context, _ string, arguments []string) ([]byte, error) {
+		call++
+		switch call {
+		case 1:
+			return []byte(`{"state":"initialized"}`), nil
+		case 2, 4:
+			return []byte(`{"runtime":"claude","state":"installed","projection":{"state":"installed"}}`), nil
+		case 3:
+			return []byte(`{"workspace":{"state":"ready","workspace_id":"` + initialized.WorkspaceID + `","workspace_path":"` + workspacePath + `"}}`), nil
+		case 5:
+			return []byte("verify diagnostic"), errors.New("verify unavailable")
+		case 6:
+			return []byte(`{"state":"enrolled","enrollment":{"workspace_id":"` + initialized.WorkspaceID + `"},"launch_agent":{"state":"active_loaded_enabled","file_present":true,"loaded":true,"enabled":true,"native_qualified":true}}`), nil
+		default:
+			return nil, errors.New("unexpected call: " + strings.Join(arguments, " "))
+		}
+	})
+	activation, err := configureWorkspaceRuntimeForPlatform(options{managedRoot: managedRoot, commandRunner: runner}, workspacePath, "darwin")
+	if err != nil || activation.State != "ready" || activation.Lifecycle.State != "configured" || activation.Maintenance.State != "active_loaded_enabled" ||
+		!strings.Contains(strings.Join(activation.Diagnostics, " "), "verify diagnostic") {
+		t.Fatalf("activation = %#v, error = %v", activation, err)
+	}
+}
+
 func TestPrimaryRuntimeDefaultsToClaudeAndAllowsExplicitCodex(t *testing.T) {
 	for _, test := range []struct {
 		name  string
@@ -444,7 +594,7 @@ func TestPrimaryRuntimeDefaultsToClaudeAndAllowsExplicitCodex(t *testing.T) {
 	}
 }
 
-func TestConfigureWorkspaceRuntimeDoesNotDeclareReadyWhenLaunchdIsNotNative(t *testing.T) {
+func TestConfigureWorkspaceRuntimeReportsLaunchdDegradationWithoutBlocking(t *testing.T) {
 	root := t.TempDir()
 	managedRoot := filepath.Join(root, "managed")
 	dataRoot := filepath.Join(root, "data")
@@ -481,9 +631,10 @@ func TestConfigureWorkspaceRuntimeDoesNotDeclareReadyWhenLaunchdIsNotNative(t *t
 		}
 	})
 
-	_, err = configureWorkspaceRuntime(options{managedRoot: managedRoot, commandRunner: runner}, workspacePath)
-	if err == nil || !strings.Contains(err.Error(), "launchd não ficou ativo") || !strings.Contains(err.Error(), "maintenance canary install-macos") || !strings.Contains(err.Error(), "--launchctl") {
-		t.Fatalf("error = %v", err)
+	activation, err := configureWorkspaceRuntime(options{managedRoot: managedRoot, commandRunner: runner}, workspacePath)
+	if err != nil || activation.State != "ready" || len(activation.Diagnostics) == 0 ||
+		!strings.Contains(strings.Join(activation.Diagnostics, " "), "launchd ainda não ficou ativo") {
+		t.Fatalf("activation = %#v, error = %v", activation, err)
 	}
 }
 
@@ -523,12 +674,13 @@ func TestConfigureWorkspaceRuntimeCanarySimpleActivatesBeforeNativeQualification
 	})
 
 	activation, err := configureWorkspaceRuntimeForPlatform(options{
-		managedRoot: managedRoot, commandRunner: runner, allowUnqualifiedNative: true,
+		managedRoot: managedRoot, commandRunner: runner,
 	}, workspacePath, "darwin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if activation.State != "ready" || !activation.Maintenance.NativeObserved || activation.Maintenance.NativeQualified {
+	if activation.State != "ready" || !activation.Maintenance.NativeObserved || activation.Maintenance.NativeQualified ||
+		!strings.Contains(strings.Join(activation.Diagnostics, " "), "observação nativa") {
 		t.Fatalf("activation = %#v", activation)
 	}
 }
@@ -573,7 +725,7 @@ func TestConfigureWorkspaceRuntimeOnWindowsCompletesWithoutMacOSMaintenance(t *t
 		t.Fatalf("calls = %#v; Windows must stop after adapter verification", calls)
 	}
 	if activation.State != "ready" || activation.Lifecycle.State != "configured" ||
-		activation.Maintenance.State != "unavailable_windows_native_qualification_pending" ||
+		activation.Maintenance.State != "runtime_scheduler_optional" ||
 		activation.Maintenance.NativeObserved || activation.Maintenance.Schedule != "not_configured" {
 		t.Fatalf("Windows activation = %#v", activation)
 	}
