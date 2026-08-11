@@ -147,7 +147,7 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "bundles":
 		return runBundles(args[1:], out, errOut)
 	case "memory":
-		return runMemory(args[1:], in, out, errOut)
+		return runMemoryWithDataRoot(args[1:], in, out, errOut, defaultDataRoot)
 	case "maintenance":
 		return runMaintenance(args[1:], out, errOut)
 	case "ingest":
@@ -3920,6 +3920,10 @@ func defaultDataRoot() (string, error) {
 }
 
 func runMemory(args []string, in io.Reader, out, errOut io.Writer) int {
+	return runMemoryWithDataRoot(args, in, out, errOut, defaultDataRoot)
+}
+
+func runMemoryWithDataRoot(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
 		fmt.Fprintln(errOut, "usage: bcgos memory <capture|status|context|dream>")
 		return ExitUsage
@@ -3929,20 +3933,20 @@ func runMemory(args []string, in io.Reader, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "usage: bcgos memory <capture|status|context|dream>")
 		return ExitOK
 	case "capture":
-		return runCapture(args[1:], in, out, errOut)
+		return runCapture(args[1:], in, out, errOut, dataRoot)
 	case "status":
-		return runStatus(args[1:], out, errOut)
+		return runStatus(args[1:], out, errOut, dataRoot)
 	case "context":
-		return runContext(args[1:], out, errOut)
+		return runContext(args[1:], out, errOut, dataRoot)
 	case "dream":
-		return runDream(args[1:], out, errOut)
+		return runDream(args[1:], out, errOut, dataRoot)
 	default:
 		fmt.Fprintf(errOut, "unknown memory command %q\n", args[0])
 		return ExitUsage
 	}
 }
 
-func runCapture(args []string, in io.Reader, out, errOut io.Writer) int {
+func runCapture(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	flags := newFlagSet("memory capture", errOut)
 	dataDir := flags.String("data-dir", "", "local BCGOS data directory")
 	workspace := flags.String("workspace", "", "workspace identity")
@@ -3955,9 +3959,12 @@ func runCapture(args []string, in io.Reader, out, errOut io.Writer) int {
 	if rejectPositionals(flags, errOut) {
 		return ExitUsage
 	}
-	if missing := required(map[string]string{"--data-dir": *dataDir, "--workspace": *workspace, "--kind": *kind}); missing != "" {
+	if missing := required(map[string]string{"--workspace": *workspace, "--kind": *kind}); missing != "" {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
+	}
+	if code := resolveMemoryDataDir(dataDir, dataRoot, errOut); code != ExitOK {
+		return code
 	}
 	if !*sanitized {
 		fmt.Fprintln(errOut, "--sanitized is required; raw input must not be persisted")
@@ -3992,7 +3999,7 @@ func runCapture(args []string, in io.Reader, out, errOut io.Writer) int {
 	return writeJSON(out, map[string]any{"workspace_id": *workspace, "state": "captured", "path": path}, errOut)
 }
 
-func runStatus(args []string, out, errOut io.Writer) int {
+func runStatus(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	flags := newFlagSet("memory status", errOut)
 	dataDir := flags.String("data-dir", "", "local BCGOS data directory")
 	workspace := flags.String("workspace", "", "workspace identity")
@@ -4002,9 +4009,12 @@ func runStatus(args []string, out, errOut io.Writer) int {
 	if rejectPositionals(flags, errOut) {
 		return ExitUsage
 	}
-	if missing := required(map[string]string{"--data-dir": *dataDir, "--workspace": *workspace}); missing != "" {
+	if missing := required(map[string]string{"--workspace": *workspace}); missing != "" {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
+	}
+	if code := resolveMemoryDataDir(dataDir, dataRoot, errOut); code != ExitOK {
+		return code
 	}
 	engine := memory.Engine{Root: filepath.Join(*dataDir, "memory")}
 	report, err := engine.Status(*workspace)
@@ -4017,7 +4027,7 @@ func runStatus(args []string, out, errOut io.Writer) int {
 	}{StatusReport: report, Dreaming: "daily_light_and_weekly_deep_available"}, errOut)
 }
 
-func runContext(args []string, out, errOut io.Writer) int {
+func runContext(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	flags := newFlagSet("memory context", errOut)
 	dataDir := flags.String("data-dir", "", "local BCGOS data directory")
 	workspace := flags.String("workspace", "", "workspace identity")
@@ -4031,9 +4041,12 @@ func runContext(args []string, out, errOut io.Writer) int {
 	if rejectPositionals(flags, errOut) {
 		return ExitUsage
 	}
-	if missing := required(map[string]string{"--data-dir": *dataDir, "--workspace": *workspace}); missing != "" {
+	if missing := required(map[string]string{"--workspace": *workspace}); missing != "" {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
+	}
+	if code := resolveMemoryDataDir(dataDir, dataRoot, errOut); code != ExitOK {
+		return code
 	}
 	budgets := map[string]int{"L1": *l1, "L2": *l2, "L3": *l3, "lifetime": *lifetime}
 	for layer, budget := range budgets {
@@ -4054,9 +4067,9 @@ func runContext(args []string, out, errOut io.Writer) int {
 	return writeJSON(out, bundle, errOut)
 }
 
-func runDream(args []string, out, errOut io.Writer) int {
+func runDream(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 || (args[0] != "daily" && args[0] != "weekly") {
-		fmt.Fprintln(errOut, "usage: bcgos memory dream <daily|weekly> --data-dir PATH --workspace ID")
+		fmt.Fprintln(errOut, "usage: bcgos memory dream <daily|weekly> --workspace ID [--data-dir PATH]")
 		return ExitUsage
 	}
 	cycle := args[0]
@@ -4069,9 +4082,12 @@ func runDream(args []string, out, errOut io.Writer) int {
 	if rejectPositionals(flags, errOut) {
 		return ExitUsage
 	}
-	if missing := required(map[string]string{"--data-dir": *dataDir, "--workspace": *workspace}); missing != "" {
+	if missing := required(map[string]string{"--workspace": *workspace}); missing != "" {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
+	}
+	if code := resolveMemoryDataDir(dataDir, dataRoot, errOut); code != ExitOK {
+		return code
 	}
 	policy, err := basememory.Policy()
 	if err != nil {
@@ -4108,6 +4124,18 @@ func configuredMemoryEngine(root string, policy memory.Policy, config basememory
 		Synthesizer: memory.DeterministicWeeklySynthesizer{Daily: daily, MaxRunes: config.ContextBudgets(), MaxInputBytes: config.L1MaxInputBytes}, SynthesizerID: memory.DeterministicWeeklySynthesizerID,
 		Eligibility: memory.DeterministicLifetimeEligibility{MinL3Generations: 2}, EligibilityPolicyID: "deterministic-l3-continuity-v1",
 	}
+}
+
+func resolveMemoryDataDir(value *string, dataRoot func() (string, error), errOut io.Writer) int {
+	if strings.TrimSpace(*value) != "" {
+		return ExitOK
+	}
+	resolved, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, fmt.Errorf("resolve installed BCGOS data root: %w", err))
+	}
+	*value = resolved
+	return ExitOK
 }
 
 func newFlagSet(name string, errOut io.Writer) *flag.FlagSet {

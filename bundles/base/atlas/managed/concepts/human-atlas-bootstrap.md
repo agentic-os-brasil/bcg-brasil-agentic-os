@@ -15,7 +15,7 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/human-atlas-bootstrap
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: c971241aee185459ed2cba432c26ec1b7e8c56198c24e52e7750ca435ca79858
+x-bcgos-source-fingerprint: 86cf0108b2fb5cc853951aaf3cb4669b1b0d9097a3b0b5ab9929221cc458e94b
 x-bcgos-freshness: fresh
 x-bcgos-status: active
 x-bcgos-generator-version: bcgos-managed-wiki/0.2
@@ -63,6 +63,7 @@ private roots:
   projects/index.md
   people/index.md
   daily/index.md
+  daily/YYYY-MM-DD.md
 ```
 
 The owner root is private user data. The workspace root is scoped to its
@@ -88,6 +89,11 @@ workspace atlas:
 - `daily/template-daily.md` keeps a human work log and explicitly states that
   selected daily signals may join Claude/Codex session signals in L1 only after
   approved sanitization and provenance capture.
+
+Initialization also creates the current local day's page from the daily
+template. The page is an immediately usable human work log, remains editable,
+and is never overwritten on a later initialization. Its existence is not a
+memory capture, receipt or proof that a scheduled routine has executed.
 
 These templates are canonical bootstrap assets, not examples copied from a
 contributor's private brain. A user may edit them after creation; repeated

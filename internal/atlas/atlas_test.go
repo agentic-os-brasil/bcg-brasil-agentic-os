@@ -3,11 +3,60 @@ package atlas
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
+
+func TestInitializeRejectsSymlinkedAtlasBoundaries(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires privileges on some Windows runners")
+	}
+	for _, scenario := range []string{"owner", "daily"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := t.TempDir()
+			dataRoot := filepath.Join(root, "local", "BCGOS")
+			workspacePath := filepath.Join(root, "Developer", "case-a")
+			registered, err := workspace.Initialize(workspace.Options{DataRoot: dataRoot, WorkspacePath: workspacePath})
+			if err != nil {
+				t.Fatal(err)
+			}
+			external := filepath.Join(root, "external")
+			if err := os.MkdirAll(external, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			var boundary string
+			switch scenario {
+			case "owner":
+				boundary = filepath.Join(dataRoot, "atlas", "owner")
+				if err := os.MkdirAll(filepath.Dir(boundary), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			case "daily":
+				boundary = filepath.Join(workspacePath, "brain", "daily")
+				if err := os.RemoveAll(boundary); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Symlink(external, boundary); err != nil {
+				t.Fatal(err)
+			}
+			_, err = Initialize(Options{DataRoot: dataRoot, WorkspacePath: workspacePath, WorkspaceID: registered.WorkspaceID, Now: func() time.Time {
+				return time.Date(2026, 8, 11, 8, 0, 0, 0, time.UTC)
+			}})
+			if err == nil {
+				t.Fatal("atlas bootstrap followed a symlinked boundary")
+			}
+			entries, readErr := os.ReadDir(external)
+			if readErr != nil || len(entries) != 0 {
+				t.Fatalf("external target was modified: entries=%v err=%v", entries, readErr)
+			}
+		})
+	}
+}
 
 func TestInitializeCreatesSeparateOwnerAndWorkspaceHumanAtlasWithVisibleTaskStub(t *testing.T) {
 	root := t.TempDir()
@@ -17,7 +66,8 @@ func TestInitializeCreatesSeparateOwnerAndWorkspaceHumanAtlasWithVisibleTaskStub
 	if err != nil {
 		t.Fatal(err)
 	}
-	status, err := Initialize(Options{DataRoot: dataRoot, WorkspacePath: workspacePath, WorkspaceID: registered.WorkspaceID})
+	now := time.Date(2026, 8, 11, 8, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
+	status, err := Initialize(Options{DataRoot: dataRoot, WorkspacePath: workspacePath, WorkspaceID: registered.WorkspaceID, Now: func() time.Time { return now }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,10 +87,15 @@ func TestInitializeCreatesSeparateOwnerAndWorkspaceHumanAtlasWithVisibleTaskStub
 		filepath.Join(workspacePath, "brain", "projects", "template-project.md"),
 		filepath.Join(workspacePath, "brain", "people", "template-person.md"),
 		filepath.Join(workspacePath, "brain", "daily", "template-daily.md"),
+		filepath.Join(workspacePath, "brain", "daily", "2026-08-11.md"),
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected %s: %v", path, err)
 		}
+	}
+	daily, err := os.ReadFile(filepath.Join(workspacePath, "brain", "daily", "2026-08-11.md"))
+	if err != nil || !strings.Contains(string(daily), "# Daily — 2026-08-11") || !strings.Contains(string(daily), "## Carry forward") {
+		t.Fatalf("initial daily log = %q, err = %v", daily, err)
 	}
 	projectTemplate, err := os.ReadFile(filepath.Join(workspacePath, "brain", "projects", "template-project.md"))
 	if err != nil || !strings.Contains(string(projectTemplate), "## Current truth") || !strings.Contains(string(projectTemplate), "## Decisions") {
