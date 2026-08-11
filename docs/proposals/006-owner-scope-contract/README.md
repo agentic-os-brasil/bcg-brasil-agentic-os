@@ -1,7 +1,7 @@
 # Proposal 006 — Owner atlas scope contract
 
-**Status:** request for decision. Defines the owner-atlas boundary; activates no
-runtime capability.
+**Status:** accepted architecture; implementation pending. Defines the
+owner-atlas boundary and activates no runtime capability by itself.
 
 **Original contribution:** Marcelo Petrof Sanches. Refined against the current
 advisory-runtime and owner-sovereignty contracts.

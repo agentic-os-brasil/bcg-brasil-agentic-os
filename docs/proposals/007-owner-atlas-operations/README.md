@@ -1,7 +1,8 @@
 # Proposal 007 — Owner atlas operations
 
-**Status:** request for decision. Specifies the preferred transactional
-operation set; ships no segment, skill or runtime capability.
+**Status:** accepted architecture; implementation pending. Specifies the
+preferred transactional operation set and ships no segment, skill or runtime
+capability by itself.
 
 **Original contribution:** Marcelo Petrof Sanches. Refined against the current
 advisory-runtime and owner-sovereignty contracts.
