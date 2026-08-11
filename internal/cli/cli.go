@@ -2649,20 +2649,11 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 	}
 	profileState, err := resolveProfile(root, "", false)
 	if err != nil {
-		return reportError(errOut, err)
+		profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
 	}
-	owner, err := ownerctx.Inspect(root)
-	if err != nil {
-		return reportError(errOut, err)
-	}
-	sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
-	}
-	continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
-	}
+	owner, _ := ownerctx.Inspect(root)
+	sharePointSource, _ := priorWorkSourceStatus(root, inspection.WorkspaceID)
+	continuous, activeExecution, _ := buildContinuousUseStatus(root, inspection, owner)
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 		Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
@@ -2934,20 +2925,11 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	state, _ := resolveHookOrchestrationState(inspection, *orchestrationState)
 	profileState, err := resolveProfile(root, "", false)
 	if err != nil {
-		return reportError(errOut, err)
+		profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
 	}
-	owner, err := ownerctx.Inspect(root)
-	if err != nil {
-		return reportError(errOut, err)
-	}
-	sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
-	}
-	continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
-	}
+	owner, _ := ownerctx.Inspect(root)
+	sharePointSource, _ := priorWorkSourceStatus(root, inspection.WorkspaceID)
+	continuous, activeExecution, _ := buildContinuousUseStatus(root, inspection, owner)
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 		Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),

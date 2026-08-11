@@ -594,6 +594,10 @@ func TestInstalledSessionHooksDegradeWhenOptionalContextIsCorrupt(t *testing.T) 
 			}
 		})
 	}
+	output.Reset()
+	if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("corrupt optional state blocked installed Codex SessionStart binding: exit=%d output=%s", code, output.String())
+	}
 }
 
 func TestInstalledGuardDoesNotCoupleReadOnlyBCGOSDiagnosticsToWorkspaceState(t *testing.T) {
