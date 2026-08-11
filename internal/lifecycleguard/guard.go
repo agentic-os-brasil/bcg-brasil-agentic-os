@@ -12,6 +12,26 @@ import (
 // ProtectedRootRemoval evaluates the deliberately small command grammar used
 // by both Claude and Codex adapters. It never executes or expands a command.
 func ProtectedRootRemoval(command string) (bool, error) {
+	segments, chained, err := splitAndThen(command)
+	if err != nil {
+		return false, err
+	}
+	if chained {
+		for _, segment := range segments {
+			destructive, segmentErr := protectedRootRemovalSimple(segment)
+			if segmentErr != nil {
+				return false, segmentErr
+			}
+			if destructive {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+	return protectedRootRemovalSimple(command)
+}
+
+func protectedRootRemovalSimple(command string) (bool, error) {
 	fields, err := splitSimpleCommand(command)
 	if err != nil {
 		if !looksLikeRemovalCommand(command) {
@@ -61,6 +81,58 @@ func ProtectedRootRemoval(command string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// splitAndThen recognizes only a small, quote-aware `&&` sequence. It does
+// not execute or expand shell syntax. Each segment is evaluated independently
+// by the same protected-root grammar, so a harmless trailing `echo` no longer
+// hides a safe file removal while any protected-root removal still denies the
+// complete command.
+func splitAndThen(command string) ([]string, bool, error) {
+	var segments []string
+	start := 0
+	var quote byte
+	for index := 0; index < len(command); index++ {
+		character := command[index]
+		if quote != 0 {
+			if character == quote {
+				quote = 0
+			}
+			continue
+		}
+		if character == '\'' || character == '"' {
+			quote = character
+			continue
+		}
+		if character != '&' {
+			continue
+		}
+		if index+1 >= len(command) || command[index+1] != '&' {
+			return nil, false, errors.New("command contains an unsupported shell operator")
+		}
+		segment := strings.TrimSpace(command[start:index])
+		if segment == "" {
+			return nil, false, errors.New("command contains an empty chained segment")
+		}
+		segments = append(segments, segment)
+		if len(segments) >= 4 {
+			return nil, false, errors.New("command exceeds the bounded chained-command limit")
+		}
+		index++
+		start = index + 1
+	}
+	if quote != 0 {
+		return nil, false, errors.New("command contains an unterminated quote")
+	}
+	if len(segments) == 0 {
+		return nil, false, nil
+	}
+	last := strings.TrimSpace(command[start:])
+	if last == "" {
+		return nil, false, errors.New("command contains an empty chained segment")
+	}
+	segments = append(segments, last)
+	return segments, true, nil
 }
 
 func looksLikeRemovalCommand(command string) bool {

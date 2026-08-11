@@ -99,7 +99,13 @@
     if (!value) return;
     try {
       await copyText(value);
-      document.querySelector('#launch-note').textContent = button.dataset.copyTarget === 'handoff-prompt' ? 'Prompt copiado.' : 'Caminho do workspace copiado.';
+      const messages = {
+        'handoff-prompt': 'Prompt copiado.',
+        'handoff-workspace-path': 'Caminho do workspace copiado.',
+        'handoff-data-root': 'Data root copiado.',
+        'handoff-memory-command': 'Comando de memória copiado.',
+      };
+      document.querySelector('#launch-note').textContent = messages[button.dataset.copyTarget] || 'Valor copiado.';
       button.classList.add('is-copied');
       button.setAttribute('aria-label', 'Copiado');
       window.setTimeout(() => { button.classList.remove('is-copied'); button.removeAttribute('aria-label'); }, 1800);
@@ -114,10 +120,16 @@
     const handoff = payload.handoff || {};
     const path = payload.workspace_path || handoff.workspace_path || workspacePath;
     const prompt = payload.prompt || handoff.prompt || '';
+    const dataRoot = payload.data_root || handoff.data_root || '';
+    const memoryCommand = payload.memory_status_command || handoff.memory_status_command || '';
     const pathNode = document.querySelector('#handoff-workspace-path');
     const promptNode = document.querySelector('#handoff-prompt');
+    const dataRootNode = document.querySelector('#handoff-data-root');
+    const memoryCommandNode = document.querySelector('#handoff-memory-command');
     if (pathNode) pathNode.textContent = path || 'Caminho ainda não detectado';
     if (promptNode) promptNode.value = prompt || 'Prompt ainda não disponível nesta prévia.';
+    if (dataRootNode) dataRootNode.textContent = dataRoot || 'Data root ainda não detectado';
+    if (memoryCommandNode) memoryCommandNode.textContent = memoryCommand || 'Comando de status ainda não disponível';
     const links = payload.deeplinks || handoff.deeplinks || {};
     const paths = payload.runtime_paths || handoff.runtime_paths || {};
     const availability = payload.runtime_available || handoff.runtime_available || {};
@@ -145,12 +157,16 @@
         linkNode.setAttribute('aria-disabled', String(!links[id]));
       }
     });
-    const diagnostics = Array.isArray(handoff.diagnostics) ? handoff.diagnostics : [];
+    const diagnostics = [...new Set([
+      ...(Array.isArray(handoff.diagnostics) ? handoff.diagnostics : []),
+      ...(Array.isArray(payload.warnings) ? payload.warnings : []),
+    ])];
     const diagnostic = document.querySelector('#handoff-diagnostic');
     if (diagnostic) diagnostic.textContent = diagnostics.length
-      ? `Diagnóstico secundário: ${diagnostics.join(' ')}`
-      : 'Diagnóstico secundário: runtimes não detectados não bloqueiam este handoff.';
+      ? `Workspace pronto. ${diagnostics.length} ajuste${diagnostics.length === 1 ? '' : 's'} poderá${diagnostics.length === 1 ? '' : 'ão'} ser concluído${diagnostics.length === 1 ? '' : 's'} durante o uso: ${diagnostics.join(' ')}`
+      : 'Workspace pronto. O Maestro continuará refinando sua configuração durante o uso.';
     root.hidden = false;
+    return diagnostics;
   }
 
   async function start(choice) {
@@ -176,8 +192,8 @@
       await pause(180);
       progress(62, 'Instalando', 'install');
       const prepared = await prepareWorkspace();
-      renderWorkspaceHandoff(prepared);
-      progress(100, 'Tudo pronto', 'workspace');
+      const diagnostics = renderWorkspaceHandoff(prepared) || [];
+      progress(100, diagnostics.length ? 'Pronto para começar' : 'Tudo pronto', 'workspace');
       document.querySelector('#launch-note').textContent = '';
       show('complete');
     } catch (error) {

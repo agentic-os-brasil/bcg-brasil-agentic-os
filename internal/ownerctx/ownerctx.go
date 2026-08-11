@@ -56,6 +56,7 @@ type ExpansionStatus struct {
 	Stale       int    `json:"stale"`
 	NextFacet   string `json:"next_facet,omitempty"`
 	ReviewCount int    `json:"review_count"`
+	OpenDraftID string `json:"open_draft_id,omitempty"`
 }
 
 // OnboardingStatus is a deterministic projection of the consented owner

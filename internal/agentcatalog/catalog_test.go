@@ -30,6 +30,21 @@ func TestCatalogAllowsOnlyMaestroDirectSpokesAtDepthOne(t *testing.T) {
 	}
 }
 
+func TestCatalogSeparatesNativeAdvisoryConsultationFromStrictDispatch(t *testing.T) {
+	catalog := mustTestCatalog(t)
+	for _, target := range []string{"client_account_agent", "pa_expert", "quality_guardian", "reviewer"} {
+		if !catalog.AllowsNativeConsultation("case_agent", target, 2) {
+			t.Fatalf("Case cannot consult %s through the native advisory profile", target)
+		}
+		if catalog.AllowsDelegation("case_agent", target, 2) {
+			t.Fatalf("strict dispatcher unexpectedly accepted native advisory edge to %s", target)
+		}
+	}
+	if !catalog.AllowsNativeConsultation("client_account_agent", "case_agent", 2) || catalog.AllowsNativeConsultation("reviewer", "case_agent", 2) || catalog.AllowsNativeConsultation("case_agent", "governance_analyst", 2) {
+		t.Fatal("native advisory graph widened beyond its bounded role edges")
+	}
+}
+
 func TestCatalogRejectsParallelismAndRoleDrift(t *testing.T) {
 	base := mustTestCatalog(t)
 	tests := []struct {

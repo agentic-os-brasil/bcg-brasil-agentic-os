@@ -1,8 +1,12 @@
 # Spec 040 — native Maestro delegation and topology correction
 
-Maestro is the only user-facing hub and the only authority that selects a
-spoke. The runtime has one active spoke, depth one and zero agent children.
-Every transition is mediated by Maestro; an agent-to-agent call is denied.
+Maestro is the primary user-facing hub and remains accountable for the result.
+The managed catalog now separates two profiles. `native_advisory` configures
+the host runtime to let Case and Client Account request only the explicitly
+listed, depth-two consultations; no consultation adds tools, data, scope or
+effect authority. The legacy signed-packet `delegation` profile remains one
+active spoke, depth one and zero children as an optional strict/shadow backend
+for deterministic replay rather than the default reasoning recipe.
 
 Gamma Guardian is a direct longitudinal quality spoke. A `code_quality` intent
 routes `Maestro → Gamma Guardian → Maestro`; it never routes through Case and
@@ -116,8 +120,12 @@ Claude and Codex adapter command paths point to the same owner-local durable
 dispatch CAS/receipt store. The CLI boundary proof is metadata-only: it records
 an occurrence-bound ordered-chain digest and a finished local epoch, but does
 not authenticate an installed native agent or fabricate adapter credentials.
-Model execution remains unavailable until a qualified runtime supplies fresh
-native evidence. Append-only receipts and an atomic current pointer preserve
+Host-runtime consultation is configured when the managed agent definitions are
+installed; native evidence reports observation separately. The strict packet
+dispatcher remains a separate assurance path for nested calls. In the Claude
+beta, exact managed-agent and hook inspection enables native execution as
+`operational_beta`; qualification is independent telemetry rather than a
+feature gate. Append-only receipts and an atomic current pointer preserve
 history and recover safely across restart, replacement, replay and parallel
 dispatch attempts. Adapter-observed receipts are not native evidence;
 native-qualified status requires fresh runtime evidence.

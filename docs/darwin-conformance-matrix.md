@@ -12,13 +12,13 @@ flowchart LR
     Modes --> Execute["same fail-closed executor"]
     Execute --> Receipt["metadata-only receipt"]
     Receipt --> Native{"native session evidence?"}
-    Native -->|no| Unavailable["runtime capability unavailable"]
+    Native -->|no| Telemetry["qualification telemetry pending"]
     Native -->|yes| Qualified["candidate for qualification"]
 ```
 
 | Implemented contract | Local evidence | Native evidence | State |
 | --- | --- | --- | --- |
-| Stable identity and emoji | `internal/darwin/contract.go`, catalog and identity tests | Claude/Codex native agent identity receipt | implemented / native unavailable |
+| Stable identity and emoji | `internal/darwin/contract.go`, catalog and identity tests | Claude/Codex native agent identity receipt | Claude advisory operational beta; Codex pending |
 | Registered scoped grant | `internal/agentcatalog`, `internal/agentorchestration/controller_test.go` | Native adapter grant receipt | contract-tested / native unavailable |
 | No forged identity or target | shared adapter adversarial fixtures | Native event observation | contract-tested / native unavailable |
 | One branch, no Darwin delegation | shared controller and Darwin grant tests | Native lifecycle event sequence | contract-tested / native unavailable |
@@ -30,7 +30,7 @@ flowchart LR
 | Daily, weekly and monthly cadence | scheduler cadence tests and maintenance catalog | Native scheduler execution | contract-tested / native unavailable |
 | Continuous event gate | maintenance command/gate tests; signal-only fixture | Native lifecycle event observation | contract-tested / native unavailable |
 | Monthly structural evolution | proposal-only command receipt; no tool invocation | Approved human application record | proposal-only / application unavailable |
-| Claude native invocation | adapter docs and lifecycle probe | qualifying Claude session | unavailable: native observation pending |
+| Claude native invocation | managed `.claude/agents/darwin.md` plus start/stop hooks | qualifying Claude session | operational beta; qualification telemetry pending |
 | Codex native invocation | adapter docs and lifecycle probe | qualifying Codex session | unavailable: native observation pending |
 
 The attended local Canary is explicit and uses the same `darwin` identity and

@@ -1,6 +1,7 @@
 // Command maestro-installer is the visual, user-space entry point for a
 // signed release package. Release content always remains Ed25519 verified;
-// native trust is either strict or a factory-pinned Windows Canary profile.
+// native trust is either strict, an owner-directed canary-simple diagnostic
+// profile, or a factory-pinned Windows Canary profile.
 package main
 
 import (
@@ -26,7 +27,9 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
@@ -67,6 +70,7 @@ type options struct {
 	workspacePath         func() (string, error)
 	configureWorkspace    func(options, string) (workspaceActivation, error)
 	authorizeSetup        func(options, string) (workspaceSetupAuthorization, error)
+	newReceiptID          func() (string, error)
 	commandRunner         commandRunner
 	workspaceFlow         workspaceFlowBackend
 	nativeTrustMode       installer.NativeTrustMode
@@ -81,6 +85,8 @@ type runtimeTarget struct {
 type workspaceHandoff struct {
 	WorkspacePath    string            `json:"workspace_path"`
 	WorkspaceID      string            `json:"workspace_id"`
+	DataRoot         string            `json:"data_root"`
+	MemoryCommand    string            `json:"memory_status_command"`
 	Prompt           string            `json:"prompt"`
 	DeepLinks        map[string]string `json:"deeplinks"`
 	RuntimePaths     map[string]string `json:"runtime_paths"`
@@ -109,6 +115,7 @@ type workspaceActivation struct {
 	WorkspaceID string                `json:"workspace_id"`
 	Lifecycle   lifecycleActivation   `json:"lifecycle"`
 	Maintenance maintenanceActivation `json:"maintenance"`
+	Diagnostics []string              `json:"diagnostics,omitempty"`
 }
 
 type workspaceSetupAuthorization struct {
@@ -126,10 +133,11 @@ type lifecycleActivation struct {
 }
 
 type maintenanceActivation struct {
-	State          string `json:"state"`
-	Schedule       string `json:"schedule"`
-	NativeObserved bool   `json:"native_observed"`
-	ModelBacked    string `json:"model_backed"`
+	State           string `json:"state"`
+	Schedule        string `json:"schedule"`
+	NativeObserved  bool   `json:"native_observed"`
+	NativeQualified bool   `json:"native_qualified"`
+	ModelBacked     string `json:"model_backed"`
 }
 
 type wizardLifecycle struct {
@@ -892,10 +900,6 @@ func wizardHandler(options options) http.Handler {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": "não foi possível entender sua escolha de memória"})
 			return
 		}
-		if !payload.AuthorizeSetup {
-			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": "confirme uma vez que o Maestro pode preparar, diagnosticar e reparar o setup local reversível"})
-			return
-		}
 		workspacePath, err := defaultWorkspacePath(options)
 		if err != nil {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -906,18 +910,20 @@ func wizardHandler(options options) http.Handler {
 			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
 		}
-		authorize := options.authorizeSetup
-		if authorize == nil {
-			authorize = authorizeWorkspaceSetup
-		}
-		setupAuthorization, err := authorize(options, workspacePath)
-		if err != nil {
-			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{
-				"error":         fmt.Sprintf("o bootstrap local foi preparado, mas a autorização one-and-done não foi registrada: %v", err),
-				"setup_state":   "authorization_pending",
-				"retry_command": workspaceDiagnosticCommand(options, workspacePath),
-			})
-			return
+		warnings := make([]string, 0, 6)
+		setupAuthorization := workspaceSetupAuthorization{State: "pending"}
+		if !payload.AuthorizeSetup {
+			warnings = append(warnings, "A autorização para manutenção automática não foi registrada; o workspace continua disponível e poderá ser refinado depois.")
+		} else {
+			authorize := options.authorizeSetup
+			if authorize == nil {
+				authorize = authorizeWorkspaceSetup
+			}
+			setupAuthorization, err = authorize(options, workspacePath)
+			if err != nil {
+				setupAuthorization = workspaceSetupAuthorization{State: "pending"}
+				warnings = append(warnings, fmt.Sprintf("A autorização de manutenção ficou pendente e será tentada novamente pelo Maestro: %v", err))
+			}
 		}
 		configure := options.configureWorkspace
 		if configure == nil {
@@ -925,15 +931,29 @@ func wizardHandler(options options) http.Handler {
 		}
 		activation, err := configure(options, workspacePath)
 		if err != nil {
-			writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{
-				"error":               fmt.Sprintf("a autorização foi registrada, mas a configuração runtime ficou pendente: %v", err),
-				"setup_state":         "runtime_configuration_pending",
-				"retry_command":       workspaceDiagnosticCommand(options, workspacePath),
-				"setup_authorization": setupAuthorization,
-			})
-			return
+			activation = workspaceActivation{
+				State:       "ready",
+				WorkspaceID: result.WorkspaceID,
+				Lifecycle: lifecycleActivation{
+					Runtime:        strings.TrimSpace(options.primaryRuntime),
+					State:          "configuration_pending",
+					StartSession:   "configuration_pending",
+					HookReview:     "pending",
+					NativeObserved: "pending",
+				},
+				Maintenance: maintenanceActivation{State: "configuration_pending", Schedule: "not_configured", ModelBacked: "unavailable"},
+			}
+			warnings = append(warnings, fmt.Sprintf("A configuração do runtime ficou pendente; isso não impede abrir e usar o workspace: %v", err))
 		}
+		if activation.State == "" {
+			activation.State = "ready"
+		}
+		if activation.WorkspaceID == "" {
+			activation.WorkspaceID = result.WorkspaceID
+		}
+		warnings = append(warnings, activation.Diagnostics...)
 		var sourcePath string
+		sourceRegistered := false
 		if payload.ImportExisting {
 			// Source selection is deliberately post-bootstrap. Any selected
 			// material must be interpreted and ingested from the workspace that
@@ -945,44 +965,74 @@ func wizardHandler(options options) http.Handler {
 			}
 			sourcePath, err = chooser()
 			if err != nil {
-				writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("o workspace foi criado, mas não foi possível escolher a fonte de trabalho: %v", err)})
-				return
+				warnings = append(warnings, fmt.Sprintf("A fonte de trabalho não foi selecionada agora; você poderá escolhê-la depois: %v", err))
+				sourcePath = ""
 			}
-			if err := validateMemorySource(sourcePath, workspacePath); err != nil {
-				writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": err.Error()})
-				return
+			if sourcePath != "" {
+				if err := validateMemorySource(sourcePath, workspacePath); err != nil {
+					warnings = append(warnings, fmt.Sprintf("A fonte escolhida não foi registrada agora; o workspace permanece pronto: %v", err))
+					sourcePath = ""
+				}
 			}
 		}
 		if sourcePath != "" {
 			if err := writeImportIntent(workspacePath, sourcePath); err != nil {
-				writeHTTPJSONStatus(writer, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("o workspace foi criado, mas não foi possível registrar a fonte: %v", err)})
-				return
+				warnings = append(warnings, fmt.Sprintf("A intenção de ingestão não foi registrada agora; o workspace permanece pronto: %v", err))
+			} else {
+				sourceRegistered = true
 			}
 		}
-		receiptID, receiptErr := newSessionToken()
-		if receiptErr != nil {
-			writeHTTPJSONStatus(writer, http.StatusInternalServerError, map[string]any{"error": "o workspace foi criado, mas não foi possível emitir um receipt"})
-			return
+		issueReceipt := options.newReceiptID
+		if issueReceipt == nil {
+			issueReceipt = newSessionToken
 		}
-		workspaceReceipt := workspaceFlowReceipt{
-			SchemaVersion: workspaceFlowSchemaVersion, ReceiptID: receiptID, Operation: "new_workspace",
-			Status: activation.State, Valid: activation.State == "ready" && result.WorkspaceID != "", Ready: activation.State == "ready" && result.WorkspaceID != "",
-			WorkspacePath: result.WorkspacePath, SourceEffect: workspaceFlowSourcePreserved, TargetEffect: map[bool]string{true: "workspace_created_and_pointer_recorded", false: "workspace_created"}[sourcePath != ""], RollbackEffect: "available_from_workspace_receipt",
-			Stages: []workspaceFlowStage{
-				{ID: "staging", Status: "completed", Detail: "estrutura do workspace preparada no destino escolhido"},
-				{ID: "validation", Status: map[bool]string{true: "completed", false: "failed"}[activation.State == "ready"], Detail: "readiness do workspace conferido pelo installer"},
-				{ID: "rollback", Status: "available", Detail: "o workspace e a origem permanecem fora da atualização do core"},
-			},
+		receiptID, receiptErr := issueReceipt()
+		var workspaceReceipt *workspaceFlowReceipt
+		if receiptErr != nil || strings.TrimSpace(receiptID) == "" {
+			if receiptErr == nil {
+				receiptErr = errors.New("o gerador retornou um identificador vazio")
+			}
+			warnings = append(warnings, fmt.Sprintf("O receipt complementar não foi emitido agora; o workspace continua pronto: %v", receiptErr))
+		} else {
+			workspaceReceipt = &workspaceFlowReceipt{
+				SchemaVersion: workspaceFlowSchemaVersion, ReceiptID: receiptID, Operation: "new_workspace",
+				Status: "ready", Valid: result.WorkspaceID != "", Ready: result.WorkspaceID != "",
+				WorkspacePath: result.WorkspacePath, SourceEffect: workspaceFlowSourcePreserved, TargetEffect: map[bool]string{true: "workspace_created_and_pointer_recorded", false: "workspace_created"}[sourceRegistered], RollbackEffect: "available_from_workspace_receipt",
+				Stages: []workspaceFlowStage{
+					{ID: "staging", Status: "completed", Detail: "estrutura do workspace preparada no destino escolhido"},
+					{ID: "validation", Status: "completed", Detail: "identidade e estrutura do workspace conferidas pelo installer"},
+					{ID: "rollback", Status: "available", Detail: "o workspace e a origem permanecem fora da atualização do core"},
+				},
+			}
 		}
 		handoff := workspaceHandoffFor(result.WorkspacePath, result.WorkspaceID)
+		handoff.DataRoot = options.dataRoot
+		handoff.MemoryCommand = memoryStatusCommand(options, result.WorkspaceID)
+		handoff.Diagnostics = append(handoff.Diagnostics, warnings...)
+		status := "ready"
+		if len(warnings) > 0 {
+			status = "ready_with_warnings"
+		}
+		sourceState := "not_requested"
+		ingestionState := "not_requested"
+		if payload.ImportExisting {
+			sourceState = "selection_or_registration_pending"
+			ingestionState = "pending_source_registration"
+		}
+		if sourceRegistered {
+			sourceState = "pointer_recorded_pending_analysis"
+			ingestionState = "not_ingested_pointer_only"
+		}
 		writeHTTPJSON(writer, map[string]any{
-			"status": activation.State, "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID,
+			"status": status, "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID, "data_root": options.dataRoot,
 			"prompt": handoff.Prompt, "deeplinks": handoff.DeepLinks, "handoff": handoff,
-			"source_registered": sourcePath != "", "source_state": map[bool]string{true: "pointer_recorded_pending_analysis", false: "not_requested"}[sourcePath != ""],
-			"ingestion_state": map[bool]string{true: "not_ingested_pointer_only", false: "not_requested"}[sourcePath != ""],
-			"adapter_state":   activation.Lifecycle.State, "readiness_state": activation.State, "scheduler_state": activation.Maintenance.State,
-			"ready_for_runtime": activation.State == "ready", "diagnostic_command": workspaceDiagnosticCommand(options, result.WorkspacePath),
-			"activation": activation, "setup_authorization": setupAuthorization, "receipt": workspaceReceipt,
+			"memory_status_command": handoff.MemoryCommand,
+			"source_registered":     sourceRegistered, "source_state": sourceState,
+			"ingestion_state": ingestionState,
+			"adapter_state":   activation.Lifecycle.State, "readiness_state": "ready", "scheduler_state": activation.Maintenance.State,
+			"ready_for_runtime": true, "diagnostic_command": workspaceDiagnosticCommand(options, result.WorkspacePath),
+			"setup_state": status, "warnings": warnings, "activation": activation, "setup_authorization": setupAuthorization,
+			"receipt_state": map[bool]string{true: "emitted", false: "pending"}[workspaceReceipt != nil], "receipt": workspaceReceipt,
 		})
 	})
 	mux.HandleFunc("/api/launch-runtime", func(writer http.ResponseWriter, request *http.Request) {
@@ -1076,6 +1126,17 @@ func workspaceDiagnosticCommand(options options, workspacePath string) string {
 		return "& " + strconv.Quote(cliPath) + " doctor " + strconv.Quote(workspacePath)
 	}
 	return shellQuote(cliPath) + " doctor " + shellQuote(workspacePath)
+}
+
+func memoryStatusCommand(options options, workspaceID string) string {
+	cliPath := installedCLIPath(options)
+	if cliPath == "" || strings.TrimSpace(workspaceID) == "" {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		return "& " + strconv.Quote(cliPath) + " memory status --data-dir " + strconv.Quote(options.dataRoot) + " --workspace " + strconv.Quote(workspaceID)
+	}
+	return shellQuote(cliPath) + " memory status --data-dir " + shellQuote(options.dataRoot) + " --workspace " + shellQuote(workspaceID)
 }
 
 // installedCLIPath is intentionally a narrow, read-only UX hint. It never
@@ -1611,6 +1672,12 @@ func initializeDefaultWorkspace(options options, workspacePath string) (workspac
 	if _, err := agentscaffold.Scaffold(options.dataRoot, agentscaffold.WorkspaceRequest(result.WorkspaceID)); err != nil {
 		return workspace.Result{}, err
 	}
+	if err := memory.Bootstrap(filepath.Join(options.dataRoot, "memory"), result.WorkspaceID); err != nil {
+		return workspace.Result{}, fmt.Errorf("bootstrap workspace memory: %w", err)
+	}
+	if _, err := atlas.Initialize(atlas.Options{DataRoot: options.dataRoot, WorkspacePath: result.WorkspacePath, WorkspaceID: result.WorkspaceID}); err != nil {
+		return workspace.Result{}, fmt.Errorf("bootstrap daily workspace atlas: %w", err)
+	}
 	return result, nil
 }
 
@@ -1653,9 +1720,25 @@ func configureWorkspaceRuntimeForPlatform(options options, workspacePath, platfo
 	if err != nil {
 		return workspaceActivation{}, err
 	}
+	activation := workspaceActivation{
+		State: "ready",
+		Lifecycle: lifecycleActivation{
+			Runtime:        runtimeName,
+			State:          "configuration_pending",
+			Events:         []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
+			StartSession:   "configuration_pending",
+			HookReview:     "pending",
+			NativeObserved: "pending",
+		},
+		Maintenance: maintenanceActivation{State: "configuration_pending", Schedule: "not_configured", ModelBacked: "unavailable"},
+	}
+	warn := func(message string) {
+		activation.Diagnostics = append(activation.Diagnostics, message)
+	}
 	cliPath := installedCLIPath(options)
 	if cliPath == "" {
-		return workspaceActivation{}, fmt.Errorf("o executável instalado do Maestro não foi encontrado")
+		warn("O executável instalado do Maestro não foi encontrado para concluir os hooks; o workspace continua disponível.")
+		return activation, nil
 	}
 	runner := options.commandRunner
 	if runner == nil {
@@ -1666,19 +1749,21 @@ func configureWorkspaceRuntimeForPlatform(options options, workspacePath, platfo
 		defer cancel()
 		output, err := runner.Run(ctx, cliPath, arguments)
 		if err != nil {
-			return nil, commandStepError(cliPath, arguments, output, err)
+			return nil, advisoryCommandDetail(output, err)
 		}
 		return output, nil
 	}
 	if _, err := run([]string{"init", workspacePath}); err != nil {
-		return workspaceActivation{}, err
+		warn(fmt.Sprintf("A reconciliação do workspace ficou pendente: %v", err))
 	}
+	adapterInstallReady := true
 	if _, err := run([]string{"adapter", "install", "--runtime", runtimeName, "--executable", cliPath, workspacePath}); err != nil {
-		return workspaceActivation{}, err
+		adapterInstallReady = false
+		warn(fmt.Sprintf("A instalação dos hooks do %s ficou pendente e poderá ser reparada depois: %v", runtimeName, err))
 	}
 	statusOutput, err := run([]string{"status", workspacePath})
 	if err != nil {
-		return workspaceActivation{}, err
+		warn(fmt.Sprintf("O diagnóstico do workspace não respondeu agora: %v", err))
 	}
 	var status struct {
 		Workspace struct {
@@ -1687,18 +1772,25 @@ func configureWorkspaceRuntimeForPlatform(options options, workspacePath, platfo
 			WorkspacePath string `json:"workspace_path"`
 		} `json:"workspace"`
 	}
-	if err := json.Unmarshal(statusOutput, &status); err != nil {
-		return workspaceActivation{}, readinessError(cliPath, []string{"status", workspacePath}, "a resposta de readiness do workspace não é JSON válido")
+	statusReady := err == nil
+	if statusReady {
+		if decodeErr := json.Unmarshal(statusOutput, &status); decodeErr != nil {
+			statusReady = false
+			warn(readinessError(cliPath, []string{"status", workspacePath}, "a resposta de readiness do workspace não é JSON válido").Error())
+		} else if (status.Workspace.State != "ready" && status.Workspace.State != "warning") || strings.TrimSpace(status.Workspace.WorkspaceID) == "" {
+			statusReady = false
+			warn(readinessError(cliPath, []string{"status", workspacePath}, "o diagnóstico ainda não reconheceu o workspace como pronto").Error())
+		} else if status.Workspace.WorkspacePath != "" && !sameInstallerPath(status.Workspace.WorkspacePath, workspacePath) {
+			statusReady = false
+			warn(readinessError(cliPath, []string{"status", workspacePath}, "o diagnóstico retornou outro workspace e foi ignorado").Error())
+		}
 	}
-	if (status.Workspace.State != "ready" && status.Workspace.State != "warning") || strings.TrimSpace(status.Workspace.WorkspaceID) == "" {
-		return workspaceActivation{}, readinessError(cliPath, []string{"status", workspacePath}, "o workspace não ficou pronto")
-	}
-	if status.Workspace.WorkspacePath != "" && !sameInstallerPath(status.Workspace.WorkspacePath, workspacePath) {
-		return workspaceActivation{}, readinessError(cliPath, []string{"status", workspacePath}, "o readiness retornou outro workspace")
+	if statusReady {
+		activation.WorkspaceID = status.Workspace.WorkspaceID
 	}
 	adapterOutput, err := run([]string{"adapter", "status", "--runtime", runtimeName, workspacePath})
 	if err != nil {
-		return workspaceActivation{}, err
+		warn(fmt.Sprintf("O estado dos hooks do %s não pôde ser confirmado agora: %v", runtimeName, err))
 	}
 	var adapterStatus struct {
 		Runtime    string `json:"runtime"`
@@ -1707,41 +1799,42 @@ func configureWorkspaceRuntimeForPlatform(options options, workspacePath, platfo
 			State string `json:"state"`
 		} `json:"projection"`
 	}
-	if err := json.Unmarshal(adapterOutput, &adapterStatus); err != nil || adapterStatus.Runtime != runtimeName || adapterStatus.State != "installed" || adapterStatus.Projection.State != "installed" {
-		return workspaceActivation{}, readinessError(cliPath, []string{"adapter", "status", "--runtime", runtimeName, workspacePath}, "os cinco hooks e a projeção do runtime primário não ficaram configurados")
+	adapterStatusReady := err == nil
+	if adapterStatusReady {
+		if decodeErr := json.Unmarshal(adapterOutput, &adapterStatus); decodeErr != nil || adapterStatus.Runtime != runtimeName || adapterStatus.State != "installed" || adapterStatus.Projection.State != "installed" {
+			adapterStatusReady = false
+			warn(readinessError(cliPath, []string{"adapter", "status", "--runtime", runtimeName, workspacePath}, "os hooks ainda não puderam ser confirmados").Error())
+		}
 	}
 	adapterVerifyArguments := []string{"adapter", "verify", "--runtime", runtimeName, workspacePath}
 	if _, err := run(adapterVerifyArguments); err != nil {
-		return workspaceActivation{}, err
+		warn(fmt.Sprintf("A verificação complementar dos hooks ficou pendente: %v", err))
 	}
-	lifecycle := lifecycleActivation{
-		Runtime:        runtimeName,
-		State:          "configured",
-		Events:         []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
-		StartSession:   "configured",
-		HookReview:     "owner_review_required",
-		NativeObserved: "unavailable_pending_first_session",
+	if adapterInstallReady && adapterStatusReady {
+		activation.Lifecycle.State = "configured"
+		activation.Lifecycle.StartSession = "configured"
+		activation.Lifecycle.HookReview = "owner_review_required"
+		activation.Lifecycle.NativeObserved = "pending_first_session"
 	}
 	if platform == "windows" {
-		return workspaceActivation{
-			State:       "ready",
-			WorkspaceID: status.Workspace.WorkspaceID,
-			Lifecycle:   lifecycle,
-			Maintenance: maintenanceActivation{
-				State:          "unavailable_windows_native_qualification_pending",
-				Schedule:       "not_configured",
-				NativeObserved: false,
-				ModelBacked:    "unavailable",
-			},
-		}, nil
+		activation.Maintenance = maintenanceActivation{
+			State:          "runtime_scheduler_optional",
+			Schedule:       "not_configured",
+			NativeObserved: false,
+			ModelBacked:    "unavailable",
+		}
+		return activation, nil
 	}
 	if platform != "darwin" {
-		return workspaceActivation{}, fmt.Errorf("a manutenção nativa ainda não é suportada em %s", platform)
+		activation.Maintenance.State = "runtime_scheduler_optional"
+		warn(fmt.Sprintf("A manutenção nativa ainda não está configurada em %s; isso não impede usar o workspace.", platform))
+		return activation, nil
 	}
 	maintenanceArguments := []string{"maintenance", "canary", "install-macos", "--workspace-path", workspacePath, "--executable", cliPath, "--confirm", "--launchctl"}
 	maintenanceOutput, err := run(maintenanceArguments)
 	if err != nil {
-		return workspaceActivation{}, err
+		warn(fmt.Sprintf("A manutenção automática do macOS ficou pendente e poderá ser reparada depois: %v", err))
+		return activation, nil
 	}
 	var maintenanceStatus struct {
 		State      string `json:"state"`
@@ -1757,22 +1850,39 @@ func configureWorkspaceRuntimeForPlatform(options options, workspacePath, platfo
 		} `json:"launch_agent"`
 	}
 	if err := json.Unmarshal(maintenanceOutput, &maintenanceStatus); err != nil {
-		return workspaceActivation{}, readinessError(cliPath, maintenanceArguments, "a resposta da manutenção não é JSON válido")
+		warn(readinessError(cliPath, maintenanceArguments, "a resposta da manutenção não é JSON válido").Error())
+		return activation, nil
 	}
-	if maintenanceStatus.State != "enrolled" || maintenanceStatus.Enrollment.WorkspaceID != status.Workspace.WorkspaceID || maintenanceStatus.LaunchAgent.State != "active_loaded_enabled" || !maintenanceStatus.LaunchAgent.FilePresent || !maintenanceStatus.LaunchAgent.Loaded || !maintenanceStatus.LaunchAgent.Enabled || !maintenanceStatus.LaunchAgent.NativeQualified {
-		return workspaceActivation{}, readinessError(cliPath, maintenanceArguments, "o launchd não ficou ativo, carregado e vinculado a este workspace")
+	activation.Maintenance = maintenanceActivation{
+		State:           maintenanceStatus.LaunchAgent.State,
+		Schedule:        "run_at_load_and_every_15_minutes",
+		NativeQualified: maintenanceStatus.LaunchAgent.NativeQualified,
+		ModelBacked:     "unavailable",
 	}
-	return workspaceActivation{
-		State:       "ready",
-		WorkspaceID: status.Workspace.WorkspaceID,
-		Lifecycle:   lifecycle,
-		Maintenance: maintenanceActivation{
-			State:          maintenanceStatus.LaunchAgent.State,
-			Schedule:       "run_at_load_and_every_15_minutes",
-			NativeObserved: true,
-			ModelBacked:    "unavailable",
-		},
-	}, nil
+	launchAgentReady := statusReady && maintenanceStatus.State == "enrolled" &&
+		maintenanceStatus.Enrollment.WorkspaceID == status.Workspace.WorkspaceID &&
+		maintenanceStatus.LaunchAgent.State == "active_loaded_enabled" &&
+		maintenanceStatus.LaunchAgent.FilePresent &&
+		maintenanceStatus.LaunchAgent.Loaded &&
+		maintenanceStatus.LaunchAgent.Enabled
+	activation.Maintenance.NativeObserved = launchAgentReady
+	if !launchAgentReady {
+		warn(readinessError(cliPath, maintenanceArguments, "o launchd ainda não ficou ativo, carregado e vinculado a este workspace").Error())
+	} else if !maintenanceStatus.LaunchAgent.NativeQualified {
+		warn("O launchd está ativo; a observação nativa ainda será refinada durante o uso.")
+	}
+	return activation, nil
+}
+
+func advisoryCommandDetail(output []byte, runErr error) error {
+	detail := strings.TrimSpace(string(output))
+	if len(detail) > 512 {
+		detail = detail[:512] + "…"
+	}
+	if detail == "" {
+		detail = runErr.Error()
+	}
+	return errors.New(detail)
 }
 
 func primaryRuntime(options options) (string, error) {

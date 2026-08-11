@@ -146,8 +146,8 @@ after bootstrapper activation is reported as quarantined/reinstallable, not as
 completed.
 
 Runtime project hooks are intentionally a separate owner-consent boundary. The
-wizard installs and verifies the five workspace-local Claude or Codex hook
-definitions, then states that the first opening must review their exact
+wizard installs and verifies seven workspace-local Claude hooks or five Codex
+hooks, then states that the first opening must review their exact
 commands before they execute automatically. It never manufactures entries in
 global runtime settings, bypasses the native hook-review UX, or presents a
 configured hook as a native observation. This keeps local hooks both wired and

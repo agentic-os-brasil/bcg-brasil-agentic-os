@@ -22,6 +22,7 @@ import (
 	techcoreskills "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/tech-core/skills"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimeprojection"
@@ -106,7 +107,9 @@ var expectedBindings = map[string][]expectedBinding{
 		{semantic: "context_inject", native: "UserPromptSubmit", commandSuffix: "claude context-injection", capability: "context_injection"},
 		{semantic: "pre_action_guard", native: "PreToolUse", commandSuffix: "claude pre-action-guard", capability: "pre_action_guard"},
 		{semantic: "post_action_observe", native: "PostToolUse", commandSuffix: "claude post-action-receipt", capability: "post_action_observe", asynchronous: true},
-		{semantic: "stop_finalize", native: "Stop", commandSuffix: "claude stop-finalization", capability: "stop_finalize", asynchronous: true},
+		{semantic: "stop_finalize", native: "Stop", commandSuffix: "claude stop-finalization", capability: "stop_finalize"},
+		{semantic: "subagent_start", native: "SubagentStart", commandSuffix: "claude subagent-start", capability: "native_subagent_start"},
+		{semantic: "subagent_stop", native: "SubagentStop", commandSuffix: "claude subagent-stop", capability: "native_subagent_stop"},
 	},
 	"codex": {
 		{semantic: "session_start", native: "SessionStart", commandSuffix: "session-start --runtime codex", capability: "session_start"},
@@ -131,6 +134,9 @@ func Verify(options Options) (Report, error) {
 		SchemaVersion: 1, State: "failed", Runtime: runtimeName,
 		EvidenceClass: "configured", NativeObservation: "not_observed", CapabilityState: "unavailable",
 		Checks: []Check{},
+	}
+	if runtimeName == "claude" {
+		report.CapabilityState = "operational_beta"
 	}
 	fail := func(id string, err error) (Report, error) {
 		report.Checks = append(report.Checks, Check{ID: id, State: "fail", Message: err.Error()})
@@ -259,18 +265,28 @@ func Verify(options Options) (Report, error) {
 		return fail("runtime_projection", err)
 	}
 	pass("runtime_projection", "the managed "+runtimeName+" projection matches the active embedded bundle")
+	if runtimeName == "claude" {
+		agents, err := claudeagents.Inspect(workspacePath)
+		if err != nil || agents.State != "installed" {
+			if err == nil {
+				err = errors.New("managed Claude native-agent projection is incomplete")
+			}
+			return fail("native_agents", err)
+		}
+		pass("native_agents", "the five managed Claude subagents match the active embedded contracts")
+	}
 
 	lifecycle, err := verifyHooks(runtimeName, workspacePath, executable, targetOS)
 	if err != nil {
 		return fail("runtime_hooks", err)
 	}
-	pass("runtime_hooks", "all five workspace-local "+runtimeName+" lifecycle commands point to the installed CLI")
+	pass("runtime_hooks", fmt.Sprintf("all %d workspace-local %s lifecycle commands point to the installed CLI", len(expectedBindings[runtimeName]), runtimeName))
 
 	if err := bindCapabilities(runtimeName, &lifecycle); err != nil {
 		return fail("lifecycle_capabilities", err)
 	}
 	report.Lifecycle = lifecycle
-	pass("lifecycle_capabilities", "canonical lifecycle capabilities remain configured and unavailable without native observation")
+	pass("lifecycle_capabilities", "canonical lifecycle availability and independent native-qualification telemetry are coherent")
 	report.State, report.Ready = "verified", true
 	return report, nil
 }
@@ -481,9 +497,13 @@ func bindCapabilities(runtimeName string, bindings *[]LifecycleBinding) error {
 		seen[capability.ID] = true
 		contract, exists := capability.Runtimes[runtimeName]
 		binding := &(*bindings)[index]
-		if !exists || capability.SemanticEvent != binding.SemanticEvent || contract.State != "unavailable" ||
+		expectedState := "unavailable"
+		if runtimeName == "claude" {
+			expectedState = "operational_beta"
+		}
+		if !exists || capability.SemanticEvent != binding.SemanticEvent || contract.State != expectedState ||
 			!contract.Configured || contract.AdapterObserved || contract.NativeQualified || contract.Reason == "" {
-			return fmt.Errorf("%s lifecycle capability %s is not fail-closed and configuration-only", runtimeName, capability.ID)
+			return fmt.Errorf("%s lifecycle capability %s has incoherent availability or qualification evidence", runtimeName, capability.ID)
 		}
 		binding.CapabilityState = contract.State
 		binding.Configured = contract.Configured

@@ -300,6 +300,14 @@ mostra o rascunho inteiro e o digest; só a confirmação exata atualiza a facet
 Ele nunca deduz uma resposta, preenche lacunas sozinho ou altera o perfil
 psicológico.
 
+Se uma sessão for interrompida depois da criação do rascunho, `owner expand
+status` devolve `review_required` e o `open_draft_id`. O Maestro retoma o mesmo
+rascunho com `bcgos owner expand review --id <open_draft_id>`; ele não repete a
+pergunta nem procura arquivos locais. Depois que você revisar e confirmar o
+texto exato, a aplicação usa `bcgos owner expand confirm --id <id> --digest
+<review_digest> --confirm`. Esse digest pertence à expansão SELF e não deve ser
+passado para `owner onboarding confirm`.
+
 ### Passo 4.1 — Escolha as fontes SharePoint do projeto
 
 Depois que a entrevista do owner estiver revisada e confirmada **dentro do
@@ -346,6 +354,43 @@ sendo a fonte de verdade. Sem enrollment, qualificação nativa ou runtime local
 disponível, a ingestão falha fechada e nada é criado. Codex não coleta
 SharePoint; ele pode consultar apenas um índice local já verificado.
 
+### Roadmap de ativação: transforme o workspace em um sistema de trabalho
+
+O `init` prepara o scaffold técnico, mas o primeiro valor profissional exige
+agentes de negócio com escopo real. Para trabalho de cliente, siga esta ordem:
+
+```text
+Client Account Agent → Case Agent vinculado → primeira entrega → checkpoint
+```
+
+Comece dizendo ao Maestro algo como:
+
+> “Quero criar o Client Account Agent da Aurora Mobility para organizar o
+> relacionamento e o contexto autorizado da conta.”
+
+Depois, crie o caso concreto:
+
+> “Crie o Case Agent do projeto de pricing 2026 da Aurora Mobility, vinculado à
+> conta, com objetivo de preparar uma recomendação para o steering de setembro.”
+
+O Client Account Agent cuida do contexto e da validação da conta; o Case Agent
+cuida da execução e da entrega do projeto. Em seguida, peça uma primeira
+entrega pequena e revisável, por exemplo:
+
+> “Transforme as três fontes aprovadas em um briefing de uma página com fatos,
+> hipóteses, lacunas e próxima decisão. Mostre o plano antes de produzir.”
+
+Finalize pedindo:
+
+> “Registre o checkpoint, indique a próxima ação e me mostre como retomar este
+> caso na próxima sessão.”
+
+Use o [roadmap detalhado de ativação dos agentes](agent-activation-roadmap.md)
+como checklist. O scaffold automático não é um substituto para um Client
+Account Agent e um Case Agent nomeados, vinculados e usados em uma primeira
+entrega. Para um trabalho interno sem conta de cliente, o caminho direto para
+Case Agent continua permitido.
+
 ### Passo 5 — Faça uma primeira tarefa pequena
 
 Escolha uma tarefa que possa ser verificada em menos de uma hora: organizar um
@@ -379,15 +424,23 @@ Comandos disponíveis na superfície do CLI:
 bcgos work schema
 bcgos work create --workspace <workspace> --stdin
 bcgos work list --workspace <workspace>
-bcgos work start --workspace <workspace> --item <id> --revision <n>
-bcgos work checkpoint --workspace <workspace> --item <id> --revision <n> --attempt <id> --stdin
+bcgos work start --workspace <workspace> --id <id>
+bcgos work checkpoint --workspace <workspace> --active --stdin
 bcgos work evidence --workspace <workspace> --item <id> --revision <n> --attempt <id> --criterion <id>
-bcgos work pause --workspace <workspace> --item <id> --revision <n> --attempt <id>
-bcgos work resume --workspace <workspace> --item <id> --revision <n>
+bcgos work pause --workspace <workspace> --active
+bcgos work resume --workspace <workspace> --active
 bcgos work inspect --workspace <workspace> --item <id>
 bcgos work export --workspace <workspace> --item <id>
 bcgos owner agent list
 ```
+
+No fluxo cotidiano, o runtime conversa com uma única tarefa ativa: `--active`
+resolve o item, a revisão e a tentativa atuais sem expor esses detalhes. Para
+checkpoint, `{ "note": "..." }` basta; o Maestro registra a nota e mantém um
+próximo passo seguro. Os parâmetros completos continuam disponíveis para
+integrações avançadas e ainda rejeitam revisões ou tentativas desatualizadas.
+`--active` nunca pode ser combinado com `--item`/`--id`; exclusão continua
+exigindo item, revisão e confirmação explícitos.
 
 Antes do primeiro `create`, rode `bcgos work schema`. O comando não lê o
 workspace nem o estado do usuário: ele mostra os campos aceitos, os dois tipos

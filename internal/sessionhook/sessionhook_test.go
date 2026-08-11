@@ -87,7 +87,7 @@ func TestSessionStartRejectsHistoricalBodySmuggledIntoContinuousStatus(t *testin
 
 func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T) {
 	pending := sessionctx.Packet{WorkspaceRoot: "/Users/pilot/Developer/maestro-os", Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", NextQuestion: "What is your professional role?"}}}
-	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING REQUIRED") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore conflicting persona") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {
+	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING AVAILABLE") || !strings.Contains(got, "never make it a prerequisite") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore conflicting persona") || !strings.Contains(got, "USER-FACING COMMUNICATION") || !strings.Contains(got, "friendly wrapper around the system") || !strings.Contains(got, "Absorb ordinary system friction") || !strings.Contains(got, "instead of exposing a setup journey") || !strings.Contains(got, "choice changes scope, consequence or final outcome") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {
 		t.Fatalf("pending directive = %q", got)
 	}
 	selection := pending
@@ -102,7 +102,7 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Count: 1}}}
 	active.SetupAuthorization = sessionctx.SetupAuthorization{State: "active", PolicyVersion: "cofs-v1"}
 	active.ContinuousUse = continuoususe.Status{SchemaVersion: 1, State: continuoususe.StateActionRequired, OpenWork: continuoususe.OpenWork{Pointer: "bcgos://execution/active", Available: true, State: "available", WorkState: "running", CheckpointState: "missing"}, NextActions: []continuoususe.NextAction{{ID: continuoususe.ActionCheckpointActiveWork, Command: "bcgos work next --active --workspace <workspace>", Reason: "checkpoint required"}}}
-	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || !strings.Contains(got, "Você quer indicar as pastas autorizadas do SharePoint deste projeto agora") || strings.Contains(got, "Prepare kickoff") {
+	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || !strings.Contains(got, "Mention it only when the current task would benefit") || !strings.Contains(got, "Quer conectar uma pasta do SharePoint deste projeto ou começar sem ela?") || strings.Contains(got, "Prepare kickoff") || strings.Contains(got, "selection_required") || strings.Contains(got, "native_qualified") {
 		t.Fatalf("active directive = %q", got)
 	}
 	if got := sessionDirective(active); !strings.Contains(got, "CONTINUOUS USE") || !strings.Contains(got, "checkpoint") || !strings.Contains(got, "bcgos work next --active") {
@@ -115,18 +115,18 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 		LocalProjection: "metadata_and_source_pointers_only", AuthorizationState: "pending_signed_enrollment",
 		CollectionRuntime: "claude", CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy",
 	}
-	if got := sessionDirective(selected); !strings.Contains(got, "exact SharePoint folder selection") || !strings.Contains(got, "resume the bounded collection automatically") || !strings.Contains(got, "external action pending") || strings.Contains(got, "Posso ler") || strings.Contains(got, "selection itself does not authorize") || strings.Contains(got, "private_release_auth") || strings.Contains(got, "SharePoint folder URL") {
+	if got := sessionDirective(selected); !strings.Contains(got, "SharePoint is connected to this workspace") || !strings.Contains(got, "Do not ask for another read") || strings.Contains(got, "native qualification") || strings.Contains(got, "Codex collection") || strings.Contains(got, "external action pending") || strings.Contains(got, "Posso ler") || strings.Contains(got, "selection itself does not authorize") || strings.Contains(got, "private_release_auth") || strings.Contains(got, "SharePoint folder URL") {
 		t.Fatalf("selected directive = %q", got)
 	}
 	deferred := active
 	deferred.SharePointSource = sessionctx.SharePointSource{State: priorwork.SourceDeferred, SourceAuthority: "sharepoint", LocalProjection: "metadata_and_source_pointers_only", CollectionRuntime: "claude", CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy"}
-	if got := sessionDirective(deferred); strings.Contains(got, "Você quer indicar as pastas autorizadas") || !strings.Contains(got, "was deferred") {
+	if got := sessionDirective(deferred); strings.Contains(got, "Quer conectar uma pasta do SharePoint") || !strings.Contains(got, "SharePoint was left out of this workspace") {
 		t.Fatalf("deferred directive = %q", got)
 	}
 	unavailable := active
 	unavailable.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
 	unavailable.SharePointSource = sessionctx.SharePointSource{State: priorwork.SourceSelectionUnavailable}
-	if got := sessionDirective(unavailable); !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" prior-work source status`) || strings.Contains(got, "`bcgos prior-work source status") {
+	if got := sessionDirective(unavailable); !strings.Contains(got, "SharePoint setup is not available in this workspace yet") || strings.Contains(got, "prior-work source status") || strings.Contains(got, "native_qualified") {
 		t.Fatalf("unavailable source directive = %q", got)
 	}
 	reviewDigest := strings.Repeat("a", 64)
@@ -139,7 +139,7 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 func TestSessionDirectiveRequestsOneSetupAuthorizationInsteadOfTechnicalSteps(t *testing.T) {
 	packet := sessionctx.Packet{WorkspaceRoot: "/Users/pilot/Developer/maestro-os", Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}}, SetupAuthorization: sessionctx.SetupAuthorization{State: "authorization_required", PolicyVersion: "cofs-v1"}}
 	got := sessionDirective(packet)
-	if strings.Count(got, "ONE-AND-DONE SETUP AUTHORIZATION IS REQUIRED") != 1 || !strings.Contains(got, "external, privileged, destructive") || !strings.Contains(got, "bcgos setup authorize") {
+	if !strings.Contains(got, "Optional one-and-done setup") || !strings.Contains(got, "do not interrupt unrelated work") || !strings.Contains(got, "bcgos setup authorize") {
 		t.Fatalf("setup directive = %q", got)
 	}
 	for _, repeated := range []string{"bcgos status", "bcgos doctor", "bcgos init", "Posso ler os materiais"} {
@@ -254,7 +254,7 @@ func TestBuildOmitsOversizedPacketInsteadOfExpandingHookOutput(t *testing.T) {
 	}
 	if !strings.Contains(output.HookSpecificOutput.AdditionalContext, "omitted") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO SESSION PROTOCOL") ||
-		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "ONBOARDING REQUIRED") ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "ONBOARDING AVAILABLE") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "deterministic_onboarding_state") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "What is your professional role?") {
 		t.Fatalf("context = %q", output.HookSpecificOutput.AdditionalContext)

@@ -9,7 +9,7 @@ import (
 
 func TestCanaryEnrollmentPersistsIANAZoneAndScopedActivations(t *testing.T) {
 	root := t.TempDir()
-	enrollment := CanaryEnrollment{SchemaVersion: EnrollmentSchemaVersion, WorkspaceID: "maestro-system", AgentID: "darwin", Home: filepath.Join(root, "home"), Executable: filepath.Join(root, "bin", "bcgos"), UID: "501", Timezone: "America/Sao_Paulo", LaunchAgentLabel: "com.bcg.maestro.maintenance", Mode: "filesystem_only", EnrolledAt: time.Date(2026, 8, 2, 7, 0, 0, 0, time.FixedZone("BRT", -3*60*60)), Activated: []Activation{{JobID: "darwin-housekeeping-daily", QualificationDigest: QualificationDigest("darwin-housekeeping-daily")}, {JobID: "darwin-deep-weekly", QualificationDigest: QualificationDigest("darwin-deep-weekly")}}}
+	enrollment := CanaryEnrollment{SchemaVersion: EnrollmentSchemaVersion, WorkspaceID: "maestro-system", AgentID: "darwin", Home: filepath.Join(root, "home"), Executable: filepath.Join(root, "bin", "bcgos"), UID: "501", Timezone: "America/Sao_Paulo", LaunchAgentLabel: "com.bcg.maestro.maintenance", Mode: "filesystem_only", EnrolledAt: time.Date(2026, 8, 2, 7, 0, 0, 0, time.FixedZone("BRT", -3*60*60)), Activated: []Activation{{JobID: "darwin-housekeeping-daily", QualificationDigest: QualificationDigest("darwin-housekeeping-daily")}, {JobID: "darwin-deep-weekly", QualificationDigest: QualificationDigest("darwin-deep-weekly")}, {JobID: MemoryDeepDreamJobID, QualificationDigest: QualificationDigest(MemoryDeepDreamJobID)}}}
 	if err := SaveCanaryEnrollment(root, enrollment); err != nil {
 		t.Fatal(err)
 	}
@@ -17,11 +17,11 @@ func TestCanaryEnrollmentPersistsIANAZoneAndScopedActivations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Timezone != enrollment.Timezone || len(loaded.Activated) != 2 {
+	if loaded.Timezone != enrollment.Timezone || len(loaded.Activated) != 3 {
 		t.Fatalf("loaded=%#v", loaded)
 	}
 	qualified, activated := ActivationMaps(loaded)
-	if qualified["darwin-deep-weekly"] == "" || len(activated) != 2 {
+	if qualified["darwin-deep-weekly"] == "" || qualified[MemoryDeepDreamJobID] == "" || len(activated) != 3 {
 		t.Fatalf("activation maps=%#v %#v", qualified, activated)
 	}
 	body, err := os.ReadFile(filepath.Join(root, "maintenance", "canary-enrollment.json"))

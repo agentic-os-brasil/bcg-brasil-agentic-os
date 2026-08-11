@@ -20,12 +20,14 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/continuoususe"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/setupauth"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillrouting"
@@ -92,6 +94,92 @@ func TestWorkListAndCheckpointRequireExplicitStdin(t *testing.T) {
 	}
 }
 
+func TestWorkConvenienceFlagsKeepConversationalCheckpointBounded(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	workspacePath := filepath.Join(t.TempDir(), "case-convenience")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	contract := `{"objective":"continue one bounded task","initial_next_step":"start","criteria":[{"id":"check","type":"command_check","command":["go","version"]}],"allowed_refs":[]}`
+	if code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("create exit = %d: %s", code, output.String())
+	}
+	var created execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code := runWork([]string{"start", "--workspace", workspacePath, "--id", created.ItemID}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("friendly start exit = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--active", "--revision", "1", "--stdin"}, strings.NewReader(`{"note":"stale checkpoint"}`), &output, &output, dataRoot); code == ExitOK || !strings.Contains(output.String(), execution.ErrRevisionConflict.Error()) {
+		t.Fatalf("active checkpoint accepted stale fence: exit=%d output=%s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--item", created.ItemID, "--active", "--stdin"}, strings.NewReader(`{"note":"ambiguous target"}`), &output, &output, dataRoot); code != ExitUsage || !strings.Contains(output.String(), "cannot be combined") {
+		t.Fatalf("mixed active/item selector exit = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--active", "--stdin"}, strings.NewReader(`{"note":"Validate continuity in the next session."}`), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("friendly checkpoint exit = %d: %s", code, output.String())
+	}
+	var checkpointed execution.MutationReceipt
+	if err := json.Unmarshal(output.Bytes(), &checkpointed); err != nil || checkpointed.CheckpointID == "" {
+		t.Fatalf("checkpoint receipt = %#v, err = %v", checkpointed, err)
+	}
+	output.Reset()
+	if code := runWork([]string{"pause", "--workspace", workspacePath, "--active"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("friendly pause exit = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"resume", "--workspace", workspacePath, "--active"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+		t.Fatalf("friendly resume exit = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runWork([]string{"next", "--workspace", workspacePath, "--active"}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK || !strings.Contains(output.String(), "Validate continuity in the next session.") || !strings.Contains(output.String(), "Resume from the recorded checkpoint.") {
+		t.Fatalf("friendly next exit = %d: %s", code, output.String())
+	}
+}
+
+func TestWorkActiveConvenienceRejectsAbsentAndAmbiguousItems(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := func() (string, error) { return root, nil }
+	workspacePath := filepath.Join(t.TempDir(), "case-active-selection")
+	if _, err := workspace.Initialize(workspace.Options{WorkspacePath: workspacePath, DataRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--active", "--stdin"}, strings.NewReader(`{"note":"no active task"}`), &output, &output, dataRoot); code == ExitOK || !strings.Contains(output.String(), "no active execution item") {
+		t.Fatalf("missing active item was accepted: exit=%d output=%s", code, output.String())
+	}
+	create := func(objective string) execution.MutationReceipt {
+		t.Helper()
+		output.Reset()
+		contract := `{"objective":"` + objective + `","initial_next_step":"start","criteria":[{"id":"check","type":"command_check","command":["go","version"]}],"allowed_refs":[]}`
+		if code := runWork([]string{"create", "--workspace", workspacePath, "--stdin"}, strings.NewReader(contract), &output, &output, dataRoot); code != ExitOK {
+			t.Fatalf("create exit = %d: %s", code, output.String())
+		}
+		var created execution.MutationReceipt
+		if err := json.Unmarshal(output.Bytes(), &created); err != nil {
+			t.Fatal(err)
+		}
+		output.Reset()
+		if code := runWork([]string{"start", "--workspace", workspacePath, "--id", created.ItemID}, strings.NewReader(""), &output, &output, dataRoot); code != ExitOK {
+			t.Fatalf("start exit = %d: %s", code, output.String())
+		}
+		return created
+	}
+	create("first active task")
+	create("second active task")
+	output.Reset()
+	if code := runWork([]string{"checkpoint", "--workspace", workspacePath, "--active", "--stdin"}, strings.NewReader(`{"note":"ambiguous active task"}`), &output, &output, dataRoot); code == ExitOK || !strings.Contains(output.String(), execution.ErrActiveItemAmbiguous.Error()) {
+		t.Fatalf("ambiguous active item was accepted: exit=%d output=%s", code, output.String())
+	}
+}
+
 func TestOwnerAgentListIsReadOnlyAndStable(t *testing.T) {
 	root := t.TempDir()
 	var output bytes.Buffer
@@ -128,7 +216,7 @@ func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 
 	output.Reset()
 	code = Run([]string{"memory", "status", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
-	if code != 0 || !strings.Contains(output.String(), `"state": "captured"`) || !strings.Contains(output.String(), `"dreaming": "daily_light_available_weekly_deep_unavailable"`) {
+	if code != 0 || !strings.Contains(output.String(), `"state": "captured"`) || !strings.Contains(output.String(), `"dreaming": "daily_light_and_weekly_deep_available"`) {
 		t.Fatalf("status exit = %d, output = %s", code, output.String())
 	}
 
@@ -151,6 +239,18 @@ func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 	}
 	if diagnostics, ok := bundle["diagnostics"].([]any); !ok || len(diagnostics) != 4 {
 		t.Fatalf("context diagnostics = %#v", bundle)
+	}
+}
+
+func TestMemoryStatusUsesTheInstalledDataRootByDefault(t *testing.T) {
+	dataDir := t.TempDir()
+	if err := memory.Bootstrap(filepath.Join(dataDir, "memory"), "case-a"); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	code := runMemoryWithDataRoot([]string{"status", "--workspace", "case-a"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataDir, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "empty"`) {
+		t.Fatalf("default data-root status exit=%d output=%s", code, output.String())
 	}
 }
 
@@ -259,7 +359,7 @@ func TestMemoryCLIReportsAllInvalidCommitsAsCorrupt(t *testing.T) {
 	}
 }
 
-func TestMemoryDailyDreamExcludesManualCaptureAndWeeklyRemainsUnavailable(t *testing.T) {
+func TestMemoryDailyDreamExcludesManualCaptureAndWeeklyRunsWithTrustedL1(t *testing.T) {
 	dataDir := t.TempDir()
 	var output bytes.Buffer
 	if code := RunWithInput([]string{"memory", "capture", "--data-dir", dataDir, "--workspace", "case-a", "--kind", "decision", "--stdin", "--sanitized"}, strings.NewReader("owner confirmation required"), &output, &output); code != ExitOK {
@@ -271,8 +371,16 @@ func TestMemoryDailyDreamExcludesManualCaptureAndWeeklyRemainsUnavailable(t *tes
 		t.Fatalf("daily dream exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
+	if err := recordAttestedSkillRoute(dataDir, "claude", "case-a", "session-a", []skillrouting.Selection{{ID: "meeting-close"}}); err != nil {
+		t.Fatal(err)
+	}
+	code = Run([]string{"memory", "dream", "daily", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "succeeded"`) {
+		t.Fatalf("trusted daily dream exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
 	code = Run([]string{"memory", "dream", "weekly", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
-	if code != ExitUnavailable || !strings.Contains(output.String(), `"capability": "memory_deep_dreaming"`) || !strings.Contains(output.String(), `"state": "unavailable"`) {
+	if code != ExitOK || !strings.Contains(output.String(), `"capability": "memory_deep_dreaming"`) || !strings.Contains(output.String(), `"state": "succeeded"`) || !strings.Contains(output.String(), `"L2"`) || !strings.Contains(output.String(), `"L3"`) {
 		t.Fatalf("weekly dream exit = %d, output = %s", code, output.String())
 	}
 }
@@ -506,8 +614,8 @@ func TestInstalledHookLeavesSafeActionToNativeFlowWhenOrchestrationStateIsSymlin
 	}
 	for _, pointer := range []string{"../outside.json", ".bcgos/../outside.json"} {
 		output.Reset()
-		if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", pointer, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code == ExitOK || !strings.Contains(output.String(), "orchestration state") {
-			t.Fatalf("pointer %q accepted: exit=%d output=%s", pointer, code, output.String())
+		if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", pointer, workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+			t.Fatalf("advisory pointer %q blocked session: exit=%d output=%s", pointer, code, output.String())
 		}
 	}
 	outside := filepath.Join(t.TempDir(), "state.json")
@@ -538,12 +646,12 @@ func TestInstalledHookLeavesSafeActionToNativeFlowWhenOrchestrationStateIsSymlin
 	}
 	output.Reset()
 	code = runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code == ExitOK || !strings.Contains(output.String(), "decode orchestration state") {
-		t.Fatalf("malformed state accepted: exit=%d output=%s", code, output.String())
+	if code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("malformed advisory state blocked session: exit=%d output=%s", code, output.String())
 	}
 }
 
-func TestInstalledHookRejectsMissingOrchestrationStateWithRemediation(t *testing.T) {
+func TestInstalledHookContinuesWhenOrchestrationStateIsMissing(t *testing.T) {
 	dataRoot, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -561,8 +669,40 @@ func TestInstalledHookRejectsMissingOrchestrationStateWithRemediation(t *testing
 	}
 	output.Reset()
 	code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", "--orchestration-state", ".bcgos/maestro-orchestration-state.json", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil })
-	if code == ExitOK || !strings.Contains(output.String(), "orchestration state is missing") || !strings.Contains(output.String(), "bcgos init") {
-		t.Fatalf("missing state accepted without remediation: exit=%d output=%s", code, output.String())
+	if code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("missing advisory state blocked SessionStart: exit=%d output=%s", code, output.String())
+	}
+}
+
+func TestInstalledSessionHooksDegradeWhenOptionalContextIsCorrupt(t *testing.T) {
+	dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
+	workspacePath := t.TempDir()
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	if err := os.WriteFile(filepath.Join(dataRoot, "owner", "registry.json"), []byte("{not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspacePath, ".bcgos", "runtime-projection.json"), []byte("{not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			output.Reset()
+			if code := runHookWithInput([]string{runtimeName, "session-start", "--adapter-source", "maestro", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+				t.Fatalf("corrupt optional state blocked SessionStart: exit=%d output=%s", code, output.String())
+			}
+			output.Reset()
+			prompt := `{"session_id":"session-a","prompt":"continue the requested work"}`
+			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"hookEventName": "UserPromptSubmit"`) {
+				t.Fatalf("corrupt optional state blocked context injection: exit=%d output=%s", code, output.String())
+			}
+		})
+	}
+	output.Reset()
+	if code := runHook([]string{"session-start", "--runtime", "codex", "--adapter-source", "maestro", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "MAESTRO SESSION PROTOCOL") {
+		t.Fatalf("corrupt optional state blocked installed Codex SessionStart binding: exit=%d output=%s", code, output.String())
 	}
 }
 
@@ -625,20 +765,31 @@ func TestPreActionGuardLeavesIncompleteMetadataToNativeFlowAndProtectsRootRemova
 	}
 }
 
-func TestPreActionGuardExplainsHowToRetryChainedRemoval(t *testing.T) {
+func TestPreActionGuardAllowsBoundedSafeChainAndStillDeniesProtectedRoot(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
-			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"mv note.md archived.md && ls && rm archived.md"}}`
+			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"rm archived.md && echo ok"}}`
 			var output bytes.Buffer
 			code := runHookWithInput(
 				[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "/workspace-that-must-not-be-inspected"},
 				strings.NewReader(input), &output, &output,
-				func() (string, error) { return "", errors.New("chained removal must not inspect workspace state") },
+				func() (string, error) { return "", errors.New("bounded removal must not inspect workspace state") },
 			)
-			if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) ||
-				!strings.Contains(output.String(), "Run each shell step separately") ||
-				!strings.Contains(output.String(), "removal") {
-				t.Fatalf("guard did not provide actionable recovery: code=%d output=%s", code, output.String())
+			if code != ExitOK || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("safe bounded chain was denied: code=%d output=%s", code, output.String())
+			}
+
+			output.Reset()
+			input = `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"rm -rf / && echo unsafe"}}`
+			code = runHookWithInput(
+				[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "/workspace-that-must-not-be-inspected"},
+				strings.NewReader(input), &output, &output,
+				func() (string, error) {
+					return "", errors.New("protected-root removal must not inspect workspace state")
+				},
+			)
+			if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("protected-root chain was not denied: code=%d output=%s", code, output.String())
 			}
 		})
 	}
@@ -888,7 +1039,7 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 	}
 }
 
-func TestLifecycleKeepsPendingOnboardingOnTheGovernedGuide(t *testing.T) {
+func TestLifecycleOffersPendingOnboardingWithoutSuppressingRequestedWork(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
 			dataRoot := filepath.Join(t.TempDir(), "local", "BCGOS")
@@ -913,8 +1064,8 @@ func TestLifecycleKeepsPendingOnboardingOnTheGovernedGuide(t *testing.T) {
 			output.Reset()
 			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
 				!strings.Contains(output.String(), "maestro-onboarding") ||
-				strings.Contains(output.String(), "case-kickoff") {
-				t.Fatalf("pending onboarding routed an unrelated Case method = %d %s", code, output.String())
+				!strings.Contains(output.String(), "case-kickoff") {
+				t.Fatalf("pending onboarding suppressed requested work = %d %s", code, output.String())
 			}
 		})
 	}
@@ -1076,6 +1227,65 @@ func TestAdapterInstallRepairsMissingStateBeforeSessionHook(t *testing.T) {
 	}
 }
 
+func TestClaudeNativeAgentBetaEnforcesStrategicRoundTrip(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	workspacePath := filepath.Join(root, "workspace")
+	var output bytes.Buffer
+	if code := runInit([]string{workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "claude", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatal(output.String())
+	}
+	output.Reset()
+	if code := runHookWithInput([]string{"claude", "session-start", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "NATIVE AGENT ROUTING IS OPERATIONAL IN BETA") {
+		t.Fatalf("operational beta session = %d %s", code, output.String())
+	}
+	call := func(action, body string) (int, string) {
+		output.Reset()
+		code := runHookWithInput([]string{"claude", action, workspacePath}, strings.NewReader(body), &output, &output, func() (string, error) { return dataRoot, nil })
+		return code, output.String()
+	}
+	if code, body := call("context-injection", `{"session_id":"session-native","prompt":"prepare strategic case"}`); code != ExitOK || !strings.Contains(body, `"hookEventName": "UserPromptSubmit"`) {
+		t.Fatalf("turn start = %d %s", code, body)
+	}
+	if code, body := call("subagent-start", `{"session_id":"session-native","agent_id":"account-1","agent_type":"client-account-agent"}`); code != ExitOK || !strings.Contains(body, "managed Maestro specialist") {
+		t.Fatalf("account start = %d %s", code, body)
+	}
+	if code, body := call("subagent-stop", `{"session_id":"session-native","agent_id":"account-1","agent_type":"client-account-agent"}`); code != ExitOK {
+		t.Fatalf("account stop = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native"}`); code != ExitOK || !strings.Contains(body, `"decision": "block"`) || !strings.Contains(body, "call Case Agent") {
+		t.Fatalf("missing Case gate = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native","stop_hook_active":true}`); code != ExitOK || !strings.Contains(body, `"continue": true`) || strings.Contains(body, `"decision": "block"`) {
+		t.Fatalf("re-entrant Stop must not loop = %d %s", code, body)
+	}
+	if code, body := call("subagent-start", `{"session_id":"session-native","agent_id":"case-1","agent_type":"case-agent"}`); code != ExitOK {
+		t.Fatalf("case start = %d %s", code, body)
+	}
+	if code, body := call("subagent-stop", `{"session_id":"session-native","agent_id":"case-1","agent_type":"case-agent"}`); code != ExitOK {
+		t.Fatalf("case stop = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native"}`); code != ExitOK || !strings.Contains(body, `"decision": "block"`) || !strings.Contains(body, "return the Case result") {
+		t.Fatalf("missing account validation gate = %d %s", code, body)
+	}
+	if code, body := call("subagent-start", `{"session_id":"session-native","agent_id":"account-2","agent_type":"client-account-agent"}`); code != ExitOK {
+		t.Fatalf("account validation start = %d %s", code, body)
+	}
+	if code, body := call("subagent-stop", `{"session_id":"session-native","agent_id":"account-2","agent_type":"client-account-agent"}`); code != ExitOK {
+		t.Fatalf("account validation stop = %d %s", code, body)
+	}
+	if code, body := call("stop-finalization", `{"session_id":"session-native"}`); code != ExitOK || !strings.Contains(body, `"continue": true`) {
+		t.Fatalf("complete route = %d %s", code, body)
+	}
+}
+
 func TestAdapterInstallPreservesAuthorizedSynchronizedWorkspace(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")
@@ -1178,21 +1388,21 @@ func TestSkillsIndexCommandExposesManagedPointers(t *testing.T) {
 
 func TestBundlesPlanMarksDataPracticeOptional(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "optional"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
+	if code := Run([]string{"bundles", "plan", "--track", "data-science"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "included"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
 	}
 }
 
 func TestBundlesPlanMarksEngineeringCoreOptional(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "software-engineering"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "optional"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
+	if code := Run([]string{"bundles", "plan", "--track", "software-engineering"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "included"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
 	}
 }
 
 func TestBundlesPlanKeepsClassicConsultingOnTheBaseBundle(t *testing.T) {
 	var output bytes.Buffer
-	if code := Run([]string{"bundles", "plan", "--track", "consulting"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "base_only"`) || strings.Contains(output.String(), `"id": "tech-core"`) {
+	if code := Run([]string{"bundles", "plan", "--track", "consulting"}, &output, &output); code != ExitOK || !strings.Contains(output.String(), `"state": "included"`) || !strings.Contains(output.String(), `"id": "tech-core"`) {
 		t.Fatalf("bundles plan exit = %d, output = %s", code, output.String())
 	}
 }
@@ -1208,7 +1418,7 @@ func TestBundlesRecommendUsesDeclaredFunctionAndDoesNotActivate(t *testing.T) {
 	output.Reset()
 	if code := Run([]string{"bundles", "recommend", "--function", "Consultora de estratégia"}, &output, &output); code != ExitOK ||
 		!strings.Contains(output.String(), `"state": "ask"`) ||
-		!strings.Contains(output.String(), "deseja incluir skills de tecnologia") {
+		!strings.Contains(output.String(), "já está incluído") {
 		t.Fatalf("ambiguous recommendation exit = %d, output = %s", code, output.String())
 	}
 }
@@ -1876,6 +2086,28 @@ func TestExecutionHandoffAcrossTwoSessionsRecoversAndCompletesFirstSessionArtifa
 		t.Fatal(err)
 	}
 
+	var maestroStatusOutput bytes.Buffer
+	if code := runMaestroWithInput([]string{"status", workspacePath}, strings.NewReader(""), &maestroStatusOutput, &maestroStatusOutput, dataRoot); code != ExitOK {
+		t.Fatalf("maestro status exit = %d, output = %s", code, maestroStatusOutput.String())
+	}
+	var maestroStatus continuoususe.Status
+	if err := json.Unmarshal(maestroStatusOutput.Bytes(), &maestroStatus); err != nil {
+		t.Fatal(err)
+	}
+	var packetOutput bytes.Buffer
+	if code := runSession([]string{"packet", workspacePath}, &packetOutput, &packetOutput, dataRoot); code != ExitOK {
+		t.Fatalf("session packet exit = %d, output = %s", code, packetOutput.String())
+	}
+	var directPacket sessionctx.Packet
+	if err := json.Unmarshal(packetOutput.Bytes(), &directPacket); err != nil {
+		t.Fatal(err)
+	}
+	activePointer := directPacket.Execution.Active
+	if !reflect.DeepEqual(maestroStatus.OpenWork, directPacket.ContinuousUse.OpenWork) ||
+		activePointer.Path != execution.ActivePointerPath || !activePointer.Available || activePointer.State != execution.ActivePointerAvailable {
+		t.Fatalf("continuity endpoints diverged: maestro=%#v packet=%#v execution=%#v", maestroStatus.OpenWork, directPacket.ContinuousUse.OpenWork, directPacket.Execution.Active)
+	}
+
 	envelopes := make(map[string]sessionstart.Envelope)
 	for _, runtimeName := range []string{"claude", "codex"} {
 		var sessionB bytes.Buffer
@@ -2040,6 +2272,33 @@ func TestAgentIdentityInterviewAndPersonalizationAreExplicit(t *testing.T) {
 	}
 }
 
+func TestAgentIdentitySetIsAnExplicitPresentationOnlyShortcut(t *testing.T) {
+	root := t.TempDir()
+	dataRoot := filepath.Join(root, "local", "BCGOS")
+	profile := `{"schema_version":1,"owner_id":"daniel","confirmed":true,"updated_at":"2026-07-28T00:00:00Z","selections":[{"role":"maestro","display_name":"Maestro","emoji":"🎼","owner_id":"daniel","ownership_scope":"system"}]}`
+	var output bytes.Buffer
+	if code := draftAndConfirmAgentProfile(t, dataRoot, profile, &output); code != ExitOK {
+		t.Fatalf("personalize = %d: %s", code, output.String())
+	}
+	output.Reset()
+	if code := runAgentWithInput([]string{"identity", "set", "--agent", "walter", "--display-name", "Virgil", "--emoji", "🧭", "--confirm"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"presentation_only": true`) || !strings.Contains(output.String(), `"authority": "unchanged"`) {
+		t.Fatalf("identity set = %d: %s", code, output.String())
+	}
+	stored, err := agentidentity.Load(dataRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, selection := range stored.Selections {
+		if selection.Role == "walter" {
+			found = selection.DisplayName == "Virgil" && selection.Emoji == "🧭" && selection.OwnerID == stored.OwnerID
+		}
+	}
+	if !found {
+		t.Fatalf("Walter presentation was not persisted: %#v", stored.Selections)
+	}
+}
+
 func TestAgentIdentityFullRosterUsesCanonicalProfileEnvelope(t *testing.T) {
 	root := t.TempDir()
 	dataRoot := filepath.Join(root, "local", "BCGOS")
@@ -2076,7 +2335,7 @@ func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
 		t.Fatalf("personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 31`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 32`) {
 		t.Fatalf("optional adapter install = %d %s", code, output.String())
 	}
 	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence"} {
@@ -2099,7 +2358,7 @@ func TestInterviewSelectionActivatesDataProjection(t *testing.T) {
 		t.Fatalf("data personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 31`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 32`) {
 		t.Fatalf("data adapter install = %d %s", code, output.String())
 	}
 	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence", "data-pipeline-quality", "data-science-evaluation", "reproducible-data-run"} {

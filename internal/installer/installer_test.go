@@ -29,6 +29,12 @@ func TestValidateAuthenticodeStatusAllowsOnlyTheGovernedLocalBetaException(t *te
 	}{
 		{name: "strict valid", mode: NativeTrustStrict, status: "Valid", ok: true},
 		{name: "strict unsigned", mode: NativeTrustStrict, status: "NotSigned"},
+		{name: "canary simple unsigned", mode: NativeTrustCanarySimple, status: "NotSigned", ok: true},
+		{name: "canary simple valid", mode: NativeTrustCanarySimple, status: "Valid", ok: true},
+		{name: "canary simple hash mismatch is diagnostic", mode: NativeTrustCanarySimple, status: "HashMismatch", ok: true},
+		{name: "canary simple untrusted is diagnostic", mode: NativeTrustCanarySimple, status: "NotTrusted", ok: true},
+		{name: "canary simple unknown is diagnostic", mode: NativeTrustCanarySimple, status: "UnknownError", ok: true},
+		{name: "canary simple unsupported is diagnostic", mode: NativeTrustCanarySimple, status: "NotSupported", ok: true},
 		{name: "local beta valid signature is outside the exact beta contract", mode: NativeTrustWindowsLocalBeta, status: "Valid"},
 		{name: "local beta unsigned", mode: NativeTrustWindowsLocalBeta, status: "NotSigned", ok: true},
 		{name: "local beta hash mismatch", mode: NativeTrustWindowsLocalBeta, status: "HashMismatch"},
@@ -114,6 +120,18 @@ func TestValidateNativeTrustPolicyRequiresExactWindowsLocalBetaPins(t *testing.T
 	strictWithPins.NativeTrustMode = NativeTrustStrict
 	if err := validateNativeTrustPolicy(strictWithPins, verified, digestA, digestB); err == nil {
 		t.Fatal("strict mode accepted local-beta pins")
+	}
+}
+
+func TestValidateNativeTrustPolicyCanarySimpleAllowsMacOSBeta(t *testing.T) {
+	options := Options{TargetOS: "darwin", TargetArch: "arm64", NativeTrustMode: NativeTrustCanarySimple}
+	verified := releaseverify.VerifiedRelease{Manifest: releasecontract.Manifest{Release: "0.1.25", Channel: "canary"}}
+	if err := validateNativeTrustPolicy(options, verified, "", ""); err != nil {
+		t.Fatalf("canary-simple macOS policy rejected: %v", err)
+	}
+	verified.Manifest.Channel = "stable"
+	if err := validateNativeTrustPolicy(options, verified, "", ""); err == nil {
+		t.Fatal("canary-simple macOS policy accepted a stable release")
 	}
 }
 
@@ -371,6 +389,26 @@ func TestPrepareWindowsLocalBetaBindsPinsWithoutExecutingSourceSeedStatus(t *tes
 		plan.ReleaseIssuer != fixture.issuer || plan.ReleaseKeyID != fixture.authorityKey ||
 		plan.BootstrapperVersion != "0.1.0" || plan.PlanDigest == "" {
 		t.Fatalf("local-beta plan did not bind governed trust inputs: %#v", plan)
+	}
+}
+
+func TestPrepareCanarySimpleRunsNativeDiagnosticVerifier(t *testing.T) {
+	fixture := newWindowsLocalBetaFixture(t)
+	nativeChecks := 0
+	options := fixture.options(func(context.Context, string, ...string) ([]byte, error) {
+		return nil, fmt.Errorf("canary-simple source bootstrapper must not execute during prepare")
+	})
+	options.NativeTrustMode = NativeTrustCanarySimple
+	options.LocalBetaPins = LocalBetaPins{}
+	options.VerifyNative = func(context.Context, string) error {
+		nativeChecks++
+		return nil
+	}
+	if _, _, err := Prepare(options); err != nil {
+		t.Fatal(err)
+	}
+	if nativeChecks != 1 {
+		t.Fatalf("canary-simple native diagnostic verifier calls = %d, want 1", nativeChecks)
 	}
 }
 

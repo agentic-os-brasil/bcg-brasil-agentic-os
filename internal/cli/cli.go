@@ -30,6 +30,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeadapter"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/codexadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/continuoususe"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/darwin"
@@ -41,6 +42,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/nativeagentflow"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimecap"
@@ -145,7 +147,7 @@ func RunWithInput(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "bundles":
 		return runBundles(args[1:], out, errOut)
 	case "memory":
-		return runMemory(args[1:], in, out, errOut)
+		return runMemoryWithDataRoot(args[1:], in, out, errOut, defaultDataRoot)
 	case "maintenance":
 		return runMaintenance(args[1:], out, errOut)
 	case "ingest":
@@ -263,22 +265,62 @@ Completion criteria:
 		flags := newFlagSet("work "+args[0], errOut)
 		workspacePath := flags.String("workspace", "", "initialized workspace path")
 		itemID := flags.String("item", "", "execution item identity")
+		idAlias := flags.String("id", "", "execution item identity (alias for --item)")
 		revision := flags.Int("revision", 0, "expected state revision")
 		confirm := flags.Bool("confirm", false, "confirm deletion")
 		attempt := flags.String("attempt", "", "active attempt identity")
 		stdin := flags.Bool("stdin", false, "read checkpoint JSON")
 		active := flags.Bool("active", false, "resolve the active execution item")
-		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*workspacePath) == "" || (args[0] != "next" && strings.TrimSpace(*itemID) == "") {
+		summary := flags.String("summary", "", "checkpoint summary")
+		nextStep := flags.String("next", "", "checkpoint next step")
+		blocker := flags.String("blocker", "", "checkpoint blocker")
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*workspacePath) == "" {
+			return ExitUsage
+		}
+		if strings.TrimSpace(*idAlias) != "" {
+			if strings.TrimSpace(*itemID) != "" && *itemID != *idAlias {
+				fmt.Fprintln(errOut, "--item and --id must identify the same work item")
+				return ExitUsage
+			}
+			*itemID = *idAlias
+		}
+		activeMutation := args[0] == "checkpoint" || args[0] == "pause" || args[0] == "resume"
+		if *active && strings.TrimSpace(*itemID) != "" {
+			fmt.Fprintln(errOut, "--active cannot be combined with --item or --id")
+			return ExitUsage
+		}
+		if strings.TrimSpace(*itemID) == "" && !(*active && (activeMutation || args[0] == "next")) {
 			return ExitUsage
 		}
 		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
 		if err != nil {
 			return reportError(errOut, err)
 		}
+		// `--active` is intentionally a convenience for a conversational runtime:
+		// it resolves the one active item and its current fenced values at the last
+		// possible moment. The store still rejects a racing update, but users and
+		// adapters no longer need to surface IDs, revisions or attempt tokens.
+		if *active && activeMutation {
+			projection, err := store.NextActive(workspaceID)
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			*itemID = projection.ItemID
+			if *revision == 0 {
+				*revision = projection.StateRevision
+			}
+			if *attempt == "" {
+				*attempt = projection.AttemptID
+			}
+		}
 		switch args[0] {
 		case "start":
 			if *revision < 1 {
-				return ExitUsage
+				item, err := store.Inspect(workspaceID, *itemID)
+				if err != nil {
+					return reportError(errOut, err)
+				}
+				*revision = item.State.StateRevision
 			}
 			item, err := store.Start(workspaceID, *itemID, *revision)
 			if err != nil {
@@ -286,22 +328,35 @@ Completion criteria:
 			}
 			return writeJSON(out, execution.Receipt(item), errOut)
 		case "checkpoint":
-			if !*stdin {
-				fmt.Fprintln(errOut, "usage: bcgos work checkpoint --workspace PATH --item ID --revision N --attempt ID --stdin")
+			if !*stdin && (strings.TrimSpace(*summary) == "" || strings.TrimSpace(*nextStep) == "") {
+				fmt.Fprintln(errOut, "usage: bcgos work checkpoint --active --workspace PATH --summary TEXT --next TEXT [--blocker TEXT]")
 				return ExitUsage
-			}
-			body, err := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
-			if err != nil {
-				return reportError(errOut, err)
 			}
 			var input struct {
 				Summary      string   `json:"summary"`
+				Note         string   `json:"note"`
 				NextStep     string   `json:"next_step"`
 				Blocker      string   `json:"blocker"`
 				ArtifactRefs []string `json:"artifact_refs"`
 			}
-			if err := json.Unmarshal(body, &input); err != nil {
-				return reportError(errOut, err)
+			if *stdin {
+				body, readErr := io.ReadAll(io.LimitReader(in, maximumWorkContractBytes+1))
+				if readErr != nil {
+					return reportError(errOut, readErr)
+				}
+				if err := json.Unmarshal(body, &input); err != nil {
+					return reportError(errOut, err)
+				}
+			} else {
+				input.Summary = *summary
+				input.NextStep = *nextStep
+				input.Blocker = *blocker
+			}
+			if strings.TrimSpace(input.Summary) == "" {
+				input.Summary = input.Note
+			}
+			if strings.TrimSpace(input.NextStep) == "" && strings.TrimSpace(input.Summary) != "" {
+				input.NextStep = "Resume from the recorded checkpoint."
 			}
 			item, err := store.Checkpoint(workspaceID, *itemID, execution.CheckpointInput{ExpectedRevision: *revision, AttemptID: *attempt, Summary: input.Summary, NextStep: input.NextStep, Blocker: input.Blocker, ArtifactRefs: input.ArtifactRefs})
 			if err != nil {
@@ -692,8 +747,11 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		}
 		return writeJSON(out, draft, errOut)
 	case "identity":
+		if len(args) > 1 && args[1] == "set" {
+			return runAgentIdentitySet(args[2:], out, errOut, root)
+		}
 		if len(args) != 1 {
-			fmt.Fprintln(errOut, "usage: bcgos agent identity")
+			fmt.Fprintln(errOut, "usage: bcgos agent identity [set --agent ROLE --display-name NAME --emoji EMOJI --confirm]")
 			return ExitUsage
 		}
 		profile, err := agentidentity.Load(root)
@@ -854,6 +912,98 @@ func runAgentWithInput(args []string, in io.Reader, out, errOut io.Writer, dataR
 		fmt.Fprintln(errOut, "usage: bcgos agent <interview|personalize|identity|hire|scaffold|status|plan|declassify|verify|monitor|darwin> [options]")
 		return ExitUsage
 	}
+}
+
+func runAgentIdentitySet(args []string, out, errOut io.Writer, root string) int {
+	flags := newFlagSet("agent identity set", errOut)
+	agentRole := flags.String("agent", "", "managed agent role")
+	agentID := flags.String("agent-id", "", "concrete account or case agent ID")
+	displayName := flags.String("display-name", "", "new presentation name")
+	emoji := flags.String("emoji", "", "new presentation emoji")
+	confirmed := flags.Bool("confirm", false, "confirm this presentation-only change")
+	if err := flags.Parse(args); err != nil || rejectPositionals(flags, errOut) ||
+		strings.TrimSpace(*agentRole) == "" || strings.TrimSpace(*displayName) == "" ||
+		strings.TrimSpace(*emoji) == "" || !*confirmed {
+		fmt.Fprintln(errOut, "usage: bcgos agent identity set --agent ROLE --display-name NAME --emoji EMOJI --confirm [--agent-id ID]")
+		return ExitUsage
+	}
+	role := agentidentity.CanonicalRole(strings.TrimSpace(*agentRole))
+	interview := agentidentity.InitialInterview()
+	var descriptor *agentidentity.RoleDescriptor
+	for index := range interview.Agents {
+		candidate := &interview.Agents[index]
+		if candidate.Role == role {
+			descriptor = candidate
+			break
+		}
+	}
+	if descriptor == nil {
+		return reportError(errOut, fmt.Errorf("unknown agent role %q; run bcgos agent interview", role))
+	}
+	profile, err := agentidentity.Load(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return reportError(errOut, errors.New("complete agent personalization before setting an identity"))
+	}
+	if err != nil {
+		return reportError(errOut, err)
+	}
+	concreteID := strings.TrimSpace(*agentID)
+	if role == "client_account_agent" || role == "case_agent" {
+		if concreteID == "" {
+			return reportError(errOut, fmt.Errorf("agent role %q requires --agent-id", role))
+		}
+	}
+	if concreteID != "" && !safeAgentIdentityID(concreteID) {
+		return reportError(errOut, errors.New("agent-id must contain only letters, digits, dot, dash or underscore"))
+	}
+	if concreteID == "" {
+		switch role {
+		case "maestro", "walter", "darwin", "quality_guardian":
+			concreteID = role
+		}
+	}
+	selectionIndex := -1
+	for index := range profile.Selections {
+		selection := profile.Selections[index]
+		if agentidentity.CanonicalRole(selection.Role) != role {
+			continue
+		}
+		if (role == "client_account_agent" || role == "case_agent") && selection.AgentID != concreteID {
+			continue
+		}
+		selectionIndex = index
+		break
+	}
+	if selectionIndex < 0 {
+		profile.Selections = append(profile.Selections, agentidentity.Selection{Role: role, AgentID: concreteID, DisplayName: *displayName, Emoji: *emoji, OwnerID: profile.OwnerID, OwnershipScope: descriptor.OwnershipScope})
+	} else {
+		profile.Selections[selectionIndex].DisplayName = *displayName
+		profile.Selections[selectionIndex].Emoji = *emoji
+	}
+	profile.UpdatedAt = time.Now().UTC()
+	if err := agentidentity.Save(root, profile); err != nil {
+		return reportError(errOut, err)
+	}
+	return writeJSON(out, map[string]any{
+		"state":             "applied",
+		"role":              role,
+		"display_name":      *displayName,
+		"emoji":             *emoji,
+		"authority":         "unchanged",
+		"presentation_only": true,
+	}, errOut)
+}
+
+func safeAgentIdentityID(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if !(r == '-' || r == '_' || r == '.' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func runDarwin(args []string, in io.Reader, out, errOut io.Writer, root string) int {
@@ -1421,7 +1571,7 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 			"bundles":                "supported",
 			"human_atlas_bootstrap":  "supported",
 			"interaction_profile":    "supported",
-			"memory_dreaming":        "daily_light_local_contract_weekly_deep_unavailable",
+			"memory_dreaming":        "daily_light_and_weekly_deep_local_contract",
 			"continuous_use":         continuous.State,
 			"private_release_auth":   releaseCapability.State,
 			"updates":                releaseCapability.State,
@@ -2649,20 +2799,11 @@ func runSession(args []string, out, errOut io.Writer, dataRoot func() (string, e
 	}
 	profileState, err := resolveProfile(root, "", false)
 	if err != nil {
-		return reportError(errOut, err)
+		profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
 	}
-	owner, err := ownerctx.Inspect(root)
-	if err != nil {
-		return reportError(errOut, err)
-	}
-	sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
-	}
-	continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
-	}
+	owner, _ := ownerctx.Inspect(root)
+	sharePointSource, _ := priorWorkSourceStatus(root, inspection.WorkspaceID)
+	continuous, activeExecution, _ := buildContinuousUseStatus(root, inspection, owner)
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 		Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
@@ -2929,26 +3070,16 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	state, err := resolveHookOrchestrationState(inspection, *orchestrationState)
-	if err != nil {
-		return reportError(errOut, err)
-	}
+	// Orchestration state enriches lifecycle evidence; it is not permission to
+	// begin a session. Missing or stale state removes only that evidence binding.
+	state, _ := resolveHookOrchestrationState(inspection, *orchestrationState)
 	profileState, err := resolveProfile(root, "", false)
 	if err != nil {
-		return reportError(errOut, err)
+		profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
 	}
-	owner, err := ownerctx.Inspect(root)
-	if err != nil {
-		return reportError(errOut, err)
-	}
-	sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
-	}
-	continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
-	if err != nil {
-		return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
-	}
+	owner, _ := ownerctx.Inspect(root)
+	sharePointSource, _ := priorWorkSourceStatus(root, inspection.WorkspaceID)
+	continuous, activeExecution, _ := buildContinuousUseStatus(root, inspection, owner)
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 		Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
@@ -2974,9 +3105,7 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 		return reportError(errOut, err)
 	}
 	interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey(*runtimeName, string(lifecycle.SessionStart), inspection.WorkspaceID), state)
-	if err := evaluateAdapterInteraction(root, *runtimeName, string(lifecycle.SessionStart), interactionKey, inspection.WorkspaceID); err != nil {
-		return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
-	}
+	_ = evaluateAdapterInteraction(root, *runtimeName, string(lifecycle.SessionStart), interactionKey, inspection.WorkspaceID)
 	signalSessionPresence(state, inspection.WorkspaceID)
 	return writeJSON(out, output, errOut)
 }
@@ -3008,7 +3137,10 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			if action == "pre-action-guard" {
 				return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
 			}
-			return reportError(errOut, err)
+			if action == "post-action-receipt" || action == "stop-finalization" {
+				return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
+			}
+			return writeJSON(out, codexadapter.GuardOutput{}, errOut)
 		}
 		native = parsed
 	}
@@ -3049,9 +3181,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			}
 		}
 		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("codex", string(lifecycle.PreActionGuard), inspection.WorkspaceID, native.ToolName, native.ToolUseID), state)
-		if err := evaluateAdapterInteraction(root, "codex", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID); err != nil {
-			return writeJSON(out, codexadapter.FailClosedDenial(), errOut)
-		}
+		_ = evaluateAdapterInteraction(root, "codex", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID)
 		return writeJSON(out, response, errOut)
 	}
 	root, err := dataRoot()
@@ -3062,27 +3192,15 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 	if err != nil {
 		return reportError(errOut, err)
 	}
-	state, err := resolveHookOrchestrationState(inspection, *orchestrationState)
-	if err != nil {
-		return reportError(errOut, err)
-	}
+	state, _ := resolveHookOrchestrationState(inspection, *orchestrationState)
 	if action == "session-start" || action == "context-injection" {
 		profileState, err := resolveProfile(root, "", false)
 		if err != nil {
-			return reportError(errOut, err)
+			profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
 		}
-		owner, err := ownerctx.Inspect(root)
-		if err != nil {
-			return reportError(errOut, err)
-		}
-		sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
-		}
-		continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
-		}
+		owner, _ := ownerctx.Inspect(root)
+		sharePointSource, _ := priorWorkSourceStatus(root, inspection.WorkspaceID)
+		continuous, activeExecution, _ := buildContinuousUseStatus(root, inspection, owner)
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 			Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
@@ -3112,9 +3230,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			event = lifecycle.ContextInject
 		}
 		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("codex", event, inspection.WorkspaceID), state)
-		if err := evaluateAdapterInteraction(root, "codex", event, interactionKey, inspection.WorkspaceID); err != nil {
-			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
-		}
+		_ = evaluateAdapterInteraction(root, "codex", event, interactionKey, inspection.WorkspaceID)
 		if action == "session-start" {
 			signalSessionPresence(state, inspection.WorkspaceID)
 		}
@@ -3126,20 +3242,18 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 	}
 	receipt, err := codexadapter.Receipt(event, native)
 	if err != nil {
-		return reportError(errOut, fmt.Errorf("build lifecycle receipt: %w", err))
+		return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
 	}
 	receipt.IdempotencyKey = orchestrationBoundKey(receipt.IdempotencyKey, state)
 	if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
-		return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
+		return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
 	}
-	if err := evaluateAdapterInteraction(root, "codex", string(event), receipt.IdempotencyKey, inspection.WorkspaceID); err != nil {
-		return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
-	}
+	_ = evaluateAdapterInteraction(root, "codex", string(event), receipt.IdempotencyKey, inspection.WorkspaceID)
 	return writeJSON(out, codexadapter.FinalizationOutput{Continue: true}, errOut)
 }
 
 func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
-	const usage = "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization> [workspace-path]"
+	const usage = "usage: bcgos hook claude <session-start|context-injection|pre-action-guard|post-action-receipt|stop-finalization|subagent-start|subagent-stop> [workspace-path]"
 	if len(args) == 0 {
 		fmt.Fprintln(errOut, usage)
 		return ExitUsage
@@ -3153,20 +3267,23 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		return ExitUsage
 	}
 	switch action {
-	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization":
+	case "session-start", "context-injection", "pre-action-guard", "post-action-receipt", "stop-finalization", "subagent-start", "subagent-stop":
 	default:
 		fmt.Fprintln(errOut, usage)
 		return ExitUsage
 	}
 
 	var native claudeadapter.NativeInput
-	if action == "context-injection" || action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" {
+	if action == "context-injection" || action == "pre-action-guard" || action == "post-action-receipt" || action == "stop-finalization" || action == "subagent-start" || action == "subagent-stop" {
 		parsed, err := claudeadapter.ParseReader(in)
 		if err != nil {
 			if action == "pre-action-guard" {
 				return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
 			}
-			return reportError(errOut, fmt.Errorf("parse bounded Claude hook input: %w", err))
+			if action == "post-action-receipt" || action == "stop-finalization" {
+				return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
+			}
+			return writeJSON(out, claudeadapter.GuardOutput{}, errOut)
 		}
 		native = parsed
 	}
@@ -3180,6 +3297,15 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 		}
 		if response.HookSpecificOutput != nil {
 			return writeJSON(out, response, errOut)
+		}
+		if native.AgentType != "" {
+			_, inspection, inspectErr := inspectProtectedActionWorkspace(optionalArg(flags.Args()), dataRoot)
+			if inspectErr != nil {
+				return writeJSON(out, claudeadapter.ExternalActionDenial(unavailableConfirmationDenial), errOut)
+			}
+			if reason, managed := claudeagents.GuardTool(native.AgentType, native.ToolName, native.ToolInputJSON(), native.CWD, inspection.WorkspacePath); managed && reason != "" {
+				return writeJSON(out, claudeadapter.ExternalActionDenial(reason), errOut)
+			}
 		}
 		protected, canonicalErr := actionconfirmation.Canonicalize(native.ToolName, native.ToolInputJSON())
 		if canonicalErr != nil {
@@ -3210,9 +3336,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			}
 		}
 		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("claude", string(lifecycle.PreActionGuard), inspection.WorkspaceID, native.ToolName, native.ToolUseID), state)
-		if err := evaluateAdapterInteraction(root, "claude", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID); err != nil {
-			return writeJSON(out, claudeadapter.FailClosedDenial(), errOut)
-		}
+		_ = evaluateAdapterInteraction(root, "claude", string(lifecycle.PreActionGuard), interactionKey, inspection.WorkspaceID)
 		return writeJSON(out, response, errOut)
 	}
 
@@ -3228,24 +3352,59 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 	if err != nil {
 		return reportError(errOut, err)
 	}
+	if action == "subagent-start" || action == "subagent-stop" {
+		event := lifecycle.SubagentStart
+		if action == "subagent-stop" {
+			event = lifecycle.SubagentStop
+		}
+		receipt, receiptErr := claudeadapter.Receipt(event, native)
+		if receiptErr != nil {
+			return reportError(errOut, fmt.Errorf("build Claude subagent receipt: %w", receiptErr))
+		}
+		flow, flowErr := nativeagentflow.New(root, inspection.WorkspaceID)
+		if flowErr != nil {
+			return reportError(errOut, fmt.Errorf("open Claude native-agent flow: %w", flowErr))
+		}
+		if claudeagents.Managed(native.AgentType) {
+			if action == "subagent-start" {
+				flowErr = flow.Start(native.SessionID, native.AgentID, native.AgentType)
+			} else {
+				flowErr = flow.Stop(native.SessionID, native.AgentID, native.AgentType)
+			}
+			if flowErr != nil {
+				return reportError(errOut, fmt.Errorf("enforce Claude native-agent sequence: %w", flowErr))
+			}
+		}
+		receipt.IdempotencyKey = orchestrationBoundKey(receipt.IdempotencyKey, state)
+		if _, recordErr := lifecycle.Record(root, inspection.WorkspaceID, receipt); recordErr != nil {
+			return reportError(errOut, fmt.Errorf("record Claude subagent receipt: %w", recordErr))
+		}
+		if evaluateErr := evaluateAdapterInteraction(root, "claude", string(event), receipt.IdempotencyKey, inspection.WorkspaceID); evaluateErr != nil {
+			return reportError(errOut, fmt.Errorf("evaluate Claude subagent interaction: %w", evaluateErr))
+		}
+		if action == "subagent-start" && claudeagents.Managed(native.AgentType) {
+			return writeJSON(out, claudeadapter.ManagedSubagentStartContext(native.AgentType), errOut)
+		}
+		return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
+	}
 	switch action {
 	case "session-start", "context-injection":
+		if action == "context-injection" && native.SessionID != "" {
+			flow, flowErr := nativeagentflow.New(root, inspection.WorkspaceID)
+			if flowErr != nil {
+				return reportError(errOut, fmt.Errorf("open Claude native-agent flow: %w", flowErr))
+			}
+			if flowErr := flow.BeginTurn(native.SessionID); flowErr != nil {
+				return reportError(errOut, fmt.Errorf("start Claude native-agent turn: %w", flowErr))
+			}
+		}
 		profileState, err := resolveProfile(root, "", false)
 		if err != nil {
-			return reportError(errOut, err)
+			profileState = profile.State{Profile: "standard", Source: "fallback", Warning: "interaction profile unavailable; using standard"}
 		}
-		owner, err := ownerctx.Inspect(root)
-		if err != nil {
-			return reportError(errOut, err)
-		}
-		sharePointSource, err := priorWorkSourceStatus(root, inspection.WorkspaceID)
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("inspect guided SharePoint source selection: %w", err))
-		}
-		continuous, activeExecution, err := buildContinuousUseStatus(root, inspection, owner)
-		if err != nil {
-			return reportError(errOut, fmt.Errorf("build continuous-use status: %w", err))
-		}
+		owner, _ := ownerctx.Inspect(root)
+		sharePointSource, _ := priorWorkSourceStatus(root, inspection.WorkspaceID)
+		continuous, activeExecution, _ := buildContinuousUseStatus(root, inspection, owner)
 		packet := sessionctx.Build(sessionctx.Sources{
 			Profile: profileState, Workspace: inspection, Owner: owner, OwnerContextRoot: root,
 			Atlas:              atlas.Inspect(atlas.Options{DataRoot: root, WorkspacePath: inspection.WorkspacePath, WorkspaceID: inspection.WorkspaceID}),
@@ -3254,6 +3413,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			SharePointSource:   sharePointSource,
 			SetupAuthorization: setupAuthorizationForPacket(root, inspection),
 			ContinuousUse:      continuous,
+			AgentRuntimeState:  claudeAgentRuntimeState(inspection.WorkspacePath),
 		})
 		if action == "context-injection" {
 			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
@@ -3275,29 +3435,38 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			event = lifecycle.ContextInject
 		}
 		interactionKey := orchestrationBoundKey(lifecycle.IdempotencyKey("claude", event, inspection.WorkspaceID), state)
-		if err := evaluateAdapterInteraction(root, "claude", event, interactionKey, inspection.WorkspaceID); err != nil {
-			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
-		}
+		_ = evaluateAdapterInteraction(root, "claude", event, interactionKey, inspection.WorkspaceID)
 		if action == "session-start" {
 			signalSessionPresence(state, inspection.WorkspaceID)
 		}
 		return writeJSON(out, response, errOut)
 	case "post-action-receipt", "stop-finalization":
+		if action == "stop-finalization" {
+			flow, flowErr := nativeagentflow.New(root, inspection.WorkspaceID)
+			if flowErr != nil {
+				return reportError(errOut, fmt.Errorf("open Claude native-agent flow: %w", flowErr))
+			}
+			ready, reason, flowErr := flow.Finalize(native.SessionID)
+			if flowErr != nil {
+				return reportError(errOut, fmt.Errorf("evaluate Claude native-agent completion: %w", flowErr))
+			}
+			if !ready && !native.StopHookActive {
+				return writeJSON(out, claudeadapter.BlockStop(reason), errOut)
+			}
+		}
 		event := lifecycle.PostActionObserve
 		if action == "stop-finalization" {
 			event = lifecycle.StopFinalize
 		}
 		receipt, err := claudeadapter.Receipt(event, native)
 		if err != nil {
-			return reportError(errOut, fmt.Errorf("build lifecycle receipt: %w", err))
+			return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
 		}
 		receipt.IdempotencyKey = orchestrationBoundKey(receipt.IdempotencyKey, state)
 		if _, err := lifecycle.Record(root, inspection.WorkspaceID, receipt); err != nil {
-			return reportError(errOut, fmt.Errorf("record lifecycle receipt: %w", err))
+			return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
 		}
-		if err := evaluateAdapterInteraction(root, "claude", string(event), receipt.IdempotencyKey, inspection.WorkspaceID); err != nil {
-			return reportError(errOut, fmt.Errorf("evaluate adapter interaction: %w", err))
-		}
+		_ = evaluateAdapterInteraction(root, "claude", string(event), receipt.IdempotencyKey, inspection.WorkspaceID)
 		return writeJSON(out, claudeadapter.FinalizationOutput{Continue: true}, errOut)
 	}
 	panic("unreachable Claude hook action")
@@ -3307,6 +3476,14 @@ const (
 	noncanonicalExternalDenial    = "Maestro denied this external mutation because the request is outside the bounded canonical grammar. Nothing was changed. Use an explicit action and target, then retry."
 	unavailableConfirmationDenial = "Maestro denied this external mutation because a user-bound confirmation challenge could not be evaluated. Nothing was changed. Retry from an identified native session."
 )
+
+func claudeAgentRuntimeState(workspacePath string) string {
+	status, err := adaptercfg.Inspect("claude", workspacePath)
+	if err == nil && status.State == "installed" {
+		return "operational_beta"
+	}
+	return "unavailable"
+}
 
 func inspectProtectedActionWorkspace(path string, dataRoot func() (string, error)) (string, workspace.Inspection, error) {
 	root, err := dataRoot()
@@ -3352,23 +3529,38 @@ func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, 
 	}
 	projection, err := runtimeprojection.Inspect(runtimeName, workspacePath)
 	if err != nil {
-		return fmt.Errorf("inspect runtime projection for contextual routing: %w", err)
+		return nil
 	}
 	if projection.State != "installed" {
 		return nil
 	}
 	if packet.Owner.Onboarding.State != "complete" {
-		return enrichOnboardingGuide(packet, runtimeName, workspacePath)
+		// Onboarding is a useful method, not an admission gate. Keep its pointer
+		// available while still routing the owner's actual request.
+		_ = enrichOnboardingGuide(packet, runtimeName, workspacePath)
 	}
 	catalog, policy, installed, err := runtimeprojection.RoutingInputs(runtimeName, workspacePath)
 	if err != nil {
-		return fmt.Errorf("load governed contextual routing inputs: %w", err)
+		return nil
 	}
 	selected, err := skillrouting.Route(skillrouting.Request{Prompt: prompt, Role: "case_agent", Catalog: catalog, Policy: policy, Installed: installed})
 	if err != nil {
-		return fmt.Errorf("route contextual skills: %w", err)
+		return nil
 	}
 	for _, item := range selected {
+		if len(packet.Skills.Selected) >= skillrouting.MaximumSelections {
+			break
+		}
+		duplicate := false
+		for _, current := range packet.Skills.Selected {
+			if current.ID == item.ID {
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
+			continue
+		}
 		packet.Skills.Selected = append(packet.Skills.Selected, sessionctx.SkillSelection{ID: item.ID, Reason: item.Reason, Pointer: item.Pointer})
 	}
 	// Continuity is intentionally best-effort and metadata-only: a prompt hook
@@ -3377,11 +3569,9 @@ func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, 
 	return nil
 }
 
-// enrichOnboardingGuide is a lifecycle-owned startup rule, not an agent skill
-// grant. While the deterministic owner state is incomplete, it points the
-// runtime to the exact integrity-checked onboarding guide and suppresses
-// unrelated contextual methods. The guide does not grant tools, data access or
-// native runtime authority.
+// enrichOnboardingGuide is a best-effort lifecycle suggestion, not an
+// admission gate. The guide does not grant tools, data access or native
+// authority, and its absence never suppresses the owner's requested work.
 func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath string) error {
 	// Native hooks invoke this process by the installed absolute path. Carry it
 	// into the human-facing directive so skills never have to rely on the
@@ -3394,14 +3584,14 @@ func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath
 	}
 	projection, err := runtimeprojection.Inspect(runtimeName, workspacePath)
 	if err != nil {
-		return fmt.Errorf("inspect runtime projection for onboarding guide: %w", err)
+		return nil
 	}
 	if projection.State != "installed" {
 		return nil
 	}
 	catalog, _, installed, err := runtimeprojection.RoutingInputs(runtimeName, workspacePath)
 	if err != nil {
-		return fmt.Errorf("load governed onboarding guide: %w", err)
+		return nil
 	}
 	known := false
 	for _, skill := range catalog.Skills {
@@ -3411,7 +3601,7 @@ func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath
 		}
 	}
 	if !known {
-		return errors.New("managed onboarding guide is absent from the active skill catalog")
+		return nil
 	}
 	for _, skill := range installed {
 		if skill.ID == "maestro-onboarding" {
@@ -3419,7 +3609,7 @@ func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath
 			return nil
 		}
 	}
-	return errors.New("managed onboarding guide is absent from the integrity-checked runtime projection")
+	return nil
 }
 
 func recordAttestedSkillRoute(root, runtimeName, workspaceID, sessionID string, selected []skillrouting.Selection) error {
@@ -3556,47 +3746,6 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 	}
 	var result adapterResult
 	var err error
-	type fileSnapshot struct {
-		path   string
-		exists bool
-		mode   os.FileMode
-		body   []byte
-	}
-	snapshotFile := func(path string) (fileSnapshot, error) {
-		if path == "" {
-			return fileSnapshot{}, nil
-		}
-		info, statErr := os.Lstat(path)
-		if errors.Is(statErr, os.ErrNotExist) {
-			return fileSnapshot{path: path}, nil
-		}
-		if statErr != nil {
-			return fileSnapshot{}, statErr
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return fileSnapshot{}, fmt.Errorf("refusing to snapshot adapter symlink %s", path)
-		}
-		body, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return fileSnapshot{}, readErr
-		}
-		return fileSnapshot{path: path, exists: true, mode: info.Mode().Perm(), body: body}, nil
-	}
-	restoreFile := func(snapshot fileSnapshot) error {
-		if snapshot.path == "" {
-			return nil
-		}
-		if !snapshot.exists {
-			if err := os.Remove(snapshot.path); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-			return nil
-		}
-		if err := os.WriteFile(snapshot.path, snapshot.body, snapshot.mode); err != nil {
-			return err
-		}
-		return nil
-	}
 	switch args[0] {
 	case "install":
 		resolvedExecutable := *executable
@@ -3618,27 +3767,12 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 		if err = bootstrapAdapterDependencies(root, path); err != nil {
 			return reportError(errOut, err)
 		}
-		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)
-		if inspectErr != nil {
-			return reportError(errOut, inspectErr)
-		}
-		excludePath, excludeErr := adaptercfg.LocalConfigExcludePath(*runtimeName, path)
-		if excludeErr != nil {
-			return reportError(errOut, excludeErr)
-		}
-		snapshot, snapshotErr := snapshotFile(priorAdapter.Path)
-		if snapshotErr != nil {
-			return reportError(errOut, snapshotErr)
-		}
-		excludeSnapshot, snapshotErr := snapshotFile(excludePath)
+		adapterSnapshot, snapshotErr := adaptercfg.CaptureState(*runtimeName, path)
 		if snapshotErr != nil {
 			return reportError(errOut, snapshotErr)
 		}
 		restoreAdapterState := func() error {
-			if restoreErr := restoreFile(snapshot); restoreErr != nil {
-				return restoreErr
-			}
-			return restoreFile(excludeSnapshot)
+			return adapterSnapshot.Restore()
 		}
 		previousProjection, _ := runtimeprojection.Inspect(*runtimeName, path)
 		result.Status, err = adaptercfg.Install(*runtimeName, path, resolvedExecutable)
@@ -3664,27 +3798,12 @@ func runAdapterWithDataRoot(args []string, out, errOut io.Writer, dataRoot func(
 		if err = runtimeprojection.ValidateUninstall(*runtimeName, path); err != nil {
 			return reportError(errOut, err)
 		}
-		priorAdapter, inspectErr := adaptercfg.Inspect(*runtimeName, path)
-		if inspectErr != nil {
-			return reportError(errOut, inspectErr)
-		}
-		excludePath, excludeErr := adaptercfg.LocalConfigExcludePath(*runtimeName, path)
-		if excludeErr != nil {
-			return reportError(errOut, excludeErr)
-		}
-		snapshot, snapshotErr := snapshotFile(priorAdapter.Path)
-		if snapshotErr != nil {
-			return reportError(errOut, snapshotErr)
-		}
-		excludeSnapshot, snapshotErr := snapshotFile(excludePath)
+		adapterSnapshot, snapshotErr := adaptercfg.CaptureState(*runtimeName, path)
 		if snapshotErr != nil {
 			return reportError(errOut, snapshotErr)
 		}
 		restoreAdapterState := func() error {
-			if restoreErr := restoreFile(snapshot); restoreErr != nil {
-				return restoreErr
-			}
-			return restoreFile(excludeSnapshot)
+			return adapterSnapshot.Restore()
 		}
 		result.Status, err = adaptercfg.Uninstall(*runtimeName, path)
 		if err != nil {
@@ -3801,6 +3920,10 @@ func defaultDataRoot() (string, error) {
 }
 
 func runMemory(args []string, in io.Reader, out, errOut io.Writer) int {
+	return runMemoryWithDataRoot(args, in, out, errOut, defaultDataRoot)
+}
+
+func runMemoryWithDataRoot(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 {
 		fmt.Fprintln(errOut, "usage: bcgos memory <capture|status|context|dream>")
 		return ExitUsage
@@ -3810,20 +3933,20 @@ func runMemory(args []string, in io.Reader, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "usage: bcgos memory <capture|status|context|dream>")
 		return ExitOK
 	case "capture":
-		return runCapture(args[1:], in, out, errOut)
+		return runCapture(args[1:], in, out, errOut, dataRoot)
 	case "status":
-		return runStatus(args[1:], out, errOut)
+		return runStatus(args[1:], out, errOut, dataRoot)
 	case "context":
-		return runContext(args[1:], out, errOut)
+		return runContext(args[1:], out, errOut, dataRoot)
 	case "dream":
-		return runDream(args[1:], out, errOut)
+		return runDream(args[1:], out, errOut, dataRoot)
 	default:
 		fmt.Fprintf(errOut, "unknown memory command %q\n", args[0])
 		return ExitUsage
 	}
 }
 
-func runCapture(args []string, in io.Reader, out, errOut io.Writer) int {
+func runCapture(args []string, in io.Reader, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	flags := newFlagSet("memory capture", errOut)
 	dataDir := flags.String("data-dir", "", "local BCGOS data directory")
 	workspace := flags.String("workspace", "", "workspace identity")
@@ -3836,9 +3959,12 @@ func runCapture(args []string, in io.Reader, out, errOut io.Writer) int {
 	if rejectPositionals(flags, errOut) {
 		return ExitUsage
 	}
-	if missing := required(map[string]string{"--data-dir": *dataDir, "--workspace": *workspace, "--kind": *kind}); missing != "" {
+	if missing := required(map[string]string{"--workspace": *workspace, "--kind": *kind}); missing != "" {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
+	}
+	if code := resolveMemoryDataDir(dataDir, dataRoot, errOut); code != ExitOK {
+		return code
 	}
 	if !*sanitized {
 		fmt.Fprintln(errOut, "--sanitized is required; raw input must not be persisted")
@@ -3873,7 +3999,7 @@ func runCapture(args []string, in io.Reader, out, errOut io.Writer) int {
 	return writeJSON(out, map[string]any{"workspace_id": *workspace, "state": "captured", "path": path}, errOut)
 }
 
-func runStatus(args []string, out, errOut io.Writer) int {
+func runStatus(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	flags := newFlagSet("memory status", errOut)
 	dataDir := flags.String("data-dir", "", "local BCGOS data directory")
 	workspace := flags.String("workspace", "", "workspace identity")
@@ -3883,9 +4009,12 @@ func runStatus(args []string, out, errOut io.Writer) int {
 	if rejectPositionals(flags, errOut) {
 		return ExitUsage
 	}
-	if missing := required(map[string]string{"--data-dir": *dataDir, "--workspace": *workspace}); missing != "" {
+	if missing := required(map[string]string{"--workspace": *workspace}); missing != "" {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
+	}
+	if code := resolveMemoryDataDir(dataDir, dataRoot, errOut); code != ExitOK {
+		return code
 	}
 	engine := memory.Engine{Root: filepath.Join(*dataDir, "memory")}
 	report, err := engine.Status(*workspace)
@@ -3895,10 +4024,10 @@ func runStatus(args []string, out, errOut io.Writer) int {
 	return writeJSON(out, struct {
 		memory.StatusReport
 		Dreaming string `json:"dreaming"`
-	}{StatusReport: report, Dreaming: "daily_light_available_weekly_deep_unavailable"}, errOut)
+	}{StatusReport: report, Dreaming: "daily_light_and_weekly_deep_available"}, errOut)
 }
 
-func runContext(args []string, out, errOut io.Writer) int {
+func runContext(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	flags := newFlagSet("memory context", errOut)
 	dataDir := flags.String("data-dir", "", "local BCGOS data directory")
 	workspace := flags.String("workspace", "", "workspace identity")
@@ -3912,9 +4041,12 @@ func runContext(args []string, out, errOut io.Writer) int {
 	if rejectPositionals(flags, errOut) {
 		return ExitUsage
 	}
-	if missing := required(map[string]string{"--data-dir": *dataDir, "--workspace": *workspace}); missing != "" {
+	if missing := required(map[string]string{"--workspace": *workspace}); missing != "" {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
+	}
+	if code := resolveMemoryDataDir(dataDir, dataRoot, errOut); code != ExitOK {
+		return code
 	}
 	budgets := map[string]int{"L1": *l1, "L2": *l2, "L3": *l3, "lifetime": *lifetime}
 	for layer, budget := range budgets {
@@ -3935,9 +4067,9 @@ func runContext(args []string, out, errOut io.Writer) int {
 	return writeJSON(out, bundle, errOut)
 }
 
-func runDream(args []string, out, errOut io.Writer) int {
+func runDream(args []string, out, errOut io.Writer, dataRoot func() (string, error)) int {
 	if len(args) == 0 || (args[0] != "daily" && args[0] != "weekly") {
-		fmt.Fprintln(errOut, "usage: bcgos memory dream <daily|weekly> --data-dir PATH --workspace ID")
+		fmt.Fprintln(errOut, "usage: bcgos memory dream <daily|weekly> --workspace ID [--data-dir PATH]")
 		return ExitUsage
 	}
 	cycle := args[0]
@@ -3950,16 +4082,12 @@ func runDream(args []string, out, errOut io.Writer) int {
 	if rejectPositionals(flags, errOut) {
 		return ExitUsage
 	}
-	if missing := required(map[string]string{"--data-dir": *dataDir, "--workspace": *workspace}); missing != "" {
+	if missing := required(map[string]string{"--workspace": *workspace}); missing != "" {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
 	}
-	if cycle == "weekly" {
-		code := writeJSON(out, map[string]any{"capability": "memory_deep_dreaming", "cycle": cycle, "state": "unavailable", "workspace_id": *workspace, "reason": "no qualified deep synthesis and lifetime eligibility adapter is installed"}, errOut)
-		if code != ExitOK {
-			return code
-		}
-		return ExitUnavailable
+	if code := resolveMemoryDataDir(dataDir, dataRoot, errOut); code != ExitOK {
+		return code
 	}
 	policy, err := basememory.Policy()
 	if err != nil {
@@ -3971,7 +4099,14 @@ func runDream(args []string, out, errOut io.Writer) int {
 	}
 	memoryRoot := filepath.Join(*dataDir, "memory")
 	attestor := memory.CaptureAttestor{Root: memoryRoot}
-	engine := memory.Engine{Root: memoryRoot, Policy: policy, Budgets: map[string]int{"L1": config.L1MaxRunes, "L2": 1, "L3": 1, "lifetime": 1}, MaxSourceBytes: config.L1MaxInputBytes, Synthesizer: memory.DeterministicL1Synthesizer{MaxRunes: config.L1MaxRunes, MaxEntries: config.L1MaxEntries, MaxInputBytes: config.L1MaxInputBytes, MaxInputEntries: config.L1MaxInputEntries, Attestor: attestor}, SynthesizerID: memory.DeterministicL1SynthesizerID}
+	engine := configuredMemoryEngine(memoryRoot, policy, config, attestor)
+	if cycle == "weekly" {
+		result, err := engine.DreamWeekly(context.Background(), *workspace, time.Now().UTC())
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]any{"capability": "memory_deep_dreaming", "cycle": cycle, "state": map[bool]string{true: "reviewed_no_change", false: "succeeded"}[result.Skipped], "workspace_id": *workspace, "result": result}, errOut)
+	}
 	result, err := engine.DreamDailyAttested(context.Background(), *workspace, time.Now().UTC())
 	if errors.Is(err, os.ErrNotExist) {
 		return writeJSON(out, map[string]any{"capability": "memory_light_dreaming", "cycle": cycle, "state": "reviewed_no_change", "workspace_id": *workspace, "reason": "no trusted capture-v2 L1 input is available for the current period"}, errOut)
@@ -3980,6 +4115,27 @@ func runDream(args []string, out, errOut io.Writer) int {
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, map[string]any{"capability": "memory_light_dreaming", "cycle": cycle, "state": map[bool]string{true: "reviewed_no_change", false: "succeeded"}[result.Skipped], "workspace_id": *workspace, "result": result}, errOut)
+}
+
+func configuredMemoryEngine(root string, policy memory.Policy, config basememory.RuntimeConfig, attestor memory.CaptureAttestor) memory.Engine {
+	daily := memory.DeterministicL1Synthesizer{MaxRunes: config.L1MaxRunes, MaxEntries: config.L1MaxEntries, MaxInputBytes: config.L1MaxInputBytes, MaxInputEntries: config.L1MaxInputEntries, Attestor: attestor}
+	return memory.Engine{
+		Root: root, Policy: policy, Budgets: config.ContextBudgets(), MaxSourceBytes: config.L1MaxInputBytes,
+		Synthesizer: memory.DeterministicWeeklySynthesizer{Daily: daily, MaxRunes: config.ContextBudgets(), MaxInputBytes: config.L1MaxInputBytes}, SynthesizerID: memory.DeterministicWeeklySynthesizerID,
+		Eligibility: memory.DeterministicLifetimeEligibility{MinL3Generations: 2}, EligibilityPolicyID: "deterministic-l3-continuity-v1",
+	}
+}
+
+func resolveMemoryDataDir(value *string, dataRoot func() (string, error), errOut io.Writer) int {
+	if strings.TrimSpace(*value) != "" {
+		return ExitOK
+	}
+	resolved, err := dataRoot()
+	if err != nil {
+		return reportError(errOut, fmt.Errorf("resolve installed BCGOS data root: %w", err))
+	}
+	*value = resolved
+	return ExitOK
 }
 
 func newFlagSet(name string, errOut io.Writer) *flag.FlagSet {

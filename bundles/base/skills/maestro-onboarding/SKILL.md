@@ -1,6 +1,6 @@
 ---
 name: maestro-onboarding
-description: Start Maestro's owner interview with an explicit quick or complete track, one question at a time, and a reviewed local profile.
+description: Start or resume Maestro's owner interview, including post-onboarding SELF refresh, one question at a time with reviewed local drafts.
 ---
 
 # Maestro Onboarding
@@ -80,6 +80,42 @@ complex or separately reviewed refinements.
 The onboarding track and final profile confirmation remain separate gates. The
 CLI registry, review digest and audit receipt are the source of truth; a
 workspace-local Markdown file alone is never evidence of completion.
+
+## Post-onboarding SELF expansion
+
+Completed onboarding and the later refresh of an unknown or stale professional
+facet are separate CLI states, even when the owner calls both experiences
+“onboarding”. Inspect
+`<maestro-cli> owner expand status` after onboarding is complete or whenever
+the owner asks to continue, refresh or confirm their profile.
+
+Follow only this exact sequence:
+
+1. Run `<maestro-cli> owner expand status`.
+2. If `state` is `review_required`, read `open_draft_id` from that response and
+   run `<maestro-cli> owner expand review --id <open_draft_id>`. Show the exact
+   `proposed_body`; do not ask the facet question again.
+3. If `state` is `action_required`, run `<maestro-cli> owner expand next`, ask
+   exactly its one `question`, and wait for the owner's answer. Drafting begins
+   only after that answer; prior chat is context, never a substitute for it.
+4. Reflect the answer concisely and ask whether that interpretation is
+   accurate. Wait for the correction or approval.
+5. Before creating a private draft, ask whether the owner consents to recording
+   that exact body and attests that it contains no client data. Only after both
+   are explicit, send the reviewed `## Current` body through standard input to
+   `<maestro-cli> owner expand draft --question-token <question_token> --stdin --consent --no-client-data`.
+6. Show the exact returned `proposed_body` and ask for confirmation. Only after
+   an affirmative answer run `<maestro-cli> owner expand confirm --id <id> --digest <review_digest> --confirm`.
+7. Re-run `<maestro-cli> owner expand status` and continue with at most one
+   question. `current` means the refresh is complete; it does not require an
+   onboarding digest.
+
+The `question_token` already binds the facet, so the draft command needs no
+facet flag. A SELF expansion draft uses `owner expand confirm`, while the
+initial onboarding profile uses `owner onboarding confirm`. Review resumes with
+the `open_draft_id` returned by status. Commands and digests remain internal
+evidence: the owner sees the question, proposed text, confirmation request and
+plain-language outcome rather than a trial-and-error command transcript.
 
 ## Opening response
 
@@ -209,6 +245,17 @@ owner-controlled; a missing optional context does not block work. A generic
 `purpose=session` read still excludes the sensitive context; a caller must use
 the explicit `owner-personal-context` purpose after the owner has authorized it.
 
+## After onboarding completes
+
+When the owner presents a substantive first deliverable, offer to register it
+through `/execution-continuity`. Onboarding completion does not itself create
+a task, and a task mentioned in conversation is not persisted until the owner
+confirms the bounded objective, next step and completion criterion. Once
+confirmed, the execution ledger provides the active pointer and checkpoint
+that the next native session can observe. Do not use `owner/operating/work-state.md`
+as evidence of an execution item, and do not blame `native_qualified` when the
+local ledger has not yet been created.
+
 ## Sugestão técnica orientada pela função
 
 Depois que o owner responder qual é sua função, use a recomendação determinística
@@ -218,13 +265,12 @@ do runtime:
 bcgos bundles recommend --function "<resposta declarada pelo owner>"
 ```
 
-Se o resultado for `recommended`, explique que engineering, data ou AI foram
-identificados somente na resposta declarada e pergunte se a pessoa quer incluir
-o bundle opcional `tech-core`. Se o resultado for `ask`, faça a mesma pergunta
-sem presumir que a função é técnica. Nunca ative o bundle automaticamente: a
-seleção de uma trilha técnica e a confirmação do owner continuam sendo a única
-forma de projetar as skills. O `tech-core` é um bundle único e inclui engineering,
-data, AI e métodos de qualidade.
+Use o resultado para ajustar a orientação e a divulgação das capacidades, não
+para decidir se o bundle será instalado. O `tech-core` já vem incluído desde a
+primeira instalação, sem pergunta de ativação ou confirmação adicional. A
+seleção de uma trilha técnica continua sendo opcional e serve apenas para
+roteamento e personalização. O `tech-core` é um bundle único e inclui
+engineering, data, AI e métodos de qualidade.
 
 ### Skills de desenvolvimento disponíveis
 
@@ -244,6 +290,34 @@ apresente como instalados nem os substitua por uma sigla inventada; se o owner
 estiver se referindo a práticas específicas com esses nomes, peça o nome
 completo ou a fonte autorizada e registre a necessidade como uma futura skill
 do `tech-core`.
+
+## Roadmap de ativação dos agentes
+
+O `init` cria o scaffold técnico do workspace, mas isso não substitui os
+agentes de negócio que dão forma ao trabalho. Depois que o owner concluir o
+onboarding, impulsione esta sequência para um caso de cliente:
+
+```text
+Client Account Agent → Case Agent vinculado → primeira entrega → checkpoint
+```
+
+Explique em linguagem simples e dê um exemplo concreto:
+
+> “Vamos criar primeiro o Client Account Agent da Aurora Mobility para organizar
+> o contexto autorizado da conta. Depois criamos o Case Agent do projeto de
+> pricing 2026, vinculado a essa conta, e damos a ele uma primeira entrega
+> pequena.”
+
+Se o owner aceitar, conduza uma criação por vez, sempre mostrando identidade,
+escopo, mandato, fontes autorizadas e critério de sucesso antes de persistir.
+O Client Account Agent prepara e valida o contexto da conta; o Case Agent
+executa e entrega o projeto. Não trate o scaffold padrão como se fosse um
+agente de conta ou um caso de negócio já criado.
+
+Para um trabalho interno sem cliente, o caminho direto para Case Agent continua
+válido. Para trabalho de cliente, a recomendação padrão é começar pela conta e
+depois vincular cada Case Agent ao Client Account Agent correto. Listar agentes
+é consulta; não cria nada sem pedido explícito do owner.
 
 ## Camadas opcionais de identidade
 
@@ -303,6 +377,14 @@ professional baseline; do not emulate ingestion from conversation.
 
 ## Completion and follow-through
 
+### Conversational surface
+
+Keep onboarding focused on the owner's outcome. Internal capability states,
+runtime names, receipts, trust terminology, JSON payloads, CLI commands and
+policy details stay in the system layer. Show one friendly question or action
+at a time; expose implementation details only when the owner explicitly asks
+for a technical explanation.
+
 - A confirmed **quick** track is a valid baseline, not a claim that the full
   identity is known. Offer the complete track later only when it is useful;
   never nag or silently upgrade it.
@@ -332,17 +414,17 @@ professional baseline; do not emulate ingestion from conversation.
     enrollment and the qualified local ingestion runtime are available:
     `<maestro-cli> prior-work rationale ingest --workspace <workspace> --stdin --confirm`.
     The batch is deterministic: newest source modifications first, then stable
-    item reference as tie-breaker. If the collector/runtime is unavailable,
-    report one consolidated external action pending, leave the source selected
-    and continue unrelated work without blaming or instructing the owner.
+    item reference as tie-breaker. If the source cannot be reached yet, keep
+    the source selection, say briefly that the folder is not reachable right
+    now, and continue unrelated work without exposing internal reasons or
+    asking the owner to troubleshoot.
   - If the owner prefers to start clean, record the choice with
     `<maestro-cli> prior-work source defer --workspace <workspace> --confirm` and do
     not ask again automatically.
   - A selection is not enrollment or collection authority. SharePoint remains
-    authoritative; only a signed enrollment plus a qualified Claude collector
-    can read the selected roots and produce the bounded rationale batch. Codex
-    collection remains `unavailable/corporate_policy` and no fallback is
-    allowed. The local rationale layer is a derived convenience, never a
+    authoritative; only the approved local collection path can read the
+    selected roots and produce the bounded rationale batch. No fallback or
+    connector is offered. The local rationale layer is a derived convenience, never a
     replacement for the SharePoint source.
 - Immediately after confirmation, always invite the owner to name the internal
   agents now or defer them: **“Quer dar nome e avatar ao Walter, ao Darwin e ao

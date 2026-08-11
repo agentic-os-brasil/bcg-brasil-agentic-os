@@ -105,6 +105,20 @@ func TestBuildReportsEmptyAndUnavailableMemoryWithoutRawFallback(t *testing.T) {
 	}
 }
 
+func TestBuildAcceptsOperationalBetaAgentRuntimeWithoutPromotingNativeEvidence(t *testing.T) {
+	packet := Build(Sources{
+		Profile:           profile.State{Profile: "standard", Source: "configured"},
+		Workspace:         workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+		AgentRuntimeState: "operational_beta",
+	})
+	if err := packet.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if packet.Agents.RuntimeState != "operational_beta" || !strings.Contains(packet.Agents.Message, "native qualification") {
+		t.Fatalf("agents=%#v", packet.Agents)
+	}
+}
+
 func TestPacketValidateRejectsTamperedContinuousUse(t *testing.T) {
 	packet := Build(Sources{
 		Profile:   profile.State{Profile: "standard", Source: "configured"},

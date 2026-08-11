@@ -29,7 +29,7 @@ only the explanation and optional detail do.
 ## Workflow
 
 1. Resolve the active workspace identity and local memory root through the installed runtime adapter.
-2. Confirm daily L1 is supported and inspect its effective managed bounds. For weekly deep work, require the separate synthesis and eligibility capabilities.
+2. Confirm the managed bounds and named weekly eligibility policy. The bundled deterministic adapter supports daily L1 and weekly L2/L3 rollups; it never selects a remote model.
 3. For capture, persist only signals already classified as sanitized by the adapter. Never pass raw credentials, client files or unrestricted prompt history.
 4. Invoke exactly one canonical cycle through the adapter. Hooks, schedules and manual requests all call the same idempotent engine operation.
 5. For weekly lifetime promotion, require a named eligibility policy. If it is missing, stop: lifetime activation must fail closed.
@@ -50,8 +50,9 @@ only the explanation and optional detail do.
 
 ## Current delivery boundary
 
-The managed bundle contains this canonical skill, the deterministic daily L1
-synthesizer and its bounded runtime configuration. `bcgos memory dream daily`
-is executable over already-sanitized local captures. Weekly deep dreaming and
-L2/L3/lifetime promotion remain unavailable until their separately qualified
-synthesis and eligibility adapters exist.
+The managed bundle contains this canonical skill, deterministic daily and
+weekly synthesis adapters, the bounded runtime configuration and the
+`deterministic-l3-continuity-v1` lifetime eligibility policy. `bcgos memory
+dream daily` is executable over already-sanitized local captures. `bcgos memory
+dream weekly` atomically activates L2 and L3 when L1 exists; it promotes
+lifetime only after two weekly L3 generations are present.

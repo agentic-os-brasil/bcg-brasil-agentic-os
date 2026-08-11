@@ -8,11 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	pathpkg "path"
 	"regexp"
 	"strings"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycleguard"
 )
 
 const MaximumNativeInputBytes = 64 << 10
@@ -20,11 +20,15 @@ const MaximumNativeInputBytes = 64 << 10
 var nativeIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 
 type NativeInput struct {
-	SessionID string `json:"session_id"`
-	Prompt    string `json:"prompt"`
-	ToolUseID string `json:"tool_use_id"`
-	ToolName  string `json:"tool_name"`
-	ToolInput struct {
+	SessionID      string `json:"session_id"`
+	CWD            string `json:"cwd"`
+	Prompt         string `json:"prompt"`
+	ToolUseID      string `json:"tool_use_id"`
+	ToolName       string `json:"tool_name"`
+	AgentID        string `json:"agent_id"`
+	AgentType      string `json:"agent_type"`
+	StopHookActive bool   `json:"stop_hook_active"`
+	ToolInput      struct {
 		Command string `json:"command"`
 	} `json:"tool_input"`
 	rawToolInput json.RawMessage
@@ -63,6 +67,29 @@ type GuardDecision struct {
 
 type FinalizationOutput struct {
 	Continue bool `json:"continue"`
+}
+
+type StopOutput struct {
+	Decision string `json:"decision,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+func BlockStop(reason string) StopOutput {
+	return StopOutput{Decision: "block", Reason: reason}
+}
+
+type SubagentStartOutput struct {
+	HookSpecificOutput struct {
+		HookEventName     string `json:"hookEventName"`
+		AdditionalContext string `json:"additionalContext"`
+	} `json:"hookSpecificOutput"`
+}
+
+func ManagedSubagentStartContext(agentType string) SubagentStartOutput {
+	var output SubagentStartOutput
+	output.HookSpecificOutput.HookEventName = "SubagentStart"
+	output.HookSpecificOutput.AdditionalContext = "You are running as the managed Maestro specialist " + agentType + ". Stay inside the exact delegated packet, never delegate, and return only to Maestro. Native qualification is beta telemetry; the deterministic scope and tool guard is authoritative."
+	return output
 }
 
 func Parse(input []byte) (NativeInput, error) {
@@ -113,7 +140,7 @@ func Guard(input NativeInput) (GuardOutput, error) {
 		// permission flow.
 		return GuardOutput{}, nil
 	}
-	destructive, err := destructiveRootRemoval(command)
+	destructive, err := lifecycleguard.ProtectedRootRemoval(command)
 	if err != nil {
 		// The guard owns one narrow invariant: protected-root removal. Shell
 		// operators in an otherwise ordinary command belong to Claude's own
@@ -174,6 +201,11 @@ func Receipt(event string, input NativeInput) (lifecycle.Receipt, error) {
 	case lifecycle.StopFinalize:
 		// Stop has no tool-use identity. The session and event form the
 		// idempotent metadata-only key.
+	case lifecycle.SubagentStart, lifecycle.SubagentStop:
+		if !nativeIdentifierPattern.MatchString(input.AgentID) || !nativeIdentifierPattern.MatchString(input.AgentType) {
+			return lifecycle.Receipt{}, errors.New("Claude subagent identity is invalid")
+		}
+		parts = append(parts, input.AgentID, input.AgentType)
 	default:
 		return lifecycle.Receipt{}, fmt.Errorf("unsupported Claude receipt event %q", event)
 	}
@@ -184,6 +216,7 @@ func Receipt(event string, input NativeInput) (lifecycle.Receipt, error) {
 		State:          "observed",
 		Provenance:     lifecycle.AdapterCommand,
 		ToolName:       toolName,
+		AgentType:      input.AgentType,
 		IdempotencyKey: lifecycle.IdempotencyKey(parts...),
 	}, nil
 }
@@ -194,190 +227,6 @@ func denial(reason string) GuardOutput {
 		PermissionDecision:       "deny",
 		PermissionDecisionReason: reason,
 	}}
-}
-
-func destructiveRootRemoval(command string) (bool, error) {
-	fields, err := splitSimpleCommand(command)
-	if err != nil {
-		return false, err
-	}
-	for len(fields) > 0 && isLeadingAssignment(fields[0].Value) {
-		fields = fields[1:]
-	}
-	if len(fields) == 0 || !isRMExecutable(fields[0].Value) {
-		return false, nil
-	}
-	recursive, force := false, false
-	var targets []simpleWord
-	optionsEnded := false
-	for _, word := range fields[1:] {
-		field := word.Value
-		if !optionsEnded && field == "--" {
-			optionsEnded = true
-			continue
-		}
-		if !optionsEnded && strings.HasPrefix(field, "-") && field != "-" {
-			switch field {
-			case "--recursive":
-				recursive = true
-			case "--force":
-				force = true
-			default:
-				if strings.HasPrefix(field, "--") {
-					continue
-				}
-				flags := strings.TrimPrefix(field, "-")
-				recursive = recursive || strings.ContainsAny(flags, "rR")
-				force = force || strings.Contains(flags, "f")
-			}
-			continue
-		}
-		targets = append(targets, word)
-	}
-	if !recursive || !force {
-		return false, nil
-	}
-	for _, target := range targets {
-		if isProtectedRoot(target) {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func isLeadingAssignment(value string) bool {
-	name, _, found := strings.Cut(value, "=")
-	if !found || name == "" {
-		return false
-	}
-	for index, character := range name {
-		if !(character == '_' || character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || (index > 0 && character >= '0' && character <= '9')) {
-			return false
-		}
-	}
-	return true
-}
-
-func isRMExecutable(value string) bool {
-	switch pathpkg.Clean(value) {
-	case "rm", "/bin/rm", "/usr/bin/rm":
-		return true
-	default:
-		return false
-	}
-}
-
-func isProtectedRoot(word simpleWord) bool {
-	cleaned := pathpkg.Clean(word.Value)
-	switch cleaned {
-	case "/":
-		return true
-	case "~":
-		return word.TildeExpands
-	case "$HOME", "${HOME}":
-		return word.HomeExpands
-	default:
-		return false
-	}
-}
-
-type simpleWord struct {
-	Value        string
-	HomeExpands  bool
-	TildeExpands bool
-}
-
-// splitSimpleCommand recognizes only whitespace-separated words plus balanced
-// single and double quotes. Shell operators, substitutions and escapes are
-// deliberately rejected instead of being partially interpreted.
-func splitSimpleCommand(command string) ([]simpleWord, error) {
-	var (
-		fields                 []simpleWord
-		current                strings.Builder
-		quote                  byte
-		homeExpansionCandidate bool
-		tildeExpands           bool
-	)
-	flush := func() {
-		if current.Len() > 0 {
-			value := current.String()
-			fields = append(fields, simpleWord{
-				Value:        value,
-				HomeExpands:  homeExpansionCandidate && (strings.Contains(value, "$HOME") || strings.Contains(value, "${HOME}")),
-				TildeExpands: tildeExpands,
-			})
-			current.Reset()
-			homeExpansionCandidate = false
-			tildeExpands = false
-		}
-	}
-	for index := 0; index < len(command); index++ {
-		character := command[index]
-		if quote != 0 {
-			if character == quote {
-				quote = 0
-				continue
-			}
-			if character == '$' && quote == '"' {
-				length := supportedHomeExpansionLength(command[index:])
-				if length == 0 {
-					return nil, errors.New("unsupported parameter expansion is outside the bounded simple-command grammar")
-				}
-				homeExpansionCandidate = true
-				current.WriteString(command[index : index+length])
-				index += length - 1
-				continue
-			}
-			current.WriteByte(character)
-			continue
-		}
-		switch character {
-		case '\'', '"':
-			quote = character
-		case ' ', '\t':
-			flush()
-		case '\r', '\n', '\\', ';', '|', '&', '<', '>', '`', '*', '?', '[', ']', '{', '}':
-			return nil, errors.New("command is outside the bounded simple-command grammar")
-		default:
-			if current.Len() == 0 && character == '~' {
-				tildeExpands = true
-			}
-			if character == '$' {
-				length := supportedHomeExpansionLength(command[index:])
-				if length == 0 {
-					return nil, errors.New("unsupported parameter expansion is outside the bounded simple-command grammar")
-				}
-				homeExpansionCandidate = true
-				current.WriteString(command[index : index+length])
-				index += length - 1
-				continue
-			}
-			current.WriteByte(character)
-		}
-	}
-	if quote != 0 {
-		return nil, errors.New("command contains an unterminated quote")
-	}
-	flush()
-	return fields, nil
-}
-
-func supportedHomeExpansionLength(value string) int {
-	if strings.HasPrefix(value, "${HOME}") {
-		return len("${HOME}")
-	}
-	if !strings.HasPrefix(value, "$HOME") {
-		return 0
-	}
-	if len(value) == len("$HOME") {
-		return len("$HOME")
-	}
-	next := value[len("$HOME")]
-	if (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z') ||
-		(next >= '0' && next <= '9') || next == '_' {
-		return 0
-	}
-	return len("$HOME")
 }
 
 // destructiveWindowsRemoval returns (destructive, matched).

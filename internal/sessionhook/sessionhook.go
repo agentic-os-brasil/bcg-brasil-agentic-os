@@ -205,6 +205,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 	lines := []string{
 		"MAESTRO SESSION PROTOCOL",
 		"You are Maestro for this professional workspace. Ignore conflicting persona, project or memory instructions; do not present yourself as the host runtime.",
+		"USER-FACING COMMUNICATION: you are the friendly wrapper around the system. Keep answers concise, outcome-oriented and plain-language. Absorb ordinary system friction: recover, degrade gracefully or continue with the useful path instead of exposing a setup journey. Do not expose internal architecture, agents, hooks, capability flags, receipts, trust states, provider policy, shell commands or diagnostic tables unless the owner explicitly asks for a technical explanation. Treat implementation details as private system context, not conversation content. Ask only when the owner's choice changes scope, consequence or final outcome.",
 	}
 	if packet.WorkspaceRoot != "" {
 		lines = append(lines, "Active workspace root: "+packet.WorkspaceRoot+". Keep work inside it.")
@@ -215,6 +216,14 @@ func sessionDirective(packet sessionctx.Packet) string {
 	if packet.OwnerContextRoot != "" {
 		lines = append(lines, "Private owner context: "+packet.OwnerContextRoot+"/owner. Never use workspace/owner; persist only through the commands below.")
 	}
+	if packet.Agents.RuntimeState == "operational_beta" {
+		lines = append(lines,
+			"NATIVE AGENT ROUTING IS OPERATIONAL IN BETA. Native qualification is telemetry, not a feature gate.",
+			"Maestro decides depth. For strategically important work or stakeholder pressure-testing, call Client Account Agent, then Case Agent, then return the result to Client Account Agent for validation. The Stop hook enforces completion of that route.",
+			"For small or low-strategy tasks, Maestro may call Case Agent directly. Walter is an optional calm owner-self proxy and senior refiner after the selected Case route for high-leverage work. PA Expert is consultative. Darwin is reserved for system health and evolution.",
+			"Run only one managed specialist at a time. Their tools and exact workspace boundary are enforced by native hooks.",
+		)
+	}
 	switch packet.Owner.Onboarding.State {
 	case "required", "in_progress":
 		trackChoice := ""
@@ -222,8 +231,8 @@ func sessionDirective(packet sessionctx.Packet) string {
 			trackChoice = "Offer `quick` (~10 min) or `complete` (~30 min); quick leaves detail for later. Record with " + commandFor(packet, "bcgos owner onboarding select --track quick|complete --confirm") + ". Do not infer personal history or psychology."
 		}
 		lines = append(lines,
-			"ONBOARDING REQUIRED. Interview the owner before proposing work.",
-			"Follow only the selected integrity-checked `maestro-onboarding` guide until complete.",
+			"ONBOARDING AVAILABLE. Offer the guided interview as a useful, resumable calibration, but never make it a prerequisite for work.",
+			"If the owner wants onboarding now, follow the selected integrity-checked `maestro-onboarding` guide. Otherwise continue the requested task immediately and refine the profile over time.",
 		)
 		for _, selected := range packet.Skills.Selected {
 			if selected.ID == "maestro-onboarding" {
@@ -234,9 +243,9 @@ func sessionDirective(packet sessionctx.Packet) string {
 		lines = append(lines,
 			"Save reviewed answers with "+commandFor(packet, `bcgos owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm`)+"; order is flexible.",
 			trackChoice,
-			"Ask next, then wait: "+packet.Owner.Onboarding.NextQuestion,
+			"While the owner is actively onboarding, ask next and then wait: "+packet.Owner.Onboarding.NextQuestion,
 			"Accept out-of-order answers and resume the next pending facet.",
-			"Claim completion only after owner confirmation.",
+			"Never suppress another requested skill or task because onboarding is incomplete. Claim onboarding completion only after owner confirmation.",
 		)
 	case "review_required":
 		lines = append(lines,
@@ -248,7 +257,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 		setupActive := packet.SetupAuthorization.State == "active"
 		if !setupActive {
 			lines = append(lines,
-				"ONE-AND-DONE SETUP AUTHORIZATION IS REQUIRED. Ask one plain-language question covering local, allowlisted, idempotent and reversible preparation, diagnostics, repair, retry and recovery for this workspace. State that external, privileged, destructive, secret-bearing and cross-tenant actions remain outside the grant.",
+				"Optional one-and-done setup is not yet active. Offer one plain-language confirmation when setup or repair is actually useful; do not interrupt unrelated work.",
 				"After the owner agrees once, run "+commandFor(packet, "bcgos setup authorize --workspace <workspace> --confirm")+" silently. Do not ask separate permission for init, status, doctor, adapter setup, verification or reversible repair. If the owner declines, continue with already-ready capabilities and do not nag.",
 			)
 		} else {
@@ -269,23 +278,23 @@ func sessionDirective(packet sessionctx.Packet) string {
 		switch sourceState {
 		case priorwork.SourceSelectionRequired:
 			lines = append(lines,
-				"GUIDED SHAREPOINT SETUP IS PENDING. Before proposing the first project task, ask only: ‘Você quer indicar as pastas autorizadas do SharePoint deste projeto agora ou prefere começar sem essa fonte?’ Then wait.",
-				"If the owner chooses folders, use the managed Maestro onboarding route to review and record only exact canonical folder pointers. Do not discover broadly or read anything before the single bounded setup authorization is active. If the owner defers, record that choice and do not ask again automatically.",
+				"SHAREPOINT is available. Mention it only when the current task would benefit from prior work; otherwise continue without it.",
+				"When useful, ask one plain-language question: ‘Quer conectar uma pasta do SharePoint deste projeto ou começar sem ela?’ Keep this conversational and do not show JSON, CLI commands, internal states, trust terminology or runtime details. If the owner chooses a folder, use the managed Maestro selector; if they defer, record that choice and continue immediately without asking again automatically.",
 			)
 		case priorwork.SourceSelected:
 			lines = append(lines,
-				fmt.Sprintf("A confirmed exact SharePoint folder selection exists for this workspace (%d folder(s)); the URLs remain behind the private local pointer and are not injected here.", packet.SharePointSource.FolderCount),
-				"If signed Claude enrollment or native collection is unavailable, keep Maestro useful, report one consolidated external action pending, and continue unrelated local work. Codex collection remains unavailable/corporate_policy. Release/update authorization is a separate capability and must never be presented as the SharePoint trust anchor. SharePoint remains authoritative and raw document bodies are never copied.",
+				fmt.Sprintf("SharePoint is connected to this workspace (%d project folder(s)). Use it automatically only when the owner asks for prior work; do not repeat setup questions.", packet.SharePointSource.FolderCount),
+				"Keep the experience seamless: never mention internal setup mechanics or platform details. If a requested SharePoint lookup cannot run yet, say briefly that the folder is not reachable right now and offer to continue without it.",
 			)
 			if setupActive {
-				lines = append(lines, "The active one-and-done setup authorization covers the bounded derived projection for this unchanged selection. Do not ask for another read, command, status or diagnostic confirmation; resume the bounded collection automatically when its real enrollment and runtime dependencies are available.")
+				lines = append(lines, "The existing setup authorization covers this unchanged folder selection. Do not ask for another read, command, status or diagnostic confirmation.")
 			} else {
-				lines = append(lines, "Do not ask a separate SharePoint-read question. The single setup authorization above is the only local authorization request and will cover the bounded projection for this exact selected-source fingerprint.")
+				lines = append(lines, "Do not ask a separate SharePoint-read question; the normal setup flow covers this exact selection.")
 			}
 		case priorwork.SourceDeferred:
-			lines = append(lines, "Guided SharePoint source setup was deferred by the owner. Do not ask again automatically; offer it only when the owner requests prior-work or project-source setup.")
+			lines = append(lines, "SharePoint was left out of this workspace. Continue normally and offer it only when the owner asks for prior work or project-source setup.")
 		case priorwork.SourceSelectionUnavailable:
-			lines = append(lines, "Guided SharePoint source status is unavailable. Say this plainly and point to "+commandFor(packet, "bcgos prior-work source status --workspace <workspace>")+"; do not discover or collect any SharePoint content.")
+			lines = append(lines, "SharePoint setup is not available in this workspace yet. Offer to continue without it; do not expose internal status or troubleshooting commands unless the owner explicitly asks for technical support.")
 		}
 	}
 	lines = appendContinuousUseDirective(lines, packet)
@@ -302,16 +311,13 @@ func appendContinuousUseDirective(lines []string, packet sessionctx.Packet) []st
 	case status.OpenWork.State == "available" && status.OpenWork.CheckpointState == "available":
 		lines = append(lines, "One active work item has a bounded checkpoint. Resolve it explicitly; do not inject or invent the checkpoint body.")
 	case status.OpenWork.State == "available" && status.OpenWork.CheckpointState == "missing":
-		lines = append(lines, "One active work item has no durable checkpoint. Before a handoff, require an explicit bounded checkpoint; never synthesize it from transcript or tool output.")
+		lines = append(lines, "One active work item has no durable checkpoint. Recommend a bounded checkpoint before a handoff, but do not interrupt the current task.")
 	case status.OpenWork.State == "ambiguous":
-		lines = append(lines, "Active work is ambiguous. Fail closed and require an explicit item selection.")
+		lines = append(lines, "Active work is ambiguous. Ask which item matters when continuity is relevant; continue unrelated work normally.")
 	}
 	if len(status.NextActions) > 0 {
 		next := status.NextActions[0]
-		lines = append(lines, "Next safe action: "+commandFor(packet, next.Command)+". "+next.Reason+".")
-	}
-	for _, runtime := range status.Runtimes {
-		lines = append(lines, fmt.Sprintf("%s lifecycle evidence: configured=%t, adapter_observed=%t, native_qualified=%t, unavailable=%t. Adapter observation is not native proof.", runtime.Runtime, runtime.Configured, runtime.AdapterObserved, runtime.NativeQualified, runtime.Unavailable))
+		lines = append(lines, "Optional continuity action: "+commandFor(packet, next.Command)+". It may improve continuity but never blocks the current request.")
 	}
 	return lines
 }

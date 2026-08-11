@@ -1,12 +1,15 @@
 package adaptercfg
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 )
 
 func ownedCommands(t *testing.T, path, runtimeName string) []string {
@@ -368,7 +371,7 @@ func TestCodexInstallOwnsCompleteSynchronousLifecycle(t *testing.T) {
 	}
 }
 
-func TestClaudeInstallOwnsCompleteLifecycleAndKeepsObserveHooksAsync(t *testing.T) {
+func TestClaudeInstallOwnsCompleteLifecycleWithBlockingStop(t *testing.T) {
 	workspace := t.TempDir()
 	path := filepath.Join(workspace, ".claude", "settings.local.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -380,6 +383,10 @@ func TestClaudeInstallOwnsCompleteLifecycleAndKeepsObserveHooksAsync(t *testing.
 	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
 		t.Fatal(err)
 	}
+	entries, err := os.ReadDir(filepath.Join(workspace, ".claude", "agents"))
+	if err != nil || len(entries) != 5 {
+		t.Fatalf("managed native agents = %v, %v", entries, err)
+	}
 	config, err := read(path)
 	if err != nil {
 		t.Fatal(err)
@@ -388,7 +395,7 @@ func TestClaudeInstallOwnsCompleteLifecycleAndKeepsObserveHooksAsync(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"} {
+	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "SubagentStart", "SubagentStop"} {
 		groups, err := groupsForEvent(hooks, event)
 		if err != nil || len(groups) == 0 {
 			t.Fatalf("%s groups = %#v, %v", event, groups, err)
@@ -404,7 +411,7 @@ func TestClaudeInstallOwnsCompleteLifecycleAndKeepsObserveHooksAsync(t *testing.
 				if entry["timeout"] != float64(5) {
 					t.Fatalf("%s timeout = %#v", event, entry["timeout"])
 				}
-				wantAsync := event == "PostToolUse" || event == "Stop"
+				wantAsync := event == "PostToolUse"
 				if got, _ := entry["async"].(bool); got != wantAsync {
 					t.Fatalf("%s async = %v, want %v", event, got, wantAsync)
 				}
@@ -459,5 +466,114 @@ func TestClaudeUninstallRemovesOnlyOwnedLifecycleBindings(t *testing.T) {
 	data, err := os.ReadFile(path)
 	if err != nil || !strings.Contains(string(data), `"command": "other"`) || strings.Contains(string(data), "--adapter-source maestro") {
 		t.Fatalf("config after uninstall = %s, %v", data, err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, ".claude", "agents", "case-agent.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("managed Claude agent survived uninstall: %v", err)
+	}
+}
+
+func TestClaudeInspectReportsPartialWhenManagedAgentProjectionIsMissing(t *testing.T) {
+	workspace := t.TempDir()
+	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(workspace, ".claude", "agents", "walter.md")); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Inspect("claude", workspace)
+	if err != nil || status.State != "partial" {
+		t.Fatalf("status=%#v err=%v", status, err)
+	}
+}
+
+func TestClaudeUninstallRefusesEditedAgentBeforeRemovingHooks(t *testing.T) {
+	workspace := t.TempDir()
+	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	agentPath := filepath.Join(workspace, ".claude", "agents", "walter.md")
+	if err := os.WriteFile(agentPath, []byte("user replacement\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall("claude", workspace); err == nil {
+		t.Fatal("edited agent was removed")
+	}
+	settings, err := os.ReadFile(filepath.Join(workspace, ".claude", "settings.local.json"))
+	if err != nil || !strings.Contains(string(settings), "--adapter-source maestro") {
+		t.Fatalf("hooks changed before agent preflight: %s, %v", settings, err)
+	}
+}
+
+func TestClaudeInstallRollsBackProjectedAgentsWhenSettingsWriteFails(t *testing.T) {
+	workspace := t.TempDir()
+	settingsPath := filepath.Join(workspace, ".claude", "settings.local.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := []byte(`{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"other"}]}]}}`)
+	if err := os.WriteFile(settingsPath, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	priorWrite := writeRuntimeConfig
+	writeRuntimeConfig = func(string, map[string]any) error { return errors.New("injected settings write failure") }
+	t.Cleanup(func() { writeRuntimeConfig = priorWrite })
+
+	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err == nil || !strings.Contains(err.Error(), "injected settings write failure") {
+		t.Fatalf("Install error = %v", err)
+	}
+	settings, err := os.ReadFile(settingsPath)
+	if err != nil || string(settings) != string(original) {
+		t.Fatalf("settings after rollback = %s, %v", settings, err)
+	}
+	for _, name := range managedClaudeAgentFiles {
+		if _, err := os.Stat(filepath.Join(workspace, ".claude", "agents", name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("managed agent %s survived rollback: %v", name, err)
+		}
+	}
+}
+
+func TestClaudeUninstallRollsBackHooksAndAgentsWhenProjectionRemovalFails(t *testing.T) {
+	workspace := t.TempDir()
+	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	priorUninstall := uninstallClaudeAgents
+	uninstallClaudeAgents = func(workspace string) (claudeagents.Status, error) {
+		status, err := claudeagents.Uninstall(workspace)
+		if err != nil {
+			return status, err
+		}
+		return status, errors.New("injected agent removal failure")
+	}
+	t.Cleanup(func() { uninstallClaudeAgents = priorUninstall })
+
+	if _, err := Uninstall("claude", workspace); err == nil || !strings.Contains(err.Error(), "injected agent removal failure") {
+		t.Fatalf("Uninstall error = %v", err)
+	}
+	status, err := Inspect("claude", workspace)
+	if err != nil || status.State != "installed" {
+		t.Fatalf("status after rollback = %#v, %v", status, err)
+	}
+}
+
+func TestStateSnapshotRestoresClaudeAgentsAfterDownstreamFailure(t *testing.T) {
+	workspace := t.TempDir()
+	snapshot, err := CaptureState("claude", workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	if err := snapshot.Restore(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, ".claude", "settings.local.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("settings survived downstream rollback: %v", err)
+	}
+	for _, name := range managedClaudeAgentFiles {
+		if _, err := os.Stat(filepath.Join(workspace, ".claude", "agents", name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("managed agent %s survived downstream rollback: %v", name, err)
+		}
 	}
 }

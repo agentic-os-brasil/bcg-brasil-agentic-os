@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	validStates        = map[string]bool{"native": true, "emulated": true, "degraded": true, "unavailable": true}
+	validStates        = map[string]bool{"native": true, "operational_beta": true, "emulated": true, "degraded": true, "unavailable": true}
 	validCriticality   = map[string]bool{"required": true, "optional": true}
 	validRuntime       = map[string]bool{"claude": true, "codex": true}
-	validSemanticEvent = map[string]bool{"": true, "session_start": true, "pre_action_guard": true, "post_action_observe": true, "stop_finalize": true, "context_inject": true, "agent_review": true}
+	validSemanticEvent = map[string]bool{"": true, "session_start": true, "pre_action_guard": true, "post_action_observe": true, "stop_finalize": true, "context_inject": true, "subagent_start": true, "subagent_stop": true, "agent_review": true}
 )
 
 type Manifest struct {
@@ -107,7 +107,7 @@ func (manifest Manifest) Validate() error {
 			if !validStates[value.State] || value.Mechanism == "" {
 				return fmt.Errorf("capability %s has invalid runtime contract for %s", capability.ID, runtime)
 			}
-			if (value.State == "unavailable" || value.State == "degraded") && value.Reason == "" {
+			if (value.State == "unavailable" || value.State == "degraded" || value.State == "operational_beta") && value.Reason == "" {
 				return fmt.Errorf("capability %s requires a reason for %s on %s", capability.ID, value.State, runtime)
 			}
 			if value.AdapterObserved && !value.Configured {
@@ -143,11 +143,18 @@ func (manifest Manifest) Report(runtime string, detected bool) (Report, error) {
 		report.Capabilities = append(report.Capabilities, entry)
 	}
 	if detected {
+		beta := false
 		for _, capability := range report.Capabilities {
-			if capability.Criticality == "required" && capability.State != "native" {
+			if capability.Criticality == "required" && (capability.State == "unavailable" || capability.State == "degraded") {
 				report.State = "capabilities_unavailable"
 				break
 			}
+			if capability.Criticality == "required" && capability.State == "operational_beta" {
+				beta = true
+			}
+		}
+		if report.State == "ready" && beta {
+			report.State = "operational_beta"
 		}
 	}
 	return report, nil

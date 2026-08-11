@@ -2,6 +2,7 @@
 .workspace-handoff{width:min(820px,100%);margin:24px auto 18px;text-align:left;padding:18px;border:1px solid rgba(49,224,181,.18);background:rgba(2,20,18,.64)}
 .workspace-handoff h2{margin:8px 0 14px;color:#edfff9;font:400 25px/1.2 Georgia,serif}
 .handoff-value,.handoff-prompt{border:1px solid rgba(49,224,181,.16);background:rgba(0,8,8,.38);padding:12px 14px}
+.handoff-continuity{margin-top:10px;border:1px solid rgba(132,223,200,.14);background:rgba(3,29,25,.24)}.handoff-continuity summary{padding:11px 14px;color:#9dd9c9;font:700 11px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;cursor:pointer}.handoff-continuity .handoff-value{border-width:1px 0 0}
 .handoff-value{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .handoff-value code,.handoff-runtime-card code{min-width:0;color:var(--teal);font:12px ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
 .handoff-value button,.handoff-prompt button{border:0;background:transparent;color:#f2cf75;font-weight:800;white-space:nowrap}

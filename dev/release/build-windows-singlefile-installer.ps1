@@ -50,7 +50,7 @@ if ($LocalBeta) {
 if ($CanarySimple -and $LocalBeta) {
     throw "CanarySimple and LocalBeta cannot be combined."
 }
-elseif (@($localBetaValues | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -ne 0) {
+elseif (-not $LocalBeta -and @($localBetaValues | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -ne 0) {
     throw "LocalBeta issuer, key ID and digest pins are valid only with -LocalBeta."
 }
 
