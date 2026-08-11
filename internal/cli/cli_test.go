@@ -2380,9 +2380,10 @@ func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
 		t.Fatalf("personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 33`) {
-		t.Fatalf("optional adapter install = %d %s", code, output.String())
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
+		t.Fatalf("engineering adapter install = %d %s", code, output.String())
 	}
+	assertCodexProjectionInstalled(t, output.String(), workspacePath)
 	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence"} {
 		if _, err := os.Stat(filepath.Join(workspacePath, ".codex", "skills", skillID, "SKILL.md")); err != nil {
 			t.Fatalf("engineering skill %s was not projected: %v", skillID, err)
@@ -2403,13 +2404,39 @@ func TestInterviewSelectionActivatesDataProjection(t *testing.T) {
 		t.Fatalf("data personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 33`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK {
 		t.Fatalf("data adapter install = %d %s", code, output.String())
 	}
+	assertCodexProjectionInstalled(t, output.String(), workspacePath)
 	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence", "data-pipeline-quality", "data-science-evaluation", "reproducible-data-run"} {
 		if _, err := os.Stat(filepath.Join(workspacePath, ".codex", "skills", skillID, "SKILL.md")); err != nil {
 			t.Fatalf("data selection did not project all skills; missing %s: %v", skillID, err)
 		}
+	}
+}
+
+func assertCodexProjectionInstalled(t *testing.T, output, workspacePath string) {
+	t.Helper()
+	var result struct {
+		State      string `json:"state"`
+		Projection struct {
+			Runtime    string `json:"runtime"`
+			State      string `json:"state"`
+			SkillCount int    `json:"skill_count"`
+		} `json:"projection"`
+	}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("decode adapter install output: %v (%s)", err, output)
+	}
+	if result.State != "installed" || result.Projection.Runtime != "codex" || result.Projection.State != "installed" {
+		t.Fatalf("unexpected adapter projection status: %+v (%s)", result, output)
+	}
+	entries, err := os.ReadDir(filepath.Join(workspacePath, ".codex", "skills"))
+	if err != nil {
+		t.Fatalf("read projected skills: %v", err)
+	}
+	if result.Projection.SkillCount != len(entries) || result.Projection.SkillCount == 0 {
+		t.Fatalf("projection skill count = %d, directory entries = %d", result.Projection.SkillCount, len(entries))
 	}
 }
 
