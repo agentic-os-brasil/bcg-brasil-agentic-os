@@ -1569,7 +1569,7 @@ func runProductStatus(args []string, out, errOut io.Writer, dataRoot func() (str
 			"bundles":                "supported",
 			"human_atlas_bootstrap":  "supported",
 			"interaction_profile":    "supported",
-			"memory_dreaming":        "daily_light_local_contract_weekly_deep_unavailable",
+			"memory_dreaming":        "daily_light_and_weekly_deep_local_contract",
 			"continuous_use":         continuous.State,
 			"private_release_auth":   releaseCapability.State,
 			"updates":                releaseCapability.State,
@@ -4005,7 +4005,7 @@ func runStatus(args []string, out, errOut io.Writer) int {
 	return writeJSON(out, struct {
 		memory.StatusReport
 		Dreaming string `json:"dreaming"`
-	}{StatusReport: report, Dreaming: "daily_light_available_weekly_deep_unavailable"}, errOut)
+	}{StatusReport: report, Dreaming: "daily_light_and_weekly_deep_available"}, errOut)
 }
 
 func runContext(args []string, out, errOut io.Writer) int {
@@ -4064,13 +4064,6 @@ func runDream(args []string, out, errOut io.Writer) int {
 		fmt.Fprintf(errOut, "%s is required\n", missing)
 		return ExitUsage
 	}
-	if cycle == "weekly" {
-		code := writeJSON(out, map[string]any{"capability": "memory_deep_dreaming", "cycle": cycle, "state": "unavailable", "workspace_id": *workspace, "reason": "no qualified deep synthesis and lifetime eligibility adapter is installed"}, errOut)
-		if code != ExitOK {
-			return code
-		}
-		return ExitUnavailable
-	}
 	policy, err := basememory.Policy()
 	if err != nil {
 		return reportError(errOut, err)
@@ -4081,7 +4074,14 @@ func runDream(args []string, out, errOut io.Writer) int {
 	}
 	memoryRoot := filepath.Join(*dataDir, "memory")
 	attestor := memory.CaptureAttestor{Root: memoryRoot}
-	engine := memory.Engine{Root: memoryRoot, Policy: policy, Budgets: map[string]int{"L1": config.L1MaxRunes, "L2": 1, "L3": 1, "lifetime": 1}, MaxSourceBytes: config.L1MaxInputBytes, Synthesizer: memory.DeterministicL1Synthesizer{MaxRunes: config.L1MaxRunes, MaxEntries: config.L1MaxEntries, MaxInputBytes: config.L1MaxInputBytes, MaxInputEntries: config.L1MaxInputEntries, Attestor: attestor}, SynthesizerID: memory.DeterministicL1SynthesizerID}
+	engine := configuredMemoryEngine(memoryRoot, policy, config, attestor)
+	if cycle == "weekly" {
+		result, err := engine.DreamWeekly(context.Background(), *workspace, time.Now().UTC())
+		if err != nil {
+			return reportError(errOut, err)
+		}
+		return writeJSON(out, map[string]any{"capability": "memory_deep_dreaming", "cycle": cycle, "state": map[bool]string{true: "reviewed_no_change", false: "succeeded"}[result.Skipped], "workspace_id": *workspace, "result": result}, errOut)
+	}
 	result, err := engine.DreamDailyAttested(context.Background(), *workspace, time.Now().UTC())
 	if errors.Is(err, os.ErrNotExist) {
 		return writeJSON(out, map[string]any{"capability": "memory_light_dreaming", "cycle": cycle, "state": "reviewed_no_change", "workspace_id": *workspace, "reason": "no trusted capture-v2 L1 input is available for the current period"}, errOut)
@@ -4090,6 +4090,15 @@ func runDream(args []string, out, errOut io.Writer) int {
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, map[string]any{"capability": "memory_light_dreaming", "cycle": cycle, "state": map[bool]string{true: "reviewed_no_change", false: "succeeded"}[result.Skipped], "workspace_id": *workspace, "result": result}, errOut)
+}
+
+func configuredMemoryEngine(root string, policy memory.Policy, config basememory.RuntimeConfig, attestor memory.CaptureAttestor) memory.Engine {
+	daily := memory.DeterministicL1Synthesizer{MaxRunes: config.L1MaxRunes, MaxEntries: config.L1MaxEntries, MaxInputBytes: config.L1MaxInputBytes, MaxInputEntries: config.L1MaxInputEntries, Attestor: attestor}
+	return memory.Engine{
+		Root: root, Policy: policy, Budgets: config.ContextBudgets(), MaxSourceBytes: config.L1MaxInputBytes,
+		Synthesizer: memory.DeterministicWeeklySynthesizer{Daily: daily, MaxRunes: config.ContextBudgets(), MaxInputBytes: config.L1MaxInputBytes}, SynthesizerID: memory.DeterministicWeeklySynthesizerID,
+		Eligibility: memory.DeterministicLifetimeEligibility{MinL3Generations: 2}, EligibilityPolicyID: "deterministic-l3-continuity-v1",
+	}
 }
 
 func newFlagSet(name string, errOut io.Writer) *flag.FlagSet {

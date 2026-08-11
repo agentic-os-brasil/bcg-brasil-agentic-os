@@ -1,9 +1,8 @@
 # Spec 006 - Memory persistence and dreaming
 
 Status: architecture, runtime-neutral core engine, CLI bridge, deterministic
-L1 light dreaming, metadata-only continuity checkpoint and bounded Session Start
-consumption implemented; weekly deep synthesis and lifetime eligibility adapters
-remain pending.
+daily and weekly dreaming, governed lifetime eligibility, metadata-only
+continuity checkpoint and bounded Session Start consumption implemented.
 
 ## Objective
 
@@ -37,8 +36,9 @@ reads no error/body/prompt/tool payload, creates no L1/L2/L3 artifact and is
 never evidence that dreaming occurred. Without a durable source watermark it
 remains unavailable. `memory-light-dream` has a separate three-hour due
 contract and uses a runtime-qualified deterministic L1 synthesizer over only
-trusted capture-v2 envelopes. `memory-deep-dream` is the weekly deep cycle and
-remains unavailable without qualified deep synthesis and eligibility adapters.
+trusted capture-v2 envelopes. `memory-deep-dream` uses the bundled
+deterministic weekly adapter: it reads only active L1/L2/L3/lifetime artifacts,
+stages L2/L3/lifetime together and applies the named continuity policy.
 
 ### L1 source composition
 
@@ -187,14 +187,20 @@ Readers resolve memory only from the newest fully valid commit manifest. An inte
 
 The engine deliberately does not select a model, sanitize raw input, decide lifetime eligibility or schedule itself. Those capabilities belong to versioned adapters and policies. A leftover lock after a process or machine crash fails closed and requires a future `bcgos doctor` recovery path; it is never deleted heuristically by the engine.
 
-The canonical product skill is `bundles/base/skills/dream-memory/SKILL.md`. It routes daily, weekly and status intents to the installed adapter and must report the capability as unavailable until that adapter exists.
+The canonical product skill is `bundles/base/skills/dream-memory/SKILL.md`. It
+routes daily, weekly and status intents to the installed adapter. The base
+distribution contains the deterministic weekly adapter and named eligibility
+policy; a missing or malformed runtime configuration remains unavailable.
 
 `cmd/bcgos` connects sanitized capture, commit/layer status, bounded context
-assembly and deterministic `memory dream daily` to the engine. Daily synthesis
+assembly and deterministic `memory dream daily` and `memory dream weekly` to
+the engine. Daily synthesis
 deduplicates and selects complete sanitized signals within the managed L1
-budget, then relies on the existing atomic commit. `memory dream weekly`
-remains explicitly unavailable and never substitutes a hard-coded model or
-lifetime eligibility rule.
+budget, then relies on the existing atomic commit. Weekly synthesis is a
+bounded, provenance-preserving rollup rather than a substituted model: it
+activates L2 and L3 atomically, and promotes lifetime only after the current
+rollup carries two weekly L3 generations under
+`deterministic-l3-continuity-v1`.
 
 ## Test expectations for implementation
 

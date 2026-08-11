@@ -28,7 +28,7 @@ bcgos memory context
 bcgos memory dream <daily|weekly>
 ```
 
-`capture`, `status` and `context` call the runtime-neutral memory core. Capture content enters through bounded standard input rather than process arguments and still requires an adapter sanitization attestation. `dream daily` runs the bundled deterministic L1 synthesizer with the bounded managed runtime configuration; `dream weekly` remains machine-readably unavailable until qualified deep synthesis and lifetime eligibility adapters exist. The local data directory remains explicit for manual commands; the enrolled local maintenance adapter resolves the approved user-local data root.
+`capture`, `status` and `context` call the runtime-neutral memory core. Capture content enters through bounded standard input rather than process arguments and still requires an adapter sanitization attestation. `dream daily` runs the bundled deterministic L1 synthesizer; `dream weekly` runs the bundled deterministic L2/L3 rollup and named lifetime-continuity eligibility policy with the bounded managed runtime configuration. The local data directory remains explicit for manual commands; the enrolled local maintenance adapter resolves the approved user-local data root.
 
 ## Current bootstrap behavior
 

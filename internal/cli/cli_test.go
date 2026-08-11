@@ -216,7 +216,7 @@ func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 
 	output.Reset()
 	code = Run([]string{"memory", "status", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
-	if code != 0 || !strings.Contains(output.String(), `"state": "captured"`) || !strings.Contains(output.String(), `"dreaming": "daily_light_available_weekly_deep_unavailable"`) {
+	if code != 0 || !strings.Contains(output.String(), `"state": "captured"`) || !strings.Contains(output.String(), `"dreaming": "daily_light_and_weekly_deep_available"`) {
 		t.Fatalf("status exit = %d, output = %s", code, output.String())
 	}
 
@@ -347,7 +347,7 @@ func TestMemoryCLIReportsAllInvalidCommitsAsCorrupt(t *testing.T) {
 	}
 }
 
-func TestMemoryDailyDreamExcludesManualCaptureAndWeeklyRemainsUnavailable(t *testing.T) {
+func TestMemoryDailyDreamExcludesManualCaptureAndWeeklyRunsWithTrustedL1(t *testing.T) {
 	dataDir := t.TempDir()
 	var output bytes.Buffer
 	if code := RunWithInput([]string{"memory", "capture", "--data-dir", dataDir, "--workspace", "case-a", "--kind", "decision", "--stdin", "--sanitized"}, strings.NewReader("owner confirmation required"), &output, &output); code != ExitOK {
@@ -359,8 +359,16 @@ func TestMemoryDailyDreamExcludesManualCaptureAndWeeklyRemainsUnavailable(t *tes
 		t.Fatalf("daily dream exit = %d, output = %s", code, output.String())
 	}
 	output.Reset()
+	if err := recordAttestedSkillRoute(dataDir, "claude", "case-a", "session-a", []skillrouting.Selection{{ID: "meeting-close"}}); err != nil {
+		t.Fatal(err)
+	}
+	code = Run([]string{"memory", "dream", "daily", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "succeeded"`) {
+		t.Fatalf("trusted daily dream exit = %d, output = %s", code, output.String())
+	}
+	output.Reset()
 	code = Run([]string{"memory", "dream", "weekly", "--data-dir", dataDir, "--workspace", "case-a"}, &output, &output)
-	if code != ExitUnavailable || !strings.Contains(output.String(), `"capability": "memory_deep_dreaming"`) || !strings.Contains(output.String(), `"state": "unavailable"`) {
+	if code != ExitOK || !strings.Contains(output.String(), `"capability": "memory_deep_dreaming"`) || !strings.Contains(output.String(), `"state": "succeeded"`) || !strings.Contains(output.String(), `"L2"`) || !strings.Contains(output.String(), `"L3"`) {
 		t.Fatalf("weekly dream exit = %d, output = %s", code, output.String())
 	}
 }

@@ -182,8 +182,11 @@ func maintenanceHandlers(root, workspace string, enrollment maintenance.CanaryEn
 		if policyErr == nil && configErr == nil {
 			memoryRoot := filepath.Join(root, "memory")
 			attestor := memory.CaptureAttestor{Root: memoryRoot}
-			engine := &memory.Engine{Root: memoryRoot, Policy: policy, Budgets: map[string]int{"L1": config.L1MaxRunes, "L2": 1, "L3": 1, "lifetime": 1}, MaxSourceBytes: config.L1MaxInputBytes, Synthesizer: memory.DeterministicL1Synthesizer{MaxRunes: config.L1MaxRunes, MaxEntries: config.L1MaxEntries, MaxInputBytes: config.L1MaxInputBytes, MaxInputEntries: config.L1MaxInputEntries, Attestor: attestor}, SynthesizerID: memory.DeterministicL1SynthesizerID}
-			handlers[maintenance.MemoryLightDreamJobID] = maintenance.MemoryLightDreamHandler{Engine: engine}
+			engine := configuredMemoryEngine(memoryRoot, policy, config, attestor)
+			handlers[maintenance.MemoryLightDreamJobID] = maintenance.MemoryLightDreamHandler{Engine: &engine}
+			if active[maintenance.MemoryDeepDreamJobID] {
+				handlers[maintenance.MemoryDeepDreamJobID] = maintenance.MemoryDeepDreamHandler{Engine: &engine}
+			}
 		}
 	}
 	if active["darwin-deep-weekly"] {
@@ -353,7 +356,7 @@ func runMaintenanceCanary(args []string, out, errOut io.Writer, catalog maintena
 		if enrollmentErr == nil {
 			enrolledAt = existing.EnrolledAt
 		}
-		enrollment := maintenance.CanaryEnrollment{SchemaVersion: maintenance.EnrollmentSchemaVersion, WorkspaceID: inspection.WorkspaceID, AgentID: "darwin", Home: filepath.Clean(*home), Executable: program, UID: uid, Timezone: timezone, LaunchAgentLabel: canaryLaunchAgentLabel, Mode: mode, EnrolledAt: enrolledAt, Activated: []maintenance.Activation{{JobID: maintenance.MemoryCheckpointJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryCheckpointJobID)}, {JobID: maintenance.MemoryLightDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryLightDreamJobID)}, {JobID: darwin.HousekeepingJobID, QualificationDigest: maintenance.QualificationDigest(darwin.HousekeepingJobID)}, {JobID: "darwin-deep-weekly", QualificationDigest: maintenance.QualificationDigest("darwin-deep-weekly")}}}
+		enrollment := maintenance.CanaryEnrollment{SchemaVersion: maintenance.EnrollmentSchemaVersion, WorkspaceID: inspection.WorkspaceID, AgentID: "darwin", Home: filepath.Clean(*home), Executable: program, UID: uid, Timezone: timezone, LaunchAgentLabel: canaryLaunchAgentLabel, Mode: mode, EnrolledAt: enrolledAt, Activated: []maintenance.Activation{{JobID: maintenance.MemoryCheckpointJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryCheckpointJobID)}, {JobID: maintenance.MemoryLightDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryLightDreamJobID)}, {JobID: maintenance.MemoryDeepDreamJobID, QualificationDigest: maintenance.QualificationDigest(maintenance.MemoryDeepDreamJobID)}, {JobID: darwin.HousekeepingJobID, QualificationDigest: maintenance.QualificationDigest(darwin.HousekeepingJobID)}, {JobID: "darwin-deep-weekly", QualificationDigest: maintenance.QualificationDigest("darwin-deep-weekly")}}}
 		// RunAtLoad may invoke the worker as soon as launchctl bootstraps the
 		// plist. Persist the exact enrollment first, so that first wake sees the
 		// same bounded authority as all subsequent interval wakes. On a failed
@@ -671,7 +674,7 @@ func maintenanceStatus(catalog maintenance.Catalog) map[string]any {
 		"native_schedulers":                     "disabled_until_explicit_install_and_qualification",
 		"idle_eligibility":                      "explicit_evidence_required_unknown_fails_closed",
 		"memory_checkpoint":                     "locally_qualified_only_after_canary_enrollment",
-		"memory_dreaming":                       "daily_light_locally_qualified_weekly_deep_unavailable",
+		"memory_dreaming":                       "daily_light_and_weekly_deep_locally_qualified",
 		"pulse_interval_seconds":                900,
 		"job_count":                             len(catalog.Jobs),
 		"reason":                                "unavailable model-backed jobs remain due; wake receipts never prove execution",
