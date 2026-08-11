@@ -44,8 +44,9 @@ stop rule and the refusals never vary by profile.
 3. Establish what changed. Most surprises have a change behind them; find it
    before theorizing.
 4. Form candidate causes, ordered by what the evidence already favours.
-5. For each candidate, name the test that would rule it out, and run or request
-   that test. A candidate with no disproving test is a belief, not a hypothesis.
+5. For each candidate, name the test that would rule it out and request that
+   test from the person or an explicitly authorized execution path. A candidate
+   with no disproving test is a belief, not a hypothesis.
 6. Apply the stop rule: after three candidates fail, the framing is suspect.
    Restate the symptom and re-fix the boundary rather than extending the list.
 7. Return the diagnosis: the cause, the evidence establishing it, the blast

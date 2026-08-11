@@ -100,18 +100,18 @@
       "relative_path": "skills/interaction-profile/SKILL.md"
     },
     {
-      "id": "maestro-environment-setup",
-      "display_name": "Preparar Ambiente Maestro",
-      "trigger": "Prepara workspace, runtime e manutenção local",
-      "default_prompt": "Use $maestro-environment-setup para preparar meu ambiente Maestro e deixar o runtime pronto para trabalhar.",
-      "relative_path": "skills/maestro-environment-setup/SKILL.md"
-    },
-    {
       "id": "investigate",
       "display_name": "Investigate",
       "trigger": "Find the root cause of a wrong or surprising result",
       "default_prompt": "Use $investigate to find why this output is wrong, with the evidence that establishes the cause.",
       "relative_path": "skills/investigate/SKILL.md"
+    },
+    {
+      "id": "maestro-environment-setup",
+      "display_name": "Preparar Ambiente Maestro",
+      "trigger": "Prepara workspace, runtime e manutenção local",
+      "default_prompt": "Use $maestro-environment-setup para preparar meu ambiente Maestro e deixar o runtime pronto para trabalhar.",
+      "relative_path": "skills/maestro-environment-setup/SKILL.md"
     },
     {
       "id": "maestro-onboarding",
