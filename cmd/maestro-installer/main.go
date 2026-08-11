@@ -27,7 +27,9 @@ import (
 	"time"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentscaffold"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/atlas"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installer"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceagent"
@@ -83,6 +85,8 @@ type runtimeTarget struct {
 type workspaceHandoff struct {
 	WorkspacePath    string            `json:"workspace_path"`
 	WorkspaceID      string            `json:"workspace_id"`
+	DataRoot         string            `json:"data_root"`
+	MemoryCommand    string            `json:"memory_status_command"`
 	Prompt           string            `json:"prompt"`
 	DeepLinks        map[string]string `json:"deeplinks"`
 	RuntimePaths     map[string]string `json:"runtime_paths"`
@@ -1002,6 +1006,8 @@ func wizardHandler(options options) http.Handler {
 			}
 		}
 		handoff := workspaceHandoffFor(result.WorkspacePath, result.WorkspaceID)
+		handoff.DataRoot = options.dataRoot
+		handoff.MemoryCommand = memoryStatusCommand(options, result.WorkspaceID)
 		handoff.Diagnostics = append(handoff.Diagnostics, warnings...)
 		status := "ready"
 		if len(warnings) > 0 {
@@ -1018,9 +1024,10 @@ func wizardHandler(options options) http.Handler {
 			ingestionState = "not_ingested_pointer_only"
 		}
 		writeHTTPJSON(writer, map[string]any{
-			"status": status, "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID,
+			"status": status, "workspace_path": result.WorkspacePath, "workspace_id": result.WorkspaceID, "data_root": options.dataRoot,
 			"prompt": handoff.Prompt, "deeplinks": handoff.DeepLinks, "handoff": handoff,
-			"source_registered": sourceRegistered, "source_state": sourceState,
+			"memory_status_command": handoff.MemoryCommand,
+			"source_registered":     sourceRegistered, "source_state": sourceState,
 			"ingestion_state": ingestionState,
 			"adapter_state":   activation.Lifecycle.State, "readiness_state": "ready", "scheduler_state": activation.Maintenance.State,
 			"ready_for_runtime": true, "diagnostic_command": workspaceDiagnosticCommand(options, result.WorkspacePath),
@@ -1119,6 +1126,17 @@ func workspaceDiagnosticCommand(options options, workspacePath string) string {
 		return "& " + strconv.Quote(cliPath) + " doctor " + strconv.Quote(workspacePath)
 	}
 	return shellQuote(cliPath) + " doctor " + shellQuote(workspacePath)
+}
+
+func memoryStatusCommand(options options, workspaceID string) string {
+	cliPath := installedCLIPath(options)
+	if cliPath == "" || strings.TrimSpace(workspaceID) == "" {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		return "& " + strconv.Quote(cliPath) + " memory status --data-dir " + strconv.Quote(options.dataRoot) + " --workspace " + strconv.Quote(workspaceID)
+	}
+	return shellQuote(cliPath) + " memory status --data-dir " + shellQuote(options.dataRoot) + " --workspace " + shellQuote(workspaceID)
 }
 
 // installedCLIPath is intentionally a narrow, read-only UX hint. It never
@@ -1653,6 +1671,12 @@ func initializeDefaultWorkspace(options options, workspacePath string) (workspac
 	}
 	if _, err := agentscaffold.Scaffold(options.dataRoot, agentscaffold.WorkspaceRequest(result.WorkspaceID)); err != nil {
 		return workspace.Result{}, err
+	}
+	if err := memory.Bootstrap(filepath.Join(options.dataRoot, "memory"), result.WorkspaceID); err != nil {
+		return workspace.Result{}, fmt.Errorf("bootstrap workspace memory: %w", err)
+	}
+	if _, err := atlas.Initialize(atlas.Options{DataRoot: options.dataRoot, WorkspacePath: result.WorkspacePath, WorkspaceID: result.WorkspaceID}); err != nil {
+		return workspace.Result{}, fmt.Errorf("bootstrap daily workspace atlas: %w", err)
 	}
 	return result, nil
 }

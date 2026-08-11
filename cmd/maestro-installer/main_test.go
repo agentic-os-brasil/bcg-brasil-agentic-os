@@ -249,6 +249,8 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 		SchedulerState    string            `json:"scheduler_state"`
 		ReadyForRuntime   bool              `json:"ready_for_runtime"`
 		DiagnosticCommand string            `json:"diagnostic_command"`
+		DataRoot          string            `json:"data_root"`
+		MemoryCommand     string            `json:"memory_status_command"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
@@ -258,6 +260,7 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 		response.DeepLinks["claude_desktop"] == "" || response.DeepLinks["claude_code_desktop"] == "" || response.DeepLinks["codex"] == "" ||
 		response.AdapterState != "configured" || response.ReadinessState != "ready" ||
 		response.SchedulerState != "active_loaded_enabled" || !response.ReadyForRuntime ||
+		response.DataRoot != dataRoot || !strings.Contains(response.MemoryCommand, "memory status --data-dir") || !strings.Contains(response.MemoryCommand, dataRoot) || !strings.Contains(response.MemoryCommand, "--workspace") || !strings.Contains(response.MemoryCommand, response.WorkspaceID) ||
 		!strings.Contains(response.DiagnosticCommand, workspacePath) {
 		t.Fatalf("workspace diagnostic = %#v", response)
 	}
@@ -271,6 +274,23 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 	if _, err := os.Stat(filepath.Join(dataRoot, "owner", "registry.json")); err != nil {
 		t.Fatalf("owner context bootstrap missing: %v", err)
 	}
+	for _, path := range []string{
+		filepath.Join(dataRoot, "memory", "workspaces", inspection.WorkspaceID, "l1", "captures"),
+		filepath.Join(dataRoot, "memory", "workspaces", inspection.WorkspaceID, "l1", "attested-captures"),
+		filepath.Join(dataRoot, "memory", "workspaces", inspection.WorkspaceID, "commits"),
+	} {
+		if info, err := os.Stat(path); err != nil || !info.IsDir() {
+			t.Fatalf("installed memory/daily bootstrap missing at %s: info=%v err=%v", path, info, err)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(workspacePath, "brain", "daily", "index.md"),
+		filepath.Join(workspacePath, "brain", "daily", time.Now().Format("2006-01-02")+".md"),
+	} {
+		if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
+			t.Fatalf("installed daily bootstrap missing at %s: info=%v err=%v", path, info, err)
+		}
+	}
 	if _, err := os.Stat(filepath.Join(workspacePath, "brain", "organization", "bcg", "README.md")); err != nil {
 		t.Fatalf("BCG organizational scaffold missing: %v", err)
 	}
@@ -279,6 +299,22 @@ func TestWizardCreatesTheDefaultWorkspaceWithoutTouchingAnImportSource(t *testin
 	}
 	if !strings.Contains(recorder.Body.String(), `"activation"`) || !strings.Contains(recorder.Body.String(), `"active_loaded_enabled"`) || !strings.Contains(recorder.Body.String(), `"model_backed":"unavailable"`) {
 		t.Fatalf("activation evidence missing from response: %s", recorder.Body.String())
+	}
+}
+
+func TestWizardRendersInstalledDataRootAndMemoryStatusCommand(t *testing.T) {
+	index, err := os.ReadFile(filepath.Join("..", "..", "installers", "wizard", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := os.ReadFile(filepath.Join("..", "..", "installers", "wizard", "app.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"handoff-data-root", "handoff-memory-command"} {
+		if !strings.Contains(string(index), expected) || !strings.Contains(string(app), expected) {
+			t.Fatalf("wizard handoff does not render %s", expected)
+		}
 	}
 }
 

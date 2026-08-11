@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -15,7 +17,10 @@ type Options struct {
 	DataRoot      string
 	WorkspacePath string
 	WorkspaceID   string
+	Now           func() time.Time
 }
+
+const dailyTemplate = "# Daily — YYYY-MM-DD\n\n> Human work log for this workspace. Raw entries are not memory input. An approved sanitization route may select daily signals to compose L1 alongside Claude/Codex session signals.\n\n## Related scope\n- **Projects:**\n- **Clients:**\n\n## Priorities\n1.\n2.\n3.\n\n## Notes\n-\n\n## Decisions surfaced\n- <link to or update the authoritative project decision>\n\n## Learning candidates\n- <owner-private learning pointer; do not copy private owner content here>\n\n## Carry forward\n-\n"
 
 type Pointer struct {
 	Path      string `json:"path"`
@@ -45,7 +50,7 @@ var workspaceFiles = map[string]string{
 	"people/index.md":              "# People\n\nPessoas relevantes neste workspace. Registre somente informacao profissional necessaria e autorizada.\n",
 	"people/template-person.md":    "# Person: <name>\n\n> Professional context only. Keep the minimum necessary information, identify the source and correct or remove it when no longer justified.\n\n## Snapshot\n- **Role / organization:**\n- **Relationship to this workspace:**\n- **Sensitivity:** professional_restricted\n- **Source / as of:**\n\n## Working context\n- **Collaboration preferences observed:**\n- **Communication considerations:**\n\n## Workspace interactions\n- YYYY-MM-DD — <factual, necessary note>\n\n## Related\n- [Projects](../projects/index.md)\n- [Clients](../clients/index.md)\n",
 	"daily/index.md":               "# Daily\n\nRegistros humanos deste workspace. Eles so podem alimentar memoria por uma rota de sanitizacao aprovada.\n",
-	"daily/template-daily.md":      "# Daily — YYYY-MM-DD\n\n> Human work log for this workspace. Raw entries are not memory input. An approved sanitization route may select daily signals to compose L1 alongside Claude/Codex session signals.\n\n## Related scope\n- **Projects:**\n- **Clients:**\n\n## Priorities\n1.\n2.\n3.\n\n## Notes\n-\n\n## Decisions surfaced\n- <link to or update the authoritative project decision>\n\n## Learning candidates\n- <owner-private learning pointer; do not copy private owner content here>\n\n## Carry forward\n-\n",
+	"daily/template-daily.md":      dailyTemplate,
 }
 
 func Initialize(options Options) (Status, error) {
@@ -59,12 +64,28 @@ func Initialize(options Options) (Status, error) {
 	if inspection.State == "uninitialized" || inspection.State == "invalid" || inspection.State == "incomplete" || inspection.WorkspaceID != options.WorkspaceID {
 		return Status{}, errors.New("atlas bootstrap requires the registered workspace identity")
 	}
-	ownerRoot := filepath.Join(options.DataRoot, "atlas", "owner")
-	workspaceRoot := filepath.Join(options.WorkspacePath, "brain")
+	ownerRoot, err := scheduler.CanonicalPrivatePath(filepath.Join(options.DataRoot, "atlas", "owner"))
+	if err != nil {
+		return Status{}, err
+	}
+	workspaceRoot, err := scheduler.CanonicalPrivatePath(filepath.Join(options.WorkspacePath, "brain"))
+	if err != nil {
+		return Status{}, err
+	}
 	if err := createFiles(ownerRoot, ownerFiles); err != nil {
 		return Status{}, err
 	}
 	if err := createFiles(workspaceRoot, workspaceFiles); err != nil {
+		return Status{}, err
+	}
+	now := time.Now()
+	if options.Now != nil {
+		now = options.Now()
+	}
+	day := now.Format("2006-01-02")
+	if err := createFiles(workspaceRoot, map[string]string{
+		filepath.ToSlash(filepath.Join("daily", day+".md")): strings.Replace(dailyTemplate, "YYYY-MM-DD", day, 1),
+	}); err != nil {
 		return Status{}, err
 	}
 	return Inspect(options), nil
@@ -81,23 +102,22 @@ func Inspect(options Options) Status {
 }
 
 func createFiles(root string, files map[string]string) error {
+	if err := scheduler.EnsurePrivateDirectory(root); err != nil {
+		return err
+	}
 	for relative, body := range files {
 		path := filepath.Join(root, filepath.FromSlash(relative))
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		if err := scheduler.EnsurePrivateDirectory(filepath.Dir(path)); err != nil {
 			return err
 		}
-		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		err := scheduler.WriteNewPrivateFile(path, []byte(body))
 		if errors.Is(err, os.ErrExist) {
+			if _, validateErr := scheduler.ReadPrivateFile(path, 16<<20); validateErr != nil {
+				return validateErr
+			}
 			continue
 		}
 		if err != nil {
-			return err
-		}
-		if _, err := file.WriteString(body); err != nil {
-			_ = file.Close()
-			return err
-		}
-		if err := file.Close(); err != nil {
 			return err
 		}
 	}

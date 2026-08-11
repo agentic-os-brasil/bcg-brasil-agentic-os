@@ -242,6 +242,18 @@ func TestMemoryCaptureStatusAndContextCommands(t *testing.T) {
 	}
 }
 
+func TestMemoryStatusUsesTheInstalledDataRootByDefault(t *testing.T) {
+	dataDir := t.TempDir()
+	if err := memory.Bootstrap(filepath.Join(dataDir, "memory"), "case-a"); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	code := runMemoryWithDataRoot([]string{"status", "--workspace", "case-a"}, strings.NewReader(""), &output, &output, func() (string, error) { return dataDir, nil })
+	if code != ExitOK || !strings.Contains(output.String(), `"state": "empty"`) {
+		t.Fatalf("default data-root status exit=%d output=%s", code, output.String())
+	}
+}
+
 func TestMemoryCaptureFailsClosedWithoutSanitizedAttestation(t *testing.T) {
 	var output bytes.Buffer
 	code := RunWithInput([]string{"memory", "capture", "--data-dir", t.TempDir(), "--workspace", "case-a", "--kind", "note", "--stdin"}, strings.NewReader("raw"), &output, &output)
