@@ -44,6 +44,13 @@
       "relative_path": "skills/dream-memory/SKILL.md"
     },
     {
+      "id": "execution-continuity",
+      "display_name": "Execution Continuity",
+      "trigger": "Registrar tarefas e entregas, preparar versão, criar checkpoints e retomar trabalho entre sessões",
+      "default_prompt": "Use $execution-continuity para registrar esta tarefa e criar um checkpoint para a próxima sessão.",
+      "relative_path": "skills/execution-continuity/SKILL.md"
+    },
+    {
       "id": "expert-interview-guide",
       "display_name": "Expert Interview Guide",
       "trigger": "Structure a bounded interview guide from approved case questions",

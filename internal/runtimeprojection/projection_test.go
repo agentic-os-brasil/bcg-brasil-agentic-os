@@ -104,7 +104,9 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 	text := string(orientation)
 	for _, expected := range []string{
 		"Sessão e hooks", "SELF do dono", "Memória e persistência",
-		"Brain, wiki e navegação", "Agents e delegação", "dream-memory",
+		"Brain, wiki e navegação", "Agents e delegação", "Execução e continuidade",
+		"execution-continuity", "dream-memory",
+		"<maestro-cli> work next --active --workspace <workspace>",
 		"<maestro-cli> adapter status --runtime claude",
 	} {
 		if !strings.Contains(text, expected) {
