@@ -24,6 +24,7 @@ type secureDirectory struct {
 
 const (
 	secureWindowsDirectoryTraverse = windows.FILE_LIST_DIRECTORY | windows.FILE_READ_ATTRIBUTES | windows.FILE_TRAVERSE | windows.SYNCHRONIZE
+	secureWindowsDirectoryOptions  = windows.FILE_DIRECTORY_FILE | windows.FILE_SYNCHRONOUS_IO_NONALERT
 	// x/sys/windows does not expose FILE_ADD_SUBDIRECTORY on every supported
 	// version, but it is a stable Windows directory access mask.
 	secureWindowsDirectoryCreate = secureWindowsDirectoryTraverse | 0x0004
@@ -202,18 +203,20 @@ func walkWindowsDirectory(path string, create bool, stepHook func(string)) (wind
 	if err != nil {
 		return windows.InvalidHandle, err
 	}
-	handle, err := ntOpenRelative(windows.InvalidHandle, `\??\`+root, secureWindowsDirectoryTraverse, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
+	handle, err := ntOpenRelative(windows.InvalidHandle, `\??\`+root, secureWindowsDirectoryTraverse, windows.FILE_OPEN, secureWindowsDirectoryOptions)
 	if err != nil {
 		return windows.InvalidHandle, err
 	}
-	for _, component := range components {
-		child, openErr := ntOpenRelative(handle, component, secureWindowsDirectoryTraverse, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
+	for index, component := range components {
+		child, openErr := ntOpenRelative(handle, component, secureWindowsDirectoryTraverse, windows.FILE_OPEN, secureWindowsDirectoryOptions)
 		if create && isWindowsNotExist(openErr) {
-			writableParent, parentErr := ntOpenRelative(handle, ".", secureWindowsDirectoryCreate, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
-			if parentErr == nil {
-				child, openErr = ntOpenRelative(writableParent, component, secureWindowsDirectoryTraverse, windows.FILE_OPEN_IF, windows.FILE_DIRECTORY_FILE)
-				_ = windows.CloseHandle(writableParent)
-			}
+			// A relative NT name of "." is not a portable way to reopen the
+			// current directory. Reopen the canonical child from the volume
+			// root instead. OBJ_DONT_REPARSE remains in force, so this is still
+			// a no-follow traversal and the create is anchored to the validated
+			// volume path.
+			childPath := `\??\` + root + strings.Join(components[:index+1], `\`)
+			child, openErr = ntOpenRelative(windows.InvalidHandle, childPath, secureWindowsDirectoryCreate, windows.FILE_OPEN_IF, secureWindowsDirectoryOptions)
 		}
 		if openErr != nil {
 			_ = windows.CloseHandle(handle)

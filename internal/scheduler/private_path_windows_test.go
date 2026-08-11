@@ -50,3 +50,21 @@ func TestWindowsSecureSchedulerRejectsReparseAncestor(t *testing.T) {
 		t.Fatalf("scheduler touched the reparse target: entries=%#v err=%v", entries, err)
 	}
 }
+
+func TestWindowsSecureSchedulerCreatesAndReadsNestedDirectory(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "BCGOS", "scheduler", "nested")
+	if err := EnsurePrivateDirectory(root); err != nil {
+		t.Fatalf("create nested scheduler directory: %v", err)
+	}
+	marker := filepath.Join(root, "marker.json")
+	if err := secureWriteFile(marker, []byte(`{"ok":true}`)); err != nil {
+		t.Fatalf("write scheduler marker: %v", err)
+	}
+	entries, err := secureReadDir(root)
+	if err != nil {
+		t.Fatalf("read nested scheduler directory: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "marker.json" {
+		t.Fatalf("nested scheduler entries = %#v", entries)
+	}
+}
