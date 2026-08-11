@@ -102,6 +102,12 @@ core and updates only the matching facet confirmation. It never updates the
 psychological profile, derives an answer from conversation or triggers L1-L3,
 prompt history, observations, Darwin or a general continuous lifecycle.
 
+When one expansion draft is open, `owner expand status` reports
+`state=review_required`, `review_count=1` and its bounded `open_draft_id` so a
+new runtime session can review the existing envelope instead of repeating the
+question or inspecting private storage. More than one open draft violates the
+single-review boundary and fails closed.
+
 SELF is bounded current truth, not an append-only diary. Every expansion body
 must contain exactly one concise `## Current` section, fit within 12 KiB and
 120 lines, and pass duplicate-paragraph and transcript-shape rejection. An
@@ -205,8 +211,11 @@ needed at the review boundary; `bcgos owner onboarding confirm --digest
 <review_digest> --confirm` records the explicit reviewed-facet version.
 `bcgos owner expand status|next` is bounded and body-free;
 `bcgos owner expand draft --question-token <sha256> --stdin --consent
---no-client-data`, `review --id <id>` and `confirm --id <id> --digest <sha256>
---confirm` implement the ongoing one-question review boundary.
+--no-client-data`, `bcgos owner expand review --id <id>` and `bcgos owner
+expand confirm --id <id> --digest <sha256> --confirm` implement the ongoing
+one-question review boundary. The question token, not a caller-provided facet
+flag, selects the target facet; expansion never uses the onboarding review
+digest or its confirmation command.
 `bcgos owner refine submit --facet <facet> --evidence <summary> --stdin`
 accepts a proposed body through standard input, applies only an eligible
 policy, and returns an opaque receipt. `apply --confirm <proposal-id>` and
