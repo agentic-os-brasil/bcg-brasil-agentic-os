@@ -354,6 +354,43 @@ sendo a fonte de verdade. Sem enrollment, qualificação nativa ou runtime local
 disponível, a ingestão falha fechada e nada é criado. Codex não coleta
 SharePoint; ele pode consultar apenas um índice local já verificado.
 
+### Roadmap de ativação: transforme o workspace em um sistema de trabalho
+
+O `init` prepara o scaffold técnico, mas o primeiro valor profissional exige
+agentes de negócio com escopo real. Para trabalho de cliente, siga esta ordem:
+
+```text
+Client Account Agent → Case Agent vinculado → primeira entrega → checkpoint
+```
+
+Comece dizendo ao Maestro algo como:
+
+> “Quero criar o Client Account Agent da Aurora Mobility para organizar o
+> relacionamento e o contexto autorizado da conta.”
+
+Depois, crie o caso concreto:
+
+> “Crie o Case Agent do projeto de pricing 2026 da Aurora Mobility, vinculado à
+> conta, com objetivo de preparar uma recomendação para o steering de setembro.”
+
+O Client Account Agent cuida do contexto e da validação da conta; o Case Agent
+cuida da execução e da entrega do projeto. Em seguida, peça uma primeira
+entrega pequena e revisável, por exemplo:
+
+> “Transforme as três fontes aprovadas em um briefing de uma página com fatos,
+> hipóteses, lacunas e próxima decisão. Mostre o plano antes de produzir.”
+
+Finalize pedindo:
+
+> “Registre o checkpoint, indique a próxima ação e me mostre como retomar este
+> caso na próxima sessão.”
+
+Use o [roadmap detalhado de ativação dos agentes](agent-activation-roadmap.md)
+como checklist. O scaffold automático não é um substituto para um Client
+Account Agent e um Case Agent nomeados, vinculados e usados em uma primeira
+entrega. Para um trabalho interno sem conta de cliente, o caminho direto para
+Case Agent continua permitido.
+
 ### Passo 5 — Faça uma primeira tarefa pequena
 
 Escolha uma tarefa que possa ser verificada em menos de uma hora: organizar um
