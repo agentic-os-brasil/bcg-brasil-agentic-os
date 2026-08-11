@@ -287,6 +287,7 @@ func candidate(root string, args []string) {
 	output := flags.String("output", "", "new output directory")
 	prebuilt := flags.String("prebuilt", "", "directory containing exact native candidate binaries")
 	macosAdHoc := flags.Bool("macos-adhoc", false, "ad-hoc sign macOS CLI artifacts before manifest creation")
+	markitdownPack := flags.String("with-markitdown", "", "verified MarkItDown runtime-pack archive to include")
 	_ = flags.Parse(args)
 	if *version == "" || *output == "" || flags.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "usage: go run ./dev/release candidate --version MAJOR.MINOR.PATCH --channel canary --output DIRECTORY")
@@ -294,12 +295,13 @@ func candidate(root string, args []string) {
 	}
 	outputPath := absoluteFromRoot(root, *output)
 	manifest, err := releasepack.BuildCandidate(context.Background(), releasepack.CandidateOptions{
-		Root:       root,
-		Output:     outputPath,
-		Version:    *version,
-		Channel:    *channel,
-		Prebuilt:   optionalAbsoluteFromRoot(root, *prebuilt),
-		AdHocMacOS: *macosAdHoc,
+		Root:           root,
+		Output:         outputPath,
+		Version:        *version,
+		Channel:        *channel,
+		Prebuilt:       optionalAbsoluteFromRoot(root, *prebuilt),
+		AdHocMacOS:     *macosAdHoc,
+		MarkItDownPack: optionalAbsoluteFromRoot(root, *markitdownPack),
 	})
 	if err != nil {
 		fatal(err)

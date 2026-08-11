@@ -46,34 +46,38 @@ type PrepareOptions struct {
 }
 
 type ActivationPlan struct {
-	SchemaVersion       int    `json:"schema_version"`
-	TransactionID       string `json:"transaction_id"`
-	Transition          string `json:"transition"`
-	ConfirmationPlanID  string `json:"confirmation_plan_id"`
-	FromRelease         string `json:"from_release"`
-	FromChannel         string `json:"from_channel"`
-	FromCLIVersion      string `json:"from_cli_version"`
-	FromBundleVersion   string `json:"from_bundle_version"`
-	Release             string `json:"release"`
-	Channel             string `json:"channel"`
-	CLIVersion          string `json:"cli_version"`
-	BundleVersion       string `json:"bundle_version"`
-	TargetOS            string `json:"target_os"`
-	TargetArch          string `json:"target_arch"`
-	ManagedRoot         string `json:"managed_root"`
-	DataRoot            string `json:"data_root"`
-	ManifestSHA256      string `json:"manifest_sha256"`
-	CLIArtifactName     string `json:"cli_artifact_name"`
-	CLISHA256           string `json:"cli_sha256"`
-	CLISize             int64  `json:"cli_size"`
-	BundleArtifactName  string `json:"bundle_artifact_name"`
-	BundleSHA256        string `json:"bundle_sha256"`
-	BundleSize          int64  `json:"bundle_size"`
-	RoleMigrationID     string `json:"role_migration_id,omitempty"`
-	CatalogSHA256       string `json:"catalog_sha256,omitempty"`
-	PolicySHA256        string `json:"policy_sha256,omitempty"`
-	StagedCLI           string `json:"staged_cli"`
-	StagedBundleArchive string `json:"staged_bundle_archive"`
+	SchemaVersion           int    `json:"schema_version"`
+	TransactionID           string `json:"transaction_id"`
+	Transition              string `json:"transition"`
+	ConfirmationPlanID      string `json:"confirmation_plan_id"`
+	FromRelease             string `json:"from_release"`
+	FromChannel             string `json:"from_channel"`
+	FromCLIVersion          string `json:"from_cli_version"`
+	FromBundleVersion       string `json:"from_bundle_version"`
+	Release                 string `json:"release"`
+	Channel                 string `json:"channel"`
+	CLIVersion              string `json:"cli_version"`
+	BundleVersion           string `json:"bundle_version"`
+	TargetOS                string `json:"target_os"`
+	TargetArch              string `json:"target_arch"`
+	ManagedRoot             string `json:"managed_root"`
+	DataRoot                string `json:"data_root"`
+	ManifestSHA256          string `json:"manifest_sha256"`
+	CLIArtifactName         string `json:"cli_artifact_name"`
+	CLISHA256               string `json:"cli_sha256"`
+	CLISize                 int64  `json:"cli_size"`
+	BundleArtifactName      string `json:"bundle_artifact_name"`
+	BundleSHA256            string `json:"bundle_sha256"`
+	BundleSize              int64  `json:"bundle_size"`
+	RoleMigrationID         string `json:"role_migration_id,omitempty"`
+	CatalogSHA256           string `json:"catalog_sha256,omitempty"`
+	PolicySHA256            string `json:"policy_sha256,omitempty"`
+	StagedCLI               string `json:"staged_cli"`
+	StagedBundleArchive     string `json:"staged_bundle_archive"`
+	RuntimePackArtifactName string `json:"runtime_pack_artifact_name,omitempty"`
+	RuntimePackSHA256       string `json:"runtime_pack_sha256,omitempty"`
+	RuntimePackSize         int64  `json:"runtime_pack_size,omitempty"`
+	StagedRuntimePack       string `json:"staged_runtime_pack,omitempty"`
 }
 
 type ActivateOptions struct {
@@ -170,7 +174,7 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 	if err != nil {
 		return "", err
 	}
-	cliArtifact, bundleArtifact, err := releaseArtifacts(verified, options.TargetOS, options.TargetArch)
+	cliArtifact, bundleArtifact, runtimePack, err := releaseArtifacts(verified, options.TargetOS, options.TargetArch)
 	if err != nil {
 		return "", err
 	}
@@ -197,6 +201,13 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 		cliArtifact.SHA256,
 	); err != nil {
 		return "", err
+	}
+	stagedRuntimePack := ""
+	if runtimePack != nil {
+		stagedRuntimePack = filepath.Join(transaction, "markitdown-runtime.tar.gz")
+		if err := copyVerifiedRegular(filepath.Join(verified.Directory, runtimePack.Name), stagedRuntimePack, 0o600, runtimePack.Size, runtimePack.SHA256); err != nil {
+			return "", err
+		}
 	}
 	stagedBundleArchive := filepath.Join(transaction, "bundle.tar.gz")
 	if err := copyVerifiedRegular(
@@ -237,6 +248,12 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 		PolicySHA256:        roleBinding.PolicySHA256,
 		StagedCLI:           stagedCLI,
 		StagedBundleArchive: stagedBundleArchive,
+		StagedRuntimePack:   stagedRuntimePack,
+	}
+	if runtimePack != nil {
+		plan.RuntimePackArtifactName = runtimePack.Name
+		plan.RuntimePackSHA256 = runtimePack.SHA256
+		plan.RuntimePackSize = runtimePack.Size
 	}
 	planPath := filepath.Join(transaction, PlanName)
 	if err := WritePlan(planPath, plan); err != nil {
@@ -265,7 +282,7 @@ func ValidatePrepared(
 	if err := validateTransitionOptions(options); err != nil {
 		return ActivationPlan{}, err
 	}
-	cliArtifact, bundleArtifact, err := releaseArtifacts(verified, options.TargetOS, options.TargetArch)
+	cliArtifact, bundleArtifact, runtimePack, err := releaseArtifacts(verified, options.TargetOS, options.TargetArch)
 	if err != nil {
 		return ActivationPlan{}, err
 	}
@@ -289,7 +306,9 @@ func ValidatePrepared(
 		plan.CLISize != cliArtifact.Size ||
 		plan.BundleArtifactName != bundleArtifact.Name ||
 		plan.BundleSHA256 != bundleArtifact.SHA256 ||
-		plan.BundleSize != bundleArtifact.Size {
+		plan.BundleSize != bundleArtifact.Size ||
+		(runtimePack != nil && (plan.RuntimePackArtifactName != runtimePack.Name || plan.RuntimePackSHA256 != runtimePack.SHA256 || plan.RuntimePackSize != runtimePack.Size || plan.StagedRuntimePack == "")) ||
+		(runtimePack == nil && (plan.RuntimePackArtifactName != "" || plan.RuntimePackSHA256 != "" || plan.RuntimePackSize != 0 || plan.StagedRuntimePack != "")) {
 		return ActivationPlan{}, errors.New("activation plan does not match the verified release and install target")
 	}
 	roleBinding, err := roleBindingForTransition(options, verified.Manifest)
@@ -314,6 +333,14 @@ func ValidatePrepared(
 	}
 	if err := verifyRegularFile(plan.StagedBundleArchive, plan.BundleSize, plan.BundleSHA256); err != nil {
 		return ActivationPlan{}, fmt.Errorf("verify staged bundle archive: %w", err)
+	}
+	if runtimePack != nil {
+		if err := ensureSafePath(dataRoot, plan.StagedRuntimePack); err != nil {
+			return ActivationPlan{}, fmt.Errorf("staged MarkItDown runtime pack path is outside the private data root: %w", err)
+		}
+		if err := verifyRegularFile(plan.StagedRuntimePack, plan.RuntimePackSize, plan.RuntimePackSHA256); err != nil {
+			return ActivationPlan{}, fmt.Errorf("verify staged MarkItDown runtime pack: %w", err)
+		}
 	}
 	return plan, nil
 }
@@ -352,11 +379,20 @@ func Activate(
 
 	activeCLI := filepath.Join(plan.ManagedRoot, "bin", executableName(plan.TargetOS))
 	bundleTarget := filepath.Join(plan.ManagedRoot, "bundles", plan.BundleVersion)
+	runtimeTarget := ""
+	if plan.RuntimePackArtifactName != "" {
+		runtimeTarget = filepath.Join(plan.ManagedRoot, "runtimes", "markitdown", plan.Release)
+	}
 	if err := ensureSafePath(plan.ManagedRoot, activeCLI); err != nil {
 		return err
 	}
 	if err := ensureSafePath(plan.ManagedRoot, bundleTarget); err != nil {
 		return err
+	}
+	if runtimeTarget != "" {
+		if err := ensureSafePath(plan.ManagedRoot, runtimeTarget); err != nil {
+			return err
+		}
 	}
 	if _, err := os.Stat(bundleTarget); err == nil {
 		return fmt.Errorf("bundle version already exists: %s", plan.BundleVersion)
@@ -410,6 +446,11 @@ func Activate(
 	if err := os.MkdirAll(filepath.Dir(bundleTarget), 0o755); err != nil {
 		return err
 	}
+	if runtimeTarget != "" {
+		if err := os.MkdirAll(filepath.Dir(runtimeTarget), 0o755); err != nil {
+			return err
+		}
+	}
 	pendingCLI := activeCLI + ".pending-" + plan.TransactionID
 	if err := ensureSafePath(plan.ManagedRoot, pendingCLI); err != nil {
 		return err
@@ -431,6 +472,17 @@ func Activate(
 		return err
 	}
 	defer os.RemoveAll(pendingBundle)
+	pendingRuntime := ""
+	if runtimeTarget != "" {
+		pendingRuntime = filepath.Join(plan.ManagedRoot, "runtimes", "markitdown", ".pending-"+plan.TransactionID)
+		if err := ensureSafePath(plan.ManagedRoot, pendingRuntime); err != nil {
+			return err
+		}
+		if err := extractVerifiedBundleArchive(plan.StagedRuntimePack, pendingRuntime, plan.RuntimePackSize, plan.RuntimePackSHA256); err != nil {
+			return err
+		}
+		defer os.RemoveAll(pendingRuntime)
+	}
 
 	var backup string
 	if _, err := os.Stat(activeCLI); err == nil {
@@ -453,10 +505,18 @@ func Activate(
 			_ = os.Rename(backup, activeCLI)
 		}
 		_ = os.RemoveAll(bundleTarget)
+		if runtimeTarget != "" {
+			_ = os.RemoveAll(runtimeTarget)
+		}
 		return cause
 	}
 	if err := os.Rename(pendingBundle, bundleTarget); err != nil {
 		return restore(fmt.Errorf("activate bundle: %w", err))
+	}
+	if pendingRuntime != "" {
+		if err := os.Rename(pendingRuntime, runtimeTarget); err != nil {
+			return restore(fmt.Errorf("activate MarkItDown runtime pack: %w", err))
+		}
 	}
 	if err := os.Rename(pendingCLI, activeCLI); err != nil {
 		return restore(fmt.Errorf("activate CLI: %w", err))
@@ -1147,37 +1207,45 @@ func validateTransitionOptions(options PrepareOptions) error {
 func releaseArtifacts(
 	verified releaseverify.VerifiedRelease,
 	targetOS, targetArch string,
-) (*releasecontract.Artifact, *releasecontract.Artifact, error) {
+) (*releasecontract.Artifact, *releasecontract.Artifact, *releasecontract.Artifact, error) {
 	if !sha256Pattern.MatchString(verified.ManifestSHA256) {
-		return nil, nil, errors.New("verified release is missing its authenticated manifest digest")
+		return nil, nil, nil, errors.New("verified release is missing its authenticated manifest digest")
 	}
-	var cliArtifact, bundleArtifact *releasecontract.Artifact
+	var cliArtifact, bundleArtifact, runtimePack *releasecontract.Artifact
 	for index := range verified.Manifest.Artifacts {
 		artifact := &verified.Manifest.Artifacts[index]
 		switch {
 		case artifact.Kind == "cli" && artifact.OS == targetOS && artifact.Arch == targetArch:
 			if cliArtifact != nil {
-				return nil, nil, errors.New("release has multiple CLI artifacts for the target")
+				return nil, nil, nil, errors.New("release has multiple CLI artifacts for the target")
 			}
 			cliArtifact = artifact
 		case artifact.Kind == "bundle":
 			if bundleArtifact != nil {
-				return nil, nil, errors.New("release has multiple base bundle artifacts")
+				return nil, nil, nil, errors.New("release has multiple base bundle artifacts")
 			}
 			bundleArtifact = artifact
+		case artifact.Kind == "runtime_pack":
+			if runtimePack != nil {
+				return nil, nil, nil, errors.New("release has multiple runtime packs")
+			}
+			runtimePack = artifact
 		}
 	}
 	if cliArtifact == nil || bundleArtifact == nil {
-		return nil, nil, errors.New("release does not contain the requested CLI and base bundle")
+		return nil, nil, nil, errors.New("release does not contain the requested CLI and base bundle")
 	}
 	for _, artifact := range []*releasecontract.Artifact{cliArtifact, bundleArtifact} {
 		if filepath.Base(artifact.Name) != artifact.Name ||
 			!sha256Pattern.MatchString(artifact.SHA256) ||
 			artifact.Size <= 0 {
-			return nil, nil, errors.New("release artifact has invalid authenticated metadata")
+			return nil, nil, nil, errors.New("release artifact has invalid authenticated metadata")
 		}
 	}
-	return cliArtifact, bundleArtifact, nil
+	if runtimePack != nil && (filepath.Base(runtimePack.Name) != runtimePack.Name || !sha256Pattern.MatchString(runtimePack.SHA256) || runtimePack.Size <= 0) {
+		return nil, nil, nil, errors.New("runtime pack has invalid authenticated metadata")
+	}
+	return cliArtifact, bundleArtifact, runtimePack, nil
 }
 
 func normalizedRoots(managedRoot, dataRoot string) (string, string, error) {

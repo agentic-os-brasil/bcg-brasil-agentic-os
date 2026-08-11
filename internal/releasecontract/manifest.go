@@ -370,7 +370,7 @@ func validateArtifacts(manifest Manifest) error {
 	cliCount := 0
 	bundleCount := 0
 	for _, artifact := range manifest.Artifacts {
-		if artifact.Kind != "cli" && artifact.Kind != "bundle" {
+		if artifact.Kind != "cli" && artifact.Kind != "bundle" && artifact.Kind != "runtime_pack" {
 			return fmt.Errorf("unsupported artifact kind %q", artifact.Kind)
 		}
 		if err := validateArtifactPlatform(artifact); err != nil {
@@ -421,9 +421,9 @@ func validateArtifactPlatform(artifact Artifact) error {
 	concreteOS := artifact.OS == "windows" || artifact.OS == "darwin" || artifact.OS == "linux"
 	concreteArch := artifact.Arch == "amd64" || artifact.Arch == "arm64"
 	switch artifact.Kind {
-	case "bundle":
+	case "bundle", "runtime_pack":
 		if artifact.OS != "any" || artifact.Arch != "any" {
-			return errors.New("bundle artifact must use os=any and arch=any")
+			return fmt.Errorf("%s artifact must use os=any and arch=any", artifact.Kind)
 		}
 	default:
 		if !concreteOS || !concreteArch {
