@@ -132,6 +132,9 @@ func TestGuidedSourceSelectionMapsLibraryAndSharePointViewRootsWithoutReading(t 
 	for _, body := range []string{
 		`{"schema_version":1,"folder_urls":["https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/.."]}`,
 		`{"schema_version":1,"folder_urls":["https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2Fxek407-rt%2FShared%20Documents%2F.."]}`,
+		`{"schema_version":1,"folder_urls":["https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2Fother-project%2FShared%20Documents%2FSecret"]}`,
+		`{"schema_version":1,"folder_urls":["https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2Fxek407-rt%2FOther%20Library%2FSecret"]}`,
+		`{"schema_version":1,"folder_urls":["https://bcgcloud.sharepoint.com/sites/xek407-rt/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2Fxek407-rt%2FShared%20Documents%2FFolder&id=%2Fsites%2Fxek407-rt%2FShared%20Documents%2FOther"]}`,
 	} {
 		if _, err := ParseSourceSelectionInput(strings.NewReader(body)); err == nil {
 			t.Fatalf("unsafe SharePoint path was accepted: %s", body)

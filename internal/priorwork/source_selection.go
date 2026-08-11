@@ -380,29 +380,55 @@ func normalizeSharePointPath(parsed *url.URL) (string, error) {
 	pathValue := strings.TrimSuffix(parsed.Path, "/")
 	viewSuffix := "/Forms/AllItems.aspx"
 	if len(pathValue) >= len(viewSuffix) && strings.EqualFold(pathValue[len(pathValue)-len(viewSuffix):], viewSuffix) {
-		pathValue = strings.TrimSuffix(pathValue[:len(pathValue)-len(viewSuffix)], "/")
+		viewRoot := strings.TrimSuffix(pathValue[:len(pathValue)-len(viewSuffix)], "/")
+		pathValue = viewRoot
 		if parsed.RawQuery != "" {
 			query, err := url.ParseQuery(parsed.RawQuery)
 			if err != nil {
 				return "", errors.New("SharePoint view link could not be read")
 			}
+			if len(query["id"]) > 1 {
+				return "", errors.New("SharePoint view link contains multiple folder scopes")
+			}
 			if id := strings.TrimSpace(query.Get("id")); id != "" {
-				pathValue = strings.TrimSuffix(id, "/")
+				target := strings.TrimSuffix(id, "/")
+				rootSegments, err := validatedSharePointPathSegments(viewRoot)
+				if err != nil {
+					return "", err
+				}
+				targetSegments, err := validatedSharePointPathSegments(target)
+				if err != nil {
+					return "", err
+				}
+				for index := 0; index < 3; index++ {
+					if !strings.EqualFold(rootSegments[index], targetSegments[index]) {
+						return "", errors.New("SharePoint view folder must remain inside the displayed site and document library")
+					}
+				}
+				pathValue = target
 			}
 		}
 	} else if parsed.RawQuery != "" {
 		return "", errors.New("SharePoint folder pointer may not contain a query string")
 	}
+	segments, err := validatedSharePointPathSegments(pathValue)
+	if err != nil {
+		return "", err
+	}
+	return "/" + strings.Join(segments, "/"), nil
+}
+
+func validatedSharePointPathSegments(pathValue string) ([]string, error) {
 	segments := strings.Split(strings.Trim(pathValue, "/"), "/")
 	if len(segments) < 3 || (strings.ToLower(segments[0]) != "sites" && strings.ToLower(segments[0]) != "teams") {
-		return "", errors.New("SharePoint folder pointer must identify a site/team and document library")
+		return nil, errors.New("SharePoint folder pointer must identify a site/team and document library")
 	}
 	for _, segment := range segments {
 		if segment == "" || segment == "." || segment == ".." {
-			return "", errors.New("SharePoint folder pointer contains an unsafe path segment")
+			return nil, errors.New("SharePoint folder pointer contains an unsafe path segment")
 		}
 	}
-	return "/" + strings.Join(segments, "/"), nil
+	return segments, nil
 }
 
 func isSharePointLibraryRoot(value string) bool {
