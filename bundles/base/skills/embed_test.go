@@ -18,8 +18,8 @@ func TestGuidedOwnerSkillsCarryExactResumableReviewCommands(t *testing.T) {
 				"owner expand draft --question-token",
 				"owner expand review --id",
 				"owner expand confirm --id",
-				"Do not use `--facet` with `owner expand draft`",
-				"Do not call `owner onboarding confirm` for a SELF expansion draft",
+				"The `question_token` already binds the facet",
+				"A SELF expansion draft uses `owner expand confirm`",
 			},
 		},
 		{

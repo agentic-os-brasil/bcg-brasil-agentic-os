@@ -83,9 +83,9 @@ workspace-local Markdown file alone is never evidence of completion.
 
 ## Post-onboarding SELF expansion
 
-Do not confuse completed onboarding with the later refresh of an unknown or
-stale professional facet. The owner may call both experiences “onboarding”, but
-the CLI state machines and confirmation envelopes are different. Inspect
+Completed onboarding and the later refresh of an unknown or stale professional
+facet are separate CLI states, even when the owner calls both experiences
+“onboarding”. Inspect
 `<maestro-cli> owner expand status` after onboarding is complete or whenever
 the owner asks to continue, refresh or confirm their profile.
 
@@ -96,8 +96,8 @@ Follow only this exact sequence:
    run `<maestro-cli> owner expand review --id <open_draft_id>`. Show the exact
    `proposed_body`; do not ask the facet question again.
 3. If `state` is `action_required`, run `<maestro-cli> owner expand next`, ask
-   exactly its one `question`, and wait for the owner's answer. Do not draft in
-   the same turn as the question and do not infer an answer from prior chat.
+   exactly its one `question`, and wait for the owner's answer. Drafting begins
+   only after that answer; prior chat is context, never a substitute for it.
 4. Reflect the answer concisely and ask whether that interpretation is
    accurate. Wait for the correction or approval.
 5. Before creating a private draft, ask whether the owner consents to recording
@@ -110,12 +110,12 @@ Follow only this exact sequence:
    question. `current` means the refresh is complete; it does not require an
    onboarding digest.
 
-Do not use `--facet` with `owner expand draft`; the facet is bound by the
-`question_token`. Do not call `owner onboarding confirm` for a SELF expansion draft.
-`owner expand review` always requires `--id`; a bare `review` or guessed
-`--stale` flag is invalid. Commands and digests remain internal evidence: the
-owner sees the question, proposed text, confirmation request and plain-language
-outcome, never a trial-and-error command transcript.
+The `question_token` already binds the facet, so the draft command needs no
+facet flag. A SELF expansion draft uses `owner expand confirm`, while the
+initial onboarding profile uses `owner onboarding confirm`. Review resumes with
+the `open_draft_id` returned by status. Commands and digests remain internal
+evidence: the owner sees the question, proposed text, confirmation request and
+plain-language outcome rather than a trial-and-error command transcript.
 
 ## Opening response
 
