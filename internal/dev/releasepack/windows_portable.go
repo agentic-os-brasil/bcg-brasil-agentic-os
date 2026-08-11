@@ -364,7 +364,11 @@ func writeDeterministicZip(staging, rootName, output string) error {
 			header.Method = zip.Store
 			header.SetMode(os.ModeDir | 0o755)
 		} else {
-			header.SetMode(0o600)
+			mode := os.FileMode(0o600)
+			if info.Mode()&0o111 != 0 {
+				mode = 0o700
+			}
+			header.SetMode(mode)
 		}
 		entry, err := writer.CreateHeader(header)
 		if err != nil {
