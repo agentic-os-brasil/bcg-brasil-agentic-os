@@ -209,7 +209,11 @@ func walkWindowsDirectory(path string, create bool, stepHook func(string)) (wind
 	for _, component := range components {
 		child, openErr := ntOpenRelative(handle, component, secureWindowsDirectoryTraverse, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
 		if create && isWindowsNotExist(openErr) {
-			writableParent, parentErr := ntOpenRelative(handle, ".", secureWindowsDirectoryCreate, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
+			// Reopen the parent by handle to add create rights. The NT
+			// namespace has no "." entry, so the name must be empty: a
+			// zero-length ObjectName with RootDirectory set reopens the
+			// directory that handle already refers to.
+			writableParent, parentErr := ntOpenRelative(handle, "", secureWindowsDirectoryCreate, windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE)
 			if parentErr == nil {
 				child, openErr = ntOpenRelative(writableParent, component, secureWindowsDirectoryTraverse, windows.FILE_OPEN_IF, windows.FILE_DIRECTORY_FILE)
 				_ = windows.CloseHandle(writableParent)
