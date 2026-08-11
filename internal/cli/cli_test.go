@@ -20,12 +20,14 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/adaptercfg"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/canary"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/continuoususe"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/execution"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maestro"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/maintenance"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionstart"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/setupauth"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillrouting"
@@ -625,20 +627,31 @@ func TestPreActionGuardLeavesIncompleteMetadataToNativeFlowAndProtectsRootRemova
 	}
 }
 
-func TestPreActionGuardExplainsHowToRetryChainedRemoval(t *testing.T) {
+func TestPreActionGuardAllowsBoundedSafeChainAndStillDeniesProtectedRoot(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
-			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"mv note.md archived.md && ls && rm archived.md"}}`
+			input := `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"rm archived.md && echo ok"}}`
 			var output bytes.Buffer
 			code := runHookWithInput(
 				[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "/workspace-that-must-not-be-inspected"},
 				strings.NewReader(input), &output, &output,
-				func() (string, error) { return "", errors.New("chained removal must not inspect workspace state") },
+				func() (string, error) { return "", errors.New("bounded removal must not inspect workspace state") },
 			)
-			if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) ||
-				!strings.Contains(output.String(), "Run each shell step separately") ||
-				!strings.Contains(output.String(), "removal") {
-				t.Fatalf("guard did not provide actionable recovery: code=%d output=%s", code, output.String())
+			if code != ExitOK || strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("safe bounded chain was denied: code=%d output=%s", code, output.String())
+			}
+
+			output.Reset()
+			input = `{"session_id":"session-a","tool_name":"Bash","tool_input":{"command":"rm -rf / && echo unsafe"}}`
+			code = runHookWithInput(
+				[]string{runtimeName, "pre-action-guard", "--adapter-source", "maestro", "/workspace-that-must-not-be-inspected"},
+				strings.NewReader(input), &output, &output,
+				func() (string, error) {
+					return "", errors.New("protected-root removal must not inspect workspace state")
+				},
+			)
+			if code != ExitOK || !strings.Contains(output.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("protected-root chain was not denied: code=%d output=%s", code, output.String())
 			}
 		})
 	}
@@ -1874,6 +1887,28 @@ func TestExecutionHandoffAcrossTwoSessionsRecoversAndCompletesFirstSessionArtifa
 	var paused execution.MutationReceipt
 	if err := json.Unmarshal(sessionA.Bytes(), &paused); err != nil {
 		t.Fatal(err)
+	}
+
+	var maestroStatusOutput bytes.Buffer
+	if code := runMaestroWithInput([]string{"status", workspacePath}, strings.NewReader(""), &maestroStatusOutput, &maestroStatusOutput, dataRoot); code != ExitOK {
+		t.Fatalf("maestro status exit = %d, output = %s", code, maestroStatusOutput.String())
+	}
+	var maestroStatus continuoususe.Status
+	if err := json.Unmarshal(maestroStatusOutput.Bytes(), &maestroStatus); err != nil {
+		t.Fatal(err)
+	}
+	var packetOutput bytes.Buffer
+	if code := runSession([]string{"packet", workspacePath}, &packetOutput, &packetOutput, dataRoot); code != ExitOK {
+		t.Fatalf("session packet exit = %d, output = %s", code, packetOutput.String())
+	}
+	var directPacket sessionctx.Packet
+	if err := json.Unmarshal(packetOutput.Bytes(), &directPacket); err != nil {
+		t.Fatal(err)
+	}
+	activePointer := directPacket.Execution.Active
+	if !reflect.DeepEqual(maestroStatus.OpenWork, directPacket.ContinuousUse.OpenWork) ||
+		activePointer.Path != execution.ActivePointerPath || !activePointer.Available || activePointer.State != execution.ActivePointerAvailable {
+		t.Fatalf("continuity endpoints diverged: maestro=%#v packet=%#v execution=%#v", maestroStatus.OpenWork, directPacket.ContinuousUse.OpenWork, directPacket.Execution.Active)
 	}
 
 	envelopes := make(map[string]sessionstart.Envelope)

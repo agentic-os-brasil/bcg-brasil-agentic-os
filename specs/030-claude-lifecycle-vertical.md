@@ -34,12 +34,16 @@ The implemented policy denies only a recursive forced `rm` whose simple command
 unambiguously targets `/` or the current home root. It canonicalizes the
 explicit executable and target forms required by the policy, including
 `/bin/rm`, balanced quoted roots, `/.`, `~`, `$HOME` and `${HOME}` variants.
-The evaluator recognizes a deliberately small simple-command grammar; it
-understands only the explicit HOME expansions above and rejects other parameter
-expansions, globbing, shell operators, substitutions, escapes and unbalanced
-quotes instead of claiming to be a general shell parser when the command could
-be a removal. All other successfully evaluated actions remain subject to
-Claude's own permission flow.
+The evaluator recognizes a deliberately small command grammar. In addition to
+a single command, it accepts a quote-aware sequence of at most four commands
+joined only by `&&`, evaluates every segment independently, and denies the
+entire sequence if any segment removes a protected root. This keeps ordinary
+forms such as `rm archived.md && echo ok` usable without weakening the protected
+root boundary. It understands only the explicit HOME expansions above and
+rejects other parameter expansions, globbing, every other shell operator,
+substitutions, escapes and unbalanced quotes instead of claiming to be a
+general shell parser when the command could be a removal. All other
+successfully evaluated actions remain subject to Claude's own permission flow.
 
 An installed guard may short-circuit workspace-state inspection only for a
 closed, simple-command allowlist of read-only local BCGOS diagnostics: help,

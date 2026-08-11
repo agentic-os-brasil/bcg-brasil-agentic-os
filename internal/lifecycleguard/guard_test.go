@@ -47,11 +47,13 @@ func TestProtectedRootRemovalCoversSupportedCommandForms(t *testing.T) {
 }
 
 func TestProtectedRootRemovalRejectsCommandsOutsideBoundedGrammar(t *testing.T) {
+	if destructive, err := ProtectedRootRemoval("rm -rf / && echo unsafe"); err != nil || !destructive {
+		t.Fatalf("protected-root chain must be denied deterministically: destructive=%v err=%v", destructive, err)
+	}
 	for _, command := range []string{
 		"rm -rf /; echo unsafe",
 		"rm -rf /\nwhoami",
 		"rm -rf / | cat",
-		"rm -rf / && echo unsafe",
 		"rm -rf `pwd`",
 		"rm -rf *",
 		"rm -rf $USER",
@@ -84,6 +86,27 @@ func TestProtectedRootRemovalKeepsWrapperAndNonRootTargetsSafe(t *testing.T) {
 				t.Fatalf("ProtectedRootRemoval(%q) = true for a non-root or wrapped command", command)
 			}
 		})
+	}
+}
+
+func TestProtectedRootRemovalAllowsBoundedSafeAndThenButStillProtectsRoots(t *testing.T) {
+	tests := []struct {
+		command     string
+		destructive bool
+	}{
+		{command: "rm canary/sandbox/nota.md && echo ok", destructive: false},
+		{command: "rm -- canary/sandbox/nota.md && printf done", destructive: false},
+		{command: "rm -rf / && echo unsafe", destructive: true},
+		{command: "echo begin && /bin/rm -Rf $HOME", destructive: true},
+	}
+	for _, test := range tests {
+		got, err := ProtectedRootRemoval(test.command)
+		if err != nil {
+			t.Fatalf("ProtectedRootRemoval(%q) error = %v", test.command, err)
+		}
+		if got != test.destructive {
+			t.Fatalf("ProtectedRootRemoval(%q) = %v, want %v", test.command, got, test.destructive)
+		}
 	}
 }
 
