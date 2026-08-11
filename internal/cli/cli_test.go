@@ -1070,6 +1070,8 @@ func TestLifecycleOffersPendingOnboardingWithoutSuppressingRequestedWork(t *test
 
 			output.Reset()
 			if code := runHookWithInput([]string{runtimeName, "session-start", "--adapter-source", "maestro", workspacePath}, strings.NewReader(""), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
+				!strings.Contains(output.String(), "bcgos-operator") ||
+				!strings.Contains(output.String(), "deterministic_operational_method") ||
 				!strings.Contains(output.String(), "maestro-onboarding") ||
 				!strings.Contains(output.String(), "deterministic_onboarding_state") {
 				t.Fatalf("session start did not select the governed onboarding guide = %d %s", code, output.String())
@@ -1078,6 +1080,7 @@ func TestLifecycleOffersPendingOnboardingWithoutSuppressingRequestedWork(t *test
 			prompt := `{"session_id":"session-a","prompt":"Please use $case-kickoff before onboarding"}`
 			output.Reset()
 			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
+				!strings.Contains(output.String(), "bcgos-operator") ||
 				!strings.Contains(output.String(), "maestro-onboarding") ||
 				!strings.Contains(output.String(), "case-kickoff") {
 				t.Fatalf("pending onboarding suppressed requested work = %d %s", code, output.String())
@@ -2377,7 +2380,7 @@ func TestInterviewSelectionActivatesEngineeringProjection(t *testing.T) {
 		t.Fatalf("personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 32`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 33`) {
 		t.Fatalf("optional adapter install = %d %s", code, output.String())
 	}
 	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence"} {
@@ -2400,7 +2403,7 @@ func TestInterviewSelectionActivatesDataProjection(t *testing.T) {
 		t.Fatalf("data personalize = %d %s", code, output.String())
 	}
 	output.Reset()
-	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 32`) {
+	if code := runAdapterWithDataRoot([]string{"install", "--runtime", "codex", workspacePath}, &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), `"skill_count": 33`) {
 		t.Fatalf("data adapter install = %d %s", code, output.String())
 	}
 	for _, skillID := range []string{"maestro-onboarding", "review-explain-change", "spec-driven-delivery", "test-and-evidence", "data-pipeline-quality", "data-science-evaluation", "reproducible-data-run"} {

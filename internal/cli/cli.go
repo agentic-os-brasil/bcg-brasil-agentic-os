@@ -3104,7 +3104,7 @@ func runHookWithInput(args []string, in io.Reader, out, errOut io.Writer, dataRo
 		SetupAuthorization: setupAuthorizationForPacket(root, inspection),
 		ContinuousUse:      continuous,
 	})
-	if err := enrichOnboardingGuide(&packet, *runtimeName, inspection.WorkspacePath); err != nil {
+	if err := enrichStartupGuides(&packet, *runtimeName, inspection.WorkspacePath); err != nil {
 		return reportError(errOut, err)
 	}
 	var output any
@@ -3229,7 +3229,7 @@ func runCodexHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot f
 			if err := enrichContextPacket(&packet, "codex", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
 				return reportError(errOut, err)
 			}
-		} else if err := enrichOnboardingGuide(&packet, "codex", inspection.WorkspacePath); err != nil {
+		} else if err := enrichStartupGuides(&packet, "codex", inspection.WorkspacePath); err != nil {
 			return reportError(errOut, err)
 		}
 		eventName := "SessionStart"
@@ -3434,7 +3434,7 @@ func runClaudeHook(args []string, in io.Reader, out, errOut io.Writer, dataRoot 
 			if err := enrichContextPacket(&packet, "claude", inspection.WorkspacePath, root, native.SessionID, native.Prompt); err != nil {
 				return reportError(errOut, err)
 			}
-		} else if err := enrichOnboardingGuide(&packet, "claude", inspection.WorkspacePath); err != nil {
+		} else if err := enrichStartupGuides(&packet, "claude", inspection.WorkspacePath); err != nil {
 			return reportError(errOut, err)
 		}
 		eventName := "SessionStart"
@@ -3533,6 +3533,9 @@ func challengeDenial(result actionconfirmation.Result) string {
 }
 
 func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, root, sessionID, prompt string) error {
+	// Keep the operating method available even when this prompt is the exact
+	// confirmation response for a pending external action.
+	_ = enrichOperationalGuide(packet, runtimeName, workspacePath)
 	actorID, _ := localConfirmedOwnerActor(root)
 	confirmed, err := confirmationStore(root, packet.Workspace.ID).Confirm(runtimeName, packet.Workspace.ID, actorID, sessionID, prompt)
 	if err != nil {
@@ -3563,7 +3566,7 @@ func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, 
 		return nil
 	}
 	for _, item := range selected {
-		if len(packet.Skills.Selected) >= skillrouting.MaximumSelections {
+		if len(packet.Skills.Selected) >= sessionctx.MaximumSelectedSkills {
 			break
 		}
 		duplicate := false
@@ -3584,16 +3587,59 @@ func enrichContextPacket(packet *sessionctx.Packet, runtimeName, workspacePath, 
 	return nil
 }
 
+func enrichStartupGuides(packet *sessionctx.Packet, runtimeName, workspacePath string) error {
+	if err := enrichOperationalGuide(packet, runtimeName, workspacePath); err != nil {
+		return err
+	}
+	return enrichOnboardingGuide(packet, runtimeName, workspacePath)
+}
+
+// enrichOperationalGuide installs the compact operating method at the front
+// of every lifecycle selection. It remains a pointer to integrity-checked
+// bundle content and grants no tools, data access or mutation authority.
+func enrichOperationalGuide(packet *sessionctx.Packet, runtimeName, workspacePath string) error {
+	if executable, err := os.Executable(); err == nil && filepath.IsAbs(executable) {
+		packet.MaestroCLIPath = executable
+	}
+	projection, err := runtimeprojection.Inspect(runtimeName, workspacePath)
+	if err != nil || projection.State != "installed" {
+		return nil
+	}
+	catalog, _, installed, err := runtimeprojection.RoutingInputs(runtimeName, workspacePath)
+	if err != nil {
+		return nil
+	}
+	known := false
+	for _, skill := range catalog.Skills {
+		if skill.ID == "bcgos-operator" {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return nil
+	}
+	for _, current := range packet.Skills.Selected {
+		if current.ID == "bcgos-operator" {
+			return nil
+		}
+	}
+	for _, skill := range installed {
+		if skill.ID == "bcgos-operator" {
+			packet.Skills.Selected = append([]sessionctx.SkillSelection{{ID: skill.ID, Reason: "deterministic_operational_method", Pointer: skill.Pointer}}, packet.Skills.Selected...)
+			if len(packet.Skills.Selected) > sessionctx.MaximumSelectedSkills {
+				packet.Skills.Selected = packet.Skills.Selected[:sessionctx.MaximumSelectedSkills]
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
 // enrichOnboardingGuide is a best-effort lifecycle suggestion, not an
 // admission gate. The guide does not grant tools, data access or native
 // authority, and its absence never suppresses the owner's requested work.
 func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath string) error {
-	// Native hooks invoke this process by the installed absolute path. Carry it
-	// into the human-facing directive so skills never have to rely on the
-	// runtime's PATH, which is often different inside a desktop app.
-	if executable, err := os.Executable(); err == nil && filepath.IsAbs(executable) {
-		packet.MaestroCLIPath = executable
-	}
 	if packet.Owner.Onboarding.State == "complete" {
 		return nil
 	}
@@ -3620,7 +3666,14 @@ func enrichOnboardingGuide(packet *sessionctx.Packet, runtimeName, workspacePath
 	}
 	for _, skill := range installed {
 		if skill.ID == "maestro-onboarding" {
-			packet.Skills.Selected = []sessionctx.SkillSelection{{ID: skill.ID, Reason: "deterministic_onboarding_state", Pointer: skill.Pointer}}
+			for _, current := range packet.Skills.Selected {
+				if current.ID == skill.ID {
+					return nil
+				}
+			}
+			if len(packet.Skills.Selected) < sessionctx.MaximumSelectedSkills {
+				packet.Skills.Selected = append(packet.Skills.Selected, sessionctx.SkillSelection{ID: skill.ID, Reason: "deterministic_onboarding_state", Pointer: skill.Pointer})
+			}
 			return nil
 		}
 	}

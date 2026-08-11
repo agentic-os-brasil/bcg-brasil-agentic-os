@@ -1050,3 +1050,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: The guided flow is shorter and backward compatible with callers that still supply `--confirm`. Enrollment and receipt workflows are not promoted by the selection command; actual collection remains truthful about the installed connector's state.
 - Refs: AGEN; specs/037-sharepoint-work-retrieval-wiki.md; internal/cli/prior_work.go; bundles/base/skills/maestro-onboarding/SKILL.md
 - Supersedes: none
+
+## BOPS - Make BCGOS operations a startup method
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The repository contains broad command, lifecycle and recovery documentation, but an installed Maestro session receives only a compact orientation and a small set of selected task methods. The runtime can therefore discover a working BCGOS command by trial and error, expose unnecessary CLI friction or miss the correct verification and recovery path.
+- Decision: Ship a compact `bcgos-operator` skill in the base bundle and select its integrity-checked pointer at every SessionStart with reason `deterministic_operational_method`. The method defines BCGOS as the silent control plane for setup, health, version, update and exceptional recovery; ordinary professional work, onboarding, agents, memory, ingestion and continuity remain owned by the runtime agent, governed skills and canonical workspace artifacts. The managed Claude/Codex orientation must tell Maestro to load that method before a control-plane operation. Increase the total native SessionStart output budget from 8 KiB to 16 KiB, retain an independent 8 KiB ceiling for generated memory context and allow at most three selected skill pointers: the operational method, the onboarding method when pending and task methods selected by the existing bounded router. The skill is a method, not authority; existing workspace, external-effect and destructive-action boundaries remain unchanged.
+- Consequences: Maestro receives a stable control-plane, verification and bounded-recovery playbook without embedding the repository manual or raw documentation in every prompt or turning the CLI into the product workflow. Onboarding and task routing remain available alongside the operating method, while generated memory cannot consume the added operational capacity. Compatibility commands may remain internal for migration and recovery but are not advertised as normal work. This change is validated through contract and unit tests; model evals are intentionally outside this change.
+- Refs: AGNT; FREE; specs/012-skills-index.md; specs/015-session-context-packet.md; specs/025-native-session-start-hook.md; specs/050-bcgos-operational-method.md; bundles/base/skills/bcgos-operator; internal/sessionctx; internal/sessionhook
+- Supersedes: none

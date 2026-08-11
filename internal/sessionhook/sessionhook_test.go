@@ -58,6 +58,15 @@ func TestSessionStartInjectsBoundedLocalMemoryButPromptHookDoesNotRepeatIt(t *te
 	}
 }
 
+func TestSessionStartBudgetReservesSpaceForOperatingMethodWithoutGrowingMemory(t *testing.T) {
+	if MaximumAdditionalContextBytes != 16<<10 {
+		t.Fatalf("SessionStart budget = %d", MaximumAdditionalContextBytes)
+	}
+	if MaximumMemoryContextBytes != 8<<10 {
+		t.Fatalf("memory budget = %d", MaximumMemoryContextBytes)
+	}
+}
+
 func TestSessionStartTruncatesMemoryBeforeDroppingThePointerPacket(t *testing.T) {
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile:   profile.State{Profile: "standard", Source: "configured"},
@@ -71,6 +80,10 @@ func TestSessionStartTruncatesMemoryBeforeDroppingThePointerPacket(t *testing.T)
 	context := output.HookSpecificOutput.AdditionalContext
 	if len(context) > MaximumAdditionalContextBytes || strings.Contains(context, "packet exceeded") || !strings.Contains(context, "memory context truncated") || !strings.Contains(context, `"memory":{"state":"available"`) {
 		t.Fatalf("bounded memory output = %q", context)
+	}
+	memoryStart := strings.Index(context, "MAESTRO LOCAL MEMORY")
+	if memoryStart < 0 || len(context)-memoryStart > MaximumMemoryContextBytes {
+		t.Fatalf("generated memory used %d bytes; maximum = %d", len(context)-memoryStart, MaximumMemoryContextBytes)
 	}
 }
 
@@ -86,8 +99,8 @@ func TestSessionStartRejectsHistoricalBodySmuggledIntoContinuousStatus(t *testin
 }
 
 func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T) {
-	pending := sessionctx.Packet{WorkspaceRoot: "/Users/pilot/Developer/maestro-os", Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", NextQuestion: "What is your professional role?"}}}
-	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING AVAILABLE") || !strings.Contains(got, "never make it a prerequisite") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore conflicting persona") || !strings.Contains(got, "USER-FACING COMMUNICATION") || !strings.Contains(got, "friendly wrapper around the system") || !strings.Contains(got, "Absorb ordinary system friction") || !strings.Contains(got, "instead of exposing a setup journey") || !strings.Contains(got, "choice changes scope, consequence or final outcome") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {
+	pending := sessionctx.Packet{WorkspaceRoot: "/Users/pilot/Developer/maestro-os", Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", NextQuestion: "What is your professional role?"}}, Skills: sessionctx.Skills{Selected: []sessionctx.SkillSelection{{ID: "bcgos-operator", Reason: "deterministic_operational_method", Pointer: ".claude/skills/bcgos-operator/SKILL.md"}}}}
+	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING AVAILABLE") || !strings.Contains(got, "never make it a prerequisite") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore conflicting persona") || !strings.Contains(got, "USER-FACING COMMUNICATION") || !strings.Contains(got, "friendly wrapper around the system") || !strings.Contains(got, "Absorb ordinary system friction") || !strings.Contains(got, "instead of exposing a setup journey") || !strings.Contains(got, "choice changes scope, consequence or final outcome") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") || !strings.Contains(got, "BCGOS OPERATING METHOD") || !strings.Contains(got, ".claude/skills/bcgos-operator/SKILL.md") {
 		t.Fatalf("pending directive = %q", got)
 	}
 	selection := pending

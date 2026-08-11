@@ -26,9 +26,10 @@ attach an ephemeral, bounded generated memory context.
   execution item can be resolved;
 - managed, owner and workspace atlas availability and pointers;
 - the managed skills-catalog pointer, not its full contents;
-- at most two relative managed-skill pointers whose IDs, reasons and runtime
-  paths are validated as one unit; while onboarding is pending this is exactly
-  the integrity-checked `maestro-onboarding` guide;
+- at most three relative managed-skill pointers whose IDs, reasons and runtime
+  paths are validated as one unit: the integrity-checked `bcgos-operator`
+  startup method, `maestro-onboarding` while pending and remaining capacity
+  from bounded task routing;
 - the managed agents-catalog pointer, Maestro hub ID and explicit definition
   versus runtime-activation states;
 - local memory state plus portable pointers for valid generated layers, without
@@ -47,8 +48,8 @@ Session Start may report only the count and must not invent a backlog.
 When onboarding is `review_required`, the packet includes only the SHA-256
 digest of the reviewable non-sensitive facets so an explicit confirmation can
 be bound to the exact version shown. It never includes the facet bodies.
-Before that confirmation, prompt hooks suppress unrelated Case methods instead
-of letting a lexical prompt silently bypass the deterministic first-use flow.
+Before that confirmation, prompt hooks keep onboarding visible without
+suppressing a separately requested safe Case method.
 Ongoing expansion never places a question token, question body, audio prompt,
 draft ID, review digest or facet body in Session Context. Counts are
 non-negative, sum to the closed eight-facet set, and `next_facet` must belong to
@@ -80,7 +81,7 @@ The packet is a local, runtime-neutral contract. It does not install a Claude
 hook, configure Codex or claim that native Session Start is qualified. The
 shared local adapter may resolve only the newest valid memory commit for the
 exact workspace and render its already-generated layers inside the managed
-per-layer and 8 KiB total budgets. It reports active-but-empty memory separately
+per-layer and independent 8 KiB memory budgets. It reports active-but-empty memory separately
 from invalid/unavailable state and never reads raw captures as fallback.
 
 `bcgos session bridge --runtime claude|codex [workspace-path]` emits the same

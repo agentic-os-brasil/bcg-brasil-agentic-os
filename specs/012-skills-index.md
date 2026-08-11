@@ -25,7 +25,9 @@ client material, logs or execution state.
 ## Context behavior
 
 Session context receives a bounded pointer to the catalog, not the full catalog
-by default. `UserPromptSubmit` may select at most two integrity-checked,
+by default. Every SessionStart first selects the integrity-checked
+`bcgos-operator` pointer with reason `deterministic_operational_method`.
+`UserPromptSubmit` may additionally select at most two integrity-checked,
 installed and policy-allowed skill entries from an explicit `$skill-id`
 reference or deterministic lexical intent. It injects IDs, reasons and runtime
 pointers only; prompt text and skill bodies are neither returned nor persisted.
@@ -33,12 +35,12 @@ Unknown or ambiguous intent selects nothing. The active
 interaction profile changes how that capability is presented; it does not
 filter the catalog or authorize execution.
 
-Pending owner onboarding has lifecycle precedence over contextual method
-selection. `SessionStart` and subsequent prompt hooks expose only the exact
-integrity-checked `maestro-onboarding` guide with reason
-`deterministic_onboarding_state`; unrelated Case methods remain suppressed
-until the reviewed onboarding digest is explicitly confirmed. This is a
-startup-control pointer, not a direct Maestro tool or delegation grant.
+Pending owner onboarding adds the exact integrity-checked
+`maestro-onboarding` guide with reason `deterministic_onboarding_state` after
+the operating method. It does not suppress the owner's requested Case method.
+The packet carries at most three pointers total, preserving operating,
+onboarding and task order. These are method pointers, not direct Maestro tools
+or delegation grants.
 
 After onboarding, the Case policy includes `ingest-content` and
 `find-prior-work`. Both retain their own explicit source, consent and runtime

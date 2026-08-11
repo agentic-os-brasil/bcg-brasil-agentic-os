@@ -24,6 +24,11 @@ import (
 const skillsCatalogPointer = "bundles/base/skills/catalog.json"
 const agentsCatalogPointer = "bundles/base/agents/catalog.json"
 
+// MaximumSelectedSkills reserves one startup method plus either onboarding and
+// one task method, or two task methods after onboarding is complete. No skill
+// body is serialized into session context.
+const MaximumSelectedSkills = 3
+
 // sessionPointerFacets is intentionally an allowlist rather than an inference
 // from a mutable local registry. Adding a facet to session context requires a
 // reviewed change here and contract tests, even when its registry reader list
@@ -451,7 +456,7 @@ func (packet Packet) Validate() error {
 	default:
 		return errors.New("session context packet has an invalid setup authorization state")
 	}
-	if len(packet.Skills.Selected) > 2 {
+	if len(packet.Skills.Selected) > MaximumSelectedSkills {
 		return errors.New("session context packet selects too many skills")
 	}
 	for _, selected := range packet.Skills.Selected {
@@ -503,7 +508,7 @@ func validSelectedSkill(selected SkillSelection) bool {
 		return false
 	}
 	switch selected.Reason {
-	case "explicit_skill_reference", "lexical_intent", "deterministic_onboarding_state":
+	case "explicit_skill_reference", "lexical_intent", "deterministic_onboarding_state", "deterministic_operational_method":
 	default:
 		return false
 	}
