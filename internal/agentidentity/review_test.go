@@ -32,6 +32,19 @@ func TestGuidedIdentityAndDigestBoundProfileReview(t *testing.T) {
 	}
 }
 
+func TestGuidedIdentityExposesTheSingleOpenDraftForResumption(t *testing.T) {
+	root := t.TempDir()
+	profile := Profile{SchemaVersion: SchemaVersion, OwnerID: "daniel", Confirmed: true, UpdatedAt: time.Now().UTC(), Selections: []Selection{{Role: "maestro", DisplayName: "Maestro", Emoji: "🎼", OwnerID: "daniel", OwnershipScope: "system"}}}
+	draft, err := DraftProfile(root, profile, true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	interview := GuidedIdentityInterview(root)
+	if interview.State != "review_required" || interview.NextQuestion != nil || interview.OpenDraftID != draft.ID {
+		t.Fatalf("resumable identity interview = %#v, want open draft %q", interview, draft.ID)
+	}
+}
+
 func TestGuidedIdentityAcceptsCanonicalManagedAgentID(t *testing.T) {
 	root := t.TempDir()
 	profile := Profile{SchemaVersion: SchemaVersion, OwnerID: "daniel", Confirmed: true, UpdatedAt: time.Now().UTC(), Selections: []Selection{{Role: "maestro", AgentID: "maestro", DisplayName: "Maestro", Emoji: "🎼", OwnerID: "daniel", OwnershipScope: "system"}}}

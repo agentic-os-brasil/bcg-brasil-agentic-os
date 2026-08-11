@@ -1,6 +1,6 @@
 ---
 name: maestro-onboarding
-description: Start Maestro's owner interview with an explicit quick or complete track, one question at a time, and a reviewed local profile.
+description: Start or resume Maestro's owner interview, including post-onboarding SELF refresh, one question at a time with reviewed local drafts.
 ---
 
 # Maestro Onboarding
@@ -80,6 +80,42 @@ complex or separately reviewed refinements.
 The onboarding track and final profile confirmation remain separate gates. The
 CLI registry, review digest and audit receipt are the source of truth; a
 workspace-local Markdown file alone is never evidence of completion.
+
+## Post-onboarding SELF expansion
+
+Do not confuse completed onboarding with the later refresh of an unknown or
+stale professional facet. The owner may call both experiences “onboarding”, but
+the CLI state machines and confirmation envelopes are different. Inspect
+`<maestro-cli> owner expand status` after onboarding is complete or whenever
+the owner asks to continue, refresh or confirm their profile.
+
+Follow only this exact sequence:
+
+1. Run `<maestro-cli> owner expand status`.
+2. If `state` is `review_required`, read `open_draft_id` from that response and
+   run `<maestro-cli> owner expand review --id <open_draft_id>`. Show the exact
+   `proposed_body`; do not ask the facet question again.
+3. If `state` is `action_required`, run `<maestro-cli> owner expand next`, ask
+   exactly its one `question`, and wait for the owner's answer. Do not draft in
+   the same turn as the question and do not infer an answer from prior chat.
+4. Reflect the answer concisely and ask whether that interpretation is
+   accurate. Wait for the correction or approval.
+5. Before creating a private draft, ask whether the owner consents to recording
+   that exact body and attests that it contains no client data. Only after both
+   are explicit, send the reviewed `## Current` body through standard input to
+   `<maestro-cli> owner expand draft --question-token <question_token> --stdin --consent --no-client-data`.
+6. Show the exact returned `proposed_body` and ask for confirmation. Only after
+   an affirmative answer run `<maestro-cli> owner expand confirm --id <id> --digest <review_digest> --confirm`.
+7. Re-run `<maestro-cli> owner expand status` and continue with at most one
+   question. `current` means the refresh is complete; it does not require an
+   onboarding digest.
+
+Do not use `--facet` with `owner expand draft`; the facet is bound by the
+`question_token`. Do not call `owner onboarding confirm` for a SELF expansion draft.
+`owner expand review` always requires `--id`; a bare `review` or guessed
+`--stale` flag is invalid. Commands and digests remain internal evidence: the
+owner sees the question, proposed text, confirmation request and plain-language
+outcome, never a trial-and-error command transcript.
 
 ## Opening response
 

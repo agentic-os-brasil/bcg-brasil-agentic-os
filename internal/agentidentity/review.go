@@ -31,6 +31,8 @@ type GuidedQuestion struct {
 type GuidedInterview struct {
 	State        string          `json:"state"`
 	NextQuestion *GuidedQuestion `json:"next_question,omitempty"`
+	OpenDraftID  string          `json:"open_draft_id,omitempty"`
+	Guidance     string          `json:"guidance,omitempty"`
 	Catalog      Interview       `json:"catalog"`
 }
 
@@ -57,6 +59,13 @@ func GuidedIdentityInterview(root string) GuidedInterview {
 	// The catalog keeps role, narrative and track choices, but only
 	// NextQuestion is an actionable question in this response.
 	catalog.Steps = nil
+	openDraftID, err := openIdentityDraftID(root)
+	if err != nil {
+		return GuidedInterview{State: "blocked", Guidance: "agent identity draft state is invalid; review local state before continuing", Catalog: catalog}
+	}
+	if openDraftID != "" {
+		return GuidedInterview{State: "review_required", OpenDraftID: openDraftID, Guidance: "review or confirm the open agent identity draft before asking another question", Catalog: catalog}
+	}
 	configured := map[string]bool{}
 	if profile, err := Load(root); err == nil {
 		for _, selection := range profile.Selections {
@@ -297,20 +306,35 @@ func storedProfileSHA(profile Profile) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 func ensureNoOpenIdentityDraft(root string) error {
-	paths, err := filepath.Glob(filepath.Join(root, "agents", "interview", "drafts", "*.json"))
+	id, err := openIdentityDraftID(root)
 	if err != nil {
 		return err
 	}
+	if id != "" {
+		return errors.New("review or confirm the open agent identity draft before creating another")
+	}
+	return nil
+}
+
+func openIdentityDraftID(root string) (string, error) {
+	paths, err := filepath.Glob(filepath.Join(root, "agents", "interview", "drafts", "*.json"))
+	if err != nil {
+		return "", err
+	}
+	openID := ""
 	for _, path := range paths {
 		draft, err := readProfileDraft(path)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if draft.State == "drafted" || draft.State == "prepared" {
-			return errors.New("review or confirm the open agent identity draft before creating another")
+			if openID != "" {
+				return "", errors.New("multiple open agent identity drafts violate the single-review boundary")
+			}
+			openID = draft.ID
 		}
 	}
-	return nil
+	return openID, nil
 }
 func compactIdentityDrafts(root, currentID string) error {
 	paths, err := filepath.Glob(filepath.Join(root, "agents", "interview", "drafts", "*.json"))

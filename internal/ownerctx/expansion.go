@@ -121,7 +121,11 @@ func expansionStatus(root string, value registry, onboarding OnboardingStatus) (
 				return ExpansionStatus{}, err
 			}
 			if d.State == "drafted" || d.State == "prepared" {
+				if result.OpenDraftID != "" {
+					return ExpansionStatus{}, errors.New("multiple open SELF expansion drafts violate the single-review boundary")
+				}
 				result.ReviewCount++
+				result.OpenDraftID = d.ID
 			}
 		}
 	}
