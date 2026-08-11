@@ -69,11 +69,22 @@ func validateStateParents(path string) error {
 	if err != nil {
 		return err
 	}
+	// Collect the components by walking up to the filesystem root, stopping at
+	// the fixed point of filepath.Dir rather than at a hardcoded separator. On
+	// Windows the root is a volume whose parent is itself (filepath.Dir(`C:\`)
+	// is `C:\`), so a separator-only guard never terminates and every caller
+	// hangs before it can take the lock. Starting the descent from that same
+	// fixed point keeps the walk correct on both platforms.
 	parts := []string{}
-	for current := abs; current != "." && current != string(filepath.Separator); current = filepath.Dir(current) {
+	current := abs
+	for {
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
 		parts = append([]string{filepath.Base(current)}, parts...)
+		current = parent
 	}
-	current := string(filepath.Separator)
 	for _, part := range parts {
 		current = filepath.Join(current, part)
 		info, err := os.Lstat(current)
