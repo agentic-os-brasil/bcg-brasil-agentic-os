@@ -330,6 +330,38 @@
       "path": "skills/retro/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/learnings-bridge/SKILL.md",
+      "path": "skills/learnings-bridge/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/learnings-bridge/agents/openai.yaml",
+      "path": "skills/learnings-bridge/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/craft-update/SKILL.md",
+      "path": "skills/craft-update/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/craft-update/agents/openai.yaml",
+      "path": "skills/craft-update/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/feedback-capture/SKILL.md",
+      "path": "skills/feedback-capture/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/feedback-capture/agents/openai.yaml",
+      "path": "skills/feedback-capture/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/upward-feedback/SKILL.md",
+      "path": "skills/upward-feedback/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/upward-feedback/agents/openai.yaml",
+      "path": "skills/upward-feedback/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/case-agent-setup/SKILL.md",
       "path": "skills/case-agent-setup/SKILL.md"
     },
