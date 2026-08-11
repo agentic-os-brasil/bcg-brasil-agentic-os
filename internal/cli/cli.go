@@ -263,22 +263,59 @@ Completion criteria:
 		flags := newFlagSet("work "+args[0], errOut)
 		workspacePath := flags.String("workspace", "", "initialized workspace path")
 		itemID := flags.String("item", "", "execution item identity")
+		idAlias := flags.String("id", "", "execution item identity (alias for --item)")
 		revision := flags.Int("revision", 0, "expected state revision")
 		confirm := flags.Bool("confirm", false, "confirm deletion")
 		attempt := flags.String("attempt", "", "active attempt identity")
 		stdin := flags.Bool("stdin", false, "read checkpoint JSON")
 		active := flags.Bool("active", false, "resolve the active execution item")
-		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*workspacePath) == "" || (args[0] != "next" && strings.TrimSpace(*itemID) == "") {
+		if err := flags.Parse(args[1:]); err != nil || rejectPositionals(flags, errOut) || strings.TrimSpace(*workspacePath) == "" {
+			return ExitUsage
+		}
+		if strings.TrimSpace(*idAlias) != "" {
+			if strings.TrimSpace(*itemID) != "" && *itemID != *idAlias {
+				fmt.Fprintln(errOut, "--item and --id must identify the same work item")
+				return ExitUsage
+			}
+			*itemID = *idAlias
+		}
+		activeMutation := args[0] == "checkpoint" || args[0] == "pause" || args[0] == "resume"
+		if *active && strings.TrimSpace(*itemID) != "" {
+			fmt.Fprintln(errOut, "--active cannot be combined with --item or --id")
+			return ExitUsage
+		}
+		if strings.TrimSpace(*itemID) == "" && !(*active && (activeMutation || args[0] == "next")) {
 			return ExitUsage
 		}
 		store, workspaceID, err := executionStoreForWorkspace(root, *workspacePath)
 		if err != nil {
 			return reportError(errOut, err)
 		}
+		// `--active` is intentionally a convenience for a conversational runtime:
+		// it resolves the one active item and its current fenced values at the last
+		// possible moment. The store still rejects a racing update, but users and
+		// adapters no longer need to surface IDs, revisions or attempt tokens.
+		if *active && activeMutation {
+			projection, err := store.NextActive(workspaceID)
+			if err != nil {
+				return reportError(errOut, err)
+			}
+			*itemID = projection.ItemID
+			if *revision == 0 {
+				*revision = projection.StateRevision
+			}
+			if *attempt == "" {
+				*attempt = projection.AttemptID
+			}
+		}
 		switch args[0] {
 		case "start":
 			if *revision < 1 {
-				return ExitUsage
+				item, err := store.Inspect(workspaceID, *itemID)
+				if err != nil {
+					return reportError(errOut, err)
+				}
+				*revision = item.State.StateRevision
 			}
 			item, err := store.Start(workspaceID, *itemID, *revision)
 			if err != nil {
@@ -296,12 +333,19 @@ Completion criteria:
 			}
 			var input struct {
 				Summary      string   `json:"summary"`
+				Note         string   `json:"note"`
 				NextStep     string   `json:"next_step"`
 				Blocker      string   `json:"blocker"`
 				ArtifactRefs []string `json:"artifact_refs"`
 			}
 			if err := json.Unmarshal(body, &input); err != nil {
 				return reportError(errOut, err)
+			}
+			if strings.TrimSpace(input.Summary) == "" {
+				input.Summary = input.Note
+			}
+			if strings.TrimSpace(input.NextStep) == "" && strings.TrimSpace(input.Summary) != "" {
+				input.NextStep = "Resume from the recorded checkpoint."
 			}
 			item, err := store.Checkpoint(workspaceID, *itemID, execution.CheckpointInput{ExpectedRevision: *revision, AttemptID: *attempt, Summary: input.Summary, NextStep: input.NextStep, Blocker: input.Blocker, ArtifactRefs: input.ArtifactRefs})
 			if err != nil {
