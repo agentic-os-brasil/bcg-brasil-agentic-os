@@ -77,7 +77,8 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	for _, required := range []string{
 		"Nao peca para a pessoa digitar ou executar comandos",
 		"Peca uma unica confirmacao curta",
-		`..\managed\bcgos-bootstrap.exe portable-activate`,
+		`..\managed\bcgos-bootstrap.exe portable-install`,
+		`..\managed\bin\bcgos.exe`,
 		"releia este CLAUDE.md",
 		"maestro-onboarding",
 		"nao repita o onboarding",
@@ -88,7 +89,7 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 		}
 	}
 	confirmation := strings.Index(orientation, "Peca uma unica confirmacao curta")
-	activationCommand := strings.Index(orientation, `..\managed\bcgos-bootstrap.exe portable-activate`)
+	activationCommand := strings.Index(orientation, `..\managed\bcgos-bootstrap.exe portable-install`)
 	if confirmation < 0 || activationCommand < 0 || confirmation > activationCommand {
 		t.Fatal("portable CLAUDE.md must require confirmation before internal activation")
 	}
@@ -119,21 +120,21 @@ func TestPortableClaudeOnboardingStopsNonWindowsBeforeConfirmation(t *testing.T)
 	platformCheck := strings.Index(orientation, "Antes de pedir confirmacao, confirme silenciosamente que o sistema e Windows")
 	stop := strings.Index(orientation, "Se nao for Windows, pare antes da ativacao")
 	confirmation := strings.Index(orientation, "Peca uma unica confirmacao curta")
-	activation := strings.Index(orientation, `..\managed\bcgos-bootstrap.exe portable-activate`)
+	activation := strings.Index(orientation, `..\managed\bcgos-bootstrap.exe portable-install`)
 	if platformCheck < 0 || stop < 0 || confirmation < 0 || activation < 0 ||
 		platformCheck > stop || stop > confirmation || confirmation > activation {
 		t.Fatal("portable onboarding must stop non-Windows sessions before confirmation and activation")
 	}
 }
 
-func TestBuildWindowsPortableRejectsBootstrapperWithoutDirectActivation(t *testing.T) {
+func TestBuildWindowsPortableRejectsBootstrapperWithoutPortableInstall(t *testing.T) {
 	options := validWindowsPortableOptions(t)
 	if err := os.WriteFile(options.Bootstrapper, []byte("stale-bootstrapper"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	options.BootstrapperSHA256 = testDigest([]byte("stale-bootstrapper"))
-	if _, err := BuildWindowsPortable(options); err == nil || !strings.Contains(err.Error(), "does not support direct portable activation") {
-		t.Fatalf("BuildWindowsPortable() error = %v, want direct activation rejection", err)
+	if _, err := BuildWindowsPortable(options); err == nil || !strings.Contains(err.Error(), "does not support portable core installation") {
+		t.Fatalf("BuildWindowsPortable() error = %v, want portable-install rejection", err)
 	}
 }
 
@@ -157,7 +158,7 @@ func validWindowsPortableOptions(t *testing.T) WindowsPortableOptions {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	bootstrapperBody := []byte("synthetic-windows-bootstrapper-" + universalPortableActivationContract)
+	bootstrapperBody := []byte("synthetic-windows-bootstrapper-" + portableInstallContract)
 	bootstrapper := filepath.Join(t.TempDir(), "bcgos-bootstrap_0.2.0_windows_amd64.exe")
 	if err := os.WriteFile(bootstrapper, bootstrapperBody, 0o700); err != nil {
 		t.Fatal(err)

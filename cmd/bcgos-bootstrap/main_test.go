@@ -64,15 +64,15 @@ func TestSeedStatusExposesOnlyPublicTrustBinding(t *testing.T) {
 	}
 }
 
-func TestPortableActivationContractIsExplicit(t *testing.T) {
-	if portableActivationContract != "maestro-portable-activate-v1" {
-		t.Fatalf("unexpected portable activation contract: %q", portableActivationContract)
+func TestPortableInstallContractIsExplicit(t *testing.T) {
+	if portableInstallContract != "maestro-portable-install-v2" {
+		t.Fatalf("unexpected portable install contract: %q", portableInstallContract)
 	}
 }
 
-func TestPortableActivationFailureIsUserFacing(t *testing.T) {
-	if strings.Contains(strings.ToLower(portableActivationFailureMessage), "cmd") || strings.Contains(portableActivationFailureMessage, "--") {
-		t.Fatalf("portable activation failure leaks command detail: %q", portableActivationFailureMessage)
+func TestPortableInstallFailureIsUserFacing(t *testing.T) {
+	if strings.Contains(strings.ToLower(portableInstallFailureMessage), "cmd") || strings.Contains(portableInstallFailureMessage, "--") {
+		t.Fatalf("portable install failure leaks command detail: %q", portableInstallFailureMessage)
 	}
 }
 

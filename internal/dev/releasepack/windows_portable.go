@@ -24,6 +24,8 @@ import (
 var portableVersionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 var portableDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
+const portableInstallContract = "maestro-portable-install-v2"
+
 type BootstrapperSeedStatus struct {
 	Version                 string `json:"bootstrapper_version"`
 	AuthorityRegistrySHA256 string `json:"authority_registry_sha256"`
@@ -171,8 +173,8 @@ func BuildWindowsPortable(options WindowsPortableOptions) (WindowsPortableResult
 	if seed.Version != options.Version || seed.AuthorityRegistrySHA256 != options.AuthorityRegistrySHA256 {
 		return WindowsPortableResult{}, errors.New("portable bootstrapper seed does not match the release and authority registry")
 	}
-	if !bytes.Contains(bootstrapperBody, []byte(universalPortableActivationContract)) {
-		return WindowsPortableResult{}, errors.New("portable bootstrapper does not support direct portable activation")
+	if !bytes.Contains(bootstrapperBody, []byte(portableInstallContract)) {
+		return WindowsPortableResult{}, errors.New("portable bootstrapper does not support portable core installation")
 	}
 
 	parent := filepath.Dir(options.Output)
@@ -431,9 +433,9 @@ Voce esta na pasta de trabalho correta do Maestro. Conduza a pessoa em portugues
 4. Se existir, releia este CLAUDE.md e siga o bloco gerenciado do Maestro. Se a orientacao atual indicar que o onboarding ainda esta incompleto, use a skill maestro-onboarding e continue uma pergunta por vez. Se ele ja estiver concluido, atenda ao pedido normal da pessoa e nao repita o onboarding.
 5. Se nao existir, explique em uma frase que voce pode preparar o Maestro nesta pasta. Peca uma unica confirmacao curta antes de qualquer ativacao, por exemplo: "Posso preparar o Maestro agora?".
 6. Nao peca para a pessoa digitar ou executar comandos, abrir terminal ou localizar arquivos internos.
-7. Somente depois de uma resposta afirmativa clara, execute internamente, a partir desta pasta: ..\managed\bcgos-bootstrap.exe portable-activate.
+7. Somente depois de uma resposta afirmativa clara, execute internamente, a partir desta pasta: ..\managed\bcgos-bootstrap.exe portable-install. Em seguida, use somente o CLI instalado em ..\managed\bin\bcgos.exe para executar setup apply para este workspace e adapter verify para Claude.
 8. A permissao nativa do Claude Code ou do Windows pode aparecer. Explique que a pessoa deve aprovar somente se reconhecer este pacote Maestro; isso nao e uma segunda autorizacao do produto.
-9. Se a ativacao terminar com sucesso, releia este CLAUDE.md porque a projecao gerenciada foi acrescentada, informe que a preparacao terminou e invoque a skill maestro-onboarding.
+9. Se a preparacao terminar com sucesso, releia este CLAUDE.md porque a projecao gerenciada foi acrescentada, informe que a preparacao terminou e invoque a skill maestro-onboarding.
 10. Se falhar, nao improvise instalacao, nao baixe substitutos e nao altere a estrutura. Resuma o erro em linguagem simples, confirme que nenhum trabalho da pessoa foi apagado e oriente-a a procurar o responsavel pelo piloto.
 
 A ativacao e idempotente: se uma tentativa anterior tiver terminado parcialmente, use o mesmo fluxo apos nova confirmacao e deixe o ativador verificar, reparar ou concluir o estado existente.

@@ -1,6 +1,6 @@
 ---
 name: release-export
-description: Exportar releases Maestro de forma reproduzível, incluindo ZIP portátil Windows, instalador Windows autocontido, checksums, provenance e publicação opcional em GitHub Releases. Usar quando alguém pedir para gerar, empacotar, guardar em releases/, validar ou publicar um release.
+description: Exportar releases Maestro de forma reproduzível, incluindo ZIPs portáteis completos para macOS Apple Silicon e Windows, checksums, provenance e publicação opcional em GitHub Releases. Usar quando alguém pedir para gerar, empacotar, guardar em releases/, validar ou publicar um release.
 ---
 
 # Exportar releases Maestro
@@ -15,12 +15,12 @@ ZIPs, executáveis, chaves, certificados, tokens ou dados de usuário na `main`.
 2. Usar um commit revisado de `main`; registrar o SHA no pacote de evidência.
 3. Confirmar que a versão é semver (`MAJOR.MINOR.PATCH`) e ainda não possui tag
    `maestro-v<versão>`.
-4. Usar uma release Canary assinada pelo registry aprovado, um bootstrapper
-   Windows versionado e seus SHA-256 exatos. Não inventar pins nem substituir
+4. Usar uma release Canary assinada pelo registry aprovado, os bootstrappers
+   versionados macOS arm64 e Windows amd64 e seus SHA-256 exatos. Não inventar pins nem substituir
    uma entrada ausente por `--skip-signature`.
-5. Exportar para `releases/<versão>/` usando o script desta skill. A factory
-   existente (`go run ./dev/release portable-windows`) continua sendo a única
-   autoridade para construir o ZIP.
+5. Exportar os dois ZIPs para `releases/<versão>/` usando o script desta skill.
+   A factory (`go run ./dev/release portable-windows` e `portable-macos`) é a
+   única autoridade para construir os ZIPs.
 6. Se a entrega exigir um único executável Windows, anexar o payload ao bridge
    validado com `go run ./dev/release self-contained`. O diretório-fonte deve
    ser o pacote convencional completo produzido pela factory Windows; nunca
@@ -30,13 +30,13 @@ ZIPs, executáveis, chaves, certificados, tokens ou dados de usuário na `main`.
 8. Publicar no GitHub somente com `--publish-github --confirm-publish`, depois
    reconsultar a release/tag e guardar a URL, SHA do commit e digests.
 
-## Exportar o ZIP portátil Windows
+## Exportar os ZIPs portáteis completos
 
 Execute a partir da raiz do repositório. A factory pode ser executada em macOS,
-Linux ou Windows para **gerar** o artefato Windows. O ZIP produzido é Windows-
-only para execução; no macOS, o usuário deve instalar pelo DMG. Em Windows, a
-factory executa `seed-status` e usa `Get-AuthenticodeSignature`, mantendo a
-exigência de `NotSigned` para o Canary:
+Linux ou Windows para **gerar** os artefatos. Cada ZIP é estritamente do seu
+alvo: macOS Apple Silicon ou Windows amd64. Ambos levam o release assinado
+completo, agentes, skills, hooks e o workspace `maestro-os`; apenas o
+bootstrapper executável é específico da plataforma:
 
 ```sh
 dev/skills/release-export/scripts/export-release.sh \
@@ -45,20 +45,24 @@ dev/skills/release-export/scripts/export-release.sh \
   --authority-registry /abs/path/to/release-authority-registry.json \
   --authority-registry-sha256 LOWERCASE_SHA256 \
   --bootstrapper /abs/path/to/bcgos-bootstrap_0.2.0_windows_amd64.exe \
-  --bootstrapper-sha256 LOWERCASE_SHA256
+  --bootstrapper-sha256 LOWERCASE_SHA256 \
+  --macos-bootstrapper /abs/path/to/bcgos-bootstrap_0.2.0_darwin_arm64 \
+  --macos-bootstrapper-sha256 LOWERCASE_SHA256
 ```
 
 O resultado fica em `releases/0.2.0/`:
 
 - `Maestro-Portable-0.2.0-windows-amd64-local-beta-unsigned.zip`;
+- `Maestro-Portable-0.2.0-macos-arm64-local-beta-unsigned.zip`;
 - o `.sha256` correspondente;
 - o `.provenance.json` correspondente;
 - `EXPORT-METADATA.txt`, com commit, tag, versão e digests observados.
 
-O ZIP é uma Canary controlada e permanece `unsigned-controlled-canary`. A
-factory recusa manifest que não seja `canary`, issuer/key fora do registry,
-drift de digest, bootstrapper incompatível, seed divergente e qualquer status
-Authenticode diferente de exatamente `NotSigned`.
+Os ZIPs são Canaries controladas e permanecem `unsigned-controlled-canary`.
+A factory recusa manifest que não seja `canary`, issuer/key fora do registry,
+drift de digest, bootstrapper incompatível ou seed divergente. O ZIP Windows
+exige Authenticode exatamente `NotSigned`; o ZIP macOS exige ausência de
+`LC_CODE_SIGNATURE` e confirmação nativa de que o binário não é assinado.
 
 ## Empacotar o instalador Windows em um único EXE
 
