@@ -4,7 +4,62 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-### Current evidence snapshot (2026-08-06)
+### Current evidence snapshot (2026-08-11)
+
+- Source baseline is `73c05e5` (`origin/main` after a large continuous wave: skills (#292,
+  #293, #288), atlasops (#297), runtime packs (#295), Windows harness fixes (#299, #300,
+  #301), ZIP distribution (#302, #303), platform-portability (#279, #282, #283, #284, #285,
+  #287, #291, #296), owner-atlas docs (#286, #289, #290, #294), and Maestro runtime/installer
+  wave (#248–#276, #278, #280). `validate`, `wiki validate` and `wiki verify` all pass. The
+  managed atlas bundle is current (watermark unchanged — allowlist sources have not changed
+  since 2026-08-06). No hosted CI evidence; workflows remain disabled.
+- Skills bundle grows from 16 to 34; all new skills pass `validate --full` on the skill
+  metadata gate. No native-qualified runtime evidence is claimed beyond the local gate.
+- Windows compatibility: three targeted fixes (#299, #300, #301) land the harness gate on
+  Windows without requiring elevation or elevated symlink permissions. macOS ad-hoc portable
+  activation and platform-portable ZIP generation now exist but are not notarized or clean-
+  device tested.
+
+### Added (2026-08-11 wave)
+
+- [PR #292] `start-day` and `eod` daily-ritual skills: bounded orientation to open threads
+  and time remaining at day open; reviewable closure packet and tomorrow's first priority at
+  day close.
+- [PR #293] Four owner-knowledge skills: `craft-update` (document a personal method or
+  working preference deliberately), `learnings-bridge` (promote daily candidates into durable
+  knowledge), `feedback-capture` (record received feedback against objectives), and
+  `upward-feedback` (prepare considered feedback for a senior colleague).
+- [PR #288] Three advisory skills: `wayfinder` (structure an open problem into a first move),
+  `investigate` (find the root cause of a wrong or surprising result), and `deck-drill`
+  (rehearse a deck against the questions the room will actually ask).
+- [PR #297] AtlasOps `set-field` and `link` atomic write operations: named-target scoping
+  prevents silent corruption; standing grants enforced at the point of effect with a session-
+  boundary proof.
+- [PR #295] Optional runtime packs transport: the release pipeline can ship packs (e.g.,
+  MarkItDown) alongside a release artifact; base install is unchanged when no pack is
+  selected.
+- [PR #299] Windows harness gate: batch `gofmt` invocations to stay below the CreateProcess
+  32 KB argument limit so the repository gate runs on Windows without a helper script.
+- [PR #300] Windows symlink test fixtures: skip symlink-dependent tests with `t.Skip` on
+  platforms that require elevation, eliminating false failures in unprivileged CI.
+- [PR #301] Windows FileMode bits: `GOOS` guard prevents treating synthetic Unix mode bits as
+  authoritative on Windows where those bits carry no meaning.
+- [PR #302] ZIP distribution and surgical delete: Go-native ZIP generation and a clean delete
+  path for the release toolchain; eval harness extended.
+- [PR #303] Skill prefix normalization and bundle hygiene: renamed skills to the `bcg-`
+  prefix convention and removed a personal-owner rule that does not belong in the shared
+  bundle.
+- [PRs #248–#291, #294, #296, #298] Maestro and platform-portability wave: macOS ad-hoc
+  portable activation, Windows portable direct-activation, platform-portable ZIP generation,
+  runtime-first Maestro workflow, memory-bootstrap routines, permissive beta routing, low-
+  friction capabilities, BCGOS operator session-start, owner atlas vertical and segment
+  documentation, owner scope contract (doc #006), Windows ownership fix, and Windows platform
+  findings report.
+- [PR #305] Maestro user-template pointer discipline: `CLAUDE.md` and `WELCOME.md` now defer
+  to `README-INSTALL.md` as the single canonical source for the update ritual, eliminating a
+  3-way contradiction that could produce divergent installation instructions across files.
+
+### Evidence snapshot (2026-08-06)
 
 - Source baseline is `b3d85edeac16816ccca8b69cf887a7d674786710`
   (`origin/main`, including PRs #197, #195, #196 and #198). The local
