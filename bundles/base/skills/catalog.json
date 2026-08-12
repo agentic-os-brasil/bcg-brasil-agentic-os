@@ -44,6 +44,13 @@
       "relative_path": "skills/case-agent-setup/SKILL.md"
     },
     {
+      "id": "client-delivery-gate",
+      "display_name": "Gate de Entrega",
+      "trigger": "Gate de qualidade em 3 lentes antes de qualquer output chegar ao cliente ou Partner",
+      "default_prompt": "Use $client-delivery-gate para revisar o output antes de enviar ao cliente.",
+      "relative_path": "skills/client-delivery-gate/SKILL.md"
+    },
+    {
       "id": "craft-update",
       "display_name": "Craft Update",
       "trigger": "Document a personal method or working preference deliberately",
