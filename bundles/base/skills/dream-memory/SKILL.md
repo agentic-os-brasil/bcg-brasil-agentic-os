@@ -35,6 +35,7 @@ If the cycle fails or the memory tree is missing, report the failure and delete 
 
 1. Resolve the active workspace identity by reading `data/profile/identity.json` and the memory root at `data/memory/`.
 2. Confirm the memory tree exists and verify the effective capacity limits for each memory layer. If either is missing, stop and report the safe next action.
+2a. **Schema-version gate (GAP-D).** Read `data/memory/.schema-version`. The current expected schema is `1`. If the marker is missing, report the tree as uninitialized and stop; if `schema_version` differs from the expected value, stop and route the user to `/maestro-setup-update`. Never mutate the memory tree when the schema does not match — a stale reader against a newer schema corrupts the layers.
 3. For capture, persist only signals classified as sanitized in the source (Session Start, hook output, prior memória recente entry). Never write raw credentials, client files or unrestricted prompt history into `data/memory/`.
 4. Execute exactly one cycle per invocation. Hooks, schedules and manual requests all follow the same idempotent read, synthesize, stage, commit sequence.
 5. For weekly lifetime promotion, require a named eligibility policy in `data/memory/policies/lifetime.json`. If it is missing, stop: lifetime activation must fail closed.

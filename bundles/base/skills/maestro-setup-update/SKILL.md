@@ -57,6 +57,25 @@ Contexto: o time BCG Brasil AI envia um email com o link do ZIP novo. O usuário
 
 3. **Sanidade pós-atualização.** Se surgir dúvida (arquivo faltando, hook não roda), delegar para `maestro-doctor` e seguir a prescrição dele.
 
+4. **Fechar o ciclo (obrigatório).** Ao concluir a verificação (match ou orientação de reextração aceita), reconciliar os marcadores em `data/`:
+   - Ler `${CLAUDE_PROJECT_DIR}/VERSION` (versão em execução) e `${CLAUDE_PROJECT_DIR}/data/.maestro-version` (versão instalada anteriormente).
+   - Se diferentes e a verificação confirmou o novo ZIP no lugar, atualizar `data/.maestro-version` para o novo valor via Write ou Edit.
+   - Se existir `data/.upgrade-pending`, apagar o arquivo. Ele foi escrito pelo hook `first-run-scaffold.sh` e serviu de gatilho; sem essa limpeza o SessionStart repete o alerta.
+   - Se a migração falhou (não conseguiu extrair, VERSION continua diferente), preservar o marcador e informar honestamente que o upgrade não fechou.
+
+## Migração incremental de schema
+
+O bundle carrega dois marcadores de schema em `data/`:
+
+- `data/.maestro-version` — versão do bundle instalado.
+- `data/memory/.schema-version` — schema efetivo da árvore de memória.
+
+Quando um upgrade muda o schema de memória, o release notes do time BCG Brasil AI indica explicitamente. Nessa situação, além do fluxo de atualização acima:
+
+1. Confirmar que o release notes menciona mudança de schema de memória.
+2. Delegar para `dream-memory` a validação — a skill lê `data/memory/.schema-version` e recusa qualquer escrita se o schema esperado não bater. Não migrar manualmente.
+3. Se o schema exigir atualização, o release notes explicita o novo valor. Só então atualizar `data/memory/.schema-version` via Edit para o valor indicado. Sem release notes explícito, não tocar.
+
 ## Fluxo: reparo
 
 1. **Delegar diagnóstico.** Ativar `maestro-doctor`. Aguardar o veredicto de uma linha e a lista de pontos.

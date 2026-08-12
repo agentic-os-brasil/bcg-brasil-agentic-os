@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "bundle_id": "bcgos-base",
+  "bundle_version": "0.0.0",
+  "format": "okf-1",
+  "provenance": {
+    "publisher": "BCG Brasil Agentic OS",
+    "canonical_source": "bundles/base/",
+    "distribution_map": "bundles/base/distribution.json"
+  },
+  "runtime_requirements": {
+    "host": ["claude-code", "codex-cli"],
+    "hooks": [
+      {
+        "event": "session_start",
+        "installer_path": ".claude/hooks/first-run-scaffold.sh",
+        "criticality": "required"
+      },
+      {
+        "event": "session_start",
+        "installer_path": ".claude/hooks/session-start-memory-inject.sh",
+        "criticality": "required"
+      },
+      {
+        "event": "stop",
+        "installer_path": ".claude/hooks/session-stop-dream.sh",
+        "criticality": "recommended"
+      }
+    ],
+    "workspace_state": {
+      "root": "data/",
+      "owned_by": "user",
+      "never_overwritten_by_upgrade": true,
+      "version_markers": [
+        "data/.maestro-version",
+        "data/memory/.schema-version"
+      ]
+    }
+  },
+  "contracts": {
+    "memory_policy": "bundles/base/memory/policy.json",
+    "profile_policy": "bundles/base/profile/policy.json",
+    "runtime_capabilities": "bundles/base/runtime/capabilities.json",
+    "runtime_maintenance": "bundles/base/runtime/maintenance.json",
+    "release_provider": "bundles/base/release/provider.json"
+  },
+  "agents": [
+    "bundles/base/agents/case-agent/AGENT.md",
+    "bundles/base/agents/client-account-agent/AGENT.md",
+    "bundles/base/agents/darwin/AGENT.md",
+    "bundles/base/agents/maestro/AGENT.md",
+    "bundles/base/agents/pa-expert/AGENT.md",
+    "bundles/base/agents/walter/AGENT.md"
+  ],
+  "skills_index": "bundles/base/skills/INDEX.md",
+  "skills_catalog": "bundles/base/skills/catalog.json",
+  "control_plane_skills": {
+    "operator": "bundles/base/skills/bcgos-operator/SKILL.md",
+    "doctor": "bundles/base/skills/maestro-doctor/SKILL.md",
+    "setup_update": "bundles/base/skills/maestro-setup-update/SKILL.md",
+    "onboarding": "bundles/base/skills/maestro-onboarding/SKILL.md",
+    "dream_memory": "bundles/base/skills/dream-memory/SKILL.md"
+  },
+  "schemas": {
+    "root": "schemas/",
+    "referenced_by": [
+      "bundles/base/memory/policy.json",
+      "bundles/base/profile/policy.json",
+      "bundles/base/runtime/capabilities.json"
+    ]
+  },
+  "portability_notes": {
+    "purpose": "Portable manifest describing how the bundle plugs into a Claude/Codex host without leaking managed-root paths. Consumers read this file to discover hooks, contracts, agents and skills without walking the tree.",
+    "consumers": ["installer", "harness validators", "downstream OKF bundlers"],
+    "invariants": [
+      "bundle never writes outside data/ inside the user's workspace",
+      "version_markers live inside data/ so upgrades are detectable but reversible",
+      "hooks are fail-open and idempotent"
+    ]
+  }
+}
