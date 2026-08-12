@@ -1,8 +1,9 @@
 # Spec 052 - Agent context snapshot
 
-Status: contract and deterministic engine slice; runtime hook wiring, Session
-Start injection, CLI surface and any model-backed semantic compaction are
-deferred to later slices.
+Status: contract, deterministic engine and pure injection primitive
+(`Assemble` / `Render` / `InjectableSection`) landed. Runtime hook wiring into
+`memory.AssembleContext`, Session Start injection, CLI surface and any
+model-backed semantic compaction remain deferred to later slices.
 
 ## Objective
 

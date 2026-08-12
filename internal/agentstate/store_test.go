@@ -13,7 +13,16 @@ func newTestStore(t *testing.T, budget int) *Store {
 	if budget > 0 {
 		store.RuneBudget = budget
 	}
-	store.Now = func() time.Time { return time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC) }
+	// Advance Now on each call so commit filenames sort chronologically. A
+	// fixed clock leaves ordering to random transaction IDs, which makes
+	// tests that rely on subsequent Load()/Apply() reading the latest commit
+	// flaky.
+	base := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	i := int64(0)
+	store.Now = func() time.Time {
+		i++
+		return base.Add(time.Duration(i))
+	}
 	return store
 }
 
