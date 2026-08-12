@@ -6,7 +6,9 @@
   "provenance": {
     "publisher": "BCG Brasil Agentic OS",
     "canonical_source": "bundles/base/",
-    "distribution_map": "bundles/base/distribution.json"
+    "distribution_map": "bundles/base/distribution.json",
+    "status": "experimental",
+    "status_note": "OKF-1 shape is not yet fixed. Downstream consumers should treat this manifest as forward-compatible-only: read known fields, ignore unknown ones. Breaking changes will bump schema_version and land with a migration note in the release provider."
   },
   "runtime_requirements": {
     "host": ["claude-code", "codex-cli"],

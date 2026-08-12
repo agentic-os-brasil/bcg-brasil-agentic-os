@@ -70,6 +70,35 @@ if [ -d "$DATA_DIR" ] && [ ! -f "$MARKER" ]; then
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# Retroactive memory-layer backfills (GAP-D + gitignore).
+# These writes are idempotent (guarded by `! -f`) and must run BEFORE the
+# first-run branch check so existing installs from earlier bundles (which
+# never wrote these files) get them populated on the next session start.
+# Without this, dream-memory silently refuses to write against pre-existing
+# workspaces because .schema-version is missing.
+# ---------------------------------------------------------------------------
+if [ -d "$DATA_DIR/memory" ]; then
+  MEMORY_GITIGNORE="$DATA_DIR/memory/.gitignore"
+  if [ ! -f "$MEMORY_GITIGNORE" ]; then
+    printf '.dream-requested\n' > "$MEMORY_GITIGNORE" 2>/dev/null && \
+      log_line "BACKFILL  data/memory/.gitignore (ignores .dream-requested)"
+  fi
+
+  MEMORY_SCHEMA_MARKER="$DATA_DIR/memory/.schema-version"
+  if [ ! -f "$MEMORY_SCHEMA_MARKER" ]; then
+    cat > "$MEMORY_SCHEMA_MARKER" 2>/dev/null <<'EOF'
+{
+  "schema_version": 1,
+  "layers": ["recent", "weekly", "medium-term", "lifetime", "policies"],
+  "policy_source": "bundles/base/memory/policy.json",
+  "initialized_by": "first-run-scaffold.sh (backfill)"
+}
+EOF
+    log_line "BACKFILL  data/memory/.schema-version (v1)"
+  fi
+fi
+
 if [ -f "$MARKER" ]; then
   # ---------------------------------------------------------------------------
   # GAP-C — Incremental upgrade detection.
