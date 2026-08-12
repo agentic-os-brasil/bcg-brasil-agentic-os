@@ -1,8 +1,15 @@
 # Professional skill porting inventory
 
-This inventory compares the 16 skills in the base bundle with reusable
-professional methods reviewed in a private reference repository. It is a
-selection record, not a claim that every source workflow belongs in the
+> **Historical wave record — 2026-08 wave.** This document captures the
+> selection decisions made when porting the first professional-skill wave into
+> the bundle. The bundle now ships 34 skills (see the live
+> [`bundles/base/skills/INDEX.md`](../../bundles/base/skills/INDEX.md)); the
+> counts and "existing" list below reflect the state at wave-decision time and
+> should not be read as the current bundle inventory.
+
+This inventory compares the 16 skills in the base bundle (at wave time) with
+reusable professional methods reviewed in a private reference repository. It is
+a selection record, not a claim that every source workflow belongs in the
 Canary.
 
 ## Base bundle: 16 existing skills
