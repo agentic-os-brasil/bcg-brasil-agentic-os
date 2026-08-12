@@ -18,3 +18,13 @@ If a required skill, projection or hook is missing or broken, stop the affected 
 For a contributor who is new to Git, read `.claude/README.md` and begin with `$start-contributing`. Guide one action at a time, explain terms in plain language and never discard work to repair a Git state. A human always decides merge.
 
 Canonical development skills remain under `dev/skills/`. Claude projections must stay thin and development harness content must never enter the user bundle. Codex remains compatible through the shared contract in `AGENTS.md`, but Claude is the primary, first-tested development surface.
+
+## Runtime dependencies
+
+The scaffold and session-start hooks depend on the `CLAUDE_PROJECT_DIR` environment variable, which Claude Code injects when a project is opened through the standard flow. The hooks include a hardened fallback that locates the project by looking for a `VERSION` file next to the hook, but in some non-standard setups the injection may still fail:
+
+- Paths under `/tmp`, `/private/tmp` or other system-managed temp locations
+- Paths with spaces or unicode characters
+- External drives mounted after the CLI started
+
+When `CLAUDE_PROJECT_DIR` is unset and no `VERSION` file is found nearby, the scaffold hook exits fail-open with a note on stderr instead of scaffolding into the wrong directory. If your `data/` workspace is missing after a first session, open the folder from a canonical path (e.g. `~/Documents/Maestro`) or invoke `maestro-doctor` to regenerate the workspace explicitly. The full caveat is tracked in `bundles/base/known-issues.md` under `claude-project-dir-nonstandard-path`.

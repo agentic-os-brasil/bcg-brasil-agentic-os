@@ -4,7 +4,27 @@
 
 set +e
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
+# CLAUDE_PROJECT_DIR is injected by Claude Code CLI. In non-standard paths
+# (/tmp, paths with spaces, external drives) it may be missing. Fallback to
+# `.` — but only if we can *verify* we are inside a Maestro project, by
+# checking for a VERSION file next to this script's parent tree. Otherwise
+# exit fail-open with a stderr note so the user is not left with a silently
+# broken scaffold. See CLAUDE.md → "Runtime dependencies" and
+# bundles/base/known-issues.md → claude-project-dir-nonstandard-path.
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
+if [ -z "$PROJECT_DIR" ]; then
+  # Try to locate VERSION relative to this hook's location (canonical: <root>/.claude/hooks/<script>).
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
+  CANDIDATE="$SCRIPT_DIR/../.."
+  if [ -n "$SCRIPT_DIR" ] && [ -f "$CANDIDATE/VERSION" ]; then
+    PROJECT_DIR="$(cd "$CANDIDATE" && pwd)"
+  elif [ -f "./VERSION" ]; then
+    PROJECT_DIR="."
+  else
+    printf 'maestro first-run-scaffold: CLAUDE_PROJECT_DIR unset and no VERSION found nearby — skipping scaffold (fail-open).\n' >&2
+    exit 0
+  fi
+fi
 DATA_DIR="$PROJECT_DIR/data"
 MARKER="$DATA_DIR/.initialized"
 LOG="$DATA_DIR/.scaffold.log"

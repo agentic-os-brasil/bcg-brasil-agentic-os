@@ -15,6 +15,8 @@ Ordem: mais recente no topo. Remover entradas resolvidas quando a versão que co
 
 ---
 
-## nenhuma
+## claude-project-dir-nonstandard-path
 
-Não há problemas conhecidos abertos para esta versão. Se algo estranho aparecer, rodar `maestro-doctor` e reportar o resultado ao time BCG Brasil AI pelo canal habitual.
+- **Sintoma:** Ao abrir a pasta em `/tmp`, em um caminho com espaços, em drive externo ou em qualquer path não-padrão, a workspace `data/` pode não ser criada na primeira sessão e nenhum erro visível aparece.
+- **Causa:** O hook `first-run-scaffold.sh` depende da variável `CLAUDE_PROJECT_DIR` injetada pelo Claude Code CLI. Em paths não-padrão essa variável pode não ser setada e o fallback para `.` cai no diretório corrente do CLI (não da pasta do projeto).
+- **Contorno:** Abrir a pasta em um caminho canônico (`~/Documents/Maestro`, `~/Desktop/Maestro`) ou rodar `maestro-doctor` para regenerar `data/` explicitamente. Ver seção "Runtime dependencies" do `CLAUDE.md` para detalhes.
