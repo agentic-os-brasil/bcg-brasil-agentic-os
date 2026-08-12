@@ -86,6 +86,13 @@ printf '<!-- maestro:session-context:start -->\n'
 printf '# Maestro — Contexto da sessão\n'
 printf '_Injetado automaticamente pelo hook de início de sessão._\n'
 
+# Operational method pointer (spec 050) — always first, before any task routing.
+# SessionStart carries the pointer only; skill body is loaded on demand.
+printf '\n## Método operacional\n'
+printf '<!-- maestro:pointer: bcgos-operator · reason: deterministic_operational_method -->\n'
+printf 'Skill: %s/bundles/base/skills/bcgos-operator/SKILL.md\n' "${PROJECT_DIR}"
+printf 'Instrução: carregar este skill antes de escolher, interpretar ou recuperar qualquer operação BCGOS.\n'
+
 # Profile (highest routing priority — who the user is and how they prefer to work)
 emit_profile_json "Identidade do usuário" "$PROFILE_DIR/identity.json"
 emit_profile_json "Preferências" "$PROFILE_DIR/preferences.json"
