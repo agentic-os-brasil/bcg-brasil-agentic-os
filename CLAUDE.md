@@ -27,7 +27,6 @@ The user-facing installation is organized around three top-level surfaces:
 - `bundles/` — canonical OKF-1 bundles that make up Maestro. Includes:
   - `base/` — user-facing skills, agents, contracts, memory and profile policies, distribution and manifest.
   - `tech-core/` — engineering skills bundle (tests, review, pipelines, spec-driven delivery). Loaded on demand.
-  - `catalog/` — reserved extension slot for user-populated skills in future releases.
 - `data/` — user workspace, created by the first-run scaffold and never overwritten by updates. Subtree:
   - `agents/` — per-agent state (working memory, decisions, context).
   - `cases/` — active client cases; each case has `brain/` (projects, decisions, tasks, deliverables, sources, canon). `cases/.active` points at the active case ID.

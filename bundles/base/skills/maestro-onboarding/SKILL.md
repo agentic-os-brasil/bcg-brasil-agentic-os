@@ -86,7 +86,7 @@ Persist to `data/profile/style.json`:
 { "interaction_profile": "standard" | "advanced" | "power", "captured_at": "..." }
 ```
 
-Este campo é lido como preflight de todas as demais skills. Não use outras chaves (`verbosity`, `mode`, etc.).
+Este campo é lido pelo skill canônico `interaction-profile` como preflight de todas as demais skills. Não use outras chaves (`verbosity`, `mode`, etc.).
 
 ### Step 5 — O que Maestro faz por você (1min)
 
