@@ -682,6 +682,14 @@
       "path": "skills/slide-summary/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/walter/SKILL.md",
+      "path": "skills/walter/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/walter/agents/openai.yaml",
+      "path": "skills/walter/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/wayfinder/SKILL.md",
       "path": "skills/wayfinder/SKILL.md"
     },

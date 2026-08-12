@@ -254,6 +254,13 @@
       "relative_path": "skills/upward-feedback/SKILL.md"
     },
     {
+      "id": "walter",
+      "display_name": "Walter — pressure-test",
+      "trigger": "Pressure-test a high-materiality proposal or decision before it reaches the owner or an external stakeholder",
+      "default_prompt": "Use $walter to submit a consequential proposal or decision for senior-advisor pressure-test before shipping.",
+      "relative_path": "skills/walter/SKILL.md"
+    },
+    {
       "id": "wayfinder",
       "display_name": "Wayfinder",
       "trigger": "Structure an open problem into a first move",
