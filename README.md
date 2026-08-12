@@ -153,9 +153,9 @@ for a genuinely absent, disabled or failed capability.
 > baseline, not a claim that native runtime activation, telemetry, a signed
 > end-user release or a user pilot is available. Pilot distribution, native
 > schedulers and hosted bridge operation remain release operations with their
-> own evidence. The repository `VERSION` remains `0.0.0` as a factory-dev
-> marker; release candidates receive an explicit semantic version (the current
-> target is `0.1.0`), and no published `v0.1.0` artifact is claimed here.
+> own evidence. The repository `VERSION` tracks the bundle release line (current:
+> `0.1.1`); release artifacts receive an explicit semantic version and are
+> distributed as signed ZIPs through the release pipeline.
 
 ### Continuous use after installation
 
@@ -368,13 +368,16 @@ ingestion and governance are intentionally sequenced.
 
 | Surface | Purpose | State |
 | --- | --- | --- |
-| [`bcgos`](cmd/bcgos) | Local product CLI and bounded inspection surfaces | Building |
+| [`bundles/`](bundles) | Versioned professional capability catalogs and optional tracks | Base by default; confirmed selection activates every skill in the selected bundle and dependencies |
 | [`specs/`](specs) | Runtime-neutral contracts and architectural boundaries | Active |
 | [`adapters/`](adapters) | Claude and Codex projections of shared contracts | In progress |
-| [`dev/`](dev) | Contributor-only harness, governance and development skills | Active |
+| [`schemas/`](schemas) | JSON schemas for receipts, canary reports, identity and federation | Active |
+| [`installers/`](installers) | ZIP installer template and trial/wizard flows for end-user distribution | Active |
+| [`docs/`](docs) | Product documentation, onboarding guides, roadmap and release runbooks | Active |
+| [`dev/`](dev) | Contributor-only harness, governance and development skills; the `bcgos` CLI entrypoint is `dev/harness/main.go` | Active |
 | [`acceptance/`](acceptance) | Clean-device and pilot acceptance evidence | In progress |
-| [`bundles/`](bundles) | Versioned professional capability catalogs and optional tracks | Base by default; confirmed selection activates every skill in the selected bundle and dependencies |
 | [`internal/priorwork/`](internal/priorwork) | Governed organizational prior-work catalog and explicit retrieval | Local core validated; native Claude collection pending; Codex collection prohibited |
+| [`dist/`](dist) | Local release artifacts (ZIPs and SHA256 digests); not committed to CI | Local only |
 
 Lifecycle adapter evidence is intentionally separated into configuration,
 direct-contract tests, adapter-command receipts and native-session proof. See

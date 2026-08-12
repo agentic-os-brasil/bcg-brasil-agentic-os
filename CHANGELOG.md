@@ -6,18 +6,17 @@ All notable changes will be documented here.
 
 ### Current evidence snapshot (2026-08-12)
 
-- Source baseline is `f867c52` (`origin/main` after post-wave additions: quality pass (#304),
-  pointer discipline (#305), snapshot annotation (#306), generate-portable-zip dev skill (#308),
-  eval-quality fixes (#310), and onboarding document-ingestion surface (#312)). `validate`,
-  `wiki validate` and `wiki verify` all pass. The managed atlas bundle is current (watermark
-  unchanged — allowlist sources have not changed since 2026-08-06). No hosted CI evidence;
-  workflows remain disabled.
-- Skills bundle remains 34 user-facing skills; `generate-portable-zip` is a development
-  operator skill only (not distributed in the user bundle). All skills pass `validate --full`
-  on the skill metadata gate.
-- Two PRs open for merge: #316 (Maestro session state machine — first-session UX enforcement
-  in CLAUDE.md + MarkItDown TTL check) and #317 (skills quality pass, SessionStart skills
-  rollup, trigger phrases for 12 skills, rollup-size sensor). Both Walter-approved.
+- Source baseline is `77d3728` (`origin/main` after onboarding restoration + MarkItDown
+  install + agent naming — PR #341 — plus walter skill entry-point PR #339, profile-outputs
+  schema shape PR #337, and schema registry PR #336). `validate`, `wiki validate` and
+  `wiki verify` all pass. The managed atlas bundle is current (watermark unchanged —
+  allowlist sources have not changed since 2026-08-06). No hosted CI evidence; workflows
+  remain disabled.
+- Skills bundle: 38 user-facing skills in the base bundle. All pass `validate --full` on
+  the skill metadata gate.
+- One PR open: #340 (capabilities: context_injection state reconcile — canary DEF-04).
+- Latest eval-release: 94 pass, 0 fail, 0 skip on `dist/Maestro-v0.1.4.zip`
+  (SHA256: `82b0be9a267938c3df8bcb2f84bc56bb11c677bced776a39f0b88d86545200ce`).
 
 ### Added (2026-08-11 wave)
 

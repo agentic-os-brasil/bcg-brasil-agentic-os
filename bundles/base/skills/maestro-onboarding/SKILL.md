@@ -1,151 +1,317 @@
 ---
 name: maestro-onboarding
-description: Guided first-run introduction to Maestro for a non-technical user. Captures identity, sets up profile, explains the delegation model and points to next actions. Use on first session or whenever the user asks "me apresente o Maestro", "não sei por onde começar", "onboarding".
+description: Start Maestro's owner interview with an explicit quick or complete track, one question at a time, and a reviewed local profile.
 ---
 
 # Maestro Onboarding
 
-Present Maestro in plain language and get the user to a productive state in under 10 minutes. Do not lecture. Do not require the user to open files or run commands. Everything happens through conversation.
+Run this skill when a newly installed Maestro workspace receives its first
+guided-onboarding prompt. The goal is a useful, consented professional baseline
+— not a long system explanation and not an unreviewed memory import.
 
-## Preconditions
+## Resolve the Maestro CLI before any command
 
-- `data/` must exist. If missing, create directories inline (data/, data/profile/) and proceed.
-- If `data/profile/onboarding.json` already exists and the skill was invoked explicitly by
-  the user (not by the session state machine), ask: "seu onboarding já foi feito — quer
-  repetir ou pular?" and act accordingly. If invoked automatically by the session state
-  machine (first message of the session), proceed directly — the check already happened.
+Never invoke a bare `bcgos` command. Desktop runtimes do not inherit the
+owner's shell `PATH`, and a missing PATH entry must not be reported as a
+permission or onboarding-state failure. Use the exact executable path emitted
+by the Maestro `SessionStart` context and shown in the managed orientation's
+**Comandos úteis** section. If that pointer is unavailable, use the platform
+managed install location (`~/Library/Application Support/Maestro/bin/bcgos` on
+macOS or `%LOCALAPPDATA%\\Maestro\\bin\\bcgos.exe` on Windows); use `PATH` only
+as a final fallback. Call the resolved path as
+`<maestro-cli>` in the commands below; this is a placeholder to substitute,
+never a literal command to execute. If no executable can be resolved, stop and
+report the concrete missing path; do not substitute another runtime or pretend
+the command succeeded.
 
-## Flow
+## Before the first reply
 
-### Step 1 — Boas-vindas (30s)
+1. Read `CLAUDE.md` and preserve the Maestro workspace identity.
+2. Resolve the canonical `interaction-profile` before choosing language,
+   explanation depth or optional technical detail. It does not choose the
+   onboarding track, grant authority or change the review requirement.
+3. Run `<maestro-cli> owner onboarding status` to inspect the deterministic local
+   state. Do not infer that onboarding exists from files or prior messages.
+4. Do not start a professional task, read a selected memory source, execute an
+   unrelated skill or grant runtime trust globally.
 
-Present in one short paragraph:
-- Maestro é o hub. É a única interface que o usuário conversa.
-- Maestro delega para especialistas invisíveis quando precisa.
-- Tudo que o usuário criar mora em `data/`. Atualizações preservam.
+## Opening response
 
-Não use termos técnicos ("subagent", "hook", "hub-and-spoke"). Use "hub", "especialistas", "sua workspace".
+Respond in Brazilian Portuguese with this compact, welcoming shape:
 
-### Step 2 — Escolha da trilha (1min)
+### 🎼 Bem-vindo ao Maestro
 
-Logo após as boas-vindas, apresente as duas trilhas com o impacto de cada uma:
+One sentence: Maestro is the owner's professional second brain for context,
+execution and evidence in this local workspace.
 
-> "Para configurar o Maestro, há duas formas:
->
-> **Trilha rápida (~3 min)** — nome, papel e estilo de resposta. Começamos a trabalhar imediatamente. O Maestro se calibra com o tempo conforme trabalhamos juntos — mas nas primeiras sessões pode precisar pedir contexto que a trilha completa já teria.
->
-> **Trilha completa (~8 min)** — além do básico, capturo seu projeto atual, o que é importante para você profissionalmente e o que consome mais energia agora. Com isso, sugestões e análises são personalizadas desde a primeira sessão: menos perguntas de clarificação, próximos passos mais alinhados ao que importa, e o Maestro já sabe puxar os temas certos ao longo do tempo.
->
-> Qual prefere?"
+### ✨ O que já está preparado
 
-- Se **trilha rápida**: execute Step 3 (só Nome e Papel) → Step 4 → Step 5 (resumido) → Step 5.5 → Step 6.
-- Se **trilha completa**: execute Step 3 → Step 3.5 → Step 4 → Step 5 → Step 5.5 → Step 6.
+- A new local workspace, separate from existing projects.
+- Initial areas for context, decisions, people and work.
+- Local hooks and maintenance configuration; describe them as configured, not
+  as observed native runtime behavior.
 
-### Step 3 — Identidade (1–2min)
+### 🎙️ Uma forma mais leve de responder
 
-Ask, in order:
-1. **Nome que usa no BCG Brasil.** (Ex.: "Daniel Scardini")
-2. **Papel.** (Ex.: "Consultant", "Senior Consultant", "Manager")
+Antes da pergunta de escolha, diga em uma frase que, se a interface do runtime
+permitir, o owner pode responder por áudio. Voz costuma trazer mais contexto e
+nuance com menos esforço do que digitar. Esclareça que o Maestro mostrará uma
+síntese ou transcrição para revisão antes de propor qualquer gravação local;
+áudio não é ingerido, enviado ou persistido automaticamente.
 
-Trilha completa: continue para Step 3.5 antes de persistir.
-Trilha rápida: persista agora e siga para Step 4.
+### 🧭 Escolha como quer começar
 
-Persist to `data/profile/identity.json` with schema:
-```json
-{
-  "name": "...",
-  "role": "...",
-  "focus": "...",
-  "work_energy": "...",
-  "quality_bar": "...",
-  "track": "quick" | "complete",
-  "captured_at": "<ISO8601 UTC>"
-}
+Present exactly two explicit options, then wait for a choice. Do not ask the
+first identity question in the same message.
+
+| Opção | Tempo estimado | O que estabelece | Implicação |
+| --- | --- | --- | --- |
+| **Curta** | **~10 minutos** | Seu nome preferido, um limite explícito para contexto pessoal, papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites de trabalho serão refinados em conversas futuras; o contexto pessoal pode ser "nenhum por enquanto". |
+| **Completa** | **~30 minutos** | Identidade básica, contexto pessoal autorizado e as oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e quais limites pessoais autorizou. |
+
+Ask only: **"Você prefere a entrevista curta ou a completa?"**
+
+## What the interview is calibrating
+
+The interview is a guided construction of the owner's **professional self** —
+not a personality test and not a request to import another system's private
+memory. Both tracks begin with two explicit, reviewable identity facets:
+
+- `owner-identity`: the name the owner wants Maestro to use. No unnecessary
+  identifiers are requested.
+- `personal-context`: an optional, purpose-bound statement of personal context
+  the owner authorizes Maestro to respect at work. "None for now" is valid.
+
+The complete track then covers eight explicit, reviewable professional facets:
+
+- `professional-role`: the work the owner is accountable for and where Maestro
+  should create leverage;
+- `communication-style`: how the owner wants reasoning, detail, language and
+  recommendations presented;
+- `voice`: how the owner's external work should sound;
+- `preferences`: tools, formats, rhythms and collaboration habits;
+- `motivations`: the professional impact and outcomes that make work matter;
+- `quality-bar`: what must be checked before something is called ready,
+  including QA, evidence and finish level;
+- `decision-rules`: principles, trade-offs and decisions that remain with the
+  owner;
+- `working-boundaries`: scope, confidentiality, sources, people and external
+  communication that require authorization.
+
+The quick track covers those two identity facets plus
+`professional-role`, `communication-style`, `preferences` and `quality-bar`.
+It is a useful operating baseline, but it intentionally leaves external voice,
+motivations, decision rules and working boundaries for later refinement. The
+personal-context question is a consent boundary, not a request to disclose
+family, health, faith or private history: the owner may decline or share only
+the minimum necessary. Psychological/personality material, assessments and
+visual identity are not inferred or imported by either track; they require a
+separate, explicit local consent path.
+
+## Sugestão técnica orientada pela função
+
+Depois que o owner responder qual é sua função, use a recomendação determinística
+do runtime:
+
+```sh
+bcgos bundles recommend --function "<resposta declarada pelo owner>"
 ```
 
-Campos `focus`, `work_energy`, `quality_bar` ficam em branco na trilha rápida.
+Se o resultado for `recommended`, explique que engineering, data ou AI foram
+identificados somente na resposta declarada e pergunte se a pessoa quer incluir
+o bundle opcional `tech-core`. Se o resultado for `ask`, faça a mesma pergunta
+sem presumir que a função é técnica. Nunca ative o bundle automaticamente: a
+seleção de uma trilha técnica e a confirmação do owner continuam sendo a única
+forma de projetar as skills. O `tech-core` é um bundle único e inclui engineering,
+data, AI e métodos de qualidade.
 
-### Step 3.5 — Contexto profissional (completo apenas, 3–4min)
+## Camadas opcionais de identidade
 
-Ask in order, one at a time:
-3. **Projeto atual ou área de foco.** (Ex.: "detecção de fraude no setor segurador", "AI use case lab para PE")
-4. **O que define trabalho bem feito para você neste projeto?** (Ex.: "análise que convence o board", "código que sobrevive sem o autor", "entrega dentro do prazo com zero retrabalho")
-5. **O que mais consome energia agora?** (Ex.: "preparar apresentações", "alinhar com o cliente", "revisar código dos outros")
+The first interview must not pretend that a professional baseline is the whole
+person. After the selected track is reviewed, offer (do not start automatically)
+these optional layers when they are useful:
 
-Persist ao `data/profile/identity.json` os campos `focus`, `quality_bar` e `work_energy`.
+- **Propósito e não negociáveis** — values, long-term direction and personal
+  constraints that the owner explicitly wants the professional system to
+  respect. Keep this private and out of client/case packets by default.
+- **Contexto pessoal ampliado** — anything beyond the short baseline the owner
+  deliberately chooses to share, with a declared purpose and reader scope. It
+  is never required for ordinary professional work.
+- **Personalidade ou avaliação** — a local owner-authored synthesis or an
+  explicitly selected assessment source. Never diagnose, infer or turn a score
+  into an agent rule; a source that cannot be reviewed remains unavailable.
+- **Identidade visual** — colors, references and presentation preferences for
+  owner-facing artifacts only. It changes presentation, never authority or
+  routing.
 
-### Step 4 — Estilo de trabalho (1min)
+For every optional layer, ask for the purpose, source, allowed readers, retention
+and explicit confirmation before writing. If the runtime has no qualified local
+adapter for the chosen layer, report `unavailable` and continue with the
+professional baseline; do not emulate ingestion from conversation.
 
-Ask exactly one question:
-> "Como prefere que eu trabalhe: **padrão** (respostas curtas, direto ao ponto), **avançado** (mais contexto e nuance quando útil), ou **power** (assume familiaridade total, máxima densidade)?"
+## After the owner chooses
 
-Mapeie a resposta para um dos três valores canônicos: `standard`, `advanced`, `power`.
+1. Confirm the exact selected track once and persist it only with:
 
-Persist to `data/profile/style.json`:
-```json
-{ "interaction_profile": "standard" | "advanced" | "power", "captured_at": "..." }
-```
+   ```sh
+   <maestro-cli> owner onboarding select --track quick|complete --confirm
+   ```
 
-Este campo é lido pelo skill canônico `interaction-profile` como preflight de todas as demais skills. Não use outras chaves (`verbosity`, `mode`, etc.).
+2. Ask one interview question at a time. Use the next question returned by
+   `<maestro-cli> owner onboarding status`; do not invent extra mandatory questions.
+3. After each answer, reflect back a concise interpretation and ask whether it
+   is accurate. Only then propose the corresponding facet draft. This is the
+   quality loop for onboarding: the owner corrects meaning before anything is
+   written.
+4. Before proposing any write to a facet, show the concise draft and obtain the
+   owner's agreement. Never claim that an answer has been saved or that the
+   track is complete until the local review is confirmed.
+5. When the status becomes `review_required`, show the owner the profile
+   facets that were included in the selected track. Ask for an explicit review,
+   then use the exact digest returned by the status command:
 
-Consulte a skill canônica `interaction-profile` (em `bundles/base/skills/interaction-profile/`) para o contrato completo do capture flow — este step é o ponto de captura inicial, e as demais skills leem o valor persistido em `data/profile/style.json` por meio desse contrato.
+   ```sh
+   <maestro-cli> owner onboarding confirm --digest SHA256 --confirm
+   ```
 
-### Step 5 — O que Maestro faz por você (1min)
+## Completion and follow-through
 
-Present o que está disponível. **Trilha rápida**: mencione apenas 3 itens principais. **Trilha completa**: apresente os 5.
+- A confirmed **quick** track is a valid baseline, not a claim that the full
+  identity is known. Offer the complete track later only when it is useful;
+  never nag or silently upgrade it.
+- A confirmed **complete** track has the full initial professional baseline.
+- The workspace bootstrap is always first. Never ask for, resolve or ingest a
+  SharePoint source before the new workspace has been initialized and the
+  Maestro session is running inside that workspace. The source question below
+  is deliberately a post-bootstrap onboarding step because all derived
+  content must be read and organized from within the workspace.
+- After either track is confirmed, inspect the deterministic project-source
+  state with `<maestro-cli> prior-work source status --workspace <workspace>`. If it is
+  `selection_required`, ask exactly one question and wait: **"Você quer indicar
+  as pastas autorizadas do SharePoint deste projeto agora ou prefere começar
+  sem essa fonte?"**
+  - If the owner chooses SharePoint, make the two-stage contract explicit:
+    selecting folders records the exact scope, but **does not yet authorize a
+    read**. Review the canonical folder URLs with the owner, then send strict
+    JSON (`schema_version: 1`, `folder_urls`) through standard input to
+    `<maestro-cli> prior-work source select --workspace <workspace> --stdin --confirm`.
+    Immediately after selection, ask whether the owner authorizes a bounded
+    recent-material pass: **"Posso ler os materiais mais recentes dessas
+    pastas e criar racionais internos rastreáveis no workspace?"** Explain
+    plainly that the pass reads only the selected folders through the qualified
+    Claude collector, writes concise derived racionais under
+    `brain/knowledge/sharepoint-rationales/`, keeps the SharePoint link and
+    modification date on every rationale, and never copies the raw document
+    body. If the owner authorizes it, run the explicit rationale-ingestion
+    command only when signed enrollment and the qualified local ingestion
+    runtime are available:
+    `<maestro-cli> prior-work rationale ingest --workspace <workspace> --stdin --confirm`.
+    The batch is deterministic: newest source modifications first, then stable
+    item reference as tie-breaker. If the collector/runtime is unavailable,
+    report that honestly and leave the source selected but not ingested.
+  - If the owner prefers to start clean, record the choice with
+    `<maestro-cli> prior-work source defer --workspace <workspace> --confirm` and do
+    not ask again automatically.
+  - A selection is not enrollment or collection authority. SharePoint remains
+    authoritative; only a signed enrollment plus a qualified Claude collector
+    can read the selected roots and produce the bounded rationale batch. Codex
+    collection remains `unavailable/corporate_policy` and no fallback is
+    allowed. The local rationale layer is a derived convenience, never a
+    replacement for the SharePoint source.
 
-- Rascunhos de deck em estilo BCG.
-- Análise de dados (qualitativa e quantitativa).
-- Revisão de código e PR.
-- Onboarding em novo caso de cliente.
-- Ingestão de documentos (CV, PDF, DOCX): é só pedir.
+### 📎 MarkItDown — ingestão de documentos
 
-**Trilha completa — adicione**: "A cada sessão, proponho próximos passos ligados ao seu projeto, ao seu desenvolvimento profissional e à saúde do Maestro — para você nunca precisar lembrar o que perguntar."
+After the profile is confirmed and before suggesting any next skill, run
+`markitdown --version` silently to detect availability.
 
-Pergunte: "qual desses topa começar hoje?"
+**Se disponível:** confirme em uma linha — "Ingestão de documentos (PDF, Word,
+PowerPoint, Excel) está habilitada via MarkItDown."
 
-### Step 5.5 — MarkItDown (silencioso, não-bloqueante)
+**Se não disponível:** explique de forma direta e peça autorização:
 
-Run `markitdown --version` silently (suppress stdout/stderr).
+> "O MarkItDown é a ferramenta que habilita a ingestão de documentos (PDF, Word,
+> PowerPoint, Excel e outros formatos) no Maestro. Com ele instalado, basta enviar
+> um arquivo na conversa para que o conteúdo seja incorporado ao workspace — sem
+> cópia manual, sem ctrl+v.
+>
+> Para instalar, basta rodar este comando no terminal:
+>
+> ```
+> pip install markitdown
+> ```
+>
+> Posso guiar a instalação agora, ou você prefere instalar depois?"
 
-- Disponível → crie `data/profile/markitdown.json`:
-  ```json
-  { "available": true, "version": "<output>", "checked_at": "<ISO8601 UTC>" }
-  ```
-  Informe em uma linha: "Ingestão de documentos (PDF, Word, PowerPoint) está habilitada."
-- Não disponível → crie `data/profile/markitdown.json`:
-  ```json
-  { "available": false, "checked_at": "<ISO8601 UTC>" }
-  ```
-  Não mencione ao usuário.
+If the owner authorizes installation now, provide the exact command
+(`pip install markitdown`) and confirm once the owner reports success by running
+`markitdown --version` again. Do not attempt to run `pip install` autonomously;
+the owner must execute it themselves or explicitly delegate terminal access.
 
-### Step 6 — Fechamento (30s)
+### 🤝 Agentes internos — identidade e personalização
 
-Grave em `data/profile/onboarding.json`:
-```json
-{
-  "completed_at": "<ISO8601 UTC>",
-  "track": "quick" | "complete",
-  "version": "<read from VERSION file>"
-}
-```
+Immediately after MarkItDown confirmation (or deferral), always invite the owner
+to name the internal agents now or defer them:
+**"Quer dar nome e avatar ao Walter, ao Darwin e ao Gamma Guardian agora, ou
+prefere deixar isso para depois?"** This is an invitation, never a required
+extra interview step.
 
-Diga:
-> "Pronto. A qualquer momento diga: 'quero fazer X' e eu conduzo. Se algo parecer errado, leia `skills/maestro-doctor/SKILL.md` para diagnóstico. Se sair uma versão nova, o ritual de update está no `README-INSTALL.md` da sua pasta."
+Present these initial suggestions with their short stories:
 
-Stop.
+- **Walter 🦉** — suggested name: `Walter`. He is the owner's calm alter
+  ego: a senior advisor that asks whether the intrinsic reason behind a
+  high-leverage request was actually met. He refines; he is not a naysayer.
+  If the owner explicitly asks for a reference-based alternative, examples
+  include `Virgil` (guide through complexity), `Iroh` (mentor sereno),
+  `Athena` (estratégia prudente) and `Jarvis` (advisor técnico elegante).
+- **Darwin 🧬** — suggested name: `Darwin`. He represents the evolutionary
+  loop: the meta-harness that helps the Maestro survive and thrive through
+  health checks, housekeeping and deliberate improvement. If the owner
+  explicitly asks for a reference-based alternative, examples include `TARS`
+  (resiliência pragmática), `Ariadne` (arquitetura de complexidade), `EVE`
+  (sinais de futuro) and `Data` (aprendizado contínuo).
+- **Gamma Guardian 🧪** — suggested name: `Gamma Guardian`. It is the
+  system-known longitudinal quality/QA guardian: a direct Maestro spoke that
+  reviews bounded workspace heads and returns advisory evidence, never a
+  naysayer, Case child, merge authority or native-runtime qualification. The
+  owner may customize its display name and emoji, but not its
+  `quality_guardian` role, `quality_longitudinal` scope, read-only boundary or
+  Maestro routing. If an adapter or independent runtime evidence is absent,
+  Gamma reports `UNAVAILABLE`/`BLOCKED`; it does not infer readiness.
 
-## Communication contract
+The full repertoire lives in `/agent-identity-setup`. Before suggesting a
+reference-based name, ask one optional question: **"Que presença você quer
+desses agentes: guia sereno, estrategista, parceiro firme, advisor técnico,
+arquiteto de sistemas ou observador de evolução?"** Use only the preferences
+the owner explicitly states to offer at most three relevant choices and say
+why each was suggested. Do not derive a personality, role fit or psychological
+profile from past conversations. `HAL` remains available only if the owner
+chooses it deliberately; never suggest it by default.
 
-- Uma pergunta por vez.
-- Nunca peça para o usuário editar arquivo, abrir terminal ou rodar comando.
-- Se o usuário responder "não sei" a qualquer campo obrigatório, ofereça uma default sensata e siga.
-- Se o usuário pedir para pular qualquer step, aceite — persista o que tiver e siga.
-- Se o usuário escolher trilha rápida mas depois quiser completar, aceite — retome do Step 3.5.
+Explain that names and emoji-avatars are entirely customizable now or later;
+they never alter an agent's authority. Gamma's identity is known by the
+system even when its runtime is unavailable. The owner can also create any
+number of named **Client Account Agents** and **Case Agents** whenever a real
+account or case is ready, through `/agent-identity-setup` and an explicitly
+confirmed local profile.
 
-## What NOT to do
+Only after this invitation may you suggest another next skill, chosen for the
+owner's stated need. Examples: `/case-agent-setup`, `/case-kickoff`,
+`/ingest-content` or `/meeting-to-work-items`. Suggesting a skill is not
+executing it. Explain its purpose and wait for the owner to choose it.
 
-- Não invocar skills por nome de tool — leia o SKILL.md correspondente diretamente.
-- Não configurar nada além dos arquivos JSON em `data/profile/`.
-- Não fazer pitch de features avançadas antes do Step 5.
-- Não apresentar as duas trilhas como "mais fácil vs mais difícil" — são diferentes em **impacto**, não em esforço.
+## Non-negotiables
+
+- Do not import prior persona, project or memory context that is outside this
+  Maestro workspace. Keep the conversation focused on the owner's
+  professional work.
+- Do not read a selected source until the owner gives the second, explicit
+  rationale-ingestion authorization. After that authorization, never copy raw
+  source bodies; only materialize bounded derived racionais with a source
+  pointer and freshness metadata.
+- Do not discover SharePoint broadly, resolve a selected folder, call a
+  collector or claim that an index exists during onboarding.
+- Do not infer a psychological profile.
+- Do not bypass the owner's review digest or runtime trust prompt.
+- Do not run `pip install` or any installation command autonomously; always
+  present the command and wait for the owner to execute or explicitly
+  authorize terminal delegation.
