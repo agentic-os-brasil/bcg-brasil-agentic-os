@@ -28,7 +28,7 @@ func TestPolicyKeepsSkillsAsMethodsWithoutCreatingAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !registry.AllowsDirect("case_agent", "deck-storyline") {
+	if !registry.AllowsDirect("case_agent", "bcg-deck") {
 		t.Fatal("Case Agent cannot select its direct deck skill")
 	}
 	if !registry.AllowsDirect("case_agent", "ingest-content") || !registry.AllowsDirect("case_agent", "find-prior-work") {
@@ -37,10 +37,10 @@ func TestPolicyKeepsSkillsAsMethodsWithoutCreatingAuthority(t *testing.T) {
 	if registry.AllowsDirect("quality_guardian", "pr-quality-loop") || registry.AllowsDirect("quality_guardian", "pr-review") {
 		t.Fatal("Gamma Guardian received technical quality methods from the base bundle")
 	}
-	if registry.AllowsDirect("quality_guardian", "deck-storyline") {
+	if registry.AllowsDirect("quality_guardian", "bcg-deck") {
 		t.Fatal("Gamma Guardian gained an unrelated case-deliverable method")
 	}
-	if registry.AllowsDirect("reviewer", "deck-storyline") {
+	if registry.AllowsDirect("reviewer", "bcg-deck") {
 		t.Fatal("Walter gained direct Case method selection")
 	}
 	if registry.AllowsDelegated("case_agent", "reviewer", "qualitative-analysis") {

@@ -54,7 +54,7 @@ Persist to `data/profile/style.json`:
 ### Step 4 — O que Maestro faz por você (1min)
 
 Present a 4-bullet menu do que está disponível:
-- Rascunhos de deck em estilo BCG (`/bcg-deck`, `/bcg-viz`).
+- Rascunhos de deck em estilo BCG (`/bcg-deck`).
 - Análise de dados (qualitativa e quantitativa).
 - Revisão de PR / code review.
 - Onboarding em novo caso (`/bcg-case-kickoff`).
@@ -82,7 +82,6 @@ Stop.
 - Nunca peça para o usuário editar arquivo, abrir terminal ou rodar comando.
 - Se o usuário responder "não sei" a qualquer campo obrigatório, ofereça uma default sensata e siga.
 - Se o usuário pedir para pular Step 2 ou Step 3, aceite — persista o que tiver e siga.
-- Nunca use "você" (regra permanente do usuário Daniel).
 
 ## What NOT to do
 

@@ -153,7 +153,7 @@ func TestInstallProjectsSelectionScopedPolicyAndPreservesModifiedPolicy(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, skillID := range []string{"data-science-evaluation", "test-and-evidence", "deck-storyline"} {
+	for _, skillID := range []string{"data-science-evaluation", "test-and-evidence", "bcg-deck"} {
 		if !policy.AllowsDirect("case_agent", skillID) {
 			t.Fatalf("selected or dependency skill %q is not active", skillID)
 		}
