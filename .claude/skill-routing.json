@@ -9,6 +9,7 @@
     "evolve_memory_persistence": "evolve-memory",
     "build_local_beta_installer": "maestro-local-beta-installer",
     "export_release": "release-export",
+    "generate_portable_zip": "generate-portable-zip",
     "record_durable_decision": "record-decision",
     "prepare_human_review": "prepare-pr",
     "recover_unclear_git_state": "recover-work"

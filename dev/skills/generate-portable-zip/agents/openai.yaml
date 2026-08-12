@@ -1,0 +1,4 @@
+interface:
+  display_name: "Generate Portable ZIP"
+  short_description: "Gerar o ZIP full portable local-beta (macOS/Windows) em um único fluxo"
+  default_prompt: "Use $generate-portable-zip para produzir o(s) ZIP(s) portable canary da versão pedida, do candidate ao release-export."

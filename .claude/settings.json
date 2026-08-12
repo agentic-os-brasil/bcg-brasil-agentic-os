@@ -26,7 +26,7 @@
     ],
     "UserPromptExpansion": [
       {
-        "matcher": "start-contributing|start-work|develop-change|evolve-memory|maestro-local-beta-installer|release-export|record-decision|prepare-pr|recover-work",
+        "matcher": "start-contributing|start-work|develop-change|evolve-memory|maestro-local-beta-installer|release-export|generate-portable-zip|record-decision|prepare-pr|recover-work",
         "hooks": [
           {
             "type": "command",
