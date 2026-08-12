@@ -1,6 +1,6 @@
 ---
 name: interaction-profile
-description: Resolve the active Maestro interaction profile before selecting language, explanation depth and optional technical suggestions in a professional workflow.
+description: Resolve the active Maestro interaction profile before selecting language, explanation depth and optional technical suggestions in a professional workflow. Called by other skills as a preflight step; also for "set my interaction profile", "switch to advanced mode".
 ---
 
 # Interaction Profile

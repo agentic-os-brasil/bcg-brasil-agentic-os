@@ -1,0 +1,4 @@
+interface:
+  display_name: "BCGOS Operator"
+  short_description: "Operational method loaded at SessionStart — routes control-plane requests to the right skill"
+  default_prompt: "Use $bcgos-operator to inspect Maestro status, version, or recover from an installation issue."

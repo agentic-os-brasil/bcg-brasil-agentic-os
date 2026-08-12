@@ -1,6 +1,6 @@
 ---
 name: qualitative-analysis
-description: Synthesize bounded qualitative evidence into themes, counter-evidence and decision implications. Use only with explicit authorized sources; it does not authorize research, broad browsing or persistence.
+description: Synthesize bounded qualitative evidence into themes, counter-evidence and decision implications. Use for "synthesize these interviews", "what are the themes", "pull the qualitative story", or with a bounded set of authorized sources. Does not authorize research, broad browsing or persistence.
 ---
 
 # Qualitative Analysis

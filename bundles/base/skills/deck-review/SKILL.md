@@ -1,6 +1,6 @@
 ---
 name: deck-review
-description: Review supplied slide text for storyline, consistency, action titles, evidence limits and language issues without opening, editing or generating a deck.
+description: Review supplied slide text for storyline, consistency, action titles, evidence limits and language issues without opening, editing or generating a deck. Use for "review my deck", "pressure-test these slides", "check the storyline", or before a review with a senior stakeholder.
 ---
 
 # Deck Review

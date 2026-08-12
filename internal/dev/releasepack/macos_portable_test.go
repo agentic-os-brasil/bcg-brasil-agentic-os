@@ -74,6 +74,20 @@ func TestBuildMacOSPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 	if strings.Contains(orientation, "portable-activate") {
 		t.Fatalf("macOS orientation retained an obsolete or terminal-directed flow: %s", orientation)
 	}
+	readme := string(entries[root+"README-PORTABLE.md"])
+	for _, required := range []string{
+		"## Verificar o SHA-256 antes de abrir",
+		"shasum -a 256 Maestro-Portable-0.2.0-macos-arm64-local-beta-unsigned.zip",
+		"## Se o macOS bloquear na primeira execucao",
+		"Abrir mesmo assim",
+		"## Se voce moveu a pasta depois de ativar",
+		"~/Library/Application Support/BCGOS",
+		"## Se algo falhar",
+	} {
+		if !strings.Contains(readme, required) {
+			t.Fatalf("macOS portable README is missing %q:\n%s", required, readme)
+		}
+	}
 	if !bytes.Contains(entries[root+"portable-provenance.json"], []byte(`"bootstrapper_codesign_status": "AdHoc"`)) {
 		t.Fatalf("macOS provenance is missing ad-hoc codesign status: %s", entries[root+"portable-provenance.json"])
 	}

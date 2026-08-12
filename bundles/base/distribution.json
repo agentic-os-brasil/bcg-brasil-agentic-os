@@ -270,6 +270,14 @@
       "path": "skills/INDEX.md"
     },
     {
+      "source": "bundles/base/skills/bcgos-operator/SKILL.md",
+      "path": "skills/bcgos-operator/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/bcgos-operator/agents/openai.yaml",
+      "path": "skills/bcgos-operator/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/account-case-setup/SKILL.md",
       "path": "skills/account-case-setup/SKILL.md"
     },
@@ -332,6 +340,14 @@
     {
       "source": "bundles/base/skills/deck-review/agents/openai.yaml",
       "path": "skills/deck-review/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/decision-log-entry/SKILL.md",
+      "path": "skills/decision-log-entry/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/decision-log-entry/agents/openai.yaml",
+      "path": "skills/decision-log-entry/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/dream-memory/SKILL.md",

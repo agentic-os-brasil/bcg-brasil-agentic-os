@@ -513,6 +513,262 @@ else
 fi
 
 # --------------------------------------------------------------------------
+phase "Phase 12 — Memory scaffold + dreaming hook wiring"
+# --------------------------------------------------------------------------
+
+# 12a: Memory sub-tiers exist after first-run scaffold (Phase 4 already ran the hook)
+for tier in recent weekly medium-term lifetime policies; do
+  if [ -d "$MAESTRO_DIR/data/memory/$tier" ]; then
+    pass "data/memory/$tier created by scaffold"
+  else
+    fail "data/memory/$tier NOT created by scaffold"
+  fi
+done
+
+# 12b: Profile placeholder files exist
+for pfile in identity.json preferences.json; do
+  if [ -f "$MAESTRO_DIR/data/profile/$pfile" ]; then
+    pass "data/profile/$pfile placeholder created by scaffold"
+  else
+    fail "data/profile/$pfile NOT created by scaffold"
+  fi
+done
+
+# 12b2: Owner self directory and 10 SELF facet placeholder files (spec 013)
+if [ -d "$MAESTRO_DIR/data/owner/self" ]; then
+  pass "data/owner/self/ directory created by scaffold"
+else
+  fail "data/owner/self/ directory NOT created by scaffold"
+fi
+SELF_FACET_COUNT=0
+for facet in owner-identity personal-context professional-role communication-style \
+             voice preferences motivations quality-bar decision-rules working-boundaries; do
+  if [ -f "$MAESTRO_DIR/data/owner/self/$facet.md" ]; then
+    SELF_FACET_COUNT=$((SELF_FACET_COUNT + 1))
+  else
+    fail "data/owner/self/$facet.md NOT created by scaffold"
+  fi
+done
+if [ "$SELF_FACET_COUNT" -eq 10 ]; then
+  pass "all 10 SELF facet placeholder files created by scaffold"
+fi
+# Verify placeholder content has ## Current section (spec 013 format)
+if grep -q "## Current" "$MAESTRO_DIR/data/owner/self/owner-identity.md" 2>/dev/null; then
+  pass "SELF facet placeholder contains ## Current section (spec 013)"
+else
+  fail "SELF facet placeholder missing ## Current section"
+fi
+
+# 12c: Hook files exist and are non-empty in the ZIP
+for hook in session-start-memory-inject.sh session-stop-dream.sh; do
+  if [ -f "$MAESTRO_DIR/.claude/hooks/$hook" ] && [ -s "$MAESTRO_DIR/.claude/hooks/$hook" ]; then
+    pass ".claude/hooks/$hook present + non-empty"
+  else
+    fail ".claude/hooks/$hook missing or empty"
+  fi
+done
+
+# 12d: settings.json wires memory-inject to SessionStart
+if grep -q "session-start-memory-inject.sh" "$SETTINGS" && grep -q "SessionStart" "$SETTINGS"; then
+  pass "settings.json wires session-start-memory-inject.sh to SessionStart"
+else
+  fail "settings.json does NOT wire session-start-memory-inject.sh to SessionStart"
+fi
+
+# 12e: settings.json wires dream marker to SessionStop
+if grep -q "session-stop-dream.sh" "$SETTINGS" && grep -q "SessionStop" "$SETTINGS"; then
+  pass "settings.json wires session-stop-dream.sh to SessionStop"
+else
+  fail "settings.json does NOT wire session-stop-dream.sh to SessionStop"
+fi
+
+# 12f: session-stop-dream.sh produces .dream-requested marker
+DREAM_SCRATCH=$(mktemp -d -t maestro-eval-dream-XXXXXX)
+unzip -q "$ZIP_PATH" -d "$DREAM_SCRATCH"
+DREAM_MAESTRO="$DREAM_SCRATCH/Maestro"
+mkdir -p "$DREAM_MAESTRO/data/memory"
+if CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/session-stop-dream.sh" >/dev/null 2>&1; then
+  pass "session-stop-dream.sh exits 0"
+else
+  fail "session-stop-dream.sh non-zero exit"
+fi
+if [ -f "$DREAM_MAESTRO/data/memory/.dream-requested" ] && [ -s "$DREAM_MAESTRO/data/memory/.dream-requested" ]; then
+  pass ".dream-requested marker written with timestamp"
+else
+  fail ".dream-requested marker missing or empty after session-stop-dream.sh"
+fi
+chmod -R u+w "$DREAM_SCRATCH"
+rm -rf "$DREAM_SCRATCH"
+
+# 12g: session-start-memory-inject.sh is fail-open when data/ absent
+INJECT_SCRATCH=$(mktemp -d -t maestro-eval-inject-XXXXXX)
+unzip -q "$ZIP_PATH" -d "$INJECT_SCRATCH"
+INJECT_MAESTRO="$INJECT_SCRATCH/Maestro"
+# Do NOT create data/ — simulate first session where scaffold hasn't run yet
+if CLAUDE_PROJECT_DIR="$INJECT_MAESTRO" bash "$INJECT_MAESTRO/.claude/hooks/session-start-memory-inject.sh" >/dev/null 2>&1; then
+  pass "session-start-memory-inject.sh exits 0 when data/ absent (fail-open)"
+else
+  fail "session-start-memory-inject.sh blocks when data/ absent"
+fi
+chmod -R u+w "$INJECT_SCRATCH"
+rm -rf "$INJECT_SCRATCH"
+
+# 12h: memory inject outputs session context markers when memory exists
+INJECT2_SCRATCH=$(mktemp -d -t maestro-eval-inject2-XXXXXX)
+unzip -q "$ZIP_PATH" -d "$INJECT2_SCRATCH"
+INJECT2_MAESTRO="$INJECT2_SCRATCH/Maestro"
+mkdir -p "$INJECT2_MAESTRO/data/memory/recent" "$INJECT2_MAESTRO/data/memory/lifetime" \
+         "$INJECT2_MAESTRO/data/profile" "$INJECT2_MAESTRO/data/owner/self"
+printf '{"schema_version":1,"display_name":"Test User","role":"test","context":"","initialized":true}\n' \
+  > "$INJECT2_MAESTRO/data/profile/identity.json"
+printf '# Test memory entry\nThis is a recent memory.\n' \
+  > "$INJECT2_MAESTRO/data/memory/recent/2024-01-01.md"
+printf '# professional-role\n\n## Current\n\nSenior AI Scientist.\n' \
+  > "$INJECT2_MAESTRO/data/owner/self/professional-role.md"
+INJECT2_OUT=$(CLAUDE_PROJECT_DIR="$INJECT2_MAESTRO" bash "$INJECT2_MAESTRO/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
+if echo "$INJECT2_OUT" | grep -q "maestro:session-context:start"; then
+  pass "session-start-memory-inject.sh emits session-context markers"
+else
+  fail "session-start-memory-inject.sh does NOT emit session-context markers"
+fi
+if echo "$INJECT2_OUT" | grep -q "Último log diário consolidado"; then
+  pass "session-start-memory-inject.sh injects L1 daily log layer"
+else
+  fail "session-start-memory-inject.sh does NOT inject L1 daily log layer"
+fi
+if echo "$INJECT2_OUT" | grep -q "Identidade"; then
+  pass "session-start-memory-inject.sh injects identity profile"
+else
+  fail "session-start-memory-inject.sh does NOT inject identity"
+fi
+if echo "$INJECT2_OUT" | grep -q "SELF do usuário"; then
+  pass "session-start-memory-inject.sh injects owner SELF facets section"
+else
+  fail "session-start-memory-inject.sh does NOT inject owner SELF facets"
+fi
+if echo "$INJECT2_OUT" | grep -q "professional-role"; then
+  pass "session-start-memory-inject.sh includes facet content from data/owner/self/"
+else
+  fail "session-start-memory-inject.sh does NOT include facet content from data/owner/self/"
+fi
+chmod -R u+w "$INJECT2_SCRATCH"
+rm -rf "$INJECT2_SCRATCH"
+
+# 12h2: dream auto-trigger — session-start-memory-inject.sh emits mandatory dreaming block when
+# .dream-requested marker is present; block is suppressed when marker is absent.
+INJECT3_SCRATCH=$(mktemp -d -t maestro-inject3-XXXXXX)
+INJECT3_MAESTRO="$INJECT3_SCRATCH/Maestro"
+mkdir -p "$INJECT3_MAESTRO/data/memory" "$INJECT3_MAESTRO/data/profile" "$INJECT3_MAESTRO/data/owner/self"
+INJECT3_HOOK="$INJECT3_MAESTRO/.claude/hooks/session-start-memory-inject.sh"
+mkdir -p "$(dirname "$INJECT3_HOOK")"
+cp "$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh" "$INJECT3_HOOK"
+chmod +x "$INJECT3_HOOK"
+
+# Sub-check A: marker present → dream-trigger block emitted
+printf '%s\n' "2099-01-01T00:00:00Z" > "$INJECT3_MAESTRO/data/memory/.dream-requested"
+INJECT3_OUT_WITH=$(CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
+if echo "$INJECT3_OUT_WITH" | grep -q "maestro:dream-trigger\|dream-requested"; then
+  pass "session-start-memory-inject.sh emits dream-trigger block when .dream-requested present"
+else
+  fail "session-start-memory-inject.sh does NOT emit dream-trigger block when .dream-requested present"
+fi
+if echo "$INJECT3_OUT_WITH" | grep -qi "obrigatória\|mandatory\|dream-memory"; then
+  pass "dream-trigger block contains mandatory action instruction"
+else
+  fail "dream-trigger block does NOT contain mandatory action instruction"
+fi
+
+# Sub-check B: marker absent → dream-trigger block NOT emitted
+rm -f "$INJECT3_MAESTRO/data/memory/.dream-requested"
+INJECT3_OUT_WITHOUT=$(CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
+if echo "$INJECT3_OUT_WITHOUT" | grep -q "maestro:dream-trigger"; then
+  fail "session-start-memory-inject.sh emits dream-trigger block even without .dream-requested"
+else
+  pass "dream-trigger block correctly suppressed when .dream-requested absent"
+fi
+chmod -R u+w "$INJECT3_SCRATCH"
+rm -rf "$INJECT3_SCRATCH"
+
+# 12h3: dream-memory skill documents auto-trigger marker cleanup
+DREAM_SKILL="$MAESTRO_DIR/bundles/base/skills/dream-memory/SKILL.md"
+if [ -f "$DREAM_SKILL" ] && grep -q "dream-requested\|marker cleanup\|Marker cleanup" "$DREAM_SKILL"; then
+  pass "dream-memory skill documents auto-trigger marker cleanup"
+else
+  fail "dream-memory skill does NOT document auto-trigger marker cleanup"
+fi
+
+# 12i: GAP-A — maestro-doctor references correct bundle names (tech-core, not data-practice)
+DOCTOR_SKILL="$MAESTRO_DIR/bundles/base/skills/maestro-doctor/SKILL.md"
+if [ -f "$DOCTOR_SKILL" ]; then
+  if grep -q "bundles/data-practice" "$DOCTOR_SKILL" || grep -q "bundles/engineering-core" "$DOCTOR_SKILL"; then
+    fail "maestro-doctor still references obsolete bundle names (data-practice/engineering-core)"
+  else
+    pass "maestro-doctor references correct bundle names (no data-practice/engineering-core)"
+  fi
+  if grep -q "bundles/tech-core" "$DOCTOR_SKILL"; then
+    pass "maestro-doctor explicitly checks for bundles/tech-core"
+  else
+    fail "maestro-doctor does NOT check for bundles/tech-core"
+  fi
+  if grep -q "data/owner" "$DOCTOR_SKILL"; then
+    pass "maestro-doctor checks for data/owner/ in workspace health"
+  else
+    fail "maestro-doctor does NOT check for data/owner/ in workspace health"
+  fi
+else
+  fail "maestro-doctor/SKILL.md not found — cannot check bundle names"
+fi
+
+# 12j: GAP-B — bcgos-operator skill exists and is registered in catalog
+BCGOS_OP_SKILL="$MAESTRO_DIR/bundles/base/skills/bcgos-operator/SKILL.md"
+CATALOG="$MAESTRO_DIR/bundles/base/skills/catalog.json"
+if [ -f "$BCGOS_OP_SKILL" ]; then
+  pass "bcgos-operator/SKILL.md exists"
+else
+  fail "bcgos-operator/SKILL.md NOT found"
+fi
+if [ -f "$CATALOG" ] && grep -q '"bcgos-operator"' "$CATALOG"; then
+  pass "bcgos-operator registered in catalog.json"
+else
+  fail "bcgos-operator NOT registered in catalog.json"
+fi
+
+# 12k: GAP-B — session-start-memory-inject.sh emits bcgos-operator pointer
+INJECT_HOOK_BUILT="$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh"
+if [ -f "$INJECT_HOOK_BUILT" ] && grep -q "bcgos-operator" "$INJECT_HOOK_BUILT"; then
+  pass "session-start-memory-inject.sh emits bcgos-operator pointer"
+else
+  fail "session-start-memory-inject.sh does NOT emit bcgos-operator pointer"
+fi
+
+# 12l: GAP-F — owner extended context tree scaffolded
+SCAFFOLD_HOOK="$MAESTRO_DIR/.claude/hooks/first-run-scaffold.sh"
+if [ -f "$SCAFFOLD_HOOK" ]; then
+  if grep -q "owner/registry.json" "$SCAFFOLD_HOOK"; then
+    pass "first-run-scaffold.sh creates owner/registry.json"
+  else
+    fail "first-run-scaffold.sh does NOT create owner/registry.json"
+  fi
+  if grep -q "owner/operating" "$SCAFFOLD_HOOK"; then
+    pass "first-run-scaffold.sh creates owner/operating/"
+  else
+    fail "first-run-scaffold.sh does NOT create owner/operating/"
+  fi
+  if grep -q "owner/observations" "$SCAFFOLD_HOOK"; then
+    pass "first-run-scaffold.sh creates owner/observations/"
+  else
+    fail "first-run-scaffold.sh does NOT create owner/observations/"
+  fi
+  if grep -q "owner/interview" "$SCAFFOLD_HOOK"; then
+    pass "first-run-scaffold.sh creates owner/interview/"
+  else
+    fail "first-run-scaffold.sh does NOT create owner/interview/"
+  fi
+else
+  fail "first-run-scaffold.sh not found — cannot check owner context tree"
+fi
+
+# --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
 

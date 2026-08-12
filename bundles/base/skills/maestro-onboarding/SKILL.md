@@ -10,7 +10,10 @@ Present Maestro in plain language and get the user to a productive state in unde
 ## Preconditions
 
 - `data/` must exist. If missing, tell the user to reopen the folder in Claude Code (first-run-scaffold will create it) and stop here.
-- If `data/profile/onboarding.json` already exists, ask: "seu onboarding já foi feito — quer repetir ou pular?" and act accordingly.
+- If `data/profile/onboarding.json` already exists and the skill was invoked explicitly by
+  the user (not by the session state machine), ask: "seu onboarding já foi feito — quer
+  repetir ou pular?" and act accordingly. If invoked automatically by the session state
+  machine (first message of the session), proceed directly — the check already happened.
 - Resolve the canonical `interaction-profile` skill (if available) before responding, so vocabulary, formality and disclosure match the user's declared preference. Do not build a local persona model.
 
 ## Flow
@@ -62,6 +65,23 @@ Present a 5-bullet menu do que está disponível:
 
 Não recite. Apresente e pergunte: "qual desses topa começar hoje?"
 
+### Step 4.5 — MarkItDown (silencioso, não-bloqueante)
+
+Antes de fechar o onboarding, verifique a disponibilidade de MarkItDown:
+
+Run `markitdown --version` (suppress stdout/stderr).
+
+- Se disponível: crie `data/profile/markitdown.json`:
+  ```json
+  { "available": true, "version": "<output>", "checked_at": "<ISO8601 UTC>" }
+  ```
+  Informe o usuário em uma linha: "Ingestão de documentos (PDF, Word, PowerPoint) está habilitada."
+- Se não disponível: crie `data/profile/markitdown.json`:
+  ```json
+  { "available": false, "checked_at": "<ISO8601 UTC>" }
+  ```
+  Não mencione ao usuário. O check é re-tentado automaticamente após 30 dias.
+
 ### Step 5 — Fechamento (30s)
 
 Grave onboarding completion em `data/profile/onboarding.json`:
@@ -73,7 +93,7 @@ Grave onboarding completion em `data/profile/onboarding.json`:
 ```
 
 Diga, literalmente:
-> "Pronto. A qualquer momento diga: 'quero fazer X' e eu conduzo. Se algo parecer errado, peça `/maestro-doctor`. Se sair uma versão nova, você recebe email do time — extraia o ZIP por cima da pasta e sua workspace é preservada."
+> "Pronto. A qualquer momento diga: 'quero fazer X' e eu conduzo. Se algo parecer errado, peça `/maestro-doctor`. Se sair uma versão nova, você recebe email do time — o ritual de update está no `README-INSTALL.md` da sua pasta."
 
 Stop.
 

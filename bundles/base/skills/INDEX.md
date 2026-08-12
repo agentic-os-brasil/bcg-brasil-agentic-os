@@ -8,8 +8,11 @@
 | Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
 | Case Kickoff | Build a bounded first-days plan from approved case scope | `skills/bcg-case-kickoff/SKILL.md` |
 | Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/bcg-deck/SKILL.md` |
+| BCGOS Operator | Operational method loaded at SessionStart — routes control-plane requests to the right skill | `skills/bcgos-operator/SKILL.md` |
 | Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
+| Gate de Entrega | Gate de qualidade em 3 lentes antes de qualquer output chegar ao cliente ou Partner | `skills/client-delivery-gate/SKILL.md` |
 | Craft Update | Document a personal method or working preference deliberately | `skills/craft-update/SKILL.md` |
+| Decision Log Entry | Register a structural case decision in the active case decision log | `skills/decision-log-entry/SKILL.md` |
 | Deck Drill | Rehearse a deck against the questions the room will ask | `skills/deck-drill/SKILL.md` |
 | Deck Review | Review supplied slide text for storyline and evidence risks | `skills/deck-review/SKILL.md` |
 | Dream Memory | Consolidate daily and weekly professional memory | `skills/dream-memory/SKILL.md` |

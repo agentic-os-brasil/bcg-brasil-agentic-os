@@ -30,6 +30,13 @@
       "relative_path": "skills/bcg-deck/SKILL.md"
     },
     {
+      "id": "bcgos-operator",
+      "display_name": "BCGOS Operator",
+      "trigger": "Operational method loaded at SessionStart — routes control-plane requests to the right skill",
+      "default_prompt": "Use $bcgos-operator to inspect Maestro status, version, or recover from an installation issue.",
+      "relative_path": "skills/bcgos-operator/SKILL.md"
+    },
+    {
       "id": "case-agent-setup",
       "display_name": "Case Agent Setup",
       "trigger": "Interview and research one project case safely",
@@ -37,11 +44,25 @@
       "relative_path": "skills/case-agent-setup/SKILL.md"
     },
     {
+      "id": "client-delivery-gate",
+      "display_name": "Gate de Entrega",
+      "trigger": "Gate de qualidade em 3 lentes antes de qualquer output chegar ao cliente ou Partner",
+      "default_prompt": "Use $client-delivery-gate para revisar o output antes de enviar ao cliente.",
+      "relative_path": "skills/client-delivery-gate/SKILL.md"
+    },
+    {
       "id": "craft-update",
       "display_name": "Craft Update",
       "trigger": "Document a personal method or working preference deliberately",
       "default_prompt": "Use $craft-update to write up this technique as a method, or record how I prefer to work.",
       "relative_path": "skills/craft-update/SKILL.md"
+    },
+    {
+      "id": "decision-log-entry",
+      "display_name": "Decision Log Entry",
+      "trigger": "Register a structural case decision in the active case decision log",
+      "default_prompt": "Use $decision-log-entry to register this decision in the active case log.",
+      "relative_path": "skills/decision-log-entry/SKILL.md"
     },
     {
       "id": "deck-drill",
