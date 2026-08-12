@@ -22,6 +22,15 @@ Resolve the canonical `interaction-profile` skill before responding. Ajustar o t
 - Use **weekly deep** for week closure or an overdue weekly cycle. It may update memória semanal and memória de médio prazo and promote eligible lifetime memory.
 - Use **status** when the user asks what is remembered, why a promotion occurred or whether a cycle was missed.
 
+## Auto-trigger (SessionStart)
+
+When invoked automatically at session start (the `⚠️ Dreaming pendente` block was present in session context), run the **daily light** cycle without prompting the user. After the cycle completes successfully:
+
+1. Delete `data/memory/.dream-requested` (the marker written by `session-stop-dream.sh`).
+2. Report the result in one paragraph — do not wait for the user to ask.
+
+If the cycle fails or the memory tree is missing, report the failure and delete the marker anyway so it does not repeat on every session start.
+
 ## Workflow
 
 1. Resolve the active workspace identity by reading `data/profile/identity.json` and the memory root at `data/memory/`.
@@ -31,6 +40,7 @@ Resolve the canonical `interaction-profile` skill before responding. Ajustar o t
 5. For weekly lifetime promotion, require a named eligibility policy in `data/memory/policies/lifetime.json`. If it is missing, stop: lifetime activation must fail closed.
 6. Return the cycle, period, origem e momento de registro de cada memória, activated layers, lifetime eligibility reason and any skipped or missing layers.
 7. If the required policy or budget files are missing, report the capability as unavailable rather than emulating dreaming with ad-hoc edits.
+8. **Marker cleanup (auto-trigger only):** if `data/memory/.dream-requested` exists at invocation time, delete it after the cycle — success or failure — so the trigger fires only once per session stop.
 
 ## Invariants
 

@@ -8,6 +8,7 @@
 | Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
 | Case Kickoff | Build a bounded first-days plan from approved case scope | `skills/bcg-case-kickoff/SKILL.md` |
 | Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/bcg-deck/SKILL.md` |
+| BCGOS Operator | Operational method loaded at SessionStart — routes control-plane requests to the right skill | `skills/bcgos-operator/SKILL.md` |
 | Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
 | Craft Update | Document a personal method or working preference deliberately | `skills/craft-update/SKILL.md` |
 | Deck Drill | Rehearse a deck against the questions the room will ask | `skills/deck-drill/SKILL.md` |

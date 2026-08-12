@@ -69,13 +69,138 @@ fi
 
 log_line "SCAFFOLD  project_dir=$PROJECT_DIR"
 
-for sub in agents memory profile workspaces; do
+for sub in agents memory owner profile workspaces; do
   if mkdir -p "$DATA_DIR/$sub" 2>/dev/null; then
     log_line "MKDIR OK  data/$sub"
   else
     log_line "MKDIR FAIL  data/$sub  (permissions or path issue)"
   fi
 done
+
+# Memory layer sub-tiers — required by dream-memory skill (L1/L2/L3 + policies)
+for tier in recent weekly medium-term lifetime policies; do
+  if mkdir -p "$DATA_DIR/memory/$tier" 2>/dev/null; then
+    log_line "MKDIR OK  data/memory/$tier"
+  else
+    log_line "MKDIR FAIL  data/memory/$tier  (permissions or path issue)"
+  fi
+done
+
+# Ensure the dreaming marker never gets committed if the user's workspace is a git repo.
+MEMORY_GITIGNORE="$DATA_DIR/memory/.gitignore"
+if [ ! -f "$MEMORY_GITIGNORE" ]; then
+  printf '.dream-requested\n' > "$MEMORY_GITIGNORE" 2>/dev/null && \
+    log_line "WRITE OK  data/memory/.gitignore  (ignores .dream-requested)"
+fi
+
+# Owner self facets — ten individually-addressable markdown files (spec 013)
+# Creates placeholder files only; content is filled in by /maestro-onboarding.
+if mkdir -p "$DATA_DIR/owner/self" 2>/dev/null; then
+  log_line "MKDIR OK  data/owner/self"
+  for facet in owner-identity personal-context professional-role communication-style \
+               voice preferences motivations quality-bar decision-rules working-boundaries; do
+    FACET_FILE="$DATA_DIR/owner/self/$facet.md"
+    if [ ! -f "$FACET_FILE" ]; then
+      printf '# %s\n\n## Current\n\n_Não preenchido. Use /maestro-onboarding para configurar._\n' \
+        "$facet" > "$FACET_FILE" 2>/dev/null && \
+        log_line "WRITE OK  data/owner/self/$facet.md (placeholder)"
+    fi
+  done
+else
+  log_line "MKDIR FAIL  data/owner/self  (permissions or path issue)"
+fi
+
+# Owner context tree — extended structure per spec 013
+# registry.json — policy/pointer index for all owner sub-trees
+if [ ! -f "$DATA_DIR/owner/registry.json" ]; then
+  cat > "$DATA_DIR/owner/registry.json" 2>/dev/null <<'EOF'
+{
+  "schema_version": 1,
+  "trees": {
+    "self":         "owner/self/",
+    "operating":    "owner/operating/",
+    "observations": "owner/observations/",
+    "interview":    "owner/interview/"
+  },
+  "initialized": false
+}
+EOF
+  log_line "WRITE OK  data/owner/registry.json (placeholder)"
+fi
+
+# owner/self/README.md — canonical index of the 10 SELF facets
+if [ ! -f "$DATA_DIR/owner/self/README.md" ]; then
+  cat > "$DATA_DIR/owner/self/README.md" 2>/dev/null <<'EOF'
+# SELF — Owner Context Facets
+
+Dez arquivos individualmente endereçáveis. Preenchidos por /maestro-onboarding.
+
+| Facet | Arquivo |
+|---|---|
+| Identidade | owner-identity.md |
+| Contexto pessoal | personal-context.md |
+| Papel profissional | professional-role.md |
+| Estilo de comunicação | communication-style.md |
+| Voz | voice.md |
+| Preferências | preferences.md |
+| Motivações | motivations.md |
+| Barra de qualidade | quality-bar.md |
+| Regras de decisão | decision-rules.md |
+| Limites de trabalho | working-boundaries.md |
+EOF
+  log_line "WRITE OK  data/owner/self/README.md"
+fi
+
+# owner/operating/work-state.md — work continuity placeholder
+if mkdir -p "$DATA_DIR/owner/operating" 2>/dev/null; then
+  log_line "MKDIR OK  data/owner/operating"
+  if [ ! -f "$DATA_DIR/owner/operating/work-state.md" ]; then
+    cat > "$DATA_DIR/owner/operating/work-state.md" 2>/dev/null <<'EOF'
+# Work State
+
+_Não inicializado. Atualizado automaticamente pelo Maestro ao final de cada sessão de trabalho._
+
+## Last session
+- date: —
+- active_project: —
+- last_decision: —
+
+## Open threads
+_Nenhum registrado._
+EOF
+    log_line "WRITE OK  data/owner/operating/work-state.md (placeholder)"
+  fi
+else
+  log_line "MKDIR FAIL  data/owner/operating"
+fi
+
+# owner/observations/ — append-only observations log
+if mkdir -p "$DATA_DIR/owner/observations" 2>/dev/null; then
+  log_line "MKDIR OK  data/owner/observations"
+  if [ ! -f "$DATA_DIR/owner/observations/observations.jsonl" ]; then
+    printf '' > "$DATA_DIR/owner/observations/observations.jsonl" 2>/dev/null && \
+      log_line "WRITE OK  data/owner/observations/observations.jsonl (empty)"
+  fi
+else
+  log_line "MKDIR FAIL  data/owner/observations"
+fi
+
+# owner/interview/ — interview confirmations + drafts
+if mkdir -p "$DATA_DIR/owner/interview/drafts" 2>/dev/null; then
+  log_line "MKDIR OK  data/owner/interview/drafts"
+  if [ ! -f "$DATA_DIR/owner/interview/confirmations.json" ]; then
+    cat > "$DATA_DIR/owner/interview/confirmations.json" 2>/dev/null <<'EOF'
+{
+  "schema_version": 1,
+  "completed_tracks": [],
+  "last_updated": null
+}
+EOF
+    log_line "WRITE OK  data/owner/interview/confirmations.json (placeholder)"
+  fi
+else
+  log_line "MKDIR FAIL  data/owner/interview/drafts"
+fi
 
 if [ ! -d "$DATA_DIR/agents" ]; then
   log_line "ABORT  data/agents was not created — hook exiting fail-open"
@@ -111,6 +236,33 @@ Tudo dentro de `data/` é seu. Atualizações do Maestro nunca sobrescrevem este
 
 Se quiser fazer backup, basta copiar `data/` inteiro. Nenhum arquivo aqui depende de código externo.
 EOF
+
+# Profile placeholders — created only once; user fills them in via /maestro-onboarding
+if [ ! -f "$DATA_DIR/profile/identity.json" ]; then
+  cat > "$DATA_DIR/profile/identity.json" 2>/dev/null <<'EOF'
+{
+  "schema_version": 1,
+  "display_name": "",
+  "role": "",
+  "context": "",
+  "initialized": false
+}
+EOF
+  log_line "WRITE OK  data/profile/identity.json (placeholder)"
+fi
+
+if [ ! -f "$DATA_DIR/profile/preferences.json" ]; then
+  cat > "$DATA_DIR/profile/preferences.json" 2>/dev/null <<'EOF'
+{
+  "schema_version": 1,
+  "language": "pt-BR",
+  "response_style": "direct",
+  "interaction_profile": "standard",
+  "initialized": false
+}
+EOF
+  log_line "WRITE OK  data/profile/preferences.json (placeholder)"
+fi
 
 printf '%s\n' "$TS" > "$MARKER" 2>/dev/null
 log_line "DONE  marker written"
