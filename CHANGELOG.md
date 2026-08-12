@@ -55,6 +55,9 @@ All notable changes will be documented here.
   friction capabilities, BCGOS operator session-start, owner atlas vertical and segment
   documentation, owner scope contract (doc #006), Windows ownership fix, and Windows platform
   findings report.
+- [PR #305] Maestro user-template pointer discipline: `CLAUDE.md` and `WELCOME.md` now defer
+  to `README-INSTALL.md` as the single canonical source for the update ritual, eliminating a
+  3-way contradiction that could produce divergent installation instructions across files.
 
 ### Evidence snapshot (2026-08-06)
 
