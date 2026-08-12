@@ -147,6 +147,7 @@ execution and evidence in this local workspace.
 - Initial areas for context, decisions, people and work.
 - Local hooks and maintenance configuration; describe them as configured, not
   as observed native runtime behavior.
+- Aceito CV, PDF ou DOCX quando quiser enviar — só pedir.
 
 ### 🧭 Escolha como quer começar
 
