@@ -1,5 +1,5 @@
 ---
-name: deck-storyline
+name: bcg-deck
 description: Build one decision-led professional storyline and deck plan from approved case evidence. Use inside an authorized workspace or account context; it does not authorize reading, editing or presentation delivery.
 ---
 

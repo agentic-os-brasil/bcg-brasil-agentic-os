@@ -145,7 +145,7 @@ conhecimento local revisável e gera uma decisão ou artefato útil.
 - batch local, templates de extração e exportações intermediárias para perfil
   `advanced`/`power`;
 - integração segura com `ingest-content`, análise qualitativa/quantitativa e
-  `deck-storyline`;
+  `bcg-deck`;
 - rejeição explícita de fallback remoto implícito.
 
 **Evidência para avançar:** runtime pack verificado em Windows/macOS, tamanho e

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maestro Doctor"
+  short_description: "Run a plain-language health check on the Maestro install"
+  default_prompt: "Use $maestro-doctor to check whether my Maestro install is healthy and tell me what to do about any issues."
