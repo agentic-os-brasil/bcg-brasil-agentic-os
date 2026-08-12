@@ -99,7 +99,18 @@ func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 		}
 	}
 	readme := string(entries[root+"README-PORTABLE.md"])
-	for _, required := range []string{"Abra a pasta `maestro-os` no Claude Code", "Envie uma mensagem", "Nao abra terminal nem execute arquivos internos"} {
+	for _, required := range []string{
+		"Abra a pasta `maestro-os` no Claude Code",
+		"Envie uma mensagem",
+		"Nao abra terminal nem execute arquivos internos",
+		"## Verificar o SHA-256 antes de abrir",
+		"Get-FileHash -Algorithm SHA256 Maestro-Portable-0.2.0-windows-amd64-local-beta-unsigned.zip",
+		"## Se o Windows bloquear na primeira execucao",
+		"Executar assim mesmo",
+		"## Se voce moveu a pasta depois de ativar",
+		"%LOCALAPPDATA%\\BCGOS",
+		"## Se algo falhar",
+	} {
 		if !strings.Contains(readme, required) {
 			t.Fatalf("portable README does not describe the prompt-first Claude Code journey; missing %q:\n%s", required, readme)
 		}
