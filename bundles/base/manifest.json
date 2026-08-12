@@ -50,9 +50,20 @@
     "bundles/base/agents/case-agent/AGENT.md",
     "bundles/base/agents/client-account-agent/AGENT.md",
     "bundles/base/agents/darwin/AGENT.md",
+    "bundles/base/agents/gamma-guardian/AGENT.md",
     "bundles/base/agents/maestro/AGENT.md",
     "bundles/base/agents/pa-expert/AGENT.md",
     "bundles/base/agents/walter/AGENT.md"
+  ],
+  "agent_templates": [
+    "bundles/base/agents/templates/account_agent/AGENT.md",
+    "bundles/base/agents/templates/case_agent/AGENT.md",
+    "bundles/base/agents/templates/client_account_agent/AGENT.md",
+    "bundles/base/agents/templates/pa_expert/AGENT.md",
+    "bundles/base/agents/templates/practice_agent/AGENT.md",
+    "bundles/base/agents/templates/quality_guardian/AGENT.md",
+    "bundles/base/agents/templates/subject_specialist/AGENT.md",
+    "bundles/base/agents/templates/workspace_agent/AGENT.md"
   ],
   "skills_index": "bundles/base/skills/INDEX.md",
   "skills_catalog": "bundles/base/skills/catalog.json",
