@@ -53,11 +53,12 @@ Persist to `data/profile/style.json`:
 
 ### Step 4 — O que Maestro faz por você (1min)
 
-Present a 4-bullet menu do que está disponível:
+Present a 5-bullet menu do que está disponível:
 - Rascunhos de deck em estilo BCG (`/bcg-deck`).
 - Análise de dados (qualitativa e quantitativa).
 - Revisão de PR / code review.
 - Onboarding em novo caso (`/bcg-case-kickoff`).
+- Ingestão de documentos que você quiser enviar (CV, PDF, DOCX): é só pedir.
 
 Não recite. Apresente e pergunte: "qual desses topa começar hoje?"
 
