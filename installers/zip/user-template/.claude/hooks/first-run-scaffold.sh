@@ -14,6 +14,44 @@ log_line() {
   ( printf '%s  %s\n' "$TS" "$1" >> "$LOG" ) 2>/dev/null
 }
 
+# ---------------------------------------------------------------------------
+# Skills rollup — emitted to stdout every session as additionalContext.
+# Compact index only (name + description first sentence). Full SKILL.md is
+# loaded on demand by the Skill tool. Fail-open: on any error, print nothing.
+# ---------------------------------------------------------------------------
+emit_skills_rollup() {
+  local skills_dir="$PROJECT_DIR/bundles/base/skills"
+  [ -d "$skills_dir" ] || return 0
+
+  local rollup
+  rollup=$(awk '
+    FNR == 1 {
+      in_fm = 0; fm_count = 0; name = ""; desc = ""
+    }
+    /^---[[:space:]]*$/ {
+      fm_count++
+      if (fm_count == 1) { in_fm = 1; next }
+      if (fm_count == 2) {
+        in_fm = 0
+        if (name != "" && desc != "") {
+          sub(/\. .*$/, ".", desc)
+          if (length(desc) > 140) desc = substr(desc, 1, 137) "..."
+          printf "- **%s** — %s\n", name, desc
+        }
+        nextfile
+      }
+    }
+    in_fm && /^name:[[:space:]]/ { sub(/^name:[[:space:]]*/, ""); name = $0 }
+    in_fm && /^description:[[:space:]]/ { sub(/^description:[[:space:]]*/, ""); desc = $0 }
+  ' "$skills_dir"/*/SKILL.md 2>/dev/null | sort)
+
+  [ -z "$rollup" ] && return 0
+
+  printf '## Maestro skills disponíveis\n\n'
+  printf 'Índice compacto. A skill completa é carregada sob demanda quando o pedido do dono a aciona.\n\n'
+  printf '%s\n' "$rollup"
+}
+
 # Recovery detection: data/ exists with real content but marker is missing.
 # Means either: (a) user restored data/ from a backup, or (b) marker was clobbered
 # during an update. Drop a breadcrumb rather than silently re-scaffolding.
@@ -24,7 +62,10 @@ if [ -d "$DATA_DIR" ] && [ ! -f "$MARKER" ]; then
   fi
 fi
 
-[ -f "$MARKER" ] && exit 0
+if [ -f "$MARKER" ]; then
+  emit_skills_rollup 2>/dev/null
+  exit 0
+fi
 
 log_line "SCAFFOLD  project_dir=$PROJECT_DIR"
 
@@ -73,5 +114,7 @@ EOF
 
 printf '%s\n' "$TS" > "$MARKER" 2>/dev/null
 log_line "DONE  marker written"
+
+emit_skills_rollup
 
 exit 0
