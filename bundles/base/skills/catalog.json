@@ -65,6 +65,13 @@
       "relative_path": "skills/dream-memory/SKILL.md"
     },
     {
+      "id": "eod",
+      "display_name": "End of Day",
+      "trigger": "Close the day and leave tomorrow a starting point",
+      "default_prompt": "Use $eod to close today on my daily page and preview tomorrow's first priority.",
+      "relative_path": "skills/eod/SKILL.md"
+    },
+    {
       "id": "execution-continuity",
       "display_name": "Execution Continuity",
       "trigger": "Registrar tarefas e entregas, preparar versão, criar checkpoints e retomar trabalho entre sessões",
@@ -203,6 +210,13 @@
       "trigger": "Map supplied deck text into slide messages and a narrative arc",
       "default_prompt": "Use $slide-summary to map the supplied deck text slide by slide without creating a deck.",
       "relative_path": "skills/slide-summary/SKILL.md"
+    },
+    {
+"id": "start-day",
+      "display_name": "Start Day",
+      "trigger": "Open the day with a briefing scoped to the hours that remain",
+      "default_prompt": "Use $start-day to open my day with a briefing scoped to the time I actually have left.",
+      "relative_path": "skills/start-day/SKILL.md"
     },
     {
       "id": "upward-feedback",

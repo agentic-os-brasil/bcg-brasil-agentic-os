@@ -509,6 +509,22 @@
       "source": "bundles/base/skills/upward-feedback/agents/openai.yaml",
       "path": "skills/upward-feedback/agents/openai.yaml"
     },
+        {
+      "source": "bundles/base/skills/start-day/SKILL.md",
+      "path": "skills/start-day/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/start-day/agents/openai.yaml",
+      "path": "skills/start-day/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/eod/SKILL.md",
+      "path": "skills/eod/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/eod/agents/openai.yaml",
+      "path": "skills/eod/agents/openai.yaml"
+    },
     {
       "source": "bundles/base/skills/slide-summary/SKILL.md",
       "path": "skills/slide-summary/SKILL.md"

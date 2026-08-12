@@ -13,6 +13,7 @@
 | Deck Drill | Rehearse a deck against the questions the room will ask | `skills/deck-drill/SKILL.md` |
 | Deck Review | Review supplied slide text for storyline and evidence risks | `skills/deck-review/SKILL.md` |
 | Dream Memory | Consolidate daily and weekly professional memory | `skills/dream-memory/SKILL.md` |
+| End of Day | Close the day and leave tomorrow a starting point | `skills/eod/SKILL.md` |
 | Execution Continuity | Registrar tarefas e entregas, preparar versão, criar checkpoints e retomar trabalho entre sessões | `skills/execution-continuity/SKILL.md` |
 | Expert Interview Guide | Structure a bounded interview guide from approved case questions | `skills/expert-interview-guide/SKILL.md` |
 | Feedback Capture | Record feedback received and apply it to your objectives | `skills/feedback-capture/SKILL.md` |
@@ -33,6 +34,7 @@
 | Quantitative Analysis | Analyze bounded quantitative evidence with explicit assumptions and checks | `skills/quantitative-analysis/SKILL.md` |
 | Retro | Close the week against your development objectives | `skills/retro/SKILL.md` |
 | Slide Summary | Map supplied deck text into slide messages and a narrative arc | `skills/slide-summary/SKILL.md` |
+| Start Day | Open the day with a briefing scoped to the hours that remain | `skills/start-day/SKILL.md` |
 | Upward Feedback | Prepare considered feedback to give a senior colleague | `skills/upward-feedback/SKILL.md` |
 | Wayfinder | Structure an open problem into a first move | `skills/wayfinder/SKILL.md` |
 | Legacy Case Agent Setup Alias | Migrate the retired workspace-agent setup name | `skills/workspace-agent-setup/SKILL.md` |
