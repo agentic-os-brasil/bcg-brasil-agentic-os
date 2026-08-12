@@ -5,6 +5,10 @@ description: Create the right Maestro workspace context for a client account and
 
 # Account Case Setup
 
+## Interaction profile
+
+Resolve the canonical `interaction-profile` skill before responding. It adjusts explanation depth and language only; it never changes scope, authority, or the confirmation gates.
+
 Turn a client engagement into a useful working setup, not a taxonomy exercise. The owner chooses names and emoji-avatars; Maestro keeps the roles clear.
 
 ## Choose the right starting point
@@ -19,7 +23,7 @@ The Client Account Agent is the partner-like steward of the relationship, stakeh
 
 ## Create one clear working context at a time
 
-1. Confirm the current Maestro workspace and resolve `interaction-profile`.
+1. Confirmar o espaço de trabalho atual do Maestro e ajustar o tom e o nível de detalhe ao perfil do usuário.
 2. Ask for the account or project name, what success looks like and the first useful outcome. Do not request a schema, agent ID or a folder plan.
 3. Explain the proposed pair in everyday language, including their suggested names and emoji-avatars. Offer customization through `$agent-identity-setup` when the owner wants it.
 4. For an account, capture only the authorized relationship context: stakeholders, important concepts, strategic view and the intended use of the context. Do not import client material, crawl SharePoint or infer a cross-project mandate.
@@ -28,4 +32,8 @@ The Client Account Agent is the partner-like steward of the relationship, stakeh
 
 ## Keep the roles honest
 
-PA Experts are cross-workspace consultants on functional and industry knowledge. They are not project agents, they do not own the client context and they are consulted longitudinally when their perspective adds value.
+PA Experts (especialistas de área do BCG) são consultores transversais em conhecimento funcional e de indústria. Não são agentes de projeto, não possuem o contexto do cliente e são consultados de forma continuada quando a perspectiva deles agrega valor.
+
+## Definição de conclusão
+
+O setup está completo quando o owner tem um contexto de trabalho nomeado, sabe qual é o próximo passo concreto e recebeu uma primeira entrega ou checkpoint útil.

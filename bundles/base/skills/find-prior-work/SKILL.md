@@ -32,13 +32,13 @@ O Maestro atual (distribuição ZIP) indexa apenas o que já está local na work
 
 1. **Extrair intenção da pergunta.** Identificar sinais explícitos: cliente, projeto, tema, ano, tipo de artefato (deck, doc, análise, brief). Se o pedido for vago demais, fazer uma única pergunta de esclarecimento antes de buscar.
 
-2. **Buscar dentro de `data/`.** Usar Grep sobre `${CLAUDE_PROJECT_DIR}/data/memory/**`, `${CLAUDE_PROJECT_DIR}/data/workspaces/**` e `${CLAUDE_PROJECT_DIR}/data/agents/**` com os termos identificados. Combinar busca por nome de arquivo (Glob) e por conteúdo (Grep). Priorizar matches em títulos, frontmatter e primeiras linhas.
+2. **Buscar dentro de `data/`.** Pesquisar dentro de `data/memory/`, `data/workspaces/` e `data/agents/` com os termos identificados, combinando busca por nome de arquivo e por conteúdo. Priorizar ocorrências em títulos, cabeçalhos e primeiras linhas.
 
 3. **Ranquear resultados.** Ordenar por: (a) match direto no termo mais específico do pedido, (b) freshness (mtime mais recente), (c) camada de memória (lifetime > L3 > L2 > L1 quando aplicável).
 
 4. **Ler apenas o necessário.** Para cada candidato do topo do ranking, ler as primeiras seções via Read para confirmar relevância. Não abrir arquivo grande inteiro sem necessidade.
 
-5. **Devolver ponteiros, não conteúdo bruto.** Para cada item retornado, informar: título ou identificador, caminho absoluto dentro de `data/`, uma linha de descrição (client / project / theme / year quando presente), data da última modificação. Não colar o conteúdo do deck ou documento no chat, apenas resumir e apontar.
+5. **Devolver ponteiros, não conteúdo bruto.** Para cada item retornado, informar: título ou identificador, caminho dentro de `data/`, uma linha de descrição (cliente / projeto / tema / ano quando presente), data da última modificação. Não colar o conteúdo do deck ou documento no chat, apenas resumir e apontar.
 
 ## Regras de recuperação
 

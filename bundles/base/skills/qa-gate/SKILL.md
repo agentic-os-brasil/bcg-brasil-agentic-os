@@ -3,53 +3,71 @@ name: qa-gate
 description: Build an evidence-gated QA packet for a bounded change and classify it as pass, hold or unavailable without self-approving release.
 ---
 
-# QA Gate
+> **Audience:** agent-facing only. This skill is not surfaced to the human owner.
 
-Turn a change request into a proportionate quality decision. This skill
-coordinates checks and evidence; it does not grant production access, approve
-a release or replace human review.
+# QA Gate
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the QA packet.
-The profile controls communication depth only and cannot relax a required
-check or approval boundary.
+Resolve the canonical `interaction-profile` skill before presenting results to any agent that surfaces output to the owner. It adjusts explanation depth only; it never changes the QA verdict, evidence requirements, or scope.
+
+Turn a consulting output into a proportionate quality decision. This skill
+coordinates evidence across five dimensions and produces a verdict; it does not
+replace the case owner's judgment or approve delivery.
 
 ## Workflow
 
-1. Identify the changed artifact, intended behavior, risk surface and the
-   decision the evidence must support.
-2. Read repository-local instructions and list required checks before running
-   anything. Prefer configured commands and existing fixtures.
-3. Select the smallest sufficient set across build/type checks, unit tests,
-   integration or end-to-end tests, static analysis, contract checks and
-   manual acceptance. Explain omissions.
-4. Execute only authorized local checks, or record them as pending when an
-   adapter or environment is required. Capture command, scope, result and
-   revision metadata—not payloads.
-5. Review test quality: meaningful assertions, failure paths, deterministic
-   fixtures, isolation and regression coverage. Use `coverage-diagnose` or
-   `unit-test-wave` when the change exposes a gap.
-6. Classify each signal as `pass`, `fail`, `skipped`, `blocked` or
-   `unavailable`. A skipped or unavailable required check is not a pass.
-   For code changes, Maestro may request a bounded `code_quality` evaluation
-   from Gamma Guardian. Keep its five-dimension result separate from command
-   checks: a local signal is advisory, and native qualification remains
-   `unavailable` without independent runtime evidence.
-7. Produce a QA packet with verdict `PASS`, `HOLD` or `UNAVAILABLE`, residual
-   risk and the smallest next action.
+1. Identify the output artifact, its stated purpose, the intended audience and
+   the decision the evidence must support.
+2. Read any case-level instructions and list the applicable quality checks
+   before evaluating anything.
+3. Evaluate the five QA dimensions below. For each, classify the signal as
+   `pass`, `hold` or `unavailable`. A missing or inconclusive check is not a
+   pass.
+4. Produce a QA packet with an overall verdict of `PASS`, `HOLD` or
+   `UNAVAILABLE`, the dimension-level findings, residual risk and the smallest
+   next action.
+
+## Five QA dimensions
+
+### 1. Storyline soundness
+Does the argument flow according to the Pyramid Principle? The governing
+insight must appear first. Supporting points must be mutually exclusive,
+collectively exhaustive and traceable to the governing claim. Flag any
+inversion, redundancy or unsupported logical jump.
+
+### 2. Evidence traceability
+Every material claim must name a source. Check that each assertion is
+accompanied by a reference — document, interview, dataset or public source —
+that a reviewer could locate. Flag unsourced claims as `hold`.
+
+### 3. Source credibility
+Is the cited evidence credible for the stated claim? Consider recency,
+authority, methodological fit and whether the source actually supports the
+specific assertion made. A credible-looking citation that does not back the
+claim is a traceability failure, not a pass.
+
+### 4. Scope compliance
+Does the output stay within what was explicitly asked? Flag scope creep,
+missing deliverable sections and any recommendation that falls outside the
+agreed brief. Scope decisions belong to the case owner, not the QA layer.
+
+### 5. Tone and format fit
+Is the output appropriate for the stated audience and channel? Check register
+(executive vs. working-team), length, visual density and BCG editorial
+conventions (conclusion-first, no bullet padding, no em-dash in external text).
+Flag mismatches between stated audience and actual register.
 
 ## Output contract
 
-The packet includes scope/revision, required checks, executed checks, failures,
-skips, evidence pointers, test-quality observations, residual risk and human
-decision still required.
+The QA packet includes: output scope and version, dimension-level verdicts,
+specific findings per dimension, residual risk and the one action required to
+move a `HOLD` to `PASS`. Human review and delivery approval remain outside
+this skill.
 
 ## Invariants
 
-- Never convert a coverage number, automated score or green subset into proof
-  of business fitness.
-- Never rerun an expensive check merely because another skill already recorded
-  fresh evidence for the same revision.
-- Never hide a failed, flaky or environment-blocked check.
-- Never store credentials, source records, prompts or full tool output.
+- Never convert a high score on one dimension into proof of overall fitness.
+- Never hide a `hold` finding to produce a cleaner verdict.
+- Never approve delivery — that decision belongs to the case owner.
+- Never store client content, credentials or source bodies in the packet.
