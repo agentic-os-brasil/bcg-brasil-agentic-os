@@ -97,5 +97,5 @@ specification**:
   performed;
 - a recommended next step for obtaining and supplying the data.
 
-Do not invent placeholder numbers or illustrative figures to simulate the
-analysis while waiting for real data.
+Do not invent illustrative or stand-in numbers to simulate the analysis while
+waiting for real data.
