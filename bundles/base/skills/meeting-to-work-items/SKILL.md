@@ -1,6 +1,6 @@
 ---
 name: meeting-to-work-items
-description: Extract decisions, tasks, follow-ups and participants from supplied professional meeting notes without creating tasks or persisting content.
+description: Extract decisions, tasks, follow-ups and participants from supplied professional meeting notes without creating tasks or persisting content. Use for "what came out of this meeting", "pull the action items", "list the decisions", or right after a call closes.
 ---
 
 # Meeting to Work Items
