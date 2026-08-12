@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:identity:v1",
+  "$comment": "experimental — mirrors bundles/base/manifest.json.provenance.status; shape may evolve. See status_note there.",
+  "title": "Maestro User Identity",
+  "description": "Persisted by the maestro-onboarding skill (Steps 3 and 3.5). Carries name, role, and — when the user picks the complete track — the rich professional context that drives the CLAUDE.md advisory posture (project ativo / contexto profissional / evolução do OS). Empty strings for focus/work_energy/quality_bar when track = quick.",
+  "type": "object",
+  "required": ["name", "role", "captured_at"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name the user uses at BCG Brasil."
+    },
+    "role": {
+      "type": "string",
+      "minLength": 1,
+      "description": "BCG role (e.g., Consultant, Senior Consultant, Manager)."
+    },
+    "focus": {
+      "type": ["string", "null"],
+      "description": "Current project or area of focus. Populated only when track = complete."
+    },
+    "work_energy": {
+      "type": ["string", "null"],
+      "description": "What consumes most energy right now, in the user's own words. Populated only when track = complete."
+    },
+    "quality_bar": {
+      "type": ["string", "null"],
+      "description": "What defines well-done work for the user on this project, in the user's own words. Populated only when track = complete."
+    },
+    "track": {
+      "enum": ["quick", "complete"],
+      "description": "Which onboarding track the user picked. Determines whether focus/work_energy/quality_bar are populated."
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of the capture."
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:onboarding:v1",
+  "$comment": "experimental — mirrors bundles/base/manifest.json.provenance.status; shape may evolve. additionalProperties permissive during this stage.",
+  "title": "Maestro Onboarding Completion",
+  "description": "Persisted by the maestro-onboarding skill (Step 6). Presence of this file gates the CLAUDE.md session state machine: if missing, onboarding runs; if present, the session proceeds normally. Track echoes identity.json.track so the completion record is self-contained.",
+  "type": "object",
+  "required": ["completed_at", "track", "version"],
+  "additionalProperties": true,
+  "properties": {
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of onboarding completion."
+    },
+    "track": {
+      "enum": ["quick", "complete"],
+      "description": "Which onboarding track was completed. Mirrors identity.json.track."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Content of the VERSION file at the moment of completion (e.g., \"0.1.1\")."
+    }
+  }
+}

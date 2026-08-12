@@ -79,8 +79,16 @@
     "referenced_by": [
       "bundles/base/memory/policy.json",
       "bundles/base/profile/policy.json",
-      "bundles/base/runtime/capabilities.json"
-    ]
+      "bundles/base/runtime/capabilities.json",
+      "bundles/base/skills/maestro-onboarding/SKILL.md"
+    ],
+    "profile_outputs": {
+      "purpose": "Maps the four user-facing profile files produced by the maestro-onboarding skill to their declarative JSON Schemas. Consumers validating data/profile/ contents (installer, harness validators, downstream OKF bundlers) should look them up here rather than walking the tree. Schemas mirror the manifest's provenance.status=experimental stance; shape may evolve.",
+      "data/profile/identity.json": "schemas/identity.schema.json",
+      "data/profile/style.json": "schemas/style.schema.json",
+      "data/profile/onboarding.json": "schemas/onboarding.schema.json",
+      "data/profile/markitdown.json": "schemas/markitdown.schema.json"
+    }
   },
   "portability_notes": {
     "purpose": "Portable manifest describing how the bundle plugs into a Claude/Codex host without leaking managed-root paths. Consumers read this file to discover hooks, contracts, agents and skills without walking the tree.",

@@ -88,6 +88,8 @@ Persist to `data/profile/style.json`:
 
 Este campo é lido como preflight de todas as demais skills. Não use outras chaves (`verbosity`, `mode`, etc.).
 
+Consulte a skill canônica `interaction-profile` (em `bundles/base/skills/interaction-profile/`) para o contrato completo do capture flow — este step é o ponto de captura inicial, e as demais skills leem o valor persistido em `data/profile/style.json` por meio desse contrato.
+
 ### Step 5 — O que Maestro faz por você (1min)
 
 Present o que está disponível. **Trilha rápida**: mencione apenas 3 itens principais. **Trilha completa**: apresente os 5.
