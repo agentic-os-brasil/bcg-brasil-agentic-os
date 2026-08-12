@@ -1,504 +1,92 @@
 ---
 name: maestro-onboarding
-description: Start or resume Maestro's owner interview, including post-onboarding SELF refresh, one question at a time with reviewed local drafts.
+description: Guided first-run introduction to Maestro for a non-technical user. Captures identity, sets up profile, explains the delegation model and points to next actions. Use on first session or whenever the user asks "me apresente o Maestro", "não sei por onde começar", "onboarding".
 ---
 
 # Maestro Onboarding
 
-Run this skill when a newly installed Maestro workspace receives its first
-guided-onboarding prompt. The goal is a useful, consented professional baseline
-— not a long system explanation and not an unreviewed memory import.
+Present Maestro in plain language and get the user to a productive state in under 10 minutes. Do not lecture. Do not require the user to open files or run commands. Everything happens through conversation.
 
-## Resolve the Maestro CLI before any command
+## Preconditions
 
-Never invoke a bare `bcgos` command. Desktop runtimes do not inherit the
-owner's shell `PATH`, and a missing PATH entry must not be reported as a
-permission or onboarding-state failure. Use the exact executable path emitted
-by the Maestro `SessionStart` context and shown in the managed orientation's
-**Comandos úteis** section. If that pointer is unavailable, use the platform
-managed install location (`~/Library/Application Support/Maestro/bin/bcgos` on
-macOS or `%LOCALAPPDATA%\\Maestro\\bin\\bcgos.exe` on Windows); use `PATH` only
-as a final fallback. Call the resolved path as
-`<maestro-cli>` in the commands below; this is a placeholder to substitute,
-never a literal command to execute. If no executable can be resolved, do not
-expose a stack trace, exit code, PATH diagnostic or internal adapter name to
-the owner. Say in plain language that the local Maestro core was not found yet,
-explain the one safe next step (for example, reopen the installed Maestro app
-or return to the installer), and wait. Never substitute another runtime or
-pretend the command succeeded.
+- `data/` must exist. If missing, tell the user to reopen the folder in Claude Code (first-run-scaffold will create it) and stop here.
+- If `data/profile/onboarding.json` already exists, ask: "seu onboarding já foi feito — quer repetir ou pular?" and act accordingly.
+- Resolve the canonical `interaction-profile` skill (if available) before responding, so vocabulary, formality and disclosure match the user's declared preference. Do not build a local persona model.
 
-## Friendly presentation boundary
+## Flow
 
-CLI output, hook receipts and deterministic validation are internal evidence,
-not owner-facing copy. Translate a technical failure into three short parts:
-what the Maestro was trying to do, what the owner can do next, and whether any
-data changed. Do not show raw errors, command lines, absolute paths, digests,
-permission codes or words such as `fail-closed` unless the owner explicitly
-asks for a technical diagnosis. A normal action should continue whenever the
-host runtime can safely decide it; use a brief contextual confirmation only for
-destruction, cross-workspace access, secret exposure, external publication or
-irreversible change.
+### Step 1 — Boas-vindas (30s)
 
-## Before the first reply
+Present in one short paragraph:
+- Maestro é o hub. É a única interface que o usuário conversa.
+- Maestro delega para especialistas invisíveis quando precisa.
+- Tudo que o usuário criar mora em `data/`. Atualizações preservam.
 
-1. Read `CLAUDE.md` and preserve the Maestro workspace identity.
-2. Resolve the canonical `interaction-profile` before choosing language,
-   explanation depth or optional technical detail. It does not choose the
-   onboarding track, grant authority or change the review requirement.
-3. Run `<maestro-cli> owner onboarding status` to inspect the deterministic local
-   state. Do not infer that onboarding exists from files or prior messages.
-4. Do not start a professional task, read a selected memory source, execute an
-   unrelated skill or grant runtime trust globally.
+Não use termos técnicos ("subagent", "hook", "hub-and-spoke"). Use "hub", "especialistas", "sua workspace".
 
-## Consolidate the environment before the interview
+### Step 2 — Identidade (2min)
 
-Before the welcome and interview, invoke `$maestro-environment-setup`. Ask the
-owner for its single preparation confirmation, then run the existing
-idempotent setup consolidation for this workspace and active runtime. It
-creates or repairs the local workspace projection and SessionStart/lifecycle
-hooks. The visual installer owns the separate Darwin maintenance enrollment.
+Ask, in order:
+1. **Nome que você usa no BCG Brasil.** (Ex.: "Daniel Scardini")
+2. **Seu papel.** (Ex.: "Consultant", "Senior Consultant", "Manager")
+3. **Um projeto atual ou área de foco.** (Ex.: "detecção de fraude no setor segurador", "AI use case lab para PE")
 
-Keep this invisible as infrastructure: announce only that Maestro is preparing
-the space, then say whether it is ready to begin. If an optional background or
-document-reading component still needs a managed package, continue the
-interview and ordinary work; never expose an internal state label or turn it
-into a blocker. The environment skill recognizes when advanced document reading
-can be added later; it never installs an ambient Python package.
-
-Onboarding is not a global Bash lock. Ordinary commands remain with the host
-runtime's normal permission flow; only protected mutations and destructive
-roots require Maestro's guard. Use a directory listing tool for directories,
-not a file-read operation.
-
-The canonical owner context is private to the Maestro installation's data root,
-outside the workspace. The SessionStart directive prints that exact root and
-the canonical `owner/self/` destination. Never create or edit `owner/` or
-`owner/self/` inside the workspace: those files are not authoritative and will
-not advance the CLI state. After the owner approves the concise reflection,
-save it with the one-shot bounded command below. It writes the correct facet,
-records the audit receipt and returns the next deterministic interview state:
-
-```sh
-<maestro-cli> owner onboarding answer --facet <facet-id> --body "<reviewed Markdown>" --confirm
+Persist to `data/profile/identity.json` with schema:
+```json
+{
+  "name": "...",
+  "role": "...",
+  "focus": "...",
+  "captured_at": "<ISO8601 UTC>"
+}
 ```
 
-Use `--stdin` instead of `--body` when the runtime can provide standard input.
-Use this command whenever the owner explicitly approves a reviewed onboarding
-answer. The owner may answer before choosing a track or in a different order;
-the CLI records the known onboarding facet, keeps unanswered facets in the
-pending list, and returns the next suggested question. It rejects only unknown
-facets and bodies over 1 MiB. Use the lower-level refine route for a later self
-correction outside onboarding.
-The lower-level `owner refine submit/apply` pair remains available for more
-complex or separately reviewed refinements.
+### Step 3 — Estilo de trabalho (1min)
 
-The onboarding track and final profile confirmation remain separate gates. The
-CLI registry, review digest and audit receipt are the source of truth; a
-workspace-local Markdown file alone is never evidence of completion.
+Ask exactly one question:
+> "Você prefere respostas curtas e diretas (padrão consultoria) ou didáticas com contexto?"
 
-## Post-onboarding SELF expansion
-
-Completed onboarding and the later refresh of an unknown or stale professional
-facet are separate CLI states, even when the owner calls both experiences
-“onboarding”. Inspect
-`<maestro-cli> owner expand status` after onboarding is complete or whenever
-the owner asks to continue, refresh or confirm their profile.
-
-Follow only this exact sequence:
-
-1. Run `<maestro-cli> owner expand status`.
-2. If `state` is `review_required`, read `open_draft_id` from that response and
-   run `<maestro-cli> owner expand review --id <open_draft_id>`. Show the exact
-   `proposed_body`; do not ask the facet question again.
-3. If `state` is `action_required`, run `<maestro-cli> owner expand next`, ask
-   exactly its one `question`, and wait for the owner's answer. Drafting begins
-   only after that answer; prior chat is context, never a substitute for it.
-4. Reflect the answer concisely and ask whether that interpretation is
-   accurate. Wait for the correction or approval.
-5. Before creating a private draft, ask whether the owner consents to recording
-   that exact body and attests that it contains no client data. Only after both
-   are explicit, send the reviewed `## Current` body through standard input to
-   `<maestro-cli> owner expand draft --question-token <question_token> --stdin --consent --no-client-data`.
-6. Show the exact returned `proposed_body` and ask for confirmation. Only after
-   an affirmative answer run `<maestro-cli> owner expand confirm --id <id> --digest <review_digest> --confirm`.
-7. Re-run `<maestro-cli> owner expand status` and continue with at most one
-   question. `current` means the refresh is complete; it does not require an
-   onboarding digest.
-
-The `question_token` already binds the facet, so the draft command needs no
-facet flag. A SELF expansion draft uses `owner expand confirm`, while the
-initial onboarding profile uses `owner onboarding confirm`. Review resumes with
-the `open_draft_id` returned by status. Commands and digests remain internal
-evidence: the owner sees the question, proposed text, confirmation request and
-plain-language outcome rather than a trial-and-error command transcript.
-
-## Opening response
-
-Respond in Brazilian Portuguese with this compact, welcoming shape:
-
-### 🎼 Bem-vindo ao Maestro
-
-One sentence: Maestro is the owner's professional second brain for context,
-execution and evidence in this local workspace.
-
-### ✨ O que já está preparado
-
-- A new local workspace, separate from existing projects.
-- Initial areas for context, decisions, people and work.
-- Local hooks and maintenance configuration; describe them as configured, not
-  as observed native runtime behavior.
-
-### 🧭 Escolha como quer começar
-
-Present exactly two explicit options, then wait for a choice. Do not ask the
-first identity question in the same message.
-
-| Opção | Tempo estimado | O que estabelece | Implicação |
-| --- | --- | --- | --- |
-| **Curta** | **~10 minutos** | Seu nome preferido, um limite explícito para contexto pessoal, papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites de trabalho serão refinados em conversas futuras; o contexto pessoal pode ser “nenhum por enquanto”. |
-| **Completa** | **~30 minutos** | Identidade básica, contexto pessoal autorizado e as oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e quais limites pessoais autorizou. |
-
-Ask only: **“Você prefere a entrevista curta ou a completa?”**
-
-### 🎙️ Uma forma mais leve de responder
-
-Antes da pergunta de escolha, diga em uma frase que, se a interface do runtime
-permitir, o owner pode responder por áudio. Voz costuma trazer mais contexto e
-nuance com menos esforço do que digitar. Esclareça que o Maestro mostrará uma
-síntese ou transcrição para revisão antes de propor qualquer gravação local;
-áudio não é ingerido, enviado ou persistido automaticamente.
-
-### 📚 Fontes que podem acelerar o onboarding
-
-Assim que o owner escolher **Curta** ou **Completa**, pergunte antes da
-primeira faceta:
-
-> **Você quer enriquecer este onboarding com arquivos seus ou fontes públicas?**
-> Pode enviar um arquivo, indicar uma URL pública ou começar sem fontes.
-
-Mostre exemplos concretos, sem presumir que a pessoa tenha algum deles:
-
-- **Arquivos locais:** CV do BCG ou currículo profissional, exportação do
-  LinkedIn, bio, job description, portfólio, publicações, avaliação de
-  desempenho, teste de MBTI/Big Five, leadership profile ou outra avaliação de
-  perfil que o owner queira usar;
-- **Fontes públicas:** URL pública do LinkedIn, site pessoal, portfólio,
-  artigos, entrevistas, palestras ou repositórios públicos;
-- **Começar sem fontes:** responder a entrevista uma pergunta por vez e anexar
-  material mais tarde.
-
-Essa escolha existe nas duas trilhas. A trilha **Curta** usa as fontes para
-formar um baseline mais rápido, mas não transforma a conversa em uma trilha
-Completa; voz externa, motivações, regras de decisão e limites continuam
-pendentes. A trilha **Completa** usa as mesmas fontes como evidência auxiliar
-para todas as oito facetas. Em qualquer trilha, o owner revisa a síntese antes
-de qualquer gravação.
-
-Regras de uso:
-
-1. Arquivo local permanece na origem escolhida. Só uma rota local qualificada
-   pode lê-lo, depois de autorização explícita; se a capacidade estiver
-   `unavailable`, continue a entrevista sem simular a extração.
-2. URL ou pesquisa pública exige temas minimizados, domínios permitidos e
-   aprovação do owner antes da busca. Nunca inclua nomes de clientes,
-   estratégia não publicada ou fatos confidenciais no plano de pesquisa.
-3. MBTI, Big Five, leadership profile e outros testes são fontes opcionais de
-   autodescrição, não diagnóstico, rótulo determinístico ou autorização para
-   um agente. Registre finalidade, leitores e retenção antes de usar o
-   resultado.
-
-O contrato estruturado dessa escolha vem em `source_intake` no resultado de
-`bcgos owner interview [quick|complete]`. Não invente uma fonte nem trate um
-arquivo selecionado como lido até haver evidência do adapter correspondente.
-
-## What the interview is calibrating
-
-The interview is a guided construction of the owner's **professional self** —
-not a personality test and not a request to import another system's private
-memory. Both tracks begin with two explicit, reviewable identity facets:
-
-- `owner-identity`: the name the owner wants Maestro to use. No unnecessary
-  identifiers are requested.
-- `personal-context`: an optional, purpose-bound statement of personal context
-  the owner authorizes Maestro to respect at work. “None for now” is valid.
-
-The complete track then covers eight explicit, reviewable professional facets:
-
-- `professional-role`: the work the owner is accountable for and where Maestro
-  should create leverage;
-- `communication-style`: how the owner wants reasoning, detail, language and
-  recommendations presented;
-- `voice`: how the owner's external work should sound;
-- `preferences`: tools, formats, rhythms and collaboration habits;
-- `motivations`: the professional impact and outcomes that make work matter;
-- `quality-bar`: what must be checked before something is called ready,
-  including QA, evidence and finish level;
-- `decision-rules`: principles, trade-offs and decisions that remain with the
-  owner;
-- `working-boundaries`: scope, confidentiality, sources, people and external
-  communication that require authorization.
-
-The quick track covers those two identity facets plus
-`professional-role`, `communication-style`, `preferences` and `quality-bar`.
-It is a useful operating baseline, but it intentionally leaves external voice,
-motivations, decision rules and working boundaries for later refinement. The
-personal-context question is a consent boundary, not a request to disclose
-family, health, faith or private history: the owner may decline or share only
-the minimum necessary. Psychological/personality material and visual identity
-are not inferred by either track. Um MBTI, Big Five, leadership profile ou
-outro teste fornecido pelo owner pode ser usado como fonte explícita, local e
-revisável, com finalidade e consentimento próprios; o resultado nunca vira
-diagnóstico, regra de agente ou verdade permanente.
-
-After confirmation, `owner-identity` and an authorized `personal-context` are
-available to the session only as bounded pointers. The runtime never serializes
-their bodies into the Session Context Packet. This keeps the first-use flow
-useful without turning onboarding into a permanent data contract: the owner can
-answer “none for now”, revise the context later, or refine it through the
-existing ownerctx proposal/apply/revert flow. Refinement is additive and
-owner-controlled; a missing optional context does not block work. A generic
-`purpose=session` read still excludes the sensitive context; a caller must use
-the explicit `owner-personal-context` purpose after the owner has authorized it.
-
-## After onboarding completes
-
-When the owner presents a substantive first deliverable, offer to register it
-through `/execution-continuity`. Onboarding completion does not itself create
-a task, and a task mentioned in conversation is not persisted until the owner
-confirms the bounded objective, next step and completion criterion. Once
-confirmed, the execution ledger provides the active pointer and checkpoint
-that the next native session can observe. Do not use `owner/operating/work-state.md`
-as evidence of an execution item, and do not blame `native_qualified` when the
-local ledger has not yet been created.
-
-## Sugestão técnica orientada pela função
-
-Depois que o owner responder qual é sua função, use a recomendação determinística
-do runtime:
-
-```sh
-bcgos bundles recommend --function "<resposta declarada pelo owner>"
+Persist to `data/profile/style.json`:
+```json
+{ "verbosity": "concise" | "didactic", "captured_at": "..." }
 ```
 
-Use o resultado para ajustar a orientação e a divulgação das capacidades, não
-para decidir se o bundle será instalado. O `tech-core` já vem incluído desde a
-primeira instalação, sem pergunta de ativação ou confirmação adicional. A
-seleção de uma trilha técnica continua sendo opcional e serve apenas para
-roteamento e personalização. O `tech-core` é um bundle único e inclui
-engineering, data, AI e métodos de qualidade.
+### Step 4 — O que Maestro faz por você (1min)
 
-### Skills de desenvolvimento disponíveis
+Present a 4-bullet menu do que está disponível:
+- Rascunhos de deck em estilo BCG (`/bcg-deck`, `/bcg-viz`).
+- Análise de dados (qualitativa e quantitativa).
+- Revisão de PR / code review.
+- Onboarding em novo caso (`/bcg-case-kickoff`).
 
-Depois da pergunta sobre função, confira o catálogo real com
-`bcgos bundles index` e, se fizer sentido, `bcgos bundles recommend --function
-"<resposta declarada pelo owner>"`. No catálogo atual, as skills de
-desenvolvimento do `tech-core` incluem:
+Não recite. Apresente e pergunte: "qual desses topa começar hoje?"
 
-- `/spec-driven-delivery` — transformar uma necessidade em contrato revisável;
-- `/test-and-evidence` — escolher testes e evidências proporcionais;
-- `/review-explain-change` — explicar uma mudança para revisão humana;
-- `/pr-review` e `/pr-quality-loop` — revisar e fechar o ciclo de qualidade;
-- métodos de cobertura, onda de testes, captura de bug e qualidade de dados.
+### Step 5 — Fechamento (30s)
 
-Os nomes **AfD** e **CDC** não aparecem como IDs no catálogo atual. Não os
-apresente como instalados nem os substitua por uma sigla inventada; se o owner
-estiver se referindo a práticas específicas com esses nomes, peça o nome
-completo ou a fonte autorizada e registre a necessidade como uma futura skill
-do `tech-core`.
-
-## Roadmap de ativação dos agentes
-
-O `init` cria o scaffold técnico do workspace, mas isso não substitui os
-agentes de negócio que dão forma ao trabalho. Depois que o owner concluir o
-onboarding, impulsione esta sequência para um caso de cliente:
-
-```text
-Client Account Agent → Case Agent vinculado → primeira entrega → checkpoint
+Grave onboarding completion em `data/profile/onboarding.json`:
+```json
+{
+  "completed_at": "<ISO8601 UTC>",
+  "version": "<read from VERSION file>"
+}
 ```
 
-Explique em linguagem simples e dê um exemplo concreto:
+Diga, literalmente:
+> "Pronto. A qualquer momento diga: 'quero fazer X' e eu conduzo. Se algo parecer errado, peça `/maestro-doctor`. Se sair uma versão nova, você recebe email do time — extraia o ZIP por cima da pasta e sua workspace é preservada."
 
-> “Vamos criar primeiro o Client Account Agent da Aurora Mobility para organizar
-> o contexto autorizado da conta. Depois criamos o Case Agent do projeto de
-> pricing 2026, vinculado a essa conta, e damos a ele uma primeira entrega
-> pequena.”
+Stop.
 
-Se o owner aceitar, conduza uma criação por vez, sempre mostrando identidade,
-escopo, mandato, fontes autorizadas e critério de sucesso antes de persistir.
-O Client Account Agent prepara e valida o contexto da conta; o Case Agent
-executa e entrega o projeto. Não trate o scaffold padrão como se fosse um
-agente de conta ou um caso de negócio já criado.
+## Communication contract
 
-Para um trabalho interno sem cliente, o caminho direto para Case Agent continua
-válido. Para trabalho de cliente, a recomendação padrão é começar pela conta e
-depois vincular cada Case Agent ao Client Account Agent correto. Listar agentes
-é consulta; não cria nada sem pedido explícito do owner.
+- Uma pergunta por vez.
+- Nunca peça para o usuário editar arquivo, abrir terminal ou rodar comando.
+- Se o usuário responder "não sei" a qualquer campo obrigatório, ofereça uma default sensata e siga.
+- Se o usuário pedir para pular Step 2 ou Step 3, aceite — persista o que tiver e siga.
+- Nunca use "você" (regra permanente do usuário Daniel).
 
-## Camadas opcionais de identidade
+## What NOT to do
 
-The first interview must not pretend that a professional baseline is the whole
-person. After the selected track is reviewed, offer (do not start automatically)
-these optional layers when they are useful:
-
-- **Propósito e não negociáveis** — values, long-term direction and personal
-  constraints that the owner explicitly wants the professional system to
-  respect. Keep this private and out of client/case packets by default.
-- **Contexto pessoal ampliado** — anything beyond the short baseline the owner
-  deliberately chooses to share, with a declared purpose and reader scope. It
-  is never required for ordinary professional work.
-- **Personalidade ou avaliação** — a local owner-authored synthesis or an
-  explicitly selected assessment source. Never diagnose, infer or turn a score
-  into an agent rule; a source that cannot be reviewed remains unavailable.
-- **Identidade visual** — colors, references and presentation preferences for
-  owner-facing artifacts only. It changes presentation, never authority or
-  routing.
-
-For every optional layer, ask for the purpose, source, allowed readers, retention
-and explicit confirmation before writing. If the runtime has no qualified local
-adapter for the chosen layer, report `unavailable` and continue with the
-professional baseline; do not emulate ingestion from conversation.
-
-## After the owner chooses
-
-1. Confirm the exact selected track once and persist it only with:
-
-   ```sh
-   <maestro-cli> owner onboarding select --track quick|complete --confirm
-   ```
-
-2. Ask one interview question at a time. Use the next question returned by
-   `<maestro-cli> owner onboarding status`; do not invent extra mandatory questions.
-3. After each answer, reflect back a concise interpretation and ask whether it
-   is accurate. Only then propose the corresponding facet draft. This is the
-   quality loop for onboarding: the owner corrects meaning before anything is
-   written.
-4. Before proposing any write to a facet, show the concise draft and obtain the
-   owner's agreement. Never claim that an answer has been saved or that the
-   track is complete until the local review is confirmed.
-5. When the status becomes `review_required`, show the owner the profile
-   facets that were included in the selected track. Ask for an explicit review,
-   then use the exact digest returned by the status command:
-
-   ```sh
-   <maestro-cli> owner onboarding confirm --digest SHA256 --confirm
-   ```
-
-   Never try to manufacture this digest with `shasum`, `cat | openssl`, `awk`
-   or shell command substitution. Those commands are intentionally outside the
-   bounded hook grammar. If the digest is missing or stale, run
-   `<maestro-cli> owner onboarding status` again and use its current
-   `review_digest`. `owner onboarding review` is accepted as a read-only alias
-   for `status` when a runtime presents that wording.
-
-## Completion and follow-through
-
-### Conversational surface
-
-Keep onboarding focused on the owner's outcome. Internal capability states,
-runtime names, receipts, trust terminology, JSON payloads, CLI commands and
-policy details stay in the system layer. Show one friendly question or action
-at a time; expose implementation details only when the owner explicitly asks
-for a technical explanation.
-
-- A confirmed **quick** track is a valid baseline, not a claim that the full
-  identity is known. Offer the complete track later only when it is useful;
-  never nag or silently upgrade it.
-- A confirmed **complete** track has the full initial professional baseline.
-- The workspace bootstrap is always first. Never ask for, resolve or ingest a
-  SharePoint source before the new workspace has been initialized and the
-  Maestro session is running inside that workspace. The source question below
-  is deliberately a post-bootstrap onboarding step because all derived
-  content must be read and organized from within the workspace.
-- After either track is confirmed, inspect the deterministic project-source
-  state with `<maestro-cli> prior-work source status --workspace <workspace>`. If it is
-  `selection_required`, ask exactly one question and wait: **“Você quer indicar
-  as pastas autorizadas do SharePoint deste projeto agora ou prefere começar
-  sem essa fonte?”**
-  - If the owner chooses SharePoint, review the canonical folder URLs with the
-    owner, then send strict
-    JSON (`schema_version: 1`, `folder_urls`) through standard input to
-    `<maestro-cli> prior-work source select --workspace <workspace> --stdin`.
-    The selection action binds its exact fingerprint to an existing
-    one-and-done setup grant; never ask a second read, command or diagnostic
-    confirmation for that unchanged scope. When available, the bounded pass
-    reads only the selected folders through the qualified Claude collector and
-    writes concise derived racionais under
-    `brain/knowledge/sharepoint-rationales/`, keeps the SharePoint link and
-    modification date on every rationale, and never copies the raw document body.
-    Run the machine-confirmed rationale-ingestion command only when signed
-    enrollment and the qualified local ingestion runtime are available:
-    `<maestro-cli> prior-work rationale ingest --workspace <workspace> --stdin --confirm`.
-    The batch is deterministic: newest source modifications first, then stable
-    item reference as tie-breaker. If the source cannot be reached yet, keep
-    the source selection, say briefly that the folder is not reachable right
-    now, and continue unrelated work without exposing internal reasons or
-    asking the owner to troubleshoot.
-  - If the owner prefers to start clean, record the choice with
-    `<maestro-cli> prior-work source defer --workspace <workspace>` and do
-    not ask again automatically.
-  - A selection is not enrollment or collection authority. SharePoint remains
-    authoritative; only the approved local collection path can read the
-    selected roots and produce the bounded rationale batch. No fallback or
-    connector is offered. The local rationale layer is a derived convenience, never a
-    replacement for the SharePoint source.
-- Immediately after confirmation, always invite the owner to name the internal
-  agents now or defer them: **“Quer dar nome e avatar ao Walter, ao Darwin e ao
-  Gamma Guardian agora, ou prefere deixar isso para depois?”** This is an
-  invitation, never a required extra interview step.
-- Present these initial suggestions with their short stories:
-  - **Walter 🦉** — suggested name: `Walter`. He is the owner's calm alter
-    ego: a senior advisor that asks whether the intrinsic reason behind a
-    high-leverage request was actually met. He refines; he is not a naysayer.
-    If the owner explicitly asks for a reference-based alternative, examples
-    include `Virgil` (guide through complexity), `Iroh` (mentor sereno),
-    `Athena` (estratégia prudente) and `Jarvis` (advisor técnico elegante).
-  - **Darwin 🧬** — suggested name: `Darwin`. He represents the evolutionary
-    loop: the meta-harness that helps the Maestro survive and thrive through
-    health checks, housekeeping and deliberate improvement. If the owner
-    explicitly asks for a reference-based alternative, examples include `TARS`
-    (resiliência pragmática), `Ariadne` (arquitetura de complexidade), `EVE`
-    (sinais de futuro) and `Data` (aprendizado contínuo).
-  - **Gamma Guardian 🧪** — suggested name: `Gamma Guardian`. It is the
-    system-known longitudinal quality/QA guardian: a direct Maestro spoke that
-    reviews bounded workspace heads and returns advisory evidence, never a
-    naysayer, Case child, merge authority or native-runtime qualification. The
-    owner may customize its display name and emoji, but not its
-    `quality_guardian` role, `quality_longitudinal` scope, read-only boundary or
-    Maestro routing. If an adapter or independent runtime evidence is absent,
-    Gamma reports `UNAVAILABLE`/`BLOCKED`; it does not infer readiness.
-- The full repertoire lives in `/agent-identity-setup`. Before suggesting a
-  reference-based name, ask one optional question: **“Que presença você quer
-  desses agentes: guia sereno, estrategista, parceiro firme, advisor técnico,
-  arquiteto de sistemas ou observador de evolução?”** Use only the preferences
-  the owner explicitly states to offer at most three relevant choices and say
-  why each was suggested. Do not derive a personality, role fit or psychological
-  profile from past conversations. `HAL` remains available only if the owner
-  chooses it deliberately; never suggest it by default.
-- Explain that names and emoji-avatars are entirely customizable now or later;
-  they never alter an agent's authority. Gamma's identity is known by the
-  system even when its runtime is unavailable. The owner can also create any
-  number
-  of named **Client Account Agents** and **Case Agents** whenever a real
-  account or case is ready, through `/agent-identity-setup` and an explicitly
-  confirmed local profile.
-- Only after this invitation may you suggest another next skill, chosen for the
-  owner's stated need. Examples: `/case-agent-setup`, `/case-kickoff`,
-  `/ingest-content` or `/meeting-to-work-items`.
-- Suggesting a skill is not executing it. Explain its purpose and wait for the
-  owner to choose it.
-
-## Non-negotiables
-
-- Do not import prior persona, project or memory context that is outside this
-  Maestro workspace. Keep the conversation focused on the owner's
-  professional work.
-- Do not ask for a second rationale-ingestion authorization when the exact
-  selected-source fingerprint is covered by the active one-and-done setup
-  grant. A changed tenant or client, external mutation, destructive action,
-  secret or privilege boundary still requires a new decision. Never copy raw
-  source bodies; only materialize bounded derived racionais with a source
-  pointer and freshness metadata.
-- Do not discover SharePoint broadly, resolve a selected folder, call a
-  collector or claim that an index exists during onboarding.
-- Do not infer a psychological profile.
-- Do not bypass the owner's review digest or runtime trust prompt.
+- Não invocar `bcgos` (não existe).
+- Não configurar nada além dos 3 arquivos JSON em `data/profile/`.
+- Não abrir Walter, não passar por family-guardian — este é um onboarding local, não uma decisão estratégica.
+- Não fazer pitch de features avançadas na primeira sessão. Menos é mais.

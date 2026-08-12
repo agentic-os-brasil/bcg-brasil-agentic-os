@@ -15,21 +15,18 @@ func TestGuidedOwnerSkillsCarryExactResumableReviewCommands(t *testing.T) {
 		{
 			id: "maestro-onboarding",
 			required: []string{
-				"owner expand status",
-				"owner expand next",
-				"owner expand draft --question-token",
-				"owner expand review --id",
-				"owner expand confirm --id",
-				"The `question_token` already binds the facet",
-				"A SELF expansion draft uses `owner expand confirm`",
+				"Maestro Onboarding",
+				"data/profile/identity.json",
+				"data/profile/onboarding.json",
+				"interaction-profile",
 			},
 		},
 		{
 			id: "agent-identity-setup",
 			required: []string{
-				"open_draft_id",
-				"bcgos agent personalize review --id",
-				"bcgos agent personalize confirm --id",
+				"interaction-profile",
+				"data/profile/agents.json",
+				"owner_id",
 			},
 		},
 	} {
@@ -44,35 +41,6 @@ func TestGuidedOwnerSkillsCarryExactResumableReviewCommands(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestBCGOSOperatorCarriesTheInstalledOperationalLoop(t *testing.T) {
-	body, err := Skill("bcgos-operator")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, required := range []string{
-		"Resolve the exact installed CLI",
-		"Runtime owns normal work",
-		"Inspect before acting",
-		"Control-plane intent map",
-		"Verify the outcome",
-		"Recover without guessing",
-		"status <workspace>",
-		"doctor <workspace>",
-		"setup status --workspace <workspace>",
-		"update --check",
-		"brain/tasks/",
-	} {
-		if !strings.Contains(string(body), required) {
-			t.Fatalf("bcgos operator is missing %q", required)
-		}
-	}
-	for _, internal := range []string{"work next --active", "prior-work source status", "agent status --id", "adapter status --runtime"} {
-		if strings.Contains(string(body), internal) {
-			t.Fatalf("bcgos operator exposes compatibility command %q as normal workflow", internal)
-		}
 	}
 }
 

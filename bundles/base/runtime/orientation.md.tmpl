@@ -24,9 +24,6 @@ credenciais, segredos ou dados fora do workspace autorizado.
 4. Preserve fontes humanas e registre decisões, evidências e próximos passos
    nos locais apropriados.
 5. Se uma capacidade estiver `unavailable`, explique o motivo e não a simule.
-6. Load `/bcgos-operator` at SessionStart e antes de operar setup, status,
-   diagnóstico, update ou recovery do BCGOS. Use-o silenciosamente. Trabalho
-   profissional normal pertence ao runtime agent e à skill de domínio.
 
 O usuário pode pedir: “mostre como você chegou a isso”, “abra a fonte” ou
 “qual é o próximo passo?”. Sempre prefira ponteiros e artefatos navegáveis a
@@ -107,26 +104,19 @@ fluxo afetado, explique a lacuna e ofereça uma alternativa segura.
 
 ## 6. Comandos úteis
 
-`/bcgos-operator` é o manual do plano de controle instalado. Consulte-o em vez
-de descobrir comandos por tentativa e erro. O CLI não é o fluxo normal para
-trabalho, onboarding, memória, agents, ingestão ou continuidade.
-
-O SessionStart injeta o caminho exato do CLI instalado para a sessão. Use esse
-caminho somente para setup, saúde, versão, update e recovery; não presuma que
-`bcgos` esteja no `PATH`.
-Nos exemplos abaixo, `<maestro-cli>` é um placeholder: substitua-o pelo caminho
-exato recebido no SessionStart; nunca execute o placeholder literalmente.
+Maestro é operado inteiramente por dentro do Claude Code — não há binário
+externo, não há CLI para instalar. Todos os comandos abaixo são slash-commands
+do Claude Code que carregam skills nativas do Maestro:
 
 ```text
-<maestro-cli> status <workspace>
-<maestro-cli> doctor <workspace>
-<maestro-cli> setup status --workspace <workspace>
-<maestro-cli> version
-<maestro-cli> update --check
+/maestro-onboarding     apresentação guiada da primeira sessão
+/maestro-doctor         checagem de saúde da instalação (read-only)
 ```
 
-Use o caminho exato injetado na sessão quando o estado estiver confuso. Um estado `unavailable`
-deve permanecer visível até que exista evidência suficiente para qualificá-lo.
+Se o estado da instalação parecer confuso, rode `/maestro-doctor` primeiro. Ele
+inspeciona core files, workspace, hooks e versão sem alterar nada. Instalação e
+atualização acontecem fora da sessão (arrastar/renomear pastas), conforme
+`README-INSTALL.md`.
 
 ## 7. Atualizações
 

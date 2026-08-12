@@ -6,7 +6,6 @@
 |---|---|---|
 | Conta e Projeto | Cria a conta e o Case Agent do projeto | `skills/account-case-setup/SKILL.md` |
 | Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
-| BCGOS Operator | Control Maestro health, updates and recovery | `skills/bcgos-operator/SKILL.md` |
 | Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
 | Case Kickoff | Build a bounded first-days plan from approved case scope | `skills/case-kickoff/SKILL.md` |
 | Deck Drill | Rehearse a deck against the questions the room will ask | `skills/deck-drill/SKILL.md` |
@@ -19,6 +18,7 @@
 | Ingest Content | Extract professional documents locally and safely | `skills/ingest-content/SKILL.md` |
 | Interaction Profile | Apply the user's BCGOS communication and disclosure preference | `skills/interaction-profile/SKILL.md` |
 | Investigate | Find the root cause of a wrong or surprising result | `skills/investigate/SKILL.md` |
+| Maestro Doctor | Run a plain-language health check on the Maestro install | `skills/maestro-doctor/SKILL.md` |
 | Preparar Ambiente Maestro | Prepara workspace, runtime e manutenção local | `skills/maestro-environment-setup/SKILL.md` |
 | Maestro Onboarding | Start a guided owner interview with quick or complete tracks | `skills/maestro-onboarding/SKILL.md` |
 | Checkup do Maestro | Confere e repara runtime, hooks e Darwin | `skills/maestro-runtime-checkup/SKILL.md` |

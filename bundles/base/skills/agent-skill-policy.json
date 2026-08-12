@@ -5,7 +5,6 @@
     {
       "role": "case_agent",
       "skill_ids": [
-        "bcgos-operator",
         "case-kickoff",
         "deck-review",
         "deck-storyline",
