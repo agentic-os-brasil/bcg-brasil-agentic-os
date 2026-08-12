@@ -69,7 +69,7 @@ fi
 
 log_line "SCAFFOLD  project_dir=$PROJECT_DIR"
 
-for sub in agents memory profile workspaces; do
+for sub in agents memory owner profile workspaces; do
   if mkdir -p "$DATA_DIR/$sub" 2>/dev/null; then
     log_line "MKDIR OK  data/$sub"
   else
@@ -77,7 +77,7 @@ for sub in agents memory profile workspaces; do
   fi
 done
 
-# Memory layer sub-tiers — required by dream-memory skill
+# Memory layer sub-tiers — required by dream-memory skill (L1/L2/L3 + policies)
 for tier in recent weekly medium-term lifetime policies; do
   if mkdir -p "$DATA_DIR/memory/$tier" 2>/dev/null; then
     log_line "MKDIR OK  data/memory/$tier"
@@ -85,6 +85,23 @@ for tier in recent weekly medium-term lifetime policies; do
     log_line "MKDIR FAIL  data/memory/$tier  (permissions or path issue)"
   fi
 done
+
+# Owner self facets — ten individually-addressable markdown files (spec 013)
+# Creates placeholder files only; content is filled in by /maestro-onboarding.
+if mkdir -p "$DATA_DIR/owner/self" 2>/dev/null; then
+  log_line "MKDIR OK  data/owner/self"
+  for facet in owner-identity personal-context professional-role communication-style \
+               voice preferences motivations quality-bar decision-rules working-boundaries; do
+    FACET_FILE="$DATA_DIR/owner/self/$facet.md"
+    if [ ! -f "$FACET_FILE" ]; then
+      printf '# %s\n\n## Current\n\n_Não preenchido. Use /maestro-onboarding para configurar._\n' \
+        "$facet" > "$FACET_FILE" 2>/dev/null && \
+        log_line "WRITE OK  data/owner/self/$facet.md (placeholder)"
+    fi
+  done
+else
+  log_line "MKDIR FAIL  data/owner/self  (permissions or path issue)"
+fi
 
 if [ ! -d "$DATA_DIR/agents" ]; then
   log_line "ABORT  data/agents was not created — hook exiting fail-open"
