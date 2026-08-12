@@ -4,7 +4,27 @@
 
 set +e
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
+# CLAUDE_PROJECT_DIR is injected by Claude Code CLI. In non-standard paths
+# (/tmp, paths with spaces, external drives) it may be missing. Fallback to
+# `.` — but only if we can *verify* we are inside a Maestro project, by
+# checking for a VERSION file next to this script's parent tree. Otherwise
+# exit fail-open with a stderr note so the user is not left with a silently
+# broken scaffold. See CLAUDE.md → "Runtime dependencies" and
+# bundles/base/known-issues.md → claude-project-dir-nonstandard-path.
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
+if [ -z "$PROJECT_DIR" ]; then
+  # Try to locate VERSION relative to this hook's location (canonical: <root>/.claude/hooks/<script>).
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
+  CANDIDATE="$SCRIPT_DIR/../.."
+  if [ -n "$SCRIPT_DIR" ] && [ -f "$CANDIDATE/VERSION" ]; then
+    PROJECT_DIR="$(cd "$CANDIDATE" && pwd)"
+  elif [ -f "./VERSION" ]; then
+    PROJECT_DIR="."
+  else
+    printf 'maestro first-run-scaffold: CLAUDE_PROJECT_DIR unset and no VERSION found nearby — skipping scaffold (fail-open).\n' >&2
+    exit 0
+  fi
+fi
 DATA_DIR="$PROJECT_DIR/data"
 MARKER="$DATA_DIR/.initialized"
 LOG="$DATA_DIR/.scaffold.log"
@@ -19,8 +39,10 @@ log_line() {
 # Compact index only (name + description first sentence). Full SKILL.md is
 # loaded on demand by the Skill tool. Fail-open: on any error, print nothing.
 # ---------------------------------------------------------------------------
-emit_skills_rollup() {
-  local skills_dir="$PROJECT_DIR/bundles/base/skills"
+_emit_skills_rollup_bundle() {
+  local skills_dir="$1"
+  local heading="$2"
+  local blurb="$3"
   [ -d "$skills_dir" ] || return 0
 
   local rollup
@@ -55,9 +77,24 @@ emit_skills_rollup() {
 
   [ -z "$rollup" ] && return 0
 
-  printf '## Maestro skills disponíveis\n\n'
-  printf 'Índice compacto. A skill completa é carregada sob demanda quando o pedido do dono a aciona.\n\n'
+  printf '## %s\n\n' "$heading"
+  printf '%s\n\n' "$blurb"
   printf '%s\n' "$rollup"
+  printf '\n'
+}
+
+emit_skills_rollup() {
+  _emit_skills_rollup_bundle \
+    "$PROJECT_DIR/bundles/base/skills" \
+    "Maestro skills disponíveis" \
+    "Índice compacto. A skill completa é carregada sob demanda quando o pedido do dono a aciona."
+
+  # tech-core — engineering skills bundle. Invisible until now (§3.1 diagnostic).
+  # Enumerated only when the directory exists; fail-open otherwise.
+  _emit_skills_rollup_bundle \
+    "$PROJECT_DIR/bundles/tech-core/skills" \
+    "Skills técnicas (tech-core)" \
+    "Skills de engenharia — testes, revisão, pipelines de dados, entrega por spec. Carregadas sob demanda."
 }
 
 # ---------------------------------------------------------------------------
