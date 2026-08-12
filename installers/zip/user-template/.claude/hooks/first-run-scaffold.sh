@@ -113,6 +113,13 @@ for tier in recent weekly medium-term lifetime policies; do
   fi
 done
 
+# Ensure the dreaming marker never gets committed if the user's workspace is a git repo.
+MEMORY_GITIGNORE="$DATA_DIR/memory/.gitignore"
+if [ ! -f "$MEMORY_GITIGNORE" ]; then
+  printf '.dream-requested\n' > "$MEMORY_GITIGNORE" 2>/dev/null && \
+    log_line "WRITE OK  data/memory/.gitignore  (ignores .dream-requested)"
+fi
+
 # Memory schema version marker — GAP-D. Consumed by dream-memory to detect
 # migrations. The current schema is v1 (L1/L2/L3 + lifetime + policies as
 # described in bundles/base/memory/policy.json). When the schema evolves,
