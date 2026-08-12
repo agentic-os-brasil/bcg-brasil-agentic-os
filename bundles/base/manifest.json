@@ -68,8 +68,14 @@
     "referenced_by": [
       "bundles/base/memory/policy.json",
       "bundles/base/profile/policy.json",
-      "bundles/base/runtime/capabilities.json"
-    ]
+      "bundles/base/runtime/capabilities.json",
+      "bundles/base/skills/maestro-onboarding/SKILL.md"
+    ],
+    "profile_outputs": {
+      "purpose": "Maps user-facing profile files produced by onboarding to their declarative schemas. Consumers validating data/profile/ contents should look them up here.",
+      "data/profile/onboarding-depth.json": "schemas/onboarding-depth.schema.json",
+      "data/profile/context.json": "schemas/context.schema.json"
+    }
   },
   "portability_notes": {
     "purpose": "Portable manifest describing how the bundle plugs into a Claude/Codex host without leaking managed-root paths. Consumers read this file to discover hooks, contracts, agents and skills without walking the tree.",

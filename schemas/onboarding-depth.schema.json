@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:onboarding-depth:v1",
+  "title": "BCGOS Onboarding Depth",
+  "description": "Captured choice between the short (~2 min) and complete (~10 min) onboarding flows. Downstream advisory behavior (CLAUDE.md 3-option axis) is depth-aware and reads this file.",
+  "type": "object",
+  "required": ["depth", "captured_at"],
+  "additionalProperties": false,
+  "properties": {
+    "depth": {
+      "enum": ["short", "complete"],
+      "description": "short = essentials only (name, role, style). complete = adds current project, BCG context, OS evolution intent."
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of the choice."
+    }
+  }
+}

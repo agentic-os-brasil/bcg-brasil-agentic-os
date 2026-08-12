@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:context:v1",
+  "title": "BCGOS Rich User Context",
+  "description": "Rich onboarding context captured only when depth=complete. Feeds Maestro's advisory 3-option pattern: axis 1 (current project) reads current_project; axis 2 (broader BCG context) reads bcg_context.practice; axis 3 (OS evolution) reads os_evolution_intent.",
+  "type": "object",
+  "required": ["captured_at"],
+  "additionalProperties": false,
+  "properties": {
+    "current_project": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": ["string", "null"],
+          "description": "One or two sentences: client, industry, nature of work."
+        },
+        "stage": {
+          "type": ["string", "null"],
+          "description": "kickoff | diagnóstico | desenho de solução | execução | handover, or free-form."
+        },
+        "friction": {
+          "type": ["string", "null"],
+          "description": "What would unblock the project today, in the user's words."
+        }
+      }
+    },
+    "bcg_context": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "practice": {
+          "type": ["string", "null"],
+          "description": "Practice / tribe / discipline the user identifies with (e.g., AI@Scale, Insurance, Consumer)."
+        }
+      }
+    },
+    "os_evolution_intent": {
+      "type": ["string", "null"],
+      "description": "How the user wants Maestro to evolve: more advisory, more executive, focused on missing skills, etc."
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of the capture."
+    }
+  }
+}

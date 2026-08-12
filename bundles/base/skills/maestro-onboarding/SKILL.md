@@ -27,22 +27,69 @@ Present in one short paragraph:
 
 Não use termos técnicos ("subagent", "hook", "hub-and-spoke"). Use "hub", "especialistas", "sua workspace".
 
-### Step 2 — Identidade (2min)
+### Step 1.5 — Escolha do formato (30s, obrigatório)
 
-Ask, in order:
+Apresente as duas opções com o impacto de cada uma. Literalmente:
+
+> "Antes de começar: entrevista **curta** (2 min, só o essencial — nome, papel, estilo) ou **completa** (10 min, também pergunto sobre projeto atual, contexto BCG e como você quer que eu evolua)?
+>
+> A diferença prática:
+> - **Curta (2min)** — pergunto nome e papel. Consigo puxar teu papel no BCG nas respostas, mas não conheço teu projeto atual, então sugestões sobre o que estás fazendo agora ficam no genérico do papel.
+> - **Completa (10min)** — as duas de cima, mais 5 perguntas sobre teu projeto atual e prática BCG. Sugestões passam a puxar o projeto específico, não só o papel."
+
+Aceite: "curta" / "short" / "rápida" / "mínima" → `short`. "completa" / "complete" / "longa" / "cheia" → `complete`. Se o usuário hesitar ou responder ambíguo, ofereça default `short` e siga; ele pode fazer a entrevista completa depois via `/maestro-onboarding`.
+
+Persista imediatamente em `data/profile/onboarding-depth.json` (schema: `schemas/onboarding-depth.schema.json`, `urn:bcg-brasil-agentic-os:schema:onboarding-depth:v1`):
+```json
+{ "depth": "short" | "complete", "captured_at": "<ISO8601 UTC>" }
+```
+
+A partir daqui, ramifique conforme a escolha.
+
+### Step 2 — Identidade (short: 1min · complete: 2min)
+
+**Ambos os formatos** perguntam:
 1. **Nome que você usa no BCG Brasil.** (Ex.: "Daniel Scardini")
 2. **Seu papel.** (Ex.: "Consultant", "Senior Consultant", "Manager")
+
+**Apenas complete** também pergunta:
 3. **Um projeto atual ou área de foco.** (Ex.: "detecção de fraude no setor segurador", "AI use case lab para PE")
 
-Persist to `data/profile/identity.json` with schema:
+Persist to `data/profile/identity.json`:
 ```json
 {
   "name": "...",
   "role": "...",
-  "focus": "...",
+  "focus": "..."  // null se depth = short
+  ,"captured_at": "<ISO8601 UTC>"
+}
+```
+
+### Step 2.5 — Contexto rico (apenas complete, 4min)
+
+Só execute se `depth = complete`. Uma pergunta por vez, na ordem:
+
+1. **Projeto atual — descrição.** "Em uma ou duas frases, o que é o projeto atual? Cliente, indústria, natureza do trabalho." Persista como `current_project.description`.
+2. **Projeto atual — estágio.** "Estágio atual: kickoff / diagnóstico / desenho de solução / execução / handover?" Persista como `current_project.stage`.
+3. **Projeto atual — o que trava.** "Se rolasse uma coisa que destravaria o projeto hoje, seria o quê?" Persista como `current_project.friction`.
+4. **Contexto BCG — prática/tribo/disciplina.** "Você se identifica com qual prática, tribo ou disciplina no BCG?" (Ex.: "AI@Scale", "Insurance", "Consumer") Persista como `bcg_context.practice`.
+5. **Evolução do OS — intenção.** "Como você quer que o Maestro evolua com o tempo? Mais advisory? Mais executivo? Focado em skills que faltam?" Persista como `os_evolution_intent`.
+
+Persist all in `data/profile/context.json` (schema: `schemas/context.schema.json`, `urn:bcg-brasil-agentic-os:schema:context:v1`):
+```json
+{
+  "current_project": {
+    "description": "...",
+    "stage": "...",
+    "friction": "..."
+  },
+  "bcg_context": { "practice": "..." },
+  "os_evolution_intent": "...",
   "captured_at": "<ISO8601 UTC>"
 }
 ```
+
+Se o usuário responder "não sei" ou "pulo", persista `null` para esse campo e siga. Não insista.
 
 ### Step 3 — Estilo de trabalho (1min)
 
@@ -88,12 +135,16 @@ Grave onboarding completion em `data/profile/onboarding.json`:
 ```json
 {
   "completed_at": "<ISO8601 UTC>",
-  "version": "<read from VERSION file>"
+  "version": "<read from VERSION file>",
+  "depth": "short" | "complete"
 }
 ```
 
-Diga, literalmente:
-> "Pronto. A qualquer momento diga: 'quero fazer X' e eu conduzo. Se algo parecer errado, peça `/maestro-doctor`. Se sair uma versão nova, você recebe email do time — o ritual de update está no `README-INSTALL.md` da sua pasta."
+**Se `depth = short`**, diga literalmente:
+> "Pronto. A qualquer momento diga: 'quero fazer X' e eu conduzo. Como a entrevista foi curta, meus conselhos ficam mais genéricos — quando quiser que eu puxe teu projeto atual e contexto, roda `/maestro-onboarding` de novo e escolhe completa. Se algo parecer errado, peça `/maestro-doctor`. Ritual de update no `README-INSTALL.md`."
+
+**Se `depth = complete`**, diga literalmente:
+> "Pronto. Agora eu conheço teu projeto atual e teu contexto BCG, então minhas próximas sugestões vão puxar disso em vez de ficar no genérico. Diga 'quero fazer X' e eu conduzo. Se algo parecer errado, peça `/maestro-doctor`. Ritual de update no `README-INSTALL.md`."
 
 Stop.
 
