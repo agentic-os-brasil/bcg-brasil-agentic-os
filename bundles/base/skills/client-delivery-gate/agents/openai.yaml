@@ -1,4 +1,4 @@
 interface:
-  display_name: "Gate de Entrega"
-  short_description: "Gate de qualidade em 3 lentes antes de qualquer output chegar ao cliente ou Partner"
-  default_prompt: "Use $client-delivery-gate para revisar o output antes de enviar ao cliente."
+  display_name: "Client Delivery Gate"
+  short_description: "Three-lens pre-delivery quality check before any output reaches a client"
+  default_prompt: "Use $client-delivery-gate to review this before delivering to the client."

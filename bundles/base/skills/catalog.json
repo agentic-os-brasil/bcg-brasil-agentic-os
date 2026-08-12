@@ -44,6 +44,13 @@
       "relative_path": "skills/case-agent-setup/SKILL.md"
     },
     {
+      "id": "case-canon-ingest",
+      "display_name": "Case Canon Ingest",
+      "trigger": "Compile reviewed insights into the active case's persistent canon layer",
+      "default_prompt": "Use $case-canon-ingest to add this to the case canon.",
+      "relative_path": "skills/case-canon-ingest/SKILL.md"
+    },
+    {
       "id": "case-decision-log-entry",
       "display_name": "Case Decision Log Entry",
       "trigger": "Register a structural case decision in the active case decision log",
@@ -52,9 +59,9 @@
     },
     {
       "id": "client-delivery-gate",
-      "display_name": "Gate de Entrega",
-      "trigger": "Gate de qualidade em 3 lentes antes de qualquer output chegar ao cliente ou Partner",
-      "default_prompt": "Use $client-delivery-gate para revisar o output antes de enviar ao cliente.",
+      "display_name": "Client Delivery Gate",
+      "trigger": "Three-lens pre-delivery quality check before any output reaches a client",
+      "default_prompt": "Use $client-delivery-gate to review this before delivering to the client.",
       "relative_path": "skills/client-delivery-gate/SKILL.md"
     },
     {

@@ -19,13 +19,18 @@ is a compatibility implementation for older workspaces and is not the normal
 execution path for a new case.
 
 Use the workspace recipes and canonical locations already present in the
-workspace:
+workspace. All case artifacts live under `data/cases/<case-id>/brain/`:
 
-- `brain/projects/` for case context and working plans;
-- `brain/decisions/` for decision records and rationale;
-- `brain/tasks/` for explicitly accepted open work;
-- `brain/deliverables/` for reviewed outputs;
-- `brain/sources/` for authorized source pointers, never copied client bodies.
+- `data/cases/<case-id>/brain/projects/` for case context and working plans;
+- `data/cases/<case-id>/brain/decisions/` for decision records and rationale;
+- `data/cases/<case-id>/brain/tasks/` for explicitly accepted open work;
+- `data/cases/<case-id>/brain/deliverables/` for reviewed outputs;
+- `data/cases/<case-id>/brain/sources/` for authorized source pointers, never copied client bodies;
+- `data/cases/<case-id>/brain/canon/` for frontmatter-indexed compiled knowledge (hypotheses, interview synthesis, frameworks, benchmarks).
+
+The active case is identified by `data/cases/.active` (plain text file containing the case-id).
+A `.pending` sentinel at `data/cases/.pending` is written first at the start of setup and removed
+only after `.active` is written successfully — this prevents corrupt state if setup is interrupted.
 
 Create only the smallest directory or Markdown artifact needed by the case.
 Keep owner context outside the workspace and never invent a second memory or
@@ -39,8 +44,13 @@ classification, provenance or case isolation requirements.
 
 ## First useful result
 
-1. Confirm the active workspace from the runtime orientation. Do not infer a
-   workspace from an arbitrary path or conversation fragment.
+1. Confirm the active case from `data/cases/.active`. If no active case exists,
+   create a new case-id (slug format: `<client>-<topic>-<year>`, e.g. `acme-cost-2026`),
+   write it to `data/cases/.pending` first, scaffold `data/cases/<case-id>/brain/` with
+   all six subdirs, then write `data/cases/.active` as the final step and remove `.pending`.
+   If `.pending` already exists at setup start, overwrite it — this indicates a prior
+   interrupted run and re-running setup from scratch is safe.
+   Do not infer a workspace from an arbitrary path or conversation fragment.
 2. Use the six prompts as a flexible starting recipe: decision and horizon;
    audience and constraints; useful result; authorized material; balanced
    hypotheses; and next step. Maestro decides which questions are needed from
