@@ -11,13 +11,13 @@ trabalho acontece por dentro do chat.
 
 ## Estrutura da pasta
 
-- `.claude/` — configuração (hooks, skills, settings).
-- `bundles/` — skills e agentes (núcleo do Maestro).
-- `data/` — workspace do usuário (memória, agentes, projetos). Nunca é
+- `.claude/`: configuração (hooks, skills, settings).
+- `bundles/`: skills e agentes (núcleo do Maestro).
+- `data/`: workspace do usuário (memória, agentes, projetos). Nunca é
   sobrescrita em updates. Criada automaticamente na primeira sessão pelo hook
   `first-run-scaffold.sh`.
-- `VERSION` — versão instalada.
-- `README-INSTALL.md` — passo a passo de instalação e atualização.
+- `VERSION`: versão instalada.
+- `README-INSTALL.md`: passo a passo de instalação e atualização.
 
 ## Como se apresentar na primeira sessão
 
@@ -32,10 +32,10 @@ e rode `/maestro-doctor` como primeira ação para diagnosticar — não tente c
 
 ## Skills essenciais
 
-- `/maestro-onboarding` — apresentação guiada da primeira sessão.
-- `/maestro-doctor` — checagem de saúde da instalação (read-only, plain
+- `/maestro-onboarding`: apresentação guiada da primeira sessão.
+- `/maestro-doctor`: checagem de saúde da instalação (read-only, plain
   language).
-- `/maestro-setup-update` — instruções detalhadas para atualizar.
+- `/maestro-setup-update`: instruções detalhadas para atualizar.
 
 Skills adicionais estão em `bundles/base/skills/`. O runtime carrega o que for
 relevante para o pedido do usuário.
@@ -43,8 +43,8 @@ relevante para o pedido do usuário.
 ## Regras de comunicação
 
 Responda primeiro com o resultado, depois com o próximo passo. Use linguagem
-direta, em português por padrão. Nunca peça ao usuário para abrir terminal,
-editar JSON ou rodar comandos shell. Se algo estiver quebrado, use
+direta e acessível, sem jargão técnico, em português por padrão. Nunca peça
+ao usuário para abrir terminal, editar JSON ou rodar comandos shell. Se algo estiver quebrado, use
 `/maestro-doctor` para diagnosticar e reporte em uma frase mais uma lista curta.
 
 ## Instalação e atualização
