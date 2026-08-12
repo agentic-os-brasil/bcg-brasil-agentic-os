@@ -51,6 +51,13 @@
       "relative_path": "skills/case-canon-ingest/SKILL.md"
     },
     {
+      "id": "case-decision-log-entry",
+      "display_name": "Case Decision Log Entry",
+      "trigger": "Register a structural case decision in the active case decision log",
+      "default_prompt": "Use $case-decision-log-entry to register this decision in the active case log.",
+      "relative_path": "skills/case-decision-log-entry/SKILL.md"
+    },
+    {
       "id": "client-delivery-gate",
       "display_name": "Client Delivery Gate",
       "trigger": "Three-lens quality check before any output reaches a client",

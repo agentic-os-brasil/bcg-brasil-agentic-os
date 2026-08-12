@@ -1,3 +1,9 @@
+# DEPRECATED: This script builds `cmd/bcgos`, which PR #302 deleted as part
+# of the surgical Go delete / ZIP-only distribution pivot. It cannot be run
+# as-is and will fail closed until it is either repointed at the ZIP
+# installer path (`installers/zip/`) or removed.
+Write-Error "DEPRECATED: dev/trial-install-smoke.ps1 depends on cmd/bcgos, which was removed in PR #302 (ZIP-only pivot). Repoint at installers/zip/ or delete before use."
+exit 1
 # Runs a real Windows trial install in an isolated temporary home.
 $ErrorActionPreference = "Stop"
 

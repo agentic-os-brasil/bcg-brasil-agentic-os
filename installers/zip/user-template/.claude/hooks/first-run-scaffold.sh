@@ -41,8 +41,16 @@ emit_skills_rollup() {
         nextfile
       }
     }
-    in_fm && /^name:[[:space:]]/ { sub(/^name:[[:space:]]*/, ""); name = $0 }
-    in_fm && /^description:[[:space:]]/ { sub(/^description:[[:space:]]*/, ""); desc = $0 }
+    in_fm && /^name:[[:space:]]/ {
+      sub(/^name:[[:space:]]*/, "")
+      gsub(/^["\x27]|["\x27]$/, "")
+      name = $0
+    }
+    in_fm && /^description:[[:space:]]/ {
+      sub(/^description:[[:space:]]*/, "")
+      gsub(/^["\x27]|["\x27]$/, "")
+      desc = $0
+    }
   ' "$skills_dir"/*/SKILL.md 2>/dev/null | sort)
 
   [ -z "$rollup" ] && return 0

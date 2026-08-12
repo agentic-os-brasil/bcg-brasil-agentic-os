@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# DEPRECATED: This script builds `cmd/bcgos`, which PR #302 deleted as part
+# of the surgical Go delete / ZIP-only distribution pivot. It cannot be run
+# as-is and will fail closed until it is either repointed at the ZIP
+# installer path (`installers/zip/`) or removed. Kept in place so operators
+# grepping `dev/` see the deprecation notice instead of a stale success path.
+echo "DEPRECATED: dev/trial-install-smoke.sh depends on cmd/bcgos, which was removed in PR #302 (ZIP-only pivot). Repoint at installers/zip/ or delete before use." >&2
+exit 1
 # Runs a real macOS/Linux trial install in an isolated temporary home.
 set -euo pipefail
 

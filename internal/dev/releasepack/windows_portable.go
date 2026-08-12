@@ -412,12 +412,25 @@ func writeDeterministicZip(staging, rootName, output string) error {
 }
 
 func portableReadme(version string) []byte {
+	archive := "Maestro-Portable-" + version + "-windows-amd64-local-beta-unsigned.zip"
 	return []byte("# Maestro Portable " + version + " para Windows\n\n" +
 		"1. Extraia a pasta completa para um local fixo em que voce possa gravar arquivos.\n" +
 		"2. Abra a pasta `maestro-os` no Claude Code.\n" +
 		"3. Envie uma mensagem como `Quero comecar`. O Claude explica e conduz o restante.\n\n" +
 		"Nao abra terminal nem execute arquivos internos. Na primeira preparacao, o Claude pedira uma confirmacao curta e o Windows ou o Claude Code podera mostrar uma permissao nativa para voce aprovar. Depois disso, use sempre a mesma pasta `maestro-os`; nao mova a pasta completa depois da ativacao.\n\n" +
-		"Este e um pacote Canary controlado e sem assinatura Authenticode. Antes da entrega, o responsavel pelo piloto deve conferir o SHA-256 enviado separadamente. SmartScreen, WDAC ou AppLocker ainda podem bloquear executaveis sem assinatura.\n")
+		"Este e um pacote Canary controlado e sem assinatura Authenticode. Antes da entrega, o responsavel pelo piloto deve conferir o SHA-256 enviado separadamente. SmartScreen, WDAC ou AppLocker ainda podem bloquear executaveis sem assinatura.\n\n" +
+		"## Verificar o SHA-256 antes de abrir\n\n" +
+		"Antes de extrair, abra o PowerShell na pasta em que o arquivo foi salvo e rode:\n\n" +
+		"```powershell\n" +
+		"Get-FileHash -Algorithm SHA256 " + archive + "\n" +
+		"```\n\n" +
+		"Compare o valor exibido com o SHA-256 enviado pelo responsavel pelo piloto por um canal separado. Se diferir, nao extraia o ZIP e avise o responsavel.\n\n" +
+		"## Se o Windows bloquear na primeira execucao\n\n" +
+		"O SmartScreen pode aparecer com \"O Windows protegeu o seu PC\". Clique em `Mais informacoes` e depois em `Executar assim mesmo` somente se voce reconhecer este pacote Maestro entregue pelo responsavel pelo piloto. Ambientes com WDAC ou AppLocker corporativo podem bloquear de vez; nesse caso, encaminhe ao responsavel para whitelisting.\n\n" +
+		"## Se voce moveu a pasta depois de ativar\n\n" +
+		"O Maestro grava estado dentro da pasta portable e tambem em `%LOCALAPPDATA%\\BCGOS`. Se a pasta portable foi movida ou renomeada apos a ativacao, volte a pasta ao local original antes de continuar. Se isso nao for possivel, avise o responsavel pelo piloto antes de tentar reativar; nao apague `%LOCALAPPDATA%\\BCGOS` por conta propria.\n\n" +
+		"## Se algo falhar\n\n" +
+		"Copie a mensagem de erro exibida pelo Claude Code e envie ao responsavel pelo piloto junto com o SHA-256 do ZIP e o horario aproximado. Nao baixe substitutos, nao edite arquivos internos e nao apague nada dentro da pasta portable nem em `%LOCALAPPDATA%\\BCGOS` sem instrucao explicita. Nenhum trabalho da pessoa e apagado por uma ativacao malsucedida.\n")
 }
 
 func portableClaudeOnboarding() []byte {
@@ -436,7 +449,7 @@ Voce esta na pasta de trabalho correta do Maestro. Conduza a pessoa em portugues
 7. Somente depois de uma resposta afirmativa clara, execute internamente, a partir desta pasta: ..\managed\bcgos-bootstrap.exe portable-install. Em seguida, use somente o CLI instalado em ..\managed\bin\bcgos.exe para executar setup apply para este workspace e adapter verify para Claude.
 8. A permissao nativa do Claude Code ou do Windows pode aparecer. Explique que a pessoa deve aprovar somente se reconhecer este pacote Maestro; isso nao e uma segunda autorizacao do produto.
 9. Se a preparacao terminar com sucesso, releia este CLAUDE.md porque a projecao gerenciada foi acrescentada, informe que a preparacao terminou e invoque a skill maestro-onboarding.
-10. Se falhar, nao improvise instalacao, nao baixe substitutos e nao altere a estrutura. Resuma o erro em linguagem simples, confirme que nenhum trabalho da pessoa foi apagado e oriente-a a procurar o responsavel pelo piloto.
+10. Se falhar, nao improvise instalacao, nao baixe substitutos e nao altere a estrutura. Capture a mensagem exata de erro da execucao interna, resuma em linguagem simples, confirme que nenhum trabalho da pessoa foi apagado e oriente-a a enviar o erro e o SHA-256 do ZIP ao responsavel pelo piloto. Nao apague %LOCALAPPDATA%\BCGOS nem arquivos internos da pasta portable sem instrucao explicita do responsavel.
 
 A ativacao e idempotente: se uma tentativa anterior tiver terminado parcialmente, use o mesmo fluxo apos nova confirmacao e deixe o ativador verificar, reparar ou concluir o estado existente.
 `)

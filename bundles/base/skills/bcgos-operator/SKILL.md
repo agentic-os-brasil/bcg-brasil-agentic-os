@@ -1,6 +1,6 @@
 ---
 name: bcgos-operator
-description: "Método operacional do BCGOS — carregado no início de cada sessão (spec 050). Roteia operações de controle para o skill ou ação certa."
+description: Método operacional do BCGOS, carregado no início de cada sessão (spec 050). Roteia operações de controle para o skill ou ação certa.
 ---
 
 # BCGOS Operator

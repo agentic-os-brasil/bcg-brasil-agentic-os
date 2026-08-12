@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## CDLE - Rename base bundle skill `decision-log-entry` to `case-decision-log-entry`
+
+- Date: 2026-08-12
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: PR #325 introduced a `decision-log-entry` skill in the base bundle after PR #326 had already shipped the same ID inside the tech-core bundle. `skillsindex.Catalog.Validate()` requires strictly ascending IDs across the merged runtime catalog produced by `runtimeprojection.catalogForTracks()`. The duplicate broke every default projection (base + tech-core) and blocked PR gating on main until resolved.
+- Decision: Rename the base bundle instance from `decision-log-entry` to `case-decision-log-entry` and reserve `decision-log-entry` for the tech-core engineering variant. The base rename reflects the intended scope — the base entry only registers structural case decisions against the active Case Agent — while the tech-core entry stays generic for engineering delivery contexts. The rename lands in PR #331 (merged) and is stabilised on main by PR #320 (validate-lite ubuntu-only gate).
+- Consequences: Downstream callers of the base skill must migrate to `case-decision-log-entry`; a legacy alias directory is left in place under `skills/workspace-agent-setup` conventions only for the retired workspace-agent name and does not cover this rename. Documentation, catalog, INDEX and per-agent adapters for the base skill are already updated. No credentials, workspace content or client data are touched.
+- Refs: bundles/base/skills/case-decision-log-entry/SKILL.md; bundles/base/skills/catalog.json; bundles/base/skills/INDEX.md; PRs #325, #326, #331, #320
+- Supersedes: none
+
 ## ACSN - Per-agent context snapshot as injectable continuity layer
 
 - Date: 2026-08-12
