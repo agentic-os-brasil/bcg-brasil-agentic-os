@@ -1,0 +1,64 @@
+name: validate-lite
+
+# Ubuntu-only slim variant of the disabled 3-OS validate workflow.
+# Purpose: restore automated PR gating within the GitHub Actions free tier
+# while the org billing block on macOS/Windows runners is resolved.
+# The full matrix workflow (validate.yml.disabled) remains the source of truth.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  development-harness:
+    name: development harness (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Record validation context
+        shell: bash
+        run: |
+          {
+            echo "### Validation context (lite)"
+            echo "- runner: ${RUNNER_OS}/${RUNNER_ARCH}"
+            echo "- ref: ${GITHUB_REF}"
+            echo "- commit: $(git rev-parse HEAD)"
+            go version
+            go env GOOS GOARCH
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
+      - name: Run full development harness (includes parsed action-pin policy)
+        id: development_harness
+        run: go run ./dev/harness validate --full
+      - name: Smoke-test local trial installation
+        shell: bash
+        run: ./dev/trial-install-smoke.sh
+      - name: Smoke-test Claude hook from nested directory
+        shell: bash
+        working-directory: specs
+        run: |
+          output=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git reset --hard HEAD"}}' | CLAUDE_PROJECT_DIR="$GITHUB_WORKSPACE" bash "$GITHUB_WORKSPACE/.claude/hooks/run-dev-hook.sh" pre-tool)
+          case "$output" in
+            *'"permissionDecision":"deny"'*) ;;
+            *) echo "Claude hook did not deny destructive Git command"; exit 1 ;;
+          esac
+      - name: Record validation completion
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Validation completion (lite)"
+            echo "- job: ${GITHUB_JOB}"
+            echo "- harness outcome: ${{ steps.development_harness.outcome }}"
+            echo "- job status: ${{ job.status }}"
+            echo "- checkout: $(git rev-parse --short HEAD 2>/dev/null || echo unavailable)"
+            git status --short --branch 2>/dev/null || true
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
