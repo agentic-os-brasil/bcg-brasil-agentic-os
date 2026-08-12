@@ -374,7 +374,7 @@ ingestion and governance are intentionally sequenced.
 | [`schemas/`](schemas) | JSON schemas for receipts, canary reports, identity and federation | Active |
 | [`installers/`](installers) | ZIP installer template and trial/wizard flows for end-user distribution | Active |
 | [`docs/`](docs) | Product documentation, onboarding guides, roadmap and release runbooks | Active |
-| [`dev/`](dev) | Contributor-only harness, governance and development skills | Active |
+| [`dev/`](dev) | Contributor-only harness, governance and development skills; the `bcgos` CLI entrypoint is `dev/harness/main.go` | Active |
 | [`acceptance/`](acceptance) | Clean-device and pilot acceptance evidence | In progress |
 | [`internal/priorwork/`](internal/priorwork) | Governed organizational prior-work catalog and explicit retrieval | Local core validated; native Claude collection pending; Codex collection prohibited |
 | [`dist/`](dist) | Local release artifacts (ZIPs and SHA256 digests); not committed to CI | Local only |
