@@ -124,14 +124,15 @@ func runGoBuild(
 }
 
 type CandidateOptions struct {
-	Root       string
-	Output     string
-	Version    string
-	Channel    string
-	Allowlist  string
-	Prebuilt   string
-	Builder    BinaryBuilder
-	AdHocMacOS bool
+	Root           string
+	Output         string
+	Version        string
+	Channel        string
+	Allowlist      string
+	Prebuilt       string
+	MarkItDownPack string
+	Builder        BinaryBuilder
+	AdHocMacOS     bool
 }
 
 func BuildCandidate(ctx context.Context, options CandidateOptions) (releasecontract.Manifest, error) {
@@ -233,6 +234,18 @@ func BuildCandidate(ctx context.Context, options CandidateOptions) (releasecontr
 		return releasecontract.Manifest{}, err
 	}
 	manifest.Artifacts = append(manifest.Artifacts, bundleArtifact)
+	if options.MarkItDownPack != "" {
+		packName := "markitdown-runtime_" + options.Version + ".tar.gz"
+		packPath := filepath.Join(staging, packName)
+		if err := stageRegularFile(options.MarkItDownPack, packPath, 0o644); err != nil {
+			return releasecontract.Manifest{}, fmt.Errorf("stage MarkItDown runtime pack: %w", err)
+		}
+		packArtifact, err := inspectArtifact("runtime_pack", "any", "any", packPath)
+		if err != nil {
+			return releasecontract.Manifest{}, err
+		}
+		manifest.Artifacts = append(manifest.Artifacts, packArtifact)
+	}
 	if expired, _ := rolemigration.IsExpired(options.Version); expired {
 		catalogInfo, catalogSHA256, err := inspectFile(filepath.Join(options.Root, "bundles", "base", "agents", "catalog.json"))
 		if err != nil || catalogInfo.Size() == 0 {
@@ -279,6 +292,21 @@ func BuildCandidate(ctx context.Context, options CandidateOptions) (releasecontr
 		return releasecontract.Manifest{}, fmt.Errorf("activate candidate output: %w", err)
 	}
 	return manifest, nil
+}
+
+func stageRegularFile(source, destination string, mode os.FileMode) error {
+	info, err := os.Lstat(source)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return errors.New("runtime pack must be a regular non-symlink file")
+	}
+	body, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(destination, body, mode)
 }
 
 func BuildNativeBinary(

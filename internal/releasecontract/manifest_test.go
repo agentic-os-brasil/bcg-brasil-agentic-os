@@ -133,7 +133,7 @@ func TestSchemaRejectsDriftedArtifactKind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	drifted := strings.Replace(string(body), `"kind": {"enum": ["cli", "bundle"]}`, `"kind": {"enum": ["runtime_pack"]}`, 1)
+	drifted := strings.Replace(string(body), `"kind": {"enum": ["cli", "bundle", "runtime_pack"]}`, `"kind": {"enum": ["runtime_pack"]}`, 1)
 	if drifted == string(body) {
 		t.Fatal("test setup did not mutate the artifact kind enum")
 	}
@@ -165,9 +165,9 @@ func TestSchemaAndParserAgreeOnStructuralFixtures(t *testing.T) {
 			schemaValid: false,
 			parseValid:  false,
 		},
-		"runtime pack": {
+		"runtime pack requires universal platform": {
 			body:        strings.Replace(validManifestJSON(), `"kind": "cli"`, `"kind": "runtime_pack"`, 1),
-			schemaValid: false,
+			schemaValid: true,
 			parseValid:  false,
 		},
 		"duplicate artifact is semantic": {
