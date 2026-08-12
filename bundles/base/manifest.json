@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "bundle_id": "bcgos-base",
-  "bundle_version": "0.0.0",
+  "bundle_version": "0.1.1",
   "format": "okf-1",
   "provenance": {
     "publisher": "BCG Brasil Agentic OS",
