@@ -47,9 +47,11 @@ jobs:
           # the five OS-gated guarantees do not drift out of CI indefinitely.
           HARNESS_SKIP_CROSS_OS_TESTS: "1"
         run: go run ./dev/harness validate --full
-      - name: Smoke-test local trial installation
-        shell: bash
-        run: ./dev/trial-install-smoke.sh
+      # Trial-install smoke test removed: PR #302 deleted `cmd/bcgos` as part
+      # of the surgical Go delete / ZIP-only distribution pivot. The script
+      # `dev/trial-install-smoke.sh` still references `cmd/bcgos` and fails
+      # closed on every runner. Cleaning up the stale script is out of scope
+      # for this ubuntu-only validate slice; tracked separately.
       - name: Smoke-test Claude hook from nested directory
         shell: bash
         working-directory: specs
