@@ -513,6 +513,111 @@ else
 fi
 
 # --------------------------------------------------------------------------
+phase "Phase 12 — Memory scaffold + dreaming hook wiring"
+# --------------------------------------------------------------------------
+
+# 12a: Memory sub-tiers exist after first-run scaffold (Phase 4 already ran the hook)
+for tier in recent weekly medium-term lifetime policies; do
+  if [ -d "$MAESTRO_DIR/data/memory/$tier" ]; then
+    pass "data/memory/$tier created by scaffold"
+  else
+    fail "data/memory/$tier NOT created by scaffold"
+  fi
+done
+
+# 12b: Profile placeholder files exist
+for pfile in identity.json preferences.json; do
+  if [ -f "$MAESTRO_DIR/data/profile/$pfile" ]; then
+    pass "data/profile/$pfile placeholder created by scaffold"
+  else
+    fail "data/profile/$pfile NOT created by scaffold"
+  fi
+done
+
+# 12c: Hook files exist and are non-empty in the ZIP
+for hook in session-start-memory-inject.sh session-stop-dream.sh; do
+  if [ -f "$MAESTRO_DIR/.claude/hooks/$hook" ] && [ -s "$MAESTRO_DIR/.claude/hooks/$hook" ]; then
+    pass ".claude/hooks/$hook present + non-empty"
+  else
+    fail ".claude/hooks/$hook missing or empty"
+  fi
+done
+
+# 12d: settings.json wires memory-inject to SessionStart
+if grep -q "session-start-memory-inject.sh" "$SETTINGS" && grep -q "SessionStart" "$SETTINGS"; then
+  pass "settings.json wires session-start-memory-inject.sh to SessionStart"
+else
+  fail "settings.json does NOT wire session-start-memory-inject.sh to SessionStart"
+fi
+
+# 12e: settings.json wires dream marker to SessionStop
+if grep -q "session-stop-dream.sh" "$SETTINGS" && grep -q "SessionStop" "$SETTINGS"; then
+  pass "settings.json wires session-stop-dream.sh to SessionStop"
+else
+  fail "settings.json does NOT wire session-stop-dream.sh to SessionStop"
+fi
+
+# 12f: session-stop-dream.sh produces .dream-requested marker
+DREAM_SCRATCH=$(mktemp -d -t maestro-eval-dream-XXXXXX)
+unzip -q "$ZIP_PATH" -d "$DREAM_SCRATCH"
+DREAM_MAESTRO="$DREAM_SCRATCH/Maestro"
+mkdir -p "$DREAM_MAESTRO/data/memory"
+if CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/session-stop-dream.sh" >/dev/null 2>&1; then
+  pass "session-stop-dream.sh exits 0"
+else
+  fail "session-stop-dream.sh non-zero exit"
+fi
+if [ -f "$DREAM_MAESTRO/data/memory/.dream-requested" ] && [ -s "$DREAM_MAESTRO/data/memory/.dream-requested" ]; then
+  pass ".dream-requested marker written with timestamp"
+else
+  fail ".dream-requested marker missing or empty after session-stop-dream.sh"
+fi
+chmod -R u+w "$DREAM_SCRATCH"
+rm -rf "$DREAM_SCRATCH"
+
+# 12g: session-start-memory-inject.sh is fail-open when data/ absent
+INJECT_SCRATCH=$(mktemp -d -t maestro-eval-inject-XXXXXX)
+unzip -q "$ZIP_PATH" -d "$INJECT_SCRATCH"
+INJECT_MAESTRO="$INJECT_SCRATCH/Maestro"
+# Do NOT create data/ — simulate first session where scaffold hasn't run yet
+if CLAUDE_PROJECT_DIR="$INJECT_MAESTRO" bash "$INJECT_MAESTRO/.claude/hooks/session-start-memory-inject.sh" >/dev/null 2>&1; then
+  pass "session-start-memory-inject.sh exits 0 when data/ absent (fail-open)"
+else
+  fail "session-start-memory-inject.sh blocks when data/ absent"
+fi
+chmod -R u+w "$INJECT_SCRATCH"
+rm -rf "$INJECT_SCRATCH"
+
+# 12h: memory inject outputs session context markers when memory exists
+INJECT2_SCRATCH=$(mktemp -d -t maestro-eval-inject2-XXXXXX)
+unzip -q "$ZIP_PATH" -d "$INJECT2_SCRATCH"
+INJECT2_MAESTRO="$INJECT2_SCRATCH/Maestro"
+mkdir -p "$INJECT2_MAESTRO/data/memory/recent" "$INJECT2_MAESTRO/data/memory/lifetime" \
+         "$INJECT2_MAESTRO/data/profile"
+printf '{"schema_version":1,"display_name":"Test User","role":"test","context":"","initialized":true}\n' \
+  > "$INJECT2_MAESTRO/data/profile/identity.json"
+printf '# Test memory entry\nThis is a recent memory.\n' \
+  > "$INJECT2_MAESTRO/data/memory/recent/2024-01-01.md"
+INJECT2_OUT=$(CLAUDE_PROJECT_DIR="$INJECT2_MAESTRO" bash "$INJECT2_MAESTRO/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
+if echo "$INJECT2_OUT" | grep -q "maestro:session-context:start"; then
+  pass "session-start-memory-inject.sh emits session-context markers"
+else
+  fail "session-start-memory-inject.sh does NOT emit session-context markers"
+fi
+if echo "$INJECT2_OUT" | grep -q "Memória recente"; then
+  pass "session-start-memory-inject.sh injects recent memory layer"
+else
+  fail "session-start-memory-inject.sh does NOT inject recent memory"
+fi
+if echo "$INJECT2_OUT" | grep -q "Identidade"; then
+  pass "session-start-memory-inject.sh injects identity profile"
+else
+  fail "session-start-memory-inject.sh does NOT inject identity"
+fi
+chmod -R u+w "$INJECT2_SCRATCH"
+rm -rf "$INJECT2_SCRATCH"
+
+# --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
 
