@@ -270,7 +270,7 @@ func TestSelectedSkillPointersUseClosedReasonsAndCannotEscapeTheRuntimeProjectio
 		Atlas: atlas.Status{Managed: atlas.Pointer{State: "unavailable"}},
 	})
 	valid := SkillSelection{ID: "ingest-content", Reason: "explicit_skill_reference", Pointer: ".claude/skills/ingest-content/SKILL.md"}
-	operator := SkillSelection{ID: "bcgos-operator", Reason: "deterministic_operational_method", Pointer: ".claude/skills/bcgos-operator/SKILL.md"}
+	operator := SkillSelection{ID: "execution-continuity", Reason: "deterministic_operational_method", Pointer: ".claude/skills/execution-continuity/SKILL.md"}
 	onboarding := SkillSelection{ID: "maestro-onboarding", Reason: "deterministic_onboarding_state", Pointer: ".claude/skills/maestro-onboarding/SKILL.md"}
 	base.Skills.Selected = []SkillSelection{operator, onboarding, valid}
 	if err := base.Validate(); err != nil {

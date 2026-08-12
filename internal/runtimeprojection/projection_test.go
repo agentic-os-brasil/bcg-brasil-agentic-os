@@ -105,11 +105,10 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 	for _, expected := range []string{
 		"Sessão e hooks", "SELF do dono", "Memória e persistência",
 		"Brain, wiki e navegação", "Agents e delegação", "Execução e continuidade",
-		"execution-continuity", "dream-memory", "bcgos-operator",
-		"Load `/bcgos-operator` at SessionStart",
+		"execution-continuity", "dream-memory",
 		"brain/tasks/", "receita conversacional",
-		"<maestro-cli> setup status --workspace <workspace>",
-		"<maestro-cli> update --check",
+		"/maestro-onboarding",
+		"/maestro-doctor",
 	} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("orientation missing %q", expected)
@@ -119,9 +118,6 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 		if strings.Contains(text, hidden) {
 			t.Fatalf("orientation exposes compatibility command %q as normal workflow", hidden)
 		}
-	}
-	if _, err := os.Stat(filepath.Join(workspace, ".claude", "skills", "bcgos-operator", "SKILL.md")); err != nil {
-		t.Fatalf("bcgos operator was not projected: %v", err)
 	}
 	if !strings.Contains(text, "`/dream-memory`") || strings.Contains(text, "`$dream-memory`") {
 		t.Fatalf("orientation skill references should use slash notation: %q", text)
