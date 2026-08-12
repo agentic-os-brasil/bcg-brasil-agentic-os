@@ -1,0 +1,75 @@
+name: validate-lite
+
+# Ubuntu-only slim variant of the disabled 3-OS validate workflow.
+# Purpose: restore automated PR gating within the GitHub Actions free tier
+# while the org billing block on macOS/Windows runners is resolved.
+# The full matrix workflow (validate.yml.disabled) remains the source of truth.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  development-harness:
+    name: development harness (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Record validation context
+        shell: bash
+        run: |
+          {
+            echo "### Validation context (lite)"
+            echo "- runner: ${RUNNER_OS}/${RUNNER_ARCH}"
+            echo "- ref: ${GITHUB_REF}"
+            echo "- commit: $(git rev-parse HEAD)"
+            go version
+            go env GOOS GOARCH
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
+      - name: Run full development harness (includes parsed action-pin policy)
+        id: development_harness
+        env:
+          # Skip cross-OS artifact verification tests (macOS/Windows portable
+          # bundles) that require matching runtime platform. The disabled
+          # 3-OS matrix workflow (validate.yml.disabled) covers them on their
+          # native runners; remove this env when that workflow is restored.
+          # Tracking issue: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/327
+          # TTL: 2026-11-02 — re-triage or restore matrix before this date so
+          # the five OS-gated guarantees do not drift out of CI indefinitely.
+          HARNESS_SKIP_CROSS_OS_TESTS: "1"
+        run: go run ./dev/harness validate --full
+      # Trial-install smoke test removed: PR #302 deleted `cmd/bcgos` as part
+      # of the surgical Go delete / ZIP-only distribution pivot. The script
+      # `dev/trial-install-smoke.sh` still references `cmd/bcgos` and fails
+      # closed on every runner. Cleaning up the stale script is out of scope
+      # for this ubuntu-only validate slice; tracked separately.
+      - name: Smoke-test Claude hook from nested directory
+        shell: bash
+        working-directory: specs
+        run: |
+          output=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git reset --hard HEAD"}}' | CLAUDE_PROJECT_DIR="$GITHUB_WORKSPACE" bash "$GITHUB_WORKSPACE/.claude/hooks/run-dev-hook.sh" pre-tool)
+          case "$output" in
+            *'"permissionDecision":"deny"'*) ;;
+            *) echo "Claude hook did not deny destructive Git command"; exit 1 ;;
+          esac
+      - name: Record validation completion
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Validation completion (lite)"
+            echo "- job: ${GITHUB_JOB}"
+            echo "- harness outcome: ${{ steps.development_harness.outcome }}"
+            echo "- job status: ${{ job.status }}"
+            echo "- checkout: $(git rev-parse --short HEAD 2>/dev/null || echo unavailable)"
+            git status --short --branch 2>/dev/null || true
+          } | tee -a "${GITHUB_STEP_SUMMARY}"

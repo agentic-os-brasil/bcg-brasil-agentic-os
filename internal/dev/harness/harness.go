@@ -183,9 +183,23 @@ func Validate(root string, full bool, out io.Writer) error {
 		{"gofmt", func() error { return checkFormatting(root) }},
 	}
 	if full {
+		testArgs := []string{"test", "./..."}
+		// Some install-readiness and release-pack tests verify OS-specific
+		// portable artifacts (macOS/Windows). They assert that the running
+		// CLI platform matches the artifact target, so they fail under a
+		// single-OS runner even when the code is correct. When
+		// HARNESS_SKIP_CROSS_OS_TESTS is set (e.g. validate-lite on Ubuntu),
+		// skip that subset via a -skip regex. The full 3-OS matrix workflow
+		// still exercises them on their native runners.
+		if os.Getenv("HARNESS_SKIP_CROSS_OS_TESTS") != "" {
+			testArgs = append(testArgs,
+				"-skip",
+				`TestBuildMacOSPortableProducesVerifiedClaudeReadyArchive|TestVerifyAcceptsOnlyCanonicalConfiguredCodexInstall|TestVerifyAcceptsOnlyCanonicalConfiguredClaudeInstall|TestVerifyRejectsMissingManagedClaudeNativeAgent|TestVerifyRejectsMissingAndTamperedSurfaces`,
+			)
+		}
 		checks = append(checks,
 			check{"go vet (offline)", func() error { return runCommand(root, "go", "vet", "./...") }},
-			check{"unit tests (offline)", func() error { return runCommand(root, "go", "test", "./...") }},
+			check{"unit tests (offline)", func() error { return runCommand(root, "go", append([]string(nil), testArgs...)...) }},
 		)
 	} else {
 		checks = append(checks, check{"fast unit tests (offline)", func() error { return runCommand(root, "go", "test", "./internal/dev/...") }})
