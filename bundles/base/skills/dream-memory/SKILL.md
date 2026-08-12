@@ -5,51 +5,45 @@ description: Run or inspect professional memory consolidation through the BCG Br
 
 # Dream Memory
 
-Operate directly on the workspace memory tree under `data/memory/` (layers
-`L1/`, `L2/`, `L3/`, `lifetime/`). All reads and writes go through the Read,
-Write and Edit tools, following the invariants below.
+Operate directly on the workspace memory tree under `data/memory/` (memória recente, memória semanal, memória de médio prazo e memória permanente). All reads and writes go through the Read, Write and Edit tools, following the invariants below.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting a human-facing result. The
-memory operation, policy, budgets and safety behavior never vary by profile;
-only the explanation and optional detail do.
+Resolve the canonical `interaction-profile` skill before responding. Ajustar o tom e o nível de detalhe ao perfil do usuário antes de apresentar qualquer resultado visível. A operação de memória, a política e o comportamento de segurança nunca variam por perfil; apenas a explicação e o detalhe opcional variam.
 
 - `standard`: state the result, what changed and one safe next action.
 - `advanced`: add the relevant cycle rationale, diagnostics and drill-down
   pointers when useful.
-- `power`: add explicit source fingerprints, commit/manifests, layer budgets
-  and operational trade-offs on request or when they materially affect a
-  decision.
+- `power`: add a detalhamento da origem de cada memória e quando foi registrada, os limites de capacidade de cada camada e os trade-offs operacionais, sob pedido ou quando afetam materialmente uma decisão.
 
 ## Choose the cycle
 
-- Use **daily light** for session or day closure. It may capture sanitized signals and update L1 only.
-- Use **weekly deep** for week closure or an overdue weekly cycle. It may update L2 and L3 and promote eligible lifetime memory.
+- Use **daily light** for session or day closure. It may capture sanitized signals and update memória recente only.
+- Use **weekly deep** for week closure or an overdue weekly cycle. It may update memória semanal and memória de médio prazo and promote eligible lifetime memory.
 - Use **status** when the user asks what is remembered, why a promotion occurred or whether a cycle was missed.
 
 ## Workflow
 
 1. Resolve the active workspace identity by reading `data/profile/identity.json` and the memory root at `data/memory/`.
-2. Confirm the memory tree exists and read `data/memory/config.json` for the effective per-layer budgets. If either is missing, stop and report the safe next action.
-3. For capture, persist only signals classified as sanitized in the source (Session Start, hook output, prior L1 entry). Never write raw credentials, client files or unrestricted prompt history into `data/memory/`.
+2. Confirm the memory tree exists and verify the effective capacity limits for each memory layer. If either is missing, stop and report the safe next action.
+3. For capture, persist only signals classified as sanitized in the source (Session Start, hook output, prior memória recente entry). Never write raw credentials, client files or unrestricted prompt history into `data/memory/`.
 4. Execute exactly one cycle per invocation. Hooks, schedules and manual requests all follow the same idempotent read, synthesize, stage, commit sequence.
 5. For weekly lifetime promotion, require a named eligibility policy in `data/memory/policies/lifetime.json`. If it is missing, stop: lifetime activation must fail closed.
-6. Return the cycle, period, source fingerprint, activated layers, lifetime eligibility reason and any skipped or missing layers.
+6. Return the cycle, period, origem e momento de registro de cada memória, activated layers, lifetime eligibility reason and any skipped or missing layers.
 7. If the required policy or budget files are missing, report the capability as unavailable rather than emulating dreaming with ad-hoc edits.
 
 ## Invariants
 
-- Daily dreaming cannot write L2, L3 or lifetime.
-- Weekly deep dreaming stages all outputs and exposes them through one committed manifest.
-- Empty, invalid or interrupted pre-commit synthesis changes nothing visible.
-- Readers use only the newest fully valid commit, so partial L2/L3/lifetime state is never injected.
-- Existing but wholly invalid commit history is reported as corrupt, never as empty memory.
-- One workspace-wide activation lock prevents daily and cross-week cycles from racing over shared memory.
-- Lifetime updates require provenance, eligibility, version history and no in-place overwrite.
-- Context is assembled as `lifetime -> L3 -> L2 -> L1`, with independent budgets and drill-down pointers.
-- Source captures remain append-only and workspace-isolated.
+- O ciclo diário não pode escrever na memória semanal, memória de médio prazo ou memória permanente.
+- O ciclo semanal prepara todos os outputs e os torna disponíveis de uma vez, de forma consistente.
+- Uma síntese vazia, inválida ou interrompida não altera nada visível.
+- O sistema usa apenas o estado mais recente totalmente válido; nenhum estado parcial de memória semanal, de médio prazo ou permanente é injetado.
+- Um histórico de memória totalmente inválido é reportado como corrompido, nunca como memória vazia.
+- Um bloqueio por espaço de trabalho impede que ciclos diários e semanais concorram sobre a memória compartilhada.
+- Atualizações de memória permanente exigem rastreabilidade de origem, critério de elegibilidade, histórico de versões e nunca sobrescrita direta.
+- O contexto é montado como memória permanente → médio prazo → semanal → recente, com limites de capacidade independentes e ponteiros de detalhamento.
+- As capturas de origem permanecem somente-leitura e isoladas por espaço de trabalho.
 
 ## Current delivery boundary
 
-The managed bundle contains this canonical skill and the layer budget and policy contracts under `data/memory/`. If those files are absent in the current workspace, report dreaming as unavailable and point the user at the setup skill rather than claim execution.
+The managed bundle contains this canonical skill and the memory capacity and policy contracts under `data/memory/`. If those files are absent in the current workspace, report dreaming as unavailable and point the user at the setup skill rather than claim execution.

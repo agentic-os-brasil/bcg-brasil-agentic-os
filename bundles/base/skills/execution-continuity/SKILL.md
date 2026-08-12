@@ -13,7 +13,7 @@ session. This is the runtime-neutral execution ledger; it is not the owner
 ## Runtime-first continuity
 
 Use the active workspace and its readable artifacts as the source of truth.
-Do not expose `bcgos`, run IDs, revisions or JSON contracts to the owner. The
+Do not expose internal commands, run IDs, revisions or JSON contracts to the owner. The
 legacy deterministic execution ledger remains a compatibility/recovery surface
 for older workspaces, but a new task is represented first by the agent in the
 canonical workspace locations.
@@ -34,7 +34,7 @@ task, grant authority or replace owner confirmation.
    completion criterion and logical artifact references.
 3. Do not place prompts, transcripts, client bodies, credentials or absolute
    paths in the task file. Report the task as registered after the reviewed
-   artifact is written.
+   artifact is written. Uma tarefa registrada é uma nota em Markdown com objetivo, próximo passo e critério de conclusão.
 
 The execution ledger is separate from `owner/operating/work-state.md`.
 `ownerctx` open tasks may remain empty while a local execution item is active;
@@ -59,8 +59,7 @@ bounded projection.
 
 ## Truth and safety
 
-- `work list` is metadata-only; use `work inspect` or `work next` only when the
-  owner has authorized reading the bounded work handoff.
+- Consultar a lista de tarefas registradas é operação somente de metadados; ver os detalhes de uma tarefa ou a próxima ação disponível apenas quando o owner autorizou leitura do handoff de trabalho delimitado.
 - Preserve the current workspace identity and reject a path or workspace ID
   that does not match the SessionStart context.
 - Keep external task systems, SharePoint, memory and agent delegation outside

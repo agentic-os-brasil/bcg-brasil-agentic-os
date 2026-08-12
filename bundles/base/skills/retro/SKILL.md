@@ -9,8 +9,8 @@ Walk the week with the owner, then write what they decided. This is a
 conversation that produces a page, not a report generator.
 
 All reads and writes go through the owner atlas operations exposed by the
-installed runtime adapter (`bcgos atlas owner collect`, `create-page`,
-`append-entry`). Never edit an atlas page directly from this skill.
+installed runtime adapter (recuperar as páginas relevantes do atlas do owner, criar página,
+registrar entrada). Never edit an atlas page directly from this skill.
 
 ## Interaction profile
 
@@ -26,7 +26,7 @@ the explanation and optional detail do.
 
 ## Inputs
 
-Obtained with `collect`, always with a declared purpose and named pages. There
+Obtidos via recuperação do atlas, sempre com propósito declarado e páginas nomeadas. There
 is no whole-root read.
 
 - this week's pages in `owner/daily/`, if the owner keeps them;
@@ -40,7 +40,7 @@ a first retrospective has no predecessor, and that is not an error.
 
 1. Resolve the week being closed and the page path for it,
    `owner/development/retros/<YYYY-MM-DD>.md`.
-2. `collect` the inputs above. Keep the revision of each page read: a later
+2. Recuperar as páginas relevantes do atlas do owner. Keep the revision of each page read: a later
    write uses it to detect that the owner edited the page in the meantime.
 3. Walk the week **as a conversation**, not as a summary handed over:
    - what went well, and what did not;
@@ -51,17 +51,17 @@ a first retrospective has no predecessor, and that is not an error.
    across weeks is worth more than any single week's detail.
 5. Land on **one** intention for next week: concrete and observable, so the
    next retrospective can tell whether it happened.
-6. Write the retrospective page with `create-page`. An existing page for the
+6. Write the retrospective page via the atlas create operation. An existing page for the
    same week is preserved — offer to append to it instead of replacing it.
 7. Offer to add each strong piece of evidence to the objective it belongs to,
-   with `append-entry` under that objective's evidence section. Confirm each
+   via the atlas append operation under that objective's evidence section. Confirm each
    one separately; nothing enters an objective without the owner agreeing to it.
    If a page declares the same evidence heading more than once, the operation
    refuses the write rather than guessing which objective was meant — name the
    objective's own heading instead.
 8. If the week produced a durable claim about how this kind of work goes — not
    what happened, but what it suggests is generally true — offer to promote it
-   to `owner/learnings/` with `create-page`, one page per claim. State it as a
+   to `owner/learnings/` via the atlas create operation, one page per claim. State it as a
    generalization: the engagement may be named as the source, but findings,
    figures and client material stay in the workspace that owns them.
 9. Report what was written, what was proposed but not written, and anything the
