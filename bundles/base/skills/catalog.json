@@ -44,6 +44,13 @@
       "relative_path": "skills/case-agent-setup/SKILL.md"
     },
     {
+      "id": "case-decision-log-entry",
+      "display_name": "Case Decision Log Entry",
+      "trigger": "Register a structural case decision in the active case decision log",
+      "default_prompt": "Use $case-decision-log-entry to register this decision in the active case log.",
+      "relative_path": "skills/case-decision-log-entry/SKILL.md"
+    },
+    {
       "id": "client-delivery-gate",
       "display_name": "Gate de Entrega",
       "trigger": "Gate de qualidade em 3 lentes antes de qualquer output chegar ao cliente ou Partner",
@@ -56,13 +63,6 @@
       "trigger": "Document a personal method or working preference deliberately",
       "default_prompt": "Use $craft-update to write up this technique as a method, or record how I prefer to work.",
       "relative_path": "skills/craft-update/SKILL.md"
-    },
-    {
-      "id": "decision-log-entry",
-      "display_name": "Decision Log Entry",
-      "trigger": "Register a structural case decision in the active case decision log",
-      "default_prompt": "Use $decision-log-entry to register this decision in the active case log.",
-      "relative_path": "skills/decision-log-entry/SKILL.md"
     },
     {
       "id": "deck-drill",

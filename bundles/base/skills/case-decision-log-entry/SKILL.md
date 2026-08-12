@@ -1,5 +1,5 @@
 ---
-name: decision-log-entry
+name: case-decision-log-entry
 description: Register a case decision in the active case decision log. Use when the owner says "register this decision", "log this", "decision:", "we decided", or describes a structural choice (methodology, architecture, stakeholder, scope). Does not write without confirmation.
 ---
 
