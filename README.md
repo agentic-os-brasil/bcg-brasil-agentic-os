@@ -154,7 +154,7 @@ for a genuinely absent, disabled or failed capability.
 > end-user release or a user pilot is available. Pilot distribution, native
 > schedulers and hosted bridge operation remain release operations with their
 > own evidence. The repository `VERSION` tracks the bundle release line (current:
-> `0.1.1`); release artifacts receive an explicit semantic version and are
+> `0.1.5`); release artifacts receive an explicit semantic version and are
 > distributed as signed ZIPs through the release pipeline.
 
 ### Continuous use after installation

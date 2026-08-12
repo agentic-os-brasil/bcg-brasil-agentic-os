@@ -6,17 +6,16 @@ All notable changes will be documented here.
 
 ### Current evidence snapshot (2026-08-12)
 
-- Source baseline is `77d3728` (`origin/main` after onboarding restoration + MarkItDown
-  install + agent naming — PR #341 — plus walter skill entry-point PR #339, profile-outputs
-  schema shape PR #337, and schema registry PR #336). `validate`, `wiki validate` and
-  `wiki verify` all pass. The managed atlas bundle is current (watermark unchanged —
-  allowlist sources have not changed since 2026-08-06). No hosted CI evidence; workflows
-  remain disabled.
-- Skills bundle: 38 user-facing skills in the base bundle. All pass `validate --full` on
+- Source baseline is `ed9db1a` (`origin/main` — lightweight UserPromptSubmit context-inject
+  hook PR #342 + README/CHANGELOG/VERSION fix PR #343 + onboarding restoration PR #341;
+  bundle version bumped to 0.1.5). `validate`, `wiki validate` and `wiki verify` all pass.
+  The managed atlas bundle is current (watermark unchanged — allowlist sources have not
+  changed since 2026-08-06). No hosted CI evidence; workflows remain disabled.
+- Skills bundle: 39 user-facing skills in the base bundle. All pass `validate --full` on
   the skill metadata gate.
-- One PR open: #340 (capabilities: context_injection state reconcile — canary DEF-04).
-- Latest eval-release: 94 pass, 0 fail, 0 skip on `dist/Maestro-v0.1.4.zip`
-  (SHA256: `82b0be9a267938c3df8bcb2f84bc56bb11c677bced776a39f0b88d86545200ce`).
+- No PRs open.
+- Latest eval-release: 94 pass, 0 fail, 0 skip on `dist/Maestro-v0.1.5.zip`
+  (SHA256: `fa28d79d99906f8409589a1fddcede60f66760d046808b6bc23b5b6808901a9e`).
 
 ### Added (2026-08-11 wave)
 
