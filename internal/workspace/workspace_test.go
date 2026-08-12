@@ -75,7 +75,8 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 		t.Fatalf("ResolveReference(workspace ID) = %q, want %q", resolved, workspacePath)
 	}
 	bindingPath := filepath.Join(dataRoot, "workspaces", result.WorkspaceID, "binding.json")
-	if info, err := os.Lstat(bindingPath); err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+	if info, err := os.Lstat(bindingPath); err != nil || !info.Mode().IsRegular() ||
+		(runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("workspace binding must be a private regular file: info=%v err=%v", info, err)
 	}
 	statePath := filepath.Join(workspacePath, ".bcgos", "maestro-orchestration-state.json")
@@ -90,7 +91,8 @@ func TestInitializeCreatesInspectableHumanWorkspace(t *testing.T) {
 	if !reflect.DeepEqual(state, agentorchestration.StateSnapshot{}) {
 		t.Fatalf("initial orchestration state should be an empty snapshot: %#v", state)
 	}
-	if info, err := os.Stat(statePath); err != nil || info.Mode().Perm() != 0o600 {
+	if info, err := os.Stat(statePath); err != nil ||
+		(runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("initial orchestration state permissions = %v, want 0600 (err=%v)", info.Mode().Perm(), err)
 	}
 
