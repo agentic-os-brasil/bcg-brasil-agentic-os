@@ -534,6 +534,31 @@ for pfile in identity.json preferences.json; do
   fi
 done
 
+# 12b2: Owner self directory and 10 SELF facet placeholder files (spec 013)
+if [ -d "$MAESTRO_DIR/data/owner/self" ]; then
+  pass "data/owner/self/ directory created by scaffold"
+else
+  fail "data/owner/self/ directory NOT created by scaffold"
+fi
+SELF_FACET_COUNT=0
+for facet in owner-identity personal-context professional-role communication-style \
+             voice preferences motivations quality-bar decision-rules working-boundaries; do
+  if [ -f "$MAESTRO_DIR/data/owner/self/$facet.md" ]; then
+    SELF_FACET_COUNT=$((SELF_FACET_COUNT + 1))
+  else
+    fail "data/owner/self/$facet.md NOT created by scaffold"
+  fi
+done
+if [ "$SELF_FACET_COUNT" -eq 10 ]; then
+  pass "all 10 SELF facet placeholder files created by scaffold"
+fi
+# Verify placeholder content has ## Current section (spec 013 format)
+if grep -q "## Current" "$MAESTRO_DIR/data/owner/self/owner-identity.md" 2>/dev/null; then
+  pass "SELF facet placeholder contains ## Current section (spec 013)"
+else
+  fail "SELF facet placeholder missing ## Current section"
+fi
+
 # 12c: Hook files exist and are non-empty in the ZIP
 for hook in session-start-memory-inject.sh session-stop-dream.sh; do
   if [ -f "$MAESTRO_DIR/.claude/hooks/$hook" ] && [ -s "$MAESTRO_DIR/.claude/hooks/$hook" ]; then
@@ -593,26 +618,38 @@ INJECT2_SCRATCH=$(mktemp -d -t maestro-eval-inject2-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$INJECT2_SCRATCH"
 INJECT2_MAESTRO="$INJECT2_SCRATCH/Maestro"
 mkdir -p "$INJECT2_MAESTRO/data/memory/recent" "$INJECT2_MAESTRO/data/memory/lifetime" \
-         "$INJECT2_MAESTRO/data/profile"
+         "$INJECT2_MAESTRO/data/profile" "$INJECT2_MAESTRO/data/owner/self"
 printf '{"schema_version":1,"display_name":"Test User","role":"test","context":"","initialized":true}\n' \
   > "$INJECT2_MAESTRO/data/profile/identity.json"
 printf '# Test memory entry\nThis is a recent memory.\n' \
   > "$INJECT2_MAESTRO/data/memory/recent/2024-01-01.md"
+printf '# professional-role\n\n## Current\n\nSenior AI Scientist.\n' \
+  > "$INJECT2_MAESTRO/data/owner/self/professional-role.md"
 INJECT2_OUT=$(CLAUDE_PROJECT_DIR="$INJECT2_MAESTRO" bash "$INJECT2_MAESTRO/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
 if echo "$INJECT2_OUT" | grep -q "maestro:session-context:start"; then
   pass "session-start-memory-inject.sh emits session-context markers"
 else
   fail "session-start-memory-inject.sh does NOT emit session-context markers"
 fi
-if echo "$INJECT2_OUT" | grep -q "Memória recente"; then
-  pass "session-start-memory-inject.sh injects recent memory layer"
+if echo "$INJECT2_OUT" | grep -q "Último log diário consolidado"; then
+  pass "session-start-memory-inject.sh injects L1 daily log layer"
 else
-  fail "session-start-memory-inject.sh does NOT inject recent memory"
+  fail "session-start-memory-inject.sh does NOT inject L1 daily log layer"
 fi
 if echo "$INJECT2_OUT" | grep -q "Identidade"; then
   pass "session-start-memory-inject.sh injects identity profile"
 else
   fail "session-start-memory-inject.sh does NOT inject identity"
+fi
+if echo "$INJECT2_OUT" | grep -q "SELF do usuário"; then
+  pass "session-start-memory-inject.sh injects owner SELF facets section"
+else
+  fail "session-start-memory-inject.sh does NOT inject owner SELF facets"
+fi
+if echo "$INJECT2_OUT" | grep -q "professional-role"; then
+  pass "session-start-memory-inject.sh includes facet content from data/owner/self/"
+else
+  fail "session-start-memory-inject.sh does NOT include facet content from data/owner/self/"
 fi
 chmod -R u+w "$INJECT2_SCRATCH"
 rm -rf "$INJECT2_SCRATCH"
