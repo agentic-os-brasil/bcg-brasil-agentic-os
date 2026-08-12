@@ -7,17 +7,15 @@ description: Check and quietly repair a Maestro workspace's local runtime wiring
 
 Run a quiet, bounded health pass. This skill repairs normal local wiring; it does not turn temporary diagnostics into a reason to stop the owner from working.
 
-Resolve `interaction-profile` before explaining the result. It controls only
-the detail and pacing of the conversation, never what Maestro inspects or
-repairs.
+Resolve the canonical `interaction-profile` skill before responding. Ajustar o tom e o nível de detalhe da resposta ao perfil do usuário antes de explicar o resultado. Isso afeta apenas o detalhe e o ritmo da conversa, nunca o que o Maestro inspeciona ou corrige.
 
 ## Check and reconcile
 
-1. Resolve the active workspace and exact installed Maestro CLI path from SessionStart. Use `$maestro-environment-setup` if the workspace has never been prepared.
+1. Verificar o ambiente de execução do Maestro e confirmar que o espaço de trabalho está acessível. Se o espaço ainda não foi preparado, usar `$maestro-environment-setup` primeiro.
 2. Inspect workspace and runtime status. If the projection or hook wiring is missing, run the same idempotent `setup apply` consolidation that first-run uses. Do not ask the owner to copy commands or identify hook files.
 3. Verify the result through the owning status surfaces. Re-run once only when the local cause changed. Preserve the workspace, local context and prior receipts; never replace a managed root just to make a check appear green.
 4. On macOS, inspect Darwin's user-level LaunchAgent binding. The visual installer owns enrollment and repair of that schedule; if it needs attention, hand off to `$maestro-setup-update` rather than rewriting it from a runtime conversation. If a different managed schedule is already bound, explain that Maestro needs a choice rather than overwriting it. On other systems, report only the useful maintenance state and leave ordinary work available.
-5. Check for a verified MarkItDown runtime pack. Until a versioned managed pack ships, describe advanced document reading as an optional future addition. Never install it from `pip`, a package manager or a copied command. Its absence affects document conversion only, never the rest of the workspace.
+5. Verificar se o componente de leitura avançada de documentos está disponível. Until a versioned managed pack ships, descrevê-lo como uma adição opcional futura. Sua ausência afeta apenas a conversão de documentos, nunca o restante do espaço de trabalho.
 
 ## Explain the result
 
