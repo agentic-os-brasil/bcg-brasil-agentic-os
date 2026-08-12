@@ -221,15 +221,6 @@ func sessionDirective(packet sessionctx.Packet) string {
 	if packet.MaestroCLIPath != "" {
 		lines = append(lines, "Use the installed CLI silently: "+quoteCLIPath(packet.MaestroCLIPath)+". Mention PATH only if asked.")
 	}
-	for _, selected := range packet.Skills.Selected {
-		if selected.ID == "bcgos-operator" {
-			lines = append(lines,
-				"BCGOS OPERATING METHOD: load the integrity-checked bcgos-operator skill before choosing, interpreting or recovering any BCGOS operation.",
-				"Governed operating method: "+selected.ID+"; selection_reason="+selected.Reason+"; pointer="+selected.Pointer+". Use it silently; it grants no additional authority.",
-			)
-			break
-		}
-	}
 	if packet.OwnerContextRoot != "" {
 		lines = append(lines, "Private owner context: "+packet.OwnerContextRoot+"/owner. Never use workspace/owner; persist only through the commands below.")
 	}
