@@ -1022,9 +1022,9 @@ func TestContextRoutingAndExternalConfirmationHaveClaudeCodexParity(t *testing.T
 				t.Fatalf("adapter install = %d %s", code, output.String())
 			}
 
-			prompt := `{"session_id":"session-a","prompt":"Please use $case-kickoff for this request"}`
+			prompt := `{"session_id":"session-a","prompt":"Please use $bcg-case-kickoff for this request"}`
 			output.Reset()
-			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "case-kickoff") || !strings.Contains(output.String(), "explicit_skill_reference") || strings.Contains(output.String(), "name: case-kickoff") {
+			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK || !strings.Contains(output.String(), "bcg-case-kickoff") || !strings.Contains(output.String(), "explicit_skill_reference") || strings.Contains(output.String(), "name: bcg-case-kickoff") {
 				t.Fatalf("context routing = %d %s", code, output.String())
 			}
 
@@ -1075,11 +1075,11 @@ func TestLifecycleOffersPendingOnboardingWithoutSuppressingRequestedWork(t *test
 				t.Fatalf("session start did not select the governed onboarding guide = %d %s", code, output.String())
 			}
 
-			prompt := `{"session_id":"session-a","prompt":"Please use $case-kickoff before onboarding"}`
+			prompt := `{"session_id":"session-a","prompt":"Please use $bcg-case-kickoff before onboarding"}`
 			output.Reset()
 			if code := runHookWithInput([]string{runtimeName, "context-injection", "--adapter-source", "maestro", workspacePath}, strings.NewReader(prompt), &output, &output, func() (string, error) { return dataRoot, nil }); code != ExitOK ||
 				!strings.Contains(output.String(), "maestro-onboarding") ||
-				!strings.Contains(output.String(), "case-kickoff") {
+				!strings.Contains(output.String(), "bcg-case-kickoff") {
 				t.Fatalf("pending onboarding suppressed requested work = %d %s", code, output.String())
 			}
 		})

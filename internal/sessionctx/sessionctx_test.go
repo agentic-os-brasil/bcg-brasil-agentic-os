@@ -35,7 +35,7 @@ func TestBuildReturnsBoundedPointersAndOmitsUnapprovedSensitiveOwnerFacets(t *te
 		}, OperatingState: ownerctx.Pointer{Path: "owner/operating/work-state.md", Available: true, State: "available"}},
 		Atlas:         atlas.Status{Managed: atlas.Pointer{State: "unavailable"}, Owner: atlas.Pointer{Path: "/local/atlas/owner", Available: true, State: "available"}, Workspace: atlas.Pointer{Path: "/work/case-a/brain", Available: true, State: "available"}},
 		Execution:     execution.ActivePointer{Path: execution.ActivePointerPath, Available: true, State: execution.ActivePointerAvailable},
-		Memory:        MemorySource{State: "available", Bundle: basememory.ContextBundle{Sections: []basememory.ContextSection{{Layer: "L1", Content: "selected methods: case-kickoff", DrillDown: "versions/tx/l1.json", Truncated: false}}}},
+		Memory:        MemorySource{State: "available", Bundle: basememory.ContextBundle{Sections: []basememory.ContextSection{{Layer: "L1", Content: "selected methods: bcg-case-kickoff", DrillDown: "versions/tx/l1.json", Truncated: false}}}},
 		ContinuousUse: continuous,
 	})
 	if err := packet.Validate(); err != nil {

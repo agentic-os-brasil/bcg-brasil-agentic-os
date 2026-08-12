@@ -2,7 +2,7 @@
   "schema_version": 1,
   "direct_selection": {
     "agent_id": "workspace-agent-alpha",
-    "skill_id": "deck-storyline",
+    "skill_id": "bcg-deck",
     "allowed": true
   },
   "delegated_selection": {

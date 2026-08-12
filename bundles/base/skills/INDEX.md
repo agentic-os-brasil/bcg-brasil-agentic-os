@@ -6,11 +6,11 @@
 |---|---|---|
 | Conta e Projeto | Cria a conta e o Case Agent do projeto | `skills/account-case-setup/SKILL.md` |
 | Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
+| Case Kickoff | Build a bounded first-days plan from approved case scope | `skills/bcg-case-kickoff/SKILL.md` |
+| Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/bcg-deck/SKILL.md` |
 | Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
-| Case Kickoff | Build a bounded first-days plan from approved case scope | `skills/case-kickoff/SKILL.md` |
 | Deck Drill | Rehearse a deck against the questions the room will ask | `skills/deck-drill/SKILL.md` |
 | Deck Review | Review supplied slide text for storyline and evidence risks | `skills/deck-review/SKILL.md` |
-| Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/deck-storyline/SKILL.md` |
 | Dream Memory | Consolidate daily and weekly professional memory | `skills/dream-memory/SKILL.md` |
 | Execution Continuity | Registrar tarefas e entregas, preparar versão, criar checkpoints e retomar trabalho entre sessões | `skills/execution-continuity/SKILL.md` |
 | Expert Interview Guide | Structure a bounded interview guide from approved case questions | `skills/expert-interview-guide/SKILL.md` |
