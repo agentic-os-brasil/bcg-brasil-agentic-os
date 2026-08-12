@@ -1,13 +1,11 @@
 ---
 name: interaction-profile
-description: Resolve the active BCGOS interaction profile before selecting language, explanation depth and optional technical suggestions in a professional workflow.
+description: Resolve the active Maestro interaction profile before selecting language, explanation depth and optional technical suggestions in a professional workflow.
 ---
 
 # Interaction Profile
 
-Resolve the active user-local profile through the installed runtime adapter or
-`bcgos profile show`. Do not infer it from a role, project, client, memory or
-the user's current wording.
+Resolve the active user-local profile by reading `${CLAUDE_PROJECT_DIR}/data/profile/style.json` (preferred key: `interaction_profile`). If the file or key is absent, fall back to `${CLAUDE_PROJECT_DIR}/data/profile/identity.json`. Do not infer the profile from a role, project, client, memory or the user's current wording.
 
 ## Behavior matrix
 
