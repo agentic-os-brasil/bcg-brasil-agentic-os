@@ -46,7 +46,7 @@ done
   echo "error: macOS installer packaging requires Darwin tooling." >&2
   exit 2
 }
-for command in hdiutil lipo shasum SetFile plutil; do
+for command in hdiutil lipo shasum SetFile jq; do
   command -v "$command" >/dev/null 2>&1 || {
     echo "error: missing required command: $command" >&2
     exit 2
@@ -107,12 +107,13 @@ manifest_size="$(stat -f%z "$release_manifest")"
   echo "error: release manifest exceeds the 1 MiB packaging bound." >&2
   exit 1
 }
-plutil -convert xml1 -o /dev/null "$release_manifest" >/dev/null 2>&1 || {
-  echo "error: release manifest is not valid property-list/JSON data." >&2
+manifest_json="$(jq -e 'type == "object"' "$release_manifest" 2>/dev/null || true)"
+[ "$manifest_json" = "true" ] || {
+  echo "error: release manifest is not valid JSON object data." >&2
   exit 1
 }
-manifest_product="$(plutil -extract product raw -o - "$release_manifest" 2>/dev/null || true)"
-manifest_release="$(plutil -extract release raw -o - "$release_manifest" 2>/dev/null || true)"
+manifest_product="$(jq -er '.product' "$release_manifest" 2>/dev/null || true)"
+manifest_release="$(jq -er '.release' "$release_manifest" 2>/dev/null || true)"
 [ "$manifest_product" = "maestro" ] || {
   echo "error: release manifest product must be maestro." >&2
   exit 1
@@ -189,13 +190,13 @@ cat > "$app/Contents/Info.plist" <<EOF
 <key>CFBundleDisplayName</key><string>Maestro Installer</string>
 <key>CFBundleExecutable</key><string>Maestro Installer</string>
 <key>CFBundleIconFile</key><string>maestro.icns</string>
-<key>CFBundleIdentifier</key><string>com.bcgbrasil.maestro.installer.runtime</string>
+<key>CFBundleIdentifier</key><string>com.bcgbrasil.maestro.installer</string>
 <key>CFBundleName</key><string>Maestro Installer</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>$version</string>
 <key>CFBundleVersion</key><string>${version}-unsigned-candidate</string>
 <key>LSMinimumSystemVersion</key><string>12.0</string>
-<key>LSUIElement</key><false/>
+<key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 EOF
@@ -205,17 +206,11 @@ cat > "$app/Contents/MacOS/Maestro Installer" <<EOF
 #!/bin/sh
 set -eu
 contents_dir=\$(CDPATH= cd -- "\$(dirname -- "\$0")/.." && pwd)
-log_root="\${TMPDIR:-/tmp}/maestro-installer"
-mkdir -p "\$log_root"
-log_file="\$log_root/installer-\$\$.log"
-nohup "\$contents_dir/Resources/maestro-installer" \\
+exec "\$contents_dir/Resources/maestro-installer" \\
   --wizard-dir "\$contents_dir/Resources/wizard" \\
   --release-dir "\$contents_dir/Resources/release" \\
   --authority-registry "\$contents_dir/Resources/authority-registry.json" \\
-  --bootstrapper "\$contents_dir/Resources/$bootstrap_name" \\
-  >"\$log_file" 2>&1 < /dev/null &
-printf '%s\n' "\$!" > "\$log_root/last-launch.pid"
-exit 0
+  --bootstrapper "\$contents_dir/Resources/$bootstrap_name"
 EOF
 chmod 755 "$app/Contents/MacOS/Maestro Installer"
 

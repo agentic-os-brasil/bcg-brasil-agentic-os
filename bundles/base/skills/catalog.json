@@ -16,11 +16,18 @@
       "relative_path": "skills/agent-identity-setup/SKILL.md"
     },
     {
-      "id": "bcgos-operator",
-      "display_name": "BCGOS Operator",
-      "trigger": "Control Maestro health, updates and recovery",
-      "default_prompt": "Use $bcgos-operator to inspect and operate Maestro setup, health, update or recovery without turning the CLI into the normal work experience.",
-      "relative_path": "skills/bcgos-operator/SKILL.md"
+      "id": "bcg-case-kickoff",
+      "display_name": "Case Kickoff",
+      "trigger": "Build a bounded first-days plan from approved case scope",
+      "default_prompt": "Use $bcg-case-kickoff to turn the approved case scope into a bounded kickoff plan.",
+      "relative_path": "skills/bcg-case-kickoff/SKILL.md"
+    },
+    {
+      "id": "bcg-deck",
+      "display_name": "Deck and Storyline",
+      "trigger": "Build one decision-led professional storyline and deck plan",
+      "default_prompt": "Use $bcg-deck to turn the approved case evidence into a decision-led deck plan.",
+      "relative_path": "skills/bcg-deck/SKILL.md"
     },
     {
       "id": "case-agent-setup",
@@ -28,13 +35,6 @@
       "trigger": "Interview and research one project case safely",
       "default_prompt": "Use $case-agent-setup to create or refresh this Case Agent with reviewed, sourced context.",
       "relative_path": "skills/case-agent-setup/SKILL.md"
-    },
-    {
-      "id": "case-kickoff",
-      "display_name": "Case Kickoff",
-      "trigger": "Build a bounded first-days plan from approved case scope",
-      "default_prompt": "Use $case-kickoff to turn the approved case scope into a bounded kickoff plan.",
-      "relative_path": "skills/case-kickoff/SKILL.md"
     },
     {
       "id": "deck-drill",
@@ -49,13 +49,6 @@
       "trigger": "Review supplied slide text for storyline and evidence risks",
       "default_prompt": "Use $deck-review to review the supplied slide text without editing or generating a deck.",
       "relative_path": "skills/deck-review/SKILL.md"
-    },
-    {
-      "id": "deck-storyline",
-      "display_name": "Deck and Storyline",
-      "trigger": "Build one decision-led professional storyline and deck plan",
-      "default_prompt": "Use $deck-storyline to turn the approved case evidence into a decision-led deck plan.",
-      "relative_path": "skills/deck-storyline/SKILL.md"
     },
     {
       "id": "dream-memory",
@@ -105,6 +98,13 @@
       "trigger": "Find the root cause of a wrong or surprising result",
       "default_prompt": "Use $investigate to find why this output is wrong, with the evidence that establishes the cause.",
       "relative_path": "skills/investigate/SKILL.md"
+    },
+    {
+      "id": "maestro-doctor",
+      "display_name": "Maestro Doctor",
+      "trigger": "Run a plain-language health check on the Maestro install",
+      "default_prompt": "Use $maestro-doctor to check whether my Maestro install is healthy and tell me what to do about any issues.",
+      "relative_path": "skills/maestro-doctor/SKILL.md"
     },
     {
       "id": "maestro-environment-setup",

@@ -34,20 +34,20 @@ func TestDispatcherIssuesOneRootPacketAndRejectsNestedDelegation(t *testing.T) {
 
 func TestDispatcherKeepsDirectSkillsInsideCaseAgent(t *testing.T) {
 	dispatcher := newTestDispatcher(t)
-	if err := dispatcher.SelectDirectSkill(WorkPacket{}, "case-agent-alpha", "case-cap", "deck-storyline"); err == nil {
+	if err := dispatcher.SelectDirectSkill(WorkPacket{}, "case-agent-alpha", "case-cap", "bcg-deck"); err == nil {
 		t.Fatal("inactive Case selected a skill")
 	}
 	root, decision, err := dispatcher.StartRoot(PacketRequest{TargetAgentID: "case-agent-alpha", ScopeKind: "case", ScopeID: "alpha", Objective: "Prepare the bounded case analysis.", TTL: time.Hour})
 	if err != nil || !decision.Allowed {
 		t.Fatalf("root dispatch failed: %#v %v", decision, err)
 	}
-	if err := dispatcher.SelectDirectSkill(root, "case-agent-alpha", "case-cap", "deck-storyline"); err != nil {
+	if err := dispatcher.SelectDirectSkill(root, "case-agent-alpha", "case-cap", "bcg-deck"); err != nil {
 		t.Fatal(err)
 	}
-	if err := dispatcher.SelectDirectSkill(root, "walter", "walter-cap", "deck-storyline"); err == nil {
+	if err := dispatcher.SelectDirectSkill(root, "walter", "walter-cap", "bcg-deck"); err == nil {
 		t.Fatal("Walter selected a Case skill")
 	}
-	if err := dispatcher.SelectDirectSkill(root, "case-agent-alpha", "forged", "deck-storyline"); err == nil {
+	if err := dispatcher.SelectDirectSkill(root, "case-agent-alpha", "forged", "bcg-deck"); err == nil {
 		t.Fatal("forged capability selected a skill")
 	}
 	if decision := dispatcher.FinishRoot(root); !decision.Allowed {
@@ -105,7 +105,7 @@ func TestDispatcherBoundsPacketAndSkillFields(t *testing.T) {
 	if _, _, err := dispatcher.StartRoot(PacketRequest{TargetAgentID: "case-agent-alpha", ScopeKind: "case", ScopeID: "alpha", Objective: large, TTL: time.Hour}); err == nil {
 		t.Fatal("oversized objective accepted")
 	}
-	if _, _, err := dispatcher.StartRoot(PacketRequest{TargetAgentID: "case-agent-alpha", ScopeKind: "case", ScopeID: "alpha", Objective: "invalid delegated skill", SkillID: "deck-storyline", TTL: time.Hour}); err == nil {
+	if _, _, err := dispatcher.StartRoot(PacketRequest{TargetAgentID: "case-agent-alpha", ScopeKind: "case", ScopeID: "alpha", Objective: "invalid delegated skill", SkillID: "bcg-deck", TTL: time.Hour}); err == nil {
 		t.Fatal("skill selection crossed packet boundary")
 	}
 }
