@@ -37,6 +37,15 @@ jobs:
           } | tee -a "${GITHUB_STEP_SUMMARY}"
       - name: Run full development harness (includes parsed action-pin policy)
         id: development_harness
+        env:
+          # Skip cross-OS artifact verification tests (macOS/Windows portable
+          # bundles) that require matching runtime platform. The disabled
+          # 3-OS matrix workflow (validate.yml.disabled) covers them on their
+          # native runners; remove this env when that workflow is restored.
+          # Tracking issue: https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/issues/327
+          # TTL: 2026-11-02 — re-triage or restore matrix before this date so
+          # the five OS-gated guarantees do not drift out of CI indefinitely.
+          HARNESS_SKIP_CROSS_OS_TESTS: "1"
         run: go run ./dev/harness validate --full
       - name: Smoke-test local trial installation
         shell: bash
