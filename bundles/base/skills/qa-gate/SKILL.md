@@ -1,6 +1,6 @@
 ---
 name: qa-gate
-description: Build an evidence-gated QA packet for a bounded change and classify it as pass, hold or unavailable without self-approving release.
+description: Build an evidence-gated QA packet for a bounded change and classify it as pass, hold or unavailable without self-approving release. Use for "QA this change", "gate this release", "classify quality", or before shipping a deliverable that needs evidence.
 ---
 
 > **Audience:** agent-facing only. This skill is not surfaced to the human owner.

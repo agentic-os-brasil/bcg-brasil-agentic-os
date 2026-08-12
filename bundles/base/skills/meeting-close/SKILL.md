@@ -1,6 +1,6 @@
 ---
 name: meeting-close
-description: Produce a reviewable closure packet from supplied meeting notes by structuring work items, decisions, unresolved follow-ups and next actions.
+description: Produce a reviewable closure packet from supplied meeting notes by structuring work items, decisions, unresolved follow-ups and next actions. Use for "close this meeting", "wrap the call", "prep the recap to send", or when notes need to become a shareable summary.
 ---
 
 # Meeting Close

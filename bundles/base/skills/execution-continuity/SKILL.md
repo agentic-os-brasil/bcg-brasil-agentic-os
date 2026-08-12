@@ -1,6 +1,6 @@
 ---
 name: execution-continuity
-description: Register, pause and resume bounded professional work with local checkpoints across sessions.
+description: Register, pause and resume bounded professional work with local checkpoints across sessions. Use for "register this task", "pause and checkpoint", "resume where I left off", "prep a version", or when work must survive a session close.
 ---
 
 # Execution Continuity

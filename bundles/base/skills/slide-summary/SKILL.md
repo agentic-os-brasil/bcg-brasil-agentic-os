@@ -1,6 +1,6 @@
 ---
 name: slide-summary
-description: Convert supplied deck text into a slide-by-slide message map and narrative arc without extracting files, saving content or creating a deck.
+description: Convert supplied deck text into a slide-by-slide message map and narrative arc without extracting files, saving content or creating a deck. Use for "summarize this deck", "map the slide messages", "what's the storyline", or when only the arc of an existing deck is needed.
 ---
 
 # Slide Summary
