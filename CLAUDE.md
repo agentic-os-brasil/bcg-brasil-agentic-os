@@ -19,6 +19,34 @@ For a contributor who is new to Git, read `.claude/README.md` and begin with `$s
 
 Canonical development skills remain under `dev/skills/`. Claude projections must stay thin and development harness content must never enter the user bundle. Codex remains compatible through the shared contract in `AGENTS.md`, but Claude is the primary, first-tested development surface.
 
+## Folder structure
+
+The user-facing installation is organized around three top-level surfaces:
+
+- `.claude/` — Claude Code harness: skills projections, hooks, settings.
+- `bundles/` — canonical OKF-1 bundles that make up Maestro. Includes:
+  - `base/` — user-facing skills, agents, contracts, memory and profile policies, distribution and manifest.
+  - `tech-core/` — engineering skills bundle (tests, review, pipelines, spec-driven delivery). Loaded on demand.
+  - `catalog/` — reserved extension slot for user-populated skills in future releases.
+- `data/` — user workspace, created by the first-run scaffold and never overwritten by updates. Subtree:
+  - `agents/` — per-agent state (working memory, decisions, context).
+  - `cases/` — active client cases; each case has `brain/` (projects, decisions, tasks, deliverables, sources, canon). `cases/.active` points at the active case ID.
+  - `memory/` — tiered memory used by dream-memory and session injection:
+    - `lifetime/` — L3 long-term compact, high-signal facts.
+    - `medium-term/` — durable summaries between L2 and L3.
+    - `weekly/` — L2 weekly syntheses.
+    - `recent/` — L1 daily consolidated logs.
+    - `policies/` — memory rules read by dream-memory.
+  - `owner/` — owner context tree:
+    - `self/` — ten SELF facets (identity, preferences, quality bar, decision rules, etc.) filled by `/maestro-onboarding`.
+    - `interview/` — interview drafts and confirmations.
+    - `observations/` — append-only observations log.
+    - `operating/` — work-state continuity between sessions.
+  - `workspaces/` — active projects that are not case-scoped.
+  - `profile/` — identity, preferences, style and onboarding markers.
+- `VERSION` — bundle version marker (source of truth for `bundle_version` in every manifest).
+- `README-INSTALL.md` — first-run and update ritual for the non-technical user.
+
 ## Runtime dependencies
 
 The scaffold and session-start hooks depend on the `CLAUDE_PROJECT_DIR` environment variable, which Claude Code injects when a project is opened through the standard flow. The hooks include a hardened fallback that locates the project by looking for a `VERSION` file next to the hook, but in some non-standard setups the injection may still fail:
