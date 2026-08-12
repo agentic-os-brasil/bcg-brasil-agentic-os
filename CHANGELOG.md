@@ -4,21 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-### Current evidence snapshot (2026-08-11)
+### Current evidence snapshot (2026-08-12)
 
-- Source baseline is `73c05e5` (`origin/main` after a large continuous wave: skills (#292,
-  #293, #288), atlasops (#297), runtime packs (#295), Windows harness fixes (#299, #300,
-  #301), ZIP distribution (#302, #303), platform-portability (#279, #282, #283, #284, #285,
-  #287, #291, #296), owner-atlas docs (#286, #289, #290, #294), and Maestro runtime/installer
-  wave (#248–#276, #278, #280). `validate`, `wiki validate` and `wiki verify` all pass. The
-  managed atlas bundle is current (watermark unchanged — allowlist sources have not changed
-  since 2026-08-06). No hosted CI evidence; workflows remain disabled.
-- Skills bundle grows from 16 to 34; all new skills pass `validate --full` on the skill
-  metadata gate. No native-qualified runtime evidence is claimed beyond the local gate.
-- Windows compatibility: three targeted fixes (#299, #300, #301) land the harness gate on
-  Windows without requiring elevation or elevated symlink permissions. macOS ad-hoc portable
-  activation and platform-portable ZIP generation now exist but are not notarized or clean-
-  device tested.
+- Source baseline is `f867c52` (`origin/main` after post-wave additions: quality pass (#304),
+  pointer discipline (#305), snapshot annotation (#306), generate-portable-zip dev skill (#308),
+  eval-quality fixes (#310), and onboarding document-ingestion surface (#312)). `validate`,
+  `wiki validate` and `wiki verify` all pass. The managed atlas bundle is current (watermark
+  unchanged — allowlist sources have not changed since 2026-08-06). No hosted CI evidence;
+  workflows remain disabled.
+- Skills bundle remains 34 user-facing skills; `generate-portable-zip` is a development
+  operator skill only (not distributed in the user bundle). All skills pass `validate --full`
+  on the skill metadata gate.
+- Two PRs open for merge: #316 (Maestro session state machine — first-session UX enforcement
+  in CLAUDE.md + MarkItDown TTL check) and #317 (skills quality pass, SessionStart skills
+  rollup, trigger phrases for 12 skills, rollup-size sensor). Both Walter-approved.
 
 ### Added (2026-08-11 wave)
 
@@ -58,6 +57,20 @@ All notable changes will be documented here.
 - [PR #305] Maestro user-template pointer discipline: `CLAUDE.md` and `WELCOME.md` now defer
   to `README-INSTALL.md` as the single canonical source for the update ritual, eliminating a
   3-way contradiction that could produce divergent installation instructions across files.
+
+### Added (2026-08-12 additions)
+
+- [PR #304] Skills quality pass: content depth, leakage removal, and contract strings added
+  across multiple base skills; `quantitative-analysis` wording tightened to prevent illustrative
+  placeholder numbers.
+- [PR #308] `generate-portable-zip` development skill: single-entry-point operator wrapper
+  that orchestrates the three-phase portable ZIP pipeline (candidate release tree, platform
+  bootstrappers, ZIP export with provenance). Development tooling only — not distributed in
+  the user bundle.
+- [PR #310] Eval-quality fixes: resolves A5, B7 and B1 gaps in the ZIP quality evaluation
+  harness.
+- [PR #312] Onboarding document ingestion surface: `maestro-onboarding` Step 4 menu now
+  includes document ingestion (CV, PDF, DOCX) as a fifth explicit capability bullet.
 
 ### Evidence snapshot (2026-08-06)
 
