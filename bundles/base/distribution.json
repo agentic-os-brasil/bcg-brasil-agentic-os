@@ -342,6 +342,14 @@
       "path": "skills/deck-review/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/decision-log-entry/SKILL.md",
+      "path": "skills/decision-log-entry/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/decision-log-entry/agents/openai.yaml",
+      "path": "skills/decision-log-entry/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/dream-memory/SKILL.md",
       "path": "skills/dream-memory/SKILL.md"
     },
