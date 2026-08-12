@@ -44,6 +44,20 @@
       "relative_path": "skills/case-agent-setup/SKILL.md"
     },
     {
+      "id": "case-canon-ingest",
+      "display_name": "Case Canon Ingest",
+      "trigger": "Compile reviewed insights into the active case's persistent canon layer",
+      "default_prompt": "Use $case-canon-ingest to add this reviewed insight to the case canon.",
+      "relative_path": "skills/case-canon-ingest/SKILL.md"
+    },
+    {
+      "id": "client-delivery-gate",
+      "display_name": "Client Delivery Gate",
+      "trigger": "Three-lens quality check before any output reaches a client",
+      "default_prompt": "Use $client-delivery-gate to review this before delivering to the client.",
+      "relative_path": "skills/client-delivery-gate/SKILL.md"
+    },
+    {
       "id": "craft-update",
       "display_name": "Craft Update",
       "trigger": "Document a personal method or working preference deliberately",
@@ -63,6 +77,13 @@
       "trigger": "Review supplied slide text for storyline and evidence risks",
       "default_prompt": "Use $deck-review to review the supplied slide text without editing or generating a deck.",
       "relative_path": "skills/deck-review/SKILL.md"
+    },
+    {
+      "id": "decision-log-entry",
+      "display_name": "Decision Log Entry",
+      "trigger": "Capture a structural case decision in the D-NNN log before it escapes",
+      "default_prompt": "Use $decision-log-entry to record this decision in the active case log.",
+      "relative_path": "skills/decision-log-entry/SKILL.md"
     },
     {
       "id": "dream-memory",

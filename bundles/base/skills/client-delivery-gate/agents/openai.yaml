@@ -1,0 +1,4 @@
+interface:
+  display_name: "Client Delivery Gate"
+  short_description: "Three-lens pre-delivery quality check before any output reaches a client"
+  default_prompt: "Use $client-delivery-gate to review this before delivering to the client."

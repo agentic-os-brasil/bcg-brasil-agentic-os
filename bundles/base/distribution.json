@@ -322,6 +322,22 @@
       "path": "skills/case-agent-setup/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/case-canon-ingest/SKILL.md",
+      "path": "skills/case-canon-ingest/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/case-canon-ingest/agents/openai.yaml",
+      "path": "skills/case-canon-ingest/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/client-delivery-gate/SKILL.md",
+      "path": "skills/client-delivery-gate/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/client-delivery-gate/agents/openai.yaml",
+      "path": "skills/client-delivery-gate/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/catalog.json",
       "path": "skills/catalog.json"
     },
@@ -340,6 +356,14 @@
     {
       "source": "bundles/base/skills/deck-review/agents/openai.yaml",
       "path": "skills/deck-review/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/decision-log-entry/SKILL.md",
+      "path": "skills/decision-log-entry/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/decision-log-entry/agents/openai.yaml",
+      "path": "skills/decision-log-entry/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/dream-memory/SKILL.md",

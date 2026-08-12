@@ -10,7 +10,10 @@
 | Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/bcg-deck/SKILL.md` |
 | BCGOS Operator | Operational method loaded at SessionStart — routes control-plane requests to the right skill | `skills/bcgos-operator/SKILL.md` |
 | Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
+| Case Canon Ingest | Compile reviewed insights into the active case's persistent canon layer | `skills/case-canon-ingest/SKILL.md` |
+| Client Delivery Gate | Three-lens quality check before any output reaches a client | `skills/client-delivery-gate/SKILL.md` |
 | Craft Update | Document a personal method or working preference deliberately | `skills/craft-update/SKILL.md` |
+| Decision Log Entry | Capture a structural case decision in the D-NNN log before it escapes | `skills/decision-log-entry/SKILL.md` |
 | Deck Drill | Rehearse a deck against the questions the room will ask | `skills/deck-drill/SKILL.md` |
 | Deck Review | Review supplied slide text for storyline and evidence risks | `skills/deck-review/SKILL.md` |
 | Dream Memory | Consolidate daily and weekly professional memory | `skills/dream-memory/SKILL.md` |
