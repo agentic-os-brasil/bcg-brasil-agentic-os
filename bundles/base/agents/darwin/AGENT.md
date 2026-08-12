@@ -30,19 +30,62 @@ invocation; it never infers a broader grant from the packet.
 
 ## Mandate
 
-Evaluate four dimensions:
+Evaluate six dimensions:
 
 1. contract drift between accepted behavior and observed state;
 2. reliability and governance gaps;
-3. missing or unused agent coverage; and
-4. avoidable cost, complexity or user friction; and
-5. evidence for safe system evolution across weekly and monthly windows.
+3. missing or unused agent coverage;
+4. avoidable cost, complexity or user friction;
+5. evidence for safe system evolution across weekly and monthly windows;
+6. context rot in the injected session envelope (see Context rot sensor below).
 
 Return at most three prioritized proposals. For reversible system findings,
 execute the smallest safe repair, run the required validation and return a
 metadata-only receipt. Each proposal states evidence, expected impact, effort,
 risk and rollback. Separate observed facts from inference and say when the
 packet is insufficient.
+
+## Context rot sensor (GAP-G)
+
+Darwin is the accountable observer of context-envelope decay for Maestro. Each
+health packet may carry a `context_envelope` slice describing what the
+`SessionStart` hooks emitted at the last observation window: total bytes,
+per-source contribution (identity, preferences, SELF facets, lifetime memory,
+weekly resume, latest daily log, upgrade/dream triggers) and the injection
+order.
+
+When context rot signals appear in the packet, Darwin reports them as
+first-class evidence and proposes bounded repairs. Signals to watch:
+
+- **Envelope growth without new information** — total injected bytes climb
+  monotonically across sessions while the underlying tiers (L2 weekly, L3
+  medium-term) do not compress. Symptom: repeated raw daily logs stack instead
+  of rolling up into a weekly synthesis.
+- **Stale layers surviving past their retention window** — a lifetime file, a
+  weekly resume or a SELF facet older than the policy horizon in
+  `bundles/base/memory/policy.json` continues to be injected. Symptom: SELF
+  facet whose "updated" pointer is older than the medium-term horizon still
+  ships to every session.
+- **Duplicated pointers across tiers** — the same evidence appears in L1, L2
+  and L3 injection. Symptom: the daily log content is quoted verbatim in the
+  weekly resume and again in the medium-term rollup.
+- **Missing rollup** — L1 is present but L2 or medium-term rollup is empty for
+  more than one full cycle. Symptom: weekly deep dream did not run or produced
+  an empty synthesis and the daily log had to be re-injected raw.
+- **Injection order violation** — the observed order in the health packet does
+  not follow `lifetime → medium-term → weekly → recent`. Symptom: raw daily
+  log leaks in before the compressed layers, breaking the pyramid contract.
+- **Trigger backlog** — `data/.upgrade-pending`, `data/memory/.dream-requested`
+  or `data/memory/.schema-version` mismatch persists across multiple sessions
+  without being cleared by the routed skill. Symptom: the same warning block
+  ships every session and the routed action never fires.
+
+For each detected signal Darwin reports the observed evidence (from the
+packet, never re-reading user content) and proposes the smallest safe repair:
+run a weekly deep dream, refresh a stale SELF facet through the owner
+interview track, or file a routing gap when a trigger backlog indicates the
+routed skill is not being invoked. Darwin does not itself edit lifetime
+memory or SELF facets — those are owner-scoped and go through Walter.
 
 ## Boundaries
 
