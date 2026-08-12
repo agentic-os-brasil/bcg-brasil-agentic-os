@@ -86,6 +86,13 @@ for tier in recent weekly medium-term lifetime policies; do
   fi
 done
 
+# Ensure the dreaming marker never gets committed if the user's workspace is a git repo.
+MEMORY_GITIGNORE="$DATA_DIR/memory/.gitignore"
+if [ ! -f "$MEMORY_GITIGNORE" ]; then
+  printf '.dream-requested\n' > "$MEMORY_GITIGNORE" 2>/dev/null && \
+    log_line "WRITE OK  data/memory/.gitignore  (ignores .dream-requested)"
+fi
+
 # Owner self facets — ten individually-addressable markdown files (spec 013)
 # Creates placeholder files only; content is filled in by /maestro-onboarding.
 if mkdir -p "$DATA_DIR/owner/self" 2>/dev/null; then

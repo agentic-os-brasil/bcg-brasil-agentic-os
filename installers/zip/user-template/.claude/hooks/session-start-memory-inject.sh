@@ -101,7 +101,9 @@ if [ -f "$DREAM_MARKER" ]; then
   printf '<!-- maestro:dream-trigger: marker=%s -->\n' "$DREAM_MARKER"
   printf 'O marcador `.dream-requested` foi detectado (escrito pelo hook da sessão anterior).\n'
   printf '\n**Ação obrigatória:** invoque `/dream-memory` (ciclo diário) como primeira ação desta sessão, antes de responder ao usuário ou executar qualquer tarefa.\n'
-  printf '\nApós o ciclo completar com sucesso, apague o marcador: `%s`\n' "$DREAM_MARKER"
+  # Deterministic marker consumption: delete after emitting the trigger block so
+  # a subsequent session start does not re-fire even if the LLM skips /dream-memory.
+  rm -f "$DREAM_MARKER" 2>/dev/null || true
 fi
 
 # Profile (highest routing priority — who the user is and how they prefer to work)
