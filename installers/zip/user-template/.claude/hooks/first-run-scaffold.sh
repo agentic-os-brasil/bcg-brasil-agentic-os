@@ -62,6 +62,98 @@ else
   log_line "MKDIR FAIL  data/owner/self  (permissions or path issue)"
 fi
 
+# Owner context tree — extended structure per spec 013
+# registry.json — policy/pointer index for all owner sub-trees
+if [ ! -f "$DATA_DIR/owner/registry.json" ]; then
+  cat > "$DATA_DIR/owner/registry.json" 2>/dev/null <<'EOF'
+{
+  "schema_version": 1,
+  "trees": {
+    "self":         "owner/self/",
+    "operating":    "owner/operating/",
+    "observations": "owner/observations/",
+    "interview":    "owner/interview/"
+  },
+  "initialized": false
+}
+EOF
+  log_line "WRITE OK  data/owner/registry.json (placeholder)"
+fi
+
+# owner/self/README.md — canonical index of the 10 SELF facets
+if [ ! -f "$DATA_DIR/owner/self/README.md" ]; then
+  cat > "$DATA_DIR/owner/self/README.md" 2>/dev/null <<'EOF'
+# SELF — Owner Context Facets
+
+Dez arquivos individualmente endereçáveis. Preenchidos por /maestro-onboarding.
+
+| Facet | Arquivo |
+|---|---|
+| Identidade | owner-identity.md |
+| Contexto pessoal | personal-context.md |
+| Papel profissional | professional-role.md |
+| Estilo de comunicação | communication-style.md |
+| Voz | voice.md |
+| Preferências | preferences.md |
+| Motivações | motivations.md |
+| Barra de qualidade | quality-bar.md |
+| Regras de decisão | decision-rules.md |
+| Limites de trabalho | working-boundaries.md |
+EOF
+  log_line "WRITE OK  data/owner/self/README.md"
+fi
+
+# owner/operating/work-state.md — work continuity placeholder
+if mkdir -p "$DATA_DIR/owner/operating" 2>/dev/null; then
+  log_line "MKDIR OK  data/owner/operating"
+  if [ ! -f "$DATA_DIR/owner/operating/work-state.md" ]; then
+    cat > "$DATA_DIR/owner/operating/work-state.md" 2>/dev/null <<'EOF'
+# Work State
+
+_Não inicializado. Atualizado automaticamente pelo Maestro ao final de cada sessão de trabalho._
+
+## Last session
+- date: —
+- active_project: —
+- last_decision: —
+
+## Open threads
+_Nenhum registrado._
+EOF
+    log_line "WRITE OK  data/owner/operating/work-state.md (placeholder)"
+  fi
+else
+  log_line "MKDIR FAIL  data/owner/operating"
+fi
+
+# owner/observations/ — append-only observations log
+if mkdir -p "$DATA_DIR/owner/observations" 2>/dev/null; then
+  log_line "MKDIR OK  data/owner/observations"
+  if [ ! -f "$DATA_DIR/owner/observations/observations.jsonl" ]; then
+    printf '' > "$DATA_DIR/owner/observations/observations.jsonl" 2>/dev/null && \
+      log_line "WRITE OK  data/owner/observations/observations.jsonl (empty)"
+  fi
+else
+  log_line "MKDIR FAIL  data/owner/observations"
+fi
+
+# owner/interview/ — interview confirmations + drafts
+if mkdir -p "$DATA_DIR/owner/interview/drafts" 2>/dev/null; then
+  log_line "MKDIR OK  data/owner/interview/drafts"
+  if [ ! -f "$DATA_DIR/owner/interview/confirmations.json" ]; then
+    cat > "$DATA_DIR/owner/interview/confirmations.json" 2>/dev/null <<'EOF'
+{
+  "schema_version": 1,
+  "completed_tracks": [],
+  "last_updated": null
+}
+EOF
+    log_line "WRITE OK  data/owner/interview/confirmations.json (placeholder)"
+  fi
+else
+  log_line "MKDIR FAIL  data/owner/interview/drafts"
+fi
+
 if [ ! -d "$DATA_DIR/agents" ]; then
   log_line "ABORT  data/agents was not created — hook exiting fail-open"
   BREADCRUMB_BODY="Maestro first-run scaffold failed at $TS.

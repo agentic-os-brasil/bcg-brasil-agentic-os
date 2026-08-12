@@ -654,6 +654,77 @@ fi
 chmod -R u+w "$INJECT2_SCRATCH"
 rm -rf "$INJECT2_SCRATCH"
 
+# 12i: GAP-A — maestro-doctor references correct bundle names (tech-core, not data-practice)
+DOCTOR_SKILL="$MAESTRO_DIR/bundles/base/skills/maestro-doctor/SKILL.md"
+if [ -f "$DOCTOR_SKILL" ]; then
+  if grep -q "bundles/data-practice" "$DOCTOR_SKILL" || grep -q "bundles/engineering-core" "$DOCTOR_SKILL"; then
+    fail "maestro-doctor still references obsolete bundle names (data-practice/engineering-core)"
+  else
+    pass "maestro-doctor references correct bundle names (no data-practice/engineering-core)"
+  fi
+  if grep -q "bundles/tech-core" "$DOCTOR_SKILL"; then
+    pass "maestro-doctor explicitly checks for bundles/tech-core"
+  else
+    fail "maestro-doctor does NOT check for bundles/tech-core"
+  fi
+  if grep -q "data/owner" "$DOCTOR_SKILL"; then
+    pass "maestro-doctor checks for data/owner/ in workspace health"
+  else
+    fail "maestro-doctor does NOT check for data/owner/ in workspace health"
+  fi
+else
+  fail "maestro-doctor/SKILL.md not found — cannot check bundle names"
+fi
+
+# 12j: GAP-B — bcgos-operator skill exists and is registered in catalog
+BCGOS_OP_SKILL="$MAESTRO_DIR/bundles/base/skills/bcgos-operator/SKILL.md"
+CATALOG="$MAESTRO_DIR/bundles/base/skills/catalog.json"
+if [ -f "$BCGOS_OP_SKILL" ]; then
+  pass "bcgos-operator/SKILL.md exists"
+else
+  fail "bcgos-operator/SKILL.md NOT found"
+fi
+if [ -f "$CATALOG" ] && grep -q '"bcgos-operator"' "$CATALOG"; then
+  pass "bcgos-operator registered in catalog.json"
+else
+  fail "bcgos-operator NOT registered in catalog.json"
+fi
+
+# 12k: GAP-B — session-start-memory-inject.sh emits bcgos-operator pointer
+INJECT_HOOK_BUILT="$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh"
+if [ -f "$INJECT_HOOK_BUILT" ] && grep -q "bcgos-operator" "$INJECT_HOOK_BUILT"; then
+  pass "session-start-memory-inject.sh emits bcgos-operator pointer"
+else
+  fail "session-start-memory-inject.sh does NOT emit bcgos-operator pointer"
+fi
+
+# 12l: GAP-F — owner extended context tree scaffolded
+SCAFFOLD_HOOK="$MAESTRO_DIR/.claude/hooks/first-run-scaffold.sh"
+if [ -f "$SCAFFOLD_HOOK" ]; then
+  if grep -q "owner/registry.json" "$SCAFFOLD_HOOK"; then
+    pass "first-run-scaffold.sh creates owner/registry.json"
+  else
+    fail "first-run-scaffold.sh does NOT create owner/registry.json"
+  fi
+  if grep -q "owner/operating" "$SCAFFOLD_HOOK"; then
+    pass "first-run-scaffold.sh creates owner/operating/"
+  else
+    fail "first-run-scaffold.sh does NOT create owner/operating/"
+  fi
+  if grep -q "owner/observations" "$SCAFFOLD_HOOK"; then
+    pass "first-run-scaffold.sh creates owner/observations/"
+  else
+    fail "first-run-scaffold.sh does NOT create owner/observations/"
+  fi
+  if grep -q "owner/interview" "$SCAFFOLD_HOOK"; then
+    pass "first-run-scaffold.sh creates owner/interview/"
+  else
+    fail "first-run-scaffold.sh does NOT create owner/interview/"
+  fi
+else
+  fail "first-run-scaffold.sh not found — cannot check owner context tree"
+fi
+
 # --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------

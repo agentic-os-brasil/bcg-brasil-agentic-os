@@ -18,14 +18,14 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
    - `CLAUDE.md`
    - `.claude/settings.json`
    - `.claude/hooks/first-run-scaffold.sh`
-   - `bundles/base/`, `bundles/data-practice/`, `bundles/engineering-core/`
+   - `bundles/base/`, `bundles/tech-core/`
 
 2. **Workspace present and healthy** — verify:
    - `data/` exists and is a directory
-   - `data/agents/`, `data/memory/`, `data/profile/`, `data/workspaces/` exist
+   - `data/agents/`, `data/memory/`, `data/profile/`, `data/workspaces/`, `data/owner/` exist
    - `data/.initialized` exists (created by first-run-scaffold on session 1)
 
-3. **Hook wired** — read `.claude/settings.json` and confirm SessionStart lists `first-run-scaffold.sh`.
+3. **Hooks wired** — read `.claude/settings.json` and confirm SessionStart lists both `first-run-scaffold.sh` and `session-start-memory-inject.sh`, and SessionStop lists `session-stop-dream.sh`.
 
 4. **Version readable** — read `VERSION`, confirm it matches `X.Y.Z` shape.
 
