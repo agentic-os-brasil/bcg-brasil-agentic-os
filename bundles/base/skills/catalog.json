@@ -51,6 +51,13 @@
       "relative_path": "skills/craft-update/SKILL.md"
     },
     {
+      "id": "decision-log-entry",
+      "display_name": "Decision Log Entry",
+      "trigger": "Register a structural case decision in the active case decision log",
+      "default_prompt": "Use $decision-log-entry to register this decision in the active case log.",
+      "relative_path": "skills/decision-log-entry/SKILL.md"
+    },
+    {
       "id": "deck-drill",
       "display_name": "Deck Drill",
       "trigger": "Rehearse a deck against the questions the room will ask",
