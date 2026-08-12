@@ -147,7 +147,7 @@ func TestResolveReferenceRejectsSymlinkedBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(target, filepath.Join(directory, "binding.json")); err != nil {
-		t.Fatal(err)
+		t.Skipf("creating a symbolic link is unavailable here: %v", err)
 	}
 	if _, err := ResolveReference(id, root); err == nil {
 		t.Fatal("symlinked workspace binding was accepted")
@@ -162,7 +162,7 @@ func TestResolveReferenceRejectsSymlinkedBindingAncestor(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(target, filepath.Join(root, "workspaces")); err != nil {
-		t.Fatal(err)
+		t.Skipf("creating a symbolic link is unavailable here: %v", err)
 	}
 	if _, err := ResolveReference(id, root); err == nil {
 		t.Fatal("symlinked workspace binding ancestor was accepted")

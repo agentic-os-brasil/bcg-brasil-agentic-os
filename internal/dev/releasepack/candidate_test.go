@@ -123,7 +123,7 @@ func TestBuildCandidateRejectsSymlinkedPrebuiltBinary(t *testing.T) {
 	}
 	name := binaryName("0.1.0", candidateTargets[0])
 	if err := os.Symlink(realBinary, filepath.Join(prebuilt, name)); err != nil {
-		t.Fatal(err)
+		t.Skipf("creating a symbolic link is unavailable here: %v", err)
 	}
 	_, err := BuildCandidate(context.Background(), CandidateOptions{
 		Root: root, Output: filepath.Join(t.TempDir(), "candidate"), Version: "0.1.0",
