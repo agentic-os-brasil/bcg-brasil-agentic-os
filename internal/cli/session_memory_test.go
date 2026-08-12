@@ -26,7 +26,7 @@ func TestSessionMemorySourceLoadsOnlyCommittedBoundedLocalMemory(t *testing.T) {
 	}
 	memoryRoot := filepath.Join(root, "memory")
 	attestor := memory.CaptureAttestor{Root: memoryRoot}
-	capture, err := attestor.Seal(memory.Capture{WorkspaceID: workspaceID, RecordedAt: now, Kind: "skill_route", Text: "case-kickoff", Sanitized: true, ProducerID: "claude.context-injection", SanitizerID: memory.SkillRouteSanitizerID, SourceDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	capture, err := attestor.Seal(memory.Capture{WorkspaceID: workspaceID, RecordedAt: now, Kind: "skill_route", Text: "bcg-case-kickoff", Sanitized: true, ProducerID: "claude.context-injection", SanitizerID: memory.SkillRouteSanitizerID, SourceDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestSessionMemorySourceLoadsOnlyCommittedBoundedLocalMemory(t *testing.T) {
 	}
 
 	source := sessionMemorySource(root, workspaceID)
-	if source.State != "available" || len(source.Bundle.Sections) != 1 || source.Bundle.Sections[0].Layer != "L1" || !strings.Contains(source.Bundle.Sections[0].Content, "case-kickoff") {
+	if source.State != "available" || len(source.Bundle.Sections) != 1 || source.Bundle.Sections[0].Layer != "L1" || !strings.Contains(source.Bundle.Sections[0].Content, "bcg-case-kickoff") {
 		t.Fatalf("session memory source = %#v", source)
 	}
 }

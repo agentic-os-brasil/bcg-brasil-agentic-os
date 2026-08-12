@@ -36,7 +36,7 @@ func validateDurableStateFilePrivacy(path string) error {
 		return errors.New("current Windows user has no valid SID")
 	}
 	if !owner.Equals(tokenUser.User.Sid) {
-		return errors.New("durable orchestration state is not owned by the current Windows user")
+		return ErrDurableStateOwnerMismatch
 	}
 
 	dacl, _, err := sd.DACL()
