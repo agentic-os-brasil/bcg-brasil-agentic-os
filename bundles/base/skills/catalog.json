@@ -37,18 +37,18 @@
       "relative_path": "skills/case-agent-setup/SKILL.md"
     },
     {
-      "id": "deck-drill",
-      "display_name": "Deck Drill",
-      "trigger": "Rehearse a deck against the questions the room will ask",
-      "default_prompt": "Use $deck-drill to rehearse this deck against the questions my audience will actually ask.",
-      "relative_path": "skills/deck-drill/SKILL.md"
-    },
-    {
       "id": "craft-update",
       "display_name": "Craft Update",
       "trigger": "Document a personal method or working preference deliberately",
       "default_prompt": "Use $craft-update to write up this technique as a method, or record how I prefer to work.",
       "relative_path": "skills/craft-update/SKILL.md"
+    },
+    {
+      "id": "deck-drill",
+      "display_name": "Deck Drill",
+      "trigger": "Rehearse a deck against the questions the room will ask",
+      "default_prompt": "Use $deck-drill to rehearse this deck against the questions my audience will actually ask.",
+      "relative_path": "skills/deck-drill/SKILL.md"
     },
     {
       "id": "deck-review",
@@ -212,7 +212,7 @@
       "relative_path": "skills/slide-summary/SKILL.md"
     },
     {
-"id": "start-day",
+      "id": "start-day",
       "display_name": "Start Day",
       "trigger": "Open the day with a briefing scoped to the hours that remain",
       "default_prompt": "Use $start-day to open my day with a briefing scoped to the time I actually have left.",

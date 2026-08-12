@@ -19,7 +19,10 @@ Não precisa instalar nada, não precisa de terminal, não precisa de conta extr
 
 ## Quando sair uma nova versão
 
-Você recebe um email do time BCG Brasil AI com o link do ZIP novo. Baixa, extrai por cima desta pasta, pronto. Sua `data/` é preservada.
+Você recebe um email do time BCG Brasil AI com o link do ZIP novo. **Não** extraia
+por cima desta pasta — isso mistura versões e pode quebrar. Siga o ritual em
+`README-INSTALL.md`: ele preserva sua memória e mantém uma cópia de segurança
+da versão anterior até você confirmar que a nova está OK.
 
 ## Ajuda
 

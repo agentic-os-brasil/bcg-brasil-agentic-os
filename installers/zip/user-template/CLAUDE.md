@@ -49,6 +49,8 @@ editar JSON ou rodar comandos shell. Se algo estiver quebrado, use
 
 ## Instalação e atualização
 
-Fora da sessão. Consulte `README-INSTALL.md`. O ritual de update é:
-renomear pasta atual → extrair ZIP novo → mover `data/` para dentro do novo.
-Sua `data/` nunca é tocada pelo ZIP.
+Fora da sessão. `README-INSTALL.md` é a fonte única do ritual. Não repita os passos
+aqui: qualquer resumo diverge do original e vira instrução destrutiva. Se o usuário
+perguntar como atualizar, aponte para `README-INSTALL.md` — o passo crítico é
+**copiar** (não mover, não extrair por cima) a `data/` da versão antiga para dentro
+da nova, seguindo o ritual completo lá descrito. Sua `data/` nunca é tocada pelo ZIP.
