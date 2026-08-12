@@ -1,0 +1,537 @@
+#!/usr/bin/env bash
+# Maestro release eval — loop-able QA harness for the shippable ZIP.
+#
+# Usage:
+#   installers/zip/eval-release.sh [--zip PATH] [--keep] [--verbose]
+#
+# Defaults to the highest-versioned dist/Maestro-v*.zip. Runs a fixed battery
+# of checks and prints a PASS/FAIL summary. Exit code is non-zero on any FAIL,
+# so you can chain it in dev loops:
+#   while ! installers/zip/eval-release.sh; do vim ...; bash installers/zip/build-release.sh 0.1.0; done
+#
+# The eval is intentionally self-contained: no Go toolchain, no external deps
+# beyond unzip / shasum / python3 (for JSON parsing).
+
+set -u
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TEMPLATE_DIR="$REPO_ROOT/installers/zip/user-template"
+DIST_DIR="$REPO_ROOT/dist"
+
+ZIP_PATH=""
+KEEP_SCRATCH=0
+VERBOSE=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --zip) ZIP_PATH="$2"; shift 2 ;;
+    --keep) KEEP_SCRATCH=1; shift ;;
+    --verbose|-v) VERBOSE=1; shift ;;
+    -h|--help)
+      sed -n '2,15p' "$0"
+      exit 0
+      ;;
+    *) echo "unknown flag: $1" >&2; exit 2 ;;
+  esac
+done
+
+if [ -z "$ZIP_PATH" ]; then
+  ZIP_PATH=$(ls -1 "$DIST_DIR"/Maestro-v*.zip 2>/dev/null | sort -V | tail -1)
+fi
+
+if [ ! -f "$ZIP_PATH" ]; then
+  echo "no ZIP found (looked in $DIST_DIR)" >&2
+  echo "run: bash installers/zip/build-release.sh <version>  first" >&2
+  exit 2
+fi
+
+RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; RESET=$'\033[0m'
+
+PASS_COUNT=0
+FAIL_COUNT=0
+SKIP_COUNT=0
+FAILURES=()
+
+pass() { PASS_COUNT=$((PASS_COUNT+1)); printf '  %sPASS%s  %s\n' "$GREEN" "$RESET" "$1"; }
+fail() { FAIL_COUNT=$((FAIL_COUNT+1)); FAILURES+=("$1"); printf '  %sFAIL%s  %s\n' "$RED" "$RESET" "$1"; }
+skip() { SKIP_COUNT=$((SKIP_COUNT+1)); printf '  %sSKIP%s  %s\n' "$YELLOW" "$RESET" "$1"; }
+info() { [ "$VERBOSE" = 1 ] && printf '  %s...%s   %s\n' "$DIM" "$RESET" "$1" || true; }
+phase() { printf '\n%s%s%s\n' "$YELLOW" "$1" "$RESET"; }
+
+SCRATCH_ROOT=$(mktemp -d -t maestro-eval-XXXXXX)
+MAESTRO_DIR="$SCRATCH_ROOT/Maestro"
+cleanup() {
+  chmod -R u+w "$SCRATCH_ROOT" 2>/dev/null || true
+  if [ "$KEEP_SCRATCH" = 1 ]; then
+    echo ""
+    echo "scratch kept: $SCRATCH_ROOT"
+  else
+    rm -rf "$SCRATCH_ROOT"
+  fi
+}
+trap cleanup EXIT
+
+printf '%sMaestro release eval%s\n' "$YELLOW" "$RESET"
+printf '  ZIP:      %s\n' "$ZIP_PATH"
+printf '  scratch:  %s\n' "$SCRATCH_ROOT"
+
+# --------------------------------------------------------------------------
+phase "Phase 1 — Integrity"
+# --------------------------------------------------------------------------
+
+SHA_FILE="${ZIP_PATH%.zip}.sha256"
+if [ -f "$SHA_FILE" ]; then
+  EXPECTED_SHA=$(awk '{print $1}' "$SHA_FILE")
+  ACTUAL_SHA=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
+  if [ "$EXPECTED_SHA" = "$ACTUAL_SHA" ]; then
+    pass "sha256 matches sidecar ($ACTUAL_SHA)"
+  else
+    fail "sha256 mismatch: sidecar=$EXPECTED_SHA actual=$ACTUAL_SHA"
+  fi
+else
+  skip "no .sha256 sidecar next to ZIP"
+fi
+
+if unzip -q "$ZIP_PATH" -d "$SCRATCH_ROOT"; then
+  pass "ZIP extracted cleanly"
+else
+  fail "unzip failed — aborting further checks"
+  exit 1
+fi
+
+if [ -d "$MAESTRO_DIR" ]; then
+  pass "top-level Maestro/ present after extract"
+else
+  fail "no Maestro/ dir at top-level of ZIP"
+  exit 1
+fi
+
+for pattern in '.DS_Store' '__pycache__' '*.pyc'; do
+  if find "$MAESTRO_DIR" -name "$pattern" -print -quit | grep -q .; then
+    fail "dev artifact leaked into ZIP: $pattern"
+  else
+    pass "no $pattern artifacts in ZIP"
+  fi
+done
+
+# --------------------------------------------------------------------------
+phase "Phase 2 — Structure (user-facing files)"
+# --------------------------------------------------------------------------
+
+REQUIRED_FILES=(
+  "VERSION"
+  "CLAUDE.md"
+  "WELCOME.md"
+  "README-INSTALL.md"
+  ".claude/settings.json"
+  ".claude/hooks/first-run-scaffold.sh"
+  "bundles/base/skills/INDEX.md"
+  "bundles/base/skills/catalog.json"
+  "bundles/base/skills/agent-skill-policy.json"
+  "bundles/base/distribution.json"
+)
+for f in "${REQUIRED_FILES[@]}"; do
+  if [ -f "$MAESTRO_DIR/$f" ]; then
+    pass "file present: $f"
+  else
+    fail "file missing: $f"
+  fi
+done
+
+for d in "bundles/base/agents"; do
+  if [ -d "$MAESTRO_DIR/$d" ] && [ -n "$(ls -A "$MAESTRO_DIR/$d" 2>/dev/null)" ]; then
+    pass "dir present + non-empty: $d"
+  else
+    fail "dir missing or empty: $d"
+  fi
+done
+
+VERSION_CONTENT=$(cat "$MAESTRO_DIR/VERSION" 2>/dev/null)
+if [ -n "$VERSION_CONTENT" ] && echo "$VERSION_CONTENT" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+  pass "VERSION file is semver (${VERSION_CONTENT})"
+else
+  fail "VERSION file malformed: '$VERSION_CONTENT'"
+fi
+
+if [ -x "$MAESTRO_DIR/.claude/hooks/first-run-scaffold.sh" ]; then
+  pass "first-run-scaffold.sh is executable"
+else
+  fail "first-run-scaffold.sh is NOT executable"
+fi
+
+if [ -d "$MAESTRO_DIR/data" ]; then
+  fail "data/ pre-shipped in ZIP (must be created by hook, not shipped)"
+else
+  pass "data/ correctly absent from ZIP"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 3 — No dev tree leakage"
+# --------------------------------------------------------------------------
+
+for forbidden in "cmd" "dev" "internal" ".github"; do
+  if [ -e "$MAESTRO_DIR/$forbidden" ]; then
+    fail "dev tree leaked: /$forbidden present in user ZIP"
+  else
+    pass "no /$forbidden in user ZIP"
+  fi
+done
+
+for forbidden_file in "go.mod" "go.sum"; do
+  if [ -e "$MAESTRO_DIR/$forbidden_file" ]; then
+    fail "dev tree leaked: /$forbidden_file present in user ZIP"
+  else
+    pass "no /$forbidden_file in user ZIP"
+  fi
+done
+
+GO_LEAK_COUNT=$(find "$MAESTRO_DIR" \( -name '*.go' -o -name '*_test.go' \) 2>/dev/null | wc -l | tr -d ' ')
+if [ "$GO_LEAK_COUNT" = "0" ]; then
+  pass "no .go source files in ZIP"
+else
+  fail "$GO_LEAK_COUNT .go source file(s) leaked into ZIP"
+  if [ "$VERBOSE" = 1 ]; then
+    find "$MAESTRO_DIR" \( -name '*.go' -o -name '*_test.go' \) | sed 's|^|      |'
+  fi
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 4 — First-run scaffold, happy path"
+# --------------------------------------------------------------------------
+
+HOOK="$MAESTRO_DIR/.claude/hooks/first-run-scaffold.sh"
+info "running: CLAUDE_PROJECT_DIR=$MAESTRO_DIR $HOOK"
+if CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$HOOK" >/dev/null 2>"$SCRATCH_ROOT/hook.stderr"; then
+  pass "hook exit 0 on first run"
+else
+  fail "hook non-zero exit on first run"
+fi
+
+for sub in agents memory profile workspaces; do
+  if [ -d "$MAESTRO_DIR/data/$sub" ]; then
+    pass "data/$sub created"
+  else
+    fail "data/$sub NOT created"
+  fi
+done
+
+if [ -f "$MAESTRO_DIR/data/.initialized" ] && [ -s "$MAESTRO_DIR/data/.initialized" ]; then
+  pass "data/.initialized marker exists + non-empty"
+else
+  fail "data/.initialized marker missing or empty"
+fi
+
+if [ -f "$MAESTRO_DIR/data/.scaffold.log" ] && grep -q "DONE  marker written" "$MAESTRO_DIR/data/.scaffold.log"; then
+  pass "data/.scaffold.log has DONE line"
+else
+  fail "data/.scaffold.log missing DONE line"
+fi
+
+if [ -f "$MAESTRO_DIR/data/README.md" ] && grep -q "workspaces" "$MAESTRO_DIR/data/README.md"; then
+  pass "data/README.md present + mentions workspaces"
+else
+  fail "data/README.md missing or malformed"
+fi
+
+if [ -f "$MAESTRO_DIR/FIRST-RUN-FAILED.txt" ]; then
+  fail "FIRST-RUN-FAILED.txt appeared on happy path (should not)"
+else
+  pass "no FIRST-RUN-FAILED.txt on happy path"
+fi
+
+STDERR_LINES=$(wc -l < "$SCRATCH_ROOT/hook.stderr" | tr -d ' ')
+if [ "$STDERR_LINES" = "0" ]; then
+  pass "hook silent on stderr (0 lines)"
+else
+  fail "hook noisy on happy path: $STDERR_LINES stderr line(s)"
+  [ "$VERBOSE" = 1 ] && sed 's|^|      |' "$SCRATCH_ROOT/hook.stderr"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 5 — First-run scaffold, idempotency"
+# --------------------------------------------------------------------------
+
+LOG_BEFORE=$(wc -l < "$MAESTRO_DIR/data/.scaffold.log" | tr -d ' ')
+if CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$HOOK" >/dev/null 2>&1; then
+  pass "hook exit 0 on second run"
+else
+  fail "hook non-zero on second run"
+fi
+LOG_AFTER=$(wc -l < "$MAESTRO_DIR/data/.scaffold.log" | tr -d ' ')
+if [ "$LOG_BEFORE" = "$LOG_AFTER" ]; then
+  pass "second run is a no-op ($LOG_BEFORE lines before/after)"
+else
+  fail "second run re-scaffolded: log grew $LOG_BEFORE → $LOG_AFTER lines"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 6 — First-run scaffold, failure modes"
+# --------------------------------------------------------------------------
+
+# Scenario B: data/ pre-exists and is unwritable. Parent writable → breadcrumb should surface.
+FAIL_SCRATCH=$(mktemp -d -t maestro-eval-failB-XXXXXX)
+unzip -q "$ZIP_PATH" -d "$FAIL_SCRATCH"
+FAIL_MAESTRO="$FAIL_SCRATCH/Maestro"
+mkdir "$FAIL_MAESTRO/data"
+chmod 555 "$FAIL_MAESTRO/data"
+
+if CLAUDE_PROJECT_DIR="$FAIL_MAESTRO" bash "$FAIL_MAESTRO/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>&1; then
+  pass "hook fail-open (exit 0) with unwritable data/ (Scenario B)"
+else
+  fail "hook non-zero when data/ unwritable"
+fi
+
+if [ -f "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt" ] && grep -q "maestro-doctor" "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt"; then
+  pass "FIRST-RUN-FAILED.txt breadcrumb visible + points at /maestro-doctor (Scenario B)"
+else
+  fail "FIRST-RUN-FAILED.txt breadcrumb missing under Scenario B (Walter Fix 1)"
+fi
+
+chmod -R u+w "$FAIL_SCRATCH"
+rm -rf "$FAIL_SCRATCH"
+
+# Scenario A: whole project dir is read-only. Breadcrumb must land in $TMPDIR fallback.
+FAIL_SCRATCH_A=$(mktemp -d -t maestro-eval-failA-XXXXXX)
+unzip -q "$ZIP_PATH" -d "$FAIL_SCRATCH_A"
+FAIL_MAESTRO_A="$FAIL_SCRATCH_A/Maestro"
+chmod 555 "$FAIL_MAESTRO_A"
+
+TMPDIR_A=$(mktemp -d -t maestro-eval-tmpA-XXXXXX)
+SCEN_A_STDERR=$(mktemp -t maestro-eval-stderrA-XXXXXX)
+
+if CLAUDE_PROJECT_DIR="$FAIL_MAESTRO_A" TMPDIR="$TMPDIR_A" bash "$FAIL_MAESTRO_A/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>"$SCEN_A_STDERR"; then
+  pass "hook fail-open (exit 0) with read-only project dir (Scenario A)"
+else
+  fail "hook non-zero when project dir read-only"
+fi
+
+FALLBACK_FOUND=$(find "$TMPDIR_A" -maxdepth 1 -name 'Maestro-FIRST-RUN-FAILED-*.txt' 2>/dev/null | head -1)
+if [ -n "$FALLBACK_FOUND" ] && grep -q "maestro-doctor" "$FALLBACK_FOUND"; then
+  pass "FIRST-RUN-FAILED breadcrumb fallback landed in \$TMPDIR (Scenario A, Walter Wave 2 fix)"
+else
+  fail "Scenario A breadcrumb fallback missing — expected file in \$TMPDIR"
+fi
+
+if grep -q "Breadcrumb:" "$SCEN_A_STDERR"; then
+  pass "hook stderr surfaces fallback path to operator (Scenario A)"
+else
+  fail "hook stderr does not surface fallback breadcrumb path"
+fi
+
+rm -f "$SCEN_A_STDERR"
+rm -rf "$TMPDIR_A"
+chmod -R u+w "$FAIL_SCRATCH_A"
+rm -rf "$FAIL_SCRATCH_A"
+
+# --------------------------------------------------------------------------
+phase "Phase 7 — Skills catalog integrity"
+# --------------------------------------------------------------------------
+
+CATALOG="$MAESTRO_DIR/bundles/base/skills/catalog.json"
+INDEX_MD="$MAESTRO_DIR/bundles/base/skills/INDEX.md"
+POLICY="$MAESTRO_DIR/bundles/base/skills/agent-skill-policy.json"
+
+if python3 -c "import json,sys; json.load(open('$CATALOG'))" 2>/dev/null; then
+  pass "catalog.json is valid JSON"
+else
+  fail "catalog.json invalid JSON"
+fi
+if python3 -c "import json,sys; json.load(open('$POLICY'))" 2>/dev/null; then
+  pass "agent-skill-policy.json is valid JSON"
+else
+  fail "agent-skill-policy.json invalid JSON"
+fi
+
+CATALOG_IDS=$(python3 -c "
+import json
+c=json.load(open('$CATALOG'))
+ids=[]
+def walk(x):
+    if isinstance(x, dict):
+        if 'id' in x and isinstance(x['id'], str):
+            ids.append(x['id'])
+        for v in x.values(): walk(v)
+    elif isinstance(x, list):
+        for v in x: walk(v)
+walk(c)
+print('\n'.join(sorted(set(ids))))
+" 2>/dev/null)
+
+CATALOG_COUNT=$(printf '%s\n' "$CATALOG_IDS" | grep -c . || true)
+info "catalog.json lists $CATALOG_COUNT skill ids"
+
+MISSING_SKILLS=0
+while IFS= read -r skill_id; do
+  [ -z "$skill_id" ] && continue
+  if [ ! -f "$MAESTRO_DIR/bundles/base/skills/$skill_id/SKILL.md" ]; then
+    MISSING_SKILLS=$((MISSING_SKILLS+1))
+    [ "$VERBOSE" = 1 ] && echo "      missing SKILL.md for: $skill_id"
+  fi
+done <<< "$CATALOG_IDS"
+if [ "$MISSING_SKILLS" = "0" ]; then
+  pass "every catalog skill has a SKILL.md on disk ($CATALOG_COUNT skills)"
+else
+  fail "$MISSING_SKILLS catalog skill(s) missing SKILL.md"
+fi
+
+POLICY_SKILLS=$(python3 -c "
+import json
+p=json.load(open('$POLICY'))
+out=[]
+for r in p.get('direct', []):
+    for s in r.get('skill_ids', []): out.append(s)
+print('\n'.join(sorted(set(out))))
+" 2>/dev/null)
+POLICY_ORPHANS=0
+while IFS= read -r sid; do
+  [ -z "$sid" ] && continue
+  if [ ! -f "$MAESTRO_DIR/bundles/base/skills/$sid/SKILL.md" ]; then
+    POLICY_ORPHANS=$((POLICY_ORPHANS+1))
+    [ "$VERBOSE" = 1 ] && echo "      policy references missing skill: $sid"
+  fi
+done <<< "$POLICY_SKILLS"
+if [ "$POLICY_ORPHANS" = "0" ]; then
+  pass "every agent-skill-policy skill_id resolves to a real skill dir"
+else
+  fail "$POLICY_ORPHANS policy skill_id(s) reference non-existent skills"
+fi
+
+INDEX_COUNT=$(grep -cE '^\| [A-Z]' "$INDEX_MD" 2>/dev/null)
+INDEX_COUNT=${INDEX_COUNT:-0}
+if [ "$INDEX_COUNT" -gt 0 ] 2>/dev/null; then
+  pass "INDEX.md has $INDEX_COUNT skill row(s)"
+else
+  fail "INDEX.md has no skill rows (regex miss?)"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 8 — Distribution manifest coverage"
+# --------------------------------------------------------------------------
+
+DIST_JSON="$MAESTRO_DIR/bundles/base/distribution.json"
+if python3 -c "import json; json.load(open('$DIST_JSON'))" 2>/dev/null; then
+  pass "distribution.json is valid JSON"
+
+  DIST_PATHS=$(python3 -c "
+import json
+d=json.load(open('$DIST_JSON'))
+paths=[]
+def walk(x):
+    if isinstance(x, dict):
+        for k,v in x.items():
+            if isinstance(v, str) and ('/' in v or v.endswith('.json') or v.endswith('.md')):
+                paths.append(v)
+            walk(v)
+    elif isinstance(x, list):
+        for v in x: walk(v)
+walk(d)
+print('\n'.join(sorted(set(paths))))
+")
+  MISSING_ASSETS=0
+  MISSING_LIST=""
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    # asset paths in distribution.json are relative to the bundle root
+    for candidate in "$MAESTRO_DIR/bundles/base/$p" "$MAESTRO_DIR/$p"; do
+      if [ -e "$candidate" ]; then
+        continue 2
+      fi
+    done
+    MISSING_ASSETS=$((MISSING_ASSETS+1))
+    MISSING_LIST="$MISSING_LIST $p"
+  done <<< "$DIST_PATHS"
+  if [ "$MISSING_ASSETS" = "0" ]; then
+    pass "every distribution.json path exists in ZIP"
+  else
+    fail "$MISSING_ASSETS distribution.json path(s) missing from ZIP"
+    [ "$VERBOSE" = 1 ] && printf '      %s\n' $MISSING_LIST
+  fi
+else
+  fail "distribution.json invalid JSON"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 9 — Walter fix regression checks"
+# --------------------------------------------------------------------------
+
+README="$MAESTRO_DIR/README-INSTALL.md"
+if grep -q "Copiar" "$README" && grep -q "Ctrl+C" "$README" && grep -q "Option" "$README"; then
+  pass "README-INSTALL step 4 uses Copiar + Ctrl+C + Option (Walter Fix 2)"
+else
+  fail "README-INSTALL step 4 missing Copiar/Ctrl+C/Option — Walter Fix 2 regressed"
+fi
+
+if grep -qE "confirmar.*data.*maestro-doctor|maestro-doctor.*data" "$README"; then
+  pass "README-INSTALL step 7 gates deletion on data/ present + doctor green"
+else
+  fail "README-INSTALL step 7 missing dual-gate on deletion"
+fi
+
+CLAUDE_MD="$MAESTRO_DIR/CLAUDE.md"
+if grep -q "FIRST-RUN-FAILED.txt" "$CLAUDE_MD" && grep -q "maestro-doctor" "$CLAUDE_MD"; then
+  pass "CLAUDE.md references FIRST-RUN-FAILED.txt + /maestro-doctor (Walter Fix 1)"
+else
+  fail "CLAUDE.md missing FIRST-RUN-FAILED.txt breadcrumb reference"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 10 — Settings + hook wiring"
+# --------------------------------------------------------------------------
+
+SETTINGS="$MAESTRO_DIR/.claude/settings.json"
+if python3 -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
+  pass "settings.json is valid JSON"
+else
+  fail "settings.json invalid JSON"
+fi
+if grep -q "first-run-scaffold.sh" "$SETTINGS" && grep -q "SessionStart" "$SETTINGS"; then
+  pass "settings.json wires first-run-scaffold.sh to SessionStart"
+else
+  fail "settings.json does NOT wire scaffold to SessionStart"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 11 — Workspace creation smoke test"
+# --------------------------------------------------------------------------
+
+# Simulate user starting a project. The hook created workspaces/; verify a project
+# subdir can be created and marker files land where expected.
+if mkdir -p "$MAESTRO_DIR/data/workspaces/demo-project" \
+   && echo "demo" > "$MAESTRO_DIR/data/workspaces/demo-project/README.md" \
+   && [ -f "$MAESTRO_DIR/data/workspaces/demo-project/README.md" ]; then
+  pass "workspace dir writable + accepts project subdir"
+else
+  fail "workspace dir not writable"
+fi
+
+if mkdir -p "$MAESTRO_DIR/data/memory/notes" \
+   && echo "test" > "$MAESTRO_DIR/data/memory/notes/first.md" \
+   && [ -f "$MAESTRO_DIR/data/memory/notes/first.md" ]; then
+  pass "memory dir writable + accepts note file"
+else
+  fail "memory dir not writable"
+fi
+
+# --------------------------------------------------------------------------
+# Summary
+# --------------------------------------------------------------------------
+
+echo ""
+printf '%s──────────────────────────────────────────────%s\n' "$YELLOW" "$RESET"
+printf 'Summary:  %s%d pass%s  %s%d fail%s  %s%d skip%s\n' \
+  "$GREEN" "$PASS_COUNT" "$RESET" \
+  "$RED" "$FAIL_COUNT" "$RESET" \
+  "$YELLOW" "$SKIP_COUNT" "$RESET"
+
+if [ "$FAIL_COUNT" -gt 0 ]; then
+  echo ""
+  echo "Failed checks:"
+  for f in "${FAILURES[@]}"; do
+    printf '  - %s\n' "$f"
+  done
+  exit 1
+fi
+
+echo ""
+echo "All checks green. ZIP is shippable."
+exit 0

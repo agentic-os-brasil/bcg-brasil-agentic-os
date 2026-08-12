@@ -601,6 +601,9 @@ func runInit(args []string, out, errOut io.Writer, dataRoot func() (string, erro
 		fmt.Fprintln(errOut, "usage: bcgos init [--allow-synced-workspace] [--profile standard|advanced|power] [path]")
 		return ExitUsage
 	}
+	if err := ensureUserLevelProcess(); err != nil {
+		return reportError(errOut, err)
+	}
 	path := "."
 	if flags.NArg() == 1 {
 		path = flags.Arg(0)
@@ -1609,6 +1612,12 @@ func runtimeDependencyCheck(root string, inspection workspace.Inspection) (docto
 		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: "workspace dependencies are unavailable until bcgos init completes"}, "Run bcgos init <local-workspace-path>."
 	}
 	if _, err := resolveHookOrchestrationState(inspection, installedOrchestrationStatePath); err != nil {
+		if errors.Is(err, agentorchestration.ErrDurableStateOwnerMismatch) {
+			return doctorCheck{
+				ID: "runtime_dependencies", State: "action_required",
+				Message: "durable Maestro state belongs to another Windows security principal, commonly an elevated Administrator process; existing files were not changed",
+			}, "Close Maestro and ask support to repair or recreate only the bounded Maestro state from a native, non-elevated Windows session. Do not use Run as administrator or reset the whole workspace."
+		}
 		return doctorCheck{ID: "runtime_dependencies", State: "action_required", Message: err.Error()}, "Run bcgos init <local-workspace-path> to repair the local runtime bootstrap."
 	}
 	owner, err := ownerctx.Inspect(root)
@@ -3610,38 +3619,6 @@ func enrichStartupGuides(packet *sessionctx.Packet, runtimeName, workspacePath s
 func enrichOperationalGuide(packet *sessionctx.Packet, runtimeName, workspacePath string) error {
 	if executable, err := os.Executable(); err == nil && filepath.IsAbs(executable) {
 		packet.MaestroCLIPath = executable
-	}
-	projection, err := runtimeprojection.Inspect(runtimeName, workspacePath)
-	if err != nil || projection.State != "installed" {
-		return nil
-	}
-	catalog, _, installed, err := runtimeprojection.RoutingInputs(runtimeName, workspacePath)
-	if err != nil {
-		return nil
-	}
-	known := false
-	for _, skill := range catalog.Skills {
-		if skill.ID == "bcgos-operator" {
-			known = true
-			break
-		}
-	}
-	if !known {
-		return nil
-	}
-	for _, current := range packet.Skills.Selected {
-		if current.ID == "bcgos-operator" {
-			return nil
-		}
-	}
-	for _, skill := range installed {
-		if skill.ID == "bcgos-operator" {
-			packet.Skills.Selected = append([]sessionctx.SkillSelection{{ID: skill.ID, Reason: "deterministic_operational_method", Pointer: skill.Pointer}}, packet.Skills.Selected...)
-			if len(packet.Skills.Selected) > sessionctx.MaximumSelectedSkills {
-				packet.Skills.Selected = packet.Skills.Selected[:sessionctx.MaximumSelectedSkills]
-			}
-			return nil
-		}
 	}
 	return nil
 }

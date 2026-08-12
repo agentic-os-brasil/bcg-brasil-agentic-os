@@ -6,6 +6,27 @@ but cannot elevate to device administrator.
 
 ## First install
 
+### Windows user-level boundary
+
+The Windows installer, `bcgos init`, `bcgos setup apply` and the stable
+bootstrapper are user-level operations. They must be launched from the logged-in
+user's normal token; the product refuses an elevated `Run as administrator`
+process before creating or updating managed state. This keeps `.bcgos` and
+`%LOCALAPPDATA%\\BCGOS` owned by the same user that will later run Maestro.
+
+If a prior elevated attempt already created state owned by
+`BUILTIN\\Administrators`, the refusal is intentional: Maestro does not silently
+take ownership, reset ACLs, delete the workspace or overwrite owner data.
+`bcgos doctor` reports this as an actionable ownership repair condition. Use a
+bounded support repair or recreate only the Maestro-owned state after a backup;
+do not apply `icacls /reset` to the workspace tree.
+
+On Windows, run the supported installer flow by double-clicking the package or
+from native PowerShell/cmd. Git Bash/MSYS can rewrite Windows paths and produce
+a misleading reparse-point error before the binary receives the intended path;
+retry the same flow natively before treating that message as a Maestro storage
+failure.
+
 1. The package supplies the exact signed release directory, a native-signed
    seeded `bcgos-bootstrap` and the public authority registry.
 2. The bridge verifies the Ed25519-signed manifest and every artifact through
