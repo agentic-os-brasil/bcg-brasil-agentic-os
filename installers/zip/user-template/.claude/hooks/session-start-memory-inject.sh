@@ -106,6 +106,21 @@ if [ -f "$DREAM_MARKER" ]; then
   rm -f "$DREAM_MARKER" 2>/dev/null || true
 fi
 
+# GAP-C — Upgrade-pending auto-trigger. Marker written by first-run-scaffold.sh
+# when a session boots against a bundle whose VERSION differs from
+# data/.maestro-version. Surfaces a mandatory action block so Claude routes to
+# /maestro-setup-update before any other work.
+UPGRADE_MARKER="$DATA_DIR/.upgrade-pending"
+if [ -f "$UPGRADE_MARKER" ]; then
+  printf '\n## ⚠️ Upgrade Maestro pendente — verificar antes de qualquer outra tarefa\n'
+  printf '<!-- maestro:upgrade-trigger: marker=%s -->\n' "$UPGRADE_MARKER"
+  printf 'O marcador `.upgrade-pending` foi detectado — o VERSION do bundle mudou desde a última sessão.\n\n'
+  printf 'Conteúdo do marcador:\n\n```json\n'
+  cat "$UPGRADE_MARKER" 2>/dev/null
+  printf '\n```\n\n'
+  printf '**Ação obrigatória:** invoque `/maestro-setup-update` (fluxo de atualização) para validar a migração antes de responder ao usuário. Apagar o marcador só após o ciclo de update concluir sem erro.\n'
+fi
+
 # Profile (highest routing priority — who the user is and how they prefer to work)
 emit_profile_json "Identidade do usuário" "$PROFILE_DIR/identity.json"
 emit_profile_json "Preferências" "$PROFILE_DIR/preferences.json"

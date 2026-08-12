@@ -71,6 +71,33 @@ if [ -d "$DATA_DIR" ] && [ ! -f "$MARKER" ]; then
 fi
 
 if [ -f "$MARKER" ]; then
+  # ---------------------------------------------------------------------------
+  # GAP-C — Incremental upgrade detection.
+  # Compare the running bundle VERSION against the marker previously written
+  # into data/.maestro-version. If they differ, emit an upgrade breadcrumb so
+  # `maestro-setup-update` can pick it up. Never mutate data/; only surface
+  # signal. Fail-open on missing files.
+  # ---------------------------------------------------------------------------
+  RUNNING_VERSION="$(cat "$PROJECT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
+  INSTALLED_MARKER="$DATA_DIR/.maestro-version"
+  INSTALLED_VERSION="$(cat "$INSTALLED_MARKER" 2>/dev/null | tr -d '[:space:]')"
+
+  if [ -n "$RUNNING_VERSION" ] && [ -z "$INSTALLED_VERSION" ]; then
+    printf '%s\n' "$RUNNING_VERSION" > "$INSTALLED_MARKER" 2>/dev/null
+    log_line "WRITE OK  data/.maestro-version=$RUNNING_VERSION (backfilled)"
+  elif [ -n "$RUNNING_VERSION" ] && [ -n "$INSTALLED_VERSION" ] && [ "$RUNNING_VERSION" != "$INSTALLED_VERSION" ]; then
+    UPGRADE_MARKER="$DATA_DIR/.upgrade-pending"
+    cat > "$UPGRADE_MARKER" 2>/dev/null <<EOF
+{
+  "from_version": "$INSTALLED_VERSION",
+  "to_version": "$RUNNING_VERSION",
+  "detected_at": "$TS",
+  "action": "run /maestro-setup-update to complete the migration"
+}
+EOF
+    log_line "UPGRADE DETECTED  $INSTALLED_VERSION -> $RUNNING_VERSION (marker: .upgrade-pending)"
+  fi
+
   emit_skills_rollup 2>/dev/null
   exit 0
 fi
@@ -99,6 +126,23 @@ MEMORY_GITIGNORE="$DATA_DIR/memory/.gitignore"
 if [ ! -f "$MEMORY_GITIGNORE" ]; then
   printf '.dream-requested\n' > "$MEMORY_GITIGNORE" 2>/dev/null && \
     log_line "WRITE OK  data/memory/.gitignore  (ignores .dream-requested)"
+fi
+
+# Memory schema version marker — GAP-D. Consumed by dream-memory to detect
+# migrations. The current schema is v1 (L1/L2/L3 + lifetime + policies as
+# described in bundles/base/memory/policy.json). When the schema evolves,
+# dream-memory refuses to write until a migration bumps this marker.
+MEMORY_SCHEMA_MARKER="$DATA_DIR/memory/.schema-version"
+if [ ! -f "$MEMORY_SCHEMA_MARKER" ]; then
+  cat > "$MEMORY_SCHEMA_MARKER" 2>/dev/null <<'EOF'
+{
+  "schema_version": 1,
+  "layers": ["recent", "weekly", "medium-term", "lifetime", "policies"],
+  "policy_source": "bundles/base/memory/policy.json",
+  "initialized_by": "first-run-scaffold.sh"
+}
+EOF
+  log_line "WRITE OK  data/memory/.schema-version (v1)"
 fi
 
 # Owner self facets — ten individually-addressable markdown files (spec 013)
@@ -274,6 +318,13 @@ fi
 
 printf '%s\n' "$TS" > "$MARKER" 2>/dev/null
 log_line "DONE  marker written"
+
+# GAP-C — record installed bundle version so future runs can detect upgrades.
+FIRST_RUN_VERSION="$(cat "$PROJECT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
+if [ -n "$FIRST_RUN_VERSION" ]; then
+  printf '%s\n' "$FIRST_RUN_VERSION" > "$DATA_DIR/.maestro-version" 2>/dev/null
+  log_line "WRITE OK  data/.maestro-version=$FIRST_RUN_VERSION"
+fi
 
 emit_skills_rollup
 
