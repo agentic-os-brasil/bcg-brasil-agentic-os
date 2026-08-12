@@ -1,6 +1,6 @@
 ---
 name: expert-interview-guide
-description: Structure a professional expert interview guide from an approved case question, audience and source set; returns questions and preparation logic without browsing or creating documents.
+description: Structure a professional expert interview guide from an approved case question, audience and source set. Use for "build an interview guide", "prep questions for the expert call", "what should I ask", or before an expert or stakeholder interview. Returns questions and preparation logic without browsing or creating documents.
 ---
 
 # Expert Interview Guide

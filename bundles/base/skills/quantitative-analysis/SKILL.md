@@ -1,6 +1,6 @@
 ---
 name: quantitative-analysis
-description: Analyze bounded quantitative evidence with explicit assumptions, checks and uncertainty. Use only with authorized data and tools; it does not grant data access, execution or publication authority.
+description: Analyze bounded quantitative evidence with explicit assumptions, checks and uncertainty. Use for "run the numbers", "size this market", "sanity-check the math", "what are the sensitivities", or with a bounded authorized dataset. Does not grant data access, execution or publication authority.
 ---
 
 # Quantitative Analysis
