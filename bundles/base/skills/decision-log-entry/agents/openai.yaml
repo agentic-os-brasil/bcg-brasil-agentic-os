@@ -1,4 +1,0 @@
-interface:
-  display_name: "Decision Log Entry"
-  short_description: "Capture a structural case decision in the D-NNN log before it escapes"
-  default_prompt: "Use $decision-log-entry to record this decision in the active case log."
