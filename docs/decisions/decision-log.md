@@ -1094,3 +1094,14 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: ZIP is transport, not a lite edition or a universal runtime. Platform mistakes fail before mutation while both packages install the same product contract. Windows accepts exactly `NotSigned`; macOS accepts exactly unsigned Mach-O executables with agreeing structural and native probes. Gatekeeper, SmartScreen, WDAC, AppLocker, Apple Developer ID/notarization, Authenticode, clean-device acceptance and publication are not bypassed or implied. The owner never runs commands, but real OS permissions remain visible. Unavailable scheduler creation is not offered as an action. Factory, package-parity and attended-device evidence must be target-specific.
 - Refs: CARY; PONB; WPOF; specs/020-release-distribution.md; specs/022-guided-pilot-release.md; specs/026-workspace-local-adapter-installation.md; specs/051-platform-specific-claude-portable.md; internal/dev/releasepack; dev/skills/release-export/SKILL.md
 - Supersedes: WPOF
+
+## UOWN - Keep Windows Maestro state user-owned
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A Windows pilot run created `.bcgos` and `%LOCALAPPDATA%\\BCGOS` under `BUILTIN\\Administrators` after an elevated installation attempt. The later current-user ownership check correctly rejected that state, but the product had not prevented the original mismatch or explained the safe recovery boundary.
+- Decision: Every mutating installation, update, workspace initialization and setup entry point must reject an elevated Windows process before its first write. The durable-state ownership check remains strict; existing mismatched state is reported as an actionable, bounded repair condition and is never silently taken over, ACL-reset, deleted or overwritten. Native PowerShell/cmd and the visual installer are supported Windows invocation paths; MSYS/Git Bash path translation is not installation evidence.
+- Consequences: A user who launches `Run as administrator` receives a clear blocked result and can retry without elevation before state is created. A previously contaminated installation requires a bounded support repair or explicit recreation of Maestro-owned state after backup; ordinary workspace/client files remain untouched. The product does not claim automated ownership transfer without a reviewed Windows security primitive.
+- Refs: specs/048-one-and-done-setup.md; docs/installer-bridge.md; internal/userlevel; internal/agentorchestration/file_privacy_windows.go; Windows pilot report (2026-08-11)
+- Supersedes: none

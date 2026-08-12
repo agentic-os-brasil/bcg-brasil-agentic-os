@@ -61,6 +61,15 @@ product prefers observable progress plus recovery over preventive ceremony.
 Only external mutation, tenant/client change, privilege, secrets, destruction
 or an operation without bounded recovery is a hard stop.
 
+On Windows, every mutating entry point performs a non-elevated-token preflight
+before the first write. A state file or private data root created under
+`BUILTIN\\Administrators` cannot later satisfy the current-user ownership
+contract, so the product refuses `Run as administrator` instead of attempting
+an implicit ownership transfer. Existing mismatched state remains untouched and
+is reported as a bounded repair condition. Native PowerShell/cmd or the visual
+installer are the supported invocation paths; MSYS/Git Bash path translation is
+not used as installation evidence.
+
 ## Setup result
 
 One setup run returns one of three states:

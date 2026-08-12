@@ -19,6 +19,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/userlevel"
 )
 
 var ErrSynchronizedWorkspace = errors.New("workspace appears to be inside a synchronized directory")
@@ -157,6 +158,9 @@ func DefaultDataRoot(platform, home, localAppData, xdgStateHome string) (string,
 }
 
 func Initialize(options Options) (Result, error) {
+	if err := userlevel.EnsureNotElevated(); err != nil {
+		return Result{}, err
+	}
 	workspacePath, dataRoot, err := normalize(options)
 	if err != nil {
 		return Result{}, err

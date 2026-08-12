@@ -11,7 +11,7 @@ Canary.
 |---|---|---|
 | `agent-identity-setup` | governed identity and ownership setup | Keep; no duplication |
 | `coverage-diagnose` | engineering quality diagnostic | Keep; separate domain |
-| `deck-storyline` | decision-led storyline and deck plan | Keep; `deck-review` adds quality review, not generation |
+| `bcg-deck` | decision-led storyline and deck plan | Keep; `deck-review` adds quality review, not generation |
 | `dream-memory` | memory lifecycle | Keep; no private-memory port |
 | `find-prior-work` | explicit prior-work retrieval | Keep; source retrieval remains capability-bound |
 | `ingest-content` | local document ingestion contract | Keep; extraction/runtime remains unavailable until qualified |
@@ -23,14 +23,14 @@ Canary.
 | `qualitative-analysis` | bounded qualitative synthesis | Keep; interview guide prepares evidence collection |
 | `quantitative-analysis` | bounded quantitative analysis | Keep; no overlap with planning methods |
 | `unit-test-wave` | engineering test planning | Keep; separate domain |
-| `case-agent-setup` | Case Agent initialization | Keep; `case-kickoff` plans the case, it does not initialize the Case Agent |
+| `case-agent-setup` | Case Agent initialization | Keep; `bcg-case-kickoff` plans the case, it does not initialize the Case Agent |
 | `xfail-bug-capture` | test-exposed bug capture | Keep; separate domain |
 
 ## Reviewed source-method candidates
 
 | Candidate family | Canary decision | Reason |
 |---|---|---|
-| Case kickoff | **Port now** as `case-kickoff` | Useful planning method after removing personal defaults, document generation and scheduling |
+| Case kickoff | **Port now** as `bcg-case-kickoff` | Useful planning method after removing personal defaults, document generation and scheduling |
 | Meeting close | **Port now** as `meeting-close` | Useful composition, but stops at a reviewable packet instead of external persistence |
 | Meeting to work items | **Port now** as `meeting-to-work-items` | Pure transformation with explicit uncertainty and source evidence |
 | Expert interview guide | **Port now** as `expert-interview-guide` | Methodological value survives without browsing, transcript search or DOCX generation |

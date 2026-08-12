@@ -1,0 +1,12 @@
+{
+  "$schema": "https://claude.ai/schemas/settings.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/first-run-scaffold.sh\"" }
+        ]
+      }
+    ]
+  }
+}

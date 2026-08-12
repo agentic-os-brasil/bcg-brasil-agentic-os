@@ -24,6 +24,7 @@ import (
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/installtx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/releaseverify"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/userlevel"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
 )
 
@@ -285,6 +286,9 @@ func Prepare(options Options) (Plan, releaseverify.VerifiedRelease, error) {
 // refuses to replace an existing managed installation and removes only the
 // newly-created managed root if the bootstrapper fails before activation.
 func Install(ctx context.Context, options Options) (Result, error) {
+	if err := userlevel.EnsureNotElevated(); err != nil {
+		return Result{}, err
+	}
 	options = withDefaults(options)
 	plan, _, err := Prepare(options)
 	if err != nil {

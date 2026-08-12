@@ -16,11 +16,18 @@
       "relative_path": "skills/agent-identity-setup/SKILL.md"
     },
     {
-      "id": "bcgos-operator",
-      "display_name": "BCGOS Operator",
-      "trigger": "Control Maestro health, updates and recovery",
-      "default_prompt": "Use $bcgos-operator to inspect and operate Maestro setup, health, update or recovery without turning the CLI into the normal work experience.",
-      "relative_path": "skills/bcgos-operator/SKILL.md"
+      "id": "bcg-case-kickoff",
+      "display_name": "Case Kickoff",
+      "trigger": "Build a bounded first-days plan from approved case scope",
+      "default_prompt": "Use $bcg-case-kickoff to turn the approved case scope into a bounded kickoff plan.",
+      "relative_path": "skills/bcg-case-kickoff/SKILL.md"
+    },
+    {
+      "id": "bcg-deck",
+      "display_name": "Deck and Storyline",
+      "trigger": "Build one decision-led professional storyline and deck plan",
+      "default_prompt": "Use $bcg-deck to turn the approved case evidence into a decision-led deck plan.",
+      "relative_path": "skills/bcg-deck/SKILL.md"
     },
     {
       "id": "case-agent-setup",
@@ -30,11 +37,11 @@
       "relative_path": "skills/case-agent-setup/SKILL.md"
     },
     {
-      "id": "case-kickoff",
-      "display_name": "Case Kickoff",
-      "trigger": "Build a bounded first-days plan from approved case scope",
-      "default_prompt": "Use $case-kickoff to turn the approved case scope into a bounded kickoff plan.",
-      "relative_path": "skills/case-kickoff/SKILL.md"
+      "id": "deck-drill",
+      "display_name": "Deck Drill",
+      "trigger": "Rehearse a deck against the questions the room will ask",
+      "default_prompt": "Use $deck-drill to rehearse this deck against the questions my audience will actually ask.",
+      "relative_path": "skills/deck-drill/SKILL.md"
     },
     {
       "id": "craft-update",
@@ -49,13 +56,6 @@
       "trigger": "Review supplied slide text for storyline and evidence risks",
       "default_prompt": "Use $deck-review to review the supplied slide text without editing or generating a deck.",
       "relative_path": "skills/deck-review/SKILL.md"
-    },
-    {
-      "id": "deck-storyline",
-      "display_name": "Deck and Storyline",
-      "trigger": "Build one decision-led professional storyline and deck plan",
-      "default_prompt": "Use $deck-storyline to turn the approved case evidence into a decision-led deck plan.",
-      "relative_path": "skills/deck-storyline/SKILL.md"
     },
     {
       "id": "dream-memory",
@@ -107,11 +107,25 @@
       "relative_path": "skills/interaction-profile/SKILL.md"
     },
     {
+      "id": "investigate",
+      "display_name": "Investigate",
+      "trigger": "Find the root cause of a wrong or surprising result",
+      "default_prompt": "Use $investigate to find why this output is wrong, with the evidence that establishes the cause.",
+      "relative_path": "skills/investigate/SKILL.md"
+    },
+    {
       "id": "learnings-bridge",
       "display_name": "Learnings Bridge",
       "trigger": "Promote daily learning candidates into durable owner knowledge",
       "default_prompt": "Use $learnings-bridge to route the learning candidates on my recent daily pages into learnings, methods or style.",
       "relative_path": "skills/learnings-bridge/SKILL.md"
+    },
+    {
+      "id": "maestro-doctor",
+      "display_name": "Maestro Doctor",
+      "trigger": "Run a plain-language health check on the Maestro install",
+      "default_prompt": "Use $maestro-doctor to check whether my Maestro install is healthy and tell me what to do about any issues.",
+      "relative_path": "skills/maestro-doctor/SKILL.md"
     },
     {
       "id": "maestro-environment-setup",
@@ -196,6 +210,13 @@
       "trigger": "Prepare considered feedback to give a senior colleague",
       "default_prompt": "Use $upward-feedback to help me prepare what I want to say in my upward feedback.",
       "relative_path": "skills/upward-feedback/SKILL.md"
+    },
+    {
+      "id": "wayfinder",
+      "display_name": "Wayfinder",
+      "trigger": "Structure an open problem into a first move",
+      "default_prompt": "Use $wayfinder to break this open question into branches and tell me which one to open first.",
+      "relative_path": "skills/wayfinder/SKILL.md"
     },
     {
       "id": "workspace-agent-setup",

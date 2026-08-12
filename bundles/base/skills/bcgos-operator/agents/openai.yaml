@@ -1,4 +1,0 @@
-interface:
-  display_name: "BCGOS Operator"
-  short_description: "Control Maestro health, updates and recovery"
-  default_prompt: "Use $bcgos-operator to inspect and operate Maestro setup, health, update or recovery without turning the CLI into the normal work experience."

@@ -5,10 +5,9 @@
     {
       "role": "case_agent",
       "skill_ids": [
-        "bcgos-operator",
-        "case-kickoff",
+        "bcg-case-kickoff",
+        "bcg-deck",
         "deck-review",
-        "deck-storyline",
         "execution-continuity",
         "expert-interview-guide",
         "find-prior-work",

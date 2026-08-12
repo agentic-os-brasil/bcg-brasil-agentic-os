@@ -1,4 +1,0 @@
-interface:
-  display_name: "Deck and Storyline"
-  short_description: "Build one decision-led professional storyline and deck plan"
-  default_prompt: "Use $deck-storyline to turn the approved case evidence into a decision-led deck plan."
