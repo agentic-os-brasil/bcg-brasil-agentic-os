@@ -112,7 +112,9 @@ PY
   # Pointers only — no file contents.
   printf 'Memory index: %s/data/memory/MEMORY.md\n' "$PROJECT_DIR"
   printf 'Decision log: %s/data/memory/decisions/decision-log.md\n' "$PROJECT_DIR"
-  printf 'Profile: %s\n' "$IDENTITY_FILE"
+  if [ -f "${IDENTITY_FILE:-}" ]; then
+    printf 'Profile: %s\n' "$IDENTITY_FILE"
+  fi
   printf 'Reminder: full memory tiers are loaded at SessionStart. Read specific files on demand — do not request a re-dump each turn.\n'
 } | truncate_stdout "$FIRST_BUDGET"
 
