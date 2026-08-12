@@ -9,12 +9,11 @@ Present Maestro in plain language and get the user to a productive state in unde
 
 ## Preconditions
 
-- `data/` must exist. If missing, tell the user to reopen the folder in Claude Code (first-run-scaffold will create it) and stop here.
+- `data/` must exist. If missing, create directories inline (data/, data/profile/) and proceed.
 - If `data/profile/onboarding.json` already exists and the skill was invoked explicitly by
   the user (not by the session state machine), ask: "seu onboarding já foi feito — quer
   repetir ou pular?" and act accordingly. If invoked automatically by the session state
   machine (first message of the session), proceed directly — the check already happened.
-- Resolve the canonical `interaction-profile` skill (if available) before responding, so vocabulary, formality and disclosure match the user's declared preference. Do not build a local persona model.
 
 ## Flow
 
@@ -27,12 +26,29 @@ Present in one short paragraph:
 
 Não use termos técnicos ("subagent", "hook", "hub-and-spoke"). Use "hub", "especialistas", "sua workspace".
 
-### Step 2 — Identidade (2min)
+### Step 2 — Escolha da trilha (1min)
+
+Logo após as boas-vindas, apresente as duas trilhas com o impacto de cada uma:
+
+> "Para configurar o Maestro, há duas formas:
+>
+> **Trilha rápida (~3 min)** — nome, papel e estilo de resposta. Começamos a trabalhar imediatamente. O Maestro se calibra com o tempo conforme trabalhamos juntos — mas nas primeiras sessões pode precisar pedir contexto que a trilha completa já teria.
+>
+> **Trilha completa (~8 min)** — além do básico, capturo seu projeto atual, o que é importante para você profissionalmente e o que consome mais energia agora. Com isso, sugestões e análises são personalizadas desde a primeira sessão: menos perguntas de clarificação, próximos passos mais alinhados ao que importa, e o Maestro já sabe puxar os temas certos ao longo do tempo.
+>
+> Qual prefere?"
+
+- Se **trilha rápida**: execute Step 3 (só Nome e Papel) → Step 4 → Step 5 (resumido) → Step 5.5 → Step 6.
+- Se **trilha completa**: execute Step 3 → Step 3.5 → Step 4 → Step 5 → Step 5.5 → Step 6.
+
+### Step 3 — Identidade (1–2min)
 
 Ask, in order:
-1. **Nome que você usa no BCG Brasil.** (Ex.: "Daniel Scardini")
-2. **Seu papel.** (Ex.: "Consultant", "Senior Consultant", "Manager")
-3. **Um projeto atual ou área de foco.** (Ex.: "detecção de fraude no setor segurador", "AI use case lab para PE")
+1. **Nome que usa no BCG Brasil.** (Ex.: "Daniel Scardini")
+2. **Papel.** (Ex.: "Consultant", "Senior Consultant", "Manager")
+
+Trilha completa: continue para Step 3.5 antes de persistir.
+Trilha rápida: persista agora e siga para Step 4.
 
 Persist to `data/profile/identity.json` with schema:
 ```json
@@ -40,11 +56,25 @@ Persist to `data/profile/identity.json` with schema:
   "name": "...",
   "role": "...",
   "focus": "...",
+  "work_energy": "...",
+  "quality_bar": "...",
+  "track": "quick" | "complete",
   "captured_at": "<ISO8601 UTC>"
 }
 ```
 
-### Step 3 — Estilo de trabalho (1min)
+Campos `focus`, `work_energy`, `quality_bar` ficam em branco na trilha rápida.
+
+### Step 3.5 — Contexto profissional (completo apenas, 3–4min)
+
+Ask in order, one at a time:
+3. **Projeto atual ou área de foco.** (Ex.: "detecção de fraude no setor segurador", "AI use case lab para PE")
+4. **O que define trabalho bem feito para você neste projeto?** (Ex.: "análise que convence o board", "código que sobrevive sem o autor", "entrega dentro do prazo com zero retrabalho")
+5. **O que mais consome energia agora?** (Ex.: "preparar apresentações", "alinhar com o cliente", "revisar código dos outros")
+
+Persist ao `data/profile/identity.json` os campos `focus`, `quality_bar` e `work_energy`.
+
+### Step 4 — Estilo de trabalho (1min)
 
 Ask exactly one question:
 > "Como prefere que eu trabalhe: **padrão** (respostas curtas, direto ao ponto), **avançado** (mais contexto e nuance quando útil), ou **power** (assume familiaridade total, máxima densidade)?"
@@ -56,48 +86,50 @@ Persist to `data/profile/style.json`:
 { "interaction_profile": "standard" | "advanced" | "power", "captured_at": "..." }
 ```
 
-Este campo é lido pela skill `interaction-profile` como preflight de todas as demais skills. Não use outras chaves (`verbosity`, `mode`, etc.).
+Este campo é lido como preflight de todas as demais skills. Não use outras chaves (`verbosity`, `mode`, etc.).
 
-### Step 4 — O que Maestro faz por você (1min)
+### Step 5 — O que Maestro faz por você (1min)
 
-Present a 5-bullet menu do que está disponível:
-- Rascunhos de deck em estilo BCG (`/bcg-deck`).
+Present o que está disponível. **Trilha rápida**: mencione apenas 3 itens principais. **Trilha completa**: apresente os 5.
+
+- Rascunhos de deck em estilo BCG.
 - Análise de dados (qualitativa e quantitativa).
-- Revisão de PR / code review.
-- Onboarding em novo caso (`/bcg-case-kickoff`).
-- Ingestão de documentos que você quiser enviar (CV, PDF, DOCX): é só pedir.
+- Revisão de código e PR.
+- Onboarding em novo caso de cliente.
+- Ingestão de documentos (CV, PDF, DOCX): é só pedir.
 
-Não recite. Apresente e pergunte: "qual desses topa começar hoje?"
+**Trilha completa — adicione**: "A cada sessão, proponho próximos passos ligados ao seu projeto, ao seu desenvolvimento profissional e à saúde do Maestro — para você nunca precisar lembrar o que perguntar."
 
-### Step 4.5 — MarkItDown (silencioso, não-bloqueante)
+Pergunte: "qual desses topa começar hoje?"
 
-Antes de fechar o onboarding, verifique a disponibilidade de MarkItDown:
+### Step 5.5 — MarkItDown (silencioso, não-bloqueante)
 
-Run `markitdown --version` (suppress stdout/stderr).
+Run `markitdown --version` silently (suppress stdout/stderr).
 
-- Se disponível: crie `data/profile/markitdown.json`:
+- Disponível → crie `data/profile/markitdown.json`:
   ```json
   { "available": true, "version": "<output>", "checked_at": "<ISO8601 UTC>" }
   ```
-  Informe o usuário em uma linha: "Ingestão de documentos (PDF, Word, PowerPoint) está habilitada."
-- Se não disponível: crie `data/profile/markitdown.json`:
+  Informe em uma linha: "Ingestão de documentos (PDF, Word, PowerPoint) está habilitada."
+- Não disponível → crie `data/profile/markitdown.json`:
   ```json
   { "available": false, "checked_at": "<ISO8601 UTC>" }
   ```
-  Não mencione ao usuário. O check é re-tentado automaticamente após 30 dias.
+  Não mencione ao usuário.
 
-### Step 5 — Fechamento (30s)
+### Step 6 — Fechamento (30s)
 
-Grave onboarding completion em `data/profile/onboarding.json`:
+Grave em `data/profile/onboarding.json`:
 ```json
 {
   "completed_at": "<ISO8601 UTC>",
+  "track": "quick" | "complete",
   "version": "<read from VERSION file>"
 }
 ```
 
-Diga, literalmente:
-> "Pronto. A qualquer momento diga: 'quero fazer X' e eu conduzo. Se algo parecer errado, peça `/maestro-doctor`. Se sair uma versão nova, você recebe email do time — o ritual de update está no `README-INSTALL.md` da sua pasta."
+Diga:
+> "Pronto. A qualquer momento diga: 'quero fazer X' e eu conduzo. Se algo parecer errado, leia `skills/maestro-doctor/SKILL.md` para diagnóstico. Se sair uma versão nova, o ritual de update está no `README-INSTALL.md` da sua pasta."
 
 Stop.
 
@@ -106,11 +138,12 @@ Stop.
 - Uma pergunta por vez.
 - Nunca peça para o usuário editar arquivo, abrir terminal ou rodar comando.
 - Se o usuário responder "não sei" a qualquer campo obrigatório, ofereça uma default sensata e siga.
-- Se o usuário pedir para pular Step 2 ou Step 3, aceite — persista o que tiver e siga.
+- Se o usuário pedir para pular qualquer step, aceite — persista o que tiver e siga.
+- Se o usuário escolher trilha rápida mas depois quiser completar, aceite — retome do Step 3.5.
 
 ## What NOT to do
 
-- Não invocar `bcgos` (não existe).
-- Não configurar nada além dos 3 arquivos JSON em `data/profile/`.
-- Não abrir Walter, não passar por family-guardian — este é um onboarding local, não uma decisão estratégica.
-- Não fazer pitch de features avançadas na primeira sessão. Menos é mais.
+- Não invocar skills por nome de tool — leia o SKILL.md correspondente diretamente.
+- Não configurar nada além dos arquivos JSON em `data/profile/`.
+- Não fazer pitch de features avançadas antes do Step 5.
+- Não apresentar as duas trilhas como "mais fácil vs mais difícil" — são diferentes em **impacto**, não em esforço.
