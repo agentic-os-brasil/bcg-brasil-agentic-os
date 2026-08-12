@@ -47,12 +47,16 @@ Persist to `data/profile/identity.json` with schema:
 ### Step 3 — Estilo de trabalho (1min)
 
 Ask exactly one question:
-> "Você prefere respostas curtas e diretas (padrão consultoria) ou didáticas com contexto?"
+> "Como prefere que eu trabalhe: **padrão** (respostas curtas, direto ao ponto), **avançado** (mais contexto e nuance quando útil), ou **power** (assume familiaridade total, máxima densidade)?"
+
+Mapeie a resposta para um dos três valores canônicos: `standard`, `advanced`, `power`.
 
 Persist to `data/profile/style.json`:
 ```json
-{ "verbosity": "concise" | "didactic", "captured_at": "..." }
+{ "interaction_profile": "standard" | "advanced" | "power", "captured_at": "..." }
 ```
+
+Este campo é lido pela skill `interaction-profile` como preflight de todas as demais skills. Não use outras chaves (`verbosity`, `mode`, etc.).
 
 ### Step 4 — O que Maestro faz por você (1min)
 
