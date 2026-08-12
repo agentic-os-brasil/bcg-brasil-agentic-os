@@ -3620,38 +3620,6 @@ func enrichOperationalGuide(packet *sessionctx.Packet, runtimeName, workspacePat
 	if executable, err := os.Executable(); err == nil && filepath.IsAbs(executable) {
 		packet.MaestroCLIPath = executable
 	}
-	projection, err := runtimeprojection.Inspect(runtimeName, workspacePath)
-	if err != nil || projection.State != "installed" {
-		return nil
-	}
-	catalog, _, installed, err := runtimeprojection.RoutingInputs(runtimeName, workspacePath)
-	if err != nil {
-		return nil
-	}
-	known := false
-	for _, skill := range catalog.Skills {
-		if skill.ID == "bcgos-operator" {
-			known = true
-			break
-		}
-	}
-	if !known {
-		return nil
-	}
-	for _, current := range packet.Skills.Selected {
-		if current.ID == "bcgos-operator" {
-			return nil
-		}
-	}
-	for _, skill := range installed {
-		if skill.ID == "bcgos-operator" {
-			packet.Skills.Selected = append([]sessionctx.SkillSelection{{ID: skill.ID, Reason: "deterministic_operational_method", Pointer: skill.Pointer}}, packet.Skills.Selected...)
-			if len(packet.Skills.Selected) > sessionctx.MaximumSelectedSkills {
-				packet.Skills.Selected = packet.Skills.Selected[:sessionctx.MaximumSelectedSkills]
-			}
-			return nil
-		}
-	}
 	return nil
 }
 

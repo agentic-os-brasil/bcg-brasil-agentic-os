@@ -1,170 +1,92 @@
 ---
 name: maestro-setup-update
-description: Guide a non-technical Maestro user through setup, authentication, update, verification or recovery with one plain-language confirmation and fail-closed release boundaries. Use whenever the user asks to install, configure, update, repair or roll back Maestro.
+description: Guia conversacional para instalar, atualizar ou reparar o Maestro a partir do ZIP distribuído pelo time BCG Brasil AI. Use sempre que o pedido envolver install, primeira instalação, update, atualização, upgrade, reparo, recuperação, "voltar versão" ou rollback do Maestro.
 ---
 
 # Maestro Setup and Update
 
-Help the user reach a safe outcome through natural conversation. Do not turn
-the interaction into a terminal tutorial.
+Guia conversacional para três desfechos: primeira instalação, atualização, reparo. O trabalho mecânico é sempre a extração de um ZIP pelo próprio usuário. Esta skill orienta, verifica e diagnostica, não executa instalador. Nunca peça terminal, edit de arquivo, script ou permissão.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before starting. Use it to control
-technical detail and pacing, never to weaken authentication, confirmation,
-signature, data-separation or acceptance requirements.
+Resolver `interaction-profile` se disponível. Ajustar vocabulário e ritmo, jamais o envelope de segurança (uma pergunta por vez, sem terminal, sem edit manual).
 
-## Product posture
+## Contrato de comunicação
 
-Bias toward completing the owner's work and tightening the system along the
-way. Missing optional evidence, stale local receipts or incomplete diagnostics
-trigger silent inspection, repair and a concise warning; they do not become a
-global blocker. If a setup grant cannot be reused, continue ordinary local work
-through the host runtime's normal permissions and renew the grant when useful.
-Hard stops are reserved for external mutation, tenant/client change, privilege,
-secrets, destruction or actions without bounded recovery.
+- Uma pergunta por vez.
+- Sem "você", "tu" ou "te". Preferir impessoal ou 3ª pessoa.
+- Sem em-dash ("—") em texto externo. Usar vírgula, dois pontos ou parênteses.
+- Sem jargão de shell, JSON ou chmod.
+- Se o usuário pedir "voltar versão", ser transparente: o Maestro atual não faz rollback automático. Se o ZIP anterior foi guardado, extrair por cima da pasta resolve. Caso contrário, pedir o link ao time BCG Brasil AI.
+- Nunca mencionar `bcgos`, `bcgos doctor`, `bcgos update` ou qualquer binário de instalador. Esse caminho foi encerrado.
 
-## Windows installer boundary
+## Roteamento inicial
 
-For a first installation on Windows, the recommended user-facing entrypoint
-is the single `Maestro-Installer-<version>-windows-amd64.exe` produced by the
-self-contained factory. It carries the complete validated package internally,
-extracts it into a temporary user directory and opens the same visual bridge.
-The factory/debug form remains a transportable folder or archive and must
-carry these sibling inputs together:
+Perguntar apenas qual desfecho o usuário quer, em uma frase:
 
-- `wizard/`;
-- `release/` with the exact signed release set;
-- `authority-registry.json`; and
-- exactly one versioned `bcgos-bootstrap_<version>_windows_amd64.exe`.
+> "É primeira instalação, atualização ou reparo?"
 
-The file named `bcgos_<version>_windows_amd64.exe` is the installed runtime
-CLI, not an installer. Never offer it as a first-install download, never tell
-the user to double-click it, and never fall back to it when the visual
-installer package is incomplete. If `maestro-installer.exe` is missing any
-required sibling input, report `installer_package_incomplete` and stop before
-asking for credentials, changing a managed root or suggesting a raw CLI
-command.
+Se o pedido for rollback, tratar como caso de "reparo com ZIP anterior" (ver seção Rollback abaixo).
 
-The `maestro-setup-update` skill is part of the signed base bundle and is
-installed by the visual installer; it is not distributed as a separate skill
-file. A successful single-file handoff therefore means “double-click the
-Maestro Installer `.exe`”; for the debug package, open
-`maestro-installer.exe`. In both cases, the CLI becomes available only after
-the installer has completed and its final self-check has passed.
+## Fluxo: primeira instalação
 
-## Workflow
+1. **Confirmar posição.** Verificar se `${CLAUDE_PROJECT_DIR}/VERSION` existe.
+   - Se existir, informar: "a pasta Maestro já está aberta aqui, versão v<X.Y.Z>. Podemos seguir com o onboarding."
+   - Se não existir, orientar: "abra no Claude Code a pasta Maestro que foi extraída do ZIP. Feche esta janela e reabra pela pasta correta."
 
-1. Ask only which outcome the user wants: first setup, update, repair or
-   rollback. Infer the operating system from the runtime when possible.
-2. For first setup, use the installer receipt and `bcgos setup status
-   --workspace <workspace>`. If one-and-done authorization is not active, ask
-   one plain-language question covering all local, allowlisted, idempotent and
-   reversible preparation, diagnostics, repair, retry and recovery for this
-   workspace. State in the same question that external, privileged,
-   destructive, secret-bearing and cross-tenant actions remain outside it.
-3. After that single agreement, run `bcgos setup authorize --workspace
-   <workspace> --confirm` and complete local setup silently. Run any required
-   `status`, `doctor`, adapter, verification, maintenance, retry or reversible
-   repair commands on the user's behalf without asking again. Show concise
-   progress and one outcome summary; do not expose the command sequence.
-   Once the installer and its local preparation complete, hand ordinary
-   workspace readiness and later quiet repairs to `$maestro-environment-setup`
-   and `$maestro-runtime-checkup`; they do not replace this installer/update
-   flow.
-4. Treat optional unavailable capabilities as
-   `complete_with_external_actions_pending`. Keep all unrelated Maestro
-   capabilities useful and consolidate true administrator actions into one
-   notice. `private_release_auth` governs private distribution and updates; it
-   is never a SharePoint enrollment or collection trust anchor.
-5. On first setup, run `bcgos agent interview`. Explain each principal agent,
-   show the suggested names and emoji-avatars, and ask the owner to choose or
-   customize them. Explain that ownership and personalization are separate
-   from authority. Persist only after explicit confirmation with
-   `bcgos agent personalize draft --stdin --consent --no-client-data`, followed
-   by review and digest-bound confirm; malformed, unconfirmed or cross-scope
-   profiles fail closed. Ask only the returned `next_question`; stage the
-   strict profile with `bcgos agent personalize draft --stdin --consent
-   --no-client-data`, show `review --id <id>`, and apply only `confirm --id
-   <id> --digest <sha256> --confirm` after the owner reviews it. The input
-   must use the canonical `selections[]` envelope returned by
-   `bcgos agent interview`; do not send interview labels such as `agent_names`,
-   `agent_emojis`, `scope` or a top-level `ownership_scope`.
-6. For an update only, inspect `bcgos auth status`. If authentication is
-   unavailable, report the approved company release channel as an external
-   action pending; do not degrade local setup, onboarding or SharePoint source
-   selection. Never suggest a token, environment variable, credential file,
-   `gh`, source clone or unsigned package. If login is required, run `bcgos
-   auth login`, show the approved browser address and short user code, and wait.
-7. Run `bcgos update --check`. Explain the installed and proposed versions,
-   whether CLI and bundle both change, and whether a migration is required.
-8. If an update is available, ask one short confirmation naming the exact
-   target version and impact. Do not confirm on the user's behalf and do not
-   reuse confirmation for a different plan ID.
-9. After confirmation, run `bcgos update --confirm <plan-id>`. Let the stable
-   bootstrapper wait for the CLI to exit, activate and self-check. Do not try to
-   replace the running executable directly.
-10. Run final verification silently. Report the active versions and
-   whether rollback remains available.
-11. If activation fails, explain that the last-known-good version was restored.
-   Offer explicit rollback only when a valid previous state exists.
+2. **Confirmar workspace inicial.** Verificar se `data/` e `data/.initialized` existem.
+   - Se ausentes, orientar: "feche a pasta no Claude Code e reabra. Na próxima abertura o Maestro cria a workspace pessoal automaticamente."
+   - Se presentes, seguir.
 
-## Communication contract
+3. **Delegar identidade.** Encaminhar para a skill `maestro-onboarding` sem duplicar o trabalho dela. Frase-ponte sugerida: "com a pasta pronta, vamos à apresentação e captura de identidade. Ativando o onboarding."
 
-- Lead with what the user can safely do now.
-- Translate `unavailable` into the missing company approval or capability;
-  never present it as the user's fault.
-- Use one setup authorization, then no repeated confirmation for local
-  diagnostics or reversible repair. Updates and rollbacks retain their exact
-  plan-bound confirmation because they change installed release state.
-- Never call an unsigned candidate a release or an isolated CI run a corporate
-  device acceptance.
-- Never expose credential, device or release-signing material.
+## Fluxo: atualização
 
-### Standard-user language
+Contexto: o time BCG Brasil AI envia um email com o link do ZIP novo. O usuário baixa, extrai por cima da pasta Maestro atual (mantendo `data/`), reabre no Claude Code. Esta skill entra depois disso, para verificar.
 
-For the `standard` profile, make the experience welcoming to a non-technical
-adult who may be installing software during a busy workday. Use Brazilian
-Portuguese unless the user clearly chooses another language. Explain one safe
-next step at a time and keep engineering detail behind the scenes.
+1. **Perguntar a versão esperada.** Uma frase apenas: "qual versão o email do time BCG Brasil AI pediu para instalar?"
 
-- Start with a one-line outcome: `✅ Vou preparar sua instalação.` or
-  `🔄 Vou atualizar o Maestro e conferir se tudo ficou bem.`
-- Use emojis as wayfinding, not decoration: normally one emoji per step or
-  warning, never an emoji wall.
-- Explain technical terms with adult analogies on first use:
-  - release/signature: `📦 uma caixa lacrada; a assinatura é o selo que prova
-    que ninguém trocou o conteúdo`;
-  - provider: `🏦 o cofre corporativo de onde a versão aprovada é retirada`;
-  - update plan: `🧾 uma ordem de serviço com a versão exata e o que vai mudar`;
-  - rollback: `↩️ o botão de desfazer que volta à última versão boa`;
-  - workspace: `🗂️ sua pasta de trabalho, que não deve ser mexida pela troca
-    do programa`.
-- Prefer adult, respectful analogies such as a bank transfer, a sealed
-  package, a backup copy or an approved building pass. Do not use baby talk,
-  childish diminutives, jokes about the user's technical ability or language
-  that implies the person is at fault.
-- Use this compact shape when useful:
-  1. `✅ O que vou fazer` — one sentence;
-  2. `🔎 O que estou conferindo` — signature, version and compatibility in
-     plain language;
-  3. `👍 O que preciso de você` — one short confirmation only when required;
-  4. `🛟 Se a ativação falhar` — explain that, when a last-known-good version
-     exists, the system attempts to restore it, then confirms the result and
-     says when rollback is unavailable.
-- Before confirmation, say the impact in human terms: `Atualizar da versão
-  X para Y troca apenas o programa, mantém sua pasta de trabalho e permite
-  voltar à versão anterior. Posso prosseguir?` Do not ask the user to repeat a
-  plan ID unless the deterministic command requires it; the runtime still
-  binds the confirmation to the exact plan.
-- When a capability is unavailable, say what is waiting and the safe next
-  action: `⚠️ A instalação está pronta, mas falta a aprovação do canal da
-  empresa. Nada será instalado até ela existir.` Never show raw stack traces,
-  provider URLs, tokens, filesystem paths or shell diagnostics by default.
+2. **Ler `VERSION` local.** Comparar com a versão informada.
+   - **Match:** "instalado v<X.Y.Z>, igual à versão do email. Atualização concluída. Sua workspace `data/` foi preservada."
+   - **Mismatch (local abaixo do esperado):** orientar sequência sem terminal.
+     1. Fechar o Claude Code inteiro.
+     2. Extrair o ZIP novo por cima da pasta Maestro. Todos os arquivos do ZIP substituem os existentes. A pasta `data/` fica intacta porque não está no ZIP.
+     3. Reabrir a pasta Maestro no Claude Code.
+     4. Perguntar de novo o status: "quando reabrir, é só dizer 'confere versão' que faço a verificação."
+   - **Mismatch (local acima do esperado):** raro, mas possível. Informar: "a versão instalada é mais nova que a informada. Confirme com o time BCG Brasil AI qual é a versão correta antes de qualquer ação."
 
-## Completion
+3. **Sanidade pós-atualização.** Se surgir dúvida (arquivo faltando, hook não roda), delegar para `maestro-doctor` e seguir a prescrição dele.
 
-Return the requested outcome, active CLI and bundle versions, authentication
-state, rollback availability and any release-environment approvals still
-missing. Keep engineering evidence, corporate-device acceptance and pilot
-readiness visibly distinct.
+## Fluxo: reparo
+
+1. **Delegar diagnóstico.** Ativar `maestro-doctor`. Aguardar o veredicto de uma linha e a lista de pontos.
+
+2. **Mapear cada achado à ação certa.** O `maestro-doctor` reporta em linguagem simples; a tabela mental abaixo traduz cada caso para a orientação ao usuário.
+
+   - **Arquivos core ausentes** (`VERSION`, `CLAUDE.md`, `.claude/`, `bundles/`): "a instalação está incompleta. Baixe o ZIP mais recente indicado no último email do time BCG Brasil AI e extraia por cima da pasta atual. A workspace `data/` é preservada."
+   - **`data/` ausente, core presente:** "feche o Claude Code e reabra a pasta Maestro. Na próxima abertura a workspace é recriada automaticamente."
+   - **Hooks presentes mas sem permissão de execução (Mac/Linux):** "reextraia o ZIP por cima da pasta Maestro. A extração restaura as permissões corretas."
+   - **`data/` corrompida ou com conteúdo perdido:** ser direto. "o Maestro não guarda backup automático da sua workspace. Se há uma cópia manual (Time Machine, backup em nuvem pessoal, cópia do OneDrive), restaure por cima da `data/` atual. Sem backup, o conteúdo perdido não é recuperável pelo Maestro."
+   - **`VERSION` presente mas fora do formato `X.Y.Z`:** tratar como install corrompido, orientar reextração.
+
+3. **Confirmar recuperação.** Após qualquer ação, sugerir rodar `maestro-doctor` de novo para confirmar veredicto "Tudo funcionando".
+
+## Rollback
+
+Não há rollback automático. Se o usuário pediu para voltar a uma versão anterior:
+
+1. Perguntar: "o ZIP da versão anterior foi guardado localmente?"
+2. **Sim:** orientar a mesma sequência do fluxo de atualização, usando o ZIP antigo no lugar do novo. Fechar Claude Code, extrair por cima, reabrir. A `data/` é preservada.
+3. **Não:** informar honestamente que o Maestro atual não faz rollback automático e sugerir pedir o link do ZIP anterior ao time BCG Brasil AI pelo canal oficial.
+
+## O que esta skill nunca faz
+
+- Não sugere abrir terminal, rodar script ou editar JSON.
+- Não invoca `bcgos` nem qualquer binário de instalador (esse caminho foi encerrado).
+- Não promete rollback automático.
+- Não toca em `data/`. Essa pasta pertence ao usuário.
+- Não repete o trabalho de `maestro-onboarding` (identidade) nem de `maestro-doctor` (diagnóstico). Delega.
+
+## Encerramento
+
+Ao terminar, resumir em uma linha o desfecho, a versão ativa (lida em `VERSION`) e o caminho absoluto da workspace (`${CLAUDE_PROJECT_DIR}/data/`). Se houver ação pendente do lado do time BCG Brasil AI (email com link, versão a confirmar), deixar explícito.

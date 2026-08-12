@@ -5,7 +5,9 @@ description: Run or inspect professional memory consolidation through the BCG Br
 
 # Dream Memory
 
-Use the installed runtime adapter for the canonical memory engine. Never write, summarize or promote memory files directly from the skill.
+Operate directly on the workspace memory tree under `data/memory/` (layers
+`L1/`, `L2/`, `L3/`, `lifetime/`). All reads and writes go through the Read,
+Write and Edit tools, following the invariants below.
 
 ## Interaction profile
 
@@ -28,13 +30,13 @@ only the explanation and optional detail do.
 
 ## Workflow
 
-1. Resolve the active workspace identity and local memory root through the installed runtime adapter.
-2. Confirm the managed bounds and named weekly eligibility policy. The bundled deterministic adapter supports daily L1 and weekly L2/L3 rollups; it never selects a remote model.
-3. For capture, persist only signals already classified as sanitized by the adapter. Never pass raw credentials, client files or unrestricted prompt history.
-4. Invoke exactly one canonical cycle through the adapter. Hooks, schedules and manual requests all call the same idempotent engine operation.
-5. For weekly lifetime promotion, require a named eligibility policy. If it is missing, stop: lifetime activation must fail closed.
+1. Resolve the active workspace identity by reading `data/profile/identity.json` and the memory root at `data/memory/`.
+2. Confirm the memory tree exists and read `data/memory/config.json` for the effective per-layer budgets. If either is missing, stop and report the safe next action.
+3. For capture, persist only signals classified as sanitized in the source (Session Start, hook output, prior L1 entry). Never write raw credentials, client files or unrestricted prompt history into `data/memory/`.
+4. Execute exactly one cycle per invocation. Hooks, schedules and manual requests all follow the same idempotent read, synthesize, stage, commit sequence.
+5. For weekly lifetime promotion, require a named eligibility policy in `data/memory/policies/lifetime.json`. If it is missing, stop: lifetime activation must fail closed.
 6. Return the cycle, period, source fingerprint, activated layers, lifetime eligibility reason and any skipped or missing layers.
-7. If the adapter or command is unavailable, report the capability as unavailable. Do not emulate dreaming by editing local memory files.
+7. If the required policy or budget files are missing, report the capability as unavailable rather than emulating dreaming with ad-hoc edits.
 
 ## Invariants
 
@@ -50,9 +52,4 @@ only the explanation and optional detail do.
 
 ## Current delivery boundary
 
-The managed bundle contains this canonical skill, deterministic daily and
-weekly synthesis adapters, the bounded runtime configuration and the
-`deterministic-l3-continuity-v1` lifetime eligibility policy. `bcgos memory
-dream daily` is executable over already-sanitized local captures. `bcgos memory
-dream weekly` atomically activates L2 and L3 when L1 exists; it promotes
-lifetime only after two weekly L3 generations are present.
+The managed bundle contains this canonical skill and the layer budget and policy contracts under `data/memory/`. If those files are absent in the current workspace, report dreaming as unavailable and point the user at the setup skill rather than claim execution.

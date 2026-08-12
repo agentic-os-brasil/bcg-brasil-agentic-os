@@ -1,48 +1,62 @@
 ---
 name: ingest-content
-description: Ingest one professional document or supported source through the BCG Brasil Agentic OS local extraction contract. Use for PDFs, Office files, webpages, images, emails and other work material that should become governed local knowledge.
+description: Registra o conteúdo de um documento profissional (PDF, arquivo Office, página web salva, imagem, email) na memória local do Maestro em `data/memory/`. Use quando o pedido for "ingerir", "processar documento", "adicionar este PDF na memória", "salvar este material" ou equivalente.
 ---
 
 # Ingest Content
 
-Use the installed runtime adapter. Do not manually parse a document, create a
-Python environment, request an API key or send source content to a remote
-provider as a fallback.
-
-## Workflow
-
-1. Resolve the active owner, workspace and local ingestion capability through
-   the installed runtime adapter.
-2. Check source scope, size, type and retention policy before reading content.
-3. Use the managed local Docling runtime as the primary extractor.
-4. Validate the structured result, Markdown rendering, provenance and output
-   budget before routing any derivative downstream.
-5. If Docling is unavailable or the result is invalid, use only an approved
-   deterministic format-specific fallback. Report why the fallback occurred.
-6. Return the extraction route, fidelity classification, provenance pointer,
-   retained-artifact policy and any capability limitation.
+Registrar um documento apontado pelo usuário como memória local do Maestro. Ler o arquivo com a ferramenta Read, sintetizar em Markdown enxuto e gravar em `data/memory/` via Write. O conteúdo original nunca é copiado para dentro da workspace, apenas referenciado por caminho.
 
 ## Interaction profile
 
-Resolve the canonical user-local profile through `interaction-profile` before
-choosing explanation depth or optional suggestions. The profile changes
-progressive disclosure only; it never authorizes a remote provider, weakens
-data boundaries or bypasses release verification.
+Resolver `interaction-profile` se disponível. O perfil ajusta profundidade de explicação e sugestões opcionais, nunca o envelope de segurança nem o destino da escrita.
 
-## Invariants
+## Contrato de comunicação
 
-- The original source remains in its user-chosen location.
-- Raw source content, credentials and client material never enter the managed
-  bundle, Git history or a shared atlas.
-- A failed extraction changes no memory or wiki state.
-- A remote provider is never an implicit fallback.
-- If the local runtime pack is unavailable, report `unavailable` and explain
-  the next safe installation action.
+- Uma pergunta por vez quando faltar informação.
+- Sem "você", "tu" ou "te". Preferir impessoal ou 3ª pessoa.
+- Sem em-dash ("—") em texto externo. Usar vírgula, dois pontos ou parênteses.
+- Nunca pedir terminal, edit de JSON, script ou instalação de dependência.
+- Nunca enviar o conteúdo do documento para provedor remoto como fallback.
 
-## Current delivery boundary
+## Fluxo
 
-This skill defines the product route. The deterministic `bcgos ingest` command
-and its fail-closed selector are implemented, but a managed verified Docling or
-MarkItDown runtime pack may still be absent from the active release. In that
-state the command must report the capability as `unavailable` rather than
-installing a dependency ad hoc or emulating ingestion.
+1. **Confirmar workspace.** Verificar que `${CLAUDE_PROJECT_DIR}/data/memory/` existe. Se ausente, orientar: "feche a pasta Maestro no Claude Code e reabra. Na próxima abertura a workspace é criada automaticamente." e parar.
+
+2. **Identificar a fonte.** Perguntar (uma linha apenas) qual é o caminho absoluto do documento se ainda não foi fornecido. Aceitar PDF, arquivo de texto, Markdown, HTML salvo ou imagem com texto simples.
+
+3. **Ler o conteúdo com a ferramenta Read.** Escopos suportados nesta release:
+   - PDF texto-nativo: extração direta via Read.
+   - Markdown, HTML, TXT, JSON, CSV: extração direta via Read.
+   - Imagem com texto: Read entrega o conteúdo visual ao modelo, que transcreve o texto relevante.
+   - Office (DOCX, XLSX, PPTX): não suportado nativamente nesta release. Ver seção "Fora do escopo desta release".
+
+4. **Sintetizar em Markdown.** Produzir um resumo estruturado com:
+   - Título curto do documento.
+   - Origem: caminho absoluto do arquivo original, tamanho aproximado, data de ingestão.
+   - Sumário em 3 a 8 bullets do conteúdo principal.
+   - Decisões, números ou trechos citáveis que o usuário provavelmente vai querer resgatar depois.
+   - Ao final, uma linha "Ver original em: <caminho absoluto>" para permitir retorno à fonte.
+
+5. **Escolher o destino em `data/memory/`.** Perguntar em uma frase qual é o tópico ("finanças", "cliente X", "leitura pessoal", etc.) e gravar em `data/memory/<topico>/<slug-do-doc>.md`. Se o subdiretório do tópico não existir, criá-lo com o mesmo Write (o Write cria diretórios intermediários).
+
+6. **Confirmar registro.** Reportar em uma linha: tópico, caminho relativo do arquivo criado, número aproximado de bullets no sumário. Não colar o sumário na conversa salvo se solicitado.
+
+## Invariantes
+
+- O documento original nunca é movido nem copiado, permanece no local escolhido pelo usuário.
+- Credenciais, tokens, dados de cliente ou material sensível dentro do documento nunca são gravados em `data/memory/` sem confirmação explícita do usuário sobre o que preservar.
+- Uma ingestão que falha ou é interrompida não altera `data/memory/`.
+- Nenhuma chamada a provedor remoto é feita nesta skill.
+- A skill nunca grava fora de `data/memory/`.
+
+## Fora do escopo desta release
+
+Extração automática de DOCX, XLSX, PPTX, PDFs escaneados (imagem pura) e OCR de imagens complexas dependem de runtime local dedicado que ainda não está incluído no ZIP do Maestro. Nesses casos:
+
+- Informar de forma direta que a extração nativa desses formatos entra em release posterior do Maestro.
+- Oferecer a alternativa atual: pedir ao usuário que abra o arquivo na aplicação nativa, copie o texto relevante e cole no chat. A skill então grava o material colado como se tivesse sido lido de um `.md`, mantendo o campo "Origem" apontando para o caminho absoluto do arquivo original.
+
+## Encerramento
+
+Uma linha com tópico, caminho absoluto do arquivo criado dentro de `data/memory/`, e (se aplicável) o item deixado para release futura. Se nada foi gravado, dizer explicitamente por que a ingestão não ocorreu e qual é o próximo passo seguro.

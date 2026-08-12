@@ -117,7 +117,7 @@ func TestStatusSeparatesAttestedContinuitySignalsFromLegacyCaptures(t *testing.T
 		t.Fatal(err)
 	}
 	attestor := CaptureAttestor{Root: engine.Root}
-	sealed, err := attestor.Seal(Capture{WorkspaceID: "case-a", RecordedAt: now, Kind: "skill_route", Text: "case-kickoff", Sanitized: true, ProducerID: "claude.context-injection", SanitizerID: SkillRouteSanitizerID, SourceDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	sealed, err := attestor.Seal(Capture{WorkspaceID: "case-a", RecordedAt: now, Kind: "skill_route", Text: "bcg-case-kickoff", Sanitized: true, ProducerID: "claude.context-injection", SanitizerID: SkillRouteSanitizerID, SourceDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestContinuityStatusVerifiesAndBoundsAttestedCaptures(t *testing.T) {
 	engine := testEngine(t)
 	now := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
 	attestor := CaptureAttestor{Root: engine.Root}
-	sealed, err := attestor.Seal(Capture{WorkspaceID: "case-a", RecordedAt: now, Kind: "skill_route", Text: "case-kickoff", Sanitized: true, ProducerID: "claude.context-injection", SanitizerID: SkillRouteSanitizerID, SourceDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	sealed, err := attestor.Seal(Capture{WorkspaceID: "case-a", RecordedAt: now, Kind: "skill_route", Text: "bcg-case-kickoff", Sanitized: true, ProducerID: "claude.context-injection", SanitizerID: SkillRouteSanitizerID, SourceDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
 	if err != nil {
 		t.Fatal(err)
 	}
