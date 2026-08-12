@@ -84,6 +84,8 @@ func (grant Grant) StateAt(now time.Time) string {
 
 var grantableOperations = map[string]bool{
 	"create-page":  true,
+	"set-field":    true,
+	"link":         true,
 	"append-entry": true,
 }
 
