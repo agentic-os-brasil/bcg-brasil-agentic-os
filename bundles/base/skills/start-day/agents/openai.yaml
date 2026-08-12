@@ -1,0 +1,4 @@
+interface:
+  display_name: "Start Day"
+  short_description: "Open the day with a briefing scoped to the hours that remain"
+  default_prompt: "Use $start-day to open my day with a briefing scoped to the time I actually have left."
