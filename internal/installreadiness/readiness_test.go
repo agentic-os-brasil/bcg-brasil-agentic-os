@@ -315,9 +315,11 @@ func (fixture readinessFixture) installState() installtx.State {
 }
 
 func (fixture readinessFixture) options() Options {
+	state := fixture.installState()
 	return Options{
 		WorkspacePath: fixture.workspace, DataRoot: fixture.dataRoot,
 		ExecutablePath: fixture.cli, CLIVersion: "0.1.0", CapabilityTracks: fixture.tracks, Runtime: fixture.runtime,
+		TargetOS: state.TargetOS, TargetArch: state.TargetArch,
 	}
 }
 
