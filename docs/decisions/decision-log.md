@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## ACSN - Per-agent context snapshot as injectable continuity layer
+
+- Date: 2026-08-12
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The memory pyramid in Spec 006 keeps L1/L2/L3/lifetime continuity at the workspace scope, and the breadcrumb tail in Spec 047 preserves metadata-only orchestration evidence that is deliberately not injectable. Neither surface carries a short, per-agent, prose-shaped operational note that the next invocation of the same agent can consume as additional context. Without this narrow layer, agents restart from generic workspace continuity even when the last handoff had a small, agent-specific residue worth carrying forward.
+- Decision: Introduce a bounded per-agent context snapshot stored under the same workspace boundary as memory (`workspaces/<workspace-id>/agents/<agent-id>/state.md`), maintained through immutable versions and an atomic activation commit, capped by a rune budget and refreshed by an authenticated post-invocation update from the same agent. Compaction is deterministic-first (drop-oldest-section when the budget is exceeded); any model-backed semantic adapter is a separate, later decision. Injection appends the snapshot as the most recent and narrowest layer after `lifetime -> L3 -> L2 -> L1`, without changing memory semantics or breadcrumb rules. Bodies never contain raw prompts, tool outputs, credentials or client-identifying content.
+- Consequences: Agents keep a small, attested operational trace between their own invocations without expanding L1 or the breadcrumb tail. Storage and privacy invariants remain aligned with Spec 006: user-local, workspace-isolated, never copied into the managed bundle. Runtime portability is preserved: Claude and Codex adapters preserve the same observable snapshot contract. Hook wiring, Session Start injection and CLI surfaces are deliberately deferred to later slices so the first change lands as a contract-only foundation with tests.
+- Refs: specs/052-agent-context-snapshot.md; specs/006-memory-persistence.md; specs/047-agent-breadcrumbs-and-done-contracts.md; internal/agentstate/
+- Supersedes: none
+
 ## WDRM - Bundle deterministic weekly memory rollups
 
 - Date: 2026-08-11
