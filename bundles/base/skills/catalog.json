@@ -256,8 +256,8 @@
     {
       "id": "walter",
       "display_name": "Walter — pressure-test",
-      "trigger": "Pressure-test a high-materiality proposal or decision before it reaches the owner or an external stakeholder",
-      "default_prompt": "Use $walter to submit a consequential proposal or decision for senior-advisor pressure-test before shipping.",
+      "trigger": "Roda revisão sênior interna de proposta ou decisão de alta materialidade antes do owner",
+      "default_prompt": "Use $walter para submeter uma proposta ou decisão consequente a pressure-test antes de enviar ao owner ou stakeholder externo.",
       "relative_path": "skills/walter/SKILL.md"
     },
     {
