@@ -93,6 +93,17 @@ printf '<!-- maestro:pointer: bcgos-operator · reason: deterministic_operationa
 printf 'Skill: %s/bundles/base/skills/bcgos-operator/SKILL.md\n' "${PROJECT_DIR}"
 printf 'Instrução: carregar este skill antes de escolher, interpretar ou recuperar qualquer operação BCGOS.\n'
 
+# Dreaming auto-trigger — check for .dream-requested marker written by session-stop-dream.sh.
+# When present, emit a mandatory action block so Claude runs dream-memory before any other task.
+DREAM_MARKER="$MEMORY_DIR/.dream-requested"
+if [ -f "$DREAM_MARKER" ]; then
+  printf '\n## ⚠️ Dreaming pendente — executar antes de qualquer outra tarefa\n'
+  printf '<!-- maestro:dream-trigger: marker=%s -->\n' "$DREAM_MARKER"
+  printf 'O marcador `.dream-requested` foi detectado (escrito pelo hook da sessão anterior).\n'
+  printf '\n**Ação obrigatória:** invoque `/dream-memory` (ciclo diário) como primeira ação desta sessão, antes de responder ao usuário ou executar qualquer tarefa.\n'
+  printf '\nApós o ciclo completar com sucesso, apague o marcador: `%s`\n' "$DREAM_MARKER"
+fi
+
 # Profile (highest routing priority — who the user is and how they prefer to work)
 emit_profile_json "Identidade do usuário" "$PROFILE_DIR/identity.json"
 emit_profile_json "Preferências" "$PROFILE_DIR/preferences.json"
