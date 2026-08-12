@@ -1,6 +1,6 @@
 ---
 name: bcg-deck
-description: Build one decision-led professional storyline and deck plan from approved case evidence. Use inside an authorized workspace or account context; it does not authorize reading, editing or presentation delivery.
+description: Build one decision-led professional storyline and deck plan from approved case evidence. Use for "build the storyline", "plan the deck", "structure the argument", or before drafting slides. Runs inside an authorized workspace or account context; it does not authorize reading, editing or presentation delivery.
 ---
 
 # Deck and Storyline

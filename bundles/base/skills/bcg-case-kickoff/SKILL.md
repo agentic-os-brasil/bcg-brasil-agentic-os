@@ -1,6 +1,6 @@
 ---
 name: bcg-case-kickoff
-description: Build a bounded, decision-led kickoff plan for a new professional case from approved scope and workspace context. Produces structure only; it does not create files, schedule meetings or contact people.
+description: Build a bounded, decision-led kickoff plan for a new professional case from approved scope and workspace context. Use for "kick off this case", "plan the first days", "ramp-up plan", or right after case scope is approved. Produces structure only; it does not create files, schedule meetings or contact people.
 ---
 
 # Case Kickoff
