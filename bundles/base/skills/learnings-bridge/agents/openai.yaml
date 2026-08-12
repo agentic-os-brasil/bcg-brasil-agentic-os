@@ -1,0 +1,4 @@
+interface:
+  display_name: "Learnings Bridge"
+  short_description: "Promote daily learning candidates into durable owner knowledge"
+  default_prompt: "Use $learnings-bridge to route the learning candidates on my recent daily pages into learnings, methods or style."

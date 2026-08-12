@@ -1,0 +1,4 @@
+interface:
+  display_name: "Craft Update"
+  short_description: "Document a personal method or working preference deliberately"
+  default_prompt: "Use $craft-update to write up this technique as a method, or record how I prefer to work."

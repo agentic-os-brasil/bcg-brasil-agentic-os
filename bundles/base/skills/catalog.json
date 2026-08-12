@@ -44,6 +44,13 @@
       "relative_path": "skills/deck-drill/SKILL.md"
     },
     {
+      "id": "craft-update",
+      "display_name": "Craft Update",
+      "trigger": "Document a personal method or working preference deliberately",
+      "default_prompt": "Use $craft-update to write up this technique as a method, or record how I prefer to work.",
+      "relative_path": "skills/craft-update/SKILL.md"
+    },
+    {
       "id": "deck-review",
       "display_name": "Deck Review",
       "trigger": "Review supplied slide text for storyline and evidence risks",
@@ -79,6 +86,13 @@
       "relative_path": "skills/expert-interview-guide/SKILL.md"
     },
     {
+      "id": "feedback-capture",
+      "display_name": "Feedback Capture",
+      "trigger": "Record feedback received and apply it to your objectives",
+      "default_prompt": "Use $feedback-capture to record this feedback and update my development objectives correctly.",
+      "relative_path": "skills/feedback-capture/SKILL.md"
+    },
+    {
       "id": "find-prior-work",
       "display_name": "Find Prior Work",
       "trigger": "Recover an explicitly requested past deck or work artifact",
@@ -105,6 +119,13 @@
       "trigger": "Find the root cause of a wrong or surprising result",
       "default_prompt": "Use $investigate to find why this output is wrong, with the evidence that establishes the cause.",
       "relative_path": "skills/investigate/SKILL.md"
+    },
+    {
+      "id": "learnings-bridge",
+      "display_name": "Learnings Bridge",
+      "trigger": "Promote daily learning candidates into durable owner knowledge",
+      "default_prompt": "Use $learnings-bridge to route the learning candidates on my recent daily pages into learnings, methods or style.",
+      "relative_path": "skills/learnings-bridge/SKILL.md"
     },
     {
       "id": "maestro-doctor",
@@ -191,11 +212,18 @@
       "relative_path": "skills/slide-summary/SKILL.md"
     },
     {
-      "id": "start-day",
+"id": "start-day",
       "display_name": "Start Day",
       "trigger": "Open the day with a briefing scoped to the hours that remain",
       "default_prompt": "Use $start-day to open my day with a briefing scoped to the time I actually have left.",
       "relative_path": "skills/start-day/SKILL.md"
+    },
+    {
+      "id": "upward-feedback",
+      "display_name": "Upward Feedback",
+      "trigger": "Prepare considered feedback to give a senior colleague",
+      "default_prompt": "Use $upward-feedback to help me prepare what I want to say in my upward feedback.",
+      "relative_path": "skills/upward-feedback/SKILL.md"
     },
     {
       "id": "wayfinder",
