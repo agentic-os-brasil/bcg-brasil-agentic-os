@@ -654,6 +654,49 @@ fi
 chmod -R u+w "$INJECT2_SCRATCH"
 rm -rf "$INJECT2_SCRATCH"
 
+# 12h2: dream auto-trigger — session-start-memory-inject.sh emits mandatory dreaming block when
+# .dream-requested marker is present; block is suppressed when marker is absent.
+INJECT3_SCRATCH=$(mktemp -d -t maestro-inject3-XXXXXX)
+INJECT3_MAESTRO="$INJECT3_SCRATCH/Maestro"
+mkdir -p "$INJECT3_MAESTRO/data/memory" "$INJECT3_MAESTRO/data/profile" "$INJECT3_MAESTRO/data/owner/self"
+INJECT3_HOOK="$INJECT3_MAESTRO/.claude/hooks/session-start-memory-inject.sh"
+mkdir -p "$(dirname "$INJECT3_HOOK")"
+cp "$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh" "$INJECT3_HOOK"
+chmod +x "$INJECT3_HOOK"
+
+# Sub-check A: marker present → dream-trigger block emitted
+printf '%s\n' "2099-01-01T00:00:00Z" > "$INJECT3_MAESTRO/data/memory/.dream-requested"
+INJECT3_OUT_WITH=$(CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
+if echo "$INJECT3_OUT_WITH" | grep -q "maestro:dream-trigger\|dream-requested"; then
+  pass "session-start-memory-inject.sh emits dream-trigger block when .dream-requested present"
+else
+  fail "session-start-memory-inject.sh does NOT emit dream-trigger block when .dream-requested present"
+fi
+if echo "$INJECT3_OUT_WITH" | grep -qi "obrigatória\|mandatory\|dream-memory"; then
+  pass "dream-trigger block contains mandatory action instruction"
+else
+  fail "dream-trigger block does NOT contain mandatory action instruction"
+fi
+
+# Sub-check B: marker absent → dream-trigger block NOT emitted
+rm -f "$INJECT3_MAESTRO/data/memory/.dream-requested"
+INJECT3_OUT_WITHOUT=$(CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
+if echo "$INJECT3_OUT_WITHOUT" | grep -q "maestro:dream-trigger"; then
+  fail "session-start-memory-inject.sh emits dream-trigger block even without .dream-requested"
+else
+  pass "dream-trigger block correctly suppressed when .dream-requested absent"
+fi
+chmod -R u+w "$INJECT3_SCRATCH"
+rm -rf "$INJECT3_SCRATCH"
+
+# 12h3: dream-memory skill documents auto-trigger marker cleanup
+DREAM_SKILL="$MAESTRO_DIR/bundles/base/skills/dream-memory/SKILL.md"
+if [ -f "$DREAM_SKILL" ] && grep -q "dream-requested\|marker cleanup\|Marker cleanup" "$DREAM_SKILL"; then
+  pass "dream-memory skill documents auto-trigger marker cleanup"
+else
+  fail "dream-memory skill does NOT document auto-trigger marker cleanup"
+fi
+
 # 12i: GAP-A — maestro-doctor references correct bundle names (tech-core, not data-practice)
 DOCTOR_SKILL="$MAESTRO_DIR/bundles/base/skills/maestro-doctor/SKILL.md"
 if [ -f "$DOCTOR_SKILL" ]; then
