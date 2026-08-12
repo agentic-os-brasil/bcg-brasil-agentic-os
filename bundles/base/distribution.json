@@ -210,6 +210,42 @@
       "path": "runtime/orientation.md.tmpl"
     },
     {
+      "source": "schemas/advancement-proposal.schema.json",
+      "path": "schemas/advancement-proposal.schema.json"
+    },
+    {
+      "source": "schemas/canary-receipt.schema.json",
+      "path": "schemas/canary-receipt.schema.json"
+    },
+    {
+      "source": "schemas/canary-report.schema.json",
+      "path": "schemas/canary-report.schema.json"
+    },
+    {
+      "source": "schemas/darwin-evidence.schema.json",
+      "path": "schemas/darwin-evidence.schema.json"
+    },
+    {
+      "source": "schemas/darwin-evolution.schema.json",
+      "path": "schemas/darwin-evolution.schema.json"
+    },
+    {
+      "source": "schemas/darwin-scorecard.schema.json",
+      "path": "schemas/darwin-scorecard.schema.json"
+    },
+    {
+      "source": "schemas/execution-state.schema.json",
+      "path": "schemas/execution-state.schema.json"
+    },
+    {
+      "source": "schemas/federation-batch.schema.json",
+      "path": "schemas/federation-batch.schema.json"
+    },
+    {
+      "source": "schemas/federation-export-state.schema.json",
+      "path": "schemas/federation-export-state.schema.json"
+    },
+    {
       "source": "schemas/ingestion-result.schema.json",
       "path": "schemas/ingestion-result.schema.json"
     },
@@ -218,16 +254,48 @@
       "path": "schemas/ingestion-runtime-pack.schema.json"
     },
     {
+      "source": "schemas/intent-review-packet.schema.json",
+      "path": "schemas/intent-review-packet.schema.json"
+    },
+    {
+      "source": "schemas/interaction-observation.schema.json",
+      "path": "schemas/interaction-observation.schema.json"
+    },
+    {
       "source": "schemas/interaction-profile.schema.json",
       "path": "schemas/interaction-profile.schema.json"
+    },
+    {
+      "source": "schemas/maestro-dispatch-input.schema.json",
+      "path": "schemas/maestro-dispatch-input.schema.json"
+    },
+    {
+      "source": "schemas/maestro-input.schema.json",
+      "path": "schemas/maestro-input.schema.json"
+    },
+    {
+      "source": "schemas/maestro-plan.schema.json",
+      "path": "schemas/maestro-plan.schema.json"
+    },
+    {
+      "source": "schemas/maintenance-command.schema.json",
+      "path": "schemas/maintenance-command.schema.json"
     },
     {
       "source": "schemas/maintenance-jobs.schema.json",
       "path": "schemas/maintenance-jobs.schema.json"
     },
     {
+      "source": "schemas/maintenance-receipt.schema.json",
+      "path": "schemas/maintenance-receipt.schema.json"
+    },
+    {
       "source": "schemas/memory-artifact.schema.json",
       "path": "schemas/memory-artifact.schema.json"
+    },
+    {
+      "source": "schemas/memory-checkpoint.schema.json",
+      "path": "schemas/memory-checkpoint.schema.json"
     },
     {
       "source": "schemas/memory-commit.schema.json",
@@ -236,6 +304,18 @@
     {
       "source": "schemas/memory-policy.schema.json",
       "path": "schemas/memory-policy.schema.json"
+    },
+    {
+      "source": "schemas/portable-skill-manifest.schema.json",
+      "path": "schemas/portable-skill-manifest.schema.json"
+    },
+    {
+      "source": "schemas/prompt-history.schema.json",
+      "path": "schemas/prompt-history.schema.json"
+    },
+    {
+      "source": "schemas/release-authority-registry.schema.json",
+      "path": "schemas/release-authority-registry.schema.json"
     },
     {
       "source": "schemas/release-manifest.schema.json",
@@ -268,6 +348,38 @@
     {
       "source": "schemas/sharepoint-work-import-receipt.schema.json",
       "path": "schemas/sharepoint-work-import-receipt.schema.json"
+    },
+    {
+      "source": "schemas/user-self-snapshot.schema.json",
+      "path": "schemas/user-self-snapshot.schema.json"
+    },
+    {
+      "source": "schemas/walter-review.schema.json",
+      "path": "schemas/walter-review.schema.json"
+    },
+    {
+      "source": "schemas/walter-self-review.schema.json",
+      "path": "schemas/walter-self-review.schema.json"
+    },
+    {
+      "source": "schemas/workspace-import-approval.schema.json",
+      "path": "schemas/workspace-import-approval.schema.json"
+    },
+    {
+      "source": "schemas/workspace-import-inspection.schema.json",
+      "path": "schemas/workspace-import-inspection.schema.json"
+    },
+    {
+      "source": "schemas/workspace-import-journal.schema.json",
+      "path": "schemas/workspace-import-journal.schema.json"
+    },
+    {
+      "source": "schemas/workspace-import-plan.schema.json",
+      "path": "schemas/workspace-import-plan.schema.json"
+    },
+    {
+      "source": "schemas/workspace-import-receipt.schema.json",
+      "path": "schemas/workspace-import-receipt.schema.json"
     },
     {
       "source": "bundles/base/skills/INDEX.md",
@@ -513,7 +625,7 @@
       "source": "bundles/base/skills/retro/agents/openai.yaml",
       "path": "skills/retro/agents/openai.yaml"
     },
-        {
+    {
       "source": "bundles/base/skills/craft-update/SKILL.md",
       "path": "skills/craft-update/SKILL.md"
     },
@@ -545,7 +657,7 @@
       "source": "bundles/base/skills/upward-feedback/agents/openai.yaml",
       "path": "skills/upward-feedback/agents/openai.yaml"
     },
-        {
+    {
       "source": "bundles/base/skills/start-day/SKILL.md",
       "path": "skills/start-day/SKILL.md"
     },
