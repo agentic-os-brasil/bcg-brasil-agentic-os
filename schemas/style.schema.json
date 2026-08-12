@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bcg-brasil-agentic-os:schema:style:v1",
+  "$comment": "experimental — mirrors bundles/base/manifest.json.provenance.status; shape may evolve. additionalProperties permissive during this stage.",
+  "title": "Maestro Interaction Style",
+  "description": "Persisted by the maestro-onboarding skill (Step 4). Read as preflight by every downstream skill to calibrate verbosity, formality, and disclosure depth. Canonical key is interaction_profile — do not introduce parallel keys (verbosity, mode, etc.).",
+  "type": "object",
+  "required": ["interaction_profile", "captured_at"],
+  "additionalProperties": true,
+  "properties": {
+    "interaction_profile": {
+      "enum": ["standard", "advanced", "power"],
+      "description": "standard = short answers, direct. advanced = more context/nuance when useful. power = assumes full familiarity, maximum density."
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of the capture."
+    }
+  }
+}
