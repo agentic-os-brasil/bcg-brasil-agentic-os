@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Signal-only. Beta signoff is the gate. Do not wire into CI blocking.
+#
 # Maestro semantic eval — Dimension C (LLM-as-judge).
 #
 # Usage:

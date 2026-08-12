@@ -1,4 +1,6 @@
 <!--
+Signal-only. Beta signoff is the gate. Do not wire into CI blocking.
+
 Maestro semantic-eval judge prompt.
 
 VERSION: c-v1-2026-08-11
