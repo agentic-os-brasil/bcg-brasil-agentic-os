@@ -93,6 +93,22 @@ printf '<!-- maestro:pointer: bcgos-operator · reason: deterministic_operationa
 printf 'Skill: %s/bundles/base/skills/bcgos-operator/SKILL.md\n' "${PROJECT_DIR}"
 printf 'Instrução: carregar este skill antes de escolher, interpretar ou recuperar qualquer operação BCGOS.\n'
 
+# Tech-core pointer (§3.1 diagnostic) — engineering skills bundle. Emitted only
+# when the directory exists; fail-open otherwise. Loaded on demand.
+TECH_CORE_DIR="$PROJECT_DIR/bundles/tech-core"
+if [ -d "$TECH_CORE_DIR/skills" ]; then
+  printf '\n## Skills técnicas (tech-core)\n'
+  printf '<!-- maestro:pointer: tech-core · reason: engineering_skills_bundle -->\n'
+  printf 'Bundle path: %s\n' "$TECH_CORE_DIR"
+  if [ -f "$TECH_CORE_DIR/INDEX.md" ]; then
+    printf 'Índice: %s/INDEX.md\n' "$TECH_CORE_DIR"
+  fi
+  if [ -f "$TECH_CORE_DIR/catalog.json" ]; then
+    printf 'Catálogo: %s/catalog.json\n' "$TECH_CORE_DIR"
+  fi
+  printf 'Instrução: skills de engenharia (testes, revisão, pipelines, entrega por spec) — carregar sob demanda quando a tarefa exigir.\n'
+fi
+
 # Dreaming auto-trigger — check for .dream-requested marker written by session-stop-dream.sh.
 # When present, emit a mandatory action block so Claude runs dream-memory before any other task.
 DREAM_MARKER="$MEMORY_DIR/.dream-requested"

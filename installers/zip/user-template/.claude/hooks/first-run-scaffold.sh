@@ -19,8 +19,10 @@ log_line() {
 # Compact index only (name + description first sentence). Full SKILL.md is
 # loaded on demand by the Skill tool. Fail-open: on any error, print nothing.
 # ---------------------------------------------------------------------------
-emit_skills_rollup() {
-  local skills_dir="$PROJECT_DIR/bundles/base/skills"
+_emit_skills_rollup_bundle() {
+  local skills_dir="$1"
+  local heading="$2"
+  local blurb="$3"
   [ -d "$skills_dir" ] || return 0
 
   local rollup
@@ -55,9 +57,24 @@ emit_skills_rollup() {
 
   [ -z "$rollup" ] && return 0
 
-  printf '## Maestro skills disponíveis\n\n'
-  printf 'Índice compacto. A skill completa é carregada sob demanda quando o pedido do dono a aciona.\n\n'
+  printf '## %s\n\n' "$heading"
+  printf '%s\n\n' "$blurb"
   printf '%s\n' "$rollup"
+  printf '\n'
+}
+
+emit_skills_rollup() {
+  _emit_skills_rollup_bundle \
+    "$PROJECT_DIR/bundles/base/skills" \
+    "Maestro skills disponíveis" \
+    "Índice compacto. A skill completa é carregada sob demanda quando o pedido do dono a aciona."
+
+  # tech-core — engineering skills bundle. Invisible until now (§3.1 diagnostic).
+  # Enumerated only when the directory exists; fail-open otherwise.
+  _emit_skills_rollup_bundle \
+    "$PROJECT_DIR/bundles/tech-core/skills" \
+    "Skills técnicas (tech-core)" \
+    "Skills de engenharia — testes, revisão, pipelines de dados, entrega por spec. Carregadas sob demanda."
 }
 
 # ---------------------------------------------------------------------------
