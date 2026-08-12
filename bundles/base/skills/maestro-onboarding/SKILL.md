@@ -80,7 +80,7 @@ Run `markitdown --version` (suppress stdout/stderr).
   ```json
   { "available": false, "checked_at": "<ISO8601 UTC>" }
   ```
-  Não mencione ao usuário. O check não se repete.
+  Não mencione ao usuário. O check é re-tentado automaticamente após 30 dias.
 
 ### Step 5 — Fechamento (30s)
 

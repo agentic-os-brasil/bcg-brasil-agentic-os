@@ -25,11 +25,15 @@ Ao receber a primeira mensagem do usuário, execute esta sequência antes de res
 
 ### Passo 1: Scaffold
 
-- Cheque se `data/.initialized` existe.
-  - Se **não existe** e `FIRST-RUN-FAILED.txt` existe na raiz: apresente-se brevemente e
-    rode `/maestro-doctor` imediatamente. Pare aqui.
-  - Se **não existe** e não há `FIRST-RUN-FAILED.txt`: peça ao usuário para fechar e
-    reabrir a pasta no Claude Code (o hook cria `data/` automaticamente). Pare aqui.
+O hook `first-run-scaffold.sh` cria `data/.initialized` automaticamente quando a pasta é aberta
+no Claude Code. Se ele rodou e `data/.initialized` existe, prossiga.
+
+- Se `data/.initialized` **existe**: scaffold OK, prossiga para o Passo 2.
+- Se `FIRST-RUN-FAILED.txt` **existe** na raiz: scaffold falhou (permissões, OneDrive, disco
+  cheio). Apresente-se brevemente e rode `/maestro-doctor`. Pare aqui.
+- Se **nenhum dos dois existe**: o hook de sessão não rodou. Peça ao usuário para fechar e
+  reabrir a pasta no Claude Code (isso aciona o hook). Se o problema persistir após reabrir,
+  rode `/maestro-doctor`. Pare aqui.
 
 ### Passo 2: Onboarding (obrigatório, nunca pulável)
 
@@ -38,22 +42,16 @@ Ao receber a primeira mensagem do usuário, execute esta sequência antes de res
     usuário escreveu. Não pergunte. Não se apresente antes. Onboarding primeiro.
   - Se **existe**: sessão normal, responda ao pedido do usuário.
 
-### Passo 3: MarkItDown (verificação única pós-onboarding)
+### Passo 3: MarkItDown (verificação pós-onboarding, com re-check de 30 dias)
 
-- Cheque se `data/profile/markitdown.json` existe.
-  - Se **não existe**: ao final da primeira resposta da sessão, rode
-    `markitdown --version` silenciosamente.
-    - Se disponível: crie `data/profile/markitdown.json` com
-      `{"available": true, "version": "<saída>", "checked_at": "<ISO8601 UTC>"}` e
-      informe o usuário em uma linha que ingestão de documentos está habilitada.
-    - Se não disponível: crie `data/profile/markitdown.json` com
-      `{"available": false, "checked_at": "<ISO8601 UTC>"}` e não mencione ao
-      usuário. O check não se repete nas próximas sessões.
-
-Se existir `FIRST-RUN-FAILED.txt` na raiz da pasta, o scaffold falhou (permissões,
-OneDrive, disco cheio). Apresente-se dizendo que o setup automático não completou
-e rode `/maestro-doctor` como primeira ação para diagnosticar. Não tente criar
-`data/` manualmente antes disso.
+- Cheque `data/profile/markitdown.json`:
+  - Se **não existe**: rode `markitdown --version` silenciosamente ao final desta resposta.
+  - Se existe com `"available": false` e `checked_at` há mais de 30 dias: re-rode o check
+    silenciosamente (MarkItDown pode ter sido instalado desde então).
+  - Se existe com `"available": true`: não é necessário re-verificar.
+  - Resultado do check:
+    - Disponível: crie/atualize com `{"available": true, "version": "<saída>", "checked_at": "<ISO8601 UTC>"}` e informe o usuário em uma linha que ingestão de documentos está habilitada.
+    - Não disponível: crie/atualize com `{"available": false, "checked_at": "<ISO8601 UTC>"}` e não mencione ao usuário.
 
 ## Skills essenciais
 
