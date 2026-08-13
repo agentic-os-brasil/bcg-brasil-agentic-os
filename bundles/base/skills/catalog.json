@@ -233,6 +233,13 @@
       "relative_path": "skills/retro/SKILL.md"
     },
     {
+      "id": "sharepoint-ingest",
+      "display_name": "SharePoint Ingest",
+      "trigger": "Ingerir pastas SharePoint autorizadas e generalizar conceitos do trajeto",
+      "default_prompt": "Use $sharepoint-ingest to read the authorized SharePoint folders in-session, materialize bounded per-document rationales under data/memory/sharepoint-rationales/, and build a generalized concept index under brain/knowledge/sharepoint-rationales/ for the folder trajectory.",
+      "relative_path": "skills/sharepoint-ingest/SKILL.md"
+    },
+    {
       "id": "slide-summary",
       "display_name": "Slide Summary",
       "trigger": "Map supplied deck text into slide messages and a narrative arc",

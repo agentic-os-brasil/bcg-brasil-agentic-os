@@ -682,6 +682,14 @@
       "path": "skills/slide-summary/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/sharepoint-ingest/SKILL.md",
+      "path": "skills/sharepoint-ingest/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/sharepoint-ingest/agents/openai.yaml",
+      "path": "skills/sharepoint-ingest/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/walter/SKILL.md",
       "path": "skills/walter/SKILL.md"
     },

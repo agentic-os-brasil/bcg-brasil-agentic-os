@@ -1,0 +1,4 @@
+interface:
+  display_name: "SharePoint Ingest"
+  short_description: "Ingerir pastas SharePoint autorizadas e generalizar conceitos do trajeto"
+  default_prompt: "Use $sharepoint-ingest to read the authorized SharePoint folders in-session, materialize bounded per-document rationales under data/memory/sharepoint-rationales/, and build a generalized concept index under brain/knowledge/sharepoint-rationales/ for the folder trajectory."
