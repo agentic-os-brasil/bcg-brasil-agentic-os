@@ -29,6 +29,12 @@ func TestBlockedCommandRejectsDangerousGitOperations(t *testing.T) {
 }
 
 func TestDoctorHandlesBareRepositoryWithoutTreatingItAsAWorktree(t *testing.T) {
+	// Doctor spawns `git` subprocesses; when this test runs inside a git hook
+	// (e.g. pre-commit) the inherited GIT_DIR/GIT_INDEX_FILE/GIT_WORK_TREE
+	// point at the outer repository, so git ignores `command.Dir` and reports
+	// on the parent worktree instead of the bare tempdir. Clear the env at the
+	// test scope so Doctor's own exec calls also see a clean slate.
+	clearGitHookEnvironment(t)
 	root := t.TempDir()
 	runGit(t, root, "init", "--bare")
 	var output bytes.Buffer
@@ -74,7 +80,7 @@ func runGit(t *testing.T, root string, args ...string) {
 
 func clearGitHookEnvironment(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{"GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE"} {
+	for _, name := range []string{"GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE", "GIT_PREFIX", "GIT_CONFIG_PARAMETERS"} {
 		value, exists := os.LookupEnv(name)
 		if err := os.Unsetenv(name); err != nil {
 			t.Fatal(err)

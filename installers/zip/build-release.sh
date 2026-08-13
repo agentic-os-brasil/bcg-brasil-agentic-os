@@ -55,6 +55,14 @@ find "$MAESTRO_DIR" -name '.DS_Store' -delete 2>/dev/null || true
 find "$MAESTRO_DIR" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 find "$MAESTRO_DIR" -name '*.pyc' -delete 2>/dev/null || true
 
+# Belt-and-suspenders: ensure every hook is executable before zipping.
+# macOS `zip` preserves Unix mode bits, but a source file that lost its +x
+# in git would silently ship non-executable and hooks would never fire.
+echo "==> Ensuring hooks are executable"
+if [ -d "$MAESTRO_DIR/.claude/hooks" ]; then
+  chmod +x "$MAESTRO_DIR/.claude/hooks"/*.sh 2>/dev/null || true
+fi
+
 STRIP_MANIFEST="$STAGE_DIR/go-strip-manifest.txt"
 find "$MAESTRO_DIR/bundles" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -print > "$STRIP_MANIFEST" 2>/dev/null || true
 STRIP_COUNT=$(wc -l < "$STRIP_MANIFEST" | tr -d ' ')

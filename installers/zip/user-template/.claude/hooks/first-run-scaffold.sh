@@ -225,7 +225,7 @@ fi
 
 log_line "SCAFFOLD  project_dir=$PROJECT_DIR"
 
-for sub in agents cases memory owner profile workspaces; do
+for sub in agents canary cases memory owner profile workspaces; do
   if mkdir -p "$DATA_DIR/$sub" 2>/dev/null; then
     log_line "MKDIR OK  data/$sub"
   else
