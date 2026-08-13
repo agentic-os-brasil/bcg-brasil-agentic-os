@@ -18,6 +18,7 @@ import (
 )
 
 func TestBuildWindowsPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
+	skipIfBundleOnly(t)
 	options := validWindowsPortableOptions(t)
 	output := options.Output
 	result, err := BuildWindowsPortable(options)
@@ -139,6 +140,7 @@ func TestPortableClaudeOnboardingStopsNonWindowsBeforeConfirmation(t *testing.T)
 }
 
 func TestBuildWindowsPortableRejectsBootstrapperWithoutPortableInstall(t *testing.T) {
+	skipIfBundleOnly(t)
 	options := validWindowsPortableOptions(t)
 	if err := os.WriteFile(options.Bootstrapper, []byte("stale-bootstrapper"), 0o700); err != nil {
 		t.Fatal(err)
@@ -188,6 +190,7 @@ func validWindowsPortableOptions(t *testing.T) WindowsPortableOptions {
 }
 
 func TestBuildWindowsPortableRejectsTrustBoundaryViolations(t *testing.T) {
+	skipIfBundleOnly(t)
 	for _, test := range []struct {
 		name    string
 		mutate  func(*WindowsPortableOptions)

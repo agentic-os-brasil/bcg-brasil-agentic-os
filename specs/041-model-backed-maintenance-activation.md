@@ -281,7 +281,7 @@ This specification does not:
 
 - implement, register, qualify or activate a model adapter;
 - choose Claude, Codex, a provider, model, API, network route or billing plan;
-- authorize BCGOS to read runtime credentials or reuse private-release custody;
+- authorize Maestro to read runtime credentials or reuse private-release custody;
 - enable native schedulers, hooks, unattended execution or a global model flag;
 - make one runtime's or job's evidence qualify another;
 - grant browsing, tools, external publication, policy mutation or cross-scope

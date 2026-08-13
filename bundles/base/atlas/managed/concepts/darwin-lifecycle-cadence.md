@@ -16,10 +16,10 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/darwin-lifecycle-cadence
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 86cf0108b2fb5cc853951aaf3cb4669b1b0d9097a3b0b5ab9929221cc458e94b
+x-bcgos-source-fingerprint: eaaee7072b9aa1d0faf0279c3b9ae26e9200e7cd0bb6d2193e55b9995e8ccd5f
 x-bcgos-freshness: fresh
 x-bcgos-status: active
-x-bcgos-generator-version: bcgos-managed-wiki/0.2
+x-bcgos-generator-version: maestro-managed-wiki/0.2
 x-bcgos-policy-version: managed-product/1
 ---
 

@@ -2,9 +2,9 @@
 
 Ao entrar no piloto, a pessoa autoriza uma única vez o envio automático de
 artefatos definidos neste contrato. Não há pedido de aprovação por envio. A
-participação pode ser revogada a qualquer momento com `bcgos federation
-revoke`; a revogação interrompe novos envios e preserva o estado local para
-suporte e auditoria.
+participação pode ser revogada a qualquer momento através do Maestro (skill
+`/maestro-operator` → opção de revogação de federação); a revogação
+interrompe novos envios e preserva o estado local para suporte e auditoria.
 
 ## O que sai automaticamente
 

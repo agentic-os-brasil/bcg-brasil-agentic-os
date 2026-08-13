@@ -141,9 +141,9 @@ professional baseline; do not emulate ingestion from conversation.
    owner's agreement. Never claim that an answer has been saved or that the
    track is complete until the local review is confirmed.
 5. When all facets for the selected track are reviewed and confirmed, write each
-   confirmed profile file to `data/profile/` (identity.json, style.json, and
-   onboarding.json with `status: "complete"`). Ask the owner for an explicit
-   final review before marking complete.
+   confirmed profile file: `data/profile/identity.json`, `data/profile/style.json`,
+   and `data/profile/onboarding.json` with `status: "complete"`. Ask the owner for an
+   explicit final review before marking complete.
 
 ## Completion and follow-through
 

@@ -15,10 +15,10 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/content-navigation
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 86cf0108b2fb5cc853951aaf3cb4669b1b0d9097a3b0b5ab9929221cc458e94b
+x-bcgos-source-fingerprint: eaaee7072b9aa1d0faf0279c3b9ae26e9200e7cd0bb6d2193e55b9995e8ccd5f
 x-bcgos-freshness: fresh
 x-bcgos-status: active
-x-bcgos-generator-version: bcgos-managed-wiki/0.2
+x-bcgos-generator-version: maestro-managed-wiki/0.2
 x-bcgos-policy-version: managed-product/1
 ---
 
@@ -166,7 +166,7 @@ Every generated page or index record requires:
 
 Human-readable Markdown is the primary navigation format. A deterministic machine-readable index may support routing, validation and adapters. The index is generated and must never become a separately maintained source of truth.
 
-Every atlas is published as an OKF v0.2 Knowledge Bundle using the BCGOS Atlas Profile defined by Spec 008. OKF provides the portable Markdown, frontmatter, path identity, standard links, `index.md` and `log.md`; the BCGOS profile provides scope, authority, privacy, freshness, invalidation and atomic lifecycle guarantees.
+Every atlas is published as an OKF v0.2 Knowledge Bundle using the Maestro Atlas Profile defined by Spec 008. OKF provides the portable Markdown, frontmatter, path identity, standard links, `index.md` and `log.md`; the Maestro profile provides scope, authority, privacy, freshness, invalidation and atomic lifecycle guarantees.
 
 ## Query and context behavior
 
@@ -234,4 +234,4 @@ The private owner/workspace atlas, including memory navigation, is part of the a
 - private-atlas compilation provider and offline behavior;
 - per-layer memory indexing, retention and context budgets;
 - organizational knowledge approval, synchronization and retirement;
-- user-facing `bcgos wiki` or `bcgos knowledge` command vocabulary.
+- user-facing wiki/knowledge command vocabulary.
