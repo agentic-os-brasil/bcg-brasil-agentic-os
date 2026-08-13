@@ -8,6 +8,17 @@ and the [detailed user onboarding](docs/onboarding/maestro-user-onboarding.md).
 This file remains the engineering execution tracker; the product roadmap must
 not be used as evidence that a pending capability is already released.
 
+> **Superseded surface note (post PR #349):** The `bcgos` external CLI referenced
+> in historical Track B items and in some open bullets below has been removed.
+> The active distribution contract is `specs/020-release-distribution.md`
+> (portable ZIP built by `installers/zip/build-release.sh`) and user-facing
+> operation happens entirely through Claude Code slash-commands
+> (`/maestro-onboarding`, `/maestro-doctor`, `/maestro-operator`,
+> `/execution-continuity`, `/ingest-content`, `/find-prior-work`,
+> `/dream-memory`). Historical `[x]` entries are preserved for provenance;
+> remaining open items that still mention `bcgos <verb>` should be read as
+> shorthand for the equivalent slash-command / harness surface.
+
 ## Current foundation
 
 - [x] Define the professional-only scope and broad target audience.
@@ -133,7 +144,7 @@ not be used as evidence that a pending capability is already released.
 - [x] Add the runtime-neutral `dream-memory` product skill.
 - [x] Connect sanitized capture, status and bounded context assembly to `bcgos memory`, with dreaming explicitly unavailable without an adapter.
 - [ ] Implement lifetime correction and deletion flows.
-- [ ] Implement stale-lock diagnosis and human-confirmed recovery in `bcgos doctor`.
+- [ ] Implement stale-lock diagnosis and human-confirmed recovery in `/maestro-doctor`.
 - [ ] Implement synthesis and eligibility adapters without embedding provider policy in the core.
 - [ ] Add executable dreaming plus `explain`, `export` and `delete` contracts before enabling persistence for pilot users.
 - [ ] Add equivalent Windows and macOS scheduling or presence-based catch-up adapters.
@@ -189,7 +200,7 @@ not be used as evidence that a pending capability is already released.
 - Which temporal, topic and entity facets may be derived from each rollup layer.
 - Private compilation provider, offline behavior and corporate data constraints.
 - Organizational knowledge approval, synchronization and retirement.
-- User command vocabulary: `bcgos wiki`, `bcgos knowledge` or another surface.
+- ~~User command vocabulary: `bcgos wiki`, `bcgos knowledge` or another surface.~~ Resolved: no user-facing CLI (see `docs/OPEN-QUESTIONS.md` Q-033); wiki/knowledge navigation surfaces are Claude-Code-native.
 - Freshness targets, retry/backoff limits and private crypto-erasure policy.
 
 ## Track F - First Agent OS bundle
