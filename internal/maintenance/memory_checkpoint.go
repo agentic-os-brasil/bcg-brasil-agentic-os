@@ -325,4 +325,3 @@ func readCheckpointJSON(path string, target any) error {
 	}
 	return nil
 }
-
