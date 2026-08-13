@@ -1,8 +1,6 @@
 # Spec 001 - CLI distribution contract
 
-Status: direction and release-manifest contract accepted; CLI entrypoint,
-initial memory bridge, workspace init, status and doctor implemented; packaging,
-install, update, production signing and release publication pending.
+Status: **superseded** — Maestro ships as a signed ZIP bundle with slash-command entry points; the standalone `bcgos` CLI binary target was removed. CLI runtime mechanics described here are historical. The active distribution contract is `specs/020-release-distribution.md`.
 
 ## User journey
 

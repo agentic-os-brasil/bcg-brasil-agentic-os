@@ -99,9 +99,9 @@ granting mutation authority.
 4. Prove offline DOCX/XLSX/HTML/text conversion on sanitized Windows and macOS
    fixtures and tamper rejection.
 
-Done means `bcgos ingest` produces a bounded derived artifact and provenance
-receipt from an installed verified pack. Source-only adapter tests are not
-enough.
+Done means the `/ingest-content` skill produces a bounded derived artifact and
+provenance receipt from an installed verified pack. Source-only adapter tests
+are not enough.
 
 ### Wave 3 — native agent orchestration
 

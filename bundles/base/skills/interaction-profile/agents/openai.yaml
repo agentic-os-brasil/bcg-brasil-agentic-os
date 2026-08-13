@@ -1,4 +1,4 @@
 interface:
   display_name: "Interaction Profile"
-  short_description: "Apply the user's BCGOS communication and disclosure preference"
-  default_prompt: "Use $interaction-profile to resolve my active BCGOS profile before responding."
+  short_description: "Apply the owner's Maestro communication and disclosure preference"
+  default_prompt: "Use $interaction-profile to resolve my active interaction profile before responding."

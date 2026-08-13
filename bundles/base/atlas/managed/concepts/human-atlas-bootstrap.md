@@ -12,14 +12,14 @@ sources:
       resource: repo://specs/014-human-atlas-bootstrap.md
       title: Human atlas bootstrap
 status: stable
-x-bcgos-profile-version: "1"
-x-bcgos-stable-id: managed/human-atlas-bootstrap
-x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 86cf0108b2fb5cc853951aaf3cb4669b1b0d9097a3b0b5ab9929221cc458e94b
-x-bcgos-freshness: fresh
-x-bcgos-status: active
-x-bcgos-generator-version: bcgos-managed-wiki/0.2
-x-bcgos-policy-version: managed-product/1
+x-maestro-profile-version: "1"
+x-maestro-stable-id: managed/human-atlas-bootstrap
+x-maestro-scope: managed
+x-maestro-source-fingerprint: eaaee7072b9aa1d0faf0279c3b9ae26e9200e7cd0bb6d2193e55b9995e8ccd5f
+x-maestro-freshness: fresh
+x-maestro-status: active
+x-maestro-generator-version: maestro-managed-wiki/0.2
+x-maestro-policy-version: managed-product/1
 ---
 
 # Source snapshot
@@ -46,12 +46,11 @@ collapsing owner and workspace scopes.
 
 ## Local roots
 
-`bcgos atlas init <workspace-path>` requires an initialized, readable
-workspace and creates non-overwriting human orientation pages in two distinct
-private roots:
+Atlas initialization requires an initialized, readable workspace and creates
+non-overwriting human orientation pages in two distinct private roots:
 
 ```text
-<local BCGOS data>/atlas/owner/
+<local Maestro data>/atlas/owner/
   index.md
   learnings/index.md
   development/index.md
@@ -106,8 +105,8 @@ cross-root links, compilation, memory ingestion, provider access, search,
 task synchronization or Session Start injection. A human daily page may feed
 memory only through a future approved sanitization adapter.
 
-`bcgos atlas status <workspace-path>` reports the three root states without
-reading page bodies. Repeated initialization never overwrites a user page.
+The atlas status check reports the three root states without reading page
+bodies. Repeated initialization never overwrites a user page.
 
 ## Follow-up
 

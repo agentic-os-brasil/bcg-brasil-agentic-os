@@ -35,6 +35,7 @@ func (builder *recordingSeededBuilder) Build(
 }
 
 func TestBuildSeededNativeBinariesBindsProviderAndAuthority(t *testing.T) {
+	skipIfBundleOnly(t)
 	root := t.TempDir()
 	providerPath := filepath.Join(root, "provider.json")
 	providerBody := approvedProviderBody(t)

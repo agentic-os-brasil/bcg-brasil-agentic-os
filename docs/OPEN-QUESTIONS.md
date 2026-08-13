@@ -12,7 +12,7 @@ This file contains decisions that still require discussion. It is not a decision
 
 ## Before implementing the product CLI
 
-- **Q-006 - Product naming:** Is `bcgos` the final public/internal command name?
+- **Q-006 - Product naming:** ~~Is `bcgos` the final public/internal command name?~~ **Resolved:** the product does not expose a user-facing CLI binary. Distribution is ZIP; the user entry point is Claude Code with slash-commands (`/maestro-onboarding`, `/maestro-doctor`, etc.). Internal harness operations use `go run ./dev/harness/main.go`.
 - **Q-007 - Application directories:** What are the approved managed-core and local-data paths on Windows and macOS?
 - **Q-008 - Private release authentication:** GitHub CLI token reuse, browser device flow or a BCG-managed distribution identity?
 - **Q-009 - Release trust:** Which signing, SmartScreen, Gatekeeper, checksum and provenance requirements apply?
@@ -45,7 +45,7 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-024 - Lifetime eligibility:** Which repeated evidence may the weekly deep dream promote automatically, and how can a user inspect, correct or remove a lifetime memory?
 - **Q-025 - Scheduling policy:** Which local daily/weekly windows, timezone-change behavior, catch-up limits, retry/backoff and unattended-model permissions should the pilot use within the layered native-schedule plus presence-recovery architecture?
 - **Q-026 - User rights:** Which inspect, explain, correct, export and delete guarantees must exist before memory persistence is enabled?
-- **Q-027 - Interrupted runs:** When may `bcgos doctor` clear a leftover dreaming lock, and what evidence or confirmation is required before recovery?
+- **Q-027 - Interrupted runs:** When may `/maestro-doctor` clear a leftover dreaming lock, and what evidence or confirmation is required before recovery?
 
 ## Before enabling wiki navigation
 
@@ -54,7 +54,7 @@ This file contains decisions that still require discussion. It is not a decision
 - **Q-030 - Memory exposure:** Which memory layers may produce private summaries, and which are pointer-only for the pilot?
 - **Q-031 - Private compilation:** Which approved provider may compile owner/workspace content, and must local-only or offline operation be supported?
 - **Q-032 - Invalidation SLA:** How quickly must correction, deletion or source-access revocation disappear from pages, backlinks, indexes and caches?
-- **Q-033 - Knowledge commands:** Should the user-facing surface be `bcgos wiki`, `bcgos knowledge` or an agent-only capability in v0?
+- **Q-033 - Knowledge commands:** ~~Should the user-facing surface be `bcgos wiki`, `bcgos knowledge` or an agent-only capability in v0?~~ **Resolved:** wiki and knowledge navigation are slash-command and agent capabilities only. No user-facing binary commands. Managed atlas is accessible through Maestro conversationally.
 - **Q-034 - Rollup facets:** Which temporal, topic, entity and active-thread facets may the private wiki derive from L2, L3 and lifetime for the pilot?
 - **Q-035 - Update freshness:** What freshness target and retry/backoff policy applies to managed changes, memory commits and correction events?
 - **Q-036 - Private erasure:** Which private versions, logs and receipts must be deleted or crypto-erased after user correction, deletion or access revocation?

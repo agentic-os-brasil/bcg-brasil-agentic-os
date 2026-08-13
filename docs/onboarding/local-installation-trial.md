@@ -1,25 +1,23 @@
 # Local installation trial
 
-This is an engineering trial for the BCGOS install path. It proves that a
-prebuilt binary can be copied, checksum-verified, activated and used without
-Go being present at runtime. It is **not** a signed release, a GitHub Release
-installer or a pilot distribution mechanism.
+This is an engineering trial for the Maestro ZIP install path. It proves that
+a ZIP release can be extracted, verified and opened in Claude Code without
+Go, Python or any other runtime being present. It is **not** a signed release,
+a GitHub Release installer or a full pilot distribution mechanism.
 
 ## What the trial proves
 
-1. A supplied `bcgos` binary runs after installation.
-2. The installer preserves an existing target instead of replacing it.
-3. The checksum catches accidental or altered artifact bytes before activation.
-4. `bcgos init` and `bcgos doctor` work from the installed binary in an
-   isolated user home.
+1. The ZIP extracts correctly to a local folder.
+2. Opening the folder in Claude Code activates the scaffold automatically.
+3. `/maestro-doctor` runs and reports capacities accurately.
+4. `/maestro-onboarding` completes the first-session calibration.
 
 ## What it does not prove
 
 - private-release authentication;
 - code signing, SmartScreen or Gatekeeper approval;
 - automatic update or rollback;
-- PATH configuration;
-- install support for a non-technical pilot user.
+- install support for a non-technical pilot user end-to-end.
 
 ## Running the automated trial
 
@@ -31,13 +29,13 @@ macOS/Linux: ./dev/trial-install-smoke.sh
 Windows:     ./dev/trial-install-smoke.ps1
 ```
 
-Each test builds a disposable binary, creates a checksum, uses the relevant
-installer and removes its temporary workspace afterward. The same checks run
+Each test builds a disposable ZIP, verifies checksum, extracts to a clean
+workspace and removes its temporary artifacts afterward. The same checks run
 in CI on Windows, macOS and Linux.
 
 ## Next distribution milestone
 
 The next implementation must produce versioned, signed private-release
-artifacts and replace the manually supplied artifact with an authenticated,
+ZIP artifacts and replace the manually assembled ZIP with an authenticated,
 verified download. A Claude-led onboarding prompt may call that installer only
 after those conditions exist.

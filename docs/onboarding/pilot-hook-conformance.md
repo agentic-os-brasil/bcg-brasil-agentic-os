@@ -12,17 +12,13 @@ actually invoked it. Do not treat one of these as proof of the others.
 
 ## Run
 
-1. Install a released `bcgos` binary and create an empty local test workspace.
+1. Extract the Maestro ZIP release to an empty local test workspace.
    Do not use OneDrive, a client workspace or `go run` for this evidence.
-2. Initialize the workspace and install one runtime adapter:
+2. Open the workspace folder in Claude Code. The scaffold creates the runtime
+   adapter configuration automatically. Verify the result:
 
    ```text
-   bcgos init <test-workspace>
-   bcgos adapter install --runtime claude <test-workspace>
-   # or
-   bcgos adapter install --runtime codex <test-workspace>
-   bcgos adapter status --runtime <runtime> <test-workspace>
-   bcgos doctor <test-workspace>
+   /maestro-doctor
    ```
 
 3. Open the workspace-local runtime configuration and verify that it contains
@@ -33,11 +29,11 @@ actually invoked it. Do not treat one of these as proof of the others.
 4. Copy that exact command and run it once in the test workspace. Confirm it
    emits `hookSpecificOutput`, `SessionStart` and a pointer-only packet; no
    client, owner or memory body may appear.
-5. Start a fresh Claude Code or Codex session in that same workspace. Use the
+5. Start a fresh Claude Code session in that same workspace. Use the
    runtime's own hook diagnostics or visible session context to confirm that
    the command ran. Record an explicit failure if it did not.
-6. Run `bcgos adapter uninstall --runtime <runtime> <test-workspace>` and
-   confirm Maestro's entry is gone while unrelated entries remain.
+6. Remove the hook entry from the workspace configuration and confirm
+   Maestro's entry is gone while unrelated entries remain.
 
 ## Record
 

@@ -13,10 +13,9 @@ borrow context from another case or from the Client Account Agent.
 
 `$case-agent-setup` is the user-facing workflow. The agent owns the interview,
 normalization and persistence of the reviewed case result. Do not ask the
-owner to run `bcgos`, create JSON, provide a run ID or translate interview
-fields into a command envelope. The installed `bcgos workspace-agent` surface
-is a compatibility implementation for older workspaces and is not the normal
-execution path for a new case.
+owner to run any external command, create JSON manually, provide a run ID or
+translate interview fields into a command envelope. The previous CLI-driven
+surface is not used; the skill handles all orchestration internally.
 
 Use the workspace recipes and canonical locations already present in the
 workspace. All case artifacts live under `data/cases/<case-id>/brain/`:

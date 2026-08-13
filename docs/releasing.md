@@ -67,10 +67,8 @@ go run ./dev/release candidate \
 
 The output directory must not already exist. The factory cross-builds:
 
-- `bcgos_<version>_windows_amd64.exe`
-- `bcgos_<version>_darwin_amd64`
-- `bcgos_<version>_darwin_arm64`
 - `maestro-base_<version>.tar.gz`
+- `maestro-base_<version>.zip`
 - `release-manifest.json`
 - `release-notes-<version>.md`
 

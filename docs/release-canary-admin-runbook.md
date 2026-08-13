@@ -217,7 +217,7 @@ replace release assets, force-update or use an unsigned override.
 Rollback is an authenticated activation of the previously approved release,
 bound to its provider release ID, manifest digest and activation receipt. It is
 not deletion or asset replacement. The repository does not expose a generic
-`bcgos rollback` command. The only currently executable rollback path is the
+user-facing rollback slash-command. The only currently executable rollback path is the
 clean-device acceptance script, which invokes the approved bootstrapper:
 
 ```text

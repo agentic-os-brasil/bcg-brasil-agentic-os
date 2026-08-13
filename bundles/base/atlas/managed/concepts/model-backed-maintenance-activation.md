@@ -13,14 +13,14 @@ sources:
       resource: repo://specs/041-model-backed-maintenance-activation.md
       title: Model-backed maintenance activation
 status: stable
-x-bcgos-profile-version: "1"
-x-bcgos-stable-id: managed/model-backed-maintenance-activation
-x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 86cf0108b2fb5cc853951aaf3cb4669b1b0d9097a3b0b5ab9929221cc458e94b
-x-bcgos-freshness: fresh
-x-bcgos-status: active
-x-bcgos-generator-version: bcgos-managed-wiki/0.2
-x-bcgos-policy-version: managed-product/1
+x-maestro-profile-version: "1"
+x-maestro-stable-id: managed/model-backed-maintenance-activation
+x-maestro-scope: managed
+x-maestro-source-fingerprint: eaaee7072b9aa1d0faf0279c3b9ae26e9200e7cd0bb6d2193e55b9995e8ccd5f
+x-maestro-freshness: fresh
+x-maestro-status: active
+x-maestro-generator-version: maestro-managed-wiki/0.2
+x-maestro-policy-version: managed-product/1
 ---
 
 # Source snapshot
@@ -317,7 +317,7 @@ This specification does not:
 
 - implement, register, qualify or activate a model adapter;
 - choose Claude, Codex, a provider, model, API, network route or billing plan;
-- authorize BCGOS to read runtime credentials or reuse private-release custody;
+- authorize Maestro to read runtime credentials or reuse private-release custody;
 - enable native schedulers, hooks, unattended execution or a global model flag;
 - make one runtime's or job's evidence qualify another;
 - grant browsing, tools, external publication, policy mutation or cross-scope

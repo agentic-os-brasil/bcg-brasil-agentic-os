@@ -89,9 +89,9 @@ printf '_Injetado automaticamente pelo hook de início de sessão._\n'
 # Operational method pointer (spec 050) — always first, before any task routing.
 # SessionStart carries the pointer only; skill body is loaded on demand.
 printf '\n## Método operacional\n'
-printf '<!-- maestro:pointer: bcgos-operator · reason: deterministic_operational_method -->\n'
-printf 'Skill: %s/bundles/base/skills/bcgos-operator/SKILL.md\n' "${PROJECT_DIR}"
-printf 'Instrução: carregar este skill antes de escolher, interpretar ou recuperar qualquer operação BCGOS.\n'
+printf '<!-- maestro:pointer: maestro-operator · reason: deterministic_operational_method -->\n'
+printf 'Skill: %s/bundles/base/skills/maestro-operator/SKILL.md\n' "${PROJECT_DIR}"
+printf 'Instrução: carregar este skill antes de escolher, interpretar ou recuperar qualquer operação de controle do Maestro.\n'
 
 # Tech-core pointer (§3.1 diagnostic) — engineering skills bundle. Emitted only
 # when the directory exists; fail-open otherwise. Loaded on demand.

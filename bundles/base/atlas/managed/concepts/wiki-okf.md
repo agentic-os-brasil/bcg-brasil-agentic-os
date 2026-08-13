@@ -12,14 +12,14 @@ sources:
       resource: repo://specs/008-wiki-update-okf.md
       title: Wiki update lifecycle and OKF profile
 status: stable
-x-bcgos-profile-version: "1"
-x-bcgos-stable-id: managed/wiki-okf
-x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 86cf0108b2fb5cc853951aaf3cb4669b1b0d9097a3b0b5ab9929221cc458e94b
-x-bcgos-freshness: fresh
-x-bcgos-status: active
-x-bcgos-generator-version: bcgos-managed-wiki/0.2
-x-bcgos-policy-version: managed-product/1
+x-maestro-profile-version: "1"
+x-maestro-stable-id: managed/wiki-okf
+x-maestro-scope: managed
+x-maestro-source-fingerprint: eaaee7072b9aa1d0faf0279c3b9ae26e9200e7cd0bb6d2193e55b9995e8ccd5f
+x-maestro-freshness: fresh
+x-maestro-status: active
+x-maestro-generator-version: maestro-managed-wiki/0.2
+x-maestro-policy-version: managed-product/1
 ---
 
 # Source snapshot
@@ -35,7 +35,7 @@ This managed concept is generated from the reviewed repository source `specs/008
 
 ## Source content
 
-# Spec 008 - Wiki update lifecycle and BCGOS OKF profile
+# Spec 008 - Wiki update lifecycle and Maestro OKF profile
 
 Status: architecture accepted; initial managed compiler and partial
 OKF/profile validator implemented; complete profile/security validation,
@@ -45,7 +45,7 @@ schemas, event outbox, durable manifests and runtime integration pending.
 
 Update each compiled wiki safely and incrementally while keeping its output portable across humans, agents and tools.
 
-Open Knowledge Format v0.2 defines the exchange envelope. The BCGOS Atlas Profile v1 defines the additional governance and lifecycle required for professional, owner-private and workspace-private knowledge. OKF remains a format, not an authorization or storage system.
+Open Knowledge Format v0.2 defines the exchange envelope. The Maestro Atlas Profile v1 defines the additional governance and lifecycle required for professional, owner-private and workspace-private knowledge. OKF remains a format, not an authorization or storage system.
 
 The normative OKF base is the GoogleCloudPlatform `knowledge-catalog/okf/SPEC.md`
 v0.2. Maestro does not require Google Cloud, Knowledge Catalog or a proprietary
@@ -66,9 +66,9 @@ Every atlas is an OKF Knowledge Bundle:
 - concept ID derived from the bundle-relative path without `.md`;
 - best-effort consumption of unknown types, optional fields and broken links.
 
-The root `index.md` declares `okf_version: "0.2"`. BCGOS does not introduce a competing concept-ID field or a proprietary link syntax.
+The root `index.md` declares `okf_version: "0.2"`. Maestro does not introduce a competing concept-ID field or a proprietary link syntax.
 
-### BCGOS Atlas Profile v1
+### Maestro Atlas Profile v1
 
 The profile extends concept frontmatter with namespaced governance metadata:
 
@@ -76,29 +76,29 @@ The profile extends concept frontmatter with namespaced governance metadata:
 type: Memory Rollup
 title: Example thematic route
 description: Compact authorized navigation summary.
-resource: bcgos://memory/opaque-resource-reference
+resource: maestro://memory/opaque-resource-reference
 tags: [memory, thematic]
 timestamp: 2026-07-20T00:00:00Z
-x-bcgos-profile-version: "1"
-x-bcgos-stable-id: opaque-stable-id
-x-bcgos-scope: workspace
-x-bcgos-tenant-ref: opaque-tenant-ref
-x-bcgos-owner-ref: opaque-owner-ref
-x-bcgos-workspace-ref: opaque-workspace-ref
-x-bcgos-memory-layer: L3
-x-bcgos-memory-commit: opaque-commit-version
-x-bcgos-rollup-version: opaque-rollup-version
-x-bcgos-source-fingerprint: opaque-keyed-fingerprint
-x-bcgos-sensitivity: client_restricted
-x-bcgos-freshness: fresh
-x-bcgos-status: active
-x-bcgos-generator-version: "1"
-x-bcgos-policy-version: "1"
+x-maestro-profile-version: "1"
+x-maestro-stable-id: opaque-stable-id
+x-maestro-scope: workspace
+x-maestro-tenant-ref: opaque-tenant-ref
+x-maestro-owner-ref: opaque-owner-ref
+x-maestro-workspace-ref: opaque-workspace-ref
+x-maestro-memory-layer: L3
+x-maestro-memory-commit: opaque-commit-version
+x-maestro-rollup-version: opaque-rollup-version
+x-maestro-source-fingerprint: opaque-keyed-fingerprint
+x-maestro-sensitivity: client_restricted
+x-maestro-freshness: fresh
+x-maestro-status: active
+x-maestro-generator-version: "1"
+x-maestro-policy-version: "1"
 ```
 
-Managed concepts omit owner and workspace references. Source relations and citations remain standard Markdown links in the body. The `resource` field or citations may use opaque BCGOS URIs that require authorization to resolve.
+Managed concepts omit owner and workspace references. Source relations and citations remain standard Markdown links in the body. The `resource` field or citations may use opaque Maestro URIs that require authorization to resolve.
 
-BCGOS consumers preserve unknown OKF fields. Unknown `type` values remain consumable as generic concepts. Unknown or missing values for security-bearing profile fields such as scope, sensitivity, status or policy version fail closed within BCGOS runtimes.
+Maestro consumers preserve unknown OKF fields. Unknown `type` values remain consumable as generic concepts. Unknown or missing values for security-bearing profile fields such as scope, sensitivity, status or policy version fail closed within Maestro runtimes.
 
 ## Physical bundle separation
 
@@ -113,7 +113,7 @@ atlases/
     sharepoint-work/          # explicit prior-work retrieval metadata
 ```
 
-These are logical paths; approved operating-system directories remain pending `bcgos init` decisions.
+These are logical paths; approved operating-system directories remain pending initialization decisions.
 
 - Managed, owner and workspace bundles never share a manifest, staging area or active pointer.
 - V1 concept documents contain no cross-bundle links.
@@ -153,7 +153,7 @@ source event
   -> compute dirty concepts and backlinks
   -> compile OKF candidates in staging
   -> OKF core validation
-  -> BCGOS profile and security validation
+  -> Maestro profile and security validation
   -> atomic atlas manifest publication
   -> metadata-safe log and receipt
   -> runtime pointer refresh
@@ -179,7 +179,7 @@ Hard OKF checks:
 - non-empty `type`;
 - valid reserved-file structure.
 
-Hard BCGOS checks:
+Hard Maestro checks:
 
 - recognized profile and policy versions;
 - valid scope, sensitivity, status and authorization metadata;
@@ -197,7 +197,7 @@ Soft diagnostics:
 - stale summaries and missing citations;
 - unknown non-security extension fields or concept types.
 
-OKF's permissive consumption remains intact; the stricter hard checks are requirements of the BCGOS profile and do not redefine OKF conformance.
+OKF's permissive consumption remains intact; the stricter hard checks are requirements of the Maestro profile and do not redefine OKF conformance.
 
 ### 5. Recheck and publish atomically
 
@@ -255,11 +255,11 @@ Backlinks and indexes belong to the same atomic atlas transaction as their chang
 V1 implements the managed bundle first. The initial deterministic compiler and
 partial validator are now available through the development-only harness. It
 writes a reviewable local candidate with a best-effort directory swap; it is
-not yet the complete BCGOS profile/security validator or the durable
+not yet the complete Maestro profile/security validator or the durable
 versioned-manifest/last-known-good publication mechanism. The remaining items
 are the following:
 
-1. Complete BCGOS Atlas Profile v1 schema, authorization and security checks.
+1. Complete Maestro Atlas Profile v1 schema, authorization and security checks.
 2. Durable staging, source watermark, atomic manifest and last-known-good behavior.
 3. Full link/provenance/revocation diagnostics and runtime pointer refresh.
 4. CI tests for complete OKF/profile conformance and product/private boundaries.
@@ -269,7 +269,7 @@ Private bundle implementation follows only after Owner Context, enrollment, user
 ## Test expectations
 
 - OKF core conformance and permissive handling of unknown types and optional fields;
-- fail-closed handling of unknown security-bearing BCGOS profile values;
+- fail-closed handling of unknown security-bearing Maestro profile values;
 - physical isolation and no cross-bundle links;
 - durable outbox recovery after interruption;
 - idempotent retry and safe coalescing;

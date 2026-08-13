@@ -1,4 +1,4 @@
-# BCGOS Skills Index
+# Maestro Skills Index
 
 > Generated from canonical product skills. Open a pointed SKILL.md only when the task requires it.
 

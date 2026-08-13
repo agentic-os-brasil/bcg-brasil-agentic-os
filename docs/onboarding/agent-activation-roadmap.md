@@ -7,9 +7,9 @@ quando você cria os agentes que representam o trabalho real. Pense nesta ordem:
 Maestro → Client Account Agent → Case Agent → primeira entrega → continuidade
 ```
 
-O scaffold criado automaticamente pelo `bcgos init` é apenas a base técnica do
-workspace. Ele não substitui a criação de um Client Account Agent para uma
-conta nem de um Case Agent para um projeto concreto.
+O scaffold criado automaticamente ao abrir a pasta do ZIP no Claude Code é
+apenas a base técnica do workspace. Ele não substitui a criação de um Client
+Account Agent para uma conta nem de um Case Agent para um projeto concreto.
 
 ## A jornada recomendada
 

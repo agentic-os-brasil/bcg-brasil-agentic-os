@@ -1,6 +1,6 @@
 # Spec 050 - BCGOS operational method
 
-Status: accepted
+Status: **superseded** — the `bcgos-operator` CLI control-plane method described here no longer exists in bundle-only Maestro. Operational method is now embedded in the base bundle's SessionStart packet and skill routing. This spec is retained as a historical record of the `bcgos` control-plane design.
 
 ## Purpose
 

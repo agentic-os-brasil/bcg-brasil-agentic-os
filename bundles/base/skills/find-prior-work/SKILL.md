@@ -12,7 +12,7 @@ Skill de recuperação de material profissional prévio dentro da workspace Maes
 - Sem "você", "tu" ou "te". Preferir impessoal ou 3ª pessoa.
 - Sem em-dash em texto externo. Vírgula, dois pontos ou parênteses.
 - Nunca pedir terminal, script, edição de JSON ou configuração de credenciais.
-- Nunca mencionar `bcgos` nem binário de instalador.
+- Nunca mencionar ferramentas ou binários de instalador.
 
 ## Interaction profile
 

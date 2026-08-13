@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "okf_version": "0.2",
-  "generator_version": "bcgos-managed-wiki/0.2",
+  "generator_version": "maestro-managed-wiki/0.2",
   "policy_version": "managed-product/1",
   "log_date": "2026-08-06",
   "sources": [

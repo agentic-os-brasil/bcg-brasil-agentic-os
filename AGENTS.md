@@ -1,6 +1,6 @@
 # Agent orientation
 
-This repository is the early foundation of the BCG Brasil Agentic OS.
+This repository is the source for **Maestro** — a Claude Code–native professional OS for context, execution and evidence in a local workspace.
 
 Before changing it:
 

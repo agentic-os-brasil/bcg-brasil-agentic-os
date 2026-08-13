@@ -9,6 +9,7 @@ import (
 )
 
 func TestWriteBinaryProvenanceCapturesBoundedBuildEvidence(t *testing.T) {
+	skipIfBundleOnly(t)
 	target := Target{OS: "darwin", Arch: "arm64"}
 	binary := filepath.Join(t.TempDir(), binaryName("0.1.0", target))
 	if err := os.WriteFile(binary, []byte("native binary"), 0o755); err != nil {
@@ -43,6 +44,7 @@ func TestWriteBinaryProvenanceCapturesBoundedBuildEvidence(t *testing.T) {
 }
 
 func TestWriteNativeProvenanceCoversBootstrapper(t *testing.T) {
+	skipIfBundleOnly(t)
 	target := Target{OS: "windows", Arch: "amd64"}
 	binary := filepath.Join(t.TempDir(), bootstrapperBinaryName("0.1.0", target))
 	if err := os.WriteFile(binary, []byte("stable bootstrapper"), 0o755); err != nil {
@@ -68,6 +70,7 @@ func TestWriteNativeProvenanceCoversBootstrapper(t *testing.T) {
 }
 
 func TestWriteBinaryProvenanceRejectsUntrustedInputs(t *testing.T) {
+	skipIfBundleOnly(t)
 	target := Target{OS: "windows", Arch: "amd64"}
 	binary := filepath.Join(t.TempDir(), binaryName("0.1.0", target))
 	if err := os.WriteFile(binary, []byte("native binary"), 0o755); err != nil {
