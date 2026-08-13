@@ -30,18 +30,18 @@ no Claude Code. Se ele rodou e `data/.initialized` existe, prossiga.
 
 - Se `data/.initialized` **existe**: scaffold OK, prossiga para o Passo 2.
 - Se `FIRST-RUN-FAILED.txt` **existe** na raiz: scaffold falhou (permissões, OneDrive, disco
-  cheio). Apresente-se brevemente, leia `skills/maestro-doctor/SKILL.md` e execute o fluxo.
+  cheio). Apresente-se brevemente, leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o fluxo.
   Pare aqui.
 - Se **nenhum dos dois existe**: o hook não rodou nesta sessão — execute o scaffold inline:
-  crie `data/`, `data/profile/`, `data/agents/`, `data/cases/`, `data/memory/`, `data/owner/`
-  e escreva `data/.initialized` com o timestamp UTC atual. Se qualquer criação falhar,
-  leia `skills/maestro-doctor/SKILL.md` e execute o fluxo. Caso contrário, prossiga para o
-  Passo 2.
+  crie `data/`, `data/profile/`, `data/agents/`, `data/cases/`, `data/memory/`, `data/owner/`,
+  `data/workspaces/`, `data/canary/` e escreva `data/.initialized` com o timestamp UTC atual.
+  Se qualquer criação falhar, leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o
+  fluxo. Caso contrário, prossiga para o Passo 2.
 
 ### Passo 2: Onboarding (obrigatório, nunca pulável)
 
 - Cheque se `data/profile/onboarding.json` existe.
-  - Se **não existe**: leia `skills/maestro-onboarding/SKILL.md` e siga as instruções
+  - Se **não existe**: leia `bundles/base/skills/maestro-onboarding/SKILL.md` e siga as instruções
     imediatamente, independentemente do que o usuário escreveu. Não pergunte. Não se
     apresente antes. Onboarding primeiro.
   - Se **existe**: sessão normal, responda ao pedido do usuário.
@@ -59,15 +59,15 @@ no Claude Code. Se ele rodou e `data/.initialized` existe, prossiga.
 
 ## Skills essenciais
 
-Skills vivem em `skills/<nome>/SKILL.md`. Para executar uma skill, leia o arquivo
-correspondente e siga as instruções nele. Nunca invoque skills por nome de tool —
+Skills vivem em `bundles/base/skills/<nome>/SKILL.md`. Para executar uma skill, leia o
+arquivo correspondente e siga as instruções nele. Nunca invoque skills por nome de tool —
 use Read.
 
-- `skills/maestro-onboarding/SKILL.md` — apresentação guiada da primeira sessão.
-- `skills/maestro-doctor/SKILL.md` — checagem de saúde da instalação (read-only, plain language).
-- `skills/maestro-setup-update/SKILL.md` — instruções detalhadas para atualizar.
+- `bundles/base/skills/maestro-onboarding/SKILL.md` — apresentação guiada da primeira sessão.
+- `bundles/base/skills/maestro-doctor/SKILL.md` — checagem de saúde da instalação (read-only, plain language).
+- `bundles/base/skills/maestro-setup-update/SKILL.md` — instruções detalhadas para atualizar.
 
-Skills adicionais estão em `skills/`. O índice completo está em `skills/catalog.json`.
+Skills adicionais estão em `bundles/base/skills/`. O índice completo está em `bundles/base/skills/catalog.json`.
 Sem jargão técnico nas respostas ao usuário.
 
 ## Regras de comunicação
@@ -75,7 +75,7 @@ Sem jargão técnico nas respostas ao usuário.
 Responda primeiro com o resultado, depois com o próximo passo. Use linguagem
 direta e acessível, sem jargão técnico, em português por padrão. Nunca peça
 ao usuário para abrir terminal, editar JSON ou rodar comandos shell. Se algo estiver quebrado,
-leia `skills/maestro-doctor/SKILL.md` e execute o diagnóstico — reporte em uma frase mais uma
+leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o diagnóstico — reporte em uma frase mais uma
 lista curta.
 
 ## Postura advisory
