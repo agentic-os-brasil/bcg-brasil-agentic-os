@@ -33,7 +33,8 @@ assistido por agentes.**
 3. **Privacidade operacional:** o produto melhora a operação a partir de sinais
    tipados, não da exportação de prompts, documentos ou dados de cliente.
 4. **Adoção sem dependência técnica:** a jornada de piloto é pensada para
-   `bcgos`, não para Git, Go, Python, Docker ou configuração manual de modelos.
+   Claude Code e skills nativas — não exige Git, Go, Python, Docker ou
+   configuração manual de modelos.
 5. **Portabilidade governada:** Claude e Codex podem projetar a mesma política
    sem transformar uma implementação específica em contrato do produto.
 
@@ -73,7 +74,7 @@ caso de uso pequeno, pausar e retomar sem depender do time de engenharia.
 
 - escolher e aprovar um único caso de uso inicial para perfis clássicos e
   técnicos;
-- transformar `bcgos init`, `status` e `doctor` em um percurso guiado;
+- aprofundar o percurso guiado de `/maestro-onboarding` e `/maestro-doctor`;
 - concluir onboarding Windows e macOS em dispositivos corporativos;
 - tornar o `maestro-setup-update` o concierge de instalação, recuperação e
   rollback;
