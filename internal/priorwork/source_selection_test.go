@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -46,7 +47,11 @@ func TestGuidedSourceSelectionIsWorkspaceBoundVersionedAndPointerOnly(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm()&0o077 != 0 {
+	// Unix mode bits are not an authority on Windows: Go synthesises FileMode
+	// from the read-only attribute, so a file written 0600 reports 0666 there.
+	// See internal/actionconfirmation/store.go (loadOrCreateKey) for the same
+	// guard and the fuller rationale.
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("selection permissions = %o", info.Mode().Perm())
 	}
 	body, err := os.ReadFile(selectionPath)

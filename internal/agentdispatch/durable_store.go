@@ -167,15 +167,7 @@ func (store *pilotRecoveryStore) write(record pilotRecord) error {
 	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("pilot recovery record activate: %w", err)
 	}
-	dir, err := os.Open(store.root)
-	if err != nil {
-		return fmt.Errorf("pilot recovery directory open: %w", err)
-	}
-	defer dir.Close()
-	if err := dir.Sync(); err != nil {
-		return fmt.Errorf("pilot recovery directory sync: %w", err)
-	}
-	return nil
+	return syncDirectory(store.root)
 }
 
 // writeBatch uses a small owner-local journal so a Walter leaf and its producer
@@ -244,18 +236,6 @@ func writeDurableFile(path string, body []byte) error {
 		return fmt.Errorf("pilot recovery file activate: %w", err)
 	}
 	return syncDirectory(directory)
-}
-
-func syncDirectory(path string) error {
-	directory, err := os.Open(path)
-	if err != nil {
-		return fmt.Errorf("pilot recovery directory open: %w", err)
-	}
-	defer directory.Close()
-	if err := directory.Sync(); err != nil {
-		return fmt.Errorf("pilot recovery directory sync: %w", err)
-	}
-	return nil
 }
 
 func (store *pilotRecoveryStore) replayTransaction(dispatcher *Dispatcher) error {

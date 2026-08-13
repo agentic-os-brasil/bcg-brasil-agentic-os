@@ -1220,15 +1220,6 @@ func publishBundle(root, source *os.Root) (string, error) {
 	return stage, nil
 }
 
-func syncRootDirectory(root *os.Root, relative string) error {
-	directory, err := root.Open(relative)
-	if err != nil {
-		return err
-	}
-	defer directory.Close()
-	return directory.Sync()
-}
-
 func loadJSONAt[T any](rootPath, relative string) (T, error) {
 	var zero T
 	root, err := openAnchoredRoot(rootPath)

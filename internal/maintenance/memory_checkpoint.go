@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"time"
 
@@ -289,7 +290,12 @@ func readCheckpointJSON(path string, target any) error {
 	if err != nil {
 		return err
 	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() || before.Mode().Perm() != 0o600 {
+	// Unix mode bits are not an authority on Windows: Go synthesises FileMode
+	// from the read-only attribute, so a file written 0600 reports 0666 there.
+	// See internal/actionconfirmation/store.go (loadOrCreateKey) for the same
+	// guard and the fuller rationale.
+	permissive := runtime.GOOS != "windows" && before.Mode().Perm() != 0o600
+	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() || permissive {
 		return errors.New("memory checkpoint state must be a private regular file")
 	}
 	file, err := os.Open(path)
@@ -318,13 +324,4 @@ func readCheckpointJSON(path string, target any) error {
 		return err
 	}
 	return nil
-}
-
-func syncCheckpointDirectory(path string) error {
-	directory, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer directory.Close()
-	return directory.Sync()
 }
