@@ -1,8 +1,8 @@
 # Como contribuir
 
 Este arquivo é o ponto de entrada curto para contribuidores do código-fonte.
-Usuários do piloto instalarão o produto pelo `bcgos` e não precisarão aprender
-Git.
+Usuários do piloto instalarão o produto pelo ZIP Maestro e não precisarão
+aprender Git (o repositório é a fábrica, não o produto).
 
 ## Comece pelo onboarding
 
