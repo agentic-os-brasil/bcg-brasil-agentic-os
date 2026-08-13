@@ -25,11 +25,7 @@ type Target struct {
 	Arch string
 }
 
-var candidateTargets = []Target{
-	{OS: "windows", Arch: "amd64"},
-	{OS: "darwin", Arch: "amd64"},
-	{OS: "darwin", Arch: "arm64"},
-}
+var candidateTargets = []Target{}
 
 type BinaryBuilder interface {
 	Build(context.Context, string, string, string, Target) error
@@ -104,23 +100,9 @@ func runGoBuild(
 	target Target,
 	environment []string,
 ) error {
-	command := exec.CommandContext(
-		ctx,
-		"go", "build",
-		"-mod=readonly",
-		"-buildvcs=false",
-		"-trimpath",
-		"-ldflags", "-s -w -X github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/cli.Version="+version,
-		"-o", output,
-		"./cmd/bcgos",
-	)
-	command.Dir = root
-	command.Env = environment
-	outputBytes, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("build bcgos for %s/%s: %w: %s", target.OS, target.Arch, err, strings.TrimSpace(string(outputBytes)))
-	}
-	return nil
+	// CLI binary removed from product distribution; distribution is ZIP bundle only.
+	// This builder is retained for future extension but has no binary target.
+	return fmt.Errorf("no CLI binary target: Maestro distribution is ZIP bundle only")
 }
 
 type CandidateOptions struct {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -81,10 +80,11 @@ func (GoSeededComponentBuilder) Build(
 		filteredEnvironment(os.Environ(), "GOOS", "GOARCH", "CGO_ENABLED"),
 		"CGO_ENABLED="+cgo,
 	)
-	commandPath := "./cmd/bcgos"
-	if component == NativeBootstrapper {
-		commandPath = "./cmd/bcgos-bootstrap"
+	if component == NativeCLI {
+		// CLI binary removed from product distribution; cmd/bcgos no longer exists.
+		return fmt.Errorf("no CLI binary target: Maestro distribution is ZIP bundle only")
 	}
+	commandPath := "./cmd/bcgos-bootstrap"
 	command := exec.CommandContext(
 		ctx,
 		"go", "build",
@@ -180,7 +180,6 @@ func BuildSeededNativeBinaries(
 		return SeededNativeArtifacts{}, err
 	}
 	defer os.RemoveAll(staging)
-	providerBase64 := base64.StdEncoding.EncodeToString(configBody)
 	cliName := binaryName(options.Version, options.Target)
 	bootstrapperName := bootstrapperBinaryName(options.Version, options.Target)
 	builds := []struct {
@@ -191,12 +190,7 @@ func BuildSeededNativeBinaries(
 		{
 			component: NativeCLI,
 			name:      cliName,
-			ldflags: strings.Join([]string{
-				"-s", "-w",
-				"-X", "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/cli.Version=" + options.Version,
-				"-X", "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/cli.AuthorityRegistrySHA256=" + registryDigest,
-				"-X", "github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/cli.ProviderConfigBase64=" + providerBase64,
-			}, " "),
+			ldflags:   strings.Join([]string{"-s", "-w"}, " "),
 		},
 		{
 			component: NativeBootstrapper,
