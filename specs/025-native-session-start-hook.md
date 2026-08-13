@@ -1,9 +1,12 @@
 # Spec 025 - Native Session Start hook payload
 
 Status: native command payload and local configuration installation implemented;
-runtime conformance receipts pending.
+runtime conformance receipts pending. **CLI entrypoint superseded** — the
+`bcgos hook session-start` command no longer exists in bundle-only Maestro; the
+hook is delivered as a Claude Code hook installed via `.claude/settings.json`.
+The payload contract and context packet envelope described here remain canonical.
 
-`bcgos hook session-start --runtime claude|codex [workspace-path]` is the thin
+The original `bcgos hook session-start --runtime claude|codex [workspace-path]` was the thin
 direct-conformance entrypoint. Installed Claude configuration invokes the
 equivalent runtime-specific `bcgos hook claude session-start` entrypoint, while
 Codex invokes the shared command with `--runtime codex`. Each emits one bounded

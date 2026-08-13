@@ -2,6 +2,8 @@
 
 > Canonical decision history now lives in `docs/decisions/decision-log.md`, using permanent four-letter codes. This file preserves the initial bootstrap wording and must not receive new decisions.
 
+> **Superseded surface:** FD-003 ("CLI-first experience"), FD-005 ("bcgos update"), and FD-007 ("Go CLI binary") describe the `bcgos` standalone CLI that was removed when Maestro shifted to a signed ZIP bundle with slash-command entry points. The underlying principles (install, health, update, versioned releases) remain valid; only the CLI delivery mechanism changed. FD-004, FD-006, FD-008, FD-009, and FD-010 remain fully in effect.
+
 These decisions captured the initial agreement before the canonical project decision log existed.
 
 ## Accepted

@@ -1,8 +1,12 @@
 # Spec 035 - Agent identity, personalization and ownership
 
-Status: deterministic one-question CLI interview, review-bound strict profile
+Status: deterministic one-question interview, review-bound strict profile
 validation and signed instance identity are implemented. Names and emojis are
-presentation metadata and never become authority. Gamma Guardian is a
+presentation metadata and never become authority. **CLI surface superseded** —
+the `bcgos agent *` commands listed in the "Deterministic interface" section no
+longer exist; the interview flow is now delivered through the
+`/maestro-onboarding` skill. The contract (one-question cadence, consent
+boundaries, profile schema) remains canonical. Gamma Guardian is a
 system-known managed identity with optional presentation customization; its
 runtime/native qualification remains a separate evidence gate.
 
