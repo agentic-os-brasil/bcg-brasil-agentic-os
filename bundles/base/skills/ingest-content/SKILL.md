@@ -29,7 +29,8 @@ Resolver `interaction-profile` se disponível. O perfil ajusta profundidade de e
    - PDF texto-nativo: extração direta via Read.
    - Markdown, HTML, TXT, JSON, CSV: extração direta via Read.
    - Imagem com texto: Read entrega o conteúdo visual ao modelo, que transcreve o texto relevante.
-   - Office (DOCX, XLSX, PPTX): não suportado nativamente nesta release. Ver seção "Fora do escopo desta release".
+   - Office (DOCX, XLSX, PPTX) e PDF texto-nativo pesado: invocar antes a skill `python-env-bootstrap` com pacote `markitdown` para preparar UV + venv em `data/runtime/venv` e instalar MarkItDown sob demanda. Depois rodar `data/runtime/venv/bin/python -m markitdown <caminho>` e capturar o Markdown. Nunca instalar Python global nem chamar `pip` do sistema.
+   - PDF 100% escaneado (imagem-pura, sem camada de texto): MarkItDown retorna Markdown vazio ou incompleto. Detectar antes de tentar extração; se detectado, cair na rota "Fora do escopo" (copiar-colar via aplicação nativa) sem fingir sucesso.
 
 4. **Sintetizar em Markdown.** Produzir um resumo estruturado com:
    - Título curto do documento.
@@ -52,10 +53,8 @@ Resolver `interaction-profile` se disponível. O perfil ajusta profundidade de e
 
 ## Fora do escopo desta release
 
-Extração automática de DOCX, XLSX, PPTX, PDFs escaneados (imagem pura) e OCR de imagens complexas dependem de runtime local dedicado que ainda não está incluído no ZIP do Maestro. Nesses casos:
-
-- Informar de forma direta que a extração nativa desses formatos entra em release posterior do Maestro.
-- Oferecer a alternativa atual: pedir ao usuário que abra o arquivo na aplicação nativa, copie o texto relevante e cole no chat. A skill então grava o material colado como se tivesse sido lido de um `.md`, mantendo o campo "Origem" apontando para o caminho absoluto do arquivo original.
+- OCR de imagens complexas e PDFs 100% escaneados (imagem pura sem camada de texto): depende de runtime OCR dedicado ainda não incluído no ZIP do Maestro. Nesses casos, informar de forma direta e oferecer alternativa: abrir o arquivo na aplicação nativa, copiar o texto relevante e colar no chat; a skill grava o material colado mantendo o campo "Origem" apontando para o caminho absoluto do arquivo original.
+- DOCX/XLSX/PPTX e PDFs texto-nativos são cobertos via `python-env-bootstrap` + MarkItDown (passo 3).
 
 ## Encerramento
 

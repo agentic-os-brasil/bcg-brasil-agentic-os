@@ -33,6 +33,7 @@
 | Maestro Setup and Update | Guide safe setup, updates and recovery conversationally | `skills/maestro-setup-update/SKILL.md` |
 | Meeting Close | Turn meeting notes into a reviewable closure packet | `skills/meeting-close/SKILL.md` |
 | Meeting to Work Items | Extract decisions, tasks and follow-ups from meeting notes | `skills/meeting-to-work-items/SKILL.md` |
+| Python Env Bootstrap | Prepare an isolated local Python env (UV + venv) and install packages on demand | `skills/python-env-bootstrap/SKILL.md` |
 | Gate de QA | Classifica a qualidade de uma mudança com evidência proporcional | `skills/qa-gate/SKILL.md` |
 | Qualitative Analysis | Synthesize bounded qualitative evidence into themes and implications | `skills/qualitative-analysis/SKILL.md` |
 | Quantitative Analysis | Analyze bounded quantitative evidence with explicit assumptions and checks | `skills/quantitative-analysis/SKILL.md` |

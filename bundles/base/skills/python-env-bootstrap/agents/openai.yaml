@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Env Bootstrap"
+  short_description: "Prepare an isolated local Python env (UV + venv) and install packages on demand"
+  default_prompt: "Use $python-env-bootstrap to prepare an isolated Python env under data/runtime/venv and install the requested package on demand, with owner disclosure only when needed."

@@ -594,6 +594,14 @@
       "path": "skills/meeting-to-work-items/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/python-env-bootstrap/SKILL.md",
+      "path": "skills/python-env-bootstrap/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/python-env-bootstrap/agents/openai.yaml",
+      "path": "skills/python-env-bootstrap/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/qa-gate/SKILL.md",
       "path": "skills/qa-gate/SKILL.md"
     },

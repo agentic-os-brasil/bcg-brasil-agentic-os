@@ -205,6 +205,13 @@
       "relative_path": "skills/meeting-to-work-items/SKILL.md"
     },
     {
+      "id": "python-env-bootstrap",
+      "display_name": "Python Env Bootstrap",
+      "trigger": "Prepare an isolated local Python env (UV + venv) and install packages on demand",
+      "default_prompt": "Use $python-env-bootstrap to prepare an isolated Python env under data/runtime/venv and install the requested package on demand, with owner disclosure only when needed.",
+      "relative_path": "skills/python-env-bootstrap/SKILL.md"
+    },
+    {
       "id": "qa-gate",
       "display_name": "Gate de QA",
       "trigger": "Classifica a qualidade de uma mudança com evidência proporcional",
