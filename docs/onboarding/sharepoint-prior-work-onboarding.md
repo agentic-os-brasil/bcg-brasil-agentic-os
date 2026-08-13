@@ -57,7 +57,7 @@ No Claude:
 | Seleção guiada por projeto | Implementada e validada localmente | O owner pode indicar, adiar ou revisar pastas exatas sem iniciar coleta; Session Start recebe apenas estado bounded. |
 | Contrato, schemas e threat model | Implementado e validado localmente | Enrollment, snapshot, receipt, revogação e consulta têm regras testáveis. |
 | Índice local determinístico | Implementado e validado localmente | Um snapshot assinado pode ser publicado e consultado sem SharePoint ao vivo. |
-| CLI `bcgos prior-work` | Implementado e validado localmente | Actor local, enrollment, status, import e find funcionam sobre artefatos locais; sync-due é diagnóstico fail-closed no build atual. |
+| Operações internas de prior-work | Implementadas e validadas localmente | Actor, enrollment, status, import e find funcionam sobre artefatos locais via harness interno; sync-due é diagnóstico fail-closed no build atual. Operações de administrador são expostas via Claude Code skills ou harness Go; não há CLI externo. |
 | Skill de recuperação | Implementada | A capacidade só deve ser ativada por pedido explícito de trabalho anterior. |
 | Coletor SharePoint no Claude | Protocolo definido; trial nativo pendente | Ainda não existe evidência suficiente para declarar `supported`. |
 | Coleta no Codex | Proibida por política corporativa | Não há fallback técnico autorizado. |
@@ -71,17 +71,15 @@ gates de distribuição aplicáveis.
 
 Depois do onboarding do owner, o Maestro pergunta se o usuário quer indicar as
 pastas autorizadas do SharePoint para aquele workspace. A resposta é
-workspace-bound e versionada em estado privado local:
+workspace-bound e versionada em estado privado local. Essa seleção é conduzida
+via `/maestro-onboarding` em conversa — o Maestro guia o usuário por intenção
+e escopo exato; um JSON estrito com `schema_version: 1` e uma lista
+`folder_urls` é produzido e registrado internamente.
 
-```text
-bcgos prior-work source status --workspace <workspace>
-bcgos prior-work source select --workspace <workspace> --stdin --confirm
-bcgos prior-work source defer --workspace <workspace> --confirm
-bcgos prior-work rationale ingest --workspace <workspace> --stdin --confirm
-```
-
-O comando `select` recebe apenas JSON estrito com `schema_version: 1` e uma
-lista `folder_urls`. URLs de compartilhamento com query/fragment, roots amplos,
+A seleção aceita apenas URLs de compartilhamento sem query/fragment, roots não
+amplos, sem credenciais, de provedor SharePoint aprovado e sem campos
+desconhecidos. O status mostra somente contagem e ponteiro privado; nunca
+devolve URLs para Session Start. URLs de compartilhamento com query/fragment, roots amplos,
 credenciais, outros provedores e campos desconhecidos são recusados. O status
 mostra somente contagem e ponteiro privado; nunca devolve URLs para Session
 Start.
@@ -120,7 +118,7 @@ Wiki organizacional de prior-work
         │
         │ somente após intenção explícita
         ▼
-bcgos prior-work find
+/find-prior-work (skill)
   resultados + origem + frescor + justificativa
 ```
 
@@ -212,10 +210,11 @@ improvisados com scripts, connector no Codex ou edição do store.
 
 ## 6. Descobrir a identidade local autorizada
 
-Execute:
+A identidade do ator local é resolvida internamente pelo runtime. Para obter
+o `actor_ref` durante o processo de enrollment, execute via harness Go:
 
 ```text
-bcgos prior-work actor
+go run ./dev/harness/main.go prior-work actor
 ```
 
 Resposta esperada:
@@ -283,7 +282,8 @@ Notas importantes:
 - a chave pública Ed25519 codificada em base64 precisa ter o formato exigido
   pelo schema; o placeholder acima é intencionalmente inválido;
 - `authority_key_id` e `authority_signature` precisam ser emitidos por uma
-  autoridade aprovada e configurada em `BCGOS_PRIOR_WORK_AUTHORITY_*`; o
+  autoridade aprovada e configurada em `BCGOS_PRIOR_WORK_AUTHORITY_KEY_ID` /
+  `BCGOS_PRIOR_WORK_AUTHORITY_PUBLIC_KEY` (env vars do runtime interno); o
   collector key sozinho nunca autoriza uma matrícula;
 - `authorization_expires_at` limita o direito de consulta;
 - `scope_expansion_confirm_after` registra a intenção de uma futura
@@ -295,10 +295,11 @@ Notas importantes:
 
 ## 8. Confirmar e gravar a matrícula
 
-Revise o arquivo por duas pessoas quando a política exigir. Depois:
+Revise o arquivo por duas pessoas quando a política exigir. A matrícula é
+realizada via harness Go (operação de administrador):
 
 ```text
-bcgos prior-work enroll --stdin --confirm < enrollment.json
+go run ./dev/harness/main.go prior-work enroll --stdin --confirm < enrollment.json
 ```
 
 O `--confirm` é obrigatório. A resposta deve indicar `state: enrolled`, tenant,
@@ -348,10 +349,10 @@ O coletor Claude produz:
 - `receipt.json`: receipt externo assinado, ligado ao digest do snapshot e à
   ocorrência autorizada.
 
-No Maestro:
+No Maestro (via harness Go, operação de administrador):
 
 ```text
-bcgos prior-work import \
+go run ./dev/harness/main.go prior-work import \
   --snapshot snapshot.json \
   --receipt receipt.json
 ```
@@ -374,10 +375,10 @@ manifest ativo e audit record correspondente não completa uma ocorrência.
 
 ## 11. Verificar status e frescor
 
-Execute:
+Execute via harness Go:
 
 ```text
-bcgos prior-work status
+go run ./dev/harness/main.go prior-work status
 ```
 
 Campos principais:
@@ -401,23 +402,20 @@ mostrado ao usuário, não escondido.
 
 ## 12. Recuperar um trabalho anterior
 
-A busca exige intenção explícita e lê a consulta por stdin. Isso evita ativação
-acidental e evita oferecer a query como argumento fácil de persistir em
-histórico de shell.
-
-Execute:
+A busca exige intenção explícita. Usuários invocam a skill:
 
 ```text
-bcgos prior-work find --explicit --stdin --limit 5
+/find-prior-work
 ```
 
-Digite a consulta, por exemplo:
+O Maestro solicita a descrição do trabalho anterior que se quer recuperar,
+por exemplo:
 
 ```text
 quero o deck que apresentei pro CEO da Suzano em 2023 sobre PLANTIO
 ```
 
-Finalize o stdin conforme o terminal. O resultado inclui:
+O resultado inclui:
 
 - `name` e `source_url`;
 - facetas de cliente, tema, ano, audiência e apresentador;
@@ -445,16 +443,16 @@ busca semântica perfeita.
 O scheduler deriva as ocorrências de `enrolled_at`, `refresh_hours` e
 `schedule_timezone`, com no máximo um catch-up por presença.
 
-Interface:
+Interface (via harness Go, operação diagnóstica):
 
 ```text
-bcgos prior-work sync-due --runtime claude
-bcgos prior-work sync-due --runtime codex
+go run ./dev/harness/main.go prior-work sync-due --runtime claude
+go run ./dev/harness/main.go prior-work sync-due --runtime codex
 ```
 
 No build atual, essa superfície é **diagnóstica e fail-closed**:
 
-- `--runtime claude` sempre retorna `unavailable`, porque o CLI ainda não possui
+- `--runtime claude` sempre retorna `unavailable`, porque o harness ainda não possui
   um caminho implementado para injetar collector e publication verifier;
 - no Codex, retorna `unavailable` com `corporate_policy`;
 - uma futura integração Claude só poderá completar depois de implementar a

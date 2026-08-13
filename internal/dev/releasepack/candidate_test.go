@@ -8,6 +8,15 @@ import (
 	"testing"
 )
 
+// skipIfBundleOnly skips the test when no CLI binary targets are configured,
+// i.e., when Maestro ships as a ZIP bundle only with no native binaries.
+func skipIfBundleOnly(t *testing.T) {
+	t.Helper()
+	if len(candidateTargets) == 0 {
+		t.Skip("no binary targets in bundle-only distribution")
+	}
+}
+
 type fakeBinaryBuilder struct{}
 
 func (fakeBinaryBuilder) Build(_ context.Context, _ string, output, version string, target Target) error {
@@ -35,8 +44,8 @@ func TestBuildAndVerifyCandidateProducesClosedReleaseSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildCandidate() error = %v", err)
 	}
-	if len(manifest.Artifacts) != 4 {
-		t.Fatalf("artifact count = %d, want 4", len(manifest.Artifacts))
+	if len(manifest.Artifacts) != 1 {
+		t.Fatalf("artifact count = %d, want 1", len(manifest.Artifacts))
 	}
 	if err := VerifyCandidate(output); err != nil {
 		t.Fatalf("VerifyCandidate() error = %v", err)
@@ -107,12 +116,13 @@ func TestBuildCandidateAssemblesExactPrebuiltNativeBinaries(t *testing.T) {
 			t.Fatalf("assembled %s = %q", name, body)
 		}
 	}
-	if len(manifest.Artifacts) != 4 {
-		t.Fatalf("artifact count = %d, want 4", len(manifest.Artifacts))
+	if len(manifest.Artifacts) != 1 {
+		t.Fatalf("artifact count = %d, want 1", len(manifest.Artifacts))
 	}
 }
 
 func TestBuildCandidateRejectsSymlinkedPrebuiltBinary(t *testing.T) {
+	skipIfBundleOnly(t)
 	root := t.TempDir()
 	writeFile(t, root, "bundles/base/runtime/capabilities.json", "{}\n")
 	writeFile(t, root, "bundles/base/distribution.json", `{"schema_version":1,"files":[{"source":"bundles/base/runtime/capabilities.json","path":"runtime/capabilities.json"}]}`)
@@ -135,6 +145,7 @@ func TestBuildCandidateRejectsSymlinkedPrebuiltBinary(t *testing.T) {
 }
 
 func TestBuildNativeBinaryValidatesTargetAndOutputName(t *testing.T) {
+	skipIfBundleOnly(t)
 	root := t.TempDir()
 	target := Target{OS: "darwin", Arch: "arm64"}
 	output := filepath.Join(t.TempDir(), binaryName("0.1.0", target))

@@ -1,4 +1,4 @@
-# BCGOS Skills Index
+# Maestro Skills Index
 
 > Generated from canonical product skills. Open a pointed SKILL.md only when the task requires it.
 
@@ -8,7 +8,6 @@
 | Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
 | Case Kickoff | Build a bounded first-days plan from approved case scope | `skills/bcg-case-kickoff/SKILL.md` |
 | Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/bcg-deck/SKILL.md` |
-| BCGOS Operator | Operational method loaded at SessionStart — routes control-plane requests to the right skill | `skills/bcgos-operator/SKILL.md` |
 | Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
 | Case Canon Ingest | Compile reviewed insights into the active case's persistent canon layer | `skills/case-canon-ingest/SKILL.md` |
 | Case Decision Log Entry | Register a structural case decision in the active case decision log | `skills/case-decision-log-entry/SKILL.md` |
@@ -23,12 +22,13 @@
 | Feedback Capture | Record feedback received and apply it to your objectives | `skills/feedback-capture/SKILL.md` |
 | Find Prior Work | Recover an explicitly requested past deck or work artifact | `skills/find-prior-work/SKILL.md` |
 | Ingest Content | Extract professional documents locally and safely | `skills/ingest-content/SKILL.md` |
-| Interaction Profile | Apply the user's BCGOS communication and disclosure preference | `skills/interaction-profile/SKILL.md` |
+| Interaction Profile | Apply the owner's Maestro communication and disclosure preference | `skills/interaction-profile/SKILL.md` |
 | Investigate | Find the root cause of a wrong or surprising result | `skills/investigate/SKILL.md` |
 | Learnings Bridge | Promote daily learning candidates into durable owner knowledge | `skills/learnings-bridge/SKILL.md` |
 | Maestro Doctor | Run a plain-language health check on the Maestro install | `skills/maestro-doctor/SKILL.md` |
 | Preparar Ambiente Maestro | Prepara workspace, runtime e manutenção local | `skills/maestro-environment-setup/SKILL.md` |
 | Maestro Onboarding | Start a guided owner interview with quick or complete tracks | `skills/maestro-onboarding/SKILL.md` |
+| Maestro Operator | Operational method loaded at SessionStart — routes control-plane requests to the right skill | `skills/maestro-operator/SKILL.md` |
 | Checkup do Maestro | Confere e repara runtime, hooks e Darwin | `skills/maestro-runtime-checkup/SKILL.md` |
 | Maestro Setup and Update | Guide safe setup, updates and recovery conversationally | `skills/maestro-setup-update/SKILL.md` |
 | Meeting Close | Turn meeting notes into a reviewable closure packet | `skills/meeting-close/SKILL.md` |

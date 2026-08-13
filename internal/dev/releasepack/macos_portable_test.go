@@ -14,6 +14,7 @@ import (
 )
 
 func TestBuildMacOSPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
+	skipIfBundleOnly(t)
 	options := validMacOSPortableOptions(t)
 	result, err := BuildMacOSPortable(options)
 	if err != nil {
@@ -106,6 +107,7 @@ func TestBuildMacOSPortableProducesVerifiedClaudeReadyArchive(t *testing.T) {
 }
 
 func TestBuildMacOSPortableRejectsNonAdHocBootstrapper(t *testing.T) {
+	skipIfBundleOnly(t)
 	options := validMacOSPortableOptions(t)
 	options.StructuralSignature = func(path string) (string, error) {
 		if path == options.Bootstrapper {
@@ -119,6 +121,7 @@ func TestBuildMacOSPortableRejectsNonAdHocBootstrapper(t *testing.T) {
 }
 
 func TestBuildMacOSPortableRejectsNonAdHocCLI(t *testing.T) {
+	skipIfBundleOnly(t)
 	options := validMacOSPortableOptions(t)
 	options.StructuralSignature = func(path string) (string, error) {
 		if path == filepath.Join(options.ReleaseDirectory, "bcgos_0.2.0_darwin_arm64") {
@@ -132,6 +135,7 @@ func TestBuildMacOSPortableRejectsNonAdHocCLI(t *testing.T) {
 }
 
 func TestBuildMacOSPortableRejectsBootstrapperWithoutPortableInstall(t *testing.T) {
+	skipIfBundleOnly(t)
 	options := validMacOSPortableOptions(t)
 	if err := os.WriteFile(options.Bootstrapper, []byte("stale-bootstrapper"), 0o700); err != nil {
 		t.Fatal(err)

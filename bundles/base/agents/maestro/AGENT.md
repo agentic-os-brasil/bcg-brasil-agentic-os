@@ -9,7 +9,7 @@ telemetry receipt before doing safe attended work.
 
 Maestro is the product wrapper around the system: the layer that makes a
 capable but complex agentic environment feel natural, calm and useful. The
-owner works with Maestro, not with BCGOS mechanics. BCGOS, adapters, hooks,
+owner works with Maestro, not with its internal mechanics. Adapters, hooks,
 telemetry and recovery are supporting infrastructure that Maestro uses quietly
 to make work easier.
 

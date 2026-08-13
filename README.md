@@ -117,11 +117,11 @@ closed. The packet is sealed before the current dispatch occurrence is
 recorded, preserving earlier same-session/repeated prompts without duplicating
 the current occurrence. Scores and reason codes are packet metadata only; historical text is
 quoted data and kept only in the ephemeral review packet. Prompt history never enters receipts, telemetry, managed bundles or release artifacts,
-and remains separate from self learning. The reachable `bcgos maestro dispatch
---stdin` boundary records a fresh owner attestation under the OS-user-local
-data-root boundary, constructs and persists the Maestro chain, and returns
-metadata-only dispatch state while model execution is unavailable. The boolean
-attestation is not cryptographic principal authentication.
+and remains separate from self learning. The reachable local dispatch boundary
+records a fresh owner attestation under the OS-user-local data-root boundary,
+constructs and persists the Maestro chain, and returns metadata-only dispatch
+state while model execution is unavailable. The boolean attestation is not
+cryptographic principal authentication.
 
 ## What is ready
 
@@ -134,8 +134,8 @@ for a genuinely absent, disabled or failed capability.
 
 | Capability | What it means today |
 | --- | --- |
-| ✅ Local workspace | `bcgos init`, `status` and `doctor` establish a local workspace without mixing it into the managed core. |
-| ✅ Guided runtime projection | `bcgos adapter install` installs hooks, a concise but complete `CLAUDE.md`/`AGENTS.md`, and the real base skills with idempotent, conflict-safe ownership. |
+| ✅ Local workspace | The first-run scaffold creates a local workspace without mixing it into the managed core. `/maestro-doctor` verifies the installation read-only. |
+| ✅ Guided runtime projection | The ZIP installer delivers hooks, a concise but complete `CLAUDE.md`/`AGENTS.md`, and the real base skills with idempotent, conflict-safe ownership. |
 | ✅ Professional context | A canonical SELF index, eight professional facets, one-question expansion, agent identity drafts, skills index, human atlas and bounded session pointers stay inspectable and local. The quick onboarding track establishes role, communication, quality bar and boundaries; the complete track covers all eight facets. |
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
 | ✅ Senior-advisor refinement | Maestro can ask Walter to pressure-test high-leverage work as a calm proxy for the owner's intent; ordinary work does not wait on a review receipt. |
@@ -144,8 +144,8 @@ for a genuinely absent, disabled or failed capability.
 | ✅ Canary contract | The local store can aggregate typed outcomes, capability failures, interventions and receipt metadata — native telemetry remains unavailable and no work content is exported. |
 | ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |
 | ✅ Darwin 🧬 operational surgeon | The same Darwin contract supports interactive and headless housekeeping with scoped `health/maestro-system` repairs and metadata-only receipts; native runtime invocation remains unavailable. |
-| ✅ Local continuity loop | `bcgos maestro status` derives calibration, open work/checkpoint presence, attested signals, memory, maintenance and runtime evidence from their existing local authorities. An explicitly enrolled macOS Canary may run deterministic three-hour L1/checkpoint work and weekly L2/L3 dreaming while idle; lifetime promotion requires two L3 generations. Walter weekly review and native qualification remain unavailable. |
-| ✅ Local ingestion | Provider-neutral contract, Docling-first fallback selector, bounded MarkItDown adapter and fail-closed `bcgos ingest`; conversion remains unavailable until an approved managed runtime pack is verified. |
+| ✅ Local continuity loop | Session Start derives calibration, open work/checkpoint presence, attested signals, memory, maintenance and runtime evidence from their existing local authorities. An explicitly enrolled macOS Canary may run deterministic three-hour L1/checkpoint work and weekly L2/L3 dreaming while idle; lifetime promotion requires two L3 generations. Walter weekly review and native qualification remain unavailable. |
+| ✅ Local ingestion | Provider-neutral contract, Docling-first fallback selector, bounded MarkItDown adapter and fail-closed ingest contract; conversion remains unavailable until an approved managed runtime pack is verified. |
 | ✅ Governed prior-work retrieval | Enrollment, signed snapshot import, deterministic local indexing, explicit search, freshness, revocation and scheduling are implemented and locally validated. Native Claude collection remains unavailable pending a qualifying trial; Codex collection is prohibited by corporate policy. |
 | 🛡️ Workspace import and migration boundaries | Transactional external import and versioned migration cores, plus installer analysis/receipt UX, are implemented and locally tested. External import requires explicit `IMPORT`/`ROLLBACK` approval and keeps unsupported formats unavailable; native workspace migration remains unavailable pending trusted stable-bootstrapper activation and managed-target authority. |
 
@@ -162,15 +162,12 @@ for a genuinely absent, disabled or failed capability.
 Maestro re-orients from durable local authorities instead of treating a prior
 conversation as state:
 
-```text
-bcgos maestro status <workspace>
-```
-
-The versioned result reports onboarding/calibration, open-task count, an opaque
-active-work pointer, checkpoint presence, generated-memory state, attested
-capture-v2 count, maintenance state and one safe next action. Session Start
-renders the same bounded status. It never injects an execution item ID,
-objective, checkpoint body, transcript, client content or local path.
+Session Start re-orients from durable local authorities and renders a bounded
+status on every session open. The status reports onboarding/calibration,
+open-task count, an opaque active-work pointer, checkpoint presence,
+generated-memory state, attested capture-v2 count, maintenance state and one
+safe next action. It never injects an execution item ID, objective, checkpoint
+body, transcript, client content or local path.
 The status is rebuilt on every read, capped at 4 KiB and has no receipt/history
 store: growing ledgers and journals remain behind their versioned authorities
 and cannot grow Session Start state.
@@ -178,11 +175,11 @@ Its evidence readers are also bounded and fail closed: capture-v2 requires its
 workspace-local HMAC, while lifecycle and maintenance receipts are strictly
 validated before they can report `adapter_observed`.
 
-For work that crosses sessions, write an explicit bounded checkpoint and pause.
-The next session can resolve it with `bcgos work next --active --workspace
-<workspace>` and resume through a new fenced attempt. A hook cannot synthesize
-a checkpoint. `UserPromptSubmit` may retain only HMAC-attested selected-skill
-IDs; it does not store the prompt.
+For work that crosses sessions, write an explicit bounded checkpoint and pause
+using `/execution-continuity`. The next session can resolve the active item and
+resume through a new fenced attempt. A hook cannot synthesize a checkpoint.
+`UserPromptSubmit` may retain only HMAC-attested selected-skill IDs; it does
+not store the prompt.
 
 Runtime evidence stays split into `configured`, `adapter_observed`,
 `native_qualified` and `unavailable`. An installed adapter or local receipt is
@@ -265,7 +262,7 @@ closes the rows below it:
 
 The detailed contributor procedures and evidence boundaries live in the
 [development harness guide](docs/development-harness.md). It is a
-development-only surface and is not part of the `bcgos` product installation.
+development-only surface and is not part of the Maestro product installation.
 
 ## Pilot boundaries
 
@@ -302,7 +299,7 @@ development-only surface and is not part of the `bcgos` product installation.
 ### 👋 Pilot participant
 
 The repository is the factory, not the product installation. Pilot users will
-use a verified release and `bcgos` — not Git, Go, Python, Node or Docker.
+use a verified Maestro release (ZIP) — not Git, Go, Python, Node or Docker.
 Distribution is intentionally not yet declared ready until signed artifacts and
 clean-device evidence exist.
 
@@ -329,23 +326,17 @@ mergeability or pilot readiness.
 
 ### Automatic maintenance, with honest boundaries
 
-`bcgos maintenance status` shows whether the maintenance plane is merely
-prebuilt or actually executable. `bcgos maintenance catalog` exposes the
-platform-neutral job contracts; `bcgos maintenance wake --trigger presence`
-uses only persisted Canary enrollment and qualified local handlers. Install the
-attended macOS presence surface explicitly with
-`bcgos maintenance canary install-macos --confirm`; status distinguishes the
-plist, native loaded/enabled state, local timezone, due work and unavailable
-jobs. Enrollment is persisted as preauthorized local authority, not as
-per-wake attended consent. Windows remains fail-closed until native
-qualification. The macOS and Windows wake templates live under
-[`adapters/`](adapters) as disabled reference artifacts, not raw tasks inside
-the immutable base bundle. A wake-up never counts as a successful memory
-commit or wiki publication. If a timed-out handler is quarantined, status
-exposes the occurrence; recovery requires an exact, confirmed
-`canary recover-quarantine --job-id ... --scheduled-for ... --reason
-operator_confirmed_process_gone --confirm` operation and never auto-clears a
-live fence.
+The maintenance plane shows whether prebuilt jobs are actually executable.
+Platform-neutral job contracts are declared in `adapters/` as disabled
+reference artifacts; a qualified Canary enrollment activates them without
+turning wake-ups into implicit consents. Enrollment is persisted as
+preauthorized local authority, not per-wake attended consent. Windows remains
+fail-closed until native qualification. The macOS and Windows wake templates
+live under [`adapters/`](adapters), not in the immutable base bundle. A
+wake-up never counts as a successful memory commit or wiki publication. If a
+timed-out handler is quarantined, status exposes the occurrence; recovery
+requires an exact operator-confirmed operation and never auto-clears a live
+fence.
 
 ### For a pilot user
 
@@ -374,7 +365,7 @@ ingestion and governance are intentionally sequenced.
 | [`schemas/`](schemas) | JSON schemas for receipts, canary reports, identity and federation | Active |
 | [`installers/`](installers) | ZIP installer template and trial/wizard flows for end-user distribution | Active |
 | [`docs/`](docs) | Product documentation, onboarding guides, roadmap and release runbooks | Active |
-| [`dev/`](dev) | Contributor-only harness, governance and development skills; the `bcgos` CLI entrypoint is `dev/harness/main.go` | Active |
+| [`dev/`](dev) | Contributor-only harness, governance and development skills; the harness entrypoint is `go run ./dev/harness/main.go` | Active |
 | [`acceptance/`](acceptance) | Clean-device and pilot acceptance evidence | In progress |
 | [`internal/priorwork/`](internal/priorwork) | Governed organizational prior-work catalog and explicit retrieval | Local core validated; native Claude collection pending; Codex collection prohibited |
 | [`dist/`](dist) | Local release artifacts (ZIPs and SHA256 digests); not committed to CI | Local only |
@@ -383,71 +374,23 @@ Lifecycle adapter evidence is intentionally separated into configuration,
 direct-contract tests, adapter-command receipts and native-session proof. See
 [the lifecycle evidence matrix](specs/035-lifecycle-evidence-matrix.md).
 
-The following are source-level `bcgos` commands exposed by the current CLI.
-Their existence is not a promise that every capability is available in an
-authorized release; `doctor` and the command result are the authority for
-`unavailable`, `blocked` or `degraded` states.
+Maestro is operated entirely through Claude Code — no external CLI is required.
+The canonical entry points are skills invoked as slash-commands:
 
 ```text
-bcgos version
-bcgos init <workspace>
-bcgos status <workspace>
-bcgos doctor <workspace>
-bcgos profile show
-bcgos owner init
-bcgos owner expand status
-bcgos owner expand next
-bcgos agent interview
-bcgos agent personalize draft --stdin --consent --no-client-data
-bcgos agent personalize review --id <draft-id>
-bcgos agent personalize confirm --id <draft-id> --digest <sha256> --confirm
-bcgos atlas init <workspace>
-bcgos atlas status <workspace>
-bcgos skills index
-bcgos adapter install --runtime claude <workspace>
-bcgos adapter status --runtime claude <workspace>
-bcgos maintenance status
-bcgos maintenance catalog
-bcgos maintenance wake --trigger presence
-bcgos ingest --workspace <path> --source <local-file> --adapter markitdown
-bcgos workspace import inspect --source <external-workspace>
-bcgos workspace import plan --source <external-workspace> --destination <maestro-workspace> --out <plan.json>
-bcgos workspace import approve --plan <plan.json> --approved-by <owner> --confirm IMPORT --out <approval.json>
-bcgos workspace import execute --plan <plan.json> --approval <approval.json>
-bcgos workspace-migration status --runtime <claude|codex> [workspace]
-bcgos prior-work actor
-bcgos prior-work source status --workspace <path>
-bcgos prior-work source select --workspace <path> --stdin --confirm
-bcgos prior-work source defer --workspace <path> --confirm
-bcgos prior-work enroll --stdin --confirm
-bcgos prior-work status
-bcgos prior-work import --snapshot <json> --receipt <json>
-bcgos prior-work find --explicit --stdin --limit 5
-bcgos prior-work sync-due --runtime <claude|codex>
-bcgos session packet [workspace]
-bcgos maestro status [workspace]
-bcgos work schema
-bcgos work create --workspace <path> --stdin
-bcgos work start --workspace <path> --id <id>
-bcgos work checkpoint --workspace <path> --active --stdin
-bcgos work pause --workspace <path> --active
-bcgos work resume --workspace <path> --active
-bcgos work next --workspace <path> (--item <id> | --active)
-bcgos work evidence --workspace <path> --item <id> --revision <n> --attempt <id> --criterion <id>
-bcgos work complete --workspace <path> --item <id> --revision <n> --attempt <id>
-bcgos work inspect --workspace <path> --item <id>
-bcgos work export --workspace <path> --item <id>
-bcgos work delete --workspace <path> --item <id> --revision <n> --confirm
+/maestro-onboarding     guided first-session interview
+/maestro-doctor         read-only installation health check
+/maestro-operator       control-plane routing (loaded at SessionStart)
+/execution-continuity   register a task, checkpoint and resume across sessions
+/ingest-content         bounded local document ingestion
+/find-prior-work        explicit prior-work search from enrolled SharePoint folders
+/dream-memory           L1/L2/L3 dreaming and memory consolidation
 ```
 
-For the normal conversational flow, `--id` is an alias for `--item`, and
-`--active` resolves exactly one running or paused item without making the user
-carry its revision or attempt token. A checkpoint may send `{ "note": "..." }`;
-the CLI records it as the summary and supplies a safe default next step. The
-optimistic-concurrency fence remains active, so a stale value supplied
-explicitly still fails rather than overwriting a newer session. `--active` and
-`--item`/`--id` are mutually exclusive. Destructive deletion continues to
-require an explicit item, revision, and confirmation.
+For the contributor harness, the local fast gate is
+`go run ./dev/harness/main.go validate`; the complete gate is
+`go run ./dev/harness/main.go validate --full`. Neither proves CI, review or
+pilot readiness.
 
 ---
 

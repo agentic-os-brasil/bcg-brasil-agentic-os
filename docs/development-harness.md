@@ -1,8 +1,8 @@
 # Development harness
 
 O harness de desenvolvimento protege o repositório-fonte do BCG Brasil
-Agentic OS. Ele não é o `bcgos`, não é um runtime de agente e não é um canal
-de distribuição para pilotos.
+Agentic OS. Ele não é um runtime de agente e não é um canal de distribuição
+para pilotos — a distribuição é feita por ZIP privado verificado.
 
 ## Mapa rápido
 
@@ -67,8 +67,8 @@ rode `wiki reconcile`, `wiki validate` e `wiki verify`. Não edite manualmente
 `bundles/base/atlas/managed/`.
 
 Esse atlas é conteúdo de produto sanitizado e não é a wiki privada de owner ou
-workspace. O runtime ainda não oferece `bcgos wiki`/`bcgos knowledge` para
-compilar ou consultar uma wiki privada. Conteúdo de desenvolvimento,
+workspace. O runtime ainda não oferece skills de wiki privada para
+compilar ou consultar conteúdo de owner. Conteúdo de desenvolvimento,
 onboarding de contribuidores, decisões e dados locais ficam fora do bundle
 managed.
 

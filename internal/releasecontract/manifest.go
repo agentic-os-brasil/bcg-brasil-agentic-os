@@ -361,13 +361,12 @@ func validateComponents(cli CLIComponent, bundle BundleComponent) error {
 }
 
 func validateArtifacts(manifest Manifest) error {
-	if len(manifest.Artifacts) < 2 {
-		return errors.New("release requires at least one CLI artifact and one bundle artifact")
+	if len(manifest.Artifacts) < 1 {
+		return errors.New("release requires at least one bundle artifact")
 	}
 	names := map[string]bool{}
 	signatures := map[string]bool{}
 	platforms := map[string]bool{}
-	cliCount := 0
 	bundleCount := 0
 	for _, artifact := range manifest.Artifacts {
 		if artifact.Kind != "cli" && artifact.Kind != "bundle" && artifact.Kind != "runtime_pack" {
@@ -400,7 +399,6 @@ func validateArtifacts(manifest Manifest) error {
 		platforms[platform] = true
 		switch artifact.Kind {
 		case "cli":
-			cliCount++
 			if !strings.Contains(artifact.Name, manifest.CLI.Version) {
 				return errors.New("CLI artifact name must contain the CLI version")
 			}
@@ -411,8 +409,8 @@ func validateArtifacts(manifest Manifest) error {
 			}
 		}
 	}
-	if cliCount == 0 || bundleCount != 1 {
-		return errors.New("release requires at least one CLI artifact and exactly one bundle artifact")
+	if bundleCount != 1 {
+		return errors.New("release requires exactly one bundle artifact")
 	}
 	return nil
 }

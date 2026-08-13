@@ -7,9 +7,7 @@ description: Help the owner prepare considered feedback to give upward to a seni
 
 Help the owner work out what to say, and how to say it, before they say it.
 
-All reads and writes go through the owner atlas operations exposed by the
-installed runtime adapter (`bcgos atlas owner collect`, `create-page`,
-`append-entry`). Never edit an atlas page directly from this skill.
+All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## The boundary that defines this skill
 

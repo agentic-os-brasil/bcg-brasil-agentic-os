@@ -120,7 +120,7 @@ func RenderMarkdown(catalog Catalog) ([]byte, error) {
 		return nil, err
 	}
 	var output strings.Builder
-	output.WriteString("# BCGOS Skills Index\n\n")
+	output.WriteString("# Maestro Skills Index\n\n")
 	output.WriteString("> Generated from canonical product skills. Open a pointed SKILL.md only when the task requires it.\n\n")
 	output.WriteString("| Skill | Use when | Pointer |\n|---|---|---|\n")
 	for _, skill := range catalog.Skills {

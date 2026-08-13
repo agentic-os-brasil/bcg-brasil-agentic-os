@@ -49,7 +49,7 @@ observes the same events and receipts.
 
 ## Deterministic adapter bridge
 
-`bcgos maestro dispatch --stdin` accepts an optional bounded `agent_events`
+The internal adapter bridge (`go run ./dev/harness/main.go maestro dispatch --stdin`) accepts an optional bounded `agent_events`
 array. Each event contains only an agent identity, a closed decision and (when
 the agent returns work) a content digest. Maestro applies the events through
 the same `ChainState.Advance` transition authority used by the planner tests,

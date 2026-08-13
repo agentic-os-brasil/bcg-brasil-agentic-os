@@ -39,9 +39,9 @@ runtime enforcement where that adapter does not exist.
 
 ## Safe bootstrap
 
-`bcgos init` first registers a path-bound workspace identity, then creates the
-Case Agent control plane and only then exposes optional human Atlas
-bootstrap. Atlas initialization independently re-checks the registered
+Opening the workspace folder in Claude Code first registers a path-bound
+workspace identity, then creates the Case Agent control plane and only then
+exposes optional human Atlas bootstrap. Atlas initialization independently re-checks the registered
 identity, so callers of the internal package cannot substitute a workspace ID.
 The compact operational state retains IDs, lifecycle, current objective,
 approval and artifact pointers; briefs, evidence, stakeholder context and

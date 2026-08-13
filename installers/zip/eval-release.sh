@@ -719,26 +719,26 @@ else
   fail "maestro-doctor/SKILL.md not found — cannot check bundle names"
 fi
 
-# 12j: GAP-B — bcgos-operator skill exists and is registered in catalog
-BCGOS_OP_SKILL="$MAESTRO_DIR/bundles/base/skills/bcgos-operator/SKILL.md"
+# 12j: GAP-B — maestro-operator skill exists and is registered in catalog
+MAESTRO_OP_SKILL="$MAESTRO_DIR/bundles/base/skills/maestro-operator/SKILL.md"
 CATALOG="$MAESTRO_DIR/bundles/base/skills/catalog.json"
-if [ -f "$BCGOS_OP_SKILL" ]; then
-  pass "bcgos-operator/SKILL.md exists"
+if [ -f "$MAESTRO_OP_SKILL" ]; then
+  pass "maestro-operator/SKILL.md exists"
 else
-  fail "bcgos-operator/SKILL.md NOT found"
+  fail "maestro-operator/SKILL.md NOT found"
 fi
-if [ -f "$CATALOG" ] && grep -q '"bcgos-operator"' "$CATALOG"; then
-  pass "bcgos-operator registered in catalog.json"
+if [ -f "$CATALOG" ] && grep -q '"maestro-operator"' "$CATALOG"; then
+  pass "maestro-operator registered in catalog.json"
 else
-  fail "bcgos-operator NOT registered in catalog.json"
+  fail "maestro-operator NOT registered in catalog.json"
 fi
 
-# 12k: GAP-B — session-start-memory-inject.sh emits bcgos-operator pointer
+# 12k: GAP-B — session-start-memory-inject.sh emits maestro-operator pointer
 INJECT_HOOK_BUILT="$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh"
-if [ -f "$INJECT_HOOK_BUILT" ] && grep -q "bcgos-operator" "$INJECT_HOOK_BUILT"; then
-  pass "session-start-memory-inject.sh emits bcgos-operator pointer"
+if [ -f "$INJECT_HOOK_BUILT" ] && grep -q "maestro-operator" "$INJECT_HOOK_BUILT"; then
+  pass "session-start-memory-inject.sh emits maestro-operator pointer"
 else
-  fail "session-start-memory-inject.sh does NOT emit bcgos-operator pointer"
+  fail "session-start-memory-inject.sh does NOT emit maestro-operator pointer"
 fi
 
 # 12l: GAP-F — owner extended context tree scaffolded

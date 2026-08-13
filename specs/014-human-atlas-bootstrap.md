@@ -11,12 +11,11 @@ collapsing owner and workspace scopes.
 
 ## Local roots
 
-`bcgos atlas init <workspace-path>` requires an initialized, readable
-workspace and creates non-overwriting human orientation pages in two distinct
-private roots:
+Atlas initialization requires an initialized, readable workspace and creates
+non-overwriting human orientation pages in two distinct private roots:
 
 ```text
-<local BCGOS data>/atlas/owner/
+<local Maestro data>/atlas/owner/
   index.md
   learnings/index.md
   development/index.md
@@ -71,8 +70,8 @@ cross-root links, compilation, memory ingestion, provider access, search,
 task synchronization or Session Start injection. A human daily page may feed
 memory only through a future approved sanitization adapter.
 
-`bcgos atlas status <workspace-path>` reports the three root states without
-reading page bodies. Repeated initialization never overwrites a user page.
+The atlas status check reports the three root states without reading page
+bodies. Repeated initialization never overwrites a user page.
 
 ## Follow-up
 

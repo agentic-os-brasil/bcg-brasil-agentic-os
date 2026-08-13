@@ -386,12 +386,12 @@
       "path": "skills/INDEX.md"
     },
     {
-      "source": "bundles/base/skills/bcgos-operator/SKILL.md",
-      "path": "skills/bcgos-operator/SKILL.md"
+      "source": "bundles/base/skills/maestro-operator/SKILL.md",
+      "path": "skills/maestro-operator/SKILL.md"
     },
     {
-      "source": "bundles/base/skills/bcgos-operator/agents/openai.yaml",
-      "path": "skills/bcgos-operator/agents/openai.yaml"
+      "source": "bundles/base/skills/maestro-operator/agents/openai.yaml",
+      "path": "skills/maestro-operator/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/account-case-setup/SKILL.md",

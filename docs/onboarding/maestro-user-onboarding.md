@@ -15,11 +15,12 @@ repositório, use [`CONTRIBUTING.md`](../../CONTRIBUTING.md), o
 o fluxo de contribuidor descrito em
 [`windows-contributor-prompt.md`](windows-contributor-prompt.md).
 
-> **Estado atual:** o repositório tem a camada de contratos, CLI e adaptadores
-> em evolução. A distribuição de piloto, a assinatura dos artefatos e o
-> runtime local de ingestão ainda precisam de evidência própria. Se `doctor`
-> reportar `unavailable`, isso é um estado seguro e honesto — não uma falha a
-> ser contornada instalando Python, `pip`, chaves ou scripts externos.
+> **Estado atual:** o Maestro é distribuído como um ZIP privado e operado
+> inteiramente pelo Claude Code — não há CLI externo nem binário para instalar.
+> A distribuição de piloto, a assinatura dos artefatos e o runtime local de
+> ingestão ainda precisam de evidência própria. Se `/maestro-doctor` reportar
+> `unavailable`, isso é um estado seguro e honesto — não uma falha a ser
+> contornada instalando Python, `pip`, chaves ou scripts externos.
 >
 > Para recuperar trabalhos anteriores em pastas SharePoint autorizadas, use o
 > [onboarding específico de prior-work](sharepoint-prior-work-onboarding.md).
@@ -30,7 +31,7 @@ o fluxo de contribuidor descrito em
 
 | Você é | Use | Comandos principais | O que não fazer |
 | --- | --- | --- | --- |
-| **Participante de piloto ou usuário autorizado** | Este guia e um release privado verificado. | `bcgos version`, `init`, `status`, `doctor` e os comandos liberados pelo release. | Não clonar o repositório nem usar o harness de desenvolvimento para instalar o produto. |
+| **Participante de piloto ou usuário autorizado** | Este guia e um release privado verificado (ZIP). | `/maestro-onboarding`, `/maestro-doctor` e as skills liberadas pelo release. | Não clonar o repositório nem usar o harness de desenvolvimento para instalar o produto. |
 | **Contribuidor do repositório** | [`CONTRIBUTING.md`](../../CONTRIBUTING.md) e o [development harness](../development-harness.md). | `go run ./dev/harness doctor`, `setup`, `validate` e `validate --full`. | Não tratar um gate local como CI verde, review concluído, mergeabilidade ou autorização de piloto. |
 
 ### Estados que precisam permanecer separados
@@ -107,7 +108,7 @@ como lixeira de documentos ou como cópia do repositório.
 
 | Camada | Responsabilidade | Regra do usuário |
 | --- | --- | --- |
-| `bcgos` | CLI local para inicialização, diagnóstico, trabalho, perfil e inspeção. | Use os comandos do release autorizado. |
+| Slash-commands | Skills nativas invocadas pelo Claude Code: `/maestro-onboarding`, `/maestro-doctor`, `/execution-continuity`, `/ingest-content` etc. | Use apenas skills do bundle gerenciado; não improvise comandos externos. |
 | Core gerenciado | Contratos, políticas, schemas, skills e agentes aprovados. | Não edite nem substitua manualmente. |
 | Workspace | Contexto e artefatos privados do trabalho atual. | Mantenha apenas material autorizado e necessário. |
 | Adaptador | Traduz contratos do Maestro para Claude ou Codex. | Configuração local não prova que um runtime nativo está qualificado. |
@@ -167,79 +168,65 @@ Faça a primeira configuração em um workspace de teste. O roteiro abaixo mostr
 o destino da experiência; um comando que ainda não estiver liberado deve ser
 reportado como `unavailable`, nunca emulado manualmente.
 
-### Passo 1 — Verifique a instalação
+### Passo 1 — Instale e verifique
+
+Extraia o ZIP privado verificado para uma pasta local (ex: `~/maestro-workspace`)
+e abra essa pasta no Claude Code. O scaffold de primeira sessão cria
+automaticamente os arquivos de configuração necessários. Em seguida, invoque:
 
 ```text
-bcgos version
-bcgos doctor <workspace>
+/maestro-doctor
 ```
 
 O diagnóstico deve explicar, em linguagem simples:
 
-- versão do CLI e compatibilidade do bundle;
+- versão do bundle instalado e compatibilidade;
 - sistema operacional e runtime detectado;
 - capacidades `supported`, `degraded`, `blocked` ou `unavailable`;
 - se o workspace está dentro dos limites esperados;
 - qual é a próxima ação segura.
 
-Se `bcgos` não existir, pare. Não instale uma versão encontrada na internet,
-não rode `pip install`, não aceite um binário sem assinatura e não forneça
-credenciais no chat. O próximo passo é pedir o release privado autorizado ao
-responsável pela distribuição.
+Se o Claude Code não reconhecer `/maestro-doctor`, pare. Não instale nada
+encontrado na internet, não rode `pip install`, não aceite scripts sem
+assinatura e não forneça credenciais no chat. O próximo passo é pedir o
+release privado autorizado ao responsável pela distribuição.
 
 ### Passo 2 — Inicialize o workspace
 
-Depois de confirmar o caminho:
+Depois de confirmar o caminho da pasta, o scaffold automático do ZIP já terá
+criado a estrutura inicial. Para confirmar o estado e calibrar o runtime:
 
 ```text
-bcgos init <workspace>
-bcgos status <workspace-path-or-id>
-bcgos doctor <workspace-path-or-id>
-bcgos maestro status <workspace-path-or-id>
+/maestro-doctor
+/maestro-onboarding
 ```
 
-O `init` deve ser idempotente: executar novamente não pode apagar ou substituir
-configuração e dados existentes. O `status` mostra a situação; o `doctor`
-explica diagnósticos. `maestro status` reúne a calibração, tarefas abertas,
-checkpoint, memória, manutenção e evidência de runtime já existentes, com uma
-próxima ação segura. Nenhum desses comandos cria clientes, projetos ou conteúdo
-de trabalho sem pedido explícito.
+O scaffold é idempotente: reabrir a pasta não apaga configuração e dados
+existentes. `/maestro-doctor` explica diagnósticos e capacidades disponíveis;
+`/maestro-onboarding` reúne calibração, tarefas abertas, checkpoint, memória,
+manutenção e evidência de runtime já existentes, propondo a próxima ação segura.
+Nenhum desses comandos cria clientes, projetos ou conteúdo de trabalho sem
+pedido explícito.
 
-### Passo 2.1 — Conecte o Maestro ao seu runtime
+### Passo 2.1 — Verifique a configuração do runtime
 
-Depois do `init`, escolha o runtime que você usa no workspace:
+O ZIP entrega os hooks locais e deixa no workspace uma orientação completa e
+legível (`CLAUDE.md` e `AGENTS.md`) com os blocos do OS, além das skills reais
+do bundle em `.claude/skills/`. É possível abrir esses arquivos diretamente no
+editor. A instalação preserva texto que já exista; se uma skill gerenciada
+tiver sido alterada manualmente, ela para com `conflict` em vez de
+sobrescrevê-la.
 
-```text
-bcgos adapter install --runtime claude <workspace>
-# ou
-bcgos adapter install --runtime codex <workspace>
-```
-
-Esse passo instala os hooks locais e também deixa no próprio workspace uma
-orientação completa e legível (`CLAUDE.md` ou `AGENTS.md`) com os blocos do OS,
-além das skills reais do bundle em `.claude/skills/` ou `.codex/skills/`.
-Você pode abrir esses arquivos diretamente no editor. A instalação preserva
-texto que já exista; se uma skill gerenciada tiver sido alterada manualmente,
-ela para com `conflict` em vez de sobrescrevê-la.
-
-Confira o resultado:
-
-```text
-bcgos adapter status --runtime claude <workspace>
-```
-
-Troque `claude` por `codex` quando aplicável. A configuração local prepara o
-runtime, mas não prova que uma capability nativa já foi qualificada. Para isso,
-é necessária uma observação em uma sessão nativa nova; consulte a
+Execute `/maestro-doctor` para confirmar que o adapter está configurado
+corretamente. A configuração local prepara o runtime, mas não prova que uma
+capability nativa já foi qualificada. Para isso, é necessária uma observação
+em uma sessão nativa nova; consulte a
 [matriz de evidências do lifecycle](../../specs/035-lifecycle-evidence-matrix.md).
 
 ### Passo 3 — Escolha a profundidade de interação
 
-```text
-bcgos profile show
-```
-
-O perfil muda a quantidade de explicação e sugestões, não muda permissões:
+Durante o `/maestro-onboarding`, o Maestro pergunta qual nível de interação
+é preferido. O perfil muda a quantidade de explicação e sugestões, não muda permissões:
 
 - **standard:** uma recomendação segura, linguagem simples e o próximo passo;
 - **advanced:** a mesma rota, mais justificativa, diagnósticos e opções úteis;
@@ -274,39 +261,24 @@ autodescrição, não diagnóstico nem regra determinística de agente.
 
 ### Passo 4 — Inicialize o contexto profissional, se autorizado
 
-```text
-bcgos owner init
-bcgos atlas init <workspace>
-bcgos atlas status <workspace>
-bcgos skills index
-```
+O `/maestro-onboarding` conduz a inicialização do contexto do owner e do atlas
+em uma entrevista guiada. O contexto do owner é local, inspecionável e limitado
+às facetas autorizadas. O atlas navega fontes derivadas e governadas; ele não
+deve ser preenchido com segredos, dumps de conversa ou conteúdo de cliente sem
+política e consentimento.
 
-O contexto do owner é local, inspecionável e limitado às facetas autorizadas.
-O atlas navega fontes derivadas e governadas; ele não deve ser preenchido com
-segredos, dumps de conversa ou conteúdo de cliente sem política e consentimento.
-
-Depois da confirmação inicial, o Maestro pode oferecer uma única pergunta para
-aprofundar ou atualizar uma faceta profissional desconhecida ou antiga:
-
-```text
-bcgos owner expand status
-bcgos owner expand next
-```
-
-Você pode responder por texto ou voz; a versão de áudio é apenas uma formulação
-curta da mesma pergunta. A resposta vira um rascunho local somente com seu
+Depois da confirmação inicial, o Maestro pode oferecer, dentro da mesma
+conversa, uma única pergunta para aprofundar ou atualizar uma faceta profissional
+desconhecida ou antiga. A resposta vira um rascunho local somente com seu
 consentimento e sua declaração de que não contém dados de cliente. O Maestro
 mostra o rascunho inteiro e o digest; só a confirmação exata atualiza a faceta.
 Ele nunca deduz uma resposta, preenche lacunas sozinho ou altera o perfil
 psicológico.
 
-Se uma sessão for interrompida depois da criação do rascunho, `owner expand
-status` devolve `review_required` e o `open_draft_id`. O Maestro retoma o mesmo
-rascunho com `bcgos owner expand review --id <open_draft_id>`; ele não repete a
-pergunta nem procura arquivos locais. Depois que você revisar e confirmar o
-texto exato, a aplicação usa `bcgos owner expand confirm --id <id> --digest
-<review_digest> --confirm`. Esse digest pertence à expansão SELF e não deve ser
-passado para `owner onboarding confirm`.
+Se uma sessão for interrompida antes de confirmar um rascunho, ao retomar o
+Maestro informará o rascunho pendente e oferecerá revisá-lo antes de qualquer
+nova pergunta. O digest de expansão não deve ser reutilizado fora do fluxo de
+onboarding.
 
 ### Passo 4.1 — Escolha as fontes SharePoint do projeto
 
@@ -317,34 +289,16 @@ instalador não pede essa fonte antes de criar o workspace: o conteúdo derivado
 será lido e organizado dentro dele. Você pode adiar sem perder funcionalidade;
 essa escolha fica registrada e o Maestro não repete a pergunta em toda sessão.
 
-Para inspecionar o estado:
-
-```text
-bcgos prior-work source status --workspace <workspace>
-```
-
-Se você escolher conectar, o Maestro mostra as URLs canônicas das pastas para
-revisão e envia um JSON estrito por entrada padrão para:
-
-```text
-bcgos prior-work source select --workspace <workspace> --stdin --confirm
-```
-
-Se preferir começar sem a fonte:
-
-```text
-bcgos prior-work source defer --workspace <workspace> --confirm
-```
+Para inspecionar o estado e selecionar fontes, diga ao Maestro que deseja
+conectar pastas SharePoint — ele guiará o processo de seleção e registro dentro
+da conversa. Se preferir começar sem a fonte, diga "quero adiar a conexão
+SharePoint" e a escolha ficará registrada.
 
 Essa primeira etapa registra somente ponteiros exatos em armazenamento privado
 local. Com um passe one-and-done ativo, a seleção vincula o fingerprint exato a
-esse passe e o Maestro não pergunta novamente por comando, diagnóstico ou
-leitura do mesmo escopo. Um coletor Claude qualificado lê apenas o escopo
-aprovado e envia um lote assinado para:
-
-```text
-bcgos prior-work rationale ingest --workspace <workspace> --stdin --confirm
-```
+esse passe e o Maestro não pergunta novamente na mesma sessão ou em leituras
+do mesmo escopo. Um coletor Claude qualificado lê apenas o escopo aprovado e
+envia o lote assinado para ingestão.
 
 O Maestro grava apenas racionais derivados em
 `brain/knowledge/sharepoint-rationales/`, ordenados pelos materiais mais
@@ -419,9 +373,8 @@ run IDs, revisões, JSON ou comandos do ledger ao owner durante o fluxo normal.
 Ao abrir uma nova sessão, leia os artefatos de tarefa e checkpoint do workspace,
 confirme o escopo e continue pelo último próximo passo revisado. Se não houver
 item ativo, diga isso e ofereça criar um; se houver mais de um, pergunte qual
-deve continuar. A superfície determinística `bcgos work` permanece disponível
-para compatibilidade, recuperação e integrações avançadas, mas não é requisito
-para registrar ou retomar trabalho novo.
+deve continuar. O `/execution-continuity` é a entrada canônica para registrar e retomar trabalho
+novo; use-o como primeira opção.
 
 Um runtime configurado ou um receipt local pode aparecer como `configured` ou
 `adapter_observed`; isso não significa `native_qualified`. `unavailable`
@@ -471,11 +424,13 @@ Para formatos cobertos por um fallback aprovado, o route selector pode usar o
 MarkItDown local. Ele é um componente delimitado do runtime pack, não uma
 instalação Python para o usuário.
 
-Exemplo da superfície prevista:
+Exemplo de invocação:
 
 ```text
-bcgos ingest --workspace <workspace> --source <arquivo-local> --adapter markitdown
+/ingest-content
 ```
+
+O Maestro pergunta a fonte, o workspace autorizado e o adapter disponível.
 
 O resultado deve informar rota, fidelidade, proveniência, retenção e limitações.
 As garantias são:
@@ -527,16 +482,16 @@ seria perigosa:
   uma nova ferramenta, raiz ou agente.
 
 Antes de qualquer uso, pergunte: “a fonte está autorizada, o destino está
-correto e a ação é reversível?”. Se uma resposta for não, pause e use
-`bcgos doctor` ou o responsável pelo ambiente.
+correto e a ação é reversível?”. Se uma resposta for não, pause e execute
+`/maestro-doctor` ou consulte o responsável pelo ambiente.
 
 ## 10. Rotina recomendada de adoção
 
 ### Primeiro dia — provar o caminho
 
-1. Configurar um workspace vazio.
-2. Rodar `status` e `doctor`.
-3. Escolher o perfil de interação.
+1. Extrair o ZIP e abrir a pasta no Claude Code.
+2. Executar `/maestro-doctor` e confirmar capacidades.
+3. Escolher o perfil de interação via `/maestro-onboarding`.
 4. Completar uma tarefa pequena com critério de sucesso.
 5. Fazer pause/resume e confirmar que o próximo passo ficou legível.
 
@@ -559,7 +514,7 @@ critério de produção.
 
 | Situação | Interpretação | Próxima ação |
 | --- | --- | --- |
-| `bcgos` não encontrado | O release não está instalado ou não está autorizado. | Pare e solicite o canal privado correto. |
+| Slash-commands não reconhecidos pelo Claude Code | O ZIP não foi extraído corretamente ou a pasta não foi aberta no Claude Code. | Feche e reabra a pasta; se persistir, solicite o release privado correto. |
 | `unavailable` | A capacidade existe no contrato, mas falta runtime/evidência. | Não emule; registre a limitação e aguarde a instalação aprovada. |
 | `blocked` | Política, escopo, assinatura ou pré-condição impediu a ação. | Leia o motivo, corrija a condição autorizada e tente novamente. |
 | `degraded` | A ação é possível com uma lacuna explícita. | Revise a fidelidade e confirme antes de usar o resultado. |
@@ -574,13 +529,13 @@ documentos, nomes de cliente ou conteúdo de prompt.
 
 ## 12. Checklist de conclusão
 
-- [ ] Release privado e autorizado confirmado.
-- [ ] `bcgos version` executado.
+- [ ] Release privado (ZIP) e autorizado confirmado.
+- [ ] ZIP extraído e pasta aberta no Claude Code.
 - [ ] Workspace local escolhido e confirmado.
-- [ ] `bcgos init`, `status` e `doctor` concluídos.
-- [ ] Perfil de interação entendido.
+- [ ] `/maestro-doctor` executado e capacidades revisadas.
+- [ ] `/maestro-onboarding` concluído (calibração e perfil de interação).
 - [ ] Primeira tarefa pequena concluída com critério.
-- [ ] Checkpoint, pause e resume testados.
+- [ ] Checkpoint, pause e resume testados via `/execution-continuity`.
 - [ ] Ingestão testada apenas quando o runtime pack estiver qualificado.
 - [ ] Limitações e próximos passos registrados sem conteúdo sensível.
 - [ ] Responsável por suporte e incidente conhecido.
