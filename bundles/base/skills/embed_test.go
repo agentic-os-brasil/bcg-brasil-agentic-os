@@ -16,8 +16,9 @@ func TestGuidedOwnerSkillsCarryExactResumableReviewCommands(t *testing.T) {
 			id: "maestro-onboarding",
 			required: []string{
 				"Maestro Onboarding",
-				"data/profile/identity.json",
-				"data/profile/onboarding.json",
+				"owner onboarding status",
+				"owner onboarding select --track",
+				"owner onboarding confirm --digest",
 				"interaction-profile",
 			},
 		},
