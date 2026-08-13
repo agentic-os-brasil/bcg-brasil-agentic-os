@@ -34,8 +34,8 @@ flowchart LR
 | Codex native invocation | adapter docs and lifecycle probe | qualifying Codex session | unavailable: native observation pending |
 
 The attended local Canary is explicit and uses the same `darwin` identity and
-`health/maestro-system` scope for health and housekeeping. `bcgos maintenance
-canary install-macos --confirm` persists the validated IANA timezone and exact
+`health/maestro-system` scope for health and housekeeping. The canary install
+maintenance job (`/maintenance canary install-macos --confirm`) persists the validated IANA timezone and exact
 activated job digests, then reports filesystem and native lifecycle state
 separately. Daily Darwin housekeeping and the operational portion of weekly
 deep review are contract-tested and locally executable after enrollment: they
@@ -63,8 +63,8 @@ The deterministic CLI exposes the same contract for an operator or a headless
 runner:
 
 ```sh
-bcgos agent darwin assess --stdin
-bcgos agent darwin housekeeping --stdin
+/darwin assess --stdin
+/darwin housekeeping --stdin
 ```
 
 Housekeeping requires three separately supplied capability values through

@@ -72,6 +72,11 @@ independent reviewer.
 
 ## Exact CLI surface
 
+> **Superseded** — The `bcgos` CLI was removed in PR #349 (2026-08-13) and replaced by
+> the ZIP + slash-command (Maestro) model. The command names below use the current
+> slash-command form. For the authoritative current surface, see
+> [MAESTRO-CANARY.md](MAESTRO-CANARY.md).
+
 The following commands are the current CLI contract. Commands below are
 documented for a future run; this document does not claim that they have been
 executed for the release under review.
@@ -79,21 +84,21 @@ executed for the release under review.
 ### Maintenance contract and local Canary
 
 ```text
-bcgos maintenance catalog
-bcgos maintenance status
-bcgos maintenance wake \
+/maintenance catalog
+/maintenance status
+/maintenance wake \
   --trigger presence|daily|weekly|monthly \
   [--workspace ID] [--attended]
 
-bcgos maintenance canary install-macos \
+/maintenance canary install-macos \
   --workspace-path PATH \
   --executable PATH \
   --confirm [--home PATH] [--launchctl]
-bcgos maintenance canary status [--home PATH] [--launchctl]
-bcgos maintenance canary pause --confirm [--home PATH] [--launchctl]
-bcgos maintenance canary resume --confirm [--home PATH] [--launchctl]
-bcgos maintenance canary uninstall --confirm [--home PATH] [--launchctl]
-bcgos maintenance canary recover-quarantine \
+/maintenance canary status [--home PATH] [--launchctl]
+/maintenance canary pause --confirm [--home PATH] [--launchctl]
+/maintenance canary resume --confirm [--home PATH] [--launchctl]
+/maintenance canary uninstall --confirm [--home PATH] [--launchctl]
+/maintenance canary recover-quarantine \
   --job-id ID \
   --scheduled-for RFC3339 \
   --reason operator_confirmed_process_gone \
@@ -116,8 +121,8 @@ current user's data root. Therefore a fixture-home enrollment is suitable for
 filesystem lifecycle evidence, but not for an end-to-end fixture worker wake.
 Do not present that fixture as a runtime result.
 
-Do not treat `bcgos maintenance wake --trigger event --event-id ID` as scheduled
-job evidence in a Canary. The CLI validates the event identity, but
+Do not treat `/maintenance wake --trigger event --event-id ID` as scheduled
+job evidence in a Canary. The implementation validates the event identity, but
 `internal/cli/maintenance.go:schedulerJobsForTrigger("event")` returns no
 concrete scheduler job. The expected result is no event execution evidence;
 record the path as `unavailable`/STOP until an event job is bound to the route.
@@ -128,10 +133,10 @@ The acceptance run must distinguish a reproducible defect from an intentionally
 unavailable capability:
 
 - agent identity personalization must accept the canonical managed IDs emitted
-  by `bcgos agent identity` (`maestro`, `walter`, `darwin`) as well as the
+  by the Maestro agent identity service (`maestro`, `walter`, `darwin`) as well as the
   documented omitted-ID form;
 - top-level `status`, `doctor` and `maestro status` accept either a workspace
-  path or an ID bound by `bcgos init`; ID resolution is private, fail-closed and
+  path or an ID bound by the initial workspace setup; ID resolution is private, fail-closed and
   never searches user files;
 - Docling/MarkItDown ingestion remains a release gap, not a successful base
   capability, until Q-037 is closed and a verified platform pack is installed;
@@ -146,11 +151,11 @@ unavailable capability:
 The direct deterministic Darwin contract is a separate surface:
 
 ```text
-bcgos agent darwin assess --stdin
+/darwin assess --stdin
 BCGOS_MAESTRO_CAPABILITY=AUTHORIZED_VALUE \
 BCGOS_DARWIN_CAPABILITY=AUTHORIZED_VALUE \
 BCGOS_RECOVERY_CAPABILITY=AUTHORIZED_VALUE \
-  bcgos agent darwin housekeeping --stdin < health-packet.json
+  /darwin housekeeping --stdin < health-packet.json
 ```
 
 These commands prove the local contract only. They do not qualify Claude,
@@ -341,7 +346,7 @@ mutable asset replacement, credential leakage or failed attestation.
 
 **Rollback:** activate the previously approved release through the authenticated
 bootstrapper, bound to its provider release ID, manifest digest and activation
-receipt. The repository has no `bcgos rollback` command and no generic release
+receipt. There is no generic rollback slash command and no generic release
 rollback workflow; release-level rollback is therefore `unavailable`/STOP
 until the external provider/bootstrapper invocation and receipt contract are
 attached. Never retag, replace assets or use an unsigned override.
@@ -360,8 +365,8 @@ attached. Never retag, replace assets or use an unsigned override.
 The clean-device scripts are the currently executable rollback surface. They
 invoke the approved bootstrapper's `rollback --data-root DATA_ROOT` only after
 binding the active release to the prior update activation receipt. Use the full
-platform command below; do not substitute `bcgos update --confirm`, which is an
-update activation, not a rollback.
+platform command below; do not substitute the update activation slash command
+(`/update --confirm`), which activates an update, not a rollback.
 
 ```text
 bash acceptance/clean-device/macos.sh \
