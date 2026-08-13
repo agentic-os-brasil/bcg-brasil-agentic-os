@@ -124,8 +124,9 @@ Do not present that fixture as a runtime result.
 
 Do not treat the event-wake maintenance job (`--trigger event --event-id ID`) as scheduled
 job evidence in a Canary. The implementation validates the event identity, but
-`internal/cli/maintenance.go:schedulerJobsForTrigger("event")` returns no
-concrete scheduler job. The expected result is no event execution evidence;
+`internal/maintenance/catalog.go:Catalog.ForTrigger("event")` returns only
+jobs whose trigger matches "event" in the catalog — and the current catalog
+contains no event-triggered jobs. The expected result is no event execution evidence;
 record the path as `unavailable`/STOP until an event job is bound to the route.
 
 ## Interpreting the v0.1.20 product Canary
@@ -368,8 +369,8 @@ attached. Never retag, replace assets or use an unsigned override.
 The clean-device scripts are the currently executable rollback surface. They
 invoke the approved bootstrapper's `rollback --data-root DATA_ROOT` only after
 binding the active release to the prior update activation receipt. Use the full
-platform command below; do not substitute the update activation slash command
-(`/update --confirm`), which activates an update, not a rollback.
+platform command below; do not substitute an update activation command
+(which activates an update, not a rollback).
 
 ```text
 bash acceptance/clean-device/macos.sh \
