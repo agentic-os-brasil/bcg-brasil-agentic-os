@@ -64,13 +64,19 @@ Não tentar leitura sem conector. Não propor coletor externo. Não gravar nada.
 - **É:** camada leve de conceitos e pointers, permite ao Maestro rodar `find-prior-work` e `wayfinder` com contexto sem re-ler o SharePoint.
 - **Não é:** substituto do SharePoint, memória canônica de decisão, nem base para citação em entregável de cliente sem re-verificação na fonte.
 
+## Failure modes & atomicity
+
+- Escrita per-doc é idempotente por `<doc-slug>.md`: reingerir o mesmo documento substitui o rationale anterior sem tocar nos vizinhos.
+- `_index.md` só é escrito **após** todos os per-doc do pass terem sucesso. Não há `_index.md` parcial.
+- Falha parcial (ex: doc 7 de 12 falha no `ingest-content`): os per-doc já escritos permanecem no lugar (retomáveis no próximo pass), `_index.md` não é escrito, e `sharepoint-config.json` recebe `ingest_status: "partial"` com `pending_docs: [<doc-slug>, ...]` para o próximo pass consumir.
+- Pass completo com sucesso zera `ingest_status` de volta para `"complete"` e regenera `_index.md` do zero.
+- Reentrância no mesmo `folder-slug`: pass novo assume o estado corrente da pasta remota, sobrescreve per-doc por slug e regenera o índice; não mescla índices antigos.
+
 ## Invariantes
 
 - Nunca lê pasta fora de `folder_urls`.
 - Nunca escreve fora de `data/memory/sharepoint-rationales/` e `brain/knowledge/sharepoint-rationales/`.
 - Sem conector MCP presente, a skill não grava nada.
-- Pass interrompido no meio não deixa `_index.md` parcial: index só é escrito na etapa final, tudo-ou-nada.
-- Um mesmo `<doc-slug>` re-ingerido substitui o rationale anterior; o índice é regenerado do zero a cada pass.
 - Nenhuma chamada a provedor remoto além do próprio conector MCP autorizado pelo owner.
 
 ## Fora do escopo
