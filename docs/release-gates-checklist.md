@@ -11,7 +11,7 @@ covered.
 
 | Gate | What it proves | Required evidence | Pilot claim |
 | --- | --- | --- | --- |
-| Maintenance Canary | An attended local maintenance rehearsal obeys the runtime-neutral catalog, authority, lease and metadata-only receipt contract. | `/maintenance catalog`, `/maintenance status`, bounded wake/lifecycle evidence, exact workspace/home identity and no content-bearing receipts. | Engineering/maintenance evidence only. No native or release claim. |
+| Maintenance Canary | An attended local maintenance rehearsal obeys the runtime-neutral catalog, authority, lease and metadata-only receipt contract. | Maintenance catalog and status checks, bounded wake/lifecycle evidence, exact workspace/home identity and no content-bearing receipts. | Engineering/maintenance evidence only. No native or release claim. |
 | Native qualification | A fresh target-runtime/platform session invokes the exact installed adapter and proves identity, grants, fencing, recovery and negative cases. | Runtime/platform identity, observed lifecycle event, qualification digest, metadata-only receipts and independent review. | Runtime-qualified only. No signed-release or pilot claim. |
 | Technical rehearsal | The repository can produce and close a deterministic candidate on all supported targets. | Full development harness; Windows amd64 and macOS amd64/arm64 builds; native `version` smoke tests; candidate manifest/artifact closure; unsigned artifact digests. | Engineering evidence only. No authenticity, publication or pilot claim. |
 | Signed release | Approved authorities produced and published one immutable, authenticated release set. | Protected `main`; approved `maestro-prerelease` environment; active Ed25519 key in the authority registry; Authenticode verification; Developer ID signing and notarization/assessment; authenticated private provider; immutable release/tag; exact asset closure and provider attestation. | Signed prerelease. Still not pilot-ready. |
@@ -21,13 +21,12 @@ covered.
 
 ### 1. Maintenance Canary (local, attended, non-release)
 
-- [ ] `/maintenance catalog` and `/maintenance status` are recorded
+- [ ] The maintenance catalog and status checks are recorded
   for the exact source/run identity.
 - [ ] The catalog remains `catalog_only` unless separate qualification evidence
   has promoted the exact job tuple.
-- [ ] Any macOS lifecycle install uses the canary install maintenance job
-  (`/maintenance canary install-macos --confirm`); fixture homes are labeled
-  filesystem-only.
+- [ ] Any macOS lifecycle install uses the canary install maintenance job;
+  fixture homes are labeled filesystem-only.
 - [ ] `maintenance wake` is not run against a fixture-home enrollment because
   the current command has no `--home` selector.
 - [ ] `unavailable`, `busy`, failed and quarantined outcomes remain explicit;

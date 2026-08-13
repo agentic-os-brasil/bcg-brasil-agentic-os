@@ -72,33 +72,34 @@ independent reviewer.
 
 ## Exact CLI surface
 
-> **Superseded** — The `bcgos` CLI was removed in PR #349 (2026-08-13) and replaced by
-> the ZIP + slash-command (Maestro) model. The command names below use the current
-> slash-command form. For the authoritative current surface, see
-> [MAESTRO-CANARY.md](MAESTRO-CANARY.md).
+> **Superseded** — The `bcgos` standalone CLI was removed in PR #349 (2026-08-13).
+> The code blocks below are **legacy reference only** — they document the `bcgos`
+> command forms that no longer exist. For the current invocation model (ZIP +
+> slash-command Maestro), see [MAESTRO-CANARY.md](MAESTRO-CANARY.md). Phase
+> checklists in this document remain valid; they describe operations, not specific
+> command syntax.
 
-The following commands are the current CLI contract. Commands below are
-documented for a future run; this document does not claim that they have been
-executed for the release under review.
+The following commands documented the CLI contract. Recorded here for historical
+evidence traceability; these commands have been removed.
 
-### Maintenance contract and local Canary
+### Maintenance contract and local Canary (legacy — superseded)
 
 ```text
-/maintenance catalog
-/maintenance status
-/maintenance wake \
+bcgos maintenance catalog
+bcgos maintenance status
+bcgos maintenance wake \
   --trigger presence|daily|weekly|monthly \
   [--workspace ID] [--attended]
 
-/maintenance canary install-macos \
+bcgos maintenance canary install-macos \
   --workspace-path PATH \
   --executable PATH \
   --confirm [--home PATH] [--launchctl]
-/maintenance canary status [--home PATH] [--launchctl]
-/maintenance canary pause --confirm [--home PATH] [--launchctl]
-/maintenance canary resume --confirm [--home PATH] [--launchctl]
-/maintenance canary uninstall --confirm [--home PATH] [--launchctl]
-/maintenance canary recover-quarantine \
+bcgos maintenance canary status [--home PATH] [--launchctl]
+bcgos maintenance canary pause --confirm [--home PATH] [--launchctl]
+bcgos maintenance canary resume --confirm [--home PATH] [--launchctl]
+bcgos maintenance canary uninstall --confirm [--home PATH] [--launchctl]
+bcgos maintenance canary recover-quarantine \
   --job-id ID \
   --scheduled-for RFC3339 \
   --reason operator_confirmed_process_gone \
@@ -121,7 +122,7 @@ current user's data root. Therefore a fixture-home enrollment is suitable for
 filesystem lifecycle evidence, but not for an end-to-end fixture worker wake.
 Do not present that fixture as a runtime result.
 
-Do not treat `/maintenance wake --trigger event --event-id ID` as scheduled
+Do not treat the event-wake maintenance job (`--trigger event --event-id ID`) as scheduled
 job evidence in a Canary. The implementation validates the event identity, but
 `internal/cli/maintenance.go:schedulerJobsForTrigger("event")` returns no
 concrete scheduler job. The expected result is no event execution evidence;
@@ -148,14 +149,16 @@ unavailable capability:
 - lifecycle receipts prove observed events, while native qualification remains
   a separate attended runtime gate.
 
-The direct deterministic Darwin contract is a separate surface:
+The direct deterministic Darwin contract is a separate surface (legacy `bcgos`
+invocation shown for reference — see [MAESTRO-CANARY.md](MAESTRO-CANARY.md) for
+the current model):
 
 ```text
-/darwin assess --stdin
+bcgos agent darwin assess --stdin
 BCGOS_MAESTRO_CAPABILITY=AUTHORIZED_VALUE \
 BCGOS_DARWIN_CAPABILITY=AUTHORIZED_VALUE \
 BCGOS_RECOVERY_CAPABILITY=AUTHORIZED_VALUE \
-  /darwin housekeeping --stdin < health-packet.json
+  bcgos agent darwin housekeeping --stdin < health-packet.json
 ```
 
 These commands prove the local contract only. They do not qualify Claude,
