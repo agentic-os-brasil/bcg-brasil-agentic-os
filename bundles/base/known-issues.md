@@ -15,6 +15,14 @@ Ordem: mais recente no topo. Remover entradas resolvidas quando a versão que co
 
 ---
 
+## preferences-json-migration
+
+- **Sintoma:** Após atualizar para v0.1.9+, preferências de estilo definidas no onboarding (como `interaction_profile`) deixam de ser injetadas na sessão de forma silenciosa.
+- **Causa:** Versões anteriores ao v0.1.9 criavam `data/profile/preferences.json` como arquivo canônico de preferências. A partir do v0.1.9 o arquivo canônico é `data/profile/style.json` (criado pelo onboarding). Se o `style.json` não existir, a injeção de preferências simplesmente não ocorre — sem erro visível.
+- **Contorno:** Rodar `maestro-onboarding` novamente (diga "rodar onboarding" no chat). O onboarding cria `style.json` com as preferências confirmadas. O arquivo `preferences.json` antigo pode ser ignorado — não causa erro.
+
+---
+
 ## claude-project-dir-nonstandard-path
 
 - **Sintoma:** Ao abrir a pasta em `/tmp`, em um caminho com espaços, em drive externo ou em qualquer path não-padrão, a workspace `data/` pode não ser criada na primeira sessão e nenhum erro visível aparece.

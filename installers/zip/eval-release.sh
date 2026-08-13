@@ -526,7 +526,7 @@ for tier in recent weekly medium-term lifetime policies; do
 done
 
 # 12b: Profile placeholder files exist
-for pfile in identity.json preferences.json; do
+for pfile in identity.json; do
   if [ -f "$MAESTRO_DIR/data/profile/$pfile" ]; then
     pass "data/profile/$pfile placeholder created by scaffold"
   else
@@ -575,11 +575,11 @@ else
   fail "settings.json does NOT wire session-start-memory-inject.sh to SessionStart"
 fi
 
-# 12e: settings.json wires dream marker to SessionEnd
-if grep -q "session-stop-dream.sh" "$SETTINGS" && grep -q "SessionEnd" "$SETTINGS"; then
-  pass "settings.json wires session-stop-dream.sh to SessionEnd"
+# 12e: settings.json wires dream marker to Stop
+if grep -q "session-stop-dream.sh" "$SETTINGS" && grep -q '"Stop"' "$SETTINGS"; then
+  pass "settings.json wires session-stop-dream.sh to Stop"
 else
-  fail "settings.json does NOT wire session-stop-dream.sh to SessionEnd"
+  fail "settings.json does NOT wire session-stop-dream.sh to Stop"
 fi
 
 # 12f: session-stop-dream.sh produces .dream-requested marker

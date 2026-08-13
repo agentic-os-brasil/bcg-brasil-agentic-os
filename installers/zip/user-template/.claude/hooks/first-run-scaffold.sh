@@ -448,19 +448,6 @@ EOF
   log_line "WRITE OK  data/profile/identity.json (placeholder)"
 fi
 
-if [ ! -f "$DATA_DIR/profile/preferences.json" ]; then
-  cat > "$DATA_DIR/profile/preferences.json" 2>/dev/null <<'EOF'
-{
-  "schema_version": 1,
-  "language": "pt-BR",
-  "response_style": "direct",
-  "interaction_profile": "standard",
-  "initialized": false
-}
-EOF
-  log_line "WRITE OK  data/profile/preferences.json (placeholder)"
-fi
-
 printf '%s\n' "$TS" > "$MARKER" 2>/dev/null
 log_line "DONE  marker written"
 
