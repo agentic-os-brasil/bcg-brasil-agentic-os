@@ -144,6 +144,19 @@ professional baseline; do not emulate ingestion from conversation.
    confirmed profile file: `data/profile/identity.json`, `data/profile/style.json`,
    and `data/profile/onboarding.json` with `status: "complete"`. Ask the owner for an
    explicit final review before marking complete.
+6. In addition to the profile JSON files, write each confirmed facet to
+   `data/owner/self/<facet-name>.md` using the reviewed draft content. The facet
+   file names match the canonical facets used by the scaffold: `owner-identity`,
+   `personal-context`, `professional-role`, `communication-style`, `voice`,
+   `preferences`, `motivations`, `quality-bar`, `decision-rules`,
+   `working-boundaries`. Overwrite only the placeholders the scaffold created;
+   never write to a facet the owner did not confirm in this session. Each file
+   uses the layout `# <facet>\n\n## Current\n\n<reviewed draft>\n`. This is the
+   canonical location the `session-start-memory-inject.sh` hook reads to inject
+   owner SELF context into future sessions — without this step, subsequent
+   sessions silently lose the owner context even though `profile/` is correct.
+   For the **quick** track, write only the six facets covered by the track and
+   leave the remaining four as scaffold placeholders.
 
 ## Completion and follow-through
 

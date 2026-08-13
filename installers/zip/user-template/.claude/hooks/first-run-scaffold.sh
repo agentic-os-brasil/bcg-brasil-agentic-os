@@ -169,7 +169,28 @@ fi
 # Without this, dream-memory silently refuses to write against pre-existing
 # workspaces because .schema-version is missing.
 # ---------------------------------------------------------------------------
+# Ensure data/memory/ itself exists before backfilling tiers. Covers workspaces
+# where data/.initialized was written outside the scaffold (backup restore,
+# manual copy, dev pre-population) and data/memory/ never got created.
+if [ -d "$DATA_DIR" ] && [ ! -d "$DATA_DIR/memory" ]; then
+  mkdir -p "$DATA_DIR/memory" 2>/dev/null && \
+    log_line "BACKFILL  data/memory/ (root mkdir — missing from pre-existing workspace)"
+fi
+
 if [ -d "$DATA_DIR/memory" ]; then
+  # Memory tier sub-dirs — required by dream-memory + session-start-memory-inject.
+  # Idempotent. Runs even when data/.initialized already exists (workspaces
+  # restored from backup, copied manually, or pre-populated in dev), where the
+  # first-run branch never executed. Without this, emit_latest_file/emit_all_files
+  # find nothing and dream-memory refuses to write because the tier target is
+  # missing.
+  for tier in recent weekly medium-term lifetime policies; do
+    if [ ! -d "$DATA_DIR/memory/$tier" ]; then
+      mkdir -p "$DATA_DIR/memory/$tier" 2>/dev/null && \
+        log_line "BACKFILL  data/memory/$tier (tier mkdir)"
+    fi
+  done
+
   MEMORY_GITIGNORE="$DATA_DIR/memory/.gitignore"
   if [ ! -f "$MEMORY_GITIGNORE" ]; then
     printf '.dream-requested\n' > "$MEMORY_GITIGNORE" 2>/dev/null && \
