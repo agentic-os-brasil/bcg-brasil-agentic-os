@@ -453,6 +453,20 @@ func writeNewJSONInDirectory(directory *secureDirectory, name string, value any)
 // ValidateSchemaFile keeps the published scheduler-state contract wired into
 // the executable test suite without introducing a runtime schema dependency.
 func ValidateSchemaFile(path string) error {
+	// Resolve symlinks so that secureReadFile can walk the path without
+	// hitting a symlink component (e.g. /tmp → /private/tmp on macOS).
+	// filepath.Abs must precede EvalSymlinks: EvalSymlinks preserves relative
+	// paths unchanged, so the symlink in /tmp is only resolved when the path
+	// is already absolute.
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return err
+	}
+	path = resolved
 	var schema map[string]any
 	if err := readStrictJSON(path, &schema); err != nil {
 		return err
