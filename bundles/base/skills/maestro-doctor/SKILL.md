@@ -25,7 +25,7 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
    - `data/agents/`, `data/memory/`, `data/profile/`, `data/workspaces/`, `data/owner/` exist
    - `data/.initialized` exists (created by first-run-scaffold on session 1)
 
-3. **Hooks wired** — read `.claude/settings.json` and confirm SessionStart lists both `first-run-scaffold.sh` and `session-start-memory-inject.sh`, and SessionStop lists `session-stop-dream.sh`.
+3. **Hooks wired** — read `.claude/settings.json` and confirm SessionStart lists both `first-run-scaffold.sh` and `session-start-memory-inject.sh`, and SessionEnd lists `session-stop-dream.sh`.
 
 4. **Version readable** — read `VERSION`, confirm it matches `X.Y.Z` shape.
 

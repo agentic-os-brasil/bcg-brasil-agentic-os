@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "bundle_id": "maestro-base",
-  "bundle_version": "0.1.6",
+  "bundle_version": "0.1.7",
   "format": "okf-1",
   "provenance": {
     "publisher": "BCG Brasil Agentic OS",
@@ -27,7 +27,18 @@
         "criticality": "required"
       },
       {
-        "event": "stop",
+        "event": "user_prompt_submit",
+        "installer_path": ".claude/hooks/context-inject-userprompt.sh",
+        "criticality": "recommended"
+      },
+      {
+        "event": "pre_tool_use",
+        "installer_path": ".claude/hooks/block-cross-case-writes.sh",
+        "matcher": "Edit|Write",
+        "criticality": "recommended"
+      },
+      {
+        "event": "session_end",
         "installer_path": ".claude/hooks/session-stop-dream.sh",
         "criticality": "recommended"
       }

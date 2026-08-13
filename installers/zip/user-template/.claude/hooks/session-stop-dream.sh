@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Maestro SessionStop dream marker — writes a timestamped marker to
+# Maestro SessionEnd dream marker — writes a timestamped marker to
 # data/memory/.dream-requested so the next session can detect that a
 # dreaming cycle is due. Fail-open: never blocks Claude.
 #
