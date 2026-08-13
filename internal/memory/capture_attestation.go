@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -112,7 +113,12 @@ func (attestor CaptureAttestor) key(workspaceID string, create bool) ([]byte, er
 		if err != nil {
 			return nil, err
 		}
-		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
+		// Unix mode bits are not an authority on Windows: Go synthesises FileMode
+		// from the read-only attribute, so a key written 0600 reports 0666 there.
+		// See internal/actionconfirmation/store.go (loadOrCreateKey) for the same
+		// guard and the fuller rationale.
+		permissive := runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0
+		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || permissive {
 			return nil, errors.New("capture attestation key is not a private regular file")
 		}
 		key, err := os.ReadFile(path)
@@ -153,12 +159,8 @@ func (attestor CaptureAttestor) key(workspaceID string, create bool) ([]byte, er
 		_ = os.Remove(path)
 		return nil, fmt.Errorf("persist capture attestation key: %w", err)
 	}
-	if directoryFile, openErr := os.Open(directory); openErr == nil {
-		if syncErr := directoryFile.Sync(); syncErr != nil {
-			_ = directoryFile.Close()
-			return nil, fmt.Errorf("sync capture attestation directory: %w", syncErr)
-		}
-		_ = directoryFile.Close()
+	if syncErr := syncDirectory(directory); syncErr != nil {
+		return nil, fmt.Errorf("sync capture attestation directory: %w", syncErr)
 	}
 	return key, nil
 }
