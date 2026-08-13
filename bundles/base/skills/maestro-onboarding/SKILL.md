@@ -143,7 +143,12 @@ professional baseline; do not emulate ingestion from conversation.
 5. When all facets for the selected track are reviewed and confirmed, write each
    confirmed profile file: `data/profile/identity.json`, `data/profile/style.json`,
    and `data/profile/onboarding.json` with `status: "complete"`. Ask the owner for an
-   explicit final review before marking complete.
+   explicit final review before marking complete. **Canonical filenames — do not
+   rename or split**: the profile layer has exactly three files: `identity.json`,
+   `style.json` (persists the interaction profile per `schemas/style.schema.json`;
+   never write a parallel `preferences.json`), and `onboarding.json`. The word
+   "preferences" appears in this doc as a facet label (`owner/self/preferences.md`)
+   and must not be mirrored as a `data/profile/preferences.json` file.
 6. In addition to the profile JSON files, write each confirmed facet to
    `data/owner/self/<facet-name>.md` using the reviewed draft content. The facet
    file names match the canonical facets used by the scaffold: `owner-identity`,
@@ -157,6 +162,16 @@ professional baseline; do not emulate ingestion from conversation.
    sessions silently lose the owner context even though `profile/` is correct.
    For the **quick** track, write only the six facets covered by the track and
    leave the remaining four as scaffold placeholders.
+7. After the profile and facet writes succeed, close the owner control-tree so
+   downstream skills see a consistent state:
+   - Update `data/owner/registry.json`: set `initialized: true` (the scaffold
+     writes it as `false`).
+   - Update `data/owner/interview/confirmations.json`: append the completed
+     track to `completed_tracks` (e.g. `["quick"]`) and set `last_updated` to
+     the current ISO 8601 UTC timestamp.
+   Without this step the profile files are written but the owner tree still
+   reports `initialized: false`, which breaks Doctor/Darwin consistency checks
+   and any consumer that reads `registry.json` as the entry pointer.
 
 ## Completion and follow-through
 
@@ -214,18 +229,26 @@ PowerPoint, Excel) está habilitada via MarkItDown."
 > um arquivo na conversa para que o conteúdo seja incorporado ao workspace — sem
 > cópia manual, sem ctrl+v.
 >
-> Para instalar, basta rodar este comando no terminal:
+> Para instalar, o caminho canônico é via **pipx** (funciona no macOS, Linux e
+> Windows sem esbarrar em ambiente Python gerenciado):
 >
 > ```
-> pip install markitdown
+> pipx install markitdown
 > ```
+>
+> No Windows, se `pipx` não estiver disponível, `pip install markitdown` também
+> funciona diretamente. No macOS com Python do Homebrew e na maioria das distros
+> Linux modernas, `pip install` retorna `error: externally-managed-environment`
+> (PEP 668) — nesses casos use `pipx`, que já vem via `brew install pipx` ou
+> `python3 -m pip install --user pipx`.
 >
 > Posso guiar a instalação agora, ou você prefere instalar depois?"
 
 If the owner authorizes installation now, provide the exact command
-(`pip install markitdown`) and confirm once the owner reports success by running
-`markitdown --version` again. Do not attempt to run `pip install` autonomously;
-the owner must execute it themselves or explicitly delegate terminal access.
+(`pipx install markitdown`, com `pip install markitdown` como fallback Windows)
+and confirm once the owner reports success by running `markitdown --version`
+again. Do not attempt to run the install autonomously; the owner must execute it
+themselves or explicitly delegate terminal access.
 
 ### 🤝 Agentes internos — identidade e personalização
 
