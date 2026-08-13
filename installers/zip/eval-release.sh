@@ -575,11 +575,11 @@ else
   fail "settings.json does NOT wire session-start-memory-inject.sh to SessionStart"
 fi
 
-# 12e: settings.json wires dream marker to SessionStop
-if grep -q "session-stop-dream.sh" "$SETTINGS" && grep -q "SessionStop" "$SETTINGS"; then
-  pass "settings.json wires session-stop-dream.sh to SessionStop"
+# 12e: settings.json wires dream marker to SessionEnd
+if grep -q "session-stop-dream.sh" "$SETTINGS" && grep -q "SessionEnd" "$SETTINGS"; then
+  pass "settings.json wires session-stop-dream.sh to SessionEnd"
 else
-  fail "settings.json does NOT wire session-stop-dream.sh to SessionStop"
+  fail "settings.json does NOT wire session-stop-dream.sh to SessionEnd"
 fi
 
 # 12f: session-stop-dream.sh produces .dream-requested marker

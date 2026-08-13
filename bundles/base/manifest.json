@@ -27,7 +27,7 @@
         "criticality": "required"
       },
       {
-        "event": "stop",
+        "event": "session_end",
         "installer_path": ".claude/hooks/session-stop-dream.sh",
         "criticality": "recommended"
       }
