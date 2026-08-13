@@ -250,10 +250,6 @@
       "path": "schemas/ingestion-result.schema.json"
     },
     {
-      "source": "schemas/ingestion-runtime-pack.schema.json",
-      "path": "schemas/ingestion-runtime-pack.schema.json"
-    },
-    {
       "source": "schemas/intent-review-packet.schema.json",
       "path": "schemas/intent-review-packet.schema.json"
     },

@@ -56,8 +56,9 @@ O repositório está no nível **contract-validated** da escada de maturidade:
 2. runtime nativo e adapters ainda precisam de evidência qualificadora;
 3. distribuição assinada, instalação em dispositivo limpo, update/rollback e
    suporte de piloto ainda são gates separados;
-4. ingestão tem Docling como rota primária definida e MarkItDown como fallback
-   delimitado, mas a conversão permanece indisponível sem runtime pack aprovado.
+4. ingestão tem Docling como rota primária definida; o adapter de fallback
+   opcional está descoped, aguardando substituto opensource ZIP-embeddable, e a
+   conversão permanece indisponível sem runtime pack aprovado.
 
 Isso é uma base sólida para evoluir, mas não deve ser descrito como piloto de
 produção. Cada horizonte abaixo só libera sua mensagem comercial depois do gate
@@ -140,7 +141,6 @@ conhecimento local revisável e gera uma decisão ou artefato útil.
 **Evoluções possíveis:**
 
 - Docling local como rota principal para documentos elegíveis;
-- MarkItDown como fallback determinístico para formatos aprovados;
 - validação de estrutura, Markdown, proveniência, tamanho e fidelidade;
 - fixtures sanitizadas e medição de tabelas, OCR, imagens e documentos Office;
 - batch local, templates de extração e exportações intermediárias para perfil
@@ -253,16 +253,17 @@ da memória geral.
 | V1 | Catálogo metadata-first de roots explícitos, import assinado, busca lexical, frescor e revogação. | Encontrar o material certo com rastreabilidade e sem download integral. | Trial Claude nativo, fixture aceita, ACL/roots e revogação testados. |
 | V1.1 | Busca guiada por cliente, ano, tema, audiência e apresentador; feedback tipado. | Menos refinamentos e resultado mais explicável para usuário não técnico. | Métricas top-k sem query ou nomes em telemetria. |
 | V1.2 | Delta otimizado, webhooks aprovados, key rotation e auditoria de drift. | Catálogo mais fresco com menor custo operacional. | Resiliência, replay, rotação e incident runbook aprovados. |
-| V2 | Enriquecimento local seletivo com MarkItDown e Docling. | Encontrar conceitos que não aparecem no nome/path, mantendo extração local. | Formatos, campos, retenção, fidelity e revogação de conteúdo aprovados. |
+| V2 | Enriquecimento local seletivo com Docling e um adapter de fallback opensource a definir. | Encontrar conceitos que não aparecem no nome/path, mantendo extração local. | Formatos, campos, retenção, fidelity e revogação de conteúdo aprovados. |
 | V2.1 | Ranking híbrido lexical/semântico com fallback determinístico. | Melhor recall sem perder explicação e previsibilidade. | Avaliação por corpus sanitizado, bias/error analysis e ACL pós-ranking. |
 | V3 | Taxonomia multi-office, ownership por domínio e compartilhamento governado. | Reuso organizacional de conhecimento com responsabilidade clara. | Modelo jurídico, retenção, suporte, opt-out e auditoria por domínio. |
 
-### Onde entram MarkItDown e Docling
+### Onde entra Docling
 
-MarkItDown é um bom adaptador delimitado para formatos simples quando a
-conversão determinística for suficiente. Docling é a rota preferida quando
-estrutura, tabelas, OCR, layout e fidelidade multimodal importarem. Nenhum deles
-deve ampliar roots, baixar arquivos fora de escopo ou virar fallback remoto.
+Docling é a rota preferida quando estrutura, tabelas, OCR, layout e fidelidade
+multimodal importarem. Um adapter de fallback determinístico opensource,
+ZIP-embeddable, será escolhido para formatos simples em uma iteração futura.
+Nenhum deles deve ampliar roots, baixar arquivos fora de escopo ou virar
+fallback remoto.
 
 No V1, a decisão correta é metadata-first: menor exposição, menor custo, melhor
 revogação e valor mais rápido. O enriquecimento só entra depois que a busca

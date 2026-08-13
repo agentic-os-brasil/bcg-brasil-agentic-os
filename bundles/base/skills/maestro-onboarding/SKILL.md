@@ -211,45 +211,9 @@ professional baseline; do not emulate ingestion from conversation.
   - SharePoint remains authoritative. The local rationale layer is a
     derived convenience, never a replacement for the SharePoint source.
 
-### 📎 MarkItDown — ingestão de documentos
-
-After the profile is confirmed and before suggesting any next skill, run
-`markitdown --version` silently to detect availability.
-
-**Se disponível:** confirme em uma linha — "Ingestão de documentos (PDF, Word,
-PowerPoint, Excel) está habilitada via MarkItDown."
-
-**Se não disponível:** explique de forma direta e peça autorização:
-
-> "O MarkItDown é a ferramenta que habilita a ingestão de documentos (PDF, Word,
-> PowerPoint, Excel e outros formatos) no Maestro. Com ele instalado, basta enviar
-> um arquivo na conversa para que o conteúdo seja incorporado ao workspace — sem
-> cópia manual, sem ctrl+v.
->
-> Para instalar, o caminho canônico é via **pipx** (funciona no macOS, Linux e
-> Windows sem esbarrar em ambiente Python gerenciado):
->
-> ```
-> pipx install markitdown
-> ```
->
-> No Windows, se `pipx` não estiver disponível, `pip install markitdown` também
-> funciona diretamente. No macOS com Python do Homebrew e na maioria das distros
-> Linux modernas, `pip install` retorna `error: externally-managed-environment`
-> (PEP 668) — nesses casos use `pipx`, que já vem via `brew install pipx` ou
-> `python3 -m pip install --user pipx`.
->
-> Posso guiar a instalação agora, ou você prefere instalar depois?"
-
-If the owner authorizes installation now, provide the exact command
-(`pipx install markitdown`, com `pip install markitdown` como fallback Windows)
-and confirm once the owner reports success by running `markitdown --version`
-again. Do not attempt to run the install autonomously; the owner must execute it
-themselves or explicitly delegate terminal access.
-
 ### 🤝 Agentes internos — identidade e personalização
 
-Immediately after MarkItDown confirmation (or deferral), always invite the owner
+After the profile is confirmed, always invite the owner
 to name the internal agents now or defer them:
 **"Quer dar nome e avatar ao Walter, ao Darwin e ao Gamma Guardian agora, ou
 prefere deixar isso para depois?"** This is an invitation, never a required

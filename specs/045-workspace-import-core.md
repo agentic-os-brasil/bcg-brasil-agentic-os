@@ -39,7 +39,7 @@ special files are exclusions. Plans do not contain source content.
 
 The import surface is not document ingestion. Plain, allowlisted workspace
 text can be copied as an explicit migration action. Office/PDF/archive formats
-that require Docling or MarkItDown are marked `unavailable` and quarantined;
+that require Docling or an optional fallback adapter are marked `unavailable` and quarantined;
 other unallowlisted formats are marked `unsupported` and quarantined. No
 runtime pack is inferred or activated by this feature.
 
@@ -70,7 +70,7 @@ closed. Staging and commit failures are persisted as `failed` receipts.
 ## Boundaries and evidence
 
 This contract does not migrate native workspaces, collect remote sources,
-invoke Claude/Codex, install Docling/MarkItDown, or claim native runtime
+invoke Claude/Codex, install Docling or any optional ingestion adapter, or claim native runtime
 qualification. Tests use synthetic temporary fixtures only. Full harness,
 hosted CI, human review, signing and production data-policy approval remain
 separate evidence gates.

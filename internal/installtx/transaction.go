@@ -204,7 +204,7 @@ func Prepare(verified releaseverify.VerifiedRelease, options PrepareOptions) (st
 	}
 	stagedRuntimePack := ""
 	if runtimePack != nil {
-		stagedRuntimePack = filepath.Join(transaction, "markitdown-runtime.tar.gz")
+		stagedRuntimePack = filepath.Join(transaction, "runtime-pack.tar.gz")
 		if err := copyVerifiedRegular(filepath.Join(verified.Directory, runtimePack.Name), stagedRuntimePack, 0o600, runtimePack.Size, runtimePack.SHA256); err != nil {
 			return "", err
 		}
@@ -336,10 +336,10 @@ func ValidatePrepared(
 	}
 	if runtimePack != nil {
 		if err := ensureSafePath(dataRoot, plan.StagedRuntimePack); err != nil {
-			return ActivationPlan{}, fmt.Errorf("staged MarkItDown runtime pack path is outside the private data root: %w", err)
+			return ActivationPlan{}, fmt.Errorf("staged runtime pack path is outside the private data root: %w", err)
 		}
 		if err := verifyRegularFile(plan.StagedRuntimePack, plan.RuntimePackSize, plan.RuntimePackSHA256); err != nil {
-			return ActivationPlan{}, fmt.Errorf("verify staged MarkItDown runtime pack: %w", err)
+			return ActivationPlan{}, fmt.Errorf("verify staged runtime pack: %w", err)
 		}
 	}
 	return plan, nil
@@ -381,7 +381,7 @@ func Activate(
 	bundleTarget := filepath.Join(plan.ManagedRoot, "bundles", plan.BundleVersion)
 	runtimeTarget := ""
 	if plan.RuntimePackArtifactName != "" {
-		runtimeTarget = filepath.Join(plan.ManagedRoot, "runtimes", "markitdown", plan.Release)
+		runtimeTarget = filepath.Join(plan.ManagedRoot, "runtimes", "pack", plan.Release)
 	}
 	if err := ensureSafePath(plan.ManagedRoot, activeCLI); err != nil {
 		return err
@@ -474,7 +474,7 @@ func Activate(
 	defer os.RemoveAll(pendingBundle)
 	pendingRuntime := ""
 	if runtimeTarget != "" {
-		pendingRuntime = filepath.Join(plan.ManagedRoot, "runtimes", "markitdown", ".pending-"+plan.TransactionID)
+		pendingRuntime = filepath.Join(plan.ManagedRoot, "runtimes", "pack", ".pending-"+plan.TransactionID)
 		if err := ensureSafePath(plan.ManagedRoot, pendingRuntime); err != nil {
 			return err
 		}
@@ -515,7 +515,7 @@ func Activate(
 	}
 	if pendingRuntime != "" {
 		if err := os.Rename(pendingRuntime, runtimeTarget); err != nil {
-			return restore(fmt.Errorf("activate MarkItDown runtime pack: %w", err))
+			return restore(fmt.Errorf("activate runtime pack: %w", err))
 		}
 	}
 	if err := os.Rename(pendingCLI, activeCLI); err != nil {

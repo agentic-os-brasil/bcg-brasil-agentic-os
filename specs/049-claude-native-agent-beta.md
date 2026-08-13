@@ -51,5 +51,6 @@ native lifecycle bindings: SessionStart, UserPromptSubmit, PreToolUse,
 PostToolUse, Stop, SubagentStart and SubagentStop. PostToolUse stays async;
 Stop is synchronous so it can issue Claude's native completion block.
 
-MarkItDown installation is deliberately outside this change. Claude may guide
-that future optional setup, but this beta neither installs nor promotes it.
+Optional ingestion adapters are deliberately outside this change. No fallback
+ingestion adapter ships with the base bundle; a future opensource,
+ZIP-embeddable replacement will be chosen separately.

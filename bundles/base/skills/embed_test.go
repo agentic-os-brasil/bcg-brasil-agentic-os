@@ -3,8 +3,6 @@ package baseskills
 import (
 	"strings"
 	"testing"
-
-	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 )
 
 func TestGuidedOwnerSkillsCarryExactResumableReviewCommands(t *testing.T) {
@@ -54,8 +52,6 @@ func TestEnvironmentSkillsCarryTheFriendlyConsolidationContract(t *testing.T) {
 			required: []string{
 				"setup apply",
 				"Darwin's user-level maintenance state",
-				"verified MarkItDown runtime pack",
-				"Do not install MarkItDown from `pip`",
 			},
 		},
 		{
@@ -89,21 +85,3 @@ func TestEnvironmentSkillsCarryTheFriendlyConsolidationContract(t *testing.T) {
 	}
 }
 
-func TestEnvironmentSkillsKeepMarkItDownOptionalUntilTheManagedPackShips(t *testing.T) {
-	manifest, err := baseruntime.Manifest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, capability := range manifest.Capabilities {
-		if capability.ID != "local_ingestion_markitdown" {
-			continue
-		}
-		for runtime, state := range capability.Runtimes {
-			if state.State != "unavailable" {
-				t.Fatalf("MarkItDown state for %s = %q, want unavailable until a managed pack ships", runtime, state.State)
-			}
-		}
-		return
-	}
-	t.Fatal("MarkItDown capability is missing")
-}

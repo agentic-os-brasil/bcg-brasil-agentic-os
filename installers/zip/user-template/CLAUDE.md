@@ -46,17 +46,6 @@ no Claude Code. Se ele rodou e `data/.initialized` existe, prossiga.
     apresente antes. Onboarding primeiro.
   - Se **existe**: sessão normal, responda ao pedido do usuário.
 
-### Passo 3: MarkItDown (verificação pós-onboarding, com re-check de 30 dias)
-
-- Cheque `data/profile/markitdown.json`:
-  - Se **não existe**: rode `markitdown --version` silenciosamente ao final desta resposta.
-  - Se existe com `"available": false` e `checked_at` há mais de 30 dias: re-rode o check
-    silenciosamente (MarkItDown pode ter sido instalado desde então).
-  - Se existe com `"available": true`: não é necessário re-verificar.
-  - Resultado do check:
-    - Disponível: crie/atualize com `{"available": true, "version": "<saída>", "checked_at": "<ISO8601 UTC>"}` e informe o usuário em uma linha que ingestão de documentos está habilitada.
-    - Não disponível: crie/atualize com `{"available": false, "checked_at": "<ISO8601 UTC>"}` e não mencione ao usuário.
-
 ## Skills essenciais
 
 Skills vivem em `bundles/base/skills/<nome>/SKILL.md`. Para executar uma skill, leia o

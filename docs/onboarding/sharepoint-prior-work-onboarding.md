@@ -152,8 +152,9 @@ O V1 é metadata-first. Cada item elegível pode conter:
 - sensitivity e status.
 
 O V1 não precisa baixar ou extrair o conteúdo integral do deck para localizar o
-arquivo. Enriquecimento de conteúdo com MarkItDown ou Docling é uma evolução
-posterior, com autorização, fidelidade, retenção e revogação próprias.
+arquivo. Enriquecimento de conteúdo com Docling (e, futuramente, um adapter de
+fallback opensource ainda a definir) é uma evolução posterior, com autorização,
+fidelidade, retenção e revogação próprias.
 
 ## 4. Papéis e responsabilidades
 
@@ -563,8 +564,9 @@ conteúdo do documento ou identidade pessoal em telemetria central.
    preview metadata-only e feedback sem texto livre.
 3. **V1.2 — cadence e mudanças:** delta otimizado, webhooks aprovados,
    observabilidade de drift e key rotation.
-4. **V2 — enriquecimento local seletivo:** MarkItDown para formatos simples e
-   Docling para estrutura/OCR/tabelas, somente em arquivos e campos aprovados.
+4. **V2 — enriquecimento local seletivo:** Docling para estrutura/OCR/tabelas
+   e um adapter de fallback opensource a definir para formatos simples, somente
+   em arquivos e campos aprovados.
 5. **V2.1 — ranking híbrido:** lexical + semântico, com avaliação, explicação,
    ACL/revogação e fallback determinístico.
 6. **V3 — escala organizacional:** taxonomia multi-office, ownership por

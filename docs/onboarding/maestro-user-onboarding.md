@@ -420,9 +420,9 @@ fonte local → checagem de política/tamanho → Docling local
 → resultado estruturado + Markdown → validação → downstream autorizado
 ```
 
-Para formatos cobertos por um fallback aprovado, o route selector pode usar o
-MarkItDown local. Ele é um componente delimitado do runtime pack, não uma
-instalação Python para o usuário.
+Um adapter de fallback opensource, ZIP-embeddable, será selecionado
+posteriormente para formatos simples cobertos por conversão determinística.
+No momento nenhum fallback é distribuído com o base bundle.
 
 Exemplo de invocação:
 

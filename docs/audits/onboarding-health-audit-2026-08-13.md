@@ -145,7 +145,6 @@ ou adicionar ao `dev/harness/validate` uma checagem de paridade entre diretório
 | Escrita de `profile/onboarding.json` com `status: complete` | ✅ |
 | Escrita de `owner/self/<faceta>.md` | ❌ Não implementado (P2) |
 | Pergunta SharePoint pós-onboarding | ✅ Fluxo correto — dois estágios (seleção ≠ autorização de leitura) |
-| Check MarkItDown pós-onboarding | ✅ |
 | Convite para naming de agentes | ✅ |
 | tech-core suggestion por role | ✅ Correto — não sugere automaticamente para roles não-técnicas |
 

@@ -75,8 +75,8 @@ func TestPrepareAndActivateInstallsOptionalRuntimePack(t *testing.T) {
 	writeTestBundle(t, filepath.Join(releaseDirectory, "maestro-base_0.1.0.tar.gz"), map[string]string{
 		"skills/example/SKILL.md": "managed",
 	})
-	writeTestBundle(t, filepath.Join(releaseDirectory, "markitdown-runtime_0.1.0.tar.gz"), map[string]string{
-		"bin/markitdown": "runtime",
+	writeTestBundle(t, filepath.Join(releaseDirectory, "runtime-pack_0.1.0.tar.gz"), map[string]string{
+		"bin/pack": "runtime",
 	})
 	verified := verifiedTestRelease(t, releaseDirectory, "0.1.0")
 	appendRuntimePack(t, &verified.Manifest, releaseDirectory, "0.1.0")
@@ -95,7 +95,7 @@ func TestPrepareAndActivateInstallsOptionalRuntimePack(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Activate() error = %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(managedRoot, "runtimes", "markitdown", "0.1.0", "bin", "markitdown"))
+	body, err := os.ReadFile(filepath.Join(managedRoot, "runtimes", "pack", "0.1.0", "bin", "pack"))
 	if err != nil || string(body) != "runtime" {
 		t.Fatalf("runtime pack was not activated: body=%q err=%v", body, err)
 	}
@@ -105,7 +105,7 @@ func TestActivateRemovesOptionalRuntimePackWhenSelfCheckFails(t *testing.T) {
 	releaseDirectory := t.TempDir()
 	writeTestFile(t, releaseDirectory, "bcgos_0.1.0_darwin_arm64", "binary 0.1.0")
 	writeTestBundle(t, filepath.Join(releaseDirectory, "maestro-base_0.1.0.tar.gz"), map[string]string{"skills/example/SKILL.md": "managed"})
-	writeTestBundle(t, filepath.Join(releaseDirectory, "markitdown-runtime_0.1.0.tar.gz"), map[string]string{"bin/markitdown": "runtime"})
+	writeTestBundle(t, filepath.Join(releaseDirectory, "runtime-pack_0.1.0.tar.gz"), map[string]string{"bin/pack": "runtime"})
 	verified := verifiedTestRelease(t, releaseDirectory, "0.1.0")
 	appendRuntimePack(t, &verified.Manifest, releaseDirectory, "0.1.0")
 	managedRoot := filepath.Join(t.TempDir(), "managed")
@@ -120,7 +120,7 @@ func TestActivateRemovesOptionalRuntimePackWhenSelfCheckFails(t *testing.T) {
 	}); err == nil {
 		t.Fatal("Activate() accepted a failing self-check")
 	}
-	if _, err := os.Stat(filepath.Join(managedRoot, "runtimes", "markitdown", "0.1.0")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(managedRoot, "runtimes", "pack", "0.1.0")); !os.IsNotExist(err) {
 		t.Fatalf("failed activation left a runtime pack behind: %v", err)
 	}
 }
@@ -453,7 +453,7 @@ func TestValidatePreparedRejectsTamperedOrExternalRuntimePack(t *testing.T) {
 	for name, mutate := range map[string]func(*testing.T, *ActivationPlan){
 		"external": func(t *testing.T, plan *ActivationPlan) {
 			external := filepath.Join(t.TempDir(), "outside-runtime.tar.gz")
-			writeTestBundle(t, external, map[string]string{"bin/markitdown": "runtime"})
+			writeTestBundle(t, external, map[string]string{"bin/pack": "runtime"})
 			plan.StagedRuntimePack = external
 		},
 		"tampered": func(t *testing.T, plan *ActivationPlan) {
@@ -470,9 +470,9 @@ func TestValidatePreparedRejectsTamperedOrExternalRuntimePack(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			plan.StagedRuntimePack = filepath.Join(filepath.Dir(planPath), "markitdown-runtime.tar.gz")
-			writeTestBundle(t, plan.StagedRuntimePack, map[string]string{"bin/markitdown": "runtime"})
-			plan.RuntimePackArtifactName = "markitdown-runtime_0.3.0.tar.gz"
+			plan.StagedRuntimePack = filepath.Join(filepath.Dir(planPath), "runtime-pack.tar.gz")
+			writeTestBundle(t, plan.StagedRuntimePack, map[string]string{"bin/pack": "runtime"})
+			plan.RuntimePackArtifactName = "runtime-pack_0.3.0.tar.gz"
 			plan.RuntimePackSize, plan.RuntimePackSHA256 = testFileIdentity(t, plan.StagedRuntimePack)
 			mutate(t, &plan)
 			if err := WritePlan(planPath, plan); err != nil {
@@ -843,7 +843,7 @@ func verifiedForPlan(plan ActivationPlan) releaseverify.VerifiedRelease {
 
 func appendRuntimePack(t *testing.T, manifest *releasecontract.Manifest, directory, version string) {
 	t.Helper()
-	name := "markitdown-runtime_" + version + ".tar.gz"
+	name := "runtime-pack_" + version + ".tar.gz"
 	size, digest := testFileIdentity(t, filepath.Join(directory, name))
 	manifest.Artifacts = append(manifest.Artifacts, releasecontract.Artifact{
 		Kind: "runtime_pack", OS: "any", Arch: "any", Name: name, Size: size, SHA256: digest,

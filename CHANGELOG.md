@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+### Removed (2026-08-13)
+
+- MarkItDown ingestion adapter descoped; a future opensource, ZIP-embeddable
+  alternative will be chosen. Removes `internal/ingest/markitdown/`,
+  `adapters/ingest/markitdown/`, `schemas/markitdown.schema.json`,
+  `schemas/ingestion-runtime-pack.schema.json`, the `local_ingestion_markitdown`
+  capability, and every MarkItDown mention in bundle manifests, skills and
+  onboarding docs. Spec 031 is marked superseded. The runtime-pack transport
+  plumbing in `internal/installtx` and `internal/dev/releasepack` remains
+  runtime-neutral; only MarkItDown-specific naming was removed.
+
 ### Current evidence snapshot (2026-08-12)
 
 - Source baseline is `ed9db1a` (`origin/main` — lightweight UserPromptSubmit context-inject

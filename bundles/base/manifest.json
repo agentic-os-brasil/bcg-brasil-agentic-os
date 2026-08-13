@@ -100,8 +100,7 @@
       "purpose": "Maps the four user-facing profile files produced by the maestro-onboarding skill to their declarative JSON Schemas. Consumers validating data/profile/ contents (installer, harness validators, downstream OKF bundlers) should look them up here rather than walking the tree. Schemas mirror the manifest's provenance.status=experimental stance; shape may evolve.",
       "data/profile/identity.json": "schemas/identity.schema.json",
       "data/profile/style.json": "schemas/style.schema.json",
-      "data/profile/onboarding.json": "schemas/onboarding.schema.json",
-      "data/profile/markitdown.json": "schemas/markitdown.schema.json"
+      "data/profile/onboarding.json": "schemas/onboarding.schema.json"
     }
   },
   "portability_notes": {

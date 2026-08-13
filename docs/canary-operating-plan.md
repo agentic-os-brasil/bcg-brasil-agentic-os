@@ -140,8 +140,9 @@ unavailable capability:
 - top-level `status`, `doctor` and `maestro status` accept either a workspace
   path or an ID bound by the initial workspace setup; ID resolution is private, fail-closed and
   never searches user files;
-- Docling/MarkItDown ingestion remains a release gap, not a successful base
-  capability, until Q-037 is closed and a verified platform pack is installed;
+- Docling ingestion (and any future opensource fallback adapter) remains a
+  release gap, not a successful base capability, until Q-037 is closed and a
+  verified platform pack is installed;
 - native agent orchestration remains unavailable under Spec 033 until a new
   accepted promotion decision and attended adapter evidence exist;
 - a native LaunchAgent enrollment must be evaluated through its loaded/enabled

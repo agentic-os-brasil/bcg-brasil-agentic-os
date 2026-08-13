@@ -1,3 +1,0 @@
-# Managed ingestion-pack dependency. The pack builder must resolve and hash
-# transitive dependencies before distribution.
-markitdown[docx,xlsx,xls]==0.1.6

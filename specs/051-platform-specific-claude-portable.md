@@ -70,9 +70,9 @@ to materialize the ordinary installed product, including:
 The archive does not carry user memory, client data, SharePoint content,
 credentials, prompts, logs, private signing keys or a pre-approved owner
 profile. Optional external dependencies are not product omissions: Claude
-guides their activation when relevant. In particular, MarkItDown remains a
-post-install managed-runtime follow-up and SharePoint remains an explicit
-owner-selected source; neither blocks local first use.
+guides their activation when relevant. In particular, SharePoint remains an
+explicit owner-selected source; it does not block local first use. No fallback
+ingestion adapter ships in this archive.
 
 Package parity means the portable route exposes the same capability contract
 and governed bundle as the canonical release. It does not mean that an absent
@@ -148,7 +148,7 @@ broken or misdirected install:
    agents, skills and Claude lifecycle bindings.
 
 Native qualification, telemetry volume, model evals, remote authentication,
-SharePoint availability, MarkItDown availability and scheduler evidence do not
+SharePoint availability and scheduler evidence do not
 gate otherwise safe local use. They remain observable follow-ups.
 
 The package does not disable Gatekeeper, remove quarantine, bypass PowerShell
