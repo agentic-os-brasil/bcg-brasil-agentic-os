@@ -62,14 +62,14 @@ type conceptHeader struct {
 	Tags              []string    `yaml:"tags,omitempty"`
 	Sources           []sourceRef `yaml:"sources,omitempty"`
 	Status            string      `yaml:"status,omitempty"`
-	ProfileVersion    string      `yaml:"x-bcgos-profile-version"`
-	StableID          string      `yaml:"x-bcgos-stable-id"`
-	Scope             string      `yaml:"x-bcgos-scope"`
-	SourceFingerprint string      `yaml:"x-bcgos-source-fingerprint"`
-	Freshness         string      `yaml:"x-bcgos-freshness"`
-	BCGOSStatus       string      `yaml:"x-bcgos-status"`
-	GeneratorVersion  string      `yaml:"x-bcgos-generator-version"`
-	PolicyVersion     string      `yaml:"x-bcgos-policy-version"`
+	ProfileVersion    string      `yaml:"x-maestro-profile-version"`
+	StableID          string      `yaml:"x-maestro-stable-id"`
+	Scope             string      `yaml:"x-maestro-scope"`
+	SourceFingerprint string      `yaml:"x-maestro-source-fingerprint"`
+	Freshness         string      `yaml:"x-maestro-freshness"`
+	BCGOSStatus       string      `yaml:"x-maestro-status"`
+	GeneratorVersion  string      `yaml:"x-maestro-generator-version"`
+	PolicyVersion     string      `yaml:"x-maestro-policy-version"`
 }
 
 type sourceRef struct {
@@ -202,10 +202,10 @@ func ValidateManagedBundle(root string) error {
 			return fmt.Errorf("%s: type is required", path)
 		}
 		if header.Scope != managedScope {
-			return fmt.Errorf("%s: x-bcgos-scope must be %q", path, managedScope)
+			return fmt.Errorf("%s: x-maestro-scope must be %q", path, managedScope)
 		}
 		if header.ProfileVersion != "1" || header.PolicyVersion == "" || header.GeneratorVersion == "" {
-			return fmt.Errorf("%s: incomplete BCGOS profile", path)
+			return fmt.Errorf("%s: incomplete Maestro profile", path)
 		}
 		return nil
 	})

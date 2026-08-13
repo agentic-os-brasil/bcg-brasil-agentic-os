@@ -1,5 +1,7 @@
 # Claude runtime orientation
 
+**Maestro** is a Claude Code–native professional OS for context, execution and evidence in a local workspace. It ships as a signed ZIP bundle with slash-command entry points; there is no standalone CLI binary.
+
 Claude Code is the primary development runtime for this repository and the reference contributor experience. Read `AGENTS.md` and follow the same canonical repository contract. Claude-specific hook names, payloads and paths are adapter concerns rather than canonical architecture.
 
 ## Mandatory skill routing
@@ -43,6 +45,11 @@ The user-facing installation is organized around three top-level surfaces:
     - `operating/` — work-state continuity between sessions.
   - `workspaces/` — active projects that are not case-scoped.
   - `profile/` — identity, preferences, style and onboarding markers.
+- `specs/` — architecture decision records and feature contracts. Each `NNN-<name>.md` file governs a stable implementation area. Read the relevant spec before changing behavior.
+- `docs/` — operational documentation: runbooks, audits, release notes, install guides and known-issue pages.
+- `internal/` — Go implementation packages. `internal/dev/` contains development-only tooling (releasepack, atlas harness); all other sub-packages are product runtime.
+- `dev/` — source-tree harness: `dev/harness/` (validate/doctor/wiki commands), `dev/skills/` (canonical skill workflow docs), `dev/wiki/` (managed atlas allowlist). Nothing under `dev/` enters the distributed bundle.
+- `adapters/` — thin Codex/OpenAI adapter shims that consume the same canonical contracts as the Claude harness.
 - `VERSION` — bundle version marker (source of truth for `bundle_version` in every manifest).
 - `README-INSTALL.md` — first-run and update ritual for the non-technical user.
 
