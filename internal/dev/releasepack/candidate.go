@@ -106,14 +106,14 @@ func runGoBuild(
 }
 
 type CandidateOptions struct {
-	Root           string
-	Output         string
-	Version        string
-	Channel        string
-	Allowlist      string
-	Prebuilt       string
-	Builder        BinaryBuilder
-	AdHocMacOS     bool
+	Root       string
+	Output     string
+	Version    string
+	Channel    string
+	Allowlist  string
+	Prebuilt   string
+	Builder    BinaryBuilder
+	AdHocMacOS bool
 }
 
 func BuildCandidate(ctx context.Context, options CandidateOptions) (releasecontract.Manifest, error) {

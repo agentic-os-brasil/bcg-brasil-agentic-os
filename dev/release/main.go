@@ -294,12 +294,12 @@ func candidate(root string, args []string) {
 	}
 	outputPath := absoluteFromRoot(root, *output)
 	manifest, err := releasepack.BuildCandidate(context.Background(), releasepack.CandidateOptions{
-		Root:           root,
-		Output:         outputPath,
-		Version:        *version,
-		Channel:        *channel,
-		Prebuilt:       optionalAbsoluteFromRoot(root, *prebuilt),
-		AdHocMacOS:     *macosAdHoc,
+		Root:       root,
+		Output:     outputPath,
+		Version:    *version,
+		Channel:    *channel,
+		Prebuilt:   optionalAbsoluteFromRoot(root, *prebuilt),
+		AdHocMacOS: *macosAdHoc,
 	})
 	if err != nil {
 		fatal(err)

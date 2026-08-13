@@ -84,4 +84,3 @@ func TestEnvironmentSkillsCarryTheFriendlyConsolidationContract(t *testing.T) {
 		})
 	}
 }
-
