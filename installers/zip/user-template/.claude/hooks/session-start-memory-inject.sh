@@ -139,7 +139,7 @@ fi
 
 # Profile (highest routing priority — who the user is and how they prefer to work)
 emit_profile_json "Identidade do usuário" "$PROFILE_DIR/identity.json"
-emit_profile_json "Preferências" "$PROFILE_DIR/preferences.json"
+emit_profile_json "Preferências e estilo" "$PROFILE_DIR/style.json"
 
 # Owner SELF facets (spec 013) — ten individually-addressable markdown files
 # Injected in full: each facet is small, high-routing-priority context.
