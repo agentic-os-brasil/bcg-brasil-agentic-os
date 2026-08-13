@@ -9,29 +9,13 @@ Run this skill when a newly installed Maestro workspace receives its first
 guided-onboarding prompt. The goal is a useful, consented professional baseline
 — not a long system explanation and not an unreviewed memory import.
 
-## Resolve the Maestro CLI before any command
-
-Never invoke a bare `bcgos` command. Desktop runtimes do not inherit the
-owner's shell `PATH`, and a missing PATH entry must not be reported as a
-permission or onboarding-state failure. Use the exact executable path emitted
-by the Maestro `SessionStart` context and shown in the managed orientation's
-**Comandos úteis** section. If that pointer is unavailable, use the platform
-managed install location (`~/Library/Application Support/Maestro/bin/bcgos` on
-macOS or `%LOCALAPPDATA%\\Maestro\\bin\\bcgos.exe` on Windows); use `PATH` only
-as a final fallback. Call the resolved path as
-`<maestro-cli>` in the commands below; this is a placeholder to substitute,
-never a literal command to execute. If no executable can be resolved, stop and
-report the concrete missing path; do not substitute another runtime or pretend
-the command succeeded.
-
 ## Before the first reply
 
 1. Read `CLAUDE.md` and preserve the Maestro workspace identity.
 2. Resolve the canonical `interaction-profile` before choosing language,
    explanation depth or optional technical detail. It does not choose the
    onboarding track, grant authority or change the review requirement.
-3. Run `<maestro-cli> owner onboarding status` to inspect the deterministic local
-   state. Do not infer that onboarding exists from files or prior messages.
+3. Read `data/profile/onboarding.json` to inspect the local onboarding state. Do not infer that onboarding exists from prior messages.
 4. Do not start a professional task, read a selected memory source, execute an
    unrelated skill or grant runtime trust globally.
 
@@ -110,20 +94,13 @@ separate, explicit local consent path.
 
 ## Sugestão técnica orientada pela função
 
-Depois que o owner responder qual é sua função, use a recomendação determinística
-do runtime:
-
-```sh
-bcgos bundles recommend --function "<resposta declarada pelo owner>"
-```
-
-Se o resultado for `recommended`, explique que engineering, data ou AI foram
-identificados somente na resposta declarada e pergunte se a pessoa quer incluir
-o bundle opcional `tech-core`. Se o resultado for `ask`, faça a mesma pergunta
-sem presumir que a função é técnica. Nunca ative o bundle automaticamente: a
-seleção de uma trilha técnica e a confirmação do owner continuam sendo a única
-forma de projetar as skills. O `tech-core` é um bundle único e inclui engineering,
-data, AI e métodos de qualidade.
+Depois que o owner responder qual é sua função, avalie diretamente se a resposta
+contém indicação clara de engenharia, data ou AI. Se sim, explique o que é o
+bundle opcional `tech-core` e pergunte se a pessoa quer incluí-lo. Se a resposta
+for ambígua, faça a mesma pergunta sem presumir que a função é técnica. Nunca
+ative o bundle automaticamente: a seleção de uma trilha técnica e a confirmação
+do owner continuam sendo a única forma de projetar as skills. O `tech-core` é um
+bundle único e inclui engineering, data, AI e métodos de qualidade.
 
 ## Camadas opcionais de identidade
 
@@ -151,14 +128,11 @@ professional baseline; do not emulate ingestion from conversation.
 
 ## After the owner chooses
 
-1. Confirm the exact selected track once and persist it only with:
+1. Confirm the exact selected track once and write the selection to
+   `data/profile/onboarding.json` (fields: `track`, `status: "in_progress"`).
 
-   ```sh
-   <maestro-cli> owner onboarding select --track quick|complete --confirm
-   ```
-
-2. Ask one interview question at a time. Use the next question returned by
-   `<maestro-cli> owner onboarding status`; do not invent extra mandatory questions.
+2. Ask one interview question at a time, following the sequence for the
+   selected track; do not invent extra mandatory questions.
 3. After each answer, reflect back a concise interpretation and ask whether it
    is accurate. Only then propose the corresponding facet draft. This is the
    quality loop for onboarding: the owner corrects meaning before anything is
@@ -166,13 +140,10 @@ professional baseline; do not emulate ingestion from conversation.
 4. Before proposing any write to a facet, show the concise draft and obtain the
    owner's agreement. Never claim that an answer has been saved or that the
    track is complete until the local review is confirmed.
-5. When the status becomes `review_required`, show the owner the profile
-   facets that were included in the selected track. Ask for an explicit review,
-   then use the exact digest returned by the status command:
-
-   ```sh
-   <maestro-cli> owner onboarding confirm --digest SHA256 --confirm
-   ```
+5. When all facets for the selected track are reviewed and confirmed, write each
+   confirmed profile file to `data/profile/` (identity.json, style.json, and
+   onboarding.json with `status: "complete"`). Ask the owner for an explicit
+   final review before marking complete.
 
 ## Completion and follow-through
 
@@ -185,16 +156,16 @@ professional baseline; do not emulate ingestion from conversation.
   Maestro session is running inside that workspace. The source question below
   is deliberately a post-bootstrap onboarding step because all derived
   content must be read and organized from within the workspace.
-- After either track is confirmed, inspect the deterministic project-source
-  state with `<maestro-cli> prior-work source status --workspace <workspace>`. If it is
+- After either track is confirmed, read `data/memory/sharepoint-config.json`
+  to check the project-source state. If the file is absent or `status` is
   `selection_required`, ask exactly one question and wait: **"Você quer indicar
   as pastas autorizadas do SharePoint deste projeto agora ou prefere começar
   sem essa fonte?"**
   - If the owner chooses SharePoint, make the two-stage contract explicit:
     selecting folders records the exact scope, but **does not yet authorize a
-    read**. Review the canonical folder URLs with the owner, then send strict
-    JSON (`schema_version: 1`, `folder_urls`) through standard input to
-    `<maestro-cli> prior-work source select --workspace <workspace> --stdin --confirm`.
+    read**. Review the canonical folder URLs with the owner, then write the
+    confirmed selection to `data/memory/sharepoint-config.json` (fields:
+    `schema_version: 1`, `folder_urls`, `status: "selected"`).
     Immediately after selection, ask whether the owner authorizes a bounded
     recent-material pass: **"Posso ler os materiais mais recentes dessas
     pastas e criar racionais internos rastreáveis no workspace?"** Explain
@@ -203,15 +174,11 @@ professional baseline; do not emulate ingestion from conversation.
     `brain/knowledge/sharepoint-rationales/`, keeps the SharePoint link and
     modification date on every rationale, and never copies the raw document
     body. If the owner authorizes it, run the explicit rationale-ingestion
-    command only when signed enrollment and the qualified local ingestion
-    runtime are available:
-    `<maestro-cli> prior-work rationale ingest --workspace <workspace> --stdin --confirm`.
-    The batch is deterministic: newest source modifications first, then stable
-    item reference as tie-breaker. If the collector/runtime is unavailable,
-    report that honestly and leave the source selected but not ingested.
-  - If the owner prefers to start clean, record the choice with
-    `<maestro-cli> prior-work source defer --workspace <workspace> --confirm` and do
-    not ask again automatically.
+    only when signed enrollment and the qualified local ingestion runtime are
+    available; report unavailability honestly and leave the source selected
+    but not ingested.
+  - If the owner prefers to start clean, write `status: "deferred"` to
+    `data/memory/sharepoint-config.json` and do not ask again automatically.
   - A selection is not enrollment or collection authority. SharePoint remains
     authoritative; only a signed enrollment plus a qualified Claude collector
     can read the selected roots and produce the bounded rationale batch. Codex
@@ -311,7 +278,7 @@ executing it. Explain its purpose and wait for the owner to choose it.
 - Do not discover SharePoint broadly, resolve a selected folder, call a
   collector or claim that an index exists during onboarding.
 - Do not infer a psychological profile.
-- Do not bypass the owner's review digest or runtime trust prompt.
+- Do not bypass the owner's profile review or skip writing confirmed profile files.
 - Do not run `pip install` or any installation command autonomously; always
   present the command and wait for the owner to execute or explicitly
   authorize terminal delegation.

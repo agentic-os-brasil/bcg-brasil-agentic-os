@@ -8,9 +8,7 @@ description: Open or resume the working day at whatever hour the owner appears, 
 Compose one briefing scoped to the hours that actually remain, and record it on
 today's page.
 
-All reads and writes go through the owner atlas operations exposed by the
-installed runtime adapter (`bcgos atlas owner collect`, `create-page`,
-`append-entry`). Never edit a page directly from this skill.
+All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## Interaction profile
 

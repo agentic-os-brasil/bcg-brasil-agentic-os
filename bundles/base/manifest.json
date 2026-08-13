@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "bundle_id": "bcgos-base",
+  "bundle_id": "maestro-base",
   "bundle_version": "0.1.5",
   "format": "okf-1",
   "provenance": {
@@ -71,7 +71,7 @@
   "skills_index": "bundles/base/skills/INDEX.md",
   "skills_catalog": "bundles/base/skills/catalog.json",
   "control_plane_skills": {
-    "operator": "bundles/base/skills/bcgos-operator/SKILL.md",
+    "operator": "bundles/base/skills/maestro-operator/SKILL.md",
     "doctor": "bundles/base/skills/maestro-doctor/SKILL.md",
     "setup_update": "bundles/base/skills/maestro-setup-update/SKILL.md",
     "onboarding": "bundles/base/skills/maestro-onboarding/SKILL.md",

@@ -56,4 +56,4 @@ Extract-over funciona porque o ZIP não contém `data/` — ficheiros no destino
 
 ## Deprecação do bcgos
 
-Esta factory substitui completamente o instalador Go (`cmd/bcgos`). Wave 2 rescreve as 7 skills que ainda referenciam `bcgos` como runtime.
+Esta factory substitui completamente o instalador Go (`cmd/bcgos`). Todas as referências ao `bcgos` como runtime foram removidas do produto — hooks, skills e registry atualizados em `refactor/remove-bcgos-cli`.
