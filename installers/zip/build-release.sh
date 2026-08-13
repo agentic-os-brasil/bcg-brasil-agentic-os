@@ -55,6 +55,22 @@ find "$MAESTRO_DIR" -name '.DS_Store' -delete 2>/dev/null || true
 find "$MAESTRO_DIR" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 find "$MAESTRO_DIR" -name '*.pyc' -delete 2>/dev/null || true
 
+# data/ contract — release ZIPs must NEVER ship any data/. The workspace is
+# always created on first run by .claude/hooks/first-run-scaffold.sh, and
+# README-INSTALL.md promises "sua data/ nunca é tocada pelo ZIP". If a data/
+# directory ever leaks into the template or gets copied in during staging
+# (dev workspace pollution, backup restore, careless test scaffold), strip
+# it here so the release stays clean. Defensive: exit non-zero if strip
+# fails to keep leakage visible.
+if [ -e "$MAESTRO_DIR/data" ]; then
+  echo "==> Stripping data/ from staged release (must never ship)"
+  rm -rf "$MAESTRO_DIR/data"
+  if [ -e "$MAESTRO_DIR/data" ]; then
+    echo "FATAL: could not strip $MAESTRO_DIR/data — aborting release" >&2
+    exit 1
+  fi
+fi
+
 # Belt-and-suspenders: ensure every hook is executable before zipping.
 # macOS `zip` preserves Unix mode bits, but a source file that lost its +x
 # in git would silently ship non-executable and hooks would never fire.
