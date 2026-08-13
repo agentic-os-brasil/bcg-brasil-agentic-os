@@ -14,6 +14,8 @@ Never include secrets, credentials, personal data, client-identifying context or
 - Context: The MarkItDown adapter (Spec 031) was the local, deterministic non-Docling fallback ingestion route bundled optionally in the Maestro base. It was never shipped as a signed managed runtime pack and its capability state has stayed `unavailable` across supported runtimes. The upstream package is Microsoft-owned Python, which is not directly ZIP-embeddable under the Maestro distribution constraints.
 - Decision: Remove MarkItDown entirely from the base bundle — code, schemas, capabilities, skills and docs — and mark Spec 031 as superseded. A replacement fallback ingestion adapter, if introduced, must be opensource and ZIP-embeddable inside the Maestro distribution. The runtime-pack transport contract (`internal/installtx`, `internal/dev/releasepack`) remains runtime-neutral and is preserved for that future adapter.
 - Consequences: No fallback converter ships with the base bundle. Ingestion relies exclusively on Docling and the existing document surfaces. The `local_ingestion_markitdown` capability is dropped; downstream consumers that read `bundles/base/runtime/capabilities.json` no longer see that ID. Selection of a replacement is deferred and out of scope for this change.
+- Refs: specs/031-markitdown-ingestion-adapter.md; bundles/base/manifest.json; bundles/base/runtime/capabilities.json; bundles/base/distribution.json; CHANGELOG.md; PR #361; issue #271
+- Supersedes: none
 
 ## CDLE - Rename base bundle skill `decision-log-entry` to `case-decision-log-entry`
 
