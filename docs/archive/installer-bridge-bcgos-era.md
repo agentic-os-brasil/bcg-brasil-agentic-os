@@ -1,5 +1,9 @@
 # Installer bridge contract
 
+> **Archived** — This document describes the `bcgos`-era installer bridge, removed in
+> PR #349 (2026-08-13). The current model is ZIP + slash-command via
+> [MAESTRO-CANARY.md](../MAESTRO-CANARY.md). Preserved for historical evidence traceability.
+
 `cmd/maestro-installer` is the executable bridge behind the Maestro visual
 wizard. It is designed for a user who can write to the corporate user profile
 but cannot elevate to device administrator.

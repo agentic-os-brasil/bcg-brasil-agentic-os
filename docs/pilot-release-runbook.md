@@ -11,8 +11,8 @@ matching native runner and assembles the release set from those exact binaries,
 and CLI auth wiring constructs native storage only behind a complete approved
 managed provider registration. The checked-in registration is intentionally
 `unavailable`, so no real login is exposed yet. When all three provider,
-authority-seed and native-store gates are approved, `bcgos update --check`
-persists one exact signed plan and `--confirm` starts the stable bootstrapper
+authority-seed and native-store gates are approved, the update check command
+persists one exact signed plan and the confirm step starts the stable bootstrapper
 only for that plan; `status` and `doctor` report the same availability
 boundary. The stable bootstrapper now prepares its own first-install activation
 plan after verifying the pinned registry and complete signed release; it does

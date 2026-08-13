@@ -72,11 +72,17 @@ independent reviewer.
 
 ## Exact CLI surface
 
-The following commands are the current CLI contract. Commands below are
-documented for a future run; this document does not claim that they have been
-executed for the release under review.
+> **Superseded** — The `bcgos` standalone CLI was removed in PR #349 (2026-08-13).
+> The code blocks below are **legacy reference only** — they document the `bcgos`
+> command forms that no longer exist. For the current invocation model (ZIP +
+> slash-command Maestro), see [MAESTRO-CANARY.md](MAESTRO-CANARY.md). Phase
+> checklists in this document remain valid; they describe operations, not specific
+> command syntax.
 
-### Maintenance contract and local Canary
+The following commands documented the CLI contract. Recorded here for historical
+evidence traceability; these commands have been removed.
+
+### Maintenance contract and local Canary (legacy — superseded)
 
 ```text
 bcgos maintenance catalog
@@ -116,10 +122,11 @@ current user's data root. Therefore a fixture-home enrollment is suitable for
 filesystem lifecycle evidence, but not for an end-to-end fixture worker wake.
 Do not present that fixture as a runtime result.
 
-Do not treat `bcgos maintenance wake --trigger event --event-id ID` as scheduled
-job evidence in a Canary. The CLI validates the event identity, but
-`internal/cli/maintenance.go:schedulerJobsForTrigger("event")` returns no
-concrete scheduler job. The expected result is no event execution evidence;
+Do not treat the event-wake maintenance job (`--trigger event --event-id ID`) as scheduled
+job evidence in a Canary. The implementation validates the event identity, but
+`internal/maintenance/catalog.go:Catalog.ForTrigger("event")` returns only
+jobs whose trigger matches "event" in the catalog — and the current catalog
+contains no event-triggered jobs. The expected result is no event execution evidence;
 record the path as `unavailable`/STOP until an event job is bound to the route.
 
 ## Interpreting the v0.1.20 product Canary
@@ -128,10 +135,10 @@ The acceptance run must distinguish a reproducible defect from an intentionally
 unavailable capability:
 
 - agent identity personalization must accept the canonical managed IDs emitted
-  by `bcgos agent identity` (`maestro`, `walter`, `darwin`) as well as the
+  by the Maestro agent identity service (`maestro`, `walter`, `darwin`) as well as the
   documented omitted-ID form;
 - top-level `status`, `doctor` and `maestro status` accept either a workspace
-  path or an ID bound by `bcgos init`; ID resolution is private, fail-closed and
+  path or an ID bound by the initial workspace setup; ID resolution is private, fail-closed and
   never searches user files;
 - Docling/MarkItDown ingestion remains a release gap, not a successful base
   capability, until Q-037 is closed and a verified platform pack is installed;
@@ -143,7 +150,9 @@ unavailable capability:
 - lifecycle receipts prove observed events, while native qualification remains
   a separate attended runtime gate.
 
-The direct deterministic Darwin contract is a separate surface:
+The direct deterministic Darwin contract is a separate surface (legacy `bcgos`
+invocation shown for reference — see [MAESTRO-CANARY.md](MAESTRO-CANARY.md) for
+the current model):
 
 ```text
 bcgos agent darwin assess --stdin
@@ -341,7 +350,7 @@ mutable asset replacement, credential leakage or failed attestation.
 
 **Rollback:** activate the previously approved release through the authenticated
 bootstrapper, bound to its provider release ID, manifest digest and activation
-receipt. The repository has no `bcgos rollback` command and no generic release
+receipt. There is no generic rollback slash command and no generic release
 rollback workflow; release-level rollback is therefore `unavailable`/STOP
 until the external provider/bootstrapper invocation and receipt contract are
 attached. Never retag, replace assets or use an unsigned override.
@@ -360,8 +369,8 @@ attached. Never retag, replace assets or use an unsigned override.
 The clean-device scripts are the currently executable rollback surface. They
 invoke the approved bootstrapper's `rollback --data-root DATA_ROOT` only after
 binding the active release to the prior update activation receipt. Use the full
-platform command below; do not substitute `bcgos update --confirm`, which is an
-update activation, not a rollback.
+platform command below; do not substitute an update activation command
+(which activates an update, not a rollback).
 
 ```text
 bash acceptance/clean-device/macos.sh \
