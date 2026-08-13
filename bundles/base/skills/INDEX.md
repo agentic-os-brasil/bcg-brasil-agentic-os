@@ -37,6 +37,7 @@
 | Qualitative Analysis | Synthesize bounded qualitative evidence into themes and implications | `skills/qualitative-analysis/SKILL.md` |
 | Quantitative Analysis | Analyze bounded quantitative evidence with explicit assumptions and checks | `skills/quantitative-analysis/SKILL.md` |
 | Retro | Close the week against your development objectives | `skills/retro/SKILL.md` |
+| SharePoint Ingest | Ingerir pastas SharePoint autorizadas e generalizar conceitos do trajeto | `skills/sharepoint-ingest/SKILL.md` |
 | Slide Summary | Map supplied deck text into slide messages and a narrative arc | `skills/slide-summary/SKILL.md` |
 | Start Day | Open the day with a briefing scoped to the hours that remain | `skills/start-day/SKILL.md` |
 | Upward Feedback | Prepare considered feedback to give a senior colleague | `skills/upward-feedback/SKILL.md` |

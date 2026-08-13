@@ -189,30 +189,27 @@ professional baseline; do not emulate ingestion from conversation.
   `selection_required`, ask exactly one question and wait: **"Você quer indicar
   as pastas autorizadas do SharePoint deste projeto agora ou prefere começar
   sem essa fonte?"**
-  - If the owner chooses SharePoint, make the two-stage contract explicit:
-    selecting folders records the exact scope, but **does not yet authorize a
-    read**. Review the canonical folder URLs with the owner, then write the
-    confirmed selection to `data/memory/sharepoint-config.json` (fields:
-    `schema_version: 1`, `folder_urls`, `status: "selected"`).
-    Immediately after selection, ask whether the owner authorizes a bounded
-    recent-material pass: **"Posso ler os materiais mais recentes dessas
-    pastas e criar racionais internos rastreáveis no workspace?"** Explain
-    plainly that the pass reads only the selected folders through the qualified
-    Claude collector, writes concise derived racionais under
-    `brain/knowledge/sharepoint-rationales/`, keeps the SharePoint link and
-    modification date on every rationale, and never copies the raw document
-    body. If the owner authorizes it, run the explicit rationale-ingestion
-    only when signed enrollment and the qualified local ingestion runtime are
-    available; report unavailability honestly and leave the source selected
-    but not ingested.
+  - If the owner chooses SharePoint, review the canonical folder URLs with
+    the owner and write the confirmed selection to
+    `data/memory/sharepoint-config.json` (fields: `schema_version: 1`,
+    `folder_urls`, `status: "selected"`).
+  - Before proposing ingestion, check upfront whether a SharePoint MCP
+    connector is configured in this Claude Code session. If none is present,
+    orient the owner in one line: **"Pra ler as pastas na próxima etapa,
+    ativar o conector SharePoint no Claude Code (Settings → Connectors).
+    Sem ele, a seleção fica gravada e a ingestão roda quando o conector
+    estiver ativo."** Do not attempt reads without the connector.
+  - With the connector active, offer the in-session ingestion via the
+    `sharepoint-ingest` skill. The skill reads only the selected folders
+    through the owner's own SharePoint access, writes bounded per-document
+    rationales under `data/memory/sharepoint-rationales/` and a generalized
+    concept index under `brain/knowledge/sharepoint-rationales/`, keeps the
+    SharePoint link and modification date on every rationale, and never
+    copies the raw document body.
   - If the owner prefers to start clean, write `status: "deferred"` to
     `data/memory/sharepoint-config.json` and do not ask again automatically.
-  - A selection is not enrollment or collection authority. SharePoint remains
-    authoritative; only a signed enrollment plus a qualified Claude collector
-    can read the selected roots and produce the bounded rationale batch. Codex
-    collection remains `unavailable/corporate_policy` and no fallback is
-    allowed. The local rationale layer is a derived convenience, never a
-    replacement for the SharePoint source.
+  - SharePoint remains authoritative. The local rationale layer is a
+    derived convenience, never a replacement for the SharePoint source.
 
 ### 📎 MarkItDown — ingestão de documentos
 
@@ -311,8 +308,9 @@ executing it. Explain its purpose and wait for the owner to choose it.
   rationale-ingestion authorization. After that authorization, never copy raw
   source bodies; only materialize bounded derived racionais with a source
   pointer and freshness metadata.
-- Do not discover SharePoint broadly, resolve a selected folder, call a
-  collector or claim that an index exists during onboarding.
+- Do not discover SharePoint broadly during onboarding, resolve or read a
+  selected folder, or claim rationales exist before `sharepoint-ingest` has
+  run with an active MCP connector.
 - Do not infer a psychological profile.
 - Do not bypass the owner's profile review or skip writing confirmed profile files.
 - Do not run `pip install` or any installation command autonomously; always
