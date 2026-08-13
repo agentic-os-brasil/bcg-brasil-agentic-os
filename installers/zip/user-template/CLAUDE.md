@@ -33,8 +33,16 @@ no Claude Code. Se ele rodou e `data/.initialized` existe, prossiga.
   cheio). Apresente-se brevemente, leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o fluxo.
   Pare aqui.
 - Se **nenhum dos dois existe**: o hook não rodou nesta sessão — execute o scaffold inline:
-  crie `data/`, `data/profile/`, `data/agents/`, `data/cases/`, `data/memory/`, `data/owner/`,
-  `data/workspaces/`, `data/canary/` e escreva `data/.initialized` com o timestamp UTC atual.
+  1. Crie os diretórios: `data/`, `data/profile/`, `data/agents/`, `data/cases/`,
+     `data/memory/`, `data/memory/recent/`, `data/memory/weekly/`, `data/memory/medium-term/`,
+     `data/memory/lifetime/`, `data/memory/policies/`, `data/owner/`, `data/owner/self/`,
+     `data/owner/operating/`, `data/owner/observations/`, `data/owner/interview/`,
+     `data/owner/interview/drafts/`, `data/workspaces/`, `data/canary/`.
+  2. Escreva os arquivos:
+     - `data/.initialized` — timestamp UTC atual (ex. `2026-08-13T00:00:00Z`)
+     - `data/memory/.schema-version` — JSON: `{"schema_version": 1, "layers": ["recent", "weekly", "medium-term", "lifetime", "policies"], "policy_source": "bundles/base/memory/policy.json", "initialized_by": "inline-scaffold"}`
+     - `data/memory/.gitignore` — conteúdo: `.dream-requested`
+     - `data/.maestro-version` — leia o arquivo `VERSION` na raiz e escreva o valor encontrado (ex. `0.1.8`)
   Se qualquer criação falhar, leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o
   fluxo. Caso contrário, prossiga para o Passo 2.
 
