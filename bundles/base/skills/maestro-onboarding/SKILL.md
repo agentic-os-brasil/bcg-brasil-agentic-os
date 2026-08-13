@@ -50,8 +50,8 @@ first identity question in the same message.
 
 | Opção | Tempo estimado | O que estabelece | Implicação |
 | --- | --- | --- | --- |
-| **Curta** | **~10 minutos** | Seu nome preferido, um limite explícito para contexto pessoal, papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites de trabalho serão refinados em conversas futuras; o contexto pessoal pode ser "nenhum por enquanto". |
-| **Completa** | **~30 minutos** | Identidade básica, contexto pessoal autorizado e as oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e quais limites pessoais autorizou. |
+| **Curta** | **~10 minutos** | Seu nome preferido, contexto pessoal de base (coletado por padrão; opt-out disponível), papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites de trabalho serão refinados em conversas futuras. |
+| **Completa** | **~30 minutos** | Identidade básica, contexto pessoal de base (coletado por padrão; opt-out disponível) e as oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e quais limites pessoais autorizou. |
 
 Ask only: **"Você prefere a entrevista curta ou a completa?"**
 
@@ -63,8 +63,10 @@ memory. Both tracks begin with two explicit, reviewable identity facets:
 
 - `owner-identity`: the name the owner wants Maestro to use. No unnecessary
   identifiers are requested.
-- `personal-context`: an optional, purpose-bound statement of personal context
-  the owner authorizes Maestro to respect at work. "None for now" is valid.
+- `personal-context`: a short, purpose-bound statement of personal context
+  Maestro should respect at work. **Collected by default in both tracks**; the
+  owner may explicitly opt out. When the owner opts out, the facet file records
+  the opt-out decision with a timestamp (not silence, not "none for now").
 
 The complete track then covers eight explicit, reviewable professional facets:
 
@@ -85,12 +87,20 @@ The complete track then covers eight explicit, reviewable professional facets:
 The quick track covers those two identity facets plus
 `professional-role`, `communication-style`, `preferences` and `quality-bar`.
 It is a useful operating baseline, but it intentionally leaves external voice,
-motivations, decision rules and working boundaries for later refinement. The
-personal-context question is a consent boundary, not a request to disclose
-family, health, faith or private history: the owner may decline or share only
-the minimum necessary. Psychological/personality material, assessments and
-visual identity are not inferred or imported by either track; they require a
-separate, explicit local consent path.
+motivations, decision rules and working boundaries for later refinement.
+
+**Personal-context policy (default-on with opt-out):** the personal-context
+facet is collected by default in both tracks. Ask a short, bounded question
+such as *"Quer registrar um contexto pessoal curto que o Maestro deve
+respeitar no trabalho? (ex.: fuso, restrições de agenda, algo relevante para
+priorização). Você pode fazer opt-out."* Never require disclosure of family,
+health, faith or private history: the owner may share only the minimum
+necessary or opt out. When the owner opts out, write
+`data/owner/self/personal-context.md` with an explicit opt-out record
+(timestamp + "opt-out registrado pelo owner"), not an ambiguous "none for
+now". Psychological/personality material, assessments and visual identity
+are not inferred or imported by either track; they require a separate,
+explicit local consent path.
 
 ## Sugestão técnica orientada pela função
 

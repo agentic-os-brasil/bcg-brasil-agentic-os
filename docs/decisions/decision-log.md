@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## PCOO - Personal-context facet collected by default with explicit opt-out
+
+- Date: 2026-08-13
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The `maestro-onboarding` skill treated `personal-context` as an opt-in consent boundary. In the first canary run (setup log 2026-08-13), this produced an ambiguous "nenhum contexto pessoal autorizado por enquanto" as the facet body, with no signal distinguishing "owner declined" from "not yet asked". Downstream skills that read `owner/self/personal-context.md` cannot tell those states apart, so no re-prompt or refinement is safely triggerable later.
+- Decision: In both quick and complete tracks, `personal-context` is collected by default with a short, bounded question about work-relevant context (timezone, agenda constraints, prioritisation notes). The owner may explicitly opt out. When the owner opts out, the skill writes `data/owner/self/personal-context.md` with an explicit opt-out record (timestamp + "opt-out registrado pelo owner"), never an ambiguous placeholder. Extended personal-context (the "Contexto pessoal ampliado" optional layer) remains opt-in and is unaffected. Psychological/personality material, assessments and visual identity remain opt-in and require a separate consent path.
+- Consequences: The onboarding interview asks one additional bounded question in the quick track (still within the ~10 minute budget). Facet consumers can distinguish opt-out (deterministic, timestamped) from unfilled placeholder. Doctor/Darwin gain a checkable signal for personal-context state. No credentials, workspace content or client data are affected.
+- Refs: bundles/base/skills/maestro-onboarding/SKILL.md; setup-log 2026-08-13 (canary Bruno, v0.1.6)
+- Supersedes: none
+
 ## CDLE - Rename base bundle skill `decision-log-entry` to `case-decision-log-entry`
 
 - Date: 2026-08-12
