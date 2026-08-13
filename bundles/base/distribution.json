@@ -386,12 +386,28 @@
       "path": "skills/deck-review/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/deck-drill/SKILL.md",
+      "path": "skills/deck-drill/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/deck-drill/agents/openai.yaml",
+      "path": "skills/deck-drill/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/expert-interview-guide/SKILL.md",
       "path": "skills/expert-interview-guide/SKILL.md"
     },
     {
       "source": "bundles/base/skills/expert-interview-guide/agents/openai.yaml",
       "path": "skills/expert-interview-guide/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/investigate/SKILL.md",
+      "path": "skills/investigate/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/investigate/agents/openai.yaml",
+      "path": "skills/investigate/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/meeting-close/SKILL.md",
@@ -416,6 +432,14 @@
     {
       "source": "bundles/base/skills/slide-summary/agents/openai.yaml",
       "path": "skills/slide-summary/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/wayfinder/SKILL.md",
+      "path": "skills/wayfinder/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/wayfinder/agents/openai.yaml",
+      "path": "skills/wayfinder/agents/openai.yaml"
     },
     {
       "source": "schemas/interaction-profile.schema.json",

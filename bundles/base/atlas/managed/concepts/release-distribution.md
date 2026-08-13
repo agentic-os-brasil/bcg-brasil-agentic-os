@@ -15,7 +15,7 @@ status: stable
 x-bcgos-profile-version: "1"
 x-bcgos-stable-id: managed/release-distribution
 x-bcgos-scope: managed
-x-bcgos-source-fingerprint: 86cf0108b2fb5cc853951aaf3cb4669b1b0d9097a3b0b5ab9929221cc458e94b
+x-bcgos-source-fingerprint: cd8ccde65dd74bde8cd482f44f0f1289df1bcf4856b70f6c909ce815a9210d8b
 x-bcgos-freshness: fresh
 x-bcgos-status: active
 x-bcgos-generator-version: bcgos-managed-wiki/0.2
@@ -122,6 +122,56 @@ go run ./dev/release verify --directory dist/release-candidate
 
 Verification rejects missing, extra, non-regular or digest-mismatched files.
 It proves candidate closure and integrity, not authenticity.
+
+## Export the no-Go script-only portable beta
+
+Decisions `SHLL`, `SSPF` and Spec 053 define the separate endpoint profile with
+no Go, compiler or Maestro native executable. From a clean reviewed `main`, use
+the script-only export command documented by the release-export workflow:
+
+```text
+export-script-portable.sh --version 0.2.0
+```
+
+The factory emits deterministic macOS shell and Windows PowerShell ZIPs with
+the allowlisted managed bundle, conversational workspace, seven Claude hook
+bindings and target text handlers, five canonical project agents,
+`continuity-lite-v1`, a bounded projection receipt, capability matrix, strict
+extracted-file inventory, checksum and provenance. The factory may use Go; the
+delivered endpoint ZIP does not. This profile is reduced capability: it must
+never be described as the native CLI, signed/notarized,
+publisher-authenticated, native-hook-qualified or universal. Its real delivery
+path still requires attended managed-device acceptance without
+quarantine/MOTW or policy changes.
+
+The projection also carries `session-profile-lite-v1`: an owner-consented,
+digest-bound local profile pointer whose SessionStart output contains only the
+closed interaction level, relative pointer and revision. It must never be
+described as SELF, memory, UserSelfSnapshot or native Session Context.
+
+Workspace projection is journaled and recoverable rather than physically
+atomic. Release evidence must include interrupted-projection recovery and
+owner-local preservation. The repository test exercises that boundary on
+macOS; Windows remains an external native-runner gate until its conditioned
+PowerShell lifecycle test executes successfully.
+
+For the exact Windows artifacts, copy the two versioned ZIPs and sidecars to an
+unelevated Windows device and run the development-only acceptance harness:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -NonInteractive -File `
+  dev\acceptance\script-only-windows-artifact.ps1 `
+  -PreviousZip <previous.zip> -PreviousChecksum <previous.zip.sha256> `
+  -CandidateZip <candidate.zip> -CandidateChecksum <candidate.zip.sha256> `
+  -PreviousVersion <previous-version> -CandidateVersion <candidate-version> `
+  -OutputReceipt <receipt.json>
+```
+
+The harness never passes an execution-policy override. It validates both ZIP
+digests, uses paths with spaces, installs/idempotently reinstalls, updates,
+executes all seven handlers, runs doctor, rolls back, preserves an owner-local
+sentinel and proves the PowerShell policy list did not change. This still does
+not replace the real Slack/SharePoint/MOTW and Claude-session acceptance.
 
 ## Role migration at the 0.2.0 release boundary
 

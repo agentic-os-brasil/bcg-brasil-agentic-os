@@ -6,6 +6,28 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## QSTR - Make the script portable quick-start launcher-first
+
+- Date: 2026-08-12
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The script-only ZIP can install without Go, a native Maestro executable or administrator access, but its primary journey still asks a non-technical owner to find a nested workspace in Claude and then manually locate the permanent workspace after installation.
+- Decision: Make the target-specific double-click launcher the normal quick-start path. After one explicit confirmation it invokes the same policy-respecting text installer and, only after a successful projection commit, best-effort reveals the validated permanent workspace in Finder or Explorer. Keep the seeded Claude conversational path as the explicit fallback when script launching is unavailable; neither path opens Claude automatically, changes security policy or treats a reveal failure as an installation failure.
+- Consequences: The common journey becomes extract, double-click, confirm, open the revealed folder in Claude and speak naturally. Platform launchers remain inspectable scripts and can still be blocked by quarantine, MOTW, PowerShell policy or endpoint controls; the package reports that boundary without suggesting a bypass. Tests must prove that direct/Claude invocation never reveals a folder, reveal occurs only after successful commit, a reveal failure is non-fatal and paths remain quoted/literal.
+- Refs: specs/053-script-only-portable.md; internal/dev/releasepack/script_portable.go; internal/dev/releasepack/script_portable_test.go
+- Supersedes: none
+
+## ARLT - Enforce a bounded script-only specialist route
+
+- Date: 2026-08-12
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The script-only profile projects five usable Claude specialists and all seven lifecycle hooks, but it currently relies only on prose to prevent overlapping specialists or an incomplete strategic Client Account and Case round trip.
+- Decision: Add `agent-route-lite-v1`, a session-scoped, metadata-only state machine driven by the existing prompt, subagent and stop hooks. It permits one specialist at a time, distinguishes direct Case, strategic Client Account–Case–Client Account, isolated Darwin and leaf PA Expert/Walter routes, caps transitions and blocks ordinary Stop while a recognized route remains incomplete. State contains only closed enums, booleans, counters and digests of runtime identifiers; it never stores prompts, outputs, client content, raw identifiers or absolute paths.
+- Consequences: The script profile gains degraded managed-route completion assurance without adding a binary or exposing business content. Strict bounded parsing, local locking, symlink/reparse rejection, atomic replacement, retry behavior and shell/PowerShell parity are required. Native signed packets, authenticated receipts, tool/workspace authority and native route enforcement remain unavailable and must not be claimed.
+- Refs: specs/053-script-only-portable.md; internal/dev/releasepack/script_portable.go; internal/dev/releasepack/script_portable_test.go
+- Supersedes: none
+
 ## WDRM - Bundle deterministic weekly memory rollups
 
 - Date: 2026-08-11
@@ -1105,3 +1127,69 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Consequences: A user who launches `Run as administrator` receives a clear blocked result and can retry without elevation before state is created. A previously contaminated installation requires a bounded support repair or explicit recreation of Maestro-owned state after backup; ordinary workspace/client files remain untouched. The product does not claim automated ownership transfer without a reviewed Windows security primitive.
 - Refs: specs/048-one-and-done-setup.md; docs/installer-bridge.md; internal/userlevel; internal/agentorchestration/file_privacy_windows.go; Windows pilot report (2026-08-11)
 - Supersedes: none
+
+## SHLL - Distribute a script-only portable profile
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A locally compiled portable alternative would avoid executing a downloaded Maestro binary but require an exact local Go and, on macOS, native CGO toolchain. The intended non-technical recipients cannot be assumed to have those developer prerequisites, and bundling a compiler would restore the native-download trust problem.
+- Decision: Add distinct `macos-shell-local-beta` and `windows-powershell-local-beta` ZIP profiles containing no Maestro Mach-O, PE, object, bytecode or compiler payload. macOS installation and lifecycle use POSIX shell; Windows uses PowerShell with a small CMD delegator. The factory projects only the reviewed managed bundle, text runtime scripts, a strict SHA-256 inventory, an explicit capability matrix and the conversational `maestro-os` workspace. Installation, update and rollback are user-level, transactional directory/pointer operations. The scripts never remove quarantine or MOTW, weaken Gatekeeper, set `ExecutionPolicy Bypass`, request elevation or download a replacement runtime.
+- Consequences: Go and Xcode are no longer endpoint prerequisites, and the distributed code surface is limited to readable scripts plus managed product content. This is not binary-equivalent to `bcgos`: compatible file-based skills, agent definitions as reference content, orientation, onboarding, atlas and managed-content update/rollback are retained, while native CLI state engines, signed-release verification, secure provider authentication, lifecycle hook enforcement, background maintenance, native ingestion and other executable-owned capabilities are explicitly unavailable. Script policy, PowerShell policy, AppLocker or EDR may still block the kit. A same-ZIP checksum inventory proves extracted integrity but not publisher authenticity; controlled delivery and an independently delivered ZIP digest remain required until a universally available script-level authority verifier exists.
+- Refs: specs/020-release-distribution.md; specs/022-guided-pilot-release.md; specs/026-workspace-local-adapter-installation.md; specs/053-script-only-portable.md; internal/dev/releasepack
+- Supersedes: none
+
+## SHHK - Preserve Claude hooks in the script-only portable profile
+
+- Date: 2026-08-11
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The initial script-only profile removed every Claude lifecycle binding together with the native CLI. Hooks are a required product behavior even when Go, notarization, administrator support and native Maestro executables are unavailable on the endpoint. Treating all hook behavior as inseparable from the Go binary would remove session orientation, prompt-time context, pre-tool safety, action observation, stop handling and subagent lifecycle surfaces unnecessarily.
+- Decision: Keep the `macos-shell-local-beta` and `windows-powershell-local-beta` profiles from SHLL, but project all seven Claude lifecycle bindings through target text handlers: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStart` and `SubagentStop`. Project the exact five canonical Claude specialists as operational project agents from the shared renderer; Maestro remains the main-session identity. The installer owns a complete `settings.local.json` and managed agent files only in a fresh or previously Maestro-owned workspace and refuses to overwrite user-modified or unrelated files. Script handlers provide bounded orientation, capability truth, conservative protected-path/removal denial, native permission escalation for recognized external mutations and metadata-only observations. They never persist prompt or tool payload bodies. Native CLI authority remains distinct: cryptographic external-mutation challenges, authenticated lifecycle receipts, memory/execution ledgers and deterministic specialist-route enforcement are unavailable and cannot be inferred from script hook or agent presence.
+- Consequences: Recipients keep the Claude hook and operational specialist surfaces without Go or a Maestro native executable, and their projection follows content update and rollback. First install materializes a stable home-directory workspace outside the disposable ZIP and requires one fresh-session reopen so `SessionStart` is not falsely claimed in the installer session. More readable product logic is exposed in the target scripts. Shell/PowerShell, Claude hook execution or endpoint policy can still block the bindings, so the profile remains a controlled beta and requires real delivered-device evidence. Existing owner hook or agent configuration is preserved by failing before replacement rather than attempting an unsafe merge; supporting composable third-party hooks requires a later ownership-aware merge contract.
+- Refs: specs/026-workspace-local-adapter-installation.md; specs/053-script-only-portable.md; internal/dev/releasepack
+- Supersedes: SHLL
+
+## SHRC - Bind script-only workspace projection completion
+
+- Date: 2026-08-12
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The script-only installer can verify its versioned runtime and the on-disk hook settings, but a process interruption or partial workspace projection may leave skills, agents, orientation or capability state divergent while `doctor` still reports the hook surface as intact. Hooks are a required behavior, so an incomplete projection must be distinguishable from a completed one without pretending that a local text receipt authenticates the publisher.
+- Decision: Make the final write of each macOS/Windows workspace projection a bounded local completion receipt that binds the exact script profile, managed-content version, runtime-inventory digest, hook-settings digest and configured-on-disk state. Remove or invalidate the prior receipt before the first managed workspace mutation. `doctor` must verify that receipt together with the managed skill and agent projections, capabilities, hook handler/settings, managed `CLAUDE.md` block and global/workspace active-version agreement. Update and rollback may advance their durable active pointer only after the receipt is committed. A missing or divergent receipt is a repair-required state; rerunning the active package reprojects only Maestro-owned files and never claims crash-atomic restoration or publisher authentication.
+- Consequences: A partial projection can no longer be reported as healthy, and the same one-step installer remains the bounded repair path for missing Maestro-owned files. The receipt contains no client content, prompts, absolute workspace path or secret and does not replace the independently delivered ZIP digest. Workspace projection remains non-crash-atomic until failure-injection demonstrates automatic last-known-good restoration, but failure is now explicit and fail-closed before capability claims.
+- Refs: SHHK; specs/026-workspace-local-adapter-installation.md; specs/053-script-only-portable.md; internal/dev/releasepack/script_portable.go; internal/dev/releasepack/script_portable_test.go
+- Supersedes: SHHK
+
+## SHCT - Preserve reviewed continuity in the script-only profile
+
+- Date: 2026-08-12
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The script-only profile carries the file-driven execution-continuity skill, but its SessionStart hook injects only static orientation and cannot point a new session to the owner-reviewed active task or checkpoint. Losing that handoff would undermine Maestro's core continuity experience even though the native execution ledger and authenticated receipts cannot be reproduced honestly without the CLI.
+- Decision: Add `continuity-lite-v1` as owner-local, degraded continuity for the script-only profile. The reviewed task and checkpoint bodies remain ordinary Markdown under `brain/tasks/`; a separate bounded `.maestro-script/continuity-state.json` stores only integer schema version, `active|paused` state, bounded positive integer revision, one safe relative `brain/tasks/<name>.md` pointer and checkpoint-presence boolean. String coercion is rejected equally on both targets. The execution-continuity skill may write that pointer only after the corresponding Markdown artifact is written or reviewed. SessionStart validates the state file, safe path, regular target and size before injecting only state, logical pointer and checkpoint presence; it never injects task/checkpoint bodies. Invalid state is ignored with a repair-required orientation and never grants authority.
+- Consequences: A fresh Claude session can find the last reviewed handoff without Go, a scheduler or native memory, while task content remains in the workspace and out of hook logs. This does not provide CAS attempts, authenticated evidence, automatic transcript summaries, completion receipts or the native Execution Ledger; capability metadata must label it degraded. Update and rollback preserve the owner-local continuity state and never rewrite it.
+- Refs: FREE; SHRC; specs/006-execution-ledger.md; specs/053-script-only-portable.md; bundles/base/skills/execution-continuity/SKILL.md; internal/dev/releasepack/script_portable.go
+- Supersedes: SHRC
+
+## SHTX - Recover interrupted script-only workspace projection
+
+- Date: 2026-08-12
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The script-only installer commits a completion receipt after projecting hooks, skills, agents and orientation, but an interruption between those writes can leave a mixed workspace that requires a manual rerun and may diverge from the durable active-version pointer. Hooks and continuity are required surfaces, so update and rollback need a bounded recovery transaction without assuming native executables, administrator authority or permission to overwrite owner-modified files.
+- Decision: Wrap every script-only workspace projection in a user-local journal with a fully staged target and a backup of only the previous Maestro-owned projection. Preflight the union of the verified previous and target release paths before the first mutation; unknown or owner-modified bytes remain a conflict. Commit the journal only after target staging, backup and desired pointer state are complete. The projection receipt remains the final workspace commit marker, followed by the global active/previous pointers. A later install, update or rollback must reconcile a pending journal before new work: finish a target whose exact receipt and projection are complete, otherwise restore the previous Maestro-owned projection idempotently and retry. `doctor` never mutates and reports a pending journal as repair-required. Owner skills, owner agents, continuity, local profile, hook-event history and content outside the single managed `CLAUDE.md` block are never backed up, deleted or rewritten by recovery.
+- Consequences: Process failure and device interruption become explicitly recoverable through the same one-step installer, and a completed projection cannot disagree silently with its durable version pointers. Recovery adds bounded user-local staging and journal state and still does not authenticate the publisher or make multiple file replacement physically atomic. A concurrent writer must fail busy; a live byte that matches neither the previous nor target verified projection fails closed and preserves the journal for support. Failure-injection tests are required on both target script implementations, while real Windows power-loss and managed-device delivery remain external acceptance evidence.
+- Refs: SHCT; specs/026-workspace-local-adapter-installation.md; specs/053-script-only-portable.md; internal/dev/releasepack/script_portable.go; internal/dev/releasepack/script_portable_test.go
+- Supersedes: SHCT
+
+## SSPF - Preserve a reviewed session profile in script-only runtime
+
+- Date: 2026-08-12
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The script-only onboarding may create an owner-reviewed local professional profile, but a fresh Claude session currently receives only static product orientation and continuity. Without a bounded profile pointer, communication depth and working-style calibration effectively reset between sessions even though the reviewed artifact remains in the workspace.
+- Decision: Add `session-profile-lite-v1` to both script-only targets. The owner-reviewed body remains only in `.maestro-script/local-profile.md`. Separate consent for session reuse explains that the hook emits only metadata while Claude may later open only a relevant profile section to adapt the interaction. A `.maestro-script/session-profile.json` of at most 2 KiB binds integer schema version, `standard|advanced|power`, bounded positive integer revision, the fixed relative profile pointer, its SHA-256 and boolean `session_use_confirmed=true`; string coercion is rejected equally on both targets. SessionStart validates the state, fixed path, regular non-link profile, size and digest, then injects only interaction profile, relative pointer and revision; it never injects the body, digest or an absolute path. Missing state means an ordinary `standard` session. Invalid state fails closed to `standard` with a repair-required message. Revocation removes only the pointer state and preserves the reviewed Markdown unless the owner separately requests deletion. Update, rollback and interrupted-projection recovery preserve both owner-local files.
+- Consequences: Reviewed communication and working-style preferences remain discoverable after a fresh session without shipping the native SELF reader, memory engine or UserSelfSnapshot. The profile body is readable local data and may be opened only when relevant under the owner-approved session-use contract. This remains degraded pointer-only personalization: facet allowlists, HMAC, staleness, attested learning, Walter packets, dreaming and Codex Session Context remain unavailable. Shell and PowerShell validation plus non-injection tests are required; native Claude observation remains a separate evidence gate.
+- Refs: SHTX; specs/015-session-context-packet.md; specs/053-script-only-portable.md; internal/dev/releasepack/script_portable.go; internal/dev/releasepack/script_portable_test.go
+- Supersedes: SHTX

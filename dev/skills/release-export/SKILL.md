@@ -21,6 +21,9 @@ ZIPs, executáveis, chaves, certificados, tokens ou dados de usuário na `main`.
 5. Exportar os dois ZIPs para `releases/<versão>/` usando o script desta skill.
    A factory (`go run ./dev/release portable-windows` e `portable-macos`) é a
    única autoridade para construir os ZIPs.
+   Quando a entrega explicitamente exigir zero Go e zero executável Maestro no
+   endpoint, usar o export separado `export-script-portable.sh`. Não misturar
+   esse perfil reduzido com a release nativa.
 6. Se a entrega exigir um único executável Windows, anexar o payload ao bridge
    validado com `go run ./dev/release self-contained`. O diretório-fonte deve
    ser o pacote convencional completo produzido pela factory Windows; nunca
@@ -63,6 +66,44 @@ A factory recusa manifest que não seja `canary`, issuer/key fora do registry,
 drift de digest, bootstrapper incompatível ou seed divergente. O ZIP Windows
 exige Authenticode exatamente `NotSigned`; o ZIP macOS exige assinatura ad-hoc
 exata e confirmação nativa de `Signature=adhoc`.
+
+## Exportar o perfil sem Go e sem executáveis Maestro
+
+Este perfil leva somente scripts de texto e o conteúdo gerenciado allowlisted:
+
+```sh
+dev/skills/release-export/scripts/export-script-portable.sh --version 0.2.0
+```
+
+Ele produz `Maestro-Portable-0.2.0-macos-shell-local-beta.zip` e
+`Maestro-Portable-0.2.0-windows-powershell-local-beta.zip`, cada um com
+checksum e provenance. O endpoint não precisa de Go ou Xcode. Esse perfil
+preserva projeção, os sete hooks Claude por handlers de texto, os cinco agentes
+Claude canônicos em formato operacional, skills compatíveis, orientação,
+onboarding próprio, atlas, update/rollback de conteúdo e `continuity-lite-v1`.
+Também preserva `session-profile-lite-v1`, que injeta somente nível de interação,
+ponteiro relativo e revisão após consentimento e validação de digest; nunca o
+corpo do perfil.
+O `doctor` valida o recibo local de conclusão da projeção, hooks, agentes,
+skills, matriz de capacidades e bloco gerenciado de orientação. Isso comprova
+configuração intacta em disco, não invocação dos hooks pelo Claude. O perfil não
+contém nem representa o CLI nativo. Presença de hooks não representa recibos nativos autenticados,
+desafio criptográfico de mutação externa ou enforcement determinístico de
+subagentes. Leia
+`capabilities.json` antes de qualquer claim. A factory recusa payload Mach-O,
+PE, ELF, objeto, bytecode, compilador, fonte Go ou arquivo fora da allowlist.
+
+O inventário interno detecta corrupção/adulteração depois da extração, mas não
+autentica o publicador porque chega no mesmo ZIP que o verificador. Entregue o
+SHA-256 por canal independente e mantenha a classificação
+`script-only-controlled-beta`. Política de shell, PowerShell, AppLocker ou EDR
+ainda pode bloquear os scripts; nunca use bypass de política.
+
+A projeção de workspace usa journal e backup somente dos arquivos gerenciados.
+Depois de uma interrupção, repetir install/update/rollback restaura a projeção
+anterior conhecida antes de tentar novamente; bytes locais desconhecidos são
+preservados como conflito. Não descreva isso como troca física atômica nem como
+evidência de power-loss ou Windows nativo sem o respectivo teste atendido.
 
 ## Empacotar o instalador Windows em um único EXE
 

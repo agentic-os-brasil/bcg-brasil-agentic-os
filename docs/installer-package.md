@@ -35,6 +35,78 @@ to the exact absolute installed CLI path. The extracted directory therefore
 must not move after activation. Owner
 data remains in `%LOCALAPPDATA%\BCGOS`, outside the portable product root.
 
+### Script-only portable beta — no Go on the endpoint
+
+Decisions `SHLL`, `SSPF` and Spec 053 define two distinct reduced-capability
+ZIPs:
+
+- `Maestro-Portable-<version>-macos-shell-local-beta.zip`;
+- `Maestro-Portable-<version>-windows-powershell-local-beta.zip`.
+
+They contain no `bcgos`, bootstrapper, Go source/toolchain, Mach-O, PE, ELF,
+object or bytecode payload. macOS uses `install.sh`; Windows uses
+`Install-Maestro.ps1`. Optional double-click delegators ask for confirmation
+and invoke the same scripts without an execution-policy bypass, but they are
+not the primary or universally supported enterprise path.
+
+The normal quick journey is extract, double-click the target `Start Maestro`
+launcher, confirm once, then open the permanent `maestro-os` revealed in Finder
+or Explorer so a fresh Claude session loads hooks and agents. The launcher
+never opens Claude automatically and reveal failure does not fail an otherwise
+committed installation. If double-click is blocked, the fallback remains open
+the seeded `maestro-os` in Claude Code, speak and confirm once. Installation stages versioned
+managed content in the conventional user application root, creates the stable
+workspace under the user's home rather than Downloads, projects Maestro-owned
+compatible skills into it and retains one previous version for rollback. The
+ZIP is disposable after handoff. An internal SHA-256
+inventory is checked before product mutation and unexpected files are rejected.
+Runtime version staging is transactional. Workspace projection is journaled
+and recoverable but not physically atomic: rerunning install/update/rollback
+restores the previous known Maestro-owned projection before retrying, while
+unknown live bytes remain a preserved conflict. macOS failure injection covers
+this recovery; native Windows and real power-loss evidence remain acceptance
+gates. `doctor` verifies the runtime, projection completion
+receipt, active-version agreement, seven hook bindings and handler identity,
+managed skills and agents, capability matrix and managed `CLAUDE.md` block.
+That is configured-on-disk evidence, not proof that Claude invoked every hook.
+The bounded projection receipt also binds the exact managed block digest, so a
+future script-only update can distinguish a known prior Maestro block from an
+owner edit while preserving all content outside the markers.
+On Windows, an existing workspace `CLAUDE.md` must be UTF-8 without BOM; an
+unsupported encoding stops before workspace mutation and leaves the file
+byte-for-byte unchanged.
+
+This profile retains all seven Claude lifecycle bindings through readable
+shell/PowerShell handlers, the five canonical specialists as operational Claude
+project agents, compatible managed skills, orientation, a script-specific
+onboarding, atlas, policies, content update/rollback and `continuity-lite-v1`.
+The continuity profile keeps reviewed task/checkpoint bodies in Markdown and
+injects only a bounded logical pointer, state and checkpoint-presence flag on
+`SessionStart`; it is not the authenticated native execution ledger. The
+separate `session-profile-lite-v1` preserves explicitly reviewed working
+style through a validated local pointer and injects only
+`standard|advanced|power`, revision and relative pointer—not the profile body.
+Its separate consent explains that Claude may later open only a relevant
+section of the reviewed Markdown; revocation deletes the pointer state while
+preserving the Markdown unless the owner requests deletion separately.
+It is not native SELF, memory or an authenticated Session Context packet.
+`agent-route-lite-v1` adds bounded metadata-only sequence assurance for the
+five specialists, including the strategic Client Account–Case–Client Account
+round trip. It remains best-effort hook enforcement without signed packets or
+authenticated native receipts.
+Skills whose state machine requires the native CLI are listed as unavailable
+rather than installed in a broken form. It intentionally reports the native CLI,
+signed-provider verification, secure credentials, authenticated native hook
+receipts, external-mutation challenges, native signed specialist-route
+authority, schedulers, background maintenance, native ingestion and CLI
+ledgers as unavailable. This beta installs only the Claude runtime projection;
+the canonical Codex adapter remains unavailable in this profile. The inventory is integrity evidence, not publisher authentication;
+deliver the ZIP SHA-256 independently. Shell/PowerShell/AppLocker/EDR policy can
+still block the scripts, and the package never attempts to weaken those controls.
+The recipient can read the shell/PowerShell and managed skills/content. This
+route keeps the Go implementation and repository private, but is not a promise
+of zero readable product logic.
+
 The self-contained installer factory is the single-file option over the same
 validated package contract. Run `go run ./dev/release self-contained` with the
 complete conventional package directory as `--source` and its

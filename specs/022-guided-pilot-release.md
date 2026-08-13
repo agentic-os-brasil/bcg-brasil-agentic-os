@@ -25,6 +25,13 @@ The skill cannot:
 - bypass unavailable native storage, provider or signing authorities;
 - describe isolated CI as corporate-device acceptance or pilot readiness.
 
+Decision `SHHK` permits a separate factory-built script-only profile under
+Spec 053. It requires no developer tool on the endpoint, but it is intentionally
+not a substitution for native CLI authority or native feature parity. The
+guided skill must read its capability matrix, may rely on the explicitly
+projected text-hook subset and must never claim unavailable native controls are
+active.
+
 Decisions `CARY` and `DZIP` define one narrower pre-pilot exception outside the
 signed guided-pilot path: factory-built target-specific Windows amd64 and
 macOS arm64 local-beta ZIPs may perform a real user-space installation for a

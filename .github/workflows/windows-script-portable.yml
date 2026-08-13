@@ -1,0 +1,104 @@
+name: Windows script-only portable acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/local-build-install-kit
+
+permissions:
+  contents: write
+
+jobs:
+  windows-script-preview18:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Parse Windows acceptance scripts with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          foreach ($path in @(
+            'dev/acceptance/script-only-windows-artifact.ps1',
+            'dev/acceptance/run-script-only-windows-ci.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path), [ref]$tokens, [ref]$errors
+            )
+            if ($errors.Count -ne 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "PowerShell 5.1 parser rejected $path"
+            }
+          }
+
+      - name: Build native conditioned test and exact Windows ZIPs
+        shell: powershell
+        run: |
+          $packageRoot = Join-Path $env:RUNNER_TEMP 'script portable packages'
+          New-Item -ItemType Directory -Path $packageRoot | Out-Null
+          go test -c ./internal/dev/releasepack -o (Join-Path $env:RUNNER_TEMP 'releasepack-tests.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'failed to compile native Windows releasepack tests' }
+          go run ./dev/release portable-script-windows --version 0.1.17 --output (Join-Path $packageRoot 'Maestro-Portable-0.1.17-windows-powershell-local-beta.zip')
+          if ($LASTEXITCODE -ne 0) { throw 'failed to build previous Windows ZIP' }
+          go run ./dev/release portable-script-windows --version 0.1.18 --output (Join-Path $packageRoot 'Maestro-Portable-0.1.18-windows-powershell-local-beta.zip')
+          if ($LASTEXITCODE -ne 0) { throw 'failed to build candidate Windows ZIP' }
+          $candidate = Join-Path $packageRoot 'Maestro-Portable-0.1.18-windows-powershell-local-beta.zip'
+          $digest = (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($digest -ne '42625631d51186dcffb900da090da38e9268219f05b1ca1e6ad81f0c45e6664a') {
+            throw "Windows rebuild did not match preview 0.1.18: $digest"
+          }
+
+      - name: Run native lifecycle and exact-artifact acceptance as a standard user
+        id: native
+        continue-on-error: true
+        shell: powershell
+        run: |
+          $packageRoot = Join-Path $env:RUNNER_TEMP 'script portable packages'
+          $receipt = Join-Path $env:RUNNER_TEMP 'windows-preview18-receipt.json'
+          ./dev/acceptance/run-script-only-windows-ci.ps1 `
+            -RepositoryRoot $env:GITHUB_WORKSPACE `
+            -TestBinary (Join-Path $env:RUNNER_TEMP 'releasepack-tests.exe') `
+            -PreviousZip (Join-Path $packageRoot 'Maestro-Portable-0.1.17-windows-powershell-local-beta.zip') `
+            -PreviousChecksum (Join-Path $packageRoot 'Maestro-Portable-0.1.17-windows-powershell-local-beta.zip.sha256') `
+            -CandidateZip (Join-Path $packageRoot 'Maestro-Portable-0.1.18-windows-powershell-local-beta.zip') `
+            -CandidateChecksum (Join-Path $packageRoot 'Maestro-Portable-0.1.18-windows-powershell-local-beta.zip.sha256') `
+            -OutputReceipt $receipt
+
+      - name: Upload native Windows receipt
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: windows-script-preview18-receipt
+          path: ${{ runner.temp }}/windows-preview18-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Publish immutable result tag
+        if: always()
+        shell: powershell
+        env:
+          NATIVE_OUTCOME: ${{ steps.native.outcome }}
+        run: |
+          $status = $env:NATIVE_OUTCOME
+          $short = $env:GITHUB_SHA.Substring(0, 12)
+          $tag = "windows-script-preview18-${status}-${short}-$env:GITHUB_RUN_ID"
+          $receipt = Join-Path $env:RUNNER_TEMP 'windows-preview18-receipt.json'
+          $receiptHash = if (Test-Path -LiteralPath $receipt) {
+            (Get-FileHash -LiteralPath $receipt -Algorithm SHA256).Hash.ToLowerInvariant()
+          } else { 'absent' }
+          git config user.name 'Maestro Windows Evidence'
+          git config user.email 'windows-evidence@example.invalid'
+          git tag -a $tag -m "status=$status`ncandidate_sha256=42625631d51186dcffb900da090da38e9268219f05b1ca1e6ad81f0c45e6664a`nreceipt_sha256=$receiptHash"
+          git push origin "refs/tags/$tag"
+
+      - name: Fail when native acceptance failed
+        if: steps.native.outcome != 'success'
+        shell: powershell
+        run: throw 'native Windows script-only acceptance failed; inspect the uploaded logs and receipt'

@@ -98,6 +98,12 @@ Allowed release content is selected through an explicit factory allowlist.
 Repository copies, globbing the entire bundle tree and generated source
 archives are not product bundles.
 
+Decision `SHLL` and Spec 053 define a separate non-native exception for endpoints
+without a local compiler. It projects only allowlisted managed content and text
+scripts, carries an explicit reduced-capability matrix and contains no Maestro
+native executable or compiler payload. It is not the release-v1 CLI and cannot
+claim native feature parity or publisher authentication.
+
 Releases may contain code, official skills, sanitized templates, schemas,
 policies and runtime adapters. They may never contain:
 

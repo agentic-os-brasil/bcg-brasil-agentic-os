@@ -30,6 +30,22 @@ func TestInstallProjectsManagedNativeAgentsIdempotently(t *testing.T) {
 	}
 }
 
+func TestProjectionFilesMatchesInstalledClaudeAgentSurface(t *testing.T) {
+	files, err := ProjectionFiles()
+	if err != nil || len(files) != 5 {
+		t.Fatalf("projection files=%d err=%v", len(files), err)
+	}
+	if _, ok := files["maestro.md"]; ok {
+		t.Fatal("Maestro must remain the main-session identity")
+	}
+	for _, name := range []string{"client-account-agent.md", "case-agent.md", "walter.md", "darwin.md", "pa-expert.md"} {
+		body, ok := files[name]
+		if !ok || !strings.HasPrefix(string(body), managedMarker) || !strings.Contains(string(body), "---\nname: ") {
+			t.Fatalf("invalid managed agent projection %s: %q", name, body)
+		}
+	}
+}
+
 func TestGuardToolEnforcesToolFreeAndWorkspaceBoundaries(t *testing.T) {
 	workspace := t.TempDir()
 	if reason, managed := GuardTool("walter", "Read", json.RawMessage(`{"file_path":"note.md"}`), workspace, workspace); !managed || reason == "" {

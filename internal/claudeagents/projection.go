@@ -37,6 +37,22 @@ var managed = []definition{
 	{ID: "pa-expert", Description: "Read-only functional or industrial PA Expert consulted only through Maestro.", Tools: "[]", PermissionMode: "plan"},
 }
 
+// ProjectionFiles returns the exact project-native Claude agent files used by
+// Install. Release factories use this to project the same managed contracts
+// into interpreter-only profiles without duplicating agent metadata or prompt
+// rendering outside this package.
+func ProjectionFiles() (map[string][]byte, error) {
+	files := make(map[string][]byte, len(managed))
+	for _, item := range managed {
+		body, err := render(item)
+		if err != nil {
+			return nil, err
+		}
+		files[item.ID+".md"] = append([]byte(nil), body...)
+	}
+	return files, nil
+}
+
 func Install(workspace string) (Status, error) {
 	root, rootPath, err := openAgentRoot(workspace, true)
 	if err != nil {

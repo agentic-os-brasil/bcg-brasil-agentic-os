@@ -50,8 +50,35 @@ func main() {
 		portableWindows(root, os.Args[2:])
 	case "portable-macos":
 		portableMacOS(root, os.Args[2:])
+	case "portable-script-macos":
+		portableScript(root, "macos", os.Args[2:])
+	case "portable-script-windows":
+		portableScript(root, "windows", os.Args[2:])
 	default:
 		usage()
+	}
+}
+
+func portableScript(root, target string, args []string) {
+	commandName := "portable-script-" + target
+	flags := flag.NewFlagSet(commandName, flag.ExitOnError)
+	version := flags.String("version", "", "immutable MAJOR.MINOR.PATCH managed-content version")
+	output := flags.String("output", "", "new target script-only ZIP path")
+	allowlist := flags.String("allowlist", "", "optional absolute distribution allowlist")
+	_ = flags.Parse(args)
+	if *version == "" || *output == "" || flags.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "usage: go run ./dev/release %s --version MAJOR.MINOR.PATCH --output ZIP [--allowlist FILE]\n", commandName)
+		os.Exit(2)
+	}
+	result, err := releasepack.BuildScriptPortable(releasepack.ScriptPortableOptions{
+		Root: root, Output: absoluteFromRoot(root, *output), Version: *version,
+		TargetOS: target, Allowlist: optionalAbsoluteFromRoot(root, *allowlist),
+	})
+	if err != nil {
+		fatal(err)
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+		fatal(err)
 	}
 }
 
@@ -395,7 +422,7 @@ func optionalAbsoluteFromRoot(root, value string) string {
 func usage() {
 	fmt.Fprintln(
 		os.Stderr,
-		"usage: go run ./dev/release <binary|icons|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness|self-contained|portable-windows|portable-macos> [options]",
+		"usage: go run ./dev/release <binary|icons|seeded-binaries|candidate|provenance|sign|verify|verify-signed|readiness|self-contained|portable-windows|portable-macos|portable-script-windows|portable-script-macos> [options]",
 	)
 	os.Exit(2)
 }

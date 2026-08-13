@@ -185,7 +185,7 @@ func Validate(root string, full bool, out io.Writer) error {
 	if full {
 		checks = append(checks,
 			check{"go vet (offline)", func() error { return runCommand(root, "go", "vet", "./...") }},
-			check{"unit tests (offline)", func() error { return runCommand(root, "go", "test", "./...") }},
+			check{"unit tests (offline)", func() error { return runCommand(root, "go", "test", "-timeout=15m", "./...") }},
 		)
 	} else {
 		checks = append(checks, check{"fast unit tests (offline)", func() error { return runCommand(root, "go", "test", "./internal/dev/...") }})

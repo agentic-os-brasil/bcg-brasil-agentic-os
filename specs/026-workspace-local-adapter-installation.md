@@ -80,6 +80,14 @@ only the marked managed block and then becomes the authority for subsequent
 onboarding. The seed cannot grant tools, suppress native host permissions,
 invoke another platform's payload or substitute for readiness checks.
 
+A Spec 053 script-only package may instead project managed orientation, skills,
+agent definitions and all seven Claude bindings through text handlers. Its
+capability matrix must distinguish those script hooks from authenticated native
+receipts, identity-bound external-mutation challenges and deterministic
+specialist-route enforcement, which remain `unavailable`. Presence of the
+projection alone never promotes native `adapter_observed` or
+`native_qualified`.
+
 The runtime still requires its ordinary local trust/review behavior. An
 installed configuration is not proof that a runtime executed the hook; later
 doctor and conformance work will report that distinction. See Spec 021 for the
