@@ -121,6 +121,13 @@
       "relative_path": "skills/find-prior-work/SKILL.md"
     },
     {
+      "id": "fodais-performance-review",
+      "display_name": "FoDAIS Performance Review",
+      "trigger": "Conduct a structured CDC interview for BCG X FoDAIS/Sr. FoDAIS",
+      "default_prompt": "Use $fodais-performance-review to conduct the FoDAIS CDC interview and produce the evaluation text.",
+      "relative_path": "skills/fodais-performance-review/SKILL.md"
+    },
+    {
       "id": "ingest-content",
       "display_name": "Ingest Content",
       "trigger": "Extract professional documents locally and safely",

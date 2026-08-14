@@ -21,6 +21,7 @@
 | Expert Interview Guide | Structure a bounded interview guide from approved case questions | `skills/expert-interview-guide/SKILL.md` |
 | Feedback Capture | Record feedback received and apply it to your objectives | `skills/feedback-capture/SKILL.md` |
 | Find Prior Work | Recover an explicitly requested past deck or work artifact | `skills/find-prior-work/SKILL.md` |
+| FoDAIS Performance Review | Conduct a structured CDC interview for BCG X FoDAIS/Sr. FoDAIS | `skills/fodais-performance-review/SKILL.md` |
 | Ingest Content | Extract professional documents locally and safely | `skills/ingest-content/SKILL.md` |
 | Interaction Profile | Apply the owner's Maestro communication and disclosure preference | `skills/interaction-profile/SKILL.md` |
 | Investigate | Find the root cause of a wrong or surprising result | `skills/investigate/SKILL.md` |

@@ -514,6 +514,14 @@
       "path": "skills/find-prior-work/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/fodais-performance-review/SKILL.md",
+      "path": "skills/fodais-performance-review/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/fodais-performance-review/agents/openai.yaml",
+      "path": "skills/fodais-performance-review/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/ingest-content/SKILL.md",
       "path": "skills/ingest-content/SKILL.md"
     },

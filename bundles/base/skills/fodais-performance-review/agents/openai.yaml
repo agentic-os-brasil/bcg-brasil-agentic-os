@@ -1,0 +1,4 @@
+interface:
+  display_name: "FoDAIS Performance Review"
+  short_description: "Conduct a structured CDC interview for BCG X FoDAIS/Sr. FoDAIS"
+  default_prompt: "Use $fodais-performance-review to conduct the FoDAIS CDC interview and produce the evaluation text."
