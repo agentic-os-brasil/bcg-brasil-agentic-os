@@ -29,7 +29,7 @@ Resolver `interaction-profile` se disponível. O perfil ajusta profundidade de e
    - PDF texto-nativo: extração direta via Read.
    - Markdown, HTML, TXT, JSON, CSV: extração direta via Read.
    - Imagem com texto: Read entrega o conteúdo visual ao modelo, que transcreve o texto relevante.
-   - Office (DOCX, XLSX, PPTX): ambiente Python sob demanda. Ver seção "Leitura de Office sob demanda".
+   - Office (DOCX, XLSX, PPTX): tentar extração nativa primeiro em macOS (ver "Extração nativa primeiro (macOS)"); se falhar ou o sistema não for macOS, cair no ambiente Python sob demanda (ver "Leitura de Office sob demanda").
 
 4. **Sintetizar em Markdown.** Produzir um resumo estruturado com:
    - Título curto do documento.
@@ -42,9 +42,31 @@ Resolver `interaction-profile` se disponível. O perfil ajusta profundidade de e
 
 6. **Confirmar registro.** Reportar em uma linha: tópico, caminho relativo do arquivo criado, número aproximado de bullets no sumário. Não colar o sumário na conversa salvo se solicitado.
 
+## Extração nativa primeiro (macOS)
+
+O princípio é evitar dependências desnecessárias: em macOS existem extratores embutidos que resolvem a maior parte dos DOCX, PPTX e XLSX sem qualquer instalação. Só escalar para o ambiente Python sob demanda quando a extração nativa falhar de fato.
+
+1. **Guarda de plataforma.** Executar via Bash `uname -s` e comparar com `Darwin`. Se o sistema não for macOS (`uname -s` diferente de `Darwin`, ex.: Linux ou WSL), pular esta seção inteira e ir direto para "Leitura de Office sob demanda". Não tentar os comandos abaixo em outras plataformas.
+
+2. **Escolher o comando pela extensão** e capturar a saída padrão via Bash:
+   - DOCX: `textutil -convert txt "<caminho-absoluto>" -stdout`
+   - PPTX: `unzip -p "<caminho-absoluto>" 'ppt/slides/slide*.xml' | xmllint --xpath "//*[local-name()='t']/text()" - 2>/dev/null`
+   - XLSX: `unzip -p "<caminho-absoluto>" xl/sharedStrings.xml xl/worksheets/sheet*.xml`
+
+3. **Detecção explícita de extração falhada.** Uma saída com exit code 0 não garante conteúdo útil (slide só com imagens, células só com fórmulas, SmartArt, textboxes fora do fluxo principal). Considerar a extração falhada, e escalar para "Leitura de Office sob demanda", quando qualquer uma destas condições for verdadeira:
+   - Exit code diferente de 0.
+   - Saída padrão com menos de 50 caracteres não-brancos.
+   - Razão `caracteres_extraidos / tamanho_do_arquivo_em_KB` menor que 5 (por exemplo, um DOCX de 200 KB devolvendo 400 caracteres de texto puro é sinal de perda estrutural).
+
+4. **Fallback de última tentativa antes de escalar** (opcional, só quando o comando principal deu exit 0 mas caiu no critério de vazio): gerar um preview via `qlmanage -t -s 2000 "<caminho-absoluto>" -o /tmp/` e reportar ao usuário o caminho do PNG gerado como material auxiliar. O texto principal continua vindo da rota Python.
+
+5. **Se a extração nativa passa nos critérios do passo 3**, seguir direto para o passo 4 do Fluxo (Sintetizar em Markdown) usando a saída obtida como conteúdo do documento. Nenhum ambiente Python é criado.
+
+Nunca instalar nada nesta seção. `textutil`, `unzip`, `xmllint` e `qlmanage` já vêm com o macOS.
+
 ## Leitura de Office sob demanda (DOCX, XLSX, PPTX)
 
-Decisão PYUV autoriza este caminho pontual: um ambiente Python local, pinado e isolado por workspace, criado apenas quando o usuário pede a leitura de um desses formatos.
+Decisão PYUV autoriza este caminho pontual: um ambiente Python local, pinado e isolado por workspace, criado apenas quando a extração nativa (ver seção anterior) falhou ou não é aplicável (sistema não-macOS).
 
 1. **Verificar se já existe um ambiente pronto.** Ler `data/runtime/python-env.json` (se existir) e confirmar `schema_version=1`, `markitdown_version=0.1.7`, `python_version=3.12`, e que o interpretador existe (`data/runtime/venv/bin/python` no Mac/Linux, `data/runtime/venv\Scripts\python.exe` no Windows). Se tudo bater, pular direto para o passo 5.
 2. **Pedir confirmação antes de qualquer instalação**, em uma linha: "Para ler arquivos Word, Excel ou PowerPoint preciso criar um ambiente Python local isolado neste workspace (via uv, download de poucos MB, sem privilégios de administrador). Posso criar agora?" Se o usuário recusar, seguir para "Fora do escopo desta release".
