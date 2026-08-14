@@ -29,7 +29,7 @@ Resolver `interaction-profile` se disponível. O perfil ajusta profundidade de e
    - PDF texto-nativo: extração direta via Read.
    - Markdown, HTML, TXT, JSON, CSV: extração direta via Read.
    - Imagem com texto: Read entrega o conteúdo visual ao modelo, que transcreve o texto relevante.
-   - Office (DOCX, XLSX, PPTX): não suportado nativamente nesta release. Ver seção "Fora do escopo desta release".
+   - Office (DOCX, XLSX, PPTX): ambiente Python sob demanda. Ver seção "Leitura de Office sob demanda".
 
 4. **Sintetizar em Markdown.** Produzir um resumo estruturado com:
    - Título curto do documento.
@@ -42,6 +42,25 @@ Resolver `interaction-profile` se disponível. O perfil ajusta profundidade de e
 
 6. **Confirmar registro.** Reportar em uma linha: tópico, caminho relativo do arquivo criado, número aproximado de bullets no sumário. Não colar o sumário na conversa salvo se solicitado.
 
+## Leitura de Office sob demanda (DOCX, XLSX, PPTX)
+
+Decisão PYUV autoriza este caminho pontual: um ambiente Python local, pinado e isolado por workspace, criado apenas quando o usuário pede a leitura de um desses formatos.
+
+1. **Verificar se já existe um ambiente pronto.** Ler `data/runtime/python-env.json` (se existir) e confirmar `schema_version=1`, `markitdown_version=0.1.7`, `python_version=3.12`, e que o interpretador existe (`data/runtime/venv/bin/python` no Mac/Linux, `data/runtime/venv\Scripts\python.exe` no Windows). Se tudo bater, pular direto para o passo 5.
+2. **Pedir confirmação antes de qualquer instalação**, em uma linha: "Para ler arquivos Word, Excel ou PowerPoint preciso criar um ambiente Python local isolado neste workspace (via uv, download de poucos MB, sem privilégios de administrador). Posso criar agora?" Se o usuário recusar, seguir para "Fora do escopo desta release".
+3. **Se confirmado, garantir que `uv` está instalado.** Verificar via Bash (`uv --version`). Se já presente, seguir direto para o próximo passo. Se ausente, decisão UVIN autoriza o próprio Maestro a instalá-lo: pedir confirmação em uma linha separada ("`uv` não está instalado; posso baixar e rodar o instalador oficial de https://astral.sh agora? Não precisa de privilégios de administrador.") e, se aceito, executar via Bash exatamente o instalador oficial publicado pela astral.sh, sem espelhar ou modificar o script:
+   - Mac/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+   - Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+   Se o usuário recusar a instalação do `uv`, ou o comando falhar (rede indisponível, proxy corporativo, etc.), reportar em uma linha e seguir para "Fora do escopo desta release".
+4. **Criar o ambiente Python via Bash.** Executar nesta ordem:
+   - `uv venv data/runtime/venv --python 3.12`
+   - `uv pip install --python <caminho-do-interpretador-do-passo-1> markitdown==0.1.7`
+   - Gravar `data/runtime/python-env.json` via Write com `{"schema_version":1,"markitdown_version":"0.1.7","python_version":"3.12","platform":"<darwin|windows|linux>","created_at":"<hora UTC ISO 8601>"}`.
+   Se qualquer comando falhar, reportar em uma linha o que falhou e seguir para "Fora do escopo desta release".
+5. **Converter o documento.** Executar `<caminho-do-interpretador> -m markitdown "<caminho-absoluto-do-arquivo>"` via Bash e usar a saída padrão como o texto extraído. Continuar a partir do passo 4 do Fluxo (Sintetizar em Markdown).
+
+Nunca recriar ou reinstalar o ambiente quando o receipt já é válido: reutilizar silenciosamente, sem perguntar de novo. A confirmação do passo 2 só é necessária na primeira criação.
+
 ## Invariantes
 
 - O documento original nunca é movido nem copiado, permanece no local escolhido pelo usuário.
@@ -52,9 +71,9 @@ Resolver `interaction-profile` se disponível. O perfil ajusta profundidade de e
 
 ## Fora do escopo desta release
 
-Extração automática de DOCX, XLSX, PPTX, PDFs escaneados (imagem pura) e OCR de imagens complexas dependem de runtime local dedicado que ainda não está incluído no ZIP do Maestro. Nesses casos:
+PDFs escaneados (imagem pura) e OCR de imagens complexas dependem de runtime local dedicado que ainda não está incluído no ZIP do Maestro. O mesmo se aplica a DOCX, XLSX ou PPTX quando o usuário recusa a criação do ambiente Python sob demanda (seção "Leitura de Office sob demanda") ou quando `uv` não está disponível. Nesses casos:
 
-- Informar de forma direta que a extração nativa desses formatos entra em release posterior do Maestro.
+- Informar de forma direta que a extração nativa desses formatos entra em release posterior do Maestro, ou depende de instalar `uv`, conforme o caso.
 - Oferecer a alternativa atual: pedir ao usuário que abra o arquivo na aplicação nativa, copie o texto relevante e cole no chat. A skill então grava o material colado como se tivesse sido lido de um `.md`, mantendo o campo "Origem" apontando para o caminho absoluto do arquivo original.
 
 ## Encerramento
