@@ -49,14 +49,14 @@ O princípio é evitar dependências desnecessárias: em macOS existem extratore
 1. **Guarda de plataforma.** Executar via Bash `uname -s` e comparar com `Darwin`. Se o sistema não for macOS (`uname -s` diferente de `Darwin`, ex.: Linux ou WSL), pular esta seção inteira e ir direto para "Leitura de Office sob demanda". Não tentar os comandos abaixo em outras plataformas.
 
 2. **Escolher o comando pela extensão** e capturar a saída padrão via Bash:
-   - DOCX: `textutil -convert txt "<caminho-absoluto>" -stdout`
+   - DOC / DOCX: `textutil -convert txt "<caminho-absoluto>" -stdout` (o `textutil` do macOS lê os dois formatos nativamente).
    - PPTX: `unzip -p "<caminho-absoluto>" 'ppt/slides/slide*.xml' | xmllint --xpath "//*[local-name()='t']/text()" - 2>/dev/null`
-   - XLSX: `unzip -p "<caminho-absoluto>" xl/sharedStrings.xml xl/worksheets/sheet*.xml`
+   - XLSX: `unzip -p "<caminho-absoluto>" 'xl/sharedStrings.xml' | xmllint --xpath "//*[local-name()='t']/text()" - 2>/dev/null` (o texto útil vive quase sempre em `sharedStrings.xml`; concatenar `sheet*.xml` cru inflaria a saída com XML sem valor e derrotaria o critério de sucesso abaixo).
 
 3. **Detecção explícita de extração falhada.** Uma saída com exit code 0 não garante conteúdo útil (slide só com imagens, células só com fórmulas, SmartArt, textboxes fora do fluxo principal). Considerar a extração falhada, e escalar para "Leitura de Office sob demanda", quando qualquer uma destas condições for verdadeira:
-   - Exit code diferente de 0.
    - Saída padrão com menos de 50 caracteres não-brancos.
    - Razão `caracteres_extraidos / tamanho_do_arquivo_em_KB` menor que 5 (por exemplo, um DOCX de 200 KB devolvendo 400 caracteres de texto puro é sinal de perda estrutural).
+   - Exit code diferente de 0 quando o comando é único (caso do `textutil`). Para os pipelines com `xmllint` (PPTX e XLSX), o exit code final reflete o `xmllint` e pode ser não-zero mesmo com texto útil no início (`xmllint` reclama de multi-documento). Nesses dois casos, ignorar o exit code e decidir apenas pelos dois critérios de tamanho acima.
 
 4. **Fallback de última tentativa antes de escalar** (opcional, só quando o comando principal deu exit 0 mas caiu no critério de vazio): gerar um preview via `qlmanage -t -s 2000 "<caminho-absoluto>" -o /tmp/` e reportar ao usuário o caminho do PNG gerado como material auxiliar. O texto principal continua vindo da rota Python.
 
