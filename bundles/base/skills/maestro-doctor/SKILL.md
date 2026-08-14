@@ -39,6 +39,13 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
 
 9. **Log do scaffold** — se `${CLAUDE_PROJECT_DIR}/data/.scaffold.log` existir, ler as últimas 20 linhas. Se contiver `MKDIR FAIL` ou `ABORT`, surfar como ponto a verificar com a recomendação: "reextraia o ZIP por cima da pasta Maestro. A pasta `data/` é preservada porque não está no ZIP." Se só houver linhas `MKDIR OK` e `DONE`, seguir em silêncio.
 
+10. **Drift de árvore do owner (onboarding pré-fix)** — detectar owners que fizeram onboarding antes do fix de fechamento da árvore de controle. Ler:
+    - `data/owner/registry.json` → campo `initialized`
+    - `data/owner/interview/confirmations.json` → campo `completed_tracks`
+    - `data/profile/onboarding.json` → campo `status`
+
+    Se `onboarding.json.status == "complete"` **e** (`registry.json.initialized == false` **ou** `confirmations.json.completed_tracks == []`), surfar como ponto informativo (não é erro funcional): "o onboarding foi concluído numa versão anterior do Maestro e dois arquivos de controle interno ficaram desatualizados. Nenhuma ação necessária — rodar o onboarding uma vez de novo (opcional) atualiza os arquivos. Isso não afeta o funcionamento do sistema." Se ambos os campos já refletem o estado concluído, seguir em silêncio.
+
 ## Output shape
 
 Return a single message with:
