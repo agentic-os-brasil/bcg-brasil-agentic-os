@@ -17,6 +17,8 @@ Rubrica de referência: `Associates & Consultants - Grading Rubrics 2023.pdf` (B
 > "fodais-performance-review: [nome]"
 > "preciso fazer o CDC do [nome], BCG X"
 
+Resolva a skill canônica `interaction-profile` antes de conduzir a entrevista, para aplicar o estilo de comunicação e disclosure do owner.
+
 ---
 
 ## Processo — entrevista em etapas
