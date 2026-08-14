@@ -316,7 +316,12 @@ if [ ! -f "$DATA_DIR/owner/registry.json" ]; then
     "observations": "owner/observations/",
     "interview":    "owner/interview/"
   },
-  "initialized": false
+  "initialized": false,
+  "personal_context": {
+    "state": "not_asked",
+    "state_timestamp": null,
+    "source_file": "owner/self/personal-context.md"
+  }
 }
 EOF
   log_line "WRITE OK  data/owner/registry.json (placeholder)"

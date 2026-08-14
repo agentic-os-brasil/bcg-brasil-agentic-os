@@ -89,18 +89,47 @@ The quick track covers those two identity facets plus
 It is a useful operating baseline, but it intentionally leaves external voice,
 motivations, decision rules and working boundaries for later refinement.
 
-**Personal-context policy (default-on with opt-out):** the personal-context
-facet is collected by default in both tracks. Ask a short, bounded question
-such as *"Quer registrar um contexto pessoal curto que o Maestro deve
-respeitar no trabalho? (ex.: fuso, restrições de agenda, algo relevante para
-priorização). Você pode fazer opt-out."* Never require disclosure of family,
-health, faith or private history: the owner may share only the minimum
-necessary or opt out. When the owner opts out, write
-`data/owner/self/personal-context.md` with an explicit opt-out record
-(timestamp + "opt-out registrado pelo owner"), not an ambiguous "none for
-now". Psychological/personality material, assessments and visual identity
-are not inferred or imported by either track; they require a separate,
-explicit local consent path.
+**Personal-context policy (default-on with explicit opt-out disclosure):**
+the personal-context facet is collected by default in both tracks. The
+prompt itself must disclose the default and the opt-out path in the same
+turn where the question is asked. Use this exact form (or a faithful
+translation preserving both clauses):
+
+> *"Por padrão, o Maestro registra um contexto pessoal curto para respeitar
+> no trabalho (ex.: fuso, restrições de agenda, algo relevante para
+> priorização). Você pode fazer opt-out agora — responda `opt-out` e nada
+> pessoal é gravado. Nunca peça histórico de família, saúde, fé ou privado."*
+
+Never require disclosure of family, health, faith or private history: the
+owner may share only the minimum necessary or opt out.
+
+**Writing rules for personal-context:**
+
+1. **Facet file (`data/owner/self/personal-context.md`):** cap at 10 lines,
+   no rationale prose. If the owner opts out, the file contains only the
+   opt-out record: a `# Personal context` heading, one line stating "opt-out
+   registrado pelo owner", and one line with the ISO 8601 UTC timestamp.
+   Rationale, if the owner offered any, goes to the interview trail, never
+   to the facet file (it would be injected into every session by
+   `session-start-memory-inject.sh` and become context rot).
+2. **Structured state (`data/owner/registry.json` → `personal_context`):**
+   the scaffold creates this object with `state: "not_asked"`. On completion
+   of the personal-context question, write:
+   - `state`: `"authorized"` if the owner shared context; `"declined"` if
+     the owner explicitly opted out; `"deferred"` only if the owner asked
+     to postpone the decision;
+   - `state_timestamp`: current ISO 8601 UTC timestamp;
+   - `source_file`: unchanged (`"owner/self/personal-context.md"`).
+   Downstream consumers key off this structured field, not the prose file.
+3. **State transitions:** `declined` is sticky. If
+   `personal_context.state == "declined"`, the skill must not re-prompt for
+   personal context on a later run without an explicit user request
+   ("reabrir contexto pessoal" or equivalent). Re-running onboarding does
+   not overwrite `declined`. `deferred` may be revisited on the next run.
+
+Psychological/personality material, assessments and visual identity are not
+inferred or imported by either track; they require a separate, explicit
+local consent path.
 
 ## Sugestão técnica orientada pela função
 
