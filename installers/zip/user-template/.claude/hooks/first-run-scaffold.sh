@@ -317,6 +317,7 @@ if [ ! -f "$DATA_DIR/owner/registry.json" ]; then
     "interview":    "owner/interview/"
   },
   "initialized": false,
+  "owner_type": null,
   "personal_context": {
     "state": "not_asked",
     "state_timestamp": null,

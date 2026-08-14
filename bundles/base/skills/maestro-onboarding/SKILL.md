@@ -89,16 +89,29 @@ The quick track covers those two identity facets plus
 It is a useful operating baseline, but it intentionally leaves external voice,
 motivations, decision rules and working boundaries for later refinement.
 
-**Personal-context policy (default-on with explicit opt-out disclosure):**
-the personal-context facet is collected by default in both tracks. The
-prompt itself must disclose the default and the opt-out path in the same
-turn where the question is asked. Use this exact form (or a faithful
-translation preserving both clauses):
+**Personal-context policy (owner-scoped default with explicit disclosure):**
+the default collection mode depends on `registry.json.owner_type`:
+
+- `owner_type == "solo-maintainer"`: personal-context is collected by
+  default in both tracks, with the disclosure quoted below.
+- `owner_type ∈ {"shared-pack", "distro-adopter"}` or unset/null: the
+  default is opt-in. The skill must ask an affirmative question
+  ("Registrar um contexto pessoal curto agora?") and only proceed on
+  explicit consent. Silence or ambiguity leaves `state: "not_asked"`.
+
+The first onboarding run determines `owner_type` from the interview
+sequence before reaching the personal-context question. When `owner_type`
+remains unset at the moment of asking, treat as `shared-pack` (the
+conservative default for the sanitized distro pack).
+
+When the default-on path applies, the prompt itself must disclose the
+default and the opt-out path in the same turn where the question is asked.
+Use this exact form (or a faithful translation preserving both clauses):
 
 > *"Por padrão, o Maestro registra um contexto pessoal curto para respeitar
 > no trabalho (ex.: fuso, restrições de agenda, algo relevante para
-> priorização). Você pode fazer opt-out agora — responda `opt-out` e nada
-> pessoal é gravado. Nunca peça histórico de família, saúde, fé ou privado."*
+> priorização). Para opt-out agora, responder `opt-out`; nada pessoal é
+> gravado. O Maestro nunca pede histórico de família, saúde, fé ou privado."*
 
 Never require disclosure of family, health, faith or private history: the
 owner may share only the minimum necessary or opt out.
