@@ -6,6 +6,28 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## OTSP - Owner-type gates personal-context default (solo-maintainer vs shared-pack)
+
+- Date: 2026-08-13
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: PCOO shipped `personal-context` as default-on with explicit opt-out disclosure. Walter pressure-test on PR #363 surfaced a load-bearing objection: `agentic-os-brasil/bcg-brasil-agentic-os` is the sanitized distro pack for BCG colleagues, not only the maintainer's personal workspace. A single global default-on transfers the privacy posture to every adopter by design, not just by disclosure. Disclosure is necessary but not sufficient; the default itself codifies a stance.
+- Decision: The personal-context default is scoped by `registry.json.owner_type`. When `owner_type == "solo-maintainer"`, the default-on path from PCOO applies (default collection with mandatory in-turn disclosure). When `owner_type ∈ {"shared-pack", "distro-adopter"}` or unset/null, the default reverts to opt-in: the skill asks an affirmative question and only proceeds on explicit consent. Undeclared owner_type is treated as `shared-pack` (conservative default for the sanitized distro pack). The scaffold seeds `owner_type: null` in `registry.json`; the first onboarding run determines it from the interview sequence before reaching the personal-context question. All other PCOO guarantees are unchanged: sticky `declined`, structured state, 10-line facet cap, opt-out record on decline.
+- Consequences: Solo maintainers see no behavioural change vs PCOO. Distro adopters see an affirmative consent prompt instead of a default-on disclosure until they declare themselves solo maintainers, which honours "no personal in shared surface" by design rather than only by disclaimer. Downstream skills key off `owner_type` alongside `personal_context.state`. Doctor/Darwin should surface `owner_type == null` as a configuration signal, not an error.
+- Refs: bundles/base/skills/maestro-onboarding/SKILL.md; installers/zip/user-template/.claude/hooks/first-run-scaffold.sh; PR #363 walter refine 2026-08-13; refines PCOO
+- Supersedes: none
+
+## PCOO - Personal-context facet collected by default with explicit opt-out
+
+- Date: 2026-08-13
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The `maestro-onboarding` skill treated `personal-context` as an opt-in consent boundary. In the first canary run (setup log 2026-08-13), this produced an ambiguous "nenhum contexto pessoal autorizado por enquanto" as the facet body, with no signal distinguishing "owner declined" from "not yet asked". Downstream skills that read `owner/self/personal-context.md` cannot tell those states apart, so no re-prompt or refinement is safely triggerable later.
+- Decision: In both quick and complete tracks, `personal-context` is collected by default with a short, bounded question about work-relevant context (timezone, agenda constraints, prioritisation notes). The owner may explicitly opt out. When the owner opts out, the skill writes `data/owner/self/personal-context.md` with an explicit opt-out record (timestamp + "opt-out registrado pelo owner"), never an ambiguous placeholder. Extended personal-context (the "Contexto pessoal ampliado" optional layer) remains opt-in and is unaffected. Psychological/personality material, assessments and visual identity remain opt-in and require a separate consent path. Refinement (post initial commit, per Walter minimum bar): (a) the prompt itself must carry a mandatory in-turn disclosure line naming the default, the opt-out path and the never-ask list (exact PT-BR wording locked in SKILL.md); (b) machine-readable state lives in `owner/registry.json.personal_context` as `{state, state_timestamp, source_file}` with states `not_asked | authorized | declined | deferred`, seeded `not_asked` by the scaffold; (c) `declined` is sticky — no re-prompt without explicit owner request; (d) facet file capped at 10 lines with no rationale prose to avoid session-start-inject context rot.
+- Consequences: The onboarding interview asks one additional bounded question in the quick track (still within the ~10 minute budget). Facet consumers can distinguish opt-out (deterministic, timestamped) from unfilled placeholder via structured field. Doctor/Darwin gain a checkable signal for personal-context state. A second canary with a non-Bruno BCG colleague is required before merge to surface disclosure-language friction from outside the build context. No credentials, workspace content or client data are affected.
+- Refs: bundles/base/skills/maestro-onboarding/SKILL.md; setup-log 2026-08-13 (canary Bruno, v0.1.6)
+- Supersedes: none
+
 ## CDLE - Rename base bundle skill `decision-log-entry` to `case-decision-log-entry`
 
 - Date: 2026-08-12
@@ -1126,4 +1148,26 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Decision: Every mutating installation, update, workspace initialization and setup entry point must reject an elevated Windows process before its first write. The durable-state ownership check remains strict; existing mismatched state is reported as an actionable, bounded repair condition and is never silently taken over, ACL-reset, deleted or overwritten. Native PowerShell/cmd and the visual installer are supported Windows invocation paths; MSYS/Git Bash path translation is not installation evidence.
 - Consequences: A user who launches `Run as administrator` receives a clear blocked result and can retry without elevation before state is created. A previously contaminated installation requires a bounded support repair or explicit recreation of Maestro-owned state after backup; ordinary workspace/client files remain untouched. The product does not claim automated ownership transfer without a reviewed Windows security primitive.
 - Refs: specs/048-one-and-done-setup.md; docs/installer-bridge.md; internal/userlevel; internal/agentorchestration/file_privacy_windows.go; Windows pilot report (2026-08-11)
+- Supersedes: none
+
+## PYUV - Allow an on-demand, pinned Python environment for pilot Python-dependent capabilities
+
+- Date: 2026-08-13
+- Status: accepted
+- Owner: Felipe Chicarelli
+- Context: SETU prohibited any skill from installing an ambient Python package, and CNAB deferred MarkItDown installation through Claude as a future item; specs/010 and specs/031 require a fully signed, managed runtime pack before any Python-dependent capability ships, and forbid shelling out to an ad-hoc Python environment. That signed pack does not exist yet, but real pilot users already reach tasks (reading a PDF/PPTX/DOCX/XLSX source) that require Python-based tooling such as MarkItDown, and the product today blocks those tasks entirely instead of degrading gracefully.
+- Decision: Only when a pilot user's explicit request requires a Python-dependent capability that the managed runtime pack does not yet cover, Maestro may create and reuse a single pinned, per-workspace local Python environment using `uv`, under `data/runtime/venv`, install only the exact pinned package versions required for that capability, and record a provenance receipt. This on-demand environment must ask for user confirmation before first creation/download, must never require administrator/elevated rights, must never run during normal onboarding or block unrelated work when absent, and must degrade to `unavailable` rather than fail silently when `uv` or network access cannot be obtained. This narrows (without closing) CNAB's deferral of MarkItDown-through-Claude to this bounded on-demand path, and narrows SETU's scope only for this explicit, user-confirmed, task-bound case.
+- Consequences: Pilot users on Windows and macOS gain Python-dependent capabilities (starting with MarkItDown) without waiting for the signed managed runtime pack; the on-demand environment remains a stopgap, not a replacement for specs/010/031's pinned-and-verified pack, and must be revisited once that pack ships. Package versions must be pinned and reproducible (e.g. a versioned lockfile), not resolved ad hoc from PyPI latest. Corporate proxy, disk space and offline behavior remain open implementation risks. This does not authorize other skills to install unrelated ambient packages; each future Python-dependent capability needs its own justification.
+- Refs: SETU; CNAB; MIDO; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md
+- Supersedes: none
+
+## UVIN - Allow Maestro to install `uv` itself, with confirmation, when it is the missing prerequisite for an on-demand Python capability
+
+- Date: 2026-08-13
+- Status: accepted
+- Owner: Felipe Chicarelli
+- Context: PYUV allows an on-demand, pinned, per-workspace Python environment via `uv` once a pilot user's request needs a Python-dependent capability, but assumed `uv` itself was already present and only had the skill point the user to https://docs.astral.sh/uv/ to install it manually. Real pilot users are non-technical and cannot be expected to run an installer themselves, so this remained a hard stop identical in effect to the gap PYUV was written to close.
+- Decision: When `uv` is absent and a pilot user's explicit request needs a Python-dependent capability under PYUV's on-demand path, Maestro may download and run the official `uv` installer from astral.sh (`install.sh` on macOS/Linux, `install.ps1` on Windows) directly, after asking the user a one-line confirmation before the download runs. The installer must be invoked exactly as published by astral.sh (no mirrored, modified or re-hosted copy), must never request or require administrator/elevated privileges, and must install to the standard per-user location rather than a system-wide path. This is a narrow widening of PYUV: it authorizes fetching and executing exactly one additional external artifact (the `uv` installer itself) under the same user-confirmed, task-bound conditions, and does not authorize installing any other external tool without its own decision.
+- Consequences: Pilot users no longer hit a hard stop when `uv` is missing; the on-demand Python path (PYUV) becomes usable end-to-end for a non-technical user. Maestro now downloads and executes one script from a third-party site (astral.sh) as part of normal operation, which is a new trust dependency beyond PyPI package installs already covered by PYUV; if astral.sh is unreachable (offline, corporate proxy/firewall) the capability must degrade to `unavailable` with the existing manual-install fallback, never fail silently. Must be revisited if specs/010/031's fully signed managed runtime pack ships and removes the need for a local `uv` install entirely.
+- Refs: PYUV; SETU; CNAB; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md
 - Supersedes: none

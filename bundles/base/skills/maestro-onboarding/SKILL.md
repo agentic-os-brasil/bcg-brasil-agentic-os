@@ -50,8 +50,8 @@ first identity question in the same message.
 
 | Opção | Tempo estimado | O que estabelece | Implicação |
 | --- | --- | --- | --- |
-| **Curta** | **~10 minutos** | Seu nome preferido, um limite explícito para contexto pessoal, papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites de trabalho serão refinados em conversas futuras; o contexto pessoal pode ser "nenhum por enquanto". |
-| **Completa** | **~30 minutos** | Identidade básica, contexto pessoal autorizado e as oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e quais limites pessoais autorizou. |
+| **Curta** | **~10 minutos** | Seu nome preferido, contexto pessoal de base (coletado por padrão; opt-out disponível), papel profissional, comunicação, preferências de trabalho e qualidade/QA | Você começa mais rápido, mas voz externa, motivações, regras de decisão e limites de trabalho serão refinados em conversas futuras. |
+| **Completa** | **~30 minutos** | Identidade básica, contexto pessoal de base (coletado por padrão; opt-out disponível) e as oito facetas profissionais, incluindo voz, preferências, motivações, qualidade/QA, regras de decisão e limites | Leva mais tempo agora, mas o Maestro começa com uma leitura mais fiel de como você trabalha, decide e quais limites pessoais autorizou. |
 
 Ask only: **"Você prefere a entrevista curta ou a completa?"**
 
@@ -63,8 +63,10 @@ memory. Both tracks begin with two explicit, reviewable identity facets:
 
 - `owner-identity`: the name the owner wants Maestro to use. No unnecessary
   identifiers are requested.
-- `personal-context`: an optional, purpose-bound statement of personal context
-  the owner authorizes Maestro to respect at work. "None for now" is valid.
+- `personal-context`: a short, purpose-bound statement of personal context
+  Maestro should respect at work. **Collected by default in both tracks**; the
+  owner may explicitly opt out. When the owner opts out, the facet file records
+  the opt-out decision with a timestamp (not silence, not "none for now").
 
 The complete track then covers eight explicit, reviewable professional facets:
 
@@ -85,12 +87,62 @@ The complete track then covers eight explicit, reviewable professional facets:
 The quick track covers those two identity facets plus
 `professional-role`, `communication-style`, `preferences` and `quality-bar`.
 It is a useful operating baseline, but it intentionally leaves external voice,
-motivations, decision rules and working boundaries for later refinement. The
-personal-context question is a consent boundary, not a request to disclose
-family, health, faith or private history: the owner may decline or share only
-the minimum necessary. Psychological/personality material, assessments and
-visual identity are not inferred or imported by either track; they require a
-separate, explicit local consent path.
+motivations, decision rules and working boundaries for later refinement.
+
+**Personal-context policy (owner-scoped default with explicit disclosure):**
+the default collection mode depends on `registry.json.owner_type`:
+
+- `owner_type == "solo-maintainer"`: personal-context is collected by
+  default in both tracks, with the disclosure quoted below.
+- `owner_type ∈ {"shared-pack", "distro-adopter"}` or unset/null: the
+  default is opt-in. The skill must ask an affirmative question
+  ("Registrar um contexto pessoal curto agora?") and only proceed on
+  explicit consent. Silence or ambiguity leaves `state: "not_asked"`.
+
+The first onboarding run determines `owner_type` from the interview
+sequence before reaching the personal-context question. When `owner_type`
+remains unset at the moment of asking, treat as `shared-pack` (the
+conservative default for the sanitized distro pack).
+
+When the default-on path applies, the prompt itself must disclose the
+default and the opt-out path in the same turn where the question is asked.
+Use this exact form (or a faithful translation preserving both clauses):
+
+> *"Por padrão, o Maestro registra um contexto pessoal curto para respeitar
+> no trabalho (ex.: fuso, restrições de agenda, algo relevante para
+> priorização). Para opt-out agora, responder `opt-out`; nada pessoal é
+> gravado. O Maestro nunca pede histórico de família, saúde, fé ou privado."*
+
+Never require disclosure of family, health, faith or private history: the
+owner may share only the minimum necessary or opt out.
+
+**Writing rules for personal-context:**
+
+1. **Facet file (`data/owner/self/personal-context.md`):** cap at 10 lines,
+   no rationale prose. If the owner opts out, the file contains only the
+   opt-out record: a `# Personal context` heading, one line stating "opt-out
+   registrado pelo owner", and one line with the ISO 8601 UTC timestamp.
+   Rationale, if the owner offered any, goes to the interview trail, never
+   to the facet file (it would be injected into every session by
+   `session-start-memory-inject.sh` and become context rot).
+2. **Structured state (`data/owner/registry.json` → `personal_context`):**
+   the scaffold creates this object with `state: "not_asked"`. On completion
+   of the personal-context question, write:
+   - `state`: `"authorized"` if the owner shared context; `"declined"` if
+     the owner explicitly opted out; `"deferred"` only if the owner asked
+     to postpone the decision;
+   - `state_timestamp`: current ISO 8601 UTC timestamp;
+   - `source_file`: unchanged (`"owner/self/personal-context.md"`).
+   Downstream consumers key off this structured field, not the prose file.
+3. **State transitions:** `declined` is sticky. If
+   `personal_context.state == "declined"`, the skill must not re-prompt for
+   personal context on a later run without an explicit user request
+   ("reabrir contexto pessoal" or equivalent). Re-running onboarding does
+   not overwrite `declined`. `deferred` may be revisited on the next run.
+
+Psychological/personality material, assessments and visual identity are not
+inferred or imported by either track; they require a separate, explicit
+local consent path.
 
 ## Sugestão técnica orientada pela função
 
@@ -213,39 +265,13 @@ professional baseline; do not emulate ingestion from conversation.
 
 ### 📎 MarkItDown — ingestão de documentos
 
-After the profile is confirmed and before suggesting any next skill, run
-`markitdown --version` silently to detect availability.
-
-**Se disponível:** confirme em uma linha — "Ingestão de documentos (PDF, Word,
-PowerPoint, Excel) está habilitada via MarkItDown."
-
-**Se não disponível:** explique de forma direta e peça autorização:
-
-> "O MarkItDown é a ferramenta que habilita a ingestão de documentos (PDF, Word,
-> PowerPoint, Excel e outros formatos) no Maestro. Com ele instalado, basta enviar
-> um arquivo na conversa para que o conteúdo seja incorporado ao workspace — sem
-> cópia manual, sem ctrl+v.
->
-> Para instalar, o caminho canônico é via **pipx** (funciona no macOS, Linux e
-> Windows sem esbarrar em ambiente Python gerenciado):
->
-> ```
-> pipx install markitdown
-> ```
->
-> No Windows, se `pipx` não estiver disponível, `pip install markitdown` também
-> funciona diretamente. No macOS com Python do Homebrew e na maioria das distros
-> Linux modernas, `pip install` retorna `error: externally-managed-environment`
-> (PEP 668) — nesses casos use `pipx`, que já vem via `brew install pipx` ou
-> `python3 -m pip install --user pipx`.
->
-> Posso guiar a instalação agora, ou você prefere instalar depois?"
-
-If the owner authorizes installation now, provide the exact command
-(`pipx install markitdown`, com `pip install markitdown` como fallback Windows)
-and confirm once the owner reports success by running `markitdown --version`
-again. Do not attempt to run the install autonomously; the owner must execute it
-themselves or explicitly delegate terminal access.
+Não instalar nem pedir instalação de MarkItDown durante o onboarding, e nunca
+tratar sua ausência como uma pendência a resolver agora (decisões SETU e
+PYUV). Confirme em uma linha, sem parar o fluxo: "A leitura de arquivos Word,
+Excel e PowerPoint pode ser habilitada automaticamente na primeira vez que
+você enviar um desses arquivos para o Maestro; não precisa configurar nada
+agora." Seguir direto para a próxima etapa do onboarding. Quando o momento
+chegar, quem conduz essa configuração pontual é `$ingest-content`.
 
 ### 🤝 Agentes internos — identidade e personalização
 
