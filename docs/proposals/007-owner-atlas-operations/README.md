@@ -63,7 +63,7 @@ smallest useful projection:
 
 - the owner session may request a named page or bounded index;
 - Maestro may receive task-relevant owner context;
-- Walter may receive a stale-checked self-proxy projection;
+- Yoda may receive a stale-checked self-proxy projection;
 - Case, Client Account and PA Expert agents receive only an explicitly
   authorized attenuated excerpt or pointer;
 - no caller receives an implicit whole-root dump.

@@ -14,7 +14,7 @@ device identifier.
 | C20-02 | `status <workspace-id>` is interpreted as a relative path | product/UX defect | Persist a private ID-to-path binding during init and revalidate the bound manifest on every ID lookup. Never scan the filesystem. | path and ID parity; missing, tampered, permission-relaxed and symlink/reparse-point bindings fail closed |
 | C20-03 | Darwin appears unloaded when status observes only the plist | diagnostic defect | Reuse the durable native enrollment for read-only launchctl observation. Keep explicit authority for pause, resume and uninstall. | loaded/enabled/native-qualified status from exact binding; mutation tests remain explicit |
 | C20-04 | MarkItDown ingestion is unavailable | release capability gap | Do not bypass the verifier or use ambient Python. Close Q-037 and produce separately versioned, verified Windows/macOS packs. | offline sanitized fixtures, size/first-use/proxy evidence, signed manifest and rollback |
-| C20-05 | Client Account, Case and Walter do not execute as native delegated agents | architecture promotion gap | Keep shadow/runtime-neutral contracts unavailable until the native Claude adapter invokes the durable Pilot boundary. | accepted promotion decision, native conformance, restart/replay/privacy evidence |
+| C20-05 | Client Account, Case and Yoda do not execute as native delegated agents | architecture promotion gap | Keep shadow/runtime-neutral contracts unavailable until the native Claude adapter invokes the durable Pilot boundary. | accepted promotion decision, native conformance, restart/replay/privacy evidence |
 | C20-06 | Claude lifecycle is observed but not fully promoted | qualification gap | Run the attended qualification protocol for the exact release/runtime/platform tuple. | fresh-session native event evidence and promotion record |
 | C20-07 | Codex is detected but its adapter is not projected | product-scope decision | Keep Claude-first for the current Canary; decide whether Codex parity is a pilot gate before claiming dual-runtime readiness. | explicit pilot requirement and, if required, installed/qualified Codex projection |
 | C20-08 | Model-backed weekly jobs remain unavailable | capability/authority gap | Select approved model execution, retention and unattended authority before activation. | approved authority, bounded inputs, receipts, failure recovery and native schedule evidence |
@@ -108,7 +108,7 @@ are not enough.
 1. Accept the promotion decision required by Spec 033.
 2. Wire Claude first to the durable `agentdispatch.Pilot` recovery root.
 3. Prove the exact user → Maestro → optional Client Account → Case → optional
-   Client Account return → optional Walter → Maestro route.
+   Client Account return → optional Yoda → Maestro route.
 4. Test restart, replay, cross-scope denial, single-active-branch and done
    contracts in a native attended session.
 5. Repeat for Codex only if Codex parity is an accepted pilot requirement.
@@ -120,7 +120,7 @@ not orchestration evidence.
 ### Wave 4 — Darwin model-backed evolution
 
 1. Approve model/provider and unattended execution authority.
-2. Qualify weekly Walter self review, deep memory synthesis and structural
+2. Qualify weekly Yoda self review, deep memory synthesis and structural
    evolution separately.
 3. Keep proposals bounded and owner-reviewable; no job mutates policy directly.
 

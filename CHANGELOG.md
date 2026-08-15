@@ -77,7 +77,7 @@ All notable changes will be documented here.
   `validate`, `wiki validate` and `wiki verify` gates pass. `validate --full`
   reaches contracts, formatting and `go vet`, but the sandbox full-test run is
   not green because of an IPv6 listener restriction, a transient MarkItDown
-  timeout and a timing-sensitive Walter lease; focused reruns passed, so the
+  timeout and a timing-sensitive Yoda lease; focused reruns passed, so the
   full gate remains environmentally inconclusive. Hosted CI has no evidence
   because the repository workflows are disabled and billing/hosted status is
   not inferred locally.

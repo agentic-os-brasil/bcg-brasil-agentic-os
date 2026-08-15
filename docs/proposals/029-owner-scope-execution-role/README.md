@@ -53,7 +53,7 @@ scope.
 
 | Source | Ruling |
 | --- | --- |
-| Proposal 004 | This proposal "does not add a second graph, grant tools, change Walter, create an owner-global agent or activate any runtime capability" |
+| Proposal 004 | This proposal "does not add a second graph, grant tools, change Yoda, create an owner-global agent or activate any runtime capability" |
 | Proposal 003 | "Proposal 004 cannot create owner-level people, career, planning or wellbeing agents on top of the account role" |
 | Proposal 006 | "Future segments and rituals may build on this scope without creating an owner-scoped agent role" — under a section headed "Execution model — no new role is created" |
 
@@ -156,7 +156,7 @@ document, with fixtures.
 2. **A packet contract.** A bounded owner packet: what it may carry, maximum
    sizes, denied sources, and the guarantee that it never carries workspace,
    client or third-party content. Proposal 006 enumerates five reader tiers over
-   owner content — the owner session, Maestro, Walter as a stale-checked self
+   owner content — the owner session, Maestro, Yoda as a stale-checked self
    proxy, an explicitly authorized attenuated excerpt or pointer for Case, Client
    Account and PA Expert agents, and no whole-root dump for anyone. A new role is
    a sixth reader; the proposal must say which tier it occupies, or argue for

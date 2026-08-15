@@ -13,7 +13,7 @@ evidence is diagnostic and non-blocking for an enabled, configured contract.
 | Delegation state can recover safely | `Pilot` can persist owner-local packet state and nonce replay state atomically; restart tests authenticate and complete a prior return, while tamper and unavailable paths fail closed | Native adapter supplies the same recovery root and proves restart/partition conformance | runtime-neutral available; native unavailable |
 
 | Packets and completion authority are bounded | Dispatcher and pilot tests verify signed packets, scope inheritance, target-authenticated execution envelopes, nonce replay rejection and finish authority | Adapter delivers only authenticated packets/envelopes without exposing capabilities | enabled; native evidence pending |
-| High-leverage output receives Walter's calm advisory review | The typed Maestro plan resolves `walter_required` independently from Account consultation; low-leverage skips carry a reason and evidence, while Walter verdicts require concrete refinements for load-bearing gaps and reserve `hold` for exceptional blockers | Native adapter emits the sealed packet and observes Walter's typed verdict in the same governed session | enabled; native evidence pending |
+| High-leverage output receives Yoda's calm advisory review | The typed Maestro plan resolves `yoda_required` independently from Account consultation; low-leverage skips carry a reason and evidence, while Yoda verdicts require concrete refinements for load-bearing gaps and reserve `hold` for exceptional blockers | Native adapter emits the sealed packet and observes Yoda's typed verdict in the same governed session | enabled; native evidence pending |
 | Direct skill selection stays with the active owner | Dispatcher tests require a signed active root packet, matching agent capability and no active child | Native agent execution proves the same root/capability binding | enabled; native evidence pending |
 | Claude/Codex semantic parity | Shared controller fixtures execute both event vocabularies and denial cases | Native session conformance from installed Claude and Codex adapters | enabled; native evidence pending |
 
@@ -35,10 +35,10 @@ explicit execution ledger export.
 
 Every schema-v2 work packet carries a signed `DoneContract`. Producer agents
 use the closed `authenticated_return` policy with exact required evidence
-pointers and a minimum evidence count; Walter uses the closed
-`typed_walter_verdict` policy. The target and Maestro both validate the
+pointers and a minimum evidence count; Yoda uses the closed
+`typed_yoda_verdict` policy. The target and Maestro both validate the
 contract, and public receipts pin its digest. A prose return, missing evidence
-or generic Walter return cannot promote a dispatch to `completed`.
+or generic Yoda return cannot promote a dispatch to `completed`.
 
 This is deterministic runtime-neutral enforcement, including an explicit
 private recovery store for packet bodies and replay state. Claude additionally
@@ -55,8 +55,8 @@ the agent returns work) a content digest. Maestro applies the events through
 the same `ChainState.Advance` transition authority used by the planner tests,
 persisting only the metadata-only chain and typed receipts. An account-assisted
 Case therefore has one enforced order: Client Account framing → Case → Client
-Account validation → Walter (when required). A direct low-leverage Case can
-finish without either consultation, while a material Case cannot skip Walter.
+Account validation → Yoda (when required). A direct low-leverage Case can
+finish without either consultation, while a material Case cannot skip Yoda.
 
 An absent event array remains `dispatch_boundary_model_pending_input`; the CLI
 never fabricates an agent invocation. The bridge is deterministic contract
@@ -81,9 +81,9 @@ blocks a later event-bearing retry for the same plan.
 - schema-v1 child packet used for a new skill selection;
 - schema-v1 root or child packet used as the parent of a new delegation.
 - high-leverage recommendation, consequential trade-off or external artifact
-  returned without the resolved Walter handoff, or a low-leverage skip without
+  returned without the resolved Yoda handoff, or a low-leverage skip without
   its reason and evidence;
-- Walter packet opened before the producer closes, bound to a forged source
+- Yoda packet opened before the producer closes, bound to a forged source
   digest/scope, or completed through the generic return path;
 - more than three objections, an approved verdict with objections, or a
   missing-the-mark verdict without a concrete fix and exit condition;
@@ -92,7 +92,7 @@ blocks a later event-bearing retry for the same plan.
 ## Native evidence still pending (non-blocking)
 
 Claude now wires a metadata-only native flow for the released Client Account,
-Case, Walter, Darwin and PA Expert beta routes. The deeper runtime-neutral
+Case, Yoda, Darwin and PA Expert beta routes. The deeper runtime-neutral
 Pilot recovery root is not yet a native packet-authentication claim, and Codex
 native projection remains outside this beta. The canonical capability manifest
 therefore reports Claude as `operational_beta` while keeping native

@@ -13,11 +13,11 @@ The managed core is:
 | Case Agent | `case_agent` | no | scoped | scoped consultation |
 | Client Account Agent | `client_account_agent` | no | scoped | scoped consultation |
 | PA Expert | `pa_expert` | no | none | no |
-| Walter | `reviewer` | no | none | no |
+| Yoda | `reviewer` | no | none | no |
 | Darwin | `governance_analyst` | no | scoped maintenance | no |
 | Gamma Guardian | `quality_guardian` | no | scoped inspection | no |
 
-Walter is an internal, tool-free review leaf. Darwin is a scoped health and
+Yoda is an internal, tool-free review leaf. Darwin is a scoped health and
 governance leaf; it cannot execute client work, approve its own changes or
 mutate live policy. PA Expert is the sole FPA/IPA practice authority and is
 centrally versioned; its registry may be empty.
@@ -40,16 +40,16 @@ flowchart LR
   Case --> Maestro
   Maestro --> V{pre-account used?}
   V -->|yes| Validate[Client Account validation]
-  V -->|no| Walter[Walter review]
+  V -->|no| Yoda[Yoda review]
   Validate --> Maestro
-  Maestro --> Walter
-  Walter --> Maestro
+  Maestro --> Yoda
+  Yoda --> Maestro
   Maestro --> User
 ```
 
 When Client Account framing is used, post-Case validation by the same account
 agent is the recommended default. Maestro may adapt the route when another
-composition better serves the task. Walter is selected independently by
+composition better serves the task. Yoda is selected independently by
 leverage, consequence and the value of a user-proxy refinement.
 
 Budgets, receipts and route events are observability aids. They should advise
@@ -58,11 +58,11 @@ safe attended work merely because evidence is missing. Agents may call other
 registered agents with attenuated scope and must return a concise result to the
 accountable owner.
 
-For high-leverage Walter review, Maestro seals an `IntentReviewPacket` with
+For high-leverage Yoda review, Maestro seals an `IntentReviewPacket` with
 the prompt, route, draft, bounded context, audience, consequence,
 reversibility, self projection version/digest and relevant observation
-metadata. Walter returns a typed intrinsic-intent hypothesis and constructive
+metadata. Yoda returns a typed intrinsic-intent hypothesis and constructive
 advice with confidence; this is proxy review, not impersonation or a second
-self authority. Walter is read-only/tool-less and never writes the canonical
+self authority. Yoda is read-only/tool-less and never writes the canonical
 Owner Context. Every loop is evaluated for a possible owner signal, but only
 material owner-attested speech/action may be appended locally.

@@ -40,7 +40,7 @@ activated job digests, then reports filesystem and native lifecycle state
 separately. Daily Darwin housekeeping and the operational portion of weekly
 deep review are contract-tested and locally executable after enrollment: they
 may repair only allowlisted, reversible managed state after validation.
-Walter and monthly structural work remain due/unavailable. A current-user
+Yoda and monthly structural work remain due/unavailable. A current-user
 macOS install can be
 adapter-installed and native-qualified only when `launchctl` confirms it; a
 fixture install is filesystem-only. Windows remains

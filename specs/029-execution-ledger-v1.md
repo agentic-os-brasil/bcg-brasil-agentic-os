@@ -46,7 +46,7 @@ The immutable contract contains:
 - objective and initial next step;
 - typed completion criteria;
 - allowed logical references;
-- an optional Walter-review requirement and its bound Ed25519 public key;
+- an optional Yoda-review requirement and its bound Ed25519 public key;
 - schema and contract version;
 - creation timestamp.
 
@@ -101,7 +101,7 @@ Agent-authored assertions are not completion evidence. Completion reads the
 contract and receipts from disk and succeeds only when all required criteria
 remain valid.
 
-When the immutable contract requires Walter review, completion also requires
+When the immutable contract requires Yoda review, completion also requires
 one authenticated approval bound to the same contract, attempt and immediately
 preceding ledger revision. Any later mutation invalidates the approval.
 Evidence remains mandatory and cannot be replaced by review.
@@ -191,13 +191,13 @@ The Session Context and handoff slice implements:
 
 The Maestro orchestration slice implements:
 
-- one optional Ed25519-authenticated Walter review gate on this same ledger;
+- one optional Ed25519-authenticated Yoda review gate on this same ledger;
 - metadata-only approved/rejected receipts bound to contract, attempt and exact
   state revision;
 - automatic invalidation after any later mutation; and
 - crash recovery through the existing immutable revision boundary.
 
-Native Walter key custody, signing and Claude/Codex orchestration adapters
+Native Yoda key custody, signing and Claude/Codex orchestration adapters
 remain unavailable.
 
 ## V1 non-goals

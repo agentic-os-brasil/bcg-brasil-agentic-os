@@ -67,7 +67,7 @@ Os benefícios principais são:
 | Benefício | Como aparece na prática | Por que importa |
 | --- | --- | --- |
 | Continuidade | Objetivo, revisão, tentativa, checkpoint e próxima ação ficam em um ledger local. | O trabalho sobrevive a interrupções, trocas de sessão e handoffs. |
-| Governança | Ações e conclusões importantes passam por contratos estreitos, evidência e, quando aplicável, revisão autenticada do Walter. | Automação ganha rastreabilidade sem receber autoridade ilimitada. |
+| Governança | Ações e conclusões importantes passam por contratos estreitos, evidência e, quando aplicável, revisão autenticada do Yoda. | Automação ganha rastreabilidade sem receber autoridade ilimitada. |
 | Privacidade | Conteúdo de cliente, credenciais e material profissional permanecem fora do bundle gerenciado e da telemetria. | O produto melhora sem transformar trabalho confidencial em dataset compartilhado. |
 | Portabilidade | Claude é a projeção primária e Codex segue contratos runtime-neutral. | A política do Maestro não fica presa à implementação de um único runtime. |
 | Ingestão local | Docling é a rota primária planejada; fallbacks determinísticos aprovados podem atender formatos específicos. | Documentos entram no fluxo sem API key nem upload remoto implícito. |

@@ -49,7 +49,7 @@ policy only. The Markdown files are human-authored and are never copied to a
 workspace, managed bundle, Git, memory layer or shared atlas.
 
 `psychological-profile.md` is optional and sensitive. It is intended only for
-professional self-understanding and for the Walter role where the owner has
+professional self-understanding and for the Yoda role where the owner has
 authorized that purpose. It is not a diagnosis, a fixed label, an employment
 selection tool or a source of inferences about other people.
 
@@ -230,8 +230,8 @@ and workspace files never create inferred tasks.
 
 The canonical facet files and registry are the one Owner Context authority.
 `UserSelfSnapshot` is a versioned, stale-checked projection for a bounded
-Walter packet, never a second database. Precedence is current explicit
-instruction, explicit correction, canon, relevant observations, then a Walter
+Yoda packet, never a second database. Precedence is current explicit
+instruction, explicit correction, canon, relevant observations, then a Yoda
 intent hypothesis. An explicit correction supersedes earlier claims and
 invalidates proposals whose canonical-source digest is stale.
 
@@ -268,7 +268,7 @@ age. It is never copied to managed bundles, telemetry, receipts, ledgers,
 federation or release artifacts.
 
 `bcgos owner prompt-history` exposes configuration, metadata inspection,
-explicit export, per-entry deletion and confirmed reset. Walter selection is
+explicit export, per-entry deletion and confirmed reset. Yoda selection is
 bounded by count, bytes, age and relevant scope, and uses stable lexical
 relevance against the current prompt or explicit keys; recent irrelevant
 history cannot outrank an older relevant prompt. The root is single-owner

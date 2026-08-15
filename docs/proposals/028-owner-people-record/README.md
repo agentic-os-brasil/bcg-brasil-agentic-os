@@ -127,7 +127,7 @@ closed reader set. Runtime packets carry minimum fields, not the record body.
 review: if a field cannot be tied to a specific collaboration decision, it fails
 admission. The reader set must then be drawn **narrower than the owner scope's
 own default**. Proposal 006 admits five reader tiers over owner content — the
-owner session, Maestro, Walter as a stale-checked self proxy, an explicitly
+owner session, Maestro, Yoda as a stale-checked self proxy, an explicitly
 authorized attenuated excerpt or pointer for Case, Client Account and PA Expert
 agents, and a whole-root dump for nobody. The fourth tier is exactly the one a
 people record cannot use: those are the roles doing work alongside the person

@@ -41,7 +41,7 @@ attach an ephemeral, bounded generated memory context.
 
 The packet must never contain an owner-facet body, a client/project/daily page,
 a conversation transcript, a memory artifact body, a credential, or a
-Walter-only facet such as the psychological profile. It also must never contain
+Yoda-only facet such as the psychological profile. It also must never contain
 an execution item ID, attempt ID, objective, done contract or checkpoint body.
 Open task titles and bodies stay behind the owner-local operating-state pointer;
 Session Start may report only the count and must not invent a backlog.
@@ -96,7 +96,7 @@ only and does not disable the configured context contract.
 
 ## Validation
 
-- reviewed session-safe owner pointers are included; sensitive, Walter-only
+- reviewed session-safe owner pointers are included; sensitive, Yoda-only
   and unreviewed owner pointers are omitted;
 - missing owner, workspace or atlas sources produce a valid `partial` packet;
 - the skills catalog remains a pointer only;

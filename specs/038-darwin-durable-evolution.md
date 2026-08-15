@@ -29,7 +29,7 @@ open episode -> append evidence window -> write proposal -> interrupt
 - Acceptance and rejection are append-only, caller-asserted shadow claims about
   an independent review. They carry `authority_state:
   caller_asserted_shadow`, cannot authorize or apply a proposal, and are not
-  authenticated Walter evidence. A future authoritative receipt requires a
+  authenticated Yoda evidence. A future authoritative receipt requires a
   separately qualified signed envelope and consumer contract.
 - Health and headless-housekeeping receipts remain owned by the existing Darwin
   health store. Evolution files use a separate namespace and schema.

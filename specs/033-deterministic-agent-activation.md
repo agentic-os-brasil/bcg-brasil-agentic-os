@@ -10,7 +10,7 @@ evidence rather than granting permission.
 
 This spec does not canonize PR #139 or a generic depth-profile policy. The
 current Maestro flow resolves `account_consultation_required` from client
-strategic-lens/stakeholder signals and `walter_required` independently from
+strategic-lens/stakeholder signals and `yoda_required` independently from
 high-leverage signals; see Spec 040.
 
 Maestro needs a repeatable way to decide whether a decision episode should go
@@ -53,7 +53,7 @@ replanned rather than accepted under the new contracts.
 
 - `D0_DIRECT`: accountable agent only;
 - `D1_TARGETED`: accountable agent plus one exact PA expert when knowledge is
-  needed, otherwise one exact Walter review;
+  needed, otherwise one exact Yoda review;
 - `D2_GOVERNED`: Maestro coordinates a bounded loop with at most two exact
   PA experts and a required assurance receipt;
 - `BLOCKED`: no execution until the rejected condition changes or a human
@@ -136,9 +136,9 @@ satisfy its plan:
 
 - D0: accountable-agent receipt;
 - D1: accountable-agent receipt and one advisory receipt from the selected
-  PA expert, or the exact Walter review receipt selected by policy;
+  PA expert, or the exact Yoda review receipt selected by policy;
 - D2: accountable-agent receipt, one advisory receipt per selected PA expert and
-  one Walter assurance receipt;
+  one Yoda assurance receipt;
 - BLOCKED: never evaluable as completed.
 
 Missing, extra, duplicated, stale or digest-mismatched breadcrumbs fail closed.

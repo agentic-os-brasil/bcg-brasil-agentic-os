@@ -13,7 +13,7 @@ Use one bounded **case-agent decision brief** as the first value loop:
 > it never browses, ingests or exports material without an approved contract.
 
 This candidate is intentionally narrow. It exercises the local workspace,
-execution ledger, bounded Case Agent, optional PA Expert route, Walter review
+execution ledger, bounded Case Agent, optional PA Expert route, Yoda review
 when required and metadata-only canary receipts without requiring Docling,
 dreaming, wiki navigation, Codex parity or autonomous side effects.
 

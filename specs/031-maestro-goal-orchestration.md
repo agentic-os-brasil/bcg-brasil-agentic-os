@@ -1,7 +1,7 @@
 # Spec 031 - Maestro goal orchestration
 
 Status: accepted contract; authenticated review gate implemented in the local
-execution core. Native Walter/Claude/Codex signing adapters remain unavailable.
+execution core. Native Yoda/Claude/Codex signing adapters remain unavailable.
 
 ## Objective
 
@@ -10,7 +10,7 @@ workspace-scoped execution ledger as the only durable completion authority:
 
 ```text
 create -> start -> checkpoint/pause -> resume -> evidence
-       -> authenticated Walter review -> complete
+       -> authenticated Yoda review -> complete
 ```
 
 ## Authority
@@ -20,7 +20,7 @@ have a second state machine, lock, event head, evidence store or completion
 method. Business priority, owner, due date and external task status remain
 outside the execution contract.
 
-The immutable contract may require Walter review and bind one Ed25519 public
+The immutable contract may require Yoda review and bind one Ed25519 public
 key. A contract without the review gate cannot carry that key. Changing the key
 or gate after creation changes the contract digest and invalidates the item.
 
@@ -45,19 +45,19 @@ A rejected review never satisfies completion. Evidence remains mandatory and
 is re-witnessed immediately before completion.
 
 The ledger's binary `approved`/`rejected` decision is not the conversational
-Walter verdict. Maestro may receive `refine-and-return` or
+Yoda verdict. Maestro may receive `refine-and-return` or
 `missing-the-mark` first; those outcomes return the packet to the producing
 owner and cannot be translated into completion. A qualified adapter may issue
-the signed `approved` envelope only after Walter independently reviewed the
+the signed `approved` envelope only after Yoda independently reviewed the
 sealed packet and the final evidence satisfies the contract.
 
 The runtime-neutral pilot enforces the handoff before any material result is
 presented as complete. Closed triggers are `material_recommendation`,
 `consequential_tradeoff` and `external_artifact`; the trigger is signed into
 the producer packet and a successful producer return becomes
-`pending_review`, never `completed`. `RequireWalterReview` accepts only that
+`pending_review`, never `completed`. `RequireYodaReview` accepts only that
 matching pending trigger, binds the source packet digest and scope, and opens
-only the registered Walter reviewer. `ReturnWalterReview` accepts only the
+only the registered Yoda reviewer. `ReturnYodaReview` accepts only the
 typed verdict envelope, caps objections at three, and promotes the producer to
 `completed` only for `approved`; `refine-and-return`, `missing-the-mark` and
 `unavailable` leave the producer pending and project compact review state.
@@ -76,7 +76,7 @@ Transition history remains metadata-only and does not identify the review
 decision. Full review receipts are available only through explicit execution
 export. No review rationale or arbitrary field enters the ledger.
 
-The runtime-neutral core and signing payload are implemented. Native Walter
+The runtime-neutral core and signing payload are implemented. Native Yoda
 key custody, signing and Claude/Codex orchestration adapters are unavailable,
 so product status must not advertise autonomous long-running execution.
 

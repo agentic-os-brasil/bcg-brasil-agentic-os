@@ -9,7 +9,7 @@ Maestro remains accountable for the user-facing result, but it may choose the
 route and depth at runtime. Registered agents may consult another registered
 agent when that improves the outcome, provided they pass only the minimum
 scope and authority required and return control to the accountable owner.
-Client Account, Case, PA Expert, Walter, Darwin, Gamma Guardian and bounded
+Client Account, Case, PA Expert, Yoda, Darwin, Gamma Guardian and bounded
 helpers are collaborators rather than mandatory stations in a state machine.
 
 ## Delegation envelope
@@ -28,10 +28,10 @@ and observable budgets, not validity conditions for otherwise safe work.
 ## Recommended routes
 
 Maestro may answer directly, call Case directly, use Client Account framing
-before Case, consult PA Experts, request Walter refinement, ask Darwin about
+before Case, consult PA Experts, request Yoda refinement, ask Darwin about
 system health or compose another bounded route. When Client Account framing is
 used, validation of the Case result by the same account agent is the preferred
-default. Walter is a calm senior-advisor option for high-leverage work; ordinary
+default. Yoda is a calm senior-advisor option for high-leverage work; ordinary
 work normally skips it without requiring a receipt.
 
 The model chooses from strategic importance, stakeholder implications,

@@ -87,7 +87,7 @@ Owner self learning is a separate local surface, not an additional memory
 layer: canonical Owner Context facets remain authoritative, while a
 stale-checked `UserSelfSnapshot` is only a packet projection. Maestro evaluates
 every interaction and persists only material, owner-attested signals under the
-local owner boundary as minimal metadata. Walter hypotheses, prompts, client documents and generated
+local owner boundary as minimal metadata. Yoda hypotheses, prompts, client documents and generated
 output cannot become canonical self evidence; explicit owner controls govern
 promotion, correction, inspection, export and deletion.
 

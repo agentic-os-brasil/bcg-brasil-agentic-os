@@ -3,7 +3,7 @@
 ## Decision
 
 The Claude beta projects five Maestro-owned project subagents under
-`.claude/agents/`: Client Account Agent, Case Agent, Walter, Darwin and PA
+`.claude/agents/`: Client Account Agent, Case Agent, Yoda, Darwin and PA
 Expert. Maestro remains the main-session identity supplied by SessionStart and
 is not projected as a child agent.
 
@@ -17,8 +17,8 @@ does not disable a working beta path.
 Maestro chooses depth. The hook-enforced client paths are:
 
 1. strategic: Client Account framing -> Case -> Client Account validation ->
-   optional Walter;
-2. direct: Case -> optional Walter.
+   optional Yoda;
+2. direct: Case -> optional Yoda.
 
 Once Client Account framing starts, Claude `Stop` blocks until Case completes
 and Client Account has validated the returned result. A re-entrant Stop event
@@ -34,7 +34,7 @@ content.
 ## Authority and safety
 
 - Specialists cannot delegate because the native Agent tool is absent.
-- Client Account, Walter, Darwin and PA Expert are tool-free in the beta.
+- Client Account, Yoda, Darwin and PA Expert are tool-free in the beta.
 - Case Agent receives only local file tools. Its CWD and every explicit path
   must remain inside the exact installed workspace; traversal and symlink
   escapes fail closed.

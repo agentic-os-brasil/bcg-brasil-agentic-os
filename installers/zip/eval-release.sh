@@ -284,7 +284,7 @@ fi
 if [ -f "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt" ] && grep -q "maestro-doctor" "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt"; then
   pass "FIRST-RUN-FAILED.txt breadcrumb visible + points at /maestro-doctor (Scenario B)"
 else
-  fail "FIRST-RUN-FAILED.txt breadcrumb missing under Scenario B (Walter Fix 1)"
+  fail "FIRST-RUN-FAILED.txt breadcrumb missing under Scenario B (Yoda Fix 1)"
 fi
 
 chmod -R u+w "$FAIL_SCRATCH"
@@ -307,7 +307,7 @@ fi
 
 FALLBACK_FOUND=$(find "$TMPDIR_A" -maxdepth 1 -name 'Maestro-FIRST-RUN-FAILED-*.txt' 2>/dev/null | head -1)
 if [ -n "$FALLBACK_FOUND" ] && grep -q "maestro-doctor" "$FALLBACK_FOUND"; then
-  pass "FIRST-RUN-FAILED breadcrumb fallback landed in \$TMPDIR (Scenario A, Walter Wave 2 fix)"
+  pass "FIRST-RUN-FAILED breadcrumb fallback landed in \$TMPDIR (Scenario A, Yoda Wave 2 fix)"
 else
   fail "Scenario A breadcrumb fallback missing — expected file in \$TMPDIR"
 fi
@@ -451,14 +451,14 @@ else
 fi
 
 # --------------------------------------------------------------------------
-phase "Phase 9 — Walter fix regression checks"
+phase "Phase 9 — Yoda fix regression checks"
 # --------------------------------------------------------------------------
 
 README="$MAESTRO_DIR/README-INSTALL.md"
 if grep -q "Copiar" "$README" && grep -q "Ctrl+C" "$README" && grep -q "Option" "$README"; then
-  pass "README-INSTALL step 4 uses Copiar + Ctrl+C + Option (Walter Fix 2)"
+  pass "README-INSTALL step 4 uses Copiar + Ctrl+C + Option (Yoda Fix 2)"
 else
-  fail "README-INSTALL step 4 missing Copiar/Ctrl+C/Option — Walter Fix 2 regressed"
+  fail "README-INSTALL step 4 missing Copiar/Ctrl+C/Option — Yoda Fix 2 regressed"
 fi
 
 if grep -qE "confirmar.*data.*maestro-doctor|maestro-doctor.*data" "$README"; then
@@ -469,7 +469,7 @@ fi
 
 CLAUDE_MD="$MAESTRO_DIR/CLAUDE.md"
 if grep -q "FIRST-RUN-FAILED.txt" "$CLAUDE_MD" && grep -q "maestro-doctor" "$CLAUDE_MD"; then
-  pass "CLAUDE.md references FIRST-RUN-FAILED.txt + /maestro-doctor (Walter Fix 1)"
+  pass "CLAUDE.md references FIRST-RUN-FAILED.txt + /maestro-doctor (Yoda Fix 1)"
 else
   fail "CLAUDE.md missing FIRST-RUN-FAILED.txt breadcrumb reference"
 fi

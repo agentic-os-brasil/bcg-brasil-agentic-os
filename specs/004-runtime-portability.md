@@ -38,7 +38,7 @@ The shared core owns:
 
 The core must not depend on Claude- or Codex-specific paths, hook names or payload formats.
 
-The managed agent catalog under `bundles/base/agents/` defines Maestro, Walter,
+The managed agent catalog under `bundles/base/agents/` defines Maestro, Yoda,
 Darwin and the lean delegation invariants. A catalog definition is not runtime
 activation. `agent_orchestration` remains unavailable until an adapter proves
 no-tool enforcement, one active spoke, depth one and zero agent children. All

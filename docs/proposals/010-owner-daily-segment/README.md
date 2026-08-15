@@ -246,7 +246,7 @@ with a maintenance pass and its degradation classes, not here.
   implied here.
 - No role is affected. Owner content reaches other readers only as a bounded,
   purpose-declared projection: the owner session and Maestro may receive one;
-  Walter may receive a stale-checked self-proxy projection; Case, Client Account
+  Yoda may receive a stale-checked self-proxy projection; Case, Client Account
   and PA Expert agents receive an explicitly authorized attenuated excerpt or
   pointer; nobody receives the owner root.
 

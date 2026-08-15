@@ -96,7 +96,7 @@ and minimized:
 2. The owner-facing session may request a bounded projection relevant to the
    current task.
 3. Maestro may receive that bounded projection to route and synthesize work.
-4. Walter may receive a stale-checked, relevance-selected projection when he is
+4. Yoda may receive a stale-checked, relevance-selected projection when he is
    acting as the owner's self proxy.
 5. Case, Client Account and PA Expert agents receive only an explicitly
    authorized, attenuated excerpt or pointer when it is necessary for the task;

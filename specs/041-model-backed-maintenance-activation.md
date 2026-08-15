@@ -11,9 +11,9 @@ requires a model adapter. This specification defines the minimum activation
 contract for such a job without turning a scheduler, lifecycle hook, installed
 runtime, provider login or shared adapter into execution authority.
 
-`walter-self-review-weekly` is the first intended consumer. It is a silent,
+`yoda-self-review-weekly` is the first intended consumer. It is a silent,
 bounded self-ingestion pass: it reviews eligible interaction evidence to keep
-Walter's owner-local self projection concise. It is not a user-facing review,
+Yoda's owner-local self projection concise. It is not a user-facing review,
 a weekly message, or an ever-growing journal. `memory-weekly` is a separate
 consumer with a different scope, input policy and success boundary. Qualifying
 or activating either job never activates the other.
@@ -117,7 +117,7 @@ qualified worker derives or receives a short-lived grant that binds:
 - immutable input snapshot digest and its per-source high-watermarks;
 - command deadline, occurrence fence, maximum attempts and remaining token-unit
   budget;
-- exact permitted terminal operation: bounded silent Walter compaction through
+- exact permitted terminal operation: bounded silent Yoda compaction through
   its Owner Context policy, or the memory staging/commit protocol for weekly
   memory.
 
@@ -221,12 +221,12 @@ receipts and success in another job are insufficient. Qualification has an
 expiry or invalidation rule and is revoked by any bound implementation, policy,
 runtime, model-class or credential-mode change.
 
-## Walter weekly self-review
+## Yoda weekly self-review
 
-`walter-self-review-weekly` is the first consumer of this contract. Its
+`yoda-self-review-weekly` is the first consumer of this contract. Its
 activation is owner-scoped and silent: it has no user-channel, notification or
 user-action artifact. The adapter implements the runtime-neutral
-`walterselfreview.ModelAdapter` response contract and receives only the
+`yodaselfreview.ModelAdapter` response contract and receives only the
 explicitly selected canonical Owner Context facets, eligible corroborated owner
 observations and bounded prompt history defined by its immutable weekly
 snapshot. It never requires or replays a current interactive task prompt.
@@ -252,14 +252,14 @@ self data, but the weekly pass itself never surfaces a prompt, proposal or
 notification. Until this silent-compaction publication boundary is implemented
 and qualified, the shipped job remains `unavailable`.
 
-Activating this weekly job does not activate interactive Walter review,
+Activating this weekly job does not activate interactive Yoda review,
 `agent_orchestration`, Darwin maintenance or any memory job.
 
 ## Weekly memory dreaming
 
 `memory-weekly` requires its own adapter registration, job activation,
 occurrence authority, workspace-scoped snapshot and qualification even if it
-uses the same native runtime or model provider as Walter.
+uses the same native runtime or model provider as Yoda.
 
 Its high-watermark covers only sanitized, policy-eligible L1 evidence for one
 workspace and the exact prior active L2/L3/lifetime manifest. Raw client
@@ -272,8 +272,8 @@ Deterministic memory validators own provenance, retention, eligibility, layer
 budgets and the one atomic commit manifest. Without an approved lifetime
 eligibility policy, lifetime activation fails closed. Success is the validated
 atomic memory commit required by Spec 006, not model completion or a staged
-candidate. Walter activation has no effect on this job, and memory activation
-does not grant Walter access to workspace memory.
+candidate. Yoda activation has no effect on this job, and memory activation
+does not grant Yoda access to workspace memory.
 
 ## Explicit non-goals
 
@@ -286,7 +286,7 @@ This specification does not:
 - make one runtime's or job's evidence qualify another;
 - grant browsing, tools, external publication, policy mutation or cross-scope
   data access to a model;
-- let Walter rewrite canonical Owner Context or let memory dreaming ingest raw
+- let Yoda rewrite canonical Owner Context or let memory dreaming ingest raw
   prompts/client content or bypass lifetime eligibility;
 - treat a model response, hook receipt, wake receipt or adapter configuration as
   durable job success.

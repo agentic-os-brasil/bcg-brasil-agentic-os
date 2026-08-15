@@ -1,7 +1,7 @@
 # Spec 027 — managed agent scaffolding
 
 The base bundle projects data-free definitions for Maestro, Case Agent, Client
-Account Agent, PA Expert, Walter, Darwin and Gamma Guardian. Installed instances add immutable
+Account Agent, PA Expert, Yoda, Darwin and Gamma Guardian. Installed instances add immutable
 scope, owner, authorization and state digests; they do not create new roles.
 
 | Role | Owner | Scope | Direct user | Delegation |
@@ -25,7 +25,7 @@ runtime still mediates every transition through Maestro.
 
 Personalization changes display name and avatar only. It cannot change role,
 scope, tools, delegation, runtime state or native qualification.
-Maestro, Walter and Darwin are interviewed one at a time. Narrative suggestions
+Maestro, Yoda and Darwin are interviewed one at a time. Narrative suggestions
 may reflect only preferences the owner explicitly states. The local profile
 changes only after a digest-bound draft is reviewed and confirmed against its
 base revision; scaffolding continues to derive authority exclusively from the
