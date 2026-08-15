@@ -170,6 +170,13 @@
       "relative_path": "skills/maestro-environment-setup/SKILL.md"
     },
     {
+      "id": "maestro-knowledge-pill",
+      "display_name": "Maestro Knowledge Pill",
+      "trigger": "Gera pílula de conhecimento curta e engajante sobre o Maestro OS em formato Slack Block Kit",
+      "default_prompt": "Use $maestro-knowledge-pill para gerar uma pílula de conhecimento sobre o Maestro OS pronta para postar no Slack.",
+      "relative_path": "skills/maestro-knowledge-pill/SKILL.md"
+    },
+    {
       "id": "maestro-onboarding",
       "display_name": "Maestro Onboarding",
       "trigger": "Start a guided owner interview with quick or complete tracks",
