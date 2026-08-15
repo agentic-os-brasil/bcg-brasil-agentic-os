@@ -513,7 +513,7 @@ account or case is ready, through `/agent-identity-setup` and an explicitly
 confirmed local profile.
 
 Only after this invitation may you suggest another next skill, chosen for the
-owner's stated need. Examples: `/case-agent-setup`, `/case-kickoff`,
+owner's stated need. Examples: `/case-agent-setup`, `/bcg-case-kickoff`,
 `/ingest-content` or `/meeting-to-work-items`. Suggesting a skill is not
 executing it. Explain its purpose and wait for the owner to choose it.
 
