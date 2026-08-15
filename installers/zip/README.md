@@ -35,7 +35,7 @@ Saída em `dist/`:
 
 1. `git tag v0.1.0 && git push --tags` (após code freeze).
 2. Rode `build-release.sh 0.1.0`.
-3. Envie `dist/Maestro-v0.1.0.zip` por email para o batch beta com instruções de extract-over.
+3. Envie `dist/Maestro-v0.1.0.zip` por email para o batch beta apontando para o `README-INSTALL.md` incluído no ZIP, que é a fonte única do ritual de instalação e atualização.
 
 Sem manifest, sem hosting público, sem checagem automática. O email é o único canal de notificação e o único canal de entrega.
 
@@ -52,7 +52,7 @@ Sem manifest, sem hosting público, sem checagem automática. O email é o únic
 - **Workspace** (do usuário, criado no first-run, nunca no ZIP):
   `data/` inteiro
 
-Extract-over funciona porque o ZIP não contém `data/` — ficheiros no destino que não estão no ZIP são preservados por Finder/Explorer.
+O ZIP não contém `data/`, então a workspace do usuário nunca é sobrescrita por uma extração. Isso não torna extract-over seguro: extrair por cima deixa arquivos de versões anteriores misturados com a nova. O ritual publicado em `user-template/README-INSTALL.md` manda renomear a pasta antiga, extrair a nova e **copiar** a `data/` para dentro dela. Esse é o único fluxo a divulgar.
 
 ## Deprecação do bcgos
 

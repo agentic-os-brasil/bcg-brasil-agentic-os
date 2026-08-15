@@ -1092,6 +1092,42 @@ else
 fi
 
 # --------------------------------------------------------------------------
+phase "Phase 18 — Update ritual has one source of truth"
+# --------------------------------------------------------------------------
+
+# README-INSTALL.md is the declared single source of the install/update ritual,
+# and it mandates rename + copy data/ across. WELCOME.md tells the owner not to
+# extract over the folder. A shipped skill that tells them to "extraia por cima"
+# contradicts both, from inside the same folder.
+#
+# Matches the instruction, not the word: a line that forbids extract-over, or
+# that restores a personal backup over data/, is fine.
+RITUAL_BAD=0
+for skillmd in "$MAESTRO_DIR/bundles/base/skills"/*/SKILL.md; do
+  [ -f "$skillmd" ] || continue
+  HITS=$(grep -nE '(extraia|extrair|reextraia|reextrair|extração)[^.]{0,40}por cima' "$skillmd" 2>/dev/null \
+         | grep -viE 'nunca|não orient|jamais' \
+         | grep -viE 'backup|time machine|nuvem pessoal' || true)
+  if [ -n "$HITS" ]; then
+    RITUAL_BAD=$((RITUAL_BAD+1))
+    fail "$(basename "$(dirname "$skillmd")") instructs extract-over, contradicting README-INSTALL.md: $(printf '%s' "$HITS" | head -1 | cut -c1-90)"
+  fi
+done
+[ "$RITUAL_BAD" -eq 0 ] && pass "no shipped skill instructs extract-over"
+
+if grep -q 'README-INSTALL' "$MAESTRO_DIR/bundles/base/skills/maestro-setup-update/SKILL.md" 2>/dev/null; then
+  pass "maestro-setup-update points at README-INSTALL.md"
+else
+  fail "maestro-setup-update never names README-INSTALL.md (the declared source of truth)"
+fi
+
+if grep -q 'README-INSTALL' "$MAESTRO_DIR/bundles/base/skills/maestro-doctor/SKILL.md" 2>/dev/null; then
+  pass "maestro-doctor points at README-INSTALL.md"
+else
+  fail "maestro-doctor never names README-INSTALL.md (the declared source of truth)"
+fi
+
+# --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
 
