@@ -27,6 +27,7 @@
 | Investigate | Find the root cause of a wrong or surprising result | `skills/investigate/SKILL.md` |
 | Learnings Bridge | Promote daily learning candidates into durable owner knowledge | `skills/learnings-bridge/SKILL.md` |
 | Maestro Doctor | Run a plain-language health check on the Maestro install | `skills/maestro-doctor/SKILL.md` |
+| Maestro Knowledge Pill | Generate a short, engaging Slack Block Kit knowledge pill about Maestro OS | `skills/maestro-knowledge-pill/SKILL.md` |
 | Preparar Ambiente Maestro | Prepara workspace, runtime e manutenção local | `skills/maestro-environment-setup/SKILL.md` |
 | Maestro Onboarding | Start a guided owner interview with quick or complete tracks | `skills/maestro-onboarding/SKILL.md` |
 | Maestro Operator | Operational method loaded at SessionStart — routes control-plane requests to the right skill | `skills/maestro-operator/SKILL.md` |

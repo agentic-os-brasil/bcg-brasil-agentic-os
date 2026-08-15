@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maestro Knowledge Pill"
+  short_description: "Gera pílula de conhecimento curta e engajante sobre o Maestro OS em formato Slack Block Kit"
+  default_prompt: "Use $maestro-knowledge-pill para gerar uma pílula de conhecimento sobre o Maestro OS pronta para postar no Slack."
