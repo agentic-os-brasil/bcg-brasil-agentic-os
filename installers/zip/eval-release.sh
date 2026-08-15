@@ -1024,6 +1024,41 @@ else
 fi
 
 # --------------------------------------------------------------------------
+phase "Phase 16 — Prompt-time context pointers resolve"
+# --------------------------------------------------------------------------
+
+# context-inject-userprompt.sh emits pointers into the model's context on every
+# turn. A pointer naming a file the scaffold never creates costs a failed read
+# on the first turn of every session and teaches the runtime that memory paths
+# are unreliable. Every absolute path it emits must exist on a fresh install.
+CTX_HOOK="$MAESTRO_DIR/.claude/hooks/context-inject-userprompt.sh"
+if [ -f "$CTX_HOOK" ]; then
+  pass "context-inject-userprompt.sh present in ZIP"
+
+  # Fresh state dir so the "first fire" (richest) branch is the one exercised.
+  CTX_HOME=$(mktemp -d -t maestro-eval-ctxhome-XXXXXX)
+  CTX_OUT=$(HOME="$CTX_HOME" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$CTX_HOOK" 2>/dev/null)
+
+  if [ -n "$CTX_OUT" ]; then
+    pass "context-inject emits a first-fire bundle"
+  else
+    fail "context-inject emitted nothing on first fire"
+  fi
+
+  # Every emitted path under the Maestro dir must resolve.
+  CTX_DANGLING=0
+  for p in $(printf '%s' "$CTX_OUT" | grep -oE "$MAESTRO_DIR[^ )]*" | sed 's/[.,]$//' | sort -u); do
+    if [ ! -e "$p" ]; then
+      CTX_DANGLING=$((CTX_DANGLING+1))
+      fail "context-inject points at a path that does not exist: ${p#"$MAESTRO_DIR/"}"
+    fi
+  done
+  [ "$CTX_DANGLING" -eq 0 ] && pass "every context-inject pointer resolves on a fresh install"
+else
+  fail "context-inject-userprompt.sh missing from ZIP"
+fi
+
+# --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
 

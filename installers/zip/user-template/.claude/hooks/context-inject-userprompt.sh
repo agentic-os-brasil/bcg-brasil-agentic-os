@@ -62,8 +62,10 @@ truncate_stdout() {
 }
 
 emit_minimal() {
-  # Absolute fallback — used on any read error.
-  printf '<!-- maestro:context-inject:minimal -->\nMemory index: %s/data/memory/MEMORY.md (load on demand).\n' "$PROJECT_DIR"
+  # Absolute fallback — used on any read error. Points at the memory root,
+  # which the scaffold always creates. Naming a specific index file here would
+  # assert a path that may not exist.
+  printf '<!-- maestro:context-inject:minimal -->\nMemory: %s/data/memory/ (load on demand).\n' "$PROJECT_DIR"
 }
 
 # Trap any unexpected error -> emit minimal, exit 0.
@@ -73,7 +75,7 @@ if [ -f "$MARKER" ]; then
   # -------- subsequent fires: stub only --------
   {
     printf '<!-- maestro:context-inject:stub -->\n'
-    printf 'Memory: %s/data/memory/ · Load MEMORY.md on demand.\n' "$PROJECT_DIR"
+    printf 'Memory: %s/data/memory/ · Load specific tiers on demand.\n' "$PROJECT_DIR"
   } | truncate_stdout "$NEXT_BUDGET"
   exit 0
 fi
@@ -109,9 +111,17 @@ PY
     fi
   fi
 
-  # Pointers only — no file contents.
-  printf 'Memory index: %s/data/memory/MEMORY.md\n' "$PROJECT_DIR"
-  printf 'Decision log: %s/data/memory/decisions/decision-log.md\n' "$PROJECT_DIR"
+  # Pointers only — no file contents. Each is emitted only when the target
+  # actually exists: neither MEMORY.md nor decisions/decision-log.md is created
+  # by the scaffold, and naming a file that is not there invites a failed read
+  # on the first turn of every session.
+  printf 'Memory: %s/data/memory/\n' "$PROJECT_DIR"
+  if [ -f "$MEMORY_DIR/MEMORY.md" ]; then
+    printf 'Memory index: %s/MEMORY.md\n' "$MEMORY_DIR"
+  fi
+  if [ -f "$MEMORY_DIR/decisions/decision-log.md" ]; then
+    printf 'Decision log: %s/decisions/decision-log.md\n' "$MEMORY_DIR"
+  fi
   if [ -f "${IDENTITY_FILE:-}" ]; then
     printf 'Profile: %s\n' "$IDENTITY_FILE"
   fi
