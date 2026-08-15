@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
-	body, err := os.ReadFile("../../adapters/conformance/walter-review.json")
+func TestYodaReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
+	body, err := os.ReadFile("../../adapters/conformance/yoda-review.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,10 +21,10 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 	if err := json.Unmarshal(body, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.SchemaVersion != 1 || fixture.MaxObjections != maxWalterObjections {
-		t.Fatalf("Walter fixture header drifted: %#v", fixture)
+	if fixture.SchemaVersion != 1 || fixture.MaxObjections != maxYodaObjections {
+		t.Fatalf("Yoda fixture header drifted: %#v", fixture)
 	}
-	expectedTriggers := []WalterReviewTrigger{ReviewMaterialRecommendation, ReviewConsequentialTradeoff, ReviewExternalArtifact}
+	expectedTriggers := []YodaReviewTrigger{ReviewMaterialRecommendation, ReviewConsequentialTradeoff, ReviewExternalArtifact}
 	if len(fixture.Triggers) != len(expectedTriggers) {
 		t.Fatalf("fixture trigger set drifted: %#v", fixture.Triggers)
 	}
@@ -32,11 +32,11 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 		if trigger != string(expectedTriggers[index]) {
 			t.Fatalf("fixture trigger order/set drifted: %#v", fixture.Triggers)
 		}
-		if !RequiresWalterReview(WalterReviewTrigger(trigger)) {
+		if !RequiresYodaReview(YodaReviewTrigger(trigger)) {
 			t.Fatalf("fixture trigger is not executable: %q", trigger)
 		}
 	}
-	expectedVerdicts := []WalterVerdict{WalterApproved, WalterRefineAndReturn, WalterMissingTheMark, WalterHold}
+	expectedVerdicts := []YodaVerdict{YodaApproved, YodaRefineAndReturn, YodaMissingTheMark, YodaHold}
 	if len(fixture.Verdicts) != len(expectedVerdicts) {
 		t.Fatalf("fixture verdict set drifted: %#v", fixture.Verdicts)
 	}
@@ -44,11 +44,11 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 		if verdict != string(expectedVerdicts[index]) {
 			t.Fatalf("fixture verdict order/set drifted: %#v", fixture.Verdicts)
 		}
-		body := WalterReviewBody{Verdict: WalterVerdict(verdict), PreservesIntent: true}
-		if verdict == string(WalterRefineAndReturn) || verdict == string(WalterMissingTheMark) || verdict == string(WalterHold) {
-			body.Objections = []WalterObjection{{Code: "fixture", Fix: "Apply the named correction.", ProposedRefinement: "Preserve the thesis while applying the concrete correction.", ExitCondition: "The correction is evidenced.", Blocking: verdict == string(WalterHold)}}
+		body := YodaReviewBody{Verdict: YodaVerdict(verdict), PreservesIntent: true}
+		if verdict == string(YodaRefineAndReturn) || verdict == string(YodaMissingTheMark) || verdict == string(YodaHold) {
+			body.Objections = []YodaObjection{{Code: "fixture", Fix: "Apply the named correction.", ProposedRefinement: "Preserve the thesis while applying the concrete correction.", ExitCondition: "The correction is evidenced.", Blocking: verdict == string(YodaHold)}}
 		}
-		if err := validateWalterReviewBody(body, ReviewPacket{
+		if err := validateYodaReviewBody(body, ReviewPacket{
 			SourcePacketID:     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			SourcePacketSHA256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 			SourceScopeKind:    "workspace", SourceScopeID: "alpha",
@@ -69,25 +69,25 @@ func TestWalterReviewConformanceFixtureMatchesSharedContract(t *testing.T) {
 	}
 }
 
-func TestWalterReviewIsConstructiveAndProportional(t *testing.T) {
+func TestYodaReviewIsConstructiveAndProportional(t *testing.T) {
 	review := ReviewPacket{SourcePacketID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", SourcePacketSHA256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", SourceScopeKind: "workspace", SourceScopeID: "alpha", Trigger: ReviewMaterialRecommendation, Audience: "sponsor", Recommendation: "Choose the bounded option.", DefinitionOfDone: "The sponsor can decide."}
-	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterApproved, PreservesIntent: true, Objections: []WalterObjection{{Code: "polish", Fix: "Tighten one sentence.", ProposedRefinement: "Keep the thesis and improve clarity.", ExitCondition: "The sentence is clearer.", Blocking: false}}}, review); err != nil {
+	if err := validateYodaReviewBody(YodaReviewBody{Verdict: YodaApproved, PreservesIntent: true, Objections: []YodaObjection{{Code: "polish", Fix: "Tighten one sentence.", ProposedRefinement: "Keep the thesis and improve clarity.", ExitCondition: "The sentence is clearer.", Blocking: false}}}, review); err != nil {
 		t.Fatalf("cosmetic polish blocked approval: %v", err)
 	}
-	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterRefineAndReturn, PreservesIntent: true, Objections: []WalterObjection{{Code: "evidence_gap", Fix: "Add the missing decision evidence.", ProposedRefinement: "Retain the recommendation and add the cited evidence.", ExitCondition: "The evidence pointer supports the claim.", Blocking: true}}}, review); err != nil {
+	if err := validateYodaReviewBody(YodaReviewBody{Verdict: YodaRefineAndReturn, PreservesIntent: true, Objections: []YodaObjection{{Code: "evidence_gap", Fix: "Add the missing decision evidence.", ProposedRefinement: "Retain the recommendation and add the cited evidence.", ExitCondition: "The evidence pointer supports the claim.", Blocking: true}}}, review); err != nil {
 		t.Fatalf("load-bearing refinement rejected: %v", err)
 	}
-	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterHold, PreservesIntent: true, Objections: []WalterObjection{{Code: "material_risk", Fix: "Resolve the material safety issue before delivery.", ExitCondition: "The safety owner confirms the mitigation.", Blocking: true}}}, review); err != nil {
+	if err := validateYodaReviewBody(YodaReviewBody{Verdict: YodaHold, PreservesIntent: true, Objections: []YodaObjection{{Code: "material_risk", Fix: "Resolve the material safety issue before delivery.", ExitCondition: "The safety owner confirms the mitigation.", Blocking: true}}}, review); err != nil {
 		t.Fatalf("material hold rejected: %v", err)
 	}
-	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterApproved, PreservesIntent: true, Objections: []WalterObjection{{Code: "cosmetic_block", Fix: "Change the color.", ExitCondition: "The color changes.", Blocking: true}}}, review); err == nil {
+	if err := validateYodaReviewBody(YodaReviewBody{Verdict: YodaApproved, PreservesIntent: true, Objections: []YodaObjection{{Code: "cosmetic_block", Fix: "Change the color.", ExitCondition: "The color changes.", Blocking: true}}}, review); err == nil {
 		t.Fatal("cosmetic blocking objection bypassed calm approval rule")
 	}
 }
 
-func TestWalterReviewRequiresIntentPreservation(t *testing.T) {
+func TestYodaReviewRequiresIntentPreservation(t *testing.T) {
 	review := ReviewPacket{SourcePacketID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", SourcePacketSHA256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", SourceScopeKind: "workspace", SourceScopeID: "alpha", Trigger: ReviewMaterialRecommendation, Audience: "sponsor", Recommendation: "Choose the bounded option.", DefinitionOfDone: "The sponsor can decide."}
-	if err := validateWalterReviewBody(WalterReviewBody{Verdict: WalterApproved}, review); err == nil {
-		t.Fatal("Walter accepted a verdict without an explicit intent-preservation assertion")
+	if err := validateYodaReviewBody(YodaReviewBody{Verdict: YodaApproved}, review); err == nil {
+		t.Fatal("Yoda accepted a verdict without an explicit intent-preservation assertion")
 	}
 }

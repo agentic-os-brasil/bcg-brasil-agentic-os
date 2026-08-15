@@ -110,9 +110,9 @@ func (store Store) Start(sessionID, agentID, agentType string) error {
 			if state.AccountRoute && !state.AccountFramed {
 				return errors.New("Case Agent must wait for Client Account Agent framing on the selected strategic route")
 			}
-		case "walter":
+		case "yoda":
 			if state.SystemHealthRoute || !state.CaseCompleted || (state.AccountRoute && !state.AccountValidated) {
-				return errors.New("Walter may refine only after the selected Case route and any required Client Account validation complete")
+				return errors.New("Yoda may refine only after the selected Case route and any required Client Account validation complete")
 			}
 		default:
 			return fmt.Errorf("agent type %q is not managed by Maestro", agentType)

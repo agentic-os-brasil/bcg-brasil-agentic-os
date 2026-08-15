@@ -24,7 +24,7 @@ func TestDispatcherIssuesOneRootPacketAndRejectsNestedDelegation(t *testing.T) {
 	if root.IssuerAgentID != "maestro" || root.ParentPacketID != "" {
 		t.Fatalf("unexpected root packet: %#v", root)
 	}
-	if _, decision, err := dispatcher.StartChild(root, PacketRequest{TargetAgentID: "walter", ScopeKind: "case", ScopeID: "alpha", Objective: "Attempt a direct handoff.", TTL: time.Hour}); err == nil || decision.Allowed {
+	if _, decision, err := dispatcher.StartChild(root, PacketRequest{TargetAgentID: "yoda", ScopeKind: "case", ScopeID: "alpha", Objective: "Attempt a direct handoff.", TTL: time.Hour}); err == nil || decision.Allowed {
 		t.Fatalf("nested packet was accepted: %#v %v", decision, err)
 	}
 	if decision := dispatcher.FinishRoot(root); !decision.Allowed {
@@ -44,8 +44,8 @@ func TestDispatcherKeepsDirectSkillsInsideCaseAgent(t *testing.T) {
 	if err := dispatcher.SelectDirectSkill(root, "case-agent-alpha", "case-cap", "bcg-deck"); err != nil {
 		t.Fatal(err)
 	}
-	if err := dispatcher.SelectDirectSkill(root, "walter", "walter-cap", "bcg-deck"); err == nil {
-		t.Fatal("Walter selected a Case skill")
+	if err := dispatcher.SelectDirectSkill(root, "yoda", "yoda-cap", "bcg-deck"); err == nil {
+		t.Fatal("Yoda selected a Case skill")
 	}
 	if err := dispatcher.SelectDirectSkill(root, "case-agent-alpha", "forged", "bcg-deck"); err == nil {
 		t.Fatal("forged capability selected a skill")
@@ -135,7 +135,7 @@ func newTestDispatcher(t *testing.T) *Dispatcher {
 	grants := []agentorchestration.Authorization{
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
 		{AgentID: "case-agent-alpha", Role: "case_agent", Scope: "alpha", ScopeKind: "case", Capability: "case-cap"},
-		{AgentID: "walter", Role: "reviewer", Scope: "review", ScopeKind: "review", Capability: "walter-cap"},
+		{AgentID: "yoda", Role: "reviewer", Scope: "review", ScopeKind: "review", Capability: "yoda-cap"},
 	}
 	adapter, err := agentorchestration.NewAdapter("claude", catalog, grants, store)
 	if err != nil {
@@ -176,7 +176,7 @@ func newTrackDispatcher(t *testing.T, tracks []string) *Dispatcher {
 func mustNew(adapter *agentorchestration.Adapter, registry skillpolicy.Registry, t *testing.T) *Dispatcher {
 	t.Helper()
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
-		"maestro": "maestro-cap", "case-agent-alpha": "case-cap", "walter": "walter-cap",
+		"maestro": "maestro-cap", "case-agent-alpha": "case-cap", "yoda": "yoda-cap",
 	}, registry)
 	if err != nil {
 		t.Fatal(err)

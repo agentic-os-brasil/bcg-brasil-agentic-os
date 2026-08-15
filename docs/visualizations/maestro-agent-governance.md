@@ -14,10 +14,10 @@ flowchart LR
   Case --> Maestro
   Maestro --> AccountValidation[validation iff framing used]
   AccountValidation --> Maestro
-  Maestro --> Material{Walter required?}
-  Material --> Walter[Walter review]
+  Maestro --> Material{Yoda required?}
+  Material --> Yoda[Yoda review]
   Material --> Deliver[delivery]
-  Walter --> Maestro
+  Yoda --> Maestro
   Maestro --> Deliver
   Deliver --> User
 ```
@@ -32,12 +32,12 @@ flowchart LR
 
 The first decision is `account_assistance`: account-assisted work has both
 framing and return validation; direct Case work has neither. The second is
-`walter_required`: material or ambiguous work goes to Walter, while a
+`yoda_required`: material or ambiguous work goes to Yoda, while a
 low-materiality skip requires a Maestro reason code and evidence. The two
 decisions are never collapsed into one depth profile.
 
 Case methods remain local skills. PA Expert is the sole centrally versioned
-FPA/IPA advisory authority. Walter is internal and tool-free. Darwin handles
+FPA/IPA advisory authority. Yoda is internal and tool-free. Darwin handles
 scoped health/governance maintenance only and cannot approve itself or mutate
 live policy. Gamma Guardian is a direct Maestro spoke for longitudinal code
 quality; its rubric is a method inside that agent, and it never becomes a Case

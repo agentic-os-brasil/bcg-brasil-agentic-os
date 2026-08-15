@@ -61,10 +61,10 @@ type IndependentApproval struct {
 var evolutionDigest = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 // independentApproverIDs is the explicit authority registry for structural
-// evolution. It intentionally names the registered Walter reviewer rather
+// evolution. It intentionally names the registered Yoda reviewer rather
 // than accepting arbitrary non-Darwin strings as an approval authority.
 var independentApproverIDs = map[string]struct{}{
-	"walter": {},
+	"yoda": {},
 }
 
 func (proposal StructuralProposal) Validate() error {

@@ -85,7 +85,7 @@ type PromptHistoryPolicy struct {
 type PromptTranslator func(original, sourceLanguage, workingLanguage string) (string, error)
 
 // IntentReviewPacket is ephemeral and sealed by Maestro. Literal request and
-// draft are available to Walter for review, but receipts retain only digests.
+// draft are available to Yoda for review, but receipts retain only digests.
 type IntentReviewPacket struct {
 	SchemaVersion               int                               `json:"schema_version"`
 	PacketVersion               string                            `json:"packet_version"`
@@ -181,7 +181,7 @@ func BuildIntentReviewPacket(prompt string, plan Plan, draft string, contextRefs
 }
 
 // BuildIntentReviewPacketWithPromptHistory keeps history selection and
-// translation before the Walter review stage. The prompt bodies remain only
+// translation before the Yoda review stage. The prompt bodies remain only
 // in the ephemeral packet; all durable receipts retain digests only.
 func BuildIntentReviewPacketWithPromptHistory(prompt string, plan Plan, draft string, contextRefs []string, snapshot ownerctx.UserSelfSnapshot, observations []RelevantObservation, audience, consequence, reversibility, accountReceiptDigest, historyRoot string, limits ownerctx.PromptHistorySelectionLimits, workingLanguage string, translator PromptTranslator, now time.Time) (IntentReviewPacket, error) {
 	packet, err := BuildIntentReviewPacket(prompt, plan, draft, contextRefs, snapshot, observations, audience, consequence, reversibility, accountReceiptDigest)
@@ -323,13 +323,13 @@ func (packet IntentReviewPacket) Validate() error {
 	for _, facet := range packet.SelfFacets {
 		allowed := false
 		for _, reader := range facet.Readers {
-			if reader == "walter" {
+			if reader == "yoda" {
 				allowed = true
 				break
 			}
 		}
 		if !allowed {
-			return errors.New("intent review packet contains a facet without Walter purpose authorization")
+			return errors.New("intent review packet contains a facet without Yoda purpose authorization")
 		}
 	}
 	for _, observation := range packet.Observations {

@@ -1,4 +1,4 @@
-package walterselfreview
+package yodaselfreview
 
 import (
 	"context"
@@ -36,21 +36,21 @@ type hungAdapter struct {
 	release chan struct{}
 }
 
-func (adapter *deadlineAdapter) ID() string { return "deadline-walter" }
+func (adapter *deadlineAdapter) ID() string { return "deadline-yoda" }
 func (adapter *deadlineAdapter) Review(ctx context.Context, _ ModelInput) (SelfRefinementProposal, error) {
 	<-ctx.Done()
 	close(adapter.canceled)
 	return SelfRefinementProposal{}, ctx.Err()
 }
 
-func (adapter *hungAdapter) ID() string { return "hung-walter" }
+func (adapter *hungAdapter) ID() string { return "hung-yoda" }
 func (adapter *hungAdapter) Review(_ context.Context, _ ModelInput) (SelfRefinementProposal, error) {
 	close(adapter.started)
 	<-adapter.release
 	return SelfRefinementProposal{}, errors.New("released after deadline")
 }
 
-func (adapter *blockingAdapter) ID() string { return "blocking-walter" }
+func (adapter *blockingAdapter) ID() string { return "blocking-yoda" }
 func (adapter *blockingAdapter) Review(ctx context.Context, _ ModelInput) (SelfRefinementProposal, error) {
 	close(adapter.started)
 	select {
@@ -61,7 +61,7 @@ func (adapter *blockingAdapter) Review(ctx context.Context, _ ModelInput) (SelfR
 	}
 }
 
-func (adapter *fakeAdapter) ID() string { return "test-walter" }
+func (adapter *fakeAdapter) ID() string { return "test-yoda" }
 func (adapter *fakeAdapter) Review(_ context.Context, _ ModelInput) (SelfRefinementProposal, error) {
 	adapter.mu.Lock()
 	defer adapter.mu.Unlock()
@@ -227,7 +227,7 @@ func TestWeeklyProposalRequiresCorroboratedObservationState(t *testing.T) {
 	}
 }
 
-func TestWalterWeeklyEligibilityRequiresExplicitOwnerSignals(t *testing.T) {
+func TestYodaWeeklyEligibilityRequiresExplicitOwnerSignals(t *testing.T) {
 	base := testRequest(t)
 	cases := []struct {
 		name      string
@@ -249,7 +249,7 @@ func TestWalterWeeklyEligibilityRequiresExplicitOwnerSignals(t *testing.T) {
 			observation := base.Observations[0]
 			observation.Signal, observation.Claim, observation.OwnerConfirmed = tc.signal, tc.claim, tc.confirmed
 			request.Observations = []ownerctx.ObservationReceipt{observation}
-			if got := ownerctx.IsWalterWeeklyEligible(observation); got != tc.eligible {
+			if got := ownerctx.IsYodaWeeklyEligible(observation); got != tc.eligible {
 				t.Fatalf("weekly eligibility = %v, want %v", got, tc.eligible)
 			}
 			proposal := testProposal(request)
@@ -339,13 +339,13 @@ func TestSensitiveFacetRequiresExplicitAuthorizationAndIsNotImplicitlyProjected(
 	command := maintenance.Command{SchemaVersion: maintenance.CommandSchemaVersion, CommandID: "command-sensitive", JobID: WeeklyJobID, WorkspaceID: "workspace-1", Trigger: maintenance.TriggerWeekly, ScheduledFor: now, RequestedAt: now, Deadline: now.Add(time.Minute), ProposalOnly: true}
 	base := Handler{Root: root, OwnerID: "owner", CurrentPrompt: "Current request", CurrentLanguage: "en-US", WorkingLanguage: "en-US", TranslatorID: "translator", TranslatorVersion: "v1", Translator: func(original, _, _ string) (string, error) { return original, nil }}
 	if _, err := base.BuildRequest(command, now); err == nil {
-		t.Fatal("Walter implicitly projected all self facets")
+		t.Fatal("Yoda implicitly projected all self facets")
 	}
 	base.ReviewFacets = []string{"psychological-profile"}
 	if _, err := base.BuildRequest(command, now); err == nil {
 		t.Fatal("unauthorized sensitive facet was projected")
 	}
-	base.SensitivePurpose = "authorized Walter self-review"
+	base.SensitivePurpose = "authorized Yoda self-review"
 	base.OwnerAuthorized = true
 	request, err := base.BuildRequest(command, now)
 	if err != nil {
@@ -359,7 +359,7 @@ func TestSensitiveFacetRequiresExplicitAuthorizationAndIsNotImplicitlyProjected(
 func TestCanonicalPolicyAndEvidenceFacetAreExact(t *testing.T) {
 	request := testRequest(t)
 	proposal := testProposal(request)
-	proposal.Readers = []string{"walter"}
+	proposal.Readers = []string{"yoda"}
 	if err := ValidateProposal(request, proposal); err == nil {
 		t.Fatal("adapter-asserted reader policy was accepted")
 	}
@@ -433,7 +433,7 @@ func TestWeeklyReviewResumesAfterProposalCommitCrash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ownerReceipt, err := ownerctx.SubmitRefinement(request.OwnerContextRoot, ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "walter-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, WalterReviewRequestSHA256: RequestDigest(request), WalterReviewProposalID: proposal.ProposalID, WalterReviewProposalSHA256: DigestJSON(proposal), WalterReviewSensitivity: proposal.Sensitivity, WalterReviewReaders: proposal.Readers, WalterReviewRefinement: proposal.Refinement, WalterReviewConfirmation: string(proposal.ConfirmationRequirement), WalterReviewAdapterID: "test-walter", WalterReviewAuthorityID: "test-authority", WalterReviewFencingToken: reservation.Receipt.FencingToken})
+	ownerReceipt, err := ownerctx.SubmitRefinement(request.OwnerContextRoot, ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "yoda-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, YodaReviewRequestSHA256: RequestDigest(request), YodaReviewProposalID: proposal.ProposalID, YodaReviewProposalSHA256: DigestJSON(proposal), YodaReviewSensitivity: proposal.Sensitivity, YodaReviewReaders: proposal.Readers, YodaReviewRefinement: proposal.Refinement, YodaReviewConfirmation: string(proposal.ConfirmationRequirement), YodaReviewAdapterID: "test-yoda", YodaReviewAuthorityID: "test-authority", YodaReviewFencingToken: reservation.Receipt.FencingToken})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,7 +526,7 @@ func TestOldWorkerCannotCommitAfterFenceTakeover(t *testing.T) {
 		t.Fatal("lease takeover did not rotate fencing token")
 	}
 	proposal := testProposal(request)
-	input := ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "walter-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, WalterReviewRequestSHA256: RequestDigest(request), WalterReviewProposalID: proposal.ProposalID, WalterReviewProposalSHA256: DigestJSON(proposal), WalterReviewSensitivity: proposal.Sensitivity, WalterReviewReaders: proposal.Readers, WalterReviewRefinement: proposal.Refinement, WalterReviewConfirmation: string(proposal.ConfirmationRequirement)}
+	input := ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "yoda-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, YodaReviewRequestSHA256: RequestDigest(request), YodaReviewProposalID: proposal.ProposalID, YodaReviewProposalSHA256: DigestJSON(proposal), YodaReviewSensitivity: proposal.Sensitivity, YodaReviewReaders: proposal.Readers, YodaReviewRefinement: proposal.Refinement, YodaReviewConfirmation: string(proposal.ConfirmationRequirement)}
 	if _, err := store.CommitOwnerctxProposal(oldReservation, request.OwnerContextRoot, input, time.Now().UTC()); err == nil {
 		t.Fatal("stale worker committed after fencing takeover")
 	}

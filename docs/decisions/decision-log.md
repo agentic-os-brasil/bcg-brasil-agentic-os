@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## WYRB - Rename internal reviewer role from Walter to Yoda (Mestre Yoda persona)
+
+- Date: 2026-08-15
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The internal pressure-test reviewer role has been referred to as "Walter" (🦉) across specs, contracts, Go packages, bundles, adapters and docs. Persona canon was refactored to Mestre Yoda (🧙) — calm, dense, sensei framing — which better fits the reviewer's function as a sealed sanity-check before high-stakes output reaches the owner. Historical decision-log entries referencing "Walter" remain untouched to preserve the record; this entry documents the rename going forward.
+- Decision: Rename the reviewer role from Walter to Yoda across all runtime-neutral surfaces: Go package `walterselfreview → yodaselfreview`, contract identifier `typed_walter_verdict → typed_yoda_verdict`, conformance adapters `walter-*.json → yoda-*.json`, bundle agent `bundles/base/agents/walter → bundles/base/agents/yoda`, and all specs/docs prose. Persona emoji migrates 🦉 → 🧙. Verdicts (`approve`/`refine`/`clarify`/`hold_exceptional`) and the sealed-packet contract are unchanged. Prior decision-log entries retain their original "Walter" text as historical record; new entries and current-tense references use "Yoda".
+- Consequences: Consumers of the schemas/identifiers must adopt the new names. No external consumers of `typed_walter_verdict` or `walterselfreview` were found in the sibling `kowalski-os` workspace (only a log-filename false positive in `walter-session-review.sh`). Downstream forks that reference these identifiers must rebase or map. Full Go test suite passes after rename. This entry is the only intended edit to `decision-log.md` in this rename PR; earlier "Walter" mentions in historical entries are preserved.
+- Refs: bundles/base/agents/yoda/AGENT.md; internal/yodaselfreview; adapters/conformance/yoda-review.json; adapters/conformance/yoda-intent-review.json; docs/personas.md (Yoda persona canon); PR: feat/rebrand-walter-to-yoda
+- Supersedes: none
+
 ## OTSP - Owner-type gates personal-context default (solo-maintainer vs shared-pack)
 
 - Date: 2026-08-13

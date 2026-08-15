@@ -80,7 +80,7 @@ For the business-facing evolution path, read the [product evolution roadmap](doc
 Maestro is the primary user-facing hub. It makes two useful, independent
 judgments around a Case: whether the work benefits from a Client Account's
 strategic/stakeholder lens, and whether the resulting work is high-leverage
-enough for Walter's calm Senior Advisor & Refiner review. The first decision is
+enough for Yoda's calm Senior Advisor & Refiner review. The first decision is
 based on client strategy, relationship, stakeholder pressure-testing, client
 narrative, cross-case context or promotion signals—not technical size. The
 second is based on consequence, leverage, reversibility, external exposure and
@@ -95,9 +95,9 @@ may carry; they do not pre-script reasoning. Telemetry, receipts and native
 qualification describe what was observed and never hold an otherwise usable
 local runtime hostage.
 
-Walter's review packet is an ephemeral, digest-bound `IntentReviewPacket`: it
+Yoda's review packet is an ephemeral, digest-bound `IntentReviewPacket`: it
 contains the literal request, selected route, bounded draft/context, audience,
-consequence, reversibility and a `UserSelfSnapshot` projection. Walter's
+consequence, reversibility and a `UserSelfSnapshot` projection. Yoda's
 intrinsic-intent assessment is a hypothesis with evidence and confidence, not
 mind-reading. Owner Context facets remain the sole self authority. At the
 reachable local dispatch boundary, Maestro evaluates each submitted interaction
@@ -108,7 +108,7 @@ local CLI exposes inspection/export and owner-confirmed rejection/redaction,
 revert and deletion controls.
 
 When explicitly enabled, the owner-local PromptHistoryStore retains only user
-prompts under bounded global/workspace/account/case scopes. Walter receives a
+prompts under bounded global/workspace/account/case scopes. Yoda receives a
 small relevance-scored selection alongside the current prompt; the current
 prompt is normalized first, then history is normalized into the configured
 working language. Each representation and the combined current-plus-history
@@ -138,13 +138,13 @@ for a genuinely absent, disabled or failed capability.
 | ✅ Guided runtime projection | The ZIP installer delivers hooks, a concise but complete `CLAUDE.md`/`AGENTS.md`, and the real base skills with idempotent, conflict-safe ownership. |
 | ✅ Professional context | A canonical SELF index, eight professional facets, one-question expansion, agent identity drafts, skills index, human atlas and bounded session pointers stay inspectable and local. The quick onboarding track establishes role, communication, quality bar and boundaries; the complete track covers all eight facets. |
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
-| ✅ Senior-advisor refinement | Maestro can ask Walter to pressure-test high-leverage work as a calm proxy for the owner's intent; ordinary work does not wait on a review receipt. |
+| ✅ Senior-advisor refinement | Maestro can ask Yoda to pressure-test high-leverage work as a calm proxy for the owner's intent; ordinary work does not wait on a review receipt. |
 | ✅ Adaptive delegation contract | Runtime-native agents may plan and consult one another using bounded purpose, context and effect envelopes; receipts and deterministic routes remain optional assurance. |
 | ✅ Professional capability bundles | The base bundle serves professional work; a confirmed technical selection activates the unified Tech Core bundle with engineering, data and quality skills. |
 | ✅ Canary contract | The local store can aggregate typed outcomes, capability failures, interventions and receipt metadata — native telemetry remains unavailable and no work content is exported. |
 | ✅ Privacy-safe improvement loop | The local Darwin can compile approved structural signals; central curation proposes advances for human acceptance. |
 | ✅ Darwin 🧬 operational surgeon | The same Darwin contract supports interactive and headless housekeeping with scoped `health/maestro-system` repairs and metadata-only receipts; native runtime invocation remains unavailable. |
-| ✅ Local continuity loop | Session Start derives calibration, open work/checkpoint presence, attested signals, memory, maintenance and runtime evidence from their existing local authorities. An explicitly enrolled macOS Canary may run deterministic three-hour L1/checkpoint work and weekly L2/L3 dreaming while idle; lifetime promotion requires two L3 generations. Walter weekly review and native qualification remain unavailable. |
+| ✅ Local continuity loop | Session Start derives calibration, open work/checkpoint presence, attested signals, memory, maintenance and runtime evidence from their existing local authorities. An explicitly enrolled macOS Canary may run deterministic three-hour L1/checkpoint work and weekly L2/L3 dreaming while idle; lifetime promotion requires two L3 generations. Yoda weekly review and native qualification remain unavailable. |
 | ✅ Local ingestion | Provider-neutral contract, Docling-first fallback selector, bounded MarkItDown adapter and fail-closed ingest contract; conversion remains unavailable until an approved managed runtime pack is verified. |
 | ✅ Governed prior-work retrieval | Enrollment, signed snapshot import, deterministic local indexing, explicit search, freshness, revocation and scheduling are implemented and locally validated. Native Claude collection remains unavailable pending a qualifying trial; Codex collection is prohibited by corporate policy. |
 | 🛡️ Workspace import and migration boundaries | Transactional external import and versioned migration cores, plus installer analysis/receipt UX, are implemented and locally tested. External import requires explicit `IMPORT`/`ROLLBACK` approval and keeps unsupported formats unavailable; native workspace migration remains unavailable pending trusted stable-bootstrapper activation and managed-target authority. |

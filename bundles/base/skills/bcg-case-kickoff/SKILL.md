@@ -37,7 +37,7 @@ deadline or authority from a path or prompt fragment.
    smallest useful next action.
 5. Add a meeting-cadence proposal only as a draft for human confirmation; do
    not schedule or send anything.
-6. Identify risks, missing access and decisions that require Walter review.
+6. Identify risks, missing access and decisions that require Yoda review.
 
 ## Output contract
 
@@ -51,7 +51,7 @@ Return a structured packet with `objective`, `scope_boundary`, `phases`,
 - Do not create DOCX, slides, tasks, calendar events or messages.
 - Do not browse, ingest or open a source unless an authorized capability and
   explicit source pointer are supplied by the owning agent.
-- Do not claim that a Case Agent, PA Expert, Walter or
+- Do not claim that a Case Agent, PA Expert, Yoda or
   Darwin was invoked; this skill only produces a method packet.
 - A missing required capability remains `unavailable`; do not emulate it with
   an external provider or hidden persistence.

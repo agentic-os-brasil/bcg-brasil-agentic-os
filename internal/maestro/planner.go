@@ -68,7 +68,7 @@ const (
 	ActionCase     Action = "open_case"
 	ActionAccount  Action = "open_client_account"
 	ActionPAExpert Action = "request_pa_expert"
-	ActionWalter   Action = "invoke_walter"
+	ActionYoda     Action = "invoke_yoda"
 	ActionDarwin   Action = "invoke_darwin"
 	ActionErrand   Action = "bounded_errand"
 	ActionGamma    Action = "invoke_gamma_guardian"
@@ -144,13 +144,13 @@ type Plan struct {
 	CaseEntry                   CaseEntry      `json:"case_entry,omitempty"`
 	SkipPreAccount              bool           `json:"skip_pre_account"`
 	SkipReasonCodes             []string       `json:"skip_reason_codes,omitempty"`
-	SkipWalter                  bool           `json:"skip_walter"`
-	WalterReasonCode            string         `json:"walter_reason_code,omitempty"`
-	WalterSkipReasonCode        string         `json:"walter_skip_reason_code,omitempty"`
-	WalterSkipEvidence          string         `json:"walter_skip_evidence,omitempty"`
+	SkipYoda                    bool           `json:"skip_yoda"`
+	YodaReasonCode              string         `json:"yoda_reason_code,omitempty"`
+	YodaSkipReasonCode          string         `json:"yoda_skip_reason_code,omitempty"`
+	YodaSkipEvidence            string         `json:"yoda_skip_evidence,omitempty"`
 	RequiresAccountFraming      bool           `json:"requires_account_framing"`
 	RequiresAccountValidation   bool           `json:"requires_account_validation"`
-	RequiresWalter              bool           `json:"requires_walter"`
+	RequiresYoda                bool           `json:"requires_yoda"`
 	ScopeKind                   string         `json:"scope_kind"`
 	ScopeID                     string         `json:"scope_id"`
 	AccountScopeID              string         `json:"account_scope_id,omitempty"`
@@ -182,7 +182,7 @@ func PlanFor(input Input) (Plan, error) {
 	add := func(agent RegisteredAgent) { selected = append(selected, agent) }
 	clientLensSignal := input.ClientImplication || input.StakeholderImplication || input.StrategicImplication || input.PromotionImplication || input.CrossCaseContext
 	accountConsultation := !input.ExecutionOnly || clientLensSignal
-	walterRequired := input.HighLeverage || input.ConsequentialDecision || input.ExternalArtifact || input.ReputationalRisk || input.HardToReverse || input.Materiality == MaterialityReview || input.ReviewTrigger != ""
+	yodaRequired := input.HighLeverage || input.ConsequentialDecision || input.ExternalArtifact || input.ReputationalRisk || input.HardToReverse || input.Materiality == MaterialityReview || input.ReviewTrigger != ""
 	switch input.IntentClass {
 	case IntentDirectAnswer:
 		plan.Action, plan.ReasonCode = ActionDirect, "direct_closed_intent"
@@ -201,12 +201,12 @@ func PlanFor(input Input) (Plan, error) {
 		}
 		add(expert)
 	case IntentReview:
-		plan.Action, plan.ReasonCode = ActionWalter, "material_review_requested"
-		walter, ok := find("reviewer", "review", "review")
+		plan.Action, plan.ReasonCode = ActionYoda, "material_review_requested"
+		yoda, ok := find("reviewer", "review", "review")
 		if !ok {
-			return Plan{}, errors.New("Walter routing is unavailable")
+			return Plan{}, errors.New("Yoda routing is unavailable")
 		}
-		add(walter)
+		add(yoda)
 	case IntentHealth:
 		if input.HealthIntent == HealthNone {
 			return Plan{}, errors.New("health routing requires a closed health or governance intent")
@@ -241,19 +241,19 @@ func PlanFor(input Input) (Plan, error) {
 			plan.Action, plan.ReasonCode = ActionCase, "direct_case_execution_only"
 			plan.CaseEntry, plan.SkipPreAccount = CaseEntryDirect, true
 			plan.AccountConsultationRequired = false
-			plan.RequiresAccountValidation, plan.RequiresWalter = false, walterRequired
+			plan.RequiresAccountValidation, plan.RequiresYoda = false, yodaRequired
 			plan.SkipReasonCodes = []string{"skip_pre_account_execution_only"}
-			plan.WalterReasonCode = "walter_required_high_leverage"
-			if !walterRequired {
-				plan.SkipWalter, plan.WalterReasonCode, plan.WalterSkipReasonCode, plan.WalterSkipEvidence = true, "walter_skipped_low_leverage", "walter_skipped_low_leverage", "execution-only Case; no consequential decision, external artifact, reputational risk, hard-to-reverse action or review trigger"
+			plan.YodaReasonCode = "yoda_required_high_leverage"
+			if !yodaRequired {
+				plan.SkipYoda, plan.YodaReasonCode, plan.YodaSkipReasonCode, plan.YodaSkipEvidence = true, "yoda_skipped_low_leverage", "yoda_skipped_low_leverage", "execution-only Case; no consequential decision, external artifact, reputational risk, hard-to-reverse action or review trigger"
 			}
 			add(caseAgent)
-			if walterRequired {
-				walter, ok := find("reviewer", "review", "review")
+			if yodaRequired {
+				yoda, ok := find("reviewer", "review", "review")
 				if !ok {
-					return Plan{}, errors.New("Walter routing is unavailable for the material Case")
+					return Plan{}, errors.New("Yoda routing is unavailable for the material Case")
 				}
-				add(walter)
+				add(yoda)
 			}
 			break
 		}
@@ -271,18 +271,18 @@ func PlanFor(input Input) (Plan, error) {
 		plan.Action, plan.ReasonCode = ActionAccount, "client_strategic_lens_required"
 		plan.CaseEntry = CaseEntryAccountFirst
 		plan.AccountConsultationRequired = true
-		plan.RequiresAccountFraming, plan.RequiresAccountValidation, plan.RequiresWalter = true, true, walterRequired
-		plan.WalterReasonCode = "walter_required_high_leverage"
+		plan.RequiresAccountFraming, plan.RequiresAccountValidation, plan.RequiresYoda = true, true, yodaRequired
+		plan.YodaReasonCode = "yoda_required_high_leverage"
 		add(account)
 		add(caseAgent)
-		if walterRequired {
-			walter, ok := find("reviewer", "review", "review")
+		if yodaRequired {
+			yoda, ok := find("reviewer", "review", "review")
 			if !ok {
-				return Plan{}, errors.New("material Case routing requires a registered Walter reviewer")
+				return Plan{}, errors.New("material Case routing requires a registered Yoda reviewer")
 			}
-			add(walter)
+			add(yoda)
 		} else {
-			plan.SkipWalter, plan.WalterReasonCode, plan.WalterSkipReasonCode, plan.WalterSkipEvidence = true, "walter_skipped_low_leverage", "walter_skipped_low_leverage", "low-leverage Case; no consequential decision, external artifact, reputational risk, hard-to-reverse action or review trigger"
+			plan.SkipYoda, plan.YodaReasonCode, plan.YodaSkipReasonCode, plan.YodaSkipEvidence = true, "yoda_skipped_low_leverage", "yoda_skipped_low_leverage", "low-leverage Case; no consequential decision, external artifact, reputational risk, hard-to-reverse action or review trigger"
 		}
 	default:
 		return Plan{}, fmt.Errorf("unknown Maestro intent class %q", input.IntentClass)
@@ -456,14 +456,14 @@ func (plan Plan) Validate() error {
 	if plan.CaseEntry != "" && len(plan.SkipReasonCodes) > 1 {
 		return errors.New("Case plans may contain at most one pre-brief skip reason")
 	}
-	if plan.CaseEntry != "" && plan.RequiresWalter && (plan.SkipWalter || plan.WalterSkipReasonCode != "" || plan.WalterSkipEvidence != "") {
-		return errors.New("Walter-required plans cannot carry a Walter skip")
+	if plan.CaseEntry != "" && plan.RequiresYoda && (plan.SkipYoda || plan.YodaSkipReasonCode != "" || plan.YodaSkipEvidence != "") {
+		return errors.New("Yoda-required plans cannot carry a Yoda skip")
 	}
-	if plan.CaseEntry != "" && !plan.RequiresWalter && (!plan.SkipWalter || plan.WalterSkipReasonCode == "" || plan.WalterSkipEvidence == "") {
-		return errors.New("Walter skip requires an auditable low-materiality reason and evidence")
+	if plan.CaseEntry != "" && !plan.RequiresYoda && (!plan.SkipYoda || plan.YodaSkipReasonCode == "" || plan.YodaSkipEvidence == "") {
+		return errors.New("Yoda skip requires an auditable low-materiality reason and evidence")
 	}
-	if plan.CaseEntry != "" && plan.WalterReasonCode == "" {
-		return errors.New("Case plan must record the Walter leverage decision")
+	if plan.CaseEntry != "" && plan.YodaReasonCode == "" {
+		return errors.New("Case plan must record the Yoda leverage decision")
 	}
 	if plan.Action == ActionCase || plan.CaseEntry != "" {
 		if plan.RequiresAccountValidation != plan.RequiresAccountFraming {
@@ -475,8 +475,8 @@ func (plan Plan) Validate() error {
 		if plan.RequiresAccountValidation && bindingID(plan, "client_account_agent") == "" {
 			return errors.New("account-assisted Case must bind Client Account framing and validation")
 		}
-		if plan.RequiresWalter != (bindingID(plan, "reviewer") != "") {
-			return errors.New("Walter binding does not match the resolved materiality decision")
+		if plan.RequiresYoda != (bindingID(plan, "reviewer") != "") {
+			return errors.New("Yoda binding does not match the resolved materiality decision")
 		}
 	}
 	if len(plan.Bindings) == 0 && plan.Action != ActionDirect {
@@ -513,7 +513,7 @@ func validatePlanBindings(plan Plan) error {
 		if plan.RequiresAccountFraming {
 			allowed["client_account_agent"] = true
 		}
-		if plan.RequiresWalter {
+		if plan.RequiresYoda {
 			allowed["reviewer"] = true
 		}
 	} else {
@@ -521,14 +521,14 @@ func validatePlanBindings(plan Plan) error {
 		case ActionDirect:
 		case ActionCase:
 			allowed["case_agent"] = true
-			if plan.RequiresWalter {
+			if plan.RequiresYoda {
 				allowed["reviewer"] = true
 			}
 		case ActionAccount:
 			allowed["client_account_agent"] = true
 		case ActionPAExpert:
 			allowed["pa_expert"] = true
-		case ActionWalter:
+		case ActionYoda:
 			allowed["reviewer"] = true
 		case ActionDarwin:
 			allowed["governance_analyst"] = true
@@ -552,7 +552,7 @@ func validatePlanBindings(plan Plan) error {
 		}
 	}
 	if plan.CaseEntry != "" {
-		var caseBinding, accountBinding, walterBinding *AgentBinding
+		var caseBinding, accountBinding, yodaBinding *AgentBinding
 		for index := range plan.Bindings {
 			binding := &plan.Bindings[index]
 			switch binding.Role {
@@ -561,7 +561,7 @@ func validatePlanBindings(plan Plan) error {
 			case "client_account_agent":
 				accountBinding = binding
 			case "reviewer":
-				walterBinding = binding
+				yodaBinding = binding
 			}
 		}
 		if caseBinding == nil || caseBinding.ScopeKind != plan.ScopeKind || caseBinding.ScopeID != plan.ScopeID {
@@ -574,8 +574,8 @@ func validatePlanBindings(plan Plan) error {
 		} else if plan.CaseEntry == CaseEntryDirect && plan.AccountScopeID != "" && (caseBinding.ParentScopeKind != "account" || caseBinding.ParentScopeID != plan.AccountScopeID) {
 			return errors.New("direct Case binding does not match its declared account scope")
 		}
-		if plan.RequiresWalter && (walterBinding == nil || walterBinding.ScopeKind != "review" || walterBinding.ScopeID != "review") {
-			return errors.New("Walter route binding does not match the review scope")
+		if plan.RequiresYoda && (yodaBinding == nil || yodaBinding.ScopeKind != "review" || yodaBinding.ScopeID != "review") {
+			return errors.New("Yoda route binding does not match the review scope")
 		}
 	}
 	if plan.Action == ActionDirect && len(plan.Bindings) != 0 {
@@ -592,7 +592,7 @@ const (
 	StageCaseExecution   Stage = "case_execution"
 	StageAccountValidate Stage = "account_validation"
 	StagePAExpert        Stage = "pa_expert_advisory"
-	StageWalterReview    Stage = "walter_review"
+	StageYodaReview      Stage = "yoda_review"
 	StageDarwinHealth    Stage = "darwin_health"
 	StageErrandExecution Stage = "errand_execution"
 	StageGammaQuality    Stage = "gamma_quality"
@@ -602,22 +602,22 @@ const (
 
 type LoopPolicy struct {
 	MaxAccountCycles int
-	MaxWalterCycles  int
+	MaxYodaCycles    int
 	MaxCaseAttempts  int
 }
 
-var DefaultLoopPolicy = LoopPolicy{MaxAccountCycles: 2, MaxWalterCycles: 2, MaxCaseAttempts: 3}
+var DefaultLoopPolicy = LoopPolicy{MaxAccountCycles: 2, MaxYodaCycles: 2, MaxCaseAttempts: 3}
 
 type ChainState struct {
 	PlanDigest            string    `json:"plan_digest"`
 	Stage                 Stage     `json:"stage"`
 	ActiveAgentID         string    `json:"active_agent_id,omitempty"`
 	AccountCycles         int       `json:"account_cycles"`
-	WalterCycles          int       `json:"walter_cycles"`
+	YodaCycles            int       `json:"yoda_cycles"`
 	CaseAttempts          int       `json:"case_attempts"`
 	ContentDigest         string    `json:"content_digest,omitempty"`
 	AccountApprovalDigest string    `json:"account_approval_digest,omitempty"`
-	WalterApprovalDigest  string    `json:"walter_approval_digest,omitempty"`
+	YodaApprovalDigest    string    `json:"yoda_approval_digest,omitempty"`
 	Receipts              []Receipt `json:"receipts"`
 }
 
@@ -629,8 +629,8 @@ type Receipt struct {
 	ContentDigest               string `json:"content_digest,omitempty"`
 	ReasonCode                  string `json:"reason_code,omitempty"`
 	AccountConsultationRequired bool   `json:"account_consultation_required"`
-	WalterRequired              bool   `json:"walter_required"`
-	WalterSkipped               bool   `json:"walter_skipped"`
+	YodaRequired                bool   `json:"yoda_required"`
+	YodaSkipped                 bool   `json:"yoda_skipped"`
 	PlanDigest                  string `json:"plan_digest"`
 	SelfSnapshotVersion         string `json:"self_snapshot_version,omitempty"`
 	SelfSnapshotDigest          string `json:"self_snapshot_digest,omitempty"`
@@ -651,7 +651,7 @@ func NewChain(plan Plan, policy LoopPolicy) (ChainState, error) {
 	if err := plan.Validate(); err != nil {
 		return ChainState{}, err
 	}
-	if policy.MaxAccountCycles < 1 || policy.MaxWalterCycles < 1 || policy.MaxCaseAttempts < 1 {
+	if policy.MaxAccountCycles < 1 || policy.MaxYodaCycles < 1 || policy.MaxCaseAttempts < 1 {
 		return ChainState{}, errors.New("quality-loop budgets must be positive")
 	}
 	state := ChainState{PlanDigest: plan.PlanDigest, Receipts: []Receipt{}}
@@ -671,8 +671,8 @@ func NewChain(plan Plan, policy LoopPolicy) (ChainState, error) {
 		state.Stage, state.ActiveAgentID = StageAccountAdvisory, bindingID(plan, "client_account_agent")
 	case ActionPAExpert:
 		state.Stage, state.ActiveAgentID = StagePAExpert, bindingID(plan, "pa_expert")
-	case ActionWalter:
-		state.Stage, state.ActiveAgentID = StageWalterReview, bindingID(plan, "reviewer")
+	case ActionYoda:
+		state.Stage, state.ActiveAgentID = StageYodaReview, bindingID(plan, "reviewer")
 	case ActionDarwin:
 		state.Stage, state.ActiveAgentID = StageDarwinHealth, bindingID(plan, "governance_analyst")
 	case ActionErrand:
@@ -711,7 +711,7 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 		Sequence: len(state.Receipts) + 1, Stage: state.Stage, AgentID: event.AgentID,
 		Decision: event.Decision, ContentDigest: event.ContentDigest, ReasonCode: event.ReasonCode,
 		AccountConsultationRequired: plan.AccountConsultationRequired,
-		WalterRequired:              plan.RequiresWalter, WalterSkipped: plan.SkipWalter,
+		YodaRequired:                plan.RequiresYoda, YodaSkipped: plan.SkipYoda,
 		PlanDigest: state.PlanDigest,
 	}
 	if event.IntentReceipt != nil {
@@ -740,13 +740,13 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 		if event.Decision != "return" || !validDigest(event.ContentDigest) {
 			return state, Receipt{}, errors.New("Case must return a content digest")
 		}
-		state.ContentDigest, state.AccountApprovalDigest, state.WalterApprovalDigest = event.ContentDigest, "", ""
+		state.ContentDigest, state.AccountApprovalDigest, state.YodaApprovalDigest = event.ContentDigest, "", ""
 		if plan.RequiresAccountValidation {
 			state.Stage, state.ActiveAgentID = StageAccountValidate, bindingID(plan, "client_account_agent")
 			break
 		}
-		if plan.RequiresWalter {
-			state.Stage, state.ActiveAgentID = StageWalterReview, bindingID(plan, "reviewer")
+		if plan.RequiresYoda {
+			state.Stage, state.ActiveAgentID = StageYodaReview, bindingID(plan, "reviewer")
 			break
 		}
 		state.Stage, state.ActiveAgentID = StageFinal, ""
@@ -760,8 +760,8 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 				return state, Receipt{}, errors.New("account approval digest does not match Case content")
 			}
 			state.AccountApprovalDigest = event.ContentDigest
-			if plan.RequiresWalter {
-				state.Stage, state.ActiveAgentID = StageWalterReview, bindingID(plan, "reviewer")
+			if plan.RequiresYoda {
+				state.Stage, state.ActiveAgentID = StageYodaReview, bindingID(plan, "reviewer")
 			} else {
 				state.Stage, state.ActiveAgentID = StageFinal, ""
 			}
@@ -771,39 +771,39 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 		if state.AccountCycles > policy.MaxAccountCycles {
 			return failState(state, "account_cycle_budget_exhausted")
 		}
-		state.ContentDigest, state.AccountApprovalDigest, state.WalterApprovalDigest = "", "", ""
+		state.ContentDigest, state.AccountApprovalDigest, state.YodaApprovalDigest = "", "", ""
 		state.Stage, state.ActiveAgentID = StageCaseExecution, bindingID(plan, "case_agent")
-	case StageWalterReview:
-		if plan.CaseEntry == "" && plan.Action == ActionWalter {
+	case StageYodaReview:
+		if plan.CaseEntry == "" && plan.Action == ActionYoda {
 			if event.Decision != "approve" && event.Decision != "return" {
-				return state, Receipt{}, errors.New("standalone Walter review must approve or return")
+				return state, Receipt{}, errors.New("standalone Yoda review must approve or return")
 			}
 			if event.Decision == "return" && !validDigest(event.ContentDigest) {
-				return state, Receipt{}, errors.New("standalone Walter review must return a content digest")
+				return state, Receipt{}, errors.New("standalone Yoda review must return a content digest")
 			}
 			state.ContentDigest = event.ContentDigest
 			state.Stage, state.ActiveAgentID = StageFinal, ""
 			break
 		}
 		if event.Decision != "approve" && event.Decision != "refine" {
-			return state, Receipt{}, errors.New("Walter decision must be approve or refine")
+			return state, Receipt{}, errors.New("Yoda decision must be approve or refine")
 		}
 		if event.ContentDigest != state.ContentDigest {
-			return state, Receipt{}, errors.New("Walter received a stale content digest")
+			return state, Receipt{}, errors.New("Yoda received a stale content digest")
 		}
 		if plan.RequiresAccountValidation && state.AccountApprovalDigest != state.ContentDigest {
-			return state, Receipt{}, errors.New("Walter received content without current Client Account validation")
+			return state, Receipt{}, errors.New("Yoda received content without current Client Account validation")
 		}
 		if event.Decision == "approve" {
-			state.WalterApprovalDigest = event.ContentDigest
+			state.YodaApprovalDigest = event.ContentDigest
 			state.Stage, state.ActiveAgentID = StageFinal, ""
 			break
 		}
-		state.WalterCycles++
-		if state.WalterCycles > policy.MaxWalterCycles {
-			return failState(state, "walter_cycle_budget_exhausted")
+		state.YodaCycles++
+		if state.YodaCycles > policy.MaxYodaCycles {
+			return failState(state, "yoda_cycle_budget_exhausted")
 		}
-		state.ContentDigest, state.AccountApprovalDigest, state.WalterApprovalDigest = "", "", ""
+		state.ContentDigest, state.AccountApprovalDigest, state.YodaApprovalDigest = "", "", ""
 		state.Stage, state.ActiveAgentID = StageCaseExecution, bindingID(plan, "case_agent")
 	default:
 		return state, Receipt{}, errors.New("quality-loop stage is not executable")

@@ -10,15 +10,15 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentorchestration"
 )
 
-// WalterReviewTrigger is the closed set of material situations that enter
-// the Maestro-to-Walter gate. Factual lookups and mechanical operations have
+// YodaReviewTrigger is the closed set of material situations that enter
+// the Maestro-to-Yoda gate. Factual lookups and mechanical operations have
 // no trigger and remain on the normal completion path.
-type WalterReviewTrigger string
+type YodaReviewTrigger string
 
 const (
-	ReviewMaterialRecommendation WalterReviewTrigger = "material_recommendation"
-	ReviewConsequentialTradeoff  WalterReviewTrigger = "consequential_tradeoff"
-	ReviewExternalArtifact       WalterReviewTrigger = "external_artifact"
+	ReviewMaterialRecommendation YodaReviewTrigger = "material_recommendation"
+	ReviewConsequentialTradeoff  YodaReviewTrigger = "consequential_tradeoff"
+	ReviewExternalArtifact       YodaReviewTrigger = "external_artifact"
 )
 
 // ReviewState is intentionally a small metadata projection. It is safe for a
@@ -35,27 +35,27 @@ const (
 	ReviewUnavailable  ReviewState = "unavailable"
 )
 
-// ReviewPacket is the sealed, bounded input Walter receives. Content remains
+// ReviewPacket is the sealed, bounded input Yoda receives. Content remains
 // in the ephemeral dispatch body; durable receipts retain only its digests.
 type ReviewPacket struct {
-	SourcePacketID     string              `json:"source_packet_id"`
-	SourcePacketSHA256 string              `json:"source_packet_sha256"`
-	SourceScopeKind    string              `json:"source_scope_kind"`
-	SourceScopeID      string              `json:"source_scope_id"`
-	Trigger            WalterReviewTrigger `json:"trigger"`
-	Audience           string              `json:"audience"`
-	Recommendation     string              `json:"recommendation"`
-	DefinitionOfDone   string              `json:"definition_of_done"`
-	ArtifactRefs       []string            `json:"artifact_refs,omitempty"`
-	EvidenceRefs       []string            `json:"evidence_refs,omitempty"`
-	Uncertainties      []string            `json:"uncertainties,omitempty"`
+	SourcePacketID     string            `json:"source_packet_id"`
+	SourcePacketSHA256 string            `json:"source_packet_sha256"`
+	SourceScopeKind    string            `json:"source_scope_kind"`
+	SourceScopeID      string            `json:"source_scope_id"`
+	Trigger            YodaReviewTrigger `json:"trigger"`
+	Audience           string            `json:"audience"`
+	Recommendation     string            `json:"recommendation"`
+	DefinitionOfDone   string            `json:"definition_of_done"`
+	ArtifactRefs       []string          `json:"artifact_refs,omitempty"`
+	EvidenceRefs       []string          `json:"evidence_refs,omitempty"`
+	Uncertainties      []string          `json:"uncertainties,omitempty"`
 }
 
-// WalterReviewRequest is assembled by Maestro after the producing branch has
+// YodaReviewRequest is assembled by Maestro after the producing branch has
 // closed. It deliberately accepts pointers and bounded text, never a
 // transcript or an unbounded context dump.
-type WalterReviewRequest struct {
-	Trigger          WalterReviewTrigger
+type YodaReviewRequest struct {
+	Trigger          YodaReviewTrigger
 	ReviewObjective  string
 	Audience         string
 	Recommendation   string
@@ -66,18 +66,18 @@ type WalterReviewRequest struct {
 	TTL              time.Duration
 }
 
-// WalterVerdict is the conversational contract. It is not the execution
+// YodaVerdict is the conversational contract. It is not the execution
 // ledger's binary authenticated approval decision.
-type WalterVerdict string
+type YodaVerdict string
 
 const (
-	WalterApproved        WalterVerdict = "approved"
-	WalterRefineAndReturn WalterVerdict = "refine-and-return"
-	WalterMissingTheMark  WalterVerdict = "missing-the-mark"
-	WalterHold            WalterVerdict = "hold"
+	YodaApproved        YodaVerdict = "approved"
+	YodaRefineAndReturn YodaVerdict = "refine-and-return"
+	YodaMissingTheMark  YodaVerdict = "missing-the-mark"
+	YodaHold            YodaVerdict = "hold"
 )
 
-type WalterObjection struct {
+type YodaObjection struct {
 	Code               string `json:"code"`
 	Fix                string `json:"fix"`
 	ExitCondition      string `json:"exit_condition"`
@@ -85,30 +85,30 @@ type WalterObjection struct {
 	Blocking           bool   `json:"blocking"`
 }
 
-type WalterReviewBody struct {
-	Verdict         WalterVerdict     `json:"verdict"`
-	Objections      []WalterObjection `json:"objections,omitempty"`
-	EvidenceRefs    []string          `json:"evidence_refs,omitempty"`
-	Uncertainty     string            `json:"uncertainty,omitempty"`
-	PreservesIntent bool              `json:"preserves_intent"`
+type YodaReviewBody struct {
+	Verdict         YodaVerdict     `json:"verdict"`
+	Objections      []YodaObjection `json:"objections,omitempty"`
+	EvidenceRefs    []string        `json:"evidence_refs,omitempty"`
+	Uncertainty     string          `json:"uncertainty,omitempty"`
+	PreservesIntent bool            `json:"preserves_intent"`
 }
 
 type ReviewSummary struct {
-	Trigger            WalterReviewTrigger `json:"trigger"`
-	State              ReviewState         `json:"state"`
-	SourcePacketID     string              `json:"source_packet_id"`
-	SourcePacketSHA256 string              `json:"source_packet_sha256"`
-	ObjectionCount     int                 `json:"objection_count,omitempty"`
-	LeverageDecision   string              `json:"leverage_decision"`
-	Posture            string              `json:"posture"`
+	Trigger            YodaReviewTrigger `json:"trigger"`
+	State              ReviewState       `json:"state"`
+	SourcePacketID     string            `json:"source_packet_id"`
+	SourcePacketSHA256 string            `json:"source_packet_sha256"`
+	ObjectionCount     int               `json:"objection_count,omitempty"`
+	LeverageDecision   string            `json:"leverage_decision"`
+	Posture            string            `json:"posture"`
 }
 
 const (
 	maxReviewFieldBytes = 1000
-	maxWalterObjections = 3
+	maxYodaObjections   = 3
 )
 
-func (trigger WalterReviewTrigger) valid() bool {
+func (trigger YodaReviewTrigger) valid() bool {
 	switch trigger {
 	case ReviewMaterialRecommendation, ReviewConsequentialTradeoff, ReviewExternalArtifact:
 		return true
@@ -117,7 +117,7 @@ func (trigger WalterReviewTrigger) valid() bool {
 	}
 }
 
-func RequiresWalterReview(trigger WalterReviewTrigger) bool {
+func RequiresYodaReview(trigger YodaReviewTrigger) bool {
 	return trigger.valid()
 }
 
@@ -128,58 +128,58 @@ func validateReviewPacket(review *ReviewPacket, packetID, objective string) erro
 	if !validPacketID(review.SourcePacketID) || (packetID != "" && review.SourcePacketID == packetID) ||
 		!validSHA256(review.SourcePacketSHA256) || !validReviewScope(review.SourceScopeKind, review.SourceScopeID) ||
 		!review.Trigger.valid() {
-		return errors.New("Walter review packet identity or trigger is invalid")
+		return errors.New("Yoda review packet identity or trigger is invalid")
 	}
 	for label, value := range map[string]string{
 		"objective": objective, "audience": review.Audience,
 		"recommendation": review.Recommendation, "definition of done": review.DefinitionOfDone,
 	} {
 		if strings.TrimSpace(value) == "" || len([]byte(strings.TrimSpace(value))) > maxReviewFieldBytes {
-			return errors.New("Walter review packet " + label + " is empty or oversized")
+			return errors.New("Yoda review packet " + label + " is empty or oversized")
 		}
 	}
 	if len(review.ArtifactRefs)+len(review.EvidenceRefs) > maxPointers || len(review.Uncertainties) > maxConstraints {
-		return errors.New("Walter review packet exceeds its bounded item budget")
+		return errors.New("Yoda review packet exceeds its bounded item budget")
 	}
 	seen := make(map[string]bool, len(review.ArtifactRefs)+len(review.EvidenceRefs))
 	for _, ref := range append(append([]string(nil), review.ArtifactRefs...), review.EvidenceRefs...) {
 		normalized, valid := agentorchestration.NormalizeResource(ref)
 		if !valid || normalized != ref || !reviewResourceWithinSource(ref, review.SourceScopeKind, review.SourceScopeID) || seen[ref] {
-			return errors.New("Walter review packet contains an invalid, duplicate or cross-scope reference")
+			return errors.New("Yoda review packet contains an invalid, duplicate or cross-scope reference")
 		}
 		seen[ref] = true
 	}
 	for _, uncertainty := range review.Uncertainties {
 		if strings.TrimSpace(uncertainty) == "" || len([]byte(strings.TrimSpace(uncertainty))) > maxConstraintBytes {
-			return errors.New("Walter review packet uncertainty is empty or oversized")
+			return errors.New("Yoda review packet uncertainty is empty or oversized")
 		}
 	}
 	return nil
 }
 
-func validateReviewRequest(request WalterReviewRequest) error {
+func validateReviewRequest(request YodaReviewRequest) error {
 	if !request.Trigger.valid() || request.TTL <= 0 || request.TTL > maxPacketTTL {
-		return errors.New("Walter review request has an invalid trigger or TTL")
+		return errors.New("Yoda review request has an invalid trigger or TTL")
 	}
 	if strings.TrimSpace(request.ReviewObjective) == "" || len([]byte(strings.TrimSpace(request.ReviewObjective))) > maxObjectiveBytes {
-		return errors.New("Walter review objective is empty or oversized")
+		return errors.New("Yoda review objective is empty or oversized")
 	}
 	if len(request.ArtifactRefs)+len(request.EvidenceRefs) > maxPointers || len(request.Uncertainties) > maxConstraints {
-		return errors.New("Walter review request exceeds its bounded item budget")
+		return errors.New("Yoda review request exceeds its bounded item budget")
 	}
 	return nil
 }
 
-func validateWalterReviewBody(body WalterReviewBody, review ReviewPacket) error {
-	if body.Verdict != WalterApproved && body.Verdict != WalterRefineAndReturn && body.Verdict != WalterMissingTheMark && body.Verdict != WalterHold {
-		return errors.New("Walter review verdict is invalid")
+func validateYodaReviewBody(body YodaReviewBody, review ReviewPacket) error {
+	if body.Verdict != YodaApproved && body.Verdict != YodaRefineAndReturn && body.Verdict != YodaMissingTheMark && body.Verdict != YodaHold {
+		return errors.New("Yoda review verdict is invalid")
 	}
 	if !body.PreservesIntent {
-		return errors.New("Walter review must preserve the user's defensible intent")
+		return errors.New("Yoda review must preserve the user's defensible intent")
 	}
-	if len(body.Objections) > maxWalterObjections ||
-		((body.Verdict == WalterMissingTheMark || body.Verdict == WalterHold || body.Verdict == WalterRefineAndReturn) && len(body.Objections) == 0) {
-		return errors.New("Walter review objection count does not match the verdict")
+	if len(body.Objections) > maxYodaObjections ||
+		((body.Verdict == YodaMissingTheMark || body.Verdict == YodaHold || body.Verdict == YodaRefineAndReturn) && len(body.Objections) == 0) {
+		return errors.New("Yoda review objection count does not match the verdict")
 	}
 	seen := make(map[string]bool, len(body.Objections))
 	for _, objection := range body.Objections {
@@ -187,35 +187,35 @@ func validateWalterReviewBody(body WalterReviewBody, review ReviewPacket) error 
 			strings.TrimSpace(objection.Fix) == "" || strings.TrimSpace(objection.ExitCondition) == "" ||
 			len([]byte(strings.TrimSpace(objection.Fix))) > maxConstraintBytes ||
 			len([]byte(strings.TrimSpace(objection.ExitCondition))) > maxConstraintBytes {
-			return errors.New("Walter objection requires a unique code, concrete fix and exit condition")
+			return errors.New("Yoda objection requires a unique code, concrete fix and exit condition")
 		}
 		if objection.ProposedRefinement != "" && len([]byte(strings.TrimSpace(objection.ProposedRefinement))) > maxConstraintBytes {
-			return errors.New("Walter proposed refinement is oversized")
+			return errors.New("Yoda proposed refinement is oversized")
 		}
-		if body.Verdict == WalterApproved && objection.Blocking {
-			return errors.New("approved Walter review cannot contain a blocking objection")
+		if body.Verdict == YodaApproved && objection.Blocking {
+			return errors.New("approved Yoda review cannot contain a blocking objection")
 		}
-		if body.Verdict == WalterHold && !objection.Blocking {
-			return errors.New("Walter hold requires a material blocking objection")
+		if body.Verdict == YodaHold && !objection.Blocking {
+			return errors.New("Yoda hold requires a material blocking objection")
 		}
 		seen[objection.Code] = true
 	}
 	if len(body.EvidenceRefs) > maxPointers {
-		return errors.New("Walter review evidence exceeds its bounded item budget")
+		return errors.New("Yoda review evidence exceeds its bounded item budget")
 	}
 	for _, ref := range body.EvidenceRefs {
 		normalized, valid := agentorchestration.NormalizeResource(ref)
 		if !valid || normalized != ref || !reviewResourceWithinSource(ref, review.SourceScopeKind, review.SourceScopeID) {
-			return errors.New("Walter review evidence is outside the source scope")
+			return errors.New("Yoda review evidence is outside the source scope")
 		}
 	}
 	if len([]byte(strings.TrimSpace(body.Uncertainty))) > maxConstraintBytes {
-		return errors.New("Walter review uncertainty is oversized")
+		return errors.New("Yoda review uncertainty is oversized")
 	}
 	return nil
 }
 
-func normalizeWalterReviewBody(body WalterReviewBody) WalterReviewBody {
+func normalizeYodaReviewBody(body YodaReviewBody) YodaReviewBody {
 	body.Uncertainty = strings.TrimSpace(body.Uncertainty)
 	body.EvidenceRefs = append([]string(nil), body.EvidenceRefs...)
 	sort.Strings(body.EvidenceRefs)

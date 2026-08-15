@@ -17,7 +17,7 @@ reproducible in-repo runtime-version artifact or fresh native-session
 observation is attached. This adapter is configured and has local contract
 coverage, but is not `native-qualified`, `release-ready` or `pilot-ready`.
 
-The managed Maestro, Case, Client Account, PA Expert, Walter and Darwin definitions live in
+The managed Maestro, Case, Client Account, PA Expert, Yoda and Darwin definitions live in
 `bundles/base/agents/`. `internal/agentorchestration` now provides the shared
 fail-closed controller, and the Codex envelope maps
 `collaboration_branch_start`, `collaboration_child_start` (legacy denial only), `tool_call_guard`,
@@ -29,30 +29,30 @@ shared durable Maestro state store prevents a second adapter instance from
 opening a parallel branch and is shared with Claude. Native qualification still
 requires fresh session evidence.
 
-Walter review wiring is shared with Claude through `internal/agentdispatch`:
-the Codex adapter only forwards a sealed Walter packet and typed verdict to
-that core. Walter is Maestro's internal Senior Advisor & Refiner: calm,
+Yoda review wiring is shared with Claude through `internal/agentdispatch`:
+the Codex adapter only forwards a sealed Yoda packet and typed verdict to
+that core. Yoda is Maestro's internal Senior Advisor & Refiner: calm,
 precise and constructive, with at most three load-bearing objections. A
 blocking refinement must include a concrete fix and acceptance condition;
-cosmetic preferences cannot block. Walter has no tools, delegation or direct
+cosmetic preferences cannot block. Yoda has no tools, delegation or direct
 user channel. The execution-ledger bridge uses installation-scoped
-`maestro/walter-review` custody, distinct from release signing; missing,
+`maestro/yoda-review` custody, distinct from release signing; missing,
 stale, replayed or cross-scope custody fails closed. Adapter-command receipts
 remain diagnostic until native evidence exists.
 
 The packet also carries a digest-bound IntentReviewPacket: literal prompt,
 Maestro route, bounded draft, Owner Context snapshot version/digest and
-relevant metadata-only observation references. Walter returns a typed purpose
+relevant metadata-only observation references. Yoda returns a typed purpose
 hypothesis with evidence and confidence; low confidence at high consequence
 returns `clarify`. Neither adapter may persist a hypothesis or write Owner
 Context; both call the same core.
 
 Maestro resolves two independent decisions: `account_consultation_required`
-for client/stakeholder strategic lens, and `walter_required` for high-leverage
+for client/stakeholder strategic lens, and `yoda_required` for high-leverage
 output. Account-assisted work proves Account framing → Case → Account
 validation; direct Case work proves an execution-only/no-client-lens reason and
 does not call Account. Both routes return to Maestro, and only a required
-Walter approval—or an explicit low-leverage `walter_skipped` receipt—can reach
+Yoda approval—or an explicit low-leverage `yoda_skipped` receipt—can reach
 the final response.
 
 ```mermaid

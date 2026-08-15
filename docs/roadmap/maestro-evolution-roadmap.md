@@ -168,7 +168,7 @@ agentes e runtimes sem transformar delegação em acesso irrestrito.
 - identidade de agente vinculada a capacidade, escopo, ferramenta e recurso;
 - branch/recoverable state para impedir execuções paralelas não autorizadas;
 - receipts metadata-only ligados ao ledger;
-- Walter como gate autenticado de conclusão de trabalho de maior criticidade;
+- Yoda como gate autenticado de conclusão de trabalho de maior criticidade;
 - handoff entre duas sessões/runtimes com ponteiros, não transcript completo;
 - catálogo de agentes e skills com ownership, versão, compatibilidade e
   retirement.

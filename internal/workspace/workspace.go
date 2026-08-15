@@ -121,7 +121,7 @@ var visibleSurface = []struct {
 	{"brain/daily/README.md", "# Daily logs\n\nRegistre aqui somente o resumo profissional que você quer revisar: decisões, entregas, riscos, próximos passos e links para as fontes. Um daily log não é transcrição de conversa nem substitui a memória privada do Maestro.\n\nO Maestro mantém as capturas, sonhos, promoções e checkpoints na área privada do workspace; esta pasta continua navegável, revisável e sob seu controle.\n"},
 	{"agents/README.md", "# Agentes\n\nEstes são stubs de papéis. Maestro coordena; nomes, avatares e ownership de Client Account Agents e Case Agents são definidos pelo dono durante o onboarding.\n"},
 	{"agents/maestro.md", "# Maestro 🎼\n\nHub do workspace: entende a intenção, decide profundidade e coordena os loops autorizados.\n"},
-	{"agents/walter.md", "# Walter 🧭\n\nSenior advisor e proxy do self do dono para tarefas de maior leverage. Refina; não é um naysayer.\n"},
+	{"agents/yoda.md", "# Yoda 🧭\n\nSenior advisor e proxy do self do dono para tarefas de maior leverage. Refina; não é um naysayer.\n"},
 	{"agents/darwin.md", "# Darwin 🧬\n\nMeta-harness: observa saúde, housekeeping e caminhos de evolução do Agentic OS.\n"},
 	{"agents/pa-experts.md", "# PA Experts 🧠\n\nEspecialistas funcionais e industriais consultivos. São versionados e evoluem ao longo do tempo; nesta instalação permanecem stubs.\n"},
 	{"agents/bcg-workspace.md", "# Espaço BCG 🏛️\n\nBCG é o workspace organizacional transversal. Não é um Client Account Agent: o Maestro usa esse espaço para colegas, práticas e contexto interno compartilhado, mantendo clientes e cases em seus próprios limites.\n"},

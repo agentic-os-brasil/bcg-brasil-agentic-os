@@ -96,10 +96,10 @@ changing runtime configuration.
 Until then, Claude is operational for Canary validation but not natively
 qualified or production release-ready; Codex remains outside this activation.
 
-Walter has a separate native qualification recipe in
-[`docs/walter-native-qualification.md`](walter-native-qualification.md). It
-must be completed before claiming qualified Walter evidence. It does not gate
-the controlled-beta Walter path.
+Yoda has a separate native qualification recipe in
+[`docs/yoda-native-qualification.md`](yoda-native-qualification.md). It
+must be completed before claiming qualified Yoda evidence. It does not gate
+the controlled-beta Yoda path.
 
 ## Darwin cadence status
 

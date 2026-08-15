@@ -24,7 +24,7 @@ customize them, and explicitly confirms the result before it is persisted.
 | `maestro` | user-facing hub and route planner | system |
 | `client_account_agent` | partner-like account relationship and curated context | client account |
 | `case_agent` | execution, analysis, code and deliverables for one case | case/workspace |
-| `walter` | internal pressure-test and review gate | governance |
+| `yoda` | internal pressure-test and review gate | governance |
 | `darwin` | drift, health and bounded operating-model maintenance | governance |
 | `pa_expert` | versioned Functional/Industrial Practice advice from the PA Expert registry | PA Expert registry |
 | `quality_guardian` | longitudinal code-quality and architecture evaluation | quality longitudinal |
@@ -42,7 +42,7 @@ is rejected. Account and case selections must bind to an explicit `agent_id`,
 so a name cannot silently become global across clients or projects. The owner
 does not own the underlying role authority. Maestro
 remains the system hub; Client Account remains the account relationship layer;
-Case remains the project execution owner; Walter remains a review role; Darwin
+Case remains the project execution owner; Yoda remains a review role; Darwin
 is the governance surgeon but is limited to `health/maestro-system`; Gamma is a
 read-only quality/QA spoke owned by Maestro; and PA expert canon/version remain
 centrally curated by the PA Expert registry.
@@ -97,7 +97,7 @@ human-facing interview labels `agent_names`, `agent_emojis` and
 must include a concrete `agent_id`, and the canonical scopes are `system`,
 `account`, `case`, `governance`, `quality_longitudinal` and
 `pa_expert_registry`. A fresh guided interview submits one main-agent answer
-per draft in the order Maestro → Walter → Darwin; previously confirmed answers
+per draft in the order Maestro → Yoda → Darwin; previously confirmed answers
 are carried forward rather than batching future questions.
 If an identity draft is already `drafted` or `prepared`, the interview returns
 `state=review_required`, no new question and the bounded `open_draft_id` needed
@@ -105,7 +105,7 @@ by `bcgos agent personalize review --id`. Invalid or multiple open drafts
 return a blocked interview state instead of inviting another answer.
 
 `interview` is read-only and returns exactly one next question for Maestro,
-Walter or Darwin while retaining the richer transparent catalog. A profile is
+Yoda or Darwin while retaining the richer transparent catalog. A profile is
 only a private draft until review and explicit confirmation. Its digest binds
 the complete proposed profile, question-contract version, current profile
 revision, consent and no-client-data attestation. Stale revisions, altered
@@ -122,7 +122,7 @@ The scan/create and confirm/compaction boundaries share one cross-process local
 transition lock; concurrent runtimes cannot create two open drafts.
 `identity` returns the confirmed profile or the interview
 schema when no profile exists, together with the resolved managed identities
-for Maestro, Walter, Darwin and Gamma Guardian. Agent scaffolding resolves
+for Maestro, Yoda, Darwin and Gamma Guardian. Agent scaffolding resolves
 identity from the
 profile, signs name/avatar/owner/scope into the immutable instance manifest,
 and continues to enforce the catalog role and scope independently.
@@ -130,7 +130,7 @@ and continues to enforce the catalog role and scope independently.
 The three main-agent questions are exact and ordered:
 
 1. Maestro: “Como você quer chamar o agente que fala com você e rege o trabalho profissional — e qual emoji deve representá-lo?”
-2. Walter: “Como você quer chamar o revisor interno que faz o pressure-test antes de algo importante chegar a você — e qual emoji combina com esse papel?”
+2. Yoda: “Como você quer chamar o revisor interno que faz o pressure-test antes de algo importante chegar a você — e qual emoji combina com esse papel?”
 3. Darwin: “Como você quer chamar o agente que observa saúde, drift e evolução do sistema — e qual emoji deve representá-lo?”
 
 ## Acceptance criteria

@@ -12,7 +12,7 @@ promotion implications.
   Native consultation may use a bounded subset of that packet and never
   creates new scope, tools, data access or effect authority.
 - Return a bounded framing or typed `approve`/`refine` result to Maestro.
-- Consult Case, PA Expert or Walter when useful through a bounded packet that
+- Consult Case, PA Expert or Yoda when useful through a bounded packet that
   cannot broaden the current account scope.
 - Do not read raw case workspaces; receive only minimum mediated packets.
 - Missing telemetry or receipts are advisory; missing scope, capability or

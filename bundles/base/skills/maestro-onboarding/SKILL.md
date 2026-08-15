@@ -469,13 +469,13 @@ chegar, quem conduz essa configuração pontual é `$ingest-content`.
 
 Immediately after MarkItDown confirmation (or deferral), always invite the owner
 to name the internal agents now or defer them:
-**"Quer dar nome e avatar ao Walter, ao Darwin e ao Gamma Guardian agora, ou
+**"Quer dar nome e avatar ao Yoda, ao Darwin e ao Gamma Guardian agora, ou
 prefere deixar isso para depois?"** This is an invitation, never a required
 extra interview step.
 
 Present these initial suggestions with their short stories:
 
-- **Walter 🦉** — suggested name: `Walter`. He is the owner's calm alter
+- **Yoda 🦉** — suggested name: `Yoda`. He is the owner's calm alter
   ego: a senior advisor that asks whether the intrinsic reason behind a
   high-leverage request was actually met. He refines; he is not a naysayer.
   If the owner explicitly asks for a reference-based alternative, examples

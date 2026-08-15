@@ -28,10 +28,10 @@ func TestInitialInterviewExplainsNamesAvatarsAndOwnership(t *testing.T) {
 		if descriptor.DefaultName == "" || descriptor.DefaultEmoji == "" || len(descriptor.Suggestions) < 2 || len(descriptor.EmojiSuggestions) < 2 || descriptor.Purpose == "" {
 			t.Fatalf("incomplete descriptor: %#v", descriptor)
 		}
-		if descriptor.Role == "walter" && descriptor.DefaultEmoji != "🦉" {
-			t.Fatalf("Walter default emoji = %q, want owl", descriptor.DefaultEmoji)
+		if descriptor.Role == "yoda" && descriptor.DefaultEmoji != "🦉" {
+			t.Fatalf("Yoda default emoji = %q, want owl", descriptor.DefaultEmoji)
 		}
-		if (descriptor.Role == "walter" || descriptor.Role == "darwin") && len(descriptor.NarrativeSuggestions) < 9 {
+		if (descriptor.Role == "yoda" || descriptor.Role == "darwin") && len(descriptor.NarrativeSuggestions) < 9 {
 			t.Fatalf("%s omitted its narrative repertoire: %#v", descriptor.Role, descriptor.NarrativeSuggestions)
 		}
 		if descriptor.Role == "quality_guardian" && descriptor.OwnershipScope != "quality_longitudinal" {
@@ -62,12 +62,12 @@ func TestNarrativeSuggestionsAreTransparentAndHALIsNotDefaultRecommended(t *test
 }
 
 func TestNarrativeRecommendationsUseOnlyExplicitPreferences(t *testing.T) {
-	if got := RecommendNarrativeSuggestions("walter", nil, 3); got != nil {
+	if got := RecommendNarrativeSuggestions("yoda", nil, 3); got != nil {
 		t.Fatalf("recommendation without explicit preferences = %#v", got)
 	}
-	got := RecommendNarrativeSuggestions("walter", []string{"estratégia", "prudência"}, 3)
+	got := RecommendNarrativeSuggestions("yoda", []string{"estratégia", "prudência"}, 3)
 	if len(got) != 1 || got[0].Name != "Athena" {
-		t.Fatalf("Walter recommendation = %#v, want Athena only", got)
+		t.Fatalf("Yoda recommendation = %#v, want Athena only", got)
 	}
 	got = RecommendNarrativeSuggestions("darwin", []string{"ficção científica clássica"}, 3)
 	if len(got) != 0 {
@@ -81,10 +81,10 @@ func TestNarrativeRecommendationsCoverEveryPromptedPreferenceAndCapAtThree(t *te
 		role       string
 		want       string
 	}{
-		{preference: "guia sereno", role: "walter", want: "Iroh"},
-		{preference: "estrategista", role: "walter", want: "Athena"},
-		{preference: "parceiro firme", role: "walter", want: "Samwise"},
-		{preference: "advisor técnico", role: "walter", want: "Jarvis"},
+		{preference: "guia sereno", role: "yoda", want: "Iroh"},
+		{preference: "estrategista", role: "yoda", want: "Athena"},
+		{preference: "parceiro firme", role: "yoda", want: "Samwise"},
+		{preference: "advisor técnico", role: "yoda", want: "Jarvis"},
 		{preference: "arquiteto de sistemas", role: "darwin", want: "Ariadne"},
 		{preference: "observador de evolução", role: "darwin", want: "Darwin"},
 	}
@@ -252,7 +252,7 @@ func TestManagedProjectionConsumesConfirmedCorePersonalization(t *testing.T) {
 		SchemaVersion: SchemaVersion, OwnerID: "daniel", Confirmed: true, UpdatedAt: time.Now().UTC(),
 		Selections: []Selection{
 			{Role: "maestro", DisplayName: "Conductor", Emoji: "🎹", OwnerID: "daniel", OwnershipScope: "system"},
-			{Role: "walter", DisplayName: "Sentinel", Emoji: "🛡️", OwnerID: "daniel", OwnershipScope: "governance"},
+			{Role: "yoda", DisplayName: "Sentinel", Emoji: "🛡️", OwnerID: "daniel", OwnershipScope: "governance"},
 		},
 	}
 	if err := profile.Validate(); err != nil {

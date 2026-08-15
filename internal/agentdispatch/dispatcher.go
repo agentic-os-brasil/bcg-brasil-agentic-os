@@ -37,9 +37,9 @@ type PacketRequest struct {
 	SkillID       string
 	// ReviewTrigger is signed into the producer packet so materiality cannot
 	// be added only after the producer has already completed.
-	ReviewTrigger WalterReviewTrigger
+	ReviewTrigger YodaReviewTrigger
 	// ReworkOfPacketID binds a new producer attempt to the prior material
-	// packet after Walter requests refinement.
+	// packet after Yoda requests refinement.
 	ReworkOfPacketID string
 	DoneContract     DoneContract
 	Review           *ReviewPacket
@@ -47,24 +47,24 @@ type PacketRequest struct {
 }
 
 type WorkPacket struct {
-	SchemaVersion    int                 `json:"schema_version"`
-	PacketID         string              `json:"packet_id"`
-	ParentPacketID   string              `json:"parent_packet_id,omitempty"`
-	IssuerAgentID    string              `json:"issuer_agent_id"`
-	TargetAgentID    string              `json:"target_agent_id"`
-	ScopeKind        string              `json:"scope_kind"`
-	ScopeID          string              `json:"scope_id"`
-	Objective        string              `json:"objective"`
-	Pointers         []string            `json:"pointers,omitempty"`
-	Constraints      []string            `json:"constraints,omitempty"`
-	SkillID          string              `json:"skill_id,omitempty"`
-	ReviewTrigger    WalterReviewTrigger `json:"review_trigger,omitempty"`
-	ReworkOfPacketID string              `json:"rework_of_packet_id,omitempty"`
-	DoneContract     DoneContract        `json:"done_contract"`
-	Review           *ReviewPacket       `json:"review,omitempty"`
-	IssuedAt         time.Time           `json:"issued_at"`
-	ExpiresAt        time.Time           `json:"expires_at"`
-	Signature        string              `json:"signature"`
+	SchemaVersion    int               `json:"schema_version"`
+	PacketID         string            `json:"packet_id"`
+	ParentPacketID   string            `json:"parent_packet_id,omitempty"`
+	IssuerAgentID    string            `json:"issuer_agent_id"`
+	TargetAgentID    string            `json:"target_agent_id"`
+	ScopeKind        string            `json:"scope_kind"`
+	ScopeID          string            `json:"scope_id"`
+	Objective        string            `json:"objective"`
+	Pointers         []string          `json:"pointers,omitempty"`
+	Constraints      []string          `json:"constraints,omitempty"`
+	SkillID          string            `json:"skill_id,omitempty"`
+	ReviewTrigger    YodaReviewTrigger `json:"review_trigger,omitempty"`
+	ReworkOfPacketID string            `json:"rework_of_packet_id,omitempty"`
+	DoneContract     DoneContract      `json:"done_contract"`
+	Review           *ReviewPacket     `json:"review,omitempty"`
+	IssuedAt         time.Time         `json:"issued_at"`
+	ExpiresAt        time.Time         `json:"expires_at"`
+	Signature        string            `json:"signature"`
 }
 
 type Dispatcher struct {
@@ -230,23 +230,23 @@ func validateRequest(request PacketRequest, child bool) error {
 		len(request.Pointers) > maxPointers || len(request.Constraints) > maxConstraints {
 		return errors.New("work packet exceeds its bounded contract")
 	}
-	if (request.TargetAgentID == "walter") != (request.Review != nil) {
-		return errors.New("Walter dispatch requires exactly one sealed review packet")
+	if (request.TargetAgentID == "yoda") != (request.Review != nil) {
+		return errors.New("Yoda dispatch requires exactly one sealed review packet")
 	}
 	if request.ReviewTrigger != "" && !request.ReviewTrigger.valid() {
-		return errors.New("work packet has an invalid Walter review trigger")
+		return errors.New("work packet has an invalid Yoda review trigger")
 	}
 	if request.ReworkOfPacketID != "" && (!validPacketID(request.ReworkOfPacketID) || child) {
 		return errors.New("work packet has an invalid rework binding")
 	}
 	if request.Review != nil && request.ReworkOfPacketID != "" {
-		return errors.New("Walter review packet cannot carry a rework binding")
+		return errors.New("Yoda review packet cannot carry a rework binding")
 	}
 	if request.Review != nil && request.ReviewTrigger != "" {
-		return errors.New("Walter review packet cannot carry a producer review trigger")
+		return errors.New("Yoda review packet cannot carry a producer review trigger")
 	}
 	if request.Review != nil && (child || request.ScopeKind != "review") {
-		return errors.New("Walter review must be a direct review root")
+		return errors.New("Yoda review must be a direct review root")
 	}
 	if child && request.ReviewTrigger != "" {
 		return errors.New("child packet cannot define a material review trigger")

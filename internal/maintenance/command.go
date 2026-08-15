@@ -15,7 +15,7 @@ const CommandSchemaVersion = 1
 
 const (
 	DarwinStructuralProposalJobID = "darwin-structural-evolution-proposal"
-	WalterSelfReviewWeeklyJobID   = "walter-self-review-weekly"
+	YodaSelfReviewWeeklyJobID     = "yoda-self-review-weekly"
 )
 
 type Trigger string
@@ -281,7 +281,7 @@ func validReceiptState(state ReceiptState) bool {
 }
 
 func IsProposalOnlyJob(jobID string) bool {
-	return jobID == DarwinStructuralProposalJobID || jobID == WalterSelfReviewWeeklyJobID
+	return jobID == DarwinStructuralProposalJobID || jobID == YodaSelfReviewWeeklyJobID
 }
 
 func isProposalOnlyJob(jobID string) bool {
@@ -294,9 +294,9 @@ func validateReservedJobTrigger(jobID string, trigger Trigger) error {
 		if trigger != TriggerMonthly {
 			return errors.New("Darwin structural evolution requires a monthly trigger")
 		}
-	case WalterSelfReviewWeeklyJobID:
+	case YodaSelfReviewWeeklyJobID:
 		if trigger != TriggerWeekly {
-			return errors.New("Walter weekly self-review requires a weekly trigger")
+			return errors.New("Yoda weekly self-review requires a weekly trigger")
 		}
 	}
 	return nil

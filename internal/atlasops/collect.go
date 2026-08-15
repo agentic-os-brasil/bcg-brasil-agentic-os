@@ -8,7 +8,7 @@ import (
 )
 
 // Reader names who the projection is for. The tiers come from the accepted
-// owner atlas contract: the owner sees their own corpus, Maestro and Walter
+// owner atlas contract: the owner sees their own corpus, Maestro and Yoda
 // receive bounded task-relevant projections, and a delegated agent gets an
 // attenuated excerpt or a pointer and only when explicitly authorized.
 type Reader string
@@ -16,7 +16,7 @@ type Reader string
 const (
 	ReaderOwnerSession Reader = "owner_session"
 	ReaderMaestro      Reader = "maestro"
-	ReaderWalter       Reader = "walter"
+	ReaderYoda         Reader = "yoda"
 	ReaderDelegate     Reader = "delegate"
 )
 
@@ -128,7 +128,7 @@ func (engine *Engine) Collect(request CollectRequest) (Projection, error) {
 
 func knownReader(reader Reader) bool {
 	switch reader {
-	case ReaderOwnerSession, ReaderMaestro, ReaderWalter, ReaderDelegate:
+	case ReaderOwnerSession, ReaderMaestro, ReaderYoda, ReaderDelegate:
 		return true
 	}
 	return false

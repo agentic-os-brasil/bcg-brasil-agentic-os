@@ -39,6 +39,6 @@
     "verdict"
   ],
   "forbidden_self_evidence": ["prompt_transcript", "client_document", "generated_output", "agent_output"],
-  "self_evolution_pipeline": ["explicit_signal", "bounded_candidate", "independent_corroboration_across_episodes", "periodic_walter_proposal", "canonical_facet_policy", "owner_attested_cas_promotion", "version_supersession_history_rollback"],
+  "self_evolution_pipeline": ["explicit_signal", "bounded_candidate", "independent_corroboration_across_episodes", "periodic_yoda_proposal", "canonical_facet_policy", "owner_attested_cas_promotion", "version_supersession_history_rollback"],
   "self_evolution_rules": ["silence_is_not_endorsement", "generic_ok_is_not_endorsement", "isolated_inference_is_not_canon", "current_prompt_or_correction_wins", "not_every_loop_persists", "darwin_observes_only"]
 }

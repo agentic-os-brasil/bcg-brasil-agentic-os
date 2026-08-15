@@ -1,7 +1,7 @@
 # Spec 036 - Universal maintenance plane
 
 Status: catalog, bounded command/receipt surface, metadata-only memory checkpoint, deterministic L1 light dream, Darwin deterministic worker and
-explicit Canary lifecycle are implemented; Walter/model-backed work and native
+explicit Canary lifecycle are implemented; Yoda/model-backed work and native
 Windows task creation remain unavailable pending runtime evidence. macOS native
 qualification is environment-dependent and is never inferred from a plist.
 
@@ -49,7 +49,7 @@ The jobs are deliberately split by success boundary:
 - local adapters, including Darwin housekeeping, remain policy-gated; Darwin
   may apply only an allowlisted, reversible repair inside managed state after
   deterministic assessment, guard authorization and post-repair validation;
-- Walter self review is never silently enabled; weekly memory dreaming uses
+- Yoda self review is never silently enabled; weekly memory dreaming uses
   only the bundled deterministic adapter and its explicit eligibility policy;
 - managed-scope jobs cannot write owner or private workspace state.
 
@@ -61,9 +61,9 @@ and emits no receipt. With enrollment, Darwin daily housekeeping may apply its
 smallest allowlisted reversible repair after validation, while weekly deep
 review may apply the same operational repair and emit proposals only for
 remaining structural findings. Both require their exact activation,
-qualification digest, lease, deadline and occurrence fence. Walter and monthly
+qualification digest, lease, deadline and occurrence fence. Yoda and monthly
 structural work remain due/unavailable and never become successful from a wake
-receipt alone. Walter is the sole recurring self-refinement synthesis surface;
+receipt alone. Yoda is the sole recurring self-refinement synthesis surface;
 the retired generic placeholder is not a second job.
 
 macOS and Windows surfaces live under `adapters/` and are not part of the

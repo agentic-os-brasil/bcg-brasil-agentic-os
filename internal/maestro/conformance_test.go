@@ -21,14 +21,14 @@ func TestMaestroAdapterQualityLoopFixtureCoversFourPathsAndDirectAnswer(t *testi
 			Materiality          Materiality `json:"materiality"`
 			CaseEntry            CaseEntry   `json:"case_entry"`
 			AccountValidation    bool        `json:"account_validation"`
-			WalterRequired       bool        `json:"walter_required"`
+			YodaRequired         bool        `json:"yoda_required"`
 		} `json:"paths"`
 		SelfSignal struct {
 			Ordinary struct {
 				Evaluated        bool `json:"evaluated"`
 				Persisted        bool `json:"persisted"`
 				ObservationCount int  `json:"observation_count"`
-			} `json:"ordinary_walter_activity"`
+			} `json:"ordinary_yoda_activity"`
 			Valid struct {
 				Signal         string  `json:"signal"`
 				Facet          string  `json:"facet"`
@@ -62,7 +62,7 @@ func TestMaestroAdapterQualityLoopFixtureCoversFourPathsAndDirectAnswer(t *testi
 		if err != nil {
 			t.Fatalf("%s: %v", path.Name, err)
 		}
-		if string(plan.CaseEntry) != string(path.CaseEntry) || plan.RequiresAccountValidation != path.AccountValidation || plan.RequiresWalter != path.WalterRequired {
+		if string(plan.CaseEntry) != string(path.CaseEntry) || plan.RequiresAccountValidation != path.AccountValidation || plan.RequiresYoda != path.YodaRequired {
 			t.Fatalf("%s: plan=%#v", path.Name, plan)
 		}
 	}
@@ -83,8 +83,8 @@ func TestMaestroAdapterQualityLoopFixtureCoversFourPathsAndDirectAnswer(t *testi
 	}
 }
 
-func TestWalterIntentReviewFixturePinsSelfAndIntentContract(t *testing.T) {
-	body, err := os.ReadFile("../../adapters/conformance/walter-intent-review.json")
+func TestYodaIntentReviewFixturePinsSelfAndIntentContract(t *testing.T) {
+	body, err := os.ReadFile("../../adapters/conformance/yoda-intent-review.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestWalterIntentReviewFixturePinsSelfAndIntentContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	if fixture.SchemaVersion != 1 || fixture.Identity != "owner_self_proxy_inside_maestro_loop" || fixture.PacketVersion != "intent-review-v1" || fixture.Role != "senior_advisor_refiner" {
-		t.Fatalf("Walter intent fixture header drifted: %#v", fixture)
+		t.Fatalf("Yoda intent fixture header drifted: %#v", fixture)
 	}
 	var semantics struct {
 		CentralQuestion       string   `json:"central_question"`
@@ -113,21 +113,21 @@ func TestWalterIntentReviewFixturePinsSelfAndIntentContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	if semantics.CentralQuestion == "" || !contains(semantics.ForbiddenRoles, "naysayer") || !contains(semantics.ForbiddenRoles, "mind_reader") || !contains(semantics.SelfEvolutionPipeline, "owner_attested_cas_promotion") || !contains(semantics.SelfEvolutionRules, "not_every_loop_persists") || !contains(semantics.SelfEvolutionRules, "darwin_observes_only") {
-		t.Fatalf("Walter self-proxy/evolution semantics drifted: %#v", semantics)
+		t.Fatalf("Yoda self-proxy/evolution semantics drifted: %#v", semantics)
 	}
 	for _, required := range []string{"self_snapshot_version", "self_snapshot_digest", "draft_output", "observations"} {
 		if !contains(fixture.Bindings, required) {
-			t.Fatalf("Walter intent packet missing %q: %#v", required, fixture.Bindings)
+			t.Fatalf("Yoda intent packet missing %q: %#v", required, fixture.Bindings)
 		}
 	}
 	for _, required := range []string{"intrinsic_intent_hypothesis", "confidence", "constructive_refinement", "unresolved_uncertainty"} {
 		if !contains(fixture.Results, required) {
-			t.Fatalf("Walter intent result missing %q: %#v", required, fixture.Results)
+			t.Fatalf("Yoda intent result missing %q: %#v", required, fixture.Results)
 		}
 	}
 	for _, verdict := range []IntentVerdict{IntentApprove, IntentRefine, IntentClarify, IntentHold} {
 		if !contains(fixture.Verdicts, string(verdict)) {
-			t.Fatalf("Walter intent verdict missing %q: %#v", verdict, fixture.Verdicts)
+			t.Fatalf("Yoda intent verdict missing %q: %#v", verdict, fixture.Verdicts)
 		}
 	}
 }

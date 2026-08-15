@@ -218,8 +218,8 @@ func (store Store) Complete(workspaceID, itemID string, input CompletionInput) (
 		unlock()
 		return Item{}, err
 	}
-	if item.Contract.RequireWalterReview {
-		if err := store.currentWalterApproval(workspaceID, itemID, item.State); err != nil {
+	if item.Contract.RequireYodaReview {
+		if err := store.currentYodaApproval(workspaceID, itemID, item.State); err != nil {
 			unlock()
 			return Item{}, err
 		}

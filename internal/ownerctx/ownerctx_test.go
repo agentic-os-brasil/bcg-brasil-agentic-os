@@ -35,7 +35,7 @@ func TestInitializeCreatesInspectablePointersWithoutOverwritingSelf(t *testing.T
 	if !status.Initialized || !status.Facets["voice"].Available || status.Tasks.State != "empty" {
 		t.Fatalf("status = %#v", status)
 	}
-	if profile := status.Facets["psychological-profile"]; profile.Sensitivity != "sensitive" || profile.Refinement != "confirmation_required" || profile.Readers[0] != "walter" {
+	if profile := status.Facets["psychological-profile"]; profile.Sensitivity != "sensitive" || profile.Refinement != "confirmation_required" || profile.Readers[0] != "yoda" {
 		t.Fatalf("psychological profile = %#v", profile)
 	}
 }

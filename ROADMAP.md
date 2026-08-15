@@ -90,9 +90,9 @@ not be used as evidence that a pending capability is already released.
 - [ ] Wire equivalent Codex lifecycle receipts and bind native receipts to the execution-ledger breadcrumb contract.
 - [x] Expose only the active execution pointer through the Session Context Packet.
 - [x] Prove handoff across two sessions or agents without transcript or contract reinjection.
-- [x] Add an optional authenticated Walter-review completion gate to the canonical execution ledger.
+- [x] Add an optional authenticated Yoda-review completion gate to the canonical execution ledger.
 - [x] Implement a closed local canary receipt store and deterministic aggregate report.
-- [ ] Implement native Walter key custody and equivalent Claude/Codex signing adapters.
+- [ ] Implement native Yoda key custody and equivalent Claude/Codex signing adapters.
 - [ ] Wire native lifecycle producers to the local canary contract without exporting professional content.
 - [x] Bootstrap one local agent per workspace with a reviewed interview and versioned briefing.
 - [x] Implement explicit research-plan approval, hostname allowlists and sourced evidence persistence.

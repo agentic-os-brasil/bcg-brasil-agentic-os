@@ -22,19 +22,19 @@ authority.
 The planner resolves two independent booleans:
 
 - `pre_account_used` chooses account-assisted framing or direct Case.
-- `walter_required` resolves materiality and review risk; uncertainty selects
-  Walter. Low-materiality skips carry a Maestro reason code and evidence.
+- `yoda_required` resolves materiality and review risk; uncertainty selects
+  Yoda. Low-materiality skips carry a Maestro reason code and evidence.
 
 The invariants are `post_account_validation_required == pre_account_used` and
-`walter_invocation == resolved_walter_required`.
+`yoda_invocation == resolved_yoda_required`.
 
-For a Walter invocation, Maestro builds an ephemeral, versioned
+For a Yoda invocation, Maestro builds an ephemeral, versioned
 `IntentReviewPacket`. It binds the literal prompt, plan route, draft digest,
 audience, consequence, reversibility, the relevant minimum context,
-`UserSelfSnapshot` version/digest and applicable observation metadata. Walter
+`UserSelfSnapshot` version/digest and applicable observation metadata. Yoda
 returns a typed intrinsic-intent hypothesis, evidence references, confidence,
 purpose satisfaction, constructive refinement, unresolved uncertainty and an
-`approve|refine|clarify|hold_exceptional` verdict. Walter is a calm Senior
+`approve|refine|clarify|hold_exceptional` verdict. Yoda is a calm Senior
 Advisor & Refiner and proxy for the user's likely contextual self-review, not a
 mind-reader, red team or second authority. A low-confidence hypothesis never
 silently changes the requested route; at most Maestro asks a bounded question.
@@ -45,7 +45,7 @@ interaction, but the local append-only observation log persists only material,
 owner-attested signals under the local owner boundary. Claims are normalized metadata codes: prompts,
 transcripts, client documents and generated output are never self evidence.
 Explicit current instruction outranks correction, canon, observations and
-Walter hypotheses. The deterministic self lifecycle is
+Yoda hypotheses. The deterministic self lifecycle is
 `captured -> eligible -> corroborated -> proposed -> promoted`, with rejected,
 contradicted, expired and redacted side states. Communication-style/voice/preferences
 may be promoted with audited explicit confirmation; role and decision rules
@@ -56,7 +56,7 @@ Local controls support inspection,
 export, owner-confirmed observation rejection/redaction, facet revert and
 snapshot deletion.
 
-Walter also receives a bounded relevant selection of prior user prompts when
+Yoda also receives a bounded relevant selection of prior user prompts when
 the owner-local PromptHistoryStore is enabled. The current user prompt is
 always explicit and highest precedence. Maestro first preserves and translates/
 normalizes the current prompt into a digest-bound `working_current_prompt`,
@@ -83,7 +83,7 @@ The optional dispatch `self_signal` is a closed, explicit owner-signal
 contract. It accepts only `explicit_instruction`, `explicit_correction` or
 non-generic `explicit_endorsement`, a real facet ID, a normalized claim, one of
 the owner evidence classes, bounded confidence/sensitivity and
-`owner_confirmed: true`. Ordinary prompts, Walter invocation, task activity
+`owner_confirmed: true`. Ordinary prompts, Yoda invocation, task activity
 and intrinsic-intent hypotheses produce an evaluation receipt but no self
 observation. Generated output, client content, unknown fields, unsupported
 signals, generic `ok`, and unknown facets fail closed. A global observation may
@@ -95,23 +95,23 @@ closed contract, and the conformance fixture checks both ingress boundaries.
 
 | Path | Sequence |
 | --- | --- |
-| A | Maestro → Client Account framing → Maestro → Case → Maestro → Client Account validation → Maestro → Walter → Maestro → User |
+| A | Maestro → Client Account framing → Maestro → Case → Maestro → Client Account validation → Maestro → Yoda → Maestro → User |
 | B | Maestro → Client Account framing → Maestro → Case → Maestro → Client Account validation → Maestro → User |
-| C | Maestro → Case → Maestro → Walter → Maestro → User |
+| C | Maestro → Case → Maestro → Yoda → Maestro → User |
 | D | Maestro → Case → Maestro → User |
 
 Case output is always returned to Maestro. In paths A/B, Client Account
 validation is required because framing occurred; in paths C/D, Client Account
-does not participate. Walter is the internal Senior Advisor & Refiner: a calm,
+does not participate. Yoda is the internal Senior Advisor & Refiner: a calm,
 constructive high-leverage advisory step, tool-free and never user-facing. An
 `approved` verdict may include optional non-blocking polish. A
 `refine-and-return` verdict requires a load-bearing issue, a proposed concrete
 refinement and an acceptance condition; `hold` is exceptional and reserved for
-material safety, governance or evidence blockers. Walter preserves a
+material safety, governance or evidence blockers. Yoda preserves a
 defensible user thesis and does not manufacture objections or block cosmetics.
 
 Any content or risk mutation clears approvals and re-plans materiality before
-the next mediated Case attempt. Account cycles, Walter cycles and Case
+the next mediated Case attempt. Account cycles, Yoda cycles and Case
 attempts have deterministic budgets and append receipts; exhaustion fails
 closed. Bindings include exact agent ID, role contract, scope, authorization
 digest, capability digest, plan digest and state snapshot digest.

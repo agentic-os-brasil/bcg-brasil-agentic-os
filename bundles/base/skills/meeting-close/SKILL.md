@@ -35,7 +35,7 @@ when the supplied notes are sufficient, with gaps made explicit.
 4. Flag items needing human confirmation before any task, message, calendar,
    memory or workspace write.
 5. If the meeting has material governance, scope or commitment implications,
-   mark the packet for Walter review. Do not claim that review occurred.
+   mark the packet for Yoda review. Do not claim that review occurred.
 
 ## Output contract
 

@@ -15,7 +15,7 @@ import (
 // HousekeepingHandler adapts the existing command-gated Darwin implementation
 // to the generic maintenance worker. The worker owns the occurrence lease;
 // this handler owns only packet construction, scoped repair and Darwin health
-// receipt publication. It is deliberately not a Walter/self implementation.
+// receipt publication. It is deliberately not a Yoda/self implementation.
 type HousekeepingHandler struct {
 	Build        HealthPacketBuilder
 	Guard        ToolGuard

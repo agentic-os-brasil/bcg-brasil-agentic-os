@@ -86,7 +86,7 @@ func TestPilotEnforcesSignedDoneContractEvidence(t *testing.T) {
 	}
 }
 
-func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T) {
+func TestPilotWiresMaterialMaestroOutputThroughYodaAcrossRuntimes(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
 			pilot := newTestPilot(t, runtimeName)
@@ -115,7 +115,7 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 				t.Fatalf("material result bypassed pending review: %#v err=%v", pending, err)
 			}
 
-			reviewDispatch, reviewReceipt, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
+			reviewDispatch, reviewReceipt, err := pilot.RequireYodaReview(sourceReceipt.DelegationID, YodaReviewRequest{
 				Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test the recommendation before escalation.",
 				Audience: "case sponsor", Recommendation: "Choose the bounded pilot scope.",
 				DefinitionOfDone: "Sponsor can decide from the reviewed artifact.",
@@ -124,35 +124,35 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 				Uncertainties:    []string{"The source refresh date should be reconfirmed before publication."}, TTL: time.Hour,
 			})
 			if err != nil || reviewReceipt.State != StateDelegated || reviewReceipt.Review == nil ||
-				reviewReceipt.Review.State != ReviewDispatched || reviewDispatch.Packet.TargetAgentID != "walter" {
-				t.Fatalf("Walter wire = dispatch=%#v receipt=%#v err=%v", reviewDispatch, reviewReceipt, err)
+				reviewReceipt.Review.State != ReviewDispatched || reviewDispatch.Packet.TargetAgentID != "yoda" {
+				t.Fatalf("Yoda wire = dispatch=%#v receipt=%#v err=%v", reviewDispatch, reviewReceipt, err)
 			}
 			if reviewDispatch.Packet.Review.SourcePacketID != dispatch.Packet.PacketID ||
 				reviewDispatch.Packet.Review.SourceScopeID != "alpha" {
 				t.Fatalf("review packet lost source binding: %#v", reviewDispatch.Packet.Review)
 			}
 
-			walter := newTestExecutor(t, runtimeName, "walter", "walter-cap", now)
-			if _, err := walter.SealReturn(reviewDispatch, ReturnBody{Summary: "bypass"}); err == nil {
-				t.Fatal("Walter generic return bypassed the typed verdict contract")
+			yoda := newTestExecutor(t, runtimeName, "yoda", "yoda-cap", now)
+			if _, err := yoda.SealReturn(reviewDispatch, ReturnBody{Summary: "bypass"}); err == nil {
+				t.Fatal("Yoda generic return bypassed the typed verdict contract")
 			}
-			verdict := WalterReviewBody{
+			verdict := YodaReviewBody{
 				PreservesIntent: true,
-				Verdict:         WalterApproved,
+				Verdict:         YodaApproved,
 				EvidenceRefs:    []string{"bcgos://workspace/alpha/dossier/evidence.md"},
 			}
-			reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, verdict)
+			reviewEnvelope, err := yoda.SealYodaReview(reviewDispatch, verdict)
 			if err != nil {
 				t.Fatal(err)
 			}
-			completed, err := pilot.ReturnWalterReview(reviewEnvelope, verdict)
+			completed, err := pilot.ReturnYodaReview(reviewEnvelope, verdict)
 			if err != nil || completed.State != StateCompleted || completed.Review == nil ||
 				completed.Review.State != ReviewApproved || completed.Review.ObjectionCount != 0 {
-				t.Fatalf("Walter verdict = %#v err=%v", completed, err)
+				t.Fatalf("Yoda verdict = %#v err=%v", completed, err)
 			}
 			producerReceipt, ok := pilot.Inspect(sourceReceipt.DelegationID)
 			if !ok || producerReceipt.State != StateCompleted || producerReceipt.Review == nil || producerReceipt.Review.State != ReviewApproved {
-				t.Fatalf("material producer was not completion-authorized by Walter: %#v", producerReceipt)
+				t.Fatalf("material producer was not completion-authorized by Yoda: %#v", producerReceipt)
 			}
 			encoded, _ := json.Marshal(completed)
 			for _, forbidden := range []string{"Choose the bounded pilot scope.", "source refresh date", "case sponsor"} {
@@ -164,7 +164,7 @@ func TestPilotWiresMaterialMaestroOutputThroughWalterAcrossRuntimes(t *testing.T
 	}
 }
 
-func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T) {
+func TestPilotYodaRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T) {
 	pilot := newTestPilot(t, "claude")
 	now := time.Date(2026, 7, 29, 18, 0, 0, 0, time.UTC)
 	pilot.now = func() time.Time { return now }
@@ -182,22 +182,22 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	if pending, err := pilot.Return(envelope, result); err != nil || pending.State != StatePendingReview {
 		t.Fatalf("material result bypassed pending review: %#v err=%v", pending, err)
 	}
-	reviewDispatch, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
+	reviewDispatch, _, err := pilot.RequireYodaReview(sourceReceipt.DelegationID, YodaReviewRequest{
 		Trigger: ReviewConsequentialTradeoff, ReviewObjective: "Pressure-test the trade-off.",
 		Audience: "sponsor", Recommendation: "Choose option A.", DefinitionOfDone: "The trade-off is explicit.", TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	walter := newTestExecutor(t, "claude", "walter", "walter-cap", now)
-	refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, PreservesIntent: true, Objections: []WalterObjection{{
+	yoda := newTestExecutor(t, "claude", "yoda", "yoda-cap", now)
+	refinement := YodaReviewBody{Verdict: YodaRefineAndReturn, PreservesIntent: true, Objections: []YodaObjection{{
 		Code: "missing-counterevidence", Fix: "Add the counter-evidence to the recommendation.", ExitCondition: "The evidence pointer is present and reviewed.",
 	}}}
-	reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, refinement)
+	reviewEnvelope, err := yoda.SealYodaReview(reviewDispatch, refinement)
 	if err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := pilot.ReturnWalterReview(reviewEnvelope, refinement)
+	receipt, err := pilot.ReturnYodaReview(reviewEnvelope, refinement)
 	if err != nil || receipt.Review == nil || receipt.Review.State != ReviewRefineReturn || receipt.Review.ObjectionCount != 1 {
 		t.Fatalf("refinement = %#v err=%v", receipt, err)
 	}
@@ -208,12 +208,12 @@ func TestPilotWalterRefinementIsBoundedAndDoesNotApproveCompletion(t *testing.T)
 	if !ok || producerReceipt.State != StatePendingReview {
 		t.Fatalf("refinement incorrectly completed producer: %#v", producerReceipt)
 	}
-	if _, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
+	if _, _, err := pilot.RequireYodaReview(sourceReceipt.DelegationID, YodaReviewRequest{
 		Trigger: ReviewConsequentialTradeoff, ReviewObjective: "Review the same output again.",
 		Audience: "sponsor", Recommendation: "Approve without rework.",
 		DefinitionOfDone: "The original output is approved.", TTL: time.Hour,
 	}); err == nil {
-		t.Fatal("refined producer opened a second Walter review without rework")
+		t.Fatal("refined producer opened a second Yoda review without rework")
 	}
 }
 
@@ -235,12 +235,12 @@ func TestPilotReceiptReviewStateCannotAuthorizeReworkByMutation(t *testing.T) {
 	if _, err := pilot.Return(envelope, result); err != nil {
 		t.Fatal(err)
 	}
-	request := WalterReviewRequest{
+	request := YodaReviewRequest{
 		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test the recommendation.",
 		Audience: "sponsor", Recommendation: "Use the recommendation.",
 		DefinitionOfDone: "The recommendation is bounded.", TTL: time.Hour,
 	}
-	if _, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, request); err != nil {
+	if _, _, err := pilot.RequireYodaReview(sourceReceipt.DelegationID, request); err != nil {
 		t.Fatal(err)
 	}
 	inspected, ok := pilot.Inspect(sourceReceipt.DelegationID)
@@ -256,7 +256,7 @@ func TestPilotReceiptReviewStateCannotAuthorizeReworkByMutation(t *testing.T) {
 	}
 }
 
-func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *testing.T) {
+func TestPilotReworkRequiresYodaRefinementBeforeNewApprovalAcrossRuntimes(t *testing.T) {
 	for _, runtimeName := range []string{"claude", "codex"} {
 		t.Run(runtimeName, func(t *testing.T) {
 			pilot := newTestPilot(t, runtimeName)
@@ -277,24 +277,24 @@ func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *t
 			if receipt, err := pilot.Return(envelope, result); err != nil || receipt.State != StatePendingReview {
 				t.Fatalf("initial return = %#v err=%v", receipt, err)
 			}
-			reviewRequest := WalterReviewRequest{
+			reviewRequest := YodaReviewRequest{
 				Trigger: trigger, ReviewObjective: "Pressure-test the first recommendation.",
 				Audience: "sponsor", Recommendation: "Use the first recommendation.",
 				DefinitionOfDone: "Counter-evidence is addressed.", TTL: time.Hour,
 			}
-			reviewDispatch, _, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, reviewRequest)
+			reviewDispatch, _, err := pilot.RequireYodaReview(sourceReceipt.DelegationID, reviewRequest)
 			if err != nil {
 				t.Fatal(err)
 			}
-			walter := newTestExecutor(t, runtimeName, "walter", "walter-cap", time.Now())
-			refinement := WalterReviewBody{Verdict: WalterRefineAndReturn, PreservesIntent: true, Objections: []WalterObjection{{
+			yoda := newTestExecutor(t, runtimeName, "yoda", "yoda-cap", time.Now())
+			refinement := YodaReviewBody{Verdict: YodaRefineAndReturn, PreservesIntent: true, Objections: []YodaObjection{{
 				Code: "missing-counterevidence", Fix: "Add the counter-evidence.", ExitCondition: "The evidence pointer is reviewed.",
 			}}}
-			refinementEnvelope, err := walter.SealWalterReview(reviewDispatch, refinement)
+			refinementEnvelope, err := yoda.SealYodaReview(reviewDispatch, refinement)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := pilot.ReturnWalterReview(refinementEnvelope, refinement); err != nil {
+			if _, err := pilot.ReturnYodaReview(refinementEnvelope, refinement); err != nil {
 				t.Fatal(err)
 			}
 
@@ -314,17 +314,17 @@ func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *t
 			if receipt, err := pilot.Return(revisedEnvelope, revised); err != nil || receipt.State != StatePendingReview {
 				t.Fatalf("revised return = %#v err=%v", receipt, err)
 			}
-			reviewDispatch, _, err = pilot.RequireWalterReview(reworkReceipt.DelegationID, reviewRequest)
+			reviewDispatch, _, err = pilot.RequireYodaReview(reworkReceipt.DelegationID, reviewRequest)
 			if err != nil {
 				t.Fatal(err)
 			}
-			walter = newTestExecutor(t, runtimeName, "walter", "walter-cap", time.Now())
-			approved := WalterReviewBody{Verdict: WalterApproved, PreservesIntent: true}
-			approvedEnvelope, err := walter.SealWalterReview(reviewDispatch, approved)
+			yoda = newTestExecutor(t, runtimeName, "yoda", "yoda-cap", time.Now())
+			approved := YodaReviewBody{Verdict: YodaApproved, PreservesIntent: true}
+			approvedEnvelope, err := yoda.SealYodaReview(reviewDispatch, approved)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := pilot.ReturnWalterReview(approvedEnvelope, approved); err != nil {
+			if _, err := pilot.ReturnYodaReview(approvedEnvelope, approved); err != nil {
 				t.Fatal(err)
 			}
 			final, ok := pilot.Inspect(reworkReceipt.DelegationID)
@@ -335,10 +335,10 @@ func TestPilotReworkRequiresWalterRefinementBeforeNewApprovalAcrossRuntimes(t *t
 	}
 }
 
-func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
+func TestPilotRecordsCompactYodaUnavailableState(t *testing.T) {
 	pilot := newTestPilot(t, "codex")
-	pilot.instances["walter"] = Instance{
-		AgentID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review",
+	pilot.instances["yoda"] = Instance{
+		AgentID: "yoda", Role: "reviewer", ScopeKind: "review", ScopeID: "review",
 		ParentAgentID: "maestro", Available: false,
 	}
 	dispatch, sourceReceipt, err := pilot.Delegate(Intent{
@@ -356,7 +356,7 @@ func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 	if pending, err := pilot.Return(envelope, result); err != nil || pending.State != StatePendingReview {
 		t.Fatalf("material result bypassed pending review: %#v err=%v", pending, err)
 	}
-	_, receipt, err := pilot.RequireWalterReview(sourceReceipt.DelegationID, WalterReviewRequest{
+	_, receipt, err := pilot.RequireYodaReview(sourceReceipt.DelegationID, YodaReviewRequest{
 		Trigger: ReviewExternalArtifact, ReviewObjective: "Check the artifact before sharing.",
 		Audience: "sponsor", Recommendation: "Share the bounded artifact.",
 		DefinitionOfDone: "The sponsor can inspect the artifact.", TTL: time.Hour,
@@ -364,7 +364,7 @@ func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 	if err == nil || receipt.State != StateUnavailable || receipt.FailureCode != "target_unavailable" ||
 		receipt.Review == nil || receipt.Review.State != ReviewUnavailable ||
 		receipt.Review.SourcePacketID != sourceReceipt.DelegationID {
-		t.Fatalf("unavailable Walter state = %#v, err=%v", receipt, err)
+		t.Fatalf("unavailable Yoda state = %#v, err=%v", receipt, err)
 	}
 	encoded, _ := json.Marshal(receipt)
 	if strings.Contains(string(encoded), "Share the bounded artifact.") {
@@ -372,7 +372,7 @@ func TestPilotRecordsCompactWalterUnavailableState(t *testing.T) {
 	}
 }
 
-func TestPilotProjectsWalterFailureToProducerWithoutApproval(t *testing.T) {
+func TestPilotProjectsYodaFailureToProducerWithoutApproval(t *testing.T) {
 	pilot := newTestPilot(t, "claude")
 	now := time.Date(2026, 7, 29, 18, 0, 0, 0, time.UTC)
 	pilot.now = func() time.Time { return now }
@@ -390,16 +390,16 @@ func TestPilotProjectsWalterFailureToProducerWithoutApproval(t *testing.T) {
 	if _, err := pilot.Return(envelope, result); err != nil {
 		t.Fatal(err)
 	}
-	reviewDispatch, _, err := pilot.RequireWalterReview(source.DelegationID, WalterReviewRequest{
+	reviewDispatch, _, err := pilot.RequireYodaReview(source.DelegationID, YodaReviewRequest{
 		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test.", Audience: "sponsor",
 		Recommendation: "Use the bounded recommendation.", DefinitionOfDone: "Sponsor can decide.", TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	walter := newTestExecutor(t, "claude", "walter", "walter-cap", now)
+	yoda := newTestExecutor(t, "claude", "yoda", "yoda-cap", now)
 	failure := FailureBody{Code: "runtime_unavailable", Detail: "reviewer stopped"}
-	failureEnvelope, err := walter.SealFailure(reviewDispatch, failure)
+	failureEnvelope, err := yoda.SealFailure(reviewDispatch, failure)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +408,7 @@ func TestPilotProjectsWalterFailureToProducerWithoutApproval(t *testing.T) {
 	}
 	producerReceipt, ok := pilot.Inspect(source.DelegationID)
 	if !ok || producerReceipt.State != StatePendingReview || producerReceipt.Review == nil || producerReceipt.Review.State != ReviewUnavailable {
-		t.Fatalf("producer review state after Walter failure = %#v", producerReceipt)
+		t.Fatalf("producer review state after Yoda failure = %#v", producerReceipt)
 	}
 }
 
@@ -851,7 +851,7 @@ func TestPilotDurableRecoveryCompletesAfterPilotRestart(t *testing.T) {
 	}
 }
 
-func TestPilotDurableRecoveryPersistsWalterAndProducerTogether(t *testing.T) {
+func TestPilotDurableRecoveryPersistsYodaAndProducerTogether(t *testing.T) {
 	now := time.Date(2026, 7, 25, 18, 0, 0, 0, time.UTC)
 	dispatcher := newTestDispatcherForRuntime(t, "claude")
 	dispatcher.now = func() time.Time { return now }
@@ -874,32 +874,32 @@ func TestPilotDurableRecoveryPersistsWalterAndProducerTogether(t *testing.T) {
 	if pending, err := pilot.Return(envelope, body); err != nil || pending.State != StatePendingReview {
 		t.Fatalf("pending material return = %#v err=%v", pending, err)
 	}
-	reviewDispatch, _, err := pilot.RequireWalterReview(source.DelegationID, WalterReviewRequest{
+	reviewDispatch, _, err := pilot.RequireYodaReview(source.DelegationID, YodaReviewRequest{
 		Trigger: ReviewMaterialRecommendation, ReviewObjective: "Pressure-test the recommendation.",
 		Audience: "sponsor", Recommendation: "Use the recommendation.", DefinitionOfDone: "The recommendation is evidence-backed.", TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	walter := newTestExecutor(t, "claude", "walter", "walter-cap", now)
-	verdict := WalterReviewBody{PreservesIntent: true, Verdict: WalterApproved, EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/evidence.md"}}
-	reviewEnvelope, err := walter.SealWalterReview(reviewDispatch, verdict)
+	yoda := newTestExecutor(t, "claude", "yoda", "yoda-cap", now)
+	verdict := YodaReviewBody{PreservesIntent: true, Verdict: YodaApproved, EvidenceRefs: []string{"bcgos://workspace/alpha/dossier/evidence.md"}}
+	reviewEnvelope, err := yoda.SealYodaReview(reviewDispatch, verdict)
 	if err != nil {
 		t.Fatal(err)
 	}
-	completed, err := pilot.ReturnWalterReview(reviewEnvelope, verdict)
+	completed, err := pilot.ReturnYodaReview(reviewEnvelope, verdict)
 	if err != nil || completed.State != StateCompleted {
-		t.Fatalf("Walter completion = %#v err=%v", completed, err)
+		t.Fatalf("Yoda completion = %#v err=%v", completed, err)
 	}
 	restarted, err := NewDurablePilot(dispatcher, testInstances(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, ok := restarted.Inspect(source.DelegationID); !ok || got.State != StateCompleted || got.Review == nil || got.Review.State != ReviewApproved {
-		t.Fatalf("producer was not atomically recovered with Walter: %#v present=%t", got, ok)
+		t.Fatalf("producer was not atomically recovered with Yoda: %#v present=%t", got, ok)
 	}
 	if got, ok := restarted.Inspect(completed.DelegationID); !ok || got.State != StateCompleted || got.Review == nil || got.Review.State != ReviewApproved {
-		t.Fatalf("Walter was not atomically recovered with producer: %#v present=%t", got, ok)
+		t.Fatalf("Yoda was not atomically recovered with producer: %#v present=%t", got, ok)
 	}
 }
 
@@ -985,7 +985,7 @@ func testInstances() []Instance {
 	return []Instance{
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", ScopeKind: "workspace", ScopeID: "alpha", ParentAgentID: "maestro", Available: true},
 		{AgentID: "errand-helper", Role: "errand_helper", ScopeKind: "errand", ScopeID: "pilot", ParentAgentID: "maestro", Available: true},
-		{AgentID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review", ParentAgentID: "maestro", Available: true},
+		{AgentID: "yoda", Role: "reviewer", ScopeKind: "review", ScopeID: "review", ParentAgentID: "maestro", Available: true},
 	}
 }
 
@@ -1001,7 +1001,7 @@ func newTestDispatcherForRuntime(t *testing.T, runtimeName string) *Dispatcher {
 	}
 	grants := []agentorchestration.Authorization{
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
-		{AgentID: "walter", Role: "reviewer", Scope: "review", ScopeKind: "review", Capability: "walter-cap"},
+		{AgentID: "yoda", Role: "reviewer", Scope: "review", ScopeKind: "review", Capability: "yoda-cap"},
 		{AgentID: "workspace-agent-alpha", Role: "workspace_agent", Scope: "alpha", ScopeKind: "workspace", Capability: "workspace-alpha-cap"},
 		{AgentID: "errand-helper", Role: "errand_helper", Scope: "pilot", ScopeKind: "errand", Capability: "errand-helper-cap", Tools: []agentorchestration.ToolGrant{
 			{Tool: errandTool, Operation: string(ErrandCreateEphemeralNote), ResourcePrefix: "bcgos://errand/pilot/"},
@@ -1013,7 +1013,7 @@ func newTestDispatcherForRuntime(t *testing.T, runtimeName string) *Dispatcher {
 		t.Fatal(err)
 	}
 	dispatcher, err := New(adapter, "packet-signing-capability", map[string]string{
-		"maestro": "maestro-cap", "walter": "walter-cap", "workspace-agent-alpha": "workspace-alpha-cap",
+		"maestro": "maestro-cap", "yoda": "yoda-cap", "workspace-agent-alpha": "workspace-alpha-cap",
 		"errand-helper": "errand-helper-cap",
 	})
 	if err != nil {

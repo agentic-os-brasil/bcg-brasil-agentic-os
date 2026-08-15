@@ -66,7 +66,7 @@ The first job vocabulary is:
   work-retrieval catalog through the approved Claude SharePoint adapter.
 - `darwin-housekeeping-daily`: policy-gated daily/presence health work;
 - `darwin-deep-weekly`: policy-gated weekly health/evolution review;
-- `walter-self-review-weekly`: silent, bounded weekly Walter self-ingestion
+- `yoda-self-review-weekly`: silent, bounded weekly Yoda self-ingestion
   seam and the sole recurring self-refinement synthesis job;
 - `darwin-structural-evolution-proposal`: monthly, proposal-only review of
   operational structure through Darwin's deterministic closed planner; it
@@ -83,7 +83,7 @@ anchor first to enrollment and, after success, to that successful attempt;
 both use `MaxCatchUp=1`. `memory-deep-dream` succeeds only after the complete
 memory commit is active. Wiki work triggered by that commit follows the outbox
 and publication boundary in Spec 008; a scheduler receipt cannot substitute
-for either durable commit. Walter's weekly job supersedes the retired generic
+for either durable commit. Yoda's weekly job supersedes the retired generic
 `self-refinement-proposal` catalog placeholder; it is a silent, finite
 self-ingestion/compaction pass, not a weekly user-facing proposal or
 notification. Observation capture remains a separate evidence producer. The
@@ -155,7 +155,7 @@ plist symlinks fail closed. Plist creation/removal is atomic and idempotent;
 native `launchctl` inspection or mutation occurs only with explicit
 `--launchctl`, only in the current user's `gui/<uid>` domain, and never requests
 administrator authority. `RunAtLoad` plus the bounded interval accelerate
-presence recovery but do not activate Walter, memory dreaming or any other
+presence recovery but do not activate Yoda, memory dreaming or any other
 model-backed maintenance capability.
 
 The presence planner receives only the jobs explicitly activated in the exact

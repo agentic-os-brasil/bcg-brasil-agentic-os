@@ -15,7 +15,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-func walterReviewStore(t *testing.T) Store {
+func yodaReviewStore(t *testing.T) Store {
 	t.Helper()
 	now := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
 	counts := make(map[string]int)
@@ -29,44 +29,44 @@ func walterReviewStore(t *testing.T) Store {
 	}
 }
 
-func walterKeypair(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
+func yodaKeypair(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 	t.Helper()
 	seed := bytes.Repeat([]byte{0x29}, ed25519.SeedSize)
 	privateKey := ed25519.NewKeyFromSeed(seed)
 	return privateKey.Public().(ed25519.PublicKey), privateKey
 }
 
-func walterExecutionInput(publicKey ed25519.PublicKey) CreateInput {
+func yodaExecutionInput(publicKey ed25519.PublicKey) CreateInput {
 	return CreateInput{
-		WorkspaceID:          testWorkspaceID,
-		Objective:            "Complete one durable Maestro goal.",
-		InitialNextStep:      "Produce the governed artifact.",
-		Criteria:             []Criterion{{ID: "artifact", Type: CriterionArtifactSnapshot, TargetRef: "bcgos://workspace/result.txt"}},
-		AllowedRefs:          []string{"bcgos://workspace/result.txt"},
-		RequireWalterReview:  true,
-		WalterPublicKey:      base64.RawURLEncoding.EncodeToString(publicKey),
-		WalterKeyID:          "walter-review-key",
-		WalterInstallationID: "install-alpha",
+		WorkspaceID:        testWorkspaceID,
+		Objective:          "Complete one durable Maestro goal.",
+		InitialNextStep:    "Produce the governed artifact.",
+		Criteria:           []Criterion{{ID: "artifact", Type: CriterionArtifactSnapshot, TargetRef: "bcgos://workspace/result.txt"}},
+		AllowedRefs:        []string{"bcgos://workspace/result.txt"},
+		RequireYodaReview:  true,
+		YodaPublicKey:      base64.RawURLEncoding.EncodeToString(publicKey),
+		YodaKeyID:          "yoda-review-key",
+		YodaInstallationID: "install-alpha",
 	}
 }
 
-func signedWalterEnvelope(t *testing.T, item Item, decision WalterReviewDecision, privateKey ed25519.PrivateKey) WalterReviewEnvelope {
+func signedYodaEnvelope(t *testing.T, item Item, decision YodaReviewDecision, privateKey ed25519.PrivateKey) YodaReviewEnvelope {
 	t.Helper()
-	envelope := WalterReviewEnvelope{
+	envelope := YodaReviewEnvelope{
 		SchemaVersion:    1,
 		ItemID:           item.State.ItemID,
 		WorkspaceID:      item.State.WorkspaceID,
 		AttemptID:        item.State.ActiveAttemptID,
 		ReviewedRevision: item.State.StateRevision,
 		ContractSHA256:   item.State.ContractSHA256,
-		SignerKeyID:      item.Contract.WalterKeyID,
-		InstallationID:   item.Contract.WalterInstallationID,
-		CustodyScope:     "maestro/walter-review",
+		SignerKeyID:      item.Contract.YodaKeyID,
+		InstallationID:   item.Contract.YodaInstallationID,
+		CustodyScope:     "maestro/yoda-review",
 		Decision:         decision,
 		Nonce:            "review-nonce",
 		IssuedAt:         time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC),
 	}
-	payload, err := WalterReviewSigningPayload(envelope)
+	payload, err := YodaReviewSigningPayload(envelope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,13 +74,13 @@ func signedWalterEnvelope(t *testing.T, item Item, decision WalterReviewDecision
 	return envelope
 }
 
-func prepareWalterExecution(t *testing.T, store Store, publicKey ed25519.PublicKey) (string, Item) {
+func prepareYodaExecution(t *testing.T, store Store, publicKey ed25519.PublicKey) (string, Item) {
 	t.Helper()
 	workspaceRoot := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspaceRoot, "result.txt"), []byte("governed result\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	created, err := store.Create(walterExecutionInput(publicKey))
+	created, err := store.Create(yodaExecutionInput(publicKey))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,13 +98,13 @@ func prepareWalterExecution(t *testing.T, store Store, publicKey ed25519.PublicK
 	return workspaceRoot, evidenced.Item
 }
 
-func TestWalterReviewAuthenticatesExactLedgerRevisionAndCompletes(t *testing.T) {
-	store := walterReviewStore(t)
-	publicKey, privateKey := walterKeypair(t)
-	workspaceRoot, evidenced := prepareWalterExecution(t, store, publicKey)
-	envelope := signedWalterEnvelope(t, evidenced, WalterReviewApproved, privateKey)
+func TestYodaReviewAuthenticatesExactLedgerRevisionAndCompletes(t *testing.T) {
+	store := yodaReviewStore(t)
+	publicKey, privateKey := yodaKeypair(t)
+	workspaceRoot, evidenced := prepareYodaExecution(t, store, publicKey)
+	envelope := signedYodaEnvelope(t, evidenced, YodaReviewApproved, privateKey)
 
-	reviewed, err := store.RecordWalterReview(testWorkspaceID, evidenced.State.ItemID, WalterReviewInput{
+	reviewed, err := store.RecordYodaReview(testWorkspaceID, evidenced.State.ItemID, YodaReviewInput{
 		ExpectedRevision: evidenced.State.StateRevision,
 		AttemptID:        evidenced.State.ActiveAttemptID,
 		Envelope:         envelope,
@@ -130,8 +130,8 @@ func TestWalterReviewAuthenticatesExactLedgerRevisionAndCompletes(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(exported.WalterReviews) != 1 || exported.WalterReviews[0].Decision != WalterReviewApproved {
-		t.Fatalf("Walter reviews = %#v", exported.WalterReviews)
+	if len(exported.YodaReviews) != 1 || exported.YodaReviews[0].Decision != YodaReviewApproved {
+		t.Fatalf("Yoda reviews = %#v", exported.YodaReviews)
 	}
 	inspected, err := store.Inspect(testWorkspaceID, evidenced.State.ItemID)
 	if err != nil {
@@ -141,28 +141,28 @@ func TestWalterReviewAuthenticatesExactLedgerRevisionAndCompletes(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(inspectedBody, []byte(`"walter_review":`)) ||
+	if bytes.Contains(inspectedBody, []byte(`"yoda_review":`)) ||
 		bytes.Contains(inspectedBody, []byte(reviewed.Receipt.EnvelopeSHA256)) {
 		t.Fatalf("inspect exposed explicit-export review data: %s", inspectedBody)
 	}
 }
 
-func TestWalterReviewRejectsForgeryAndRejectedDecisionCannotComplete(t *testing.T) {
-	store := walterReviewStore(t)
-	publicKey, privateKey := walterKeypair(t)
-	workspaceRoot, evidenced := prepareWalterExecution(t, store, publicKey)
+func TestYodaReviewRejectsForgeryAndRejectedDecisionCannotComplete(t *testing.T) {
+	store := yodaReviewStore(t)
+	publicKey, privateKey := yodaKeypair(t)
+	workspaceRoot, evidenced := prepareYodaExecution(t, store, publicKey)
 
-	forged := signedWalterEnvelope(t, evidenced, WalterReviewApproved, privateKey)
+	forged := signedYodaEnvelope(t, evidenced, YodaReviewApproved, privateKey)
 	forged.Signature = base64.RawStdEncoding.EncodeToString(bytes.Repeat([]byte{0x42}, ed25519.SignatureSize))
-	if _, err := store.RecordWalterReview(testWorkspaceID, evidenced.State.ItemID, WalterReviewInput{
+	if _, err := store.RecordYodaReview(testWorkspaceID, evidenced.State.ItemID, YodaReviewInput{
 		ExpectedRevision: evidenced.State.StateRevision,
 		AttemptID:        evidenced.State.ActiveAttemptID, Envelope: forged,
 	}); err == nil || !strings.Contains(err.Error(), "signature verification failed") {
 		t.Fatalf("forged signature error = %v", err)
 	}
 
-	rejected := signedWalterEnvelope(t, evidenced, WalterReviewRejected, privateKey)
-	reviewed, err := store.RecordWalterReview(testWorkspaceID, evidenced.State.ItemID, WalterReviewInput{
+	rejected := signedYodaEnvelope(t, evidenced, YodaReviewRejected, privateKey)
+	reviewed, err := store.RecordYodaReview(testWorkspaceID, evidenced.State.ItemID, YodaReviewInput{
 		ExpectedRevision: evidenced.State.StateRevision,
 		AttemptID:        evidenced.State.ActiveAttemptID, Envelope: rejected,
 	})
@@ -172,19 +172,19 @@ func TestWalterReviewRejectsForgeryAndRejectedDecisionCannotComplete(t *testing.
 	if _, err := store.Complete(testWorkspaceID, evidenced.State.ItemID, CompletionInput{
 		WorkspaceRoot: workspaceRoot, ExpectedRevision: reviewed.Item.State.StateRevision,
 		AttemptID: reviewed.Item.State.ActiveAttemptID,
-	}); !errors.Is(err, ErrWalterReviewUnsatisfied) {
+	}); !errors.Is(err, ErrYodaReviewUnsatisfied) {
 		t.Fatalf("completion after rejection error = %v", err)
 	}
 }
 
-func TestWalterApprovalIsInvalidatedByAnyLaterMutation(t *testing.T) {
-	store := walterReviewStore(t)
-	publicKey, privateKey := walterKeypair(t)
-	workspaceRoot, evidenced := prepareWalterExecution(t, store, publicKey)
-	reviewed, err := store.RecordWalterReview(testWorkspaceID, evidenced.State.ItemID, WalterReviewInput{
+func TestYodaApprovalIsInvalidatedByAnyLaterMutation(t *testing.T) {
+	store := yodaReviewStore(t)
+	publicKey, privateKey := yodaKeypair(t)
+	workspaceRoot, evidenced := prepareYodaExecution(t, store, publicKey)
+	reviewed, err := store.RecordYodaReview(testWorkspaceID, evidenced.State.ItemID, YodaReviewInput{
 		ExpectedRevision: evidenced.State.StateRevision,
 		AttemptID:        evidenced.State.ActiveAttemptID,
-		Envelope:         signedWalterEnvelope(t, evidenced, WalterReviewApproved, privateKey),
+		Envelope:         signedYodaEnvelope(t, evidenced, YodaReviewApproved, privateKey),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -200,15 +200,15 @@ func TestWalterApprovalIsInvalidatedByAnyLaterMutation(t *testing.T) {
 	if _, err := store.Complete(testWorkspaceID, evidenced.State.ItemID, CompletionInput{
 		WorkspaceRoot: workspaceRoot, ExpectedRevision: checkpointed.State.StateRevision,
 		AttemptID: checkpointed.State.ActiveAttemptID,
-	}); !errors.Is(err, ErrWalterReviewUnsatisfied) {
+	}); !errors.Is(err, ErrYodaReviewUnsatisfied) {
 		t.Fatalf("completion after later mutation error = %v", err)
 	}
 }
 
-func TestWalterReviewRecoversFromProjectionCrash(t *testing.T) {
-	store := walterReviewStore(t)
-	publicKey, privateKey := walterKeypair(t)
-	_, evidenced := prepareWalterExecution(t, store, publicKey)
+func TestYodaReviewRecoversFromProjectionCrash(t *testing.T) {
+	store := yodaReviewStore(t)
+	publicKey, privateKey := yodaKeypair(t)
+	_, evidenced := prepareYodaExecution(t, store, publicKey)
 	triggered := false
 	store.FaultPoint = func(point string) error {
 		if point == "after_revision_commit" && !triggered {
@@ -217,10 +217,10 @@ func TestWalterReviewRecoversFromProjectionCrash(t *testing.T) {
 		}
 		return nil
 	}
-	if _, err := store.RecordWalterReview(testWorkspaceID, evidenced.State.ItemID, WalterReviewInput{
+	if _, err := store.RecordYodaReview(testWorkspaceID, evidenced.State.ItemID, YodaReviewInput{
 		ExpectedRevision: evidenced.State.StateRevision,
 		AttemptID:        evidenced.State.ActiveAttemptID,
-		Envelope:         signedWalterEnvelope(t, evidenced, WalterReviewApproved, privateKey),
+		Envelope:         signedYodaEnvelope(t, evidenced, YodaReviewApproved, privateKey),
 	}); err == nil {
 		t.Fatal("projection crash was not injected")
 	}
@@ -235,28 +235,28 @@ func TestWalterReviewRecoversFromProjectionCrash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(exported.WalterReviews) != 1 ||
-		exported.WalterReviews[0].Decision != WalterReviewApproved {
-		t.Fatalf("recovered reviews = %#v", exported.WalterReviews)
+	if len(exported.YodaReviews) != 1 ||
+		exported.YodaReviews[0].Decision != YodaReviewApproved {
+		t.Fatalf("recovered reviews = %#v", exported.YodaReviews)
 	}
 }
 
-func TestWalterContractRequiresOneValidBoundPublicKey(t *testing.T) {
+func TestYodaContractRequiresOneValidBoundPublicKey(t *testing.T) {
 	input := testCreateInput()
-	input.RequireWalterReview = true
-	input.WalterKeyID = "walter-review-key"
-	input.WalterInstallationID = "install-alpha"
-	if _, err := walterReviewStore(t).Create(input); err == nil {
+	input.RequireYodaReview = true
+	input.YodaKeyID = "yoda-review-key"
+	input.YodaInstallationID = "install-alpha"
+	if _, err := yodaReviewStore(t).Create(input); err == nil {
 		t.Fatal("review-gated contract without a public key was accepted")
 	}
-	input.RequireWalterReview = false
-	input.WalterPublicKey = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0x11}, ed25519.PublicKeySize))
-	if _, err := walterReviewStore(t).Create(input); err == nil {
-		t.Fatal("unused Walter public key was accepted")
+	input.RequireYodaReview = false
+	input.YodaPublicKey = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0x11}, ed25519.PublicKeySize))
+	if _, err := yodaReviewStore(t).Create(input); err == nil {
+		t.Fatal("unused Yoda public key was accepted")
 	}
 }
 
-func TestExecutionSchemaClosesWalterReviewContracts(t *testing.T) {
+func TestExecutionSchemaClosesYodaReviewContracts(t *testing.T) {
 	path := filepath.Join("..", "..", "schemas", "execution-state.schema.json")
 	schemaBody, err := os.ReadFile(path)
 	if err != nil {
@@ -274,9 +274,9 @@ func TestExecutionSchemaClosesWalterReviewContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publicKey, _ := walterKeypair(t)
-	store := walterReviewStore(t)
-	created, err := store.Create(walterExecutionInput(publicKey))
+	publicKey, _ := yodaKeypair(t)
+	store := yodaReviewStore(t)
+	created, err := store.Create(yodaExecutionInput(publicKey))
 	if err != nil {
 		t.Fatal(err)
 	}

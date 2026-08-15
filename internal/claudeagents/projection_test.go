@@ -32,8 +32,8 @@ func TestInstallProjectsManagedNativeAgentsIdempotently(t *testing.T) {
 
 func TestGuardToolEnforcesToolFreeAndWorkspaceBoundaries(t *testing.T) {
 	workspace := t.TempDir()
-	if reason, managed := GuardTool("walter", "Read", json.RawMessage(`{"file_path":"note.md"}`), workspace, workspace); !managed || reason == "" {
-		t.Fatalf("Walter tool call was not denied: managed=%v reason=%q", managed, reason)
+	if reason, managed := GuardTool("yoda", "Read", json.RawMessage(`{"file_path":"note.md"}`), workspace, workspace); !managed || reason == "" {
+		t.Fatalf("Yoda tool call was not denied: managed=%v reason=%q", managed, reason)
 	}
 	if reason, managed := GuardTool("case-agent", "Read", json.RawMessage(`{"file_path":"brain/projects/a.md"}`), workspace, workspace); !managed || reason != "" {
 		t.Fatalf("local Case read was denied: managed=%v reason=%q", managed, reason)
@@ -124,7 +124,7 @@ func TestGuardToolRejectsTraversalAndNonexistentTargetBelowOutsideSymlink(t *tes
 
 func TestInstallRefusesUserOwnedCollision(t *testing.T) {
 	workspace := t.TempDir()
-	path := filepath.Join(workspace, ".claude", "agents", "walter.md")
+	path := filepath.Join(workspace, ".claude", "agents", "yoda.md")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestProjectionRefusesManagedFileSymlink(t *testing.T) {
 	if err := os.WriteFile(outside, []byte(managedMarker+"outside\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(outside, filepath.Join(root, "walter.md")); err != nil {
+	if err := os.Symlink(outside, filepath.Join(root, "yoda.md")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Install(workspace); err == nil {

@@ -96,10 +96,10 @@ type ObservationReceipt struct {
 	OwnerAction     bool             `json:"owner_action"`
 }
 
-// IsWalterWeeklyEligible is the single ownerctx predicate for weekly Walter
+// IsYodaWeeklyEligible is the single ownerctx predicate for weekly Yoda
 // evidence. Weekly self evolution is explicit-signal-first: corroboration
 // alone, observed patterns and inferred hypotheses never qualify.
-func IsWalterWeeklyEligible(observation ObservationReceipt) bool {
+func IsYodaWeeklyEligible(observation ObservationReceipt) bool {
 	if observation.State != ObservationCorroborated || !observation.OwnerConfirmed {
 		return false
 	}

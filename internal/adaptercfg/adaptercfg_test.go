@@ -477,7 +477,7 @@ func TestClaudeInspectReportsPartialWhenManagedAgentProjectionIsMissing(t *testi
 	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(filepath.Join(workspace, ".claude", "agents", "walter.md")); err != nil {
+	if err := os.Remove(filepath.Join(workspace, ".claude", "agents", "yoda.md")); err != nil {
 		t.Fatal(err)
 	}
 	status, err := Inspect("claude", workspace)
@@ -491,7 +491,7 @@ func TestClaudeUninstallRefusesEditedAgentBeforeRemovingHooks(t *testing.T) {
 	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {
 		t.Fatal(err)
 	}
-	agentPath := filepath.Join(workspace, ".claude", "agents", "walter.md")
+	agentPath := filepath.Join(workspace, ".claude", "agents", "yoda.md")
 	if err := os.WriteFile(agentPath, []byte("user replacement\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

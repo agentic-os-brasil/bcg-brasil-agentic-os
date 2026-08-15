@@ -1,6 +1,6 @@
 //go:build aix || darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris
 
-package walterselfreview
+package yodaselfreview
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var errWeeklyReceiptLockBusy = errors.New("Walter weekly receipt advisory lock is busy")
+var errWeeklyReceiptLockBusy = errors.New("Yoda weekly receipt advisory lock is busy")
 
 func tryLockWeeklyReceiptFile(file *os.File) error {
 	err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)

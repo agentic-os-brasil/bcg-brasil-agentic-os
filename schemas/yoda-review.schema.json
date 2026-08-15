@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentic-os-brasil/schemas/walter-review.schema.json",
-  "title": "Walter Senior Advisor and Refiner review",
+  "$id": "https://agentic-os-brasil/schemas/yoda-review.schema.json",
+  "title": "Yoda Senior Advisor and Refiner review",
   "type": "object",
   "additionalProperties": false,
   "required": ["verdict", "preserves_intent"],

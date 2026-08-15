@@ -286,7 +286,7 @@ func (receipt EvolutionDecisionReceipt) Validate() error {
 		!idPattern.MatchString(receipt.ReceiptID) || !idPattern.MatchString(receipt.ProposalID) ||
 		!validEvolutionSHA(receipt.ProposalSHA256) || receipt.Decision == "" ||
 		(receipt.Decision != "approved" && receipt.Decision != "rejected") ||
-		receipt.ClaimedApproverID != "walter" || receipt.AuthorityState != callerAssertedDecisionAuthority ||
+		receipt.ClaimedApproverID != "yoda" || receipt.AuthorityState != callerAssertedDecisionAuthority ||
 		receipt.MayAuthorize || receipt.RecordedAt.IsZero() || !validEvolutionSHA(receipt.ReceiptSHA256) {
 		return errors.New("Darwin evolution decision receipt is invalid or claims unavailable authority")
 	}

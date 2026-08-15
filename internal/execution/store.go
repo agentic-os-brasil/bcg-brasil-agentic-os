@@ -88,20 +88,20 @@ type Criterion struct {
 }
 
 type Contract struct {
-	SchemaVersion        int         `json:"schema_version"`
-	ContractVersion      int         `json:"contract_version"`
-	ItemID               string      `json:"item_id"`
-	WorkspaceID          string      `json:"workspace_id"`
-	AuthorityKind        string      `json:"authority_kind"`
-	Objective            string      `json:"objective"`
-	InitialNextStep      string      `json:"initial_next_step"`
-	Criteria             []Criterion `json:"criteria"`
-	AllowedRefs          []string    `json:"allowed_refs"`
-	RequireWalterReview  bool        `json:"require_walter_review"`
-	WalterPublicKey      string      `json:"walter_public_key,omitempty"`
-	WalterKeyID          string      `json:"walter_key_id,omitempty"`
-	WalterInstallationID string      `json:"walter_installation_id,omitempty"`
-	CreatedAt            time.Time   `json:"created_at"`
+	SchemaVersion      int         `json:"schema_version"`
+	ContractVersion    int         `json:"contract_version"`
+	ItemID             string      `json:"item_id"`
+	WorkspaceID        string      `json:"workspace_id"`
+	AuthorityKind      string      `json:"authority_kind"`
+	Objective          string      `json:"objective"`
+	InitialNextStep    string      `json:"initial_next_step"`
+	Criteria           []Criterion `json:"criteria"`
+	AllowedRefs        []string    `json:"allowed_refs"`
+	RequireYodaReview  bool        `json:"require_yoda_review"`
+	YodaPublicKey      string      `json:"yoda_public_key,omitempty"`
+	YodaKeyID          string      `json:"yoda_key_id,omitempty"`
+	YodaInstallationID string      `json:"yoda_installation_id,omitempty"`
+	CreatedAt          time.Time   `json:"created_at"`
 }
 
 type State struct {
@@ -157,26 +157,26 @@ type Transition struct {
 // Projections such as state.json may be regenerated from the newest valid
 // revision after an interrupted write.
 type Revision struct {
-	SchemaVersion int                  `json:"schema_version"`
-	State         State                `json:"state"`
-	Attempt       *Attempt             `json:"attempt,omitempty"`
-	Checkpoint    *Checkpoint          `json:"checkpoint,omitempty"`
-	Evidence      *EvidenceReceipt     `json:"evidence,omitempty"`
-	ToolCall      *ToolCallReceipt     `json:"tool_call,omitempty"`
-	WalterReview  *WalterReviewReceipt `json:"walter_review,omitempty"`
-	Transition    Transition           `json:"transition"`
+	SchemaVersion int                `json:"schema_version"`
+	State         State              `json:"state"`
+	Attempt       *Attempt           `json:"attempt,omitempty"`
+	Checkpoint    *Checkpoint        `json:"checkpoint,omitempty"`
+	Evidence      *EvidenceReceipt   `json:"evidence,omitempty"`
+	ToolCall      *ToolCallReceipt   `json:"tool_call,omitempty"`
+	YodaReview    *YodaReviewReceipt `json:"yoda_review,omitempty"`
+	Transition    Transition         `json:"transition"`
 }
 
 type CreateInput struct {
-	WorkspaceID          string
-	Objective            string
-	InitialNextStep      string
-	Criteria             []Criterion
-	AllowedRefs          []string
-	RequireWalterReview  bool
-	WalterPublicKey      string
-	WalterKeyID          string
-	WalterInstallationID string
+	WorkspaceID        string
+	Objective          string
+	InitialNextStep    string
+	Criteria           []Criterion
+	AllowedRefs        []string
+	RequireYodaReview  bool
+	YodaPublicKey      string
+	YodaKeyID          string
+	YodaInstallationID string
 }
 
 type CheckpointInput struct {
@@ -211,14 +211,14 @@ type Summary struct {
 }
 
 type Export struct {
-	Contract      Contract              `json:"contract"`
-	State         State                 `json:"state"`
-	Attempt       *Attempt              `json:"attempt,omitempty"`
-	Checkpoint    *Checkpoint           `json:"checkpoint,omitempty"`
-	Evidences     []EvidenceReceipt     `json:"evidences,omitempty"`
-	ToolCalls     []ToolCallReceipt     `json:"tool_calls,omitempty"`
-	WalterReviews []WalterReviewReceipt `json:"walter_reviews,omitempty"`
-	Transitions   []Transition          `json:"transitions"`
+	Contract    Contract            `json:"contract"`
+	State       State               `json:"state"`
+	Attempt     *Attempt            `json:"attempt,omitempty"`
+	Checkpoint  *Checkpoint         `json:"checkpoint,omitempty"`
+	Evidences   []EvidenceReceipt   `json:"evidences,omitempty"`
+	ToolCalls   []ToolCallReceipt   `json:"tool_calls,omitempty"`
+	YodaReviews []YodaReviewReceipt `json:"yoda_reviews,omitempty"`
+	Transitions []Transition        `json:"transitions"`
 }
 
 // NextProjection is the only execution body designed for bounded model
@@ -289,20 +289,20 @@ func (store Store) Create(input CreateInput) (Item, error) {
 	}
 	now := store.now()
 	contract := Contract{
-		SchemaVersion:        1,
-		ContractVersion:      1,
-		ItemID:               itemID,
-		WorkspaceID:          input.WorkspaceID,
-		AuthorityKind:        AuthorityLocalExecution,
-		Objective:            strings.TrimSpace(input.Objective),
-		InitialNextStep:      strings.TrimSpace(input.InitialNextStep),
-		Criteria:             append([]Criterion(nil), input.Criteria...),
-		AllowedRefs:          append([]string(nil), input.AllowedRefs...),
-		RequireWalterReview:  input.RequireWalterReview,
-		WalterPublicKey:      strings.TrimSpace(input.WalterPublicKey),
-		WalterKeyID:          strings.TrimSpace(input.WalterKeyID),
-		WalterInstallationID: strings.TrimSpace(input.WalterInstallationID),
-		CreatedAt:            now,
+		SchemaVersion:      1,
+		ContractVersion:    1,
+		ItemID:             itemID,
+		WorkspaceID:        input.WorkspaceID,
+		AuthorityKind:      AuthorityLocalExecution,
+		Objective:          strings.TrimSpace(input.Objective),
+		InitialNextStep:    strings.TrimSpace(input.InitialNextStep),
+		Criteria:           append([]Criterion(nil), input.Criteria...),
+		AllowedRefs:        append([]string(nil), input.AllowedRefs...),
+		RequireYodaReview:  input.RequireYodaReview,
+		YodaPublicKey:      strings.TrimSpace(input.YodaPublicKey),
+		YodaKeyID:          strings.TrimSpace(input.YodaKeyID),
+		YodaInstallationID: strings.TrimSpace(input.YodaInstallationID),
+		CreatedAt:          now,
 	}
 	digest, err := contractDigest(contract)
 	if err != nil {
@@ -849,14 +849,14 @@ func (store Store) Export(workspaceID, itemID string) (Export, error) {
 	if err != nil {
 		return Export{}, err
 	}
-	walterReviews, err := store.walterReviews(workspaceID, itemID)
+	yodaReviews, err := store.yodaReviews(workspaceID, itemID)
 	if err != nil {
 		return Export{}, err
 	}
 	return Export{
 		Contract: item.Contract, State: item.State, Attempt: item.Attempt,
 		Checkpoint: item.Checkpoint, Evidences: evidences, ToolCalls: toolCalls,
-		WalterReviews: walterReviews, Transitions: transitions,
+		YodaReviews: yodaReviews, Transitions: transitions,
 	}, nil
 }
 
@@ -1072,7 +1072,7 @@ func validateCreateInput(input CreateInput) error {
 	if err := validateID("workspace", input.WorkspaceID); err != nil {
 		return err
 	}
-	if err := validateWalterContractSettings(input.RequireWalterReview, input.WalterPublicKey, input.WalterKeyID, input.WalterInstallationID); err != nil {
+	if err := validateYodaContractSettings(input.RequireYodaReview, input.YodaPublicKey, input.YodaKeyID, input.YodaInstallationID); err != nil {
 		return err
 	}
 	objective := strings.TrimSpace(input.Objective)
@@ -1166,11 +1166,11 @@ func validateContract(contract Contract) error {
 	return validateCreateInput(CreateInput{
 		WorkspaceID: contract.WorkspaceID, Objective: contract.Objective,
 		InitialNextStep: contract.InitialNextStep, Criteria: contract.Criteria,
-		AllowedRefs:          contract.AllowedRefs,
-		RequireWalterReview:  contract.RequireWalterReview,
-		WalterPublicKey:      contract.WalterPublicKey,
-		WalterKeyID:          contract.WalterKeyID,
-		WalterInstallationID: contract.WalterInstallationID,
+		AllowedRefs:        contract.AllowedRefs,
+		RequireYodaReview:  contract.RequireYodaReview,
+		YodaPublicKey:      contract.YodaPublicKey,
+		YodaKeyID:          contract.YodaKeyID,
+		YodaInstallationID: contract.YodaInstallationID,
 	})
 }
 
@@ -1302,7 +1302,7 @@ func validateRevision(revision Revision) error {
 		if revision.Evidence != nil {
 			return errors.New("execution revision cannot contain both evidence and a tool call")
 		}
-		if revision.WalterReview != nil {
+		if revision.YodaReview != nil {
 			return errors.New("execution revision cannot contain multiple mutation receipts")
 		}
 		if err := validateToolCallReceipt(*revision.ToolCall); err != nil {
@@ -1317,21 +1317,21 @@ func validateRevision(revision Revision) error {
 			return errors.New("execution tool call revision requires a running item")
 		}
 	}
-	if revision.WalterReview != nil {
+	if revision.YodaReview != nil {
 		if revision.Evidence != nil {
 			return errors.New("execution revision cannot contain multiple mutation receipts")
 		}
-		if err := validateWalterReviewReceipt(*revision.WalterReview); err != nil {
+		if err := validateYodaReviewReceipt(*revision.YodaReview); err != nil {
 			return err
 		}
-		if revision.WalterReview.ItemID != revision.State.ItemID ||
-			revision.WalterReview.WorkspaceID != revision.State.WorkspaceID ||
-			revision.WalterReview.AttemptID != revision.Transition.AttemptID ||
-			revision.WalterReview.RecordedRevision != revision.State.StateRevision {
-			return errors.New("execution Walter review does not match state")
+		if revision.YodaReview.ItemID != revision.State.ItemID ||
+			revision.YodaReview.WorkspaceID != revision.State.WorkspaceID ||
+			revision.YodaReview.AttemptID != revision.Transition.AttemptID ||
+			revision.YodaReview.RecordedRevision != revision.State.StateRevision {
+			return errors.New("execution Yoda review does not match state")
 		}
 		if revision.State.State != StateRunning {
-			return errors.New("Walter review revision requires a running item")
+			return errors.New("Yoda review revision requires a running item")
 		}
 	}
 	if revision.Attempt == nil {
@@ -1617,7 +1617,7 @@ func ValidateSchemaFile(path string) error {
 		`["go","version"]`, `["go","test","./..."]`, `["go","vet","./..."]`,
 		`"tool_sha256"`, `"artifact_snapshot"`, `"command_check"`,
 		`"tool_call"`, `"started"`, `"succeeded"`, `"unavailable"`,
-		`"walter_review"`, `"require_walter_review"`, `"approved"`, `"rejected"`,
+		`"yoda_review"`, `"require_yoda_review"`, `"approved"`, `"rejected"`,
 	} {
 		if !bytes.Contains(body, []byte(required)) {
 			return fmt.Errorf("execution state schema is missing exact contract %s", required)

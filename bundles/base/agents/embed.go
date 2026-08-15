@@ -19,7 +19,7 @@ var paExpertRegistryJSON []byte
 //go:embed templates/*/AGENT.md
 var templates embed.FS
 
-//go:embed case-agent/AGENT.md client-account-agent/AGENT.md darwin/AGENT.md pa-expert/AGENT.md walter/AGENT.md
+//go:embed case-agent/AGENT.md client-account-agent/AGENT.md darwin/AGENT.md pa-expert/AGENT.md yoda/AGENT.md
 var definitions embed.FS
 
 func Catalog() (agentcatalog.Catalog, error) {
@@ -73,7 +73,7 @@ func Template(role string) ([]byte, error) {
 // intentionally absent because the main session owns the hub role.
 func Definition(id string) ([]byte, error) {
 	switch id {
-	case "case-agent", "client-account-agent", "darwin", "pa-expert", "walter":
+	case "case-agent", "client-account-agent", "darwin", "pa-expert", "yoda":
 	default:
 		return nil, fmt.Errorf("no managed native definition for %q", id)
 	}

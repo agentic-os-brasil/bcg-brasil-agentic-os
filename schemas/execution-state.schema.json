@@ -10,7 +10,7 @@
     {"$ref": "#/$defs/checkpoint"},
     {"$ref": "#/$defs/evidence"},
     {"$ref": "#/$defs/tool_call"},
-    {"$ref": "#/$defs/walter_review"},
+    {"$ref": "#/$defs/yoda_review"},
     {"$ref": "#/$defs/transition"}
   ],
   "$defs": {
@@ -68,7 +68,7 @@
         "initial_next_step",
         "criteria",
         "allowed_refs",
-        "require_walter_review",
+        "require_yoda_review",
         "created_at"
       ],
       "properties": {
@@ -91,15 +91,15 @@
             "pattern": "^bcgos://[A-Za-z0-9/_.-]+$"
           }
         },
-        "require_walter_review": {"type": "boolean"},
-        "walter_public_key": {
+        "require_yoda_review": {"type": "boolean"},
+        "yoda_public_key": {
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]{43}$"
         },
-        "walter_key_id": {
+        "yoda_key_id": {
           "$ref": "#/$defs/id"
         },
-        "walter_installation_id": {
+        "yoda_installation_id": {
           "$ref": "#/$defs/id"
         },
         "created_at": {"type": "string", "format": "date-time"}
@@ -107,15 +107,15 @@
       "allOf": [
         {
           "if": {
-            "properties": {"require_walter_review": {"const": true}},
-            "required": ["require_walter_review"]
+            "properties": {"require_yoda_review": {"const": true}},
+            "required": ["require_yoda_review"]
           },
-          "then": {"required": ["walter_public_key", "walter_key_id", "walter_installation_id"]},
+          "then": {"required": ["yoda_public_key", "yoda_key_id", "yoda_installation_id"]},
           "else": {
             "allOf": [
-              {"not": {"required": ["walter_public_key"]}},
-              {"not": {"required": ["walter_key_id"]}},
-              {"not": {"required": ["walter_installation_id"]}}
+              {"not": {"required": ["yoda_public_key"]}},
+              {"not": {"required": ["yoda_key_id"]}},
+              {"not": {"required": ["yoda_installation_id"]}}
             ]
           }
         }
@@ -313,7 +313,7 @@
         }
       ]
     },
-    "walter_review": {
+    "yoda_review": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -334,7 +334,7 @@
         "contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "signer_key_id": {"$ref": "#/$defs/id"},
         "installation_id": {"$ref": "#/$defs/id"},
-        "custody_scope": {"const": "maestro/walter-review"},
+        "custody_scope": {"const": "maestro/yoda-review"},
         "decision": {"enum": ["approved", "rejected"]},
         "signer_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "envelope_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
@@ -347,8 +347,8 @@
       "required": ["schema_version", "state", "transition"],
       "allOf": [
         {"not": {"required": ["evidence", "tool_call"]}},
-        {"not": {"required": ["evidence", "walter_review"]}},
-        {"not": {"required": ["tool_call", "walter_review"]}}
+        {"not": {"required": ["evidence", "yoda_review"]}},
+        {"not": {"required": ["tool_call", "yoda_review"]}}
       ],
       "properties": {
         "schema_version": {"const": 1},
@@ -357,7 +357,7 @@
         "checkpoint": {"$ref": "#/$defs/checkpoint"},
         "evidence": {"$ref": "#/$defs/evidence"},
         "tool_call": {"$ref": "#/$defs/tool_call"},
-        "walter_review": {"$ref": "#/$defs/walter_review"},
+        "yoda_review": {"$ref": "#/$defs/yoda_review"},
         "transition": {"$ref": "#/$defs/transition"}
       }
     }

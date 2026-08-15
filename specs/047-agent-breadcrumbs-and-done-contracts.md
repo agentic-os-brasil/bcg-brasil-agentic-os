@@ -52,13 +52,13 @@ policies are:
 
 - `authenticated_return` for producing agents, with a bounded minimum and
   optional exact list of required evidence pointers;
-- `typed_walter_verdict` for Walter, which can only close through the typed
+- `typed_yoda_verdict` for Yoda, which can only close through the typed
   review envelope.
 
 The target validates the contract before sealing a return. Maestro validates it
 again before accepting the envelope, and the public receipt pins the contract
 digest. Missing required evidence, an insufficient evidence count, a policy
-mismatch or a generic Walter return cannot become `completed`.
+mismatch or a generic Yoda return cannot become `completed`.
 
 The contract is structural and scope-bound. It does not store the result body;
 the body remains ephemeral and its digest is the only durable result binding.
@@ -67,7 +67,7 @@ contract.
 
 ## Agent obligations
 
-Maestro, Client Account Agent, Case Agent, PA Expert, Walter, Darwin and Gamma
+Maestro, Client Account Agent, Case Agent, PA Expert, Yoda, Darwin and Gamma
 Guardian all operate under the same rule: emit lifecycle/tool events through
 the governed adapter, use only the bounded packet, and return only the typed
 done contract plus metadata/evidence pointers. No agent may use transcript

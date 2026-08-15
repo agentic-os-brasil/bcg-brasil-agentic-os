@@ -58,7 +58,7 @@ uses only that persisted qualification and never obtains new authority inline.
 The scheduler only plans occurrences and the adapter only wakes the process.
 The local Darwin worker contract has a
 bounded deterministic success boundary; weekly deep review emits
-proposal-only evidence. Walter and monthly structural work remain unavailable
+proposal-only evidence. Yoda and monthly structural work remain unavailable
 until their owning runtime integrations are qualified. The owning subsystem
 must establish its durable success boundary before a successful receipt can be
 recorded.

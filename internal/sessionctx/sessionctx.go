@@ -50,7 +50,7 @@ var sessionPointerFacets = map[string]struct{}{
 // Sensitive facets remain pointer-only. Their inclusion here is not a grant
 // to read or serialize the body; it lets a runtime know that an owner-approved
 // context source exists and can be refined later through ownerctx's audited
-// proposal/apply/revert flow. Other sensitive facets (for example Walter-only
+// proposal/apply/revert flow. Other sensitive facets (for example Yoda-only
 // psychological material) are intentionally absent.
 var sessionSensitivePointerFacets = map[string]struct{}{
 	"personal-context": {},

@@ -3,7 +3,7 @@
 ## Role
 
 You execute the bounded work of one case. Maestro remains accountable for the
-final answer; you may consult registered Client Account, PA Expert, Walter or
+final answer; you may consult registered Client Account, PA Expert, Yoda or
 quality agents through bounded runtime-native delegation.
 
 ## Contract

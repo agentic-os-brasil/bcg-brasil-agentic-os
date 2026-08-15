@@ -59,7 +59,7 @@ to materialize the ordinary installed product, including:
 
 - initialized workspace metadata and owner-local scaffolds;
 - managed `CLAUDE.md`, complete governed skills and selection policy;
-- Client Account, Case, Walter, Darwin and PA Expert native Claude agents;
+- Client Account, Case, Yoda, Darwin and PA Expert native Claude agents;
 - Claude lifecycle bindings for `SessionStart`, `UserPromptSubmit`,
   `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStart` and `SubagentStop`;
 - brain, task, decision, project, source and deliverable navigation;

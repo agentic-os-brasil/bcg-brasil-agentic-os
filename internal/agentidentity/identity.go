@@ -107,7 +107,7 @@ type ManagedTarget struct {
 
 var managedTargets = []ManagedTarget{
 	{AgentID: "maestro", Role: "maestro"},
-	{AgentID: "walter", Role: "walter"},
+	{AgentID: "yoda", Role: "yoda"},
 	{AgentID: "darwin", Role: "darwin"},
 	{AgentID: "gamma-guardian", Role: "quality_guardian"},
 }
@@ -140,7 +140,7 @@ func CanonicalRole(role string) string {
 
 func IsCanonicalRole(role string) bool {
 	switch role {
-	case "maestro", "client_account_agent", "case_agent", "walter", "darwin", "pa_expert", "errand_helper", "quality_guardian":
+	case "maestro", "client_account_agent", "case_agent", "yoda", "darwin", "pa_expert", "errand_helper", "quality_guardian":
 		return true
 	default:
 		return false
@@ -156,7 +156,7 @@ func InitialInterview() Interview {
 		AvatarExplanation:    "Cada agent sempre aparece com um emoji-avatar. Você pode aceitar a sugestão ou escolher outro emoji válido; o emoji não concede nenhuma capacidade.",
 		Steps: []InterviewStep{
 			{Field: "owner_id", Question: "Quem será o owner desta configuração de identidade?", Explanation: "Use um identificador estável do proprietário, não um nome sensível ou credencial."},
-			{Field: "agent_names", Question: "Que nomes você quer usar para Maestro, Client Account, Case, Walter, Darwin e PA experts?", Explanation: "Você pode escolher individualmente ou aceitar as sugestões abaixo; conta e case serão vinculados ao agent_id concreto."},
+			{Field: "agent_names", Question: "Que nomes você quer usar para Maestro, Client Account, Case, Yoda, Darwin e PA experts?", Explanation: "Você pode escolher individualmente ou aceitar as sugestões abaixo; conta e case serão vinculados ao agent_id concreto."},
 			{Field: "agent_emojis", Question: "Que emoji-avatar deve acompanhar cada agent?", Explanation: "O emoji é visual e personalizável; a definição técnica continua versionada no catálogo."},
 			{Field: "ownership_scope", Question: "Esta personalização é global, de uma conta, de um case ou do PA Expert registry?", Explanation: "O scope limita onde o nome e o avatar podem ser usados."},
 			{Field: "capability_tracks", Question: "A partir da sua função, qual trilha deve orientar o roteamento? O Tech Core já vem incluído com engineering, data, AI e qualidade; se a função não for claramente técnica, pergunto antes de sugerir.", Explanation: "A recomendação é derivada somente da função declarada e nunca altera a instalação. A seleção de uma trilha técnica personaliza roteamento e divulgação, enquanto o Tech Core completo já está disponível desde a primeira projeção."},
@@ -166,7 +166,7 @@ func InitialInterview() Interview {
 			{Role: "maestro", Purpose: "Hub user-facing que coordena o trabalho", DefaultName: "Maestro", DefaultEmoji: "🎼", Suggestions: []string{"Maestro", "Conductor", "Orquestrador"}, EmojiSuggestions: []string{"🎼", "🎵", "🎻"}, OwnershipScope: "system", CustomizationNote: "Nome e avatar podem ser personalizados pelo owner; autoridade permanece no hub."},
 			{Role: "client_account_agent", Purpose: "Owner partner-like do relacionamento e contexto curado da conta", DefaultName: "Account Partner", DefaultEmoji: "🤝", Suggestions: []string{"Account Partner", "Compass", "Navigator"}, EmojiSuggestions: []string{"🤝", "🧭", "🌐"}, OwnershipScope: "account", CustomizationNote: "Personalização vale apenas para a conta registrada."},
 			{Role: "case_agent", Purpose: "Executa análise, código e entregas de um case", DefaultName: "Case Lead", DefaultEmoji: "⚙️", Suggestions: []string{"Case Lead", "Forge", "Mission Control"}, EmojiSuggestions: []string{"⚙️", "🛠️", "🚀"}, OwnershipScope: "case", CustomizationNote: "Personalização vale apenas para o case registrado."},
-			{Role: "walter", Purpose: "Senior advisor e alter ego calmo do owner: refina trabalho de alto leverage contra a intenção intrínseca", DefaultName: "Walter", DefaultEmoji: "🦉", Suggestions: []string{"Walter", "Virgil", "Iroh", "Jarvis", "Athena"}, EmojiSuggestions: []string{"🦉", "🔍", "🧭"}, NarrativeSuggestions: walterNarrativeSuggestions(), OwnershipScope: "governance", CustomizationNote: "Walter refina; não é um naysayer. Nome e avatar podem mudar agora ou depois, sem alterar sua autoridade."},
+			{Role: "yoda", Purpose: "Senior advisor e alter ego calmo do owner: refina trabalho de alto leverage contra a intenção intrínseca", DefaultName: "Yoda", DefaultEmoji: "🦉", Suggestions: []string{"Yoda", "Virgil", "Iroh", "Jarvis", "Athena"}, EmojiSuggestions: []string{"🦉", "🔍", "🧭"}, NarrativeSuggestions: yodaNarrativeSuggestions(), OwnershipScope: "governance", CustomizationNote: "Yoda refina; não é um naysayer. Nome e avatar podem mudar agora ou depois, sem alterar sua autoridade."},
 			{Role: "darwin", Purpose: "Meta-harness evolutivo para saúde, housekeeping e caminhos deliberados de survive and thrive", DefaultName: "Darwin", DefaultEmoji: "🧬", Suggestions: []string{"Darwin", "TARS", "Ariadne", "EVE", "Data"}, EmojiSuggestions: []string{"🧬", "🌱", "🪴"}, NarrativeSuggestions: darwinNarrativeSuggestions(), OwnershipScope: "governance", CustomizationNote: "Darwin orienta evolução e manutenção reversível escopada; nome e avatar podem mudar agora ou depois, sem alterar grants, escopo ou autoridade."},
 			{Role: "quality_guardian", Purpose: "Avalia longitudinalmente a qualidade de código e arquitetura", DefaultName: "Gamma Guardian", DefaultEmoji: "🧪", Suggestions: []string{"Gamma Guardian", "Verifier", "Quality Lens"}, EmojiSuggestions: []string{"🧪", "🔬", "✅"}, OwnershipScope: "quality_longitudinal", CustomizationNote: "Gamma é um spoke direto do Maestro, somente leitura e sem contexto de case; o nome e o emoji não alteram o rubric, grants ou autoridade."},
 			{Role: "pa_expert", Purpose: "Advisory FPA/IPA versionado pelo PA Expert registry", DefaultName: "PA Expert", DefaultEmoji: "🧠", Suggestions: []string{"PA Expert", "Advisor", "Lens"}, EmojiSuggestions: []string{"🧠", "💡", "🔬"}, OwnershipScope: "pa_expert_registry", CustomizationNote: "O owner pode personalizar a apresentação; a versão e o canon continuam centralizados no PA Expert registry."},
@@ -189,19 +189,19 @@ func InitialInterview() Interview {
 				"maestro":              "system",
 				"client_account_agent": "account",
 				"case_agent":           "case",
-				"walter":               "governance",
+				"yoda":                 "governance",
 				"darwin":               "governance",
 				"quality_guardian":     "quality_longitudinal",
 				"pa_expert":            "pa_expert_registry",
 			},
-			Guidance: "Use selections[]; agent_names, agent_emojis, scope and ownership_scope are interview labels, not top-level profile fields. Keep only the current guided main-agent answer (Maestro, then Walter, then Darwin) in each draft. For these managed agents, agent_id may be omitted or set to the canonical ID shown by bcgos agent identity: maestro, walter or darwin.",
+			Guidance: "Use selections[]; agent_names, agent_emojis, scope and ownership_scope are interview labels, not top-level profile fields. Keep only the current guided main-agent answer (Maestro, then Yoda, then Darwin) in each draft. For these managed agents, agent_id may be omitted or set to the canonical ID shown by bcgos agent identity: maestro, yoda or darwin.",
 		},
 	}
 }
 
-func walterNarrativeSuggestions() []NarrativeSuggestion {
+func yodaNarrativeSuggestions() []NarrativeSuggestion {
 	return []NarrativeSuggestion{
-		{Name: "Walter", Reference: "identidade original", Story: "O alter ego sóbrio que preserva continuidade e testa se a intenção intrínseca foi atendida.", BestFor: []string{"alter ego", "continuidade", "sobriedade"}},
+		{Name: "Yoda", Reference: "identidade original", Story: "O alter ego sóbrio que preserva continuidade e testa se a intenção intrínseca foi atendida.", BestFor: []string{"alter ego", "continuidade", "sobriedade"}},
 		{Name: "Virgil", Reference: "A Divina Comédia", Story: "O guia que atravessa complexidade sem tomar a jornada pelo outro.", BestFor: []string{"clareza", "perspectiva", "decisões complexas"}},
 		{Name: "Iroh", Reference: "Avatar: A Lenda de Aang", Story: "Mentoria serena, humana e paciente, com espaço para reflexão.", BestFor: []string{"calma", "humanidade", "reflexão"}},
 		{Name: "Morpheus", Reference: "Matrix", Story: "O advisor que questiona o aparente e convida a enxergar premissas ocultas.", BestFor: []string{"questionar premissas", "mudança", "franqueza"}},
@@ -240,8 +240,8 @@ func RecommendNarrativeSuggestions(role string, explicitPreferences []string, li
 	}
 	var candidates []NarrativeSuggestion
 	switch CanonicalRole(role) {
-	case "walter":
-		candidates = walterNarrativeSuggestions()
+	case "yoda":
+		candidates = yodaNarrativeSuggestions()
 	case "darwin":
 		candidates = darwinNarrativeSuggestions()
 	default:
@@ -393,7 +393,7 @@ func validOwnershipScope(role, scope string) bool {
 		return scope == "account"
 	case "case_agent":
 		return scope == "case"
-	case "walter", "darwin":
+	case "yoda", "darwin":
 		return scope == "governance"
 	case "pa_expert":
 		return scope == "pa_expert_registry"

@@ -41,7 +41,7 @@ Validar se o Maestro instalado funciona como produto profissional:
 - organiza contexto, tarefas e continuidade;
 - encontra e executa skills;
 - decide a profundidade adequada para cada tarefa;
-- utiliza Client Account Agent, Case Agent e Walter quando aplicável;
+- utiliza Client Account Agent, Case Agent e Yoda quando aplicável;
 - observa sua saúde com Darwin;
 - mantém hooks, receipts e estado entre sessões;
 - permanece amigável e pouco intrusivo para usuários leigos.
@@ -105,7 +105,7 @@ oferecidas nas trilhas curta e completa.
 
 Execute, se disponíveis, `/interaction-profile` e `/agent-identity-setup`.
 Configure nomes, emojis, papéis e ownership de Maestro, Client Account Agent,
-Case Agent, Walter e Darwin. PA Experts permanecem especialistas funcionais e
+Case Agent, Yoda e Darwin. PA Experts permanecem especialistas funcionais e
 industriais consultivos, podendo continuar como stubs.
 
 **Aprovação:** personalização compreensível e persistida sem alterar os
@@ -163,10 +163,10 @@ Cenário:
 Classifique materialidade e explique a rota. Quando disponível, use:
 
 `User → Maestro → Client Account → Maestro → Case → Maestro → Client Account
-validation → Maestro → Walter → Maestro → User`
+validation → Maestro → Yoda → Maestro → User`
 
 A validação de Client Account só ocorre se esse agente foi chamado na ida.
-Walter atua como senior advisor, proxy contextual do owner e refiner, avaliando
+Yoda atua como senior advisor, proxy contextual do owner e refiner, avaliando
 se a intenção intrínseca foi atendida. Se a orquestração nativa estiver
 indisponível, não a simule: mostre o plano e registre `UNAVAILABLE`.
 

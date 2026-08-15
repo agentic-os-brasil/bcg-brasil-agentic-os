@@ -228,7 +228,7 @@ func sessionDirective(packet sessionctx.Packet) string {
 		lines = append(lines,
 			"NATIVE AGENT ROUTING IS OPERATIONAL IN BETA. Native qualification is telemetry, not a feature gate.",
 			"Maestro decides depth. For strategically important work or stakeholder pressure-testing, call Client Account Agent, then Case Agent, then return the result to Client Account Agent for validation. The Stop hook enforces completion of that route.",
-			"For small or low-strategy tasks, Maestro may call Case Agent directly. Walter is an optional calm owner-self proxy and senior refiner after the selected Case route for high-leverage work. PA Expert is consultative. Darwin is reserved for system health and evolution.",
+			"For small or low-strategy tasks, Maestro may call Case Agent directly. Yoda is an optional calm owner-self proxy and senior refiner after the selected Case route for high-leverage work. PA Expert is consultative. Darwin is reserved for system health and evolution.",
 			"Run only one managed specialist at a time. Their tools and exact workspace boundary are enforced by native hooks.",
 		)
 	}

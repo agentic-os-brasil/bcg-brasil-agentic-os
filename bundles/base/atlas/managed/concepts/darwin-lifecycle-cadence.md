@@ -16,7 +16,7 @@ status: stable
 x-maestro-profile-version: "1"
 x-maestro-stable-id: managed/darwin-lifecycle-cadence
 x-maestro-scope: managed
-x-maestro-source-fingerprint: eaaee7072b9aa1d0faf0279c3b9ae26e9200e7cd0bb6d2193e55b9995e8ccd5f
+x-maestro-source-fingerprint: 469d86c2e5ded2775bff1d6da8aebd7e3cb080ef9a1142e729650deff375b13a
 x-maestro-freshness: fresh
 x-maestro-status: active
 x-maestro-generator-version: maestro-managed-wiki/0.2
@@ -73,9 +73,9 @@ occurrences. Continuous lifecycle events map only to catalog jobs with the
 silent default.
 
 The base catalog separates `darwin-housekeeping-daily`, `darwin-deep-weekly`,
-`walter-self-review-weekly` and `darwin-structural-evolution-proposal`.
+`yoda-self-review-weekly` and `darwin-structural-evolution-proposal`.
 Darwin housekeeping and the operational portion of deep review may execute the
-same allowlisted reversible repair after validation. The Walter scheduler seam
+same allowlisted reversible repair after validation. The Yoda scheduler seam
 and runtime-neutral review core exist, but its handler remains unavailable
 until an approved model adapter, authority and scheduled-input integration are
 installed.

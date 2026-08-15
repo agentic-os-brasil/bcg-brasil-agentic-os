@@ -125,15 +125,15 @@
       "customizable": true
     },
     {
-      "id": "walter",
+      "id": "yoda",
       "role": "reviewer",
       "direct_user_access": false,
       "tool_access": "none",
       "may_delegate": false,
       "input_contract": "sealed_review_packet",
-      "relative_path": "agents/walter/AGENT.md",
-      "display_name": "Walter",
-      "default_emoji": "🦉",
+      "relative_path": "agents/yoda/AGENT.md",
+      "display_name": "Yoda",
+      "default_emoji": "🧙",
       "ownership_scope": "governance",
       "customizable": true
     }

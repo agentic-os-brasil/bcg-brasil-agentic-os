@@ -14,9 +14,9 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/scheduler"
 )
 
-type canonicalWalterHandlerFunc func(context.Context, Command, ExecutionGrant) (Receipt, error)
+type canonicalYodaHandlerFunc func(context.Context, Command, ExecutionGrant) (Receipt, error)
 
-func (handler canonicalWalterHandlerFunc) ProposeWeekly(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
+func (handler canonicalYodaHandlerFunc) ProposeWeekly(ctx context.Context, command Command, grant ExecutionGrant) (HandlerResult, error) {
 	receipt, err := handler(ctx, command, grant)
 	return HandlerResult{State: receipt.State, ProposalCount: receipt.ProposalCount, ProposalDigest: receipt.ProposalDigest, ProposalArtifactID: receipt.ProposalArtifactID, ReasonCode: receipt.ReasonCode}, err
 }
@@ -347,7 +347,7 @@ func TestWorkerLeavesUnavailableModelJobDue(t *testing.T) {
 	if _, err := (scheduler.Store{Root: root}).EnsureEnrollment("maestro-system", now.Add(-8*24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	worker := Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: root}, Receipts: Store{Root: t.TempDir()}, Jobs: []scheduler.Job{{ID: "walter-self-review-weekly", Cadence: scheduler.Weekly, Weekday: time.Saturday, LocalHour: 9, MaxCatchUp: 1}}, Deadline: time.Minute}
+	worker := Worker{Catalog: catalog, Scheduler: scheduler.Store{Root: root}, Receipts: Store{Root: t.TempDir()}, Jobs: []scheduler.Job{{ID: "yoda-self-review-weekly", Cadence: scheduler.Weekly, Weekday: time.Saturday, LocalHour: 9, MaxCatchUp: 1}}, Deadline: time.Minute}
 	report, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "worker-1", Now: now, Preauthorized: true})
 	if err != nil || len(report.Receipts) != 1 || report.Receipts[0].State != ReceiptUnavailable {
 		t.Fatalf("report=%#v err=%v", report, err)
@@ -358,7 +358,7 @@ func TestWorkerLeavesUnavailableModelJobDue(t *testing.T) {
 	}
 }
 
-func TestWorkerHandlesWalterProposalJobAndPublishesOneTerminalReceipt(t *testing.T) {
+func TestWorkerHandlesYodaProposalJobAndPublishesOneTerminalReceipt(t *testing.T) {
 	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
 	if err != nil {
 		t.Fatal(err)
@@ -371,18 +371,18 @@ func TestWorkerHandlesWalterProposalJobAndPublishesOneTerminalReceipt(t *testing
 	proposalDigest := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	worker := Worker{
 		Catalog: catalog, Scheduler: scheduler.Store{Root: root}, Receipts: Store{Root: receiptRoot},
-		Jobs: []scheduler.Job{{ID: WalterSelfReviewWeeklyJobID, Cadence: scheduler.Weekly, Weekday: time.Saturday, LocalHour: 9, MaxCatchUp: 1}},
-		Handlers: map[string]any{WalterSelfReviewWeeklyJobID: WalterWeeklyAdapter{Handler: canonicalWalterHandlerFunc(func(_ context.Context, command Command, _ ExecutionGrant) (Receipt, error) {
+		Jobs: []scheduler.Job{{ID: YodaSelfReviewWeeklyJobID, Cadence: scheduler.Weekly, Weekday: time.Saturday, LocalHour: 9, MaxCatchUp: 1}},
+		Handlers: map[string]any{YodaSelfReviewWeeklyJobID: YodaWeeklyAdapter{Handler: canonicalYodaHandlerFunc(func(_ context.Context, command Command, _ ExecutionGrant) (Receipt, error) {
 			return Receipt{SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", OccurrenceDigest: command.OccurrenceDigest(), CommandID: command.CommandID, JobID: command.JobID, WorkspaceID: command.WorkspaceID, Trigger: command.Trigger, State: ReceiptProposalEmitted, RecordedAt: command.RequestedAt, Deadline: command.Deadline, ProposalOnly: true, ProposalCount: 1, ProposalDigest: proposalDigest, ProposalArtifactID: proposalDigest, ReasonCode: ReasonProposalEmitted}, nil
 		})}},
-		LocalQualification: map[string]string{WalterSelfReviewWeeklyJobID: QualificationDigest(WalterSelfReviewWeeklyJobID)},
-		ActivatedJobs:      []string{WalterSelfReviewWeeklyJobID}, Deadline: time.Minute,
+		LocalQualification: map[string]string{YodaSelfReviewWeeklyJobID: QualificationDigest(YodaSelfReviewWeeklyJobID)},
+		ActivatedJobs:      []string{YodaSelfReviewWeeklyJobID}, Deadline: time.Minute,
 	}
-	report, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "walter-worker", Now: now, Attended: true})
+	report, err := worker.Run(context.Background(), WakeRequest{WorkspaceID: "maestro-system", OwnerID: "yoda-worker", Now: now, Attended: true})
 	if err != nil || len(report.Receipts) != 1 || report.Receipts[0].State != ReceiptProposalEmitted {
 		t.Fatalf("report=%#v err=%v", report, err)
 	}
-	stored, err := (Store{Root: receiptRoot}).Receipts("maestro-system", WalterSelfReviewWeeklyJobID)
+	stored, err := (Store{Root: receiptRoot}).Receipts("maestro-system", YodaSelfReviewWeeklyJobID)
 	if err != nil || len(stored) != 1 || stored[0].State != ReceiptProposalEmitted {
 		t.Fatalf("stored=%#v err=%v", stored, err)
 	}

@@ -74,7 +74,7 @@ func GuidedIdentityInterview(root string) GuidedInterview {
 	}
 	questions := []GuidedQuestion{
 		{Kind: "managed_agent_identity", Role: "maestro", QuestionID: "identity-maestro", Version: 1, Question: "Como você quer chamar o agente que fala com você e rege o trabalho profissional — e qual emoji deve representá-lo?", AudioPrompt: "Qual nome e emoji você quer para o agente principal?"},
-		{Kind: "managed_agent_identity", Role: "walter", QuestionID: "identity-walter", Version: 1, Question: "Como você quer chamar o revisor interno que faz o pressure-test antes de algo importante chegar a você — e qual emoji combina com esse papel?", AudioPrompt: "Qual nome e emoji você quer para o revisor interno?"},
+		{Kind: "managed_agent_identity", Role: "yoda", QuestionID: "identity-yoda", Version: 1, Question: "Como você quer chamar o revisor interno que faz o pressure-test antes de algo importante chegar a você — e qual emoji combina com esse papel?", AudioPrompt: "Qual nome e emoji você quer para o revisor interno?"},
 		{Kind: "managed_agent_identity", Role: "darwin", QuestionID: "identity-darwin", Version: 1, Question: "Como você quer chamar o agente que observa saúde, drift e evolução do sistema — e qual emoji deve representá-lo?", AudioPrompt: "Qual nome e emoji você quer para o agente de evolução do sistema?"},
 	}
 	for index := range questions {
@@ -125,7 +125,7 @@ func draftProfileLocked(root string, profile Profile, consent, noClientData bool
 		if _, ok := profileSelection(profile, expected); !ok {
 			return ProfileDraft{}, errors.New("agent identity draft is off-sequence: answer only the current next_question")
 		}
-		for _, role := range []string{"maestro", "walter", "darwin"} {
+		for _, role := range []string{"maestro", "yoda", "darwin"} {
 			before, existed := profileSelection(current, role)
 			after, proposed := profileSelection(profile, role)
 			if role != expected && !existed && proposed {
