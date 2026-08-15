@@ -42,6 +42,6 @@
 | Slide Summary | Map supplied deck text into slide messages and a narrative arc | `skills/slide-summary/SKILL.md` |
 | Start Day | Open the day with a briefing scoped to the hours that remain | `skills/start-day/SKILL.md` |
 | Upward Feedback | Prepare considered feedback to give a senior colleague | `skills/upward-feedback/SKILL.md` |
-| Yoda 🧙 — pressure-test | Roda revisão sênior interna de proposta ou decisão de alta materialidade antes do owner | `skills/yoda/SKILL.md` |
 | Wayfinder | Structure an open problem into a first move | `skills/wayfinder/SKILL.md` |
 | Legacy Case Agent Setup Alias | Migrate the retired workspace-agent setup name | `skills/workspace-agent-setup/SKILL.md` |
+| Yoda — pressure-test | Roda revisão sênior interna de proposta ou decisão de alta materialidade antes do owner | `skills/yoda/SKILL.md` |
