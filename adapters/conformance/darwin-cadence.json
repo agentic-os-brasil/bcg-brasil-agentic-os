@@ -14,7 +14,7 @@
   ],
   "governed_jobs": {
     "daily": "darwin-housekeeping-daily",
-    "weekly": ["darwin-deep-weekly", "walter-self-review-weekly"],
+    "weekly": ["darwin-deep-weekly", "yoda-self-review-weekly"],
     "monthly": "darwin-structural-evolution-proposal"
   },
   "worker_contract": {

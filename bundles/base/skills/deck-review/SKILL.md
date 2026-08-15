@@ -49,5 +49,5 @@ Return `verdict`, `top_issues`, `findings[]` with `slide_refs`, `severity`,
 - Never invent a number, visual property, source or transcript outcome.
 - A text-only review cannot certify layout, rendering, footnotes hidden in
   visuals or accessibility; state those limits explicitly.
-- Walter review remains a separate governance step when the verdict has
+- Yoda review remains a separate governance step when the verdict has
   material decision or delivery consequences.

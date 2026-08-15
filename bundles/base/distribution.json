@@ -30,8 +30,8 @@
       "path": "agents/pa-expert/AGENT.md"
     },
     {
-      "source": "bundles/base/agents/walter/AGENT.md",
-      "path": "agents/walter/AGENT.md"
+      "source": "bundles/base/agents/yoda/AGENT.md",
+      "path": "agents/yoda/AGENT.md"
     },
     {
       "source": "bundles/base/atlas/managed/backlinks.json",
@@ -354,12 +354,12 @@
       "path": "schemas/user-self-snapshot.schema.json"
     },
     {
-      "source": "schemas/walter-review.schema.json",
-      "path": "schemas/walter-review.schema.json"
+      "source": "schemas/yoda-review.schema.json",
+      "path": "schemas/yoda-review.schema.json"
     },
     {
-      "source": "schemas/walter-self-review.schema.json",
-      "path": "schemas/walter-self-review.schema.json"
+      "source": "schemas/yoda-self-review.schema.json",
+      "path": "schemas/yoda-self-review.schema.json"
     },
     {
       "source": "schemas/workspace-import-approval.schema.json",
@@ -698,12 +698,12 @@
       "path": "skills/sharepoint-ingest/agents/openai.yaml"
     },
     {
-      "source": "bundles/base/skills/walter/SKILL.md",
-      "path": "skills/walter/SKILL.md"
+      "source": "bundles/base/skills/yoda/SKILL.md",
+      "path": "skills/yoda/SKILL.md"
     },
     {
-      "source": "bundles/base/skills/walter/agents/openai.yaml",
-      "path": "skills/walter/agents/openai.yaml"
+      "source": "bundles/base/skills/yoda/agents/openai.yaml",
+      "path": "skills/yoda/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/wayfinder/SKILL.md",

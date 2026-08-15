@@ -26,7 +26,7 @@
     "update-check",
     "darwin-housekeeping-daily",
     "darwin-deep-weekly",
-    "walter-self-review-weekly",
+    "yoda-self-review-weekly",
     "darwin-structural-evolution-proposal"
   ]
 }

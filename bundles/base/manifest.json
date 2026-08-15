@@ -67,7 +67,7 @@
     "bundles/base/agents/gamma-guardian/AGENT.md",
     "bundles/base/agents/maestro/AGENT.md",
     "bundles/base/agents/pa-expert/AGENT.md",
-    "bundles/base/agents/walter/AGENT.md"
+    "bundles/base/agents/yoda/AGENT.md"
   ],
   "agent_templates": [
     "bundles/base/agents/templates/account_agent/AGENT.md",

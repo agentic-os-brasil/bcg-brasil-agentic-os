@@ -52,5 +52,5 @@ and `unavailable_checks`.
 - No automatic `D-NNN` or other project identifier assignment.
 - Do not turn an open question, preference or hypothesis into a locked
   decision.
-- Walter review may be required by the owning governance workflow; the skill
-  must not claim that Walter approved the draft.
+- Yoda review may be required by the owning governance workflow; the skill
+  must not claim that Yoda approved the draft.

@@ -211,13 +211,13 @@
       "success_boundary": "a bounded deep review durably records an allowlisted validated operational repair or a metadata-only structural recommendation; it never applies structural change"
     },
     {
-      "id": "walter-self-review-weekly",
+      "id": "yoda-self-review-weekly",
       "category": "self",
       "trigger": "weekly_or_presence",
       "executor": "model_adapter",
       "scope": "owner",
       "availability": "unavailable",
-      "availability_reason": "Walter's preliminary runtime-neutral seam exists, but the approved model adapter, authority, bounded silent-compaction publication boundary, scheduled input integration and native qualification are not installed",
+      "availability_reason": "Yoda's preliminary runtime-neutral seam exists, but the approved model adapter, authority, bounded silent-compaction publication boundary, scheduled input integration and native qualification are not installed",
       "default_enabled": false,
       "unattended": "policy_gated",
       "writes": ["owner_observation"],

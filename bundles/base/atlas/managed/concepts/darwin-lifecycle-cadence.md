@@ -73,9 +73,9 @@ occurrences. Continuous lifecycle events map only to catalog jobs with the
 silent default.
 
 The base catalog separates `darwin-housekeeping-daily`, `darwin-deep-weekly`,
-`walter-self-review-weekly` and `darwin-structural-evolution-proposal`.
+`yoda-self-review-weekly` and `darwin-structural-evolution-proposal`.
 Darwin housekeeping and the operational portion of deep review may execute the
-same allowlisted reversible repair after validation. The Walter scheduler seam
+same allowlisted reversible repair after validation. The Yoda scheduler seam
 and runtime-neutral review core exist, but its handler remains unavailable
 until an approved model adapter, authority and scheduled-input integration are
 installed.

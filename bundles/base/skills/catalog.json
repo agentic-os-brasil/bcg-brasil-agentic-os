@@ -268,13 +268,6 @@
       "relative_path": "skills/upward-feedback/SKILL.md"
     },
     {
-      "id": "walter",
-      "display_name": "Walter — pressure-test",
-      "trigger": "Roda revisão sênior interna de proposta ou decisão de alta materialidade antes do owner",
-      "default_prompt": "Use $walter para submeter uma proposta ou decisão consequente a pressure-test antes de enviar ao owner ou stakeholder externo.",
-      "relative_path": "skills/walter/SKILL.md"
-    },
-    {
       "id": "wayfinder",
       "display_name": "Wayfinder",
       "trigger": "Structure an open problem into a first move",
@@ -287,6 +280,13 @@
       "trigger": "Migrate the retired workspace-agent setup name",
       "default_prompt": "Use $case-agent-setup; this legacy alias only redirects existing callers during migration.",
       "relative_path": "skills/workspace-agent-setup/SKILL.md"
+    },
+    {
+      "id": "yoda",
+      "display_name": "Yoda — pressure-test",
+      "trigger": "Roda revisão sênior interna de proposta ou decisão de alta materialidade antes do owner",
+      "default_prompt": "Use $yoda para submeter uma proposta ou decisão consequente a pressure-test antes de enviar ao owner ou stakeholder externo.",
+      "relative_path": "skills/yoda/SKILL.md"
     }
   ]
 }
