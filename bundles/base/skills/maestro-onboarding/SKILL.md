@@ -27,6 +27,76 @@ never say "runtime", "workspace", "bundle", "scaffold", "hook", "harness",
 human name: "conversa", "segundo cérebro", "assistente", "arquivo". One
 question per turn. Never dump the whole flow at once.
 
+## Formato das perguntas (contrato)
+
+**Every interview question after the track is chosen MUST be asked through the
+`AskUserQuestion` tool, never as plain text.** A blank field in front of a
+non-technical owner produces a vague answer that the model then has to
+paraphrase back to check it understood. Structured options remove both problems
+at once.
+
+1. **One question per call.** Never batch several into one call — this is what
+   preserves "one question per turn" from the tone contract above.
+2. **At most 4 options**, in the owner's language, concrete and mutually
+   distinct. The tool always adds its own free-text escape, so the owner can
+   write something else at any time. **Never add a manual "Outro" option.**
+3. **`multiSelect: true`** only when answers are genuinely cumulative
+   (ferramentas, formatos); `false` when the owner picks one direction.
+4. **Counter in the question text.** Every question starts with
+   `Pergunta <n> de <N> · `. `<N>` is the total for the chosen track and must
+   never change mid-track.
+5. **`header`** carries the topic in 12 characters or fewer (`Seu papel`,
+   `Ferramentas`, `Qualidade`) — never the counter.
+6. **Fallback:** if `AskUserQuestion` is unavailable in the current runtime, ask
+   the same question in plain text with the same options as a short numbered
+   list, keeping the counter prefix. Never skip the question.
+
+### Sequência e total por trilha
+
+The counter starts only after the track is chosen. Turnos 1-3 (nome, pré-check
+de segundo cérebro, escolha da trilha) are the opening and are not numbered.
+
+**Trilha curta — 10 perguntas:**
+
+| # | Tópico | Faceta |
+|---|---|---|
+| 1 | Contexto pessoal | `personal-context` |
+| 2 | Papel profissional | `professional-role` |
+| 3 | Estilo de comunicação | `communication-style` |
+| 4 | Ferramentas | `preferences` |
+| 5 | Formatos de entrega | `preferences` |
+| 6 | Jeito de colaborar | `preferences` |
+| 7 | Padrão de qualidade | `quality-bar` |
+| 8 | Métodos técnicos | — |
+| 9 | Pastas de SharePoint | — |
+| 10 | Nomear os agentes | — |
+
+**Trilha completa — 14 perguntas:** the same ten, plus `voice` (voz externa),
+`motivations` (motivações), `decision-rules` (regras de decisão) and
+`working-boundaries` (limites de trabalho), all inserted before "Métodos
+técnicos".
+
+**Caminho "já tem segundo cérebro" — 2 perguntas:** the mini baseline in
+Step 2, numbered `Pergunta 1 de 2` and `Pergunta 2 de 2`.
+
+Questions 4, 5 and 6 all write into the single canonical facet file
+`data/owner/self/preferences.md`. Splitting the question does not split the
+facet: the canonical file list in "After the owner chooses" is unchanged.
+
+### Confirmação: uma só, no fim
+
+**Never ask the owner to confirm an answer immediately after giving it.**
+Options are unambiguous, and an instant paraphrase of something the owner just
+said reads as not listening.
+
+- Answer picked from options → record it and go to the next question.
+- Answer written as free text → record it as given and go to the next question.
+  Do **not** paraphrase it back yet.
+- No filler between questions ("Anotado!", "Saquei!", "Ficou fiel?").
+- **All** captured answers — every free-text one reflected back in the owner's
+  own terms — appear together in the single closing summary, which remains the
+  only confirmation gate before anything is marked complete.
+
 ## Opening response — turno 1 (só apresentação + nome)
 
 Respond in Brazilian Portuguese. **Nunca despejar tudo no primeiro turno.** O
@@ -108,19 +178,35 @@ start.
 **Step 1 — Register the pointer (owner can defer the sensitive string).**
 Ask in warm tone, honoring the "defer is fine" option:
 
-> "Show! 🎯 Me conta onde vive teu segundo cérebro. Duas formas de responder,
-> escolhe a que te deixar mais tranquilo:
+Two separate `AskUserQuestion` calls, in this order. Never combine them: the
+first is low-risk information, the second is the sensitive string, and merging
+them forces two decisions into one turn.
+
+First — **what kind**:
+
+> **header:** `Onde vive`
+> **question:** `Show! 🎯 Que tipo de segundo cérebro você já usa?`
 >
-> - 🅰️ **Me passa o endereço agora** — path local, link do Notion, nome da
->   pasta. Fica gravado só aqui, no teu computador.
-> - 🅱️ **Só o tipo por enquanto** — Notion, Obsidian, pasta de docs, outro.
->   O endereço específico você me mostra depois, quando fizer sentido. 👌
+> - `Notion` · `Obsidian ou notas` · `Pasta de documentos` · `Outro sistema`
+
+Then — **whether to give the address now**:
+
+> **header:** `Endereço`
+> **question:** `Quer me passar o endereço agora, ou deixar pra depois?`
 >
-> As duas funcionam igual — a diferença é só quando você me mostra o link. 🙏"
+> - `Te passo agora` — fica gravado só aqui, no teu computador
+> - `Depois, quando fizer sentido` — funciona igual; a diferença é só quando
+>   você me mostra
+>
+> Se escolher `Te passo agora`, peça o endereço na resposta seguinte.
+
+Deferring costs the owner nothing and must never be framed as the lesser
+option.
 
 Write `data/profile/existing_brain.json`:
 - `has_existing_brain: true`
-- `pointer`: the string owner shared, or `"deferred"` if owner picked 🅱️
+- `pointer`: the string owner shared, or `"deferred"` if the owner chose to
+  give the address later
 - `pointer_type`: `"notion" | "obsidian" | "local_folder" | "other" | "deferred"`
 - `declared_at`: ISO 8601 UTC timestamp
 - `ingestion_mode`: `"on_demand"` (fixed for MVP — never bulk-copy, never
@@ -128,28 +214,34 @@ Write `data/profile/existing_brain.json`:
 
 **Step 2 — Mini baseline (2 questions, one at a time).**
 This closes the promise/delivery gap: without it, imported-brain leaves the
-owner emptier than the quick track. Ask both, one turn each, in warm tone
-with the "why":
+owner emptier than the quick track. Ask both through `AskUserQuestion`, one per
+turn, carrying the counter. The owner can always write their own answer through
+the tool's free-text escape.
 
-> "Antes de te liberar pro trabalho, só duas perguntinhas rapidinhas — 2
-> minutos no total — pra eu não ficar dependendo 100% do teu segundo cérebro
-> pra qualquer coisa básica. Combinado? 🙌"
+Give the "why" as the opening line of question 1 — never as a separate turn
+asking permission to ask ("Combinado?"), which spends a turn to gain nothing:
 
-Question 1 (write to `data/owner/self/professional-role.md` after
-confirmation):
+> "Só duas perguntinhas rapidinhas pra eu não ficar dependendo 100% do teu
+> segundo cérebro pra qualquer coisa básica. 🙌"
 
-> "**Em 2 frases:** o que você faz? Tipo, teu papel, o tipo de trabalho que
-> chega na tua mesa. Sem elaborar — a gente refina depois se precisar. 💼"
+Question 1 → `data/owner/self/professional-role.md`:
 
-Question 2 (write to `data/owner/self/communication-style.md` after
-confirmation):
+> **header:** `Teu papel`
+> **question:** `Pergunta 1 de 2 · O que chega na tua mesa no dia a dia?`
+>
+> - `Estratégia e casos clássicos` · `Analytics e dados` ·
+>   `Digital e tecnologia` · `Operações`
 
-> "**E como você gosta que eu te responda?** Ex: 'direto ao ponto', 'me
-> explica o raciocínio antes', 'em bullets curtos', 'em português'. Solta
-> o que vier à cabeça. 💬"
+Question 2 → `data/owner/self/communication-style.md`:
 
-After each answer, reflect back one line, confirm, then write. Same quality
-loop as the guided path — owner corrects meaning before anything hits disk.
+> **header:** `Como responder`
+> **question:** `Pergunta 2 de 2 · Como você gosta que eu te responda?`
+>
+> - `Direto ao ponto` · `Com o raciocínio antes` · `Em bullets curtos` ·
+>   `Com o mínimo de texto possível`
+
+Do not confirm either answer on the spot. Record both and reflect them back
+together in the closing summary, per "Confirmação: uma só, no fim".
 
 **Step 3 — Close the owner control-tree.**
 - `data/profile/onboarding.json`: `track: "imported-brain"`, `status:
@@ -267,7 +359,18 @@ The complete track then covers eight explicit, reviewable professional facets:
 - `communication-style`: how the owner wants reasoning, detail, language and
   recommendations presented;
 - `voice`: how the owner's external work should sound;
-- `preferences`: tools, formats, rhythms and collaboration habits;
+- `preferences`: tools, delivery formats and collaboration habits. **Never ask
+  this as one question** — it is three distinct dimensions and bundling them
+  produces a vague answer. Ask questions 4, 5 and 6 of the sequence separately,
+  and do not ask about schedules or working hours here: that is already covered
+  by `personal-context`. Suggested option sets:
+  - **Ferramentas** (`multiSelect: true`) — `Excel` · `PowerPoint` ·
+    `Python ou código` · `Ferramentas de BI`
+  - **Formatos de entrega** (`multiSelect: true`) — `Slides` ·
+    `Documento escrito` · `Planilha` · `Resumo curto no chat`
+  - **Jeito de colaborar** (`multiSelect: false`) — `Reviso antes de circular` ·
+    `Construo junto desde o início` · `Delego e checo no fim` ·
+    `Depende do time`
 - `motivations`: the professional impact and outcomes that make work matter;
 - `quality-bar`: what must be checked before something is called ready,
   including QA, evidence and finish level;
@@ -298,15 +401,26 @@ conservative default for the sanitized distro pack).
 
 When the default-on path applies, the prompt itself must disclose the
 default and the opt-out path in the same turn where the question is asked.
-Use this exact form (or a faithful translation preserving both clauses):
+Ask it through `AskUserQuestion` in this exact form. The opt-out is one of the
+options — never ask the owner to type the word `opt-out`, and never recite the
+list of categories Maestro does not collect (naming "família, saúde, fé"
+introduces worries the owner did not have).
 
-> *"Por padrão, o Maestro registra um contexto pessoal curto para respeitar
-> no trabalho (ex.: fuso, restrições de agenda, algo relevante para
-> priorização). Para opt-out agora, responder `opt-out`; nada pessoal é
-> gravado. O Maestro nunca pede histórico de família, saúde, fé ou privado."*
+> **header:** `Teu contexto`
+> **question:** `Pergunta <n> de <N> · Tem algo do teu dia a dia que eu deveria
+> respeitar quando for organizar teu trabalho?`
+>
+> - `Meu fuso e horário` — onde estou e em que horário costumo trabalhar
+> - `Janelas fixas na agenda` — compromissos recorrentes que eu não movo
+> - `Ritmo de viagem` — quando estou em cliente ou em trânsito
+> - `Prefiro não registrar` — nada pessoal é gravado
+
+Selecting `Prefiro não registrar` **is** the opt-out: record the decision with a
+timestamp in the facet file exactly as the writing rules below require, and move
+on without insisting.
 
 Never require disclosure of family, health, faith or private history: the
-owner may share only the minimum necessary or opt out.
+owner may share only the minimum necessary or decline.
 
 **Writing rules for personal-context:**
 
@@ -338,13 +452,25 @@ local consent path.
 
 ## Sugestão técnica orientada pela função
 
-Depois que o owner responder qual é sua função, avalie diretamente se a resposta
-contém indicação clara de engenharia, data ou AI. Se sim, explique o que é o
-bundle opcional `tech-core` e pergunte se a pessoa quer incluí-lo. Se a resposta
-for ambígua, faça a mesma pergunta sem presumir que a função é técnica. Nunca
-ative o bundle automaticamente: a seleção de uma trilha técnica e a confirmação
-do owner continuam sendo a única forma de projetar as skills. O `tech-core` é um
-bundle único e inclui engineering, data, AI e métodos de qualidade.
+Ask this of **every** owner, at the numbered position in the sequence — never
+conditionally on how technical the role sounded. A conditional question would
+make the counter lie, and guessing who is "technical" from a one-line answer is
+exactly the inference this skill must not make.
+
+Never say "bundle" to the owner (the tone contract forbids it). `tech-core` is
+an internal identifier; describe it in plain language:
+
+> **header:** `Métodos`
+> **question:** `Pergunta <n> de <N> · Quer que eu carregue também os métodos
+> técnicos — análise de dados, código e checagem de qualidade?`
+>
+> - `Sim, uso isso no meu trabalho`
+> - `Não, meu trabalho não é técnico`
+> - `Não sei ainda` — dá pra ligar depois a qualquer momento
+
+Never activate it automatically: explicit owner confirmation remains the only
+way to project these skills. Treat `Não sei ainda` as "not now", record it, and
+do not ask again in this session.
 
 ## Camadas opcionais de identidade
 
@@ -375,15 +501,17 @@ professional baseline; do not emulate ingestion from conversation.
 1. Confirm the exact selected track once and write the selection to
    `data/profile/onboarding.json` (fields: `track`, `status: "in_progress"`).
 
-2. Ask one interview question at a time, following the sequence for the
-   selected track; do not invent extra mandatory questions.
-3. After each answer, reflect back a concise interpretation and ask whether it
-   is accurate. Only then propose the corresponding facet draft. This is the
-   quality loop for onboarding: the owner corrects meaning before anything is
-   written.
-4. Before proposing any write to a facet, show the concise draft and obtain the
-   owner's agreement. Never claim that an answer has been saved or that the
-   track is complete until the local review is confirmed.
+2. Ask one question at a time through `AskUserQuestion`, following the numbered
+   sequence in "Sequência e total por trilha" above and carrying the
+   `Pergunta <n> de <N> · ` prefix. Do not invent extra mandatory questions and
+   do not renumber.
+3. Do not confirm answers one by one. Record each answer as given and move to
+   the next question, per "Confirmação: uma só, no fim" above.
+4. Before marking the track complete, show the single closing summary with every
+   captured answer — free-text ones reflected back in the owner's own terms —
+   and obtain the owner's agreement there. That summary is the quality loop for
+   onboarding: the owner corrects meaning before the track is closed. Never
+   claim that the track is complete until that review is confirmed.
 5. When all facets for the selected track are reviewed and confirmed, write each
    confirmed profile file: `data/profile/identity.json`, `data/profile/style.json`,
    and `data/profile/onboarding.json` with `status: "complete"`. Ask the owner for an
@@ -467,11 +595,21 @@ chegar, quem conduz essa configuração pontual é `$ingest-content`.
 
 ### 🤝 Agentes internos — identidade e personalização
 
-Immediately after MarkItDown confirmation (or deferral), always invite the owner
-to name the internal agents now or defer them:
-**"Quer dar nome e avatar ao Yoda, ao Darwin e ao Gamma Guardian agora, ou
-prefere deixar isso para depois?"** This is an invitation, never a required
-extra interview step.
+This is the last numbered question of the sequence. Ask it through
+`AskUserQuestion` with the counter, and do not stack a second question on top
+of it:
+
+> **header:** `Os agentes`
+> **question:** `Pergunta <n> de <N> · O Maestro tem três assistentes internos
+> que trabalham nos bastidores. Quer dar nome e avatar a eles agora?`
+>
+> - `Usa os nomes sugeridos` — Yoda, Darwin e Gamma Guardian
+> - `Quero escolher os nomes agora`
+> - `Deixa pra depois` — dá pra fazer isso a qualquer momento
+
+Only if the owner picks `Quero escolher os nomes agora`, present the
+suggestions below. Otherwise record the choice and close. This is an
+invitation, never a required extra interview step.
 
 Present these initial suggestions with their short stories:
 
@@ -496,12 +634,18 @@ Present these initial suggestions with their short stories:
   Maestro routing. If an adapter or independent runtime evidence is absent,
   Gamma reports `UNAVAILABLE`/`BLOCKED`; it does not infer readiness.
 
-The full repertoire lives in `/agent-identity-setup`. Before suggesting a
-reference-based name, ask one optional question: **"Que presença você quer
-desses agentes: guia sereno, estrategista, parceiro firme, advisor técnico,
-arquiteto de sistemas ou observador de evolução?"** Use only the preferences
-the owner explicitly states to offer at most three relevant choices and say
-why each was suggested. Do not derive a personality, role fit or psychological
+Before suggesting a reference-based name, you may ask one follow-up. It is a
+branch inside the last question, not a new numbered one — never give it a
+`Pergunta <n> de <N>` prefix, and never stack it onto the question above:
+
+> **header:** `Que presença`
+> **question:** `Que presença combina mais com o que você procura?`
+>
+> - `Um guia calmo` · `Um estrategista` · `Um parceiro direto` ·
+>   `Um observador que acompanha a evolução`
+
+Use only the preferences the owner explicitly states to offer at most three
+relevant choices and say why each was suggested. Do not derive a personality, role fit or psychological
 profile from past conversations. `HAL` remains available only if the owner
 chooses it deliberately; never suggest it by default.
 
