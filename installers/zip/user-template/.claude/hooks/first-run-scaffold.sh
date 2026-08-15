@@ -436,19 +436,35 @@ EOF
   # to what the owner is actually working toward. It is authored by the owner,
   # so it ships as an empty structure rather than invented content.
   if [ ! -f "$DATA_DIR/owner/atlas/development/objectives.md" ]; then
+    # The heading set is load-bearing, not decoration. feedback-capture files
+    # evidence and retirements with `append-entry`, which never creates a
+    # heading and refuses one that appears more than once on a page. So the
+    # page must ship with a uniquely-numbered evidence heading per objective
+    # and a single retirement heading, or those writes are declined outright.
     cat > "$DATA_DIR/owner/atlas/development/objectives.md" 2>/dev/null <<'EOF'
 # Objetivos de desenvolvimento
 
-O que você está tentando desenvolver neste período, com o que conta como
-progresso. Lido no início e no fim do dia para conectar o trabalho ao objetivo.
+O que você está tentando desenvolver neste período, e o que conta como
+progresso. Lido no início e no fim do dia para conectar o trabalho ao objetivo,
+e atualizado quando chega feedback formal.
 
 _Não preenchido. Diga "quero definir meus objetivos" para preencher._
 
-## Objetivos atuais
--
+## Objetivos ativos
 
-## Como saber que avançou
--
+### 1. <objetivo>
+- **Status:** ativo | em risco | atingido
+- **Como saber que avançou:**
+- **Última confirmação:** YYYY-MM-DD
+- **Próxima revisão:** YYYY-MM-DD
+
+#### Evidência — objetivo 1
+
+<!-- append-only: uma linha datada por evidência, citando a origem -->
+
+## Aposentados
+
+<!-- append-only: uma linha datada por objetivo aposentado, nomeando a review que o aposentou -->
 EOF
     log_line "WRITE OK  data/owner/atlas/development/objectives.md (placeholder)"
   fi
