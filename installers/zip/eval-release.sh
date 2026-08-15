@@ -165,6 +165,34 @@ else
   pass "data/ correctly absent from ZIP"
 fi
 
+# Slash commands must reference paths that exist in the shipped layout.
+# A command body is read verbatim by the runtime, so a path that resolves to
+# nothing turns the command into a dead end. /maestro-onboarding is forced on
+# the first session, so a wrong path here is the first thing an owner hits.
+COMMANDS_DIR="$MAESTRO_DIR/.claude/commands"
+if [ -d "$COMMANDS_DIR" ]; then
+  CMD_BAD=0
+  CMD_CHECKED=0
+  for cmd in "$COMMANDS_DIR"/*.md; do
+    [ -f "$cmd" ] || continue
+    # Pull every backtick-quoted path ending in SKILL.md out of the command body.
+    for ref in $(grep -oE '`[^`]*SKILL\.md`' "$cmd" 2>/dev/null | tr -d '`'); do
+      CMD_CHECKED=$((CMD_CHECKED+1))
+      if [ ! -f "$MAESTRO_DIR/$ref" ]; then
+        CMD_BAD=$((CMD_BAD+1))
+        fail "$(basename "$cmd") references a path absent from the ZIP: $ref"
+      fi
+    done
+  done
+  if [ "$CMD_CHECKED" -eq 0 ]; then
+    fail "no SKILL.md references found in .claude/commands/ (check is not exercising anything)"
+  elif [ "$CMD_BAD" -eq 0 ]; then
+    pass "all $CMD_CHECKED slash-command skill path(s) resolve in the ZIP"
+  fi
+else
+  fail ".claude/commands/ missing from ZIP"
+fi
+
 # --------------------------------------------------------------------------
 phase "Phase 3 — No dev tree leakage"
 # --------------------------------------------------------------------------
