@@ -100,11 +100,13 @@ if [ -d "$TECH_CORE_DIR/skills" ]; then
   printf '\n## Skills técnicas (tech-core)\n'
   printf '<!-- maestro:pointer: tech-core · reason: engineering_skills_bundle -->\n'
   printf 'Bundle path: %s\n' "$TECH_CORE_DIR"
-  if [ -f "$TECH_CORE_DIR/INDEX.md" ]; then
-    printf 'Índice: %s/INDEX.md\n' "$TECH_CORE_DIR"
+  # INDEX.md and catalog.json live beside the skills, at
+  # bundles/tech-core/skills/, not at the bundle root.
+  if [ -f "$TECH_CORE_DIR/skills/INDEX.md" ]; then
+    printf 'Índice: %s/skills/INDEX.md\n' "$TECH_CORE_DIR"
   fi
-  if [ -f "$TECH_CORE_DIR/catalog.json" ]; then
-    printf 'Catálogo: %s/catalog.json\n' "$TECH_CORE_DIR"
+  if [ -f "$TECH_CORE_DIR/skills/catalog.json" ]; then
+    printf 'Catálogo: %s/skills/catalog.json\n' "$TECH_CORE_DIR"
   fi
   printf 'Instrução: skills de engenharia (testes, revisão, pipelines, entrega por spec) — carregar sob demanda quando a tarefa exigir.\n'
 fi

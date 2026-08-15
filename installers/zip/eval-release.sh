@@ -741,6 +741,27 @@ else
   fail "session-start-memory-inject.sh does NOT emit maestro-operator pointer"
 fi
 
+# 12k2: tech-core pointer resolves to the real index/catalog location.
+# INDEX.md and catalog.json ship at bundles/tech-core/skills/, not at the
+# bundle root. When the pointer looks at the root the lines are silently never
+# emitted, so the session rollup names the bundle without ever telling the
+# runtime where its index is. Asserted against real hook output, not source.
+TC_OUT=$(CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$INJECT_HOOK_BUILT" 2>/dev/null)
+if [ -f "$MAESTRO_DIR/bundles/tech-core/skills/INDEX.md" ]; then
+  if printf '%s' "$TC_OUT" | grep -q "tech-core/skills/INDEX.md"; then
+    pass "tech-core pointer emits the real INDEX.md path"
+  else
+    fail "tech-core INDEX.md exists but the pointer never emits it (wrong path)"
+  fi
+  if printf '%s' "$TC_OUT" | grep -q "tech-core/skills/catalog.json"; then
+    pass "tech-core pointer emits the real catalog.json path"
+  else
+    fail "tech-core catalog.json exists but the pointer never emits it (wrong path)"
+  fi
+else
+  skip "bundles/tech-core/skills/INDEX.md not in ZIP"
+fi
+
 # 12l: GAP-F — owner extended context tree scaffolded
 SCAFFOLD_HOOK="$MAESTRO_DIR/.claude/hooks/first-run-scaffold.sh"
 if [ -f "$SCAFFOLD_HOOK" ]; then
