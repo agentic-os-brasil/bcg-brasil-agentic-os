@@ -255,7 +255,7 @@ func (catalog Catalog) Validate() error {
 		inputContract string
 	}{
 		"maestro":              {"hub", true, "none", true, "session_context_packet"},
-		"walter":               {"reviewer", false, "none", false, "sealed_review_packet"},
+		"yoda":               {"reviewer", false, "none", false, "sealed_review_packet"},
 		"darwin":               {"governance_analyst", false, "scoped", false, "bounded_health_packet"},
 		"case-agent":           {"case_agent", false, "scoped", false, "bounded_case_packet"},
 		"client-account-agent": {"client_account_agent", false, "scoped", false, "bounded_client_account_packet"},

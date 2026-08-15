@@ -1,5 +1,5 @@
 // Package reviewcustody defines the installation-scoped signing boundary for
-// Walter review. It is deliberately separate from release signing: a review
+// Yoda review. It is deliberately separate from release signing: a review
 // signer can authenticate one local review installation, but cannot sign
 // release manifests or authorize distribution.
 package reviewcustody
@@ -11,9 +11,9 @@ import (
 	"regexp"
 )
 
-const WalterReviewScope = "maestro/walter-review"
+const YodaReviewScope = "maestro/yoda-review"
 
-var ErrUnavailable = errors.New("Walter review signing custody is unavailable")
+var ErrUnavailable = errors.New("Yoda review signing custody is unavailable")
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$`)
 
@@ -49,14 +49,14 @@ func NewProvider(load func(string) (Signer, error)) (LocalProvider, error) {
 }
 
 func (provider LocalProvider) Load(scope string) (Signer, error) {
-	if provider.load == nil || scope != WalterReviewScope {
+	if provider.load == nil || scope != YodaReviewScope {
 		return nil, ErrUnavailable
 	}
 	signer, err := provider.load(scope)
 	if err != nil {
 		return nil, err
 	}
-	if signer == nil || signer.Scope() != WalterReviewScope {
+	if signer == nil || signer.Scope() != YodaReviewScope {
 		return nil, errors.New("review custody returned a signer for the wrong scope")
 	}
 	return signer, nil
@@ -76,16 +76,16 @@ type Ed25519Signer struct {
 
 func NewEd25519Signer(privateKey ed25519.PrivateKey, keyID, installationID string) (*Ed25519Signer, error) {
 	if len(privateKey) != ed25519.PrivateKeySize {
-		return nil, errors.New("Walter review private key has an invalid size")
+		return nil, errors.New("Yoda review private key has an invalid size")
 	}
 	if !identifierPattern.MatchString(keyID) || !identifierPattern.MatchString(installationID) {
-		return nil, errors.New("Walter review custody identity is invalid")
+		return nil, errors.New("Yoda review custody identity is invalid")
 	}
 	keyCopy := append(ed25519.PrivateKey(nil), privateKey...)
 	publicKey := append(ed25519.PublicKey(nil), privateKey.Public().(ed25519.PublicKey)...)
 	return &Ed25519Signer{
 		privateKey: keyCopy, publicKey: publicKey, keyID: keyID,
-		installationID: installationID, scope: WalterReviewScope,
+		installationID: installationID, scope: YodaReviewScope,
 	}, nil
 }
 
@@ -125,11 +125,11 @@ func (signer *Ed25519Signer) Scope() string {
 }
 
 func ValidateSigner(signer Signer) error {
-	if signer == nil || signer.Scope() != WalterReviewScope ||
+	if signer == nil || signer.Scope() != YodaReviewScope ||
 		!identifierPattern.MatchString(signer.KeyID()) ||
 		!identifierPattern.MatchString(signer.InstallationID()) ||
 		len(signer.PublicKey()) != ed25519.PublicKeySize {
-		return fmt.Errorf("Walter review signer is missing or outside the installation scope")
+		return fmt.Errorf("Yoda review signer is missing or outside the installation scope")
 	}
 	return nil
 }

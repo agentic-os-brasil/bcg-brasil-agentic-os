@@ -20,7 +20,7 @@ type DispatchBoundaryReceipt struct {
 	PromptDigest         string `json:"prompt_digest"`
 	DraftDigest          string `json:"draft_digest"`
 	AccountConsultation  bool   `json:"account_consultation_required"`
-	WalterRequired       bool   `json:"walter_required"`
+	YodaRequired       bool   `json:"yoda_required"`
 	HistoryCount         int    `json:"history_count"`
 	DispatchID           string `json:"dispatch_id"`
 	DurableDispatchEpoch uint64 `json:"durable_dispatch_epoch"`
@@ -354,8 +354,8 @@ func orderedBindingDigest(plan Plan) string {
 	if plan.CaseEntry == CaseEntryAccountFirst && plan.RequiresAccountValidation {
 		appendBinding("account_validation", "client_account_agent", "account", plan.AccountScopeID)
 	}
-	if plan.RequiresWalter {
-		appendBinding("walter_review", "reviewer", "review", "review")
+	if plan.RequiresYoda {
+		appendBinding("yoda_review", "reviewer", "review", "review")
 	}
 	if plan.Action == ActionGamma {
 		appendBinding("gamma_quality", "quality_guardian", "workspace", plan.ScopeID)

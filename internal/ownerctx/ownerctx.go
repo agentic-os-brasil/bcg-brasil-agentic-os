@@ -144,17 +144,17 @@ type facetTemplate struct {
 }
 
 var facets = map[string]facetTemplate{
-	"owner-identity":        {facetRecord{"owner/self/owner-identity.md", "identity", []string{"session", "walter"}, "confirmation_required"}, "# Owner identity\n\n## Current\n\nRegistre como o owner prefere ser chamado. Nao inclua identificadores desnecessarios.\n"},
-	"personal-context":      {facetRecord{"owner/self/personal-context.md", "sensitive", []string{"session", "walter"}, "confirmation_required"}, "# Authorized personal context\n\n## Current\n\nOpcional. Registre somente o contexto pessoal que o owner autoriza, com finalidade, leitores e limite de retencao claros. O owner pode declarar que nao quer compartilhar contexto pessoal agora.\n"},
-	"professional-role":     {facetRecord{"owner/self/professional-role.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Professional role\n\n## Current\n\nDescreva responsabilidades, contexto profissional e resultados pelos quais voce responde.\n"},
-	"communication-style":   {facetRecord{"owner/self/communication-style.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Communication style\n\n## Current\n\nDescreva como prefere colaborar com o Agentic OS: tom, nivel de detalhe, idioma e formato.\n"},
-	"voice":                 {facetRecord{"owner/self/voice.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Voice\n\n## Current\n\nDescreva como voce quer falar com o mundo em entregas externas: emails, documentos, propostas e apresentacoes.\n"},
-	"preferences":           {facetRecord{"owner/self/preferences.md", "professional", []string{"session", "walter"}, "automatic_with_audit"}, "# Preferences\n\n## Current\n\nRegistre preferencias de ferramentas, formatos, rotinas e formas de trabalho.\n"},
-	"motivations":           {facetRecord{"owner/self/motivations.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Professional motivations\n\n## Current\n\nDescreva o impacto, os resultados e o tipo de valor que tornam seu trabalho significativo.\n"},
-	"quality-bar":           {facetRecord{"owner/self/quality-bar.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Quality bar\n\n## Current\n\nDescreva o que precisa ser verdadeiro antes de considerar um trabalho pronto: criterios, validacoes, evidencias e nivel de acabamento.\n"},
-	"decision-rules":        {facetRecord{"owner/self/decision-rules.md", "professional", []string{"session", "walter"}, "proposal_only"}, "# Decision rules\n\n## Current\n\nRegistre principios e trade-offs que devem orientar recomendacoes importantes.\n"},
-	"working-boundaries":    {facetRecord{"owner/self/working-boundaries.md", "professional", []string{"session", "walter"}, "confirmation_required"}, "# Working boundaries\n\n## Current\n\nRegistre limites de escopo, confidencialidade e quando escalar decisoes.\n"},
-	"psychological-profile": {facetRecord{"owner/self/psychological-profile.md", "sensitive", []string{"walter"}, "confirmation_required"}, "# Psychological profile\n\nOpcional. Inclua apenas uma sintese profissional revisada por voce, com fontes e finalidades autorizadas. Nunca use como diagnostico ou rotulo deterministico.\n"},
+	"owner-identity":        {facetRecord{"owner/self/owner-identity.md", "identity", []string{"session", "yoda"}, "confirmation_required"}, "# Owner identity\n\n## Current\n\nRegistre como o owner prefere ser chamado. Nao inclua identificadores desnecessarios.\n"},
+	"personal-context":      {facetRecord{"owner/self/personal-context.md", "sensitive", []string{"session", "yoda"}, "confirmation_required"}, "# Authorized personal context\n\n## Current\n\nOpcional. Registre somente o contexto pessoal que o owner autoriza, com finalidade, leitores e limite de retencao claros. O owner pode declarar que nao quer compartilhar contexto pessoal agora.\n"},
+	"professional-role":     {facetRecord{"owner/self/professional-role.md", "professional", []string{"session", "yoda"}, "proposal_only"}, "# Professional role\n\n## Current\n\nDescreva responsabilidades, contexto profissional e resultados pelos quais voce responde.\n"},
+	"communication-style":   {facetRecord{"owner/self/communication-style.md", "professional", []string{"session", "yoda"}, "automatic_with_audit"}, "# Communication style\n\n## Current\n\nDescreva como prefere colaborar com o Agentic OS: tom, nivel de detalhe, idioma e formato.\n"},
+	"voice":                 {facetRecord{"owner/self/voice.md", "professional", []string{"session", "yoda"}, "automatic_with_audit"}, "# Voice\n\n## Current\n\nDescreva como voce quer falar com o mundo em entregas externas: emails, documentos, propostas e apresentacoes.\n"},
+	"preferences":           {facetRecord{"owner/self/preferences.md", "professional", []string{"session", "yoda"}, "automatic_with_audit"}, "# Preferences\n\n## Current\n\nRegistre preferencias de ferramentas, formatos, rotinas e formas de trabalho.\n"},
+	"motivations":           {facetRecord{"owner/self/motivations.md", "professional", []string{"session", "yoda"}, "proposal_only"}, "# Professional motivations\n\n## Current\n\nDescreva o impacto, os resultados e o tipo de valor que tornam seu trabalho significativo.\n"},
+	"quality-bar":           {facetRecord{"owner/self/quality-bar.md", "professional", []string{"session", "yoda"}, "proposal_only"}, "# Quality bar\n\n## Current\n\nDescreva o que precisa ser verdadeiro antes de considerar um trabalho pronto: criterios, validacoes, evidencias e nivel de acabamento.\n"},
+	"decision-rules":        {facetRecord{"owner/self/decision-rules.md", "professional", []string{"session", "yoda"}, "proposal_only"}, "# Decision rules\n\n## Current\n\nRegistre principios e trade-offs que devem orientar recomendacoes importantes.\n"},
+	"working-boundaries":    {facetRecord{"owner/self/working-boundaries.md", "professional", []string{"session", "yoda"}, "confirmation_required"}, "# Working boundaries\n\n## Current\n\nRegistre limites de escopo, confidencialidade e quando escalar decisoes.\n"},
+	"psychological-profile": {facetRecord{"owner/self/psychological-profile.md", "sensitive", []string{"yoda"}, "confirmation_required"}, "# Psychological profile\n\nOpcional. Inclua apenas uma sintese profissional revisada por voce, com fontes e finalidades autorizadas. Nunca use como diagnostico ou rotulo deterministico.\n"},
 }
 
 const statePath = "owner/operating/work-state.md"
@@ -206,7 +206,7 @@ falham antes de virar draft.
 ` + "`personal-context.md`" + ` e opcional e sensivel. O owner pode responder
 "nenhum por enquanto"; qualquer conteudo persistido deve declarar finalidade,
 leitores e limite de retencao. ` + "`psychological-profile.md`" + ` e opcional,
-sensivel e exclusivo de Walter; ele
+sensivel e exclusivo de Yoda; ele
 nao integra entrevistas de expansao, o indice de sessao ou recomendacoes
 deterministicas. A confirmacao ` + "`no_client_data`" + ` e uma declaracao do owner,
 nao um classificador automatico de conteudo.

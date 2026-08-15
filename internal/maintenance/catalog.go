@@ -154,7 +154,7 @@ func (catalog Catalog) Validate() error {
 		"wiki-incremental-sync", "wiki-reconcile", "wiki-integrity-check", "skills-index-refresh",
 		"runtime-health-check", "capability-recheck", "runtime-drift-check", "self-observation-capture",
 		"update-check", "darwin-structural-evolution-proposal",
-		"darwin-housekeeping-daily", "darwin-deep-weekly", "walter-self-review-weekly",
+		"darwin-housekeeping-daily", "darwin-deep-weekly", "yoda-self-review-weekly",
 	} {
 		if !seen[required] {
 			return fmt.Errorf("maintenance catalog is missing required universal job %q", required)
@@ -177,9 +177,9 @@ func validateRequiredJobInvariant(job Job) error {
 		if job.Category != "memory" || job.Trigger != "weekly_or_presence" || job.Executor != "model_adapter" || job.Scope != "workspace" || job.Availability != Unavailable || job.DefaultEnabled || job.Unattended != "policy_gated" {
 			return errors.New("memory deep dream has an unsafe maintenance contract")
 		}
-	case "walter-self-review-weekly":
+	case "yoda-self-review-weekly":
 		if job.Category != "self" || job.Trigger != "weekly_or_presence" || job.Executor != "model_adapter" || job.Scope != "owner" || job.DefaultEnabled || job.Unattended != "policy_gated" {
-			return errors.New("Walter weekly self-review has an unsafe maintenance contract")
+			return errors.New("Yoda weekly self-review has an unsafe maintenance contract")
 		}
 	case "darwin-structural-evolution-proposal":
 		if job.Category != "runtime" || job.Trigger != "monthly_or_presence" || job.Executor != "local_adapter" || job.Scope != "managed" || job.DefaultEnabled || job.Unattended != "never" {

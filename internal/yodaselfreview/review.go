@@ -1,8 +1,8 @@
-// Package walterselfreview defines Walter's periodic, bounded self-ingestion
+// Package yodaselfreview defines Yoda's periodic, bounded self-ingestion
 // seam on top of the canonical ownerctx and Maestro contracts. The shipped
 // model path remains unavailable; a qualified implementation must compact a
 // bounded self projection without emitting a user-facing weekly artifact.
-package walterselfreview
+package yodaselfreview
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 
 const (
 	SchemaVersion           = 1
-	WeeklyJobID             = maintenance.WalterSelfReviewWeeklyJobID
+	WeeklyJobID             = maintenance.YodaSelfReviewWeeklyJobID
 	MaxPromptEntries        = 8
 	MaxPromptBytes          = 32 << 10
 	MaxContextBytes         = 32 << 10
@@ -37,9 +37,9 @@ const (
 )
 
 var (
-	ErrUnavailable    = errors.New("Walter weekly self review is unavailable without an approved model adapter and authority")
-	ErrProposalOnly   = errors.New("Walter self review produces proposals only; canonical mutation belongs to Owner Context policy")
-	ErrOccurrenceBusy = errors.New("Walter weekly self-review occurrence is already reserved")
+	ErrUnavailable    = errors.New("Yoda weekly self review is unavailable without an approved model adapter and authority")
+	ErrProposalOnly   = errors.New("Yoda self review produces proposals only; canonical mutation belongs to Owner Context policy")
+	ErrOccurrenceBusy = errors.New("Yoda weekly self-review occurrence is already reserved")
 )
 
 type ReceiptState string
@@ -254,8 +254,8 @@ func (store ReceiptStore) Finalize(reservation Reservation, state ReceiptState, 
 	if state == ReceiptProposal {
 		final.ProposalID = proposal.ProposalID
 		final.ProposalSHA256 = DigestJSON(proposal)
-		if ownerReceipt.WalterProposalSHA256 != "" {
-			final.ProposalSHA256 = ownerReceipt.WalterProposalSHA256
+		if ownerReceipt.YodaProposalSHA256 != "" {
+			final.ProposalSHA256 = ownerReceipt.YodaProposalSHA256
 		}
 		final.OwnerctxProposalID = ownerReceipt.ID
 		final.OwnerctxProposalSHA256 = ownerReceipt.ProposalSHA256
@@ -338,7 +338,7 @@ func (store ReceiptStore) AssertLease(reservation Reservation, now time.Time) er
 	})
 }
 
-// CommitOwnerctxProposal is the Walter commit seam. The receipt advisory lock
+// CommitOwnerctxProposal is the Yoda commit seam. The receipt advisory lock
 // remains held while the current reserved lease/fence is reloaded and the
 // occurrence-bound ownerctx proposal is created with create-if-absent/CAS
 // semantics. A stale worker can therefore never write after takeover.
@@ -356,7 +356,7 @@ func (store ReceiptStore) CommitOwnerctxProposal(reservation Reservation, root s
 		if !found || existing.State != ReceiptReserved || existing.FencingToken != reservation.Receipt.FencingToken || existing.LeaseOwner != reservation.LeaseOwner || !existing.LeaseUntil.After(now.UTC()) {
 			return errors.New("weekly occurrence lease is stale or fenced before ownerctx commit")
 		}
-		input.WalterReviewFencingToken = reservation.Receipt.FencingToken
+		input.YodaReviewFencingToken = reservation.Receipt.FencingToken
 		result, err = ownerctx.SubmitRefinement(root, input)
 		if err != nil {
 			return err
@@ -538,22 +538,22 @@ func Review(ctx context.Context, request Request, adapter ModelAdapter, authorit
 			// Recovery is bound to the immutable occurrence and request, not the
 			// lease fence held by the worker that may have crashed after the
 			// ownerctx commit. A takeover rotates the fence by design.
-			if ownerReceipt.WalterRequestSHA256 != RequestDigest(request) || ownerReceipt.WalterProposalID == "" || ownerReceipt.WalterProposalSHA256 == "" {
-				return SelfRefinementProposal{}, Receipt{}, errors.New("Walter occurrence artifact is bound to a different request")
+			if ownerReceipt.YodaRequestSHA256 != RequestDigest(request) || ownerReceipt.YodaProposalID == "" || ownerReceipt.YodaProposalSHA256 == "" {
+				return SelfRefinementProposal{}, Receipt{}, errors.New("Yoda occurrence artifact is bound to a different request")
 			}
 			policy, policyErr := request.CanonicalSnapshot.Policy(ownerReceipt.Facet)
-			if policyErr != nil || !contains(request.ReviewFacets, ownerReceipt.Facet) || ownerReceipt.WalterSensitivity != policy.Sensitivity || !sameStrings(ownerReceipt.WalterReaders, policy.Readers) || ownerReceipt.WalterRefinement != policy.Refinement || ownerReceipt.WalterConfirmation != policy.ConfirmationRequirement {
-				return SelfRefinementProposal{}, Receipt{}, errors.New("Walter occurrence artifact policy is stale")
+			if policyErr != nil || !contains(request.ReviewFacets, ownerReceipt.Facet) || ownerReceipt.YodaSensitivity != policy.Sensitivity || !sameStrings(ownerReceipt.YodaReaders, policy.Readers) || ownerReceipt.YodaRefinement != policy.Refinement || ownerReceipt.YodaConfirmation != policy.ConfirmationRequirement {
+				return SelfRefinementProposal{}, Receipt{}, errors.New("Yoda occurrence artifact policy is stale")
 			}
-			resumedProposal := SelfRefinementProposal{SchemaVersion: SchemaVersion, ProposalID: ownerReceipt.WalterProposalID, State: "proposed", WeekID: request.WeekID, Facet: ownerReceipt.Facet, Sensitivity: ownerReceipt.WalterSensitivity, Readers: append([]string(nil), ownerReceipt.WalterReaders...), Refinement: ownerReceipt.WalterRefinement, ConfirmationRequirement: ConfirmationRequirement(ownerReceipt.WalterConfirmation), CanonicalSnapshotVersion: request.CanonicalSnapshot.Version, CanonicalSnapshotSHA256: request.CanonicalSnapshot.CanonicalSourceDigest, PromptHistorySHA256: PromptHistoryDigest(request.PromptHistory), TranslationReceiptSHA256: request.Translation.ReceiptSHA256, IntentHypothesisSHA256: request.IntentHypothesisSHA256}
-			terminal, finalizeErr := store.Finalize(reservation, ReceiptProposal, resumedProposal, ownerReceipt, ownerReceipt.WalterAdapterID, ownerReceipt.WalterAuthorityID, "proposal_resumed_without_model", now)
+			resumedProposal := SelfRefinementProposal{SchemaVersion: SchemaVersion, ProposalID: ownerReceipt.YodaProposalID, State: "proposed", WeekID: request.WeekID, Facet: ownerReceipt.Facet, Sensitivity: ownerReceipt.YodaSensitivity, Readers: append([]string(nil), ownerReceipt.YodaReaders...), Refinement: ownerReceipt.YodaRefinement, ConfirmationRequirement: ConfirmationRequirement(ownerReceipt.YodaConfirmation), CanonicalSnapshotVersion: request.CanonicalSnapshot.Version, CanonicalSnapshotSHA256: request.CanonicalSnapshot.CanonicalSourceDigest, PromptHistorySHA256: PromptHistoryDigest(request.PromptHistory), TranslationReceiptSHA256: request.Translation.ReceiptSHA256, IntentHypothesisSHA256: request.IntentHypothesisSHA256}
+			terminal, finalizeErr := store.Finalize(reservation, ReceiptProposal, resumedProposal, ownerReceipt, ownerReceipt.YodaAdapterID, ownerReceipt.YodaAuthorityID, "proposal_resumed_without_model", now)
 			if finalizeErr != nil {
 				return SelfRefinementProposal{}, terminal, finalizeErr
 			}
 			return resumedProposal, terminal, nil
 		}
 	}
-	if adapter == nil || authority == nil || !authority.Approved("walter/self-review-weekly") {
+	if adapter == nil || authority == nil || !authority.Approved("yoda/self-review-weekly") {
 		receipt, finalizeErr := store.Finalize(reservation, ReceiptUnavailable, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, "", "", "approved_model_adapter_or_authority_unavailable", now)
 		if finalizeErr != nil {
 			return SelfRefinementProposal{}, receipt, finalizeErr
@@ -624,7 +624,7 @@ func Review(ctx context.Context, request Request, adapter ModelAdapter, authorit
 		}
 		return SelfRefinementProposal{}, receipt, ctxErr
 	}
-	ownerReceipt, err := store.CommitOwnerctxProposal(reservation, request.OwnerContextRoot, ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "walter-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, WalterReviewRequestSHA256: RequestDigest(request), WalterReviewProposalID: proposal.ProposalID, WalterReviewProposalSHA256: DigestJSON(proposal), WalterReviewSensitivity: proposal.Sensitivity, WalterReviewReaders: proposal.Readers, WalterReviewRefinement: proposal.Refinement, WalterReviewConfirmation: string(proposal.ConfirmationRequirement), WalterReviewAdapterID: adapter.ID(), WalterReviewAuthorityID: authority.ID()}, time.Now().UTC())
+	ownerReceipt, err := store.CommitOwnerctxProposal(reservation, request.OwnerContextRoot, ownerctx.RefinementInput{Facet: proposal.Facet, Evidence: "yoda-weekly:" + DigestJSON(proposal.EvidenceObservationIDs), ProposedBody: proposal.ProposedRefinement, OccurrenceID: request.OccurrenceID, YodaReviewRequestSHA256: RequestDigest(request), YodaReviewProposalID: proposal.ProposalID, YodaReviewProposalSHA256: DigestJSON(proposal), YodaReviewSensitivity: proposal.Sensitivity, YodaReviewReaders: proposal.Readers, YodaReviewRefinement: proposal.Refinement, YodaReviewConfirmation: string(proposal.ConfirmationRequirement), YodaReviewAdapterID: adapter.ID(), YodaReviewAuthorityID: authority.ID()}, time.Now().UTC())
 	if err != nil {
 		receipt, finalizeErr := store.Finalize(reservation, ReceiptFailed, SelfRefinementProposal{}, ownerctx.RefinementReceipt{}, adapter.ID(), authority.ID(), "ownerctx_proposal_failed", now)
 		if finalizeErr != nil {
@@ -675,7 +675,7 @@ type Handler struct {
 
 var _ maintenance.Handler = Handler{}
 
-var _ maintenance.WalterWeeklyProposalHandler = Handler{}
+var _ maintenance.YodaWeeklyProposalHandler = Handler{}
 
 func (handler Handler) ExecuteAuthorized(ctx context.Context, command maintenance.Command, grant maintenance.ExecutionGrant) (maintenance.HandlerResult, error) {
 	if err := maintenance.ValidateExecutionGrant(grant, command); err != nil {
@@ -717,7 +717,7 @@ func (handler Handler) Handle(ctx context.Context, command maintenance.Command) 
 	return receipt, err
 }
 
-// execute is the publication-free Walter seam. The Worker owns the outer
+// execute is the publication-free Yoda seam. The Worker owns the outer
 // occurrence lease and the single terminal maintenance receipt; Handle keeps
 // direct callers deterministic by publishing through the dedicated store.
 func (handler Handler) execute(ctx context.Context, command maintenance.Command) (maintenance.Receipt, error) {
@@ -726,7 +726,7 @@ func (handler Handler) execute(ctx context.Context, command maintenance.Command)
 		now = handler.Now().UTC()
 	}
 	if err := command.Validate(now); err != nil || command.JobID != WeeklyJobID || !command.ProposalOnly || command.Trigger != maintenance.TriggerWeekly {
-		return maintenance.Receipt{}, errors.New("invalid Walter weekly self-review maintenance command")
+		return maintenance.Receipt{}, errors.New("invalid Yoda weekly self-review maintenance command")
 	}
 	request, err := handler.BuildRequest(command, now)
 	if err != nil {
@@ -744,7 +744,7 @@ func (handler Handler) execute(ctx context.Context, command maintenance.Command)
 
 func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) (Request, error) {
 	if strings.TrimSpace(handler.OwnerID) == "" || strings.TrimSpace(handler.CurrentPrompt) == "" || strings.TrimSpace(handler.WorkingLanguage) == "" || strings.TrimSpace(handler.TranslatorID) == "" || strings.TrimSpace(handler.TranslatorVersion) == "" || handler.Translator == nil {
-		return Request{}, errors.New("Walter weekly self-review requires canonical prompt history and translator configuration")
+		return Request{}, errors.New("Yoda weekly self-review requires canonical prompt history and translator configuration")
 	}
 	if handler.ScopeKind == "" {
 		handler.ScopeKind = ownerctx.PromptScopeGlobal
@@ -766,7 +766,7 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 	}
 	filtered := make([]ownerctx.ObservationReceipt, 0, len(observations))
 	for _, observation := range observations {
-		if contains(facets, observation.Facet) && ownerctx.IsWalterWeeklyEligible(observation) {
+		if contains(facets, observation.Facet) && ownerctx.IsYodaWeeklyEligible(observation) {
 			filtered = append(filtered, observation)
 		}
 	}
@@ -782,7 +782,7 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 	}
 	currentNormalized, err := handler.Translator(handler.CurrentPrompt, handler.CurrentLanguage, handler.WorkingLanguage)
 	if err != nil || strings.TrimSpace(currentNormalized) == "" {
-		return Request{}, errors.New("Walter current prompt translation is unavailable")
+		return Request{}, errors.New("Yoda current prompt translation is unavailable")
 	}
 	currentNormalized = strings.TrimSpace(currentNormalized)
 	history := make([]PromptEvidence, 0, len(selected))
@@ -790,7 +790,7 @@ func (handler Handler) BuildRequest(command maintenance.Command, now time.Time) 
 	for _, item := range selected {
 		normalized, translateErr := handler.Translator(item.Entry.Prompt, item.Entry.Language, handler.WorkingLanguage)
 		if translateErr != nil || strings.TrimSpace(normalized) == "" {
-			return Request{}, errors.New("Walter prompt history translation is unavailable")
+			return Request{}, errors.New("Yoda prompt history translation is unavailable")
 		}
 		normalized = strings.TrimSpace(normalized)
 		history = append(history, PromptEvidence{ID: item.Entry.ID, OriginalText: item.Entry.Prompt, NormalizedText: normalized, SourceLanguage: item.Entry.Language, WorkingLanguage: handler.WorkingLanguage, OriginalSHA256: maestro.SHA256Hex(item.Entry.Prompt), NormalizedSHA256: maestro.SHA256Hex(normalized), RelevanceScore: item.Score, QuotedData: true, Instructional: false})
@@ -838,7 +838,7 @@ func (handler Handler) toMaintenanceReceipt(command maintenance.Command, receipt
 
 func ValidateRequest(request Request) error {
 	if request.SchemaVersion != SchemaVersion || !validID(request.WeekID) || !validID(request.OccurrenceID) || strings.TrimSpace(request.OwnerID) == "" || strings.TrimSpace(request.CurrentOriginal) == "" || strings.TrimSpace(request.CurrentNormalized) == "" || len(request.PromptHistory) > MaxPromptEntries || len(request.Observations) > MaxObservations || len(request.ReviewFacets) == 0 {
-		return errors.New("Walter weekly self-review request is invalid")
+		return errors.New("Yoda weekly self-review request is invalid")
 	}
 	if err := request.CanonicalSnapshot.Validate(); err != nil {
 		return err
@@ -851,16 +851,16 @@ func ValidateRequest(request Request) error {
 		hypothesisDigest = DigestJSON(request.IntentHypothesis)
 	}
 	if request.IntentHypothesisSHA256 != hypothesisDigest {
-		return errors.New("Walter intent hypothesis digest is missing or stale")
+		return errors.New("Yoda intent hypothesis digest is missing or stale")
 	}
 	if err := validateReviewFacets(request); err != nil {
 		return err
 	}
 	if strings.TrimSpace(request.Translation.TranslatorID) == "" || strings.TrimSpace(request.Translation.TranslatorVersion) == "" || strings.TrimSpace(request.Translation.SourceLanguage) == "" || strings.TrimSpace(request.Translation.WorkingLanguage) == "" {
-		return errors.New("Walter translation receipt is missing translator identity or language binding")
+		return errors.New("Yoda translation receipt is missing translator identity or language binding")
 	}
 	if request.Translation.ReceiptSHA256 != DigestJSON(TranslationReceipt{TranslatorID: request.Translation.TranslatorID, TranslatorVersion: request.Translation.TranslatorVersion, SourceLanguage: request.Translation.SourceLanguage, WorkingLanguage: request.Translation.WorkingLanguage, OriginalSHA256: request.Translation.OriginalSHA256, WorkingSHA256: request.Translation.WorkingSHA256, HistorySHA256: request.Translation.HistorySHA256}) || request.Translation.OriginalSHA256 != maestro.SHA256Hex(request.CurrentOriginal) || request.Translation.WorkingSHA256 != maestro.SHA256Hex(request.CurrentNormalized) {
-		return errors.New("Walter translation receipt is stale or incomplete")
+		return errors.New("Yoda translation receipt is stale or incomplete")
 	}
 	if err := validateTranslationPair(request.CurrentOriginal, request.CurrentNormalized); err != nil {
 		return err
@@ -868,7 +868,7 @@ func ValidateRequest(request Request) error {
 	historyDigests := make([]string, 0, len(request.PromptHistory))
 	for _, prompt := range request.PromptHistory {
 		if !prompt.QuotedData || prompt.Instructional || prompt.OriginalSHA256 != maestro.SHA256Hex(prompt.OriginalText) || prompt.NormalizedSHA256 != maestro.SHA256Hex(prompt.NormalizedText) || prompt.WorkingLanguage != request.Translation.WorkingLanguage || strings.TrimSpace(prompt.OriginalText) == "" || strings.TrimSpace(prompt.NormalizedText) == "" || strings.TrimSpace(prompt.SourceLanguage) == "" {
-			return errors.New("Walter prompt history is not quoted, normalized and digest-bound")
+			return errors.New("Yoda prompt history is not quoted, normalized and digest-bound")
 		}
 		if err := validateTranslationPair(prompt.OriginalText, prompt.NormalizedText); err != nil {
 			return err
@@ -877,11 +877,11 @@ func ValidateRequest(request Request) error {
 	}
 	sort.Strings(historyDigests)
 	if request.Translation.HistorySHA256 != Digest(strings.Join(historyDigests, "\n")) {
-		return errors.New("Walter translation receipt history digest is stale or incomplete")
+		return errors.New("Yoda translation receipt history digest is stale or incomplete")
 	}
 	for _, observation := range request.Observations {
 		if observation.ID == "" || observation.SourceDigest == "" || observation.Claim == "" {
-			return errors.New("Walter observation evidence is incomplete")
+			return errors.New("Yoda observation evidence is incomplete")
 		}
 	}
 	return validateContextBounds(request)
@@ -892,10 +892,10 @@ func ValidateProposal(request Request, proposal SelfRefinementProposal) error {
 		return err
 	}
 	if proposal.SchemaVersion != SchemaVersion || proposal.State != "proposed" || strings.TrimSpace(proposal.ProposalID) == "" || !validFacet(proposal.Facet) || !contains(request.ReviewFacets, proposal.Facet) || strings.TrimSpace(proposal.PriorClaim) == "" || strings.TrimSpace(proposal.ProposedRefinement) == "" || len([]byte(proposal.PriorClaim)) > MaxProposalBytes || len([]byte(proposal.ProposedRefinement)) > MaxProposalBytes || proposal.WeekID != request.WeekID || proposal.CanonicalSnapshotVersion != request.CanonicalSnapshot.Version || proposal.CanonicalSnapshotSHA256 != request.CanonicalSnapshot.CanonicalSourceDigest || proposal.PromptHistorySHA256 != DigestJSON(request.PromptHistory) || proposal.TranslationReceiptSHA256 != request.Translation.ReceiptSHA256 || !validConfidence(proposal.Confidence) || strings.TrimSpace(proposal.Sensitivity) == "" || len(proposal.EvidenceObservationIDs) == 0 || len(proposal.EvidenceObservationIDs) > MaxObservations || !validConfirmation(proposal.ConfirmationRequirement) || strings.TrimSpace(proposal.Refinement) == "" || len(proposal.Readers) == 0 {
-		return errors.New("Walter self-refinement proposal is incomplete or stale")
+		return errors.New("Yoda self-refinement proposal is incomplete or stale")
 	}
 	if proposal.IntentHypothesisSHA256 != request.IntentHypothesisSHA256 {
-		return errors.New("Walter intrinsic-purpose hypothesis binding is stale")
+		return errors.New("Yoda intrinsic-purpose hypothesis binding is stale")
 	}
 	available := map[string]ownerctx.ObservationReceipt{}
 	for _, observation := range request.Observations {
@@ -904,17 +904,17 @@ func ValidateProposal(request Request, proposal SelfRefinementProposal) error {
 	seen := map[string]bool{}
 	for _, id := range proposal.EvidenceObservationIDs {
 		observation, ok := available[id]
-		if !ok || seen[id] || !ownerctx.IsWalterWeeklyEligible(observation) {
-			return errors.New("Walter proposal evidence requires independent corroboration")
+		if !ok || seen[id] || !ownerctx.IsYodaWeeklyEligible(observation) {
+			return errors.New("Yoda proposal evidence requires independent corroboration")
 		}
 		if observation.Facet != proposal.Facet {
-			return errors.New("Walter proposal evidence facet does not match the proposed facet")
+			return errors.New("Yoda proposal evidence facet does not match the proposed facet")
 		}
 		seen[id] = true
 	}
 	policy, err := request.CanonicalSnapshot.Policy(proposal.Facet)
 	if err != nil || proposal.Sensitivity != policy.Sensitivity || !sameStrings(proposal.Readers, policy.Readers) || proposal.Refinement != policy.Refinement || string(proposal.ConfirmationRequirement) != policy.ConfirmationRequirement {
-		return errors.New("Walter proposal policy does not exactly match the canonical self policy")
+		return errors.New("Yoda proposal policy does not exactly match the canonical self policy")
 	}
 	return nil
 }
@@ -925,7 +925,7 @@ func ApplyCanonicalMutation(SelfRefinementProposal, ownerctx.UserSelfSnapshot) e
 
 func resolveReviewFacets(requested []string, sensitivePurpose string, ownerAuthorized bool) ([]string, error) {
 	if len(requested) == 0 {
-		return nil, errors.New("Walter review requires an explicit minimal facet allowlist")
+		return nil, errors.New("Yoda review requires an explicit minimal facet allowlist")
 	}
 	seen := make(map[string]bool, len(requested))
 	facets := make([]string, 0, len(requested))
@@ -933,7 +933,7 @@ func resolveReviewFacets(requested []string, sensitivePurpose string, ownerAutho
 		facet = strings.TrimSpace(facet)
 		if !validFacet(facet) || seen[facet] {
 			if !validFacet(facet) {
-				return nil, errors.New("Walter review facet is not canonical")
+				return nil, errors.New("Yoda review facet is not canonical")
 			}
 			continue
 		}
@@ -949,20 +949,20 @@ func resolveReviewFacets(requested []string, sensitivePurpose string, ownerAutho
 
 func validateReviewFacets(request Request) error {
 	if len(request.ReviewFacets) != len(request.CanonicalSnapshot.Facets) {
-		return errors.New("Walter request facet allowlist does not match its snapshot")
+		return errors.New("Yoda request facet allowlist does not match its snapshot")
 	}
 	seen := map[string]bool{}
 	for _, facet := range request.ReviewFacets {
 		if !validFacet(facet) || seen[facet] {
-			return errors.New("Walter request facet allowlist is invalid")
+			return errors.New("Yoda request facet allowlist is invalid")
 		}
 		if _, ok := request.CanonicalSnapshot.Facets[facet]; !ok {
-			return errors.New("Walter request facet is absent from its snapshot")
+			return errors.New("Yoda request facet is absent from its snapshot")
 		}
 		seen[facet] = true
 	}
 	if _, ok := request.CanonicalSnapshot.Facets["psychological-profile"]; ok && (!request.SensitiveOwnerAuthorized || request.SensitivePurposeSHA256 == "") {
-		return errors.New("Walter request includes a sensitive self facet without authorization binding")
+		return errors.New("Yoda request includes a sensitive self facet without authorization binding")
 	}
 	return nil
 }
@@ -984,10 +984,10 @@ func validateCurrentSnapshot(request Request) error {
 func validateTranslationPair(original, normalized string) error {
 	originalBytes, normalizedBytes := len([]byte(original)), len([]byte(normalized))
 	if originalBytes == 0 || normalizedBytes == 0 || originalBytes > MaxContextBytes || normalizedBytes > MaxContextBytes {
-		return errors.New("Walter prompt field exceeds its UTF-8 bound")
+		return errors.New("Yoda prompt field exceeds its UTF-8 bound")
 	}
 	if normalizedBytes > originalBytes*MaxTranslationExpansion+MaxTranslationOverhead {
-		return errors.New("Walter translation expansion exceeds its bound")
+		return errors.New("Yoda translation expansion exceeds its bound")
 	}
 	return nil
 }
@@ -997,11 +997,11 @@ func validateContextBounds(request Request) error {
 	add := func(value string) error {
 		bytes := len([]byte(value))
 		if bytes > MaxContextBytes {
-			return errors.New("Walter model input field exceeds its UTF-8 bound")
+			return errors.New("Yoda model input field exceeds its UTF-8 bound")
 		}
 		total += bytes
 		if total > MaxContextBytes {
-			return errors.New("Walter model input exceeds its combined UTF-8 bound")
+			return errors.New("Yoda model input exceeds its combined UTF-8 bound")
 		}
 		return nil
 	}
@@ -1043,11 +1043,11 @@ func validateContextBounds(request Request) error {
 func validateIntentHypothesis(request Request) error {
 	hypothesis := request.IntentHypothesis
 	if hypothesis == nil || strings.TrimSpace(hypothesis.ExpressedObjective) == "" || strings.TrimSpace(hypothesis.LatentIntentHypothesis) == "" || strings.TrimSpace(hypothesis.Materiality) == "" || strings.TrimSpace(hypothesis.DisconfirmationCondition) == "" || strings.TrimSpace(hypothesis.WorkingPrompt) == "" || hypothesis.WorkingPrompt != request.CurrentNormalized || !validConfidence(hypothesis.Confidence) || len(hypothesis.EvidenceRefs) == 0 || len(hypothesis.EvidenceRefs) > MaxObservations || len(hypothesis.Alternatives) > MaxObservations {
-		return errors.New("Walter intent hypothesis is incomplete")
+		return errors.New("Yoda intent hypothesis is incomplete")
 	}
 	for _, value := range []string{hypothesis.ExpressedObjective, hypothesis.LatentIntentHypothesis, hypothesis.Materiality, hypothesis.DisconfirmationCondition, hypothesis.WorkingPrompt} {
 		if len([]byte(value)) > MaxContextBytes {
-			return errors.New("Walter intent hypothesis exceeds its UTF-8 bound")
+			return errors.New("Yoda intent hypothesis exceeds its UTF-8 bound")
 		}
 	}
 	seen := make(map[string]bool, len(hypothesis.EvidenceRefs))
@@ -1063,16 +1063,16 @@ func validateIntentHypothesis(request Request) error {
 	}
 	for _, value := range hypothesis.EvidenceRefs {
 		if strings.TrimSpace(value) == "" || len([]byte(value)) > MaxContextBytes || seen[value] || !allowed[value] {
-			return errors.New("Walter intent hypothesis evidence reference is invalid or outside the request")
+			return errors.New("Yoda intent hypothesis evidence reference is invalid or outside the request")
 		}
 		seen[value] = true
 	}
 	if !seen["current_prompt"] {
-		return errors.New("Walter intent hypothesis must include the canonical current prompt evidence reference")
+		return errors.New("Yoda intent hypothesis must include the canonical current prompt evidence reference")
 	}
 	for _, value := range hypothesis.Alternatives {
 		if strings.TrimSpace(value) == "" || len([]byte(value)) > MaxContextBytes {
-			return errors.New("Walter intent hypothesis metadata is invalid")
+			return errors.New("Yoda intent hypothesis metadata is invalid")
 		}
 	}
 	return nil
@@ -1083,11 +1083,11 @@ func validateRawRequestInputs(current string, selected []ownerctx.PromptHistoryS
 	add := func(value string) error {
 		bytes := len([]byte(value))
 		if bytes > MaxContextBytes {
-			return errors.New("Walter raw model input field exceeds its UTF-8 bound")
+			return errors.New("Yoda raw model input field exceeds its UTF-8 bound")
 		}
 		total += bytes
 		if total > MaxContextBytes {
-			return errors.New("Walter raw model input exceeds its combined UTF-8 bound")
+			return errors.New("Yoda raw model input exceeds its combined UTF-8 bound")
 		}
 		return nil
 	}
@@ -1185,21 +1185,21 @@ func weekID(now time.Time) string {
 
 func validateReceipt(receipt Receipt) error {
 	if receipt.SchemaVersion != SchemaVersion || !validID(receipt.ReceiptID) || !validID(receipt.WeekID) || !validID(receipt.OccurrenceID) || len(receipt.FencingToken) != 32 || receipt.RecordedAt.IsZero() || receipt.RequestSHA256 == "" || receipt.PromptHistorySHA256 == "" || receipt.TranslationReceiptSHA256 == "" || receipt.CanonicalSnapshotSHA256 == "" {
-		return errors.New("weekly Walter receipt is invalid")
+		return errors.New("weekly Yoda receipt is invalid")
 	}
 	if len(receipt.LeaseOwner) != 32 || receipt.LeaseUntil.IsZero() {
-		return errors.New("weekly Walter receipt lease binding is invalid")
+		return errors.New("weekly Yoda receipt lease binding is invalid")
 	}
 	switch receipt.State {
 	case ReceiptReserved, ReceiptUnavailable, ReceiptFailed:
 		return nil
 	case ReceiptProposal:
 		if receipt.ProposalID == "" || receipt.ProposalSHA256 == "" || receipt.OwnerctxProposalID == "" || receipt.OwnerctxProposalSHA256 == "" || receipt.OwnerctxPolicy == "" || receipt.CanonicalSensitivity == "" || len(receipt.CanonicalReaders) == 0 || receipt.CanonicalRefinement == "" || !validConfirmation(receipt.CanonicalConfirmationRequirement) {
-			return errors.New("weekly Walter proposal receipt is missing canonical ownerctx binding")
+			return errors.New("weekly Yoda proposal receipt is missing canonical ownerctx binding")
 		}
 		return nil
 	default:
-		return errors.New("weekly Walter receipt state is invalid")
+		return errors.New("weekly Yoda receipt state is invalid")
 	}
 }
 

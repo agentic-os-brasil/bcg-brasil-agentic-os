@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bcgos.local/schemas/walter-self-review.schema.json",
-  "title": "Walter weekly self-review metadata receipt",
+  "$id": "https://bcgos.local/schemas/yoda-self-review.schema.json",
+  "title": "Yoda weekly self-review metadata receipt",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "receipt_id", "state", "week_id", "occurrence_id", "fencing_token", "lease_owner", "lease_until", "request_sha256", "prompt_history_sha256", "translation_receipt_sha256", "canonical_snapshot_sha256", "recorded_at"],

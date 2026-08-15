@@ -15,7 +15,7 @@ func orchestrationTestAgent(id, role, scopeKind, scopeID, parentKind, parentID s
 	}
 }
 
-func TestExecuteAgentEventsAccountCaseAccountWalter(t *testing.T) {
+func TestExecuteAgentEventsAccountCaseAccountYoda(t *testing.T) {
 	plan, err := PlanFor(Input{
 		SchemaVersion: 1, IntentClass: IntentCase, ScopeKind: "case", ScopeID: "case-alpha",
 		AccountScopeID: "account-alpha", Sensitivity: SensitivityInternal, Materiality: MaterialityReview,
@@ -23,7 +23,7 @@ func TestExecuteAgentEventsAccountCaseAccountWalter(t *testing.T) {
 		AvailableAgents: []RegisteredAgent{
 			orchestrationTestAgent("account-agent-alpha", "client_account_agent", "account", "account-alpha", "", ""),
 			orchestrationTestAgent("case-agent-alpha", "case_agent", "case", "case-alpha", "account", "account-alpha"),
-			orchestrationTestAgent("walter", "reviewer", "review", "review", "", ""),
+			orchestrationTestAgent("yoda", "reviewer", "review", "review", "", ""),
 		},
 	})
 	if err != nil {
@@ -34,7 +34,7 @@ func TestExecuteAgentEventsAccountCaseAccountWalter(t *testing.T) {
 		{AgentID: "account-agent-alpha", Decision: "approve"},
 		{AgentID: "case-agent-alpha", Decision: "return", ContentDigest: digest},
 		{AgentID: "account-agent-alpha", Decision: "approve", ContentDigest: digest},
-		{AgentID: "walter", Decision: "approve", ContentDigest: digest},
+		{AgentID: "yoda", Decision: "approve", ContentDigest: digest},
 	}, DefaultLoopPolicy)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestExecuteAgentEventsAccountCaseAccountWalter(t *testing.T) {
 		t.Fatalf("orchestration state = %#v", state)
 	}
 	if got := []Stage{state.Receipts[0].Stage, state.Receipts[1].Stage, state.Receipts[2].Stage, state.Receipts[3].Stage}; strings.Join([]string{string(got[0]), string(got[1]), string(got[2]), string(got[3])}, ",") !=
-		"account_framing,case_execution,account_validation,walter_review" {
+		"account_framing,case_execution,account_validation,yoda_review" {
 		t.Fatalf("stage order = %v", got)
 	}
 }

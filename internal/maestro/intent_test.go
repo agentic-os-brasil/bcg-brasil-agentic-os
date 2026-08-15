@@ -261,7 +261,7 @@ func TestMaestroAdvanceEvaluatesAndCapturesAuthenticatedMaterialInteraction(t *t
 	}
 }
 
-func TestPromptHistoryIsSelectedNormalizedAndQuotedInEphemeralWalterPacket(t *testing.T) {
+func TestPromptHistoryIsSelectedNormalizedAndQuotedInEphemeralYodaPacket(t *testing.T) {
 	root := t.TempDir()
 	if _, err := ownerctx.Initialize(root); err != nil {
 		t.Fatal(err)

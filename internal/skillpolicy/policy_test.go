@@ -41,7 +41,7 @@ func TestPolicyKeepsSkillsAsMethodsWithoutCreatingAuthority(t *testing.T) {
 		t.Fatal("Gamma Guardian gained an unrelated case-deliverable method")
 	}
 	if registry.AllowsDirect("reviewer", "bcg-deck") {
-		t.Fatal("Walter gained direct Case method selection")
+		t.Fatal("Yoda gained direct Case method selection")
 	}
 	if registry.AllowsDelegated("case_agent", "reviewer", "qualitative-analysis") {
 		t.Fatal("agent-to-agent skill delegation was accepted")

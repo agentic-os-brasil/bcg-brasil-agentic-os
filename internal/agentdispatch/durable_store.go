@@ -170,7 +170,7 @@ func (store *pilotRecoveryStore) write(record pilotRecord) error {
 	return syncDirectory(store.root)
 }
 
-// writeBatch uses a small owner-local journal so a Walter leaf and its producer
+// writeBatch uses a small owner-local journal so a Yoda leaf and its producer
 // projection are recovered together after a process or filesystem interruption.
 // The journal is replayed before normal records are loaded and is removed only
 // after every record has been durably written.

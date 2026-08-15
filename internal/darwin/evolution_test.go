@@ -35,7 +35,7 @@ func TestStructuralApprovalCannotBeIssuedByDarwin(t *testing.T) {
 	if err := approval.Validate(proposal); err == nil {
 		t.Fatal("Darwin self-approval was accepted")
 	}
-	approval.ApproverID = "walter"
+	approval.ApproverID = "yoda"
 	if err := approval.Validate(proposal); err != nil {
 		t.Fatal(err)
 	}

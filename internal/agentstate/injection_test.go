@@ -26,7 +26,7 @@ func TestAssembleRoundtripRendersH2Sections(t *testing.T) {
 	store := newTestStore(t, 0)
 	first := baseUpdate()
 	first.SectionLabel = "handoff_note"
-	first.Body = "Handed off session to walter."
+	first.Body = "Handed off session to yoda."
 
 	second := baseUpdate()
 	second.SectionLabel = "last_action"
@@ -178,8 +178,8 @@ func TestAssembleWorkspaceAndAgentIsolation(t *testing.T) {
 
 	c := baseUpdate()
 	c.WorkspaceID = "workspace-a"
-	c.AgentID = "walter"
-	c.Body = "Only visible to workspace-a walter."
+	c.AgentID = "yoda"
+	c.Body = "Only visible to workspace-a yoda."
 
 	for _, u := range []SnapshotUpdate{a, b, c} {
 		if _, err := store.Apply(u); err != nil {
@@ -194,7 +194,7 @@ func TestAssembleWorkspaceAndAgentIsolation(t *testing.T) {
 	if !strings.Contains(sectionA.Content, "workspace-a maestro") {
 		t.Fatalf("workspace-a/maestro missing own body:\n%s", sectionA.Content)
 	}
-	if strings.Contains(sectionA.Content, "workspace-b") || strings.Contains(sectionA.Content, "walter") {
+	if strings.Contains(sectionA.Content, "workspace-b") || strings.Contains(sectionA.Content, "yoda") {
 		t.Fatalf("cross-agent or cross-workspace leak:\n%s", sectionA.Content)
 	}
 }

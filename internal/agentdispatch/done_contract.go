@@ -14,7 +14,7 @@ type DonePolicy string
 
 const (
 	DoneAuthenticatedReturn DonePolicy = "authenticated_return"
-	DoneTypedWalterVerdict  DonePolicy = "typed_walter_verdict"
+	DoneTypedYodaVerdict  DonePolicy = "typed_yoda_verdict"
 )
 
 const maxDoneEvidence = 12
@@ -31,8 +31,8 @@ type DoneContract struct {
 
 func defaultDoneContract(targetID string) DoneContract {
 	policy := DoneAuthenticatedReturn
-	if targetID == "walter" {
-		policy = DoneTypedWalterVerdict
+	if targetID == "yoda" {
+		policy = DoneTypedYodaVerdict
 	}
 	return DoneContract{SchemaVersion: 1, Policy: policy}
 }
@@ -54,9 +54,9 @@ func validateDoneContract(contract DoneContract, targetID, scopeKind, scopeID st
 	if contract.SchemaVersion != 1 || contract.MinimumEvidenceRefs < 0 || contract.MinimumEvidenceRefs > maxDoneEvidence {
 		return errors.New("done contract schema or evidence bound is invalid")
 	}
-	if targetID == "walter" {
-		if contract.Policy != DoneTypedWalterVerdict {
-			return errors.New("Walter requires the typed verdict done policy")
+	if targetID == "yoda" {
+		if contract.Policy != DoneTypedYodaVerdict {
+			return errors.New("Yoda requires the typed verdict done policy")
 		}
 	} else if contract.Policy != DoneAuthenticatedReturn {
 		return errors.New("producer requires the authenticated return done policy")
@@ -82,8 +82,8 @@ func doneContractSatisfied(contract DoneContract, body ReturnBody, targetID stri
 	if contract.SchemaVersion != 1 || contract.Policy != DoneAuthenticatedReturn {
 		return errors.New("return does not carry the authenticated return done policy")
 	}
-	if targetID == "walter" {
-		return errors.New("Walter completion must use its typed verdict path")
+	if targetID == "yoda" {
+		return errors.New("Yoda completion must use its typed verdict path")
 	}
 	if len(body.EvidenceRefs) < contract.MinimumEvidenceRefs {
 		return fmt.Errorf("done contract requires at least %d evidence references", contract.MinimumEvidenceRefs)

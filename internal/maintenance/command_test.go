@@ -420,11 +420,11 @@ func TestPublishedCommandAndReceiptSchemasAreStrictlyPresent(t *testing.T) {
 	}
 }
 
-func TestPublishedSchemasAcceptWalterWeeklyProposalOnly(t *testing.T) {
+func TestPublishedSchemasAcceptYodaWeeklyProposalOnly(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
 	command := Command{
-		SchemaVersion: CommandSchemaVersion, CommandID: "cmd-walter-weekly",
-		JobID: WalterSelfReviewWeeklyJobID, WorkspaceID: "maestro-system",
+		SchemaVersion: CommandSchemaVersion, CommandID: "cmd-yoda-weekly",
+		JobID: YodaSelfReviewWeeklyJobID, WorkspaceID: "maestro-system",
 		Trigger: TriggerWeekly, ScheduledFor: now, RequestedAt: now,
 		Deadline: now.Add(time.Minute), ProposalOnly: true,
 	}
@@ -432,7 +432,7 @@ func TestPublishedSchemasAcceptWalterWeeklyProposalOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := validatePublishedSchemaDocument(t, "maintenance-command.schema.json", command); err != nil {
-		t.Fatalf("Walter weekly command does not satisfy its published schema: %v", err)
+		t.Fatalf("Yoda weekly command does not satisfy its published schema: %v", err)
 	}
 	receipt := Receipt{
 		SchemaVersion: CommandSchemaVersion, AttemptID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -446,22 +446,22 @@ func TestPublishedSchemasAcceptWalterWeeklyProposalOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := validatePublishedSchemaDocument(t, "maintenance-receipt.schema.json", receipt); err != nil {
-		t.Fatalf("Walter weekly receipt does not satisfy its published schema: %v", err)
+		t.Fatalf("Yoda weekly receipt does not satisfy its published schema: %v", err)
 	}
 
 	command.Trigger = TriggerMonthly
 	if err := command.Validate(now); err == nil {
-		t.Fatal("Go command validator accepted Walter on the Darwin monthly cadence")
+		t.Fatal("Go command validator accepted Yoda on the Darwin monthly cadence")
 	}
 	if err := validatePublishedSchemaDocument(t, "maintenance-command.schema.json", command); err == nil {
-		t.Fatal("published command schema accepted Walter on the Darwin monthly cadence")
+		t.Fatal("published command schema accepted Yoda on the Darwin monthly cadence")
 	}
 	receipt.Trigger = TriggerMonthly
 	if err := receipt.Validate(); err == nil {
-		t.Fatal("Go receipt validator accepted Walter on the Darwin monthly cadence")
+		t.Fatal("Go receipt validator accepted Yoda on the Darwin monthly cadence")
 	}
 	if err := validatePublishedSchemaDocument(t, "maintenance-receipt.schema.json", receipt); err == nil {
-		t.Fatal("published receipt schema accepted Walter on the Darwin monthly cadence")
+		t.Fatal("published receipt schema accepted Yoda on the Darwin monthly cadence")
 	}
 }
 

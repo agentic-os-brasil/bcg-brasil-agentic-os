@@ -209,7 +209,7 @@ func TestIdentityDraftRejectsBatchedFutureMainAgents(t *testing.T) {
 	root := t.TempDir()
 	profile := Profile{SchemaVersion: SchemaVersion, OwnerID: "daniel", Confirmed: true, UpdatedAt: time.Now().UTC(), Selections: []Selection{
 		{Role: "maestro", DisplayName: "Maestro", Emoji: "🎼", OwnerID: "daniel", OwnershipScope: "system"},
-		{Role: "walter", DisplayName: "Walter", Emoji: "🦉", OwnerID: "daniel", OwnershipScope: "governance"},
+		{Role: "yoda", DisplayName: "Yoda", Emoji: "🦉", OwnerID: "daniel", OwnershipScope: "governance"},
 	}}
 	if _, err := DraftProfile(root, profile, true, true); err == nil {
 		t.Fatal("one-question interview accepted a batched future main-agent answer")

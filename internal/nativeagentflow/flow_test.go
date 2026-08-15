@@ -43,7 +43,7 @@ func TestStrategicRouteRequiresCaseAndAccountValidation(t *testing.T) {
 	}
 }
 
-func TestDirectCaseAndOptionalWalterCanFinish(t *testing.T) {
+func TestDirectCaseAndOptionalYodaCanFinish(t *testing.T) {
 	store, _ := New(t.TempDir(), "workspace-a")
 	if err := store.BeginTurn("session-a"); err != nil {
 		t.Fatal(err)
@@ -57,14 +57,14 @@ func TestDirectCaseAndOptionalWalterCanFinish(t *testing.T) {
 	if ready, _, _ := store.Finalize("session-a"); !ready {
 		t.Fatal("direct Case route did not finish")
 	}
-	if err := store.Start("session-a", "walter-1", "walter"); err != nil {
+	if err := store.Start("session-a", "yoda-1", "yoda"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Stop("session-a", "walter-1", "walter"); err != nil {
+	if err := store.Stop("session-a", "yoda-1", "yoda"); err != nil {
 		t.Fatal(err)
 	}
 	if ready, _, _ := store.Finalize("session-a"); !ready {
-		t.Fatal("Walter-refined route did not finish")
+		t.Fatal("Yoda-refined route did not finish")
 	}
 }
 
@@ -73,8 +73,8 @@ func TestWrongOrderAndParallelAgentsFailClosed(t *testing.T) {
 	if err := store.BeginTurn("session-a"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Start("session-a", "walter-1", "walter"); err == nil {
-		t.Fatal("Walter started before Case")
+	if err := store.Start("session-a", "yoda-1", "yoda"); err == nil {
+		t.Fatal("Yoda started before Case")
 	}
 	if err := store.Start("session-a", "account-1", "client-account-agent"); err != nil {
 		t.Fatal(err)

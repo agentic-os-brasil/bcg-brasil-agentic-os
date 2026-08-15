@@ -32,7 +32,7 @@ type definition struct {
 var managed = []definition{
 	{ID: "client-account-agent", Description: "Client account strategic framing and stakeholder validation. Invoke only when Maestro selects the account route.", Tools: "[]", PermissionMode: "plan"},
 	{ID: "case-agent", Description: "Executes one Maestro-authorized case packet inside its exact workspace scope; never delegates.", Tools: "Read, Write, Edit, Glob, Grep", PermissionMode: "default"},
-	{ID: "walter", Description: "Calm owner-self proxy and senior refiner for high-leverage outputs selected by Maestro.", Tools: "[]", PermissionMode: "plan"},
+	{ID: "yoda", Description: "Calm owner-self proxy and senior refiner for high-leverage outputs selected by Maestro.", Tools: "[]", PermissionMode: "plan"},
 	{ID: "darwin", Description: "Maestro system-health and bounded-housekeeping specialist; never handles client work.", Tools: "[]", PermissionMode: "plan"},
 	{ID: "pa-expert", Description: "Read-only functional or industrial PA Expert consulted only through Maestro.", Tools: "[]", PermissionMode: "plan"},
 }
@@ -284,7 +284,7 @@ func validateManaged(root *os.Root, action string) error {
 }
 
 var managedAgentTypes = map[string]bool{
-	"case-agent": true, "client-account-agent": true, "walter": true,
+	"case-agent": true, "client-account-agent": true, "yoda": true,
 	"darwin": true, "pa-expert": true,
 }
 

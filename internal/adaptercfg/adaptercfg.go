@@ -29,7 +29,7 @@ var (
 var managedClaudeAgentFiles = []string{
 	"client-account-agent.md",
 	"case-agent.md",
-	"walter.md",
+	"yoda.md",
 	"darwin.md",
 	"pa-expert.md",
 }

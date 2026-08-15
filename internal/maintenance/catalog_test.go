@@ -36,9 +36,9 @@ func TestCatalogRequiresUniversalMaintenancePlane(t *testing.T) {
 	if _, found := findJob(catalog.Jobs, "self-refinement-proposal"); found {
 		t.Fatal("retired generic self-refinement job remains in the canonical catalog")
 	}
-	walter, found := findJob(catalog.Jobs, "walter-self-review-weekly")
-	if !found || walter.Executor != "model_adapter" || walter.DefaultEnabled || walter.Unattended != "policy_gated" || !strings.Contains(walter.SuccessBoundary, "silent self-ingestion") || strings.Contains(walter.SuccessBoundary, "proposal") {
-		t.Fatalf("Walter weekly silent-ingestion contract drifted: %#v", walter)
+	yoda, found := findJob(catalog.Jobs, "yoda-self-review-weekly")
+	if !found || yoda.Executor != "model_adapter" || yoda.DefaultEnabled || yoda.Unattended != "policy_gated" || !strings.Contains(yoda.SuccessBoundary, "silent self-ingestion") || strings.Contains(yoda.SuccessBoundary, "proposal") {
+		t.Fatalf("Yoda weekly silent-ingestion contract drifted: %#v", yoda)
 	}
 	checkpoint, found := findJob(catalog.Jobs, MemoryCheckpointJobID)
 	if !found || checkpoint.Executor != "deterministic" || checkpoint.Scope != "workspace" || !checkpoint.DefaultEnabled || checkpoint.Unattended != "deterministic_only" || !reflect.DeepEqual(checkpoint.Writes, []string{"memory_checkpoint"}) {
@@ -99,22 +99,22 @@ func TestManagedJobsCannotWritePrivateState(t *testing.T) {
 	}
 }
 
-func TestCatalogFixesWalterAndDarwinStructuralSafetyTuples(t *testing.T) {
+func TestCatalogFixesYodaAndDarwinStructuralSafetyTuples(t *testing.T) {
 	catalog, err := LoadFile("../../bundles/base/runtime/maintenance.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for index := range catalog.Jobs {
 		switch catalog.Jobs[index].ID {
-		case "walter-self-review-weekly":
+		case "yoda-self-review-weekly":
 			catalog.Jobs[index].Executor = "deterministic"
 			if err := catalog.Validate(); err == nil {
-				t.Fatal("catalog accepted an unsafe Walter execution tuple")
+				t.Fatal("catalog accepted an unsafe Yoda execution tuple")
 			}
 			return
 		}
 	}
-	t.Fatal("Walter weekly job was not found")
+	t.Fatal("Yoda weekly job was not found")
 }
 
 func TestCatalogFixesDarwinStructuralSafetyTuple(t *testing.T) {

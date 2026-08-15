@@ -26,12 +26,12 @@ func TestBuildReturnsBoundedPointersAndOmitsUnapprovedSensitiveOwnerFacets(t *te
 			State: "ready", WorkspacePath: "/work/case-a", WorkspaceID: "workspace-a", BrainReadable: true,
 		},
 		Owner: ownerctx.Status{Initialized: true, Facets: map[string]ownerctx.Facet{
-			"owner-identity":        {Pointer: ownerctx.Pointer{Path: "owner/self/owner-identity.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}, Sensitivity: "identity"},
-			"personal-context":      {Pointer: ownerctx.Pointer{Path: "owner/self/personal-context.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}, Sensitivity: "sensitive"},
-			"voice":                 {Pointer: ownerctx.Pointer{Path: "owner/self/voice.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}},
-			"motivations":           {Pointer: ownerctx.Pointer{Path: "owner/self/motivations.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}},
-			"quality-bar":           {Pointer: ownerctx.Pointer{Path: "owner/self/quality-bar.md", Available: true, State: "available"}, Readers: []string{"session", "walter"}},
-			"psychological-profile": {Pointer: ownerctx.Pointer{Path: "owner/self/psychological-profile.md", Available: true, State: "available"}, Readers: []string{"walter"}, Sensitivity: "sensitive"},
+			"owner-identity":        {Pointer: ownerctx.Pointer{Path: "owner/self/owner-identity.md", Available: true, State: "available"}, Readers: []string{"session", "yoda"}, Sensitivity: "identity"},
+			"personal-context":      {Pointer: ownerctx.Pointer{Path: "owner/self/personal-context.md", Available: true, State: "available"}, Readers: []string{"session", "yoda"}, Sensitivity: "sensitive"},
+			"voice":                 {Pointer: ownerctx.Pointer{Path: "owner/self/voice.md", Available: true, State: "available"}, Readers: []string{"session", "yoda"}},
+			"motivations":           {Pointer: ownerctx.Pointer{Path: "owner/self/motivations.md", Available: true, State: "available"}, Readers: []string{"session", "yoda"}},
+			"quality-bar":           {Pointer: ownerctx.Pointer{Path: "owner/self/quality-bar.md", Available: true, State: "available"}, Readers: []string{"session", "yoda"}},
+			"psychological-profile": {Pointer: ownerctx.Pointer{Path: "owner/self/psychological-profile.md", Available: true, State: "available"}, Readers: []string{"yoda"}, Sensitivity: "sensitive"},
 		}, OperatingState: ownerctx.Pointer{Path: "owner/operating/work-state.md", Available: true, State: "available"}},
 		Atlas:         atlas.Status{Managed: atlas.Pointer{State: "unavailable"}, Owner: atlas.Pointer{Path: "/local/atlas/owner", Available: true, State: "available"}, Workspace: atlas.Pointer{Path: "/work/case-a/brain", Available: true, State: "available"}},
 		Execution:     execution.ActivePointer{Path: execution.ActivePointerPath, Available: true, State: execution.ActivePointerAvailable},
@@ -60,7 +60,7 @@ func TestBuildReturnsBoundedPointersAndOmitsUnapprovedSensitiveOwnerFacets(t *te
 		t.Fatalf("quality bar facet missing: %#v", packet.Owner.Facets)
 	}
 	if _, ok := packet.Owner.Facets["psychological-profile"]; ok {
-		t.Fatalf("sensitive Walter-only facet leaked into packet: %#v", packet.Owner.Facets)
+		t.Fatalf("sensitive Yoda-only facet leaked into packet: %#v", packet.Owner.Facets)
 	}
 	if packet.Atlas.Owner.Path != "bcgos://atlas/owner" || packet.Atlas.Workspace.Path != "bcgos://atlas/workspace" {
 		t.Fatalf("atlas references must be portable: %#v", packet.Atlas)
@@ -178,12 +178,12 @@ func TestBuildFailsClosedForSensitiveSessionReadableFacet(t *testing.T) {
 		Owner: ownerctx.Status{Initialized: true, Facets: map[string]ownerctx.Facet{
 			"personal-context": {
 				Pointer:     ownerctx.Pointer{Path: "owner/self/personal-context.md", Available: true, State: "available"},
-				Readers:     []string{"session", "walter"},
+				Readers:     []string{"session", "yoda"},
 				Sensitivity: "sensitive",
 			},
 			"psychological-profile": {
 				Pointer:     ownerctx.Pointer{Path: "owner/self/psychological-profile.md", Available: true, State: "available"},
-				Readers:     []string{"session", "walter"},
+				Readers:     []string{"session", "yoda"},
 				Sensitivity: "sensitive",
 			},
 		}},

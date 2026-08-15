@@ -14,7 +14,7 @@ func TestPlannerAccountAssistedMaterialPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.CaseEntry != CaseEntryAccountFirst || !plan.RequiresAccountFraming || !plan.RequiresAccountValidation || !plan.RequiresWalter || plan.SkipWalter || len(plan.Bindings) != 3 {
+	if plan.CaseEntry != CaseEntryAccountFirst || !plan.RequiresAccountFraming || !plan.RequiresAccountValidation || !plan.RequiresYoda || plan.SkipYoda || len(plan.Bindings) != 3 {
 		t.Fatalf("account-assisted material plan = %#v", plan)
 	}
 	state, err := NewChain(plan, DefaultLoopPolicy)
@@ -33,8 +33,8 @@ func TestPlannerAccountAssistedMaterialPath(t *testing.T) {
 	advance(Event{AgentID: "account-agent-client-alpha", Decision: "approve"})
 	advance(Event{AgentID: "case-agent-transformation", Decision: "return", ContentDigest: digest})
 	advance(Event{AgentID: "account-agent-client-alpha", Decision: "approve", ContentDigest: digest})
-	advance(Event{AgentID: "walter", Decision: "approve", ContentDigest: digest})
-	if state.Stage != StageFinal || state.WalterApprovalDigest != digest {
+	advance(Event{AgentID: "yoda", Decision: "approve", ContentDigest: digest})
+	if state.Stage != StageFinal || state.YodaApprovalDigest != digest {
 		t.Fatalf("material account path did not finish: %#v", state)
 	}
 }
@@ -50,7 +50,7 @@ func TestPlannerBuildsActionSpecificChainsForEveryNonCaseRoute(t *testing.T) {
 		{name: "direct answer", input: Input{SchemaVersion: 1, IntentClass: IntentDirectAnswer, ScopeKind: "workspace", ScopeID: "workspace-a", Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone}, stage: StageFinal, direct: true},
 		{name: "account advisory", input: routeInput(IntentAccount, "account", "client-alpha", RegisteredAgent{ID: "account-agent", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-alpha"}), stage: StageAccountAdvisory, activeRole: "client_account_agent"},
 		{name: "PA advisory", input: routeInput(IntentAdvisory, "practice", "fpa", RegisteredAgent{ID: "pa-expert", Role: "pa_expert", ScopeKind: "practice", ScopeID: "fpa"}), stage: StagePAExpert, activeRole: "pa_expert"},
-		{name: "Walter review", input: routeInput(IntentReview, "review", "review", RegisteredAgent{ID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review"}), stage: StageWalterReview, activeRole: "reviewer"},
+		{name: "Yoda review", input: routeInput(IntentReview, "review", "review", RegisteredAgent{ID: "yoda", Role: "reviewer", ScopeKind: "review", ScopeID: "review"}), stage: StageYodaReview, activeRole: "reviewer"},
 		{name: "Darwin health", input: func() Input {
 			input := routeInput(IntentHealth, "health", "system", RegisteredAgent{ID: "darwin", Role: "governance_analyst", ScopeKind: "health", ScopeID: "system"})
 			input.HealthIntent = HealthSystem
@@ -138,12 +138,12 @@ func TestPlanValidateAcceptsAllFourCaseRoutes(t *testing.T) {
 		input   Input
 		entry   CaseEntry
 		account bool
-		walter  bool
+		yoda  bool
 	}{
-		{name: "account-assisted-walter", input: func() Input { input := caseInput(false); input.Materiality = MaterialityReview; return input }(), entry: CaseEntryAccountFirst, account: true, walter: true},
-		{name: "account-assisted-no-walter", input: caseInput(false), entry: CaseEntryAccountFirst, account: true, walter: false},
-		{name: "direct-walter", input: func() Input { input := caseInput(true); input.Materiality = MaterialityReview; return input }(), entry: CaseEntryDirect, account: false, walter: true},
-		{name: "direct-no-walter", input: caseInput(true), entry: CaseEntryDirect, account: false, walter: false},
+		{name: "account-assisted-yoda", input: func() Input { input := caseInput(false); input.Materiality = MaterialityReview; return input }(), entry: CaseEntryAccountFirst, account: true, yoda: true},
+		{name: "account-assisted-no-yoda", input: caseInput(false), entry: CaseEntryAccountFirst, account: true, yoda: false},
+		{name: "direct-yoda", input: func() Input { input := caseInput(true); input.Materiality = MaterialityReview; return input }(), entry: CaseEntryDirect, account: false, yoda: true},
+		{name: "direct-no-yoda", input: caseInput(true), entry: CaseEntryDirect, account: false, yoda: false},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestPlanValidateAcceptsAllFourCaseRoutes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if plan.CaseEntry != testCase.entry || plan.RequiresAccountValidation != testCase.account || plan.RequiresWalter != testCase.walter {
+			if plan.CaseEntry != testCase.entry || plan.RequiresAccountValidation != testCase.account || plan.RequiresYoda != testCase.yoda {
 				t.Fatalf("unexpected route: %#v", plan)
 			}
 			if err := plan.Validate(); err != nil {
@@ -168,7 +168,7 @@ func TestPlanValidateRejectsExtraBindingsForCaseRouteSemantics(t *testing.T) {
 		extra AgentBinding
 	}{
 		{name: "direct-case-account-extra", input: caseInput(true), extra: AgentBinding{ID: "account-agent-client-alpha", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-alpha", AuthorizationDigest: digestFor("extra-account-auth"), CapabilityDigest: digestFor("extra-account-capability"), StateSnapshotDigest: digestFor("extra-account-state")}},
-		{name: "account-first-walter-extra", input: caseInput(false), extra: AgentBinding{ID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review", AuthorizationDigest: digestFor("extra-walter-auth"), CapabilityDigest: digestFor("extra-walter-capability"), StateSnapshotDigest: digestFor("extra-walter-state")}},
+		{name: "account-first-yoda-extra", input: caseInput(false), extra: AgentBinding{ID: "yoda", Role: "reviewer", ScopeKind: "review", ScopeID: "review", AuthorizationDigest: digestFor("extra-yoda-auth"), CapabilityDigest: digestFor("extra-yoda-capability"), StateSnapshotDigest: digestFor("extra-yoda-state")}},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -204,12 +204,12 @@ func TestPlannerRequiresExplicitCaseAccountBindingAndDoesNotUseRegistryOrder(t *
 	}
 }
 
-func TestPlannerAccountAssistedLowMaterialitySkipsOnlyWalter(t *testing.T) {
+func TestPlannerAccountAssistedLowMaterialitySkipsOnlyYoda(t *testing.T) {
 	plan, err := PlanFor(caseInput(false))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !plan.RequiresAccountFraming || !plan.RequiresAccountValidation || plan.RequiresWalter || !plan.SkipWalter || plan.WalterSkipReasonCode == "" || plan.WalterSkipEvidence == "" {
+	if !plan.RequiresAccountFraming || !plan.RequiresAccountValidation || plan.RequiresYoda || !plan.SkipYoda || plan.YodaSkipReasonCode == "" || plan.YodaSkipEvidence == "" {
 		t.Fatalf("account low-materiality plan = %#v", plan)
 	}
 	state, err := NewChain(plan, DefaultLoopPolicy)
@@ -258,40 +258,40 @@ func TestPlannerKeepsQualityRiskIndependentFromClientLens(t *testing.T) {
 	directQuality.ExecutionOnly = true
 	directQuality.Materiality = MaterialityReview
 	plan, err := PlanFor(directQuality)
-	if err != nil || plan.CaseEntry != CaseEntryDirect || !plan.RequiresWalter || plan.RequiresAccountValidation {
+	if err != nil || plan.CaseEntry != CaseEntryDirect || !plan.RequiresYoda || plan.RequiresAccountValidation {
 		t.Fatalf("execution-only quality risk collapsed into Account consultation: %#v %v", plan, err)
 	}
 	strategicLowRisk := caseInput(true)
 	strategicLowRisk.StrategicImplication = true
 	plan, err = PlanFor(strategicLowRisk)
-	if err != nil || plan.CaseEntry != CaseEntryAccountFirst || plan.RequiresWalter {
-		t.Fatalf("strategic lens and Walter decisions were coupled: %#v %v", plan, err)
+	if err != nil || plan.CaseEntry != CaseEntryAccountFirst || plan.RequiresYoda {
+		t.Fatalf("strategic lens and Yoda decisions were coupled: %#v %v", plan, err)
 	}
 }
 
-func TestPlannerUsesWalterForHighLeverageSignalsAndSkipsOrdinaryWorkCalmly(t *testing.T) {
+func TestPlannerUsesYodaForHighLeverageSignalsAndSkipsOrdinaryWorkCalmly(t *testing.T) {
 	highLeverage := caseInput(false)
 	highLeverage.ExecutionOnly = true
 	highLeverage.ConsequentialDecision = true
 	plan, err := PlanFor(highLeverage)
-	if err != nil || plan.CaseEntry != CaseEntryDirect || !plan.RequiresWalter || plan.WalterReasonCode != "walter_required_high_leverage" {
-		t.Fatalf("high-leverage execution did not select Walter: %#v %v", plan, err)
+	if err != nil || plan.CaseEntry != CaseEntryDirect || !plan.RequiresYoda || plan.YodaReasonCode != "yoda_required_high_leverage" {
+		t.Fatalf("high-leverage execution did not select Yoda: %#v %v", plan, err)
 	}
 	ordinary := caseInput(true)
 	plan, err = PlanFor(ordinary)
-	if err != nil || plan.RequiresWalter || !plan.SkipWalter || plan.WalterReasonCode != "walter_skipped_low_leverage" {
-		t.Fatalf("ordinary work inflated Walter loop: %#v %v", plan, err)
+	if err != nil || plan.RequiresYoda || !plan.SkipYoda || plan.YodaReasonCode != "yoda_skipped_low_leverage" {
+		t.Fatalf("ordinary work inflated Yoda loop: %#v %v", plan, err)
 	}
 }
 
-func TestPlannerDirectCaseConvergesToWalterWhenMaterial(t *testing.T) {
+func TestPlannerDirectCaseConvergesToYodaWhenMaterial(t *testing.T) {
 	input := caseInput(true)
 	input.Materiality = MaterialityReview
 	plan, err := PlanFor(input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.CaseEntry != CaseEntryDirect || !plan.SkipPreAccount || plan.RequiresAccountValidation || !plan.RequiresWalter || len(plan.Bindings) != 2 {
+	if plan.CaseEntry != CaseEntryDirect || !plan.SkipPreAccount || plan.RequiresAccountValidation || !plan.RequiresYoda || len(plan.Bindings) != 2 {
 		t.Fatalf("direct material plan = %#v", plan)
 	}
 	state, err := NewChain(plan, DefaultLoopPolicy)
@@ -300,21 +300,21 @@ func TestPlannerDirectCaseConvergesToWalterWhenMaterial(t *testing.T) {
 	}
 	digest := digestFor("direct-material-v1")
 	state, _, err = state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: "case-agent-transformation", Decision: "return", ContentDigest: digest})
-	if err != nil || state.Stage != StageWalterReview {
-		t.Fatalf("direct material Case did not converge to Walter: %#v %v", state, err)
+	if err != nil || state.Stage != StageYodaReview {
+		t.Fatalf("direct material Case did not converge to Yoda: %#v %v", state, err)
 	}
-	state, _, err = state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: "walter", Decision: "approve", ContentDigest: digest})
+	state, _, err = state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: "yoda", Decision: "approve", ContentDigest: digest})
 	if err != nil || state.Stage != StageFinal {
-		t.Fatalf("direct material Walter gate = %#v %v", state, err)
+		t.Fatalf("direct material Yoda gate = %#v %v", state, err)
 	}
 }
 
-func TestPlannerDirectCaseLowMaterialitySkipsAccountAndWalter(t *testing.T) {
+func TestPlannerDirectCaseLowMaterialitySkipsAccountAndYoda(t *testing.T) {
 	plan, err := PlanFor(caseInput(true))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.CaseEntry != CaseEntryDirect || !plan.SkipPreAccount || plan.RequiresAccountValidation || plan.RequiresWalter || !plan.SkipWalter || plan.WalterSkipReasonCode == "" || len(plan.Bindings) != 1 {
+	if plan.CaseEntry != CaseEntryDirect || !plan.SkipPreAccount || plan.RequiresAccountValidation || plan.RequiresYoda || !plan.SkipYoda || plan.YodaSkipReasonCode == "" || len(plan.Bindings) != 1 {
 		t.Fatalf("direct low-materiality plan = %#v", plan)
 	}
 	state, err := NewChain(plan, DefaultLoopPolicy)
@@ -341,12 +341,12 @@ func TestPlannerReceiptsExposeIndependentRoutingDecisions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if receipt.AccountConsultationRequired || receipt.WalterRequired || !receipt.WalterSkipped || state.Stage != StageFinal {
+	if receipt.AccountConsultationRequired || receipt.YodaRequired || !receipt.YodaSkipped || state.Stage != StageFinal {
 		t.Fatalf("receipt did not preserve direct low-leverage decisions: %+v", receipt)
 	}
 }
 
-func TestPlannerRevalidatesAfterAccountAndWalterRefinement(t *testing.T) {
+func TestPlannerRevalidatesAfterAccountAndYodaRefinement(t *testing.T) {
 	input := caseInput(false)
 	input.Materiality = MaterialityReview
 	plan, err := PlanFor(input)
@@ -373,13 +373,13 @@ func TestPlannerRevalidatesAfterAccountAndWalterRefinement(t *testing.T) {
 	advance(Event{AgentID: "account-agent-client-alpha", Decision: "refine", ContentDigest: first})
 	advance(Event{AgentID: "case-agent-transformation", Decision: "return", ContentDigest: second})
 	advance(Event{AgentID: "account-agent-client-alpha", Decision: "approve", ContentDigest: second})
-	advance(Event{AgentID: "walter", Decision: "refine", ContentDigest: second})
-	if state.AccountApprovalDigest != "" || state.WalterApprovalDigest != "" || state.Stage != StageCaseExecution {
+	advance(Event{AgentID: "yoda", Decision: "refine", ContentDigest: second})
+	if state.AccountApprovalDigest != "" || state.YodaApprovalDigest != "" || state.Stage != StageCaseExecution {
 		t.Fatalf("refinement did not invalidate approvals: %#v", state)
 	}
 	advance(Event{AgentID: "case-agent-transformation", Decision: "return", ContentDigest: third})
 	advance(Event{AgentID: "account-agent-client-alpha", Decision: "approve", ContentDigest: third})
-	advance(Event{AgentID: "walter", Decision: "approve", ContentDigest: third})
+	advance(Event{AgentID: "yoda", Decision: "approve", ContentDigest: third})
 	if state.Stage != StageFinal || len(state.Receipts) != 9 {
 		t.Fatalf("bounded revalidation sequence = %#v", state)
 	}
@@ -409,8 +409,8 @@ func TestPlannerIgnoresCallerRoleAndRejectsDirectHandoffsOrStaleApproval(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: "walter", Decision: "approve", ContentDigest: digestFor("mutated")}); err == nil {
-		t.Fatal("Walter accepted a stale Case digest")
+	if _, _, err := state.Advance(plan, DefaultLoopPolicy, "maestro", Event{AgentID: "yoda", Decision: "approve", ContentDigest: digestFor("mutated")}); err == nil {
+		t.Fatal("Yoda accepted a stale Case digest")
 	}
 }
 
@@ -422,18 +422,18 @@ func TestPlannerRejectsUnknownReviewTrigger(t *testing.T) {
 	}
 }
 
-func TestPlannerBudgetsFailClosedAndMaterialityCannotSkipWalter(t *testing.T) {
+func TestPlannerBudgetsFailClosedAndMaterialityCannotSkipYoda(t *testing.T) {
 	input := caseInput(false)
 	input.Materiality = MaterialityReview
 	plan, err := PlanFor(input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	state, err := NewChain(plan, LoopPolicy{MaxAccountCycles: 1, MaxWalterCycles: 1, MaxCaseAttempts: 2})
+	state, err := NewChain(plan, LoopPolicy{MaxAccountCycles: 1, MaxYodaCycles: 1, MaxCaseAttempts: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy := LoopPolicy{MaxAccountCycles: 1, MaxWalterCycles: 1, MaxCaseAttempts: 2}
+	policy := LoopPolicy{MaxAccountCycles: 1, MaxYodaCycles: 1, MaxCaseAttempts: 2}
 	advance := func(event Event) error {
 		var advanceErr error
 		state, _, advanceErr = state.Advance(plan, policy, "maestro", event)
@@ -455,13 +455,13 @@ func TestPlannerBudgetsFailClosedAndMaterialityCannotSkipWalter(t *testing.T) {
 		t.Fatalf("account budget did not fail closed: %#v %v", state, err)
 	}
 	bad := plan
-	bad.RequiresWalter = false
-	bad.SkipWalter = false
-	bad.WalterSkipReasonCode = ""
-	bad.WalterSkipEvidence = ""
+	bad.RequiresYoda = false
+	bad.SkipYoda = false
+	bad.YodaSkipReasonCode = ""
+	bad.YodaSkipEvidence = ""
 	bad.PlanDigest = digestPlan(bad)
 	if _, err := NewChain(bad, DefaultLoopPolicy); err == nil {
-		t.Fatal("material Case plan without Walter or valid skip was accepted")
+		t.Fatal("material Case plan without Yoda or valid skip was accepted")
 	}
 }
 
@@ -469,7 +469,7 @@ func caseInput(simple bool) Input {
 	return Input{SchemaVersion: 1, IntentClass: IntentCase, ScopeKind: "case", ScopeID: "transformation", AccountScopeID: "client-alpha", Sensitivity: SensitivityInternal, Materiality: MaterialityNone, HealthIntent: HealthNone, SimpleReversible: simple, ExecutionOnly: simple, AvailableAgents: []RegisteredAgent{
 		{ID: "account-agent-client-alpha", Role: "client_account_agent", ScopeKind: "account", ScopeID: "client-alpha", AuthorizationDigest: digestFor("account-auth"), CapabilityDigest: digestFor("account-capability"), StateSnapshotDigest: digestFor("account-state"), Available: true},
 		{ID: "case-agent-transformation", Role: "case_agent", ScopeKind: "case", ScopeID: "transformation", ParentScopeKind: "account", ParentScopeID: "client-alpha", AuthorizationDigest: digestFor("case-auth"), CapabilityDigest: digestFor("case-capability"), StateSnapshotDigest: digestFor("case-state"), Available: true},
-		{ID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review", AuthorizationDigest: digestFor("walter-auth"), CapabilityDigest: digestFor("walter-capability"), StateSnapshotDigest: digestFor("walter-state"), Available: true},
+		{ID: "yoda", Role: "reviewer", ScopeKind: "review", ScopeID: "review", AuthorizationDigest: digestFor("yoda-auth"), CapabilityDigest: digestFor("yoda-capability"), StateSnapshotDigest: digestFor("yoda-state"), Available: true},
 	}}
 }
 

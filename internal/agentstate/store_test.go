@@ -153,8 +153,8 @@ func TestAgentIsolationInSameWorkspace(t *testing.T) {
 	updateA := baseUpdate()
 	updateA.AgentID = "maestro"
 	updateB := baseUpdate()
-	updateB.AgentID = "walter"
-	updateB.Body = "Independent walter note."
+	updateB.AgentID = "yoda"
+	updateB.Body = "Independent yoda note."
 	if _, err := store.Apply(updateA); err != nil {
 		t.Fatalf("apply A: %v", err)
 	}

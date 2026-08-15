@@ -144,7 +144,7 @@
         "proposal_id": {"$ref": "#/$defs/id"},
         "proposal_sha256": {"$ref": "#/$defs/sha256"},
         "decision": {"enum": ["approved", "rejected"]},
-        "claimed_approver_id": {"const": "walter"},
+        "claimed_approver_id": {"const": "yoda"},
         "authority_state": {"const": "caller_asserted_shadow"},
         "may_authorize": {"const": false},
         "recorded_at": {"type": "string", "format": "date-time"},

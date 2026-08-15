@@ -95,7 +95,7 @@ type Intent struct {
 	Pointers      []string
 	Constraints   []string
 	DoneContract  DoneContract
-	ReviewTrigger WalterReviewTrigger
+	ReviewTrigger YodaReviewTrigger
 	TTL           time.Duration
 }
 
@@ -172,7 +172,7 @@ type State string
 const (
 	StateDelegated State = "delegated"
 	// StatePendingReview means the producer returned, but material completion
-	// remains blocked until Walter issues an approved verdict.
+	// remains blocked until Yoda issues an approved verdict.
 	StatePendingReview State = "pending_review"
 	StateCompleted     State = "completed"
 	StateFailed        State = "failed"
@@ -256,7 +256,7 @@ func (executor *Executor) SealReturn(dispatch Dispatch, body ReturnBody) (Execut
 		return ExecutionEnvelope{}, errors.New("executor is not authorized for this dispatch")
 	}
 	if dispatch.Packet.Review != nil {
-		return ExecutionEnvelope{}, errors.New("Walter dispatch requires a typed review verdict")
+		return ExecutionEnvelope{}, errors.New("Yoda dispatch requires a typed review verdict")
 	}
 	if err := validateReturnBody(body, dispatch.Packet.ScopeKind, dispatch.Packet.ScopeID); err != nil {
 		return ExecutionEnvelope{}, err
@@ -267,23 +267,23 @@ func (executor *Executor) SealReturn(dispatch Dispatch, body ReturnBody) (Execut
 	return executor.seal(dispatch, ExecutionSucceeded, digestBody(normalizeReturnBody(body)))
 }
 
-// SealWalterReview is the only success envelope Walter may produce. Keeping
+// SealYodaReview is the only success envelope Yoda may produce. Keeping
 // it separate from SealReturn prevents a generic summary from bypassing the
 // bounded conversational verdict contract.
-func (executor *Executor) SealWalterReview(dispatch Dispatch, body WalterReviewBody) (ExecutionEnvelope, error) {
+func (executor *Executor) SealYodaReview(dispatch Dispatch, body YodaReviewBody) (ExecutionEnvelope, error) {
 	if dispatch.Runtime != executor.runtime || dispatch.Packet.TargetAgentID != executor.targetID ||
-		executor.targetID != "walter" || dispatch.Packet.Review == nil {
-		return ExecutionEnvelope{}, errors.New("executor is not authorized for this Walter review")
+		executor.targetID != "yoda" || dispatch.Packet.Review == nil {
+		return ExecutionEnvelope{}, errors.New("executor is not authorized for this Yoda review")
 	}
 	doneContract := dispatch.Packet.DoneContract
 	if doneContract.SchemaVersion == 0 {
-		doneContract = defaultDoneContract("walter")
+		doneContract = defaultDoneContract("yoda")
 	}
-	if doneContract.Policy != DoneTypedWalterVerdict {
-		return ExecutionEnvelope{}, errors.New("Walter dispatch has no typed verdict done contract")
+	if doneContract.Policy != DoneTypedYodaVerdict {
+		return ExecutionEnvelope{}, errors.New("Yoda dispatch has no typed verdict done contract")
 	}
-	normalized := normalizeWalterReviewBody(body)
-	if err := validateWalterReviewBody(normalized, *dispatch.Packet.Review); err != nil {
+	normalized := normalizeYodaReviewBody(body)
+	if err := validateYodaReviewBody(normalized, *dispatch.Packet.Review); err != nil {
 		return ExecutionEnvelope{}, err
 	}
 	return executor.seal(dispatch, ExecutionSucceeded, digestBody(normalized))
@@ -387,13 +387,13 @@ func NewPilot(dispatcher *Dispatcher, instances []Instance, recoveryRoots ...str
 		}
 		registered[instance.AgentID] = instance
 	}
-	// Walter is a managed core leaf, not a user-scaffolded workspace instance.
+	// Yoda is a managed core leaf, not a user-scaffolded workspace instance.
 	// Material review remains unavailable unless the dispatcher also carries his
 	// authenticated capability; the synthetic registration only preserves the
 	// canonical fixed review scope and does not grant authority.
-	if _, exists := registered["walter"]; !exists && dispatcher.credentials["walter"] != "" {
-		registered["walter"] = Instance{
-			AgentID: "walter", Role: "reviewer", ScopeKind: "review", ScopeID: "review",
+	if _, exists := registered["yoda"]; !exists && dispatcher.credentials["yoda"] != "" {
+		registered["yoda"] = Instance{
+			AgentID: "yoda", Role: "reviewer", ScopeKind: "review", ScopeID: "review",
 			ParentAgentID: "maestro", Available: true,
 		}
 	}
@@ -436,15 +436,15 @@ func (pilot *Pilot) Recovery() RecoveryReport {
 	return RecoveryReport{State: RecoveryUnavailable, Reason: RecoveryReasonProcessLocal}
 }
 
-// RequireWalterReview opens exactly one direct Walter branch for a producer
+// RequireYodaReview opens exactly one direct Yoda branch for a producer
 // that is already pending review. The review packet binds the source packet
 // digest and keeps the projection to IDs, digests, trigger and verdict metadata.
-func (pilot *Pilot) RequireWalterReview(sourceDelegationID string, request WalterReviewRequest) (Dispatch, Receipt, error) {
+func (pilot *Pilot) RequireYodaReview(sourceDelegationID string, request YodaReviewRequest) (Dispatch, Receipt, error) {
 	pilot.mu.Lock()
 	defer pilot.mu.Unlock()
 
 	source, exists := pilot.records[sourceDelegationID]
-	if !exists || source.receipt.State != StatePendingReview || source.packet.TargetAgentID == "walter" ||
+	if !exists || source.receipt.State != StatePendingReview || source.packet.TargetAgentID == "yoda" ||
 		source.packet.ReviewTrigger == "" || source.packet.ReviewTrigger != request.Trigger {
 		receipt, err := pilot.recordReviewFailure(source, request, "source_not_complete", StateFailed)
 		return Dispatch{}, receipt, err
@@ -481,14 +481,14 @@ func (pilot *Pilot) RequireWalterReview(sourceDelegationID string, request Walte
 		receipt, failure := pilot.recordReviewFailure(source, request, "review_invalid", StateFailed)
 		return Dispatch{}, receipt, failure
 	}
-	instance, exists := pilot.instances["walter"]
+	instance, exists := pilot.instances["yoda"]
 	if !exists || !instance.Available || instance.Role != "reviewer" || instance.ScopeKind != "review" ||
 		instance.ScopeID != "review" || instance.ParentAgentID != "maestro" {
 		receipt, failure := pilot.recordReviewFailure(source, request, "target_unavailable", StateUnavailable)
 		return Dispatch{}, receipt, failure
 	}
 	dispatch, receipt, err := pilot.start(instance, PacketRequest{
-		TargetAgentID: "walter", ScopeKind: "review", ScopeID: "review",
+		TargetAgentID: "yoda", ScopeKind: "review", ScopeID: "review",
 		Objective: request.ReviewObjective, Review: &review, TTL: request.TTL,
 	}, nil)
 	if err == nil {
@@ -526,7 +526,7 @@ func (pilot *Pilot) Delegate(intent Intent) (Dispatch, Receipt, error) {
 	}, nil)
 }
 
-// Rework starts a new signed producer attempt only after Walter returned a
+// Rework starts a new signed producer attempt only after Yoda returned a
 // bounded refinement or missing-the-mark verdict. The new packet carries the
 // prior packet ID so the retry cannot be detached from the reviewed material.
 func (pilot *Pilot) Rework(sourceDelegationID string, intent Intent) (Dispatch, Receipt, error) {
@@ -724,7 +724,7 @@ func (pilot *Pilot) Return(envelope ExecutionEnvelope, body ReturnBody) (Receipt
 	pilot.mu.Lock()
 	defer pilot.mu.Unlock()
 	if record, ok := pilot.records[envelope.PacketID]; ok && record.packet.Review != nil {
-		return pilot.rejectEnvelope(envelope, "review_verdict_required", errors.New("Walter dispatch requires a typed review verdict"))
+		return pilot.rejectEnvelope(envelope, "review_verdict_required", errors.New("Yoda dispatch requires a typed review verdict"))
 	}
 	normalized := normalizeReturnBody(body)
 	if err := validateReturnBody(normalized, envelope.ScopeKind, envelope.ScopeID); err != nil {
@@ -757,19 +757,19 @@ func (pilot *Pilot) Return(envelope ExecutionEnvelope, body ReturnBody) (Receipt
 	return receipt, nil
 }
 
-// ReturnWalterReview authenticates and closes the Walter leaf with a bounded
+// ReturnYodaReview authenticates and closes the Yoda leaf with a bounded
 // conversational verdict. A refine or missing verdict closes only the review
 // branch; it never becomes execution-ledger approval or final business
 // completion authority.
-func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterReviewBody) (Receipt, error) {
+func (pilot *Pilot) ReturnYodaReview(envelope ExecutionEnvelope, body YodaReviewBody) (Receipt, error) {
 	pilot.mu.Lock()
 	defer pilot.mu.Unlock()
-	normalized := normalizeWalterReviewBody(body)
+	normalized := normalizeYodaReviewBody(body)
 	record, exists := pilot.records[envelope.PacketID]
 	if !exists || record.packet.Review == nil {
-		return pilot.rejectEnvelope(envelope, "review_not_found", errors.New("Walter review packet is not active"))
+		return pilot.rejectEnvelope(envelope, "review_not_found", errors.New("Yoda review packet is not active"))
 	}
-	if err := validateWalterReviewBody(normalized, *record.packet.Review); err != nil {
+	if err := validateYodaReviewBody(normalized, *record.packet.Review); err != nil {
 		return pilot.rejectEnvelope(envelope, "review_invalid", err)
 	}
 	verified, err := pilot.verifyEnvelope(envelope, ExecutionSucceeded, digestBody(normalized))
@@ -777,18 +777,18 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 		return pilot.rejectEnvelope(envelope, envelopeFailureCode(err), err)
 	}
 	if decision := pilot.dispatcher.FinishRoot(verified.packet); !decision.Allowed {
-		return pilot.rejectEnvelope(envelope, "completion_denied", fmt.Errorf("Walter review close denied: %s", decision.Code))
+		return pilot.rejectEnvelope(envelope, "completion_denied", fmt.Errorf("Yoda review close denied: %s", decision.Code))
 	}
 	state := ReviewState(ReviewMissingMark)
 	switch normalized.Verdict {
-	case WalterApproved:
+	case YodaApproved:
 		state = ReviewApproved
-	case WalterRefineAndReturn:
+	case YodaRefineAndReturn:
 		state = ReviewRefineReturn
-	case WalterHold:
+	case YodaHold:
 		state = ReviewHold
 	}
-	originalWalter := verified
+	originalYoda := verified
 	receipt := pilot.complete(verified, envelope, "", StateCompleted, state)
 	if receipt.Review != nil {
 		receipt.Review.ObjectionCount = len(normalized.Objections)
@@ -804,7 +804,7 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 			}
 			producerID, originalProducer = delegationID, producer
 			producer.receipt.Review = reviewSummary(verified.packet.Review, state)
-			if normalized.Verdict == WalterApproved {
+			if normalized.Verdict == YodaApproved {
 				producer.receipt.State = StateCompleted
 				producer.receipt.CompletedAt = pilot.now().UTC()
 			}
@@ -816,14 +816,14 @@ func (pilot *Pilot) ReturnWalterReview(envelope ExecutionEnvelope, body WalterRe
 		records := []pilotRecord{updated, producerUpdated}
 		if err := pilot.persistRecordsLocked(records...); err != nil {
 			pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
-			pilot.records[receipt.DelegationID] = originalWalter
+			pilot.records[receipt.DelegationID] = originalYoda
 			pilot.records[producerID] = originalProducer
 			return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
 		}
 		pilot.records[producerID] = producerUpdated
 	} else if err := pilot.persistRecordLocked(updated); err != nil {
 		pilot.usedNonces = deleteNonce(pilot.usedNonces, envelope.Nonce)
-		pilot.records[receipt.DelegationID] = originalWalter
+		pilot.records[receipt.DelegationID] = originalYoda
 		return Receipt{SchemaVersion: 1, OwnerAgentID: "maestro", State: StateUnavailable, FailureCode: "durable_state_unavailable"}, err
 	}
 	pilot.records[receipt.DelegationID] = updated
@@ -852,7 +852,7 @@ func (pilot *Pilot) Fail(envelope ExecutionEnvelope, body FailureBody) (Receipt,
 	if record.packet.Review != nil {
 		original := record
 		receipt := pilot.complete(record, envelope, normalized.Code, StateFailed, ReviewUnavailable)
-		// A Walter branch may fail after dispatch. Project only the review
+		// A Yoda branch may fail after dispatch. Project only the review
 		// availability state back to the producer; failure never approves it.
 		if sourceID := record.packet.Review.SourcePacketID; sourceID != "" {
 			for delegationID, producer := range pilot.records {
@@ -1064,8 +1064,8 @@ func (pilot *Pilot) recordFailure(scopeKind, targetID, scopeID, code string, sta
 // recordReviewFailure keeps the unavailable/failed projection as useful as a
 // successful review without persisting any review body. The source binding is
 // copied from the producer receipt, never from untrusted request prose.
-func (pilot *Pilot) recordReviewFailure(source pilotRecord, request WalterReviewRequest, code string, state State) (Receipt, error) {
-	receipt, err := pilot.recordFailure("review", "walter", "review", code, state)
+func (pilot *Pilot) recordReviewFailure(source pilotRecord, request YodaReviewRequest, code string, state State) (Receipt, error) {
+	receipt, err := pilot.recordFailure("review", "yoda", "review", code, state)
 	if request.Trigger.valid() {
 		receipt.Review = &ReviewSummary{Trigger: request.Trigger, State: ReviewUnavailable}
 		if source.receipt.DelegationID != "" {

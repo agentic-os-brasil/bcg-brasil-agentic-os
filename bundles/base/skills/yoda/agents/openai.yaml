@@ -1,0 +1,4 @@
+interface:
+  display_name: "Yoda — pressure-test"
+  short_description: "Roda revisão sênior interna de proposta ou decisão de alta materialidade antes do owner"
+  default_prompt: "Use $yoda para submeter uma proposta ou decisão consequente a pressure-test antes de enviar ao owner ou stakeholder externo."

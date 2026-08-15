@@ -1,6 +1,6 @@
 //go:build windows
 
-package walterselfreview
+package yodaselfreview
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var errWeeklyReceiptLockBusy = errors.New("Walter weekly receipt advisory lock is busy")
+var errWeeklyReceiptLockBusy = errors.New("Yoda weekly receipt advisory lock is busy")
 
 func tryLockWeeklyReceiptFile(file *os.File) error {
 	var overlapped windows.Overlapped

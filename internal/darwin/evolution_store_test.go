@@ -351,7 +351,7 @@ func TestEvolutionSchemaRejectsContextBearingFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	valid := decodeEvolutionJSON(t, `{"record_type":"decision_receipt","schema_version":1,"receipt_id":"receipt-1","proposal_id":"proposal-1","proposal_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","decision":"approved","claimed_approver_id":"walter","authority_state":"caller_asserted_shadow","may_authorize":false,"recorded_at":"2026-07-30T12:00:00Z","receipt_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`)
+	valid := decodeEvolutionJSON(t, `{"record_type":"decision_receipt","schema_version":1,"receipt_id":"receipt-1","proposal_id":"proposal-1","proposal_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","decision":"approved","claimed_approver_id":"yoda","authority_state":"caller_asserted_shadow","may_authorize":false,"recorded_at":"2026-07-30T12:00:00Z","receipt_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`)
 	if err := schema.Validate(valid); err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func TestEvolutionSchemaRejectsContextBearingFields(t *testing.T) {
 	if err := schema.Validate(proposalValue); err != nil {
 		t.Fatalf("valid proposal rejected by schema: %v", err)
 	}
-	invalid := decodeEvolutionJSON(t, `{"record_type":"decision_receipt","schema_version":1,"receipt_id":"receipt-1","proposal_id":"proposal-1","proposal_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","decision":"approved","claimed_approver_id":"walter","authority_state":"caller_asserted_shadow","may_authorize":false,"recorded_at":"2026-07-30T12:00:00Z","receipt_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","prompt":"secret"}`)
+	invalid := decodeEvolutionJSON(t, `{"record_type":"decision_receipt","schema_version":1,"receipt_id":"receipt-1","proposal_id":"proposal-1","proposal_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","decision":"approved","claimed_approver_id":"yoda","authority_state":"caller_asserted_shadow","may_authorize":false,"recorded_at":"2026-07-30T12:00:00Z","receipt_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","prompt":"secret"}`)
 	if err := schema.Validate(invalid); err == nil {
 		t.Fatal("schema accepted context-bearing prompt")
 	}
@@ -432,7 +432,7 @@ func testEvolutionDecision(proposal EvolutionProposalArtifact, receiptID, decisi
 		ProposalID:        proposal.Proposal.ProposalID,
 		ProposalSHA256:    proposal.ProposalSHA256,
 		Decision:          decision,
-		ClaimedApproverID: "walter",
+		ClaimedApproverID: "yoda",
 		AuthorityState:    callerAssertedDecisionAuthority,
 		RecordedAt:        testTime,
 	}

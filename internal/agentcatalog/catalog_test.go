@@ -56,7 +56,7 @@ func TestCatalogRejectsParallelismAndRoleDrift(t *testing.T) {
 		{"multiple children", func(value *Catalog) { value.Delegation.MaxChildrenPerAgent = 1 }},
 		{"multiple errands", func(value *Catalog) { value.Delegation.MaxErrandHelpers = 2 }},
 		{"Maestro tools", func(value *Catalog) { value.Agents[4].ToolAccess = "scoped" }},
-		{"Walter tools", func(value *Catalog) { value.Agents[5].ToolAccess = "read" }},
+		{"Yoda tools", func(value *Catalog) { value.Agents[5].ToolAccess = "read" }},
 		{"reviewer edge", func(value *Catalog) {
 			value.Delegation.AllowedEdges = append(value.Delegation.AllowedEdges, DelegationEdge{FromRole: "reviewer", ToRoles: []string{"case_agent"}})
 		}},

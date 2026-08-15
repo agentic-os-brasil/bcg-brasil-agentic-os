@@ -193,7 +193,7 @@ func Plan(envelope IntentEnvelope, registry []PAExpert) (RoutePlan, error) {
 	}
 	if route == D2Governed || (route == D1Targeted && len(plan.Experts) == 0) {
 		plan.RequiresAssurance = true
-		plan.AssuranceAgentID = "walter"
+		plan.AssuranceAgentID = "yoda"
 	}
 	plan.PlanSHA256 = PlanDigest(plan)
 	return plan, nil

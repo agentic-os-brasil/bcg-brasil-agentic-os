@@ -26,7 +26,7 @@ func TestAdaptersShareTheSameSingleActiveSpokeContract(t *testing.T) {
 			if decision := adapter.StartBranch("maestro", "maestro-cap", "client-account-agent-alpha", "run-beta", "account-alpha", "account"); decision.Allowed || decision.Code != "branch_active" {
 				t.Fatalf("parallel spoke was accepted: %#v", decision)
 			}
-			if decision := adapter.StartChild("case-agent-alpha", "case-cap", "walter", "run-alpha", "nested", "alpha", "case"); decision.Allowed || decision.Code != "depth_one_no_children" {
+			if decision := adapter.StartChild("case-agent-alpha", "case-cap", "yoda", "run-alpha", "nested", "alpha", "case"); decision.Allowed || decision.Code != "depth_one_no_children" {
 				t.Fatalf("nested delegation was accepted: %#v", decision)
 			}
 			if decision := adapter.FinishBranch("case-agent-alpha", "case-cap", "run-alpha"); !decision.Allowed {
@@ -105,7 +105,7 @@ func TestAdaptersPersistMetadataOnlyBreadcrumbsAcrossRestart(t *testing.T) {
 	}
 }
 
-func TestDarwinRemainsScopedAndWalterRemainsToolless(t *testing.T) {
+func TestDarwinRemainsScopedAndYodaRemainsToolless(t *testing.T) {
 	catalog := loadCatalog(t)
 	adapter, err := NewAdapter("claude", catalog, testAuthorizations(), mustStore(t))
 	if err != nil {
@@ -123,7 +123,7 @@ func TestDarwinRemainsScopedAndWalterRemainsToolless(t *testing.T) {
 	invalid := testAuthorizations()
 	invalid[3].Tools = []ToolGrant{{Tool: "filesystem", Operation: "read", ResourcePrefix: "bcgos://review/review/"}}
 	if _, err := NewAdapter("claude", catalog, invalid, mustStore(t)); err == nil {
-		t.Fatal("Walter tool grant was accepted")
+		t.Fatal("Yoda tool grant was accepted")
 	}
 }
 
@@ -224,7 +224,7 @@ func testAuthorizations() []Authorization {
 		{AgentID: "maestro", Role: "hub", ScopeKind: "control", Capability: "maestro-cap"},
 		{AgentID: "case-agent-alpha", Role: "case_agent", Scope: "alpha", ScopeKind: "case", Capability: "case-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://case/alpha/"}}},
 		{AgentID: "client-account-agent-alpha", Role: "client_account_agent", Scope: "account-alpha", ScopeKind: "account", Capability: "account-cap", Tools: []ToolGrant{{Tool: "workspace_reader", Operation: "read", ResourcePrefix: "bcgos://account/account-alpha/"}}},
-		{AgentID: "walter", Role: "reviewer", Scope: "review", ScopeKind: "review", Capability: "walter-cap"},
+		{AgentID: "yoda", Role: "reviewer", Scope: "review", ScopeKind: "review", Capability: "yoda-cap"},
 		{AgentID: "pa-expert-fpa", Role: "pa_expert", Scope: "fpa", ScopeKind: "practice", Capability: "pa-cap"},
 		{AgentID: "darwin", Role: "governance_analyst", Scope: "maestro-system", ScopeKind: "health", Capability: "darwin-cap", Tools: []ToolGrant{{Tool: "filesystem", Operation: "write", ResourcePrefix: "bcgos://health/maestro-system/"}}},
 	}

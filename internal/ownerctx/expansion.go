@@ -369,7 +369,7 @@ func validateExpansionBody(body string) error {
 			currentSections++
 		}
 		lower := strings.ToLower(trimmed)
-		for _, prefix := range []string{"user:", "assistant:", "usuario:", "usuário:", "maestro:", "walter:"} {
+		for _, prefix := range []string{"user:", "assistant:", "usuario:", "usuário:", "maestro:", "yoda:"} {
 			if strings.HasPrefix(lower, prefix) {
 				return errors.New("proposed SELF facet looks transcript-like; compact it into current owner truth")
 			}
