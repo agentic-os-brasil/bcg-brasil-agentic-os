@@ -525,6 +525,29 @@ for tier in recent weekly medium-term lifetime policies; do
   fi
 done
 
+# 12a2: Lifetime eligibility policy exists after first-run scaffold.
+# dream-memory/SKILL.md step 5 refuses lifetime promotion without a named
+# eligibility policy at data/memory/policies/lifetime.json ("lifetime
+# activation must fail closed"). Spec 006 states the base distribution ships
+# that named policy, so an install without it can never activate the permanent
+# memory tier.
+LIFETIME_POLICY="$MAESTRO_DIR/data/memory/policies/lifetime.json"
+if [ -f "$LIFETIME_POLICY" ]; then
+  pass "data/memory/policies/lifetime.json created by scaffold"
+  if python3 -c "import json;json.load(open(r'$(cygpath -w "$LIFETIME_POLICY" 2>/dev/null || echo "$LIFETIME_POLICY")'))" 2>/dev/null; then
+    pass "lifetime.json is valid JSON"
+  else
+    fail "lifetime.json invalid JSON"
+  fi
+  if grep -q 'deterministic-l3-continuity-v1' "$LIFETIME_POLICY"; then
+    pass "lifetime.json names the spec-006 eligibility policy"
+  else
+    fail "lifetime.json does NOT name the spec-006 eligibility policy"
+  fi
+else
+  fail "data/memory/policies/lifetime.json NOT created by scaffold (lifetime tier fails closed forever)"
+fi
+
 # 12b: Profile placeholder files exist
 for pfile in identity.json; do
   if [ -f "$MAESTRO_DIR/data/profile/$pfile" ]; then
