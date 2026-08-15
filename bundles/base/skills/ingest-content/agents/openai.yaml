@@ -1,4 +1,4 @@
 interface:
-  display_name: "Ingest Content"
-  short_description: "Extract professional documents locally and safely"
-  default_prompt: "Use $ingest-content to process this professional source through the approved local ingestion route."
+  display_name: "Ingestão de Conteúdo"
+  short_description: "Extrai documentos profissionais localmente e com segurança"
+  default_prompt: "Use $ingest-content para processar esta fonte profissional pela rota local de ingestão aprovada."

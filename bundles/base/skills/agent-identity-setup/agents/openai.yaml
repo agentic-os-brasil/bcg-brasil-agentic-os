@@ -1,3 +1,3 @@
-display_name: "Agent Identity Setup"
-short_description: "Name and personalize governed agents"
-default_prompt: "Use $agent-identity-setup to choose names, emoji-avatars and ownership for my agents."
+display_name: "Identidade dos Agentes"
+short_description: "Nomeia e personaliza os agentes governados"
+default_prompt: "Use $agent-identity-setup para definir nomes, avatares e responsáveis dos meus agentes."

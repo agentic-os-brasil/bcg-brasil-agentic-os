@@ -5,44 +5,44 @@
 | Skill | Use when | Pointer |
 |---|---|---|
 | Conta e Projeto | Cria a conta e o Case Agent do projeto | `skills/account-case-setup/SKILL.md` |
-| Agent Identity Setup | Name and personalize governed agents | `skills/agent-identity-setup/SKILL.md` |
-| Case Kickoff | Build a bounded first-days plan from approved case scope | `skills/bcg-case-kickoff/SKILL.md` |
-| Deck and Storyline | Build one decision-led professional storyline and deck plan | `skills/bcg-deck/SKILL.md` |
-| Case Agent Setup | Interview and research one project case safely | `skills/case-agent-setup/SKILL.md` |
-| Case Canon Ingest | Compile reviewed insights into the active case's persistent canon layer | `skills/case-canon-ingest/SKILL.md` |
-| Case Decision Log Entry | Register a structural case decision in the active case decision log | `skills/case-decision-log-entry/SKILL.md` |
-| Client Delivery Gate | Three-lens pre-delivery quality check before any output reaches a client | `skills/client-delivery-gate/SKILL.md` |
-| Craft Update | Document a personal method or working preference deliberately | `skills/craft-update/SKILL.md` |
-| Deck Drill | Rehearse a deck against the questions the room will ask | `skills/deck-drill/SKILL.md` |
-| Deck Review | Review supplied slide text for storyline and evidence risks | `skills/deck-review/SKILL.md` |
-| Dream Memory | Consolidate daily and weekly professional memory | `skills/dream-memory/SKILL.md` |
-| End of Day | Close the day and leave tomorrow a starting point | `skills/eod/SKILL.md` |
+| Identidade dos Agentes | Nomeia e personaliza os agentes governados | `skills/agent-identity-setup/SKILL.md` |
+| Kickoff de Case | Monta um plano dos primeiros dias a partir do escopo aprovado do case | `skills/bcg-case-kickoff/SKILL.md` |
+| Deck e Storyline | Constrói uma storyline profissional orientada à decisão e o plano do deck | `skills/bcg-deck/SKILL.md` |
+| Case Agent | Entrevista e pesquisa um case de projeto com segurança | `skills/case-agent-setup/SKILL.md` |
+| Canon do Case | Compila insights revisados no canon persistente do case ativo | `skills/case-canon-ingest/SKILL.md` |
+| Registro de Decisão do Case | Registra uma decisão estrutural no log de decisões do case ativo | `skills/case-decision-log-entry/SKILL.md` |
+| Gate de Entrega ao Cliente | Checagem de qualidade em três lentes antes de qualquer entrega ao cliente | `skills/client-delivery-gate/SKILL.md` |
+| Registro de Método | Documenta um método próprio ou uma preferência de trabalho | `skills/craft-update/SKILL.md` |
+| Ensaio de Deck | Ensaia o deck contra as perguntas que a sala vai fazer | `skills/deck-drill/SKILL.md` |
+| Review de Deck | Revisa o texto dos slides em busca de riscos de storyline e de evidência | `skills/deck-review/SKILL.md` |
+| Consolidação de Memória | Consolida a memória profissional diária e semanal | `skills/dream-memory/SKILL.md` |
+| Fechar o Dia | Fecha o dia e deixa um ponto de partida para amanhã | `skills/eod/SKILL.md` |
 | Execution Continuity | Registrar tarefas e entregas, preparar versão, criar checkpoints e retomar trabalho entre sessões | `skills/execution-continuity/SKILL.md` |
-| Expert Interview Guide | Structure a bounded interview guide from approved case questions | `skills/expert-interview-guide/SKILL.md` |
-| Feedback Capture | Record feedback received and apply it to your objectives | `skills/feedback-capture/SKILL.md` |
-| Find Prior Work | Recover an explicitly requested past deck or work artifact | `skills/find-prior-work/SKILL.md` |
-| FoDAIS Performance Review | Conduct a structured CDC interview for BCG X FoDAIS/Sr. FoDAIS | `skills/fodais-performance-review/SKILL.md` |
-| Ingest Content | Extract professional documents locally and safely | `skills/ingest-content/SKILL.md` |
-| Interaction Profile | Apply the owner's Maestro communication and disclosure preference | `skills/interaction-profile/SKILL.md` |
-| Investigate | Find the root cause of a wrong or surprising result | `skills/investigate/SKILL.md` |
-| Learnings Bridge | Promote daily learning candidates into durable owner knowledge | `skills/learnings-bridge/SKILL.md` |
-| Maestro Doctor | Run a plain-language health check on the Maestro install | `skills/maestro-doctor/SKILL.md` |
+| Guia de Entrevista com Expert | Estrutura um guia de entrevista a partir das perguntas aprovadas do case | `skills/expert-interview-guide/SKILL.md` |
+| Registro de Feedback | Registra o feedback recebido e aplica aos objetivos de desenvolvimento | `skills/feedback-capture/SKILL.md` |
+| Buscar Trabalho Anterior | Recupera um deck ou material anterior pedido explicitamente | `skills/find-prior-work/SKILL.md` |
+| Avaliação FoDAIS | Conduz a entrevista estruturada de CDC para BCG X FoDAIS/Sr. FoDAIS | `skills/fodais-performance-review/SKILL.md` |
+| Ingestão de Conteúdo | Extrai documentos profissionais localmente e com segurança | `skills/ingest-content/SKILL.md` |
+| Perfil de Interação | Aplica a preferência de comunicação e de detalhe do owner no Maestro | `skills/interaction-profile/SKILL.md` |
+| Investigar | Encontra a causa raiz de um resultado errado ou inesperado | `skills/investigate/SKILL.md` |
+| Ponte de Aprendizados | Promove aprendizados do dia a dia para conhecimento durável do owner | `skills/learnings-bridge/SKILL.md` |
+| Diagnóstico do Maestro | Faz um diagnóstico da instalação do Maestro em linguagem simples | `skills/maestro-doctor/SKILL.md` |
 | Preparar Ambiente Maestro | Prepara workspace, runtime e manutenção local | `skills/maestro-environment-setup/SKILL.md` |
 | Maestro Knowledge Pill | Gera pílula de conhecimento curta e engajante sobre o Maestro OS em formato Slack Block Kit | `skills/maestro-knowledge-pill/SKILL.md` |
-| Maestro Onboarding | Start a guided owner interview with quick or complete tracks | `skills/maestro-onboarding/SKILL.md` |
-| Maestro Operator | Operational method loaded at SessionStart — routes control-plane requests to the right skill | `skills/maestro-operator/SKILL.md` |
+| Onboarding do Maestro | Inicia a entrevista guiada do owner nas trilhas rápida ou completa | `skills/maestro-onboarding/SKILL.md` |
+| Operador do Maestro | Método operacional carregado no SessionStart — roteia pedidos de controle para o skill certo | `skills/maestro-operator/SKILL.md` |
 | Checkup do Maestro | Confere e repara runtime, hooks e Darwin | `skills/maestro-runtime-checkup/SKILL.md` |
-| Maestro Setup and Update | Guide safe setup, updates and recovery conversationally | `skills/maestro-setup-update/SKILL.md` |
-| Meeting Close | Turn meeting notes into a reviewable closure packet | `skills/meeting-close/SKILL.md` |
-| Meeting to Work Items | Extract decisions, tasks and follow-ups from meeting notes | `skills/meeting-to-work-items/SKILL.md` |
+| Instalação e Atualização do Maestro | Conduz instalação, atualização e recuperação de forma conversacional | `skills/maestro-setup-update/SKILL.md` |
+| Fechamento de Reunião | Transforma notas de reunião em um pacote de fechamento revisável | `skills/meeting-close/SKILL.md` |
+| Reunião em Itens de Trabalho | Extrai decisões, tarefas e follow-ups das notas de reunião | `skills/meeting-to-work-items/SKILL.md` |
 | Gate de QA | Classifica a qualidade de uma mudança com evidência proporcional | `skills/qa-gate/SKILL.md` |
-| Qualitative Analysis | Synthesize bounded qualitative evidence into themes and implications | `skills/qualitative-analysis/SKILL.md` |
-| Quantitative Analysis | Analyze bounded quantitative evidence with explicit assumptions and checks | `skills/quantitative-analysis/SKILL.md` |
-| Retro | Close the week against your development objectives | `skills/retro/SKILL.md` |
-| SharePoint Ingest | Ingerir pastas SharePoint autorizadas e generalizar conceitos do trajeto | `skills/sharepoint-ingest/SKILL.md` |
-| Slide Summary | Map supplied deck text into slide messages and a narrative arc | `skills/slide-summary/SKILL.md` |
-| Start Day | Open the day with a briefing scoped to the hours that remain | `skills/start-day/SKILL.md` |
-| Upward Feedback | Prepare considered feedback to give a senior colleague | `skills/upward-feedback/SKILL.md` |
-| Wayfinder | Structure an open problem into a first move | `skills/wayfinder/SKILL.md` |
-| Legacy Case Agent Setup Alias | Migrate the retired workspace-agent setup name | `skills/workspace-agent-setup/SKILL.md` |
+| Análise Qualitativa | Sintetiza evidência qualitativa delimitada em temas e implicações | `skills/qualitative-analysis/SKILL.md` |
+| Análise Quantitativa | Analisa evidência quantitativa delimitada com premissas e checagens explícitas | `skills/quantitative-analysis/SKILL.md` |
+| Retrospectiva da Semana | Fecha a semana contra os objetivos de desenvolvimento | `skills/retro/SKILL.md` |
+| Ingestão do SharePoint | Ingerir pastas SharePoint autorizadas e generalizar conceitos do trajeto | `skills/sharepoint-ingest/SKILL.md` |
+| Resumo de Slides | Mapeia o texto do deck em mensagens de slide e um arco narrativo | `skills/slide-summary/SKILL.md` |
+| Abrir o Dia | Abre o dia com um briefing ajustado às horas que restam | `skills/start-day/SKILL.md` |
+| Upward Feedback | Prepara um feedback consistente para dar a um colega sênior | `skills/upward-feedback/SKILL.md` |
+| Wayfinder | Estrutura um problema aberto até o primeiro movimento | `skills/wayfinder/SKILL.md` |
+| Alias Legado do Case Agent | Redireciona o nome aposentado workspace-agent-setup | `skills/workspace-agent-setup/SKILL.md` |
 | Yoda — pressure-test | Roda revisão sênior interna de proposta ou decisão de alta materialidade antes do owner | `skills/yoda/SKILL.md` |

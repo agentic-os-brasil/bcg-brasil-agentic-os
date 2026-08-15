@@ -1,4 +1,4 @@
 interface:
-  display_name: "Dream Memory"
-  short_description: "Consolidate daily and weekly professional memory"
-  default_prompt: "Use $dream-memory to run or inspect the appropriate memory dreaming cycle safely."
+  display_name: "Consolidação de Memória"
+  short_description: "Consolida a memória profissional diária e semanal"
+  default_prompt: "Use $dream-memory para rodar ou inspecionar com segurança o ciclo de consolidação de memória adequado."

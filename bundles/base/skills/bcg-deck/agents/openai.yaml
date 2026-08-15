@@ -1,4 +1,4 @@
 interface:
-  display_name: "Deck and Storyline"
-  short_description: "Build one decision-led professional storyline and deck plan"
-  default_prompt: "Use $bcg-deck to turn the approved case evidence into a decision-led deck plan."
+  display_name: "Deck e Storyline"
+  short_description: "Constrói uma storyline profissional orientada à decisão e o plano do deck"
+  default_prompt: "Use $bcg-deck para transformar as evidências aprovadas do case em um plano de deck orientado à decisão."

@@ -1,4 +1,4 @@
 interface:
-  display_name: "Legacy Case Agent Setup Alias"
-  short_description: "Migrate the retired workspace-agent setup name"
-  default_prompt: "Use $case-agent-setup; this legacy alias only redirects existing callers during migration."
+  display_name: "Alias Legado do Case Agent"
+  short_description: "Redireciona o nome aposentado workspace-agent-setup"
+  default_prompt: "Use $case-agent-setup; este alias legado apenas redireciona chamadas existentes durante a migração."

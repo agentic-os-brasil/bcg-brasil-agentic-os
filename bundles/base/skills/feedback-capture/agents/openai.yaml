@@ -1,4 +1,4 @@
 interface:
-  display_name: "Feedback Capture"
-  short_description: "Record feedback received and apply it to your objectives"
-  default_prompt: "Use $feedback-capture to record this feedback and update my development objectives correctly."
+  display_name: "Registro de Feedback"
+  short_description: "Registra o feedback recebido e aplica aos objetivos de desenvolvimento"
+  default_prompt: "Use $feedback-capture para registrar este feedback e atualizar corretamente meus objetivos de desenvolvimento."

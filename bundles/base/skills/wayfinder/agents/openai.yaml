@@ -1,4 +1,4 @@
 interface:
   display_name: "Wayfinder"
-  short_description: "Structure an open problem into a first move"
-  default_prompt: "Use $wayfinder to break this open question into branches and tell me which one to open first."
+  short_description: "Estrutura um problema aberto até o primeiro movimento"
+  default_prompt: "Use $wayfinder para quebrar esta questão aberta em ramos e me dizer qual abrir primeiro."

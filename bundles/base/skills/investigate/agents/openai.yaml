@@ -1,4 +1,4 @@
 interface:
-  display_name: "Investigate"
-  short_description: "Find the root cause of a wrong or surprising result"
-  default_prompt: "Use $investigate to find why this output is wrong, with the evidence that establishes the cause."
+  display_name: "Investigar"
+  short_description: "Encontra a causa raiz de um resultado errado ou inesperado"
+  default_prompt: "Use $investigate para descobrir por que este resultado está errado, com a evidência que sustenta a causa."

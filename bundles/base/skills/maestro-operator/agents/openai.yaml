@@ -1,4 +1,4 @@
 interface:
-  display_name: "Maestro Operator"
-  short_description: "Operational method loaded at SessionStart — routes control-plane requests to the right skill"
-  default_prompt: "Use $maestro-operator to inspect Maestro status, version, or recover from an installation issue."
+  display_name: "Operador do Maestro"
+  short_description: "Método operacional carregado no SessionStart — roteia pedidos de controle para o skill certo"
+  default_prompt: "Use $maestro-operator para consultar status e versão do Maestro ou resolver um problema de instalação."

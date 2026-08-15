@@ -1,4 +1,4 @@
 interface:
-  display_name: "Maestro Onboarding"
-  short_description: "Start a guided owner interview with quick or complete tracks"
-  default_prompt: "Use $maestro-onboarding to welcome me to Maestro and start the guided interview with a clear choice between the short and complete tracks."
+  display_name: "Onboarding do Maestro"
+  short_description: "Inicia a entrevista guiada do owner nas trilhas rápida ou completa"
+  default_prompt: "Use $maestro-onboarding para me dar as boas-vindas ao Maestro e iniciar a entrevista guiada com uma escolha clara entre a trilha curta e a completa."

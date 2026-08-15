@@ -1,4 +1,4 @@
 interface:
-  display_name: "Interaction Profile"
-  short_description: "Apply the owner's Maestro communication and disclosure preference"
-  default_prompt: "Use $interaction-profile to resolve my active interaction profile before responding."
+  display_name: "Perfil de Interação"
+  short_description: "Aplica a preferência de comunicação e de detalhe do owner no Maestro"
+  default_prompt: "Use $interaction-profile para resolver meu perfil de interação ativo antes de responder."

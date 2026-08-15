@@ -1,4 +1,4 @@
 interface:
-  display_name: "Maestro Doctor"
-  short_description: "Run a plain-language health check on the Maestro install"
-  default_prompt: "Use $maestro-doctor to check whether my Maestro install is healthy and tell me what to do about any issues."
+  display_name: "Diagnóstico do Maestro"
+  short_description: "Faz um diagnóstico da instalação do Maestro em linguagem simples"
+  default_prompt: "Use $maestro-doctor para verificar se minha instalação do Maestro está saudável e me dizer o que fazer com cada problema."
