@@ -2,6 +2,27 @@
 
 All notable changes will be documented here.
 
+## 0.1.10 — 2026-08-15
+
+Release wave since 0.1.9 (six merged PRs on `main`):
+
+- [PR #370] `doctor` now detects pre-fix owner control-tree drift so the operator
+  sees the actual divergence before any repair.
+- [PR #374] Spec 053 — knowledge folder manifest for delta analysis: per-folder,
+  per-analyzer manifest that lets recurring scans skip unchanged content under
+  unchanged analyzer identity.
+- [PR #373] Onboarding humanized into a 3-turn warm flow with a pre-check that
+  refuses to advance on an unknown workspace state.
+- [PR #375] Persona rename Walter → Mestre Yoda across contracts, package and
+  runtime surfaces; behaviour unchanged, identifiers stabilized.
+- [PR #376] `maestro-knowledge-pill` skill plus 50 pills (batch 041–090) and the
+  personas canon bundle refresh.
+- [PR #377] Spec 054 — anonymized telemetry export with a receiver-side verifier:
+  contract-only, closed-union records, per-day salt, 90-day rolling retention.
+
+Bundle: `bundles/base/manifest.json` `bundle_version` propagated to `0.1.10`
+via `dev/sync-bundle-version.sh`.
+
 ## Unreleased
 
 ### Current evidence snapshot (2026-08-12)
