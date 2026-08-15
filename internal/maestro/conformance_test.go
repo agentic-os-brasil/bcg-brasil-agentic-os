@@ -21,7 +21,7 @@ func TestMaestroAdapterQualityLoopFixtureCoversFourPathsAndDirectAnswer(t *testi
 			Materiality          Materiality `json:"materiality"`
 			CaseEntry            CaseEntry   `json:"case_entry"`
 			AccountValidation    bool        `json:"account_validation"`
-			YodaRequired       bool        `json:"yoda_required"`
+			YodaRequired         bool        `json:"yoda_required"`
 		} `json:"paths"`
 		SelfSignal struct {
 			Ordinary struct {

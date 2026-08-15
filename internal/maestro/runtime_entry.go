@@ -20,7 +20,7 @@ type DispatchBoundaryReceipt struct {
 	PromptDigest         string `json:"prompt_digest"`
 	DraftDigest          string `json:"draft_digest"`
 	AccountConsultation  bool   `json:"account_consultation_required"`
-	YodaRequired       bool   `json:"yoda_required"`
+	YodaRequired         bool   `json:"yoda_required"`
 	HistoryCount         int    `json:"history_count"`
 	DispatchID           string `json:"dispatch_id"`
 	DurableDispatchEpoch uint64 `json:"durable_dispatch_epoch"`

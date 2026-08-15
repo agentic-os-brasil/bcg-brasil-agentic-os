@@ -14,7 +14,7 @@ type DonePolicy string
 
 const (
 	DoneAuthenticatedReturn DonePolicy = "authenticated_return"
-	DoneTypedYodaVerdict  DonePolicy = "typed_yoda_verdict"
+	DoneTypedYodaVerdict    DonePolicy = "typed_yoda_verdict"
 )
 
 const maxDoneEvidence = 12

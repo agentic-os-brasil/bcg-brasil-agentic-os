@@ -15,7 +15,7 @@ const CommandSchemaVersion = 1
 
 const (
 	DarwinStructuralProposalJobID = "darwin-structural-evolution-proposal"
-	YodaSelfReviewWeeklyJobID   = "yoda-self-review-weekly"
+	YodaSelfReviewWeeklyJobID     = "yoda-self-review-weekly"
 )
 
 type Trigger string

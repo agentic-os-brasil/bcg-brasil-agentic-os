@@ -38,11 +38,11 @@ func yodaKeypair(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 
 func yodaExecutionInput(publicKey ed25519.PublicKey) CreateInput {
 	return CreateInput{
-		WorkspaceID:          testWorkspaceID,
-		Objective:            "Complete one durable Maestro goal.",
-		InitialNextStep:      "Produce the governed artifact.",
-		Criteria:             []Criterion{{ID: "artifact", Type: CriterionArtifactSnapshot, TargetRef: "bcgos://workspace/result.txt"}},
-		AllowedRefs:          []string{"bcgos://workspace/result.txt"},
+		WorkspaceID:        testWorkspaceID,
+		Objective:          "Complete one durable Maestro goal.",
+		InitialNextStep:    "Produce the governed artifact.",
+		Criteria:           []Criterion{{ID: "artifact", Type: CriterionArtifactSnapshot, TargetRef: "bcgos://workspace/result.txt"}},
+		AllowedRefs:        []string{"bcgos://workspace/result.txt"},
 		RequireYodaReview:  true,
 		YodaPublicKey:      base64.RawURLEncoding.EncodeToString(publicKey),
 		YodaKeyID:          "yoda-review-key",

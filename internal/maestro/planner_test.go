@@ -138,7 +138,7 @@ func TestPlanValidateAcceptsAllFourCaseRoutes(t *testing.T) {
 		input   Input
 		entry   CaseEntry
 		account bool
-		yoda  bool
+		yoda    bool
 	}{
 		{name: "account-assisted-yoda", input: func() Input { input := caseInput(false); input.Materiality = MaterialityReview; return input }(), entry: CaseEntryAccountFirst, account: true, yoda: true},
 		{name: "account-assisted-no-yoda", input: caseInput(false), entry: CaseEntryAccountFirst, account: true, yoda: false},

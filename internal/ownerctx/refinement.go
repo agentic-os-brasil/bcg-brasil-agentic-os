@@ -34,7 +34,7 @@ type RefinementInput struct {
 	Capability   string
 	// OccurrenceID binds a periodic proposal to one execution occurrence. When
 	// present, retries return the same proposal instead of creating another.
-	OccurrenceID               string
+	OccurrenceID             string
 	YodaReviewRequestSHA256  string
 	YodaReviewProposalID     string
 	YodaReviewProposalSHA256 string
@@ -50,14 +50,14 @@ type RefinementInput struct {
 // RefinementReceipt is safe to expose in CLI output: it deliberately omits the
 // proposed text and evidence body.
 type RefinementReceipt struct {
-	ID                   string   `json:"id"`
-	Facet                string   `json:"facet"`
-	State                string   `json:"state"`
-	Policy               string   `json:"policy"`
-	Sensitivity          string   `json:"sensitivity"`
-	Readers              []string `json:"readers"`
-	ProposalSHA256       string   `json:"proposal_sha256"`
-	OccurrenceID         string   `json:"occurrence_id,omitempty"`
+	ID                 string   `json:"id"`
+	Facet              string   `json:"facet"`
+	State              string   `json:"state"`
+	Policy             string   `json:"policy"`
+	Sensitivity        string   `json:"sensitivity"`
+	Readers            []string `json:"readers"`
+	ProposalSHA256     string   `json:"proposal_sha256"`
+	OccurrenceID       string   `json:"occurrence_id,omitempty"`
 	YodaRequestSHA256  string   `json:"yoda_request_sha256,omitempty"`
 	YodaProposalID     string   `json:"yoda_proposal_id,omitempty"`
 	YodaProposalSHA256 string   `json:"yoda_proposal_sha256,omitempty"`
@@ -68,21 +68,21 @@ type RefinementReceipt struct {
 	YodaAdapterID      string   `json:"yoda_adapter_id,omitempty"`
 	YodaAuthorityID    string   `json:"yoda_authority_id,omitempty"`
 	YodaFencingToken   string   `json:"yoda_fencing_token,omitempty"`
-	AuditID              string   `json:"audit_id,omitempty"`
+	AuditID            string   `json:"audit_id,omitempty"`
 }
 
 type proposal struct {
-	ID                   string    `json:"id"`
-	Facet                string    `json:"facet"`
-	Sensitivity          string    `json:"sensitivity"`
-	Readers              []string  `json:"readers"`
-	SourceSHA256         string    `json:"source_sha256"`
-	Evidence             string    `json:"evidence"`
-	ProposedBody         string    `json:"proposed_body"`
-	Policy               string    `json:"policy"`
-	ProducerID           string    `json:"producer_id"`
-	AutoApproved         bool      `json:"auto_approved"`
-	OccurrenceID         string    `json:"occurrence_id,omitempty"`
+	ID                 string    `json:"id"`
+	Facet              string    `json:"facet"`
+	Sensitivity        string    `json:"sensitivity"`
+	Readers            []string  `json:"readers"`
+	SourceSHA256       string    `json:"source_sha256"`
+	Evidence           string    `json:"evidence"`
+	ProposedBody       string    `json:"proposed_body"`
+	Policy             string    `json:"policy"`
+	ProducerID         string    `json:"producer_id"`
+	AutoApproved       bool      `json:"auto_approved"`
+	OccurrenceID       string    `json:"occurrence_id,omitempty"`
 	YodaRequestSHA256  string    `json:"yoda_request_sha256,omitempty"`
 	YodaProposalID     string    `json:"yoda_proposal_id,omitempty"`
 	YodaProposalSHA256 string    `json:"yoda_proposal_sha256,omitempty"`
@@ -93,9 +93,9 @@ type proposal struct {
 	YodaAdapterID      string    `json:"yoda_adapter_id,omitempty"`
 	YodaAuthorityID    string    `json:"yoda_authority_id,omitempty"`
 	YodaFencingToken   string    `json:"yoda_fencing_token,omitempty"`
-	CreatedAt            time.Time `json:"created_at"`
-	State                string    `json:"state"`
-	AuditID              string    `json:"audit_id,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	State              string    `json:"state"`
+	AuditID            string    `json:"audit_id,omitempty"`
 }
 
 type audit struct {

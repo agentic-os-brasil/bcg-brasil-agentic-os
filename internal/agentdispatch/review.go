@@ -38,17 +38,17 @@ const (
 // ReviewPacket is the sealed, bounded input Yoda receives. Content remains
 // in the ephemeral dispatch body; durable receipts retain only its digests.
 type ReviewPacket struct {
-	SourcePacketID     string              `json:"source_packet_id"`
-	SourcePacketSHA256 string              `json:"source_packet_sha256"`
-	SourceScopeKind    string              `json:"source_scope_kind"`
-	SourceScopeID      string              `json:"source_scope_id"`
+	SourcePacketID     string            `json:"source_packet_id"`
+	SourcePacketSHA256 string            `json:"source_packet_sha256"`
+	SourceScopeKind    string            `json:"source_scope_kind"`
+	SourceScopeID      string            `json:"source_scope_id"`
 	Trigger            YodaReviewTrigger `json:"trigger"`
-	Audience           string              `json:"audience"`
-	Recommendation     string              `json:"recommendation"`
-	DefinitionOfDone   string              `json:"definition_of_done"`
-	ArtifactRefs       []string            `json:"artifact_refs,omitempty"`
-	EvidenceRefs       []string            `json:"evidence_refs,omitempty"`
-	Uncertainties      []string            `json:"uncertainties,omitempty"`
+	Audience           string            `json:"audience"`
+	Recommendation     string            `json:"recommendation"`
+	DefinitionOfDone   string            `json:"definition_of_done"`
+	ArtifactRefs       []string          `json:"artifact_refs,omitempty"`
+	EvidenceRefs       []string          `json:"evidence_refs,omitempty"`
+	Uncertainties      []string          `json:"uncertainties,omitempty"`
 }
 
 // YodaReviewRequest is assembled by Maestro after the producing branch has
@@ -88,24 +88,24 @@ type YodaObjection struct {
 type YodaReviewBody struct {
 	Verdict         YodaVerdict     `json:"verdict"`
 	Objections      []YodaObjection `json:"objections,omitempty"`
-	EvidenceRefs    []string          `json:"evidence_refs,omitempty"`
-	Uncertainty     string            `json:"uncertainty,omitempty"`
-	PreservesIntent bool              `json:"preserves_intent"`
+	EvidenceRefs    []string        `json:"evidence_refs,omitempty"`
+	Uncertainty     string          `json:"uncertainty,omitempty"`
+	PreservesIntent bool            `json:"preserves_intent"`
 }
 
 type ReviewSummary struct {
 	Trigger            YodaReviewTrigger `json:"trigger"`
-	State              ReviewState         `json:"state"`
-	SourcePacketID     string              `json:"source_packet_id"`
-	SourcePacketSHA256 string              `json:"source_packet_sha256"`
-	ObjectionCount     int                 `json:"objection_count,omitempty"`
-	LeverageDecision   string              `json:"leverage_decision"`
-	Posture            string              `json:"posture"`
+	State              ReviewState       `json:"state"`
+	SourcePacketID     string            `json:"source_packet_id"`
+	SourcePacketSHA256 string            `json:"source_packet_sha256"`
+	ObjectionCount     int               `json:"objection_count,omitempty"`
+	LeverageDecision   string            `json:"leverage_decision"`
+	Posture            string            `json:"posture"`
 }
 
 const (
 	maxReviewFieldBytes = 1000
-	maxYodaObjections = 3
+	maxYodaObjections   = 3
 )
 
 func (trigger YodaReviewTrigger) valid() bool {

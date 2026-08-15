@@ -30,34 +30,34 @@ var ErrYodaReviewUnsatisfied = errors.New("authenticated Yoda review is not sati
 // decision to the exact item, contract, attempt and pre-review ledger revision.
 // The signature never enters transition history.
 type YodaReviewEnvelope struct {
-	SchemaVersion    int                  `json:"schema_version"`
-	ItemID           string               `json:"item_id"`
-	WorkspaceID      string               `json:"workspace_id"`
-	AttemptID        string               `json:"attempt_id"`
-	ReviewedRevision int                  `json:"reviewed_revision"`
-	ContractSHA256   string               `json:"contract_sha256"`
-	SignerKeyID      string               `json:"signer_key_id"`
-	InstallationID   string               `json:"installation_id"`
-	CustodyScope     string               `json:"custody_scope"`
+	SchemaVersion    int                `json:"schema_version"`
+	ItemID           string             `json:"item_id"`
+	WorkspaceID      string             `json:"workspace_id"`
+	AttemptID        string             `json:"attempt_id"`
+	ReviewedRevision int                `json:"reviewed_revision"`
+	ContractSHA256   string             `json:"contract_sha256"`
+	SignerKeyID      string             `json:"signer_key_id"`
+	InstallationID   string             `json:"installation_id"`
+	CustodyScope     string             `json:"custody_scope"`
 	Decision         YodaReviewDecision `json:"decision"`
-	Nonce            string               `json:"nonce"`
-	IssuedAt         time.Time            `json:"issued_at"`
-	Signature        string               `json:"signature"`
+	Nonce            string             `json:"nonce"`
+	IssuedAt         time.Time          `json:"issued_at"`
+	Signature        string             `json:"signature"`
 }
 
 type yodaReviewSigningPayload struct {
-	SchemaVersion    int                  `json:"schema_version"`
-	ItemID           string               `json:"item_id"`
-	WorkspaceID      string               `json:"workspace_id"`
-	AttemptID        string               `json:"attempt_id"`
-	ReviewedRevision int                  `json:"reviewed_revision"`
-	ContractSHA256   string               `json:"contract_sha256"`
-	SignerKeyID      string               `json:"signer_key_id"`
-	InstallationID   string               `json:"installation_id"`
-	CustodyScope     string               `json:"custody_scope"`
+	SchemaVersion    int                `json:"schema_version"`
+	ItemID           string             `json:"item_id"`
+	WorkspaceID      string             `json:"workspace_id"`
+	AttemptID        string             `json:"attempt_id"`
+	ReviewedRevision int                `json:"reviewed_revision"`
+	ContractSHA256   string             `json:"contract_sha256"`
+	SignerKeyID      string             `json:"signer_key_id"`
+	InstallationID   string             `json:"installation_id"`
+	CustodyScope     string             `json:"custody_scope"`
 	Decision         YodaReviewDecision `json:"decision"`
-	Nonce            string               `json:"nonce"`
-	IssuedAt         time.Time            `json:"issued_at"`
+	Nonce            string             `json:"nonce"`
+	IssuedAt         time.Time          `json:"issued_at"`
 }
 
 // YodaReviewSigningPayload returns the canonical bytes signed by a Yoda
@@ -83,21 +83,21 @@ func YodaReviewSigningPayload(envelope YodaReviewEnvelope) ([]byte, error) {
 // YodaReviewReceipt is metadata-only. It records what ledger revision was
 // reviewed and which immutable key authenticated the decision, not rationale.
 type YodaReviewReceipt struct {
-	SchemaVersion    int                  `json:"schema_version"`
-	ReviewID         string               `json:"review_id"`
-	ItemID           string               `json:"item_id"`
-	WorkspaceID      string               `json:"workspace_id"`
-	AttemptID        string               `json:"attempt_id"`
-	ReviewedRevision int                  `json:"reviewed_revision"`
-	RecordedRevision int                  `json:"recorded_revision"`
-	ContractSHA256   string               `json:"contract_sha256"`
-	SignerKeyID      string               `json:"signer_key_id"`
-	InstallationID   string               `json:"installation_id"`
-	CustodyScope     string               `json:"custody_scope"`
+	SchemaVersion    int                `json:"schema_version"`
+	ReviewID         string             `json:"review_id"`
+	ItemID           string             `json:"item_id"`
+	WorkspaceID      string             `json:"workspace_id"`
+	AttemptID        string             `json:"attempt_id"`
+	ReviewedRevision int                `json:"reviewed_revision"`
+	RecordedRevision int                `json:"recorded_revision"`
+	ContractSHA256   string             `json:"contract_sha256"`
+	SignerKeyID      string             `json:"signer_key_id"`
+	InstallationID   string             `json:"installation_id"`
+	CustodyScope     string             `json:"custody_scope"`
 	Decision         YodaReviewDecision `json:"decision"`
-	SignerSHA256     string               `json:"signer_sha256"`
-	EnvelopeSHA256   string               `json:"envelope_sha256"`
-	ObservedAt       time.Time            `json:"observed_at"`
+	SignerSHA256     string             `json:"signer_sha256"`
+	EnvelopeSHA256   string             `json:"envelope_sha256"`
+	ObservedAt       time.Time          `json:"observed_at"`
 }
 
 type YodaReviewInput struct {

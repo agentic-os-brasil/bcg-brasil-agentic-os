@@ -189,7 +189,7 @@ func InitialInterview() Interview {
 				"maestro":              "system",
 				"client_account_agent": "account",
 				"case_agent":           "case",
-				"yoda":               "governance",
+				"yoda":                 "governance",
 				"darwin":               "governance",
 				"quality_guardian":     "quality_longitudinal",
 				"pa_expert":            "pa_expert_registry",

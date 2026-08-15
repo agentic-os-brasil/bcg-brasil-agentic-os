@@ -68,7 +68,7 @@ const (
 	ActionCase     Action = "open_case"
 	ActionAccount  Action = "open_client_account"
 	ActionPAExpert Action = "request_pa_expert"
-	ActionYoda   Action = "invoke_yoda"
+	ActionYoda     Action = "invoke_yoda"
 	ActionDarwin   Action = "invoke_darwin"
 	ActionErrand   Action = "bounded_errand"
 	ActionGamma    Action = "invoke_gamma_guardian"
@@ -144,13 +144,13 @@ type Plan struct {
 	CaseEntry                   CaseEntry      `json:"case_entry,omitempty"`
 	SkipPreAccount              bool           `json:"skip_pre_account"`
 	SkipReasonCodes             []string       `json:"skip_reason_codes,omitempty"`
-	SkipYoda                  bool           `json:"skip_yoda"`
-	YodaReasonCode            string         `json:"yoda_reason_code,omitempty"`
-	YodaSkipReasonCode        string         `json:"yoda_skip_reason_code,omitempty"`
-	YodaSkipEvidence          string         `json:"yoda_skip_evidence,omitempty"`
+	SkipYoda                    bool           `json:"skip_yoda"`
+	YodaReasonCode              string         `json:"yoda_reason_code,omitempty"`
+	YodaSkipReasonCode          string         `json:"yoda_skip_reason_code,omitempty"`
+	YodaSkipEvidence            string         `json:"yoda_skip_evidence,omitempty"`
 	RequiresAccountFraming      bool           `json:"requires_account_framing"`
 	RequiresAccountValidation   bool           `json:"requires_account_validation"`
-	RequiresYoda              bool           `json:"requires_yoda"`
+	RequiresYoda                bool           `json:"requires_yoda"`
 	ScopeKind                   string         `json:"scope_kind"`
 	ScopeID                     string         `json:"scope_id"`
 	AccountScopeID              string         `json:"account_scope_id,omitempty"`
@@ -592,7 +592,7 @@ const (
 	StageCaseExecution   Stage = "case_execution"
 	StageAccountValidate Stage = "account_validation"
 	StagePAExpert        Stage = "pa_expert_advisory"
-	StageYodaReview    Stage = "yoda_review"
+	StageYodaReview      Stage = "yoda_review"
 	StageDarwinHealth    Stage = "darwin_health"
 	StageErrandExecution Stage = "errand_execution"
 	StageGammaQuality    Stage = "gamma_quality"
@@ -602,7 +602,7 @@ const (
 
 type LoopPolicy struct {
 	MaxAccountCycles int
-	MaxYodaCycles  int
+	MaxYodaCycles    int
 	MaxCaseAttempts  int
 }
 
@@ -613,11 +613,11 @@ type ChainState struct {
 	Stage                 Stage     `json:"stage"`
 	ActiveAgentID         string    `json:"active_agent_id,omitempty"`
 	AccountCycles         int       `json:"account_cycles"`
-	YodaCycles          int       `json:"yoda_cycles"`
+	YodaCycles            int       `json:"yoda_cycles"`
 	CaseAttempts          int       `json:"case_attempts"`
 	ContentDigest         string    `json:"content_digest,omitempty"`
 	AccountApprovalDigest string    `json:"account_approval_digest,omitempty"`
-	YodaApprovalDigest  string    `json:"yoda_approval_digest,omitempty"`
+	YodaApprovalDigest    string    `json:"yoda_approval_digest,omitempty"`
 	Receipts              []Receipt `json:"receipts"`
 }
 
@@ -629,8 +629,8 @@ type Receipt struct {
 	ContentDigest               string `json:"content_digest,omitempty"`
 	ReasonCode                  string `json:"reason_code,omitempty"`
 	AccountConsultationRequired bool   `json:"account_consultation_required"`
-	YodaRequired              bool   `json:"yoda_required"`
-	YodaSkipped               bool   `json:"yoda_skipped"`
+	YodaRequired                bool   `json:"yoda_required"`
+	YodaSkipped                 bool   `json:"yoda_skipped"`
 	PlanDigest                  string `json:"plan_digest"`
 	SelfSnapshotVersion         string `json:"self_snapshot_version,omitempty"`
 	SelfSnapshotDigest          string `json:"self_snapshot_digest,omitempty"`
@@ -711,7 +711,7 @@ func (state ChainState) Advance(plan Plan, policy LoopPolicy, actor string, even
 		Sequence: len(state.Receipts) + 1, Stage: state.Stage, AgentID: event.AgentID,
 		Decision: event.Decision, ContentDigest: event.ContentDigest, ReasonCode: event.ReasonCode,
 		AccountConsultationRequired: plan.AccountConsultationRequired,
-		YodaRequired:              plan.RequiresYoda, YodaSkipped: plan.SkipYoda,
+		YodaRequired:                plan.RequiresYoda, YodaSkipped: plan.SkipYoda,
 		PlanDigest: state.PlanDigest,
 	}
 	if event.IntentReceipt != nil {

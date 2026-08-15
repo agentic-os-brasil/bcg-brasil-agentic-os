@@ -16,7 +16,7 @@ type Reader string
 const (
 	ReaderOwnerSession Reader = "owner_session"
 	ReaderMaestro      Reader = "maestro"
-	ReaderYoda       Reader = "yoda"
+	ReaderYoda         Reader = "yoda"
 	ReaderDelegate     Reader = "delegate"
 )
 

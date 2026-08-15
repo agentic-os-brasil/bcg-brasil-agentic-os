@@ -88,20 +88,20 @@ type Criterion struct {
 }
 
 type Contract struct {
-	SchemaVersion        int         `json:"schema_version"`
-	ContractVersion      int         `json:"contract_version"`
-	ItemID               string      `json:"item_id"`
-	WorkspaceID          string      `json:"workspace_id"`
-	AuthorityKind        string      `json:"authority_kind"`
-	Objective            string      `json:"objective"`
-	InitialNextStep      string      `json:"initial_next_step"`
-	Criteria             []Criterion `json:"criteria"`
-	AllowedRefs          []string    `json:"allowed_refs"`
+	SchemaVersion      int         `json:"schema_version"`
+	ContractVersion    int         `json:"contract_version"`
+	ItemID             string      `json:"item_id"`
+	WorkspaceID        string      `json:"workspace_id"`
+	AuthorityKind      string      `json:"authority_kind"`
+	Objective          string      `json:"objective"`
+	InitialNextStep    string      `json:"initial_next_step"`
+	Criteria           []Criterion `json:"criteria"`
+	AllowedRefs        []string    `json:"allowed_refs"`
 	RequireYodaReview  bool        `json:"require_yoda_review"`
 	YodaPublicKey      string      `json:"yoda_public_key,omitempty"`
 	YodaKeyID          string      `json:"yoda_key_id,omitempty"`
 	YodaInstallationID string      `json:"yoda_installation_id,omitempty"`
-	CreatedAt            time.Time   `json:"created_at"`
+	CreatedAt          time.Time   `json:"created_at"`
 }
 
 type State struct {
@@ -157,22 +157,22 @@ type Transition struct {
 // Projections such as state.json may be regenerated from the newest valid
 // revision after an interrupted write.
 type Revision struct {
-	SchemaVersion int                  `json:"schema_version"`
-	State         State                `json:"state"`
-	Attempt       *Attempt             `json:"attempt,omitempty"`
-	Checkpoint    *Checkpoint          `json:"checkpoint,omitempty"`
-	Evidence      *EvidenceReceipt     `json:"evidence,omitempty"`
-	ToolCall      *ToolCallReceipt     `json:"tool_call,omitempty"`
-	YodaReview  *YodaReviewReceipt `json:"yoda_review,omitempty"`
-	Transition    Transition           `json:"transition"`
+	SchemaVersion int                `json:"schema_version"`
+	State         State              `json:"state"`
+	Attempt       *Attempt           `json:"attempt,omitempty"`
+	Checkpoint    *Checkpoint        `json:"checkpoint,omitempty"`
+	Evidence      *EvidenceReceipt   `json:"evidence,omitempty"`
+	ToolCall      *ToolCallReceipt   `json:"tool_call,omitempty"`
+	YodaReview    *YodaReviewReceipt `json:"yoda_review,omitempty"`
+	Transition    Transition         `json:"transition"`
 }
 
 type CreateInput struct {
-	WorkspaceID          string
-	Objective            string
-	InitialNextStep      string
-	Criteria             []Criterion
-	AllowedRefs          []string
+	WorkspaceID        string
+	Objective          string
+	InitialNextStep    string
+	Criteria           []Criterion
+	AllowedRefs        []string
 	RequireYodaReview  bool
 	YodaPublicKey      string
 	YodaKeyID          string
@@ -211,14 +211,14 @@ type Summary struct {
 }
 
 type Export struct {
-	Contract      Contract              `json:"contract"`
-	State         State                 `json:"state"`
-	Attempt       *Attempt              `json:"attempt,omitempty"`
-	Checkpoint    *Checkpoint           `json:"checkpoint,omitempty"`
-	Evidences     []EvidenceReceipt     `json:"evidences,omitempty"`
-	ToolCalls     []ToolCallReceipt     `json:"tool_calls,omitempty"`
+	Contract    Contract            `json:"contract"`
+	State       State               `json:"state"`
+	Attempt     *Attempt            `json:"attempt,omitempty"`
+	Checkpoint  *Checkpoint         `json:"checkpoint,omitempty"`
+	Evidences   []EvidenceReceipt   `json:"evidences,omitempty"`
+	ToolCalls   []ToolCallReceipt   `json:"tool_calls,omitempty"`
 	YodaReviews []YodaReviewReceipt `json:"yoda_reviews,omitempty"`
-	Transitions   []Transition          `json:"transitions"`
+	Transitions []Transition        `json:"transitions"`
 }
 
 // NextProjection is the only execution body designed for bounded model
@@ -289,20 +289,20 @@ func (store Store) Create(input CreateInput) (Item, error) {
 	}
 	now := store.now()
 	contract := Contract{
-		SchemaVersion:        1,
-		ContractVersion:      1,
-		ItemID:               itemID,
-		WorkspaceID:          input.WorkspaceID,
-		AuthorityKind:        AuthorityLocalExecution,
-		Objective:            strings.TrimSpace(input.Objective),
-		InitialNextStep:      strings.TrimSpace(input.InitialNextStep),
-		Criteria:             append([]Criterion(nil), input.Criteria...),
-		AllowedRefs:          append([]string(nil), input.AllowedRefs...),
+		SchemaVersion:      1,
+		ContractVersion:    1,
+		ItemID:             itemID,
+		WorkspaceID:        input.WorkspaceID,
+		AuthorityKind:      AuthorityLocalExecution,
+		Objective:          strings.TrimSpace(input.Objective),
+		InitialNextStep:    strings.TrimSpace(input.InitialNextStep),
+		Criteria:           append([]Criterion(nil), input.Criteria...),
+		AllowedRefs:        append([]string(nil), input.AllowedRefs...),
 		RequireYodaReview:  input.RequireYodaReview,
 		YodaPublicKey:      strings.TrimSpace(input.YodaPublicKey),
 		YodaKeyID:          strings.TrimSpace(input.YodaKeyID),
 		YodaInstallationID: strings.TrimSpace(input.YodaInstallationID),
-		CreatedAt:            now,
+		CreatedAt:          now,
 	}
 	digest, err := contractDigest(contract)
 	if err != nil {
@@ -1166,7 +1166,7 @@ func validateContract(contract Contract) error {
 	return validateCreateInput(CreateInput{
 		WorkspaceID: contract.WorkspaceID, Objective: contract.Objective,
 		InitialNextStep: contract.InitialNextStep, Criteria: contract.Criteria,
-		AllowedRefs:          contract.AllowedRefs,
+		AllowedRefs:        contract.AllowedRefs,
 		RequireYodaReview:  contract.RequireYodaReview,
 		YodaPublicKey:      contract.YodaPublicKey,
 		YodaKeyID:          contract.YodaKeyID,

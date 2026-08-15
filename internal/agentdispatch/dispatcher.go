@@ -47,24 +47,24 @@ type PacketRequest struct {
 }
 
 type WorkPacket struct {
-	SchemaVersion    int                 `json:"schema_version"`
-	PacketID         string              `json:"packet_id"`
-	ParentPacketID   string              `json:"parent_packet_id,omitempty"`
-	IssuerAgentID    string              `json:"issuer_agent_id"`
-	TargetAgentID    string              `json:"target_agent_id"`
-	ScopeKind        string              `json:"scope_kind"`
-	ScopeID          string              `json:"scope_id"`
-	Objective        string              `json:"objective"`
-	Pointers         []string            `json:"pointers,omitempty"`
-	Constraints      []string            `json:"constraints,omitempty"`
-	SkillID          string              `json:"skill_id,omitempty"`
+	SchemaVersion    int               `json:"schema_version"`
+	PacketID         string            `json:"packet_id"`
+	ParentPacketID   string            `json:"parent_packet_id,omitempty"`
+	IssuerAgentID    string            `json:"issuer_agent_id"`
+	TargetAgentID    string            `json:"target_agent_id"`
+	ScopeKind        string            `json:"scope_kind"`
+	ScopeID          string            `json:"scope_id"`
+	Objective        string            `json:"objective"`
+	Pointers         []string          `json:"pointers,omitempty"`
+	Constraints      []string          `json:"constraints,omitempty"`
+	SkillID          string            `json:"skill_id,omitempty"`
 	ReviewTrigger    YodaReviewTrigger `json:"review_trigger,omitempty"`
-	ReworkOfPacketID string              `json:"rework_of_packet_id,omitempty"`
-	DoneContract     DoneContract        `json:"done_contract"`
-	Review           *ReviewPacket       `json:"review,omitempty"`
-	IssuedAt         time.Time           `json:"issued_at"`
-	ExpiresAt        time.Time           `json:"expires_at"`
-	Signature        string              `json:"signature"`
+	ReworkOfPacketID string            `json:"rework_of_packet_id,omitempty"`
+	DoneContract     DoneContract      `json:"done_contract"`
+	Review           *ReviewPacket     `json:"review,omitempty"`
+	IssuedAt         time.Time         `json:"issued_at"`
+	ExpiresAt        time.Time         `json:"expires_at"`
+	Signature        string            `json:"signature"`
 }
 
 type Dispatcher struct {
