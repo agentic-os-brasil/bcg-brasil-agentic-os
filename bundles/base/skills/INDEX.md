@@ -28,6 +28,7 @@
 | Learnings Bridge | Promote daily learning candidates into durable owner knowledge | `skills/learnings-bridge/SKILL.md` |
 | Maestro Doctor | Run a plain-language health check on the Maestro install | `skills/maestro-doctor/SKILL.md` |
 | Preparar Ambiente Maestro | Prepara workspace, runtime e manutenção local | `skills/maestro-environment-setup/SKILL.md` |
+| Maestro Knowledge Pill | Gera pílula de conhecimento curta e engajante sobre o Maestro OS em formato Slack Block Kit | `skills/maestro-knowledge-pill/SKILL.md` |
 | Maestro Onboarding | Start a guided owner interview with quick or complete tracks | `skills/maestro-onboarding/SKILL.md` |
 | Maestro Operator | Operational method loaded at SessionStart — routes control-plane requests to the right skill | `skills/maestro-operator/SKILL.md` |
 | Checkup do Maestro | Confere e repara runtime, hooks e Darwin | `skills/maestro-runtime-checkup/SKILL.md` |
