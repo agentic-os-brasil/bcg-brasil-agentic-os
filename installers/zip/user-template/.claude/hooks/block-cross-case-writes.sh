@@ -131,6 +131,6 @@ if [ -f "$PENDING_FILE" ]; then
 fi
 
 # Block: target case differs from active and is not the pending case
-printf '{"decision":"block","reason":"Cross-case write blocked. Active case: %s. Target path is in case: %s. To switch cases, update data/cases/.active first via $case-agent-setup."}\n' \
+printf '{"decision":"block","reason":"Cross-case write blocked. Active case: %s. Target path is in case: %s. To switch cases, ask the owner to confirm the switch and then set data/cases/.active to the target case."}\n' \
   "$ACTIVE_CASE" "$TARGET_CASE"
 exit 2
