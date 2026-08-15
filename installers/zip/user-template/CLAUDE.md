@@ -37,7 +37,11 @@ no Claude Code. Se ele rodou e `data/.initialized` existe, prossiga.
      `data/memory/`, `data/memory/recent/`, `data/memory/weekly/`, `data/memory/medium-term/`,
      `data/memory/lifetime/`, `data/memory/policies/`, `data/owner/`, `data/owner/self/`,
      `data/owner/operating/`, `data/owner/observations/`, `data/owner/interview/`,
-     `data/owner/interview/drafts/`, `data/workspaces/`, `data/canary/`.
+     `data/owner/interview/drafts/`, `data/workspaces/`, `data/canary/`,
+     `data/owner/atlas/`, `data/owner/atlas/daily/`, `data/owner/atlas/craft/methods/`,
+     `data/owner/atlas/craft/style/`, `data/owner/atlas/learnings/`,
+     `data/owner/atlas/development/cdc/`, `data/owner/atlas/development/project-feedback/`,
+     `data/owner/atlas/development/upward-feedback/`.
   2. Escreva os arquivos:
      - `data/.initialized` — timestamp UTC atual (ex. `2026-08-13T00:00:00Z`)
      - `data/memory/.schema-version` — JSON: `{"schema_version": 1, "layers": ["recent", "weekly", "medium-term", "lifetime", "policies"], "policy_source": "bundles/base/memory/policy.json", "initialized_by": "inline-scaffold"}`

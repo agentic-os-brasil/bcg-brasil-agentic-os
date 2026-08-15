@@ -769,6 +769,51 @@ else
 fi
 
 # --------------------------------------------------------------------------
+phase "Phase 13 — Owner atlas tree"
+# --------------------------------------------------------------------------
+
+# start-day, eod, craft-update, feedback-capture, learnings-bridge and
+# upward-feedback all operate on data/owner/atlas/. Their reads carry
+# continuity between sessions, so a missing tree silently degrades the daily
+# ritual rather than failing loudly. Phase 4 already ran the scaffold.
+for atlas_dir in \
+  owner/atlas \
+  owner/atlas/daily \
+  owner/atlas/craft/methods \
+  owner/atlas/craft/style \
+  owner/atlas/learnings \
+  owner/atlas/development/cdc \
+  owner/atlas/development/project-feedback \
+  owner/atlas/development/upward-feedback
+do
+  if [ -d "$MAESTRO_DIR/data/$atlas_dir" ]; then
+    pass "data/$atlas_dir created by scaffold"
+  else
+    fail "data/$atlas_dir NOT created by scaffold"
+  fi
+done
+
+for atlas_file in \
+  owner/atlas/craft/index.md \
+  owner/atlas/learnings/index.md \
+  owner/atlas/development/objectives.md
+do
+  if [ -f "$MAESTRO_DIR/data/$atlas_file" ]; then
+    pass "data/$atlas_file created by scaffold"
+  else
+    fail "data/$atlas_file NOT created by scaffold"
+  fi
+done
+
+# The daily page is authored by start-day, never pre-seeded: a placeholder
+# there would be read back as a real entry.
+if [ -n "$(ls -A "$MAESTRO_DIR/data/owner/atlas/daily" 2>/dev/null)" ]; then
+  fail "owner/atlas/daily/ is pre-seeded (must be authored by start-day)"
+else
+  pass "owner/atlas/daily/ correctly left empty for start-day"
+fi
+
+# --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
 

@@ -385,6 +385,77 @@ else
   log_line "MKDIR FAIL  data/owner/observations"
 fi
 
+# owner/atlas/ — the owner's professional atlas (spec 007 navigation layer).
+# start-day, eod, craft-update, feedback-capture, learnings-bridge and
+# upward-feedback all read and write under data/owner/atlas/. Their reads are
+# what rank the day and carry continuity between sessions; with no tree and no
+# objectives file those reads return nothing and the daily ritual degrades to a
+# briefing composed from the session alone.
+#
+# Only the directories and the two index pages are created. Daily pages, method
+# and style pages, learnings and feedback captures are authored by the skills
+# themselves — placeholders there would be mistaken for real content.
+if mkdir -p "$DATA_DIR/owner/atlas" 2>/dev/null; then
+  log_line "MKDIR OK  data/owner/atlas"
+  for atlas_sub in daily craft/methods craft/style learnings \
+                   development/cdc development/project-feedback development/upward-feedback; do
+    if mkdir -p "$DATA_DIR/owner/atlas/$atlas_sub" 2>/dev/null; then
+      log_line "MKDIR OK  data/owner/atlas/$atlas_sub"
+    else
+      log_line "MKDIR FAIL  data/owner/atlas/$atlas_sub  (permissions or path issue)"
+    fi
+  done
+
+  if [ ! -f "$DATA_DIR/owner/atlas/craft/index.md" ]; then
+    cat > "$DATA_DIR/owner/atlas/craft/index.md" 2>/dev/null <<'EOF'
+# Craft
+
+Métodos e calibrações de estilo que se mantêm verdadeiros entre projetos.
+
+- `methods/` — técnicas reutilizáveis, cada uma em sua própria página.
+- `style/` — como você calibra o trabalho em uma situação específica.
+
+_Ainda vazio. As páginas são criadas por `/craft-update` e `/learnings-bridge`._
+EOF
+    log_line "WRITE OK  data/owner/atlas/craft/index.md"
+  fi
+
+  if [ ! -f "$DATA_DIR/owner/atlas/learnings/index.md" ]; then
+    cat > "$DATA_DIR/owner/atlas/learnings/index.md" 2>/dev/null <<'EOF'
+# Learnings
+
+Aprendizados profissionais duráveis, corrigíveis e ligados às suas fontes
+quando aplicável.
+
+_Ainda vazio. As páginas são criadas por `/learnings-bridge`._
+EOF
+    log_line "WRITE OK  data/owner/atlas/learnings/index.md"
+  fi
+
+  # objectives.md is read by start-day, eod and feedback-capture to tie the day
+  # to what the owner is actually working toward. It is authored by the owner,
+  # so it ships as an empty structure rather than invented content.
+  if [ ! -f "$DATA_DIR/owner/atlas/development/objectives.md" ]; then
+    cat > "$DATA_DIR/owner/atlas/development/objectives.md" 2>/dev/null <<'EOF'
+# Objetivos de desenvolvimento
+
+O que você está tentando desenvolver neste período, com o que conta como
+progresso. Lido no início e no fim do dia para conectar o trabalho ao objetivo.
+
+_Não preenchido. Diga "quero definir meus objetivos" para preencher._
+
+## Objetivos atuais
+-
+
+## Como saber que avançou
+-
+EOF
+    log_line "WRITE OK  data/owner/atlas/development/objectives.md (placeholder)"
+  fi
+else
+  log_line "MKDIR FAIL  data/owner/atlas  (permissions or path issue)"
+fi
+
 # owner/interview/ — interview confirmations + drafts
 if mkdir -p "$DATA_DIR/owner/interview/drafts" 2>/dev/null; then
   log_line "MKDIR OK  data/owner/interview/drafts"
