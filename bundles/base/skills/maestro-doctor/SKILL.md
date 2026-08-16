@@ -29,7 +29,7 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
 
 4. **Version readable** — read `VERSION`, confirm it matches `X.Y.Z` shape.
 
-5. **Hook executable** (Mac/Linux only) — verify the hook under `.claude/hooks/` has execute permission. On Windows, skip (Claude Code runs it via bash without needing +x).
+5. **Hook executable** (Mac/Linux only) — verify the hook under `.claude/hooks/` has execute permission. On Windows the permission bit is not the constraint, so skip it here — whether the hooks ran at all is covered by check 11.
 
 6. **Cloud-sync path** — inspect `${CLAUDE_PROJECT_DIR}` for substrings `OneDrive`, `Dropbox`, `Google Drive`, `iCloud`, `iCloudDrive`, `pCloud`, `Box Sync`. If any match, sinalizar como ponto a verificar. Pasta sincronizada em nuvem pode causar conflitos de arquivo e perda de `data/` durante extração do ZIP novo. Recomendar mover a pasta `Maestro/` para um local não-sincronizado, por exemplo `Documents/Maestro/` (Mac) ou `Documentos\Maestro\` local (Windows).
 
@@ -45,6 +45,31 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
     - `data/profile/onboarding.json` → campo `status`
 
     Se `onboarding.json.status == "complete"` **e** (`registry.json.initialized == false` **ou** `confirmations.json.completed_tracks == []`), surfar como ponto informativo (não é erro funcional): "o onboarding foi concluído numa versão anterior do Maestro e dois arquivos de controle interno ficaram desatualizados. Nenhuma ação necessária — rodar o onboarding uma vez de novo (opcional) atualiza os arquivos. Isso não afeta o funcionamento do sistema." Se ambos os campos já refletem o estado concluído, seguir em silêncio.
+
+11. **As rotinas automáticas rodaram nesta máquina** — este é o único check que
+    detecta uma instalação onde os hooks nunca executaram. Comparar dois arquivos:
+
+    - `data/.initialized` existe (a workspace foi montada), **e**
+    - `data/.scaffold.log` **não** existe.
+
+    `first-run-scaffold.sh` escreve o log em toda execução, desde a primeira linha.
+    O caminho de emergência descrito no `CLAUDE.md` — em que o próprio assistente
+    monta a `data/` dentro da conversa — não escreve o log. Portanto `data/`
+    montada **sem** log significa que os hooks não rodaram: em geral porque o
+    `bash` não está disponível na máquina (ele não vem no Windows por padrão).
+
+    Quando o par acima bater, surfar como ponto a verificar, em linguagem simples:
+    "algumas rotinas automáticas do Maestro não estão ativas nesta máquina — ele
+    funciona, mas não lembra sozinho do contexto entre conversas nem fecha o dia
+    por conta própria. Avise o time BCG Brasil AI; não é problema da sua pasta e
+    não dá pra resolver por aqui." Complementar com o contorno da entrada
+    `hooks-nao-executados` em `known-issues.md`.
+
+    Se `data/.scaffold.log` existir, ou se `data/.initialized` não existir (aí o
+    caso é o check 2, não este), seguir em silêncio.
+
+    Nunca recomendar instalar `bash`, Git for Windows ou WSL ao usuário: é
+    decisão de quem administra a máquina e foge do contrato de "nada de terminal".
 
 ## Output shape
 
