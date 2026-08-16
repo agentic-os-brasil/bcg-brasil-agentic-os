@@ -2,25 +2,40 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:bcg-brasil-agentic-os:schema:onboarding:v1",
   "$comment": "experimental — mirrors bundles/base/manifest.json.provenance.status; shape may evolve. additionalProperties permissive during this stage.",
-  "title": "Maestro Onboarding Completion",
-  "description": "Persisted by the maestro-onboarding skill (Step 6). Presence of this file gates the CLAUDE.md session state machine: if missing, onboarding runs; if present, the session proceeds normally. Track echoes identity.json.track so the completion record is self-contained.",
+  "title": "Maestro Onboarding State",
+  "description": "Persisted by the maestro-onboarding skill. Written as soon as the owner gives their name, then updated as the interview advances. The `status` field gates the CLAUDE.md session state machine: anything other than \"complete\" means onboarding must be resumed, not skipped. Presence alone is not completion — an abandoned interview leaves this file behind with status \"in_progress\".",
   "type": "object",
-  "required": ["completed_at", "track", "version"],
+  "required": ["status", "version"],
   "additionalProperties": true,
   "properties": {
+    "status": {
+      "enum": ["in_progress", "complete"],
+      "description": "Whether the interview finished. \"in_progress\" is written at the first turn and must cause onboarding to resume on the next session."
+    },
     "completed_at": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 UTC timestamp of onboarding completion."
+      "description": "ISO 8601 UTC timestamp of onboarding completion. Present only when status is \"complete\"."
     },
     "track": {
-      "enum": ["quick", "complete"],
-      "description": "Which onboarding track was completed. Mirrors identity.json.track."
+      "enum": ["quick", "complete", "imported-brain"],
+      "description": "Which onboarding track was taken. Mirrors identity.json.track for the two guided tracks. \"imported-brain\" is the path taken when the owner already has a structured second brain. Unset until the owner picks a path."
     },
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Content of the VERSION file at the moment of completion (e.g., \"0.1.1\")."
+      "description": "Content of the VERSION file at the moment of the first write (e.g., \"0.1.10\")."
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "complete" } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["completed_at", "track"]
+      }
+    }
+  ]
 }

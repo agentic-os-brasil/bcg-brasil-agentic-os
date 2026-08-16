@@ -53,11 +53,19 @@ no Claude Code. Se ele rodou e `data/.initialized` existe, prossiga.
 
 ### Passo 2: Onboarding (obrigatório, nunca pulável)
 
-- Cheque se `data/profile/onboarding.json` existe.
-  - Se **não existe**: leia `bundles/base/skills/maestro-onboarding/SKILL.md` e siga as instruções
-    imediatamente, independentemente do que o usuário escreveu. Não pergunte. Não se
-    apresente antes. Onboarding primeiro.
-  - Se **existe**: sessão normal, responda ao pedido do usuário.
+Decida pelo campo `status`, nunca pela existência do arquivo. Um onboarding
+abandonado no meio deixa o arquivo criado com `status: "in_progress"`; tratar
+isso como concluído deixa a pessoa com um perfil vazio para sempre, sem nenhum
+aviso.
+
+- Leia `data/profile/onboarding.json`.
+  - Se o arquivo **não existe**: leia `bundles/base/skills/maestro-onboarding/SKILL.md` e siga
+    as instruções imediatamente, independentemente do que o usuário escreveu. Não pergunte.
+    Não se apresente antes. Onboarding primeiro.
+  - Se existe com `status` diferente de `"complete"`: leia a mesma skill e **retome de onde
+    parou**. Não recomece do zero e não repita o que já foi respondido — a skill tem a seção
+    de reentrada para isso.
+  - Se existe com `status: "complete"`: sessão normal, responda ao pedido do usuário.
 
 ### Passo 3: MarkItDown (verificação pós-onboarding, com re-check de 30 dias)
 

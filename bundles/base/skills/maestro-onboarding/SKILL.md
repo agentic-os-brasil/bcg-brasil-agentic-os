@@ -50,6 +50,21 @@ técnico — nada de "runtime", "bundle", "hook", "scaffold", "workspace"):
 - Não pedir sobrenome, cargo, empresa. Só o nome pelo qual quer ser chamado.
 - Esperar a resposta e ler no próximo turno.
 
+**Persistência imediata do nome (obrigatória).** No instante em que o nome
+chegar — antes de escrever a resposta do turno 2 — grave dois arquivos:
+
+- `data/profile/identity.json`: campo `name` com o nome informado, mais
+  `captured_at` (ISO 8601 UTC). Preencha `role` quando ele for conhecido; até
+  lá, deixe o campo fora do arquivo em vez de gravar string vazia.
+- `data/profile/onboarding.json`: `status: "in_progress"` e `version` (conteúdo
+  do arquivo `VERSION` na raiz). Ainda não grave `track` nem `completed_at` —
+  a trilha só é conhecida no turno 3.
+
+Sem isso, quem responde o nome e fecha a janela não deixa nada em disco: a
+sessão seguinte reabre o onboarding do zero e pergunta o nome de novo,
+ignorando o que a pessoa escreveu. Era o comportamento anterior e não tinha
+saída para o usuário.
+
 ## Opening response — turno 2 (o "por que" + pré-check de segundo cérebro)
 
 Depois que o owner disser o nome, este é o turno crítico que estava faltando:
@@ -153,7 +168,10 @@ loop as the guided path — owner corrects meaning before anything hits disk.
 
 **Step 3 — Close the owner control-tree.**
 - `data/profile/onboarding.json`: `track: "imported-brain"`, `status:
-  "complete"`.
+  "complete"`, `completed_at` (ISO 8601 UTC) and `version` (contents of the
+  root `VERSION` file). All four are required by
+  `schemas/onboarding.schema.json`; a file missing `completed_at` or `version`
+  is invalid even though nothing rejects it at write time.
 - `data/owner/registry.json`: `initialized: true`, `onboarding_mode:
   "imported-brain"`.
 - `data/owner/interview/confirmations.json`: append `"imported-brain"` to
@@ -210,6 +228,25 @@ explicando por que cada uma importa antes de perguntar).
 
 Onboarding is **not a one-way door**. A decision made in the first 90 seconds
 must be reversible. Track completions coexist; they don't overwrite each other.
+
+### Retomar uma entrevista abandonada (`status: "in_progress"`)
+
+This is the most common re-entry and it is not a re-run: the owner never
+finished. `CLAUDE.md` routes here whenever `onboarding.json.status` is anything
+other than `"complete"`.
+
+1. **Never restart from turno 1.** The name is already in
+   `data/profile/identity.json` — greet the owner by it.
+2. Open by saying where things stopped, in one line and without jargon:
+   *"Oi de novo, \<nome\>! A gente tinha parado na pergunta 4. Retomo daí?"*
+3. Determine the resume point from what is already on disk: `track` in
+   `onboarding.json` (absent means the track was never chosen — resume at the
+   track question), the facet files already written under `data/owner/self/`,
+   and `confirmations.json`. Never re-ask something already answered.
+4. If `track` is absent, ask the track question again — that is the genuine
+   stopping point, not a repetition.
+5. Renumber nothing: the counter total for the chosen track is fixed, so a
+   resumed interview continues at the position it stopped, with the same `<N>`.
 
 **Trigger phrases** that must re-open onboarding even when
 `onboarding.json.status == "complete"`:
@@ -386,7 +423,11 @@ professional baseline; do not emulate ingestion from conversation.
    track is complete until the local review is confirmed.
 5. When all facets for the selected track are reviewed and confirmed, write each
    confirmed profile file: `data/profile/identity.json`, `data/profile/style.json`,
-   and `data/profile/onboarding.json` with `status: "complete"`. Ask the owner for an
+   and `data/profile/onboarding.json` with `status: "complete"`, `track` (`"quick"`
+   or `"complete"`), `completed_at` (ISO 8601 UTC) and `version` (contents of the
+   root `VERSION` file). Those four fields are what
+   `schemas/onboarding.schema.json` requires; writing only `track` and `status`
+   produces an invalid file that nothing rejects at write time. Ask the owner for an
    explicit final review before marking complete. **Canonical filenames — do not
    rename or split**: the profile layer has exactly three files: `identity.json`,
    `style.json` (persists the interaction profile per `schemas/style.schema.json`;
