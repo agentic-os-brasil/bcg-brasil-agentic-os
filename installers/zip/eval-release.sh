@@ -987,6 +987,43 @@ else
 fi
 
 # --------------------------------------------------------------------------
+phase "Phase 15 — User-visible hook messages carry no internal syntax"
+# --------------------------------------------------------------------------
+
+# The `$skill` prefix is a development-repo convention: it expands only through
+# a UserPromptExpansion hook that exists in the source repo's .claude/settings.json.
+# The shipped settings.json has no such hook, so `$skill` is inert for an owner.
+# Any hook `reason` string is rendered verbatim to the user, so it must never
+# instruct them to type something that cannot work.
+CROSS_CASE_HOOK="$MAESTRO_DIR/.claude/hooks/block-cross-case-writes.sh"
+if [ -f "$CROSS_CASE_HOOK" ]; then
+  pass "block-cross-case-writes.sh present in ZIP"
+
+  # Drive the hook into its block branch and inspect the emitted reason string.
+  XC_ROOT=$(mktemp -d -t maestro-eval-crosscase-XXXXXX)
+  mkdir -p "$XC_ROOT/data/cases/case-alpha" "$XC_ROOT/data/cases/case-beta" "$XC_ROOT/.claude/hooks"
+  cp "$CROSS_CASE_HOOK" "$XC_ROOT/.claude/hooks/"
+  printf 'case-alpha\n' > "$XC_ROOT/data/cases/.active"
+  XC_OUT=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' \
+             "$XC_ROOT/data/cases/case-beta/notes.md" \
+           | CLAUDE_PROJECT_DIR="$XC_ROOT" bash "$XC_ROOT/.claude/hooks/block-cross-case-writes.sh" 2>/dev/null)
+
+  if printf '%s' "$XC_OUT" | grep -q '"decision":"block"'; then
+    pass "cross-case write is blocked"
+
+    if printf '%s' "$XC_OUT" | grep -q '\$'; then
+      fail "block message leaks internal \$skill syntax to the user: $XC_OUT"
+    else
+      pass "block message contains no internal \$skill syntax"
+    fi
+  else
+    fail "cross-case write was NOT blocked (hook emitted: $XC_OUT)"
+  fi
+else
+  fail "block-cross-case-writes.sh missing from ZIP"
+fi
+
+# --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
 
