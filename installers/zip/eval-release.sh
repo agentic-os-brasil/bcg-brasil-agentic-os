@@ -1059,6 +1059,39 @@ else
 fi
 
 # --------------------------------------------------------------------------
+phase "Phase 17 — Suggested skill ids resolve"
+# --------------------------------------------------------------------------
+
+# Skills suggest follow-ups to the owner as `/skill-id`. An id that matches no
+# shipped skill is a dead end the owner cannot act on. maestro-onboarding is
+# forced on the first session, so a bad id there reaches every user.
+SKILLS_ROOT="$MAESTRO_DIR/bundles/base/skills"
+if [ -d "$SKILLS_ROOT" ]; then
+  # Slash-prefixed ids that are runtime commands rather than skills.
+  SLASH_ALLOWLIST=" clear help "
+  SLASH_BAD=0
+  SLASH_CHECKED=0
+  for skillmd in "$SKILLS_ROOT"/*/SKILL.md; do
+    [ -f "$skillmd" ] || continue
+    for id in $(grep -oE '`/[a-z0-9][a-z0-9-]*`' "$skillmd" 2>/dev/null | tr -d '`/' | sort -u); do
+      case "$SLASH_ALLOWLIST" in *" $id "*) continue ;; esac
+      SLASH_CHECKED=$((SLASH_CHECKED+1))
+      if [ ! -d "$SKILLS_ROOT/$id" ]; then
+        SLASH_BAD=$((SLASH_BAD+1))
+        fail "$(basename "$(dirname "$skillmd")") suggests /$id, which is not a shipped skill"
+      fi
+    done
+  done
+  if [ "$SLASH_CHECKED" -eq 0 ]; then
+    fail "no /skill-id suggestions found (check is not exercising anything)"
+  elif [ "$SLASH_BAD" -eq 0 ]; then
+    pass "all $SLASH_CHECKED suggested /skill-id reference(s) resolve to a shipped skill"
+  fi
+else
+  fail "bundles/base/skills missing from ZIP"
+fi
+
+# --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
 
