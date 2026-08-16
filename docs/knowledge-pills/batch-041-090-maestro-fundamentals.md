@@ -184,20 +184,20 @@
 
 ## Bloco B — Memória (#051–#060)
 
-### Pílula #051 — Memória tem cinco andares
+### Pílula #051 — Memória tem quatro andares
 
 ```json
 {
   "blocks": [
-    {"type": "header", "text": {"type": "plain_text", "text": "💊 Memória tem cinco andares 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🧠 _A memória do Maestro é uma pirâmide de 5 tiers, cada um com propósito distinto:_\n\n• _T1 daily — o que aconteceu hoje_ 📅\n• _T2 weekly — o que sobrou da semana_ 📆\n• _T3 medium-term — janela temática rolante_ 🌊\n• _T4 lifetime — canon durável_ 🏛\n• _T5 agent-state — compactação por agente_ 🗜\n\n📖 _Princípio em `control-plane/memory/auto/memory_pyramid_principle.md`._"}},
+    {"type": "header", "text": {"type": "plain_text", "text": "💊 Memória tem quatro andares 💊", "emoji": true}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🧠 _A memória do Maestro é uma pirâmide de 4 andares, cada um com propósito distinto:_\n\n• _recent — o que aconteceu hoje_ 📅\n• _weekly — o que sobrou da semana_ 📆\n• _medium-term — janela temática rolante_ 🌊\n• _lifetime — canon durável_ 🏛\n\n📖 _Contrato em `bundles/base/memory/policy.json`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #051 · Maestro OS_ :maestro:"}]}
   ]
 }
 ```
 
-> 💊 **Memória tem cinco andares** 💊
-> 🧠 *T1 daily · T2 weekly · T3 medium · T4 lifetime · T5 agent-state.*
+> 💊 **Memória tem quatro andares** 💊
+> 🧠 *recent · weekly · medium-term · lifetime.*
 
 ---
 
@@ -207,7 +207,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 A memória rola sozinha 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🌊 _Cada tier tem janela própria: daily rola em 1 dia, weekly em 7, medium em 6 semanas._\n\n♻️ _O conteúdo que importa sobe de andar; o resto expira. Não é o owner que decide item a item — a rotina promove ou descarta._\n\n📥 _SessionStart injeta os tiers relevantes automaticamente. Contexto chega denso e sem lixo._\n\n📖 _Rollups em `control-plane/memory/daily/weekly/` e `daily/digests/`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🌊 _Cada andar tem sua janela: o diário roda todo dia, o semanal fecha a semana, o médio prazo guarda o que sobrevive a ela._\n\n♻️ _O conteúdo que importa sobe de andar; o resto expira. Não é o owner que decide item a item — a rotina promove ou descarta._\n\n📥 _No início da sessão entram sozinhos o lifetime, o semanal e o diário mais recente._\n\n📖 _Rollups em `data/memory/`, um diretório por andar._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #052 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -224,7 +224,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Dormir é o que fixa memória 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🌙 _`dream-memory` roda no fim do dia: comprime daily em digest, promove aprendizado durável, verifica ponteiros._\n\n🧠 _Sem esse passo, daily vira lixo acumulado e o SessionStart do dia seguinte injeta contexto ruim._\n\n💡 _Digest é denso e curto — LLM-friendly, não narrativo. O log bruto fica arquivado; o que sobe pro medium-term é a compressão._\n\n📖 _Skill em `bundles/base/skills/dream-memory/SKILL.md`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🌙 _`dream-memory` tem dois ciclos: o diário comprime o dia na memória recente, e o semanal é que promove o que virou aprendizado durável._\n\n🧠 _Sem esse passo, o diário vira lixo acumulado e a sessão seguinte começa com contexto ruim._\n\n💡 _O digest é denso e curto, não narrativo. O log bruto fica arquivado; o que sobe de andar é a compressão._\n\n📖 _Skill em `bundles/base/skills/dream-memory/SKILL.md`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #053 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -241,7 +241,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Lifetime é o que fica pra sempre 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🏛 _Tier 4 é canon: decisões estruturais, princípios, personas, arquitetura._\n\n🔒 _Não expira, não rola. Só entra por promoção deliberada — via `case-canon-ingest`, `craft-update` ou proposta Darwin aprovada por Yoda._\n\n🎯 _Isso protege o núcleo do sistema: ninguém enfia coisa aleatória no canon durante um daily busy._\n\n📖 _Ver `control-plane/memory/auto/MEMORY.md` como índice._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🏛 _O andar `lifetime` é canon: decisões estruturais, princípios, personas, arquitetura._\n\n🔒 _Não expira, não rola. Só entra por promoção deliberada, e só no ciclo semanal — via `case-canon-ingest`, `craft-update` ou proposta Darwin aprovada por Yoda._\n\n🎯 _Isso protege o núcleo do sistema: ninguém enfia coisa aleatória no canon no meio de um dia corrido._\n\n📖 _Vive em `data/memory/lifetime/`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #054 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -252,20 +252,20 @@
 
 ---
 
-### Pílula #055 — Agent-state compacta por agente
+### Pílula #055 — Cada agente guarda seu próprio estado
 
 ```json
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Cada agente tem sua memória 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🗜 _Tier 5 é a compactação de estado por agente. Darwin tem seu snapshot, learning-curator tem outro, case agent tem outro._\n\n📉 _Sem isso, cada agente carregaria histórico inteiro toda vez. Compactação reduziu Darwin de 709 pra 154 linhas, learning-curator de 264 pra 105._\n\n⚡ _Contexto denso, custo baixo, comportamento consistente sessão após sessão._\n\n📖 _Pattern registrado em `memory_pyramid_principle.md`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🗜 _Estado por agente não é um andar da memória — é uma área própria em `data/agents/`, uma pasta por agente._\n\n📉 _Cada um guarda ali sua memória de trabalho, suas decisões e seu contexto. Sem isso, todo agente carregaria o histórico inteiro toda vez._\n\n⚡ _Contexto denso, custo baixo, comportamento consistente sessão após sessão._\n\n📖 _Ver `data/agents/` na sua pasta do Maestro._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #055 · Maestro OS_ :maestro:"}]}
   ]
 }
 ```
 
 > 💊 **Cada agente tem sua memória** 💊
-> 🗜 *Compactação por agente.* 📉 *Reduz tokens.* ⚡ *Comportamento consistente.*
+> 🗜 *Uma pasta por agente.* 📉 *Não recarrega o histórico todo.* ⚡ *Comportamento consistente.*
 
 ---
 
@@ -292,7 +292,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Contexto apodrece sem olhar 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🦠 _Context rot é real: papers mostram queda de 13% a 85% em performance com contexto poluído._\n\n👀 _Darwin tem sensor pra isso: mede crescimento de envelope, camadas stale, ponteiros duplicados, ordem de injeção._\n\n🧹 _Sem sensor, o sistema degrada silenciosamente — respostas piores, custo maior, ninguém sabe por quê._\n\n📖 _Evidência canônica em `control-plane/memory/auto/context-rot-evidence-2025.md`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🦠 _Contexto poluído degrada resposta: camada velha que ninguém limpou, ponteiro duplicado, ordem de injeção errada._\n\n👀 _O Darwin tem sensor pra isso: mede o crescimento do envelope, as camadas paradas e os ponteiros repetidos._\n\n🧹 _Sem sensor, o sistema piora em silêncio — respostas piores, custo maior, ninguém sabe por quê._\n\n📖 _Agente em `bundles/base/agents/darwin/AGENT.md`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #057 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -309,7 +309,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Weekly mostra o que sobrou 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "📆 _Domingo (ou fim de ciclo), um script consolida 7 dailies em um rollup semanal denso._\n\n🧭 _O que aparece: runtime, entregas, itens que viraram carry, blockers._\n\n♻️ _O rollup fica em `daily/weekly/` e alimenta o medium-term. O log diário original fica arquivado — recuperação sob demanda, injeção só do compacto._\n\n📖 _Ver `daily-log-weekly-digest.sh` em `control-plane/scripts/`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "📆 _No fim do ciclo, o `dream-memory` consolida os diários da semana num rollup denso._\n\n🧭 _O que aparece: entregas, itens que viraram carry, blockers._\n\n♻️ _O rollup fica em `data/memory/weekly/` e alimenta o médio prazo. O diário original fica arquivado — recuperação sob demanda, injeção só do compacto._\n\n📖 _Skill em `bundles/base/skills/dream-memory/SKILL.md`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #058 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -326,31 +326,31 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Medium-term é janela temática 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🌊 _Tier 3 agrega ~6 semanas em digest temático: infra do OS, projetos ativos, issues recorrentes, carries._\n\n🎯 _É o meio-termo entre o barulho do daily e o silêncio do canon: mostra o que está evoluindo agora._\n\n🔁 _Injetado no SessionStart, dá ao agente contexto de trajetória sem precisar rebobinar transcript._\n\n📖 _Gerado por `daily-log-medium-term-digest.sh`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🌊 _O médio prazo agrega várias semanas num digest temático: projetos ativos, questões recorrentes, carries._\n\n🎯 _É o meio-termo entre o barulho do diário e o silêncio do canon: mostra o que está evoluindo agora._\n\n🔁 _Consultado sob demanda, dá contexto de trajetória sem rebobinar conversa._\n\n📖 _Vive em `data/memory/medium-term/`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #059 · Maestro OS_ :maestro:"}]}
   ]
 }
 ```
 
 > 💊 **Medium-term é janela temática** 💊
-> 🌊 *~6 semanas em digest.* 🎯 *Trajetória sem transcript.* 🔁 *Injetado no SessionStart.*
+> 🌊 *Várias semanas em digest.* 🎯 *Trajetória sem rebobinar.* 🔁 *Consultado sob demanda.*
 
 ---
 
-### Pílula #060 — Memória tem índice
+### Pílula #060 — A memória é sua, e dá pra abrir
 
 ```json
 {
   "blocks": [
-    {"type": "header", "text": {"type": "plain_text", "text": "💊 A memória tem índice 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🗂 _`MEMORY.md` é a porta de entrada da memória automática — lista tudo que existe em `auto/`, com pointer e uma linha explicando._\n\n📖 _Um script valida os ponteiros: quebrou, abre issue. Ninguém precisa navegar a árvore no escuro._\n\n🎯 _Índice + validador = memória confiável mesmo com dezenas de arquivos._\n\n📖 _Ver `control-plane/memory/auto/MEMORY.md`._"}},
+    {"type": "header", "text": {"type": "plain_text", "text": "💊 A memória é sua, e dá pra abrir 💊", "emoji": true}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🗂 _Tudo que o Maestro lembra fica em `data/memory/`, uma pasta por andar, em arquivos de texto comum._\n\n📖 _Você pode abrir, ler, editar e apagar qualquer um deles pelo seu próprio computador. Não tem banco de dados nem formato fechado._\n\n🎯 _Nada sai da sua máquina, e a pasta `data/` nunca é sobrescrita quando chega uma versão nova._\n\n📖 _Abra `data/memory/` na sua pasta do Maestro._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #060 · Maestro OS_ :maestro:"}]}
   ]
 }
 ```
 
-> 💊 **A memória tem índice** 💊
-> 🗂 *MEMORY.md lista tudo.* 📖 *Validador checa ponteiros.* 🎯 *Confiável em escala.*
+> 💊 **A memória é sua, e dá pra abrir** 💊
+> 🗂 *Texto comum em `data/memory/`.* 📖 *Você abre, lê e edita.* 🎯 *Nunca sai da sua máquina.*
 
 ---
 
@@ -362,7 +362,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Skills atendem no gatilho certo 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🎯 _Toda skill do Maestro tem triggers — frases que fazem ela pular na frente automaticamente._\n\n⚡ _Não precisa lembrar do nome. Basta descrever o que quer:_\n\n• _`kickoff de caso novo` → dispara `bcg-case-kickoff`_ 🚀\n• _`revisa esse deck` → dispara `deck-review`_ 📊\n• _`fecha o dia` → dispara `eod`_ 🌙\n\n📖 _Ver todos em `bundles/base/skills/INDEX.md`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🎯 _Toda skill do Maestro tem triggers — frases que fazem ela pular na frente automaticamente._\n\n⚡ _Não precisa lembrar do nome. Basta descrever o que quer:_\n\n• _`kickoff de caso novo` → dispara `bcg-case-kickoff`_ 🚀\n• _`revisa esse deck` → dispara `deck-review`_ 📊\n• _`fechando o dia` → dispara `eod`_ 🌙\n\n📖 _Ver todos em `bundles/base/skills/INDEX.md`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #061 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -396,7 +396,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Skill descreve, não impõe 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "📜 _Skill é procedimento explícito: quando usar, o que produz, anti-padrões que evitar._\n\n🧠 _Diferente de ability (que é capacidade do modelo), skill é procedure escrita — não some se o modelo esquecer._\n\n🔒 _Formato locked garante consistência: mesma estrutura, mesmo contrato, saída previsível._\n\n📖 _Base conceitual em `learning/canon/harness-engineering-anthropic-2026.md`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "📜 _Skill é procedimento explícito: quando usar, o que produz, anti-padrões que evitar._\n\n🧠 _Diferente de ability (que é capacidade do modelo), skill é procedure escrita — não some se o modelo esquecer._\n\n🔒 _Formato locked garante consistência: mesma estrutura, mesmo contrato, saída previsível._\n\n📖 _Todas em `bundles/base/skills/`, uma pasta por skill._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #063 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -413,14 +413,14 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Skills atômicas compõem 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🧩 _Skill grande vira várias skills pequenas com contrato de composição._\n\n🎯 _Ex: `bcg-deck` = `bcg-deck-plan` (fase 1) + `bcg-deck-build` (fase 2) + `bcg-deck-qa` (fase 3)._\n\n♻️ _Cada fase é reutilizável: qa de deck externo pode chamar só o `bcg-deck-qa`. Composição > monolito._\n\n📖 _Ver bundles em `bundles/base/skills/`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🧩 _Skill pequena com escopo claro compõe melhor do que skill grande que tenta tudo._\n\n🎯 _Ex: montar um deck usa `bcg-deck`, revisar usa `deck-review`, treinar a apresentação usa `deck-drill` — três skills, três momentos._\n\n♻️ _Cada uma é reutilizável sozinha: dá pra revisar um deck que não foi feito aqui. Composição > monolito._\n\n📖 _Ver `bundles/base/skills/`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #064 · Maestro OS_ :maestro:"}]}
   ]
 }
 ```
 
 > 💊 **Skills atômicas compõem** 💊
-> 🧩 *Fases pequenas com contrato.* 🎯 *Ex: bcg-deck em 3 skills.* ♻️ *Reutilizável.*
+> 🧩 *Escopo pequeno e claro.* 🎯 *Montar, revisar e treinar são três.* ♻️ *Reutilizável.*
 
 ---
 
@@ -430,14 +430,14 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Gate protege a entrega 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🔒 _`client-delivery-gate` é o check final antes de qualquer output ir pro cliente. Três lentes: escopo, qualidade, risco._\n\n🚦 _Se qualquer lente reprova, output volta pra refino. Não é rubber stamp — é freio._\n\n🎯 _Complementa Yoda: Yoda pressure-testa proposta, gate valida entrega final._\n\n📖 _Skill em `bundles/base/skills/client-delivery-gate/SKILL.md`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🔒 _`client-delivery-gate` é o check final antes de qualquer entrega ir pro cliente. Três lentes:_\n\n• _Kahneman — solidez analítica: viés de confirmação, ancoragem, falsa precisão_ 🧠\n• _Taleb — risco de cauda: o que precisa ser verdade, o que quebra sob estresse_ 🎲\n• _Ariely — integridade de enquadramento: o número que ancora, o que ficou de fora_ 🖼\n\n🚦 _Devolve LIBERADO, LIBERADO COM RESSALVAS ou SEGURAR. Não reescreve nada — aponta e sugere._\n\n📖 _Diga \"pode entregar?\" antes de mandar deck, memo ou análise._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #065 · Maestro OS_ :maestro:"}]}
   ]
 }
 ```
 
 > 💊 **Gate protege a entrega** 💊
-> 🔒 *3 lentes pré-cliente.* 🚦 *Freio, não carimbo.* 🎯 *Complementa Yoda.*
+> 🔒 *Kahneman, Taleb e Ariely.* 🚦 *LIBERADO, COM RESSALVAS ou SEGURAR.* 🎯 *Aponta, não reescreve.*
 
 ---
 
@@ -464,7 +464,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Ingest content traz o doc pra dentro 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "📥 _PDF, office, web — `ingest-content` extrai o conteúdo localmente e registra na memória certa._\n\n🔒 _Fica no local, não sobe pra nuvem sem instrução. Compliance-safe por default._\n\n🧠 _Depois de ingerir, o material vira canon consultável — não precisa colar de novo._\n\n📖 _Skill em `bundles/base/skills/ingest-content/SKILL.md`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "📥 _PDF de texto, markdown, HTML, planilha em CSV — `ingest-content` extrai e registra na memória certa._\n\n🔒 _Tudo acontece na sua máquina, nada sobe pra nuvem. Word, Excel e PowerPoint pedem uma instalação extra e o Maestro avisa antes; PDF escaneado ainda não dá — nesse caso, copie o texto e cole no chat._\n\n🧠 _Depois de ingerir, o material vira canon consultável — não precisa colar de novo._\n\n📖 _Skill em `bundles/base/skills/ingest-content/SKILL.md`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #067 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -534,7 +534,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Bundle é a unidade portável 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "📦 _Bundle empacota agentes, skills, runtime e canon num diretório que outro OS consegue instalar._\n\n🎯 _`bundles/base/` é o núcleo compartilhado. `bundles/tech-core/` traz skills de engenharia. `bundles/dev/` é experimental._\n\n♻️ _Separação por bundle deixa release incremental: subo tech-core sem mexer no base._\n\n📖 _Ver `bundles/base/manifest.json` e `distribution.json`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "📦 _Bundle empacota agentes, skills, runtime e canon num diretório que outro OS consegue instalar._\n\n🎯 _`bundles/base/` é o núcleo compartilhado. `bundles/tech-core/` traz as skills de engenharia, carregadas sob demanda._\n\n♻️ _Separação por bundle deixa release incremental: subo tech-core sem mexer no base._\n\n📖 _Ver `bundles/base/manifest.json` e `distribution.json`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #071 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -551,7 +551,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Catalog é o índice do bundle 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🗂 _`catalog.json` lista tudo que o bundle expõe — agentes, skills, ordem, emoji, versão._\n\n🔒 _Validador exige ordem alfabética e schema estrito. Muda a mão sem cuidado, quebra o build._\n\n⚡ _É a fonte de verdade que o instalador lê. Sem ele, o bundle é só uma pasta de markdowns._\n\n📖 _Ver `bundles/base/skills/catalog.json` e `agents/catalog.json`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🗂 _`catalog.json` lista tudo que o bundle expõe: para cada skill, o id, o nome, o gatilho e o caminho do arquivo._\n\n🔒 _É gerado, não escrito à mão. Editar direto quebra o build — quem manda é o arquivo de origem._\n\n⚡ _É a fonte de verdade que o instalador lê. Sem ele, o bundle é só uma pasta de markdowns._\n\n📖 _Ver `bundles/base/skills/catalog.json` e `agents/catalog.json`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #072 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -568,14 +568,14 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Adapter fala com o cliente 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🔌 _`adapters/` liga o Maestro a runtimes específicos: Claude, Codex, macOS._\n\n🎯 _Cada adapter traduz contrato interno em API do runtime. O core não sabe se está falando com Claude ou Codex — o adapter resolve._\n\n♻️ _Isso deixa o Maestro portável: novo runtime = novo adapter, sem tocar no núcleo._\n\n📖 _Ver `adapters/claude/`, `adapters/codex/`, `adapters/macos/`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🔌 _O Maestro é escrito contra contratos, não contra um runtime específico. Hoje ele roda no Claude Code._\n\n🎯 _As skills e os agentes descrevem o que deve acontecer; quem traduz isso para cada ambiente fica de fora do núcleo._\n\n♻️ _É o que torna a portabilidade possível mais adiante — ainda não é uma capacidade entregue._\n\n📖 _Contratos em `bundles/base/`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #073 · Maestro OS_ :maestro:"}]}
   ]
 }
 ```
 
 > 💊 **Adapter fala com o cliente** 💊
-> 🔌 *Liga a Claude/Codex/macOS.* 🎯 *Core não sabe qual runtime.* ♻️ *Portabilidade.*
+> 🔌 *Escrito contra contratos.* 🎯 *Núcleo não conhece o runtime.* ♻️ *Portabilidade como projeto.*
 
 ---
 
@@ -636,7 +636,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Governance fence protege o núcleo 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🚧 _Arquivos de governance — regras, agents, skills, CLAUDE.md, hooks — ficam atrás de uma cerca._\n\n🔒 _Mudança neles não passa direto: precisa Yoda pressure-test + decision-log entry + PR review._\n\n🎯 _Isso impede que uma sessão qualquer mude os princípios do sistema num daily agitado._\n\n📖 _Regra em `control-plane/rules/no-direct-merges.md` (kowalski-os) ou equivalente._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🚧 _O núcleo do Maestro — agentes, skills, contratos — vem pronto no pacote e não é alterado pelo uso do dia a dia._\n\n🔒 _Mudança nele passa por revisão humana antes de virar uma versão nova: pressure-test do Yoda, decisão registrada, PR revisado._\n\n🎯 _Isso impede que uma conversa qualquer mude os princípios do sistema num dia agitado._\n\n📖 _Sua parte fica em `data/`, e ela nunca é sobrescrita no update._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #077 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -670,7 +670,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Distribution empacota release 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "📦 _`distribution.json` diz o que entra no ZIP de release: bundles, adapters, docs, scripts._\n\n🚀 _`installers/zip/` gera o pacote instalável. Colega roda o installer e recebe o Maestro configurado._\n\n🎯 _Sem distribution, o repo é código-fonte. Com ele, virou produto instalável._\n\n📖 _Ver `bundles/base/distribution.json` e `installers/zip/`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "📦 _`distribution.json` diz o que entra no ZIP de release: manifesto, agentes, skills, contratos e schemas._\n\n🚀 _`installers/zip/` gera o pacote instalável. Colega roda o installer e recebe o Maestro configurado._\n\n🎯 _Sem distribution, o repo é código-fonte. Com ele, virou produto instalável._\n\n📖 _Ver `bundles/base/distribution.json` e `installers/zip/`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #079 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -687,7 +687,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Doctor mede saúde do install 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🩺 _`maestro-doctor` roda health check no install: bundles presentes, adapters conformes, memória íntegra._\n\n🚨 _Se algo quebrou, doctor lista o que checar antes de dar report vago tipo 'não funciona'._\n\n🎯 _É a diferença entre pedir ajuda com sintoma vs pedir ajuda com diagnóstico._\n\n📖 _Skill em `bundles/base/skills/maestro-doctor/SKILL.md`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🩺 _`maestro-doctor` confere a instalação: arquivos do núcleo, pastas da sua área, hooks ligados, versão e problemas conhecidos._\n\n🚨 _Se algo quebrou, doctor lista o que checar antes de dar report vago tipo 'não funciona'._\n\n🎯 _É a diferença entre pedir ajuda com sintoma vs pedir ajuda com diagnóstico._\n\n📖 _Skill em `bundles/base/skills/maestro-doctor/SKILL.md`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #080 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -740,14 +740,14 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Dream memory consolida a noite 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🌙 _`dream-memory` roda depois do EOD: comprime daily em digest, promove aprendizado, valida ponteiros._\n\n🧠 _É o passo que faz memória virar canon consultável em vez de log inflado._\n\n⚡ _Deterministic-first (Haiku) — barato, roda headless, não precisa da presença do owner._\n\n📖 _Skill em `bundles/base/skills/dream-memory/SKILL.md`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🌙 _`dream-memory` roda depois do EOD: comprime o dia num digest e, no ciclo semanal, promove o que virou aprendizado._\n\n🧠 _É o passo que faz memória virar canon consultável em vez de log inflado._\n\n⚡ _Dispara sozinho na abertura da sessão seguinte, a partir do marcador deixado no fechamento da anterior._\n\n📖 _Skill em `bundles/base/skills/dream-memory/SKILL.md`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #083 · Maestro OS_ :maestro:"}]}
   ]
 }
 ```
 
 > 💊 **Dream memory consolida a noite** 💊
-> 🌙 *Digest + promoção + valida ponteiros.* 🧠 *Log vira canon.* ⚡ *Headless.*
+> 🌙 *Digest diário, promoção semanal.* 🧠 *Log vira canon.* ⚡ *Dispara sozinho.*
 
 ---
 
@@ -808,7 +808,7 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 Hook injeta contexto na entrada 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🪝 _Hook SessionStart roda toda vez que a sessão abre — injeta memória, personas, skill routing, decision-log rollup._\n\n📥 _Não é mágica: é script que compõe o pacote inicial. Determinístico, testável, versionado._\n\n🎯 _Sem hook, cada sessão pediria ao owner pra recolar contexto. Com hook, contexto vem pronto._\n\n📖 _Setup canônico via `maestro-operator`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🪝 _O hook de abertura roda toda vez que a sessão começa — injeta o teu SELF, a memória de longo prazo, o resumo semanal e o último diário._\n\n📥 _Não é mágica: é script que compõe o pacote inicial. Determinístico, testável, versionado._\n\n🎯 _Sem hook, cada sessão pediria ao owner pra recolar contexto. Com hook, contexto vem pronto._\n\n📖 _Setup canônico via `maestro-operator`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #087 · Maestro OS_ :maestro:"}]}
   ]
 }
@@ -825,14 +825,14 @@
 {
   "blocks": [
     {"type": "header", "text": {"type": "plain_text", "text": "💊 PreToolUse bloqueia risco 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🚦 _Hook PreToolUse roda antes de cada ferramenta ser chamada — pode auditar, alertar ou bloquear._\n\n🔒 _Aplicação típica: fence de governance. Se a call tenta escrever em arquivo de contrato do sistema, hook barra e força ritual (Yoda + decision-log)._\n\n🎯 _Enforcement técnico, não apenas convenção. Hook é o freio real._\n\n📖 _Pattern documentado em `bundles/base/skills/maestro-operator/SKILL.md`._"}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🚦 _Existe uma checagem que roda antes de cada escrita em arquivo — dá pra auditar, alertar ou barrar._\n\n🔒 _O uso que já vem ativo é a separação entre casos: escrita em um caso que não é o ativo é barrada, com a instrução de trocar de caso primeiro._\n\n🎯 _É freio técnico, não convenção. Não depende de ninguém lembrar da regra._\n\n📖 _Hook em `.claude/hooks/block-cross-case-writes.sh`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #088 · Maestro OS_ :maestro:"}]}
   ]
 }
 ```
 
 > 💊 **PreToolUse bloqueia risco** 💊
-> 🚦 *Roda antes da tool.* 🔒 *Barra escrita em fence.* 🎯 *Freio técnico.*
+> 🚦 *Roda antes da escrita.* 🔒 *Separa os casos.* 🎯 *Freio técnico.*
 
 ---
 
@@ -853,20 +853,20 @@
 
 ---
 
-### Pílula #090 — Setup + update com rollback
+### Pílula #090 — Update sem medo: a versão antiga fica
 
 ```json
 {
   "blocks": [
-    {"type": "header", "text": {"type": "plain_text", "text": "💊 Setup + update com rollback 💊", "emoji": true}},
-    {"type": "section", "text": {"type": "mrkdwn", "text": "🛠 _`maestro-setup-update` guia install, update e rollback via ZIP conversacional._\n\n🔒 _Update quebrou? Rollback pro estado anterior sem drama. Reversibilidade é feature, não anti-clímax._\n\n🎯 _Reduz medo de atualizar: se der ruim, volta. Se der bom, seguiu adiante._\n\n📖 _Skill em `bundles/base/skills/maestro-setup-update/SKILL.md`._"}},
+    {"type": "header", "text": {"type": "plain_text", "text": "💊 Update sem medo 💊", "emoji": true}},
+    {"type": "section", "text": {"type": "mrkdwn", "text": "🛠 _`maestro-setup-update` guia a atualização pelo chat e confere no fim se deu certo._\n\n🔒 _Não existe rollback automático — a rede de segurança é outra: você renomeia a pasta atual para `Maestro-old`, extrai a nova ao lado e **copia** a `data/`. Copiar é reversível; mover não._\n\n🎯 _Só apague a `Maestro-old` depois de confirmar que está tudo certo. Guarde por uns 7 dias._\n\n📖 _O ritual completo está no `README-INSTALL.md`._"}},
     {"type": "context", "elements": [{"type": "mrkdwn", "text": ":maestro: _Pílula #090 · Maestro OS_ :maestro:"}]}
   ]
 }
 ```
 
-> 💊 **Setup + update com rollback** 💊
-> 🛠 *Install / update / rollback.* 🔒 *Reversível por design.* 🎯 *Reduz medo de atualizar.*
+> 💊 **Update sem medo** 💊
+> 🛠 *Guiado pelo chat.* 🔒 *Sem rollback automático — a `Maestro-old` é a rede.* 🎯 *Copiar, não mover.*
 
 ---
 
