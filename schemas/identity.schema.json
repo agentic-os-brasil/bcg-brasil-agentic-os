@@ -3,7 +3,7 @@
   "$id": "urn:bcg-brasil-agentic-os:schema:identity:v1",
   "$comment": "experimental — mirrors bundles/base/manifest.json.provenance.status; shape may evolve. See status_note there.",
   "title": "Maestro User Identity",
-  "description": "Persisted by the maestro-onboarding skill (Steps 3 and 3.5). Carries name, role, and — when the user picks the complete track — the rich professional context that drives the CLAUDE.md advisory posture (project ativo / contexto profissional / evolução do OS). Empty strings for focus/work_energy/quality_bar when track = quick.",
+  "description": "Persisted by the maestro-onboarding skill (Steps 3 and 3.5). Carries name, role, current focus (populated in both quick and complete tracks by Q9 of the sequence), and — when the user picks the complete track — the additional professional context that drives the CLAUDE.md advisory posture (contexto profissional / evolução do OS). Empty strings for work_energy/quality_bar when track = quick.",
   "type": "object",
   "required": ["name", "role", "captured_at"],
   "additionalProperties": false,
@@ -20,7 +20,7 @@
     },
     "focus": {
       "type": ["string", "null"],
-      "description": "Current project or area of focus. Populated only when track = complete."
+      "description": "Current project or area of focus. Populated by Q9 of the guided sequence in both the quick and complete tracks."
     },
     "work_energy": {
       "type": ["string", "null"],
@@ -31,8 +31,8 @@
       "description": "What defines well-done work for the user on this project, in the user's own words. Populated only when track = complete."
     },
     "track": {
-      "enum": ["quick", "complete"],
-      "description": "Which onboarding track the user picked. Determines whether focus/work_energy/quality_bar are populated."
+      "enum": ["quick", "complete", "imported-brain"],
+      "description": "Which onboarding track the user picked. Mirrors onboarding.json.track. Determines whether work_energy/quality_bar are populated (complete only); focus is populated in every guided track."
     },
     "captured_at": {
       "type": "string",
