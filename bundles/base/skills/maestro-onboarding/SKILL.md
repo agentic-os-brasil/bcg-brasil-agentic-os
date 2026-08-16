@@ -507,9 +507,8 @@ flow touches, so none of these is optional:
 This is the question that makes the three next steps at the end of every
 response concrete instead of generic — `CLAUDE.md` reads `identity.json` to
 personalize them by "projeto, papel, foco", and `focus` was never populated by
-any question before this one. Ask it in **both** tracks: the schema description
-for `focus` still says "complete track only" and is now out of date; the field
-itself accepts a value on either track.
+any question before this one. Ask it in **both** tracks — the schema now records
+that `focus` is populated by Q9 in every guided track.
 
 Do not ask for the client's name. `Um caso de cliente` is enough; if the owner
 volunteers a name, record it as given and do not probe further.
