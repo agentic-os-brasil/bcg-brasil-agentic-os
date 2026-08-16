@@ -65,9 +65,22 @@ emit_profile_json() {
   local label="$1"
   local file="$2"
   [ -f "$file" ] || return
+  # Pass the path as argv, never interpolated into the Python source: a Windows
+  # path such as C:\Users\... makes \U an invalid unicode escape inside a string
+  # literal, the interpreter raises SyntaxError, 2>/dev/null swallows it, and the
+  # guard fails open — injecting the empty placeholder identity into every
+  # session. context-inject-userprompt.sh already reads it this way.
   if command -v python3 >/dev/null 2>&1; then
     local initialized
-    initialized=$(python3 -c "import json,sys; d=json.load(open('$file')); print(d.get('initialized', True))" 2>/dev/null)
+    initialized=$(python3 - "$file" <<'PY' 2>/dev/null
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        print(json.load(f).get("initialized", True))
+except Exception:
+    print(True)
+PY
+)
     [ "$initialized" = "False" ] && return
   fi
   printf '\n## %s\n' "$label"
@@ -118,10 +131,12 @@ if [ -f "$DREAM_MARKER" ]; then
   printf '\n## ⚠️ Dreaming pendente — executar antes de qualquer outra tarefa\n'
   printf '<!-- maestro:dream-trigger: marker=%s -->\n' "$DREAM_MARKER"
   printf 'O marcador `.dream-requested` foi detectado (escrito pelo hook da sessão anterior).\n'
-  printf '\n**Ação obrigatória:** invoque `/dream-memory` (ciclo diário) como primeira ação desta sessão, antes de responder ao usuário ou executar qualquer tarefa.\n'
-  # Deterministic marker consumption: delete after emitting the trigger block so
-  # a subsequent session start does not re-fire even if the LLM skips /dream-memory.
-  rm -f "$DREAM_MARKER" 2>/dev/null || true
+  printf '\n**Ação obrigatória:** leia `bundles/base/skills/dream-memory/SKILL.md` e execute o ciclo diário como primeira ação desta sessão, antes de responder ao usuário ou executar qualquer tarefa.\n'
+  # The marker is consumed by dream-memory itself, which deletes it both at the
+  # start of the cycle and again on completion. Deleting it here instead meant a
+  # skipped cycle destroyed the request: the consolidation was never retried and
+  # nothing recorded that it had been dropped. A repeated prompt is recoverable;
+  # silently losing a day of memory is not.
 fi
 
 # GAP-C — Upgrade-pending auto-trigger. Marker written by first-run-scaffold.sh
