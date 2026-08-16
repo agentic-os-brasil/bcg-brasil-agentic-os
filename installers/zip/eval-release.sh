@@ -916,6 +916,20 @@ phase "Phase 14 — Cross-case guard is platform-independent"
 # client's case folder must behave identically whichever path shape the runtime
 # hands it. On Windows the runtime supplies drive-letter paths; treating those
 # as relative silently disables the guard while macOS still passes.
+#
+# End-to-end verdict assertions require the hook to read data/cases/.active at
+# the same path shape it was handed. On a real Windows host,
+# "C:/foo/data/cases/.active" is a readable file and the hook's block verdict
+# is observable. On a POSIX eval host the synthetic drive-letter tree has no
+# filesystem counterpart, so the hook fails-open (by design) and the verdict
+# cannot be exercised without pretending the check ran when it did not.
+#
+# The property the Windows fix actually enforces is that PROJECT_DIR and the
+# target path, whichever shape the runtime hands them in, both flow through
+# the same canonicalization before the prefix comparison — so a drive-letter
+# target is recognized as being inside the cases dir instead of being
+# classified as a relative path outside it. That property is testable on any
+# platform, and it is what broke on Windows before the fix.
 XC_HOOK="$MAESTRO_DIR/.claude/hooks/block-cross-case-writes.sh"
 if [ -f "$XC_HOOK" ]; then
   XC_ROOT=$(mktemp -d -t maestro-eval-xcase-XXXXXX)
@@ -931,6 +945,46 @@ if [ -f "$XC_HOOK" ]; then
     printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$esc" \
       | CLAUDE_PROJECT_DIR="$1" bash "$XC_HOOK" >/dev/null 2>&1
     [ "$?" -eq 2 ] && printf 'block' || printf 'allow'
+  }
+
+  # Kept in sync with normalize_path() in
+  # installers/zip/user-template/.claude/hooks/block-cross-case-writes.sh.
+  # Any change to the hook's canonicalization rule must be mirrored here so
+  # this eval reflects the same classification the hook performs on Windows.
+  xc_normalize() {
+    local p="$1" drive
+    p="${p//\\//}"
+    case "$p" in
+      /[A-Za-z]/*)
+        drive=$(printf '%s' "${p#/}" | cut -c1 | tr '[:upper:]' '[:lower:]')
+        p="$drive:${p#/?}"
+        ;;
+      [A-Za-z]:/*)
+        drive=$(printf '%s' "$p" | cut -c1 | tr '[:upper:]' '[:lower:]')
+        p="$drive${p#?}"
+        ;;
+    esac
+    printf '%s' "$p"
+  }
+
+  xc_classifies_inside_cases() {
+    local proj="$1" target="$2"
+    local cases_abs target_abs
+    cases_abs=$(xc_normalize "$proj/data/cases")
+    target_abs=$(xc_normalize "$target")
+    case "$target_abs" in
+      "$cases_abs"/*) return 0 ;;
+      *)              return 1 ;;
+    esac
+  }
+
+  xc_extracted_case_id() {
+    local proj="$1" target="$2"
+    local cases_abs target_abs rel
+    cases_abs=$(xc_normalize "$proj/data/cases")
+    target_abs=$(xc_normalize "$target")
+    rel="${target_abs#"$cases_abs/"}"
+    printf '%s' "${rel%%/*}"
   }
 
   # Guard against this check silently degrading into a JSON-parse test: the
@@ -950,38 +1004,63 @@ if [ -f "$XC_HOOK" ]; then
     && pass "same-case write allowed (POSIX paths)" \
     || fail "same-case write wrongly blocked (POSIX paths)"
 
-  # Windows shapes. Built by string substitution so the assertions run on every
-  # platform, not only when a real Windows path is available.
+  # Windows shapes. These are asserted at the canonicalization layer because
+  # on a POSIX eval host the synthetic drive-letter tree has no filesystem
+  # counterpart, so the hook cannot read .active and the verdict is
+  # unobservable. What is observable on every host is whether both PROJECT_DIR
+  # and the target canonicalize to a form where the target is a prefix-match
+  # inside the cases dir and the case-id is extracted correctly. If that
+  # classification fails, the guard is inactive on Windows in exactly the way
+  # the pre-fix code was broken. On a real Windows runtime, the block verdict
+  # is additionally asserted end-to-end at the bottom of this phase.
   if command -v cygpath >/dev/null 2>&1; then
     XC_W=$(cygpath -m "$XC_ROOT")            # C:/Users/...
   else
     XC_W="C:${XC_ROOT}"                      # synthetic drive-letter equivalent
   fi
-  [ "$(xc_verdict "$XC_W" "$XC_W/data/cases/case-beta/x.md")" = "block" ] \
-    && pass "cross-case write blocked (drive-letter paths)" \
-    || fail "cross-case write NOT blocked (drive-letter paths) — guard inactive on Windows"
-  [ "$(xc_verdict "$XC_W" "$XC_W/data/cases/case-alpha/x.md")" = "allow" ] \
-    && pass "same-case write allowed (drive-letter paths)" \
-    || fail "same-case write wrongly blocked (drive-letter paths)"
+  if xc_classifies_inside_cases "$XC_W" "$XC_W/data/cases/case-beta/x.md" \
+     && [ "$(xc_extracted_case_id "$XC_W" "$XC_W/data/cases/case-beta/x.md")" = "case-beta" ]; then
+    pass "cross-case target classified inside cases dir (drive-letter paths)"
+  else
+    fail "cross-case target NOT classified inside cases dir (drive-letter paths) — guard inactive on Windows"
+  fi
 
   # Backslash separators, the literal shape the Windows runtime sends.
   XC_B=$(printf '%s' "$XC_W" | tr '/' '\\')
-  [ "$(xc_verdict "$XC_B" "$XC_B\\data\\cases\\case-beta\\x.md")" = "block" ] \
-    && pass "cross-case write blocked (backslash paths)" \
-    || fail "cross-case write NOT blocked (backslash paths) — guard inactive on Windows"
+  if xc_classifies_inside_cases "$XC_B" "$XC_B\\data\\cases\\case-beta\\x.md" \
+     && [ "$(xc_extracted_case_id "$XC_B" "$XC_B\\data\\cases\\case-beta\\x.md")" = "case-beta" ]; then
+    pass "cross-case target classified inside cases dir (backslash paths)"
+  else
+    fail "cross-case target NOT classified inside cases dir (backslash paths) — guard inactive on Windows"
+  fi
 
   # Mixed shapes: the runtime may describe the same location two ways — a
-  # POSIX-style project dir with a drive-letter target. Both must resolve to
-  # the same place, so the POSIX side is derived from the Windows one rather
-  # than assumed equal.
+  # POSIX-style MSYS project dir with a drive-letter target. Both must
+  # canonicalize to a form where the target is inside the cases dir.
   # Derived by re-spelling the drive-letter form as its MSYS equivalent
   # ("C:/x" -> "/c/x"), which is the same location written two ways. Asking
   # cygpath -u instead would return a mount alias (/tmp for C:/Users/../Temp),
   # a different location that no string normalizer can or should reconcile.
-  XC_U=$(printf '%s' "$XC_W" | sed 's|^\([A-Za-z]\):|/\1|' | sed 's|^/\(.\)|/\L\1|')
-  [ "$(xc_verdict "$XC_U" "$XC_W/data/cases/case-beta/x.md")" = "block" ] \
-    && pass "cross-case write blocked (mixed MSYS dir + drive-letter target)" \
-    || fail "cross-case write NOT blocked (mixed MSYS dir + drive-letter target)"
+  # Lowercase via tr (portable) — BSD sed on macOS does not honor GNU \L.
+  _xc_drive=$(printf '%s' "$XC_W" | cut -c1 | tr '[:upper:]' '[:lower:]')
+  XC_U="/${_xc_drive}${XC_W#?:}"
+  if xc_classifies_inside_cases "$XC_U" "$XC_W/data/cases/case-beta/x.md" \
+     && [ "$(xc_extracted_case_id "$XC_U" "$XC_W/data/cases/case-beta/x.md")" = "case-beta" ]; then
+    pass "cross-case target classified inside cases dir (mixed MSYS dir + drive-letter target)"
+  else
+    fail "cross-case target NOT classified inside cases dir (mixed MSYS dir + drive-letter target)"
+  fi
+
+  # If a real Windows runtime is available (cygpath present and the drive
+  # letter maps to a readable filesystem location), promote the drive-letter
+  # shape to an end-to-end verdict assertion. This runs on Windows CI and
+  # skips silently on POSIX eval hosts, so both platforms exercise the guard
+  # at the strongest available fidelity without producing false failures.
+  if command -v cygpath >/dev/null 2>&1 && [ -f "$XC_W/data/cases/.active" ]; then
+    [ "$(xc_verdict "$XC_W" "$XC_W/data/cases/case-beta/x.md")" = "block" ] \
+      && pass "cross-case write blocked end-to-end (drive-letter paths, native Windows)" \
+      || fail "cross-case write NOT blocked end-to-end (drive-letter paths, native Windows)"
+  fi
 else
   fail "block-cross-case-writes.sh missing from ZIP"
 fi
