@@ -46,6 +46,7 @@ no Claude Code. Se ele rodou e `data/.initialized` existe, prossiga.
      - `data/.initialized` — timestamp UTC atual (ex. `2026-08-13T00:00:00Z`)
      - `data/memory/.schema-version` — JSON: `{"schema_version": 1, "layers": ["recent", "weekly", "medium-term", "lifetime", "policies"], "policy_source": "bundles/base/memory/policy.json", "initialized_by": "inline-scaffold"}`
      - `data/memory/.gitignore` — conteúdo: `.dream-requested`
+     - `data/memory/policies/lifetime.json` — JSON: `{"schema_version": 1, "policy_id": "deterministic-l3-continuity-v1", "min_l3_generations": 2, "promotion": "weekly_deep_dream", "automatic": true, "versioned_updates": true, "direct_overwrite": false, "provenance_required": true, "initialized_by": "inline-scaffold"}`
      - `data/.maestro-version` — leia o arquivo `VERSION` na raiz e escreva o valor encontrado (ex. `0.1.8`)
   Se qualquer criação falhar, leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o
   fluxo. Caso contrário, prossiga para o Passo 2.

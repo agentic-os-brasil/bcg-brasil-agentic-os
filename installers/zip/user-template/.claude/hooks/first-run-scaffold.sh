@@ -35,6 +35,43 @@ log_line() {
 }
 
 # ---------------------------------------------------------------------------
+# Lifetime eligibility policy — required by dream-memory before it may promote
+# anything into the permanent memory tier. dream-memory/SKILL.md step 5 stops
+# outright when this file is absent ("lifetime activation must fail closed"),
+# so without it the permanent tier can never activate on any install.
+#
+# Spec 006 states the base distribution ships a *named* eligibility policy and
+# names the deterministic rule: lifetime promotes only once the rollup carries
+# two weekly L3 generations. That rule is implemented by
+# DeterministicLifetimeEligibility in internal/memory/deep_synthesizer.go under
+# the id `deterministic-l3-continuity-v1`. This file is the workspace-local
+# declaration of that same policy, so the shipped skill and the engine agree.
+#
+# Writing it does not make promotion automatic or unconditional: the policy is
+# conservative by construction (nothing is promoted on a first weekly pass) and
+# every other lifetime invariant — provenance, version history, no in-place
+# overwrite — still applies.
+# ---------------------------------------------------------------------------
+write_lifetime_policy() {
+  local target="$1"
+  local origin="$2"
+  cat > "$target" 2>/dev/null <<EOF
+{
+  "schema_version": 1,
+  "policy_id": "deterministic-l3-continuity-v1",
+  "description": "Promove memória permanente somente quando a consolidação semanal já carrega duas gerações de L3, preservando continuidade antes de tornar algo permanente.",
+  "min_l3_generations": 2,
+  "promotion": "weekly_deep_dream",
+  "automatic": true,
+  "versioned_updates": true,
+  "direct_overwrite": false,
+  "provenance_required": true,
+  "initialized_by": "$origin"
+}
+EOF
+}
+
+# ---------------------------------------------------------------------------
 # Skills rollup — emitted to stdout every session as additionalContext.
 # Compact index only (name + description first sentence). Full SKILL.md is
 # loaded on demand by the Skill tool. Fail-open: on any error, print nothing.
@@ -197,6 +234,12 @@ if [ -d "$DATA_DIR/memory" ]; then
       log_line "BACKFILL  data/memory/.gitignore (ignores .dream-requested)"
   fi
 
+  LIFETIME_POLICY="$DATA_DIR/memory/policies/lifetime.json"
+  if [ ! -f "$LIFETIME_POLICY" ]; then
+    write_lifetime_policy "$LIFETIME_POLICY" "first-run-scaffold.sh (backfill)" && \
+      log_line "BACKFILL  data/memory/policies/lifetime.json (deterministic-l3-continuity-v1)"
+  fi
+
   MEMORY_SCHEMA_MARKER="$DATA_DIR/memory/.schema-version"
   if [ ! -f "$MEMORY_SCHEMA_MARKER" ]; then
     cat > "$MEMORY_SCHEMA_MARKER" 2>/dev/null <<'EOF'
@@ -268,6 +311,13 @@ MEMORY_GITIGNORE="$DATA_DIR/memory/.gitignore"
 if [ ! -f "$MEMORY_GITIGNORE" ]; then
   printf '.dream-requested\n' > "$MEMORY_GITIGNORE" 2>/dev/null && \
     log_line "WRITE OK  data/memory/.gitignore  (ignores .dream-requested)"
+fi
+
+# Lifetime eligibility policy — see write_lifetime_policy() above.
+LIFETIME_POLICY="$DATA_DIR/memory/policies/lifetime.json"
+if [ ! -f "$LIFETIME_POLICY" ]; then
+  write_lifetime_policy "$LIFETIME_POLICY" "first-run-scaffold.sh" && \
+    log_line "WRITE OK  data/memory/policies/lifetime.json (deterministic-l3-continuity-v1)"
 fi
 
 # Memory schema version marker — GAP-D. Consumed by dream-memory to detect
