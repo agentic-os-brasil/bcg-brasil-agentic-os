@@ -2,6 +2,40 @@
 
 All notable changes will be documented here.
 
+## 0.1.11 — 2026-08-16
+
+Release wave since 0.1.10 (nineteen merged PRs on `main`):
+
+- [PR #379] Cross-case write guard extended to Windows-style paths (POSIX path
+  handling covered; drive-letter/backslash/mixed MSYS variants still surface in
+  `eval-release.sh` Phase 14 as known Windows edge cases pending follow-up).
+- [PR #380] Lifetime eligibility policy scaffolded so permanent memory can activate.
+- [PR #381] Hooks stop telling owners to type commands that cannot work.
+- [PR #382] Tech-core rollup points at the real index location.
+- [PR #383] Three slash commands point at the real skill path.
+- [PR #384] Hooks stop injecting pointers to files that are never created.
+- [PR #385] Onboarding suggests `/bcg-case-kickoff` (the id that actually ships).
+- [PR #386] Scaffold creates the owner atlas tree the daily skills depend on.
+- [PR #387] Repair and update ritual reconciled with README-INSTALL.md.
+- [PR #388] Skill catalog normalized to Portuguese.
+- [PR #389] Owner atlas skills get the page shapes they were missing.
+- [PR #391] Onboarding structured questions with progress counter + single closing
+  confirmation (`AskUserQuestion` contract, tone rules, Bloco A/B).
+- [PR #392] Onboarding persists the name at turn 2 and gates re-entry on
+  `onboarding.json.status`.
+- [PR #393] Hooks stop injecting empty identity on Windows paths and stop
+  destroying dream-memory requests on skip.
+- [PR #394] `doctor` detects installations where the hooks never ran (Windows
+  without bash).
+- [PR #395] Knowledge pills corrected to the 4-tier memory model.
+- [PR #396] Wave record stops stating a stale skill count; points at the live
+  `INDEX.md`.
+- [PR #397] `identity.schema.json` reflects that `focus` is populated in every
+  guided track; `track` enum includes `imported-brain`.
+
+Bundle: `bundles/base/manifest.json` `bundle_version` propagated to `0.1.11`
+via `dev/sync-bundle-version.sh`.
+
 ## 0.1.10 — 2026-08-15
 
 Release wave since 0.1.9 (six merged PRs on `main`):
