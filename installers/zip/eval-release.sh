@@ -909,6 +909,84 @@ else
 fi
 
 # --------------------------------------------------------------------------
+phase "Phase 14 — Cross-case guard is platform-independent"
+# --------------------------------------------------------------------------
+
+# The guard that stops one client's material being written into another
+# client's case folder must behave identically whichever path shape the runtime
+# hands it. On Windows the runtime supplies drive-letter paths; treating those
+# as relative silently disables the guard while macOS still passes.
+XC_HOOK="$MAESTRO_DIR/.claude/hooks/block-cross-case-writes.sh"
+if [ -f "$XC_HOOK" ]; then
+  XC_ROOT=$(mktemp -d -t maestro-eval-xcase-XXXXXX)
+  mkdir -p "$XC_ROOT/data/cases/case-alpha" "$XC_ROOT/data/cases/case-beta"
+  printf 'case-alpha\n' > "$XC_ROOT/data/cases/.active"
+
+  # verdict PROJECT_DIR TARGET -> "block" | "allow"
+  # Backslashes must be escaped or the payload is not valid JSON and the hook
+  # would exit on a parse failure rather than on its path logic — which would
+  # make this check pass for the wrong reason.
+  xc_verdict() {
+    local esc=${2//\\/\\\\}
+    printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$esc" \
+      | CLAUDE_PROJECT_DIR="$1" bash "$XC_HOOK" >/dev/null 2>&1
+    [ "$?" -eq 2 ] && printf 'block' || printf 'allow'
+  }
+
+  # Guard against this check silently degrading into a JSON-parse test: the
+  # hook must still block when handed a well-formed POSIX payload.
+  if [ "$(xc_verdict "$XC_ROOT" "$XC_ROOT/data/cases/case-beta/probe.md")" = "block" ]; then
+    pass "cross-case harness drives the hook's path logic, not a parse failure"
+  else
+    fail "cross-case harness is not exercising the hook (payload rejected before path logic)"
+  fi
+
+  # POSIX shape — the shape macOS always produced, and the only one previously covered.
+  XC_R="$XC_ROOT"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+    && pass "cross-case write blocked (POSIX paths)" \
+    || fail "cross-case write NOT blocked (POSIX paths)"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/x.md")" = "allow" ] \
+    && pass "same-case write allowed (POSIX paths)" \
+    || fail "same-case write wrongly blocked (POSIX paths)"
+
+  # Windows shapes. Built by string substitution so the assertions run on every
+  # platform, not only when a real Windows path is available.
+  if command -v cygpath >/dev/null 2>&1; then
+    XC_W=$(cygpath -m "$XC_ROOT")            # C:/Users/...
+  else
+    XC_W="C:${XC_ROOT}"                      # synthetic drive-letter equivalent
+  fi
+  [ "$(xc_verdict "$XC_W" "$XC_W/data/cases/case-beta/x.md")" = "block" ] \
+    && pass "cross-case write blocked (drive-letter paths)" \
+    || fail "cross-case write NOT blocked (drive-letter paths) — guard inactive on Windows"
+  [ "$(xc_verdict "$XC_W" "$XC_W/data/cases/case-alpha/x.md")" = "allow" ] \
+    && pass "same-case write allowed (drive-letter paths)" \
+    || fail "same-case write wrongly blocked (drive-letter paths)"
+
+  # Backslash separators, the literal shape the Windows runtime sends.
+  XC_B=$(printf '%s' "$XC_W" | tr '/' '\\')
+  [ "$(xc_verdict "$XC_B" "$XC_B\\data\\cases\\case-beta\\x.md")" = "block" ] \
+    && pass "cross-case write blocked (backslash paths)" \
+    || fail "cross-case write NOT blocked (backslash paths) — guard inactive on Windows"
+
+  # Mixed shapes: the runtime may describe the same location two ways — a
+  # POSIX-style project dir with a drive-letter target. Both must resolve to
+  # the same place, so the POSIX side is derived from the Windows one rather
+  # than assumed equal.
+  # Derived by re-spelling the drive-letter form as its MSYS equivalent
+  # ("C:/x" -> "/c/x"), which is the same location written two ways. Asking
+  # cygpath -u instead would return a mount alias (/tmp for C:/Users/../Temp),
+  # a different location that no string normalizer can or should reconcile.
+  XC_U=$(printf '%s' "$XC_W" | sed 's|^\([A-Za-z]\):|/\1|' | sed 's|^/\(.\)|/\L\1|')
+  [ "$(xc_verdict "$XC_U" "$XC_W/data/cases/case-beta/x.md")" = "block" ] \
+    && pass "cross-case write blocked (mixed MSYS dir + drive-letter target)" \
+    || fail "cross-case write NOT blocked (mixed MSYS dir + drive-letter target)"
+else
+  fail "block-cross-case-writes.sh missing from ZIP"
+fi
+
+# --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
 

@@ -62,16 +62,44 @@ except Exception:
 
 [ -z "$TARGET_PATH" ] && exit 0
 
-# Resolve to absolute path
-case "$TARGET_PATH" in
-  /*) ABS_PATH="$TARGET_PATH" ;;
-  *)  ABS_PATH="$PROJECT_DIR/$TARGET_PATH" ;;
+# Bring a path to one canonical shape before any comparison.
+#
+# On Windows the runtime hands this hook drive-letter paths ("C:\...\data\cases\x"),
+# while $CLAUDE_PROJECT_DIR and Git Bash may use "/c/..." or forward slashes.
+# The previous code tested only for a leading "/", so a drive-letter path was
+# classified as *relative*, got $PROJECT_DIR prepended, and produced a path that
+# matched no case directory — the hook then exited 0 and allowed the write. The
+# cross-case guard was therefore inactive on Windows while passing on macOS.
+#
+# Both sides of the comparison go through this function, so the transformation
+# only has to be consistent, not platform-detected.
+normalize_path() {
+  local p="$1" drive
+  p="${p//\\//}"                 # C:\a\b        -> C:/a/b
+  case "$p" in
+    /[A-Za-z]/*)                 # /c/a/b (MSYS) -> c:/a/b
+      drive=$(printf '%s' "${p#/}" | cut -c1 | tr '[:upper:]' '[:lower:]')
+      p="$drive:${p#/?}"
+      ;;
+    [A-Za-z]:/*)                 # C:/a/b        -> c:/a/b
+      drive=$(printf '%s' "$p" | cut -c1 | tr '[:upper:]' '[:lower:]')
+      p="$drive${p#?}"
+      ;;
+  esac
+  printf '%s' "$p"
+}
+
+# A path is absolute if it is POSIX-rooted or carries a drive letter.
+TARGET_NORM=$(normalize_path "$TARGET_PATH")
+case "$TARGET_NORM" in
+  /*|[A-Za-z]:/*) ABS_PATH="$TARGET_NORM" ;;
+  *)              ABS_PATH=$(normalize_path "$PROJECT_DIR/$TARGET_PATH") ;;
 esac
 
 # Scope bound: exit immediately if path is not inside data/cases/.
 # This is the primary performance guard — no case-ID extraction happens
 # for ordinary writes outside the case workspace.
-CASES_ABS="$CASES_DIR"
+CASES_ABS=$(normalize_path "$CASES_DIR")
 case "$ABS_PATH" in
   "$CASES_ABS"/*) ;;
   *) exit 0 ;;
