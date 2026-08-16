@@ -44,7 +44,10 @@ at once.
    (ferramentas, formatos); `false` when the owner picks one direction.
 4. **Counter in the question text.** Every question starts with
    `Pergunta <n> de <N> · `. `<N>` is the total for the chosen track and must
-   never change mid-track.
+   never change mid-track. **The literal numbers written into the question
+   examples further down are the quick-track positions** (`Pergunta 1 de 13`,
+   `Pergunta 8 de 13` …). On the complete track, recompute both numbers from the
+   sequence below and never copy the example verbatim.
 5. **`header`** carries the topic in 12 characters or fewer (`Seu papel`,
    `Ferramentas`, `Qualidade`) — never the counter.
 6. **Fallback:** if `AskUserQuestion` is unavailable in the current runtime, ask
@@ -56,30 +59,50 @@ at once.
 The counter starts only after the track is chosen. Turnos 1-3 (nome, pré-check
 de segundo cérebro, escolha da trilha) are the opening and are not numbered.
 
-**Trilha curta — 10 perguntas:**
+**Ordering principle:** build the owner's context first, and leave everything
+that configures Maestro itself for the end. A person answers better about their
+own work than about a tool they have not used yet.
 
-| # | Tópico | Faceta |
+- **Bloco A — o dono e o trabalho dele** (questions 1 to 9, or 1 to 13 on the
+  complete track).
+- **Bloco B — configuração do Maestro** (the last four). Never move a Bloco B
+  question earlier to "get it out of the way".
+
+**Trilha curta — 13 perguntas:**
+
+| # | Tópico | Destino |
 |---|---|---|
-| 1 | Contexto pessoal | `personal-context` |
-| 2 | Papel profissional | `professional-role` |
-| 3 | Estilo de comunicação | `communication-style` |
+| 1 | Ritmo de trabalho e horários | `personal-context` |
+| 2 | Tipo de trabalho que desenvolve | `professional-role` |
+| 3 | Formatos de entrega | `preferences` |
 | 4 | Ferramentas | `preferences` |
-| 5 | Formatos de entrega | `preferences` |
+| 5 | Estilo de comunicação | `communication-style` |
 | 6 | Jeito de colaborar | `preferences` |
 | 7 | Padrão de qualidade | `quality-bar` |
-| 8 | Métodos técnicos | — |
-| 9 | Pastas de SharePoint | — |
-| 10 | Nomear os agentes | — |
+| 8 | Pontos de desenvolvimento | `owner/atlas/development/objectives.md` |
+| 9 | No que está trabalhando agora | `identity.json` → `focus` |
+| 10 | Métodos técnicos | — |
+| 11 | Conexões (email, calendário, notas) | — |
+| 12 | Pastas de SharePoint | — |
+| 13 | Nomear os agentes | — |
 
-**Trilha completa — 14 perguntas:** the same ten, plus `voice` (voz externa),
-`motivations` (motivações), `decision-rules` (regras de decisão) and
-`working-boundaries` (limites de trabalho), all inserted before "Métodos
-técnicos".
+Question 3 comes immediately after question 2 because delivery format follows
+directly from the kind of work the owner does.
 
-**Caminho "já tem segundo cérebro" — 2 perguntas:** the mini baseline in
-Step 2, numbered `Pergunta 1 de 2` and `Pergunta 2 de 2`.
+**Trilha completa — 17 perguntas:** the same thirteen, plus `voice` (voz
+externa) inserted right after question 5 — external voice is the sibling of
+communication style and belongs next to it — and `motivations` (motivações),
+`decision-rules` (regras de decisão) and `working-boundaries` (limites de
+trabalho) inserted after "Padrão de qualidade". Bloco B stays last.
 
-Questions 4, 5 and 6 all write into the single canonical facet file
+**Caminho "já tem segundo cérebro" — 4 perguntas:** que tipo de segundo cérebro
+(Step 1), o endereço (Step 1), tipo de trabalho e estilo de comunicação (the
+mini baseline in Step 2). Number all four: `Pergunta 1 de 4` … `Pergunta 4 de 4`.
+The Bloco B questions are offered on this path only if the owner engages, are
+announced as optional, and are **never** numbered — otherwise the count the
+owner was promised would grow after the fact.
+
+Questions 3, 4 and 6 all write into the single canonical facet file
 `data/owner/self/preferences.md`. Splitting the question does not split the
 facet: the canonical file list in "After the owner chooses" is unchanged.
 
@@ -185,14 +208,16 @@ them forces two decisions into one turn.
 First — **what kind**:
 
 > **header:** `Onde vive`
-> **question:** `Show! 🎯 Que tipo de segundo cérebro você já usa?`
+> **question:** `Pergunta 1 de 4 · Show! 🎯 Que tipo de segundo cérebro você já
+> usa?`
 >
 > - `Notion` · `Obsidian ou notas` · `Pasta de documentos` · `Outro sistema`
 
 Then — **whether to give the address now**:
 
 > **header:** `Endereço`
-> **question:** `Quer me passar o endereço agora, ou deixar pra depois?`
+> **question:** `Pergunta 2 de 4 · Quer me passar o endereço agora, ou deixar
+> pra depois?`
 >
 > - `Te passo agora` — fica gravado só aqui, no teu computador
 > - `Depois, quando fizer sentido` — funciona igual; a diferença é só quando
@@ -224,18 +249,19 @@ asking permission to ask ("Combinado?"), which spends a turn to gain nothing:
 > "Só duas perguntinhas rapidinhas pra eu não ficar dependendo 100% do teu
 > segundo cérebro pra qualquer coisa básica. 🙌"
 
-Question 1 → `data/owner/self/professional-role.md`:
+Question 3 → `data/owner/self/professional-role.md`:
 
-> **header:** `Teu papel`
-> **question:** `Pergunta 1 de 2 · O que chega na tua mesa no dia a dia?`
+> **header:** `Teu trabalho`
+> **question:** `Pergunta 3 de 4 · Que tipo de trabalho você geralmente
+> desenvolve?`
 >
 > - `Estratégia e casos clássicos` · `Analytics e dados` ·
 >   `Digital e tecnologia` · `Operações`
 
-Question 2 → `data/owner/self/communication-style.md`:
+Question 4 → `data/owner/self/communication-style.md`:
 
 > **header:** `Como responder`
-> **question:** `Pergunta 2 de 2 · Como você gosta que eu te responda?`
+> **question:** `Pergunta 4 de 4 · Como você gosta que eu te responda?`
 >
 > - `Direto ao ponto` · `Com o raciocínio antes` · `Em bullets curtos` ·
 >   `Com o mínimo de texto possível`
@@ -361,16 +387,22 @@ The complete track then covers eight explicit, reviewable professional facets:
 - `voice`: how the owner's external work should sound;
 - `preferences`: tools, delivery formats and collaboration habits. **Never ask
   this as one question** — it is three distinct dimensions and bundling them
-  produces a vague answer. Ask questions 4, 5 and 6 of the sequence separately,
+  produces a vague answer. Ask questions 3, 4 and 6 of the sequence separately,
   and do not ask about schedules or working hours here: that is already covered
   by `personal-context`. Suggested option sets:
-  - **Ferramentas** (`multiSelect: true`) — `Excel` · `PowerPoint` ·
-    `Python ou código` · `Ferramentas de BI`
-  - **Formatos de entrega** (`multiSelect: true`) — `Slides` ·
+  - **Formatos de entrega** (question 3, `multiSelect: true`) — `Slides` ·
     `Documento escrito` · `Planilha` · `Resumo curto no chat`
-  - **Jeito de colaborar** (`multiSelect: false`) — `Reviso antes de circular` ·
-    `Construo junto desde o início` · `Delego e checo no fim` ·
-    `Depende do time`
+  - **Ferramentas** (question 4, `multiSelect: true`) — `Excel` · `PowerPoint` ·
+    `Python ou código` · `Ferramentas de BI`. Ask **two things in sequence
+    here**, because "o que uso" and "o que eu queria usar" are different
+    answers and the second is where Maestro can actually add something: first
+    `Quais você mais usa hoje?`, then, as an immediate follow-up in the same
+    step (not a new number), `E tem alguma que você gostaria de usar mais?`
+    with the same options. Record both; the second is a development signal, not
+    a habit.
+  - **Jeito de colaborar** (question 6, `multiSelect: false`) —
+    `Reviso antes de circular` · `Construo junto desde o início` ·
+    `Delego e checo no fim` · `Depende do time`
 - `motivations`: the professional impact and outcomes that make work matter;
 - `quality-bar`: what must be checked before something is called ready,
   including QA, evidence and finish level;
@@ -383,6 +415,67 @@ The quick track covers those two identity facets plus
 `professional-role`, `communication-style`, `preferences` and `quality-bar`.
 It is a useful operating baseline, but it intentionally leaves external voice,
 motivations, decision rules and working boundaries for later refinement.
+
+### Desenvolvimento e projeto atual (perguntas 8 e 9)
+
+Neither of these is a facet under `owner/self/`: they describe what the owner is
+working **toward** and **on**, not who they are. They close Bloco A.
+
+**Pergunta 8 — pontos de desenvolvimento.** Writes to
+`data/owner/atlas/development/objectives.md` under `## Objetivos atuais`. That
+tree is created by the owner-atlas block of the scaffold; `start-day`, `eod` and
+`feedback-capture` already read it, so an answer here feeds the daily ritual
+from day one.
+
+> **header:** `Desenvolvimento`
+> **question:** `Pergunta 8 de 13 · Tem algum ponto que você quer desenvolver?
+> Pode ser algo que já veio em feedback.`
+>
+> - `Comunicação e presença` · `Storyline e estruturação` ·
+>   `Profundidade analítica` · `Gestão de time e do próprio tempo`
+
+Then, as a follow-up inside the same step (never a new number), offer to take
+material:
+
+> `Quer me passar algum material pra eu entender melhor o contexto?`
+>
+> - `Material de CDC` → `data/owner/atlas/development/cdc/`
+> - `Feedback de projeto` → `data/owner/atlas/development/project-feedback/`
+> - `Agora não`
+
+Handling rules for that material — it is the most sensitive content the whole
+flow touches, so none of these is optional:
+
+- Take **one file at a time**, only when the owner points at it explicitly.
+  Never scan a folder, never bulk-copy, never read anything not named.
+- A project deliverable is usually **client-confidential**. Before reading one,
+  say so in one line and let the owner reconsider: *"Esse material é do cliente
+  — ele fica só aqui no teu computador. Seguimos?"*
+- If the owner declines at any point, record `Agora não` and move on without
+  insisting. Declining must never block finishing onboarding.
+- If document reading is not working on this machine, do not troubleshoot it
+  during onboarding: record the intent, say the material can be added later, and
+  continue.
+
+**Pergunta 9 — no que está trabalhando agora.** Write `focus` in
+`data/profile/identity.json` and `active_project` in
+`data/owner/operating/work-state.md`.
+
+> **header:** `Agora`
+> **question:** `Pergunta 9 de 13 · E no que você está trabalhando agora?`
+>
+> - `Um caso de cliente` · `Proposta ou pitch` · `Trabalho interno do BCG` ·
+>   `Entre projetos`
+
+This is the question that makes the three next steps at the end of every
+response concrete instead of generic — `CLAUDE.md` reads `identity.json` to
+personalize them by "projeto, papel, foco", and `focus` was never populated by
+any question before this one. Ask it in **both** tracks: the schema description
+for `focus` still says "complete track only" and is now out of date; the field
+itself accepts a value on either track.
+
+Do not ask for the client's name. `Um caso de cliente` is enough; if the owner
+volunteers a name, record it as given and do not probe further.
 
 **Personal-context policy (owner-scoped default with explicit disclosure):**
 the default collection mode depends on `registry.json.owner_type`:
@@ -406,11 +499,15 @@ options — never ask the owner to type the word `opt-out`, and never recite the
 list of categories Maestro does not collect (naming "família, saúde, fé"
 introduces worries the owner did not have).
 
-> **header:** `Teu contexto`
-> **question:** `Pergunta <n> de <N> · Tem algo do teu dia a dia que eu deveria
-> respeitar quando for organizar teu trabalho?`
+This is **question 1** of both guided tracks. Opening on working rhythm is
+deliberate: it is the easiest question to answer, it is immediately useful, and
+it does not require the owner to have any opinion about Maestro yet.
+
+> **header:** `Teu ritmo`
+> **question:** `Pergunta 1 de 13 · Como é teu ritmo de trabalho? Horários,
+> agenda, o que eu deveria respeitar quando for te organizar.`
 >
-> - `Meu fuso e horário` — onde estou e em que horário costumo trabalhar
+> - `Meu fuso e meus horários` — onde estou e quando costumo trabalhar
 > - `Janelas fixas na agenda` — compromissos recorrentes que eu não movo
 > - `Ritmo de viagem` — quando estou em cliente ou em trânsito
 > - `Prefiro não registrar` — nada pessoal é gravado
@@ -471,6 +568,35 @@ an internal identifier; describe it in plain language:
 Never activate it automatically: explicit owner confirmation remains the only
 way to project these skills. Treat `Não sei ainda` as "not now", record it, and
 do not ask again in this session.
+
+## Conexões — email, calendário e notas
+
+Bloco B, immediately after "Métodos técnicos".
+
+**Frame this as a setup tip, never as a Maestro capability.** No shipped skill
+reads email, calendar or Notion — `find-prior-work` states remote sources are
+out of scope. What *is* true, and what makes the question worth asking: a
+connector configured in Claude Code is available to the assistant in any
+session, including this one. So the honest claim is "connect it and I can help
+with that", never "Maestro integrates with Outlook".
+
+Never say "MCP" or "connector contract" to the owner (the tone contract forbids
+the first). Say "conectar", and point at the app's own settings screen — this is
+not a terminal instruction and does not violate the no-shell rule.
+
+> **header:** `Conexões`
+> **question:** `Pergunta 11 de 13 · Tem algo que você gostaria de conectar pra
+> eu conseguir ajudar mais? Dá pra ativar em Settings → Connectors, aqui no
+> Claude Code.`
+>
+> - `Email e calendário` — pra eu ajudar com agenda e follow-ups
+> - `Notion` · `Obsidian ou outras notas`
+> - `Agora não`
+
+Record the answer as intent. Do **not** attempt to configure anything, do not
+ask for credentials, tokens or account names, and do not claim a connection was
+established. If the owner already declared a second brain in the imported path,
+reflect that instead of asking again about Notion or Obsidian.
 
 ## Camadas opcionais de identidade
 
