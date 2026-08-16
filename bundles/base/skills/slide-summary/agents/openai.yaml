@@ -1,4 +1,4 @@
 interface:
-  display_name: "Slide Summary"
-  short_description: "Map supplied deck text into slide messages and a narrative arc"
-  default_prompt: "Use $slide-summary to map the supplied deck text slide by slide without creating a deck."
+  display_name: "Resumo de Slides"
+  short_description: "Mapeia o texto do deck em mensagens de slide e um arco narrativo"
+  default_prompt: "Use $slide-summary para mapear o texto do deck fornecido slide a slide, sem criar um deck."

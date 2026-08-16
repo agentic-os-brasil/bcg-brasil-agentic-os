@@ -1,4 +1,4 @@
 interface:
   display_name: "Upward Feedback"
-  short_description: "Prepare considered feedback to give a senior colleague"
-  default_prompt: "Use $upward-feedback to help me prepare what I want to say in my upward feedback."
+  short_description: "Prepara um feedback consistente para dar a um colega sênior"
+  default_prompt: "Use $upward-feedback para me ajudar a preparar o que quero dizer no meu upward feedback."

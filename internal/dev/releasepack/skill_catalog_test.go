@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -104,11 +105,18 @@ func TestCaseAgentSetupUsesCanonicalSkillAndExplicitLegacyAlias(t *testing.T) {
 			}{skill.ID, skill.DisplayName, skill.DefaultPrompt}
 		}
 	}
-	if canonical == nil || canonical.DisplayName != "Case Agent Setup" || canonical.DefaultPrompt != "Use $case-agent-setup to create or refresh this Case Agent with reviewed, sourced context." {
-		t.Fatalf("canonical case-agent-setup entry missing or user-facing contract drifted: %#v", canonical)
+	// The guarantee here is the routing shape, not the wording: the canonical
+	// entry must invoke itself, and the alias must redirect to the canonical id
+	// instead of standing on its own. Asserting the literal English copy would
+	// also pin the catalog's language, which is a separate product decision.
+	if canonical == nil || canonical.DisplayName == "" || !strings.Contains(canonical.DefaultPrompt, "$case-agent-setup") {
+		t.Fatalf("canonical case-agent-setup entry missing or no longer invokes itself: %#v", canonical)
 	}
-	if alias == nil || alias.DisplayName != "Legacy Case Agent Setup Alias" || alias.DefaultPrompt == "" || alias.DefaultPrompt == "Use $workspace-agent-setup to create or refresh this workspace agent with reviewed, sourced context." {
-		t.Fatalf("workspace-agent-setup is not an explicit migration alias: %#v", alias)
+	if alias == nil || alias.DisplayName == "" || alias.DefaultPrompt == "" {
+		t.Fatalf("workspace-agent-setup alias entry is missing or empty: %#v", alias)
+	}
+	if !strings.Contains(alias.DefaultPrompt, "$case-agent-setup") || strings.Contains(alias.DefaultPrompt, "$workspace-agent-setup") {
+		t.Fatalf("workspace-agent-setup must redirect to $case-agent-setup rather than invoke itself: %#v", alias)
 	}
 	for _, relative := range []string{
 		"bundles/base/skills/case-agent-setup/SKILL.md",

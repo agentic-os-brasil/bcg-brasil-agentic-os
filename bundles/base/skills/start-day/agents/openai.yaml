@@ -1,4 +1,4 @@
 interface:
-  display_name: "Start Day"
-  short_description: "Open the day with a briefing scoped to the hours that remain"
-  default_prompt: "Use $start-day to open my day with a briefing scoped to the time I actually have left."
+  display_name: "Abrir o Dia"
+  short_description: "Abre o dia com um briefing ajustado às horas que restam"
+  default_prompt: "Use $start-day para abrir meu dia com um briefing ajustado ao tempo que realmente tenho."

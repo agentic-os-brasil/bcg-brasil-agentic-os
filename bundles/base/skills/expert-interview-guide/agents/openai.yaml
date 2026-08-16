@@ -1,4 +1,4 @@
 interface:
-  display_name: "Expert Interview Guide"
-  short_description: "Structure a bounded interview guide from approved case questions"
-  default_prompt: "Use $expert-interview-guide to structure a bounded interview guide from the approved case scope."
+  display_name: "Guia de Entrevista com Expert"
+  short_description: "Estrutura um guia de entrevista a partir das perguntas aprovadas do case"
+  default_prompt: "Use $expert-interview-guide para estruturar um guia de entrevista delimitado pelo escopo aprovado do case."

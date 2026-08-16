@@ -1,4 +1,4 @@
 interface:
-  display_name: "Case Decision Log Entry"
-  short_description: "Register a structural case decision in the active case decision log"
-  default_prompt: "Use $case-decision-log-entry to register this decision in the active case log."
+  display_name: "Registro de Decisão do Case"
+  short_description: "Registra uma decisão estrutural no log de decisões do case ativo"
+  default_prompt: "Use $case-decision-log-entry para registrar esta decisão no log do case ativo."

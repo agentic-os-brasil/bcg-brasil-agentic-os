@@ -1,4 +1,4 @@
 interface:
-  display_name: "Meeting to Work Items"
-  short_description: "Extract decisions, tasks and follow-ups from meeting notes"
-  default_prompt: "Use $meeting-to-work-items to structure the supplied meeting notes without creating tasks."
+  display_name: "Reunião em Itens de Trabalho"
+  short_description: "Extrai decisões, tarefas e follow-ups das notas de reunião"
+  default_prompt: "Use $meeting-to-work-items para estruturar as notas de reunião fornecidas sem criar tarefas."

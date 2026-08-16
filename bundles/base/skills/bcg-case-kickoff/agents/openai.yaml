@@ -1,4 +1,4 @@
 interface:
-  display_name: "Case Kickoff"
-  short_description: "Build a bounded first-days plan from approved case scope"
-  default_prompt: "Use $bcg-case-kickoff to turn the approved case scope into a bounded kickoff plan."
+  display_name: "Kickoff de Case"
+  short_description: "Monta um plano dos primeiros dias a partir do escopo aprovado do case"
+  default_prompt: "Use $bcg-case-kickoff para transformar o escopo aprovado do case em um plano de kickoff delimitado."

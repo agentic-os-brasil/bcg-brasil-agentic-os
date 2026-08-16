@@ -1,4 +1,4 @@
 interface:
-  display_name: "Case Canon Ingest"
-  short_description: "Compile reviewed insights into the active case's persistent canon layer"
-  default_prompt: "Use $case-canon-ingest to add this to the case canon."
+  display_name: "Canon do Case"
+  short_description: "Compila insights revisados no canon persistente do case ativo"
+  default_prompt: "Use $case-canon-ingest para incorporar isto ao canon do case."

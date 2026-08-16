@@ -1,4 +1,4 @@
 interface:
-  display_name: "Craft Update"
-  short_description: "Document a personal method or working preference deliberately"
-  default_prompt: "Use $craft-update to write up this technique as a method, or record how I prefer to work."
+  display_name: "Registro de Método"
+  short_description: "Documenta um método próprio ou uma preferência de trabalho"
+  default_prompt: "Use $craft-update para registrar esta técnica como método, ou anotar como prefiro trabalhar."

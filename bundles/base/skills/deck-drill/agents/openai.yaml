@@ -1,4 +1,4 @@
 interface:
-  display_name: "Deck Drill"
-  short_description: "Rehearse a deck against the questions the room will ask"
-  default_prompt: "Use $deck-drill to rehearse this deck against the questions my audience will actually ask."
+  display_name: "Ensaio de Deck"
+  short_description: "Ensaia o deck contra as perguntas que a sala vai fazer"
+  default_prompt: "Use $deck-drill para ensaiar este deck contra as perguntas que a audiência realmente vai fazer."

@@ -1,4 +1,4 @@
 interface:
-  display_name: "Retro"
-  short_description: "Close the week against your development objectives"
-  default_prompt: "Use $retro to walk this week against my objectives and record the retrospective."
+  display_name: "Retrospectiva da Semana"
+  short_description: "Fecha a semana contra os objetivos de desenvolvimento"
+  default_prompt: "Use $retro para revisar a semana contra meus objetivos e registrar a retrospectiva."

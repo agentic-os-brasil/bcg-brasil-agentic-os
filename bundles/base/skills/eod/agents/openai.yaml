@@ -1,4 +1,4 @@
 interface:
-  display_name: "End of Day"
-  short_description: "Close the day and leave tomorrow a starting point"
-  default_prompt: "Use $eod to close today on my daily page and preview tomorrow's first priority."
+  display_name: "Fechar o Dia"
+  short_description: "Fecha o dia e deixa um ponto de partida para amanhã"
+  default_prompt: "Use $eod para fechar o dia na minha página diária e antecipar a primeira prioridade de amanhã."
