@@ -37,7 +37,7 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
 
 8. **Workspace recuperada** — listar `${CLAUDE_PROJECT_DIR}/data/.recovered-*`. Se houver algum, surfar como ponto informativo (não é erro): "workspace foi recuperada em <timestamp extraído do nome do arquivo>, nenhuma ação necessária". Isso sinaliza que o hook de scaffold detectou `data/` sem marcador (restauração de backup ou marker apagado em update).
 
-9. **Log do scaffold** — se `${CLAUDE_PROJECT_DIR}/data/.scaffold.log` existir, ler as últimas 20 linhas. Se contiver `MKDIR FAIL` ou `ABORT`, surfar como ponto a verificar com a recomendação: "reextraia o ZIP por cima da pasta Maestro. A pasta `data/` é preservada porque não está no ZIP." Se só houver linhas `MKDIR OK` e `DONE`, seguir em silêncio.
+9. **Log do scaffold** — se `${CLAUDE_PROJECT_DIR}/data/.scaffold.log` existir, ler as últimas 20 linhas. Se contiver `MKDIR FAIL` ou `ABORT`, surfar como ponto a verificar com a recomendação: "reinstale seguindo o passo a passo do `README-INSTALL.md` na raiz da pasta Maestro. Sua `data/` é preservada porque o ritual copia ela para a instalação nova." Se só houver linhas `MKDIR OK` e `DONE`, seguir em silêncio.
 
 10. **Drift de árvore do owner (onboarding pré-fix)** — detectar owners que fizeram onboarding antes do fix de fechamento da árvore de controle. Ler:
     - `data/owner/registry.json` → campo `initialized`
@@ -53,7 +53,7 @@ Return a single message with:
 - **One-line verdict:** "Tudo funcionando" | "Um ponto a verificar: <what>" | "Instalação incompleta: <what>"
 - **Version:** `v<X.Y.Z>`
 - **Sua workspace:** absolute path to `data/`
-- **Se houver problemas:** action per problem, in plain Portuguese. Preferir "reextraia o ZIP por cima da pasta" para arquivos core ausentes; nunca pedir para o usuário editar JSON ou shell.
+- **Se houver problemas:** action per problem, in plain Portuguese. Para arquivos core ausentes, apontar para o `README-INSTALL.md` na raiz da pasta Maestro — ele é a fonte única do ritual de instalação e atualização. Nunca orientar a extrair o ZIP por cima da pasta atual: isso mistura arquivos de versões diferentes. Nunca repetir os passos do ritual aqui; qualquer resumo diverge do original. Nunca pedir para o usuário editar JSON ou shell.
 
 ## What NOT to do
 
@@ -64,6 +64,6 @@ Return a single message with:
 
 ## Escalation
 
-If more than 2 core files are missing, tell the user: "sua instalação parece corrompida — baixe o ZIP mais recente pelo email do time BCG Brasil AI e extraia por cima da pasta atual. Sua `data/` é preservada."
+If more than 2 core files are missing, tell the user: "sua instalação parece corrompida — baixe o ZIP mais recente pelo email do time BCG Brasil AI e siga o passo a passo do `README-INSTALL.md`. Sua `data/` é preservada pelo ritual."
 
 Se `data/` estiver ausente mas core existir, apenas informe: "sua próxima sessão vai recriar `data/` automaticamente."
