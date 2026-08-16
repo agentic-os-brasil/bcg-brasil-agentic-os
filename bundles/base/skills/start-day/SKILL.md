@@ -77,6 +77,63 @@ of context it can use, and works without any of it.
    written or came back as a proposal. An incomplete briefing is reported as
    incomplete, and an unrecorded one is never reported as recorded.
 
+## Formato da página
+
+Forma recomendada, não porta de entrada: a página do owner aceita Markdown
+livre. O que a template garante é recuperabilidade e headings estáveis, já que
+`append-entry` nunca cria um heading.
+
+**Página do dia — `owner/daily/<YYYY-MM-DD>.md`**, criada apenas quando o dia
+ainda não tem página:
+
+```markdown
+# Daily — YYYY-MM-DD
+
+> Registro humano do dia. Entradas brutas não são insumo de memória.
+
+## Escopo relacionado
+- **Projetos:**
+- **Clientes:**
+
+## Prioridades
+<!-- append-only: uma entrada de briefing por execução do start-day -->
+
+## Notas
+<!-- append-only: o fechamento do dia entra aqui -->
+
+## Decisões que emergiram
+- <link para a decisão autoritativa na página do workspace que a possui>
+
+## Candidatos a aprendizado
+- <ponteiro de aprendizado owner-private; não copie conteúdo privado do owner aqui>
+
+## Levar adiante
+-
+```
+
+`## Escopo relacionado`, `## Decisões que emergiram`, `## Candidatos a
+aprendizado` e `## Levar adiante` são mantidos pelo owner ou por outras skills.
+Esta skill escreve apenas sob `## Prioridades`.
+
+**Entrada de briefing**, anexada sob `## Prioridades` a cada execução. A
+primeira execução do dia cria a página e anexa a primeira entrada; cada
+execução seguinte apenas acrescenta outra entrada, com o horário em que
+aconteceu:
+
+```markdown
+### HH:MM — briefing
+- **Prioridades para as horas restantes:**
+  1. <prioridade> — <por que ficou nesta posição>
+  2. <prioridade> — <por que ficou nesta posição>
+  3. <prioridade> — <por que ficou nesta posição>
+- **Primeiro movimento:** <a próxima ação concreta>
+```
+
+O que veio de calendário, e-mail ou visão externa de tarefas não entra na
+entrada: título de reunião, contagem de participantes e nome de quem espera
+resposta ficam fora da página. Uma entrada que não foi gravada nunca é
+reportada como gravada.
+
 ## Invariants
 
 - Append-only per day. The first run creates one page; each subsequent run

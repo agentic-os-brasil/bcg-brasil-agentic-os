@@ -86,7 +86,7 @@ day, under governance that does not exist yet and is not invoked here.
    run before the artefact goes out. Present it, then `create-page`.
 5. **Revision.** Say plainly what the implemented operations can and cannot do
    here. A dated line under a heading the page already declares — typically
-   `## Evidence of use` — is an `append-entry` and is written. Rewriting the
+   `## Evidência de uso` — is an `append-entry` and is written. Rewriting the
    steps, correcting `Maturity`, `Last used` or `Last confirmed`, or retiring
    guidance is **an owner edit**: no implemented operation replaces prose or
    sets a field. Show the current text beside the proposed replacement, hand
@@ -103,6 +103,93 @@ day, under governance that does not exist yet and is not invoked here.
 
 Every run is attended. Nothing here is scheduled, and no standing grant reaches
 this segment.
+
+## Formato da página
+
+Formas recomendadas, não portas de entrada: o owner pode escrever Markdown
+livre no segmento e nenhuma página é recusada por sair da forma. O que a
+template garante é recuperabilidade, a fronteira visível entre método e estilo,
+e headings estáveis — `append-entry` nunca cria um heading, então uma seção que
+a página não declara é uma seção onde nada pode ser anexado depois.
+
+**Método — `owner/craft/methods/<method-slug>.md`**:
+
+```markdown
+# Método — <nome>
+
+> Técnica reutilizável. Registre a técnica, nunca a engagement em que ela foi
+> usada. Sem nome de cliente, sem dado de cliente, sem conteúdo de entregável.
+
+## Snapshot
+- **Tipo:** técnica | framework | playbook
+- **Origem:** desenvolvido | adaptado de <fonte pública ou gerenciada>
+- **Maturidade:** rascunho | usado uma vez | repetível
+- **Último uso:** YYYY-MM-DD
+
+## Problema que resolve
+-
+
+## Quando usar, e quando não usar
+- **Usar quando:**
+- **Não usar quando:**
+
+## Passos
+1.
+2.
+
+## Insumos necessários
+-
+
+## Modos de falha
+-
+
+## Evidência de uso
+- YYYY-MM-DD — <a que foi aplicado, descrito sem detalhe identificável>
+
+## Compartilhabilidade
+- **Generalizável:** sim | ainda não
+- **O que teria de mudar antes de compartilhar:**
+
+## Relacionado
+- [Índice de craft](../index.md)
+```
+
+**Estilo — `owner/craft/style/<situation-slug>.md`**:
+
+```markdown
+# Estilo — <tipo de artefato ou situação recorrente>
+
+> Calibração pessoal, não uma capacidade. Esta página nunca é candidata a
+> promoção para conhecimento compartilhado.
+
+## Snapshot
+- **Aplica-se a:** <tipo de artefato ou situação recorrente>
+- **Força:** sempre | em geral | quando há tempo
+- **Última confirmação:** YYYY-MM-DD
+
+## Preferência
+-
+
+## Por que o owner trabalha assim
+-
+
+## Checar sempre antes de o artefato sair
+- [ ]
+
+## Anti-padrões que o owner recusa
+-
+
+## Não é generalizável porque
+- <uma linha. Se não for possível completar, a página provavelmente pertence a methods/.>
+
+## Relacionado
+- [Índice de craft](../index.md)
+```
+
+`Maturidade`, `Último uso` e `Última confirmação` mudam por edição do owner:
+nenhuma operação implementada altera um campo. A linha no índice de craft
+também é edição do owner. `## Evidência de uso` é o único destino de
+`append-entry` numa página de método já existente.
 
 ## Invariants
 

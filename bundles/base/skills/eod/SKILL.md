@@ -46,6 +46,32 @@ from `owner/development/objectives.md` when the day touched one.
 6. Preview tomorrow's first priority in one line.
 7. Give a three-line recap: what closed, what carries, what is first tomorrow.
 
+## Formato da entrada de fechamento
+
+A página do dia é a mesma que `start-day` cria, com o mesmo cabeçalho e as
+mesmas seções. Esta skill não redefine a página: quando o dia ainda não tem
+página, ela é criada na forma que `start-day` declara, e o fechamento é sempre
+uma entrada anexada.
+
+**Entrada de fechamento**, anexada sob `## Notas` da página do dia. Fechar duas
+vezes acrescenta uma segunda entrada com outro horário; nenhuma entrada
+anterior é reescrita:
+
+```markdown
+### HH:MM — fechamento
+- **Concluído:** <o que fechou hoje>
+- **Andou e não terminou:** <o que avançou, e onde parou>
+- **Carrega para amanhã:** <uma linha por item>
+- **Decisão a registrar em outro lugar:** <a decisão e onde ela pertence> | nenhuma
+- **Página de workspace a atualizar:** <link para a página que precisa da atualização> | nenhuma
+```
+
+As duas últimas linhas são ponteiros, não registros. Uma decisão durável
+pertence ao workspace que a possui e é registrada lá, num ato separado; um fato
+de workspace que mudou hoje é apenas anotado aqui como pendência. Nada entra na
+entrada que o owner não tenha confirmado na conversa, e um fechamento que não
+foi gravado nunca é reportado como gravado.
+
 ## What this skill narrowed
 
 An earlier design reconciled an external task system and a project's current

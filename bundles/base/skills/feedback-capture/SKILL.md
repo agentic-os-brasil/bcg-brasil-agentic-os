@@ -87,9 +87,9 @@ owner edited the page in the meantime.
      `append-entry`. `append-entry` refuses a heading that appears more than
      once on a page, and an objectives page carries an evidence section beneath
      every objective, so the target must be that objective's own numbered
-     heading — a bare `### Evidence` is ambiguous and the write is declined
-     rather than filed under objective one;
-   - **a retirement** is a dated line under `## Retired` with `append-entry`,
+     heading — `#### Evidência — objetivo <n>`. A bare `#### Evidência` is
+     ambiguous and the write is declined rather than filed under objective one;
+   - **a retirement** is a dated line under `## Aposentados` with `append-entry`,
      naming the review that retired it;
    - **an objective's status, its last-confirmed date, the next review date and
      any new objective** change the page's fields or its heading structure.
@@ -114,6 +114,88 @@ owner edited the page in the meantime.
 
 Every run is attended. Nothing here is scheduled, and no standing grant reaches
 this segment.
+
+## Formato da página
+
+Formas recomendadas, não portas de entrada: o owner pode escrever Markdown
+livre no segmento. O que a template garante é recuperabilidade e headings
+estáveis. As duas páginas registram o que foi dito ao owner e o efeito sobre os
+objetivos; nenhuma delas avalia quem deu o feedback.
+
+**Project feedback — `owner/development/project-feedback/<YYYY-MM-DD>-<project-slug>.md`**:
+
+```markdown
+# Project feedback — <project-slug> — YYYY-MM-DD
+
+> Registra o feedback que o owner recebeu, como o owner registrou. Quem deu o
+> feedback pode ser nomeado, como atribuição do que foi dito sobre o owner. Não
+> avalie quem deu, e não registre feedback sobre terceiros.
+
+## Snapshot
+- **Projeto / workstream:** <link para a página do projeto no workspace>
+- **Período coberto:** YYYY-MM-DD a YYYY-MM-DD
+- **Rodada:** meio de projeto | fim de projeto
+- **Dado por:** <nome, papel, ou ambos — atribuição apenas, minimizada>
+
+## Pontos fortes, como recebidos
+-
+
+## Áreas de desenvolvimento, como recebidas
+-
+
+## Leitura do owner
+- **O que eu aceito:**
+- **O que eu qualificaria:**
+
+## Efeito nos objetivos
+- **Objetivo tocado:** <link> — reforça | estende | contradiz
+- **Novo objetivo proposto:** sim | não
+
+## Relacionado
+- [Objetivos](../objectives.md)
+```
+
+**Career-committee review — `owner/development/cdc/<YYYY-MM-DD>-cdc.md`**:
+
+```markdown
+# CDC — YYYY-MM-DD
+
+> Síntese de carreira. Esta página abre um novo ciclo de objetivos. Uma posição
+> do comitê pode ser atribuída a quem a enunciou; não registre avaliação de
+> nenhum membro.
+
+## Snapshot
+- **Ciclo revisado:** YYYY-MM-DD a YYYY-MM-DD
+- **Resultado, como comunicado:**
+- **Próximo CDC em:** YYYY-MM-DD
+
+## Trajetória, como comunicada
+-
+
+## Pontos fortes que seguem
+-
+
+## Prioridades definidas para o próximo ciclo
+1.
+2.
+
+## Efeito nos objetivos
+| Objetivo anterior | Destino | Motivo |
+| --- | --- | --- |
+| <link> | mantido \| aposentado \| substituído | |
+
+## Leitura do owner
+-
+
+## Relacionado
+- [Objetivos](../objectives.md)
+```
+
+A tabela da página de CDC registra o reset como ele foi comunicado. Aplicar o
+reset em `objectives.md` — status, data de última confirmação, próxima revisão,
+objetivo novo — é edição do owner, mostrada como pendente e nunca reportada
+como escrita. A aposentadoria de um objetivo preserva o enunciado e o log de
+evidência dele e aponta para a página de CDC que a causou.
 
 ## Invariants
 
