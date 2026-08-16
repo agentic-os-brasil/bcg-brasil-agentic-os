@@ -46,7 +46,7 @@ is no whole-root read and no folder listing, so name the days.
 
 - the daily pages for the window — default the last seven days, or since the
   previous pass if the owner names it — read for their
-  `## Learning candidates` section;
+  `## Candidatos a aprendizado` section;
 - `owner/learnings/index.md` and `owner/craft/index.md`, so a candidate that
   restates a page already written is recognized before it is duplicated.
 
@@ -93,10 +93,10 @@ it, and the skill never performs that generalization on their behalf.
      shape. An existing page at the path is preserved and reported
      `unchanged`, never replaced;
    - further grounding for a claim already written — `append-entry` under its
-     `## Grounded in`;
+     `## Fundamentada em`;
    - a claim sharpened, narrowed or superseded — `append-entry` under its
-     `## Revisions`, which keeps the original text and its history;
-   - a method used again — `append-entry` under its `## Evidence of use`.
+     `## Revisões`, which keeps the original text and its history;
+   - a method used again — `append-entry` under its `## Evidência de uso`.
 6. `append-entry` never creates a heading, so a page that does not declare the
    target section cannot receive the entry. Say so and offer the text as a
    draft for the owner to place. Where a page declares the same heading more
@@ -107,7 +107,7 @@ it, and the skill never performs that generalization on their behalf.
    written.
 8. On a drop, tell the owner the candidate will be marked so a later pass does
    not re-offer it, then `append-entry` a dated `considered, not promoted` line
-   under the `## Learning candidates` heading of the source daily page. The
+   under the `## Candidatos a aprendizado` heading of the source daily page. The
    owner chose the drop, but the write is still a write and is announced before
    it happens. That is the only write this skill makes to a daily.
 9. Close with what was promoted and where, what was declined, what was deferred
@@ -117,6 +117,67 @@ This pass is **attended only**. A standing grant covers one page family and
 this one writes into three, so no grant can wake it — which is the right shape
 rather than a limitation to route around. A durable claim about the owner's own
 profession is theirs to make, not something a scheduled job settles for them.
+
+## Formato da página
+
+Formas recomendadas, não portas de entrada: o owner pode escrever Markdown
+livre nesses segmentos. O que a template garante é recuperabilidade e headings
+estáveis — `append-entry` nunca cria um heading, então fundamentação e revisão
+não podem ser acrescentadas depois a uma página que não declarou onde elas
+entram.
+
+**Afirmação — `owner/learnings/<claim-slug>.md`**:
+
+```markdown
+# Aprendizado — <a afirmação em poucas palavras>
+
+> Afirmação durável escrita pelo owner. Enuncie a generalização, nunca o
+> conteúdo da engagement por trás dela. A engagement de origem pode ser
+> nomeada; seus achados, números e material de entregável não.
+
+## Afirmação
+- <uma linha. Se precisar de mais de uma, é mais de um aprendizado.>
+
+## Snapshot
+- **Status:** ativa | superada
+- **Aberta em:** YYYY-MM-DD
+- **Última confirmação:** YYYY-MM-DD
+
+## Vale para
+- **Situações:**
+- **Não vale para, ou não testado:**
+
+## Fundamentada em
+- YYYY-MM-DD — <engagement nomeada como fonte> — <o que foi observado, enunciado como generalização> — <link para a página do workspace que guarda o detalhe, quando existir>
+
+## Confiança
+- **Nível:** tentativa | de trabalho | firmada
+- **Em:** YYYY-MM-DD
+- **O que mudaria isso:**
+
+## Revisões
+- YYYY-MM-DD — refinada | estreitada | superada — <o que mudou e por quê> — <link para a afirmação que substitui esta, se houver>
+
+## Relacionado
+- [Índice de learnings](index.md)
+- <link para a página de método, estilo ou objetivo que esta afirmação afeta>
+```
+
+Uma página superada mantém o texto, a fundamentação original e a história; só o
+`Status` no snapshot muda, por edição do owner. `Nível`, `Em`, `Última
+confirmação` e a linha no índice também são edição do owner.
+
+**Método e estilo** usam as mesmas templates declaradas em `craft-update` —
+`owner/craft/methods/<method-slug>.md` e `owner/craft/style/<situation-slug>.md`.
+Elas não são reproduzidas aqui; leia a seção `## Formato da página` daquela
+skill antes de escrever uma dessas páginas.
+
+**Candidato descartado**, anexado sob `## Candidatos a aprendizado` da página
+diária de origem. É a única escrita que esta skill faz numa página diária:
+
+```markdown
+- YYYY-MM-DD — considerado, não promovido — <o candidato, em uma linha> — <por que não>
+```
 
 ## Invariants
 

@@ -97,6 +97,54 @@ profile; only the explanation and optional detail do.
 Every run is attended. Nothing here is scheduled, and no standing grant reaches
 this page family.
 
+## Formato da página
+
+Forma recomendada, não porta de entrada. A página é nomeada pela ocasião, nunca
+pela pessoa, e diz na primeira linha o que ela é. Todo ponto traz o momento que
+o owner confirmou; um ponto sem âncora confirmada não entra na página.
+
+**Preparação — `owner/development/upward-feedback/<YYYY-MM-DD>-<occasion-slug>.md`**:
+
+```markdown
+# Preparação de feedback — <ocasião> — YYYY-MM-DD
+
+> Preparação do owner para uma conversa, escrita nas palavras do owner. Não é
+> um registro sobre a outra pessoa: nada aqui descreve traço, tendência, nota
+> ou perfil de quem vai receber o feedback. Entregar o feedback é ato do owner.
+
+## Snapshot
+- **Para:** <nome ou papel de quem vai receber>
+- **Senioridade em relação ao owner:** <calibra o registro, não a franqueza>
+- **Período coberto:** YYYY-MM-DD a YYYY-MM-DD
+- **Ocasião:** <a ocasião que dá nome à página>
+
+## O que o owner quer dizer
+-
+
+## Pontos, em comportamento e efeito
+- **Momento:** YYYY-MM-DD — <o que aconteceu, confirmado pelo owner>
+  - **Efeito no trabalho ou no time:** <o que isso causou>
+  - **Como dizer:** <a frase que o owner pretende usar>
+
+## O que o owner está pedindo como prática
+- <a prática pedida, não a deficiência diagnosticada>
+
+## Lacunas assumidas
+- <seção sem ponto genuíno, nomeada como lacuna em vez de preenchida>
+
+## O que ainda falta o owner decidir
+-
+
+## Relacionado
+- [Development](../index.md)
+```
+
+Uma preparação, uma página. Uma segunda conversa é uma segunda página, com
+outra ocasião e outra data; nada é fundido num registro por pessoa. Uma nova
+passada sobre a mesma preparação é `append-entry` sob um heading que a página
+já declara — tipicamente `## Pontos, em comportamento e efeito` ou `## O que
+ainda falta o owner decidir`.
+
 ## Invariants
 
 - The skill never writes a file. Every effect is a named operation through the
