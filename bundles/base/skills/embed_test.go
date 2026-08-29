@@ -107,3 +107,17 @@ func TestEnvironmentSkillsKeepMarkItDownOptionalUntilTheManagedPackShips(t *test
 	}
 	t.Fatal("MarkItDown capability is missing")
 }
+
+func TestMemorySkillsCarryExplicitLegacyHubBridgeContract(t *testing.T) {
+	for _, id := range []string{"dream-memory", "maestro-operator"} {
+		body, err := Skill(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, required := range []string{"workspace memory bridge inspect", "workspace memory bridge preview", "--attest-target-scope", "L1"} {
+			if !strings.Contains(string(body), required) {
+				t.Fatalf("distributed skill %s is missing %q", id, required)
+			}
+		}
+	}
+}

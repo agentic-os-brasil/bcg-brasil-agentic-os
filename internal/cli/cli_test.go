@@ -176,6 +176,97 @@ func TestWorkspaceAccessCLIHasClaudeCodexParityAndDoesNotWidenGuard(t *testing.T
 	}
 }
 
+func TestWorkspaceMemoryBridgeHasClaudeCodexParityAndFeedsDirectSessionStart(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			fixture := newCLIFixture(t)
+			var out, errOut bytes.Buffer
+			if code := Run(workspaceArgs(fixture, "enroll", runtimeName), strings.NewReader(""), &out, &errOut); code != ExitOK {
+				t.Fatalf("enroll exit=%d stderr=%s", code, errOut.String())
+			}
+			legacyPath := filepath.Join(fixture.dataRoot, "memory", "recent", "owner-reviewed.md")
+			if err := os.MkdirAll(filepath.Dir(legacyPath), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			legacyBody := []byte("legacy-bridge-" + runtimeName + "-sentinel")
+			if err := os.WriteFile(legacyPath, legacyBody, 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			common := []string{"--runtime", runtimeName, "--workspace", fixture.worktree, "--managed-root", fixture.managedRoot, "--data-root", fixture.dataRoot, "--executable", fixture.executable}
+			inspectArgs := append([]string{"workspace", "memory", "bridge", "inspect"}, common...)
+			out.Reset()
+			errOut.Reset()
+			if code := Run(inspectArgs, strings.NewReader(""), &out, &errOut); code != ExitOK {
+				t.Fatalf("inspect exit=%d stderr=%s", code, errOut.String())
+			}
+			var report struct {
+				Candidates []struct {
+					ID string `json:"candidate_id"`
+				} `json:"candidates"`
+			}
+			if err := json.Unmarshal(out.Bytes(), &report); err != nil || len(report.Candidates) != 1 {
+				t.Fatalf("inspect = %s, %v", out.String(), err)
+			}
+			for _, private := range []string{legacyPath, fixture.dataRoot, "owner-reviewed.md", string(legacyBody)} {
+				if strings.Contains(out.String(), private) {
+					t.Fatalf("inspect leaked %q: %s", private, out.String())
+				}
+			}
+			candidateID := report.Candidates[0].ID
+			previewArgs := append([]string{"workspace", "memory", "bridge", "preview"}, common...)
+			previewArgs = append(previewArgs, "--candidate", candidateID)
+			out.Reset()
+			errOut.Reset()
+			if code := Run(previewArgs, strings.NewReader(""), &out, &errOut); code != ExitOK || !strings.Contains(out.String(), string(legacyBody)) {
+				t.Fatalf("preview exit=%d output=%s stderr=%s", code, out.String(), errOut.String())
+			}
+
+			applyArgs := append([]string{"workspace", "memory", "bridge", "apply"}, common...)
+			applyArgs = append(applyArgs, "--candidates", candidateID, "--attest-target-scope", "--confirm")
+			out.Reset()
+			errOut.Reset()
+			if code := Run(applyArgs[:len(applyArgs)-1], strings.NewReader(""), &out, &errOut); code != ExitFailure || !strings.Contains(errOut.String(), "attestation") {
+				t.Fatalf("unguarded apply exit=%d output=%s stderr=%s", code, out.String(), errOut.String())
+			}
+			out.Reset()
+			errOut.Reset()
+			if code := Run(applyArgs, strings.NewReader(""), &out, &errOut); code != ExitOK || !strings.Contains(out.String(), `"state": "applied"`) {
+				t.Fatalf("apply exit=%d output=%s stderr=%s", code, out.String(), errOut.String())
+			}
+			after, err := os.ReadFile(legacyPath)
+			if err != nil || string(after) != string(legacyBody) {
+				t.Fatalf("legacy source changed: %q, %v", after, err)
+			}
+
+			out.Reset()
+			errOut.Reset()
+			if code := Run(hookArgs(fixture, runtimeName, "session-start"), strings.NewReader(`{"session_id":"bridge"}`), &out, &errOut); code != ExitOK || !strings.Contains(out.String(), string(legacyBody)) {
+				t.Fatalf("SessionStart exit=%d output=%s stderr=%s", code, out.String(), errOut.String())
+			}
+
+			governed := strings.Join([]string{strconv.Quote(fixture.executable), "workspace", "memory", "bridge", "apply", "--runtime", runtimeName, "--workspace", strconv.Quote(fixture.worktree), "--candidates", candidateID, "--attest-target-scope", "--confirm"}, " ")
+			for _, check := range []struct {
+				command string
+				denied  bool
+			}{
+				{command: governed},
+				{command: strings.Replace(governed, strconv.Quote(fixture.executable), "bcgos", 1), denied: true},
+				{command: governed + "; pwd", denied: true},
+			} {
+				payload := `{"session_id":"bridge-guard","tool_name":"Bash","tool_input":{"command":` + strconv.Quote(check.command) + `}}`
+				out.Reset()
+				errOut.Reset()
+				code := Run(hookArgs(fixture, runtimeName, "pre-action-guard"), strings.NewReader(payload), &out, &errOut)
+				denied := strings.Contains(out.String(), `"permissionDecision": "deny"`)
+				if code != ExitOK || denied != check.denied {
+					t.Fatalf("guard denied=%t want=%t output=%s stderr=%s", denied, check.denied, out.String(), errOut.String())
+				}
+			}
+		})
+	}
+}
+
 func TestWorkspaceLifecycleRefusesMissingActivationBeforeProjectionWrite(t *testing.T) {
 	fixture := newCLIFixture(t)
 	if err := os.Remove(filepath.Join(fixture.dataRoot, portableactivation.StateRelativePath)); err != nil {

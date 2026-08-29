@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## LHMB - Bridge legacy Hub memory through explicit workspace import
+
+- Date: 2026-08-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Portable Maestro installations may already contain owner-curated Markdown memory under the legacy Hub-wide `data/memory` tree, while direct repository sessions consume only canonical generated memory isolated below an enrolled workspace identity. Automatically projecting or copying that global tree into every repository would mix scopes, bypass canonical provenance and promotion rules and risk exposing material to the wrong client workspace.
+- Decision: Add an explicit, reviewed and owner-attested bridge that discovers only bounded regular Markdown files in the four fixed legacy Hub memory layers, exposes opaque content-bound candidates and imports an explicitly selected set into one exact enrolled workspace. The bridge preserves the legacy files byte-for-byte, stages immutable selected-source snapshots below the target workspace's private import authority and atomically activates a provenance-bearing canonical L1 artifact through the existing memory engine. It never maps legacy labels directly to L2, L3 or lifetime, never synchronizes automatically and requires the owner to attest both target scope and absence of credentials, secrets or unauthorized content immediately before apply.
+- Consequences: Existing useful Hub memory can become available in a direct repository without weakening workspace isolation or changing normal Maestro-folder behavior. Imported content enters the canonical dreaming pipeline as reviewed L1 evidence, retains opaque source provenance and can reach later layers only through their normal eligibility rules. A failed, interrupted or repeated import preserves the last valid commit; exact retries are idempotent even after newer memory commits. Claude and Codex share one runtime-neutral contract and parity tests. The owner must review and repeat the bridge separately for every intended workspace; automatic federation and bidirectional synchronization remain unavailable.
+- Refs: DATA; PORT; MEMO; SELP; HBND; specs/002-data-boundaries.md; specs/004-runtime-portability.md; specs/006-memory-persistence.md; specs/055-direct-repository-worktree-entry.md; specs/058-legacy-hub-memory-bridge.md; internal/memory; internal/memorybridge
+- Supersedes: none
+
 ## XWAC - Allow explicit temporary cross-workspace context reads
 
 - Date: 2026-08-29

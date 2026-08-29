@@ -26,6 +26,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/codexadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memorybridge"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/nativeagentflow"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/portableactivation"
@@ -61,7 +62,7 @@ func Run(args []string, in io.Reader, out, errOut io.Writer) int {
 	switch args[0] {
 	case "help", "--help", "-h":
 		fmt.Fprintln(out, publicUsage)
-		fmt.Fprintln(out, "workspace lifecycle: enroll, status, repair, remove, access")
+		fmt.Fprintln(out, "workspace lifecycle: enroll, status, repair, remove, access, memory bridge")
 		return ExitOK
 	case "version":
 		fmt.Fprintf(out, "bcgos %s\n", Version)
@@ -78,11 +79,14 @@ func Run(args []string, in io.Reader, out, errOut io.Writer) int {
 
 func runWorkspace(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos workspace <enroll|status|repair|remove|access> ...")
+		fmt.Fprintln(errOut, "usage: bcgos workspace <enroll|status|repair|remove|access|memory> ...")
 		return ExitUsage
 	}
 	if args[0] == "access" {
 		return runWorkspaceAccess(args[1:], out, errOut)
+	}
+	if args[0] == "memory" {
+		return runWorkspaceMemory(args[1:], out, errOut)
 	}
 	operation := args[0]
 	if operation != "enroll" && operation != "status" && operation != "repair" && operation != "remove" {
@@ -119,6 +123,86 @@ func runWorkspace(args []string, out, errOut io.Writer) int {
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, status, errOut)
+}
+
+func runWorkspaceMemory(args []string, out, errOut io.Writer) int {
+	if len(args) < 2 || args[0] != "bridge" {
+		fmt.Fprintln(errOut, "usage: bcgos workspace memory bridge <inspect|preview|apply> --runtime claude|codex --workspace PATH ...")
+		return ExitUsage
+	}
+	operation := args[1]
+	if operation != "inspect" && operation != "preview" && operation != "apply" {
+		fmt.Fprintln(errOut, "usage: bcgos workspace memory bridge <inspect|preview|apply> --runtime claude|codex --workspace PATH ...")
+		return ExitUsage
+	}
+	flags := flag.NewFlagSet("workspace memory bridge "+operation, flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	runtimeName := flags.String("runtime", "", "claude or codex")
+	workspacePath := flags.String("workspace", "", "exact enrolled repository or worktree")
+	candidate := flags.String("candidate", "", "opaque candidate ID")
+	candidates := flags.String("candidates", "", "comma-separated opaque candidate IDs")
+	attested := flags.Bool("attest-target-scope", false, "attest selected content and exact target scope")
+	confirmed := flags.Bool("confirm", false, "explicit owner confirmation")
+	managedRoot := flags.String("managed-root", "", "activated managed root")
+	dataRoot := flags.String("data-root", "", "owner-private data root")
+	executable := flags.String("executable", "", "installed CLI path")
+	if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 || (*runtimeName != "claude" && *runtimeName != "codex") || strings.TrimSpace(*workspacePath) == "" {
+		fmt.Fprintf(errOut, "usage: bcgos workspace memory bridge %s --runtime claude|codex --workspace PATH ...\n", operation)
+		return ExitUsage
+	}
+	manager, err := resolveManager(*managedRoot, *dataRoot, *executable)
+	if err != nil {
+		return reportWorkspaceMemoryBridgeError(errOut, operation, errors.New("installed Maestro activation could not be verified"))
+	}
+	status, err := manager.Status(background(), *runtimeName, *workspacePath)
+	if err != nil || status.State != workspaceprojection.StateEnrolled {
+		return reportWorkspaceMemoryBridgeError(errOut, operation, errors.New("target workspace is not enrolled and intact"))
+	}
+	policy, err := basememory.Policy()
+	if err != nil {
+		return reportWorkspaceMemoryBridgeError(errOut, operation, err)
+	}
+	runtimeConfig, err := basememory.Runtime()
+	if err != nil {
+		return reportWorkspaceMemoryBridgeError(errOut, operation, err)
+	}
+	engine := &memory.Engine{Root: manager.DataRoot, Policy: policy, Budgets: runtimeConfig.ContextBudgets()}
+	bridge := memorybridge.Service{DataRoot: manager.DataRoot, Engine: engine}
+	switch operation {
+	case "inspect":
+		if *candidate != "" || *candidates != "" || *attested || *confirmed {
+			return reportWorkspaceMemoryBridgeError(errOut, operation, errors.New("inspect accepts no candidate or mutation flags"))
+		}
+		report, inspectErr := bridge.Inspect(background(), status.WorkspaceID)
+		if inspectErr != nil {
+			return reportWorkspaceMemoryBridgeError(errOut, operation, inspectErr)
+		}
+		return writeJSON(out, report, errOut)
+	case "preview":
+		if *candidate == "" || *candidates != "" || *attested || *confirmed {
+			return reportWorkspaceMemoryBridgeError(errOut, operation, errors.New("preview requires exactly one candidate"))
+		}
+		report, previewErr := bridge.Preview(background(), status.WorkspaceID, *candidate)
+		if previewErr != nil {
+			return reportWorkspaceMemoryBridgeError(errOut, operation, previewErr)
+		}
+		return writeJSON(out, report, errOut)
+	case "apply":
+		if *candidate != "" || *candidates == "" {
+			return reportWorkspaceMemoryBridgeError(errOut, operation, errors.New("apply requires a candidate selection and both owner attestations"))
+		}
+		result, applyErr := bridge.Apply(background(), memorybridge.ApplyRequest{WorkspaceID: status.WorkspaceID, CandidateIDs: splitCommaList(*candidates), AttestedTargetScope: *attested, Confirmed: *confirmed})
+		if applyErr != nil {
+			return reportWorkspaceMemoryBridgeError(errOut, operation, applyErr)
+		}
+		return writeJSON(out, result, errOut)
+	}
+	return ExitUsage
+}
+
+func reportWorkspaceMemoryBridgeError(errOut io.Writer, operation string, err error) int {
+	reason := strings.TrimSpace(err.Error())
+	return reportError(errOut, fmt.Errorf("workspace memory bridge %s failed: %s; legacy Hub memory and repository content were not changed; next safe command: bcgos workspace memory bridge inspect --runtime <claude|codex> --workspace <repository-or-worktree>", operation, reason))
 }
 
 func runWorkspaceAccess(args []string, out, errOut io.Writer) int {
@@ -937,6 +1021,12 @@ func unsafeToolPath(body []byte, workspaceRoot, installedExecutable string) stri
 		}
 	}
 	for _, command := range commands {
+		if matched, reason := governedWorkspaceMemoryBridgeCommand(command, installedExecutable, workspaceRoot); matched {
+			if reason != "" {
+				return reason
+			}
+			continue
+		}
 		if matched, reason := governedWorkspaceAccessCommand(command, installedExecutable, workspaceRoot); matched {
 			if reason != "" {
 				return reason
@@ -948,6 +1038,97 @@ func unsafeToolPath(body []byte, workspaceRoot, installedExecutable string) stri
 		}
 	}
 	return ""
+}
+
+func governedWorkspaceMemoryBridgeCommand(command, installedExecutable, workspaceRoot string) (bool, string) {
+	commands, err := shellCommandWords(command)
+	if err != nil || len(commands) == 0 || len(commands[0]) < 4 {
+		return false, ""
+	}
+	words := commands[0]
+	if words[1] != "workspace" || words[2] != "memory" || words[3] != "bridge" {
+		return false, ""
+	}
+	if len(commands) != 1 {
+		return true, "governed workspace memory bridge must be one exact simple command"
+	}
+	expected, err := filepath.Abs(filepath.Clean(installedExecutable))
+	if err != nil {
+		return true, "governed workspace memory bridge executable is invalid"
+	}
+	actual := strings.Trim(words[0], "\"'")
+	if !filepath.IsAbs(actual) {
+		return true, "governed workspace memory bridge requires the exact installed executable"
+	}
+	actual, err = filepath.Abs(filepath.Clean(actual))
+	if err != nil || actual != expected {
+		return true, "governed workspace memory bridge requires the exact installed executable"
+	}
+	if len(words) < 5 {
+		return true, "governed workspace memory bridge operation is missing"
+	}
+	operation := words[4]
+	if operation != "inspect" && operation != "preview" && operation != "apply" {
+		return true, "governed workspace memory bridge operation is invalid"
+	}
+	values := map[string]string{}
+	booleans := map[string]bool{}
+	for index := 5; index < len(words); index++ {
+		name := words[index]
+		if name == "--attest-target-scope" || name == "--confirm" {
+			if booleans[name] {
+				return true, "governed workspace memory bridge contains a duplicate flag"
+			}
+			booleans[name] = true
+			continue
+		}
+		if name != "--runtime" && name != "--workspace" && name != "--candidate" && name != "--candidates" {
+			return true, "governed workspace memory bridge contains an unsupported flag"
+		}
+		if index+1 >= len(words) || strings.HasPrefix(words[index+1], "--") || values[name] != "" {
+			return true, "governed workspace memory bridge contains a missing or duplicate flag value"
+		}
+		values[name] = words[index+1]
+		index++
+	}
+	if values["--runtime"] != "claude" && values["--runtime"] != "codex" {
+		return true, "governed workspace memory bridge runtime is invalid"
+	}
+	target, targetErr := filepath.Abs(filepath.Clean(values["--workspace"]))
+	expectedTarget, expectedErr := filepath.Abs(filepath.Clean(workspaceRoot))
+	if targetErr != nil || expectedErr != nil || target != expectedTarget {
+		return true, "governed workspace memory bridge target must be the exact enrolled worktree"
+	}
+	validID := func(value string) bool {
+		if len(value) != 32 || strings.ToLower(value) != value {
+			return false
+		}
+		_, decodeErr := hex.DecodeString(value)
+		return decodeErr == nil
+	}
+	switch operation {
+	case "inspect":
+		if values["--candidate"] != "" || values["--candidates"] != "" || len(booleans) != 0 {
+			return true, "governed workspace memory bridge inspect grammar is invalid"
+		}
+	case "preview":
+		if !validID(values["--candidate"]) || values["--candidates"] != "" || len(booleans) != 0 {
+			return true, "governed workspace memory bridge preview grammar is invalid"
+		}
+	case "apply":
+		ids := splitCommaList(values["--candidates"])
+		if values["--candidate"] != "" || len(ids) == 0 || len(ids) > 16 || !booleans["--attest-target-scope"] || !booleans["--confirm"] {
+			return true, "governed workspace memory bridge apply grammar is invalid"
+		}
+		seen := map[string]bool{}
+		for _, id := range ids {
+			if !validID(id) || seen[id] {
+				return true, "governed workspace memory bridge candidate selection is invalid"
+			}
+			seen[id] = true
+		}
+	}
+	return true, ""
 }
 
 func governedWorkspaceAccessCommand(command, installedExecutable, workspaceRoot string) (bool, string) {

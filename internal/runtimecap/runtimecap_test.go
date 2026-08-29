@@ -85,6 +85,32 @@ func TestGovernedCrossWorkspaceContextCannotBecomeOneSided(t *testing.T) {
 	t.Fatal("governed_cross_workspace_context capability is missing")
 }
 
+func TestLegacyHubMemoryBridgeCannotBecomeOneSided(t *testing.T) {
+	manifest, err := baseruntime.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, capability := range manifest.Capabilities {
+		if capability.ID != "legacy_hub_memory_bridge" {
+			continue
+		}
+		claude := capability.Runtimes["claude"]
+		codex := capability.Runtimes["codex"]
+		if claude.State != "operational_beta" || codex.State != "operational_beta" || !claude.Configured || !codex.Configured || claude.NativeQualified || codex.NativeQualified {
+			t.Fatalf("legacy Hub memory bridge drifted: claude=%#v codex=%#v", claude, codex)
+		}
+		for _, mechanism := range []string{claude.Mechanism, codex.Mechanism} {
+			for _, required := range []string{"explicit", "attested", "L1"} {
+				if !strings.Contains(mechanism, required) {
+					t.Fatalf("mechanism %q omits %q", mechanism, required)
+				}
+			}
+		}
+		return
+	}
+	t.Fatal("legacy_hub_memory_bridge capability is missing")
+}
+
 func TestClaudeLifecycleIsOperationalBetaWhileQualificationRemainsTelemetry(t *testing.T) {
 	manifest, err := baseruntime.Manifest()
 	if err != nil {

@@ -82,6 +82,10 @@ An LLM may compress, group and propose durable evidence, but it does not choose 
 - Workspace memory is isolated by workspace identity and must never be copied into the managed bundle.
 - Raw prompts, credentials, client files, client-identifying examples and unsanitized artifacts are not valid shared-memory inputs.
 - Updates may migrate memory through versioned, reversible migrations but never replace it with bundle defaults.
+- Legacy Hub Markdown may enter one exact canonical workspace only through the
+  explicit, owner-attested bridge in Spec 058. The bridge preserves source
+  bytes, snapshots only selected opaque candidates and activates them as L1;
+  legacy folder labels never confer L2, L3 or lifetime authority.
 
 Owner self learning is a separate local surface, not an additional memory
 layer: canonical Owner Context facets remain authoritative, while a
@@ -219,6 +223,8 @@ rollup carries two weekly L3 generations under
 - equivalent policy behavior on Windows and macOS;
 - Claude and Codex conformance fixtures for context injection and failure reporting.
 - concurrent-cycle exclusion and fail-closed leftover-lock behavior.
+- explicit legacy-Hub import attestation, source preservation, target isolation,
+  bounded historical idempotency and L1-only promotion-entry behavior.
 
 ## Deferred decisions
 

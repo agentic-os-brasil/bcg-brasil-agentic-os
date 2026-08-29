@@ -5,7 +5,10 @@ description: Run or inspect professional memory consolidation through the BCG Br
 
 # Dream Memory
 
-Operate directly on the workspace memory tree under `data/memory/` (memória recente, memória semanal, memória de médio prazo e memória permanente). All reads and writes go through the Read, Write and Edit tools, following the invariants below.
+Use the canonical memory engine for the active workspace. In the Maestro-folder
+Hub, the existing `data/memory/` Markdown tree remains the legacy owner-curated
+surface. In an enrolled direct repository, generated memory is private and
+workspace-scoped; never approximate it with repository files or direct edits.
 
 ## Interaction profile
 
@@ -43,6 +46,26 @@ If the cycle fails or the memory tree is missing, report the failure and delete 
 7. If the required policy or budget files are missing, report the capability as unavailable rather than emulating dreaming with ad-hoc edits.
 8. **Marker cleanup (auto-trigger only):** if `data/memory/.dream-requested` exists at invocation time, delete it after the cycle — success or failure — so the trigger fires only once per session stop.
 
+## Explicit legacy Hub bridge
+
+When the owner wants existing Hub-wide Markdown memory available in one direct
+repository, do not copy the tree and do not treat its folder names as canonical
+promotion authority:
+
+1. run `workspace memory bridge inspect` for the exact enrolled workspace and
+   present the opaque layer/size metadata;
+2. use `workspace memory bridge preview` only for candidates the owner chooses,
+   preserving the bounded preview;
+3. ask the owner to confirm that the selected content belongs in that exact
+   workspace and contains no credentials, secrets or unauthorized material; and
+4. only then apply the selected IDs with `--attest-target-scope --confirm`.
+
+Every selected legacy layer enters canonical L1. Weekly, medium-term and
+lifetime promotion can happen only through normal dreaming and eligibility.
+The source files remain byte-identical, imports do not synchronize, and a retry
+of the same committed selection is idempotent. Never reveal legacy filenames or
+local paths from candidate metadata.
+
 ## Invariants
 
 - O ciclo diário não pode escrever na memória semanal, memória de médio prazo ou memória permanente.
@@ -57,4 +80,8 @@ If the cycle fails or the memory tree is missing, report the failure and delete 
 
 ## Current delivery boundary
 
-The managed bundle contains this canonical skill and the memory capacity and policy contracts under `data/memory/`. If those files are absent in the current workspace, report dreaming as unavailable and point the user at the setup skill rather than claim execution.
+The managed bundle contains this canonical skill and the memory capacity and
+policy contracts. Legacy Hub files remain under `data/memory/`; canonical direct
+memory remains below its private workspace authority. If the applicable policy
+or authority is absent, report dreaming as unavailable and point the user at the
+setup skill rather than claim execution.

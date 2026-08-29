@@ -231,16 +231,26 @@ func (engine *Engine) dreamDaily(ctx context.Context, workspaceID string, day ti
 		return DreamResult{}, err
 	}
 	fingerprint := engine.sourceFingerprint("daily", sources)
-	if existing, _, err := engine.readArtifactByKey(workspaceID, "L1/"+period); err == nil && engine.validateArtifact(existing) == nil && existing.WorkspaceID == workspaceID && existing.Layer == "L1" && existing.Period == period && existing.SourceFingerprint == fingerprint && existing.SynthesizerID == engine.SynthesizerID {
-		return DreamResult{Cycle: "daily", Period: period, SourceFingerprint: fingerprint, Skipped: true}, nil
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return DreamResult{}, err
+	var existing *Artifact
+	if active, _, readErr := engine.readArtifactByKey(workspaceID, "L1/"+period); readErr == nil {
+		existing = &active
+		if engine.validateArtifact(active) == nil && active.WorkspaceID == workspaceID && active.Layer == "L1" && active.Period == period && active.SourceFingerprint == fingerprint && active.SynthesizerID == engine.SynthesizerID {
+			return DreamResult{Cycle: "daily", Period: period, SourceFingerprint: fingerprint, Skipped: true}, nil
+		}
+	} else if !errors.Is(readErr, os.ErrNotExist) {
+		return DreamResult{}, readErr
 	}
 	content, err := engine.Synthesizer.Synthesize(ctx, SynthesisRequest{Cycle: "daily", TargetLayer: "L1", WorkspaceID: workspaceID, Period: period, Sources: sources})
 	if err != nil {
 		return DreamResult{}, fmt.Errorf("synthesize L1: %w", err)
 	}
 	artifact := engine.newArtifact(workspaceID, "L1", period, fingerprint, sources, content)
+	if existing != nil {
+		if imported, provenance := legacyHubImportedContinuation(*existing); imported != "" {
+			artifact.Content = strings.TrimSpace(artifact.Content) + "\n\n" + imported
+			artifact.Sources = appendUniqueSourceRefs(artifact.Sources, provenance)
+		}
+	}
 	if err := engine.activate(workspaceID, []Artifact{artifact}); err != nil {
 		return DreamResult{}, err
 	}
