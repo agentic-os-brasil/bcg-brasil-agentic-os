@@ -27,6 +27,33 @@ func TestCodexNativePayloadAndOutputsAreAdapterOwned(t *testing.T) {
 	}
 }
 
+func TestCodexReceiptsCoverContextAndGuardWithoutPayloadContent(t *testing.T) {
+	input, err := ParseReader(strings.NewReader(`{"session_id":"session-a","tool_use_id":"tool-a","tool_name":"Bash","prompt":"private prompt","tool_input":{"command":"git reset --hard HEAD"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []string{lifecycle.SessionStart, lifecycle.ContextInject, lifecycle.PreActionGuard} {
+		receipt, receiptErr := Receipt(event, input)
+		if receiptErr != nil {
+			t.Fatalf("%s receipt: %v", event, receiptErr)
+		}
+		encoded, marshalErr := json.Marshal(receipt)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if receipt.Event != event || receipt.Runtime != "codex" || receipt.Provenance != lifecycle.AdapterCommand ||
+			strings.Contains(string(encoded), "private prompt") || strings.Contains(string(encoded), "reset --hard") {
+			t.Fatalf("unsafe %s receipt: %s", event, encoded)
+		}
+		if event == lifecycle.PreActionGuard && receipt.ToolName != "Bash" {
+			t.Fatalf("guard receipt lost bounded tool name: %#v", receipt)
+		}
+		if event == lifecycle.PreActionGuard && len(receipt.ActionSHA256) != 64 {
+			t.Fatalf("guard receipt did not bind the action by digest: %#v", receipt)
+		}
+	}
+}
+
 func TestCodexGuardLeavesOrdinaryShellPipelinesToNativePermissionFlow(t *testing.T) {
 	output, err := Guard(NativeInput{ToolName: "Bash", ToolInput: struct {
 		Command string `json:"command"`

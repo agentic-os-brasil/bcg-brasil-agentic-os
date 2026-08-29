@@ -8,12 +8,15 @@ Este é seu OS pessoal para trabalho no BCG Brasil. Ele roda dentro do Claude Co
 2. `File > Open folder…` e escolher a pasta `Maestro/`. (Alternativa: arrastar a pasta para dentro do Claude Code, mas o "Open folder" é mais confiável no Windows.)
 3. Aguardar a primeira sessão iniciar. O Maestro se apresenta sozinho.
 
-Não precisa instalar nada, não precisa de terminal, não precisa de conta extra. Só o Claude Code.
+No modo Hub, não precisa instalar nada nem usar terminal: o bootstrapper e o
+control plane já vêm no ZIP. Uma projeção direta em repositório/worktree é
+opcional e sempre explícita.
 
 ## O que tem dentro da pasta
 
 - **`data/`** — sua área. Memória, agentes, projetos. **Nunca é sobrescrita em updates.**
 - **`.claude/`, `bundles/`, `CLAUDE.md`** — o núcleo do Maestro. Vem pronto.
+- **`managed/`** — bootstrapper, manifesto e CLI localmente verificado. Não edite.
 - **`README-INSTALL.md`** — passo a passo detalhado + solução de problemas.
 - **`VERSION`** — versão instalada.
 
@@ -21,8 +24,9 @@ Não precisa instalar nada, não precisa de terminal, não precisa de conta extr
 
 Você recebe um email do time BCG Brasil AI com o link do ZIP novo. **Não** extraia
 por cima desta pasta — isso mistura versões e pode quebrar. Siga o ritual em
-`README-INSTALL.md`: ele preserva sua memória e mantém uma cópia de segurança
-da versão anterior até você confirmar que a nova está OK.
+`README-INSTALL.md`: ele preserva sua memória, orienta o reparo de projeções
+diretas e mantém uma cópia de segurança da versão anterior até você confirmar
+que a nova está OK.
 
 ## Ajuda
 

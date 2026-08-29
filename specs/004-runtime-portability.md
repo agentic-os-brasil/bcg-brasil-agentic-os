@@ -87,6 +87,41 @@ A versioned manifest is the single source for capability ID, semantic contract, 
 
 Every canonical capability requires conformance fixtures against both adapters. Documentation may render the matrix, but must not become a separately maintained source of truth.
 
+The development gate exercises runtime parity at three levels:
+
+1. the public direct-workspace lifecycle (`enroll`, `status`, `repair`, and
+   idempotent `remove`) must succeed for both runtimes;
+2. the five shared lifecycle semantics (`session_start`, `context_inject`,
+   `pre_action_guard`, `post_action_observe`, and `stop_finalize`) must produce
+   equivalent observable outcomes, while canonical skill bodies and selection
+   policy hashes remain identical; and
+3. the latest bounded Claude and Codex native evidence for the current release
+   must be passing for the same OS, architecture, release and exact artifact
+   SHA-256, with every shared qualification check passing on both sides.
+
+Parity tests include negative fixtures that remove one shared event or check
+from only one runtime. Those fixtures must be rejected, proving that the gate
+itself fails on one-sided support. Native trigger shapes, output envelopes and
+receipt mechanics may differ only where the executable lifecycle matrix or an
+accepted decision says so. Claude-only `subagent_start` and `subagent_stop`,
+and Codex-only metadata required to bind its native guard evidence, are explicit
+extensions rather than shared-parity requirements.
+
+Direct-repository Session Start parity also covers the canonical Maestro
+identity directive and the presence of the same reviewed, non-sensitive owner
+projection for Claude and Codex. A mutation that removes either marker from
+only one runtime must fail, and neither runtime may expose the projection on a
+prompt hook or include sensitive/other-workspace content.
+
+The identity directive presents Maestro as a configured professional operating
+layer over the named host runtime, not as a replacement identity. Claude Code
+and Codex must remain explicit when identity, provenance or mechanics are
+relevant. Managed instructions may keep incidental detail concise, but cannot
+require concealment or misrepresentation of the provider, runtime, hooks,
+limitations or architecture. Native parity requires affirmative evidence of
+both layers and rejects prompt-injection/refusal language, including a quoted
+refusal that merely contains the word `Maestro`.
+
 ## Initial implementation
 
 `bundles/base/runtime/capabilities.json` is the versioned source of truth for

@@ -18,6 +18,9 @@ func TestInstallProjectsManagedNativeAgentsIdempotently(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.HasPrefix(string(caseBody), "---\n") {
+		t.Fatalf("Claude native agent frontmatter must start at byte zero: %q", caseBody[:min(len(caseBody), 48)])
+	}
 	if !strings.Contains(string(caseBody), "name: case-agent") || !strings.Contains(string(caseBody), "bounded_case_packet") {
 		t.Fatalf("case agent=%s", caseBody)
 	}

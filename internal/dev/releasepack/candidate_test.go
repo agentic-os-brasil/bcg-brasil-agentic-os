@@ -8,12 +8,13 @@ import (
 	"testing"
 )
 
-// skipIfBundleOnly skips the test when no CLI binary targets are configured,
-// i.e., when Maestro ships as a ZIP bundle only with no native binaries.
+// skipIfBundleOnly skips the closed-candidate target tests while that separate
+// factory is disabled. The local-beta platform ZIP factory still ships the
+// narrow installed CLI and has its own build/evaluation evidence.
 func skipIfBundleOnly(t *testing.T) {
 	t.Helper()
 	if len(candidateTargets) == 0 {
-		t.Skip("no binary targets in bundle-only distribution")
+		t.Skip("closed-candidate binary targets are disabled")
 	}
 }
 

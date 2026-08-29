@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Maestro release eval — loop-able QA harness for the shippable ZIP.
+# Maestro release eval — loop-able QA harness for a local-contract ZIP.
 #
 # Usage:
 #   installers/zip/eval-release.sh [--zip PATH] [--keep] [--verbose]
@@ -21,6 +21,9 @@ DIST_DIR="$REPO_ROOT/dist"
 ZIP_PATH=""
 KEEP_SCRATCH=0
 VERBOSE=0
+PORTABLE_TARGET_OS=""
+PORTABLE_TARGET_ARCH=""
+PORTABLE_CLI_PATH=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -125,6 +128,7 @@ REQUIRED_FILES=(
   "README-INSTALL.md"
   ".claude/settings.json"
   ".claude/hooks/first-run-scaffold.sh"
+  "managed/install-manifest.json"
   "bundles/base/skills/INDEX.md"
   "bundles/base/skills/catalog.json"
   "bundles/base/skills/agent-skill-policy.json"
@@ -137,6 +141,41 @@ for f in "${REQUIRED_FILES[@]}"; do
     fail "file missing: $f"
   fi
 done
+
+if python3 -m json.tool "$MAESTRO_DIR/managed/install-manifest.json" >/dev/null 2>&1; then
+  pass "managed/install-manifest.json is valid JSON"
+  PORTABLE_TARGET_OS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["target_os"])' "$MAESTRO_DIR/managed/install-manifest.json")
+  PORTABLE_TARGET_ARCH=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["target_arch"])' "$MAESTRO_DIR/managed/install-manifest.json")
+  PORTABLE_CLI_PATH=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["cli_path"])' "$MAESTRO_DIR/managed/install-manifest.json")
+  if [ -f "$MAESTRO_DIR/managed/$PORTABLE_CLI_PATH" ]; then
+    pass "installed CLI present at manifest path: managed/$PORTABLE_CLI_PATH"
+  else
+    fail "installed CLI missing at manifest path: managed/$PORTABLE_CLI_PATH"
+  fi
+  PORTABLE_BOOTSTRAPPER="managed/bcgos-bootstrap"
+  [ "$PORTABLE_TARGET_OS" = "windows" ] && PORTABLE_BOOTSTRAPPER="managed/bcgos-bootstrap.exe"
+  if [ -f "$MAESTRO_DIR/$PORTABLE_BOOTSTRAPPER" ]; then
+    pass "bootstrapper present: $PORTABLE_BOOTSTRAPPER"
+  else
+    fail "bootstrapper missing: $PORTABLE_BOOTSTRAPPER"
+  fi
+else
+  fail "managed/install-manifest.json is invalid JSON"
+fi
+
+if [ "$PORTABLE_TARGET_OS" = "darwin" ]; then
+  if ! command -v codesign >/dev/null 2>&1; then
+    fail "codesign is required to verify macOS portable signatures"
+  else
+    for executable in "managed/$PORTABLE_CLI_PATH" "managed/bcgos-bootstrap"; do
+      if codesign -d --verbose=4 "$MAESTRO_DIR/$executable" 2>&1 | grep -q '^Signature=adhoc$'; then
+        pass "$executable has Signature=adhoc"
+      else
+        fail "$executable must have Signature=adhoc"
+      fi
+    done
+  fi
+fi
 
 for d in "bundles/base/agents"; do
   if [ -d "$MAESTRO_DIR/$d" ] && [ -n "$(ls -A "$MAESTRO_DIR/$d" 2>/dev/null)" ]; then
@@ -253,6 +292,12 @@ if [ -f "$MAESTRO_DIR/data/.scaffold.log" ] && grep -q "DONE  marker written" "$
   pass "data/.scaffold.log has DONE line"
 else
   fail "data/.scaffold.log missing DONE line"
+fi
+
+if [ -f "$MAESTRO_DIR/data/install.json" ] && python3 -m json.tool "$MAESTRO_DIR/data/install.json" >/dev/null 2>&1; then
+  pass "bootstrap-first activation wrote private data/install.json"
+else
+  fail "bootstrap-first activation state missing or invalid"
 fi
 
 if [ -f "$MAESTRO_DIR/data/README.md" ] && grep -q "workspaces" "$MAESTRO_DIR/data/README.md"; then
@@ -1147,7 +1192,7 @@ phase "Phase 17 — Suggested skill ids resolve"
 SKILLS_ROOT="$MAESTRO_DIR/bundles/base/skills"
 if [ -d "$SKILLS_ROOT" ]; then
   # Slash-prefixed ids that are runtime commands rather than skills.
-  SLASH_ALLOWLIST=" clear help "
+  SLASH_ALLOWLIST=" clear help hooks "
   SLASH_BAD=0
   SLASH_CHECKED=0
   for skillmd in "$SKILLS_ROOT"/*/SKILL.md; do
@@ -1207,6 +1252,83 @@ else
 fi
 
 # --------------------------------------------------------------------------
+phase "Phase 19 — Transported direct Repo/Worktree control plane"
+# --------------------------------------------------------------------------
+
+DIRECT_CLI="$MAESTRO_DIR/managed/$PORTABLE_CLI_PATH"
+DIRECT_REPO="$SCRATCH_ROOT/direct-smoke-repository"
+HOST_TARGET_OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+HOST_TARGET_ARCH="$(uname -m)"
+[ "$HOST_TARGET_OS" = "darwin" ] || [ "$HOST_TARGET_OS" = "linux" ] || HOST_TARGET_OS=""
+[ "$HOST_TARGET_ARCH" = "x86_64" ] && HOST_TARGET_ARCH="amd64"
+[ "$HOST_TARGET_ARCH" = "aarch64" ] && HOST_TARGET_ARCH="arm64"
+if [ -z "$PORTABLE_CLI_PATH" ]; then
+  fail "transported CLI path unavailable because install manifest was invalid"
+elif [ "$PORTABLE_TARGET_OS" != "$HOST_TARGET_OS" ] || [ "$PORTABLE_TARGET_ARCH" != "$HOST_TARGET_ARCH" ]; then
+  skip "direct Repo/Worktree execution requires a matching host ($PORTABLE_TARGET_OS/$PORTABLE_TARGET_ARCH artifact on $HOST_TARGET_OS/$HOST_TARGET_ARCH host)"
+elif ! command -v git >/dev/null 2>&1; then
+  fail "Git missing — direct Repo/Worktree smoke test cannot run"
+elif [ ! -x "$DIRECT_CLI" ]; then
+  fail "transported CLI is not executable on this host"
+elif ! mkdir -p "$DIRECT_REPO" || ! git -C "$DIRECT_REPO" init -q; then
+  fail "could not create direct Repo/Worktree smoke repository"
+else
+  for runtime_name in claude codex; do
+    ENROLL_OUT="$SCRATCH_ROOT/direct-$runtime_name-enroll.json"
+    STATUS_OUT="$SCRATCH_ROOT/direct-$runtime_name-status.json"
+    if "$DIRECT_CLI" workspace enroll --runtime "$runtime_name" "$DIRECT_REPO" >"$ENROLL_OUT" 2>/dev/null &&
+       grep -q '"state": "enrolled"' "$ENROLL_OUT"; then
+      pass "transported CLI enrolls direct $runtime_name repository"
+    else
+      fail "transported CLI failed direct $runtime_name enrollment"
+      continue
+    fi
+    if "$DIRECT_CLI" workspace status --runtime "$runtime_name" "$DIRECT_REPO" >"$STATUS_OUT" 2>/dev/null &&
+       grep -q '"state": "enrolled"' "$STATUS_OUT" &&
+       ! grep -q "$SCRATCH_ROOT" "$STATUS_OUT"; then
+      pass "direct $runtime_name status is enrolled and path-free"
+    else
+      fail "direct $runtime_name status failed or leaked a private path"
+    fi
+    if [ -z "$(git -C "$DIRECT_REPO" status --porcelain)" ]; then
+      pass "direct $runtime_name projection keeps Git clean"
+    else
+      fail "direct $runtime_name projection dirtied Git"
+    fi
+  done
+  if "$DIRECT_CLI" workspace status --runtime claude "$DIRECT_REPO" >"$SCRATCH_ROOT/direct-claude-coexist.json" 2>/dev/null &&
+     grep -q '"state": "enrolled"' "$SCRATCH_ROOT/direct-claude-coexist.json" &&
+     "$DIRECT_CLI" workspace status --runtime codex "$DIRECT_REPO" >"$SCRATCH_ROOT/direct-codex-coexist.json" 2>/dev/null &&
+     grep -q '"state": "enrolled"' "$SCRATCH_ROOT/direct-codex-coexist.json"; then
+    pass "Claude and Codex projections coexist in one direct checkout"
+  else
+    fail "direct runtime projections did not remain simultaneously enrolled"
+  fi
+  REMOVE_OUT="$SCRATCH_ROOT/direct-claude-remove.json"
+  if "$DIRECT_CLI" workspace remove --runtime claude "$DIRECT_REPO" >"$REMOVE_OUT" 2>/dev/null &&
+     grep -q '"state": "removed"' "$REMOVE_OUT"; then
+    pass "transported CLI removes direct claude projection"
+  else
+    fail "transported CLI failed direct claude removal"
+  fi
+  if "$DIRECT_CLI" workspace status --runtime codex "$DIRECT_REPO" >"$SCRATCH_ROOT/direct-codex-survives.json" 2>/dev/null &&
+     grep -q '"state": "enrolled"' "$SCRATCH_ROOT/direct-codex-survives.json"; then
+    pass "Codex projection survives independent Claude removal"
+  else
+    fail "Codex projection was lost during Claude removal"
+  fi
+  for runtime_name in codex; do
+    REMOVE_OUT="$SCRATCH_ROOT/direct-$runtime_name-remove.json"
+    if "$DIRECT_CLI" workspace remove --runtime "$runtime_name" "$DIRECT_REPO" >"$REMOVE_OUT" 2>/dev/null &&
+       grep -q '"state": "removed"' "$REMOVE_OUT"; then
+      pass "transported CLI removes direct $runtime_name projection"
+    else
+      fail "transported CLI failed direct $runtime_name removal"
+    fi
+  done
+fi
+
+# --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
 
@@ -1227,5 +1349,5 @@ if [ "$FAIL_COUNT" -gt 0 ]; then
 fi
 
 echo ""
-echo "All checks green. ZIP is shippable."
+echo "All local checks green. ZIP is locally contract-ready; signing, native qualification and release readiness remain separate."
 exit 0

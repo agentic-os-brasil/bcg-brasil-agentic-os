@@ -137,7 +137,7 @@ func Uninstall(workspace string) (Status, error) {
 		if err != nil {
 			return Status{}, err
 		}
-		if !bytes.HasPrefix(body, []byte(managedMarker)) {
+		if !hasManagedMarker(body) {
 			return Status{}, fmt.Errorf("Claude agent path %s is user-owned; refusing to remove it", filepath.Join(rootPath, name))
 		}
 		if err := root.Remove(name); err != nil {
@@ -164,8 +164,25 @@ func render(item definition) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	header := managedMarker + "---\nname: " + item.ID + "\ndescription: " + item.Description + "\ntools: " + item.Tools + "\npermissionMode: " + item.PermissionMode + "\n---\n\n"
+	header := "---\nname: " + item.ID + "\ndescription: " + item.Description + "\ntools: " + item.Tools + "\npermissionMode: " + item.PermissionMode + "\n---\n" + managedMarker + "\n"
 	return append([]byte(header), contract...), nil
+}
+
+func hasManagedMarker(body []byte) bool {
+	if bytes.HasPrefix(body, []byte(managedMarker)) {
+		// Accept the unreleased legacy projection so explicit repair and removal
+		// remain safe after moving the marker behind native YAML frontmatter.
+		return true
+	}
+	if !bytes.HasPrefix(body, []byte("---\n")) {
+		return false
+	}
+	frontmatterEnd := bytes.Index(body[len("---\n"):], []byte("\n---\n"))
+	if frontmatterEnd < 0 {
+		return false
+	}
+	afterFrontmatter := len("---\n") + frontmatterEnd + len("\n---\n")
+	return bytes.HasPrefix(body[afterFrontmatter:], []byte(managedMarker))
 }
 
 func writeAtomic(root *os.Root, name string, body []byte) error {
@@ -276,7 +293,7 @@ func validateManaged(root *os.Root, action string) error {
 		if err != nil {
 			return err
 		}
-		if !bytes.HasPrefix(body, []byte(managedMarker)) {
+		if !hasManagedMarker(body) {
 			return fmt.Errorf("Claude agent path %s is user-owned; refusing to %s it", name, action)
 		}
 	}

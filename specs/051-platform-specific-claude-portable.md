@@ -1,8 +1,10 @@
 # Spec 051 - Platform-specific Claude portable distribution
 
-Status: accepted for implementation as a controlled local-beta distribution
-contract. Production native signing, clean-device acceptance and publication
-remain separate release gates.
+Status: accepted target contract. The current Hub-compatible ZIP factory
+implements only the bounded local activation/direct-worktree vertical recorded
+by DRWT and Spec 055. Closed-release parity, Ed25519 authority verification,
+attended native qualification, production signing, clean-device acceptance and
+publication remain unimplemented separate gates.
 
 ## Objective
 
@@ -39,6 +41,29 @@ cross-platform fallback, binary conversion, emulation and execution of the
 other platform's payload are forbidden. macOS amd64 may be added later as
 another explicit platform archive; it is not silently activated from the
 arm64 package.
+
+### Current Hub-compatible vertical
+
+The existing shell-distributed Hub predates the closed-release layout above and
+uses a single top-level `Maestro/` directory containing sibling `managed/` and
+eventually-created `data/` roots. DRWT deliberately preserves that installed
+Hub experience while direct repository/worktree entry is introduced. The
+current local factory therefore uses the same two target-specific archive names
+but transports:
+
+- the existing `Maestro/` Hub template and complete platform-neutral bundles;
+- `managed/bcgos-bootstrap[.exe]`;
+- `managed/bin/bcgos[.exe]`; and
+- `managed/install-manifest.json` with target, version, CLI path and SHA-256.
+
+The bootstrapper validates those local fields before writing private activation
+state under `data/`. This is a small, reversible implementation vertical; it
+does not satisfy the closed-release, registry, detached-signature, package
+parity, attended confirmation or native-device evidence required by the rest of
+this spec. In particular, a SHA-256 sidecar and an ad-hoc macOS signature are
+not Ed25519 release authentication, Developer ID/notarization or Authenticode.
+The factory and docs must label these artifacts `local-beta-unsigned` and must
+not promote the full Spec 051 status from this local evidence.
 
 The package may move before activation. After activation, its top-level
 directory is fixed because workspace hooks bind the installed CLI by absolute
@@ -160,7 +185,9 @@ Authenticode.
 The Windows local-beta factory accepts native Authenticode status exactly
 `NotSigned`. The macOS local-beta factory requires an exact ad-hoc Mach-O
 signature container for the bootstrapper and CLI. When built on macOS, native
-`codesign` must independently report `Signature=adhoc`. A valid Developer ID
+`codesign` is a mandatory factory dependency and must independently report
+`Signature=adhoc` for both executables before archive publication. The release
+evaluator repeats the same native assertion for a macOS archive. A valid Developer ID
 signature, an invalid signature, an unsigned executable, a partial signature or
 disagreement between the structural and native probes is rejected. Ad-hoc
 signing prevents Apple Silicon from killing the technical-beta executable; it

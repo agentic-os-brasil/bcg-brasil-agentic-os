@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "result": "pass",
+  "observed_at": "2026-08-26T00:58:08Z",
+  "runtime": "codex",
+  "runtime_version": "codex-cli 0.149.1",
+  "os": "darwin",
+  "arch": "arm64",
+  "release_version": "0.1.11",
+  "artifact_sha256": "c676e4d2cc8797edb3b435e19d3c58400ba07b34d53951f2230b98f55ddaa100",
+  "model": "gpt-5.6-sol",
+  "runtime_config_sha256": "a98c7c33e14c9657b80b7bdd9389ad9f6f2a8c6924c0f5b842138fa33a7072e5",
+  "runtime_config_final_sha256": "a98c7c33e14c9657b80b7bdd9389ad9f6f2a8c6924c0f5b842138fa33a7072e5",
+  "checks": {
+    "agents_instructions_discovered": true,
+    "continuity_native_file_edit": true,
+    "continuity_no_external_tools": true,
+    "dangerous_git_denied": true,
+    "direct_enrollment": true,
+    "doctor_green_verdict": true,
+    "doctor_skill_discovered": true,
+    "doctor_skill_invoked": true,
+    "doctor_skill_read": true,
+    "doctor_status_checked": true,
+    "doctor_version_checked": true,
+    "doctor_version_matches": true,
+    "guard_action_digest_matches": true,
+    "guard_receipt_observed": true,
+    "hook_config_PostToolUse": true,
+    "hook_config_PreToolUse": true,
+    "hook_config_SessionStart": true,
+    "hook_config_Stop": true,
+    "hook_config_UserPromptSubmit": true,
+    "hub_bootstrap": true,
+    "lifecycle_context_injected": true,
+    "projection_git_clean": true,
+    "projection_removal": true,
+    "receipt_post_action_observe": true,
+    "receipt_stop_finalize": true,
+    "removal_git_clean": true,
+    "runtime_config_stable": true,
+    "runtime_initialization_clean": true,
+    "second_session_continuity": true,
+    "workspace_write": true
+  },
+  "receipt_counts": {
+    "post_action_observe": 15,
+    "stop_finalize": 3
+  },
+  "stream_item_counts": {
+    "continuity:agent_message": 1,
+    "continuity:error": 2,
+    "continuity:file_change": 1,
+    "guard:agent_message": 2,
+    "guard:error": 2
+  },
+  "notes": [
+    "synthetic repository only",
+    "raw prompts, paths, tool payloads and session identifiers were not persisted",
+    "Codex home was isolated to a temporary auth copy and minimal hook config; user instructions, skills, plugins, MCP servers and configuration were not loaded, and post-initialization config drift was denied",
+    "hook trust bypass was limited to inspected synthetic qualification projections; approvals and workspace-write sandbox remained active"
+  ]
+}

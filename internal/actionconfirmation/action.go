@@ -129,10 +129,14 @@ func canonicalShellAction(command string) (*Action, error) {
 	executable := strings.TrimPrefix(strings.TrimPrefix(fields[0], "/usr/bin/"), "/opt/homebrew/bin/")
 	switch executable {
 	case "git":
-		if fields[1] != "push" {
+		arguments, err := gitCommandArguments(fields[1:])
+		if err != nil {
+			return nil, err
+		}
+		if len(arguments) == 0 || arguments[0] != "push" {
 			return nil, nil
 		}
-		remote, ref, parseErr := gitPushTarget(fields[2:])
+		remote, ref, parseErr := gitPushTarget(arguments[1:])
 		if parseErr != nil {
 			return nil, parseErr
 		}
@@ -144,6 +148,81 @@ func canonicalShellAction(command string) (*Action, error) {
 	default:
 		return nil, nil
 	}
+}
+
+func gitCommandArguments(arguments []string) ([]string, error) {
+	aliases := map[string]string{}
+	for index := 0; index < len(arguments); {
+		argument := arguments[index]
+		if argument == "--" {
+			return resolveGitAlias(arguments[index+1:], aliases, 0)
+		}
+		if !strings.HasPrefix(argument, "-") {
+			return resolveGitAlias(arguments[index:], aliases, 0)
+		}
+		switch argument {
+		case "-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env":
+			if index+1 >= len(arguments) {
+				return nil, errors.New("git global option is missing its value")
+			}
+			if argument == "-c" {
+				captureGitAlias(arguments[index+1], aliases)
+			}
+			if argument == "--config-env" && strings.HasPrefix(strings.ToLower(arguments[index+1]), "alias.") {
+				return nil, errors.New("environment-backed Git alias is outside the bounded external-action grammar")
+			}
+			index += 2
+			continue
+		}
+		if strings.HasPrefix(argument, "--config-env=") && strings.HasPrefix(strings.ToLower(strings.TrimPrefix(argument, "--config-env=")), "alias.") {
+			return nil, errors.New("environment-backed Git alias is outside the bounded external-action grammar")
+		}
+		if strings.HasPrefix(argument, "--git-dir=") || strings.HasPrefix(argument, "--work-tree=") || strings.HasPrefix(argument, "--namespace=") || strings.HasPrefix(argument, "--exec-path=") || strings.HasPrefix(argument, "--config-env=") {
+			index++
+			continue
+		}
+		switch argument {
+		case "-p", "--paginate", "-P", "--no-pager", "--bare", "--no-replace-objects", "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs", "--icase-pathspecs", "--no-optional-locks", "--no-lazy-fetch", "--no-advice", "--version", "--help":
+			index++
+			continue
+		}
+		for _, remaining := range arguments[index+1:] {
+			if strings.EqualFold(remaining, "push") {
+				return nil, errors.New("Git push is outside the bounded external-action grammar")
+			}
+		}
+		return nil, nil
+	}
+	return resolveGitAlias(nil, aliases, 0)
+}
+
+func captureGitAlias(config string, aliases map[string]string) {
+	key, value, ok := strings.Cut(config, "=")
+	key = strings.ToLower(strings.TrimSpace(key))
+	if ok && strings.HasPrefix(key, "alias.") && len(strings.TrimPrefix(key, "alias.")) > 0 {
+		aliases[strings.TrimPrefix(key, "alias.")] = value
+	}
+}
+
+func resolveGitAlias(arguments []string, aliases map[string]string, depth int) ([]string, error) {
+	if len(arguments) == 0 || depth > 8 {
+		if depth > 8 {
+			return nil, errors.New("Git alias expansion exceeds the bounded external-action grammar")
+		}
+		return arguments, nil
+	}
+	expansion, ok := aliases[strings.ToLower(arguments[0])]
+	if !ok {
+		return arguments, nil
+	}
+	if strings.HasPrefix(strings.TrimSpace(expansion), "!") {
+		return nil, errors.New("shell-backed Git alias is outside the bounded external-action grammar")
+	}
+	fields, err := splitSimpleCommand(expansion)
+	if err != nil || len(fields) == 0 {
+		return nil, errors.New("Git alias is outside the bounded external-action grammar")
+	}
+	return resolveGitAlias(append(fields, arguments[1:]...), aliases, depth+1)
 }
 
 func gitPushTarget(arguments []string) (string, string, error) {

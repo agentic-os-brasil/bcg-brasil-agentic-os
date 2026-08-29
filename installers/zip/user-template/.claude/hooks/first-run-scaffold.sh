@@ -34,6 +34,25 @@ log_line() {
   ( printf '%s  %s\n' "$TS" "$1" >> "$LOG" ) 2>/dev/null
 }
 
+# A platform ZIP carries a locally verifiable installed control plane under
+# managed/. Source templates do not carry the activation manifest and skip
+# this block. The receipt is deliberately discarded: private activation state
+# lives only under data/, never in hook additionalContext. A verification
+# failure is visible on stderr but stays fail-open for the legacy Hub shell
+# runtime; the unverified CLI itself remains unusable through enrollment.
+if [ -f "$PROJECT_DIR/managed/install-manifest.json" ]; then
+  BOOTSTRAPPER="$PROJECT_DIR/managed/bcgos-bootstrap"
+  [ -x "$PROJECT_DIR/managed/bcgos-bootstrap.exe" ] && \
+    BOOTSTRAPPER="$PROJECT_DIR/managed/bcgos-bootstrap.exe"
+  if [ -x "$BOOTSTRAPPER" ]; then
+    "$BOOTSTRAPPER" activate \
+      --managed-root "$PROJECT_DIR/managed" \
+      --data-root "$DATA_DIR" >/dev/null
+  else
+    printf 'maestro activation: bootstrapper missing or not executable; Hub remains fail-open and direct enrollment is unavailable.\n' >&2
+  fi
+fi
+
 # ---------------------------------------------------------------------------
 # Lifetime eligibility policy — required by dream-memory before it may promote
 # anything into the permanent memory tier. dream-memory/SKILL.md step 5 stops

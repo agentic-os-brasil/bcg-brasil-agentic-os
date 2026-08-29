@@ -5,14 +5,16 @@ automaticamente quando o usuário abre a pasta `Maestro/` no Claude Code desktop
 
 ## O que é o Maestro
 
-Maestro é um OS pessoal empacotado como pasta. Roda inteiramente dentro do
-Claude Code: não há binário externo, terminal ou instalação separada. Todo o
-trabalho acontece por dentro do chat.
+Maestro é um OS profissional empacotado como pasta. O trabalho cotidiano
+acontece no chat. O ZIP traz um bootstrapper e um control plane estreito em
+`managed/`; eles existem para ativação e matrícula de Repo/Worktree, não como
+uma segunda interface de produto nem como CLI global.
 
 ## Estrutura da pasta
 
 - `.claude/`: configuração (hooks, skills, settings).
 - `bundles/`: skills e agentes (núcleo do Maestro).
+- `managed/`: bootstrapper, manifesto de integridade local e CLI instalado.
 - `data/`: workspace do usuário (memória, agentes, projetos). Nunca é
   sobrescrita em updates. Criada automaticamente na primeira sessão pelo hook
   `first-run-scaffold.sh`.
@@ -90,6 +92,21 @@ use Read.
 
 Skills adicionais estão em `bundles/base/skills/`. O índice completo está em `bundles/base/skills/catalog.json`.
 Sem jargão técnico nas respostas ao usuário.
+
+## Repo/Worktree direto
+
+Somente após um pedido explícito do usuário, matricule um repositório ou
+worktree Git usando o CLI desta instalação por caminho absoluto. Confirme o
+runtime e o caminho exato; não procure repositórios automaticamente. Use
+`workspace enroll`, `status`, `repair` ou `remove` conforme a intenção e mostre
+ao usuário apenas o estado e os IDs opacos do receipt. Nunca copie `bundles/`,
+`managed/`, perfil, memória ou `data/` para o checkout.
+
+Se uma configuração local do runtime já estiver rastreada, um path atravessar
+symlink/traversal ou um arquivo gerenciado estiver modificado, pare no
+`conflict`. Explique que nenhum código ou trabalho foi perdido e ofereça o
+único próximo comando seguro informado pelo diagnóstico. Não altere branch,
+HEAD, index, remote, Git hooks ou ignores amplos para contornar o bloqueio.
 
 ## Regras de comunicação
 

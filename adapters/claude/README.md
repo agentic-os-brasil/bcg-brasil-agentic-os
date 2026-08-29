@@ -11,13 +11,13 @@ implemented protected-root, external-action and managed-agent scope policies.
 PostToolUse is asynchronous; Stop is synchronous so it can block an incomplete
 selected strategic route. All observations emit metadata-only local receipts.
 
-This establishes configured wiring and local contract behavior, not native
-qualification. Evidence snapshot: `as_of: 2026-08-06` · source baseline:
+This establishes configured wiring and local contract behavior. Native
+qualification remains tuple-specific. Evidence snapshot: `as_of: 2026-08-24` · source baseline:
 `43e86494b2e32ca8eccece843514b75d2c98ffa7` (`origin/main` at review start;
-candidate refresh at `012c08f`) · runtime evidence: no
-reproducible in-repo runtime-version artifact or qualifying fresh session is
-attached. This adapter is not `native-qualified`, `release-ready` or
-`pilot-ready`.
+candidate refresh at `012c08f`) · runtime evidence: Claude Code 2.1.203 on
+macOS arm64 qualified the exact unsigned v0.1.11 ZIP recorded in
+`docs/evidence/claude-direct-macos-arm64-0.1.11-2026-08-26.json`. Other tuples
+remain unqualified. The adapter is not `release-ready` or `pilot-ready`.
 
 The product installer selects Claude as the primary workspace projection by
 default and verifies this exact projection after activation. Codex remains a
@@ -78,7 +78,8 @@ flowchart LR
     Adapter --> Fixtures["Implemented<br/>cross-runtime fixtures"]
     Fixtures --> Wiring["Configured<br/>Claude-native lifecycle wiring"]
     Wiring --> Active["Operational beta<br/>native subagents"]
-    Active -.->|qualification telemetry| Pending["Native-qualified pending"]
+    Active -->|exact recorded tuple| Qualified["Native-qualified<br/>macOS tuple"]
+    Active -.->|other tuples| Pending["Native-qualified pending"]
 ```
 
 The lifecycle wiring maps `session_start`, `pre_action_guard`,

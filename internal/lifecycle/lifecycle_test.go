@@ -93,6 +93,11 @@ func TestRecordRejectsMissingOrInventedProvenance(t *testing.T) {
 	if _, err := Record(t.TempDir(), testWorkspaceID, valid); err == nil || !strings.Contains(err.Error(), "provenance") {
 		t.Fatalf("Record invented provenance error = %v", err)
 	}
+	valid.Provenance = AdapterCommand
+	valid.ActionSHA256 = "not-a-digest"
+	if _, err := Record(t.TempDir(), testWorkspaceID, valid); err == nil || !strings.Contains(err.Error(), "action digest") {
+		t.Fatalf("Record invalid action digest error = %v", err)
+	}
 }
 
 func TestDiagnoseAbsentIsExplicitlyUnavailable(t *testing.T) {

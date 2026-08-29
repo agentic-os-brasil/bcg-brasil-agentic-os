@@ -100,9 +100,11 @@ func runGoBuild(
 	target Target,
 	environment []string,
 ) error {
-	// CLI binary removed from product distribution; distribution is ZIP bundle only.
-	// This builder is retained for future extension but has no binary target.
-	return fmt.Errorf("no CLI binary target: Maestro distribution is ZIP bundle only")
+	// The closed candidate factory keeps its target list disabled until its
+	// independent signing/publication contract is requalified. The current
+	// local-beta platform ZIP factory builds cmd/bcgos directly; do not treat
+	// that local vertical as authority to re-enable closed candidates.
+	return fmt.Errorf("closed candidate CLI targets are disabled; use the explicit local-beta platform ZIP factory")
 }
 
 type CandidateOptions struct {

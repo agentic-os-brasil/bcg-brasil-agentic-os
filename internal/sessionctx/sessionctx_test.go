@@ -2,6 +2,8 @@ package sessionctx
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -87,6 +89,47 @@ func TestBuildReturnsBoundedPointersAndOmitsUnapprovedSensitiveOwnerFacets(t *te
 	}
 	if err := roundTrip.Validate(); err != nil {
 		t.Fatalf("pointer-only packet did not survive JSON round trip: %v", err)
+	}
+}
+
+func TestReviewedOwnerContextRemainsEphemeralAndSensitiveFacetsStayPointerOnly(t *testing.T) {
+	root := t.TempDir()
+	status, err := ownerctx.Initialize(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, body := range map[string]string{
+		"owner-identity":   "# Owner identity\n\n## Current\n\nSynthetic Owner\n",
+		"personal-context": "# Authorized personal context\n\n## Current\n\nsensitive-sentinel\n",
+	} {
+		if err := os.WriteFile(filepath.Join(root, "owner", "self", id+".md"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status, err = ownerctx.Inspect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status.Onboarding = ownerctx.OnboardingStatus{State: "complete", Track: ownerctx.OnboardingTrackQuick}
+	snapshot, err := ownerctx.ProjectAnsweredSnapshot(root, SessionOwnerFacetIDs())
+	if err != nil {
+		t.Fatal(err)
+	}
+	packet := Build(Sources{
+		Profile:       profile.State{Profile: "standard", Source: "configured"},
+		Workspace:     workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+		Owner:         status,
+		OwnerSnapshot: &snapshot,
+	})
+	if packet.Owner.Context.State != "available" || len(packet.Owner.Context.Sections) != 1 || packet.Owner.Context.Sections[0].Facet != "owner-identity" {
+		t.Fatalf("owner context = %#v", packet.Owner.Context)
+	}
+	encoded, err := json.Marshal(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "Synthetic Owner") || strings.Contains(string(encoded), "sensitive-sentinel") {
+		t.Fatalf("serialized packet leaked owner body: %s", encoded)
 	}
 }
 

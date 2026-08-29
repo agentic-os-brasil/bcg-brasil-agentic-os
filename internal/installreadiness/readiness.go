@@ -87,13 +87,15 @@ type LifecycleBinding struct {
 }
 
 type projectionManifest struct {
-	SchemaVersion   int               `json:"schema_version"`
-	Runtime         string            `json:"runtime"`
-	OrientationPath string            `json:"orientation_path"`
-	OrientationHash string            `json:"orientation_hash"`
-	SkillHashes     map[string]string `json:"skill_hashes"`
-	PolicyPath      string            `json:"policy_path"`
-	PolicyHash      string            `json:"policy_hash"`
+	SchemaVersion     int               `json:"schema_version"`
+	Runtime           string            `json:"runtime"`
+	OrientationPath   string            `json:"orientation_path"`
+	OrientationHash   string            `json:"orientation_hash"`
+	OrientationMode   string            `json:"orientation_mode,omitempty"`
+	OrientationOrigin string            `json:"orientation_origin,omitempty"`
+	SkillHashes       map[string]string `json:"skill_hashes"`
+	PolicyPath        string            `json:"policy_path"`
+	PolicyHash        string            `json:"policy_hash"`
 }
 
 type expectedBinding struct {
@@ -342,6 +344,23 @@ func verifyProjection(runtimeName, workspacePath string, tracks []string) error 
 		manifest.OrientationPath != orientation || manifest.PolicyPath != runtimeprojection.PolicyRelativePath {
 		return errors.New("runtime projection manifest has a mismatched " + runtimeLabel + " path identity")
 	}
+	orientationMode := manifest.OrientationMode
+	if orientationMode == "" {
+		orientationMode = runtimeprojection.OrientationModeManaged
+	}
+	if orientationMode != runtimeprojection.OrientationModeManaged && orientationMode != runtimeprojection.OrientationModePreservedTracked {
+		return errors.New("runtime projection manifest has an invalid orientation mode")
+	}
+	if (orientationMode == runtimeprojection.OrientationModeManaged && manifest.OrientationHash == "") ||
+		(orientationMode == runtimeprojection.OrientationModePreservedTracked && manifest.OrientationHash != "") {
+		return errors.New("runtime projection manifest has an invalid orientation identity")
+	}
+	if manifest.OrientationOrigin != "" && manifest.OrientationOrigin != runtimeprojection.OrientationOriginCreated && manifest.OrientationOrigin != runtimeprojection.OrientationOriginExisting {
+		return errors.New("runtime projection manifest has an invalid orientation origin")
+	}
+	if orientationMode == runtimeprojection.OrientationModePreservedTracked && manifest.OrientationOrigin != "" {
+		return errors.New("preserved orientation cannot have a managed origin")
+	}
 	policy, catalog, err := runtimeprojection.PolicyForTracks(tracks)
 	if err != nil {
 		return fmt.Errorf("resolve active capability tracks: %w", err)
@@ -379,24 +398,26 @@ func verifyProjection(runtimeName, workspacePath string, tracks []string) error 
 		return errors.New("runtime projection skill identities do not match the active embedded bundle")
 	}
 
-	expectedOrientation, err := renderOrientation(runtimeName, catalog.Skills)
-	if err != nil {
-		return err
-	}
-	orientationBody, err := os.ReadFile(filepath.Join(workspacePath, orientation))
-	if err != nil {
-		return err
-	}
-	managedBlock, err := exactManagedBlock(string(orientationBody))
-	if err != nil {
-		return err
-	}
-	expectedBlock, err := exactManagedBlock(expectedOrientation)
-	if err != nil {
-		return err
-	}
-	if managedBlock != expectedBlock || manifest.OrientationHash != digest([]byte(strings.TrimSpace(expectedBlock))) {
-		return errors.New("managed " + orientation + " orientation does not match the active embedded bundle")
+	if orientationMode == runtimeprojection.OrientationModeManaged {
+		expectedOrientation, err := renderOrientation(runtimeName, catalog.Skills)
+		if err != nil {
+			return err
+		}
+		orientationBody, err := os.ReadFile(filepath.Join(workspacePath, orientation))
+		if err != nil {
+			return err
+		}
+		managedBlock, err := exactManagedBlock(string(orientationBody))
+		if err != nil {
+			return err
+		}
+		expectedBlock, err := exactManagedBlock(expectedOrientation)
+		if err != nil {
+			return err
+		}
+		if managedBlock != expectedBlock || manifest.OrientationHash != digest([]byte(strings.TrimSpace(expectedBlock))) {
+			return errors.New("managed " + orientation + " orientation does not match the active embedded bundle")
+		}
 	}
 	return nil
 }
@@ -559,21 +580,25 @@ func isMaestroOwned(command string) bool {
 
 func renderOrientation(runtimeName string, skills []skillsindex.Skill) (string, error) {
 	template := string(baseruntime.OrientationTemplate())
-	if !strings.Contains(template, "{{SKILLS_BLOCK}}") || !strings.Contains(template, "{{RUNTIME}}") || !strings.Contains(template, "{{RUNTIME_ID}}") {
+	if !strings.Contains(template, "{{SKILLS_BLOCK}}") || !strings.Contains(template, "{{RUNTIME}}") || !strings.Contains(template, "{{RUNTIME_ID}}") || !strings.Contains(template, "{{SKILL_PREFIX}}") || !strings.Contains(template, "{{RUNTIME_TRUST_GUIDANCE}}") {
 		return "", errors.New("orientation template is missing required placeholders")
 	}
 	var block strings.Builder
 	block.WriteString("<!-- BCGOS:INSTALLED-SKILLS:BEGIN -->\n")
-	skillsRoot, runtimeLabel := ".codex/skills", "Codex"
+	skillsRoot, runtimeLabel, skillPrefix := ".codex/skills", "Codex", "$"
+	trustGuidance := "Na primeira abertura, o Codex exige revisão nativa dos hooks locais. Abra `/hooks`, confira que os comandos apontam para o CLI instalado do Maestro e aprove o conjunto antes de depender das rotinas automáticas. Mudanças posteriores nos hooks exigem nova revisão."
 	if runtimeName == "claude" {
-		skillsRoot, runtimeLabel = ".claude/skills", "Claude Code"
+		skillsRoot, runtimeLabel, skillPrefix = ".claude/skills", "Claude Code", "/"
+		trustGuidance = ""
 	}
 	for _, skill := range skills {
-		fmt.Fprintf(&block, "- `/%s` — %s; usar quando: %s; fonte: `%s/%s/SKILL.md`\n", skill.ID, skill.DisplayName, skill.Trigger, skillsRoot, skill.ID)
+		fmt.Fprintf(&block, "- `%s%s` — %s; usar quando: %s; fonte: `%s/%s/SKILL.md`\n", skillPrefix, skill.ID, skill.DisplayName, skill.Trigger, skillsRoot, skill.ID)
 	}
 	block.WriteString("<!-- BCGOS:INSTALLED-SKILLS:END -->")
 	body := strings.ReplaceAll(template, "{{RUNTIME}}", runtimeLabel)
 	body = strings.ReplaceAll(body, "{{RUNTIME_ID}}", runtimeName)
+	body = strings.ReplaceAll(body, "{{SKILL_PREFIX}}", skillPrefix)
+	body = strings.ReplaceAll(body, "{{RUNTIME_TRUST_GUIDANCE}}", trustGuidance)
 	body = strings.ReplaceAll(body, "{{SKILLS_BLOCK}}", block.String())
 	return runtimeprojection.OrientationBegin + "\n" + strings.TrimSpace(body) + "\n" + runtimeprojection.OrientationEnd + "\n", nil
 }

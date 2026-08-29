@@ -126,6 +126,11 @@ Missing memory is an active `empty` state; invalid or incomplete state is
 `unavailable` and never falls back to raw captures. Successful local assembly
 is adapter delivery, not native lifecycle qualification.
 
+Reviewed owner SELF is not a memory layer. The same local Session Start
+boundary may attach its separately bounded, ephemeral non-sensitive projection
+after explicit onboarding confirmation, but it does not enter
+`lifetime -> L3 -> L2 -> L1`, memory commits or prompt-hook repetition.
+
 The continuous-use projection may report generated-memory state and the count
 of valid HMAC-attested capture-v2 files. It cannot expose capture bodies, count
 legacy/manual captures as eligible signals, trigger a rollup or promote L1 into

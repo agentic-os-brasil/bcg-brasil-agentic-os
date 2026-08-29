@@ -3,19 +3,25 @@
 This is the thin product adapter boundary for Codex. Policies, memory and
 capability states remain canonical in `bundles/base/runtime/capabilities.json`.
 
-Current state: `bcgos doctor` discovers a local Codex executable, while every
-product lifecycle event remains explicitly unavailable. Workspace-local
-configuration installs the five bounded command hooks supported by the current
-Codex runtime; this does not prove that Codex trusted or invoked them. Native
-observation is still pending, and Codex must not inherit Claude-specific
-development hooks as a product capability.
+Current state: the installed `bcgos workspace` control plane can enroll an
+ordinary Git repository or linked worktree for Codex and project five bounded
+workspace-local command hooks using the absolute installed CLI path. This is
+implemented, locally contract-tested and natively qualified for the exact
+Codex CLI 0.149.1 / `gpt-5.6-sol` / post-initialization isolated-config digest / macOS
+arm64 / unsigned v0.1.11 ZIP tuple recorded under `docs/evidence/`. Codex must
+still review workspace hooks through `/hooks` in
+ordinary use and must not inherit Claude-specific development hooks as a
+product capability.
 
-Evidence snapshot: `as_of: 2026-08-06` · source baseline:
-`43e86494b2e32ca8eccece843514b75d2c98ffa7` (`origin/main` at review start;
-candidate refresh at `012c08f`) · runtime evidence: no
-reproducible in-repo runtime-version artifact or fresh native-session
-observation is attached. This adapter is configured and has local contract
-coverage, but is not `native-qualified`, `release-ready` or `pilot-ready`.
+Evidence snapshot: `as_of: 2026-08-25` · source baseline:
+`00617f3af0beab729679ac03e077d3a898b814ab` (`origin/main` at review start) ·
+runtime evidence: the bounded record
+`docs/evidence/codex-direct-macos-arm64-0.1.11-2026-08-25.json` qualifies the
+direct projection only for the exact model/config/runtime/platform/artifact
+tuple it names. The
+qualification used synthetic fixtures, `--approve-for-me`, workspace-write
+sandboxing and a bypass only of the already inspected hook-trust prompt. It
+does not establish `release-ready` or `pilot-ready`.
 
 The managed Maestro, Case, Client Account, PA Expert, Yoda and Darwin definitions live in
 `bundles/base/agents/`. `internal/agentorchestration` now provides the shared
@@ -60,20 +66,25 @@ flowchart LR
     Catalog["Implemented<br/>managed agent catalog"] --> Adapter["Implemented<br/>shared enforcement"]
     Adapter --> Fixtures["Implemented<br/>cross-runtime fixtures"]
     Fixtures --> Wiring["Configured<br/>Codex-native command-hook wiring"]
-    Wiring --> Active["Pending<br/>native qualification and activation"]
+    Wiring --> Active["Qualified slice<br/>exact recorded Codex tuple"]
     Catalog -.->|current capability| Unavailable["Unavailable<br/>fails closed"]
 ```
 
-The lifecycle adapter maps Codex-native command hooks to `session_start`,
+The direct-worktree lifecycle adapter maps Codex-native command hooks to `session_start`,
 `pre_action_guard`, `post_action_observe`, `stop_finalize` and `context_inject`.
-Conformance fixtures must remain green before changing a capability state. At
-Session Start it also resolves the user-local interaction profile and injects
-only its bounded ID and managed policy pointer; the profile must not be derived
-from or persisted into memory.
+Enrollment, status, repair and removal are idempotent and preserve the same
+root, identity, privacy and local-effect invariants as Claude. Conformance
+fixtures must remain green before changing a capability state. At Session
+Start the direct projection resolves only its exact private workspace binding
+and bounded workspace-scoped context; no prompt, path, Git command or client
+content enters a receipt.
 
-Spec 035 and `docs/lifecycle-readiness.md` record the current evidence matrix:
-Codex configuration is not native invocation evidence. Each of the five
-bindings remains unavailable until a real native-session observation exists.
+Spec 035 and `docs/lifecycle-readiness.md` record the current evidence matrix.
+The exact recorded Codex tuple observed guard denial, PostToolUse and Stop
+receipts, and lifecycle context from the configured SessionStart /
+UserPromptSubmit pair. The bounded stream does not attribute the injected
+context bytes to one member of that pair, so that joint limitation remains
+explicit rather than being promoted to stronger per-event evidence.
 
 Darwin 🧬 is the governance surgeon, not a separate housekeeping agent. The
 runtime-neutral `internal/darwin` contract accepts the same bounded packet in

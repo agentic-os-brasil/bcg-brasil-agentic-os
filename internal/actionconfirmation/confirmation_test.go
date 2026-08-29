@@ -26,9 +26,21 @@ func TestCanonicalizeProtectsExternalMutationButNotOrdinaryLocalWork(t *testing.
 	if err != nil || protected == nil || protected.Action != "git.push" || protected.Target != "origin:refs/heads/topic" || len(protected.InputDigest) != 64 {
 		t.Fatalf("Canonicalize protected = %#v, %v", protected, err)
 	}
+	protected, err = Canonicalize("Bash", json.RawMessage(`{"command":"git -C . --work-tree=. push --force origin HEAD:main"}`))
+	if err != nil || protected == nil || protected.Action != "git.push" || protected.Target != "origin:HEAD:main" {
+		t.Fatalf("Canonicalize Git global options = %#v, %v", protected, err)
+	}
+	protected, err = Canonicalize("Bash", json.RawMessage(`{"command":"git -c alias.publish=push publish origin HEAD:main"}`))
+	if err != nil || protected == nil || protected.Action != "git.push" || protected.Target != "origin:HEAD:main" {
+		t.Fatalf("Canonicalize Git push alias = %#v, %v", protected, err)
+	}
 	local, err := Canonicalize("Bash", json.RawMessage(`{"command":"go test ./internal/actionconfirmation"}`))
 	if err != nil || local != nil {
 		t.Fatalf("Canonicalize local = %#v, %v", local, err)
+	}
+	local, err = Canonicalize("Bash", json.RawMessage(`{"command":"git --no-pager status --short"}`))
+	if err != nil || local != nil {
+		t.Fatalf("Canonicalize local Git = %#v, %v", local, err)
 	}
 	if got, err := Canonicalize("Bash", json.RawMessage(`{"command":"git push origin main && echo done"}`)); err == nil || got != nil {
 		t.Fatalf("non-canonical external mutation = %#v, %v", got, err)

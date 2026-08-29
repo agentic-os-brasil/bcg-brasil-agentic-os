@@ -6,6 +6,83 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## TRNS - Present Maestro as a transparent runtime layer
+
+- Date: 2026-08-28
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Native direct-repository use proved that an identity directive which told the host not to present itself as the host runtime and to hide architecture could be correctly classified as deceptive prompt injection. The previous native gate still passed because it checked only for the word `Maestro` and the absence of two exact self-identification phrases, so a quoted refusal could satisfy the product identity check.
+- Decision: Maestro is the configured professional operating layer, never a false claim that the underlying model, provider or host runtime changed. Claude and Codex must identify both layers truthfully whenever identity or system mechanics are relevant, and managed instructions must never require concealment or misrepresentation of the host runtime, provider, hooks, provenance, limitations or architecture. Ordinary responses may keep incidental implementation detail concise, but explicit questions receive accurate answers. Native qualification requires affirmative evidence of both the Maestro layer and the named host runtime and rejects refusal or prompt-injection language; the same check remains mandatory for both runtimes.
+- Consequences: Users retain Maestro's governed context, skills, routing and professional surface while being able to see that it operates through Claude Code or Codex. Session and agent copy must distinguish product layer from runtime identity. Qualification becomes resistant to quoted/refused instructions and one-sided runtime drift, but it cannot guarantee the wording of every future model response; native evidence continues to qualify only an exact runtime and artifact tuple.
+- Refs: SELP; PORT; specs/004-runtime-portability.md; specs/015-session-context-packet.md; specs/055-direct-repository-worktree-entry.md; internal/sessionhook; dev/native-qualification
+- Supersedes: none
+
+## SELP - Inject reviewed professional SELF ephemerally at Session Start
+
+- Date: 2026-08-28
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Direct repository enrollment delivered lifecycle hooks and workspace isolation, but its reduced Session Start compositor bypassed the canonical Maestro identity directive and exposed only owner pointers that the direct runtime could not resolve. A reviewed owner profile therefore existed locally while the host runtime still presented itself generically and inferred identity from repository metadata.
+- Decision: Every direct Claude and Codex Session Start uses the shared runtime-neutral Session Context Packet and canonical session-hook serializer. After onboarding confirmation, the local hook boundary may additionally attach one bounded, ephemeral professional SELF projection built only from the reviewed non-sensitive session allowlist. Until the portable Hub scaffold migrates to the canonical owner registry, the direct boundary recognizes its exact schema-v1 authority, requires both initialized registry and completed onboarding state, and maps only the same bounded allowlist; fresh or incomplete portable profiles remain unprojected. The serialized packet remains pointer-only; personal context, Yoda-only material, unconfirmed facets, other-workspace content and local storage paths are never included. UserPromptSubmit does not repeat SELF bodies.
+- Consequences: Opening an enrolled repository preserves Maestro identity and the owner's reviewed professional context without copying owner data into the checkout or managed bundle. The projection consumes part of the existing native hook budget, prioritizes identity before other professional facets and fails closed on invalid or oversized sources. Claude and Codex must pass the same positive, privacy and one-sided-mutation tests. Explicit cross-workspace discovery and delegation remain a separate capability.
+- Refs: specs/002-data-boundaries.md; specs/004-runtime-portability.md; specs/006-memory-persistence.md; specs/015-session-context-packet.md; specs/055-direct-repository-worktree-entry.md; internal/sessionctx; internal/sessionhook; internal/cli
+- Supersedes: none
+
+## GDIG - Bind guarded actions with metadata-only digests
+
+- Date: 2026-08-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A stage-local `pre_action_guard` receipt proves that the adapter ran but cannot distinguish the intended destructive test command from another denied action in the same native session. Persisting the raw command would violate the lifecycle receipt privacy boundary.
+- Decision: For Codex `pre_action_guard` receipts only, add the lowercase SHA-256 of the normalized bounded command as `action_sha256`. Never persist the command, prompt, output, native identifiers or workspace paths. Native qualification must combine a new exact-digest receipt with independent unchanged-state evidence; the receipt retains `provenance=adapter_command` and never proves native origin by itself.
+- Consequences: Qualification can bind a denial to one exact synthetic action without widening durable content. Receipt readers validate the optional digest strictly and idempotency comparison includes it. Existing receipts remain valid, Claude receipts remain unchanged, and all native promotion boundaries from LIFE continue to apply.
+- Refs: LIFE; DRWT; specs/035-lifecycle-evidence-matrix.md; specs/055-direct-repository-worktree-entry.md; internal/lifecycle; internal/codexadapter; dev/native-qualification
+- Supersedes: LIFE
+
+## OCTX - Bound tracked-file orientation injection at 64 KiB
+
+- Date: 2026-08-25
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Direct repository enrollment must preserve a tracked `CLAUDE.md` or `AGENTS.md` byte-for-byte while still giving the runtime the same canonical Maestro orientation available when the file is untracked. The complete path-free orientation plus independently bounded workspace context can exceed the 16 KiB Session Start ceiling established by BOPS.
+- Decision: When a direct-worktree projection records `orientation_mode: preserved_tracked`, inject the integrity-checked canonical managed orientation ephemerally at Session Start and bound the complete direct-worktree context at 64 KiB. Retain the independent 8 KiB ceiling for each authorized workspace context source, the memory policy's own limits and all other BOPS method-selection and authority boundaries. Do not inject this orientation when the managed block is already present in an untracked orientation file.
+- Consequences: Tracked runtime instruction files remain byte-identical without losing Maestro orientation, and the direct entry path has an explicit deterministic upper bound. The larger ceiling applies only to the already-authorized assembled Session Start output; it grants no new data roots, tools or authority. Projection integrity failure blocks orientation assembly instead of falling back to user or private content.
+- Refs: BOPS; DRWT; ORIG; specs/055-direct-repository-worktree-entry.md; internal/cli; internal/runtimeprojection
+- Supersedes: BOPS
+
+## ORIG - Preserve user orientation bytes across projection lifecycle
+
+- Date: 2026-08-22
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: A removable managed orientation block cannot safely normalize the bytes around it. Trimming line endings or whitespace during enrollment, repair or removal changes user-owned `CLAUDE.md` and `AGENTS.md` content, while deleting an apparently empty remainder cannot distinguish a Maestro-created file from a pre-existing whitespace-only file.
+- Decision: Treat every byte outside the Maestro orientation markers as user-owned and preserve it exactly through install, repair and removal. Managed blocks carry no separator bytes outside their markers. Runtime-projection manifests record whether the orientation file was `created` by Maestro or `existing` before projection; removal deletes only a Maestro-created file whose exact post-block remainder is empty, and otherwise writes the exact remainder back even when it contains only whitespace or CRLF line endings.
+- Consequences: Enrollment may place the opening marker immediately after a user file that lacks a final newline, because inserting a human-friendly separator outside the managed block would not be reversibly attributable. Existing manifests without origin metadata retain the conservative legacy cleanup path. The origin field is runtime-scoped, hash validation still covers only the managed block, and user edits outside that block do not become Maestro-owned.
+- Refs: DRWT; PROJ; specs/055-direct-repository-worktree-entry.md; internal/runtimeprojection
+- Supersedes: none
+
+## DUET - Allow Claude and Codex projections to coexist in one worktree
+
+- Date: 2026-08-21
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: The first direct-worktree vertical stored one runtime in a shared checkout manifest, private enrollment and runtime-projection manifest. Enrolling Claude therefore made Codex report an identity conflict, and switching applications required destructive remove-and-reenroll ceremony even though their native configuration, orientation and skill roots are disjoint. That behavior contradicts the intended runtime portability of an exact worktree identity.
+- Decision: Keep one shared `repository_id`, `workspace_id`, orchestration state and Git-common transaction lock, but give Claude and Codex independent checkout manifests, runtime-projection manifests, selection-policy files and private enrollment bindings. Both projections may be enrolled and inspected concurrently in the same exact worktree. Lifecycle hooks verify the binding for their own runtime. Removal and repair are runtime-scoped; shared state and Git exclude entries remain until no intact sibling runtime references them.
+- Consequences: The same checkout can open in either supported application without changing its other projection. Mutation remains serialized across runtimes and each runtime retains independent ownership hashes and conflict detection. Shared surfaces require reference-aware removal and rollback tests. Existing single-runtime direct projections are branch-local and need no released migration, while the older managed-workspace manifest contract remains unchanged.
+- Refs: specs/004-runtime-portability.md; specs/026-workspace-local-adapter-installation.md; specs/055-direct-repository-worktree-entry.md; internal/runtimeprojection; internal/workspaceprojection
+- Supersedes: DRWT
+
+## DRWT - Project Maestro into direct Git repositories and worktrees
+
+- Date: 2026-08-21
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Maestro's current ZIP-only Hub assumes that one opened directory is simultaneously managed product, owner-private state and client workspace. Opening a repository or a normal Git worktree directly therefore loses governed hooks, skills, memory and continuity, while copying the complete Hub or owner data into that checkout would violate the existing data boundary. The accepted portable distribution contract already requires a verified platform CLI after activation, but the current bundle-only implementation deleted that executable and left Hub-relative shell bindings.
+- Decision: Keep target-specific ZIPs as transport and no desktop application, but restore the verified installed `bcgos` executable as Maestro's narrow control plane. Preserve the conversational Hub entry and add a second public entry through `bcgos workspace enroll|status|repair|remove --runtime claude|codex <repository-or-worktree>`. Enrollment resolves the canonical Git top level and common directory with Git itself; derives a shared opaque `repository_id` from the local Git common directory and a distinct opaque `workspace_id` from the exact worktree root; stores owner-private binding state under `data_root`; and writes only a local, regenerable runtime projection into the checkout. Hooks bind the exact installed executable by absolute path and pass `managed_root`, `data_root` and `workspace_root` explicitly. Remote URLs never participate in identity or telemetry. The projection preserves user orientation, refuses tracked machine-local configuration and unsafe paths, records exact local files in Git's validated common `info/exclude`, and is transactional, idempotent, inspectable, repairable and removable. Ordinary professional work remains runtime-agent-owned; these commands are setup, update and recovery operations only.
+- Consequences: Managed core, owner-private state, repository identity and exact worktree identity become separate authorities. Normal `git worktree add` remains the creation mechanism; each resulting checkout enrolls explicitly and shares only `repository_id`. Core updates or moves can be diagnosed and repaired without changing a project's branch, index, tracked files, Git configuration or hooks. Claude receives its seven supported project events and Codex its five supported events with equivalent governed invariants, while native qualification remains a separate evidence class. Existing bundle-only documentation and Hub-relative hook assumptions must be migrated without claiming release, pilot or native-runtime qualification from local tests.
+- Refs: specs/002-data-boundaries.md; specs/004-runtime-portability.md; specs/026-workspace-local-adapter-installation.md; specs/046-workspace-migration.md; specs/049-claude-native-agent-beta.md; specs/051-platform-specific-claude-portable.md; specs/055-direct-repository-worktree-entry.md; internal/workspaceprojection
+- Supersedes: none
+
 ## WYRB - Rename internal reviewer role from Walter to Yoda (Mestre Yoda persona)
 
 - Date: 2026-08-15

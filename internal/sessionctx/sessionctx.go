@@ -29,6 +29,8 @@ const agentsCatalogPointer = "bundles/base/agents/catalog.json"
 // body is serialized into session context.
 const MaximumSelectedSkills = 3
 
+const maximumOwnerContextFacetBytes = 12 << 10
+
 // sessionPointerFacets is intentionally an allowlist rather than an inference
 // from a mutable local registry. Adding a facet to session context requires a
 // reviewed change here and contract tests, even when its registry reader list
@@ -56,6 +58,29 @@ var sessionSensitivePointerFacets = map[string]struct{}{
 	"personal-context": {},
 }
 
+// sessionOwnerBodyFacets is ordered so the owner's reviewed identity survives
+// before broader professional guidance when the native Session Start budget is
+// tight. Sensitive facets remain pointer-only even when their registry reader
+// list includes session.
+var sessionOwnerBodyFacets = []string{
+	"owner-identity",
+	"professional-role",
+	"communication-style",
+	"preferences",
+	"quality-bar",
+	"voice",
+	"motivations",
+	"decision-rules",
+	"working-boundaries",
+}
+
+// SessionOwnerFacetIDs returns the closed, ordered allowlist that a local hook
+// boundary may request for ephemeral Session Start projection. It deliberately
+// excludes personal-context and every Yoda-only facet.
+func SessionOwnerFacetIDs() []string {
+	return append([]string(nil), sessionOwnerBodyFacets...)
+}
+
 // sessionExpansionFacets is the longitudinal professional-self loop. Identity
 // and optional personal context are initialized at onboarding but are not
 // forced into the ongoing expansion queue.
@@ -74,6 +99,10 @@ type Sources struct {
 	Profile   profile.State
 	Workspace workspace.Inspection
 	Owner     ownerctx.Status
+	// OwnerSnapshot is a fresh, read-only projection assembled by the local
+	// hook boundary. Its reviewed non-sensitive bodies remain ephemeral and are
+	// excluded from the serialized Session Context Packet.
+	OwnerSnapshot *ownerctx.UserSelfSnapshot
 	// OwnerContextRoot is a local directive anchor only. Owner context is
 	// intentionally stored in the private data root, never inferred from a
 	// workspace-local owner/ directory.
@@ -124,6 +153,17 @@ type Owner struct {
 	SelfIndex      Pointer            `json:"self_index"`
 	Expansion      SelfExpansion      `json:"expansion"`
 	OpenTasks      OpenTasks          `json:"open_tasks"`
+	Context        OwnerContext       `json:"-"`
+}
+
+type OwnerContext struct {
+	State    string                `json:"-"`
+	Sections []OwnerContextSection `json:"-"`
+}
+
+type OwnerContextSection struct {
+	Facet   string `json:"-"`
+	Content string `json:"-"`
 }
 
 type SelfExpansion struct {
@@ -335,6 +375,7 @@ func Build(sources Sources) Packet {
 			SelfIndex:      pointer(selfIndex),
 			Expansion:      SelfExpansion{State: expansion.State, Total: expansion.Total, Current: expansion.Current, Unknown: expansion.Unknown, Stale: expansion.Stale, NextFacet: expansion.NextFacet, ReviewCount: expansion.ReviewCount},
 			OpenTasks:      OpenTasks{State: openTasks.State, Count: openTasks.Count},
+			Context:        buildOwnerContext(sources.Owner, sources.OwnerSnapshot),
 		},
 		Atlas: Atlas{
 			Managed:   pointerAtlas("managed", sources.Atlas.Managed),
@@ -472,6 +513,9 @@ func (packet Packet) Validate() error {
 			return errors.New("session context packet has an invalid owner facet pointer")
 		}
 	}
+	if err := validateOwnerContext(packet.Owner.Context); err != nil {
+		return err
+	}
 	active := packet.Execution.Active
 	switch active.State {
 	case execution.ActivePointerAvailable:
@@ -490,6 +534,69 @@ func (packet Packet) Validate() error {
 	}
 	if packet.State == "ready" && len(packet.Omissions) != 0 {
 		return errors.New("ready session context packet has omissions")
+	}
+	return nil
+}
+
+func buildOwnerContext(status ownerctx.Status, snapshot *ownerctx.UserSelfSnapshot) OwnerContext {
+	if !status.Initialized || status.Onboarding.State != "complete" || snapshot == nil {
+		return OwnerContext{State: "unavailable"}
+	}
+	if err := snapshot.Validate(); err != nil {
+		return OwnerContext{State: "unavailable"}
+	}
+	allowed := make(map[string]struct{}, len(sessionOwnerBodyFacets))
+	for _, id := range sessionOwnerBodyFacets {
+		allowed[id] = struct{}{}
+	}
+	for id := range snapshot.Facets {
+		if _, ok := allowed[id]; !ok {
+			return OwnerContext{State: "unavailable"}
+		}
+	}
+	result := OwnerContext{State: "available"}
+	for _, id := range sessionOwnerBodyFacets {
+		projected, ok := snapshot.Facets[id]
+		if !ok {
+			continue
+		}
+		registered, ok := status.Facets[id]
+		content := strings.TrimSpace(projected.Content)
+		if !ok || registered.Sensitivity == "sensitive" || projected.Sensitivity == "sensitive" ||
+			projected.SourcePath != registered.Path || projected.Sensitivity != registered.Sensitivity ||
+			projected.Refinement != registered.Refinement || !hasReader(registered.Readers, "session") ||
+			!hasReader(projected.Readers, "session") || content == "" || len(content) > maximumOwnerContextFacetBytes {
+			return OwnerContext{State: "unavailable"}
+		}
+		result.Sections = append(result.Sections, OwnerContextSection{Facet: id, Content: content})
+	}
+	if len(result.Sections) == 0 {
+		result.State = "unavailable"
+	}
+	return result
+}
+
+func validateOwnerContext(context OwnerContext) error {
+	if context.State == "" || context.State == "unavailable" {
+		if len(context.Sections) != 0 {
+			return errors.New("unavailable owner context exposes facet bodies")
+		}
+		return nil
+	}
+	if context.State != "available" || len(context.Sections) == 0 {
+		return errors.New("session owner context has an invalid state")
+	}
+	positions := make(map[string]int, len(sessionOwnerBodyFacets))
+	for index, id := range sessionOwnerBodyFacets {
+		positions[id] = index
+	}
+	last := -1
+	for _, section := range context.Sections {
+		position, ok := positions[section.Facet]
+		if !ok || position <= last || strings.TrimSpace(section.Content) == "" || len(section.Content) > maximumOwnerContextFacetBytes {
+			return errors.New("session owner context contains an invalid or unordered facet")
+		}
+		last = position
 	}
 	return nil
 }

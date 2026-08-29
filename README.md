@@ -136,6 +136,7 @@ for a genuinely absent, disabled or failed capability.
 | --- | --- |
 | ✅ Local workspace | The first-run scaffold creates a local workspace without mixing it into the managed core. `/maestro-doctor` verifies the installation read-only. |
 | ✅ Guided runtime projection | The ZIP installer delivers hooks, a concise but complete `CLAUDE.md`/`AGENTS.md`, and the real base skills with idempotent, conflict-safe ownership. |
+| ✅ Hub or direct Git worktree entry | The same platform ZIP can run as the existing Hub or enroll an ordinary Git repository/linked worktree through the installed, absolute-path control plane. Repository and worktree identities, private data and managed core remain separate; local contract tests are not native-runtime qualification. |
 | ✅ Professional context | A canonical SELF index, eight professional facets, one-question expansion, agent identity drafts, skills index, human atlas and bounded session pointers stay inspectable and local. The quick onboarding track establishes role, communication, quality bar and boundaries; the complete track covers all eight facets. |
 | ✅ Long-running work | A local execution ledger supports contract, checkpoint, pause, resume, evidence, inspect and export. |
 | ✅ Senior-advisor refinement | Maestro can ask Yoda to pressure-test high-leverage work as a calm proxy for the owner's intent; ordinary work does not wait on a review receipt. |
@@ -154,8 +155,9 @@ for a genuinely absent, disabled or failed capability.
 > end-user release or a user pilot is available. Pilot distribution, native
 > schedulers and hosted bridge operation remain release operations with their
 > own evidence. The repository `VERSION` tracks the bundle release line (current:
-> `0.1.5`); release artifacts receive an explicit semantic version and are
-> distributed as signed ZIPs through the release pipeline.
+> `0.1.13`); local platform ZIPs receive an explicit semantic version and a
+> SHA-256 sidecar. The current `local-beta-unsigned` artifacts are not an
+> organization-signed or notarized release.
 
 ### Continuous use after installation
 
@@ -208,23 +210,31 @@ from lifecycle evidence alone:
   gates; **pilot-ready** additionally requires clean-device acceptance,
   support/incident ownership and the pilot gate.
 
-**Evidence snapshot:** `as_of: 2026-08-06` · source baseline:
-`43e86494b2e32ca8eccece843514b75d2c98ffa7` (`origin/main` at review start,
-including the
-workspace import, migration and installer-flow changes) · local evidence:
-`go run ./dev/harness validate`, `wiki validate` and `wiki verify` pass.
-On the candidate branch at `012c08f`, a fresh `go run ./dev/harness
-validate --full` also passed contracts, formatting, `go vet` and the complete
-offline unit-test suite. This is branch-local evidence only: the source
-baseline above is the pre-merge comparison point for this documentation
-refresh, and hosted CI evidence is none; the
-repository workflows remain disabled and billing or hosted status is not
-inferred from local passes · runtime evidence: no fresh attended Claude/Codex
-native-session receipt or reproducible in-repo runtime-version artifact ·
-release/pilot evidence: no organization-signed or notarized artifact, Windows
-device acceptance, clean-device acceptance, support/incident owner or pilot-gate
-record. `native_qualified`, CI-green, release-ready and pilot-ready are
-therefore not declared.
+**Evidence snapshot:** `as_of: 2026-08-28` · source baseline:
+`00617f3` (`origin/main` at review start) · working branch:
+`feat/direct-repo-worktree-entry` with uncommitted review changes · local
+evidence: `go run ./dev/harness validate` and `go run ./dev/harness validate
+--full` pass; the full gate includes contracts, formatting, `go vet` and the
+complete offline unit-test suite. The Hub release evaluator passes 146 checks,
+and repeated local factories produced byte-identical macOS arm64 and Windows
+amd64 ZIPs for identical inputs. This is working-tree-local evidence only;
+hosted CI, human review and mergeability have not been assessed · runtime
+evidence: Claude Code `2.1.203` on macOS arm64 natively qualified all seven
+direct-workspace lifecycle events, the Hub bootstrap/Doctor path, managed
+agents, transparent Maestro/host identity, reviewed synthetic owner context,
+guard, receipts and continuity for the exact unsigned v0.1.13 ZIP
+digest recorded in
+`docs/evidence/claude-direct-macos-arm64-0.1.13-2026-08-28.json`; Codex CLI
+`0.149.1` on macOS arm64 also passed the direct-workspace matrix for the exact
+same unsigned v0.1.13 ZIP digest recorded in
+`docs/evidence/codex-direct-macos-arm64-0.1.13-2026-08-28.json`; other runtime
+and platform tuples remain pending · release/pilot
+evidence: the generated artifacts are explicitly `local-beta-unsigned`; there
+is no organization signature/notarization, Windows device acceptance,
+clean-device acceptance, support/incident owner or pilot-gate record.
+Native qualification is declared only for the exact runtime/platform/artifact
+tuples in those bounded records. CI-green, reviewed, release-ready and
+pilot-ready are not declared.
 
 ### Maturity ladder
 
@@ -242,7 +252,8 @@ Maestro advances only when the evidence for the next tier exists:
 5. **Production** — the controlled pilot meets its success and safety criteria
    and the release owner records promotion.
 
-The repository is currently at tier 1. Q-011 (one concrete use case, persona
+The repository has local tier-2 evidence for the exact Claude/macOS tuple
+above. Q-011 (one concrete use case, persona
 and acceptance metric) must close before tier 3; no user pilot should be
 described as active while native lifecycle evidence is pending.
 
@@ -298,10 +309,29 @@ development-only surface and is not part of the Maestro product installation.
 
 ### 👋 Pilot participant
 
-The repository is the factory, not the product installation. Pilot users will
-use a verified Maestro release (ZIP) — not Git, Go, Python, Node or Docker.
+The repository is the factory, not the product installation. Authorized users
+use the ZIP for their platform — not a source clone, Go, Python, Node or
+Docker. Each ZIP carries a small installed control plane that the bootstrapper
+checks locally before enrollment; this is local integrity evidence, not code
+signing or notarization.
 Distribution is intentionally not yet declared ready until signed artifacts and
 clean-device evidence exist.
+
+The extracted product has two entry modes:
+
+- **Hub:** open `Maestro/` in Claude Code. The first-session hook activates the
+  transported control plane and preserves the existing conversational flow.
+- **Git Repo/Worktree:** after activation, explicitly enroll the exact checkout
+  with `managed/bin/bcgos workspace enroll --runtime claude|codex <path>`.
+  Linked worktrees share an opaque repository identity and keep distinct
+  workspace identities. Claude and Codex may both be enrolled in the same
+  checkout; status, repair and removal remain independent per runtime. Hooks
+  use the absolute installed CLI path and never depend on `PATH`, an ancestor
+  Maestro folder or global runtime settings.
+
+See [Spec 055](specs/055-direct-repository-worktree-entry.md) and the
+[installation guide](installers/zip/user-template/README-INSTALL.md) for the
+authority, update, repair and removal boundaries.
 
 Start with the [Maestro user onboarding](docs/onboarding/maestro-user-onboarding.md).
 Do not run the contributor harness or clone the repository as a substitute for
@@ -368,14 +398,17 @@ ingestion and governance are intentionally sequenced.
 | [`dev/`](dev) | Contributor-only harness, governance and development skills; the harness entrypoint is `go run ./dev/harness/main.go` | Active |
 | [`acceptance/`](acceptance) | Clean-device and pilot acceptance evidence | In progress |
 | [`internal/priorwork/`](internal/priorwork) | Governed organizational prior-work catalog and explicit retrieval | Local core validated; native Claude collection pending; Codex collection prohibited |
+| [`internal/workspaceprojection/`](internal/workspaceprojection) | Transactional direct repository/worktree enrollment, identity, repair and removal | Local contract-tested; native-qualified only for the exact recorded Claude/Codex macOS tuples |
 | [`dist/`](dist) | Local release artifacts (ZIPs and SHA256 digests); not committed to CI | Local only |
 
 Lifecycle adapter evidence is intentionally separated into configuration,
 direct-contract tests, adapter-command receipts and native-session proof. See
 [the lifecycle evidence matrix](specs/035-lifecycle-evidence-matrix.md).
 
-Maestro is operated entirely through Claude Code — no external CLI is required.
-The canonical entry points are skills invoked as slash-commands:
+Ordinary Hub work is operated through Claude Code; users do not install a
+global CLI. The ZIP does carry a narrow, locally verified control plane for
+activation and direct repository/worktree lifecycle. Professional work remains
+conversational, through governed skills such as:
 
 ```text
 /maestro-onboarding     guided first-session interview

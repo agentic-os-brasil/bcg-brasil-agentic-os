@@ -50,8 +50,9 @@ var (
 	validProvenance     = map[string]bool{AdapterCommand: true}
 )
 
-// Receipt deliberately excludes prompt text, tool input/output, native session
-// IDs and workspace paths. IdempotencyKey is a one-way digest of native IDs.
+// Receipt deliberately excludes prompt text, raw tool input/output, native
+// session IDs and workspace paths. IdempotencyKey is a one-way digest of native
+// IDs; ActionSHA256 may bind a guarded action without retaining its body.
 // Provenance describes only the local producer and never serves as proof of
 // native runtime invocation.
 type Receipt struct {
@@ -62,6 +63,7 @@ type Receipt struct {
 	Provenance     string    `json:"provenance"`
 	OccurredAt     time.Time `json:"occurred_at"`
 	IdempotencyKey string    `json:"idempotency_key"`
+	ActionSHA256   string    `json:"action_sha256,omitempty"`
 	ToolName       string    `json:"tool_name,omitempty"`
 	AgentType      string    `json:"agent_type,omitempty"`
 	Diagnostic     string    `json:"diagnostic,omitempty"`
@@ -275,6 +277,14 @@ func validateReceipt(receipt Receipt) error {
 	if receipt.ToolName != "" && !metadataNamePattern.MatchString(receipt.ToolName) {
 		return errors.New("invalid receipt tool name")
 	}
+	if receipt.ActionSHA256 != "" {
+		if len(receipt.ActionSHA256) != sha256.Size*2 {
+			return errors.New("invalid receipt action digest")
+		}
+		if _, err := hex.DecodeString(receipt.ActionSHA256); err != nil || strings.ToLower(receipt.ActionSHA256) != receipt.ActionSHA256 {
+			return errors.New("invalid receipt action digest")
+		}
+	}
 	if receipt.AgentType != "" && !metadataNamePattern.MatchString(receipt.AgentType) {
 		return errors.New("invalid receipt agent type")
 	}
@@ -331,6 +341,7 @@ func sameIdempotentReceipt(left, right Receipt) bool {
 		left.State == right.State &&
 		left.Provenance == right.Provenance &&
 		left.IdempotencyKey == right.IdempotencyKey &&
+		left.ActionSHA256 == right.ActionSHA256 &&
 		left.ToolName == right.ToolName &&
 		left.AgentType == right.AgentType &&
 		left.Diagnostic == right.Diagnostic

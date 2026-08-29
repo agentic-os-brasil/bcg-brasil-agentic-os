@@ -8,7 +8,8 @@ Claude is operational for the controlled beta and Codex remains unavailable.
 Give Claude and Codex Session Start adapters one small, identical and safe
 description of the current user and workspace. The serialized packet orients
 an adapter and remains pointer-only; the local hook boundary may separately
-attach an ephemeral, bounded generated memory context.
+attach ephemeral, bounded generated memory and reviewed professional SELF
+context.
 
 ## Packet contents
 
@@ -75,6 +76,19 @@ packet fails closed: a sensitive facet is always omitted, and a new non-
 sensitive facet remains omitted until it is added to the reviewed session-safe
 allowlist with contract tests.
 
+After onboarding is explicitly confirmed, the local Session Start boundary may
+resolve a fresh `UserSelfSnapshot` for the closed non-sensitive session
+allowlist and render its bodies ephemerally. Identity is ordered first; only
+explicitly answered facets are eligible. `personal-context`, Yoda-only facets,
+unconfirmed answers and workspace content remain excluded. This projection is
+not serialized into the packet, persisted in receipts or repeated by
+`UserPromptSubmit`.
+The portable Hub's schema-v1 owner registry is a temporary compatibility input:
+the boundary requires its exact SELF root, `initialized: true` and a completed
+onboarding record before mapping answered files into the same allowlist. A
+fresh/incomplete portable scaffold starts normally but contributes no owner
+body. Unknown legacy shapes fail closed.
+
 ## Runtime boundary
 
 The packet is a local, runtime-neutral contract. It does not install a Claude
@@ -83,6 +97,17 @@ shared local adapter may resolve only the newest valid memory commit for the
 exact workspace and render its already-generated layers inside the managed
 per-layer and independent 8 KiB memory budgets. It reports active-but-empty memory separately
 from invalid/unavailable state and never reads raw captures as fallback.
+The same boundary may render at most 6 KiB of reviewed professional SELF inside
+the independent native-output ceiling. It keeps facets whole, validates the
+fresh snapshot against the owner registry and fails closed instead of reading
+templates, sensitive facets or another data root.
+
+The Session Start operating directive is transparent about provenance:
+Maestro is the configured professional layer and `Claude Code` or `Codex` is
+the host runtime. It never asks the host to deny or hide that relationship.
+Explicit questions about identity, provider, hooks, limitations or architecture
+must receive accurate answers; brevity about irrelevant mechanics is a
+communication preference, not a concealment rule.
 
 `bcgos session bridge --runtime claude|codex [workspace-path]` emits the same
 bounded Session Start envelope for either runtime. It is an adapter input, not
@@ -107,6 +132,9 @@ only and does not disable the configured context contract.
   bodies and storage paths remain absent.
 - Session Start may carry bounded generated memory, while `UserPromptSubmit`
   never repeats it and corrupt state fails closed without raw fallback.
+- Session Start may carry the bounded reviewed professional SELF projection,
+  while serialized JSON, `UserPromptSubmit`, receipts and sensitive facets
+  contain no owner body.
 - packet references never reveal absolute local filesystem paths.
 - malformed SELF index pointers, counts, lifecycle states or next facets fail
   validation closed;

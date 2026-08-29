@@ -544,6 +544,27 @@ func TestSnapshotIsAStaleCheckedProjectionOfCanonicalFacets(t *testing.T) {
 	}
 }
 
+func TestAnsweredSnapshotOmitsUntouchedFacetTemplates(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Initialize(root); err != nil {
+		t.Fatal(err)
+	}
+	rolePath := filepath.Join(root, "owner", "self", "professional-role.md")
+	if err := os.WriteFile(rolePath, []byte("# Professional role\n\n## Current\n\nSynthetic role\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ProjectAnsweredSnapshot(root, []string{"owner-identity", "professional-role"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Facets) != 1 || snapshot.Facets["professional-role"].Content == "" {
+		t.Fatalf("answered snapshot = %#v", snapshot.Facets)
+	}
+	if _, ok := snapshot.Facets["owner-identity"]; ok {
+		t.Fatal("untouched owner identity template entered the answered snapshot")
+	}
+}
+
 func TestSnapshotRejectsTamperedProjectedContentAndReaders(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Initialize(root); err != nil {
