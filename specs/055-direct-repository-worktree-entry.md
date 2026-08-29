@@ -171,7 +171,9 @@ other workspace remain excluded, and prompt hooks do not repeat owner bodies.
 Claude and Codex tests must reject a one-sided identity or owner-context path.
 The current ZIP's schema-v1 owner registry is accepted only through the bounded
 compatibility rule in Spec 015; this bridge neither treats templates as answers
-nor grants cross-workspace access.
+nor grants cross-workspace access. Spec 057 adds a separate owner-confirmed,
+temporary and read-only context projection; its grant never widens this hook's
+exact-worktree file, shell, Git or specialist boundary.
 
 Native qualification must observe an affirmative response containing both the
 Maestro layer and the correct host runtime and must reject refusal or

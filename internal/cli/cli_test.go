@@ -56,6 +56,126 @@ func TestWorkspacePublicLifecycleEndToEnd(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAccessCLIHasClaudeCodexParityAndDoesNotWidenGuard(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			fixture := newCLIFixture(t)
+			target := filepath.Join(filepath.Dir(fixture.worktree), "target-repository")
+			if err := os.MkdirAll(target, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if output, err := exec.Command("git", "-C", target, "init").CombinedOutput(); err != nil {
+				t.Fatalf("git init target: %v: %s", err, output)
+			}
+			for _, worktree := range []string{fixture.worktree, target} {
+				args := workspaceArgs(fixture, "enroll", runtimeName)
+				args[len(args)-1] = worktree
+				var out, errOut bytes.Buffer
+				if code := Run(args, strings.NewReader(""), &out, &errOut); code != ExitOK {
+					t.Fatalf("enroll %s exit=%d stderr=%s", worktree, code, errOut.String())
+				}
+			}
+			var targetStatus struct {
+				WorkspaceID string `json:"workspace_id"`
+			}
+			args := workspaceArgs(fixture, "status", runtimeName)
+			args[len(args)-1] = target
+			var out, errOut bytes.Buffer
+			if code := Run(args, strings.NewReader(""), &out, &errOut); code != ExitOK || json.Unmarshal(out.Bytes(), &targetStatus) != nil {
+				t.Fatalf("target status exit=%d output=%s stderr=%s", code, out.String(), errOut.String())
+			}
+			contextPath := filepath.Join(fixture.dataRoot, "workspaces", targetStatus.WorkspaceID, "context", "session-context.md")
+			if err := os.MkdirAll(filepath.Dir(contextPath), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(contextPath, []byte("governed-target-context"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			accessBase := []string{"workspace", "access"}
+			common := []string{"--runtime", runtimeName, "--managed-root", fixture.managedRoot, "--data-root", fixture.dataRoot, "--executable", fixture.executable, "--source", fixture.worktree}
+			grantArgs := append(append([]string{}, accessBase...), "grant")
+			grantArgs = append(grantArgs, common...)
+			grantArgs = append(grantArgs, "--target", target, "--purpose", "reference_context", "--include", "context", "--ttl", "30m", "--confirm")
+			out.Reset()
+			errOut.Reset()
+			if code := Run(grantArgs, strings.NewReader(""), &out, &errOut); code != ExitOK {
+				t.Fatalf("grant exit=%d output=%s stderr=%s", code, out.String(), errOut.String())
+			}
+			var grant struct {
+				GrantID string `json:"grant_id"`
+			}
+			if err := json.Unmarshal(out.Bytes(), &grant); err != nil || grant.GrantID == "" {
+				t.Fatalf("decode grant: %v: %s", err, out.String())
+			}
+			readArgs := append(append([]string{}, accessBase...), "read")
+			readArgs = append(readArgs, common...)
+			readArgs = append(readArgs, "--grant-id", grant.GrantID)
+			out.Reset()
+			errOut.Reset()
+			if code := Run(readArgs, strings.NewReader(""), &out, &errOut); code != ExitOK || !strings.Contains(out.String(), "governed-target-context") {
+				t.Fatalf("read exit=%d output=%s stderr=%s", code, out.String(), errOut.String())
+			}
+			for _, private := range []string{fixture.dataRoot, fixture.worktree, target} {
+				if strings.Contains(out.String(), private) {
+					t.Fatalf("access output leaked path %q: %s", private, out.String())
+				}
+			}
+			governedCommand := strings.Join([]string{
+				strconv.Quote(fixture.executable), "workspace", "access", "grant",
+				"--runtime", runtimeName, "--source", strconv.Quote(fixture.worktree),
+				"--target", strconv.Quote(target), "--purpose", "reference_context",
+				"--include", "context", "--ttl", "30m", "--confirm",
+			}, " ")
+			for _, check := range []struct {
+				name    string
+				command string
+				denied  bool
+			}{
+				{name: "exact installed control plane", command: governedCommand},
+				{name: "PATH spoof", command: strings.Replace(governedCommand, strconv.Quote(fixture.executable), "bcgos", 1), denied: true},
+				{name: "compound escape", command: governedCommand + "; cat " + strconv.Quote(filepath.Join(target, "secret.txt")), denied: true},
+			} {
+				t.Run(check.name, func(t *testing.T) {
+					payload := `{"session_id":"guarded","tool_name":"Bash","tool_input":{"command":` + strconv.Quote(check.command) + `}}`
+					out.Reset()
+					errOut.Reset()
+					code := Run(hookArgs(fixture, runtimeName, "pre-action-guard"), strings.NewReader(payload), &out, &errOut)
+					denied := strings.Contains(out.String(), `"permissionDecision": "deny"`)
+					if code != ExitOK || denied != check.denied {
+						t.Fatalf("governed command denied=%t want=%t exit=%d output=%s stderr=%s", denied, check.denied, code, out.String(), errOut.String())
+					}
+				})
+			}
+
+			guardPayload := `{"session_id":"guarded","tool_name":"Read","tool_input":{"file_path":` + strconv.Quote(filepath.Join(target, "secret.txt")) + `}}`
+			out.Reset()
+			errOut.Reset()
+			if code := Run(hookArgs(fixture, runtimeName, "pre-action-guard"), strings.NewReader(guardPayload), &out, &errOut); code != ExitOK || !strings.Contains(out.String(), `"permissionDecision": "deny"`) {
+				t.Fatalf("active grant widened guard: exit=%d output=%s stderr=%s", code, out.String(), errOut.String())
+			}
+
+			removeArgs := workspaceArgs(fixture, "remove", runtimeName)
+			removeArgs[len(removeArgs)-1] = target
+			out.Reset()
+			errOut.Reset()
+			if code := Run(removeArgs, strings.NewReader(""), &out, &errOut); code != ExitOK {
+				t.Fatalf("remove target exit=%d stderr=%s", code, errOut.String())
+			}
+			out.Reset()
+			errOut.Reset()
+			if code := Run(readArgs, strings.NewReader(""), &out, &errOut); code != ExitFailure || !strings.Contains(errOut.String(), "target") {
+				t.Fatalf("removed target read exit=%d output=%s stderr=%s", code, out.String(), errOut.String())
+			}
+			for _, private := range []string{fixture.dataRoot, fixture.worktree, target} {
+				if strings.Contains(errOut.String(), private) {
+					t.Fatalf("workspace access error leaked path %q: %s", private, errOut.String())
+				}
+			}
+		})
+	}
+}
+
 func TestWorkspaceLifecycleRefusesMissingActivationBeforeProjectionWrite(t *testing.T) {
 	fixture := newCLIFixture(t)
 	if err := os.Remove(filepath.Join(fixture.dataRoot, portableactivation.StateRelativePath)); err != nil {

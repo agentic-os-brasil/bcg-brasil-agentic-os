@@ -62,6 +62,15 @@ type Status struct {
 	NextAction    string `json:"next_action,omitempty"`
 }
 
+// Enrollment is an internally resolved, freshly revalidated direct-workspace
+// identity. It intentionally exposes no local path.
+type Enrollment struct {
+	State        string `json:"state"`
+	Runtime      string `json:"runtime"`
+	RepositoryID string `json:"repository_id"`
+	WorkspaceID  string `json:"workspace_id"`
+}
+
 type gitIdentity struct {
 	RepositoryRoot string
 	GitCommonDir   string
@@ -139,6 +148,41 @@ func (manager Manager) Status(ctx context.Context, runtimeName, target string) (
 		return Status{SchemaVersion: SchemaVersion, State: StateConflict, Runtime: runtimeName, RepositoryID: identity.RepositoryID, WorkspaceID: identity.WorkspaceID, Reason: "managed_projection_tracked", NextAction: "remove only Maestro-generated paths from Git tracking, then rerun workspace status"}, nil
 	}
 	return manager.statusWithIdentity(runtimeName, identity, managedRoot, dataRoot, executable)
+}
+
+// ResolveEnrolledWorkspace resolves an opaque workspace identity through the
+// private enrollment binding, then reruns the normal exact-worktree Status
+// validation. It never trusts the stored path as enrollment evidence by itself.
+func (manager Manager) ResolveEnrolledWorkspace(ctx context.Context, runtimeName, workspaceID string) (Enrollment, error) {
+	if runtimeName != "claude" && runtimeName != "codex" {
+		return Enrollment{}, errors.New("runtime must be claude or codex")
+	}
+	if len(workspaceID) != 32 {
+		return Enrollment{}, errors.New("workspace identity is invalid")
+	}
+	decoded, err := hex.DecodeString(workspaceID)
+	if err != nil || len(decoded) != 16 || strings.ToLower(workspaceID) != workspaceID {
+		return Enrollment{}, errors.New("workspace identity is invalid")
+	}
+	_, dataRoot, _, err := manager.authorities()
+	if err != nil {
+		return Enrollment{}, err
+	}
+	var binding privateBinding
+	if err := readJSONStrict(manager.bindingPath(dataRoot, workspaceID, runtimeName), &binding); err != nil {
+		return Enrollment{}, fmt.Errorf("resolve private workspace binding: %w", err)
+	}
+	if binding.SchemaVersion != SchemaVersion || binding.Runtime != runtimeName || binding.WorkspaceID != workspaceID || !validOpaqueID(binding.RepositoryID) {
+		return Enrollment{}, errors.New("private workspace binding identity is invalid")
+	}
+	status, err := manager.Status(ctx, runtimeName, binding.WorktreeRoot)
+	if err != nil {
+		return Enrollment{}, err
+	}
+	if status.State != StateEnrolled || status.WorkspaceID != binding.WorkspaceID || status.RepositoryID != binding.RepositoryID {
+		return Enrollment{}, fmt.Errorf("target workspace enrollment is not intact: %s", status.State)
+	}
+	return Enrollment{State: status.State, Runtime: runtimeName, RepositoryID: status.RepositoryID, WorkspaceID: status.WorkspaceID}, nil
 }
 
 func (manager Manager) statusWithIdentity(runtimeName string, identity gitIdentity, managedRoot, dataRoot, executable string) (Status, error) {
@@ -919,6 +963,14 @@ func validDigest(value string) bool {
 	}
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == sha256.Size
+}
+
+func validOpaqueID(value string) bool {
+	if len(value) != 32 || strings.ToLower(value) != value {
+		return false
+	}
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 16
 }
 
 func (manager Manager) bindingPath(dataRoot, workspaceID, runtimeName string) string {

@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## XWAC - Allow explicit temporary cross-workspace context reads
+
+- Date: 2026-08-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Direct repository entry intentionally binds every session and specialist to one exact enrolled worktree. That isolation prevents an owner working in one repository from deliberately consulting bounded Maestro context from another enrolled workspace, even though the Maestro-folder Hub can coordinate several workspaces. Granting filesystem access to the target checkout, automatically injecting another workspace or copying its private state would break the existing data and agent boundaries.
+- Decision: Add owner-confirmed, short-lived, revocable and read-only cross-workspace context grants between two distinct, intact enrolled workspace identities. A grant binds the authenticated local principal and device, source and target workspace and repository identities, runtime, a closed purpose and an explicit allowlist of Maestro-owned context sources; it is integrity-protected in owner-private state and contains no raw path, identity or content body. An explicit read revalidates the grant and both enrollments, then assembles only bounded target session context, canonical generated memory and continuity through their existing authorities. It never authorizes checkout reads, writes, tool scope, specialist delegation, automatic SessionStart injection or external effects. Expired, revoked, tampered, replayed, ambiguous or changed-scope grants fail closed.
+- Consequences: A direct-repository Maestro session can consult useful context from another enrolled workspace without weakening exact-worktree guards or copying target material into the source checkout. The owner must explicitly choose the target, purpose, sources and duration; context bodies exist only in bounded ephemeral command output. Claude and Codex consume the same runtime-neutral contract and must fail parity tests when either projection omits it. Cross-workspace mutation, generic repository browsing, standing delegation and automatic context federation remain unavailable.
+- Refs: DATA; FREE; PORT; DRWT; DUET; SELP; NHUB; specs/002-data-boundaries.md; specs/015-session-context-packet.md; specs/016-workspace-agent-boundaries.md; specs/055-direct-repository-worktree-entry.md; specs/057-governed-cross-workspace-context.md; internal/workspaceaccess
+- Supersedes: none
+
 ## HBND - Bound direct hook context to native delivery capacity
 
 - Date: 2026-08-29

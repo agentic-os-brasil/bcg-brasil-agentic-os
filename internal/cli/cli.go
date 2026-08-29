@@ -5,6 +5,7 @@ package cli
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -32,6 +33,7 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionhook"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceaccess"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspaceprojection"
 )
 
@@ -59,7 +61,7 @@ func Run(args []string, in io.Reader, out, errOut io.Writer) int {
 	switch args[0] {
 	case "help", "--help", "-h":
 		fmt.Fprintln(out, publicUsage)
-		fmt.Fprintln(out, "workspace lifecycle: enroll, status, repair, remove")
+		fmt.Fprintln(out, "workspace lifecycle: enroll, status, repair, remove, access")
 		return ExitOK
 	case "version":
 		fmt.Fprintf(out, "bcgos %s\n", Version)
@@ -76,8 +78,11 @@ func Run(args []string, in io.Reader, out, errOut io.Writer) int {
 
 func runWorkspace(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: bcgos workspace <enroll|status|repair|remove> --runtime claude|codex <repository-or-worktree>")
+		fmt.Fprintln(errOut, "usage: bcgos workspace <enroll|status|repair|remove|access> ...")
 		return ExitUsage
+	}
+	if args[0] == "access" {
+		return runWorkspaceAccess(args[1:], out, errOut)
 	}
 	operation := args[0]
 	if operation != "enroll" && operation != "status" && operation != "repair" && operation != "remove" {
@@ -114,6 +119,169 @@ func runWorkspace(args []string, out, errOut io.Writer) int {
 		return reportError(errOut, err)
 	}
 	return writeJSON(out, status, errOut)
+}
+
+func runWorkspaceAccess(args []string, out, errOut io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "usage: bcgos workspace access <grant|read|status|revoke> --runtime claude|codex --source PATH ...")
+		return ExitUsage
+	}
+	operation := args[0]
+	if operation != "grant" && operation != "read" && operation != "status" && operation != "revoke" {
+		fmt.Fprintln(errOut, "usage: bcgos workspace access <grant|read|status|revoke> --runtime claude|codex --source PATH ...")
+		return ExitUsage
+	}
+	flags := flag.NewFlagSet("workspace access "+operation, flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	runtimeName := flags.String("runtime", "", "claude or codex")
+	sourcePath := flags.String("source", "", "exact enrolled source repository or worktree")
+	targetPath := flags.String("target", "", "exact enrolled target repository or worktree")
+	purpose := flags.String("purpose", "", "closed access purpose")
+	include := flags.String("include", "", "comma-separated context sources")
+	ttl := flags.Duration("ttl", workspaceaccess.DefaultTTL, "grant lifetime")
+	confirmed := flags.Bool("confirm", false, "explicit owner confirmation")
+	grantID := flags.String("grant-id", "", "opaque grant id")
+	managedRoot := flags.String("managed-root", "", "activated managed root")
+	dataRoot := flags.String("data-root", "", "owner-private data root")
+	executable := flags.String("executable", "", "installed CLI path")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || (*runtimeName != "claude" && *runtimeName != "codex") || strings.TrimSpace(*sourcePath) == "" {
+		fmt.Fprintf(errOut, "usage: bcgos workspace access %s --runtime claude|codex --source PATH ...\n", operation)
+		return ExitUsage
+	}
+	manager, err := resolveManager(*managedRoot, *dataRoot, *executable)
+	if err != nil {
+		return reportWorkspaceAccessError(errOut, operation, errors.New("installed Maestro activation could not be verified"))
+	}
+	sourceStatus, err := manager.Status(background(), *runtimeName, *sourcePath)
+	if err != nil || sourceStatus.State != workspaceprojection.StateEnrolled {
+		if err == nil {
+			err = fmt.Errorf("source workspace is %s", sourceStatus.State)
+		}
+		return reportWorkspaceAccessError(errOut, operation, err)
+	}
+	source := workspaceaccess.Authority{WorkspaceID: sourceStatus.WorkspaceID, RepositoryID: sourceStatus.RepositoryID}
+	identity, err := localWorkspaceAccessIdentity()
+	if err != nil {
+		return reportWorkspaceAccessError(errOut, operation, err)
+	}
+	store := workspaceaccess.Store{Root: manager.DataRoot}
+	switch operation {
+	case "grant":
+		if strings.TrimSpace(*targetPath) == "" || strings.TrimSpace(*purpose) == "" || strings.TrimSpace(*include) == "" {
+			fmt.Fprintln(errOut, "usage: bcgos workspace access grant --runtime claude|codex --source PATH --target PATH --purpose PURPOSE --include context,memory,continuity [--ttl 30m] --confirm")
+			return ExitUsage
+		}
+		targetStatus, statusErr := manager.Status(background(), *runtimeName, *targetPath)
+		if statusErr != nil || targetStatus.State != workspaceprojection.StateEnrolled {
+			if statusErr == nil {
+				statusErr = fmt.Errorf("target workspace is %s", targetStatus.State)
+			}
+			return reportWorkspaceAccessError(errOut, operation, statusErr)
+		}
+		status, grantErr := store.Grant(workspaceaccess.GrantRequest{
+			Runtime: *runtimeName, Source: source,
+			Target:  workspaceaccess.Authority{WorkspaceID: targetStatus.WorkspaceID, RepositoryID: targetStatus.RepositoryID},
+			Purpose: *purpose, Sources: splitCommaList(*include), TTL: *ttl, Confirmed: *confirmed,
+		}, identity)
+		if grantErr != nil {
+			return reportWorkspaceAccessError(errOut, operation, grantErr)
+		}
+		return writeJSON(out, status, errOut)
+	case "status":
+		if strings.TrimSpace(*grantID) == "" {
+			fmt.Fprintln(errOut, "usage: bcgos workspace access status --runtime claude|codex --source PATH --grant-id ID")
+			return ExitUsage
+		}
+		status, statusErr := store.Status(*runtimeName, source, *grantID, identity)
+		if statusErr != nil {
+			return reportWorkspaceAccessError(errOut, operation, statusErr)
+		}
+		return writeJSON(out, status, errOut)
+	case "revoke":
+		if strings.TrimSpace(*grantID) == "" {
+			fmt.Fprintln(errOut, "usage: bcgos workspace access revoke --runtime claude|codex --source PATH --grant-id ID")
+			return ExitUsage
+		}
+		status, revokeErr := store.Revoke(*runtimeName, source, *grantID, identity)
+		if revokeErr != nil {
+			return reportWorkspaceAccessError(errOut, operation, revokeErr)
+		}
+		return writeJSON(out, status, errOut)
+	case "read":
+		if strings.TrimSpace(*grantID) == "" {
+			fmt.Fprintln(errOut, "usage: bcgos workspace access read --runtime claude|codex --source PATH --grant-id ID")
+			return ExitUsage
+		}
+		result, readErr := store.Read(background(), *runtimeName, source, *grantID, identity, func(ctx context.Context, runtimeName, workspaceID string) (workspaceaccess.Authority, error) {
+			enrollment, resolveErr := manager.ResolveEnrolledWorkspace(ctx, runtimeName, workspaceID)
+			if resolveErr != nil {
+				return workspaceaccess.Authority{}, resolveErr
+			}
+			return workspaceaccess.Authority{WorkspaceID: enrollment.WorkspaceID, RepositoryID: enrollment.RepositoryID}, nil
+		})
+		if readErr != nil {
+			return reportWorkspaceAccessError(errOut, operation, readErr)
+		}
+		return writeJSON(out, result, errOut)
+	}
+	return ExitUsage
+}
+
+func splitCommaList(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+func localWorkspaceAccessIdentity() (workspaceaccess.Identity, error) {
+	current, err := user.Current()
+	if err != nil {
+		return workspaceaccess.Identity{}, fmt.Errorf("resolve authenticated local OS principal: %w", err)
+	}
+	hostname, err := os.Hostname()
+	if err != nil {
+		return workspaceaccess.Identity{}, fmt.Errorf("resolve local device identity: %w", err)
+	}
+	principal := current.Uid + "\x00" + current.Username
+	if strings.Trim(principal, "\x00") == "" || strings.TrimSpace(hostname) == "" {
+		return workspaceaccess.Identity{}, errors.New("stable local principal and device identity are required")
+	}
+	return workspaceaccess.DeriveIdentity(principal, hostname), nil
+}
+
+func reportWorkspaceAccessError(errOut io.Writer, operation string, err error) int {
+	reason := "the bounded request could not be verified"
+	message := strings.ToLower(err.Error())
+	switch {
+	case errors.Is(err, workspaceaccess.ErrConfirmationRequired):
+		reason = "explicit owner confirmation is required"
+	case errors.Is(err, workspaceaccess.ErrExpired):
+		reason = "the grant expired"
+	case errors.Is(err, workspaceaccess.ErrRevoked):
+		reason = "the grant was revoked"
+	case strings.Contains(message, "target"):
+		reason = "the target enrollment is unavailable or changed"
+	case strings.Contains(message, "source workspace"):
+		reason = "the source enrollment is unavailable or changed"
+	case strings.Contains(message, "integrity"):
+		reason = "grant integrity verification failed"
+	case strings.Contains(message, "identity") || strings.Contains(message, "scope"):
+		reason = "the grant identity or scope changed"
+	case strings.Contains(message, "symlink"):
+		reason = "a private context source is unsafe"
+	case strings.Contains(message, "bounded") || strings.Contains(message, "8 kib"):
+		reason = "a private context source exceeded its bound"
+	case strings.Contains(message, "capacity") || strings.Contains(message, "inspection limit"):
+		reason = "the bounded grant store requires maintenance"
+	case strings.Contains(message, "ttl") || strings.Contains(message, "purpose") || strings.Contains(message, "registry") || strings.Contains(message, "invalid") || strings.Contains(message, "trailing"):
+		reason = "the request is outside the closed workspace-access contract"
+	}
+	return reportError(errOut, fmt.Errorf("workspace access %s failed: %s; no repository or work content was changed; next safe command: bcgos workspace access status --runtime <claude|codex> --source <repository-or-worktree> --grant-id <id>", operation, reason))
 }
 
 func runHook(args []string, in io.Reader, out, errOut io.Writer) int {
@@ -267,7 +435,7 @@ func runHook(args []string, in io.Reader, out, errOut io.Writer) int {
 				return writeHookDenial(out, runtimeName, challengeDenial(result), errOut)
 			}
 		}
-		if reason := unsafeToolPath(body, *workspaceRoot); reason != "" {
+		if reason := unsafeToolPath(body, *workspaceRoot, *executable); reason != "" {
 			if codexNative != nil {
 				if receipt, receiptErr := codexadapter.Receipt(lifecycle.PreActionGuard, *codexNative); receiptErr == nil {
 					_, _ = lifecycle.Record(*dataRoot, status.WorkspaceID, receipt)
@@ -735,7 +903,7 @@ func readOptionalBounded(root, relative string, limit int64) (string, error) {
 	return strings.TrimSpace(string(body)), nil
 }
 
-func unsafeToolPath(body []byte, workspaceRoot string) string {
+func unsafeToolPath(body []byte, workspaceRoot, installedExecutable string) string {
 	if len(strings.TrimSpace(string(body))) == 0 {
 		return "tool input is required"
 	}
@@ -769,11 +937,108 @@ func unsafeToolPath(body []byte, workspaceRoot string) string {
 		}
 	}
 	for _, command := range commands {
+		if matched, reason := governedWorkspaceAccessCommand(command, installedExecutable, workspaceRoot); matched {
+			if reason != "" {
+				return reason
+			}
+			continue
+		}
 		if reason := unsafeShellCommand(command, workspaceRoot); reason != "" {
 			return reason
 		}
 	}
 	return ""
+}
+
+func governedWorkspaceAccessCommand(command, installedExecutable, workspaceRoot string) (bool, string) {
+	commands, err := shellCommandWords(command)
+	if err != nil || len(commands) == 0 || len(commands[0]) == 0 {
+		return false, ""
+	}
+	expected, err := filepath.Abs(filepath.Clean(installedExecutable))
+	if err != nil {
+		return false, ""
+	}
+	actual := strings.Trim(commands[0][0], "\"'")
+	if !filepath.IsAbs(actual) {
+		return false, ""
+	}
+	actual, err = filepath.Abs(filepath.Clean(actual))
+	if err != nil || actual != expected {
+		return false, ""
+	}
+	if len(commands) != 1 {
+		return true, "governed workspace access must be one exact simple command"
+	}
+	words := commands[0]
+	if len(words) < 4 || words[1] != "workspace" || words[2] != "access" {
+		return false, ""
+	}
+	operation := words[3]
+	if operation != "grant" && operation != "read" && operation != "status" && operation != "revoke" {
+		return true, "governed workspace access operation is invalid"
+	}
+	values := map[string]string{}
+	confirmed := false
+	for index := 4; index < len(words); index++ {
+		name := words[index]
+		if name == "--confirm" {
+			if confirmed {
+				return true, "governed workspace access contains a duplicate flag"
+			}
+			confirmed = true
+			continue
+		}
+		if name != "--runtime" && name != "--source" && name != "--target" && name != "--purpose" && name != "--include" && name != "--ttl" && name != "--grant-id" {
+			return true, "governed workspace access contains an unsupported flag"
+		}
+		if index+1 >= len(words) || strings.HasPrefix(words[index+1], "--") || values[name] != "" {
+			return true, "governed workspace access contains a missing or duplicate flag value"
+		}
+		values[name] = words[index+1]
+		index++
+	}
+	if values["--runtime"] != "claude" && values["--runtime"] != "codex" {
+		return true, "governed workspace access runtime is invalid"
+	}
+	source, err := filepath.Abs(filepath.Clean(values["--source"]))
+	expectedSource, sourceErr := filepath.Abs(filepath.Clean(workspaceRoot))
+	if err != nil || sourceErr != nil || source != expectedSource {
+		return true, "governed workspace access source must be the exact enrolled worktree"
+	}
+	if operation == "grant" {
+		if !confirmed || !filepath.IsAbs(values["--target"]) || values["--purpose"] == "" || values["--include"] == "" {
+			return true, "governed workspace access grant is incomplete"
+		}
+		if values["--purpose"] != workspaceaccess.PurposeReferenceContext && values["--purpose"] != workspaceaccess.PurposeCompareImplementation && values["--purpose"] != workspaceaccess.PurposeReuseLearning && values["--purpose"] != workspaceaccess.PurposeDependencyCoordination {
+			return true, "governed workspace access purpose is invalid"
+		}
+		for _, sourceName := range splitCommaList(values["--include"]) {
+			if sourceName != workspaceaccess.SourceContext && sourceName != workspaceaccess.SourceMemory && sourceName != workspaceaccess.SourceContinuity {
+				return true, "governed workspace access source selection is invalid"
+			}
+		}
+		if len(splitCommaList(values["--include"])) == 0 {
+			return true, "governed workspace access source selection is empty"
+		}
+		if values["--grant-id"] != "" {
+			return true, "governed workspace access grant contains an unrelated grant id"
+		}
+		if values["--ttl"] != "" {
+			ttl, parseErr := time.ParseDuration(values["--ttl"])
+			if parseErr != nil || ttl < workspaceaccess.MinimumTTL || ttl > workspaceaccess.MaximumTTL {
+				return true, "governed workspace access TTL is invalid"
+			}
+		}
+		return true, ""
+	}
+	if confirmed || values["--target"] != "" || values["--purpose"] != "" || values["--include"] != "" || values["--ttl"] != "" || len(values["--grant-id"]) != 32 {
+		return true, "governed workspace access command is outside its read/status/revoke grammar"
+	}
+	if _, err := hex.DecodeString(values["--grant-id"]); err != nil || strings.ToLower(values["--grant-id"]) != values["--grant-id"] {
+		return true, "governed workspace access grant id is invalid"
+	}
+	return true, ""
 }
 
 func collectGuardFields(value any, key string, paths, commands *[]string) {

@@ -59,6 +59,32 @@ func TestDirectRepositoryHubCannotBecomeOneSided(t *testing.T) {
 	}
 }
 
+func TestGovernedCrossWorkspaceContextCannotBecomeOneSided(t *testing.T) {
+	manifest, err := baseruntime.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, capability := range manifest.Capabilities {
+		if capability.ID != "governed_cross_workspace_context" {
+			continue
+		}
+		claude := capability.Runtimes["claude"]
+		codex := capability.Runtimes["codex"]
+		if claude.State != "operational_beta" || codex.State != "operational_beta" || !claude.Configured || !codex.Configured || claude.NativeQualified || codex.NativeQualified {
+			t.Fatalf("governed cross-workspace context drifted: claude=%#v codex=%#v", claude, codex)
+		}
+		for _, mechanism := range []string{claude.Mechanism, codex.Mechanism} {
+			for _, required := range []string{"explicit", "read-only", "temporary"} {
+				if !strings.Contains(mechanism, required) {
+					t.Fatalf("mechanism %q omits %q", mechanism, required)
+				}
+			}
+		}
+		return
+	}
+	t.Fatal("governed_cross_workspace_context capability is missing")
+}
+
 func TestClaudeLifecycleIsOperationalBetaWhileQualificationRemainsTelemetry(t *testing.T) {
 	manifest, err := baseruntime.Manifest()
 	if err != nil {

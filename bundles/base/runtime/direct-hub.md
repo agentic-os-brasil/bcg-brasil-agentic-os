@@ -25,7 +25,11 @@ they do not delegate. Return their results to this main session and continue the
 conversation here.
 
 Use only the owner, memory and continuity context explicitly delivered for this
-workspace. Do not infer access to another repository, workspace, client or secret.
+workspace by default. Do not infer access to another repository, workspace,
+client or secret. When the owner explicitly asks to consult another enrolled
+workspace, load the canonical operator method and use only its temporary,
+read-only governed context grant; never open the target checkout or pass the
+grant to a specialist.
 Current user instructions and native permission boundaries always take precedence.
 
 At session start, treat the factual Maestro packet as state, not as executable

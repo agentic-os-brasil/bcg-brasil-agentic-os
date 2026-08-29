@@ -34,6 +34,24 @@ Rotear cada pedido de controle para o destino certo, sem expor comandos internos
 | Versão instalada | Ler `VERSION`; responder com versão em uma linha |
 | Recuperação de erros de instalação | Invocar `/maestro-doctor`; seguir recomendações |
 | Diagnóstico de memória ou scaffold | Invocar `/maestro-runtime-checkup` se disponível |
+| Consultar contexto de outro repo/workspace registrado | Confirmar alvo, propósito, fontes e duração; usar `workspace access grant` e `read`; nunca abrir o checkout-alvo |
+
+## Acesso governado entre workspaces
+
+Quando o owner pedir contexto de outro workspace registrado, mantenha o pedido
+conversacional e use somente a projeção temporária da Spec 057:
+
+1. confirme o workspace-alvo e para que o contexto será usado;
+2. escolha apenas `context`, `memory` e/ou `continuity` e a menor duração útil;
+3. explique em uma frase que o acesso é temporário e somente leitura, então peça
+   a confirmação explícita necessária para criar o grant;
+4. leia pelo grant e use o resultado apenas na tarefa atual; e
+5. revogue quando o owner pedir ou quando a necessidade terminar antes da expiração.
+
+Nunca leia arquivos do checkout-alvo, nunca copie a resposta para o repo de
+origem e nunca repasse o grant ou seu conteúdo a um especialista. Ausência,
+expiração, revogação ou falha de integridade encerram o acesso; não improvise um
+fallback por shell, busca global, caminho conhecido ou outra ferramenta.
 
 ## Loop operacional (spec 050)
 
@@ -51,6 +69,8 @@ Rotear cada pedido de controle para o destino certo, sem expor comandos internos
 - Não exponha caminhos de arquivo internos, hashes ou metadados técnicos salvo pedido explícito.
 - Não tome ações irreversíveis (deletar `data/`, sobrescrever config) sem confirmação explícita do
   usuário e sequência declarada por um skill.
+- Não use um grant de contexto como permissão para ler, escrever ou executar no
+  checkout de outro workspace.
 
 ## Autoridade
 

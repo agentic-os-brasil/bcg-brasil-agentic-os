@@ -685,6 +685,32 @@ func TestModifiedManagedContentBlocksRepairAndRemoveWithoutOverwrite(t *testing.
 	}
 }
 
+func TestResolveEnrolledWorkspaceRevalidatesPrivateBinding(t *testing.T) {
+	fixture := newFixture(t)
+	target := filepath.Join(filepath.Dir(fixture.worktree), "second-repository")
+	if err := os.MkdirAll(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, target, "init")
+	enrolled, err := fixture.manager.Enroll(context.Background(), "claude", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := fixture.manager.ResolveEnrolledWorkspace(context.Background(), "claude", enrolled.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.State != StateEnrolled || resolved.WorkspaceID != enrolled.WorkspaceID || resolved.RepositoryID != enrolled.RepositoryID {
+		t.Fatalf("resolved enrollment = %#v", resolved)
+	}
+	if _, err := fixture.manager.Remove(context.Background(), "claude", target); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.manager.ResolveEnrolledWorkspace(context.Background(), "claude", enrolled.WorkspaceID); err == nil {
+		t.Fatal("removed target enrollment was still resolvable")
+	}
+}
+
 type testFixture struct {
 	manager      Manager
 	managedRoot  string
