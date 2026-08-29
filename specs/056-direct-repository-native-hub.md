@@ -112,6 +112,12 @@ repository contracts only. Release readiness additionally requires fresh
 native sessions covering tools, governed skills, routing, hooks, resume,
 compaction and distinct Git worktrees for both supported hosts.
 
+The paired development matrix in Spec 059 qualifies those shared direct-mode
+surfaces without inventing a Codex-native Maestro-folder Hub or Codex managed
+specialist execution. Runtime-specific cells must match the canonical
+capability manifest; shared direct cells must pass for both hosts against the
+same ZIP bytes.
+
 ## Out of scope
 
 - replacing the Maestro control plane with an autonomous agent;

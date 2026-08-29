@@ -3,6 +3,7 @@
 # Idempotent. Fail-open. Never blocks Claude Code.
 
 set +e
+umask 077
 
 # CLAUDE_PROJECT_DIR is injected by Claude Code CLI. In non-standard paths
 # (/tmp, paths with spaces, external drives) it may be missing. Fallback to
@@ -32,6 +33,41 @@ TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 log_line() {
   ( printf '%s  %s\n' "$TS" "$1" >> "$LOG" ) 2>/dev/null
+}
+
+# The legacy Hub memory bridge accepts only an owner-private source boundary.
+# New scaffold state inherits umask 077; this bounded pass also repairs older
+# ZIP workspaces that created the fixed memory tiers under a permissive umask.
+# It never follows symlinks or changes file bytes.
+harden_legacy_memory_permissions() {
+  local directory candidate metadata
+  for directory in \
+    "$DATA_DIR/memory" \
+    "$DATA_DIR/memory/recent" \
+    "$DATA_DIR/memory/weekly" \
+    "$DATA_DIR/memory/medium-term" \
+    "$DATA_DIR/memory/lifetime" \
+    "$DATA_DIR/memory/policies"; do
+    if [ -d "$directory" ] && [ ! -L "$directory" ]; then
+      chmod 700 "$directory" 2>/dev/null
+    fi
+  done
+  for directory in recent weekly medium-term lifetime; do
+    [ -d "$DATA_DIR/memory/$directory" ] && [ ! -L "$DATA_DIR/memory/$directory" ] || continue
+    for candidate in "$DATA_DIR/memory/$directory/"*.md; do
+      if [ -f "$candidate" ] && [ ! -L "$candidate" ]; then
+        chmod 600 "$candidate" 2>/dev/null
+      fi
+    done
+  done
+  for metadata in \
+    "$DATA_DIR/memory/.gitignore" \
+    "$DATA_DIR/memory/.schema-version" \
+    "$DATA_DIR/memory/policies/lifetime.json"; do
+    if [ -f "$metadata" ] && [ ! -L "$metadata" ]; then
+      chmod 600 "$metadata" 2>/dev/null
+    fi
+  done
 }
 
 # A platform ZIP carries a locally verifiable installed control plane under
@@ -272,6 +308,8 @@ EOF
     log_line "BACKFILL  data/memory/.schema-version (v1)"
   fi
 fi
+
+harden_legacy_memory_permissions
 
 if [ -f "$MARKER" ]; then
   # ---------------------------------------------------------------------------

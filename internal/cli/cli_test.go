@@ -64,7 +64,7 @@ func TestWorkspaceAccessCLIHasClaudeCodexParityAndDoesNotWidenGuard(t *testing.T
 			if err := os.MkdirAll(target, 0o700); err != nil {
 				t.Fatal(err)
 			}
-			if output, err := exec.Command("git", "-C", target, "init").CombinedOutput(); err != nil {
+			if output, err := testGitCommand("-C", target, "init").CombinedOutput(); err != nil {
 				t.Fatalf("git init target: %v: %s", err, output)
 			}
 			for _, worktree := range []string{fixture.worktree, target} {
@@ -540,7 +540,7 @@ func TestHookSessionStartInjectsManagedOrientationWhenCodexAgentsIsTracked(t *te
 		{"-C", fixture.worktree, "add", "AGENTS.md"},
 		{"-C", fixture.worktree, "commit", "-m", "tracked orientation"},
 	} {
-		if output, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+		if output, err := testGitCommand(args...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v: %s", args, err, output)
 		}
 	}
@@ -604,7 +604,7 @@ func TestHookSessionStartDoesNotInjectTrackedClaudeOrientationIntoNativeHub(t *t
 		{"-C", fixture.worktree, "add", "CLAUDE.md"},
 		{"-C", fixture.worktree, "commit", "-m", "tracked Claude orientation"},
 	} {
-		if output, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+		if output, err := testGitCommand(args...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v: %s", args, err, output)
 		}
 	}
@@ -981,6 +981,96 @@ func TestClaudeDirectHooksEnforceManagedAgentFlowAndRecordLifecycle(t *testing.T
 	}
 }
 
+func TestCodexHookDiscoveredFromMainWorktreeBindsNativeLinkedWorktreeCWD(t *testing.T) {
+	fixture := newCLIFixture(t)
+	seed := filepath.Join(fixture.worktree, "seed.txt")
+	if err := os.WriteFile(seed, []byte("seed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"-C", fixture.worktree, "add", "seed.txt"}, {"-C", fixture.worktree, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "seed"}} {
+		if output, err := testGitCommand(args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, output)
+		}
+	}
+	var out, errOut bytes.Buffer
+	if code := Run(workspaceArgs(fixture, "enroll", "codex"), strings.NewReader(""), &out, &errOut); code != ExitOK {
+		t.Fatalf("enroll main exit=%d stderr=%s", code, errOut.String())
+	}
+	second := filepath.Join(filepath.Dir(fixture.worktree), "linked-worktree")
+	if output, err := testGitCommand("-C", fixture.worktree, "worktree", "add", "-b", "qualification-linked", second).CombinedOutput(); err != nil {
+		t.Fatalf("git worktree add: %v: %s", err, output)
+	}
+	secondArgs := workspaceArgs(fixture, "enroll", "codex")
+	secondArgs[len(secondArgs)-1] = second
+	out.Reset()
+	errOut.Reset()
+	if code := Run(secondArgs, strings.NewReader(""), &out, &errOut); code != ExitOK {
+		t.Fatalf("enroll linked exit=%d stderr=%s", code, errOut.String())
+	}
+	readProjection := func(root string) struct {
+		WorkspaceID string `json:"workspace_id"`
+	} {
+		var projection struct {
+			WorkspaceID string `json:"workspace_id"`
+		}
+		body, err := os.ReadFile(filepath.Join(root, ".bcgos", "workspace-projections", "codex.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(body, &projection); err != nil {
+			t.Fatal(err)
+		}
+		return projection
+	}
+	mainProjection := readProjection(fixture.worktree)
+	secondProjection := readProjection(second)
+	for workspaceID, sentinel := range map[string]string{
+		mainProjection.WorkspaceID:   "MAIN-WORKTREE-SENTINEL",
+		secondProjection.WorkspaceID: "SECOND-WORKTREE-SENTINEL",
+	} {
+		path := filepath.Join(fixture.dataRoot, "workspaces", workspaceID, "continuity", "active.md")
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(sentinel+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out.Reset()
+	errOut.Reset()
+	payload := `{"session_id":"session-linked","cwd":` + strconv.Quote(second) + `}`
+	if code := Run(hookArgs(fixture, "codex", "session-start"), strings.NewReader(payload), &out, &errOut); code != ExitOK {
+		t.Fatalf("linked SessionStart exit=%d stderr=%s", code, errOut.String())
+	}
+	context := hookAdditionalContext(t, out.Bytes())
+	if !strings.Contains(context, "SECOND-WORKTREE-SENTINEL") || strings.Contains(context, "MAIN-WORKTREE-SENTINEL") {
+		t.Fatalf("hook context crossed worktrees: %s", context)
+	}
+	unrelated := filepath.Join(filepath.Dir(fixture.worktree), "unrelated-repository")
+	if err := os.Mkdir(unrelated, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := testGitCommand("-C", unrelated, "init").CombinedOutput(); err != nil {
+		t.Fatalf("git init unrelated: %v: %s", err, output)
+	}
+	unrelatedArgs := workspaceArgs(fixture, "enroll", "codex")
+	unrelatedArgs[len(unrelatedArgs)-1] = unrelated
+	out.Reset()
+	errOut.Reset()
+	if code := Run(unrelatedArgs, strings.NewReader(""), &out, &errOut); code != ExitOK {
+		t.Fatalf("enroll unrelated exit=%d stderr=%s", code, errOut.String())
+	}
+	out.Reset()
+	errOut.Reset()
+	payload = `{"session_id":"session-unrelated","cwd":` + strconv.Quote(unrelated) + `}`
+	if code := Run(hookArgs(fixture, "codex", "session-start"), strings.NewReader(payload), &out, &errOut); code == ExitOK {
+		t.Fatalf("main hook accepted unrelated enrolled repository: output=%s", out.String())
+	}
+	if !strings.Contains(errOut.String(), "does not belong to the configured repository") {
+		t.Fatalf("unrelated rejection omitted safe reason: %s", errOut.String())
+	}
+}
+
 func TestCodexDirectPostAndStopHooksRecordLifecycle(t *testing.T) {
 	fixture := newCLIFixture(t)
 	var out, errOut bytes.Buffer
@@ -1191,7 +1281,7 @@ func newCLIFixture(t *testing.T) cliFixture {
 	if _, err := portableactivation.Activate(portableactivation.Options{ManagedRoot: fixture.managedRoot, DataRoot: fixture.dataRoot}); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("git", "-C", fixture.worktree, "init")
+	command := testGitCommand("-C", fixture.worktree, "init")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v: %s", err, output)
 	}
@@ -1281,6 +1371,21 @@ func containsString(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func testGitCommand(args ...string) *exec.Cmd {
+	command := exec.Command("git", args...)
+	for _, variable := range os.Environ() {
+		if strings.HasPrefix(variable, "GIT_INDEX_FILE=") ||
+			strings.HasPrefix(variable, "GIT_DIR=") ||
+			strings.HasPrefix(variable, "GIT_WORK_TREE=") ||
+			strings.HasPrefix(variable, "GIT_PREFIX=") ||
+			strings.HasPrefix(variable, "GIT_CONFIG_PARAMETERS=") {
+			continue
+		}
+		command.Env = append(command.Env, variable)
+	}
+	return command
 }
 
 func executableName() string {

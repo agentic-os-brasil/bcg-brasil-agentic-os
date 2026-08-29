@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -408,6 +409,19 @@ func runHook(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 		return reportError(errOut, errors.New("hook input exceeded the bounded lifecycle contract"))
 	}
+	effectiveWorkspaceRoot := *workspaceRoot
+	if runtimeName == "codex" && len(bytes.TrimSpace(body)) > 0 {
+		native, parseErr := codexadapter.ParseReader(strings.NewReader(string(body)))
+		if parseErr == nil && strings.TrimSpace(native.CWD) != "" {
+			effectiveWorkspaceRoot, status, err = resolveCodexHookWorkspace(manager, *workspaceRoot, status, native.CWD)
+			if err != nil {
+				if semanticEvent == "pre_action_guard" {
+					return writeHookDenial(out, runtimeName, "native worktree identity could not be verified", errOut)
+				}
+				return reportError(errOut, err)
+			}
+		}
+	}
 	switch semanticEvent {
 	case "session_start", "context_inject":
 		var codexNative *codexadapter.NativeInput
@@ -451,7 +465,7 @@ func runHook(args []string, in io.Reader, out, errOut io.Writer) int {
 				codexNative = &native
 			}
 		}
-		contextBody, err := composeScopedContext(*dataRoot, runtimeName, semanticEvent, *workspaceRoot, status)
+		contextBody, err := composeScopedContext(*dataRoot, runtimeName, semanticEvent, effectiveWorkspaceRoot, status)
 		if err != nil {
 			return reportError(errOut, err)
 		}
@@ -519,7 +533,7 @@ func runHook(args []string, in io.Reader, out, errOut io.Writer) int {
 				return writeHookDenial(out, runtimeName, challengeDenial(result), errOut)
 			}
 		}
-		if reason := unsafeToolPath(body, *workspaceRoot, *executable); reason != "" {
+		if reason := unsafeToolPath(body, effectiveWorkspaceRoot, *executable); reason != "" {
 			if codexNative != nil {
 				if receipt, receiptErr := codexadapter.Receipt(lifecycle.PreActionGuard, *codexNative); receiptErr == nil {
 					_, _ = lifecycle.Record(*dataRoot, status.WorkspaceID, receipt)
@@ -685,6 +699,31 @@ func resolveManager(managedRoot, dataRoot, executable string) (workspaceprojecti
 		return workspaceprojection.Manager{}, fmt.Errorf("installed Maestro activation is not verified: %w", err)
 	}
 	return workspaceprojection.Manager{ManagedRoot: managedRoot, DataRoot: dataRoot, Executable: executable}, nil
+}
+
+func resolveCodexHookWorkspace(manager workspaceprojection.Manager, configuredRoot string, configuredStatus workspaceprojection.Status, nativeCWD string) (string, workspaceprojection.Status, error) {
+	if !filepath.IsAbs(nativeCWD) {
+		return "", workspaceprojection.Status{}, errors.New("Codex native worktree root must be absolute")
+	}
+	candidateRoot := filepath.Clean(nativeCWD)
+	configuredAbsolute, err := filepath.Abs(filepath.Clean(configuredRoot))
+	if err != nil {
+		return "", workspaceprojection.Status{}, fmt.Errorf("resolve configured Codex worktree: %w", err)
+	}
+	if candidateRoot == configuredAbsolute {
+		return configuredAbsolute, configuredStatus, nil
+	}
+	candidateStatus, err := manager.Status(background(), "codex", candidateRoot)
+	if err != nil {
+		return "", workspaceprojection.Status{}, fmt.Errorf("verify Codex native worktree: %w", err)
+	}
+	if candidateStatus.State != workspaceprojection.StateEnrolled {
+		return "", workspaceprojection.Status{}, fmt.Errorf("Codex native worktree is %s", candidateStatus.State)
+	}
+	if candidateStatus.RepositoryID == "" || candidateStatus.RepositoryID != configuredStatus.RepositoryID {
+		return "", workspaceprojection.Status{}, errors.New("Codex native worktree does not belong to the configured repository")
+	}
+	return candidateRoot, candidateStatus, nil
 }
 
 func composeScopedContext(dataRoot, runtimeName, semanticEvent, workspaceRoot string, status workspaceprojection.Status) (string, error) {

@@ -15,8 +15,8 @@ go run ./dev/native-qualification \
   --artifact dist/Maestro-Portable-0.1.13-macos-arm64-local-beta-unsigned.zip
 ```
 
-The Codex path uses one tool-free initialization session followed by three
-ephemeral qualification sessions with an explicitly named model,
+The Codex path uses one persisted initialization session for the native-resume
+cell plus bounded ephemeral qualification sessions with an explicitly named model,
 `--approve-for-me` and its workspace-write sandbox. It ignores user/project
 execpolicy rules and runs with a disposable `CODEX_HOME` containing only a
 temporary copy of the existing authentication file plus a minimal config that
@@ -27,12 +27,13 @@ bypasses only the interactive trust review for the exact
 projected hooks already inspected by this synthetic matrix. Normal users must
 review those hooks through `/hooks`; the product does not bypass trust.
 
-The identity gate uses the natural prompt `Quem é você?` in a tool-free
-session without naming the expected product/runtime pair. Passing evidence must
-affirm both the host runtime and the configured Maestro layer, include the
-reviewed synthetic owner context and contain no refusal or prompt-injection
-language. Claude runs this probe as a dedicated session; Codex uses its
-tool-free initialization session.
+The identity gate uses a tool-free session. Passing evidence must affirm both
+the host runtime and the configured Maestro layer and contain no refusal or
+prompt-injection language. Owner context, imported memory, Doctor, workspace
+write, specialists, guard and linked-worktree isolation use independent native
+cells so a small model cannot satisfy one check by silently skipping another.
+Claude's persisted identity cell and Codex's initialization cell are resumed by
+their exact native session IDs; those IDs never enter the report.
 
 Use `--evidence <path>` to retain the bounded JSON report and `--keep` only
 while diagnosing a failure. The temporary `auth.json` copy is always scrubbed,
@@ -51,6 +52,12 @@ schema-validated, not merely counted by filename. Codex 0.149.1 surfaces
 successful local hook delivery as bounded `error` stream items; these are
 counted in the report as non-executable diagnostics and cannot satisfy any
 behavioral gate.
+
+The linked-worktree cell reuses the same isolated runtime home. If Codex
+discovers hooks through the common Git repository, the hook adapter accepts the
+native absolute `cwd` only after proving it is independently enrolled and has
+the same repository ID as the configured binding. A separately enrolled
+repository is rejected rather than receiving its private context.
 
 The Codex Doctor check accepts only a successful canonical
 `cat .codex/skills/maestro-doctor/SKILL.md` execution whose output identifies

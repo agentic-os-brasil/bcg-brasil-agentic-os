@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## NQMX - Qualify supported runtime topology through one paired native matrix
+
+- Date: 2026-08-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Direct-repository contracts now cover Claude and Codex, but the existing native reports prove only sampled Doctor, guard, write and second-session continuity behavior in one checkout. They do not bind generated memory, true host resume or distinct Git worktrees to the same ZIP. The Maestro-folder Hub is intentionally Claude-native; pretending that Codex has the same Hub frontend would turn parity into a false product claim.
+- Decision: Extend the development-only native qualification into a paired matrix over one exact macOS-arm64 ZIP. Shared direct-mode gates cover complete projected skills, supported hooks, declared specialist topology, imported canonical memory, true native conversation resume, distinct worktree identity and context isolation, guards, lifecycle, writes and reversible removal for both runtimes. Claude additionally proves its native Maestro-folder Hub and managed specialist execution. Codex proves deterministic portable Hub activation and the explicitly unavailable native-agent capability rather than inventing a Codex Hub or agent mechanism. Persisted qualification sessions use isolated disposable state and are scrubbed with the fixture; reports retain bounded booleans and digests only.
+- Consequences: A passing pair demonstrates the supported topology honestly and fails whenever a shared direct capability works for only one runtime or the two reports name different artifact bytes. Host-specific cells remain explicit instead of being forced into misleading symmetry. The matrix remains local, synthetic, macOS-arm64 and version/runtime/artifact-bound; it does not establish Windows execution, signing, clean-device acceptance, release readiness or pilot readiness.
+- Refs: PORT; DRWT; DUET; NHUB; TRNS; LHMB; specs/004-runtime-portability.md; specs/035-lifecycle-evidence-matrix.md; specs/055-direct-repository-worktree-entry.md; specs/056-direct-repository-native-hub.md; specs/059-paired-native-runtime-matrix.md; dev/native-qualification
+- Supersedes: none
+
 ## LHMB - Bridge legacy Hub memory through explicit workspace import
 
 - Date: 2026-08-29

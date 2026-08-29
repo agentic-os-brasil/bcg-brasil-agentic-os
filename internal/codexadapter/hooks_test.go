@@ -83,11 +83,11 @@ func TestCodexNativePayloadFailsClosed(t *testing.T) {
 }
 
 func TestParseReaderPreservesBoundedIdentityPromptAndRawToolInput(t *testing.T) {
-	input, err := ParseReader(strings.NewReader(`{"session_id":"session-a","prompt":"route this","tool_name":"mcp__github__create_pull_request","tool_input":{"repository":"org/repo","title":"private title"}}`))
+	input, err := ParseReader(strings.NewReader(`{"session_id":"session-a","cwd":"/exact/linked-worktree","prompt":"route this","tool_name":"mcp__github__create_pull_request","tool_input":{"repository":"org/repo","title":"private title"}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.SessionID != "session-a" || input.Prompt != "route this" || !strings.Contains(string(input.ToolInputJSON()), `"private title"`) {
+	if input.SessionID != "session-a" || input.CWD != "/exact/linked-worktree" || input.Prompt != "route this" || !strings.Contains(string(input.ToolInputJSON()), `"private title"`) {
 		t.Fatalf("parsed input = %#v raw=%s", input, input.ToolInputJSON())
 	}
 	spoofed, err := ParseReader(strings.NewReader(`{"actor_id":"attacker","session_id":"session-a","prompt":"route this","tool_input":{}}`))

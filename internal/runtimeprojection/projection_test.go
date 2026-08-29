@@ -135,6 +135,7 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 	for _, expected := range []string{
 		"Sessão e hooks", "SELF do dono", "Memória e persistência",
 		"Brain, wiki e navegação", "Agents e delegação", "Execução e continuidade",
+		"client-account-agent", "case-agent", "yoda", "darwin", "pa-expert",
 		"execution-continuity", "dream-memory",
 		"brain/tasks/", "receita conversacional",
 		"/maestro-onboarding",

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPrepareIsolatedCodexHomeCopiesOnlyAuthAndCanonicalConfig(t *testing.T) {
@@ -45,14 +47,143 @@ func TestPrepareIsolatedCodexHomeCopiesOnlyAuthAndCanonicalConfig(t *testing.T) 
 	if err := scrubQualificationCredentials(fixture); err != nil {
 		t.Fatalf("scrub isolated credential: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(isolate, "auth.json")); !os.IsNotExist(err) {
-		t.Fatalf("temporary auth survived credential scrub: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(isolate, "config.toml")); err != nil {
-		t.Fatalf("credential scrub removed sanitized diagnostics: %v", err)
+	if _, err := os.Stat(isolate); !os.IsNotExist(err) {
+		t.Fatalf("temporary auth, config or persisted sessions survived runtime-state scrub: %v", err)
 	}
 	if err := removeQualificationFixture(fixture); err != nil {
 		t.Fatalf("remove isolated credential fixture: %v", err)
+	}
+}
+
+func TestCodexIsolatedEnvironmentBindsExactWorktree(t *testing.T) {
+	environment := codexIsolatedEnvironment([]string{
+		"PATH=/usr/bin",
+		"PWD=/stale/main-worktree",
+		"CODEX_HOME=/ambient/codex",
+	}, "/isolated/codex", "/exact/second-worktree")
+	if !slices.Contains(environment, "PWD=/exact/second-worktree") {
+		t.Fatalf("exact worktree PWD was not projected: %v", environment)
+	}
+	if !slices.Contains(environment, "CODEX_HOME=/isolated/codex") {
+		t.Fatalf("isolated Codex home was not projected: %v", environment)
+	}
+	for _, forbidden := range []string{"PWD=/stale/main-worktree", "CODEX_HOME=/ambient/codex"} {
+		if slices.Contains(environment, forbidden) {
+			t.Fatalf("ambient authority survived isolation: %s in %v", forbidden, environment)
+		}
+	}
+}
+
+func TestQualificationCommandEnvironmentStripsAmbientGitAuthority(t *testing.T) {
+	environment := qualificationCommandEnvironment([]string{
+		"PATH=/usr/bin",
+		"GIT_INDEX_FILE=/ambient/index",
+		"GIT_DIR=/ambient/git-dir",
+		"GIT_WORK_TREE=/ambient/worktree",
+		"GIT_PREFIX=ambient",
+		"GIT_CONFIG_PARAMETERS=ambient",
+	}, []string{"CODEX_HOME=/isolated/codex"})
+	for _, forbiddenPrefix := range []string{"GIT_INDEX_FILE=", "GIT_DIR=", "GIT_WORK_TREE=", "GIT_PREFIX=", "GIT_CONFIG_PARAMETERS="} {
+		for _, entry := range environment {
+			if strings.HasPrefix(entry, forbiddenPrefix) {
+				t.Fatalf("ambient Git authority survived qualification isolation: %s", entry)
+			}
+		}
+	}
+	for _, required := range []string{"PATH=/usr/bin", "CODEX_HOME=/isolated/codex"} {
+		if !slices.Contains(environment, required) {
+			t.Fatalf("required environment entry missing: %s in %v", required, environment)
+		}
+	}
+}
+
+func TestSpecialistTopologyRequiresNativeDiscoveryAndManagedBody(t *testing.T) {
+	body := "client-account-agent case-agent yoda darwin pa-expert"
+	if !specialistTopologyProjected("loaded AGENTS.md for Maestro", body, true) {
+		t.Fatal("discovered managed topology was not accepted")
+	}
+	for _, candidate := range []struct {
+		prompt, body string
+		unavailable  bool
+	}{
+		{"no project instructions", body, true},
+		{"loaded AGENTS.md for Maestro", "case-agent yoda", true},
+		{"loaded AGENTS.md for Maestro", body, false},
+	} {
+		if specialistTopologyProjected(candidate.prompt, candidate.body, candidate.unavailable) {
+			t.Fatalf("incomplete topology proof was accepted: %+v", candidate)
+		}
+	}
+}
+
+func TestPrepareIsolatedClaudeConfigCopiesOnlyMinimalAuthBootstrap(t *testing.T) {
+	sourceRoot := t.TempDir()
+	sourceState := filepath.Join(sourceRoot, ".claude.json")
+	body := `{
+  "hasCompletedOnboarding": true,
+  "lastOnboardingVersion": "2.1.203",
+  "userID": "synthetic-user-id",
+  "machineID": "synthetic-machine-id",
+  "hasAvailableSubscription": true,
+  "installMethod": "native",
+  "oauthAccount": {
+    "accountUuid": "synthetic-account-id",
+    "organizationUuid": "synthetic-organization-id",
+    "emailAddress": "must-not-copy@example.invalid",
+    "displayName": "Must Not Copy"
+  },
+  "projects": {"/private/customer/repository": {"hasTrustDialogAccepted": true}},
+  "pluginUsage": {"private-plugin": 1},
+  "skillUsage": {"private-skill": 1},
+  "githubRepoPaths": {"private/repository": ["/private/customer/repository"]}
+}`
+	if err := os.WriteFile(sourceState, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fixture := t.TempDir()
+	isolate, digest, err := prepareIsolatedClaudeConfigFrom(fixture, sourceState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(isolate, ".claude.json")
+	stateBody, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"projects", "pluginUsage", "skillUsage", "githubRepoPaths", "emailAddress", "displayName", "/private/customer/repository"} {
+		if strings.Contains(string(stateBody), forbidden) {
+			t.Fatalf("isolated Claude auth bootstrap inherited %q: %s", forbidden, stateBody)
+		}
+	}
+	for _, required := range []string{"hasCompletedOnboarding", "lastOnboardingVersion", "userID", "machineID", "hasAvailableSubscription", "installMethod", "oauthAccount", "accountUuid", "organizationUuid"} {
+		if !strings.Contains(string(stateBody), required) {
+			t.Errorf("isolated Claude auth bootstrap omitted %q: %s", required, stateBody)
+		}
+	}
+	if got, err := fileDigest(statePath); err != nil || got != digest {
+		t.Fatalf("Claude auth bootstrap digest mismatch: got %q err=%v want=%q", got, err, digest)
+	}
+	if info, err := os.Stat(statePath); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("Claude auth bootstrap must remain private: info=%v err=%v", info, err)
+	}
+	entries, err := os.ReadDir(isolate)
+	if err != nil || len(entries) != 1 || entries[0].Name() != ".claude.json" {
+		t.Fatalf("isolated Claude root inherited global surfaces: entries=%v err=%v", entries, err)
+	}
+}
+
+func TestClaudeIsolatedEnvironmentPinsDefaultSecureStorageWithoutGlobalConfig(t *testing.T) {
+	environment := claudeIsolatedEnvironment([]string{"PATH=/synthetic/bin", "CLAUDE_CONFIG_DIR=/must-not-survive", "CLAUDE_SECURESTORAGE_CONFIG_DIR=/must-not-survive"}, "/fixture/.claude-home")
+	if !slices.Contains(environment, "CLAUDE_CONFIG_DIR=/fixture/.claude-home") {
+		t.Fatalf("isolated Claude configuration root missing: %v", environment)
+	}
+	if !slices.Contains(environment, "CLAUDE_SECURESTORAGE_CONFIG_DIR=") {
+		t.Fatalf("default macOS secure-storage pin missing: %v", environment)
+	}
+	for _, value := range environment {
+		if value == "CLAUDE_CONFIG_DIR=/must-not-survive" || value == "CLAUDE_SECURESTORAGE_CONFIG_DIR=/must-not-survive" {
+			t.Fatalf("ambient Claude storage override survived isolation: %v", environment)
+		}
 	}
 }
 
@@ -144,6 +275,154 @@ func TestClaudeArgsUseNarrowToolAuthorizationWithoutGlobalBypass(t *testing.T) {
 	}
 }
 
+func TestNativeResumeArgsPersistOnlyInsideIsolatedRuntimeState(t *testing.T) {
+	const sessionID = "11111111-1111-4111-8111-111111111111"
+	claudeStart := claudePersistentArgs("haiku", "0.50", sessionID, "remember")
+	claudeResume := claudeResumeArgs("haiku", "0.50", sessionID, "resume")
+	if slices.Contains(claudeStart, "--no-session-persistence") || !slices.Contains(claudeStart, "--session-id") || !slices.Contains(claudeResume, "--resume") {
+		t.Fatalf("Claude resume grammar is not persistent and exact: start=%v resume=%v", claudeStart, claudeResume)
+	}
+	for _, args := range [][]string{claudeStart, claudeResume} {
+		if slices.Contains(args, "--dangerously-skip-permissions") || slices.Contains(args, "bypassPermissions") {
+			t.Fatalf("Claude resume bypassed permissions: %v", args)
+		}
+	}
+	codexStart := codexPersistentArgs("gpt-test", "remember")
+	codexResume := codexResumeArgs("gpt-test", sessionID, "resume")
+	if slices.Contains(codexStart, "--ephemeral") || !slices.Contains(codexStart, "--approve-for-me") || !slices.Contains(codexResume, "resume") || !slices.Contains(codexResume, sessionID) {
+		t.Fatalf("Codex resume grammar is not persistent and exact: start=%v resume=%v", codexStart, codexResume)
+	}
+	for _, args := range [][]string{codexStart, codexResume} {
+		if slices.Contains(args, "--dangerously-bypass-approvals-and-sandbox") {
+			t.Fatalf("Codex resume bypassed approvals/sandbox: %v", args)
+		}
+	}
+}
+
+func TestNativeStreamsCaptureSessionIDsButReportsCannotSerializeThem(t *testing.T) {
+	const sessionID = "11111111-1111-4111-8111-111111111111"
+	claude, err := inspectClaudeStream([]byte(`{"type":"system","subtype":"init","session_id":"` + sessionID + `","agents":[],"skills":[]}` + "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex, err := inspectCodexStream([]byte(`{"type":"thread.started","thread_id":"`+sessionID+`"}`+"\n"), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claude.SessionID != sessionID || codex.SessionID != sessionID {
+		t.Fatalf("session IDs not captured: claude=%q codex=%q", claude.SessionID, codex.SessionID)
+	}
+	body, err := json.Marshal(report{SchemaVersion: 2, Result: "pass", Checks: map[string]bool{"native_resume": true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), sessionID) || strings.Contains(string(body), "session_id") {
+		t.Fatalf("bounded report leaked session authority: %s", body)
+	}
+}
+
+func TestCleanupScrubsPersistedClaudeAndCodexRuntimeStateEvenWithKeep(t *testing.T) {
+	fixture := t.TempDir()
+	for _, name := range []string{".claude-home", ".codex-home"} {
+		root := filepath.Join(fixture, name)
+		if err := os.Mkdir(root, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "synthetic-session.jsonl"), []byte("transcript"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := cleanupQualificationFixture(fixture, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{".claude-home", ".codex-home"} {
+		if _, err := os.Stat(filepath.Join(fixture, name)); !os.IsNotExist(err) {
+			t.Fatalf("persisted runtime state %s survived keep cleanup: %v", name, err)
+		}
+	}
+}
+
+func TestCanonicalSkillAndCapabilityQualificationHelpersFailClosed(t *testing.T) {
+	hub := t.TempDir()
+	catalogPath := filepath.Join(hub, "bundles", "base", "skills", "catalog.json")
+	if err := os.MkdirAll(filepath.Dir(catalogPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(catalogPath, []byte(`{"schema_version":1,"skills":[{"id":"maestro-doctor"},{"id":"dream-memory"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	capabilityPath := filepath.Join(hub, "bundles", "base", "runtime", "capabilities.json")
+	if err := os.MkdirAll(filepath.Dir(capabilityPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(capabilityPath, []byte(`{"capabilities":[{"id":"agent_orchestration","runtimes":{"codex":{"state":"unavailable"}}}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ids, err := canonicalSkillIDs(hub)
+	if err != nil || !slices.Equal(ids, []string{"dream-memory", "maestro-doctor"}) {
+		t.Fatalf("skill IDs=%v err=%v", ids, err)
+	}
+	repository := t.TempDir()
+	for _, id := range ids {
+		path := filepath.Join(repository, ".codex", "skills", id, "SKILL.md")
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("skill"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !completeSkillProjection(repository, "codex", ids) {
+		t.Fatal("complete projection was rejected")
+	}
+	if err := os.Remove(filepath.Join(repository, ".codex", "skills", "dream-memory", "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	if completeSkillProjection(repository, "codex", ids) {
+		t.Fatal("partial projection was accepted")
+	}
+	state, err := capabilityState(hub, "agent_orchestration", "codex")
+	if err != nil || state != "unavailable" {
+		t.Fatalf("capability state=%q err=%v", state, err)
+	}
+}
+
+func TestPrepareDistinctWorktreeCreatesSameRepositoryDifferentCheckout(t *testing.T) {
+	repository := t.TempDir()
+	for _, args := range [][]string{{"init"}, {"config", "user.email", "native@example.invalid"}, {"config", "user.name", "Native"}} {
+		if _, err := commandOutput(repository, 10*time.Second, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(repository, "seed.txt"), []byte("seed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "seed.txt"}, {"commit", "-m", "seed"}} {
+		if _, err := commandOutput(repository, 10*time.Second, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	worktree, err := prepareDistinctWorktree(repository, filepath.Join(t.TempDir(), "second"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	commonA, err := commandOutput(repository, 10*time.Second, "git", "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commonB, err := commandOutput(worktree, 10*time.Second, "git", "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	topA, _ := commandOutput(repository, 10*time.Second, "git", "rev-parse", "--show-toplevel")
+	topB, _ := commandOutput(worktree, 10*time.Second, "git", "rev-parse", "--show-toplevel")
+	physicalCommonA, _ := filepath.EvalSymlinks(commonA)
+	physicalCommonB, _ := filepath.EvalSymlinks(commonB)
+	if filepath.Clean(physicalCommonA) != filepath.Clean(physicalCommonB) || filepath.Clean(topA) == filepath.Clean(topB) {
+		t.Fatalf("worktree identity invalid: common=%q/%q top=%q/%q", physicalCommonA, physicalCommonB, topA, topB)
+	}
+}
+
 func TestInspectClaudeStreamFindsNativeLifecycleSkillsAndAgents(t *testing.T) {
 	stream := []byte(`{"type":"system","subtype":"hook_response","hook_event":"SessionStart","output":"{\"semantic_event\":\"session_start\"}"}
 {"type":"system","subtype":"init","agents":["case-agent","client-account-agent","yoda","darwin","pa-expert"],"skills":["maestro-doctor"]}
@@ -172,6 +451,34 @@ func TestInspectClaudeStreamFindsNativeLifecycleSkillsAndAgents(t *testing.T) {
 	}
 	if !evidence.Skills["maestro-doctor"] || !evidence.InvokedDoctor || !evidence.ReadHubDoctor || !evidence.GuardDenied || !evidence.ManagedSubagent || !evidence.Contains("DIRECT-OK") {
 		t.Fatalf("incomplete evidence: %#v", evidence)
+	}
+}
+
+func TestMergeStreamEvidencePreservesIndependentNativeCells(t *testing.T) {
+	merged := mergeStreamEvidence(
+		streamEvidence{
+			Hooks:         map[string]bool{"SessionStart": true, "PostToolUse": true},
+			Agents:        map[string]bool{"case-agent": true},
+			Skills:        map[string]bool{"maestro-doctor": true},
+			InvokedDoctor: true, ToolUseCount: 2, Text: "doctor\n",
+		},
+		streamEvidence{
+			Hooks:       map[string]bool{"PreToolUse": true, "SubagentStart": true, "SubagentStop": true},
+			Agents:      map[string]bool{"yoda": true},
+			Skills:      map[string]bool{"dream-memory": true},
+			GuardDenied: true, ManagedSubagent: true, ToolUseCount: 3, Text: "guard and agents\n",
+		},
+	)
+	for _, hook := range []string{"SessionStart", "PreToolUse", "PostToolUse", "SubagentStart", "SubagentStop"} {
+		if !merged.Hooks[hook] {
+			t.Errorf("merged evidence lost hook %s: %#v", hook, merged)
+		}
+	}
+	if !merged.Agents["case-agent"] || !merged.Agents["yoda"] || !merged.Skills["maestro-doctor"] || !merged.Skills["dream-memory"] {
+		t.Fatalf("merged evidence lost independent discovery: %#v", merged)
+	}
+	if !merged.InvokedDoctor || !merged.GuardDenied || !merged.ManagedSubagent || merged.ToolUseCount != 5 || !strings.Contains(merged.Text, "doctor") || !strings.Contains(merged.Text, "guard") {
+		t.Fatalf("merged evidence lost independent behavior: %#v", merged)
 	}
 }
 

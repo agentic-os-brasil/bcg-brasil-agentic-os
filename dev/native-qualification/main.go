@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -31,6 +32,7 @@ var requiredHooks = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "
 var requiredAgents = []string{"case-agent", "client-account-agent", "yoda", "darwin", "pa-expert"}
 
 type streamEvidence struct {
+	SessionID            string
 	Hooks                map[string]bool
 	Agents               map[string]bool
 	Skills               map[string]bool
@@ -46,6 +48,7 @@ type streamEvidence struct {
 	CommandCount         int
 	FileChangeCount      int
 	ExternalToolCount    int
+	ToolUseCount         int
 	ItemTypes            map[string]int
 	Text                 string
 }
@@ -62,6 +65,25 @@ func codexArgs(model, prompt string) []string {
 	return append(args, prompt)
 }
 
+func codexPersistentArgs(model, prompt string) []string {
+	args := codexArgs(model, prompt)
+	result := make([]string, 0, len(args)-1)
+	for _, arg := range args {
+		if arg != "--ephemeral" {
+			result = append(result, arg)
+		}
+	}
+	return result
+}
+
+func codexResumeArgs(model, sessionID, prompt string) []string {
+	args := []string{"--approve-for-me", "--dangerously-bypass-hook-trust", "--enable", "hooks", "exec", "resume", "--json", "--ignore-rules"}
+	if strings.TrimSpace(model) != "" {
+		args = append(args, "-m", model)
+	}
+	return append(args, sessionID, prompt)
+}
+
 func inspectCodexStream(stream []byte, expectedCLI, expectedRepository string) (streamEvidence, error) {
 	evidence := streamEvidence{Hooks: map[string]bool{}, Agents: map[string]bool{}, Skills: map[string]bool{}, ItemTypes: map[string]int{}}
 	scanner := bufio.NewScanner(bytes.NewReader(stream))
@@ -72,8 +94,9 @@ func inspectCodexStream(stream []byte, expectedCLI, expectedRepository string) (
 			continue
 		}
 		var envelope struct {
-			Type string `json:"type"`
-			Item struct {
+			Type     string `json:"type"`
+			ThreadID string `json:"thread_id"`
+			Item     struct {
 				Type             string `json:"type"`
 				Command          string `json:"command"`
 				AggregatedOutput string `json:"aggregated_output"`
@@ -83,6 +106,9 @@ func inspectCodexStream(stream []byte, expectedCLI, expectedRepository string) (
 		}
 		if err := json.Unmarshal(line, &envelope); err != nil {
 			return streamEvidence{}, fmt.Errorf("decode Codex stream line: %w", err)
+		}
+		if envelope.Type == "thread.started" && evidence.SessionID == "" {
+			evidence.SessionID = envelope.ThreadID
 		}
 		if envelope.Type != "item.completed" {
 			continue
@@ -392,20 +418,22 @@ func cleanupQualificationFixture(fixture string, keep bool) error {
 }
 
 func scrubQualificationCredentials(fixture string) error {
-	isolatedHome := filepath.Join(fixture, ".codex-home")
-	if info, err := os.Lstat(isolatedHome); err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
-		if err := os.Chmod(isolatedHome, 0o700); err != nil {
+	for _, name := range []string{".codex-home", ".claude-home"} {
+		isolatedHome := filepath.Join(fixture, name)
+		if info, err := os.Lstat(isolatedHome); err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+			if err := os.Chmod(isolatedHome, 0o700); err != nil {
+				return err
+			}
+			if err := os.RemoveAll(isolatedHome); err != nil {
+				return err
+			}
+		} else if errors.Is(err, os.ErrNotExist) {
+			continue
+		} else if err != nil {
 			return err
+		} else {
+			return errors.New("isolated runtime home is not a safe directory")
 		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		return nil
-	} else if err != nil {
-		return err
-	} else {
-		return errors.New("isolated Codex home is not a safe directory")
-	}
-	if err := os.Remove(filepath.Join(isolatedHome, "auth.json")); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
 	}
 	return nil
 }
@@ -424,12 +452,13 @@ func removeQualificationFixture(fixture string) error {
 
 func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, string, error) {
 	result := report{
-		SchemaVersion: 1, Result: "failed", ObservedAt: time.Now().UTC().Format(time.RFC3339),
+		SchemaVersion: 2, Result: "failed", ObservedAt: time.Now().UTC().Format(time.RFC3339),
 		Runtime: "claude", OS: runtime.GOOS, Arch: runtime.GOARCH,
 		Checks: map[string]bool{}, ReceiptCounts: map[string]int{},
 		StreamItemCounts: map[string]int{},
 		Notes:            []string{"synthetic repository only", "raw prompts, paths, tool payloads and session identifiers were not persisted"},
 	}
+	result.Model = model
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
 		return result, "", errors.New("this matrix currently qualifies the macos-arm64 ZIP on a native darwin/arm64 host")
 	}
@@ -445,6 +474,11 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 	if err != nil {
 		return result, "", err
 	}
+	claudeConfig, claudeConfigDigest, err := prepareIsolatedClaudeConfig(fixture)
+	if err != nil {
+		return result, fixture, fmt.Errorf("prepare isolated Claude config: %w", err)
+	}
+	result.RuntimeConfigSHA256 = claudeConfigDigest
 	if err := extractZIP(absoluteArtifact, fixture); err != nil {
 		return result, fixture, fmt.Errorf("extract artifact: %w", err)
 	}
@@ -459,7 +493,7 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 		return result, fixture, fmt.Errorf("inspect Claude version: %w", err)
 	}
 
-	hubStream, err := runClaude(hub, claudePath, model, maxBudget,
+	hubStream, err := runClaudeIsolated(hub, claudeConfig, claudePath, model, maxBudget,
 		"Read bundles/base/skills/maestro-doctor/SKILL.md and complete its checks. Include the Doctor's one-line verdict and version in your final response.")
 	if err != nil {
 		return result, fixture, fmt.Errorf("Hub native session failed: %w", err)
@@ -471,8 +505,17 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 	result.Checks["hub_session_start"] = hubEvidence.Hooks["SessionStart"]
 	result.Checks["hub_doctor_skill"] = hubEvidence.ReadHubDoctor
 	result.Checks["hub_bootstrap"] = regular(filepath.Join(hub, "data", ".initialized")) && regular(filepath.Join(hub, "data", "install.json"))
+	skillIDs, err := canonicalSkillIDs(hub)
+	if err != nil {
+		return result, fixture, fmt.Errorf("read canonical skill catalog: %w", err)
+	}
 	if err := preparePortableOwnerFixture(filepath.Join(hub, "data")); err != nil {
 		return result, fixture, fmt.Errorf("prepare synthetic reviewed owner: %w", err)
+	}
+	memorySentinel := "MAESTRO-IMPORTED-MEMORY-CLAUDE-OK"
+	memoryPath, memoryBody, err := prepareLegacyHubCandidate(filepath.Join(hub, "data"), memorySentinel)
+	if err != nil {
+		return result, fixture, fmt.Errorf("prepare synthetic legacy Hub memory: %w", err)
 	}
 
 	repository := filepath.Join(fixture, "synthetic-repository")
@@ -496,11 +539,17 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 	if _, err := commandOutput(repository, 30*time.Second, cli, "workspace", "enroll", "--runtime", "claude", repository); err != nil {
 		return result, fixture, fmt.Errorf("enroll synthetic repository: %w", err)
 	}
-	status, err := commandOutput(repository, 30*time.Second, cli, "workspace", "status", "--runtime", "claude", repository)
-	if err != nil || !strings.Contains(status, `"state": "enrolled"`) {
+	mainStatus, err := enrolledWorkspaceStatus(repository, cli, "claude", repository)
+	if err != nil {
 		return result, fixture, fmt.Errorf("workspace status is not enrolled: %w", err)
 	}
 	result.Checks["direct_enrollment"] = true
+	result.Checks["canonical_skill_projection"] = completeSkillProjection(repository, "claude", skillIDs)
+	if err := bridgeLegacyHubCandidate(repository, cli, "claude", memorySentinel); err != nil {
+		return result, fixture, fmt.Errorf("bridge synthetic legacy Hub memory: %w", err)
+	}
+	memoryAfter, memoryErr := os.ReadFile(memoryPath)
+	result.Checks["memory_source_preserved"] = memoryErr == nil && bytes.Equal(memoryAfter, memoryBody)
 	clean, err := commandOutput(repository, 10*time.Second, "git", "status", "--porcelain")
 	if err != nil {
 		return result, fixture, err
@@ -517,14 +566,42 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 	if projection.WorkspaceID == "" || projection.DataRoot == "" {
 		return result, fixture, errors.New("direct projection omitted private authority pointers")
 	}
+	if projection.WorkspaceID != mainStatus.WorkspaceID {
+		return result, fixture, errors.New("Claude projection workspace identity drifted from enrolled status")
+	}
+	secondWorktree, err := prepareDistinctWorktree(repository, filepath.Join(fixture, "synthetic-second-worktree"))
+	if err != nil {
+		return result, fixture, fmt.Errorf("create distinct Git worktree: %w", err)
+	}
+	if _, err := commandOutput(secondWorktree, 30*time.Second, cli, "workspace", "enroll", "--runtime", "claude", secondWorktree); err != nil {
+		return result, fixture, fmt.Errorf("enroll second Claude worktree: %w", err)
+	}
+	secondStatus, err := enrolledWorkspaceStatus(secondWorktree, cli, "claude", secondWorktree)
+	if err != nil {
+		return result, fixture, err
+	}
+	result.Checks["distinct_worktree_identity"] = mainStatus.RepositoryID == secondStatus.RepositoryID && mainStatus.WorkspaceID != secondStatus.WorkspaceID
+	var secondProjection struct {
+		WorkspaceID string `json:"workspace_id"`
+		DataRoot    string `json:"data_root"`
+	}
+	if err := readJSON(filepath.Join(secondWorktree, ".bcgos", "workspace-projections", "claude.json"), &secondProjection); err != nil {
+		return result, fixture, err
+	}
 	for _, agent := range requiredAgents {
 		body, readErr := os.ReadFile(filepath.Join(repository, ".claude", "agents", agent+".md"))
 		if readErr != nil || !bytes.HasPrefix(body, []byte("---\n")) {
 			return result, fixture, fmt.Errorf("projected native agent %s has invalid frontmatter", agent)
 		}
 	}
-	identityStream, err := runClaude(repository, claudePath, model, maxBudget,
-		"Quem é você? Responda em uma frase, sem usar ferramentas. Em uma segunda frase, diga o nome preferido e o papel profissional do owner conforme o contexto recebido no início da sessão.")
+	result.Checks["specialist_topology_projected"] = true
+	resumeSessionID, err := newQualificationSessionID()
+	if err != nil {
+		return result, fixture, err
+	}
+	resumeToken := "MAESTRO-CLAUDE-RESUME-OK"
+	identityStream, err := runClaudePersistent(repository, claudeConfig, claudePath, model, maxBudget, resumeSessionID,
+		"Responda em quatro linhas, sem usar ferramentas. Linha 1: identifique explicitamente Claude Code como o host runtime subjacente. Linha 2: identifique explicitamente Maestro como a camada operacional profissional configurada. Linha 3: informe o nome preferido e o papel profissional do owner, usando apenas o contexto recebido no SessionStart. Linha 4: informe o token exato de memória importada recebido no SessionStart. Seja transparente e não descreva nenhuma camada como prompt injection ou instrução recusada. Memorize também este token apenas para retomada: "+resumeToken+".")
 	if err != nil {
 		return result, fixture, fmt.Errorf("transparent identity session failed: %w", err)
 	}
@@ -533,19 +610,71 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 		return result, fixture, fmt.Errorf("inspect transparent identity stream: %w", err)
 	}
 	result.Checks["transparent_maestro_identity"] = transparentIdentityObserved(identityEvidence, "claude")
-	result.Checks["owner_sensitive_context_excluded"] = !identityEvidence.Contains("NATIVE-PRIVATE-SENTINEL-MUST-NOT-APPEAR")
+	ownerStream, err := runClaudeIsolated(repository, claudeConfig, claudePath, model, maxBudget,
+		"Return exactly two lines and do not use tools. Line 1: the reviewed owner's preferred name supplied in SessionStart. Line 2: the reviewed owner's professional role supplied in SessionStart.")
+	if err != nil {
+		return result, fixture, fmt.Errorf("owner-context session failed: %w", err)
+	}
+	ownerEvidence, err := inspectClaudeStream(ownerStream)
+	if err != nil {
+		return result, fixture, fmt.Errorf("inspect owner-context stream: %w", err)
+	}
+	result.Checks["owner_context_injected"] = ownerEvidence.Contains("Qualification Owner") && ownerEvidence.Contains("Synthetic engineering qualification role") && ownerEvidence.ToolUseCount == 0
+	result.Checks["owner_sensitive_context_excluded"] = !identityEvidence.Contains("NATIVE-PRIVATE-SENTINEL-MUST-NOT-APPEAR") && !ownerEvidence.Contains("NATIVE-PRIVATE-SENTINEL-MUST-NOT-APPEAR")
+	result.Checks["memory_context_injected"] = identityEvidence.Contains(memorySentinel)
+	resumeStream, err := resumeClaude(repository, claudeConfig, claudePath, model, maxBudget, resumeSessionID, "Return only the resume token I asked you to remember in the prior turn. Do not use tools.")
+	if err != nil {
+		return result, fixture, fmt.Errorf("Claude native resume failed: %w", err)
+	}
+	resumeEvidence, err := inspectClaudeStream(resumeStream)
+	if err != nil {
+		return result, fixture, err
+	}
+	result.Checks["native_resume"] = identityEvidence.SessionID == resumeSessionID && resumeEvidence.Contains(resumeToken) && resumeEvidence.ToolUseCount == 0
 
-	directStream, err := runClaude(repository, claudePath, model, maxBudget,
-		"Before using any tool, state the reviewed owner's preferred name and professional role from SessionStart context. Then run this synthetic qualification in order. Use the Skill tool with skill=maestro-doctor and complete its checks. Write native-proof.txt with exactly MAESTRO-DIRECT-NATIVE-OK. Delegate once to case-agent and ask it to read seed.txt and return CASE-NATIVE-OK. After it returns, delegate once to yoda and ask it to return YODA-NATIVE-OK. Then attempt the exact Bash command git reset --hard HEAD; do not replace it with another command. Include the Doctor's one-line verdict and version in your final response.")
+	doctorStream, err := runClaudeIsolated(repository, claudeConfig, claudePath, model, maxBudget,
+		"Before using any tool, state the reviewed owner's preferred name and professional role from SessionStart context. Then use the Skill tool with skill=maestro-doctor and complete its checks. Include the Doctor's one-line verdict and version in your final response.")
 	if err != nil {
-		return result, fixture, fmt.Errorf("direct native session failed: %w", err)
+		return result, fixture, fmt.Errorf("direct Doctor session failed: %w", err)
 	}
-	directEvidence, err := inspectClaudeStream(directStream)
+	doctorEvidence, err := inspectClaudeStream(doctorStream)
 	if err != nil {
-		return result, fixture, fmt.Errorf("inspect direct native stream: %w", err)
+		return result, fixture, fmt.Errorf("inspect direct Doctor stream: %w", err)
 	}
+	writeStream, err := runClaudeIsolated(repository, claudeConfig, claudePath, model, maxBudget,
+		"Use the native Write tool now to create native-proof.txt with exactly MAESTRO-DIRECT-NATIVE-OK and no trailing newline. Do not use Bash, do not perform any other task, and finish only after the file exists.")
+	if err != nil {
+		return result, fixture, fmt.Errorf("direct workspace-write session failed: %w", err)
+	}
+	writeEvidence, err := inspectClaudeStream(writeStream)
+	if err != nil {
+		return result, fixture, fmt.Errorf("inspect direct workspace-write stream: %w", err)
+	}
+	agentStream, err := runClaudeIsolated(repository, claudeConfig, claudePath, model, maxBudget,
+		"Run this synthetic specialist qualification in order. Delegate once to case-agent and ask it to read seed.txt and return CASE-NATIVE-OK. After it returns, delegate once to yoda and ask it to return YODA-NATIVE-OK. Do not perform other work.")
+	if err != nil {
+		return result, fixture, fmt.Errorf("direct specialist session failed: %w", err)
+	}
+	agentEvidence, err := inspectClaudeStream(agentStream)
+	if err != nil {
+		return result, fixture, fmt.Errorf("inspect direct specialist stream: %w", err)
+	}
+	guardStream, err := runClaudeIsolated(repository, claudeConfig, claudePath, model, maxBudget,
+		"Attempt the exact Bash command git reset --hard HEAD now. Do not replace it, quote it, simulate it or perform any other action.")
+	if err != nil {
+		return result, fixture, fmt.Errorf("direct guard session failed: %w", err)
+	}
+	guardEvidence, err := inspectClaudeStream(guardStream)
+	if err != nil {
+		return result, fixture, fmt.Errorf("inspect direct guard stream: %w", err)
+	}
+	directEvidence := mergeStreamEvidence(doctorEvidence, writeEvidence, agentEvidence, guardEvidence)
 	for _, hook := range requiredHooks {
 		result.Checks["hook_"+hook] = directEvidence.Hooks[hook]
+	}
+	result.Checks["supported_hooks_complete"] = true
+	for _, hook := range requiredHooks {
+		result.Checks["supported_hooks_complete"] = result.Checks["supported_hooks_complete"] && directEvidence.Hooks[hook]
 	}
 	allAgents := true
 	for _, agent := range requiredAgents {
@@ -555,8 +684,9 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 	}
 	result.Checks["native_agents_discovered"] = allAgents
 	result.Checks["doctor_skill_discovered"] = directEvidence.Skills["maestro-doctor"]
+	result.Checks["operator_skill_discovered"] = directEvidence.Skills["maestro-operator"]
+	result.Checks["memory_skill_discovered"] = directEvidence.Skills["dream-memory"]
 	result.Checks["doctor_skill_invoked"] = doctorPassed(directEvidence, result.ReleaseVersion, false)
-	result.Checks["owner_context_injected"] = directEvidence.Contains("Qualification Owner") && directEvidence.Contains("Synthetic engineering qualification role")
 	result.Checks["owner_sensitive_context_excluded"] = result.Checks["owner_sensitive_context_excluded"] && !directEvidence.Contains("NATIVE-PRIVATE-SENTINEL-MUST-NOT-APPEAR")
 	result.Checks["managed_agent_flow"] = directEvidence.ManagedSubagent
 	result.Checks["dangerous_git_denied"] = directEvidence.GuardDenied
@@ -581,7 +711,7 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 	if err := os.WriteFile(continuityPath, []byte(continuity+"\n"), 0o600); err != nil {
 		return result, fixture, err
 	}
-	continuityStream, err := runClaude(repository, claudePath, model, maxBudget,
+	continuityStream, err := runClaudeIsolated(repository, claudeConfig, claudePath, model, maxBudget,
 		"Return the exact continuity sentinel supplied by Maestro and nothing else. Do not use tools.")
 	if err != nil {
 		return result, fixture, fmt.Errorf("continuity native session failed: %w", err)
@@ -591,8 +721,30 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 		return result, fixture, err
 	}
 	result.Checks["second_session_continuity"] = continuityEvidence.Contains(continuity)
+	secondContinuity := "MAESTRO-SECOND-WORKTREE-CLAUDE-OK"
+	secondContinuityPath := filepath.Join(secondProjection.DataRoot, "workspaces", secondProjection.WorkspaceID, "continuity", "active.md")
+	if err := os.MkdirAll(filepath.Dir(secondContinuityPath), 0o700); err != nil {
+		return result, fixture, err
+	}
+	if err := os.WriteFile(secondContinuityPath, []byte(secondContinuity+"\n"), 0o600); err != nil {
+		return result, fixture, err
+	}
+	secondStream, err := runClaudeIsolated(secondWorktree, claudeConfig, claudePath, model, maxBudget, "Return the exact continuity sentinel supplied for this worktree and nothing else. Do not use tools.")
+	if err != nil {
+		return result, fixture, fmt.Errorf("second-worktree Claude session failed: %w", err)
+	}
+	secondEvidence, err := inspectClaudeStream(secondStream)
+	if err != nil {
+		return result, fixture, err
+	}
+	result.Checks["distinct_worktree_context_isolated"] = secondEvidence.Contains(secondContinuity) && !secondEvidence.Contains(continuity) && !secondEvidence.Contains(memorySentinel)
+	finalClaudeConfigDigest, configErr := fileDigest(filepath.Join(claudeConfig, ".claude.json"))
+	if configErr != nil {
+		return result, fixture, fmt.Errorf("digest final isolated Claude config: %w", configErr)
+	}
+	result.RuntimeConfigFinalSHA256 = finalClaudeConfigDigest
 
-	if err := os.Remove(filepath.Join(repository, "native-proof.txt")); err != nil {
+	if err := os.Remove(filepath.Join(repository, "native-proof.txt")); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return result, fixture, err
 	}
 	if _, err := commandOutput(repository, 30*time.Second, cli, "workspace", "remove", "--runtime", "claude", repository); err != nil {
@@ -603,6 +755,11 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 		return result, fixture, err
 	}
 	result.Checks["projection_removal"] = strings.Contains(removedStatus, `"state": "absent"`)
+	secondStillEnrolled, secondStatusErr := enrolledWorkspaceStatus(secondWorktree, cli, "claude", secondWorktree)
+	result.Checks["distinct_worktree_removal_independent"] = secondStatusErr == nil && secondStillEnrolled.WorkspaceID == secondStatus.WorkspaceID
+	if _, err := commandOutput(secondWorktree, 30*time.Second, cli, "workspace", "remove", "--runtime", "claude", secondWorktree); err != nil {
+		return result, fixture, fmt.Errorf("remove second Claude projection: %w", err)
+	}
 	clean, err = commandOutput(repository, 10*time.Second, "git", "status", "--porcelain")
 	result.Checks["removal_git_clean"] = err == nil && clean == ""
 
@@ -622,7 +779,7 @@ func qualifyClaude(artifact, claudePath, model, maxBudget string) (report, strin
 
 func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 	result := report{
-		SchemaVersion: 1, Result: "failed", ObservedAt: time.Now().UTC().Format(time.RFC3339),
+		SchemaVersion: 2, Result: "failed", ObservedAt: time.Now().UTC().Format(time.RFC3339),
 		Runtime: "codex", OS: runtime.GOOS, Arch: runtime.GOARCH,
 		Checks: map[string]bool{}, ReceiptCounts: map[string]int{},
 		StreamItemCounts: map[string]int{},
@@ -675,8 +832,23 @@ func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 		return result, fixture, fmt.Errorf("activate portable Hub: %w", err)
 	}
 	result.Checks["hub_bootstrap"] = regular(filepath.Join(hub, "data", "install.json"))
+	result.Checks["hub_activation_only"] = result.Checks["hub_bootstrap"]
+	agentState, err := capabilityState(hub, "agent_orchestration", "codex")
+	if err != nil {
+		return result, fixture, err
+	}
+	result.Checks["agent_orchestration_declared_unavailable"] = agentState == "unavailable"
+	skillIDs, err := canonicalSkillIDs(hub)
+	if err != nil {
+		return result, fixture, fmt.Errorf("read canonical skill catalog: %w", err)
+	}
 	if err := preparePortableOwnerFixture(filepath.Join(hub, "data")); err != nil {
 		return result, fixture, fmt.Errorf("prepare synthetic reviewed owner: %w", err)
+	}
+	memorySentinel := "MAESTRO-IMPORTED-MEMORY-CODEX-OK"
+	memoryPath, memoryBody, err := prepareLegacyHubCandidate(filepath.Join(hub, "data"), memorySentinel)
+	if err != nil {
+		return result, fixture, fmt.Errorf("prepare synthetic legacy Hub memory: %w", err)
 	}
 
 	repository := filepath.Join(fixture, "synthetic-repository")
@@ -702,11 +874,17 @@ func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 	if _, err := commandOutput(repository, 30*time.Second, cli, "workspace", "enroll", "--runtime", "codex", repository); err != nil {
 		return result, fixture, fmt.Errorf("enroll synthetic Codex repository: %w", err)
 	}
-	status, err := commandOutput(repository, 30*time.Second, cli, "workspace", "status", "--runtime", "codex", repository)
-	if err != nil || !strings.Contains(status, `"state": "enrolled"`) {
+	mainStatus, err := enrolledWorkspaceStatus(repository, cli, "codex", repository)
+	if err != nil {
 		return result, fixture, fmt.Errorf("Codex workspace status is not enrolled: %w", err)
 	}
 	result.Checks["direct_enrollment"] = true
+	result.Checks["canonical_skill_projection"] = completeSkillProjection(repository, "codex", skillIDs)
+	if err := bridgeLegacyHubCandidate(repository, cli, "codex", memorySentinel); err != nil {
+		return result, fixture, fmt.Errorf("bridge synthetic legacy Hub memory: %w", err)
+	}
+	memoryAfter, memoryErr := os.ReadFile(memoryPath)
+	result.Checks["memory_source_preserved"] = memoryErr == nil && bytes.Equal(memoryAfter, memoryBody)
 	clean, err := commandOutput(repository, 10*time.Second, "git", "status", "--porcelain")
 	if err != nil {
 		return result, fixture, err
@@ -723,6 +901,28 @@ func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 	if projection.WorkspaceID == "" || projection.DataRoot == "" {
 		return result, fixture, errors.New("Codex projection omitted private authority pointers")
 	}
+	if projection.WorkspaceID != mainStatus.WorkspaceID {
+		return result, fixture, errors.New("Codex projection workspace identity drifted from enrolled status")
+	}
+	secondWorktree, err := prepareDistinctWorktree(repository, filepath.Join(fixture, "synthetic-second-worktree"))
+	if err != nil {
+		return result, fixture, fmt.Errorf("create distinct Git worktree: %w", err)
+	}
+	if _, err := commandOutput(secondWorktree, 30*time.Second, cli, "workspace", "enroll", "--runtime", "codex", secondWorktree); err != nil {
+		return result, fixture, fmt.Errorf("enroll second Codex worktree: %w", err)
+	}
+	secondStatus, err := enrolledWorkspaceStatus(secondWorktree, cli, "codex", secondWorktree)
+	if err != nil {
+		return result, fixture, err
+	}
+	result.Checks["distinct_worktree_identity"] = mainStatus.RepositoryID == secondStatus.RepositoryID && mainStatus.WorkspaceID != secondStatus.WorkspaceID
+	var secondProjection struct {
+		WorkspaceID string `json:"workspace_id"`
+		DataRoot    string `json:"data_root"`
+	}
+	if err := readJSON(filepath.Join(secondWorktree, ".bcgos", "workspace-projections", "codex.json"), &secondProjection); err != nil {
+		return result, fixture, err
+	}
 	var hookConfig struct {
 		Hooks map[string]any `json:"hooks"`
 	}
@@ -733,6 +933,10 @@ func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 		_, present := hookConfig.Hooks[event]
 		result.Checks["hook_config_"+event] = present
 	}
+	hookConfigComplete := true
+	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"} {
+		hookConfigComplete = hookConfigComplete && result.Checks["hook_config_"+event]
+	}
 	receiptRoot := filepath.Join(projection.DataRoot, "runtime", "receipts", projection.WorkspaceID)
 
 	promptInput, err := commandOutputWithEnv(repository, 30*time.Second, []string{"CODEX_HOME=" + codexHome}, codexPath, "debug", "prompt-input", "synthetic discovery probe")
@@ -741,8 +945,20 @@ func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 	}
 	result.Checks["agents_instructions_discovered"] = strings.Contains(promptInput, "AGENTS.md") && strings.Contains(promptInput, "Maestro")
 	result.Checks["doctor_skill_discovered"] = strings.Contains(promptInput, "maestro-doctor")
-	warmupStream, err := runCodex(repository, codexHome, codexPath, model,
-		"Quem é você? Responda em uma frase, sem usar ferramentas. Em uma segunda frase, diga o nome preferido e o papel profissional do owner conforme o contexto recebido no início da sessão. Termine com MAESTRO-CODEX-INITIALIZED.")
+	result.Checks["operator_skill_discovered"] = strings.Contains(promptInput, "maestro-operator")
+	result.Checks["memory_skill_discovered"] = strings.Contains(promptInput, "dream-memory")
+	agentsBody, err := os.ReadFile(filepath.Join(repository, "AGENTS.md"))
+	if err != nil {
+		return result, fixture, fmt.Errorf("read projected Codex instructions: %w", err)
+	}
+	result.Checks["specialist_topology_projected"] = specialistTopologyProjected(
+		promptInput,
+		string(agentsBody),
+		result.Checks["agent_orchestration_declared_unavailable"],
+	)
+	resumeToken := "MAESTRO-CODEX-RESUME-OK"
+	warmupStream, err := runCodexPersistent(repository, codexHome, codexPath, model,
+		"Quem é você? Responda em uma frase, sem usar ferramentas. Em uma segunda frase, diga o nome preferido e o papel profissional do owner conforme o contexto recebido no início da sessão. Em uma terceira frase, informe o token exato de memória importada recebido no SessionStart. Memorize também este token apenas para retomada: "+resumeToken+". Termine com MAESTRO-CODEX-INITIALIZED.")
 	if err != nil {
 		return result, fixture, fmt.Errorf("initialize isolated Codex runtime: %w", err)
 	}
@@ -753,6 +969,19 @@ func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 	result.Checks["runtime_initialization_clean"] = warmupEvidence.Contains("MAESTRO-CODEX-INITIALIZED") && warmupEvidence.ExternalToolCount == 0 && warmupEvidence.FileChangeCount == 0
 	result.Checks["transparent_maestro_identity"] = transparentIdentityObserved(warmupEvidence, "codex")
 	result.Checks["owner_sensitive_context_excluded"] = !warmupEvidence.Contains("NATIVE-PRIVATE-SENTINEL-MUST-NOT-APPEAR")
+	result.Checks["memory_context_injected"] = warmupEvidence.Contains(memorySentinel)
+	if warmupEvidence.SessionID == "" {
+		return result, fixture, errors.New("Codex persistent qualification session omitted its thread ID")
+	}
+	resumeStream, err := resumeCodex(repository, codexHome, codexPath, model, warmupEvidence.SessionID, "Return only the resume token I asked you to remember in the prior turn. Do not use tools.")
+	if err != nil {
+		return result, fixture, fmt.Errorf("Codex native resume failed: %w", err)
+	}
+	resumeEvidence, err := inspectCodexStream(resumeStream, "", "")
+	if err != nil {
+		return result, fixture, err
+	}
+	result.Checks["native_resume"] = resumeEvidence.Contains(resumeToken) && resumeEvidence.ExternalToolCount == 0 && resumeEvidence.FileChangeCount == 0
 	result.RuntimeConfigSHA256, err = fileDigest(filepath.Join(codexHome, "config.toml"))
 	if err != nil {
 		return result, fixture, fmt.Errorf("digest initialized isolated Codex config: %w", err)
@@ -819,6 +1048,7 @@ func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 		result.ReceiptCounts[event] = allReceipts.Counts[event]
 		result.Checks["receipt_"+event] = allReceipts.Counts[event] > 0
 	}
+	result.Checks["supported_hooks_complete"] = hookConfigComplete && allReceipts.Counts[lifecycle.SessionStart] > 0 && allReceipts.Counts[lifecycle.ContextInject] > 0 && allReceipts.Counts[lifecycle.PreActionGuard] > 0 && allReceipts.Counts[lifecycle.PostActionObserve] > 0 && allReceipts.Counts[lifecycle.StopFinalize] > 0
 
 	continuity := "MAESTRO-CONTINUITY-NATIVE-OK"
 	continuityPath := filepath.Join(projection.DataRoot, "workspaces", projection.WorkspaceID, "continuity", "active.md")
@@ -856,11 +1086,32 @@ func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 	result.Checks["second_session_continuity"] = contextObserved && continuityEvidence.Contains(continuity) && continuitySafe
 	proof, proofErr := os.ReadFile(filepath.Join(repository, "native-proof.txt"))
 	result.Checks["workspace_write"] = proofErr == nil && matchesSentinel(proof, "MAESTRO-DIRECT-NATIVE-OK")
+	secondContinuity := "MAESTRO-SECOND-WORKTREE-CODEX-OK"
+	secondContinuityPath := filepath.Join(secondProjection.DataRoot, "workspaces", secondProjection.WorkspaceID, "continuity", "active.md")
+	if err := os.MkdirAll(filepath.Dir(secondContinuityPath), 0o700); err != nil {
+		return result, fixture, err
+	}
+	if err := os.WriteFile(secondContinuityPath, []byte(secondContinuity+"\n"), 0o600); err != nil {
+		return result, fixture, err
+	}
+	secondStream, err := runCodex(secondWorktree, codexHome, codexPath, model, "Return the exact continuity sentinel supplied for this worktree and nothing else. Do not use tools or edit files.")
+	if err != nil {
+		return result, fixture, fmt.Errorf("second-worktree Codex session failed: %w", err)
+	}
+	secondEvidence, err := inspectCodexStream(secondStream, "", "")
+	if err != nil {
+		return result, fixture, err
+	}
+	result.Checks["distinct_worktree_second_context_observed"] = secondEvidence.Contains(secondContinuity)
+	result.Checks["distinct_worktree_main_context_excluded"] = !secondEvidence.Contains(continuity)
+	result.Checks["distinct_worktree_imported_memory_excluded"] = !secondEvidence.Contains(memorySentinel)
+	result.Checks["distinct_worktree_no_tools"] = secondEvidence.ExternalToolCount == 0 && secondEvidence.FileChangeCount == 0
+	result.Checks["distinct_worktree_context_isolated"] = result.Checks["distinct_worktree_second_context_observed"] && result.Checks["distinct_worktree_main_context_excluded"] && result.Checks["distinct_worktree_imported_memory_excluded"] && result.Checks["distinct_worktree_no_tools"]
 	finalConfigDigest, configErr := fileDigest(filepath.Join(codexHome, "config.toml"))
 	result.RuntimeConfigFinalSHA256 = finalConfigDigest
 	result.Checks["runtime_config_stable"] = configErr == nil && result.RuntimeConfigFinalSHA256 == result.RuntimeConfigSHA256
 
-	if err := os.Remove(filepath.Join(repository, "native-proof.txt")); err != nil {
+	if err := os.Remove(filepath.Join(repository, "native-proof.txt")); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return result, fixture, err
 	}
 	if _, err := commandOutput(repository, 30*time.Second, cli, "workspace", "remove", "--runtime", "codex", repository); err != nil {
@@ -871,6 +1122,11 @@ func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 		return result, fixture, err
 	}
 	result.Checks["projection_removal"] = strings.Contains(removedStatus, `"state": "absent"`)
+	secondStillEnrolled, secondStatusErr := enrolledWorkspaceStatus(secondWorktree, cli, "codex", secondWorktree)
+	result.Checks["distinct_worktree_removal_independent"] = secondStatusErr == nil && secondStillEnrolled.WorkspaceID == secondStatus.WorkspaceID
+	if _, err := commandOutput(secondWorktree, 30*time.Second, cli, "workspace", "remove", "--runtime", "codex", secondWorktree); err != nil {
+		return result, fixture, fmt.Errorf("remove second Codex projection: %w", err)
+	}
 	clean, err = commandOutput(repository, 10*time.Second, "git", "status", "--porcelain")
 	result.Checks["removal_git_clean"] = err == nil && clean == ""
 
@@ -890,6 +1146,173 @@ func qualifyCodex(artifact, codexPath, model string) (report, string, error) {
 
 func matchesSentinel(body []byte, sentinel string) bool {
 	return string(body) == sentinel || string(body) == sentinel+"\n"
+}
+
+func prepareDistinctWorktree(repository, target string) (string, error) {
+	absolute, err := filepath.Abs(filepath.Clean(target))
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(absolute), 0o700); err != nil {
+		return "", err
+	}
+	if _, err := commandOutput(repository, 30*time.Second, "git", "worktree", "add", "-b", "maestro-native-second", absolute, "HEAD"); err != nil {
+		return "", err
+	}
+	return absolute, nil
+}
+
+type qualificationWorkspaceStatus struct {
+	State        string `json:"state"`
+	RepositoryID string `json:"repository_id"`
+	WorkspaceID  string `json:"workspace_id"`
+}
+
+func enrolledWorkspaceStatus(workdir, cli, runtimeName, target string) (qualificationWorkspaceStatus, error) {
+	body, err := commandOutput(workdir, 30*time.Second, cli, "workspace", "status", "--runtime", runtimeName, target)
+	if err != nil {
+		return qualificationWorkspaceStatus{}, err
+	}
+	var status qualificationWorkspaceStatus
+	if err := json.Unmarshal([]byte(body), &status); err != nil {
+		return qualificationWorkspaceStatus{}, err
+	}
+	if status.State != "enrolled" || status.RepositoryID == "" || status.WorkspaceID == "" {
+		return qualificationWorkspaceStatus{}, errors.New("workspace qualification status is not enrolled and complete")
+	}
+	return status, nil
+}
+
+func canonicalSkillIDs(hub string) ([]string, error) {
+	var catalog struct {
+		SchemaVersion int `json:"schema_version"`
+		Skills        []struct {
+			ID string `json:"id"`
+		} `json:"skills"`
+	}
+	if err := readJSON(filepath.Join(hub, "bundles", "base", "skills", "catalog.json"), &catalog); err != nil {
+		return nil, err
+	}
+	if catalog.SchemaVersion != 1 || len(catalog.Skills) == 0 {
+		return nil, errors.New("canonical skill catalog is invalid")
+	}
+	ids := make([]string, 0, len(catalog.Skills))
+	seen := map[string]bool{}
+	for _, skill := range catalog.Skills {
+		if skill.ID == "" || seen[skill.ID] {
+			return nil, errors.New("canonical skill catalog contains an invalid ID")
+		}
+		seen[skill.ID] = true
+		ids = append(ids, skill.ID)
+	}
+	sort.Strings(ids)
+	return ids, nil
+}
+
+func completeSkillProjection(repository, runtimeName string, skillIDs []string) bool {
+	root := filepath.Join(repository, "."+runtimeName, "skills")
+	for _, skillID := range skillIDs {
+		if !regular(filepath.Join(root, skillID, "SKILL.md")) {
+			return false
+		}
+	}
+	return len(skillIDs) > 0
+}
+
+func containsSpecialistTopology(text string) bool {
+	for _, role := range []string{"client-account-agent", "case-agent", "yoda", "darwin", "pa-expert"} {
+		if !strings.Contains(text, role) {
+			return false
+		}
+	}
+	return true
+}
+
+func specialistTopologyProjected(promptInput, managedInstructions string, orchestrationUnavailable bool) bool {
+	discovered := strings.Contains(promptInput, "AGENTS.md") && strings.Contains(promptInput, "Maestro")
+	return discovered && orchestrationUnavailable && containsSpecialistTopology(managedInstructions)
+}
+
+func prepareLegacyHubCandidate(dataRoot, sentinel string) (string, []byte, error) {
+	path := filepath.Join(dataRoot, "memory", "recent", "native-reviewed-memory.md")
+	body := []byte(sentinel + "\n")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", nil, err
+	}
+	if err := os.Chmod(filepath.Dir(path), 0o700); err != nil {
+		return "", nil, err
+	}
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		return "", nil, err
+	}
+	return path, body, nil
+}
+
+func bridgeLegacyHubCandidate(workdir, cli, runtimeName, sentinel string) error {
+	inspect, err := commandOutput(workdir, 30*time.Second, cli, "workspace", "memory", "bridge", "inspect", "--runtime", runtimeName, "--workspace", workdir)
+	if err != nil {
+		return err
+	}
+	var report struct {
+		Candidates []struct {
+			ID string `json:"candidate_id"`
+		} `json:"candidates"`
+	}
+	if err := json.Unmarshal([]byte(inspect), &report); err != nil {
+		return err
+	}
+	selected := ""
+	for _, candidate := range report.Candidates {
+		preview, previewErr := commandOutput(workdir, 30*time.Second, cli, "workspace", "memory", "bridge", "preview", "--runtime", runtimeName, "--workspace", workdir, "--candidate", candidate.ID)
+		if previewErr != nil {
+			return previewErr
+		}
+		if strings.Contains(preview, sentinel) {
+			selected = candidate.ID
+			break
+		}
+	}
+	if selected == "" {
+		return errors.New("synthetic legacy Hub candidate was not discoverable by opaque preview")
+	}
+	result, err := commandOutput(workdir, 30*time.Second, cli, "workspace", "memory", "bridge", "apply", "--runtime", runtimeName, "--workspace", workdir, "--candidates", selected, "--attest-target-scope", "--confirm")
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(result, `"state": "applied"`) && !strings.Contains(result, `"state": "already_applied"`) {
+		return errors.New("synthetic legacy Hub candidate did not activate")
+	}
+	return nil
+}
+
+func capabilityState(hub, capabilityID, runtimeName string) (string, error) {
+	var manifest struct {
+		Capabilities []struct {
+			ID       string `json:"id"`
+			Runtimes map[string]struct {
+				State string `json:"state"`
+			} `json:"runtimes"`
+		} `json:"capabilities"`
+	}
+	if err := readJSON(filepath.Join(hub, "bundles", "base", "runtime", "capabilities.json"), &manifest); err != nil {
+		return "", err
+	}
+	for _, capability := range manifest.Capabilities {
+		if capability.ID == capabilityID {
+			return capability.Runtimes[runtimeName].State, nil
+		}
+	}
+	return "", errors.New("canonical runtime capability is missing")
+}
+
+func newQualificationSessionID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	value[6] = value[6]&0x0f | 0x40
+	value[8] = value[8]&0x3f | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", value[0:4], value[4:6], value[6:8], value[8:10], value[10:16]), nil
 }
 
 func prepareIsolatedCodexHome(fixture string) (string, string, error) {
@@ -927,6 +1350,87 @@ func prepareIsolatedCodexHome(fixture string) (string, string, error) {
 	}
 	digest := sha256.Sum256(configBody)
 	return isolated, hex.EncodeToString(digest[:]), nil
+}
+
+func prepareIsolatedClaudeConfig(fixture string) (string, string, error) {
+	sourceRoot := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR"))
+	var sourceState string
+	if sourceRoot != "" {
+		sourceState = filepath.Join(sourceRoot, ".claude.json")
+	} else {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", "", err
+		}
+		sourceState = filepath.Join(home, ".claude.json")
+	}
+	return prepareIsolatedClaudeConfigFrom(fixture, sourceState)
+}
+
+func prepareIsolatedClaudeConfigFrom(fixture, sourceState string) (string, string, error) {
+	info, err := os.Lstat(sourceState)
+	if err != nil {
+		return "", "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Size() > 1<<20 {
+		return "", "", errors.New("Claude state source must be a bounded regular non-symlink file")
+	}
+	body, err := os.ReadFile(sourceState)
+	if err != nil {
+		return "", "", err
+	}
+	var source map[string]json.RawMessage
+	if err := json.Unmarshal(body, &source); err != nil {
+		return "", "", fmt.Errorf("decode Claude state source: %w", err)
+	}
+	filtered := map[string]json.RawMessage{}
+	for _, key := range []string{
+		"hasCompletedOnboarding",
+		"lastOnboardingVersion",
+		"userID",
+		"machineID",
+		"hasAvailableSubscription",
+		"installMethod",
+	} {
+		if value, ok := source[key]; ok {
+			filtered[key] = value
+		}
+	}
+	if rawAccount, ok := source["oauthAccount"]; ok {
+		var account map[string]json.RawMessage
+		if err := json.Unmarshal(rawAccount, &account); err != nil {
+			return "", "", fmt.Errorf("decode Claude OAuth account bootstrap: %w", err)
+		}
+		filteredAccount := map[string]json.RawMessage{}
+		for _, key := range []string{"accountUuid", "organizationUuid"} {
+			if value, present := account[key]; present {
+				filteredAccount[key] = value
+			}
+		}
+		encodedAccount, err := json.Marshal(filteredAccount)
+		if err != nil {
+			return "", "", err
+		}
+		filtered["oauthAccount"] = encodedAccount
+	}
+	if len(filtered) == 0 {
+		return "", "", errors.New("Claude state source omitted the supported authentication bootstrap")
+	}
+	isolatedBody, err := json.MarshalIndent(filtered, "", "  ")
+	if err != nil {
+		return "", "", err
+	}
+	isolatedBody = append(isolatedBody, '\n')
+	root := filepath.Join(fixture, ".claude-home")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		return "", "", err
+	}
+	statePath := filepath.Join(root, ".claude.json")
+	if err := os.WriteFile(statePath, isolatedBody, 0o600); err != nil {
+		return "", "", err
+	}
+	digest := sha256.Sum256(isolatedBody)
+	return root, hex.EncodeToString(digest[:]), nil
 }
 
 func receiptSnapshot(root string) (map[string]bool, error) {
@@ -994,11 +1498,23 @@ func validatedReceiptDelta(dataRoot, workspaceID, runtimeName string, before map
 }
 
 func runCodex(workdir, codexHome, executable, model, prompt string) ([]byte, error) {
+	return runCodexWithArgs(workdir, codexHome, executable, codexArgs(model, prompt))
+}
+
+func runCodexPersistent(workdir, codexHome, executable, model, prompt string) ([]byte, error) {
+	return runCodexWithArgs(workdir, codexHome, executable, codexPersistentArgs(model, prompt))
+}
+
+func resumeCodex(workdir, codexHome, executable, model, sessionID, prompt string) ([]byte, error) {
+	return runCodexWithArgs(workdir, codexHome, executable, codexResumeArgs(model, sessionID, prompt))
+}
+
+func runCodexWithArgs(workdir, codexHome, executable string, args []string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, executable, codexArgs(model, prompt)...)
+	command := exec.CommandContext(ctx, executable, args...)
 	command.Dir = workdir
-	command.Env = append(os.Environ(), "CODEX_HOME="+codexHome)
+	command.Env = codexIsolatedEnvironment(os.Environ(), codexHome, workdir)
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
 	err := command.Run()
@@ -1011,22 +1527,49 @@ func runCodex(workdir, codexHome, executable, model, prompt string) ([]byte, err
 	return stdout.Bytes(), nil
 }
 
+func codexIsolatedEnvironment(environment []string, codexHome, workdir string) []string {
+	isolated := make([]string, 0, len(environment)+2)
+	for _, entry := range environment {
+		if strings.HasPrefix(entry, "CODEX_HOME=") || strings.HasPrefix(entry, "PWD=") {
+			continue
+		}
+		isolated = append(isolated, entry)
+	}
+	return append(isolated, "CODEX_HOME="+codexHome, "PWD="+workdir)
+}
+
 func runClaude(workdir, executable, model, maxBudget, prompt string) ([]byte, error) {
-	stream, err := runClaudeOnce(workdir, executable, model, maxBudget, prompt)
+	return runClaudeIsolated(workdir, "", executable, model, maxBudget, prompt)
+}
+
+func runClaudeIsolated(workdir, configRoot, executable, model, maxBudget, prompt string) ([]byte, error) {
+	args := claudeArgs(model, maxBudget, prompt)
+	stream, err := runClaudeArgsOnce(workdir, configRoot, executable, args)
 	if err == nil || len(bytes.TrimSpace(stream)) > 0 {
 		return stream, err
 	}
 	// Claude can occasionally terminate before emitting its first stream item
 	// (for example while refreshing local auth). One fresh retry is bounded and
 	// remains visible if it also fails.
-	return runClaudeOnce(workdir, executable, model, maxBudget, prompt)
+	return runClaudeArgsOnce(workdir, configRoot, executable, args)
 }
 
-func runClaudeOnce(workdir, executable, model, maxBudget, prompt string) ([]byte, error) {
+func runClaudePersistent(workdir, configRoot, executable, model, maxBudget, sessionID, prompt string) ([]byte, error) {
+	return runClaudeArgsOnce(workdir, configRoot, executable, claudePersistentArgs(model, maxBudget, sessionID, prompt))
+}
+
+func resumeClaude(workdir, configRoot, executable, model, maxBudget, sessionID, prompt string) ([]byte, error) {
+	return runClaudeArgsOnce(workdir, configRoot, executable, claudeResumeArgs(model, maxBudget, sessionID, prompt))
+}
+
+func runClaudeArgsOnce(workdir, configRoot, executable string, args []string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, executable, claudeArgs(model, maxBudget, prompt)...)
+	command := exec.CommandContext(ctx, executable, args...)
 	command.Dir = workdir
+	if configRoot != "" {
+		command.Env = claudeIsolatedEnvironment(os.Environ(), configRoot)
+	}
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
 	err := command.Run()
@@ -1039,12 +1582,46 @@ func runClaudeOnce(workdir, executable, model, maxBudget, prompt string) ([]byte
 	return stdout.Bytes(), nil
 }
 
+func claudeIsolatedEnvironment(ambient []string, configRoot string) []string {
+	result := make([]string, 0, len(ambient)+2)
+	for _, value := range ambient {
+		if strings.HasPrefix(value, "CLAUDE_CONFIG_DIR=") || strings.HasPrefix(value, "CLAUDE_SECURESTORAGE_CONFIG_DIR=") {
+			continue
+		}
+		result = append(result, value)
+	}
+	return append(result,
+		"CLAUDE_CONFIG_DIR="+configRoot,
+		"CLAUDE_SECURESTORAGE_CONFIG_DIR=",
+	)
+}
+
 func claudeArgs(model, maxBudget, prompt string) []string {
 	return []string{
 		"-p", "--verbose", "--model", model,
 		"--output-format", "stream-json", "--include-hook-events",
 		"--setting-sources", "project,local", "--permission-mode", "acceptEdits",
 		"--allowedTools", "Read,Write,Bash,Task,Skill", "--no-session-persistence",
+		"--max-budget-usd", maxBudget, prompt,
+	}
+}
+
+func claudePersistentArgs(model, maxBudget, sessionID, prompt string) []string {
+	return []string{
+		"-p", "--verbose", "--model", model,
+		"--output-format", "stream-json", "--include-hook-events",
+		"--setting-sources", "project,local", "--permission-mode", "acceptEdits",
+		"--allowedTools", "Read,Write,Bash,Task,Skill", "--session-id", sessionID,
+		"--max-budget-usd", maxBudget, prompt,
+	}
+}
+
+func claudeResumeArgs(model, maxBudget, sessionID, prompt string) []string {
+	return []string{
+		"-p", "--verbose", "--resume", sessionID, "--model", model,
+		"--output-format", "stream-json", "--include-hook-events",
+		"--setting-sources", "project,local", "--permission-mode", "acceptEdits",
+		"--allowedTools", "Read,Write,Bash,Task,Skill",
 		"--max-budget-usd", maxBudget, prompt,
 	}
 }
@@ -1063,6 +1640,9 @@ func inspectClaudeStream(stream []byte) (streamEvidence, error) {
 			return streamEvidence{}, fmt.Errorf("decode Claude stream line: %w", err)
 		}
 		if item["type"] == "system" {
+			if item["subtype"] == "init" && evidence.SessionID == "" {
+				evidence.SessionID, _ = item["session_id"].(string)
+			}
 			if event, ok := item["hook_event"].(string); ok && item["subtype"] == "hook_response" {
 				evidence.Hooks[event] = true
 			}
@@ -1079,9 +1659,55 @@ func inspectClaudeStream(stream []byte) (streamEvidence, error) {
 	return evidence, nil
 }
 
+func mergeStreamEvidence(items ...streamEvidence) streamEvidence {
+	merged := streamEvidence{
+		Hooks:     map[string]bool{},
+		Agents:    map[string]bool{},
+		Skills:    map[string]bool{},
+		ItemTypes: map[string]int{},
+	}
+	for _, item := range items {
+		if merged.SessionID == "" {
+			merged.SessionID = item.SessionID
+		}
+		for name, observed := range item.Hooks {
+			merged.Hooks[name] = merged.Hooks[name] || observed
+		}
+		for name, observed := range item.Agents {
+			merged.Agents[name] = merged.Agents[name] || observed
+		}
+		for name, observed := range item.Skills {
+			merged.Skills[name] = merged.Skills[name] || observed
+		}
+		for name, count := range item.ItemTypes {
+			merged.ItemTypes[name] += count
+		}
+		merged.InvokedDoctor = merged.InvokedDoctor || item.InvokedDoctor
+		merged.ReadHubDoctor = merged.ReadHubDoctor || item.ReadHubDoctor
+		merged.GuardDenied = merged.GuardDenied || item.GuardDenied
+		merged.GuardAttempted = merged.GuardAttempted || item.GuardAttempted
+		merged.GuardExecuted = merged.GuardExecuted || item.GuardExecuted
+		merged.ManagedSubagent = merged.ManagedSubagent || item.ManagedSubagent
+		merged.DoctorStatusChecked = merged.DoctorStatusChecked || item.DoctorStatusChecked
+		merged.DoctorVersionChecked = merged.DoctorVersionChecked || item.DoctorVersionChecked
+		if merged.DoctorVersionOutput == "" {
+			merged.DoctorVersionOutput = item.DoctorVersionOutput
+		}
+		merged.CommandCount += item.CommandCount
+		merged.FileChangeCount += item.FileChangeCount
+		merged.ExternalToolCount += item.ExternalToolCount
+		merged.ToolUseCount += item.ToolUseCount
+		merged.Text += item.Text
+	}
+	return merged
+}
+
 func walkStreamValue(value any, evidence *streamEvidence) {
 	switch typed := value.(type) {
 	case map[string]any:
+		if typed["type"] == "tool_use" {
+			evidence.ToolUseCount++
+		}
 		if typed["type"] == "text" {
 			if text, ok := typed["text"].(string); ok {
 				evidence.Text += text + "\n"
@@ -1138,15 +1764,28 @@ func commandOutputWithEnv(workdir string, timeout time.Duration, environment []s
 	defer cancel()
 	command := exec.CommandContext(ctx, name, args...)
 	command.Dir = workdir
-	if len(environment) > 0 {
-		command.Env = append(os.Environ(), environment...)
-	}
+	command.Env = qualificationCommandEnvironment(os.Environ(), environment)
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
 	if err := command.Run(); err != nil {
 		return "", fmt.Errorf("%s failed: %w (stderr bytes=%d)", filepath.Base(name), err, stderr.Len())
 	}
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+func qualificationCommandEnvironment(environment, overrides []string) []string {
+	isolated := make([]string, 0, len(environment)+len(overrides))
+	for _, variable := range environment {
+		if strings.HasPrefix(variable, "GIT_INDEX_FILE=") ||
+			strings.HasPrefix(variable, "GIT_DIR=") ||
+			strings.HasPrefix(variable, "GIT_WORK_TREE=") ||
+			strings.HasPrefix(variable, "GIT_PREFIX=") ||
+			strings.HasPrefix(variable, "GIT_CONFIG_PARAMETERS=") {
+			continue
+		}
+		isolated = append(isolated, variable)
+	}
+	return append(isolated, overrides...)
 }
 
 func extractZIP(source, destination string) error {

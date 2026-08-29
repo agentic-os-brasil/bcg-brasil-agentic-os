@@ -277,3 +277,11 @@ output and a version-bounded verdict. Any qualification or fixture-cleanup
 failure changes the report to `failed` before it can be serialized, so a
 cleanup error can never publish a passing record. Neither path establishes Windows, organization
 signing, release readiness or pilot readiness.
+
+Spec 059 extends this into a paired matrix over the same ZIP. Shared direct-mode
+evidence additionally covers complete skill projection, canonical imported
+memory, true native resume and two distinct Git worktrees. Claude alone proves
+the native Maestro-folder Hub and managed specialist execution; Codex proves
+portable Hub activation and the canonical declaration that its native-agent
+adapter is unavailable. Those explicit topology differences are not parity
+failures, while any one-sided shared direct capability is.

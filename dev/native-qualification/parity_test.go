@@ -6,16 +6,28 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
 
 var sharedNativeQualificationChecks = []string{
+	"canonical_skill_projection",
 	"dangerous_git_denied",
 	"direct_enrollment",
+	"distinct_worktree_context_isolated",
+	"distinct_worktree_identity",
+	"distinct_worktree_removal_independent",
 	"doctor_skill_discovered",
 	"doctor_skill_invoked",
 	"hub_bootstrap",
+	"memory_context_injected",
+	"memory_skill_discovered",
+	"memory_source_preserved",
+	"native_resume",
+	"operator_skill_discovered",
+	"specialist_topology_projected",
+	"supported_hooks_complete",
 	"transparent_maestro_identity",
 	"owner_context_injected",
 	"owner_sensitive_context_excluded",
@@ -67,7 +79,7 @@ func TestLatestClaudeAndCodexNativeEvidenceQualifiesSameArtifactContract(t *test
 
 func TestNativeRuntimeParityGateRejectsOneSidedSuccess(t *testing.T) {
 	base := report{
-		SchemaVersion:  1,
+		SchemaVersion:  2,
 		Result:         "pass",
 		ObservedAt:     time.Now().UTC().Format(time.RFC3339),
 		OS:             "darwin",
@@ -104,7 +116,45 @@ func TestNativeRuntimeParityGateRejectsOneSidedSuccess(t *testing.T) {
 	}
 }
 
+func TestNativeRuntimeParityGateRejectsEveryOneSidedExpandedMatrixCell(t *testing.T) {
+	base := report{SchemaVersion: 2, Result: "pass", Runtime: "claude", OS: "darwin", Arch: "arm64", ReleaseVersion: "0.1.13", ArtifactSHA256: strings.Repeat("a", 64), Checks: map[string]bool{}}
+	for _, check := range sharedNativeQualificationChecks {
+		base.Checks[check] = true
+	}
+	for _, check := range []string{"canonical_skill_projection", "memory_context_injected", "native_resume", "distinct_worktree_identity", "distinct_worktree_context_isolated", "specialist_topology_projected", "supported_hooks_complete"} {
+		t.Run(check, func(t *testing.T) {
+			claude := cloneParityReport(base)
+			codex := cloneParityReport(base)
+			codex.Runtime = "codex"
+			delete(codex.Checks, check)
+			if err := validateNativeRuntimeParity(claude, codex); err == nil {
+				t.Fatalf("parity accepted one-sided %s", check)
+			}
+		})
+	}
+}
+
+func TestNativeRuntimeTopologyRejectsInventedOrMissingHostSpecificCells(t *testing.T) {
+	claude := report{Runtime: "claude", Checks: map[string]bool{"hub_session_start": true, "hub_doctor_skill": true, "native_agents_discovered": true, "managed_agent_flow": true}}
+	codex := report{Runtime: "codex", Checks: map[string]bool{"hub_activation_only": true, "agent_orchestration_declared_unavailable": true}}
+	if err := validateNativeRuntimeTopology(claude, codex); err != nil {
+		t.Fatal(err)
+	}
+	codex.Checks["hub_session_start"] = true
+	if err := validateNativeRuntimeTopology(claude, codex); err == nil {
+		t.Fatal("invented Codex native Hub was accepted")
+	}
+	delete(codex.Checks, "hub_session_start")
+	delete(codex.Checks, "agent_orchestration_declared_unavailable")
+	if err := validateNativeRuntimeTopology(claude, codex); err == nil {
+		t.Fatal("missing Codex agent limitation was accepted")
+	}
+}
+
 func validateNativeRuntimeParity(claude, codex report) error {
+	if claude.SchemaVersion != 2 || codex.SchemaVersion != 2 {
+		return fmt.Errorf("paired native matrix requires schema version 2 reports")
+	}
 	if claude.Runtime != "claude" || codex.Runtime != "codex" {
 		return fmt.Errorf("native parity requires one Claude and one Codex report")
 	}
@@ -123,6 +173,44 @@ func validateNativeRuntimeParity(claude, codex report) error {
 	if len(missing) > 0 {
 		sort.Strings(missing)
 		return fmt.Errorf("shared native qualification checks diverged: %v", missing)
+	}
+	return validateNativeRuntimeTopology(claude, codex)
+}
+
+func TestNativeRuntimeParityAcceptsCompleteSupportedTopology(t *testing.T) {
+	base := report{SchemaVersion: 2, Result: "pass", OS: "darwin", Arch: "arm64", ReleaseVersion: "0.1.13", ArtifactSHA256: strings.Repeat("a", 64), Checks: map[string]bool{}}
+	for _, check := range sharedNativeQualificationChecks {
+		base.Checks[check] = true
+	}
+	claude := cloneParityReport(base)
+	claude.Runtime = "claude"
+	for _, check := range []string{"hub_session_start", "hub_doctor_skill", "native_agents_discovered", "managed_agent_flow"} {
+		claude.Checks[check] = true
+	}
+	codex := cloneParityReport(base)
+	codex.Runtime = "codex"
+	codex.Checks["hub_activation_only"] = true
+	codex.Checks["agent_orchestration_declared_unavailable"] = true
+	if err := validateNativeRuntimeParity(claude, codex); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func validateNativeRuntimeTopology(claude, codex report) error {
+	for _, check := range []string{"hub_session_start", "hub_doctor_skill", "native_agents_discovered", "managed_agent_flow"} {
+		if !claude.Checks[check] {
+			return fmt.Errorf("Claude native topology omitted %s", check)
+		}
+	}
+	for _, check := range []string{"hub_activation_only", "agent_orchestration_declared_unavailable"} {
+		if !codex.Checks[check] {
+			return fmt.Errorf("Codex declared topology omitted %s", check)
+		}
+	}
+	for _, invented := range []string{"hub_session_start", "hub_doctor_skill", "native_agents_discovered", "managed_agent_flow"} {
+		if codex.Checks[invented] {
+			return fmt.Errorf("Codex report invented unsupported native topology cell %s", invented)
+		}
 	}
 	return nil
 }

@@ -60,6 +60,9 @@ fail() { FAIL_COUNT=$((FAIL_COUNT+1)); FAILURES+=("$1"); printf '  %sFAIL%s  %s\
 skip() { SKIP_COUNT=$((SKIP_COUNT+1)); printf '  %sSKIP%s  %s\n' "$YELLOW" "$RESET" "$1"; }
 info() { [ "$VERBOSE" = 1 ] && printf '  %s...%s   %s\n' "$DIM" "$RESET" "$1" || true; }
 phase() { printf '\n%s%s%s\n' "$YELLOW" "$1" "$RESET"; }
+mode_of() {
+  stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1" 2>/dev/null
+}
 
 SCRATCH_ROOT=$(mktemp -d -t maestro-eval-XXXXXX)
 MAESTRO_DIR="$SCRATCH_ROOT/Maestro"
@@ -597,6 +600,39 @@ for tier in recent weekly medium-term lifetime policies; do
     fail "data/memory/$tier NOT created by scaffold"
   fi
 done
+
+PRIVATE_MEMORY_DIRS=1
+for private_dir in "$MAESTRO_DIR/data/memory" \
+  "$MAESTRO_DIR/data/memory/recent" \
+  "$MAESTRO_DIR/data/memory/weekly" \
+  "$MAESTRO_DIR/data/memory/medium-term" \
+  "$MAESTRO_DIR/data/memory/lifetime" \
+  "$MAESTRO_DIR/data/memory/policies"; do
+  [ "$(mode_of "$private_dir")" = "700" ] || PRIVATE_MEMORY_DIRS=0
+done
+if [ "$PRIVATE_MEMORY_DIRS" = "1" ]; then
+  pass "legacy memory authority directories are private (0700)"
+else
+  fail "legacy memory authority directories are not all private (0700)"
+fi
+
+# Existing installations may have been scaffolded by an older ZIP under a
+# permissive umask. A later SessionStart must harden the fixed legacy-memory
+# boundary without changing file bytes.
+LEGACY_PERMISSION_FIXTURE="$MAESTRO_DIR/data/memory/recent/legacy-permission-fixture.md"
+printf 'permission fixture\n' > "$LEGACY_PERMISSION_FIXTURE"
+chmod 755 "$MAESTRO_DIR/data/memory/recent"
+chmod 644 "$LEGACY_PERMISSION_FIXTURE"
+LEGACY_PERMISSION_BEFORE=$(shasum -a 256 "$LEGACY_PERMISSION_FIXTURE" | awk '{print $1}')
+CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$HOOK" >/dev/null 2>&1
+LEGACY_PERMISSION_AFTER=$(shasum -a 256 "$LEGACY_PERMISSION_FIXTURE" | awk '{print $1}')
+if [ "$(mode_of "$MAESTRO_DIR/data/memory/recent")" = "700" ] \
+   && [ "$(mode_of "$LEGACY_PERMISSION_FIXTURE")" = "600" ] \
+   && [ "$LEGACY_PERMISSION_BEFORE" = "$LEGACY_PERMISSION_AFTER" ]; then
+  pass "existing legacy memory is hardened without changing bytes"
+else
+  fail "existing legacy memory was not hardened byte-preservingly"
+fi
 
 # 12a2: Lifetime eligibility policy exists after first-run scaffold.
 # dream-memory/SKILL.md step 5 refuses lifetime promotion without a named

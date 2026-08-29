@@ -22,6 +22,7 @@ var nativeIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,
 // beyond this contract are deliberately ignored.
 type NativeInput struct {
 	SessionID string `json:"session_id"`
+	CWD       string `json:"cwd"`
 	Prompt    string `json:"prompt"`
 	ToolUseID string `json:"tool_use_id"`
 	ToolName  string `json:"tool_name"`
