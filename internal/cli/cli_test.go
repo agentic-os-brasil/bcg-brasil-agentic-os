@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,8 +16,10 @@ import (
 	"testing"
 	"time"
 
+	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/portableactivation"
 )
@@ -97,7 +100,7 @@ func TestHookSessionStartUsesScopedEnrollmentWithoutLeakingRoots(t *testing.T) {
 	}
 }
 
-func TestDirectSessionStartUsesCanonicalMaestroIdentityAndReviewedOwnerContextForBothRuntimes(t *testing.T) {
+func TestDirectSessionStartUsesNativeClaudeHubAndReviewedOwnerContextForBothRuntimes(t *testing.T) {
 	fixture := newCLIFixture(t)
 	prepareReviewedOwnerContext(t, fixture.dataRoot)
 	otherContext := filepath.Join(fixture.dataRoot, "workspaces", strings.Repeat("f", 32), "context")
@@ -120,17 +123,27 @@ func TestDirectSessionStartUsesCanonicalMaestroIdentityAndReviewedOwnerContextFo
 			t.Fatalf("%s SessionStart exit=%d stderr=%s", runtimeName, code, errOut.String())
 		}
 		startup[runtimeName] = out.String()
-		for _, wanted := range []string{
-			"Maestro is the configured professional operating layer",
-			"Synthetic Owner",
-			"Synthetic engineering role",
-		} {
+		for _, wanted := range []string{"Synthetic Owner", "Synthetic engineering role"} {
 			if !strings.Contains(out.String(), wanted) {
 				t.Fatalf("%s SessionStart omitted %q: %s", runtimeName, wanted, out.String())
 			}
 		}
 		hostRuntime := map[string]string{"claude": "Claude Code", "codex": "Codex"}[runtimeName]
-		if !strings.Contains(out.String(), hostRuntime) || !strings.Contains(out.String(), "Never deny, conceal or misrepresent") {
+		if runtimeName == "claude" {
+			for _, forbidden := range []string{
+				"Maestro is the configured professional operating layer",
+				"Use the installed CLI silently",
+				"Both facts remain visible",
+				"ONBOARDING AVAILABLE",
+			} {
+				if strings.Contains(out.String(), forbidden) {
+					t.Fatalf("direct Claude SessionStart retained imperative policy %q: %s", forbidden, out.String())
+				}
+			}
+			if !strings.Contains(out.String(), "Host runtime: "+hostRuntime) || !strings.Contains(out.String(), "Native frontend: maestro-hub") {
+				t.Fatalf("direct Claude SessionStart omitted factual native Hub state: %s", out.String())
+			}
+		} else if !strings.Contains(out.String(), "Host runtime: "+hostRuntime) || !strings.Contains(out.String(), "Both facts remain visible") {
 			t.Fatalf("%s SessionStart omitted transparent host identity: %s", runtimeName, out.String())
 		}
 		for _, forbidden := range []string{
@@ -154,7 +167,75 @@ func TestDirectSessionStartUsesCanonicalMaestroIdentityAndReviewedOwnerContextFo
 			t.Fatalf("%s UserPromptSubmit repeated or lost bounded context: %s", runtimeName, out.String())
 		}
 	}
-	if err := validateDirectStartupParity(startup, []string{"Maestro is the configured professional operating layer", "Synthetic Owner", "Synthetic engineering role"}); err != nil {
+	if err := validateDirectStartupParity(startup, []string{"Synthetic Owner", "Synthetic engineering role"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDirectSessionStartInjectsGeneratedMemoryForBothRuntimes(t *testing.T) {
+	fixture := newCLIFixture(t)
+	var enrollment bytes.Buffer
+	var errOut bytes.Buffer
+	if code := Run(workspaceArgs(fixture, "enroll", "claude"), strings.NewReader(""), &enrollment, &errOut); code != ExitOK {
+		t.Fatalf("Claude enroll exit=%d stderr=%s", code, errOut.String())
+	}
+	var enrolled struct {
+		WorkspaceID string `json:"workspace_id"`
+	}
+	if err := json.Unmarshal(enrollment.Bytes(), &enrolled); err != nil {
+		t.Fatal(err)
+	}
+	policy, err := basememory.Policy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeConfig, err := basememory.Runtime()
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	engine := memory.Engine{
+		Root: fixture.dataRoot, Policy: policy, Budgets: runtimeConfig.ContextBudgets(),
+		Synthesizer: fixedMemorySynthesizer("generated-memory-parity-sentinel"), SynthesizerID: "cli-test-synth-v1", Now: func() time.Time { return now },
+	}
+	if _, err := engine.Capture(memory.Capture{WorkspaceID: enrolled.WorkspaceID, RecordedAt: now, Kind: "test", Text: "bounded source", Sanitized: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.DreamDaily(context.Background(), enrolled.WorkspaceID, now); err != nil {
+		t.Fatal(err)
+	}
+
+	startup := map[string]string{}
+	for _, runtimeName := range []string{"claude", "codex"} {
+		if runtimeName == "codex" {
+			enrollment.Reset()
+			errOut.Reset()
+			if code := Run(workspaceArgs(fixture, "enroll", runtimeName), strings.NewReader(""), &enrollment, &errOut); code != ExitOK {
+				t.Fatalf("Codex enroll exit=%d stderr=%s", code, errOut.String())
+			}
+		}
+		var out bytes.Buffer
+		errOut.Reset()
+		if code := Run(hookArgs(fixture, runtimeName, "session-start"), strings.NewReader(`{"session_id":"memory-parity"}`), &out, &errOut); code != ExitOK {
+			t.Fatalf("%s SessionStart exit=%d stderr=%s", runtimeName, code, errOut.String())
+		}
+		startup[runtimeName] = out.String()
+		for _, wanted := range []string{"MAESTRO LOCAL MEMORY", "generated-memory-parity-sentinel"} {
+			if !strings.Contains(out.String(), wanted) {
+				t.Fatalf("%s SessionStart omitted %q: %s", runtimeName, wanted, out.String())
+			}
+		}
+
+		out.Reset()
+		errOut.Reset()
+		if code := Run(hookArgs(fixture, runtimeName, "context-injection"), strings.NewReader(`{"session_id":"memory-parity","prompt":"continue"}`), &out, &errOut); code != ExitOK {
+			t.Fatalf("%s UserPromptSubmit exit=%d stderr=%s", runtimeName, code, errOut.String())
+		}
+		if strings.Contains(out.String(), "MAESTRO LOCAL MEMORY") || strings.Contains(out.String(), "generated-memory-parity-sentinel") {
+			t.Fatalf("%s UserPromptSubmit repeated generated memory: %s", runtimeName, out.String())
+		}
+	}
+	if err := validateDirectStartupParity(startup, []string{"MAESTRO LOCAL MEMORY", "generated-memory-parity-sentinel"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -182,10 +263,17 @@ func TestDirectSessionStartSupportsReviewedPortableLegacyOwnerContext(t *testing
 		if code := Run(hookArgs(fixture, runtimeName, "session-start"), strings.NewReader(`{"session_id":"legacy-owner"}`), &out, &errOut); code != ExitOK {
 			t.Fatalf("%s legacy SessionStart exit=%d stderr=%s", runtimeName, code, errOut.String())
 		}
-		for _, wanted := range []string{"Maestro is the configured professional operating layer", "Portable Synthetic Owner", "Portable synthetic role"} {
+		for _, wanted := range []string{"Portable Synthetic Owner", "Portable synthetic role"} {
 			if !strings.Contains(out.String(), wanted) {
 				t.Fatalf("%s legacy SessionStart omitted %q: %s", runtimeName, wanted, out.String())
 			}
+		}
+		if runtimeName == "claude" {
+			if !strings.Contains(out.String(), "Native frontend: maestro-hub") || strings.Contains(out.String(), "Maestro is the configured professional operating layer") {
+				t.Fatalf("Claude legacy owner context used the wrong direct trust channel: %s", out.String())
+			}
+		} else if !strings.Contains(out.String(), "Maestro is the configured professional operating layer") {
+			t.Fatalf("Codex legacy owner context omitted its operating orientation: %s", out.String())
 		}
 		if strings.Contains(out.String(), "portable-personal-secret") {
 			t.Fatalf("%s legacy SessionStart leaked personal context: %s", runtimeName, out.String())
@@ -212,8 +300,15 @@ func TestDirectSessionStartKeepsFreshPortableScaffoldAvailableForBothRuntimes(t 
 		}
 		out.Reset()
 		errOut.Reset()
-		if code := Run(hookArgs(fixture, runtimeName, "session-start"), strings.NewReader(`{"session_id":"fresh-portable"}`), &out, &errOut); code != ExitOK || !strings.Contains(out.String(), "Maestro is the configured professional operating layer") {
+		if code := Run(hookArgs(fixture, runtimeName, "session-start"), strings.NewReader(`{"session_id":"fresh-portable"}`), &out, &errOut); code != ExitOK {
 			t.Fatalf("%s fresh portable SessionStart exit=%d output=%s stderr=%s", runtimeName, code, out.String(), errOut.String())
+		}
+		if runtimeName == "claude" {
+			if !strings.Contains(out.String(), "Native frontend: maestro-hub") || strings.Contains(out.String(), "ONBOARDING AVAILABLE") {
+				t.Fatalf("Claude fresh portable SessionStart used an imperative hook channel: %s", out.String())
+			}
+		} else if !strings.Contains(out.String(), "Maestro is the configured professional operating layer") {
+			t.Fatalf("Codex fresh portable SessionStart omitted its operating orientation: %s", out.String())
 		}
 		if strings.Contains(out.String(), "Portable Synthetic Owner") {
 			t.Fatalf("%s fresh portable SessionStart injected unconfirmed identity: %s", runtimeName, out.String())
@@ -223,6 +318,7 @@ func TestDirectSessionStartKeepsFreshPortableScaffoldAvailableForBothRuntimes(t 
 
 func TestHookSessionStartInjectsManagedOrientationWhenCodexAgentsIsTracked(t *testing.T) {
 	fixture := newCLIFixture(t)
+	prepareReviewedOwnerContext(t, fixture.dataRoot)
 	tracked := "# Team-owned Codex instructions\n\nKeep this file byte-for-byte.\n"
 	if err := os.WriteFile(filepath.Join(fixture.worktree, "AGENTS.md"), []byte(tracked), 0o600); err != nil {
 		t.Fatal(err)
@@ -249,15 +345,74 @@ func TestHookSessionStartInjectsManagedOrientationWhenCodexAgentsIsTracked(t *te
 	if code := Run(hookArgs(fixture, "codex", "session-start"), strings.NewReader(`{"session_id":"tracked-session"}`), &out, &errOut); code != ExitOK {
 		t.Fatalf("session start exit=%d stderr=%s", code, errOut.String())
 	}
-	for _, required := range []string{"# Maestro — orientação operacional", "$maestro-doctor", "## 5. Limites de dados e autoridade"} {
+	for _, required := range []string{"MAESTRO WORKSPACE CONTEXT", "Configured layer: Maestro", "Host runtime: Codex"} {
 		if !strings.Contains(out.String(), required) {
 			t.Errorf("tracked orientation context is missing %q: %s", required, out.String())
 		}
+	}
+	if strings.Contains(out.String(), "# Maestro — orientação operacional") {
+		t.Fatalf("tracked Codex SessionStart repeated the complete orientation document: %s", out.String())
 	}
 	for _, private := range []string{fixture.managedRoot, fixture.dataRoot, fixture.worktree} {
 		if strings.Contains(out.String(), private) {
 			t.Fatalf("tracked orientation context leaked root %q", private)
 		}
+	}
+	additional := hookAdditionalContext(t, out.Bytes())
+	if len(additional) > 8<<10 {
+		t.Fatalf("tracked Codex SessionStart context = %d bytes, want at most 8 KiB", len(additional))
+	}
+	ownerAt := strings.Index(additional, "Synthetic Owner")
+	packetAt := strings.Index(additional, "Maestro bounded session context")
+	if ownerAt < 0 || packetAt < 0 || ownerAt > packetAt {
+		t.Fatalf("reviewed owner context must precede the pointer packet: %s", additional)
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if code := Run(hookArgs(fixture, "codex", "context-injection"), strings.NewReader(`{"session_id":"tracked-session","prompt":"continue"}`), &out, &errOut); code != ExitOK {
+		t.Fatalf("prompt hook exit=%d stderr=%s", code, errOut.String())
+	}
+	promptContext := hookAdditionalContext(t, out.Bytes())
+	for _, repeated := range []string{"# Maestro — orientação operacional", "Synthetic Owner", "MAESTRO REVIEWED OWNER CONTEXT"} {
+		if strings.Contains(promptContext, repeated) {
+			t.Fatalf("tracked Codex UserPromptSubmit repeated %q: %s", repeated, promptContext)
+		}
+	}
+}
+
+func TestHookSessionStartDoesNotInjectTrackedClaudeOrientationIntoNativeHub(t *testing.T) {
+	fixture := newCLIFixture(t)
+	tracked := "# Team-owned Claude instructions\n\ntracked-orientation-policy-sentinel\n"
+	if err := os.WriteFile(filepath.Join(fixture.worktree, "CLAUDE.md"), []byte(tracked), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"-C", fixture.worktree, "config", "user.email", "test@example.invalid"},
+		{"-C", fixture.worktree, "config", "user.name", "Test"},
+		{"-C", fixture.worktree, "add", "CLAUDE.md"},
+		{"-C", fixture.worktree, "commit", "-m", "tracked Claude orientation"},
+	} {
+		if output, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, output)
+		}
+	}
+	var setupOut, setupErr bytes.Buffer
+	if code := Run(workspaceArgs(fixture, "enroll", "claude"), strings.NewReader(""), &setupOut, &setupErr); code != ExitOK {
+		t.Fatalf("enroll exit=%d stderr=%s", code, setupErr.String())
+	}
+	if body, err := os.ReadFile(filepath.Join(fixture.worktree, "CLAUDE.md")); err != nil || string(body) != tracked {
+		t.Fatalf("tracked CLAUDE.md changed: body=%q err=%v", body, err)
+	}
+	var out, errOut bytes.Buffer
+	if code := Run(hookArgs(fixture, "claude", "session-start"), strings.NewReader(`{"session_id":"tracked-claude"}`), &out, &errOut); code != ExitOK {
+		t.Fatalf("session start exit=%d stderr=%s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "Native frontend: maestro-hub") ||
+		strings.Contains(out.String(), "tracked-orientation-policy-sentinel") ||
+		strings.Contains(out.String(), "# Maestro — orientação operacional") ||
+		strings.Contains(out.String(), "Use the installed CLI silently") {
+		t.Fatalf("tracked Claude orientation leaked into the factual hook channel: %s", out.String())
 	}
 }
 
@@ -767,6 +922,25 @@ type cliFixture struct {
 	dataRoot    string
 	executable  string
 	worktree    string
+}
+
+type fixedMemorySynthesizer string
+
+func (value fixedMemorySynthesizer) Synthesize(context.Context, memory.SynthesisRequest) (string, error) {
+	return string(value), nil
+}
+
+func hookAdditionalContext(t *testing.T, body []byte) string {
+	t.Helper()
+	var output struct {
+		HookSpecificOutput struct {
+			AdditionalContext string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal(body, &output); err != nil {
+		t.Fatalf("decode hook output: %v: %s", err, body)
+	}
+	return output.HookSpecificOutput.AdditionalContext
 }
 
 func newCLIFixture(t *testing.T) cliFixture {

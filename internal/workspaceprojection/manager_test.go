@@ -44,20 +44,59 @@ func TestEnrollClaudeProjectsIntoGitRepositoryWithoutReplacingUserOrientation(t 
 	}
 
 	settings := readFile(t, filepath.Join(fixture.worktree, ".claude", "settings.local.json"))
-	for _, required := range []string{fixture.executable, "--managed-root", fixture.managedRoot, "--data-root", fixture.dataRoot, "--workspace-root", fixture.worktree} {
+	for _, required := range []string{fixture.executable, "--managed-root", fixture.managedRoot, "--data-root", fixture.dataRoot, "--workspace-root", fixture.worktree, `"agent": "maestro-hub"`} {
 		if !strings.Contains(settings, required) {
 			t.Fatalf("settings missing %q:\n%s", required, settings)
 		}
 	}
+	hub := readFile(t, filepath.Join(fixture.worktree, ".claude", "agents", "maestro-hub.md"))
+	if !strings.Contains(hub, "skills:\n  - maestro-operator") || strings.Contains(strings.Split(hub, "---\n")[1], "tools:") {
+		t.Fatalf("direct native Hub contract is incomplete: %s", hub)
+	}
+	if _, err := os.Stat(filepath.Join(fixture.worktree, ".claude", "skills", "maestro-operator", "SKILL.md")); err != nil {
+		t.Fatalf("preloaded canonical operator is not projected: %v", err)
+	}
 
 	exclude := readFile(t, filepath.Join(fixture.gitCommonDir, "info", "exclude"))
-	for _, required := range []string{"/.claude/settings.local.json", "/.bcgos/workspace-projections/claude.json"} {
+	for _, required := range []string{"/.claude/settings.local.json", "/.claude/agents/maestro-hub.md", "/.bcgos/workspace-projections/claude.json"} {
 		if !strings.Contains(exclude, required) {
 			t.Fatalf("Git exclude missing %q:\n%s", required, exclude)
 		}
 	}
 	if dirty := strings.TrimSpace(runGit(t, fixture.worktree, "status", "--porcelain")); dirty != "" {
 		t.Fatalf("machine-local projection is visible to Git: %s", dirty)
+	}
+}
+
+func TestStatusRequiresRepairWhenDirectNativeHubIsMissing(t *testing.T) {
+	fixture := newFixture(t)
+	if _, err := fixture.manager.Enroll(context.Background(), "claude", fixture.worktree); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(fixture.worktree, ".claude", "agents", "maestro-hub.md")); err != nil {
+		t.Fatal(err)
+	}
+	status, err := fixture.manager.Status(context.Background(), "claude", fixture.worktree)
+	if err != nil || status.State != StateRepairNeeded {
+		t.Fatalf("missing direct native Hub status = %+v, %v", status, err)
+	}
+	repaired, err := fixture.manager.Repair(context.Background(), "claude", fixture.worktree)
+	if err != nil || repaired.State != StateEnrolled {
+		t.Fatalf("repair missing direct native Hub = %+v, %v", repaired, err)
+	}
+	if _, err := os.Stat(filepath.Join(fixture.worktree, ".claude", "agents", "maestro-hub.md")); err != nil {
+		t.Fatalf("repair did not restore direct native Hub: %v", err)
+	}
+	oldManaged := "---\nname: maestro-hub\ndescription: old managed frontend\n---\n<!-- BCGOS:MANAGED-CLAUDE-AGENT -->\nold contract\n"
+	if err := os.WriteFile(filepath.Join(fixture.worktree, ".claude", "agents", "maestro-hub.md"), []byte(oldManaged), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status, err = fixture.manager.Status(context.Background(), "claude", fixture.worktree)
+	if err != nil || status.State != StateRepairNeeded {
+		t.Fatalf("outdated managed native Hub status = %+v, %v", status, err)
+	}
+	if repaired, err = fixture.manager.Repair(context.Background(), "claude", fixture.worktree); err != nil || repaired.State != StateEnrolled {
+		t.Fatalf("repair outdated direct native Hub = %+v, %v", repaired, err)
 	}
 }
 
@@ -120,6 +159,40 @@ func TestEnrollCodexProjectsFiveEventsAndPreservesAgentsInstructions(t *testing.
 	wantEvents := []string{"PostToolUse", "PreToolUse", "SessionStart", "Stop", "UserPromptSubmit"}
 	if got := sortedKeys(hooks); !reflect.DeepEqual(got, wantEvents) {
 		t.Fatalf("Codex events = %v, want %v", got, wantEvents)
+	}
+}
+
+func TestStatusIgnoresUserOwnedHooksWhenValidatingManagedAuthorities(t *testing.T) {
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			fixture := newFixture(t)
+			if _, err := fixture.manager.Enroll(context.Background(), runtimeName, fixture.worktree); err != nil {
+				t.Fatal(err)
+			}
+
+			configPath := runtimeConfigPath(runtimeName, fixture.worktree)
+			var config map[string]any
+			if err := json.Unmarshal([]byte(readFile(t, configPath)), &config); err != nil {
+				t.Fatal(err)
+			}
+			hooks := config["hooks"].(map[string]any)
+			groups := hooks["PreToolUse"].([]any)
+			hooks["PreToolUse"] = append(groups, map[string]any{
+				"matcher": "Bash",
+				"hooks": []any{map[string]any{
+					"type":    "command",
+					"command": "printf 'user-owned hook\\n'",
+				}},
+			})
+			if err := writeJSONAtomic(configPath, config, 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			status, err := fixture.manager.Status(context.Background(), runtimeName, fixture.worktree)
+			if err != nil || status.State != StateEnrolled {
+				t.Fatalf("Status() = %+v, %v; want enrolled with user-owned hook preserved", status, err)
+			}
+		})
 	}
 }
 

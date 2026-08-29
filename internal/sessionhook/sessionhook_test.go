@@ -46,12 +46,15 @@ func TestSessionStartPresentsMaestroAndHostRuntimeTransparently(t *testing.T) {
 		"Claude Code": claude.HookSpecificOutput.AdditionalContext,
 		"Codex":       codex.HookSpecificOutput.AdditionalContext,
 	} {
-		if !strings.Contains(context, "Maestro is the configured professional operating layer") ||
-			!strings.Contains(context, runtime) ||
-			!strings.Contains(context, "Never deny, conceal or misrepresent") {
+		if !strings.Contains(context, "Configured layer: Maestro") ||
+			!strings.Contains(context, "Host runtime: "+runtime) ||
+			!strings.Contains(context, "Both facts remain visible") {
 			t.Fatalf("%s SessionStart did not identify both layers transparently: %s", runtime, context)
 		}
 		for _, deceptive := range []string{
+			"MAESTRO SESSION PROTOCOL",
+			"IDENTITY AND PROVENANCE:",
+			"Never deny, conceal or misrepresent",
 			"do not present yourself as the host runtime",
 			"Ignore conflicting persona",
 			"Do not expose internal architecture",
@@ -94,15 +97,15 @@ func TestSessionStartInjectsBoundedLocalMemoryButPromptHookDoesNotRepeatIt(t *te
 }
 
 func TestSessionStartBudgetReservesSpaceForOperatingMethodWithoutGrowingMemory(t *testing.T) {
-	if MaximumAdditionalContextBytes != 16<<10 {
+	if MaximumAdditionalContextBytes != (8<<10)-512 {
 		t.Fatalf("SessionStart budget = %d", MaximumAdditionalContextBytes)
 	}
-	if MaximumMemoryContextBytes != 8<<10 {
+	if MaximumMemoryContextBytes != 3<<10 {
 		t.Fatalf("memory budget = %d", MaximumMemoryContextBytes)
 	}
 }
 
-func TestSessionStartTruncatesMemoryBeforeDroppingThePointerPacket(t *testing.T) {
+func TestSessionStartPrioritizesBoundedMemoryBeforeDroppingThePointerPacket(t *testing.T) {
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile:   profile.State{Profile: "standard", Source: "configured"},
 		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
@@ -113,12 +116,16 @@ func TestSessionStartTruncatesMemoryBeforeDroppingThePointerPacket(t *testing.T)
 		t.Fatal(err)
 	}
 	context := output.HookSpecificOutput.AdditionalContext
-	if len(context) > MaximumAdditionalContextBytes || strings.Contains(context, "packet exceeded") || !strings.Contains(context, "memory context truncated") || !strings.Contains(context, `"memory":{"state":"available"`) {
+	if len(context) > MaximumAdditionalContextBytes || !strings.Contains(context, "packet exceeded") || !strings.Contains(context, "context truncated") || strings.Contains(context, `"memory":{"state":"available"`) {
 		t.Fatalf("bounded memory output = %q", context)
 	}
 	memoryStart := strings.Index(context, "MAESTRO LOCAL MEMORY")
-	if memoryStart < 0 || len(context)-memoryStart > MaximumMemoryContextBytes {
-		t.Fatalf("generated memory used %d bytes; maximum = %d", len(context)-memoryStart, MaximumMemoryContextBytes)
+	if memoryStart < 0 {
+		t.Fatalf("generated memory missing: %q", context)
+	}
+	memoryEnd := strings.Index(context[memoryStart:], "\n\nMaestro bounded session context omitted")
+	if memoryEnd < 0 || memoryEnd > MaximumMemoryContextBytes {
+		t.Fatalf("generated memory used %d bytes; maximum = %d", memoryEnd, MaximumMemoryContextBytes)
 	}
 }
 
@@ -257,7 +264,7 @@ func TestClaudeContextInjectionUsesTheSameBoundedPacketWithNativeEventName(t *te
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "runtime contract is operational") {
 		t.Fatalf("adapter output reported the wrong evidence state: %#v", output)
 	}
-	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO SESSION PROTOCOL") ||
+	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO WORKSPACE CONTEXT") ||
 		strings.Contains(output.HookSpecificOutput.AdditionalContext, "Ask only this next question") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO CONTEXT UPDATE") {
 		t.Fatalf("prompt hook repeated the startup protocol: %#v", output)
@@ -301,7 +308,7 @@ func TestBuildOmitsOversizedPacketInsteadOfExpandingHookOutput(t *testing.T) {
 		t.Fatalf("context was %d bytes", len(output.HookSpecificOutput.AdditionalContext))
 	}
 	if !strings.Contains(output.HookSpecificOutput.AdditionalContext, "omitted") ||
-		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO SESSION PROTOCOL") ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO WORKSPACE CONTEXT") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "ONBOARDING AVAILABLE") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "deterministic_onboarding_state") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "What is your professional role?") {

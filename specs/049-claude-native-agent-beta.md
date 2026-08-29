@@ -2,10 +2,12 @@
 
 ## Decision
 
-The Claude beta projects five Maestro-owned project subagents under
+The Claude beta projects five Maestro-owned specialist subagents under
 `.claude/agents/`: Client Account Agent, Case Agent, Yoda, Darwin and PA
-Expert. Maestro remains the main-session identity supplied by SessionStart and
-is not projected as a child agent.
+Expert. Maestro is not projected as a child agent. In the Maestro-folder Hub,
+the existing SessionStart path continues to supply the operating orientation.
+In an enrolled repository or worktree, Spec 056 instead projects a native
+main-session frontend; that frontend is not part of this five-specialist set.
 
 An exact adapter inspection reports this surface as `operational_beta` only
 when every managed agent definition and all owned lifecycle bindings match the

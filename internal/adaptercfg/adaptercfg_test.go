@@ -427,6 +427,169 @@ func TestClaudeInstallOwnsCompleteLifecycleWithBlockingStop(t *testing.T) {
 	}
 }
 
+func TestClaudeScopedInstallSelectsNativeHubWithoutChangingOrdinaryHub(t *testing.T) {
+	ordinary := t.TempDir()
+	ordinaryPath := filepath.Join(ordinary, ".claude", "settings.local.json")
+	if err := os.MkdirAll(filepath.Dir(ordinaryPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	userHook := []byte(`{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"user-tool --managed-root /user/value"}]}]}}`)
+	if err := os.WriteFile(ordinaryPath, userHook, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install("claude", ordinary, "/opt/maestro/bcgos"); err != nil {
+		t.Fatal(err)
+	}
+	ordinaryConfig, err := read(ordinaryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := ordinaryConfig["agent"]; exists {
+		t.Fatalf("ordinary Hub install selected a main agent: %#v", ordinaryConfig["agent"])
+	}
+	if _, err := os.Stat(filepath.Join(ordinary, ".claude", "agents", "maestro-hub.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("ordinary Hub install projected the direct native Hub: %v", err)
+	}
+	if status, err := Inspect("claude", ordinary); err != nil || status.State != "installed" {
+		t.Fatalf("user hook was mistaken for a scoped Maestro binding: %#v, %v", status, err)
+	}
+
+	workspace := t.TempDir()
+	roots := ScopedRoots{ManagedRoot: t.TempDir(), DataRoot: t.TempDir(), WorkspaceRoot: workspace}
+	if _, err := InstallScoped("claude", workspace, "/opt/maestro/bcgos", roots); err != nil {
+		t.Fatal(err)
+	}
+	config, err := read(filepath.Join(workspace, ".claude", "settings.local.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config["agent"] != "maestro-hub" {
+		t.Fatalf("scoped Claude main agent = %#v", config["agent"])
+	}
+	body, err := os.ReadFile(filepath.Join(workspace, ".claude", "agents", "maestro-hub.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	if !strings.Contains(text, "name: maestro-hub") ||
+		!strings.Contains(text, "skills:\n  - maestro-operator") ||
+		!strings.Contains(text, "If owner onboarding is required") ||
+		!strings.Contains(text, "Setup authorization is explicit owner state") ||
+		!strings.Contains(text, "Specialists are leaves") ||
+		strings.Contains(strings.Split(text, "---\n")[1], "tools:") {
+		t.Fatalf("native Hub contract = %s", text)
+	}
+}
+
+func TestClaudeScopedInstallRefusesConflictingMainAgentBeforeMutation(t *testing.T) {
+	workspace := t.TempDir()
+	settingsPath := filepath.Join(workspace, ".claude", "settings.local.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := []byte("{\n  \"agent\": \"user-reviewer\",\n  \"theme\": \"dark\"\n}\n")
+	if err := os.WriteFile(settingsPath, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	roots := ScopedRoots{ManagedRoot: t.TempDir(), DataRoot: t.TempDir(), WorkspaceRoot: workspace}
+	if err := ValidateScopedInstall("claude", workspace, "/opt/maestro/bcgos", roots); err == nil || !strings.Contains(err.Error(), "user-reviewer") {
+		t.Fatalf("preflight error = %v", err)
+	}
+	if _, err := InstallScoped("claude", workspace, "/opt/maestro/bcgos", roots); err == nil || !strings.Contains(err.Error(), "user-reviewer") {
+		t.Fatalf("install error = %v", err)
+	}
+	got, err := os.ReadFile(settingsPath)
+	if err != nil || string(got) != string(original) {
+		t.Fatalf("settings changed before conflict failure: %s, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, ".claude", "agents", "case-agent.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("specialists were written before conflict failure: %v", err)
+	}
+}
+
+func TestClaudeUninstallPreservesUserMainAgentChangedAfterScopedInstall(t *testing.T) {
+	workspace := t.TempDir()
+	roots := ScopedRoots{ManagedRoot: t.TempDir(), DataRoot: t.TempDir(), WorkspaceRoot: workspace}
+	if _, err := InstallScoped("claude", workspace, "/opt/maestro/bcgos", roots); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(workspace, ".claude", "settings.local.json")
+	config, err := read(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config["agent"] = "user-reviewer"
+	config["theme"] = "dark"
+	if err := write(settingsPath, config); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall("claude", workspace); err != nil {
+		t.Fatal(err)
+	}
+	config, err = read(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config["agent"] != "user-reviewer" || config["theme"] != "dark" {
+		t.Fatalf("user settings changed on remove: %#v", config)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, ".claude", "agents", "maestro-hub.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("owned native Hub survived remove: %v", err)
+	}
+}
+
+func TestClaudeUninstallRemovesOwnedSelectionWhenDirectHubFileIsMissing(t *testing.T) {
+	workspace := t.TempDir()
+	roots := ScopedRoots{ManagedRoot: t.TempDir(), DataRoot: t.TempDir(), WorkspaceRoot: workspace}
+	if _, err := InstallScoped("claude", workspace, "/opt/maestro/bcgos", roots); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(workspace, ".claude", "agents", "maestro-hub.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall("claude", workspace); err != nil {
+		t.Fatal(err)
+	}
+	config, err := read(filepath.Join(workspace, ".claude", "settings.local.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := config["agent"]; exists {
+		t.Fatalf("owned native Hub selection survived removal: %#v", config)
+	}
+	if hasOwnedBindings(config, "claude") {
+		t.Fatalf("owned lifecycle bindings survived removal: %#v", config)
+	}
+}
+
+func TestClaudeScopedInstallRollsBackNativeHubAndSelectionOnSettingsFailure(t *testing.T) {
+	workspace := t.TempDir()
+	settingsPath := filepath.Join(workspace, ".claude", "settings.local.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := []byte("{\n  \"theme\": \"dark\"\n}\n")
+	if err := os.WriteFile(settingsPath, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	priorWrite := writeRuntimeConfig
+	writeRuntimeConfig = func(string, map[string]any) error { return errors.New("injected scoped settings failure") }
+	t.Cleanup(func() { writeRuntimeConfig = priorWrite })
+	roots := ScopedRoots{ManagedRoot: t.TempDir(), DataRoot: t.TempDir(), WorkspaceRoot: workspace}
+	if _, err := InstallScoped("claude", workspace, "/opt/maestro/bcgos", roots); err == nil || !strings.Contains(err.Error(), "injected scoped settings failure") {
+		t.Fatalf("InstallScoped error = %v", err)
+	}
+	got, err := os.ReadFile(settingsPath)
+	if err != nil || string(got) != string(original) {
+		t.Fatalf("settings after scoped rollback = %s, %v", got, err)
+	}
+	for _, name := range managedClaudeAgentFiles {
+		if _, err := os.Stat(filepath.Join(workspace, ".claude", "agents", name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("managed agent %s survived scoped rollback: %v", name, err)
+		}
+	}
+}
+
 func TestClaudeInspectRequiresEveryOwnedLifecycleBinding(t *testing.T) {
 	workspace := t.TempDir()
 	if _, err := Install("claude", workspace, "/opt/maestro/bcgos"); err != nil {

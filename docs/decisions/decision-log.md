@@ -6,6 +6,17 @@ Codes contain exactly four uppercase letters. They are globally unique, permanen
 
 Never include secrets, credentials, personal data, client-identifying context or case content.
 
+## HBND - Bound direct hook context to native delivery capacity
+
+- Date: 2026-08-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Native Codex evidence showed that a direct SessionStart assembled under OCTX's 64 KiB ceiling was truncated near the host's command-hook delivery limit. The pointer packet consumed the delivered prefix while reviewed SELF and tracked-file orientation were placed later, so valid owner context never reached the model; the complete tracked orientation was then repeated on every prompt and displaced useful context.
+- Decision: Cap the complete direct-worktree hook context at 8 KiB for both Claude and Codex. On SessionStart, place bounded reviewed SELF and generated memory before the pointer-only packet, omit that packet whole when the remaining budget cannot hold it, and use the compact canonical runtime directive as Codex's ephemeral orientation when a tracked `AGENTS.md` must remain unchanged. Never append the complete orientation document to a prompt hook, and never repeat SELF or memory bodies on UserPromptSubmit.
+- Consequences: Owner identity and governed continuity survive native delivery limits with runtime parity, tracked instruction files remain byte-identical and prompt deltas stay small. A tracked Codex repository receives the same essential Maestro operating contract through the compact directive and installed skills instead of a duplicate full manual; detailed pointer telemetry may be omitted from SessionStart when authorized bodies consume the budget and remains available through the installed CLI. Native qualification is still required for an exact release artifact.
+- Refs: OCTX; SELP; MEMO; specs/006-memory-persistence.md; specs/015-session-context-packet.md; specs/055-direct-repository-worktree-entry.md; specs/056-direct-repository-native-hub.md; internal/cli; internal/sessionhook
+- Supersedes: OCTX
+
 ## TRNS - Present Maestro as a transparent runtime layer
 
 - Date: 2026-08-28
@@ -1258,4 +1269,15 @@ This is a frozen milestone for navigation, not a separate decision, live index o
 - Decision: When `uv` is absent and a pilot user's explicit request needs a Python-dependent capability under PYUV's on-demand path, Maestro may download and run the official `uv` installer from astral.sh (`install.sh` on macOS/Linux, `install.ps1` on Windows) directly, after asking the user a one-line confirmation before the download runs. The installer must be invoked exactly as published by astral.sh (no mirrored, modified or re-hosted copy), must never request or require administrator/elevated privileges, and must install to the standard per-user location rather than a system-wide path. This is a narrow widening of PYUV: it authorizes fetching and executing exactly one additional external artifact (the `uv` installer itself) under the same user-confirmed, task-bound conditions, and does not authorize installing any other external tool without its own decision.
 - Consequences: Pilot users no longer hit a hard stop when `uv` is missing; the on-demand Python path (PYUV) becomes usable end-to-end for a non-technical user. Maestro now downloads and executes one script from a third-party site (astral.sh) as part of normal operation, which is a new trust dependency beyond PyPI package installs already covered by PYUV; if astral.sh is unreachable (offline, corporate proxy/firewall) the capability must degrade to `unavailable` with the existing manual-install fallback, never fail silently. Must be revisited if specs/010/031's fully signed managed runtime pack ships and removes the need for a local `uv` install entirely.
 - Refs: PYUV; SETU; CNAB; specs/010-local-ingestion-runtime.md; specs/031-markitdown-ingestion-adapter.md
+- Supersedes: none
+
+## NHUB - Project a native Maestro frontend in direct repositories
+
+- Date: 2026-08-29
+- Status: accepted
+- Owner: Daniel Scardini
+- Context: Direct repository enrollment currently asks SessionStart hooks to establish the Maestro operating identity and stable behavioral contract. Native runtimes may correctly treat imperative identity and execution instructions arriving from hooks as untrusted prompt injection, even though the same product works when the Maestro folder is the session root. The direct mode needs a first-class runtime surface without turning hooks into prompts, reducing the existing specialist topology or changing the Hub experience.
+- Decision: Keep Maestro as the runtime-neutral control plane and project a runtime-native main-session frontend only for enrolled repositories and worktrees. Claude receives a managed `maestro-hub` main agent that transparently identifies Claude Code as the host, preloads the canonical `maestro-operator` method and retains the host's ordinary tools; Codex consumes the same capability and policy contract through its thin native adapter. Hooks remain deterministic enforcement, lifecycle and bounded factual-context channels and must not instruct the model to adopt an identity, conceal architecture or silently execute control-plane commands. The native frontend may route to the existing Client Account, Case, Yoda, Darwin and PA Expert specialists, but it is not a specialist and does not change their single-level delegation boundary. Hub sessions rooted in the Maestro product folder keep their existing orientation and behavior. A conflicting user-selected native main agent blocks direct installation before mutation; install, repair and remove never overwrite or erase that choice.
+- Consequences: Direct repository conversation gains the same governed Maestro capabilities through a native trust channel while preserving provider transparency and normal repository tooling. Claude and Codex adapters may use different host mechanisms, but parity tests must bind them to the same canonical capability, lifecycle, privacy and routing invariants and fail when one runtime drifts. The custom Claude main-agent path must be qualified for tools, skills, specialist routing, resume, compaction and worktrees before release-ready claims. This narrows OCTX and CNAB only for direct repository projection; their Hub behavior and five-specialist contract remain intact. MCP may later provide a shared invocation surface but is not required for this frontend contract.
+- Refs: TRNS; PORT; DUET; OCTX; CNAB; DRWT; specs/004-runtime-portability.md; specs/049-claude-native-agent-beta.md; specs/055-direct-repository-worktree-entry.md; specs/056-direct-repository-native-hub.md
 - Supersedes: none

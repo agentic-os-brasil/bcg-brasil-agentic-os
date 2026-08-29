@@ -63,9 +63,14 @@ that no source code or work was lost and returns exactly one safe next action.
 
 ## Thin runtime projection
 
+Spec 056 defines the direct-entry native Hub layered on this projection. It
+changes only enrolled repositories and worktrees; the Maestro-folder Hub keeps
+its existing adapter path.
+
 Enrollment writes only bounded, regenerable local runtime material:
 
-- Claude: a path-free managed block in an untracked `CLAUDE.md`,
+- Claude: a path-free managed block in an untracked `CLAUDE.md`, a direct-only
+  native `maestro-hub` main frontend selected in
   `.claude/settings.local.json`, governed skill projections and the supported
   SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop,
   SubagentStart and SubagentStop bindings;
@@ -84,8 +89,9 @@ every shared surface and exact Git exclude still referenced by the other.
 
 When `CLAUDE.md` or `AGENTS.md` is already tracked, enrollment
 preserves it byte-for-byte, records `orientation_mode: preserved_tracked` and
-delivers Maestro orientation through the bounded Session Start hook instead of
-dirtying a tracked file. An untracked orientation receives the removable
+delivers Maestro's compact canonical runtime directive through the bounded
+Session Start hook instead of dirtying a tracked file. It does not append the
+complete orientation document to SessionStart or UserPromptSubmit. An untracked orientation receives the removable
 path-free managed block. Every byte outside that block remains user-owned and
 survives enroll, repair and remove exactly, including CRLF, leading whitespace
 and repeated trailing line endings. The runtime manifest records whether the
@@ -109,13 +115,18 @@ reading scoped context or accepting a lifecycle event.
 
 Session Start may compose only bounded, authorized workspace-scoped context:
 Maestro orientation, integrity-checked skill pointers, owner-approved context,
-workspace memory and explicit continuity. Prompt, file and Git-command bodies
+workspace memory and explicit continuity. Reviewed SELF and generated memory
+are rendered before the pointer packet so they survive the native delivery
+boundary; a packet that does not fit is omitted whole rather than truncated.
+Prompt, file and Git-command bodies
 are never written to receipts. A Codex guard receipt may retain only the
 SHA-256 of its normalized command so native qualification can bind a denial to
 the exact synthetic action without retaining the command body. The complete direct-worktree Session Start
-output is capped at 64 KiB; each optional workspace context source retains its
-independent 8 KiB read ceiling. The canonical orientation is included only
-when a tracked runtime instruction file forced `preserved_tracked` mode.
+output is capped at 8 KiB; each optional workspace context source retains its
+independent read ceiling but cannot widen that final output budget. The compact
+canonical runtime directive supplies essential orientation when a tracked
+runtime instruction file forced `preserved_tracked` mode. UserPromptSubmit
+never repeats the complete orientation, reviewed SELF or generated memory.
 Pre-action enforcement resolves paths against
 the exact `worktree_root`; traversal, symlink escape and unresolved shell or
 environment path expansion fail closed. The direct route invokes the existing
@@ -147,11 +158,11 @@ shapes, but preserve the same isolation, identity, privacy and local-effect
 invariants.
 
 The direct hook must enter through the same runtime-neutral Session Context
-Packet and canonical session-hook serializer as the Hub path. It must not
-replace the canonical Maestro operating layer with a reduced direct-mode
-identity or misrepresent the named host runtime. The projected experience
-describes Claude Code or Codex and Maestro together whenever identity or
-provenance is relevant; it never requires concealment of provider, hooks,
+Packet as the Hub path. Runtime-specific serialization follows Spec 056:
+direct Claude hooks carry factual state while the native main-session frontend
+and preloaded canonical method carry stable operating policy; Codex uses its
+equivalent thin adapter. Neither route may reduce the Maestro operating layer,
+misrepresent the named host runtime or require concealment of provider, hooks,
 limitations or architecture.
 After confirmed onboarding, it may attach the bounded ephemeral professional
 SELF projection defined by Spec 015. The packet remains pointer-only;

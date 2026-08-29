@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	basememory "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/memory"
 	baseprofile "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/profile"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/actionconfirmation"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/agentidentity"
@@ -23,11 +24,11 @@ import (
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/claudeagents"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/codexadapter"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/lifecycle"
+	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/memory"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/nativeagentflow"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/ownerctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/portableactivation"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/profile"
-	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/runtimeprojection"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionctx"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/sessionhook"
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/workspace"
@@ -35,9 +36,10 @@ import (
 )
 
 const (
-	ExitOK      = 0
-	ExitFailure = 1
-	ExitUsage   = 2
+	ExitOK                        = 0
+	ExitFailure                   = 1
+	ExitUsage                     = 2
+	maximumScopedHookContextBytes = 8 << 10
 )
 
 var Version = "0.0.0-dev"
@@ -465,6 +467,13 @@ func composeScopedContext(dataRoot, runtimeName, semanticEvent, workspaceRoot st
 	if err != nil {
 		return "", fmt.Errorf("load interaction profile: %w", err)
 	}
+	memorySource := sessionctx.MemorySource{}
+	if semanticEvent == "session_start" {
+		memorySource, err = assembleSessionMemory(dataRoot, status.WorkspaceID)
+		if err != nil {
+			return "", err
+		}
+	}
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile: profileState,
 		Workspace: workspace.Inspection{
@@ -472,6 +481,7 @@ func composeScopedContext(dataRoot, runtimeName, semanticEvent, workspaceRoot st
 		},
 		Owner:         ownerStatus,
 		OwnerSnapshot: ownerSnapshot,
+		Memory:        memorySource,
 	})
 	if legacyOwnerContext.State != "" {
 		packet.Owner.Context = legacyOwnerContext
@@ -482,7 +492,7 @@ func composeScopedContext(dataRoot, runtimeName, semanticEvent, workspaceRoot st
 	}
 	canonical := ""
 	if runtimeName == "claude" {
-		output, buildErr := sessionhook.BuildClaudeEvent(packet, nativeEvent)
+		output, buildErr := sessionhook.BuildDirectClaudeEvent(packet, nativeEvent)
 		if buildErr != nil {
 			return "", fmt.Errorf("build canonical Claude context: %w", buildErr)
 		}
@@ -498,20 +508,16 @@ func composeScopedContext(dataRoot, runtimeName, semanticEvent, workspaceRoot st
 	builder.WriteString("Maestro direct workspace is active.\n")
 	builder.WriteString("repository_id: " + status.RepositoryID + "\n")
 	builder.WriteString("workspace_id: " + status.WorkspaceID + "\n")
-	builder.WriteString("Work only inside the exact opened worktree; do not cross repository or workspace boundaries.\n")
 	if runtimeName == "claude" {
-		builder.WriteString("Load governed methods only from integrity-checked .claude/skills pointers.\n")
+		builder.WriteString("Host runtime: Claude Code.\n")
+		builder.WriteString("Native frontend: maestro-hub.\n")
+		builder.WriteString("Workspace boundary: exact enrolled worktree.\n")
+		builder.WriteString("Governed method projection: integrity-checked .claude/skills pointers.\n")
 	} else {
+		builder.WriteString("Work only inside the exact opened worktree; do not cross repository or workspace boundaries.\n")
 		builder.WriteString("Load governed methods only from integrity-checked .codex/skills pointers.\n")
 	}
 	builder.WriteString("\n" + canonical + "\n")
-	orientation, required, err := runtimeprojection.SessionOrientation(runtimeName, workspaceRoot)
-	if err != nil {
-		return "", fmt.Errorf("resolve tracked-file Session Start orientation: %w", err)
-	}
-	if required {
-		builder.WriteString("\n" + strings.TrimSpace(orientation) + "\n")
-	}
 	for _, relative := range []string{
 		filepath.Join("context", "session-context.md"),
 		filepath.Join("memory", "session-context.md"),
@@ -523,13 +529,36 @@ func composeScopedContext(dataRoot, runtimeName, semanticEvent, workspaceRoot st
 			return "", err
 		}
 		if body != "" {
-			builder.WriteString("\n" + body + "\n")
+			block := "\n" + body + "\n"
+			if builder.Len()+len(block) <= maximumScopedHookContextBytes {
+				builder.WriteString(block)
+			}
 		}
 	}
-	if builder.Len() > 64<<10 {
-		return "", errors.New("scoped Session Start context exceeds 64 KiB")
+	if builder.Len() > maximumScopedHookContextBytes {
+		return "", errors.New("scoped hook context exceeds 8 KiB")
 	}
 	return builder.String(), nil
+}
+
+func assembleSessionMemory(dataRoot, workspaceID string) (sessionctx.MemorySource, error) {
+	policy, err := basememory.Policy()
+	if err != nil {
+		return sessionctx.MemorySource{}, fmt.Errorf("load memory policy: %w", err)
+	}
+	runtimeConfig, err := basememory.Runtime()
+	if err != nil {
+		return sessionctx.MemorySource{}, fmt.Errorf("load memory runtime config: %w", err)
+	}
+	engine := memory.Engine{Root: dataRoot, Policy: policy, Budgets: runtimeConfig.ContextBudgets()}
+	bundle, err := engine.AssembleContext(workspaceID)
+	if err != nil {
+		return sessionctx.MemorySource{State: "unavailable"}, nil
+	}
+	if len(bundle.Sections) == 0 {
+		return sessionctx.MemorySource{State: "empty", Bundle: bundle}, nil
+	}
+	return sessionctx.MemorySource{State: "available", Bundle: bundle}, nil
 }
 
 func inspectPortableOwnerContext(dataRoot string, includeBodies bool) (ownerctx.Status, sessionctx.OwnerContext, bool, error) {

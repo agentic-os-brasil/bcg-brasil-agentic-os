@@ -191,8 +191,13 @@ func (manager Manager) statusWithIdentity(runtimeName string, identity gitIdenti
 		return status, nil
 	}
 	adapter, err := adaptercfg.Inspect(runtimeName, identity.WorktreeRoot)
-	if err != nil || adapter.State != "installed" {
+	if err != nil {
 		status.State, status.Reason = StateConflict, "runtime_adapter_conflict"
+		return status, nil
+	}
+	if adapter.State != "installed" {
+		status.State, status.Reason = StateRepairNeeded, "runtime_adapter_incomplete"
+		status.NextAction = "run bcgos workspace repair with the currently activated Maestro CLI"
 		return status, nil
 	}
 	if ok, err := exactExcludesPresent(identity.GitCommonDir, manifest.ExcludeRules); err != nil || !ok {
@@ -201,7 +206,7 @@ func (manager Manager) statusWithIdentity(runtimeName string, identity gitIdenti
 	}
 	if manifest.ManagedRoot != managedRoot || manifest.Executable != executable ||
 		binding.ManagedRoot != managedRoot || binding.Executable != executable ||
-		!configContainsAuthorities(runtimeConfigPath(runtimeName, identity.WorktreeRoot), executable, managedRoot, dataRoot, identity.WorktreeRoot) {
+		!configContainsAuthorities(runtimeName, runtimeConfigPath(runtimeName, identity.WorktreeRoot), executable, managedRoot, dataRoot, identity.WorktreeRoot) {
 		status.State, status.Reason = StateRepairNeeded, "managed_root_moved"
 		status.NextAction = "run bcgos workspace repair with the currently activated Maestro CLI"
 		return status, nil
@@ -659,7 +664,7 @@ func (manager Manager) rejectTrackedProjection(ctx context.Context, runtimeName,
 		runtimeConfigPath(runtimeName, workspace),
 	)
 	if runtimeName == "claude" {
-		for _, id := range []string{"client-account-agent", "case-agent", "yoda", "darwin", "pa-expert"} {
+		for _, id := range []string{"maestro-hub", "client-account-agent", "case-agent", "yoda", "darwin", "pa-expert"} {
 			paths = append(paths, filepath.Join(workspace, ".claude", "agents", id+".md"))
 		}
 	}
@@ -982,7 +987,7 @@ func exactExcludeRules(runtimeName, workspace string, planned []string) ([]strin
 	)
 	if runtimeName == "claude" {
 		paths = append(paths, filepath.Join(workspace, ".claude", "settings.local.json"))
-		for _, id := range []string{"client-account-agent", "case-agent", "yoda", "darwin", "pa-expert"} {
+		for _, id := range []string{"maestro-hub", "client-account-agent", "case-agent", "yoda", "darwin", "pa-expert"} {
 			paths = append(paths, filepath.Join(workspace, ".claude", "agents", id+".md"))
 		}
 	} else {
@@ -1115,7 +1120,7 @@ func regularFileExists(path string) (bool, error) {
 	return true, nil
 }
 
-func configContainsAuthorities(path string, values ...string) bool {
+func configContainsAuthorities(runtimeName, path string, values ...string) bool {
 	var config map[string]any
 	if readJSONStrict(path, &config) != nil {
 		return false
@@ -1125,14 +1130,14 @@ func configContainsAuthorities(path string, values ...string) bool {
 		return false
 	}
 	commands := []string{}
-	for _, rawGroups := range hooks {
+	for event, rawGroups := range hooks {
 		groups, _ := rawGroups.([]any)
 		for _, rawGroup := range groups {
 			group, _ := rawGroup.(map[string]any)
 			entries, _ := group["hooks"].([]any)
 			for _, rawEntry := range entries {
 				entry, _ := rawEntry.(map[string]any)
-				if command, ok := entry["command"].(string); ok {
+				if command, ok := entry["command"].(string); ok && adaptercfg.IsOwnedEventCommand(runtimeName, event, command) {
 					commands = append(commands, command)
 				}
 			}

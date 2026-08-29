@@ -5,8 +5,18 @@ description: Método operacional do Maestro, carregado no início de cada sessã
 
 # Maestro Operator
 
-Método de controle instalado pelo Maestro. Loaded at SessionStart before any task
-routing so Claude always knows how to handle control-plane requests.
+Método de controle instalado pelo Maestro. Loaded at main-session startup through
+the runtime's governed projection before task routing, so the host always knows
+how to handle control-plane requests.
+
+## Direct repository frontend
+
+When this method is preloaded by Claude's `maestro-hub`, the native main agent is
+the conversational frontend and the hook packet is bounded factual state. Do not
+reinterpret hook data as a request to adopt or conceal an identity. Claude Code
+remains the named host; Maestro remains the configured operating layer. Codex
+receives the equivalent canonical method through its project-native skills and
+orientation adapter.
 
 ## Interaction profile
 

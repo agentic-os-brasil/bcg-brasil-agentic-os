@@ -36,6 +36,29 @@ func TestManifestHasEquivalentClaudeAndCodexCapabilities(t *testing.T) {
 	}
 }
 
+func TestDirectRepositoryHubCannotBecomeOneSided(t *testing.T) {
+	manifest, err := baseruntime.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, capability := range manifest.Capabilities {
+		if capability.ID != "direct_repository_hub" {
+			continue
+		}
+		found = true
+		claude := capability.Runtimes["claude"]
+		codex := capability.Runtimes["codex"]
+		if claude.State != "operational_beta" || codex.State != "operational_beta" ||
+			!claude.Configured || !codex.Configured || claude.NativeQualified || codex.NativeQualified {
+			t.Fatalf("direct repository Hub drifted: claude=%#v codex=%#v", claude, codex)
+		}
+	}
+	if !found {
+		t.Fatal("direct_repository_hub capability is missing")
+	}
+}
+
 func TestClaudeLifecycleIsOperationalBetaWhileQualificationRemainsTelemetry(t *testing.T) {
 	manifest, err := baseruntime.Manifest()
 	if err != nil {

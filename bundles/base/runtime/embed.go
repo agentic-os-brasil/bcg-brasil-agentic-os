@@ -18,6 +18,9 @@ var hookPolicyJSON []byte
 //go:embed orientation.md.tmpl
 var orientationTemplate []byte
 
+//go:embed direct-hub.md
+var directHubContract []byte
+
 //go:embed maintenance.json
 var maintenanceJSON []byte
 
@@ -31,6 +34,10 @@ func HookPolicy() (hookpolicy.Policy, error) {
 
 func OrientationTemplate() []byte {
 	return append([]byte(nil), orientationTemplate...)
+}
+
+func DirectHubContract() []byte {
+	return append([]byte(nil), directHubContract...)
 }
 
 func Maintenance() (maintenance.Catalog, error) {

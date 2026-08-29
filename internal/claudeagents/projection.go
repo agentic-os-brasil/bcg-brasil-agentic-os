@@ -1,6 +1,7 @@
 // Package claudeagents projects Maestro's managed specialist contracts into
-// Claude Code's project-native subagent directory. It never projects Maestro:
-// SessionStart owns the user-facing hub identity.
+// Claude Code's project-native agent directory. Direct repository enrollment
+// may additionally project a main-session frontend; ordinary Hub installation
+// still projects specialists only.
 package claudeagents
 
 import (
@@ -15,9 +16,11 @@ import (
 	"strings"
 
 	baseagents "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/agents"
+	baseruntime "github.com/agentic-os-brasil/bcg-brasil-agentic-os/bundles/base/runtime"
 )
 
 const managedMarker = "<!-- BCGOS:MANAGED-CLAUDE-AGENT -->\n"
+const DirectHubID = "maestro-hub"
 
 type Status struct {
 	State  string   `json:"state"`
@@ -27,6 +30,15 @@ type Status struct {
 
 type definition struct {
 	ID, Description, Tools, PermissionMode string
+	Skills                                 []string
+	DirectHub                              bool
+}
+
+var directHub = definition{
+	ID:          DirectHubID,
+	Description: "Main-session frontend for the governed Maestro operating layer in an enrolled repository or worktree.",
+	Skills:      []string{"maestro-operator"},
+	DirectHub:   true,
 }
 
 var managed = []definition{
@@ -78,6 +90,126 @@ func ValidateInstall(workspace string) error {
 	}
 	defer root.Close()
 	return validateManaged(root, "replace")
+}
+
+// InstallDirectHub projects only the direct-entry main-session frontend.
+func InstallDirectHub(workspace string) (Status, error) {
+	root, rootPath, err := openAgentRoot(workspace, true)
+	if err != nil {
+		return Status{}, err
+	}
+	defer root.Close()
+	if err := validateDefinitions(root, []definition{directHub}, "replace"); err != nil {
+		return Status{}, err
+	}
+	body, err := render(directHub)
+	if err != nil {
+		return Status{}, err
+	}
+	name := DirectHubID + ".md"
+	current, readErr := readRegular(root, name)
+	if readErr == nil && bytes.Equal(current, body) {
+		return Status{State: "installed", Path: rootPath, Agents: []string{DirectHubID}}, nil
+	}
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return Status{}, readErr
+	}
+	if err := writeAtomic(root, name, body); err != nil {
+		return Status{}, err
+	}
+	return Status{State: "installed", Path: rootPath, Agents: []string{DirectHubID}}, nil
+}
+
+func ValidateDirectHubInstall(workspace string) error {
+	root, _, err := openAgentRoot(workspace, false)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return validateDefinitions(root, []definition{directHub}, "replace")
+}
+
+// DirectHubManaged reports ownership without treating a user-owned file with
+// the reserved filename as removable Maestro state.
+func DirectHubManaged(workspace string) (bool, error) {
+	root, _, err := openAgentRoot(workspace, false)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer root.Close()
+	body, err := readRegular(root, DirectHubID+".md")
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return hasManagedMarker(body), nil
+}
+
+func InspectDirectHub(workspace string) (Status, error) {
+	root, rootPath, err := openAgentRoot(workspace, false)
+	status := Status{State: "absent", Path: rootPath}
+	if errors.Is(err, os.ErrNotExist) {
+		return status, nil
+	}
+	if err != nil {
+		return Status{}, err
+	}
+	defer root.Close()
+	expected, err := render(directHub)
+	if err != nil {
+		return Status{}, err
+	}
+	body, err := readRegular(root, DirectHubID+".md")
+	if errors.Is(err, os.ErrNotExist) {
+		return status, nil
+	}
+	if err != nil {
+		return Status{}, err
+	}
+	if !bytes.Equal(body, expected) {
+		if hasManagedMarker(body) {
+			status.State = "outdated"
+			return status, nil
+		}
+		return Status{}, fmt.Errorf("Claude agent %s does not match the managed contract", DirectHubID)
+	}
+	status.State = "installed"
+	status.Agents = []string{DirectHubID}
+	return status, nil
+}
+
+func UninstallDirectHub(workspace string) (Status, error) {
+	root, rootPath, err := openAgentRoot(workspace, false)
+	status := Status{State: "absent", Path: rootPath}
+	if errors.Is(err, os.ErrNotExist) {
+		return status, nil
+	}
+	if err != nil {
+		return Status{}, err
+	}
+	defer root.Close()
+	body, err := readRegular(root, DirectHubID+".md")
+	if errors.Is(err, os.ErrNotExist) {
+		return status, nil
+	}
+	if err != nil {
+		return Status{}, err
+	}
+	if !hasManagedMarker(body) {
+		return Status{}, fmt.Errorf("Claude agent path %s is user-owned; refusing to remove it", filepath.Join(rootPath, DirectHubID+".md"))
+	}
+	if err := root.Remove(DirectHubID + ".md"); err != nil {
+		return Status{}, err
+	}
+	return status, nil
 }
 
 func Inspect(workspace string) (Status, error) {
@@ -160,11 +292,30 @@ func ValidateUninstall(workspace string) error {
 }
 
 func render(item definition) ([]byte, error) {
-	contract, err := baseagents.Definition(item.ID)
-	if err != nil {
-		return nil, err
+	var contract []byte
+	var err error
+	if item.DirectHub {
+		contract = baseruntime.DirectHubContract()
+	} else {
+		contract, err = baseagents.Definition(item.ID)
+		if err != nil {
+			return nil, err
+		}
 	}
-	header := "---\nname: " + item.ID + "\ndescription: " + item.Description + "\ntools: " + item.Tools + "\npermissionMode: " + item.PermissionMode + "\n---\n" + managedMarker + "\n"
+	header := "---\nname: " + item.ID + "\ndescription: " + item.Description + "\n"
+	if item.Tools != "" {
+		header += "tools: " + item.Tools + "\n"
+	}
+	if item.PermissionMode != "" {
+		header += "permissionMode: " + item.PermissionMode + "\n"
+	}
+	if len(item.Skills) > 0 {
+		header += "skills:\n"
+		for _, skill := range item.Skills {
+			header += "  - " + skill + "\n"
+		}
+	}
+	header += "---\n" + managedMarker + "\n"
 	return append([]byte(header), contract...), nil
 }
 
@@ -284,7 +435,11 @@ func readRegular(root *os.Root, name string) ([]byte, error) {
 }
 
 func validateManaged(root *os.Root, action string) error {
-	for _, item := range managed {
+	return validateDefinitions(root, managed, action)
+}
+
+func validateDefinitions(root *os.Root, definitions []definition, action string) error {
+	for _, item := range definitions {
 		name := item.ID + ".md"
 		body, err := readRegular(root, name)
 		if errors.Is(err, os.ErrNotExist) {

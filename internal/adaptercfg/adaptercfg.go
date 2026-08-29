@@ -28,6 +28,7 @@ var (
 )
 
 var managedClaudeAgentFiles = []string{
+	"maestro-hub.md",
 	"client-account-agent.md",
 	"case-agent.md",
 	"yoda.md",
@@ -218,6 +219,11 @@ func validateInstall(runtimeName, workspace, executable string, roots ScopedRoot
 	if err != nil {
 		return err
 	}
+	if runtimeName == "claude" && roots != (ScopedRoots{}) {
+		if err := validateDirectHubSelection(config, workspace); err != nil {
+			return err
+		}
+	}
 	hooks, err := hooksMap(config)
 	if err != nil {
 		return err
@@ -318,6 +324,12 @@ func install(runtimeName, workspace, executable string, roots ScopedRoots) (Stat
 	if err != nil {
 		return Status{}, err
 	}
+	directClaude := runtimeName == "claude" && roots != (ScopedRoots{})
+	if directClaude {
+		if err := validateDirectHubSelection(config, workspace); err != nil {
+			return Status{}, err
+		}
+	}
 	hooks, err := hooksMap(config)
 	if err != nil {
 		return Status{}, err
@@ -344,8 +356,17 @@ func install(runtimeName, workspace, executable string, roots ScopedRoots) (Stat
 		if _, err := installClaudeAgents(workspace); err != nil {
 			return Status{}, rollbackState(snapshot, "adapter install", err)
 		}
+		if directClaude {
+			if _, err := claudeagents.InstallDirectHub(workspace); err != nil {
+				return Status{}, rollbackState(snapshot, "adapter install", err)
+			}
+		}
 	}
 	changed := false
+	if directClaude && config["agent"] != claudeagents.DirectHubID {
+		config["agent"] = claudeagents.DirectHubID
+		changed = true
+	}
 	for _, binding := range bindings {
 		groups, _ := groupsForEvent(hooks, binding.NativeEvent)
 		updated, bindingChanged := updateOwnedEventHook(groups, runtimeName, binding.NativeEvent, binding.Command, binding.Async)
@@ -368,8 +389,14 @@ func install(runtimeName, workspace, executable string, roots ScopedRoots) (Stat
 }
 
 func Uninstall(runtimeName, workspace string) (Status, error) {
+	directHubManaged := false
 	if runtimeName == "claude" {
 		if err := claudeagents.ValidateUninstall(workspace); err != nil {
+			return Status{}, err
+		}
+		var err error
+		directHubManaged, err = claudeagents.DirectHubManaged(workspace)
+		if err != nil {
 			return Status{}, err
 		}
 	}
@@ -386,6 +413,11 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 			if _, removeErr := uninstallClaudeAgents(workspace); removeErr != nil {
 				return Status{}, rollbackState(snapshot, "adapter uninstall", removeErr)
 			}
+			if directHubManaged {
+				if _, removeErr := claudeagents.UninstallDirectHub(workspace); removeErr != nil {
+					return Status{}, rollbackState(snapshot, "adapter uninstall", removeErr)
+				}
+			}
 		}
 		return Status{Runtime: runtimeName, Path: path, State: "absent"}, nil
 	} else if err != nil {
@@ -394,6 +426,12 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	config, err := read(path)
 	if err != nil {
 		return Status{}, err
+	}
+	directHubSelectionOwned := directHubManaged
+	if runtimeName == "claude" && !directHubSelectionOwned &&
+		ownedConfigurationIsScoped(config, runtimeName) && config["agent"] == claudeagents.DirectHubID {
+		hub, inspectErr := claudeagents.InspectDirectHub(workspace)
+		directHubSelectionOwned = inspectErr == nil && hub.State == "absent"
 	}
 	hooks, err := hooksMap(config)
 	if err != nil {
@@ -422,6 +460,9 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
+	if directHubSelectionOwned && config["agent"] == claudeagents.DirectHubID {
+		delete(config, "agent")
+	}
 	config["hooks"] = hooks
 	if err := writeRuntimeConfig(path, config); err != nil {
 		return Status{}, rollbackState(snapshot, "adapter uninstall", err)
@@ -429,6 +470,11 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	if runtimeName == "claude" {
 		if _, err := uninstallClaudeAgents(workspace); err != nil {
 			return Status{}, rollbackState(snapshot, "adapter uninstall", err)
+		}
+		if directHubManaged {
+			if _, err := claudeagents.UninstallDirectHub(workspace); err != nil {
+				return Status{}, rollbackState(snapshot, "adapter uninstall", err)
+			}
 		}
 	}
 	return Status{Runtime: runtimeName, Path: path, State: "removed"}, nil
@@ -474,10 +520,67 @@ func Inspect(runtimeName, workspace string) (Status, error) {
 			if agents.State != "installed" {
 				return Status{Runtime: runtimeName, Path: path, State: "partial"}, nil
 			}
+			if ownedConfigurationIsScoped(config, runtimeName) {
+				if config["agent"] != claudeagents.DirectHubID {
+					return Status{Runtime: runtimeName, Path: path, State: "partial"}, nil
+				}
+				hub, err := claudeagents.InspectDirectHub(workspace)
+				if err != nil {
+					return Status{}, err
+				}
+				if hub.State != "installed" {
+					return Status{Runtime: runtimeName, Path: path, State: "partial"}, nil
+				}
+			}
 		}
 		return Status{Runtime: runtimeName, Path: path, State: "installed"}, nil
 	}
 	return Status{Runtime: runtimeName, Path: path, State: "absent"}, nil
+}
+
+func validateDirectHubSelection(config map[string]any, workspace string) error {
+	selected, exists := config["agent"]
+	if exists {
+		name, ok := selected.(string)
+		if !ok || strings.TrimSpace(name) == "" {
+			return errors.New("Claude main agent setting is not a valid string; no files were changed")
+		}
+		if name != claudeagents.DirectHubID {
+			return fmt.Errorf("Claude main agent %q is already selected; no files were changed", name)
+		}
+	}
+	return claudeagents.ValidateDirectHubInstall(workspace)
+}
+
+func ownedConfigurationIsScoped(config map[string]any, runtimeName string) bool {
+	if runtimeName != "claude" {
+		return false
+	}
+	hooks, ok := config["hooks"].(map[string]any)
+	if !ok {
+		return false
+	}
+	for event, rawGroups := range hooks {
+		groups, ok := rawGroups.([]any)
+		if !ok {
+			continue
+		}
+		for _, rawGroup := range groups {
+			group, ok := rawGroup.(map[string]any)
+			if !ok {
+				continue
+			}
+			entries, _ := group["hooks"].([]any)
+			for _, rawEntry := range entries {
+				entry, _ := rawEntry.(map[string]any)
+				command, _ := entry["command"].(string)
+				if isOwnedEventCommand(runtimeName, event, command) && strings.Contains(command, "--managed-root") {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func target(runtimeName, workspace string) (string, error) {
@@ -834,6 +937,14 @@ func asyncMatches(expected bool, value any) bool {
 
 func isOwnedCommand(runtimeName string, value any) bool {
 	return isOwnedEventCommand(runtimeName, "SessionStart", value)
+}
+
+// IsOwnedEventCommand reports whether a native hook command belongs to the
+// Maestro adapter for the given runtime and event. Callers inspecting a mixed
+// runtime configuration use it to keep user-owned hooks outside Maestro's
+// authority validation.
+func IsOwnedEventCommand(runtimeName, event string, value any) bool {
+	return isOwnedEventCommand(runtimeName, event, value)
 }
 
 func isOwnedEventCommand(runtimeName, event string, value any) bool {
