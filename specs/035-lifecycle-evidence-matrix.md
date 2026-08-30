@@ -1,8 +1,10 @@
 # Spec 035 - Lifecycle evidence matrix
 
 Status: Claude lifecycle and managed subagents are operational for the
-controlled beta; native qualification remains telemetry. Codex remains
-configured but unavailable pending its own activation path.
+controlled beta and natively qualified for the exact v0.1.13 macOS-arm64 /
+Claude Code 2.1.203 artifact tuple recorded below. Codex's five lifecycle events
+are natively qualified for the exact v0.1.13 macOS-arm64 / Codex CLI 0.149.1 /
+`gpt-5.6-sol` tuple recorded below; other tuples remain unavailable.
 
 ## Objective
 
@@ -10,9 +12,10 @@ Make runtime lifecycle status auditable without treating a configuration file,
 unit test, direct hook command or local receipt as proof that Claude or Codex
 invoked Maestro inside a native session.
 
-`adapters/conformance/lifecycle.json` is the executable matrix. Its tests bind
-each canonical event to the capability manifest and reject a false
-`native_qualified` claim while fresh native evidence is absent.
+`adapters/conformance/lifecycle.json` is the executable contract matrix. Its
+tests bind each canonical event to the capability manifest and reject an
+unbacked aggregate `native_qualified` claim. Fresh tuple-specific native
+evidence remains separate from the portable default manifest.
 
 ## Evidence classes
 
@@ -42,19 +45,20 @@ remains `unavailable` until the pilot protocol is complete.
 
 Only the last class can set `native_qualified=true`. The Claude manifest uses
 `operational_beta` for released behavior while keeping that evidence bit
-false; Codex remains `unavailable` in this version.
+false. The portable Codex manifest remains conservative even though the
+separate tuple-specific record below is native-qualified.
 
 ## Current matrix
 
 | Semantic event | Claude binding | Claude evidence | Codex binding | Codex evidence |
 | --- | --- | --- | --- | --- |
-| `session_start` | `SessionStart`, pointer-only packet | operational beta; qualification telemetry | `SessionStart`, pointer-only packet | contract-tested; native pending |
-| `context_inject` | `UserPromptSubmit`, pointer-only packet | operational beta; qualification telemetry | `UserPromptSubmit`, pointer-only packet | contract-tested; native pending |
-| `pre_action_guard` | `PreToolUse`, bounded deterministic deny | operational beta; qualification telemetry | `PreToolUse`, bounded deterministic deny | contract-tested; native pending |
-| `post_action_observe` | async `PostToolUse`, metadata-only receipt | operational beta; qualification telemetry | `PostToolUse`, metadata-only receipt | contract-tested; native pending |
-| `stop_finalize` | synchronous `Stop`, metadata-only receipt plus native-agent completion gate | operational beta; native qualification is telemetry | `Stop`, metadata-only receipt | contract-tested; native pending |
-| `subagent_start` | `SubagentStart`, admission and bounded context | operational beta; qualification telemetry | none | not implemented |
-| `subagent_stop` | `SubagentStop`, deterministic transition | operational beta; qualification telemetry | none | not implemented |
+| `session_start` | `SessionStart`, pointer-only packet | native-qualified for recorded macOS tuple | `SessionStart`, pointer-only packet | jointly native-qualified with `context_inject` for recorded macOS tuple |
+| `context_inject` | `UserPromptSubmit`, pointer-only packet | native-qualified for recorded macOS tuple | `UserPromptSubmit`, pointer-only packet | jointly native-qualified with `session_start` for recorded macOS tuple |
+| `pre_action_guard` | `PreToolUse`, bounded deterministic deny | native-qualified for recorded macOS tuple | `PreToolUse`, bounded deterministic deny | native-qualified for recorded macOS tuple |
+| `post_action_observe` | async `PostToolUse`, metadata-only receipt | native-qualified for recorded macOS tuple | `PostToolUse`, metadata-only receipt | native-qualified for recorded macOS tuple |
+| `stop_finalize` | synchronous `Stop`, metadata-only receipt plus native-agent completion gate | native-qualified for recorded macOS tuple | `Stop`, metadata-only receipt | native-qualified for recorded macOS tuple |
+| `subagent_start` | `SubagentStart`, admission and bounded context | native-qualified for recorded macOS tuple | none | not implemented |
+| `subagent_stop` | `SubagentStop`, deterministic transition | native-qualified for recorded macOS tuple | none | not implemented |
 
 ## Probe
 
@@ -68,8 +72,8 @@ go run ./dev/lifecycle-probe --runtime codex
 The probe parses only a semantic version from stdout; stderr warnings are not
 part of `runtime_version`. A detected executable alone is not an aggregate
 readiness claim. Exact Claude projection reports `operational_beta`;
-qualification remains visible and independent. Codex remains
-`capabilities_unavailable` until activated.
+qualification remains visible and independent. Codex's portable capability
+state stays conservative despite the separate passing tuple-specific record.
 
 It reads only the local executable path and `--version` under a two-second
 budget. It starts no model session, changes no runtime configuration, writes no
@@ -78,9 +82,10 @@ canonical event's binding, evidence class and blocker. A result of `blocked` or
 `not_observed` is evidence of a limitation, not a product failure to hide.
 
 For Claude, the current lifecycle contract requires at least `2.1.177` before
-a native-session trial may begin. Codex `0.144.1` exposes the five command-hook
-events and the adapter configures all five. The probe keeps every Codex event
-unqualified until a fresh native-session observation is captured.
+a native-session trial may begin. Codex requires at least `0.144.1`; the
+recorded trial observed `0.149.1` exposing all five configured command-hook
+events. The probe itself never promotes an event without fresh native-session
+evidence.
 
 ## Native trial protocol
 
@@ -90,3 +95,34 @@ direct command result, bounded native-session observation and removal result.
 Do not record prompts, source bodies, client material, workspace paths, native
 session IDs, tool arguments or outputs. An adapter-command receipt may be
 attached as supporting diagnostics but is never the native observation.
+
+For the Claude macOS-arm64 direct-workspace slice, `go run
+./dev/native-qualification --artifact <platform-zip>` automates that protocol
+against disposable Hub and synthetic-repository fixtures. Its report is the
+reviewable matrix record; its source-level tests are only contract evidence and
+cannot substitute for executing the command with the real runtime. Codex Doctor
+evidence requires a successful canonical read of the projected skill and an
+exact installed-CLI version result. Qualification and fixture-cleanup errors
+invalidate a passing result before report serialization.
+
+The development suite pairs the newest bounded Claude and Codex records for the
+current `VERSION`. Both must qualify the same release, OS, architecture and
+artifact SHA-256, and both must pass the shared direct-workspace checks. This
+gate deliberately does not equate runtime-specific native extensions with
+shared semantics.
+
+The shared checks include transparent identity: affirmative native output must
+name both Maestro and the correct host runtime. Refusal, prompt-injection or
+concealment language fails qualification even if it quotes the word `Maestro`.
+One-sided removal of that check is rejected by the parity tests.
+
+The current passing bounded record is
+`docs/evidence/claude-direct-macos-arm64-0.1.13-2026-08-28.json`. It qualifies
+only Claude Code 2.1.203 on darwin/arm64 for the named artifact SHA-256. The
+Codex record is
+`docs/evidence/codex-direct-macos-arm64-0.1.13-2026-08-28.json`; it qualifies
+only Codex CLI 0.149.1 with model `gpt-5.6-sol`, the recorded post-initialization
+isolated runtime configuration digest, darwin/arm64 and artifact SHA-256
+`a93d5fb658c1908c9e2642f5d6dd53b1c2a3e7184da735e65da178ed94993d92`.
+The portable capability manifest remains conservative because it also covers
+unobserved runtime/model/configuration/platform/artifact tuples.

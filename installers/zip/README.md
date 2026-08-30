@@ -2,7 +2,15 @@
 
 ## O que este diretório é
 
-Factory que produz `Maestro-v<version>.zip` — o entregável para os 40 beta users. Distribuição é 100% por email; não há check de versão remoto.
+Factory que produz dois artefatos portáteis e específicos de plataforma:
+
+- `Maestro-Portable-<version>-macos-arm64-local-beta-unsigned.zip`
+- `Maestro-Portable-<version>-windows-amd64-local-beta-unsigned.zip`
+
+Cada artefato inclui o Hub, o bootstrapper e o CLI instalado daquela
+plataforma. O sufixo `unsigned` é deliberado: SHA-256 e verificação local não
+equivalem a assinatura organizacional, notarização, release-ready ou
+pilot-ready.
 
 ## Layout
 
@@ -19,25 +27,35 @@ installers/zip/
             └── first-run-scaffold.sh
 ```
 
-O `build-release.sh` copia `user-template/` + `bundles/` + `CLAUDE.md` para uma pasta temporária, injeta `VERSION`, e produz o ZIP.
+O `build-release.sh` copia `user-template/` + `bundles/` para uma pasta
+temporária, injeta `VERSION`, compila `bcgos` e `bcgos-bootstrap` para cada
+target, gera `managed/install-manifest.json` com o digest do CLI e produz os
+ZIPs em ordem e timestamps determinísticos.
 
 ## Como buildar
 
 ```bash
-installers/zip/build-release.sh 0.1.0
+installers/zip/build-release.sh 0.1.13
+# ou um único target:
+installers/zip/build-release.sh 0.1.13 macos-arm64
 ```
 
-Saída em `dist/`:
-- `Maestro-v0.1.0.zip`
-- `Maestro-v0.1.0.sha256`
+Saída em `dist/`: os dois ZIPs `Maestro-Portable-*`, seus sidecars `.sha256` e,
+quando ambos são gerados, `Maestro-v<version>.zip` como alias macOS temporário
+para o avaliador legado do Hub. O alias não é um binário universal.
 
 ## Fluxo de release
 
-1. `git tag v0.1.0 && git push --tags` (após code freeze).
-2. Rode `build-release.sh 0.1.0`.
-3. Envie `dist/Maestro-v0.1.0.zip` por email para o batch beta apontando para o `README-INSTALL.md` incluído no ZIP, que é a fonte única do ritual de instalação e atualização.
+1. Concluir os gates de código e revisão; não criar tag ou publicar a partir
+   desta factory automaticamente.
+2. Rodar `build-release.sh <version>`.
+3. Rodar `eval-release.sh --zip <artefato compatível com o host>`.
+4. Submeter os artefatos específicos de plataforma aos gates separados de
+   assinatura, notarização, clean-device e publicação.
 
-Sem manifest, sem hosting público, sem checagem automática. O email é o único canal de notificação e o único canal de entrega.
+Esta factory não faz hosting, assinatura, notarização, publicação nem declara
+prontidão de piloto. O manifesto é local ao artefato e serve apenas para o
+bootstrapper verificar target, versão, caminho e digest do CLI antes do uso.
 
 ## Design do hook first-run-scaffold.sh
 
@@ -48,12 +66,20 @@ Sem manifest, sem hosting público, sem checagem automática. O email é o únic
 ## Separação core vs workspace
 
 - **Core** (dentro do ZIP, sobrescrito em cada release):
-  `VERSION`, `.claude/`, `bundles/`, `CLAUDE.md`, `WELCOME.md`, `README-INSTALL.md`
+  `VERSION`, `managed/`, `.claude/`, `bundles/`, `CLAUDE.md`, `WELCOME.md`, `README-INSTALL.md`
 - **Workspace** (do usuário, criado no first-run, nunca no ZIP):
   `data/` inteiro
 
 O ZIP não contém `data/`, então a workspace do usuário nunca é sobrescrita por uma extração. Isso não torna extract-over seguro: extrair por cima deixa arquivos de versões anteriores misturados com a nova. O ritual publicado em `user-template/README-INSTALL.md` manda renomear a pasta antiga, extrair a nova e **copiar** a `data/` para dentro dela. Esse é o único fluxo a divulgar.
 
-## Deprecação do bcgos
+## Dois modos de entrada
 
-Esta factory substitui completamente o instalador Go (`cmd/bcgos`). Todas as referências ao `bcgos` como runtime foram removidas do produto — hooks, skills e registry atualizados em `refactor/remove-bcgos-cli`.
+- **Hub:** abrir a raiz `Maestro/`; o first-run verifica o CLI e preserva o
+  fluxo conversacional existente.
+- **Repo/Worktree:** o CLI instalado oferece somente
+  `workspace enroll|status|repair|remove`. A projeção escreve hooks locais com
+  caminho absoluto para esse CLI e mantém dados privados fora do checkout.
+
+O CLI é control plane estreito, não uma segunda experiência de produto e não
+fica no `PATH` global. O contrato completo está em
+[`specs/055-direct-repository-worktree-entry.md`](../../specs/055-direct-repository-worktree-entry.md).

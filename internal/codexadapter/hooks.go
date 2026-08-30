@@ -1,6 +1,8 @@
 package codexadapter
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +22,7 @@ var nativeIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,
 // beyond this contract are deliberately ignored.
 type NativeInput struct {
 	SessionID string `json:"session_id"`
+	CWD       string `json:"cwd"`
 	Prompt    string `json:"prompt"`
 	ToolUseID string `json:"tool_use_id"`
 	ToolName  string `json:"tool_name"`
@@ -123,8 +126,10 @@ func Receipt(event string, input NativeInput) (lifecycle.Receipt, error) {
 	}
 	parts := []string{"codex", event, input.SessionID}
 	toolName := ""
+	actionSHA256 := ""
 	switch event {
-	case lifecycle.PostActionObserve:
+	case lifecycle.SessionStart, lifecycle.ContextInject:
+	case lifecycle.PreActionGuard, lifecycle.PostActionObserve:
 		if !nativeIdentifierPattern.MatchString(input.ToolUseID) {
 			return lifecycle.Receipt{}, errors.New("Codex hook tool-use ID is invalid")
 		}
@@ -133,6 +138,14 @@ func Receipt(event string, input NativeInput) (lifecycle.Receipt, error) {
 		}
 		parts = append(parts, input.ToolUseID, input.ToolName)
 		toolName = input.ToolName
+		if event == lifecycle.PreActionGuard {
+			command := strings.TrimSpace(input.ToolInput.Command)
+			if command == "" {
+				return lifecycle.Receipt{}, errors.New("Codex guard receipt requires a bounded command")
+			}
+			digest := sha256.Sum256([]byte(command))
+			actionSHA256 = hex.EncodeToString(digest[:])
+		}
 	case lifecycle.StopFinalize:
 	default:
 		return lifecycle.Receipt{}, fmt.Errorf("unsupported Codex receipt event %q", event)
@@ -144,6 +157,7 @@ func Receipt(event string, input NativeInput) (lifecycle.Receipt, error) {
 		State:          "observed",
 		Provenance:     lifecycle.AdapterCommand,
 		ToolName:       toolName,
+		ActionSHA256:   actionSHA256,
 		IdempotencyKey: lifecycle.IdempotencyKey(parts...),
 	}, nil
 }

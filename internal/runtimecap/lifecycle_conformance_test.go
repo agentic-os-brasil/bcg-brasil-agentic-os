@@ -74,16 +74,16 @@ func TestLifecycleConformanceFixtureSeparatesClaudeBetaAvailabilityFromQualifica
 	if fixture.Events[0].Codex.Implementation != "configured" || fixture.Events[0].Codex.Binding != "SessionStart" {
 		t.Fatalf("Codex SessionStart fixture = %#v", fixture.Events[0].Codex)
 	}
-	if fixture.Events[0].Codex.NativeEvidence != "not_observed" || fixture.Events[0].Codex.EvidenceClass != "contract-tested" {
-		t.Fatalf("Codex SessionStart native evidence must stay unqualified: %#v", fixture.Events[0].Codex)
+	if fixture.Events[0].Codex.NativeEvidence != "beta_telemetry" || fixture.Events[0].Codex.EvidenceClass != "contract-tested" {
+		t.Fatalf("Codex SessionStart bounded native evidence was lost: %#v", fixture.Events[0].Codex)
 	}
 	for _, row := range fixture.Events[:5] {
-		if row.Codex.Implementation != "configured" || row.Codex.EvidenceClass != "contract-tested" || row.Codex.NativeEvidence != "not_observed" || row.Codex.Blocker == "" {
-			t.Fatalf("Codex lifecycle surface must remain configured but unobserved: %#v", row.Codex)
+		if row.Codex.Implementation != "configured" || row.Codex.EvidenceClass != "contract-tested" || row.Codex.NativeEvidence != "beta_telemetry" || row.Codex.ManifestState != "unavailable" || row.Codex.Blocker == "" {
+			t.Fatalf("Codex lifecycle evidence must remain tuple-bounded and fail-closed: %#v", row.Codex)
 		}
 	}
 	codexSessionStart := byEvent[fixture.Events[0].SemanticEvent].Codex
-	if codexSessionStart.Mechanism != "workspace-local Codex SessionStart binding implemented" || codexSessionStart.Reason != "qualifying native conformance evidence is pending" {
+	if codexSessionStart.Mechanism != "workspace-local Codex SessionStart binding implemented" || codexSessionStart.Reason != "one exact tuple is natively qualified as bounded telemetry; aggregate activation remains unavailable" {
 		t.Fatalf("Codex SessionStart capability details drifted: %#v", codexSessionStart)
 	}
 }

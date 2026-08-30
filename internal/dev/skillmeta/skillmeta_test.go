@@ -1,6 +1,8 @@
 package skillmeta
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,6 +64,38 @@ func TestValidateClaudeProjectionsRejectsMissingAndOrphanedSkills(t *testing.T) 
 	err := ValidateClaudeProjections(canonical, projection)
 	if err == nil || !strings.Contains(err.Error(), "missing") || !strings.Contains(err.Error(), "no canonical") {
 		t.Fatalf("ValidateClaudeProjections() error = %v", err)
+	}
+}
+
+func TestValidateClaudeProjectionsAcceptsIntegrityOwnedDirectWorkspaceSkills(t *testing.T) {
+	root := t.TempDir()
+	canonical := filepath.Join(root, "dev", "skills")
+	projection := filepath.Join(root, ".claude", "skills")
+	writeSkill(t, canonical, "start-work", "start-work", "Start work safely.")
+	writeProjection(t, projection, "start-work", "../../../dev/skills/start-work/SKILL.md")
+	writeSkill(t, projection, "maestro-doctor", "maestro-doctor", "Diagnose Maestro safely.")
+	managedPath := filepath.Join(projection, "maestro-doctor", "SKILL.md")
+	managedBody, err := os.ReadFile(managedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(managedBody)
+	manifestPath := filepath.Join(root, ".bcgos", "runtime-projections", "claude.json")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"schema_version":1,"runtime":"claude","skill_hashes":{"maestro-doctor":"` + hex.EncodeToString(digest[:]) + `"}}`
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateClaudeProjections(canonical, projection); err != nil {
+		t.Fatalf("integrity-owned direct projection was rejected: %v", err)
+	}
+	if err := os.WriteFile(managedPath, append(managedBody, []byte("tampered\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateClaudeProjections(canonical, projection); err == nil || !strings.Contains(err.Error(), "no canonical development skill") {
+		t.Fatalf("tampered direct projection was accepted: %v", err)
 	}
 }
 

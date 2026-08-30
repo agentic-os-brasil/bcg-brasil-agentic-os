@@ -1,6 +1,8 @@
 {
   "broken_links": [],
   "opaque_links": [
+    "docs/install-update.md:repo://docs/release-gates-checklist.md",
+    "docs/install-update.md:repo://specs/055-direct-repository-worktree-entry.md",
     "docs/releasing.md:repo://docs/release-gates-checklist.md",
     "docs/wiki.md:repo://bundles/base/atlas/managed/index.md",
     "docs/wiki.md:repo://dev/wiki/managed-allowlist.json"

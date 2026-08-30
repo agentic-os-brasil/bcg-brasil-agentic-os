@@ -2,6 +2,8 @@ package skillmeta
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -74,6 +76,10 @@ func ValidateClaudeProjections(canonicalRoot, projectionRoot string) error {
 	if err != nil {
 		return fmt.Errorf("read Claude skill projections: %w", err)
 	}
+	managedSkillHashes, err := managedClaudeSkillHashes(projectionRoot)
+	if err != nil {
+		return fmt.Errorf("read managed Claude workspace projections: %w", err)
+	}
 	var problems []error
 	for name := range canonical {
 		if !projections[name] {
@@ -101,10 +107,57 @@ func ValidateClaudeProjections(canonicalRoot, projectionRoot string) error {
 	}
 	for name := range projections {
 		if !canonical[name] {
+			path := filepath.Join(projectionRoot, name, "SKILL.md")
+			if expected := managedSkillHashes[name]; expected != "" {
+				content, readErr := os.ReadFile(path)
+				if readErr == nil {
+					digest := sha256.Sum256(content)
+					if hex.EncodeToString(digest[:]) == expected {
+						continue
+					}
+				}
+			}
 			problems = append(problems, fmt.Errorf("Claude projection %s has no canonical development skill", name))
 		}
 	}
 	return errors.Join(problems...)
+}
+
+func managedClaudeSkillHashes(projectionRoot string) (map[string]string, error) {
+	workspaceRoot := filepath.Dir(filepath.Dir(filepath.Clean(projectionRoot)))
+	manifestPath := filepath.Join(workspaceRoot, ".bcgos", "runtime-projections", "claude.json")
+	info, err := os.Lstat(manifestPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return map[string]string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Size() > 1<<20 {
+		return nil, errors.New("managed Claude projection manifest must be a bounded regular non-symlink file")
+	}
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, err
+	}
+	var manifest struct {
+		SchemaVersion int               `json:"schema_version"`
+		Runtime       string            `json:"runtime"`
+		SkillHashes   map[string]string `json:"skill_hashes"`
+	}
+	if err := json.Unmarshal(body, &manifest); err != nil {
+		return nil, err
+	}
+	if manifest.SchemaVersion != 1 || manifest.Runtime != "claude" {
+		return nil, errors.New("managed Claude projection manifest identity is invalid")
+	}
+	for name, digest := range manifest.SkillHashes {
+		decoded, decodeErr := hex.DecodeString(digest)
+		if name == "" || decodeErr != nil || len(decoded) != sha256.Size || digest != strings.ToLower(digest) {
+			return nil, fmt.Errorf("managed Claude skill hash for %s is invalid", name)
+		}
+	}
+	return manifest.SkillHashes, nil
 }
 
 // ValidateClaudeRouting enforces Claude as the primary native development surface.

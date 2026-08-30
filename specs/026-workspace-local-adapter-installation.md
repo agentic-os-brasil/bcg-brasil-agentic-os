@@ -1,9 +1,13 @@
 # Spec 026 - Workspace-local adapter installation
 
-Status: seven-event Claude beta and five-event Codex lifecycle configuration
-implemented; native runtime qualification remains separate.
+Status: seven-event Claude and five-event Codex projection cores implemented;
+the direct Git Repo/Worktree lifecycle is exposed through `bcgos workspace`.
+The older initialized-workspace `bcgos adapter` public route described below
+is not exposed by the current narrow CLI. Native runtime qualification remains
+separate.
 
-`bcgos adapter install --runtime claude|codex [workspace]` first ensures the
+The initialized-workspace adapter contract historically grouped installation
+under `bcgos adapter install --runtime claude|codex [workspace]`. Its core first ensures the
 workspace-local installation dependencies (`workspace.json`, durable
 orchestration state, owner registry, Case Agent dossier and signed agent
 scaffold) exist idempotently, then adds only Maestro-owned commands to the
@@ -15,6 +19,20 @@ events. Claude uses
 mutating a user-wide configuration and keeps the adapter scoped to a
 professional workspace.
 
+For an ordinary Git repository or linked worktree, Spec 055 provides the
+implemented public route:
+
+```text
+bcgos workspace enroll|status|repair|remove --runtime claude|codex <path>
+```
+
+That route does not create the older managed-workspace authorities. It resolves
+Git repository/worktree identity, stores the private binding under `data_root`
+and invokes the projection/adapter cores transactionally with explicit
+`managed_root`, `data_root` and `workspace_root`. The distinction avoids
+claiming that the historical `bcgos adapter` command exists when only its
+underlying projection contract remains implemented.
+
 The same command also installs the user-facing runtime projection from the
 active base bundle. Claude receives a managed `CLAUDE.md` and the complete
 base-skill bodies under `.claude/skills/<skill-id>/SKILL.md`; Codex receives the
@@ -25,6 +43,12 @@ navigation and agents) while remaining pointer-oriented. The projection writes
 Reinstallation replaces only the managed block and unchanged managed skill
 files. User-authored orientation text is preserved; modified or symlinked
 managed files fail closed and are reported as conflicts.
+
+Spec 055 adds one direct-Git exception: when the orientation file is already
+tracked, direct enrollment leaves it byte-for-byte user-owned and records a
+`preserved_tracked` projection mode. The bounded Session Start hook supplies
+the Maestro orientation in that checkout. This prevents a local installation
+from dirtying a tracked team instruction file or altering the Git index.
 
 Installation preserves unrelated configuration entries and is idempotent.
 The commands point to the local released executable, rather than relying on a

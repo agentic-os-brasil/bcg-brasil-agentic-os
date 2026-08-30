@@ -18,6 +18,7 @@ import (
 
 const adapterSourceMarker = "--adapter-source maestro"
 const orchestrationStateMarker = "--orchestration-state .bcgos/maestro-orchestration-state.json"
+const maximumAdapterFileBytes = 8 << 20
 
 var (
 	installClaudeAgents   = claudeagents.Install
@@ -27,6 +28,7 @@ var (
 )
 
 var managedClaudeAgentFiles = []string{
+	"maestro-hub.md",
 	"client-account-agent.md",
 	"case-agent.md",
 	"yoda.md",
@@ -38,6 +40,15 @@ type Status struct {
 	Runtime string `json:"runtime"`
 	Path    string `json:"path"`
 	State   string `json:"state"`
+}
+
+// ScopedRoots are the explicit authorities passed to workspace-local hooks.
+// Direct repository/worktree projections use this form so hook execution does
+// not infer product or private-data roots from cwd, PATH or an ancestor file.
+type ScopedRoots struct {
+	ManagedRoot   string
+	DataRoot      string
+	WorkspaceRoot string
 }
 
 type binding struct {
@@ -118,6 +129,9 @@ func captureStateFile(path string) (stateFileSnapshot, error) {
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return stateFileSnapshot{}, fmt.Errorf("refusing to snapshot non-regular adapter surface %s", path)
 	}
+	if info.Size() > maximumAdapterFileBytes {
+		return stateFileSnapshot{}, fmt.Errorf("adapter surface exceeds bounded snapshot size: %s", path)
+	}
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return stateFileSnapshot{}, err
@@ -178,6 +192,16 @@ func rollbackState(snapshot StateSnapshot, operation string, original error) err
 // coordinate another local transaction can use it to fail closed before either
 // side writes.
 func ValidateInstall(runtimeName, workspace, executable string) error {
+	return validateInstall(runtimeName, workspace, executable, ScopedRoots{})
+}
+
+// ValidateScopedInstall performs the same preflight while also validating the
+// explicit roots that will be bound into every managed command.
+func ValidateScopedInstall(runtimeName, workspace, executable string, roots ScopedRoots) error {
+	return validateInstall(runtimeName, workspace, executable, roots)
+}
+
+func validateInstall(runtimeName, workspace, executable string, roots ScopedRoots) error {
 	if runtimeName == "claude" {
 		if err := claudeagents.ValidateInstall(workspace); err != nil {
 			return err
@@ -187,13 +211,18 @@ func ValidateInstall(runtimeName, workspace, executable string) error {
 	if err != nil {
 		return err
 	}
-	bindings, err := bindingsFor(runtimeName, executable, workspace)
+	bindings, err := bindingsForRoots(runtimeName, executable, workspace, roots)
 	if err != nil {
 		return err
 	}
 	config, err := read(path)
 	if err != nil {
 		return err
+	}
+	if runtimeName == "claude" && roots != (ScopedRoots{}) {
+		if err := validateDirectHubSelection(config, workspace); err != nil {
+			return err
+		}
 	}
 	hooks, err := hooksMap(config)
 	if err != nil {
@@ -272,17 +301,34 @@ func LocalConfigExcludePath(runtimeName, workspace string) (string, error) {
 // released CLI executable. The executable is explicit so an installed hook
 // never depends on a consultant's PATH or shell profile.
 func Install(runtimeName, workspace, executable string) (Status, error) {
+	return install(runtimeName, workspace, executable, ScopedRoots{})
+}
+
+// InstallScoped writes hooks that carry every direct-workspace authority as an
+// explicit absolute argument. The ordinary Install surface remains available
+// for legacy initialized Hub workspaces.
+func InstallScoped(runtimeName, workspace, executable string, roots ScopedRoots) (Status, error) {
+	return install(runtimeName, workspace, executable, roots)
+}
+
+func install(runtimeName, workspace, executable string, roots ScopedRoots) (Status, error) {
 	path, err := target(runtimeName, workspace)
 	if err != nil {
 		return Status{}, err
 	}
-	bindings, err := bindingsFor(runtimeName, executable, workspace)
+	bindings, err := bindingsForRoots(runtimeName, executable, workspace, roots)
 	if err != nil {
 		return Status{}, err
 	}
 	config, err := read(path)
 	if err != nil {
 		return Status{}, err
+	}
+	directClaude := runtimeName == "claude" && roots != (ScopedRoots{})
+	if directClaude {
+		if err := validateDirectHubSelection(config, workspace); err != nil {
+			return Status{}, err
+		}
 	}
 	hooks, err := hooksMap(config)
 	if err != nil {
@@ -310,8 +356,17 @@ func Install(runtimeName, workspace, executable string) (Status, error) {
 		if _, err := installClaudeAgents(workspace); err != nil {
 			return Status{}, rollbackState(snapshot, "adapter install", err)
 		}
+		if directClaude {
+			if _, err := claudeagents.InstallDirectHub(workspace); err != nil {
+				return Status{}, rollbackState(snapshot, "adapter install", err)
+			}
+		}
 	}
 	changed := false
+	if directClaude && config["agent"] != claudeagents.DirectHubID {
+		config["agent"] = claudeagents.DirectHubID
+		changed = true
+	}
 	for _, binding := range bindings {
 		groups, _ := groupsForEvent(hooks, binding.NativeEvent)
 		updated, bindingChanged := updateOwnedEventHook(groups, runtimeName, binding.NativeEvent, binding.Command, binding.Async)
@@ -334,8 +389,14 @@ func Install(runtimeName, workspace, executable string) (Status, error) {
 }
 
 func Uninstall(runtimeName, workspace string) (Status, error) {
+	directHubManaged := false
 	if runtimeName == "claude" {
 		if err := claudeagents.ValidateUninstall(workspace); err != nil {
+			return Status{}, err
+		}
+		var err error
+		directHubManaged, err = claudeagents.DirectHubManaged(workspace)
+		if err != nil {
 			return Status{}, err
 		}
 	}
@@ -352,6 +413,11 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 			if _, removeErr := uninstallClaudeAgents(workspace); removeErr != nil {
 				return Status{}, rollbackState(snapshot, "adapter uninstall", removeErr)
 			}
+			if directHubManaged {
+				if _, removeErr := claudeagents.UninstallDirectHub(workspace); removeErr != nil {
+					return Status{}, rollbackState(snapshot, "adapter uninstall", removeErr)
+				}
+			}
 		}
 		return Status{Runtime: runtimeName, Path: path, State: "absent"}, nil
 	} else if err != nil {
@@ -360,6 +426,12 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	config, err := read(path)
 	if err != nil {
 		return Status{}, err
+	}
+	directHubSelectionOwned := directHubManaged
+	if runtimeName == "claude" && !directHubSelectionOwned &&
+		ownedConfigurationIsScoped(config, runtimeName) && config["agent"] == claudeagents.DirectHubID {
+		hub, inspectErr := claudeagents.InspectDirectHub(workspace)
+		directHubSelectionOwned = inspectErr == nil && hub.State == "absent"
 	}
 	hooks, err := hooksMap(config)
 	if err != nil {
@@ -388,6 +460,9 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
+	if directHubSelectionOwned && config["agent"] == claudeagents.DirectHubID {
+		delete(config, "agent")
+	}
 	config["hooks"] = hooks
 	if err := writeRuntimeConfig(path, config); err != nil {
 		return Status{}, rollbackState(snapshot, "adapter uninstall", err)
@@ -395,6 +470,11 @@ func Uninstall(runtimeName, workspace string) (Status, error) {
 	if runtimeName == "claude" {
 		if _, err := uninstallClaudeAgents(workspace); err != nil {
 			return Status{}, rollbackState(snapshot, "adapter uninstall", err)
+		}
+		if directHubManaged {
+			if _, err := claudeagents.UninstallDirectHub(workspace); err != nil {
+				return Status{}, rollbackState(snapshot, "adapter uninstall", err)
+			}
 		}
 	}
 	return Status{Runtime: runtimeName, Path: path, State: "removed"}, nil
@@ -440,10 +520,67 @@ func Inspect(runtimeName, workspace string) (Status, error) {
 			if agents.State != "installed" {
 				return Status{Runtime: runtimeName, Path: path, State: "partial"}, nil
 			}
+			if ownedConfigurationIsScoped(config, runtimeName) {
+				if config["agent"] != claudeagents.DirectHubID {
+					return Status{Runtime: runtimeName, Path: path, State: "partial"}, nil
+				}
+				hub, err := claudeagents.InspectDirectHub(workspace)
+				if err != nil {
+					return Status{}, err
+				}
+				if hub.State != "installed" {
+					return Status{Runtime: runtimeName, Path: path, State: "partial"}, nil
+				}
+			}
 		}
 		return Status{Runtime: runtimeName, Path: path, State: "installed"}, nil
 	}
 	return Status{Runtime: runtimeName, Path: path, State: "absent"}, nil
+}
+
+func validateDirectHubSelection(config map[string]any, workspace string) error {
+	selected, exists := config["agent"]
+	if exists {
+		name, ok := selected.(string)
+		if !ok || strings.TrimSpace(name) == "" {
+			return errors.New("Claude main agent setting is not a valid string; no files were changed")
+		}
+		if name != claudeagents.DirectHubID {
+			return fmt.Errorf("Claude main agent %q is already selected; no files were changed", name)
+		}
+	}
+	return claudeagents.ValidateDirectHubInstall(workspace)
+}
+
+func ownedConfigurationIsScoped(config map[string]any, runtimeName string) bool {
+	if runtimeName != "claude" {
+		return false
+	}
+	hooks, ok := config["hooks"].(map[string]any)
+	if !ok {
+		return false
+	}
+	for event, rawGroups := range hooks {
+		groups, ok := rawGroups.([]any)
+		if !ok {
+			continue
+		}
+		for _, rawGroup := range groups {
+			group, ok := rawGroup.(map[string]any)
+			if !ok {
+				continue
+			}
+			entries, _ := group["hooks"].([]any)
+			for _, rawEntry := range entries {
+				entry, _ := rawEntry.(map[string]any)
+				command, _ := entry["command"].(string)
+				if isOwnedEventCommand(runtimeName, event, command) && strings.Contains(command, "--managed-root") {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func target(runtimeName, workspace string) (string, error) {
@@ -465,6 +602,17 @@ func commandFor(runtimeName, executable string) (string, error) {
 }
 
 func bindingsFor(runtimeName, executable string, workspacePath ...string) ([]binding, error) {
+	return bindingsForRoots(runtimeName, executable, firstWorkspace(workspacePath), ScopedRoots{})
+}
+
+func firstWorkspace(workspacePath []string) string {
+	if len(workspacePath) == 0 {
+		return ""
+	}
+	return workspacePath[0]
+}
+
+func bindingsForRoots(runtimeName, executable, workspacePath string, roots ScopedRoots) ([]binding, error) {
 	if strings.TrimSpace(executable) == "" {
 		return nil, errors.New("adapter executable must not be empty")
 	}
@@ -475,12 +623,29 @@ func bindingsFor(runtimeName, executable string, workspacePath ...string) ([]bin
 	prefix := quoteCommandPath(abs) + " hook "
 	markers := adapterSourceMarker + " " + orchestrationStateMarker
 	workspaceArgument := ""
-	if len(workspacePath) > 0 && strings.TrimSpace(workspacePath[0]) != "" {
-		workspace, err := filepath.Abs(filepath.Clean(workspacePath[0]))
+	if strings.TrimSpace(workspacePath) != "" {
+		workspace, err := filepath.Abs(filepath.Clean(workspacePath))
 		if err != nil {
 			return nil, fmt.Errorf("resolve adapter workspace: %w", err)
 		}
 		workspaceArgument = " " + quoteCommandPath(workspace)
+	}
+	if roots != (ScopedRoots{}) {
+		managedRoot, err := absoluteRoot("managed", roots.ManagedRoot)
+		if err != nil {
+			return nil, err
+		}
+		dataRoot, err := absoluteRoot("data", roots.DataRoot)
+		if err != nil {
+			return nil, err
+		}
+		workspaceRoot, err := absoluteRoot("workspace", roots.WorkspaceRoot)
+		if err != nil {
+			return nil, err
+		}
+		workspaceArgument = " --managed-root " + quoteCommandPath(managedRoot) +
+			" --data-root " + quoteCommandPath(dataRoot) +
+			" --workspace-root " + quoteCommandPath(workspaceRoot)
 	}
 	switch runtimeName {
 	case "codex":
@@ -508,6 +673,20 @@ func bindingsFor(runtimeName, executable string, workspacePath ...string) ([]bin
 	}
 }
 
+func absoluteRoot(name, value string) (string, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", fmt.Errorf("adapter %s root is required", name)
+	}
+	absolute, err := filepath.Abs(filepath.Clean(value))
+	if err != nil {
+		return "", fmt.Errorf("resolve adapter %s root: %w", name, err)
+	}
+	if !filepath.IsAbs(absolute) {
+		return "", fmt.Errorf("adapter %s root must be absolute", name)
+	}
+	return absolute, nil
+}
+
 func quoteCommandPath(path string) string {
 	return quoteCommandPathFor(runtime.GOOS, path)
 }
@@ -520,11 +699,18 @@ func quoteCommandPathFor(platform, path string) string {
 }
 
 func read(path string) (map[string]any, error) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return map[string]any{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Size() > maximumAdapterFileBytes {
+		return nil, fmt.Errorf("runtime configuration must be a bounded regular non-symlink file: %s", path)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return map[string]any{}, nil
-		}
 		return nil, err
 	}
 	var config map[string]any
@@ -548,7 +734,10 @@ func writeBytes(path string, data []byte, defaultMode os.FileMode) error {
 		return err
 	}
 	mode := defaultMode
-	if info, err := os.Stat(path); err == nil {
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return fmt.Errorf("refusing to replace non-regular adapter surface %s", path)
+		}
 		mode = info.Mode().Perm()
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -750,6 +939,14 @@ func isOwnedCommand(runtimeName string, value any) bool {
 	return isOwnedEventCommand(runtimeName, "SessionStart", value)
 }
 
+// IsOwnedEventCommand reports whether a native hook command belongs to the
+// Maestro adapter for the given runtime and event. Callers inspecting a mixed
+// runtime configuration use it to keep user-owned hooks outside Maestro's
+// authority validation.
+func IsOwnedEventCommand(runtimeName, event string, value any) bool {
+	return isOwnedEventCommand(runtimeName, event, value)
+}
+
 func isOwnedEventCommand(runtimeName, event string, value any) bool {
 	command, ok := value.(string)
 	if !ok {
@@ -813,6 +1010,11 @@ func ownedMarkerMatches(command, suffix string) bool {
 	if remainder == "" {
 		return true
 	}
+	if strings.Contains(remainder, "--managed-root ") &&
+		strings.Contains(remainder, "--data-root ") &&
+		strings.Contains(remainder, "--workspace-root ") {
+		return true
+	}
 	if len(remainder) < 2 || (remainder[0] != '\'' && remainder[0] != '"') || remainder[len(remainder)-1] != remainder[0] {
 		return false
 	}
@@ -858,7 +1060,7 @@ func rejectTrackedConfig(workspace, configPath string) error {
 	if gitDir == "" {
 		return nil
 	}
-	command := exec.Command("git", "-C", workspace, "ls-files", "--error-unmatch", "--", filepath.ToSlash(relative))
+	command := isolatedGitCommand("-C", workspace, "ls-files", "--error-unmatch", "--", filepath.ToSlash(relative))
 	if output, err := command.CombinedOutput(); err == nil {
 		return fmt.Errorf("refusing to modify tracked runtime configuration %s; remove it from Git tracking before installing Maestro", filepath.ToSlash(relative))
 	} else {
@@ -868,6 +1070,21 @@ func rejectTrackedConfig(workspace, configPath string) error {
 		}
 		return fmt.Errorf("check whether runtime configuration is tracked: %w (%s)", err, strings.TrimSpace(string(output)))
 	}
+}
+
+func isolatedGitCommand(args ...string) *exec.Cmd {
+	command := exec.Command("git", args...)
+	for _, variable := range os.Environ() {
+		if strings.HasPrefix(variable, "GIT_INDEX_FILE=") ||
+			strings.HasPrefix(variable, "GIT_DIR=") ||
+			strings.HasPrefix(variable, "GIT_WORK_TREE=") ||
+			strings.HasPrefix(variable, "GIT_PREFIX=") ||
+			strings.HasPrefix(variable, "GIT_CONFIG_PARAMETERS=") {
+			continue
+		}
+		command.Env = append(command.Env, variable)
+	}
+	return command
 }
 
 func ensureLocalConfigExcluded(workspace, configPath string) error {
@@ -887,6 +1104,13 @@ func ensureLocalConfigExcluded(workspace, configPath string) error {
 	}
 	excludePath := filepath.Join(gitDir, "info", "exclude")
 	pattern := "/" + filepath.ToSlash(relative)
+	if info, statErr := os.Lstat(excludePath); statErr == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Size() > maximumAdapterFileBytes {
+			return errors.New("Git exclude must be a bounded regular non-symlink file")
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return statErr
+	}
 	data, err := os.ReadFile(excludePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -905,15 +1129,21 @@ func ensureLocalConfigExcluded(workspace, configPath string) error {
 
 func gitDirForWorkspace(workspace string) (string, error) {
 	marker := filepath.Join(workspace, ".git")
-	info, err := os.Stat(marker)
+	info, err := os.Lstat(marker)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
 	}
 	if err != nil {
 		return "", err
 	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", errors.New("Git marker must not be a symlink")
+	}
 	if info.IsDir() {
 		return marker, nil
+	}
+	if !info.Mode().IsRegular() || info.Size() > maximumAdapterFileBytes {
+		return "", errors.New("Git marker must be a bounded regular file or directory")
 	}
 	data, err := os.ReadFile(marker)
 	if err != nil {
@@ -928,7 +1158,18 @@ func gitDirForWorkspace(workspace string) (string, error) {
 	if !filepath.IsAbs(gitDir) {
 		gitDir = filepath.Join(workspace, gitDir)
 	}
-	commonDir, err := os.ReadFile(filepath.Join(gitDir, "commondir"))
+	commonMarker := filepath.Join(gitDir, "commondir")
+	commonInfo, statErr := os.Lstat(commonMarker)
+	if errors.Is(statErr, os.ErrNotExist) {
+		return gitDir, nil
+	}
+	if statErr != nil {
+		return "", statErr
+	}
+	if commonInfo.Mode()&os.ModeSymlink != 0 || !commonInfo.Mode().IsRegular() || commonInfo.Size() > maximumAdapterFileBytes {
+		return "", errors.New("Git commondir marker must be a bounded regular non-symlink file")
+	}
+	commonDir, err := os.ReadFile(commonMarker)
 	if errors.Is(err, os.ErrNotExist) {
 		return gitDir, nil
 	}

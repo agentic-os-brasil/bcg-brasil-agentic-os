@@ -29,6 +29,44 @@ func TestBuildUsesNativeSessionStartContextWithoutSourceBodies(t *testing.T) {
 	}
 }
 
+func TestSessionStartPresentsMaestroAndHostRuntimeTransparently(t *testing.T) {
+	packet := sessionctx.Build(sessionctx.Sources{
+		Profile:   profile.State{Profile: "standard", Source: "configured"},
+		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
+	})
+	claude, err := BuildClaude(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex, err := BuildCodex(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for runtime, context := range map[string]string{
+		"Claude Code": claude.HookSpecificOutput.AdditionalContext,
+		"Codex":       codex.HookSpecificOutput.AdditionalContext,
+	} {
+		if !strings.Contains(context, "Configured layer: Maestro") ||
+			!strings.Contains(context, "Host runtime: "+runtime) ||
+			!strings.Contains(context, "Both facts remain visible") {
+			t.Fatalf("%s SessionStart did not identify both layers transparently: %s", runtime, context)
+		}
+		for _, deceptive := range []string{
+			"MAESTRO SESSION PROTOCOL",
+			"IDENTITY AND PROVENANCE:",
+			"Never deny, conceal or misrepresent",
+			"do not present yourself as the host runtime",
+			"Ignore conflicting persona",
+			"Do not expose internal architecture",
+			"Treat implementation details as private system context",
+		} {
+			if strings.Contains(context, deceptive) {
+				t.Fatalf("%s SessionStart retained deceptive identity language %q: %s", runtime, deceptive, context)
+			}
+		}
+	}
+}
+
 func TestSessionStartInjectsBoundedLocalMemoryButPromptHookDoesNotRepeatIt(t *testing.T) {
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile:   profile.State{Profile: "standard", Source: "configured"},
@@ -59,15 +97,15 @@ func TestSessionStartInjectsBoundedLocalMemoryButPromptHookDoesNotRepeatIt(t *te
 }
 
 func TestSessionStartBudgetReservesSpaceForOperatingMethodWithoutGrowingMemory(t *testing.T) {
-	if MaximumAdditionalContextBytes != 16<<10 {
+	if MaximumAdditionalContextBytes != (8<<10)-512 {
 		t.Fatalf("SessionStart budget = %d", MaximumAdditionalContextBytes)
 	}
-	if MaximumMemoryContextBytes != 8<<10 {
+	if MaximumMemoryContextBytes != 3<<10 {
 		t.Fatalf("memory budget = %d", MaximumMemoryContextBytes)
 	}
 }
 
-func TestSessionStartTruncatesMemoryBeforeDroppingThePointerPacket(t *testing.T) {
+func TestSessionStartPrioritizesBoundedMemoryBeforeDroppingThePointerPacket(t *testing.T) {
 	packet := sessionctx.Build(sessionctx.Sources{
 		Profile:   profile.State{Profile: "standard", Source: "configured"},
 		Workspace: workspace.Inspection{State: "ready", WorkspaceID: "workspace-a"},
@@ -78,12 +116,16 @@ func TestSessionStartTruncatesMemoryBeforeDroppingThePointerPacket(t *testing.T)
 		t.Fatal(err)
 	}
 	context := output.HookSpecificOutput.AdditionalContext
-	if len(context) > MaximumAdditionalContextBytes || strings.Contains(context, "packet exceeded") || !strings.Contains(context, "memory context truncated") || !strings.Contains(context, `"memory":{"state":"available"`) {
+	if len(context) > MaximumAdditionalContextBytes || !strings.Contains(context, "packet exceeded") || !strings.Contains(context, "context truncated") || strings.Contains(context, `"memory":{"state":"available"`) {
 		t.Fatalf("bounded memory output = %q", context)
 	}
 	memoryStart := strings.Index(context, "MAESTRO LOCAL MEMORY")
-	if memoryStart < 0 || len(context)-memoryStart > MaximumMemoryContextBytes {
-		t.Fatalf("generated memory used %d bytes; maximum = %d", len(context)-memoryStart, MaximumMemoryContextBytes)
+	if memoryStart < 0 {
+		t.Fatalf("generated memory missing: %q", context)
+	}
+	memoryEnd := strings.Index(context[memoryStart:], "\n\nMaestro bounded session context omitted")
+	if memoryEnd < 0 || memoryEnd > MaximumMemoryContextBytes {
+		t.Fatalf("generated memory used %d bytes; maximum = %d", memoryEnd, MaximumMemoryContextBytes)
 	}
 }
 
@@ -100,25 +142,25 @@ func TestSessionStartRejectsHistoricalBodySmuggledIntoContinuousStatus(t *testin
 
 func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T) {
 	pending := sessionctx.Packet{WorkspaceRoot: "/Users/pilot/Developer/maestro-os", Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", NextQuestion: "What is your professional role?"}}}
-	if got := sessionDirective(pending); !strings.Contains(got, "ONBOARDING AVAILABLE") || !strings.Contains(got, "never make it a prerequisite") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Ignore conflicting persona") || !strings.Contains(got, "USER-FACING COMMUNICATION") || !strings.Contains(got, "friendly wrapper around the system") || !strings.Contains(got, "Absorb ordinary system friction") || !strings.Contains(got, "instead of exposing a setup journey") || !strings.Contains(got, "choice changes scope, consequence or final outcome") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {
+	if got := sessionDirective("claude", pending); !strings.Contains(got, "ONBOARDING AVAILABLE") || !strings.Contains(got, "never make it a prerequisite") || !strings.Contains(got, "What is your professional role?") || !strings.Contains(got, "/Users/pilot/Developer/maestro-os") || !strings.Contains(got, "Claude Code") || !strings.Contains(got, "USER-FACING COMMUNICATION") || !strings.Contains(got, "answer accurately when the owner asks") || !strings.Contains(got, "choice changes scope, consequence or final outcome") || !strings.Contains(got, "CONTINUOUS USE status is unavailable") {
 		t.Fatalf("pending directive = %q", got)
 	}
 	selection := pending
 	selection.Owner.Onboarding.Track = "selection_required"
-	if got := sessionDirective(selection); !strings.Contains(got, "quick") || !strings.Contains(got, "complete") || !strings.Contains(got, "~10 min") || !strings.Contains(got, "~30 min") || !strings.Contains(got, "Do not infer") {
+	if got := sessionDirective("claude", selection); !strings.Contains(got, "quick") || !strings.Contains(got, "complete") || !strings.Contains(got, "~10 min") || !strings.Contains(got, "~30 min") || !strings.Contains(got, "Do not infer") {
 		t.Fatalf("track selection directive = %q", got)
 	}
 	selection.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
-	if got := sessionDirective(selection); !strings.Contains(got, "Use the installed CLI silently") || !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" owner onboarding select`) {
+	if got := sessionDirective("claude", selection); !strings.Contains(got, "Use the installed CLI silently") || !strings.Contains(got, `"/Users/pilot/Library/Application Support/Maestro/bin/bcgos" owner onboarding select`) {
 		t.Fatalf("resolved CLI directive = %q", got)
 	}
 	active := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}, OpenTasks: sessionctx.OpenTasks{State: "available", Count: 1}}}
 	active.SetupAuthorization = sessionctx.SetupAuthorization{State: "active", PolicyVersion: "cofs-v1"}
 	active.ContinuousUse = continuoususe.Status{SchemaVersion: 1, State: continuoususe.StateActionRequired, OpenWork: continuoususe.OpenWork{Pointer: "bcgos://execution/active", Available: true, State: "available", WorkState: "running", CheckpointState: "missing"}, NextActions: []continuoususe.NextAction{{ID: continuoususe.ActionCheckpointActiveWork, Command: "bcgos work next --active --workspace <workspace>", Reason: "checkpoint required"}}}
-	if got := sessionDirective(active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || !strings.Contains(got, "Mention it only when the current task would benefit") || !strings.Contains(got, "Quer conectar uma pasta do SharePoint deste projeto ou começar sem ela?") || strings.Contains(got, "Prepare kickoff") || strings.Contains(got, "selection_required") || strings.Contains(got, "native_qualified") {
+	if got := sessionDirective("claude", active); !strings.Contains(got, "Maestro is active") || !strings.Contains(got, "1 explicitly registered") || !strings.Contains(got, "Mention it only when the current task would benefit") || !strings.Contains(got, "Quer conectar uma pasta do SharePoint deste projeto ou começar sem ela?") || strings.Contains(got, "Prepare kickoff") || strings.Contains(got, "selection_required") || strings.Contains(got, "native_qualified") {
 		t.Fatalf("active directive = %q", got)
 	}
-	if got := sessionDirective(active); !strings.Contains(got, "CONTINUOUS USE") || !strings.Contains(got, "checkpoint") || !strings.Contains(got, "Optional continuity action: checkpoint required") || strings.Contains(got, "bcgos work next --active") {
+	if got := sessionDirective("claude", active); !strings.Contains(got, "CONTINUOUS USE") || !strings.Contains(got, "checkpoint") || !strings.Contains(got, "Optional continuity action: checkpoint required") || strings.Contains(got, "bcgos work next --active") {
 		t.Fatalf("continuous-use directive = %q", got)
 	}
 	selected := active
@@ -128,30 +170,30 @@ func TestSessionDirectiveStartsOnboardingAndListsOnlyDeclaredTasks(t *testing.T)
 		LocalProjection: "metadata_and_source_pointers_only", AuthorizationState: "pending_signed_enrollment",
 		CollectionRuntime: "claude", CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy",
 	}
-	if got := sessionDirective(selected); !strings.Contains(got, "SharePoint is connected to this workspace") || !strings.Contains(got, "Do not ask for another read") || strings.Contains(got, "native qualification") || strings.Contains(got, "Codex collection") || strings.Contains(got, "external action pending") || strings.Contains(got, "Posso ler") || strings.Contains(got, "selection itself does not authorize") || strings.Contains(got, "private_release_auth") || strings.Contains(got, "SharePoint folder URL") {
+	if got := sessionDirective("claude", selected); !strings.Contains(got, "SharePoint is connected to this workspace") || !strings.Contains(got, "Do not ask for another read") || strings.Contains(got, "native qualification") || strings.Contains(got, "Codex collection") || strings.Contains(got, "external action pending") || strings.Contains(got, "Posso ler") || strings.Contains(got, "selection itself does not authorize") || strings.Contains(got, "private_release_auth") || strings.Contains(got, "SharePoint folder URL") {
 		t.Fatalf("selected directive = %q", got)
 	}
 	deferred := active
 	deferred.SharePointSource = sessionctx.SharePointSource{State: priorwork.SourceDeferred, SourceAuthority: "sharepoint", LocalProjection: "metadata_and_source_pointers_only", CollectionRuntime: "claude", CollectionState: "unavailable", CodexCollectionState: "unavailable/corporate_policy"}
-	if got := sessionDirective(deferred); strings.Contains(got, "Quer conectar uma pasta do SharePoint") || !strings.Contains(got, "SharePoint was left out of this workspace") {
+	if got := sessionDirective("claude", deferred); strings.Contains(got, "Quer conectar uma pasta do SharePoint") || !strings.Contains(got, "SharePoint was left out of this workspace") {
 		t.Fatalf("deferred directive = %q", got)
 	}
 	unavailable := active
 	unavailable.MaestroCLIPath = "/Users/pilot/Library/Application Support/Maestro/bin/bcgos"
 	unavailable.SharePointSource = sessionctx.SharePointSource{State: priorwork.SourceSelectionUnavailable}
-	if got := sessionDirective(unavailable); !strings.Contains(got, "SharePoint setup is not available in this workspace yet") || strings.Contains(got, "prior-work source status") || strings.Contains(got, "native_qualified") {
+	if got := sessionDirective("claude", unavailable); !strings.Contains(got, "SharePoint setup is not available in this workspace yet") || strings.Contains(got, "prior-work source status") || strings.Contains(got, "native_qualified") {
 		t.Fatalf("unavailable source directive = %q", got)
 	}
 	reviewDigest := strings.Repeat("a", 64)
 	review := sessionctx.Packet{Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "review_required", ReviewDigest: reviewDigest}}}
-	if got := sessionDirective(review); !strings.Contains(got, "--digest "+reviewDigest+" --confirm") || !strings.Contains(got, "Only after the owner confirms") {
+	if got := sessionDirective("claude", review); !strings.Contains(got, "--digest "+reviewDigest+" --confirm") || !strings.Contains(got, "Only after the owner confirms") {
 		t.Fatalf("review directive = %q", got)
 	}
 }
 
 func TestSessionDirectiveRequestsOneSetupAuthorizationInsteadOfTechnicalSteps(t *testing.T) {
 	packet := sessionctx.Packet{WorkspaceRoot: "/Users/pilot/Developer/maestro-os", Owner: sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "complete"}}, SetupAuthorization: sessionctx.SetupAuthorization{State: "authorization_required", PolicyVersion: "cofs-v1"}}
-	got := sessionDirective(packet)
+	got := sessionDirective("claude", packet)
 	if !strings.Contains(got, "Optional one-and-done setup") || !strings.Contains(got, "do not interrupt unrelated work") || !strings.Contains(got, "bcgos setup authorize") {
 		t.Fatalf("setup directive = %q", got)
 	}
@@ -173,7 +215,7 @@ func TestSessionDirectiveProtectsCanonicalOwnerContextRoot(t *testing.T) {
 		OwnerContextRoot: "/Users/pilot/Library/Application Support/BCGOS",
 		Owner:            sessionctx.Owner{Onboarding: sessionctx.Onboarding{State: "required", Track: "quick", NextQuestion: "Qual é o seu papel profissional?"}},
 	}
-	got := sessionDirective(packet)
+	got := sessionDirective("claude", packet)
 	if !strings.Contains(got, "Private owner context") || !strings.Contains(got, "/Users/pilot/Library/Application Support/BCGOS/owner") || !strings.Contains(got, "owner onboarding answer --facet") || !strings.Contains(got, "Never use workspace/owner") {
 		t.Fatalf("directive did not anchor the private owner context: %s", got)
 	}
@@ -183,7 +225,7 @@ func TestSessionDirectiveProtectsCanonicalOwnerContextRoot(t *testing.T) {
 	selectionPacket := packet
 	selectionPacket.Owner.Onboarding.Track = "selection_required"
 	selectionPacket.Owner.Onboarding.NextQuestion = "Você prefere a entrevista curta ou a completa?"
-	selection := sessionDirective(selectionPacket)
+	selection := sessionDirective("claude", selectionPacket)
 	if !strings.Contains(selection, "owner onboarding answer --facet") || !strings.Contains(selection, "order is flexible") {
 		t.Fatalf("selection state did not expose the governed conversational answer route: %s", selection)
 	}
@@ -222,7 +264,7 @@ func TestClaudeContextInjectionUsesTheSameBoundedPacketWithNativeEventName(t *te
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "runtime contract is operational") {
 		t.Fatalf("adapter output reported the wrong evidence state: %#v", output)
 	}
-	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO SESSION PROTOCOL") ||
+	if strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO WORKSPACE CONTEXT") ||
 		strings.Contains(output.HookSpecificOutput.AdditionalContext, "Ask only this next question") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO CONTEXT UPDATE") {
 		t.Fatalf("prompt hook repeated the startup protocol: %#v", output)
@@ -266,7 +308,7 @@ func TestBuildOmitsOversizedPacketInsteadOfExpandingHookOutput(t *testing.T) {
 		t.Fatalf("context was %d bytes", len(output.HookSpecificOutput.AdditionalContext))
 	}
 	if !strings.Contains(output.HookSpecificOutput.AdditionalContext, "omitted") ||
-		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO SESSION PROTOCOL") ||
+		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "MAESTRO WORKSPACE CONTEXT") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "ONBOARDING AVAILABLE") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "deterministic_onboarding_state") ||
 		!strings.Contains(output.HookSpecificOutput.AdditionalContext, "What is your professional role?") {

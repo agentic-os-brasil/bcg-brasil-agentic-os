@@ -5,27 +5,27 @@
     {
       "semantic_event": "session_start",
       "claude": {"binding": "SessionStart", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "beta_telemetry", "manifest_state": "operational_beta", "blocker": "none; native qualification is tracked as beta telemetry"},
-      "codex": {"binding": "SessionStart", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "not_observed", "manifest_state": "unavailable", "blocker": "native Codex SessionStart observation is pending"}
+      "codex": {"binding": "SessionStart", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "beta_telemetry", "manifest_state": "unavailable", "blocker": "qualified jointly with UserPromptSubmit for the recorded tuple; aggregate activation remains unavailable and the bounded report does not attribute the injected bytes to one context hook"}
     },
     {
       "semantic_event": "context_inject",
       "claude": {"binding": "UserPromptSubmit", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "beta_telemetry", "manifest_state": "operational_beta", "blocker": "none; native qualification is tracked as beta telemetry"},
-      "codex": {"binding": "UserPromptSubmit", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "not_observed", "manifest_state": "unavailable", "blocker": "native Codex UserPromptSubmit observation is pending"}
+      "codex": {"binding": "UserPromptSubmit", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "beta_telemetry", "manifest_state": "unavailable", "blocker": "qualified jointly with SessionStart for the recorded tuple; aggregate activation remains unavailable and the bounded report does not attribute the injected bytes to one context hook"}
     },
     {
       "semantic_event": "pre_action_guard",
       "claude": {"binding": "PreToolUse", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "beta_telemetry", "manifest_state": "operational_beta", "blocker": "none; native qualification is tracked as beta telemetry"},
-      "codex": {"binding": "PreToolUse", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "not_observed", "manifest_state": "unavailable", "blocker": "native Codex PreToolUse observation is pending"}
+      "codex": {"binding": "PreToolUse", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "beta_telemetry", "manifest_state": "unavailable", "blocker": "exact tuple qualified; aggregate Codex activation remains unavailable"}
     },
     {
       "semantic_event": "post_action_observe",
       "claude": {"binding": "PostToolUse", "implementation": "configured_async", "evidence_class": "contract-tested", "native_evidence": "beta_telemetry", "manifest_state": "operational_beta", "blocker": "none; native qualification is tracked as beta telemetry"},
-      "codex": {"binding": "PostToolUse", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "not_observed", "manifest_state": "unavailable", "blocker": "native Codex PostToolUse observation is pending"}
+      "codex": {"binding": "PostToolUse", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "beta_telemetry", "manifest_state": "unavailable", "blocker": "exact tuple qualified; aggregate Codex activation remains unavailable"}
     },
     {
       "semantic_event": "stop_finalize",
       "claude": {"binding": "Stop", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "beta_telemetry", "manifest_state": "operational_beta", "blocker": "none; native qualification is tracked as beta telemetry"},
-      "codex": {"binding": "Stop", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "not_observed", "manifest_state": "unavailable", "blocker": "native Codex Stop observation is pending"}
+      "codex": {"binding": "Stop", "implementation": "configured", "evidence_class": "contract-tested", "native_evidence": "beta_telemetry", "manifest_state": "unavailable", "blocker": "exact tuple qualified; aggregate Codex activation remains unavailable"}
     },
     {
       "semantic_event": "subagent_start",

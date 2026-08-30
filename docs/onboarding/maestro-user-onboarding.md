@@ -15,10 +15,13 @@ repositório, use [`CONTRIBUTING.md`](../../CONTRIBUTING.md), o
 o fluxo de contribuidor descrito em
 [`windows-contributor-prompt.md`](windows-contributor-prompt.md).
 
-> **Estado atual:** o Maestro é distribuído como um ZIP privado e operado
-> inteiramente pelo Claude Code — não há CLI externo nem binário para instalar.
-> A distribuição de piloto, a assinatura dos artefatos e o runtime local de
-> ingestão ainda precisam de evidência própria. Se `/maestro-doctor` reportar
+> **Estado atual:** o Maestro é distribuído como ZIP privado específico de
+> plataforma. O ZIP traz um bootstrapper e um CLI instalado estreito; nenhum
+> CLI global é instalado e o trabalho profissional continua no chat. A
+> ativação verifica target, versão e digest localmente, mas os artefatos
+> `local-beta-unsigned` não são assinatura organizacional nem notarização.
+> Distribuição de piloto, assinatura e runtime local de ingestão ainda precisam
+> de evidência própria. Se `/maestro-doctor` reportar
 > `unavailable`, isso é um estado seguro e honesto — não uma falha a ser
 > contornada instalando Python, `pip`, chaves ou scripts externos.
 >
@@ -31,7 +34,7 @@ o fluxo de contribuidor descrito em
 
 | Você é | Use | Comandos principais | O que não fazer |
 | --- | --- | --- | --- |
-| **Participante de piloto ou usuário autorizado** | Este guia e um release privado verificado (ZIP). | `/maestro-onboarding`, `/maestro-doctor` e as skills liberadas pelo release. | Não clonar o repositório nem usar o harness de desenvolvimento para instalar o produto. |
+| **Participante de piloto ou usuário autorizado** | Este guia e um ZIP privado da plataforma correta. | `/maestro-onboarding`, `/maestro-doctor`; quando solicitado, `workspace enroll|status|repair|remove` pelo control plane instalado. | Não clonar o repositório, instalar `bcgos` globalmente nem usar o harness de desenvolvimento como produto. |
 | **Contribuidor do repositório** | [`CONTRIBUTING.md`](../../CONTRIBUTING.md) e o [development harness](../development-harness.md). | `go run ./dev/harness doctor`, `setup`, `validate` e `validate --full`. | Não tratar um gate local como CI verde, review concluído, mergeabilidade ou autorização de piloto. |
 
 ### Estados que precisam permanecer separados
@@ -90,6 +93,7 @@ Os benefícios principais são:
 - Git, Go, Python, Node ou Docker para usar uma instalação de piloto;
 - uma API key para o caminho local;
 - uma pasta de cliente dentro do repositório do Maestro;
+- instalar um CLI global ou colocar `managed/bin` no `PATH`;
 - copiar documentos para o bundle gerenciado;
 - fornecer senha, token ou código de recuperação no chat.
 
@@ -110,7 +114,8 @@ como lixeira de documentos ou como cópia do repositório.
 | --- | --- | --- |
 | Slash-commands | Skills nativas invocadas pelo Claude Code: `/maestro-onboarding`, `/maestro-doctor`, `/execution-continuity`, `/ingest-content` etc. | Use apenas skills do bundle gerenciado; não improvise comandos externos. |
 | Core gerenciado | Contratos, políticas, schemas, skills e agentes aprovados. | Não edite nem substitua manualmente. |
-| Workspace | Contexto e artefatos privados do trabalho atual. | Mantenha apenas material autorizado e necessário. |
+| Dados privados | Perfil do owner, memória, continuidade e matrículas em `data/`. | Não copie para repositórios de cliente nem para o core gerenciado. |
+| Repo/Worktree | Checkout Git exato, com uma projeção local fina e regenerável. | Cada worktree tem identidade própria; não trate o remote ou nome da pasta como identidade. |
 | Adaptador | Traduz contratos do Maestro para Claude ou Codex. | Configuração local não prova que um runtime nativo está qualificado. |
 | Runtime pack | Componentes pesados, como extração local e modelos aprovados. | Instale apenas pelo fluxo verificado do Maestro. |
 | Ledger | Estado de trabalho, checkpoints, evidências e receipts locais. | Consulte-o para retomar; não o trate como transcript completo. |
@@ -170,9 +175,10 @@ reportado como `unavailable`, nunca emulado manualmente.
 
 ### Passo 1 — Instale e verifique
 
-Extraia o ZIP privado verificado para uma pasta local (ex: `~/maestro-workspace`)
-e abra essa pasta no Claude Code. O scaffold de primeira sessão cria
-automaticamente os arquivos de configuração necessários. Em seguida, invoque:
+Extraia o ZIP privado da plataforma correta para uma pasta local (ex:
+`~/maestro-workspace`) e abra essa pasta no Claude Code. O bootstrapper verifica
+o CLI transportado e o scaffold de primeira sessão cria os dados privados
+necessários. Em seguida, invoque:
 
 ```text
 /maestro-doctor
@@ -185,6 +191,13 @@ O diagnóstico deve explicar, em linguagem simples:
 - capacidades `supported`, `degraded`, `blocked` ou `unavailable`;
 - se o workspace está dentro dos limites esperados;
 - qual é a próxima ação segura.
+
+Essa é a entrada **Hub**. Para trabalhar diretamente em um repositório Git ou
+em um checkout criado com `git worktree add`, primeiro conclua essa ativação e
+depois peça ao Maestro para matricular o caminho exato para Claude ou Codex. A
+projeção usa o CLI instalado por caminho absoluto, mantém core e dados fora do
+checkout e não altera branch, HEAD, index, remote ou Git hooks. Consulte
+`README-INSTALL.md` no ZIP para matrícula, atualização, reparo e remoção.
 
 Se o Claude Code não reconhecer `/maestro-doctor`, pare. Não instale nada
 encontrado na internet, não rode `pip install`, não aceite scripts sem
@@ -489,7 +502,7 @@ correto e a ação é reversível?”. Se uma resposta for não, pause e execute
 
 ### Primeiro dia — provar o caminho
 
-1. Extrair o ZIP e abrir a pasta no Claude Code.
+1. Extrair o ZIP da plataforma correta, abrir a pasta no Claude Code e confirmar a ativação local.
 2. Executar `/maestro-doctor` e confirmar capacidades.
 3. Escolher o perfil de interação via `/maestro-onboarding`.
 4. Completar uma tarefa pequena com critério de sucesso.
@@ -520,6 +533,8 @@ critério de produção.
 | `degraded` | A ação é possível com uma lacuna explícita. | Revise a fidelidade e confirme antes de usar o resultado. |
 | workspace fora da raiz permitida | O limite de segurança foi acionado. | Escolha um workspace dentro do escopo; não force path ou symlink. |
 | update falhou | A ativação não passou pela verificação ou compatibilidade. | Preserve a versão ativa e acione rollback/support; não substitua binários manualmente. |
+| projeção direta em `repair_required` | O core gerenciado mudou de caminho, mas os outros arquivos continuam íntegros. | Execute o reparo explícito com o CLI da instalação atual; não edite hooks manualmente. |
+| projeção direta em `conflict` | Um arquivo, bloco gerenciado ou autoridade local divergiu. | Preserve o conteúdo, rode `workspace status` e siga a única ação segura; não use reset/clean. |
 | resultado de ingestão estranho | Conversão não garante fidelidade sem revisão. | Inspecione estrutura, tabelas e proveniência; reclassifique ou pare. |
 
 Nunca apague o workspace para “destravar”. Nunca rode comandos destrutivos de
@@ -531,6 +546,8 @@ documentos, nomes de cliente ou conteúdo de prompt.
 
 - [ ] Release privado (ZIP) e autorizado confirmado.
 - [ ] ZIP extraído e pasta aberta no Claude Code.
+- [ ] Ativação local concluiu sem erro de target, versão ou digest.
+- [ ] Modo escolhido: Hub ou Repo/Worktree explicitamente matriculado.
 - [ ] Workspace local escolhido e confirmado.
 - [ ] `/maestro-doctor` executado e capacidades revisadas.
 - [ ] `/maestro-onboarding` concluído (calibração e perfil de interação).

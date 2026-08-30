@@ -80,11 +80,10 @@ func (GoSeededComponentBuilder) Build(
 		filteredEnvironment(os.Environ(), "GOOS", "GOARCH", "CGO_ENABLED"),
 		"CGO_ENABLED="+cgo,
 	)
-	if component == NativeCLI {
-		// CLI binary removed from product distribution; cmd/bcgos no longer exists.
-		return fmt.Errorf("no CLI binary target: Maestro distribution is ZIP bundle only")
-	}
 	commandPath := "./cmd/bcgos-bootstrap"
+	if component == NativeCLI {
+		commandPath = "./cmd/bcgos"
+	}
 	command := exec.CommandContext(
 		ctx,
 		"go", "build",

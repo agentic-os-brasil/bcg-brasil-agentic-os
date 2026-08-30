@@ -9,10 +9,10 @@ not disable a capability that is already configured and released.
 
 | Field | Value |
 | --- | --- |
-| `as_of` | `2026-08-10` |
-| `base_commit` | `43e86494b2e32ca8eccece843514b75d2c98ffa7` — `origin/main` comparison point at review start; candidate evidence was run on `012c08f` and is not hosted CI evidence |
-| Repository evidence | Configured adapters, local contract fixtures and the non-invasive lifecycle probe are present; no model session was started for this documentation update. |
-| Runtime evidence | No reproducible in-repo runtime-version artifact or fresh native-session observation is attached for either runtime; prior external version observations are not treated as current snapshot evidence. |
+| `as_of` | `2026-08-28` |
+| `base_commit` | `00617f3af0beab729679ac03e077d3a898b814ab` — `origin/main` comparison point; candidate evidence is working-tree-local, not hosted CI evidence |
+| Repository evidence | Configured adapters, local contract fixtures and the non-invasive lifecycle probe are present. |
+| Runtime evidence | Bounded in-repo records qualify Claude Code 2.1.203 and Codex CLI 0.149.1 with `gpt-5.6-sol` plus the recorded post-initialization isolated-config digest on macOS arm64 for the same exact unsigned v0.1.13 ZIP digest. Both observed transparent Maestro/host identity; other tuples remain pending. |
 | Scheduler evidence | No live `launchctl` observation is attached. Filesystem/plist installation and scheduler loaded/enabled state remain separate claims. |
 | Release/pilot evidence | No signed artifact, clean-device acceptance, support/incident owner or pilot-gate record is present in this snapshot. |
 
@@ -45,11 +45,11 @@ flowchart LR
 
 | Event | Claude | Codex | Native promotion blocker |
 | --- | --- | --- | --- |
-| `session_start` | operational beta; native-qualified: no | configured + local contract-tested; native-qualified: no | Qualification telemetry only; not a Claude availability gate |
-| `context_inject` | operational beta; native-qualified: no | configured + local contract-tested; native-qualified: no | Qualification telemetry only; not a Claude availability gate |
-| `pre_action_guard` | operational beta; native-qualified: no | configured + local contract-tested; native-qualified: no | Qualification telemetry only; not a Claude availability gate |
-| `post_action_observe` | operational beta, async; native-qualified: no | configured + local contract-tested; native-qualified: no | Qualification telemetry only; not a Claude availability gate |
-| `stop_finalize` | operational beta, synchronous completion gate + local contract-tested; native qualification remains telemetry | configured + local contract-tested; adapter-observed: not captured; native-qualified: no | Beta telemetry for Claude; fresh qualifying observation for Codex |
+| `session_start` | native-qualified for recorded macOS tuple | native-qualified jointly with `context_inject` for recorded macOS tuple | Bounded Codex report does not attribute injected bytes to one member of the context-hook pair |
+| `context_inject` | native-qualified for recorded macOS tuple | native-qualified jointly with `session_start` for recorded macOS tuple | Bounded Codex report does not attribute injected bytes to one member of the context-hook pair |
+| `pre_action_guard` | native-qualified for recorded macOS tuple | native-qualified for recorded macOS tuple; destructive Git denial observed | Fresh observation for other tuples |
+| `post_action_observe` | native-qualified for recorded macOS tuple; async receipt observed | native-qualified for recorded macOS tuple; receipt observed | Fresh observation for other tuples |
+| `stop_finalize` | native-qualified for recorded macOS tuple; synchronous completion receipt observed | native-qualified for recorded macOS tuple; receipt observed | Fresh observation for other tuples |
 
 The canonical manifest keeps native qualification as a separate evidence field.
 Configured lifecycle behavior remains enabled; the local probe reports the
@@ -60,10 +60,10 @@ changing runtime configuration.
 
 | Readiness class | Snapshot status |
 | --- | --- |
-| Configured | Yes — workspace-local Claude adapter and five managed subagents are represented. |
+| Configured | Yes — workspace-local Claude and Codex adapters are represented; Claude additionally projects five managed native agents. |
 | Local contract-tested | Repository fixtures and deterministic boundaries are present; `go run ./dev/harness validate --full` passed on candidate branch `012c08f` (branch-local evidence, not hosted CI). |
-| Adapter-observed | No — no bounded `adapter_command` receipt or equivalent diagnostic signal is attached in this snapshot. |
-| Native-qualified | No — telemetry remains pending; Claude availability is nevertheless operational in the controlled beta. |
+| Adapter-observed | Yes for the recorded Claude and Codex tuples — bounded metadata-only lifecycle receipts accompany the native observations. |
+| Native-qualified | Yes only for the exact Claude Code 2.1.203 tuple and the Codex CLI 0.149.1 / `gpt-5.6-sol` / post-initialization isolated-config digest / macOS arm64 / v0.1.13 artifact tuple in their bounded records. |
 | Release-ready | No — signing, publication and release-gate evidence are absent. |
 | Pilot-ready | No — clean-device, support/incident ownership and pilot-gate evidence are absent. |
 
@@ -72,9 +72,10 @@ changing runtime configuration.
 - Claude's exact managed projection enables the controlled beta. The lifecycle
   probe still applies a qualification floor, but missing qualification evidence
   does not disable the released path.
-- Codex's adapter configures all five command-hook events, but no
-  adapter-observed receipt or native-session observation is attached; none is
-  promoted without fresh native-session evidence.
+- Codex's adapter configures all five command-hook events. The recorded native
+  matrix observed the context pair, guard and PostToolUse/Stop receipts. It
+  bypassed only interactive trust review for the exact inspected synthetic
+  hooks; ordinary use still requires `/hooks` review.
 - `adapter_command` receipts remain diagnostic only. They do not become native
   evidence and cannot change the manifest.
 - `.codex/RUNTIME-CONTRACT.md` and `.codex/CODEX-RUNTIME.md` are not present in
@@ -85,16 +86,16 @@ changing runtime configuration.
 
 ## Next qualifying evidence
 
-1. Use a supported Claude runtime that satisfies the current lifecycle floor,
-   install the exact workspace-local bindings, and capture a fresh native
-   observation for all five events.
-2. Capture native Codex observations for all five configured events, including
-   trust review for the workspace-local hook definitions.
-3. Set `native_qualified=true` only from a reviewed record with
+1. Add per-event attribution for the Codex SessionStart/UserPromptSubmit pair
+   if a future native stream exposes that distinction without retaining prompt
+   content.
+2. Repeat both matrices for each additional runtime/platform/artifact tuple
+   before extending the claim beyond the recorded macOS slice.
+3. Set aggregate `native_qualified=true` only when its scope is backed by a reviewed record with
    runtime/platform identity and bounded event evidence.
 
-Until then, Claude is operational for Canary validation but not natively
-qualified or production release-ready; Codex remains outside this activation.
+Claude and Codex are natively qualified only for their recorded tuples and are
+not production release-ready.
 
 Yoda has a separate native qualification recipe in
 [`docs/yoda-native-qualification.md`](yoda-native-qualification.md). It

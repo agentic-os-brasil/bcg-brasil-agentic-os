@@ -2,5 +2,5 @@
 
 ## 2026-08-06
 
-* **Reconcile**: compiled 8 allowlisted concepts with source watermark `469d86c2e5ded2775bff1d6da8aebd7e3cb080ef9a1142e729650deff375b13a`.
+* **Reconcile**: compiled 8 allowlisted concepts with source watermark `b54d1d52765dfc79441b02cc1b5a6fc87664c10ef62bcd7a4367ca64234b8974`.
 * **Policy**: BCGOS managed scope, generator `maestro-managed-wiki/0.2`, policy `managed-product/1`.

@@ -4,11 +4,41 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/agentic-os-brasil/bcg-brasil-agentic-os/internal/skillpolicy"
 )
+
+func TestClaudeAndCodexProjectSameCanonicalSkillsAndPolicy(t *testing.T) {
+	manifests := map[string]manifest{}
+	for _, runtimeName := range []string{"claude", "codex"} {
+		t.Run(runtimeName, func(t *testing.T) {
+			workspace := t.TempDir()
+			status, err := InstallForTracks(runtimeName, workspace, []string{"software-engineering"})
+			if err != nil || status.State != "installed" {
+				t.Fatalf("install = %+v, %v", status, err)
+			}
+			projected, err := readManifest(filepath.Join(workspace, ManifestRelativePath))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if projected.Runtime != runtimeName || projected.PolicyHash == "" || len(projected.SkillHashes) == 0 {
+				t.Fatalf("incomplete %s projection manifest: %+v", runtimeName, projected)
+			}
+			manifests[runtimeName] = projected
+		})
+	}
+	claude := manifests["claude"]
+	codex := manifests["codex"]
+	if !reflect.DeepEqual(claude.SkillHashes, codex.SkillHashes) {
+		t.Fatalf("canonical skill projection diverged: claude=%v codex=%v", claude.SkillHashes, codex.SkillHashes)
+	}
+	if claude.PolicyHash != codex.PolicyHash {
+		t.Fatalf("canonical skill policy diverged: claude=%s codex=%s", claude.PolicyHash, codex.PolicyHash)
+	}
+}
 
 func TestInspectAndRoutingRejectSkillBodyAndManifestCoTamper(t *testing.T) {
 	workspace := t.TempDir()
@@ -105,6 +135,7 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 	for _, expected := range []string{
 		"Sessão e hooks", "SELF do dono", "Memória e persistência",
 		"Brain, wiki e navegação", "Agents e delegação", "Execução e continuidade",
+		"client-account-agent", "case-agent", "yoda", "darwin", "pa-expert",
 		"execution-continuity", "dream-memory",
 		"brain/tasks/", "receita conversacional",
 		"/maestro-onboarding",
@@ -140,6 +171,32 @@ func TestInstallProjectsRichOrientationAndSkills(t *testing.T) {
 	updated, err := os.ReadFile(filepath.Join(workspace, "CLAUDE.md"))
 	if err != nil || strings.Count(string(updated), OrientationBegin) != 1 || strings.Count(string(updated), OrientationEnd) != 1 {
 		t.Fatalf("orientation markers after reinstall = %q, %v", updated, err)
+	}
+}
+
+func TestInstallWithoutOrientationPreservesTrackedSurfaceAcrossUninstall(t *testing.T) {
+	workspace := t.TempDir()
+	orientationPath := filepath.Join(workspace, "AGENTS.md")
+	userBody := "# Tracked team instructions\n"
+	if err := os.WriteFile(orientationPath, []byte(userBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := InstallWithoutOrientation("codex", workspace)
+	if err != nil || installed.State != "installed" {
+		t.Fatalf("InstallWithoutOrientation() = %+v, %v", installed, err)
+	}
+	if got, err := os.ReadFile(orientationPath); err != nil || string(got) != userBody {
+		t.Fatalf("tracked orientation changed: %q, %v", got, err)
+	}
+	inspected, err := Inspect("codex", workspace)
+	if err != nil || inspected.State != "installed" {
+		t.Fatalf("Inspect() = %+v, %v", inspected, err)
+	}
+	if _, err := Uninstall("codex", workspace); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(orientationPath); err != nil || string(got) != userBody {
+		t.Fatalf("tracked orientation changed on uninstall: %q, %v", got, err)
 	}
 }
 
@@ -238,6 +295,33 @@ func TestInstallPreservesUserOrientationAndFailsClosedOnModifiedSkill(t *testing
 	}
 }
 
+func TestManagedOrientationRoundTripPreservesUserBytes(t *testing.T) {
+	for name, original := range map[string]string{
+		"crlf":                "# Workspace\r\n\r\nUser notes.  \r\n\r\n",
+		"leading whitespace":  "\r\n  # Workspace\nUser notes.\t\n",
+		"trailing whitespace": "# Workspace\n\nUser notes.\n\n\n",
+		"whitespace only":     " \t\r\n\r\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			workspace := t.TempDir()
+			path := filepath.Join(workspace, "CLAUDE.md")
+			if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Install("claude", workspace); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Uninstall("claude", workspace); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || string(got) != original {
+				t.Fatalf("orientation round trip changed user bytes:\nwant %q\n got %q\nerr=%v", original, got, err)
+			}
+		})
+	}
+}
+
 func TestModifiedManagedOrientationFailsClosed(t *testing.T) {
 	workspace := t.TempDir()
 	if _, err := Install("claude", workspace); err != nil {
@@ -306,6 +390,19 @@ func TestCodexProjectionAndUninstallPreserveUserContent(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(workspace, ".codex", "skills", "unit-test-wave", "SKILL.md")); err != nil {
 		t.Fatal(err)
+	}
+	orientation, err := os.ReadFile(filepath.Join(workspace, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(orientation)
+	if !strings.Contains(text, "$maestro-doctor") || !strings.Contains(text, "$execution-continuity") || !strings.Contains(text, "/hooks") {
+		t.Fatalf("Codex orientation does not use native skill mentions: %q", text)
+	}
+	for _, claudeOnly := range []string{"inteiramente por dentro do Claude Code", "slash-commands do Claude Code", "`/maestro-doctor`", "`/execution-continuity`"} {
+		if strings.Contains(text, claudeOnly) {
+			t.Fatalf("Codex orientation contains Claude-only guidance %q", claudeOnly)
+		}
 	}
 	removed, err := Uninstall("codex", workspace)
 	if err != nil || removed.State != "removed" {

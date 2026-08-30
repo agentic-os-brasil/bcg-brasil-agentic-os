@@ -57,7 +57,7 @@ No Claude:
 | Seleção guiada por projeto | Implementada e validada localmente | O owner pode indicar, adiar ou revisar pastas exatas sem iniciar coleta; Session Start recebe apenas estado bounded. |
 | Contrato, schemas e threat model | Implementado e validado localmente | Enrollment, snapshot, receipt, revogação e consulta têm regras testáveis. |
 | Índice local determinístico | Implementado e validado localmente | Um snapshot assinado pode ser publicado e consultado sem SharePoint ao vivo. |
-| Operações internas de prior-work | Implementadas e validadas localmente | Actor, enrollment, status, import e find funcionam sobre artefatos locais via harness interno; sync-due é diagnóstico fail-closed no build atual. Operações de administrador são expostas via Claude Code skills ou harness Go; não há CLI externo. |
+| Operações internas de prior-work | Implementadas e validadas localmente | Actor, enrollment, status, import e find funcionam sobre artefatos locais via harness interno; sync-due é diagnóstico fail-closed no build atual. Operações de administrador são expostas via Claude Code skills ou harness Go; o CLI instalado estreito não expõe comandos administrativos de prior-work. |
 | Skill de recuperação | Implementada | A capacidade só deve ser ativada por pedido explícito de trabalho anterior. |
 | Coletor SharePoint no Claude | Protocolo definido; trial nativo pendente | Ainda não existe evidência suficiente para declarar `supported`. |
 | Coleta no Codex | Proibida por política corporativa | Não há fallback técnico autorizado. |

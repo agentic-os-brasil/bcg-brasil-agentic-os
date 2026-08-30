@@ -126,6 +126,34 @@ func TestVerifyRejectsMissingAndTamperedSurfaces(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
+		{name: "invalid orientation mode", failedID: "runtime_projection", mutate: func(t *testing.T, f readinessFixture) {
+			path := filepath.Join(f.workspace, runtimeprojection.ManifestRelativePath)
+			body, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body = []byte(strings.Replace(string(body), `"orientation_mode": "managed_block"`, `"orientation_mode": "untrusted"`, 1))
+			if err := os.WriteFile(path, body, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "invalid orientation origin", failedID: "runtime_projection", mutate: func(t *testing.T, f readinessFixture) {
+			path := filepath.Join(f.workspace, runtimeprojection.ManifestRelativePath)
+			body, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			original := string(body)
+			mutated := strings.Replace(original, `"orientation_origin": "created"`, `"orientation_origin": "untrusted"`, 1)
+			mutated = strings.Replace(mutated, `"orientation_origin": "existing"`, `"orientation_origin": "untrusted"`, 1)
+			if mutated == original {
+				t.Fatal("projection fixture has no orientation_origin")
+			}
+			body = []byte(mutated)
+			if err := os.WriteFile(path, body, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}},
 		{name: "missing hooks", failedID: "runtime_hooks", mutate: func(t *testing.T, f readinessFixture) {
 			removeFile(t, filepath.Join(f.workspace, ".codex", "hooks.json"))
 		}},

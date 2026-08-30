@@ -7,11 +7,51 @@ description: Runs a plain-language health check of the user's Maestro install. V
 
 Diagnose a Maestro install without technical jargon. Report in one paragraph plus a short list. Never ask the user to open a terminal — inspect files yourself.
 
+## Execution mode
+
+Determine the mode before running any other check:
+
+- **Repo/Worktree mode** — the opened Git root contains either
+  `.bcgos/workspace-projections/claude.json` or
+  `.bcgos/workspace-projections/codex.json`. The opened directory is a thin,
+  enrolled projection. Do not expect `VERSION`, `bundles/` or `data/` inside
+  the repository and do not inspect paths outside the opened worktree directly.
+- **Hub mode** — neither projection manifest exists. Use the original ZIP-root checks below.
+
+In Repo/Worktree mode, diagnose the runtime whose skill root loaded this exact
+`SKILL.md`; do not diagnose an enrolled sibling runtime unless the user asks.
+Use the opened Git root directly rather than a runtime-specific environment
+variable. Read only that runtime's local projection manifest and native config.
+From the manifest, obtain the opaque workspace ID and exact installed executable
+path. Confirm that every binding uses that executable and the exact opened
+worktree. Then run that executable with `version`, and its read-only status
+command for the selected runtime. A healthy direct projection returns
+`enrolled`:
+
+- **Claude direct:** read `.bcgos/workspace-projections/claude.json` and
+  `.claude/settings.local.json`; confirm all seven Claude events
+  (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`,
+  `SubagentStart`, `SubagentStop`); run `workspace status --runtime claude`;
+  and confirm the five managed files under `.claude/agents/`. The currently
+  loaded Doctor file already proves that its projected skill pointer resolves.
+- **Codex direct:** read `.bcgos/workspace-projections/codex.json` and
+  `.codex/hooks.json`; confirm the five Codex events (`SessionStart`,
+  `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`); run
+  `workspace status --runtime codex`; and confirm
+  `.codex/skills/maestro-doctor/SKILL.md`. Codex native hook trust is a separate
+  host state: if the current session reports unreviewed hooks, return one point
+  to verify and direct the user to review the exact project hooks through
+  `/hooks`; never bypass trust in an ordinary Doctor run.
+
+Do not reconstruct or edit commands, do not use a PATH lookup, and do not
+follow private paths from the manifest for direct file inspection. These checks
+replace checks 1–11 below in Repo/Worktree mode.
+
 ## Interaction profile
 
 Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the checks themselves.
 
-## Checks (run in order, silent on success)
+## Hub checks (run in order, silent on success)
 
 1. **Core files present** — verify these exist at `${CLAUDE_PROJECT_DIR}`:
    - `VERSION`
@@ -76,13 +116,13 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
 Return a single message with:
 
 - **One-line verdict:** "Tudo funcionando" | "Um ponto a verificar: <what>" | "Instalação incompleta: <what>"
-- **Version:** `v<X.Y.Z>`
-- **Sua workspace:** absolute path to `data/`
+- **Version:** `v<X.Y.Z>` (from `VERSION` in Hub mode or the exact installed executable in Repo/Worktree mode)
+- **Sua workspace:** absolute path to `data/` in Hub mode; in Repo/Worktree mode, the opened repository path plus its opaque workspace ID (never expose the private `data_root`)
 - **Se houver problemas:** action per problem, in plain Portuguese. Para arquivos core ausentes, apontar para o `README-INSTALL.md` na raiz da pasta Maestro — ele é a fonte única do ritual de instalação e atualização. Nunca orientar a extrair o ZIP por cima da pasta atual: isso mistura arquivos de versões diferentes. Nunca repetir os passos do ritual aqui; qualquer resumo diverge do original. Nunca pedir para o usuário editar JSON ou shell.
 
 ## What NOT to do
 
-- Do not run `bcgos` (does not exist anymore).
+- In Hub mode, do not run `bcgos`; the Hub diagnosis is file-based. In Repo/Worktree mode, run only the exact absolute executable recorded by the projection, and only its read-only `version` and `workspace status` commands.
 - Do not try to install, update or repair anything. `maestro-doctor` is read-only.
 - Do not dump raw JSON, file contents, hashes ou timestamps salvo se o usuário pedir.
 - Do not surface intermediate check names; report the outcome, not the procedure.

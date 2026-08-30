@@ -130,6 +130,36 @@ func TestCaseAgentSetupUsesCanonicalSkillAndExplicitLegacyAlias(t *testing.T) {
 	}
 }
 
+func TestMaestroDoctorSupportsHubAndDirectWorkspaceModes(t *testing.T) {
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", "..", ".."))
+	body, err := os.ReadFile(filepath.Join(root, "bundles", "base", "skills", "maestro-doctor", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, required := range []string{
+		"Hub mode",
+		"Repo/Worktree mode",
+		".bcgos/workspace-projections/claude.json",
+		".bcgos/workspace-projections/codex.json",
+		".claude/settings.local.json",
+		".codex/hooks.json",
+		"workspace status --runtime claude",
+		"workspace status --runtime codex",
+		"five Codex events",
+		"maestro-doctor/SKILL.md",
+		"workspace status",
+	} {
+		if !strings.Contains(text, required) {
+			t.Errorf("maestro-doctor is missing direct-workspace contract %q", required)
+		}
+	}
+}
+
 func TestTechCoreSkillCatalogIsClosedByDistributionAllowlist(t *testing.T) {
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {

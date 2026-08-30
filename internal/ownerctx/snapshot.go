@@ -114,6 +114,25 @@ func ProjectSnapshot(root string, requested []string) (UserSelfSnapshot, error) 
 	}, nil
 }
 
+// ProjectAnsweredSnapshot projects only explicitly answered requested facets.
+// It prevents additive registry migrations and untouched templates from being
+// mistaken for reviewed owner context at a runtime boundary.
+func ProjectAnsweredSnapshot(root string, requested []string) (UserSelfSnapshot, error) {
+	answered := make([]string, 0, len(requested))
+	for _, id := range requested {
+		if _, ok := facets[id]; !ok {
+			return UserSelfSnapshot{}, errors.New("requested self facet is not registered")
+		}
+		if facetAnswered(root, id) {
+			answered = append(answered, id)
+		}
+	}
+	if len(answered) == 0 {
+		return UserSelfSnapshot{}, errors.New("no requested self facet has an explicit answer")
+	}
+	return ProjectSnapshot(root, answered)
+}
+
 const maximumOwnerProjectionBytes = 32 << 10
 
 func PersistSnapshot(root string, snapshot UserSelfSnapshot) error {
