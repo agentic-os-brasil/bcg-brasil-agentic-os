@@ -518,6 +518,16 @@ else
   fail "settings.json does NOT wire scaffold to SessionStart"
 fi
 
+# The PreToolUse matcher is a regex. Unanchored, "Write" also matches
+# TodoWrite, which then reaches the isolation guard with no file target; and a
+# matcher naming only Edit and Write never delivers MultiEdit or NotebookEdit
+# to the guard at all. Both shapes were live bypasses.
+if grep -q '"\^(Edit|MultiEdit|Write|NotebookEdit)\$"' "$SETTINGS"; then
+  pass "PreToolUse matcher is anchored and names every file-writing tool"
+else
+  fail "PreToolUse matcher is not the anchored four-tool form (TodoWrite leaks in, MultiEdit/NotebookEdit never arrive)"
+fi
+
 # --------------------------------------------------------------------------
 phase "Phase 11 — Workspace creation smoke test"
 # --------------------------------------------------------------------------
@@ -947,31 +957,44 @@ if [ -f "$XC_HOOK" ]; then
     [ "$?" -eq 2 ] && printf 'block' || printf 'allow'
   }
 
-  # Kept in sync with normalize_path() in
+  # Kept in sync with canon_path() in
   # installers/zip/user-template/.claude/hooks/block-cross-case-writes.sh.
   # Any change to the hook's canonicalization rule must be mirrored here so
   # this eval reflects the same classification the hook performs on Windows.
-  xc_normalize() {
-    local p="$1" drive
+  xc_canon() {
+    local p="$1" root="" out="" seg oldIFS
     p="${p//\\//}"
     case "$p" in
       /[A-Za-z]/*)
-        drive=$(printf '%s' "${p#/}" | cut -c1 | tr '[:upper:]' '[:lower:]')
-        p="$drive:${p#/?}"
+        root="$(printf '%s' "${p#/}" | cut -c1):"
+        p="${p#/?}"
         ;;
       [A-Za-z]:/*)
-        drive=$(printf '%s' "$p" | cut -c1 | tr '[:upper:]' '[:lower:]')
-        p="$drive${p#?}"
+        root="$(printf '%s' "$p" | cut -c1):"
+        p="${p#??}"
         ;;
     esac
-    printf '%s' "$p"
+    oldIFS="$IFS"
+    IFS='/'
+    set -f
+    set -- $p
+    set +f
+    IFS="$oldIFS"
+    for seg in "$@"; do
+      case "$seg" in
+        ''|.) ;;
+        ..)   out="${out%/*}" ;;
+        *)    out="$out/$seg" ;;
+      esac
+    done
+    printf '%s%s' "$root" "$out" | tr '[:upper:]' '[:lower:]'
   }
 
   xc_classifies_inside_cases() {
     local proj="$1" target="$2"
     local cases_abs target_abs
-    cases_abs=$(xc_normalize "$proj/data/cases")
-    target_abs=$(xc_normalize "$target")
+    cases_abs=$(xc_canon "$proj/data/cases")
+    target_abs=$(xc_canon "$target")
     case "$target_abs" in
       "$cases_abs"/*) return 0 ;;
       *)              return 1 ;;
@@ -981,10 +1004,43 @@ if [ -f "$XC_HOOK" ]; then
   xc_extracted_case_id() {
     local proj="$1" target="$2"
     local cases_abs target_abs rel
-    cases_abs=$(xc_normalize "$proj/data/cases")
-    target_abs=$(xc_normalize "$target")
+    cases_abs=$(xc_canon "$proj/data/cases")
+    target_abs=$(xc_canon "$target")
     rel="${target_abs#"$cases_abs/"}"
     printf '%s' "${rel%%/*}"
+  }
+
+  # verdict for a named tool and payload key, so the tools that reach the hook
+  # through the settings matcher are all exercised, not just Write.
+  xc_verdict_tool() {
+    local proj="$1" tool="$2" key="$3" esc=${4//\\/\\\\}
+    printf '{"tool_name":"%s","tool_input":{"%s":"%s"}}' "$tool" "$key" "$esc" \
+      | CLAUDE_PROJECT_DIR="$proj" bash "$XC_HOOK" >/dev/null 2>&1
+    [ "$?" -eq 2 ] && printf 'block' || printf 'allow'
+  }
+
+  # verdict with a raw payload, for shapes that are not one tool plus one path.
+  xc_verdict_raw() {
+    printf '%s' "$2" | CLAUDE_PROJECT_DIR="$1" bash "$XC_HOOK" >/dev/null 2>&1
+    [ "$?" -eq 2 ] && printf 'block' || printf 'allow'
+  }
+
+  # verdict when the parse yields nothing — the state a machine without python3
+  # is in. Driven with a stub interpreter that prints nothing rather than by
+  # emptying PATH: the hook also needs cat, tr and cut, and a stripped PATH
+  # would exercise a broken shell instead of a missing interpreter. Both routes
+  # converge on the same branch, since an absent python3 leaves PARSED empty
+  # exactly as a silent one does.
+  xc_verdict_noparse() {
+    local proj="$1" payload="$2" bindir rc
+    bindir=$(mktemp -d -t maestro-eval-nopy-XXXXXX)
+    printf '#!/bin/sh\nexit 0\n' > "$bindir/python3"
+    chmod +x "$bindir/python3"
+    printf '%s' "$payload" \
+      | PATH="$bindir:$PATH" CLAUDE_PROJECT_DIR="$proj" bash "$XC_HOOK" >/dev/null 2>&1
+    rc=$?
+    rm -rf "$bindir"
+    [ "$rc" -eq 2 ] && printf 'block' || printf 'allow'
   }
 
   # Guard against this check silently degrading into a JSON-parse test: the
@@ -1051,6 +1107,82 @@ if [ -f "$XC_HOOK" ]; then
     fail "cross-case target NOT classified inside cases dir (mixed MSYS dir + drive-letter target)"
   fi
 
+  # Path-shape bypasses. Each of these reached the active case on its leading
+  # segment (or lost the case id entirely) while the OS resolved the path
+  # somewhere else. All are observable on any host: the verdict comes from
+  # string canonicalization, not from the filesystem.
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/../case-beta/leak.md")" = "block" ] \
+    && pass "cross-case write blocked (.. traversal out of the active case)" \
+    || fail "cross-case write NOT blocked (.. traversal out of the active case)"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/sub/../../case-beta/leak.md")" = "block" ] \
+    && pass "cross-case write blocked (multi-level .. traversal)" \
+    || fail "cross-case write NOT blocked (multi-level .. traversal)"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases//case-beta/x.md")" = "block" ] \
+    && pass "cross-case write blocked (double separator)" \
+    || fail "cross-case write NOT blocked (double separator)"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/./case-beta/x.md")" = "block" ] \
+    && pass "cross-case write blocked (/./ segment)" \
+    || fail "cross-case write NOT blocked (/./ segment)"
+
+  # Every tool the settings matcher admits must be guarded, not just Write.
+  # MultiEdit and NotebookEdit previously reached the hook and were waved
+  # through by a case statement that named only Edit and Write.
+  [ "$(xc_verdict_tool "$XC_R" MultiEdit file_path "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+    && pass "cross-case write blocked (MultiEdit)" \
+    || fail "cross-case write NOT blocked (MultiEdit)"
+  [ "$(xc_verdict_tool "$XC_R" NotebookEdit notebook_path "$XC_R/data/cases/case-beta/n.ipynb")" = "block" ] \
+    && pass "cross-case write blocked (NotebookEdit via notebook_path)" \
+    || fail "cross-case write NOT blocked (NotebookEdit via notebook_path)"
+  [ "$(xc_verdict_raw "$XC_R" "$(printf '{"tool_name":"NotebookEdit","tool_input":{"file_path":"%s","notebook_path":"%s"}}' "$XC_R/data/cases/case-alpha/ok.md" "$XC_R/data/cases/case-beta/n.ipynb")")" = "block" ] \
+    && pass "cross-case write blocked (NotebookEdit with a decoy file_path on the active case)" \
+    || fail "cross-case write NOT blocked (NotebookEdit decoy file_path)"
+
+  # A tool that writes no file has no target to verify and must never be
+  # refused. The settings matcher is an unanchored regex in installs predating
+  # this change, so TodoWrite does arrive here, and in a Portuguese-language
+  # workspace its list mentions the cases tree routinely.
+  [ "$(xc_verdict_raw "$XC_R" '{"tool_name":"TodoWrite","tool_input":{"todos":[{"content":"revisar data/cases/case-beta"}]}}')" = "allow" ] \
+    && pass "TodoWrite naming the cases tree is allowed" \
+    || fail "TodoWrite naming the cases tree was refused"
+
+  # Fail-closed without python3. This is the branch that silently disabled
+  # client isolation on every machine without an interpreter: the parse
+  # returned empty, the tool name matched nothing, and the hook exited 0 for
+  # every write.
+  [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/cases/case-beta/x.md")")" = "block" ] \
+    && pass "write into the cases tree refused when the payload cannot be parsed" \
+    || fail "write into the cases tree ALLOWED when the payload cannot be parsed — isolation inactive"
+  [ "$(xc_verdict_noparse "$XC_R" '{"tool_name":"TodoWrite","tool_input":{"todos":[{"content":"revisar data/cases/case-beta"}]}}')" = "allow" ] \
+    && pass "TodoWrite still allowed when the payload cannot be parsed" \
+    || fail "TodoWrite refused when the payload cannot be parsed"
+  [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/memory/x.md")")" = "allow" ] \
+    && pass "write outside the cases tree still allowed when the payload cannot be parsed" \
+    || fail "write outside the cases tree refused when the payload cannot be parsed"
+
+  # An unreadable active marker means the target cannot be shown to be the
+  # right case. Previously both shapes exited 0 and allowed the write.
+  mv "$XC_ROOT/data/cases/.active" "$XC_ROOT/data/cases/.active.evalbak"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+    && pass "write into a case refused while .active is missing" \
+    || fail "write into a case ALLOWED while .active is missing"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/memory/x.md")" = "allow" ] \
+    && pass "write outside the cases tree still allowed while .active is missing" \
+    || fail "write outside the cases tree refused while .active is missing"
+  printf '   \n' > "$XC_ROOT/data/cases/.active"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+    && pass "write into a case refused while .active is empty" \
+    || fail "write into a case ALLOWED while .active is empty"
+  mv "$XC_ROOT/data/cases/.active.evalbak" "$XC_ROOT/data/cases/.active"
+
+  # The runtime reads stdout only on exit 0, so a reason printed there on the
+  # block path never reaches the model. It must be on stderr.
+  XC_MSG=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/cases/case-beta/x.md" \
+    | CLAUDE_PROJECT_DIR="$XC_R" bash "$XC_HOOK" 2>&1 >/dev/null)
+  case "$XC_MSG" in
+    *"case-alpha"*|*"case-beta"*) pass "block reason reaches stderr, where the runtime reads it on exit 2" ;;
+    *) fail "block reason is not on stderr (got: ${XC_MSG:-<empty>})" ;;
+  esac
+
   # If a real Windows runtime is available (cygpath present and the drive
   # letter maps to a readable filesystem location), promote the drive-letter
   # shape to an end-to-end verdict assertion. This runs on Windows CI and
@@ -1083,12 +1215,19 @@ if [ -f "$CROSS_CASE_HOOK" ]; then
   mkdir -p "$XC_ROOT/data/cases/case-alpha" "$XC_ROOT/data/cases/case-beta" "$XC_ROOT/.claude/hooks"
   cp "$CROSS_CASE_HOOK" "$XC_ROOT/.claude/hooks/"
   printf 'case-alpha\n' > "$XC_ROOT/data/cases/.active"
-  XC_OUT=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' \
-             "$XC_ROOT/data/cases/case-beta/notes.md" \
-           | CLAUDE_PROJECT_DIR="$XC_ROOT" bash "$XC_ROOT/.claude/hooks/block-cross-case-writes.sh" 2>/dev/null)
+  # The reason travels on stderr, not stdout: the runtime reads a decision
+  # object on stdout only when the hook exits 0, so a reason printed there on
+  # the exit-2 path is discarded before anyone sees it.
+  XC_ERR="$XC_ROOT/block.err"
+  printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' \
+    "$XC_ROOT/data/cases/case-beta/notes.md" \
+    | CLAUDE_PROJECT_DIR="$XC_ROOT" bash "$XC_ROOT/.claude/hooks/block-cross-case-writes.sh" \
+      >/dev/null 2>"$XC_ERR"
+  XC_RC=$?
+  XC_OUT=$(cat "$XC_ERR" 2>/dev/null)
 
-  if printf '%s' "$XC_OUT" | grep -q '"decision":"block"'; then
-    pass "cross-case write is blocked"
+  if [ "$XC_RC" -eq 2 ] && [ -n "$XC_OUT" ]; then
+    pass "cross-case write is blocked, with a reason on stderr"
 
     if printf '%s' "$XC_OUT" | grep -q '\$'; then
       fail "block message leaks internal \$skill syntax to the user: $XC_OUT"
@@ -1096,7 +1235,7 @@ if [ -f "$CROSS_CASE_HOOK" ]; then
       pass "block message contains no internal \$skill syntax"
     fi
   else
-    fail "cross-case write was NOT blocked (hook emitted: $XC_OUT)"
+    fail "cross-case write was NOT blocked (rc=$XC_RC, stderr: ${XC_OUT:-<empty>})"
   fi
 else
   fail "block-cross-case-writes.sh missing from ZIP"
