@@ -30,8 +30,13 @@ set -eu
 
 # Resolved from this file's own directory, not from CLAUDE_PROJECT_DIR: the hook
 # must find its library whatever the working directory is.
+#
+# `|| true` is load-bearing: `set -eu` is already active here and the ERR trap
+# that guarantees the minimal-pointer fallback is not installed until further
+# down. Without it, an unreadable library would kill the hook before its own
+# fail-open contract could apply.
 # shellcheck source=lib/python.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null || true
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 DATA_DIR="$PROJECT_DIR/data"
