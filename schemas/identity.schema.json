@@ -38,6 +38,23 @@
       "type": "string",
       "format": "date-time",
       "description": "ISO 8601 UTC timestamp of the capture."
+    },
+    "role_band": {
+      "type": "string",
+      "enum": ["execucao", "lideranca", "comercial", "outro"],
+      "description": "Faixa de cargo que seleciona a camada de perguntas do onboarding. Derivada de `role`, nunca perguntada diretamente."
+    },
+    "segment": {
+      "type": "string",
+      "description": "Segmento do BCG: classico, x, platinion, inverto, bst — ou o que o dono escrever."
+    },
+    "office": {
+      "type": "string",
+      "description": "Escritório do dono."
+    },
+    "language": {
+      "type": "string",
+      "description": "Idioma escolhido pelo dono no turno 0 do onboarding (ex.: pt-BR, en, es, ou o texto livre digitado). Todo o restante da entrevista, e a saudação de qualquer reentrada, usa este idioma."
     }
   }
 }
