@@ -109,9 +109,11 @@ printf '_Injetado automaticamente pelo hook de início de sessão._\n'
 # inert — and the owner has no way to tell, because each of those hooks exits
 # 0 in silence. That silence is the defect; this block ends it.
 #
-# Emitted once per session, and only when resolution fails. The remedy is a
-# skill that can act, not an instruction to the owner: Maestro provisions its
-# own interpreter, so this never asks anyone to open a terminal.
+# Emitted on every SessionStart where resolution fails — which includes
+# `/clear` and `/compact`, not just the first start of the day. That is
+# deliberate rather than noisy: those events drop the earlier notice out of
+# context, so a model that has just lost it needs to be told again. A
+# once-only marker would buy quiet at the cost of the model not knowing.
 if ! maestro_python >/dev/null 2>&1; then
   printf '\n## ⚠️ Uma peça do Maestro não está instalada nesta máquina\n'
   printf '<!-- maestro:python-missing -->\n'
