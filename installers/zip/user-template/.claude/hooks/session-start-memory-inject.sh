@@ -75,9 +75,9 @@ emit_profile_json() {
   # literal, the interpreter raises SyntaxError, 2>/dev/null swallows it, and the
   # guard fails open — injecting the empty placeholder identity into every
   # session. context-inject-userprompt.sh already reads it this way.
-  if MAESTRO_PY=$(maestro_python 2>/dev/null) && [ -n "$MAESTRO_PY" ]; then
+  if maestro_python >/dev/null 2>&1; then
     local initialized
-    initialized=$($MAESTRO_PY - "$file" <<'PY' 2>/dev/null
+    initialized=$(maestro_py - "$file" <<'PY' 2>/dev/null
 import json, sys
 try:
     with open(sys.argv[1], encoding="utf-8") as f:
@@ -103,6 +103,21 @@ PY
 printf '<!-- maestro:session-context:start -->\n'
 printf '# Maestro — Contexto da sessão\n'
 printf '_Injetado automaticamente pelo hook de início de sessão._\n'
+
+# No interpreter, no automation. Every hook that parses JSON needs one, so
+# without it memory injection, context routing and case isolation are all
+# inert — and the owner has no way to tell, because each of those hooks exits
+# 0 in silence. That silence is the defect; this block ends it.
+#
+# Emitted once per session, and only when resolution fails. The remedy is a
+# skill that can act, not an instruction to the owner: Maestro provisions its
+# own interpreter, so this never asks anyone to open a terminal.
+if ! maestro_python >/dev/null 2>&1; then
+  printf '\n## ⚠️ Uma peça do Maestro não está instalada nesta máquina\n'
+  printf '<!-- maestro:python-missing -->\n'
+  printf 'Sem ela, o Maestro não lembra o contexto entre conversas, não sugere skills e não protege a separação entre clientes. Ele abre e funciona para conversar, mas essas rotinas estão desligadas.\n'
+  printf '\n**Ação:** leia `bundles/base/skills/maestro-environment-setup/SKILL.md` e execute a seção "Interpretador local" para resolver agora. É automático, não precisa de terminal nem de privilégio de administrador, e leva menos de um minuto.\n'
+fi
 
 # Operational method pointer (spec 050) — always first, before any task routing.
 # SessionStart carries the pointer only; skill body is loaded on demand.

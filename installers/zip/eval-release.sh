@@ -1411,6 +1411,54 @@ exit 1')
   else
     fail "hook(s) still invoke python3 directly: $(printf '%s' "$HARDCODED" | tr '\n' ' ')"
   fi
+
+  # A provisioned interpreter is recorded by path, and on Windows that path
+  # routinely contains a space ("C:\Users\Firstname Lastname\..."). It must
+  # both resolve and RUN, which is why the library invokes through a function
+  # instead of interpolating the interpreter at each call site.
+  if [ -n "$PY_REAL" ]; then
+    PY_REC_ROOT=$(mktemp -d -t maestro-eval-pyrec-XXXXXX)
+    mkdir -p "$PY_REC_ROOT/with space" "$PY_REC_ROOT/data"
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$PY_REAL" > "$PY_REC_ROOT/with space/maestro-python"
+    chmod +x "$PY_REC_ROOT/with space/maestro-python"
+    printf '%s\n' "$PY_REC_ROOT/with space/maestro-python" > "$PY_REC_ROOT/data/.maestro-python"
+
+    RAN=$(env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
+            bash -c ". '$PY_LIB'; maestro_py -c 'print(\"ran\")'" 2>/dev/null)
+    [ "$RAN" = "ran" ] \
+      && pass "a recorded interpreter resolves and runs, including a path with a space" \
+      || fail "recorded interpreter did not run (got: ${RAN:-<none>})"
+
+    # A record outlives the interpreter it names — uninstalled, moved, or
+    # carried in a workspace copied to another machine. It must be skipped, not
+    # trusted, or provisioning leaves behind a permanent false positive.
+    printf '%s\n' "$PY_REC_ROOT/gone/maestro-python" > "$PY_REC_ROOT/data/.maestro-python"
+    RESOLVED=$(env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
+                 bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    [ -z "$RESOLVED" ] \
+      && pass "a stale interpreter record is rejected rather than trusted" \
+      || fail "stale interpreter record was accepted (got: $RESOLVED)"
+
+    # Absence must be visible. Every hook that needs the interpreter exits 0
+    # without it, so silence here is the whole defect.
+    MEM_HOOK="$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh"
+    if [ -f "$MEM_HOOK" ]; then
+      mkdir -p "$PY_REC_ROOT/data/memory/recent"
+      rm -f "$PY_REC_ROOT/data/.maestro-python"
+      NUDGE=$(env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" bash "$MEM_HOOK" 2>/dev/null)
+      case "$NUDGE" in
+        *maestro:python-missing*) pass "SessionStart names a missing interpreter instead of degrading in silence" ;;
+        *) fail "SessionStart emitted no signal for a missing interpreter" ;;
+      esac
+      QUIET=$(CLAUDE_PROJECT_DIR="$PY_REC_ROOT" bash "$MEM_HOOK" 2>/dev/null)
+      case "$QUIET" in
+        *maestro:python-missing*) fail "SessionStart warns about a missing interpreter while one is available" ;;
+        *) pass "SessionStart stays quiet when an interpreter is available" ;;
+      esac
+    fi
+
+    rm -rf "$PY_REC_ROOT"
+  fi
 else
   fail "hooks/lib/python.sh missing from ZIP"
 fi

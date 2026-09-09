@@ -99,8 +99,8 @@ fi
 
   # Profile identity headline (name / role / track) — best-effort.
   IDENTITY_FILE="$PROFILE_DIR/identity.json"
-  if [ -f "$IDENTITY_FILE" ] && MAESTRO_PY=$(maestro_python 2>/dev/null) && [ -n "$MAESTRO_PY" ]; then
-    HEADLINE=$($MAESTRO_PY - "$IDENTITY_FILE" <<'PY' 2>/dev/null || true
+  if [ -f "$IDENTITY_FILE" ] && maestro_python >/dev/null 2>&1; then
+    HEADLINE=$(maestro_py - "$IDENTITY_FILE" <<'PY' 2>/dev/null || true
 import json, sys
 try:
     with open(sys.argv[1]) as f:
