@@ -28,6 +28,16 @@
 
 set -eu
 
+# Resolved from this file's own directory, not from CLAUDE_PROJECT_DIR: the hook
+# must find its library whatever the working directory is.
+#
+# `|| true` is load-bearing: `set -eu` is already active here and the ERR trap
+# that guarantees the minimal-pointer fallback is not installed until further
+# down. Without it, an unreadable library would kill the hook before its own
+# fail-open contract could apply.
+# shellcheck source=lib/python.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null || true
+
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 DATA_DIR="$PROJECT_DIR/data"
 PROFILE_DIR="$DATA_DIR/profile"
@@ -89,8 +99,8 @@ fi
 
   # Profile identity headline (name / role / track) — best-effort.
   IDENTITY_FILE="$PROFILE_DIR/identity.json"
-  if [ -f "$IDENTITY_FILE" ] && command -v python3 >/dev/null 2>&1; then
-    HEADLINE=$(python3 - "$IDENTITY_FILE" <<'PY' 2>/dev/null || true
+  if [ -f "$IDENTITY_FILE" ] && MAESTRO_PY=$(maestro_python 2>/dev/null) && [ -n "$MAESTRO_PY" ]; then
+    HEADLINE=$($MAESTRO_PY - "$IDENTITY_FILE" <<'PY' 2>/dev/null || true
 import json, sys
 try:
     with open(sys.argv[1]) as f:
