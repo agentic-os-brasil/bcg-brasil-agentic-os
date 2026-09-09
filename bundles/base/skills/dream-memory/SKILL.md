@@ -18,7 +18,7 @@ Resolve the canonical `interaction-profile` skill before responding. Ajustar o t
 
 ## Choose the cycle
 
-- Use **daily light** for session or day closure. It may capture sanitized signals and update memória recente only.
+- Use **daily light** for session or day closure. It may capture sanitized signals and update memória recente only. The day's entry is `data/memory/recent/<YYYY-MM-DD>.md`, one file per date being closed.
 - Use **weekly deep** for week closure or an overdue weekly cycle. It may update memória semanal and memória de médio prazo and promote eligible lifetime memory.
 - Use **status** when the user asks what is remembered, why a promotion occurred or whether a cycle was missed.
 
@@ -46,6 +46,7 @@ If the cycle fails or the memory tree is missing, report the failure and delete 
 ## Invariants
 
 - O ciclo diário não pode escrever na memória semanal, memória de médio prazo ou memória permanente.
+- A presença de `data/memory/recent/<YYYY-MM-DD>.md` é o sinal público de que aquele dia já foi consolidado. O `session-stop-dream.sh` lê exatamente esse caminho para decidir se ainda pede um ciclo; gravar o dia sob outro nome desarma o pedido de dreaming sem erro visível.
 - O ciclo semanal prepara todos os outputs e os torna disponíveis de uma vez, de forma consistente.
 - Uma síntese vazia, inválida ou interrompida não altera nada visível.
 - O sistema usa apenas o estado mais recente totalmente válido; nenhum estado parcial de memória semanal, de médio prazo ou permanente é injetado.
