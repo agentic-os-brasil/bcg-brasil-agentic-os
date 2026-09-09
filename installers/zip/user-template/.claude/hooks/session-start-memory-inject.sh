@@ -13,6 +13,11 @@
 
 set +e
 
+# Resolved from this file's own directory, not from CLAUDE_PROJECT_DIR: the hook
+# must find its library whatever the working directory is.
+# shellcheck source=lib/python.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null
+
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 DATA_DIR="$PROJECT_DIR/data"
 MEMORY_DIR="$DATA_DIR/memory"
@@ -70,9 +75,9 @@ emit_profile_json() {
   # literal, the interpreter raises SyntaxError, 2>/dev/null swallows it, and the
   # guard fails open — injecting the empty placeholder identity into every
   # session. context-inject-userprompt.sh already reads it this way.
-  if command -v python3 >/dev/null 2>&1; then
+  if MAESTRO_PY=$(maestro_python 2>/dev/null) && [ -n "$MAESTRO_PY" ]; then
     local initialized
-    initialized=$(python3 - "$file" <<'PY' 2>/dev/null
+    initialized=$($MAESTRO_PY - "$file" <<'PY' 2>/dev/null
 import json, sys
 try:
     with open(sys.argv[1], encoding="utf-8") as f:
