@@ -1348,6 +1348,74 @@ fi
 # --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+phase "Phase 19 — Hook interpreter resolution"
+# --------------------------------------------------------------------------
+
+# The hooks parse JSON with Python. Testing `command -v python3` and nothing
+# else made a Windows box that has Python indistinguishable from one that does
+# not: the python.org installer ships python.exe and the py launcher and
+# creates no python3, so every hook needing an interpreter exited 0 in silence.
+PY_LIB="$MAESTRO_DIR/.claude/hooks/lib/python.sh"
+if [ -f "$PY_LIB" ]; then
+  pass "hooks/lib/python.sh present in ZIP"
+
+  py_stub_dir() {
+    local name="$1" body="$2" d
+    d=$(mktemp -d -t maestro-eval-py-XXXXXX)
+    printf '%s\n' "$body" > "$d/$name"
+    chmod +x "$d/$name"
+    printf '%s' "$d"
+  }
+  PY_REAL=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
+
+  if [ -n "$PY_REAL" ]; then
+    PY_ONLY_PYTHON=$(py_stub_dir python "#!/bin/sh
+exec \"$PY_REAL\" \"\$@\"")
+    RESOLVED=$(env PATH="$PY_ONLY_PYTHON:/usr/bin:/bin" bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    [ "$RESOLVED" = "python" ] \
+      && pass "resolver finds 'python' when 'python3' is absent" \
+      || fail "resolver did not find 'python' when 'python3' is absent (got: ${RESOLVED:-<none>})"
+
+    PY_ONLY_LAUNCHER=$(py_stub_dir py "#!/bin/sh
+shift
+exec \"$PY_REAL\" \"\$@\"")
+    RESOLVED=$(env PATH="$PY_ONLY_LAUNCHER:/usr/bin:/bin" bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    [ "$RESOLVED" = "py -3" ] \
+      && pass "resolver falls back to the 'py -3' launcher" \
+      || fail "resolver did not fall back to 'py -3' (got: ${RESOLVED:-<none>})"
+
+    rm -rf "$PY_ONLY_PYTHON" "$PY_ONLY_LAUNCHER"
+  else
+    skip "no interpreter on this host to build resolver stubs from"
+  fi
+
+  # A `python` that is Python 2 must be rejected rather than selected: the hook
+  # scripts are Python 3, and the resulting error is swallowed by 2>/dev/null —
+  # the silent failure this resolver exists to end.
+  PY_TWO=$(py_stub_dir python '#!/bin/sh
+exit 1')
+  RESOLVED=$(env PATH="$PY_TWO:/usr/bin:/bin" bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+  [ -z "$RESOLVED" ] \
+    && pass "resolver rejects a 'python' that is not Python 3" \
+    || fail "resolver selected a non-Python-3 interpreter (got: $RESOLVED)"
+  rm -rf "$PY_TWO"
+
+  # Regression guard: a hook that calls the interpreter by name again
+  # reintroduces the bug for every owner whose Python is not called python3.
+  HARDCODED=$(grep -rlE '(\||^|[[:space:]])python3[[:space:]]+(-c|-)' \
+                "$MAESTRO_DIR/.claude/hooks" 2>/dev/null \
+              | grep -v '/lib/python.sh$' || true)
+  if [ -z "$HARDCODED" ]; then
+    pass "no hook invokes python3 directly; all resolve through the library"
+  else
+    fail "hook(s) still invoke python3 directly: $(printf '%s' "$HARDCODED" | tr '\n' ' ')"
+  fi
+else
+  fail "hooks/lib/python.sh missing from ZIP"
+fi
+
+
 
 echo ""
 printf '%s──────────────────────────────────────────────%s\n' "$YELLOW" "$RESET"

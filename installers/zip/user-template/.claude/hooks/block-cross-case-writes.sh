@@ -117,8 +117,10 @@ except Exception:
 PY
 
 PARSED=""
-if command -v python3 >/dev/null 2>&1; then
-  PARSED=$(printf '%s' "$HOOK_INPUT" | PYTHONIOENCODING=utf-8 python3 -c "$PARSE_PY" 2>/dev/null)
+# shellcheck source=lib/python.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null
+if MAESTRO_PY=$(maestro_python 2>/dev/null) && [ -n "$MAESTRO_PY" ]; then
+  PARSED=$(printf '%s' "$HOOK_INPUT" | PYTHONIOENCODING=utf-8 $MAESTRO_PY -c "$PARSE_PY" 2>/dev/null)
 fi
 
 # Python's text mode on Windows writes CRLF and command substitution strips only
@@ -134,7 +136,7 @@ if [ -z "$PARSED" ]; then
   # unanchored regex, so `TodoWrite` does reach this hook.
   case "$HOOK_INPUT" in
     *file_path*|*notebook_path*)
-      block "The guard could not read this tool call (no python3 on this machine, or an unparsable payload) and the request references the cases tree, so isolation cannot be verified. Ask the owner to make this write themselves, or to have python3 restored on this machine."
+      block "The guard could not read this tool call (no Python 3 interpreter on this machine, or an unparsable payload) and the request references the cases tree, so isolation cannot be verified. Ask the owner to make this write themselves, or to have Python 3 installed on this machine."
       ;;
     *)
       exit 0
