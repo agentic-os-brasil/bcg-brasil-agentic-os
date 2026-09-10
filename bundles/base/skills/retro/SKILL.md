@@ -29,9 +29,9 @@ the explanation and optional detail do.
 Obtidos via recuperação do atlas, sempre com propósito declarado e páginas nomeadas. There
 is no whole-root read.
 
-- this week's pages in `owner/daily/`, if the owner keeps them;
-- current objectives from `owner/development/objectives.md`;
-- the previous one or two retrospectives in `owner/development/retros/`.
+- this week's pages in `brain/daily/`, if the owner keeps them;
+- current objectives from `brain/development/objectives.md`;
+- the previous one or two retrospectives in `brain/development/retros/`.
 
 If a page is absent, `collect` reports it as an omission. Say so and continue —
 a first retrospective has no predecessor, and that is not an error.
@@ -39,7 +39,7 @@ a first retrospective has no predecessor, and that is not an error.
 ## Workflow
 
 1. Resolve the week being closed and the page path for it,
-   `owner/development/retros/<YYYY-MM-DD>.md`.
+   `brain/development/retros/<YYYY-MM-DD>.md`.
 2. Recuperar as páginas relevantes do atlas do owner. Keep the revision of each page read: a later
    write uses it to detect that the owner edited the page in the meantime.
 3. Walk the week **as a conversation**, not as a summary handed over:
@@ -61,7 +61,7 @@ a first retrospective has no predecessor, and that is not an error.
    objective's own heading instead.
 8. If the week produced a durable claim about how this kind of work goes — not
    what happened, but what it suggests is generally true — offer to promote it
-   to `owner/learnings/` via the atlas create operation, one page per claim. State it as a
+   to `brain/learnings/` via the atlas create operation, one page per claim. State it as a
    generalization: the engagement may be named as the source, but findings,
    figures and client material stay in the workspace that owns them.
 9. Report what was written, what was proposed but not written, and anything the

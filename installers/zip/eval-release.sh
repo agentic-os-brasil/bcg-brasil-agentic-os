@@ -1865,6 +1865,49 @@ if [ -f "$RT_SKILL" ] && [ -n "${PY_REAL:-}" ]; then
     && pass "the skill router stays silent on a greeting" \
     || fail "the skill router fired on a greeting"
 fi
+# --------------------------------------------------------------------------
+phase "Phase 24 — Every path the product cites exists on a fresh install"
+# --------------------------------------------------------------------------
+
+# This is the dead-path class, and it has produced a defect in every structural
+# change this product has made: the 2026-09-01 account migration moved the disk
+# and not the scaffold; the flip to brain/ raised four trees to the top and left
+# nine skills pointing at where they had been. Both times the code was correct
+# and the instructions were not, which is the failure a model cannot route
+# around — it follows the text.
+#
+# The fixture is shaped like an owner's install rather than the repo: hooks at
+# `.claude/`, the nine scaffolded trunks present, and the on-demand trees
+# (`.maestro/`, `runtime/`) absent, because absent is their normal state before
+# first use.
+PATHS_TOOL_EVAL="$MAESTRO_DIR/bundles/base/tools/paths-check.py"
+if [ -f "$PATHS_TOOL_EVAL" ] && [ -n "${PY_REAL:-}" ]; then
+  PC_ROOT=$(mktemp -d -t maestro-eval-paths-XXXXXX)
+  cp -R "$MAESTRO_DIR/bundles" "$PC_ROOT/" 2>/dev/null
+  cp -R "$MAESTRO_DIR/.claude" "$PC_ROOT/" 2>/dev/null
+  cp -R "$MAESTRO_DIR/schemas" "$PC_ROOT/" 2>/dev/null
+  cp "$MAESTRO_DIR/CLAUDE.md" "$PC_ROOT/" 2>/dev/null
+  for sub in accounts craft/methods craft/style daily development/cdc \
+             development/project-feedback development/upward-feedback \
+             development/retros learnings memory/recent memory/weekly \
+             memory/medium-term memory/lifetime memory/policies owner/self \
+             owner/operating owner/observations owner/interview/drafts people tasks; do
+    mkdir -p "$PC_ROOT/brain/$sub"
+  done
+
+  PC_OUT=$(cd "$PC_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/paths-check.py 2>/dev/null)
+  PC_COUNT=$(cd "$PC_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/paths-check.py --count 2>/dev/null)
+  if [ "${PC_COUNT:-1}" = "0" ]; then
+    pass "no dead paths cited anywhere in the shipped product"
+  else
+    fail "$PC_COUNT dead path(s) cited by the shipped product: $(printf '%s' "$PC_OUT" | tr '\n' ' ' | cut -c1-320)"
+  fi
+  rm -rf "$PC_ROOT"
+else
+  skip "paths-check.py or interpreter unavailable"
+fi
+
+
 
 
 

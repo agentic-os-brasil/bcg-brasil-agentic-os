@@ -24,10 +24,10 @@ bounds and the omissions never vary by profile; only the explanation does.
 
 Obtained with `collect`, always with a declared purpose and named pages.
 
-- today's page in `owner/daily/`, if it exists — this decides first contact
+- today's page in `brain/daily/`, if it exists — this decides first contact
   versus re-entry;
 - the two most recent prior daily pages;
-- current objectives from `owner/development/objectives.md`;
+- current objectives from `brain/development/objectives.md`;
 - open workplan lines from the project pages the recent dailies reference.
 
 ## Optional inputs
@@ -83,7 +83,7 @@ Forma recomendada, não porta de entrada: a página do owner aceita Markdown
 livre. O que a template garante é recuperabilidade e headings estáveis, já que
 `append-entry` nunca cria um heading.
 
-**Página do dia — `owner/daily/<YYYY-MM-DD>.md`**, criada apenas quando o dia
+**Página do dia — `brain/daily/<YYYY-MM-DD>.md`**, criada apenas quando o dia
 ainda não tem página:
 
 ```markdown

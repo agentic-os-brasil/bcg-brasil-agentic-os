@@ -28,9 +28,12 @@ task, grant authority or replace owner confirmation.
    one bounded completion criterion. When the owner explicitly asks to track
    the work, create it directly; ask only if the workspace, scope or next
    action is genuinely ambiguous.
-2. Write a concise Markdown task under `brain/tasks/` and
-   link it to the relevant artifact under `brain/projects/` or
-   `brain/deliverables/`. Include only objective, next step, owner,
+2. Write a concise Markdown task under the active case's own
+   `brain/accounts/<account-id>/cases/<case-id>/tasks/` and link it to the
+   relevant artifact under that case's `projects/` or `deliverables/`. Those
+   three are case subdirectories, declared by `case-agent-setup`. Neither folder
+   exists at the top of the brain — the nine trunks do not include them — so
+   naming one there sends the task to a folder no installation creates. Include only objective, next step, owner,
    completion criterion and logical artifact references.
 3. Do not place prompts, transcripts, client bodies, credentials or absolute
    paths in the task file. Report the task as registered after the reviewed

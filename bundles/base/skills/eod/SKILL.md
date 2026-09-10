@@ -22,8 +22,8 @@ bounds never vary by profile.
 
 ## Inputs
 
-Obtained with `collect`: today's page in `owner/daily/`, and current objectives
-from `owner/development/objectives.md` when the day touched one.
+Obtained with `collect`: today's page in `brain/daily/`, and current objectives
+from `brain/development/objectives.md` when the day touched one.
 
 ## Workflow
 
