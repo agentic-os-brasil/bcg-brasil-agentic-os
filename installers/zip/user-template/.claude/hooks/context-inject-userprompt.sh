@@ -81,6 +81,49 @@ emit_minimal() {
 # Trap any unexpected error -> emit minimal, exit 0.
 trap 'emit_minimal; exit 0' ERR
 
+# ---------------------------------------------------------------------------
+# Agent routing — runs on EVERY prompt, deliberately above the marker branch.
+#
+# The marker below silences this hook after the first fire of a session, which
+# is right for context pointers and wrong for this: a request that needs a
+# spoke can arrive at any turn. So the routing sits before that gate.
+#
+# It is conservative by construction. The router stays silent on the
+# overwhelming majority of messages, because dispatching a spoke costs a whole
+# model call. When it does match, it carries the closed packet the agent
+# requires — a truncated packet is worse than none, since the spoke then
+# answers about something else, which is why this budget is larger than the
+# pointer budgets above.
+#
+# Every step is `|| true` or guarded: `set -eu` and the ERR trap are both live
+# here, and a router that cannot run must cost the owner nothing.
+# ---------------------------------------------------------------------------
+AGENT_ROUTER="$PROJECT_DIR/bundles/base/tools/agent-route.py"
+AGENT_BUDGET=1600
+
+if [ -f "$AGENT_ROUTER" ] && maestro_python >/dev/null 2>&1; then
+  AGENT_HOOK_INPUT=$(cat 2>/dev/null || true)
+  if [ -n "${AGENT_HOOK_INPUT:-}" ]; then
+    # Quoted heredoc: unquoted, bash reinterprets the body and a stray
+    # backtick or $ in the payload becomes shell.
+    AGENT_PROMPT=$(printf '%s' "$AGENT_HOOK_INPUT"       | PYTHONIOENCODING=utf-8 maestro_py - <<'AGENT_PY' 2>/dev/null || true
+import sys, json
+try:
+    print(json.load(sys.stdin).get("prompt", "") or "")
+except Exception:
+    print("")
+AGENT_PY
+    )
+    if [ -n "${AGENT_PROMPT:-}" ]; then
+      AGENTS_OUT=$( (cd "$PROJECT_DIR" && printf '%s' "$AGENT_PROMPT"         | PYTHONIOENCODING=utf-8 maestro_py "$AGENT_ROUTER" --max 2 2>/dev/null)         | truncate_stdout "$AGENT_BUDGET" || true)
+      if [ -n "${AGENTS_OUT:-}" ]; then
+        printf '%s
+' "$AGENTS_OUT"
+      fi
+    fi
+  fi
+fi
+
 if [ -f "$MARKER" ]; then
   # -------- subsequent fires: stub only --------
   {

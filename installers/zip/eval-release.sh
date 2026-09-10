@@ -1602,6 +1602,114 @@ if [ -z "$DRIFTED" ]; then
 else
   fail "a MAESTRO_RUN declaration drifted from the canonical spelling: $(printf '%s' "$DRIFTED" | tr '\n' ' ')"
 fi
+# --------------------------------------------------------------------------
+phase "Phase 22 — Agent dispatch is wired to the policy that authorizes it"
+# --------------------------------------------------------------------------
+
+# The policy declares which agents exist and when each is called; the router
+# and the periodic check are what read it. They can drift apart silently, and
+# both failure modes are invisible: a policy entry for an agent nothing can
+# dispatch, or a dispatch path for an agent the policy never authorized. This
+# phase asserts they still agree, and that the announcement actually reaches
+# the hub instead of being printed into the void — the defect the announce
+# hook was rewritten to fix, which had a green test the whole time because the
+# test captured the hook's stdout and proved the text EXISTED, never that it
+# ARRIVED.
+AGENT_POLICY="$MAESTRO_DIR/bundles/base/agents/activation-policy.json"
+AGENT_ROUTER="$MAESTRO_DIR/bundles/base/tools/agent-route.py"
+ANNOUNCE_HOOK="$MAESTRO_DIR/.claude/hooks/announce-agent-dispatch.sh"
+
+if [ -f "$AGENT_POLICY" ] && [ -f "$AGENT_ROUTER" ]; then
+  pass "activation policy and agent router both ship"
+
+  # Every spoke the policy declares must have a projection under .claude/agents/,
+  # or the dispatch names a subagent type the runtime cannot resolve.
+  MISSING_PROJ=""
+  for spoke in yoda darwin gamma-guardian pa-expert; do
+    [ -f "$MAESTRO_DIR/.claude/agents/$spoke.md" ] || MISSING_PROJ="$MISSING_PROJ $spoke"
+  done
+  if [ -z "$MISSING_PROJ" ]; then
+    pass "every spoke in the policy has a .claude/agents projection"
+  else
+    fail "spoke(s) declared but not projected:$MISSING_PROJ"
+  fi
+
+  # The announcement text is the policy's, not the hook's. A hook carrying its
+  # own copy is a second source that drifts the first time the format changes.
+  if grep -q "announce" "$AGENT_POLICY"; then
+    pass "the policy carries the announcement contract"
+  else
+    fail "the policy has no announce block — the hook would have to invent the format"
+  fi
+else
+  fail "activation policy or agent router missing from ZIP"
+fi
+
+# The router must be conservative. A router that fires on ordinary work costs a
+# model call per message and trains the owner to ignore the line.
+if [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
+  ROUTE_QUIET=$(cd "$MAESTRO_DIR" && printf 'pode me ajudar a montar o slide de decisao do projeto' \
+                  | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+  [ -z "$ROUTE_QUIET" ] \
+    && pass "router stays silent on ordinary work" \
+    || fail "router fired on an ordinary request (would cost a model call per message)"
+
+  ROUTE_HIT=$(cd "$MAESTRO_DIR" && printf 'chama o yoda para revisar essa recomendacao' \
+                | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+  case "$ROUTE_HIT" in
+    *yoda*) pass "router resolves an explicit agent request" ;;
+    *) fail "router did not resolve an explicit request for yoda" ;;
+  esac
+
+  # pa-expert is declared dormant. Naming it must NOT route it, or the owner
+  # gets a dispatch that can only answer "no applicable canon".
+  ROUTE_DORMANT=$(cd "$MAESTRO_DIR" && printf 'chama o pa-expert para trazer a visao de pratica' \
+                    | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+  case "$ROUTE_DORMANT" in
+    *pa-expert*) fail "router routed pa-expert, which the policy declares dormant" ;;
+    *) pass "router honours the dormant declaration and stays silent on pa-expert" ;;
+  esac
+else
+  skip "no interpreter on this host to exercise the agent router"
+fi
+
+# The announce hook's only useful output is a JSON object with
+# hookSpecificOutput.additionalContext. Plain stdout in PreToolUse goes to the
+# transcript and never reaches the model.
+if [ -f "$ANNOUNCE_HOOK" ] && [ -n "${PY_REAL:-}" ]; then
+  ANN=$(printf '{"tool_name":"Agent","tool_input":{"subagent_type":"yoda","prompt":"x"}}' \
+        | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" 2>/dev/null)
+  ANN_OK=$(printf '%s' "$ANN" | "$PY_REAL" -c 'import sys,json
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print("nojson"); raise SystemExit
+h=d.get("hookSpecificOutput") or {}
+print("ok" if h.get("additionalContext") else "nocontext")' 2>/dev/null)
+  case "$ANN_OK" in
+    ok) pass "announce hook returns hookSpecificOutput.additionalContext (reaches the hub)" ;;
+    nojson) fail "announce hook emitted non-JSON — plain stdout never reaches the model in PreToolUse" ;;
+    *) fail "announce hook returned JSON without additionalContext (speaks into the void)" ;;
+  esac
+
+  # A non-agent tool must be ignored, and absence of an interpreter must never
+  # block a dispatch: this hook is a net, not a gate.
+  printf '{"tool_name":"Write","tool_input":{"file_path":"x"}}' \
+    | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" >/dev/null 2>&1
+  [ $? -eq 0 ] \
+    && pass "announce hook ignores a non-agent tool and exits 0" \
+    || fail "announce hook did not exit 0 for a non-agent tool"
+
+  env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" \
+    < /dev/null >/dev/null 2>&1
+  [ $? -eq 0 ] \
+    && pass "announce hook fails open without an interpreter (never blocks a dispatch)" \
+    || fail "announce hook returned nonzero without an interpreter — this would block every agent call"
+else
+  skip "announce hook or interpreter unavailable"
+fi
+
+
 
 
 

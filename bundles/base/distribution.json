@@ -490,6 +490,10 @@
       "path": "skills/yoda/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/tools/agent-route.py",
+      "path": "tools/agent-route.py"
+    },
+    {
       "source": "bundles/base/tools/migrate-data-to-brain.py",
       "path": "tools/migrate-data-to-brain.py"
     },
