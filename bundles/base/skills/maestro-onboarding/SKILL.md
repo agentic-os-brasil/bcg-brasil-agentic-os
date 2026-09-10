@@ -49,11 +49,16 @@ at once.
 3. **`multiSelect: true`** only when answers are genuinely cumulative
    (ferramentas, formatos); `false` when the owner picks one direction.
 4. **Counter in the question text.** Every question starts with
-   `Pergunta <n> de <N> · `. `<N>` is the total for the chosen track and must
-   never change mid-track. **The literal numbers written into the question
-   examples further down are the quick-track positions** (`Pergunta 1 de 13`,
-   `Pergunta 8 de 13` …). On the complete track, recompute both numbers from the
-   sequence below and never copy the example verbatim.
+   `Pergunta <n> de <N> · `. `<N>` is the total for this owner's interview and
+   must never change mid-track. **`<N>` is always computed, never copied — on
+   either track.** There is no fixed total, not even on the quick one: the
+   role-band layer adds 2 or 3 questions to Bloco A, so a quick-track interview
+   is 15 or 16 questions (13 core + layer) and a complete-track one is 22 or 23
+   (17 core + layer + 3 of BCG history). A question that
+   announces a total the owner will not reach tells them the interview is
+   shorter than it is, which is the one thing a progress counter exists to get
+   right. The examples further down write `<N>` for exactly this reason;
+   substitute the computed value when you ask.
 5. **`header`** carries the topic in 12 characters or fewer (`Seu papel`,
    `Ferramentas`, `Qualidade`) — never the counter.
 6. **Fallback:** if `AskUserQuestion` is unavailable in the current runtime, ask
@@ -754,7 +759,7 @@ tree is one of the nine the scaffold creates at the top of `brain/`; [`start-day
 from day one.
 
 > **header:** `Desenvolvimento`
-> **question:** `Pergunta 8 de 13 · Tem algum ponto que você quer desenvolver?
+> **question:** `Pergunta 8 de <N> · Tem algum ponto que você quer desenvolver?
 > Pode ser algo que já veio em feedback.`
 >
 > - `Comunicação e presença` · `Storyline e estruturação` ·
@@ -788,7 +793,7 @@ flow touches, so none of these is optional:
 `brain/owner/operating/work-state.md`.
 
 > **header:** `Agora`
-> **question:** `Pergunta 9 de 13 · E no que você está trabalhando agora?`
+> **question:** `Pergunta 9 de <N> · E no que você está trabalhando agora?`
 >
 > - `Um caso de cliente` · `Proposta ou pitch` · `Trabalho interno do BCG` ·
 >   `Entre projetos`
@@ -911,7 +916,7 @@ deliberate: it is the easiest question to answer, it is immediately useful, and
 it does not require the owner to have any opinion about Maestro yet.
 
 > **header:** `Teu ritmo`
-> **question:** `Pergunta 1 de 13 · Como é teu ritmo de trabalho? Horários,
+> **question:** `Pergunta 1 de <N> · Como é teu ritmo de trabalho? Horários,
 > agenda, o que eu deveria respeitar quando for te organizar.`
 >
 > - `Meu fuso e meus horários` — onde estou e quando costumo trabalhar
@@ -995,7 +1000,7 @@ the first). Say "conectar", and point at the app's own settings screen — this 
 not a terminal instruction and does not violate the no-shell rule.
 
 > **header:** `Conexões`
-> **question:** `Pergunta 11 de 13 · Tem algo que você gostaria de conectar pra
+> **question:** `Pergunta 11 de <N> · Tem algo que você gostaria de conectar pra
 > eu conseguir ajudar mais? Dá pra ativar em Settings → Connectors, aqui no
 > Claude Code.`
 >
@@ -1020,7 +1025,7 @@ igual a Conexões. Só a **execução** (ler pastas de verdade) fica condicionad
 à confirmação dada aqui, nunca a pergunta em si.
 
 > **header:** `SharePoint`
-> **question:** `Pergunta 12 de 13 · Você quer indicar as pastas autorizadas
+> **question:** `Pergunta 12 de <N> · Você quer indicar as pastas autorizadas
 > do SharePoint deste projeto agora ou prefere começar sem essa fonte?`
 >
 > - `Sim, quero indicar agora` — te mostro as pastas e confirmamos juntos
