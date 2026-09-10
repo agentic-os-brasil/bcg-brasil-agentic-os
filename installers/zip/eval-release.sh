@@ -1554,6 +1554,56 @@ else
   fail "scaffold did not build brain/accounts/ — cannot check active-case context"
 fi
 rm -rf "$CASE_ROOT"
+# --------------------------------------------------------------------------
+phase "Phase 21 — Scheduled routines are wired to run unattended"
+# --------------------------------------------------------------------------
+
+# The onboarding offers to schedule these three, and the scheduled prompt runs
+# the skill itself. Two ways that breaks silently, both checked here: a skill
+# with no unattended mode asks its first question and waits for an owner who is
+# not there, and a marker that drifted by one word does the same thing while
+# looking configured. The owner sees a routine that produces nothing.
+ROUTINE_MARKER="MAESTRO_RUN: scheduled-unattended"
+for routine in start-day eod retro; do
+  RSKILL="$MAESTRO_DIR/bundles/base/skills/$routine/SKILL.md"
+  if [ ! -f "$RSKILL" ]; then
+    fail "$routine/SKILL.md not in ZIP"
+    continue
+  fi
+  if grep -q "^## Autonomous mode (scheduled run)$" "$RSKILL"; then
+    pass "$routine declares an autonomous mode"
+  else
+    fail "$routine has no autonomous mode — scheduling it would run a dialogue with nobody there"
+  fi
+  if grep -qF "$ROUTINE_MARKER" "$RSKILL"; then
+    pass "$routine names the canonical unattended marker"
+  else
+    fail "$routine does not name the marker '$ROUTINE_MARKER' — its entry condition cannot be triggered"
+  fi
+  # An unattended run has nobody to hear a summary, so the report to its own
+  # chat is the owner's only account of what the routine concluded.
+  if grep -q "chat of this execution" "$RSKILL"; then
+    pass "$routine reports to the chat of its own execution"
+  else
+    fail "$routine does not require reporting to its own chat — a run the owner cannot see"
+  fi
+done
+
+# Anything that creates the scheduled task must write the same marker the
+# skills read. Checked across the whole bundle so the onboarding prompt cannot
+# ship a reworded one.
+MARKER_USERS=$(grep -rlF "$ROUTINE_MARKER" "$MAESTRO_DIR/bundles" 2>/dev/null | wc -l | tr -d ' ')
+# Compare the declarations themselves, not the files that contain them: every
+# file has lines that are not the marker, so a file-level -v test always fires.
+DRIFTED=$(grep -rhoE "MAESTRO_RUN:[[:space:]]*[A-Za-z0-9_-]+" "$MAESTRO_DIR/bundles" 2>/dev/null \
+          | sort -u | grep -vxF "$ROUTINE_MARKER" || true)
+if [ -z "$DRIFTED" ]; then
+  pass "every MAESTRO_RUN declaration in the bundle is the canonical marker ($MARKER_USERS file(s))"
+else
+  fail "a MAESTRO_RUN declaration drifted from the canonical spelling: $(printf '%s' "$DRIFTED" | tr '\n' ' ')"
+fi
+
+
 
 
 

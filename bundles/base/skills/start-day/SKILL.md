@@ -134,6 +134,103 @@ entrada: título de reunião, contagem de participantes e nome de quem espera
 resposta ficam fora da página. Uma entrada que não foi gravada nunca é
 reportada como gravada.
 
+## Autonomous mode (scheduled run)
+
+Entered only when the invoking prompt states explicitly that this is an
+unattended, scheduled run (`scheduled-tasks`) with no owner present to answer
+or confirm. Never inferred — not from a quiet chat, not from an unanswered
+question, not from the hour. If the prompt does not say so, the run is
+attended and the workflow above applies as written. This mode relaxes no
+invariant except the two named at the end of this section.
+
+**The declaration is a fixed marker, not a paraphrase.** The invoking prompt
+must contain this line verbatim:
+
+```
+MAESTRO_RUN: scheduled-unattended
+```
+
+Whoever creates the scheduled task writes that line; this skill enters
+autonomous mode on it and on nothing else. A prose description of being
+scheduled is not enough, because the failure is silent in the worst
+direction: reworded, the skill reads the run as attended, asks its first
+question, and waits for an owner who is not there — a routine that appears
+configured and quietly produces nothing. A marker either matches or it does
+not, and it can be asserted by a check.
+
+A scheduled opening runs before the owner arrives, which is the whole point:
+the briefing is waiting when they get there. It also means every judgment in
+it was made without them.
+
+1. **Steps 1 through 6 run unchanged, without dialogue.** Resolve the time,
+   `collect`, take whatever optional context the session offers, compute the
+   remaining hours, rank, and compose the briefing exactly as attended. The
+   ranking is the value of this run; it is not deferred for lack of an
+   audience.
+2. **Where the attended workflow would ask, state the reading instead** and
+   mark which kind it is: `evidência direta` when a page the owner wrote
+   supports it, `inferido, não confirmado` when it does not. Never invent a
+   priority to fill a thin day. A day with little evidence produces a short
+   briefing, and says that it is short because the evidence was thin.
+3. **Near-zero remaining hours does not offer to close the day.** There is
+   nobody to accept the offer. Say so in the entry and give the briefing for
+   the hours that remain; closing the day stays an attended act.
+4. **The entry is written, and marked as unconfirmed.** Step 7 runs as usual —
+   `create-page` if today has no page, then `append-entry` — with one added
+   line at the top of the entry: `**Registro:** briefing automático, não
+   confirmado pelo dono`. The rest of the entry's shape is identical to an
+   attended briefing, so the page stays readable as one record.
+5. **A `proposed` result is final in this mode.** Attended, a proposal is
+   shown to the owner and they decide. Here there is nobody to show it to, so
+   the page moved under the read and the entry is not written: leave the
+   owner's version alone, do not retry, and name it in the report. Silently
+   retrying over an edit the owner made is the one failure this mode could
+   cause that they would not be able to see.
+6. **Step 8 is folded into the report below**, not dropped: every optional
+   input that was unavailable, and the true write outcome, are still stated —
+   to the chat rather than to a listener.
+7. **Report the briefing in full to the chat of this execution.** Not a
+   confirmation line — the whole briefing: the ranked priorities with their
+   reasons, the first move, every optional input that was unavailable, and
+   whether the entry was written, proposed or skipped. The owner reads this
+   chat later and it has to carry what an attended briefing would have said
+   out loud. A page written and never announced is indistinguishable, from
+   where the owner sits, from a run that never happened.
+
+   **Why this is a hard requirement and not a preference.** Scheduled runs
+   were observed opening a session, doing the work, and reporting a fraction
+   of what the skill was supposed to produce — the chat existed, the page was
+   written, and the owner still could not see what the routine had actually
+   concluded. The failure is silent from the owner's side and looks identical
+   to the routine working. So the bar is not "announce that the run
+   happened": it is that this chat carries **everything an attended run of
+   this skill would have said out loud**, at the same level of detail. If a
+   line would have been spoken to the owner, it is written here.
+
+An owner returning to an autonomously written briefing in an ordinary session
+can correct it, act on it, or ignore it exactly as with any other entry. This
+mode defers the acts that need them; it forecloses none.
+
+
+The permission for this mode and its five bounding conditions are recorded as
+decision UNAT in the project decision log. This section implements that
+decision; it does not extend it.
+
+### Invariants (autonomous mode)
+
+- Autonomous mode is entered only on an explicit, self-declared unattended
+  run. Never inferred from context.
+- An autonomously written briefing is always marked as such in its own text,
+  never indistinguishable from an attended one.
+- Every invariant of the attended skill still holds, with two named
+  exceptions: the confirmation gate is replaced by the unconfirmed marker in
+  point 4, and a `proposed` result ends the write instead of starting a
+  conversation.
+- Nothing sourced from optional context is written, here as anywhere. An
+  unattended run has less oversight, not more latitude.
+- The interaction profile calibrates how much is explained, never how much of
+  this run is reported. A concise profile shortens the prose, not the record:
+  the report still carries every item, every marker and everything deferred.
 ## Invariants
 
 - Append-only per day. The first run creates one page; each subsequent run
@@ -148,7 +245,8 @@ reportada como gravada.
 - An engagement may be named. Findings, figures and deliverable material stay
   in the workspace that owns them.
 - A result of `proposed` rather than `written` means the page moved under the
-  read. Show the owner the proposal; do not retry over their edit.
+  read. Show the owner the proposal; do not retry over their edit. In a
+  scheduled run there is nobody to show it to — see "Autonomous mode" above.
 - If an operation is unavailable, say so and give the briefing anyway. The plan
   is still worth having — only the recording is lost, and it must never be
   reported as done.

@@ -79,11 +79,99 @@ This ritual is reflective, and the tone should be warmer and slower than a
 planning ritual. That is a matter of register only. It widens no bound, skips
 no confirmation and does not soften an honest reading of the week.
 
+## Autonomous mode (scheduled run)
+
+Entered only when the invoking prompt states explicitly that this is an
+unattended, scheduled run (`scheduled-tasks`) with no owner present. Never
+inferred. If the prompt does not say so, the run is attended and the workflow
+above applies as written. This mode relaxes no invariant except the two named
+at the end of this section.
+
+**The declaration is a fixed marker, not a paraphrase.** The invoking prompt
+must contain this line verbatim:
+
+```
+MAESTRO_RUN: scheduled-unattended
+```
+
+Whoever creates the scheduled task writes that line; this skill enters
+autonomous mode on it and on nothing else. A prose description of being
+scheduled is not enough, because the failure is silent in the worst
+direction: reworded, the skill reads the run as attended, asks its first
+question, and waits for an owner who is not there — a routine that appears
+configured and quietly produces nothing. A marker either matches or it does
+not, and it can be asserted by a check.
+
+The standing-grant paragraph after step 9 already describes this shape: an
+occurrence woken under the weekly retro grant writes the retrospective and not
+a learning. This section says what the rest of the walk does under the same
+grant.
+
+1. **Steps 1 through 5 run without dialogue.** Read the week's dailies, the
+   objectives and the previous retrospectives; name the patterns; land on one
+   intention. Where step 3 would ask before concluding, state the reading and
+   mark it: `evidência direta` when a daily page supports it, `inferido, não
+   confirmado` when it does not. Never invent evidence to fill a quiet week —
+   a thin week produces a short retrospective that says the evidence was thin.
+2. **The page is written, with its intention marked as proposed.** Step 6 runs
+   as usual, and an existing page for the same week is still preserved rather
+   than replaced. The intention from step 5 is written as `proposta, a
+   confirmar`, because no owner settled on it. One added line at the top of
+   the page: `**Registro:** retro automática, não confirmada pelo dono`.
+3. **Steps 7 and 8 do not run.** No evidence is added to an objective's own
+   heading and no learning is promoted. Where the week surfaced something that
+   would ordinarily prompt either, list it on the retrospective page under a
+   `## Pendências desta rodada` heading — one line each, naming the objective
+   or the candidate claim — so the owner can act on it in the next attended
+   pass. This is the standing grant working as designed, not a limitation to
+   route around: a durable claim about the owner's profession is theirs to
+   make.
+4. **A `proposed` result is final in this mode.** There is nobody to show the
+   proposal to, so the page moved under the read and nothing is written: leave
+   the owner's version alone, do not retry, and name it in the report.
+5. **Report the retrospective in full to the chat of this execution.** The
+   week's reading, the patterns, the proposed intention, which readings were
+   inferred rather than evidenced, every pendência left behind, and whether
+   the page was written, proposed or skipped. A retrospective the owner never
+   hears about does not close their week.
+
+   **Why this is a hard requirement and not a preference.** Scheduled runs
+   were observed opening a session, doing the work, and reporting a fraction
+   of what the skill was supposed to produce — the chat existed, the page was
+   written, and the owner still could not see what the routine had actually
+   concluded. The failure is silent from the owner's side and looks identical
+   to the routine working. So the bar is not "announce that the run
+   happened": it is that this chat carries **everything an attended run of
+   this skill would have said out loud**, at the same level of detail. If a
+   line would have been spoken to the owner, it is written here.
+
+
+The permission for this mode and its five bounding conditions are recorded as
+decision UNAT in the project decision log. This section implements that
+decision; it does not extend it.
+
+### Invariants (autonomous mode)
+
+- Autonomous mode is entered only on an explicit, self-declared unattended
+  run. Never inferred from context.
+- An autonomously written retrospective marks itself, its proposed intention
+  and every uncertain reading as such, in its own text.
+- No evidence is added to an objective and no learning is promoted in this
+  mode, without exception. Both stay attended-only acts.
+- Every other invariant of the attended skill still holds, with two named
+  exceptions: the agreement gate is replaced by the markers in point 2, and a
+  `proposed` result ends the write instead of starting a conversation.
+- The interaction profile calibrates how much is explained, never how much of
+  this run is reported. A concise profile shortens the prose, not the record:
+  the report still carries every item, every marker and everything deferred.
 ## Invariants
 
 - The skill never writes a file. Every effect is a named operation through the
   installed adapter.
 - Nothing is recorded that the owner did not agree to in the conversation.
+  The single exception is a scheduled run, which records a reading marked as
+  unconfirmed with its intention marked as proposed — see "Autonomous mode"
+  above.
 - Evidence is quoted from what the owner wrote, never invented to fill an
   objective that had a quiet week.
 - Client and engagement content stays in the workspace that owns it. A
@@ -91,7 +179,8 @@ no confirmation and does not soften an honest reading of the week.
   figures or deliverable material into owner scope.
 - A write that reports `proposed` rather than `written` means the page changed
   underneath the read and nothing was persisted. Show the owner the proposal
-  and let them decide; do not retry over their edit.
+  and let them decide; do not retry over their edit. In a scheduled run there
+  is nobody to show it to — see "Autonomous mode" above.
 - If an operation is unavailable, say so and continue the conversation. The
   walk, the reflection and a reviewable draft are all still worth having — only
   the recording is lost, and it must not be reported as done.
