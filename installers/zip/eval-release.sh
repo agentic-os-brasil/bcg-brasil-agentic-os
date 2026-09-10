@@ -1735,6 +1735,38 @@ if [ -f "$CI_HOOK" ] && [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
   rm -rf "$CI_HOME"
 fi
 
+# The operator's spoke section is prose derived from the policy. Prose and its
+# source drift, and the drift is silent: the method a session reads would name
+# an agent the policy never authorized, or miss one it did.
+OPERATOR="$MAESTRO_DIR/bundles/base/skills/maestro-operator/SKILL.md"
+if [ -f "$OPERATOR" ] && [ -f "$AGENT_POLICY" ] && [ -n "${PY_REAL:-}" ]; then
+  OP_AGREE=$(PYTHONIOENCODING=utf-8 "$PY_REAL" - "$OPERATOR" "$AGENT_POLICY" <<'PY' 2>/dev/null
+import io, json, re, sys
+op = io.open(sys.argv[1], encoding="utf-8").read()
+pol = json.load(io.open(sys.argv[2], encoding="utf-8"))
+ids = sorted(a["id"] for a in pol["agents"] if a.get("layer") == "spoke")
+parts = op.split("### 3. Spokes")
+if len(parts) < 2:
+    print("nosection"); raise SystemExit
+sec = parts[1].split("\n## ")[0]
+named = sorted(set(i for i in ids if i in sec))
+missing = [i for i in ids if i not in named]
+if missing:
+    print("missing:" + ",".join(missing)); raise SystemExit
+if not re.search(r"activation-policy\.json", op):
+    print("nosource"); raise SystemExit
+print("ok")
+PY
+)
+  case "$OP_AGREE" in
+    ok) pass "operator spoke section names every policy spoke and defers to the policy as source" ;;
+    nosection) fail "operator has no spoke section — the method a session reads would not know the layer" ;;
+    nosource) fail "operator does not name activation-policy.json as the source (two sources, one will drift)" ;;
+    missing:*) fail "operator omits policy spoke(s): ${OP_AGREE#missing:}" ;;
+    *) fail "could not compare operator against policy (got: ${OP_AGREE:-<empty>})" ;;
+  esac
+fi
+
 
 
 
