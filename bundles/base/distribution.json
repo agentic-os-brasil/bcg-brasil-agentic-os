@@ -534,6 +534,10 @@
       "path": "tools/brain-route.py"
     },
     {
+      "source": "bundles/base/tools/session-memory-emit.py",
+      "path": "tools/session-memory-emit.py"
+    },
+    {
       "source": "bundles/base/tools/skill-route.py",
       "path": "tools/skill-route.py"
     },
