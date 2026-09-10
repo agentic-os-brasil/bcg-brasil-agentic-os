@@ -25,6 +25,7 @@
 | Ingestão de Conteúdo | Extrai documentos profissionais localmente e com segurança | `skills/ingest-content/SKILL.md` |
 | Perfil de Interação | Aplica a preferência de comunicação e de detalhe do owner no Maestro | `skills/interaction-profile/SKILL.md` |
 | Investigar | Encontra a causa raiz de um resultado errado ou inesperado | `skills/investigate/SKILL.md` |
+| Aprender com os Logs | Lê conversas anteriores com o Claude para propor rascunhos ou atualizações ao perfil do dono, sempre com confirmação individual | `skills/learn-from-logs/SKILL.md` |
 | Ponte de Aprendizados | Promove aprendizados do dia a dia para conhecimento durável do owner | `skills/learnings-bridge/SKILL.md` |
 | Diagnóstico do Maestro | Faz um diagnóstico da instalação do Maestro em linguagem simples | `skills/maestro-doctor/SKILL.md` |
 | Preparar Ambiente Maestro | Prepara workspace, runtime e manutenção local | `skills/maestro-environment-setup/SKILL.md` |
@@ -35,6 +36,7 @@
 | Instalação e Atualização do Maestro | Conduz instalação, atualização e recuperação de forma conversacional | `skills/maestro-setup-update/SKILL.md` |
 | Fechamento de Reunião | Transforma notas de reunião em um pacote de fechamento revisável | `skills/meeting-close/SKILL.md` |
 | Reunião em Itens de Trabalho | Extrai decisões, tarefas e follow-ups das notas de reunião | `skills/meeting-to-work-items/SKILL.md` |
+| Background do dono | Registra formação, trajetória antes do BCG e aspirações de carreira e de vida | `skills/owner-background/SKILL.md` |
 | Gate de QA | Classifica a qualidade de uma mudança com evidência proporcional | `skills/qa-gate/SKILL.md` |
 | Análise Qualitativa | Sintetiza evidência qualitativa delimitada em temas e implicações | `skills/qualitative-analysis/SKILL.md` |
 | Análise Quantitativa | Analisa evidência quantitativa delimitada com premissas e checagens explícitas | `skills/quantitative-analysis/SKILL.md` |

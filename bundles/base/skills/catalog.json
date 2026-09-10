@@ -149,6 +149,13 @@
       "relative_path": "skills/investigate/SKILL.md"
     },
     {
+      "id": "learn-from-logs",
+      "display_name": "Aprender com os Logs",
+      "trigger": "Lê conversas anteriores com o Claude para propor rascunhos ou atualizações ao perfil do dono, sempre com confirmação individual",
+      "default_prompt": "Use $learn-from-logs para ler minhas conversas novas com o Claude (chat ou Claude Code) e propor atualizações ao meu perfil, uma de cada vez.",
+      "relative_path": "skills/learn-from-logs/SKILL.md"
+    },
+    {
       "id": "learnings-bridge",
       "display_name": "Ponte de Aprendizados",
       "trigger": "Promove aprendizados do dia a dia para conhecimento durável do owner",
@@ -217,6 +224,13 @@
       "trigger": "Extrai decisões, tarefas e follow-ups das notas de reunião",
       "default_prompt": "Use $meeting-to-work-items para estruturar as notas de reunião fornecidas sem criar tarefas.",
       "relative_path": "skills/meeting-to-work-items/SKILL.md"
+    },
+    {
+      "id": "owner-background",
+      "display_name": "Background do dono",
+      "trigger": "Registra formação, trajetória antes do BCG e aspirações de carreira e de vida",
+      "default_prompt": "Use $owner-background para registrar minha formação, minha trajetória antes do BCG e minhas aspirações.",
+      "relative_path": "skills/owner-background/SKILL.md"
     },
     {
       "id": "qa-gate",
