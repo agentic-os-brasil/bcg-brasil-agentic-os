@@ -290,6 +290,22 @@
       "path": "skills/investigate/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/learn-from-logs/SKILL.md",
+      "path": "skills/learn-from-logs/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/learn-from-logs/agents/openai.yaml",
+      "path": "skills/learn-from-logs/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/learn-from-logs/references/extraction-and-mapping.md",
+      "path": "skills/learn-from-logs/references/extraction-and-mapping.md"
+    },
+    {
+      "source": "bundles/base/skills/learn-from-logs/references/provenance.md",
+      "path": "skills/learn-from-logs/references/provenance.md"
+    },
+    {
       "source": "bundles/base/skills/learnings-bridge/SKILL.md",
       "path": "skills/learnings-bridge/SKILL.md"
     },
@@ -368,6 +384,14 @@
     {
       "source": "bundles/base/skills/meeting-to-work-items/agents/openai.yaml",
       "path": "skills/meeting-to-work-items/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/owner-background/SKILL.md",
+      "path": "skills/owner-background/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/owner-background/agents/openai.yaml",
+      "path": "skills/owner-background/agents/openai.yaml"
     },
     {
       "source": "bundles/base/skills/qa-gate/SKILL.md",
