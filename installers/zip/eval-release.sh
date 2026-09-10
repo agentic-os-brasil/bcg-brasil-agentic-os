@@ -1368,11 +1368,13 @@ if [ -f "$PY_LIB" ]; then
     printf '%s' "$d"
   }
   PY_REAL=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
+  PY_EMPTY_PATH=$(mktemp -d -t maestro-eval-empty-path-XXXXXX)
+  ln -s "$(command -v dirname)" "$PY_EMPTY_PATH/dirname"
 
   if [ -n "$PY_REAL" ]; then
     PY_ONLY_PYTHON=$(py_stub_dir python "#!/bin/sh
 exec \"$PY_REAL\" \"\$@\"")
-    RESOLVED=$(env PATH="$PY_ONLY_PYTHON:/usr/bin:/bin" bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    RESOLVED=$(env PATH="$PY_ONLY_PYTHON:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
     [ "$RESOLVED" = "python" ] \
       && pass "resolver finds 'python' when 'python3' is absent" \
       || fail "resolver did not find 'python' when 'python3' is absent (got: ${RESOLVED:-<none>})"
@@ -1380,7 +1382,7 @@ exec \"$PY_REAL\" \"\$@\"")
     PY_ONLY_LAUNCHER=$(py_stub_dir py "#!/bin/sh
 shift
 exec \"$PY_REAL\" \"\$@\"")
-    RESOLVED=$(env PATH="$PY_ONLY_LAUNCHER:/usr/bin:/bin" bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    RESOLVED=$(env PATH="$PY_ONLY_LAUNCHER:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
     [ "$RESOLVED" = "py -3" ] \
       && pass "resolver falls back to the 'py -3' launcher" \
       || fail "resolver did not fall back to 'py -3' (got: ${RESOLVED:-<none>})"
@@ -1395,7 +1397,7 @@ exec \"$PY_REAL\" \"\$@\"")
   # the silent failure this resolver exists to end.
   PY_TWO=$(py_stub_dir python '#!/bin/sh
 exit 1')
-  RESOLVED=$(env PATH="$PY_TWO:/usr/bin:/bin" bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+  RESOLVED=$(env PATH="$PY_TWO:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
   [ -z "$RESOLVED" ] \
     && pass "resolver rejects a 'python' that is not Python 3" \
     || fail "resolver selected a non-Python-3 interpreter (got: $RESOLVED)"
@@ -1423,8 +1425,8 @@ exit 1')
     chmod +x "$PY_REC_ROOT/with space/maestro-python"
     printf '%s\n' "$PY_REC_ROOT/with space/maestro-python" > "$PY_REC_ROOT/data/.maestro-python"
 
-    RAN=$(env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
-            bash -c ". '$PY_LIB'; maestro_py -c 'print(\"ran\")'" 2>/dev/null)
+    RAN=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
+            /bin/bash -c ". '$PY_LIB'; maestro_py -c 'print(\"ran\")'" 2>/dev/null)
     [ "$RAN" = "ran" ] \
       && pass "a recorded interpreter resolves and runs, including a path with a space" \
       || fail "recorded interpreter did not run (got: ${RAN:-<none>})"
@@ -1433,8 +1435,8 @@ exit 1')
     # carried in a workspace copied to another machine. It must be skipped, not
     # trusted, or provisioning leaves behind a permanent false positive.
     printf '%s\n' "$PY_REC_ROOT/gone/maestro-python" > "$PY_REC_ROOT/data/.maestro-python"
-    RESOLVED=$(env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
-                 bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    RESOLVED=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
+                 /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
     [ -z "$RESOLVED" ] \
       && pass "a stale interpreter record is rejected rather than trusted" \
       || fail "stale interpreter record was accepted (got: $RESOLVED)"
@@ -1445,7 +1447,7 @@ exit 1')
     if [ -f "$MEM_HOOK" ]; then
       mkdir -p "$PY_REC_ROOT/data/memory/recent"
       rm -f "$PY_REC_ROOT/data/.maestro-python"
-      NUDGE=$(env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" bash "$MEM_HOOK" 2>/dev/null)
+      NUDGE=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" /bin/bash "$MEM_HOOK" 2>/dev/null)
       case "$NUDGE" in
         *maestro:python-missing*) pass "SessionStart names a missing interpreter instead of degrading in silence" ;;
         *) fail "SessionStart emitted no signal for a missing interpreter" ;;
@@ -1459,8 +1461,107 @@ exit 1')
 
     rm -rf "$PY_REC_ROOT"
   fi
+  rm -rf "$PY_EMPTY_PATH"
 else
   fail "hooks/lib/python.sh missing from ZIP"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 20 — Agent calls are wired without changing the data/ contract"
+# --------------------------------------------------------------------------
+
+AGENT_POLICY="$MAESTRO_DIR/bundles/base/agents/activation-policy.json"
+AGENT_ROUTER="$MAESTRO_DIR/bundles/base/tools/agent-route.py"
+ANNOUNCE_HOOK="$MAESTRO_DIR/.claude/hooks/announce-agent-dispatch.sh"
+CI_HOOK="$MAESTRO_DIR/.claude/hooks/context-inject-userprompt.sh"
+
+if [ -f "$AGENT_POLICY" ] && [ -f "$AGENT_ROUTER" ]; then
+  pass "activation policy and agent router both ship"
+else
+  fail "activation policy or agent router missing from ZIP"
+fi
+
+MISSING_PROJ=""
+for spoke in yoda darwin gamma-guardian pa-expert; do
+  [ -f "$MAESTRO_DIR/.claude/agents/$spoke.md" ] || MISSING_PROJ="$MISSING_PROJ $spoke"
+done
+if [ -z "$MISSING_PROJ" ]; then
+  pass "every declared spoke has a .claude/agents projection"
+else
+  fail "spoke projection(s) missing:$MISSING_PROJ"
+fi
+
+if [ -f "$AGENT_POLICY" ]; then
+  if grep -q 'brain/' "$AGENT_POLICY"; then
+    fail "activation policy references brain/ and would change the 0.1.11 data contract"
+  else
+    pass "activation policy preserves the 0.1.11 data/ contract"
+  fi
+fi
+
+if [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
+  ROUTE_QUIET=$(cd "$MAESTRO_DIR" && printf 'pode me ajudar a montar o slide de decisao do projeto' \
+                  | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+  [ -z "$ROUTE_QUIET" ] \
+    && pass "router stays silent on ordinary work" \
+    || fail "router fired on an ordinary request"
+
+  ROUTE_HIT=$(cd "$MAESTRO_DIR" && printf 'chama o yoda para revisar essa recomendacao' \
+                | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+  case "$ROUTE_HIT" in
+    *yoda*) pass "router resolves an explicit agent request" ;;
+    *) fail "router did not resolve an explicit request for yoda" ;;
+  esac
+
+  ROUTE_DORMANT=$(cd "$MAESTRO_DIR" && printf 'chama o pa-expert para trazer a visao de pratica' \
+                    | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+  case "$ROUTE_DORMANT" in
+    *pa-expert*) fail "router dispatched pa-expert although it is dormant" ;;
+    *) pass "router honours the dormant pa-expert declaration" ;;
+  esac
+else
+  skip "no interpreter on this host to exercise the agent router"
+fi
+
+if [ -f "$ANNOUNCE_HOOK" ] && [ -n "${PY_REAL:-}" ]; then
+  ANN=$(printf '{"tool_name":"Agent","tool_input":{"subagent_type":"yoda","prompt":"x"}}' \
+        | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" 2>/dev/null)
+  ANN_OK=$(printf '%s' "$ANN" | "$PY_REAL" -c 'import sys,json
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print("nojson"); raise SystemExit
+h=d.get("hookSpecificOutput") or {}
+print("ok" if h.get("additionalContext") else "nocontext")' 2>/dev/null)
+  [ "$ANN_OK" = "ok" ] \
+    && pass "announce hook returns additionalContext to the hub" \
+    || fail "announce hook does not return usable additionalContext"
+
+  env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" \
+    < /dev/null >/dev/null 2>&1
+  [ $? -eq 0 ] \
+    && pass "announce hook fails open without an interpreter" \
+    || fail "announce hook blocks dispatch without an interpreter"
+else
+  skip "announce hook or interpreter unavailable"
+fi
+
+if [ -f "$CI_HOOK" ] && [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
+  CI_HOME=$(mktemp -d -t maestro-eval-cihome-XXXXXX)
+  CI_OUT=$(printf '{"prompt":"chama o yoda para revisar essa recomendacao"}' \
+           | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)
+  case "$CI_OUT" in
+    *yoda*) pass "context-inject reaches the router for an explicit request" ;;
+    *) fail "context-inject did not reach the router" ;;
+  esac
+
+  CI_QUIET=$(printf '{"prompt":"me ajuda a montar o slide de decisao"}' \
+             | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)
+  case "$CI_QUIET" in
+    *yoda*|*darwin*|*gamma-guardian*) fail "context-inject routed ordinary work" ;;
+    *) pass "context-inject stays quiet on ordinary work" ;;
+  esac
+  rm -rf "$CI_HOME"
 fi
 
 
