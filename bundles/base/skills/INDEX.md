@@ -47,4 +47,5 @@
 | Upward Feedback | Prepara um feedback consistente para dar a um colega sênior | `skills/upward-feedback/SKILL.md` |
 | Wayfinder | Estrutura um problema aberto até o primeiro movimento | `skills/wayfinder/SKILL.md` |
 | Alias Legado do Case Agent | Redireciona o nome aposentado workspace-agent-setup | `skills/workspace-agent-setup/SKILL.md` |
+| Apertar a escrita | Corta o excesso de um texto já escrito, na voz registrada do dono, sem mudar o que ele afirma | `skills/writing-tighten/SKILL.md` |
 | Yoda — pressure-test | Roda revisão sênior interna de proposta ou decisão de alta materialidade antes do owner | `skills/yoda/SKILL.md` |

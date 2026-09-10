@@ -466,6 +466,14 @@
       "path": "skills/wayfinder/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/writing-tighten/SKILL.md",
+      "path": "skills/writing-tighten/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/writing-tighten/agents/openai.yaml",
+      "path": "skills/writing-tighten/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/workspace-agent-setup/SKILL.md",
       "path": "skills/workspace-agent-setup/SKILL.md"
     },

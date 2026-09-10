@@ -303,6 +303,13 @@
       "relative_path": "skills/workspace-agent-setup/SKILL.md"
     },
     {
+      "id": "writing-tighten",
+      "display_name": "Apertar a escrita",
+      "trigger": "Corta o excesso de um texto já escrito, na voz registrada do dono, sem mudar o que ele afirma",
+      "default_prompt": "Use $writing-tighten para apertar este texto: corte preâmbulo, nominalização e hedge empilhado, mantenha cada afirmação, número e atribuição, e me mostre o que cortou e o que decidiu não cortar.",
+      "relative_path": "skills/writing-tighten/SKILL.md"
+    },
+    {
       "id": "yoda",
       "display_name": "Yoda — pressure-test",
       "trigger": "Roda revisão sênior interna de proposta ou decisão de alta materialidade antes do owner",
