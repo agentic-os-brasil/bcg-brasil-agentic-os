@@ -14,7 +14,7 @@ description: Run an internal pressure-test of a high-materiality proposal, decis
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` skill before composing the review packet or reporting the verdict. It only calibrates explanation depth for the requesting agent; it never changes the review contract, verdict vocabulary or Yoda's read-only stance.
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) skill before composing the review packet or reporting the verdict. It only calibrates explanation depth for the requesting agent; it never changes the review contract, verdict vocabulary or Yoda's read-only stance.
 
 Yoda is Maestro's Senior Advisor and Refiner. This skill is the entry point
 producing agents use to invoke him. The full mandate, judgment model and
@@ -39,9 +39,28 @@ as a rubber-stamp before every response. Overuse degrades the signal.
 
 ## Invocation contract
 
+> **This skill is not the reviewer — it is how the packet is built.** There is a
+> skill named `yoda` and a native subagent named `yoda`, and until 2026-09-06
+> nothing said which one "invoke Yoda" meant. Measured live, the message router
+> answered the *skill* for every phrasing, so the review that
+> [`maestro-operator`](../maestro-operator/SKILL.md) declares mandatory never reached the agent that performs
+> it. The two are now explicitly split:
+>
+> - **This file** — when review is warranted, and what the sealed packet must
+>   contain. Read it to compose.
+> - **The subagent** (`.claude/agents/yoda.md`, spec
+>   `bundles/base/agents/yoda/AGENT.md`) — the reviewer itself. Dispatch it with
+>   the Agent tool, `subagent_type: "yoda"`, passing the packet in the prompt.
+>
+> Composing the packet and never dispatching is not a review. The declared rule
+> for when to dispatch lives in
+> `bundles/base/agents/activation-policy.json`.
+
 - Maestro composes a sealed `IntentReviewPacket` — literal prompt, selected
   route, draft, audience, consequence, reversibility, minimum context,
   `UserSelfSnapshot` projection, applicable observation metadata.
+- Maestro then dispatches the `yoda` subagent with that packet. The Agent call
+  **is** the invocation; there is no other path.
 - Yoda reads only the packet. He has no tools, no retrieval, no delegation.
   Missing evidence is a review finding, never an invitation to browse.
 - Yoda never speaks to the owner directly. His verdict returns to the
