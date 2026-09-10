@@ -136,3 +136,13 @@ packet bodies or transcript context.
 - Emoji: `🧬`
 - Ownership scope: `governance`
 - Maintenance scope: `health/maestro-system`
+
+## Runnable projection
+
+This spec is canonical. Its runnable projection lives at `.claude/agents/darwin.md`
+and is what the host runtime actually dispatches (`native_advisory` mode in
+`agents/catalog.json`). The projection translates this contract into the
+vocabulary the runtime has — files, tools, a returned report — and drops the
+control-plane ceremony (sealed packets, digests, receipts, `DoneContract`) that
+has no implementation here. When the two disagree, this file wins and the
+projection is the bug.

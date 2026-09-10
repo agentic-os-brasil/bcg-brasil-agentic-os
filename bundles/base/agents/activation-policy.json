@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "policy_id": "agent-activation-v1",
+  "updated": "2026-09-06",
+  "note": "Fonte unica de quando o hub chama cada agente. Nao ha segunda copia: editar este arquivo e como se muda o comportamento. ATENCAO - os leitores ainda nao estao neste repositorio: agent-route.py (roteamento por mensagem, via .claude/hooks/context-inject-userprompt.sh) e .claude/hooks/session-stop-agent-check.sh (gatilho periodico) chegam na PR de despacho. Ate entao este arquivo e a declaracao da politica e nao altera comportamento nenhum, e vale dizer isso em vez do contrario. A tabela de spokes em bundles/base/skills/maestro-operator/SKILL.md e prosa derivada desta politica, nunca a fonte.",
+  "layers": {
+    "hub": "A propria sessao. Nao se despacha, nao se invoca, nao e subagente.",
+    "instance": "Identidade e escopo que a sessao assume quando ha caso ativo. E o que a sessao vira, nao algo que ela chama.",
+    "spoke": "Subagente nativo em .claude/agents/. Despachado pela ferramenta Agent com um pacote fechado."
+  },
+  "dispatch_rules": {
+    "max_depth": 2,
+    "max_active_branches": 1,
+    "parallel_when": "escopos independentes que nao conflitam podem ir no mesmo bloco de mensagem",
+    "packet_is_closed": "o spoke nao busca contexto: o que ele precisa vai no prompt",
+    "verdict_is_input": "o retorno do spoke e insumo, nao saida; o hub continua responsavel pela resposta",
+    "budget_not_gate": "max_depth e max_active_branches sao ORCAMENTO OBSERVAVEL, nao condicao de validade. A spec 023 e explicita: 'branch count, order, depth and nesting are planning guidance and observable budgets, not validity conditions for otherwise safe work', e a postura default dela e receita consultiva, nao portao de execucao. Quem implementar o roteador nao deve barrar trabalho seguro por estourar um destes numeros: excedeu, registra e segue. Barrar aqui seria inverter a spec por causa do nome do campo."
+  },
+  "announce": {
+    "required": true,
+    "since": "2026-09-06",
+    "rule": "Todo despacho de spoke e anunciado no chat. O dono pediu explicitamente esta visibilidade em 2026-09-06: ele quer saber que agente foi ativado, sem ter que perguntar.",
+    "format": "{emoji} **{display} ativado** — {motivo em meia linha, na lingua do dono}.",
+    "on_return": "Quando o veredito muda o que vai ser entregue, diga em uma linha que o agente voltou e o que mudou. Quando nao muda nada, basta seguir - nao encha o chat com ida e volta sem consequencia.",
+    "never": "Nao anuncie agente que voce NAO despachou. Nao anuncie a camada de instancia (conta e caso): ela nao e despachada, a sessao ja e ela, e o SessionStart ja a mostra. Anunciar sem despachar e pior que nao anunciar.",
+    "exception_to_advisory_posture": "O CLAUDE.md manda nao surfacar arquitetura interna, roteamento e hooks salvo pedido explicito. Este e o pedido explicito, e vale so para a ativacao de agente.",
+    "timing": "Antes da chamada da ferramenta Agent quando o despacho nasce de uma mensagem do dono — e o agent-route.py que cobra ai, e e o unico ponto que consegue cobrar ANTES. Quando o despacho nasce de marcador periodico, de portao ou de decisao propria do hub, o anuncio sai junto do resultado na mesma rodada: o hook de PreToolUse dispara depois da chamada ja composta, entao ele e rede e nao portao. Nao prometer 'antes' onde o mecanismo so alcanca 'na mesma rodada'."
+  },
+  "agents": [
+    {
+      "id": "maestro",
+      "layer": "hub",
+      "status": "active",
+      "emoji": "🎼",
+      "spec": "bundles/base/agents/maestro/AGENT.md",
+      "method": "bundles/base/skills/maestro-operator/SKILL.md",
+      "dispatchable": false,
+      "when": "Sempre. E esta sessao.",
+      "never": "Nao se despacha como subagente.",
+      "triggers": []
+    },
+    {
+      "id": "client-account-agent",
+      "layer": "instance",
+      "status": "active",
+      "emoji": "🏢",
+      "spec": "bundles/base/agents/client-account-agent/AGENT.md",
+      "state": "brain/accounts/<conta>/agent.json",
+      "dispatchable": false,
+      "when": "Ativado pelo SessionStart quando brain/accounts/.active nomeia uma conta. A sessao assume a identidade e o escopo da conta.",
+      "never": "Nao e despachado pela ferramenta Agent. Nao e um raciocinador separado.",
+      "triggers": []
+    },
+    {
+      "id": "case-agent",
+      "layer": "instance",
+      "status": "active",
+      "emoji": "📁",
+      "spec": "bundles/base/agents/case-agent/AGENT.md",
+      "state": "brain/accounts/<conta>/cases/<caso>/agent.json",
+      "dispatchable": false,
+      "when": "Ativado pelo SessionStart quando brain/accounts/.active nomeia um caso. E o escopo de trabalho ativo da sessao.",
+      "never": "Nao e despachado pela ferramenta Agent. Nao e um raciocinador separado.",
+      "triggers": []
+    },
+    {
+      "id": "yoda",
+      "layer": "spoke",
+      "status": "active",
+      "emoji": "🧙",
+      "spec": "bundles/base/agents/yoda/AGENT.md",
+      "projection": ".claude/agents/yoda.md",
+      "subagent_type": "yoda",
+      "dispatchable": true,
+      "when": "Antes de output de alta alavancagem sair: recomendacao material, trade-off consequente, artefato que vai para cliente ou stakeholder externo, escolha dificil de reverter, mudanca de regra permanente ou de configuracao compartilhada.",
+      "never": "Trabalho operacional, reversivel, de baixa alavancagem. Formatacao. Carimbo antes de toda resposta - o uso excessivo degrada o sinal.",
+      "packet": [
+        "o pedido literal do dono",
+        "o rascunho produzido, inteiro",
+        "a audiencia nomeada",
+        "a consequencia se estiver errado",
+        "a reversibilidade",
+        "as referencias de evidencia"
+      ],
+      "gate": "client-delivery-gate",
+      "after_verdict": "refine ou missing-the-mark devolvem o controle ao hub: aplicar a correcao concreta e so entao re-sintetizar para o dono. Instrucao local nao dispensa uma exigencia de revisao ja resolvida.",
+      "triggers": [
+        "revisa antes de mandar",
+        "revisar antes de enviar",
+        "pressure-test disso",
+        "yoda check",
+        "isso vai para o cliente",
+        "vai para o comite",
+        "manda para o parceiro",
+        "recomendacao material",
+        "decisao dificil de reverter",
+        "trade-off consequente",
+        "antes de apresentar para a lideranca",
+        "esse deck sai amanha"
+      ],
+      "auto": null
+    },
+    {
+      "id": "darwin",
+      "layer": "spoke",
+      "status": "active",
+      "emoji": "🧬",
+      "spec": "bundles/base/agents/darwin/AGENT.md",
+      "projection": ".claude/agents/darwin.md",
+      "subagent_type": "darwin",
+      "dispatchable": true,
+      "when": "Saude do proprio sistema: deriva entre o que esta especificado e o que roda, lacuna de confiabilidade, cobertura de agente e de skill, custo e atrito, apodrecimento do contexto injetado no SessionStart.",
+      "never": "Trabalho de caso. Material de cliente. Conversa com o dono - Darwin devolve ao hub.",
+      "packet": [
+        "o escopo da avaliacao (sistema inteiro, ou a area nomeada)",
+        "o que mudou desde a ultima avaliacao",
+        "os marcadores e diagnosticos vigentes em brain/.maestro/"
+      ],
+      "triggers": [
+        "saude do sistema",
+        "saude do maestro",
+        "o que esta inerte",
+        "arquivo especificado e nunca lido",
+        "deriva entre especificacao e execucao",
+        "cobertura de skill",
+        "cobertura de agente",
+        "auditoria do proprio sistema",
+        "apodrecimento de contexto",
+        "governanca do maestro"
+      ],
+      "auto": {
+        "kind": "periodic",
+        "marker": "brain/.maestro/.darwin-requested",
+        "stamp": "brain/.maestro/agent-runs.json",
+        "cooldown_days": 7,
+        "also_when": "diagnostics.json acusa link quebrado, lacuna de contrato ou caminho morto",
+        "rationale": "Deriva entre o especificado e o que roda nao se anuncia. Sem cadencia automatica ela so aparece quando alguem tropeca nela - foi assim que o subsistema de agentes ficou inerte de 16/08 a 05/09 sem ninguem notar."
+      }
+    },
+    {
+      "id": "gamma-guardian",
+      "layer": "spoke",
+      "status": "active",
+      "emoji": "🧪",
+      "spec": "bundles/base/agents/gamma-guardian/AGENT.md",
+      "projection": ".claude/agents/gamma-guardian.md",
+      "subagent_type": "gamma-guardian",
+      "dispatchable": true,
+      "when": "Qualidade longitudinal de codigo de uma workspace autorizada, contra um head de fonte: Clean Code, Arquitetura, Testes, Seguranca/Confiabilidade e Documentacao.",
+      "never": "Herdando contexto de caso. Avaliando material de cliente. Sem workspace e head declarados.",
+      "packet": [
+        "a workspace autorizada, por caminho absoluto",
+        "o head de fonte (commit, tag ou data da ultima alteracao)",
+        "o que mudou desde a ultima avaliacao"
+      ],
+      "triggers": [
+        "qualidade do codigo",
+        "avaliacao longitudinal de codigo",
+        "nota de clean code",
+        "cobertura de teste do sistema",
+        "divida tecnica do maestro",
+        "semaforo de qualidade",
+        "o codigo esta saudavel"
+      ],
+      "auto": {
+        "kind": "on_change",
+        "marker": "brain/.maestro/.gamma-requested",
+        "stamp": "brain/.maestro/agent-runs.json",
+        "cooldown_days": 14,
+        "watch": [
+          ".claude/hooks/*.sh",
+          "bundles/*/tools/*.py",
+          "tests/*.sh",
+          "tests/*.py"
+        ],
+        "rationale": "Qualidade longitudinal so significa alguma coisa se for medida em serie. Disparar por mudanca de codigo, e nao por lembranca, e o que produz a serie."
+      }
+    },
+    {
+      "id": "pa-expert",
+      "layer": "spoke",
+      "status": "dormant",
+      "emoji": "🧠",
+      "spec": "bundles/base/agents/pa-expert/AGENT.md",
+      "projection": ".claude/agents/pa-expert.md",
+      "subagent_type": "pa-expert",
+      "dispatchable": false,
+      "dormant_since": "2026-09-06",
+      "dormant_reason": "bundles/base/agents/pa-expert-registry.json tem experts: []. A unica leitura permitida ao spoke e esse registro, entao despacha-lo so pode devolver SEM CANONE APLICAVEL. Fica no disco, nao e roteado e nao aparece ao hub ate ter canone. Reativar = registrar ao menos um expert e trocar status para active.",
+      "when": "Enquanto dormente: nunca. Quando ativo: uma perspectiva de pratica (FPA ou IPA), presa ao canone versionado do registro.",
+      "never": "Com contexto de cliente ou de caso no pacote. Para pesquisa aberta ou opiniao generica.",
+      "packet": [
+        "a pergunta de pratica, ja higienizada - sem cliente, sem projeto, sem dado de caso"
+      ],
+      "triggers": []
+    }
+  ]
+}
