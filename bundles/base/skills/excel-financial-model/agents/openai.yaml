@@ -1,0 +1,4 @@
+interface:
+  display_name: "Modelo financeiro em Excel"
+  short_description: "Constrói ou reestrutura um modelo em Excel que precisa amarrar e ir a comitê, com origem única por número e aba Overview obrigatória"
+  default_prompt: "Use $excel-financial-model para montar ou reorganizar este modelo: cada número com uma origem rastreável, cada visão derivada amarrando com a base na própria planilha, e a aba Overview dizendo onde digitar e onde não tocar."

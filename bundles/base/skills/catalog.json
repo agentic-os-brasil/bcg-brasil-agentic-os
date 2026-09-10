@@ -58,6 +58,20 @@
       "relative_path": "skills/case-decision-log-entry/SKILL.md"
     },
     {
+      "id": "case-sharepoint-ingest",
+      "display_name": "SharePoint do Case",
+      "trigger": "Lê a pasta SharePoint do case ativo e propõe candidatos a canon por módulo",
+      "default_prompt": "Use $case-sharepoint-ingest para ler a pasta SharePoint do case ativo e propor cada documento recente como candidato a canon, ligado ao módulo certo.",
+      "relative_path": "skills/case-sharepoint-ingest/SKILL.md"
+    },
+    {
+      "id": "case-sharepoint-map",
+      "display_name": "Mapa do SharePoint do Case",
+      "trigger": "Mapeia onde cada tipo de informação mora no SharePoint do case ativo",
+      "default_prompt": "Use $case-sharepoint-map para mapear a estrutura do SharePoint do case ativo e gravar um guia de navegação em sources/.",
+      "relative_path": "skills/case-sharepoint-map/SKILL.md"
+    },
+    {
       "id": "client-delivery-gate",
       "display_name": "Gate de Entrega ao Cliente",
       "trigger": "Checagem de qualidade em três lentes antes de qualquer entrega ao cliente",
@@ -98,6 +112,13 @@
       "trigger": "Fecha o dia e deixa um ponto de partida para amanhã",
       "default_prompt": "Use $eod para fechar o dia na minha página diária e antecipar a primeira prioridade de amanhã.",
       "relative_path": "skills/eod/SKILL.md"
+    },
+    {
+      "id": "excel-financial-model",
+      "display_name": "Modelo financeiro em Excel",
+      "trigger": "Constrói ou reestrutura um modelo em Excel que precisa amarrar e ir a comitê, com origem única por número e aba Overview obrigatória",
+      "default_prompt": "Use $excel-financial-model para montar ou reorganizar este modelo: cada número com uma origem rastreável, cada visão derivada amarrando com a base na própria planilha, e a aba Overview dizendo onde digitar e onde não tocar.",
+      "relative_path": "skills/excel-financial-model/SKILL.md"
     },
     {
       "id": "execution-continuity",
