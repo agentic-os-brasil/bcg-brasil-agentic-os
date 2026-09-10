@@ -39,9 +39,9 @@ set -eu
 . "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null || true
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-DATA_DIR="$PROJECT_DIR/data"
-PROFILE_DIR="$DATA_DIR/profile"
-MEMORY_DIR="$DATA_DIR/memory"
+BRAIN_DIR="$PROJECT_DIR/brain"
+OWNER_DIR="$BRAIN_DIR/owner"
+MEMORY_DIR="$BRAIN_DIR/memory"
 
 FIRST_BUDGET=1600
 NEXT_BUDGET=160
@@ -75,7 +75,7 @@ emit_minimal() {
   # Absolute fallback — used on any read error. Points at the memory root,
   # which the scaffold always creates. Naming a specific index file here would
   # assert a path that may not exist.
-  printf '<!-- maestro:context-inject:minimal -->\nMemory: %s/data/memory/ (load on demand).\n' "$PROJECT_DIR"
+  printf '<!-- maestro:context-inject:minimal -->\nMemory: %s/brain/memory/ (load on demand).\n' "$PROJECT_DIR"
 }
 
 # Trap any unexpected error -> emit minimal, exit 0.
@@ -85,7 +85,7 @@ if [ -f "$MARKER" ]; then
   # -------- subsequent fires: stub only --------
   {
     printf '<!-- maestro:context-inject:stub -->\n'
-    printf 'Memory: %s/data/memory/ · Load specific tiers on demand.\n' "$PROJECT_DIR"
+    printf 'Memory: %s/brain/memory/ · Load specific tiers on demand.\n' "$PROJECT_DIR"
   } | truncate_stdout "$NEXT_BUDGET"
   exit 0
 fi
@@ -98,7 +98,7 @@ fi
   printf '# Context pointers\n'
 
   # Profile identity headline (name / role / track) — best-effort.
-  IDENTITY_FILE="$PROFILE_DIR/identity.json"
+  IDENTITY_FILE="$OWNER_DIR/identity.json"
   if [ -f "$IDENTITY_FILE" ] && maestro_python >/dev/null 2>&1; then
     HEADLINE=$(maestro_py - "$IDENTITY_FILE" <<'PY' 2>/dev/null || true
 import json, sys
@@ -125,7 +125,7 @@ PY
   # actually exists: neither MEMORY.md nor decisions/decision-log.md is created
   # by the scaffold, and naming a file that is not there invites a failed read
   # on the first turn of every session.
-  printf 'Memory: %s/data/memory/\n' "$PROJECT_DIR"
+  printf 'Memory: %s/brain/memory/\n' "$PROJECT_DIR"
   if [ -f "$MEMORY_DIR/MEMORY.md" ]; then
     printf 'Memory index: %s/MEMORY.md\n' "$MEMORY_DIR"
   fi

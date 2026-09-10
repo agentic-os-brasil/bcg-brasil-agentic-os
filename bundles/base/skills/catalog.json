@@ -250,7 +250,7 @@
       "id": "sharepoint-ingest",
       "display_name": "Ingestão do SharePoint",
       "trigger": "Ingerir pastas SharePoint autorizadas e generalizar conceitos do trajeto",
-      "default_prompt": "Use $sharepoint-ingest para ler as pastas autorizadas do SharePoint na sessão, materializar rationales delimitados por documento em data/memory/sharepoint-rationales/ e construir um índice de conceitos generalizados em brain/knowledge/sharepoint-rationales/ para o trajeto da pasta.",
+      "default_prompt": "Use $sharepoint-ingest para ler as pastas autorizadas do SharePoint na sessão, materializar rationales delimitados por documento em brain/memory/sharepoint-rationales/ e construir um índice de conceitos generalizados em brain/knowledge/sharepoint-rationales/ para o trajeto da pasta.",
       "relative_path": "skills/sharepoint-ingest/SKILL.md"
     },
     {

@@ -7,7 +7,7 @@ description: Close the working day on the owner's daily page — what got done, 
 
 Close the day honestly and leave tomorrow a starting point.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## Interaction profile
 

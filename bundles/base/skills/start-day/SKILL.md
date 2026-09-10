@@ -8,7 +8,7 @@ description: Open or resume the working day at whatever hour the owner appears, 
 Compose one briefing scoped to the hours that actually remain, and record it on
 today's page.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## Interaction profile
 

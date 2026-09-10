@@ -20,7 +20,7 @@
 #
 # The policy now splits:
 #
-#   - Outside data/cases/  -> always allow. Errors there are not this hook's
+#   - Outside brain/accounts/ -> always allow. Errors there are not this hook's
 #     business and must never block ordinary work.
 #   - Inside a case dir    -> allowed only when it can be POSITIVELY shown to
 #     target the active (or pending) case. If the marker is missing, empty or
@@ -31,15 +31,16 @@
 # because it seemed prudent:
 #
 #   1. `..` traversal. Segments were compared literally, so
-#      data/cases/alpha/../beta/leak.md matched the ACTIVE case on its leading
-#      segment and was allowed, while the OS resolved `..` and wrote into beta.
+#      accounts/alfa/cases/x/../../../beta/cases/y/leak.md matched the ACTIVE
+#      pair on its leading segments and was allowed, while the OS resolved the
+#      `..` and wrote into another client's case.
 #      Paths are now canonicalized lexically (canon_path) before any segment
 #      is read.
 #   2. Case. Only the drive letter was lowercased, but Windows is
 #      case-insensitive: C:\USERS\... is the same file and failed the prefix
 #      test, falling through to allow. Comparison happens on a lowercased copy.
-#   3. Double separator. data/cases//alpha left an empty segment that never
-#      matched, so the case id came out wrong. canon_path collapses them.
+#   3. Double separator. accounts//alfa left an empty segment that never
+#      matched, so the identity came out wrong. canon_path collapses them.
 #   4/5. MultiEdit and NotebookEdit reached the hook and were waved through by
 #      a `case` naming only Edit and Write. NotebookEdit also carries its
 #      target in `notebook_path`, a field the hook never read.
@@ -52,7 +53,7 @@
 # syntax error, and 2 is this hook's "block" signal — a 4.0-only construct here
 # would turn every unparsed write into a refusal on an un-upgraded Mac.
 #
-# Performance: the raw payload is string-tested for "cases" before anything is
+# Performance: the raw payload is string-tested for "accounts" before anything is
 # spawned, so ordinary writes cost zero subprocesses. The parse extracts both
 # fields in a single python call rather than two.
 #
@@ -62,10 +63,10 @@
 set +e
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-DATA_DIR="$PROJECT_DIR/data"
-CASES_DIR="$DATA_DIR/cases"
-ACTIVE_FILE="$CASES_DIR/.active"
-PENDING_FILE="$CASES_DIR/.pending"
+BRAIN_DIR="$PROJECT_DIR/brain"
+ACCOUNTS_DIR="$BRAIN_DIR/accounts"
+ACTIVE_FILE="$ACCOUNTS_DIR/.active"
+PENDING_FILE="$ACCOUNTS_DIR/.pending"
 
 HOOK_INPUT=$(cat 2>/dev/null)
 [ -z "$HOOK_INPUT" ] && exit 0
@@ -76,8 +77,8 @@ block() {
 }
 
 # ---------------------------------------------------------------------------
-# Fast path: if the payload never mentions the cases tree, no write it
-# describes can land inside a case. Any path reaching data/cases/ — including
+# Fast path: if the payload never mentions the accounts tree, no write it
+# describes can land inside a case. Any path reaching brain/accounts/ — including
 # one that gets there through `..` — contains the literal segment.
 #
 # Matched with bracket expressions rather than a lowercased copy so this stays
@@ -85,7 +86,7 @@ block() {
 # LOOK; it is not the defence.
 # ---------------------------------------------------------------------------
 case "$HOOK_INPUT" in
-  *[Cc][Aa][Ss][Ee][Ss]*|*[Cc][Aa][Ss][Ee]~*) ;;
+  *[Aa][Cc][Cc][Oo][Uu][Nn][Tt][Ss]*|*[Aa][Cc][Cc][Oo][Uu][Nn]~*) ;;
   *) exit 0 ;;
 esac
 
@@ -131,12 +132,12 @@ PARSED=$(printf '%s' "$PARSED" | tr -d '\r')
 if [ -z "$PARSED" ]; then
   # No python3, or the payload did not parse. Narrow before refusing: a call
   # carrying neither path field cannot be a file write, and refusing it would
-  # block legitimate work — a TodoWrite whose list mentions `data/cases/` is
+  # block legitimate work — a TodoWrite whose list mentions `brain/accounts/` is
   # ordinary in a Portuguese-language workspace, and the settings matcher is an
   # unanchored regex, so `TodoWrite` does reach this hook.
   case "$HOOK_INPUT" in
     *file_path*|*notebook_path*)
-      block "The guard could not read this tool call (no Python 3 interpreter on this machine, or an unparsable payload) and the request references the cases tree, so isolation cannot be verified. Ask the owner to make this write themselves, or to have Python 3 installed on this machine."
+      block "The guard could not read this tool call (no Python 3 interpreter on this machine, or an unparsable payload) and the request references the accounts tree, so isolation cannot be verified. Ask the owner to make this write themselves, or to have Python 3 installed on this machine."
       ;;
     *)
       exit 0
@@ -161,7 +162,7 @@ TARGET_PATH="${PARSED#*$'\n'}"
 TARGET_PATH="${TARGET_PATH%%$'\n'*}"
 
 if [ -z "$TARGET_PATH" ]; then
-  block "A file-writing call referencing the cases tree arrived without a readable target path, so isolation cannot be verified. Ask the owner to make this write themselves."
+  block "A file-writing call referencing the accounts tree arrived without a readable target path, so isolation cannot be verified. Ask the owner to make this write themselves."
 fi
 
 # ---------------------------------------------------------------------------
@@ -217,41 +218,133 @@ case "$TARGET_CANON" in
   *) TARGET_CANON=$(canon_path "$PROJECT_DIR/$TARGET_PATH") ;;
 esac
 
-CASES_CANON=$(canon_path "$CASES_DIR")
+ACCOUNTS_CANON=$(canon_path "$ACCOUNTS_DIR")
 
-# Scope bound: anything outside data/cases/ is none of this hook's business.
-case "$TARGET_CANON" in
-  "$CASES_CANON"/*) ;;
+# The same directory can be spelled several ways on Windows, and the comparison
+# is textual, so every spelling this hook might be handed has to be derived from
+# OUR side — the accounts dir exists on disk, the write target does not yet, so
+# only our side can be resolved against the filesystem.
+#
+# Drive-letter form, when PROJECT_DIR arrived as an MSYS path.
+ACCOUNTS_ALT=""
+case "$ACCOUNTS_CANON" in
+  [a-z]:/*) ;;
+  *) if command -v cygpath >/dev/null 2>&1; then
+       ACCOUNTS_ALT=$(canon_path "$(cygpath -m "$ACCOUNTS_DIR" 2>/dev/null)")
+       [ "$ACCOUNTS_ALT" = "$ACCOUNTS_CANON" ] && ACCOUNTS_ALT=""
+     fi ;;
+esac
+
+# 8.3 short-name form. The SAME file has two names — C:\Users\Nome Sobrenome\...
+# and C:\Users\NOMESO~1\... — and the OS resolves both. Compared as text only the
+# long one matched, so a target in short form fell through the "outside the tree"
+# exit and the cross-case write was allowed. Not an exotic shape: a profile with
+# a long name produces one in the owner's own home directory.
+ACCOUNTS_SHORT=""
+if command -v cygpath >/dev/null 2>&1 && [ -d "$ACCOUNTS_DIR" ]; then
+  ACCOUNTS_SHORT=$(canon_path "$(cygpath -w -s "$ACCOUNTS_DIR" 2>/dev/null)")
+  case "$ACCOUNTS_SHORT" in
+    "$ACCOUNTS_CANON"|"$ACCOUNTS_ALT"|"") ACCOUNTS_SHORT="" ;;
+  esac
+fi
+
+# Scope bound: anything outside brain/accounts/ is none of this hook's business.
+# Evaluated after canonicalization, so a traversal landing outside is treated as
+# outside and one landing inside is caught.
+ACCOUNTS_MATCH=""
+for candidate in "$ACCOUNTS_CANON" "$ACCOUNTS_ALT" "$ACCOUNTS_SHORT"; do
+  [ -z "$candidate" ] && continue
+  [ -n "$ACCOUNTS_MATCH" ] && continue
+  case "$TARGET_CANON" in
+    "$candidate"/*) ACCOUNTS_MATCH="$candidate" ;;
+  esac
+done
+
+# Safety net for a spelling the resolution above could not reach. If the path
+# matches none of the known forms and still carries a `~`, the likely cause is a
+# short-name variant this hook cannot resolve — and the right answer to "I
+# cannot tell" in an isolation control is to refuse, not to allow.
+#
+# Keyed on the PATH, never on the payload text. The fast path deliberately reads
+# the whole payload, content included, to stay free of subprocesses; using that
+# as proof of intent here would refuse a file outside the project just because
+# its text mentioned the accounts tree and its path happened to contain a `~`.
+if [ -z "$ACCOUNTS_MATCH" ]; then
+  case "$TARGET_CANON" in
+    *accounts*|*accoun~*)
+      case "$TARGET_CANON" in
+        *"~"*) block "Target path uses a Windows short-name (8.3) form the guard cannot resolve to a canonical location: $TARGET_PATH. Isolation cannot be verified, so the write is refused. Use the full path." ;;
+      esac ;;
+  esac
+fi
+
+[ -z "$ACCOUNTS_MATCH" ] && exit 0
+ACCOUNTS_CANON="$ACCOUNTS_MATCH"
+
+# Under the accounts tree a case lives at <account>/cases/<case>/..., so the
+# identity being guarded is the PAIR, not the case id alone. Two clients may
+# reasonably name a case the same thing ("diagnostico", "tmo"), and comparing
+# only the last segment would let a write into the other client's identically
+# named case look like a write into the active one.
+REL="${TARGET_CANON#"$ACCOUNTS_CANON/"}"
+TARGET_ACCOUNT="${REL%%/*}"
+
+# Sentinels (.active, .pending, ...) sit directly under accounts/, not inside an
+# account. Writing them is how the owner switches case.
+case "$TARGET_ACCOUNT" in
+  .*) exit 0 ;;
+esac
+
+REST="${REL#*/}"
+# One segment only — the write targets the accounts root, not a case.
+[ "$REST" = "$REL" ] && exit 0
+
+# Account-level material (the account brief, for instance) is not case-scoped
+# and is not this hook's business. Only <account>/cases/... continues.
+case "$REST" in
+  cases/*) ;;
   *) exit 0 ;;
 esac
 
-REL="${TARGET_CANON#"$CASES_CANON/"}"
-TARGET_CASE="${REL%%/*}"
+CASE_PART="${REST#cases/}"
+TARGET_CASE="${CASE_PART%%/*}"
 
-# Sentinels (.active, .pending, ...) live in the cases dir itself, not in a
-# case. Writing them is how the owner switches case.
+# Sentinels under an account's own cases/ dir.
 case "$TARGET_CASE" in
-  .*) exit 0 ;;
+  .*|"") exit 0 ;;
 esac
+
+TARGET_ID="$TARGET_ACCOUNT/$TARGET_CASE"
 
 # From here the write is inside a case directory, so it must be shown to be the
 # right one. Every remaining exit that is not a positive match is a refusal.
 if [ ! -f "$ACTIVE_FILE" ]; then
-  block "No active case is recorded ($ACTIVE_FILE is missing), and this write targets case '$TARGET_CASE'. Isolation cannot be verified. Ask the owner which case is active."
+  block "No active case is recorded ($ACTIVE_FILE is missing), and this write targets '$TARGET_ID'. Isolation cannot be verified. Ask the owner which case is active."
 fi
 
-ACTIVE_CASE=$(tr -d '[:space:]' < "$ACTIVE_FILE" 2>/dev/null | tr '[:upper:]' '[:lower:]')
-if [ -z "$ACTIVE_CASE" ]; then
-  block "The active-case marker ($ACTIVE_FILE) is empty or unreadable, and this write targets case '$TARGET_CASE'. Isolation cannot be verified. Ask the owner which case is active."
+# The marker holds <account>/<case>. Whitespace is stripped rather than trimmed
+# so a trailing newline, a stray space or a CRLF from an editor on Windows all
+# read the same.
+ACTIVE_ID=$(tr -d '[:space:]' < "$ACTIVE_FILE" 2>/dev/null | tr '[:upper:]' '[:lower:]')
+if [ -z "$ACTIVE_ID" ]; then
+  block "The active-case marker ($ACTIVE_FILE) is empty or unreadable, and this write targets '$TARGET_ID'. Isolation cannot be verified. Ask the owner which case is active."
 fi
 
-[ "$TARGET_CASE" = "$ACTIVE_CASE" ] && exit 0
+# A marker carrying a bare case id is the pre-accounts format. It cannot name
+# an account, so it cannot authorise a write under one — refuse rather than
+# guess which client it meant.
+case "$ACTIVE_ID" in
+  */*) ;;
+  *) block "The active-case marker ($ACTIVE_FILE) still holds the old single-case format '$ACTIVE_ID', which does not name an account, and this write targets '$TARGET_ID'. Isolation cannot be verified. Ask the owner to set the active case as <account>/<case>." ;;
+esac
+
+[ "$TARGET_ID" = "$ACTIVE_ID" ] && exit 0
 
 # Bootstrap path: a case being created is named in .pending before it becomes
 # active.
 if [ -f "$PENDING_FILE" ]; then
-  PENDING_CASE=$(tr -d '[:space:]' < "$PENDING_FILE" 2>/dev/null | tr '[:upper:]' '[:lower:]')
-  [ -n "$PENDING_CASE" ] && [ "$TARGET_CASE" = "$PENDING_CASE" ] && exit 0
+  PENDING_ID=$(tr -d '[:space:]' < "$PENDING_FILE" 2>/dev/null | tr '[:upper:]' '[:lower:]')
+  [ -n "$PENDING_ID" ] && [ "$TARGET_ID" = "$PENDING_ID" ] && exit 0
 fi
 
-block "Active case: $ACTIVE_CASE. This write targets case: $TARGET_CASE. To switch cases, ask the owner to confirm the switch, then set data/cases/.active to the target case."
+block "Active case: $ACTIVE_ID. This write targets: $TARGET_ID. To switch cases, ask the owner to confirm the switch, then set brain/accounts/.active to the target case."

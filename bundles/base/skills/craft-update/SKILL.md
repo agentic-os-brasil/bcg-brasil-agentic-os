@@ -9,7 +9,7 @@ Write one craft page properly, or revise one that already exists. The owner has
 already decided there is something to record; the work here is getting it into
 a shape that is still usable a year from now.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## How this differs from `learnings-bridge`
 

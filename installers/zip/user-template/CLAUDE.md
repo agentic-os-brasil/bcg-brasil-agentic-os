@@ -13,7 +13,7 @@ trabalho acontece por dentro do chat.
 
 - `.claude/`: configuração (hooks, skills, settings).
 - `bundles/`: skills e agentes (núcleo do Maestro).
-- `data/`: workspace do usuário (memória, agentes, projetos). Nunca é
+- `brain/`: workspace do usuário (memória, agentes, projetos). Nunca é
   sobrescrita em updates. Criada automaticamente na primeira sessão pelo hook
   `first-run-scaffold.sh`.
 - `VERSION`: versão instalada.
@@ -25,29 +25,31 @@ Ao receber a primeira mensagem do usuário, execute esta sequência antes de res
 
 ### Passo 1: Scaffold
 
-O hook `first-run-scaffold.sh` cria `data/.initialized` automaticamente quando a pasta é aberta
-no Claude Code. Se ele rodou e `data/.initialized` existe, prossiga.
+O hook `first-run-scaffold.sh` cria `brain/.initialized` automaticamente quando a pasta é aberta
+no Claude Code. Se ele rodou e `brain/.initialized` existe, prossiga.
 
-- Se `data/.initialized` **existe**: scaffold OK, prossiga para o Passo 2.
+- Se `brain/.initialized` **existe**: scaffold OK, prossiga para o Passo 2.
 - Se `FIRST-RUN-FAILED.txt` **existe** na raiz: scaffold falhou (permissões, OneDrive, disco
   cheio). Apresente-se brevemente, leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o fluxo.
   Pare aqui.
 - Se **nenhum dos dois existe**: o hook não rodou nesta sessão — execute o scaffold inline:
-  1. Crie os diretórios: `data/`, `data/profile/`, `data/agents/`, `data/cases/`,
-     `data/memory/`, `data/memory/recent/`, `data/memory/weekly/`, `data/memory/medium-term/`,
-     `data/memory/lifetime/`, `data/memory/policies/`, `data/owner/`, `data/owner/self/`,
-     `data/owner/operating/`, `data/owner/observations/`, `data/owner/interview/`,
-     `data/owner/interview/drafts/`, `data/workspaces/`, `data/canary/`,
-     `data/owner/atlas/`, `data/owner/atlas/daily/`, `data/owner/atlas/craft/methods/`,
-     `data/owner/atlas/craft/style/`, `data/owner/atlas/learnings/`,
-     `data/owner/atlas/development/cdc/`, `data/owner/atlas/development/project-feedback/`,
-     `data/owner/atlas/development/upward-feedback/`.
+  1. Crie os diretórios — as nove árvores do topo e o que cada uma precisa:
+     `brain/`, `brain/accounts/`,
+     `brain/memory/`, `brain/memory/recent/`, `brain/memory/weekly/`, `brain/memory/medium-term/`,
+     `brain/memory/lifetime/`, `brain/memory/policies/`,
+     `brain/owner/`, `brain/owner/self/`, `brain/owner/operating/`,
+     `brain/owner/observations/`, `brain/owner/interview/`, `brain/owner/interview/drafts/`,
+     `brain/daily/`, `brain/craft/methods/`, `brain/craft/style/`,
+     `brain/learnings/`, `brain/people/`,
+     `brain/development/cdc/`, `brain/development/project-feedback/`,
+     `brain/development/upward-feedback/`, `brain/development/retros/`,
+     `brain/tasks/`.
   2. Escreva os arquivos:
-     - `data/.initialized` — timestamp UTC atual (ex. `2026-08-13T00:00:00Z`)
-     - `data/memory/.schema-version` — JSON: `{"schema_version": 1, "layers": ["recent", "weekly", "medium-term", "lifetime", "policies"], "policy_source": "bundles/base/memory/policy.json", "initialized_by": "inline-scaffold"}`
-     - `data/memory/.gitignore` — conteúdo: `.dream-requested`
-     - `data/memory/policies/lifetime.json` — JSON: `{"schema_version": 1, "policy_id": "deterministic-l3-continuity-v1", "min_l3_generations": 2, "promotion": "weekly_deep_dream", "automatic": true, "versioned_updates": true, "direct_overwrite": false, "provenance_required": true, "initialized_by": "inline-scaffold"}`
-     - `data/.maestro-version` — leia o arquivo `VERSION` na raiz e escreva o valor encontrado (ex. `0.1.8`)
+     - `brain/.initialized` — timestamp UTC atual (ex. `2026-08-13T00:00:00Z`)
+     - `brain/memory/.schema-version` — JSON: `{"schema_version": 1, "layers": ["recent", "weekly", "medium-term", "lifetime", "policies"], "policy_source": "bundles/base/memory/policy.json", "initialized_by": "inline-scaffold"}`
+     - `brain/memory/.gitignore` — conteúdo: `.dream-requested`
+     - `brain/memory/policies/lifetime.json` — JSON: `{"schema_version": 1, "policy_id": "deterministic-l3-continuity-v1", "min_l3_generations": 2, "promotion": "weekly_deep_dream", "automatic": true, "versioned_updates": true, "direct_overwrite": false, "provenance_required": true, "initialized_by": "inline-scaffold"}`
+     - `brain/.maestro-version` — leia o arquivo `VERSION` na raiz e escreva o valor encontrado (ex. `0.1.8`)
   Se qualquer criação falhar, leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o
   fluxo. Caso contrário, prossiga para o Passo 2.
 
@@ -58,7 +60,7 @@ abandonado no meio deixa o arquivo criado com `status: "in_progress"`; tratar
 isso como concluído deixa a pessoa com um perfil vazio para sempre, sem nenhum
 aviso.
 
-- Leia `data/profile/onboarding.json`.
+- Leia `brain/owner/onboarding.json`.
   - Se o arquivo **não existe**: leia `bundles/base/skills/maestro-onboarding/SKILL.md` e siga
     as instruções imediatamente, independentemente do que o usuário escreveu. Não pergunte.
     Não se apresente antes. Onboarding primeiro.
@@ -69,7 +71,7 @@ aviso.
 
 ### Passo 3: MarkItDown (verificação pós-onboarding, com re-check de 30 dias)
 
-- Cheque `data/profile/markitdown.json`:
+- Cheque `brain/owner/markitdown.json`:
   - Se **não existe**: rode `markitdown --version` silenciosamente ao final desta resposta.
   - Se existe com `"available": false` e `checked_at` há mais de 30 dias: re-rode o check
     silenciosamente (MarkItDown pode ter sido instalado desde então).
@@ -105,7 +107,7 @@ Ao final de qualquer resposta em que o pedido do usuário foi atendido, ofereça
 **três próximos passos orientados**, um por linha, nas seguintes direções:
 
 1. **Projeto ativo** — algo específico ligado ao contexto de trabalho atual do usuário
-   (use `data/profile/identity.json` para personalizá-lo: projeto, papel, foco).
+   (use `brain/owner/identity.json` para personalizá-lo: projeto, papel, foco).
    Ex.: "avançar na hipótese X do caso Y", "preparar o slide de decisão do projeto Z".
 2. **Contexto profissional mais amplo** — entregável BCG, análise com impacto externo,
    desenvolvimento de uma visão ou skill profissional.
@@ -116,7 +118,7 @@ Ao final de qualquer resposta em que o pedido do usuário foi atendido, ofereça
 **Regras de apresentação:**
 - Formule como três linhas curtas e acionáveis — não como menu formal com títulos.
 - Use o contexto da conversa para tornar cada opção específica, não genérica.
-- Se `data/profile/identity.json` não existir ainda, personalize com o que foi dito na conversa.
+- Se `brain/owner/identity.json` não existir ainda, personalize com o que foi dito na conversa.
 - **Não** ofereça as três opções em: confirmações de uma palavra, respostas a perguntas
   conceituais rápidas, ou quando o usuário claramente continua uma sequência em andamento.
 
@@ -125,5 +127,5 @@ Ao final de qualquer resposta em que o pedido do usuário foi atendido, ofereça
 Fora da sessão. `README-INSTALL.md` é a fonte única do ritual. Não repita os passos
 aqui: qualquer resumo diverge do original e vira instrução destrutiva. Se o usuário
 perguntar como atualizar, aponte para `README-INSTALL.md`. O passo crítico é
-**copiar** (não mover, não extrair por cima) a `data/` da versão antiga para dentro
-da nova, seguindo o ritual completo lá descrito. Sua `data/` nunca é tocada pelo ZIP.
+**copiar** (não mover, não extrair por cima) a `brain/` da versão antiga para dentro
+da nova, seguindo o ritual completo lá descrito. Sua `brain/` nunca é tocada pelo ZIP.

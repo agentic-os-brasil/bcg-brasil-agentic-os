@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Maestro SessionEnd dream marker — writes a timestamped marker to
-# data/memory/.dream-requested so the next session can detect that a
+# brain/memory/.dream-requested so the next session can detect that a
 # dreaming cycle is due. Fail-open: never blocks Claude.
 #
 # The marker is consumed by the dream-memory skill on the next SessionStart
@@ -10,8 +10,8 @@
 set +e
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-DATA_DIR="$PROJECT_DIR/data"
-MEMORY_DIR="$DATA_DIR/memory"
+BRAIN_DIR="$PROJECT_DIR/brain"
+MEMORY_DIR="$BRAIN_DIR/memory"
 MARKER="$MEMORY_DIR/.dream-requested"
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 

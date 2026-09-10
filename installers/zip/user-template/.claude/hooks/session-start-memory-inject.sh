@@ -19,13 +19,13 @@ set +e
 . "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-DATA_DIR="$PROJECT_DIR/data"
-MEMORY_DIR="$DATA_DIR/memory"
-PROFILE_DIR="$DATA_DIR/profile"
+BRAIN_DIR="$PROJECT_DIR/brain"
+MEMORY_DIR="$BRAIN_DIR/memory"
+OWNER_DIR="$BRAIN_DIR/owner"
 
-# If data/ does not exist yet (first-run-scaffold.sh had not run or failed),
+# If brain/ does not exist yet (first-run-scaffold.sh had not run or failed),
 # exit silently — nothing to inject.
-[ -d "$DATA_DIR" ] || exit 0
+[ -d "$BRAIN_DIR" ] || exit 0
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -163,9 +163,9 @@ fi
 
 # GAP-C — Upgrade-pending auto-trigger. Marker written by first-run-scaffold.sh
 # when a session boots against a bundle whose VERSION differs from
-# data/.maestro-version. Surfaces a mandatory action block so Claude routes to
+# brain/.maestro-version. Surfaces a mandatory action block so Claude routes to
 # /maestro-setup-update before any other work.
-UPGRADE_MARKER="$DATA_DIR/.upgrade-pending"
+UPGRADE_MARKER="$BRAIN_DIR/.upgrade-pending"
 if [ -f "$UPGRADE_MARKER" ]; then
   printf '\n## ⚠️ Upgrade Maestro pendente — verificar antes de qualquer outra tarefa\n'
   printf '<!-- maestro:upgrade-trigger: marker=%s -->\n' "$UPGRADE_MARKER"
@@ -177,12 +177,12 @@ if [ -f "$UPGRADE_MARKER" ]; then
 fi
 
 # Profile (highest routing priority — who the user is and how they prefer to work)
-emit_profile_json "Identidade do usuário" "$PROFILE_DIR/identity.json"
-emit_profile_json "Preferências e estilo" "$PROFILE_DIR/style.json"
+emit_profile_json "Identidade do usuário" "$OWNER_DIR/identity.json"
+emit_profile_json "Preferências e estilo" "$OWNER_DIR/style.json"
 
 # Owner SELF facets (spec 013) — ten individually-addressable markdown files
 # Injected in full: each facet is small, high-routing-priority context.
-emit_all_files "SELF do usuário" "$DATA_DIR/owner/self"
+emit_all_files "SELF do usuário" "$BRAIN_DIR/owner/self"
 
 # L3 — long-term memory (injected in full: compact, high-signal, rarely changes)
 emit_all_files "Memória de longo prazo (L3)" "$MEMORY_DIR/lifetime"

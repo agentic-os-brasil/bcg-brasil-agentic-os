@@ -12,7 +12,7 @@ Não precisa instalar nada, não precisa de terminal, não precisa de conta extr
 
 ## O que tem dentro da pasta
 
-- **`data/`** — sua área. Memória, agentes, projetos. **Nunca é sobrescrita em updates.**
+- **`brain/`** — sua área. Memória, agentes, projetos. **Nunca é sobrescrita em updates.**
 - **`.claude/`, `bundles/`, `CLAUDE.md`** — o núcleo do Maestro. Vem pronto.
 - **`README-INSTALL.md`** — passo a passo detalhado + solução de problemas.
 - **`VERSION`** — versão instalada.

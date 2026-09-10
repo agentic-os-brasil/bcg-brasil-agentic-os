@@ -28,7 +28,7 @@ cannot change role authority, scope rules, industry-specialist versioning or rev
 
 Before writing, show the complete proposed profile and ask for one explicit
 confirmation. Persist only the confirmed strict JSON profile by writing it to
-`data/profile/agents.json` (create the file if absent, overwrite the matching
+`brain/owner/agents.json` (create the file if absent, overwrite the matching
 role block otherwise). A missing confirmation, unknown role, invalid emoji or
 ownership-scope mismatch cancels the operation: do not write the file.
 

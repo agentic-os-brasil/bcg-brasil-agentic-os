@@ -39,7 +39,7 @@ Rotear cada pedido de controle para o destino certo, sem expor comandos internos
 
 - Não instale, atualize ou repare arquivos fora dos skills autorizados.
 - Não exponha caminhos de arquivo internos, hashes ou metadados técnicos salvo pedido explícito.
-- Não tome ações irreversíveis (deletar `data/`, sobrescrever config) sem confirmação explícita do
+- Não tome ações irreversíveis (deletar `brain/`, sobrescrever config) sem confirmação explícita do
   usuário e sequência declarada por um skill.
 
 ## Autoridade

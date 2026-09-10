@@ -9,7 +9,7 @@ Record what was said to the owner, then apply the effect it actually has on
 their objectives. Getting the capture right matters less than getting the
 effect right: the two feedback events are not the same kind of event.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## Interaction profile
 

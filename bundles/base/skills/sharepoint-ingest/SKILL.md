@@ -1,6 +1,6 @@
 ---
 name: sharepoint-ingest
-description: Lê as pastas SharePoint autorizadas em `data/memory/sharepoint-config.json`, ingere os materiais recentes via ingest-content e generaliza conceitos/contexto do trajeto. Use quando o pedido for "ingerir SharePoint", "ler as pastas autorizadas", "puxar racionais das pastas do projeto" ou equivalente.
+description: Lê as pastas SharePoint autorizadas em `brain/memory/sharepoint-config.json`, ingere os materiais recentes via ingest-content e generaliza conceitos/contexto do trajeto. Use quando o pedido for "ingerir SharePoint", "ler as pastas autorizadas", "puxar racionais das pastas do projeto" ou equivalente.
 ---
 
 # SharePoint Ingest
@@ -34,14 +34,14 @@ Não tentar leitura sem conector. Não propor coletor externo. Não gravar nada.
 
 ## Fluxo
 
-1. **Confirmar workspace e config.** Ler `${CLAUDE_PROJECT_DIR}/data/memory/sharepoint-config.json`. Se ausente ou `status != "selected"`, orientar: "as pastas ainda não foram selecionadas; rodar `maestro-onboarding` primeiro" e parar.
+1. **Confirmar workspace e config.** Ler `${CLAUDE_PROJECT_DIR}/brain/memory/sharepoint-config.json`. Se ausente ou `status != "selected"`, orientar: "as pastas ainda não foram selecionadas; rodar `maestro-onboarding` primeiro" e parar.
 
 2. **Pré-checagem de MCP.** Ver seção acima. Fail-closed com orientação.
 
 3. **Confirmar escopo.** Listar em uma linha as pastas registradas em `folder_urls` e pedir confirmação: "Ingerir dessas pastas agora? (sim / ajustar / cancelar)". Ajustar redireciona pro `maestro-onboarding`. Cancelar para tudo sem escrever.
 
 4. **Pass bounded pelas pastas.** Para cada `folder_url` autorizada, listar somente os materiais **modificados nos últimos 90 dias** (padrão bounded). Para cada item:
-   - Delegar a síntese ao `ingest-content` apontando a URL como fonte, com destino `data/memory/sharepoint-rationales/<folder-slug>/<doc-slug>.md`.
+   - Delegar a síntese ao `ingest-content` apontando a URL como fonte, com destino `brain/memory/sharepoint-rationales/<folder-slug>/<doc-slug>.md`.
    - Rationale gravado tem obrigatoriamente: título, `Origem: <URL SharePoint>`, data de modificação, 3–8 bullets, decisões/números citáveis, linha final "Ver original em: <URL>".
    - Nunca copiar o corpo bruto. Se um item é imagem/binário sem texto extraível, registrar o pointer só com metadata e marcar `content: pointer_only`.
 
@@ -52,7 +52,7 @@ Não tentar leitura sem conector. Não propor coletor externo. Não gravar nada.
    - Para cada conceito: 1 frase de contexto + até 3 pointers (`<doc-slug>.md`) que sustentam.
    - Gaps observados: pastas/subpastas mencionadas nos racionais mas não autorizadas ainda.
 
-6. **Atualizar config.** Escrever em `data/memory/sharepoint-config.json`:
+6. **Atualizar config.** Escrever em `brain/memory/sharepoint-config.json`:
    - `last_ingest_at: <ISO-8601>`
    - `last_ingest_summary: { folders: N, rationales: M, concepts: K }`
    - `status` permanece `"selected"`.
@@ -75,7 +75,7 @@ Não tentar leitura sem conector. Não propor coletor externo. Não gravar nada.
 ## Invariantes
 
 - Nunca lê pasta fora de `folder_urls`.
-- Nunca escreve fora de `data/memory/sharepoint-rationales/` e `brain/knowledge/sharepoint-rationales/`.
+- Nunca escreve fora de `brain/memory/sharepoint-rationales/` e `brain/knowledge/sharepoint-rationales/`.
 - Sem conector MCP presente, a skill não grava nada.
 - Nenhuma chamada a provedor remoto além do próprio conector MCP autorizado pelo owner.
 
