@@ -1767,6 +1767,107 @@ PY
   esac
 fi
 
+# --------------------------------------------------------------------------
+phase "Phase 23 — The routers read what the compiler writes"
+# --------------------------------------------------------------------------
+
+# The brain router reads `route-index.json` and opens no page. That makes the
+# index shape a contract between two files that never import each other, and a
+# silent one: rename a key in the compiler and the router matches nothing, on
+# every message, with no error.
+#
+# The fixture needs SIX pages, not one, and the reason is a real property of
+# the compiler rather than padding: a term present in nearly every page is
+# template structure, not a concept, so it is filtered out. With a single page
+# every term is present in 100% of pages, the inverted index comes back empty,
+# and a check built on one page fails while the router is perfectly healthy.
+# That is exactly how the first version of this phase failed.
+RT_ROUTER="$MAESTRO_DIR/bundles/base/tools/brain-route.py"
+RT_SKILL="$MAESTRO_DIR/bundles/base/tools/skill-route.py"
+RT_INDEXER="$MAESTRO_DIR/bundles/base/tools/brain-index.py"
+
+if [ -f "$RT_ROUTER" ] && [ -f "$RT_INDEXER" ] && [ -n "${PY_REAL:-}" ]; then
+  RT_ROOT=$(mktemp -d -t maestro-eval-route-XXXXXX)
+  mkdir -p "$RT_ROOT/bundles/base/tools" "$RT_ROOT/brain/learnings" \
+           "$RT_ROOT/brain/craft/methods" "$RT_ROOT/brain/craft/style" \
+           "$RT_ROOT/brain/people" "$RT_ROOT/brain/development"
+  cp "$RT_INDEXER" "$RT_ROUTER" "$RT_ROOT/bundles/base/tools/"
+  cp "$MAESTRO_DIR/bundles/base/brain-contract.md" "$RT_ROOT/bundles/base/" 2>/dev/null
+
+  rt_page() {
+    printf -- '---\nid: %s\ntitle: "%s"\nsummary: "%s"\ntype: %s\nscope: owner\nstatus: active\nsensitivity: owner-private\nupdated: 2026-09-01\n---\n\n# %s\n\n%s\n' \
+      "${1%.md}" "$3" "$4" "$2" "$3" "$4" > "$RT_ROOT/brain/$1"
+  }
+  rt_page "learnings/kickoff-sem-agenda.md" learning "Kickoff sem agenda escrita" \
+    "Kickoff sem agenda escrita gasta a primeira semana alinhando escopo do projeto"
+  rt_page "learnings/planilha-fonte-cliente.md" learning "Reconhecer planilha do cliente" \
+    "Mapear tabs e tabela workhorse antes de modelar qualquer coisa na planilha"
+  rt_page "craft/methods/pipeline-automacao.md" craft-method "Pipeline de automacao" \
+    "Cinco estagios para decidir se vale automatizar um passo manual de um caso"
+  rt_page "craft/style/tom-slack.md" craft-style "Tom no Slack" \
+    "Gancho envolvente e corpo profissional nas mensagens de anuncio interno"
+  rt_page "people/colega-analista.md" person "Colega analista" \
+    "Perfil de trabalho conjunto em modelagem quantitativa e revisao de numeros"
+  rt_page "development/objectives.md" development "Objetivos atuais" \
+    "Pontos de desenvolvimento em lideranca de time e comunicacao executiva"
+
+  ( cd "$RT_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-index.py >/dev/null 2>&1 )
+
+  if [ -f "$RT_ROOT/brain/.maestro/route-index.json" ]; then
+    pass "the compiler writes route-index.json"
+
+    RT_TERMS=$(cd "$RT_ROOT" && PYTHONIOENCODING=utf-8 "$PY_REAL" -c 'import json,io;print(len(json.load(io.open("brain/.maestro/route-index.json",encoding="utf-8"))["owner"]["terms"]))' 2>/dev/null)
+    [ "${RT_TERMS:-0}" -gt 0 ] 2>/dev/null \
+      && pass "the inverted index has terms ($RT_TERMS) once the corpus is not one page" \
+      || fail "the inverted index came back empty on a six-page corpus"
+
+    RT_HIT=$(cd "$RT_ROOT" && printf 'kickoff sem agenda escrita no projeto' \
+             | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-route.py --max 5 2>/dev/null)
+    case "$RT_HIT" in
+      *kickoff-sem-agenda*) pass "the brain router resolves a page from that index" ;;
+      *) fail "the router read the compiler's index and matched nothing — the index shape and the router disagree" ;;
+    esac
+
+    # The router must not open the page. It carries title, summary and path;
+    # the body is the owner's most sensitive material.
+    case "$RT_HIT" in
+      *"# Kickoff"*) fail "the router emitted page body — it carries only title, summary and path" ;;
+      *) pass "the router carries pointers, never page body" ;;
+    esac
+
+    RT_QUIET=$(cd "$RT_ROOT" && printf 'oi' \
+               | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/brain-route.py --max 5 2>/dev/null)
+    [ -z "$RT_QUIET" ] \
+      && pass "the brain router stays silent on a greeting" \
+      || fail "the brain router fired on a two-letter greeting"
+  else
+    fail "the compiler produced no route-index.json — the router has nothing to read"
+  fi
+  rm -rf "$RT_ROOT"
+else
+  skip "router, compiler or interpreter unavailable"
+fi
+
+# The skill router replaces injecting every skill at every session start, so it
+# has to answer a literal request. "eod" is three characters and is the most
+# literal request that exists for that skill.
+if [ -f "$RT_SKILL" ] && [ -n "${PY_REAL:-}" ]; then
+  SK_HIT=$(cd "$MAESTRO_DIR" && printf 'eod' \
+           | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/skill-route.py --max 4 2>/dev/null)
+  case "$SK_HIT" in
+    *eod*) pass "the skill router answers a three-character literal request" ;;
+    *) fail "the skill router did not resolve 'eod' — a literal skill name must route" ;;
+  esac
+
+  SK_QUIET=$(cd "$MAESTRO_DIR" && printf 'oi' \
+             | PYTHONIOENCODING=utf-8 "$PY_REAL" bundles/base/tools/skill-route.py --max 4 2>/dev/null)
+  [ -z "$SK_QUIET" ] \
+    && pass "the skill router stays silent on a greeting" \
+    || fail "the skill router fired on a greeting"
+fi
+
+
+
 
 
 

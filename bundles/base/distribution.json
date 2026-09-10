@@ -506,6 +506,22 @@
       "path": "tools/agent-route.py"
     },
     {
+      "source": "bundles/base/tools/brain-route.py",
+      "path": "tools/brain-route.py"
+    },
+    {
+      "source": "bundles/base/tools/skill-route.py",
+      "path": "tools/skill-route.py"
+    },
+    {
+      "source": "bundles/base/tools/paths-check.py",
+      "path": "tools/paths-check.py"
+    },
+    {
+      "source": "bundles/base/tools/INDEX.md",
+      "path": "tools/INDEX.md"
+    },
+    {
       "source": "bundles/base/tools/migrate-data-to-brain.py",
       "path": "tools/migrate-data-to-brain.py"
     },
