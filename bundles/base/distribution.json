@@ -134,6 +134,14 @@
       "path": "skills/agent-skill-policy.json"
     },
     {
+      "source": "bundles/base/skills/brain-index/SKILL.md",
+      "path": "skills/brain-index/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/brain-index/agents/openai.yaml",
+      "path": "skills/brain-index/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/bcg-case-kickoff/SKILL.md",
       "path": "skills/bcg-case-kickoff/SKILL.md"
     },
@@ -488,6 +496,10 @@
     {
       "source": "bundles/base/skills/yoda/agents/openai.yaml",
       "path": "skills/yoda/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/tools/brain-index.py",
+      "path": "tools/brain-index.py"
     },
     {
       "source": "bundles/base/tools/agent-route.py",

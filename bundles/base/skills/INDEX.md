@@ -8,6 +8,7 @@
 | Identidade dos Agentes | Nomeia e personaliza os agentes governados | `skills/agent-identity-setup/SKILL.md` |
 | Kickoff de Case | Monta um plano dos primeiros dias a partir do escopo aprovado do case | `skills/bcg-case-kickoff/SKILL.md` |
 | Deck e Storyline | Constrói uma storyline profissional orientada à decisão e o plano do deck | `skills/bcg-deck/SKILL.md` |
+| Índice do brain | Recompila a camada de navegação do brain e reporta links quebrados, páginas órfãs e frontmatter incompleto | `skills/brain-index/SKILL.md` |
 | Case Agent | Entrevista e pesquisa um case de projeto com segurança | `skills/case-agent-setup/SKILL.md` |
 | Canon do Case | Compila insights revisados no canon persistente do case ativo | `skills/case-canon-ingest/SKILL.md` |
 | Registro de Decisão do Case | Registra uma decisão estrutural no log de decisões do case ativo | `skills/case-decision-log-entry/SKILL.md` |
