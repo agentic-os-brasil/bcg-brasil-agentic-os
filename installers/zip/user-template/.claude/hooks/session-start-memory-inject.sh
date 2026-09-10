@@ -118,7 +118,7 @@ if ! maestro_python >/dev/null 2>&1; then
   printf '\n## ⚠️ Uma peça do Maestro não está instalada nesta máquina\n'
   printf '<!-- maestro:python-missing -->\n'
   printf 'Sem ela, o Maestro não lembra o contexto entre conversas, não sugere skills e não protege a separação entre clientes. Ele abre e funciona para conversar, mas essas rotinas estão desligadas.\n'
-  printf '\n**Ação:** leia `bundles/base/skills/maestro-environment-setup/SKILL.md` e execute a seção "Interpretador local" para resolver agora. É automático, não precisa de terminal nem de privilégio de administrador, e leva menos de um minuto.\n'
+  printf '\n**Ação:** leia `bundles/base/skills/maestro-environment-setup/SKILL.md`, seção "Interpretador local". Se houver um interpretador nesta máquina fora do PATH, ela sabe apontar o Maestro para ele. Se não houver, avise o dono em uma linha e siga — instalar não está autorizado hoje.\n'
 fi
 
 # Operational method pointer (spec 050) — always first, before any task routing.
