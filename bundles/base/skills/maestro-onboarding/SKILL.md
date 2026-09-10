@@ -1036,11 +1036,13 @@ igual a Conexões. Só a **execução** (ler pastas de verdade) fica condicionad
   quando o conector estiver ativo." Não tente ler sem o conector. Com o
   conector ativo, ofereça a ingestão nesta própria sessão via a skill
   [`sharepoint-ingest`](../sharepoint-ingest/SKILL.md) — ela lê só as pastas
-  selecionadas através do acesso do próprio dono, grava racionais por
-  documento em `brain/memory/sharepoint-rationales/` e um índice de conceitos
-  generalizado em `brain/knowledge/sharepoint-rationales/`, mantém o link e a
-  data de modificação do SharePoint em cada racional, e nunca copia o corpo
-  bruto do documento.
+  selecionadas através do acesso do próprio dono, mantém o link e a data de
+  modificação do SharePoint em cada racional, e nunca copia o corpo bruto do
+  documento. Como a pergunta 9 já montou o caso, o material da pasta do
+  projeto aterrissa **dentro dele**, em
+  `sources/sharepoint-rationales/` — junto do trabalho que ele descreve e sob
+  o guard de isolamento entre clientes, não numa camada de conhecimento à
+  parte.
 - Se `Prefiro começar sem essa fonte`: escreva `status: "deferred"` em
   `brain/memory/sharepoint-config.json` e não pergunte de novo
   automaticamente.

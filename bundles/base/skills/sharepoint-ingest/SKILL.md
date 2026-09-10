@@ -1,6 +1,6 @@
 ---
 name: sharepoint-ingest
-description: Lê as pastas SharePoint autorizadas em `brain/memory/sharepoint-config.json`, ingere os materiais recentes via ingest-content e generaliza conceitos/contexto do trajeto. Use quando o pedido for "ingerir SharePoint", "ler as pastas autorizadas", "puxar racionais das pastas do projeto" ou equivalente.
+description: Lê as pastas SharePoint autorizadas em `brain/memory/sharepoint-config.json`, ingere os materiais recentes via ingest-content e generaliza conceitos/contexto do trajeto, gravando dentro do caso ativo quando há um — o material fica junto do trabalho que ele descreve, nunca numa árvore de conhecimento separada. Use quando o pedido for "ingerir SharePoint", "ler as pastas autorizadas", "puxar racionais das pastas do projeto" ou equivalente.
 ---
 
 # SharePoint Ingest
@@ -32,6 +32,41 @@ Se nenhum sinal está presente, parar imediatamente e orientar em uma linha:
 
 Não tentar leitura sem conector. Não propor coletor externo. Não gravar nada.
 
+## Onde o material aterrissa — decidido antes de qualquer escrita
+
+Conhecimento não tem uma pasta própria no `brain/`: ele mora junto do que ele
+descreve. Material de um cliente fica na pasta daquele cliente, conhecimento do
+próprio dono fica nas árvores do dono. Uma pasta de SharePoint de projeto,
+portanto, aterrissa **dentro do caso** que aquele projeto é — não numa camada
+de conhecimento paralela, que ficaria fora do guard de isolamento entre
+clientes e invisível para quem abre o caso.
+
+Antes do passo 1, decida o destino e diga qual é:
+
+- **Com caso ativo** (`brain/accounts/.active`, formato `<conta>/<caso>`) — o
+  destino é o próprio caso:
+  - racionais por documento em
+    `brain/accounts/<conta>/cases/<caso>/sources/sharepoint-rationales/<doc-slug>.md`;
+  - índice de conceitos em
+    `brain/accounts/<conta>/cases/<caso>/sources/sharepoint-rationales/_index.md`.
+
+  `sources/` é exatamente para isto: ponteiro de fonte autorizada, nunca corpo
+  de documento de cliente. Um racional promovido a artefato revisado de canon é
+  um ato separado, por [`case-canon-ingest`](../case-canon-ingest/SKILL.md),
+  com confirmação individual — esta skill nunca escreve em `canon/`.
+- **Sem caso ativo, pasta pessoal do dono** — o destino é
+  `brain/memory/sharepoint-rationales/<folder-slug>/`, com o `_index.md` na
+  mesma pasta dos racionais que ele indexa. Os ponteiros do índice apontam para
+  arquivos irmãos, então separar os dois só quebraria os links.
+- **Sem caso ativo e a pasta é claramente de um projeto de cliente** — pare.
+  Não grave material de cliente em memória global do dono: aquilo não fica sob
+  o guard de isolamento e não aparece para quem abrir o caso depois. Diga em
+  uma linha que o caso precisa existir primeiro (`/case-agent-setup`) e ofereça
+  retomar em seguida.
+
+Se o caso ativo mudar no meio de um pass, pare: o destino foi decidido no
+início e continuar escreveria material de um cliente dentro de outro.
+
 ## Fluxo
 
 1. **Confirmar workspace e config.** Ler `${CLAUDE_PROJECT_DIR}/brain/memory/sharepoint-config.json`. Se ausente ou `status != "selected"`, orientar: "as pastas ainda não foram selecionadas; rodar `maestro-onboarding` primeiro" e parar.
@@ -41,11 +76,11 @@ Não tentar leitura sem conector. Não propor coletor externo. Não gravar nada.
 3. **Confirmar escopo.** Listar em uma linha as pastas registradas em `folder_urls` e pedir confirmação: "Ingerir dessas pastas agora? (sim / ajustar / cancelar)". Ajustar redireciona pro `maestro-onboarding`. Cancelar para tudo sem escrever.
 
 4. **Pass bounded pelas pastas.** Para cada `folder_url` autorizada, listar somente os materiais **modificados nos últimos 90 dias** (padrão bounded). Para cada item:
-   - Delegar a síntese ao `ingest-content` apontando a URL como fonte, com destino `brain/memory/sharepoint-rationales/<folder-slug>/<doc-slug>.md`.
+   - Delegar a síntese ao `ingest-content` apontando a URL como fonte, com destino `<destino>/<doc-slug>.md`, onde `<destino>` é a pasta decidida na seção acima — nunca escolhido aqui.
    - Rationale gravado tem obrigatoriamente: título, `Origem: <URL SharePoint>`, data de modificação, 3–8 bullets, decisões/números citáveis, linha final "Ver original em: <URL>".
    - Nunca copiar o corpo bruto. Se um item é imagem/binário sem texto extraível, registrar o pointer só com metadata e marcar `content: pointer_only`.
 
-5. **Generalização — índice de conceitos do trajeto.** Após o pass, produzir **um** arquivo `brain/knowledge/sharepoint-rationales/<folder-slug>/_index.md` com:
+5. **Generalização — índice de conceitos do trajeto.** Após o pass, produzir **um** arquivo `_index.md` na mesma pasta dos racionais do pass (`<destino>/_index.md`) com:
    - Nome da pasta + URL raiz.
    - Data do pass.
    - 5–10 conceitos recorrentes atravessando os racionais (temas, stakeholders, entregáveis).
@@ -75,7 +110,9 @@ Não tentar leitura sem conector. Não propor coletor externo. Não gravar nada.
 ## Invariantes
 
 - Nunca lê pasta fora de `folder_urls`.
-- Nunca escreve fora de `brain/memory/sharepoint-rationales/` e `brain/knowledge/sharepoint-rationales/`.
+- Nunca escreve fora do destino decidido no início do pass: `sources/sharepoint-rationales/` do caso ativo, ou `brain/memory/sharepoint-rationales/` quando não há caso e a pasta é do próprio dono.
+- Nunca escreve em `canon/`. Promover um racional a artefato de canon é ato separado e confirmado, por `case-canon-ingest`.
+- Nunca cria uma árvore de conhecimento paralela no topo de `brain/`. Conhecimento mora junto do que descreve.
 - Sem conector MCP presente, a skill não grava nada.
 - Nenhuma chamada a provedor remoto além do próprio conector MCP autorizado pelo owner.
 
