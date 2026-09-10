@@ -22,9 +22,9 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
 
 2. **Workspace present and healthy** — verify:
    - `brain/` exists and is a directory
-   - the eight top-level trees exist: `brain/memory/`, `brain/owner/`, `brain/daily/`,
+   - the nine top-level trees exist: `brain/memory/`, `brain/owner/`, `brain/daily/`,
      `brain/learnings/`, `brain/craft/`, `brain/people/`, `brain/development/`,
-     `brain/accounts/`
+     `brain/accounts/`, `brain/tasks/`
    - `brain/.initialized` exists (created by first-run-scaffold on session 1)
 
 3. **Hooks wired** — read `.claude/settings.json` and confirm SessionStart lists both `first-run-scaffold.sh` and `session-start-memory-inject.sh`, and Stop lists `session-stop-dream.sh`.

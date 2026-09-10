@@ -235,7 +235,7 @@ else
   fail "hook non-zero exit on first run"
 fi
 
-for sub in accounts craft daily development learnings memory owner people; do
+for sub in accounts craft daily development learnings memory owner people tasks; do
   if [ -d "$MAESTRO_DIR/brain/$sub" ]; then
     pass "brain/$sub created"
   else

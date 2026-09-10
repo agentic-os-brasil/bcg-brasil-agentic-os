@@ -335,7 +335,13 @@ fi
 
 log_line "SCAFFOLD  project_dir=$PROJECT_DIR"
 
-for sub in accounts craft daily development learnings memory owner people; do
+# `tasks` is the ninth trunk, not an eighth-plus-one. It holds a view of the
+# case and owner checkboxes that the brain index compiles; the compiler and
+# the SessionStart block that reads brain/tasks/tasks.md arrive with the
+# indexing change, so the directory is empty until then. Created here anyway:
+# the tree shape belongs to the scaffold, and adding it later would mean a
+# second pass over this file for a directory name.
+for sub in accounts craft daily development learnings memory owner people tasks; do
   if mkdir -p "$BRAIN_DIR/$sub" 2>/dev/null; then
     log_line "MKDIR OK  brain/$sub"
   else

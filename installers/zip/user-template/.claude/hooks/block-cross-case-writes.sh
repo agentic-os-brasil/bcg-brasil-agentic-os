@@ -220,11 +220,66 @@ esac
 
 ACCOUNTS_CANON=$(canon_path "$ACCOUNTS_DIR")
 
-# Scope bound: anything outside brain/accounts/ is none of this hook's business.
-case "$TARGET_CANON" in
-  "$ACCOUNTS_CANON"/*) ;;
-  *) exit 0 ;;
+# The same directory can be spelled several ways on Windows, and the comparison
+# is textual, so every spelling this hook might be handed has to be derived from
+# OUR side — the accounts dir exists on disk, the write target does not yet, so
+# only our side can be resolved against the filesystem.
+#
+# Drive-letter form, when PROJECT_DIR arrived as an MSYS path.
+ACCOUNTS_ALT=""
+case "$ACCOUNTS_CANON" in
+  [a-z]:/*) ;;
+  *) if command -v cygpath >/dev/null 2>&1; then
+       ACCOUNTS_ALT=$(canon_path "$(cygpath -m "$ACCOUNTS_DIR" 2>/dev/null)")
+       [ "$ACCOUNTS_ALT" = "$ACCOUNTS_CANON" ] && ACCOUNTS_ALT=""
+     fi ;;
 esac
+
+# 8.3 short-name form. The SAME file has two names — C:\Users\Nome Sobrenome\...
+# and C:\Users\NOMESO~1\... — and the OS resolves both. Compared as text only the
+# long one matched, so a target in short form fell through the "outside the tree"
+# exit and the cross-case write was allowed. Not an exotic shape: a profile with
+# a long name produces one in the owner's own home directory.
+ACCOUNTS_SHORT=""
+if command -v cygpath >/dev/null 2>&1 && [ -d "$ACCOUNTS_DIR" ]; then
+  ACCOUNTS_SHORT=$(canon_path "$(cygpath -w -s "$ACCOUNTS_DIR" 2>/dev/null)")
+  case "$ACCOUNTS_SHORT" in
+    "$ACCOUNTS_CANON"|"$ACCOUNTS_ALT"|"") ACCOUNTS_SHORT="" ;;
+  esac
+fi
+
+# Scope bound: anything outside brain/accounts/ is none of this hook's business.
+# Evaluated after canonicalization, so a traversal landing outside is treated as
+# outside and one landing inside is caught.
+ACCOUNTS_MATCH=""
+for candidate in "$ACCOUNTS_CANON" "$ACCOUNTS_ALT" "$ACCOUNTS_SHORT"; do
+  [ -z "$candidate" ] && continue
+  [ -n "$ACCOUNTS_MATCH" ] && continue
+  case "$TARGET_CANON" in
+    "$candidate"/*) ACCOUNTS_MATCH="$candidate" ;;
+  esac
+done
+
+# Safety net for a spelling the resolution above could not reach. If the path
+# matches none of the known forms and still carries a `~`, the likely cause is a
+# short-name variant this hook cannot resolve — and the right answer to "I
+# cannot tell" in an isolation control is to refuse, not to allow.
+#
+# Keyed on the PATH, never on the payload text. The fast path deliberately reads
+# the whole payload, content included, to stay free of subprocesses; using that
+# as proof of intent here would refuse a file outside the project just because
+# its text mentioned the accounts tree and its path happened to contain a `~`.
+if [ -z "$ACCOUNTS_MATCH" ]; then
+  case "$TARGET_CANON" in
+    *accounts*|*accoun~*)
+      case "$TARGET_CANON" in
+        *"~"*) block "Target path uses a Windows short-name (8.3) form the guard cannot resolve to a canonical location: $TARGET_PATH. Isolation cannot be verified, so the write is refused. Use the full path." ;;
+      esac ;;
+  esac
+fi
+
+[ -z "$ACCOUNTS_MATCH" ] && exit 0
+ACCOUNTS_CANON="$ACCOUNTS_MATCH"
 
 # Under the accounts tree a case lives at <account>/cases/<case>/..., so the
 # identity being guarded is the PAIR, not the case id alone. Two clients may

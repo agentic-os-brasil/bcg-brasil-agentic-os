@@ -33,7 +33,7 @@ no Claude Code. Se ele rodou e `brain/.initialized` existe, prossiga.
   cheio). Apresente-se brevemente, leia `bundles/base/skills/maestro-doctor/SKILL.md` e execute o fluxo.
   Pare aqui.
 - Se **nenhum dos dois existe**: o hook não rodou nesta sessão — execute o scaffold inline:
-  1. Crie os diretórios — as oito árvores do topo e o que cada uma precisa:
+  1. Crie os diretórios — as nove árvores do topo e o que cada uma precisa:
      `brain/`, `brain/accounts/`,
      `brain/memory/`, `brain/memory/recent/`, `brain/memory/weekly/`, `brain/memory/medium-term/`,
      `brain/memory/lifetime/`, `brain/memory/policies/`,
@@ -42,7 +42,8 @@ no Claude Code. Se ele rodou e `brain/.initialized` existe, prossiga.
      `brain/daily/`, `brain/craft/methods/`, `brain/craft/style/`,
      `brain/learnings/`, `brain/people/`,
      `brain/development/cdc/`, `brain/development/project-feedback/`,
-     `brain/development/upward-feedback/`, `brain/development/retros/`.
+     `brain/development/upward-feedback/`, `brain/development/retros/`,
+     `brain/tasks/`.
   2. Escreva os arquivos:
      - `brain/.initialized` — timestamp UTC atual (ex. `2026-08-13T00:00:00Z`)
      - `brain/memory/.schema-version` — JSON: `{"schema_version": 1, "layers": ["recent", "weekly", "medium-term", "lifetime", "policies"], "policy_source": "bundles/base/memory/policy.json", "initialized_by": "inline-scaffold"}`
