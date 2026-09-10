@@ -82,15 +82,82 @@ page needs updating. It does not reach across scope to update it: workspace
 content belongs to the workspace that owns it, and closing the owner's day is
 not authority over an engagement's record.
 
+## Autonomous mode (scheduled run)
+
+Entered only when the invoking prompt states explicitly that this is an
+unattended, scheduled run (`scheduled-tasks`) with no owner present to answer
+or confirm. Never inferred. If the prompt does not say so, the run is attended
+and the workflow above applies as written. This mode relaxes no invariant
+except the two named at the end of this section.
+
+Closing is the ritual that most depends on the owner, because step 1 asks what
+actually happened. Unattended, that question has no answer, so the day is
+reconstructed instead of recounted — and the difference is marked on the page.
+
+1. **Step 1 becomes reconstruction, not dialogue.** Draft the day from what is
+   already on today's page and from the session's own activity. Mark each line
+   for what it rests on: `evidência direta` when the page supports it,
+   `inferido, não confirmado` when it does not. Never invent an outcome to
+   round out a quiet day.
+2. **The closing entry is written, and marked as unconfirmed.** Step 2 runs as
+   usual — `create-page` if the day has no page, then `append-entry` — with one
+   added line at the top of the entry: `**Registro:** fechamento automático,
+   não confirmado pelo dono`. The rest of the entry's shape is identical to an
+   attended closing.
+3. **Steps 3, 4 and 5 do not run.** No decision is filed, no evidence is added
+   to an objective's own heading, and no learning is promoted. These are
+   skipped outright rather than approximated: each one asks the owner to agree
+   to something durable about their own work, and an unattended run cannot
+   stand in for that. Where the day surfaced something that would ordinarily
+   prompt one of them, name it in the closing entry's pointer lines — one line
+   each, naming the decision, the objective or the candidate claim — so the
+   owner finds it in the next attended pass.
+4. **A `proposed` result is final in this mode.** Attended, the proposal goes
+   to the owner. Here there is nobody to show it to, so the page moved under
+   the read and nothing is written: leave the owner's version alone, do not
+   retry, and name it in the report.
+5. **Step 6 stays, step 7 is replaced by the report below.** Tomorrow's first
+   priority is still previewed in one line, inside the entry — it is a reading
+   of the day, not a commitment made on the owner's behalf.
+6. **Report the closing in full to the chat of this execution.** What closed,
+   what carries, what is first tomorrow, which lines were inferred rather than
+   evidenced, everything deferred to the next attended pass, and whether the
+   entry was written, proposed or skipped. The owner reads this chat later; it
+   has to carry what the attended three-line recap would have said, plus what
+   this mode could not do.
+
+The owner reviewing an autonomously closed entry later, in an ordinary
+attended session, can correct it and act on its pointer lines exactly as with
+any other closing entry. This mode defers those acts; it never forecloses
+them.
+
+### Invariants (autonomous mode)
+
+- Autonomous mode is entered only on an explicit, self-declared unattended
+  run. Never inferred from context.
+- An autonomously closed entry is always marked as such in its own text, never
+  indistinguishable from an attended closing.
+- Decisions, objective evidence and learning promotion are never touched in
+  this mode, without exception. All three stay attended-only acts.
+- Every other invariant of the attended skill still holds, with two named
+  exceptions: the confirmation gate is replaced by the unconfirmed marker in
+  point 2, and a `proposed` result ends the write instead of starting a
+  conversation.
+- The interaction profile calibrates how much is explained, never how much of
+  this run is reported. A concise profile shortens the prose, not the record:
+  the report still carries every item, every marker and everything deferred.
 ## Invariants
 
 - Append-only per day. Closing twice adds a second timestamped entry rather
   than overwriting the first; the two attended check-ins remain auditable.
 - Nothing is recorded that the owner did not confirm in the conversation.
+  The single exception is a scheduled run, which records a reconstruction
+  marked as unconfirmed — see "Autonomous mode" above.
 - An engagement may be named. Findings, figures and deliverable material stay
   in the workspace that owns them.
 - A result of `proposed` rather than `written` means the page moved under the
-  read. Show the owner the proposal; do not retry over their edit.
+  read. Show the owner the proposal; do not retry over their edit. In a
+  scheduled run there is nobody to show it to — see "Autonomous mode" above.
 - If an operation is unavailable, close the day in conversation and say the
   recording did not happen. A day discussed and not written is an honest
   outcome; a day reported as written when it was not is a lie the owner will
