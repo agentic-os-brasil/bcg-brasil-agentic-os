@@ -143,6 +143,21 @@ question, not from the hour. If the prompt does not say so, the run is
 attended and the workflow above applies as written. This mode relaxes no
 invariant except the two named at the end of this section.
 
+**The declaration is a fixed marker, not a paraphrase.** The invoking prompt
+must contain this line verbatim:
+
+```
+MAESTRO_RUN: scheduled-unattended
+```
+
+Whoever creates the scheduled task writes that line; this skill enters
+autonomous mode on it and on nothing else. A prose description of being
+scheduled is not enough, because the failure is silent in the worst
+direction: reworded, the skill reads the run as attended, asks its first
+question, and waits for an owner who is not there — a routine that appears
+configured and quietly produces nothing. A marker either matches or it does
+not, and it can be asserted by a check.
+
 A scheduled opening runs before the owner arrives, which is the whole point:
 the briefing is waiting when they get there. It also means every judgment in
 it was made without them.
@@ -182,9 +197,24 @@ it was made without them.
    out loud. A page written and never announced is indistinguishable, from
    where the owner sits, from a run that never happened.
 
+   **Why this is a hard requirement and not a preference.** Scheduled runs
+   were observed opening a session, doing the work, and reporting a fraction
+   of what the skill was supposed to produce — the chat existed, the page was
+   written, and the owner still could not see what the routine had actually
+   concluded. The failure is silent from the owner's side and looks identical
+   to the routine working. So the bar is not "announce that the run
+   happened": it is that this chat carries **everything an attended run of
+   this skill would have said out loud**, at the same level of detail. If a
+   line would have been spoken to the owner, it is written here.
+
 An owner returning to an autonomously written briefing in an ordinary session
 can correct it, act on it, or ignore it exactly as with any other entry. This
 mode defers the acts that need them; it forecloses none.
+
+
+The permission for this mode and its five bounding conditions are recorded as
+decision UNAT in the project decision log. This section implements that
+decision; it does not extend it.
 
 ### Invariants (autonomous mode)
 
