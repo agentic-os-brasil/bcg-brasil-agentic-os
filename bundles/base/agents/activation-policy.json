@@ -13,7 +13,8 @@
     "max_active_branches": 1,
     "parallel_when": "escopos independentes que nao conflitam podem ir no mesmo bloco de mensagem",
     "packet_is_closed": "o spoke nao busca contexto: o que ele precisa vai no prompt",
-    "verdict_is_input": "o retorno do spoke e insumo, nao saida; o hub continua responsavel pela resposta"
+    "verdict_is_input": "o retorno do spoke e insumo, nao saida; o hub continua responsavel pela resposta",
+    "budget_not_gate": "max_depth e max_active_branches sao ORCAMENTO OBSERVAVEL, nao condicao de validade. A spec 023 e explicita: 'branch count, order, depth and nesting are planning guidance and observable budgets, not validity conditions for otherwise safe work', e a postura default dela e receita consultiva, nao portao de execucao. Quem implementar o roteador nao deve barrar trabalho seguro por estourar um destes numeros: excedeu, registra e segue. Barrar aqui seria inverter a spec por causa do nome do campo."
   },
   "announce": {
     "required": true,
