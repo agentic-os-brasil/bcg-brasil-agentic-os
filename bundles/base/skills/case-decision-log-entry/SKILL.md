@@ -5,7 +5,7 @@ description: Register a case decision in the active case decision log. Use when 
 
 # Decision Log Entry
 
-Resolve the canonical `interaction-profile` before proceeding. It governs
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before proceeding. It governs
 explanation depth and disclosure; it never changes the confirmation gate or
 invariants below.
 
@@ -29,12 +29,13 @@ scope — so they survive session boundaries and are reviewable on a fixed caden
 
 ### 1. Resolve active case
 
-Read `brain/accounts/.active`. It contains `<account-id>/<case-id>` — split on the
-slash; both halves are needed to build the path below.
+Read `brain/accounts/.active` (format `<account-id>/<case-id>`) and split on the slash —
+both halves build the path below. A marker without a slash is the pre-accounts format and
+the isolation guard refuses it, so treat it the same as absent.
 
-If the file is absent, empty, or holds no slash, stop and return:
+If the file is absent or empty, stop and return:
 
-> Nenhum caso ativo. Use `/bcg-case-kickoff` para iniciar um caso primeiro.
+> Nenhum caso ativo. Use [`/bcg-case-kickoff`](../bcg-case-kickoff/SKILL.md) para iniciar um caso primeiro.
 
 Never infer a case from path fragments, session history, or prompt context.
 
@@ -108,6 +109,16 @@ Add a blank line before the entry if the file is non-empty.
 
 | Condition | Response |
 |---|---|
-| `brain/accounts/.active` absent or empty | "Nenhum caso ativo. Use `/bcg-case-kickoff` para iniciar um caso primeiro." |
+| `brain/accounts/.active` absent or empty | "Nenhum caso ativo. Use [`/bcg-case-kickoff`](../bcg-case-kickoff/SKILL.md) para iniciar um caso primeiro." |
 | `type` not determinable | Ask the owner to specify one of the five allowed types. |
 | `title` exceeds 50 characters | Propose a shortened version and confirm before accepting. |
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

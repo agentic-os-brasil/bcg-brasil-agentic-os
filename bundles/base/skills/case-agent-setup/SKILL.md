@@ -18,23 +18,44 @@ translate interview fields into a command envelope. The previous CLI-driven
 surface is not used; the skill handles all orchestration internally.
 
 Use the workspace recipes and canonical locations already present in the
-workspace. All case artifacts live under `brain/accounts/<account-id>/cases/<case-id>/`:
+workspace. Every case belongs to an account (a client, or an internal account
+for non-client work — see [`account-case-setup`](../account-case-setup/SKILL.md)). All case artifacts live under
+`brain/accounts/<account-id>/cases/<case-id>/`:
 
-- `brain/accounts/<account-id>/cases/<case-id>/projects/` for case context and working plans;
+- `brain/accounts/<account-id>/cases/<case-id>/<case-id>.md` — the project brief
+  itself, at the case root, not nested in a `projects/` subfolder: a case already
+  is one project, so a same-named wrapper folder around its one brief is a
+  redundant file for a redundant folder. Write only the brief itself here — the
+  index compiler (`brain-index.py`) appends and thereafter owns a
+  `<!-- maestro:generated:start -->…<!-- maestro:generated:end -->` block at the
+  end of this file on its own, with the case's navigation (canon/decisions/
+  tasks/deliverables/sources). Never write inside that block or remove it by
+  hand; everything above it is this skill's, and the owner's, to edit;
 - `brain/accounts/<account-id>/cases/<case-id>/decisions/` for decision records and rationale;
 - `brain/accounts/<account-id>/cases/<case-id>/tasks/` for explicitly accepted open work;
 - `brain/accounts/<account-id>/cases/<case-id>/deliverables/` for reviewed outputs;
 - `brain/accounts/<account-id>/cases/<case-id>/sources/` for authorized source pointers, never copied client bodies;
 - `brain/accounts/<account-id>/cases/<case-id>/canon/` for frontmatter-indexed compiled knowledge (hypotheses, interview synthesis, frameworks, benchmarks).
 
-The active case is identified by `brain/accounts/.active`: a plain text file containing
-`<account-id>/<case-id>` (for example `acme/acme-cost-2026`). A case id on its own does not
-name an account, so it cannot authorize a write under one — `block-cross-case-writes.sh`
-refuses that older single-case format rather than guessing which client it meant. Write the
-pair. A `.pending` sentinel at `brain/accounts/.pending`, in the same pair format, is written
+Each case also carries its own agent identity at
+`brain/accounts/<account-id>/cases/<case-id>/agent.json` (name, emoji, owner_id —
+see [`agent-identity-setup`](../agent-identity-setup/SKILL.md)). Never fall back to a case directory that is not
+nested under an account; if no account exists yet for this case, run
+[`account-case-setup`](../account-case-setup/SKILL.md) first (an internal account is enough for non-client work —
+never skip the account tier "for simplicity").
+
+The active case is identified by `brain/accounts/.active` (plain text file containing
+`<account-id>/<case-id>`, e.g. `acme/acme-cost-2026`). Write the pair, always. A case id
+on its own does not name an account, so it cannot authorize a write under one —
+`block-cross-case-writes.sh` refuses that older single-case format rather than guessing
+which client it meant, which means a workspace set up with a bare id has every later case
+write blocked by a marker the product itself just wrote. This sentence is here so the
+format is not "simplified" back.
+
+A `.pending` sentinel at `brain/accounts/.pending`, in the same pair format, is written
 first at the start of setup and removed only after `.active` is written successfully — this
-prevents corrupt state if setup is interrupted, and it is what lets the isolation guard allow
-the writes that create the case.
+prevents corrupt state if setup is interrupted, and it is what lets the isolation guard
+allow the writes that create the case in the first place.
 
 Create only the smallest directory or Markdown artifact needed by the case.
 Keep owner context outside the workspace and never invent a second memory or
@@ -42,22 +63,23 @@ task store.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before starting. It controls how
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before starting. It controls how
 much technical detail is shown during setup, but never changes approval,
 classification, provenance or case isolation requirements.
 
 ## First useful result
 
-1. Confirm the active case from `brain/accounts/.active`, reading it as
-   `<account-id>/<case-id>`. If no active case exists, resolve the account first (an
-   existing `brain/accounts/<account-id>/` or a new one via `account-case-setup` — an
-   internal account is fine for non-client work), create a new case-id (slug format:
+1. Confirm the active case from `brain/accounts/.active` (format `<account-id>/<case-id>`).
+   If no active case exists, first confirm which account this case belongs to (an
+   existing `brain/accounts/<account-id>/` or a new one via [`account-case-setup`](../account-case-setup/SKILL.md) — an
+   internal account is fine for non-client work). Create a new case-id (slug format:
    `<client>-<topic>-<year>`, e.g. `acme-cost-2026`), write `<account-id>/<case-id>` to
    `brain/accounts/.pending` first, scaffold `brain/accounts/<account-id>/cases/<case-id>/`
-   with all six subdirs, then write `<account-id>/<case-id>` to `brain/accounts/.active` as
-   the final step and remove `.pending`.
-   If `.pending` already exists at setup start, overwrite it — this indicates a prior
-   interrupted run and re-running setup from scratch is safe.
+   with the five subdirs (`decisions/`, `tasks/`, `deliverables/`, `sources/`, `canon/` —
+   no `projects/`, per the canonical locations above), then write `brain/accounts/.active`
+   as the final step and remove `.pending`. If `.pending` already exists at setup start,
+   overwrite it — this indicates a prior interrupted run and re-running setup from scratch
+   is safe.
    Do not infer a workspace from an arbitrary path or conversation fragment.
 2. Use the six prompts as a flexible starting recipe: decision and horizon;
    audience and constraints; useful result; authorized material; balanced
@@ -74,6 +96,11 @@ classification, provenance or case isolation requirements.
    Markdown in the canonical workspace locations. Include date, owner, scope,
    evidence pointers, assumptions, open questions and next step. Do not write
    prompts, transcripts, credentials or client bodies into a control file.
+   For a brand-new case, also add one line for it under the account's own
+   `## Cases` section (`brain/accounts/<account-id>/<account-id>.md`) linking
+   to the new brief — the account page is hand-maintained and is the only
+   place that lists which cases belong to it, so a case created without this
+   line is unreachable from the account.
 6. On a correction, edit the reviewed Markdown artifact when the owner asks;
    preserve prior decision or revision history when it matters. On a later
    session, inspect the existing artifact and continue from its next step.
@@ -128,3 +155,13 @@ approved themes or domains requires a new plan and approval.
 - Runtime filesystem isolation remains fail-closed: if the runtime cannot
   enforce the declared workspace root, state that limitation explicitly and do
   not claim hard isolation.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.
