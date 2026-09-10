@@ -5,7 +5,7 @@ description: Compile a document, interview synthesis, hypothesis, framework, or 
 
 # Skill: case-canon-ingest
 
-Resolve the canonical `interaction-profile` before starting. It controls verbosity during
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before starting. It controls verbosity during
 extraction, but never changes classification requirements, provenance rules, or the
 confirmation-before-save invariant.
 
@@ -28,7 +28,7 @@ Use for:
 - External research synthesis (approved public sources only — no confidential client bodies)
 
 Do NOT use for:
-- Structural decisions → use `decision-log-entry`
+- Structural decisions → use [`decision-log-entry`](../../tech-core/skills/decision-log-entry/SKILL.md)
 - Raw document storage → keep source pointer in `brain/sources/`, not body in canon
 - Cross-case knowledge → each canon artifact is case-scoped; no cross-case lookup
 
@@ -44,7 +44,7 @@ Do NOT use for:
 | `framework` | A methodology or analytical framework applied to this case |
 | `benchmark` | Competitive, industry, or historical benchmark reference |
 
-Note: `decision` type is redirected to `decision-log-entry`.
+Note: `decision` type is redirected to [`decision-log-entry`](../../tech-core/skills/decision-log-entry/SKILL.md).
 
 ---
 
@@ -52,10 +52,12 @@ Note: `decision` type is redirected to `decision-log-entry`.
 
 ### Step 1 — Confirm active case
 
-Read `brain/accounts/.active`. It contains `<account-id>/<case-id>` — split on the
-slash; both halves are needed to build the path, and the case id alone is not enough.
-If `.active` is absent, empty, or holds no slash, stop and ask the owner to activate a
-case first (`/case-agent-setup`).
+Read `brain/accounts/.active` (format `<account-id>/<case-id>`) to get the current account
+and case-id — split on the slash, because both halves are needed to build the path and the
+case id alone is not enough. If `.active` is absent, empty, **or holds no slash**, stop and
+ask the owner to activate a case first ([`/case-agent-setup`](../case-agent-setup/SKILL.md)).
+A marker without a slash is the pre-accounts format, and the isolation guard refuses it
+rather than guessing which client it meant.
 
 Canon dir: `brain/accounts/<account-id>/cases/<case-id>/canon/`
 
@@ -84,7 +86,12 @@ Work with the owner to produce the canon content:
 - Status: `exploratory` | `supported` | `rejected`
 
 **For `interview`:**
-- Participant role (never name — role only, e.g. "Head of Distribution")
+- Participant name and role (e.g. "Denis Güven, President Mercedes-Benz do Brasil") — this
+  is the owner's own private, single-user brain, not a shared or client-facing document;
+  redacting the name buys no real confidentiality and costs operational usefulness. The
+  hard boundary is cross-case: a name (or any other fact) from one account/case must never
+  appear in another's canon — that is enforced structurally (case-isolation guard on
+  `brain/accounts/`), not by anonymizing within a case's own correct workspace.
 - Date (YYYY-MM-DD)
 - Key themes (bulleted)
 - Verbatim quotes (at most 3, in `> "..."` blocks — never paraphrase)
@@ -156,4 +163,14 @@ On confirmation, write the file. On correction, adjust per feedback.
 ❌ **Cross-case references** — each artifact is strictly scoped to its case
 ❌ **Skip frontmatter** — frontmatter is what makes the canon machine-readable across sessions
 ❌ **Save without confirming** — always show the owner before writing
-❌ **Redirect decisions here** — structural decisions go to `decision-log-entry`
+❌ **Redirect decisions here** — structural decisions go to [`decision-log-entry`](../../tech-core/skills/decision-log-entry/SKILL.md)
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.
