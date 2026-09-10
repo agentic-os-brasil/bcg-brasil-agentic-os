@@ -119,8 +119,8 @@ PY
 PARSED=""
 # shellcheck source=lib/python.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null
-if MAESTRO_PY=$(maestro_python 2>/dev/null) && [ -n "$MAESTRO_PY" ]; then
-  PARSED=$(printf '%s' "$HOOK_INPUT" | PYTHONIOENCODING=utf-8 $MAESTRO_PY -c "$PARSE_PY" 2>/dev/null)
+if maestro_python >/dev/null 2>&1; then
+  PARSED=$(printf '%s' "$HOOK_INPUT" | PYTHONIOENCODING=utf-8 maestro_py -c "$PARSE_PY" 2>/dev/null)
 fi
 
 # Python's text mode on Windows writes CRLF and command substitution strips only

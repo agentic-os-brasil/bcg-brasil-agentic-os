@@ -71,6 +71,33 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
     Nunca recomendar instalar `bash`, Git for Windows ou WSL ao usuário: é
     decisão de quem administra a máquina e foge do contrato de "nada de terminal".
 
+12. **Interpretador das rotinas automáticas** — o check 11 responde "os hooks
+    rodaram?"; este responde "eles tinham com que trabalhar?". Todo hook que lê
+    ou escreve JSON depende de um interpretador Python 3, e sem ele cada um sai
+    sem erro: memória entre conversas, roteamento de skills e separação entre
+    clientes ficam desligados sem nenhum sinal.
+
+    Rodar `bash -c '. "$CLAUDE_PROJECT_DIR/.claude/hooks/lib/python.sh"; maestro_python'`.
+
+    - Se imprimir algo, seguir em silêncio. O que imprime é o nome ou caminho
+      resolvido; não mostrar ao usuário.
+    - Se não imprimir nada, surfar como ponto a verificar: "uma peça do Maestro
+      não está instalada nesta máquina — por isso ele não lembra do contexto
+      entre conversas nem protege a separação entre clientes. Ele segue
+      utilizável para conversar. Avise o time BCG Brasil AI." Encaminhar para a
+      seção "Interpretador local" de `maestro-environment-setup`, que sabe
+      apontar o Maestro para um interpretador que exista fora do PATH.
+
+    Instalar um interpretador não está autorizado hoje: a decisão `PYUV` cobre
+    ambiente Python sob demanda para uma capacidade pedida pelo dono, e exige
+    justificativa própria para cada nova capacidade dependente de Python. As
+    rotinas automáticas são infraestrutura sempre-ligada, não capacidade sob
+    demanda. Enquanto isso não for decidido, este check reporta e encaminha —
+    nunca pede ao usuário para instalar Python nem abrir terminal.
+
+    `maestro-doctor` continua read-only: este check diagnostica e nomeia o
+    próximo passo; quem executa é a skill de setup.
+
 ## Output shape
 
 Return a single message with:

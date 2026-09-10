@@ -17,6 +17,24 @@ Resolve the canonical `interaction-profile` skill before responding. Ajustar o t
 4. Inspect Darwin's user-level maintenance state without trying to replace it. The visual installer owns first macOS LaunchAgent enrollment; on Windows and other systems, keep the workspace ready while the native scheduler is added by its platform-specific installer path. Never make normal work wait for background upkeep.
 5. Re-read the narrow workspace status after the transaction. Report only a friendly outcome: **pronto**, **pronto com um detalhe para concluir depois** or **preciso de uma escolha sua**. Translate errors; do not show command lines, paths, receipts, internal state names or raw diagnostics.
 
+## Interpretador local
+
+As rotinas automáticas do Maestro — memória entre conversas, roteamento de skills, separação entre clientes — leem e escrevem JSON através de um interpretador Python 3. Sem ele, todas ficam inertes, e ficam inertes **em silêncio**: cada hook sai sem erro.
+
+O Maestro procura o interpretador sozinho, sob os três nomes que ele costuma ter (`python3`, `python`, e o launcher `py -3` no Windows). Esta seção trata do caso em que existe um interpretador na máquina que não está sob nenhum desses nomes — por exemplo, instalado em um caminho próprio.
+
+**Instalar um interpretador não está autorizado hoje.** A decisão `PYUV` cobre ambiente Python sob demanda para uma capacidade pedida pelo dono, e diz explicitamente que cada nova capacidade dependente de Python precisa da própria justificativa. As rotinas automáticas são infraestrutura sempre-ligada, não capacidade sob demanda, então estão fora desse escopo. Enquanto não houver decisão que as cubra, não instalar nada — reportar e encaminhar.
+
+1. **Confirmar o estado.** Rodar `bash -c '. "$CLAUDE_PROJECT_DIR/.claude/hooks/lib/python.sh"; maestro_python'`. Se imprimir algo, está tudo certo: seguir em silêncio.
+
+2. **Se não imprimir nada, procurar um interpretador fora do PATH** antes de concluir que falta. Só continuar se encontrar um Python 3 utilizável.
+
+3. **Se encontrar, registrar onde ele está.** Gravar o caminho absoluto, em uma linha e sem mais nada, em `data/.maestro-python`. É esse registro que faz os hooks o encontrarem. O arquivo é texto puro de propósito — é ele que diz onde está o leitor de JSON, e exigir JSON para lê-lo seria circular.
+
+4. **Verificar de verdade.** Repetir o comando do passo 1. Ele tem de imprimir o caminho registrado. Se não imprimir, o registro não serviu: reportar em uma linha e não afirmar que ficou pronto.
+
+5. **Se não encontrar nenhum**, reportar em uma linha que uma peça não está instalada nesta máquina, que o Maestro segue utilizável para conversar, e orientar a avisar o time BCG Brasil AI. Nunca pedir ao dono para instalar Python, abrir terminal ou rodar comando.
+
 ## Preparação do componente de leitura avançada de documentos
 
 Tratar o suporte local a documentos como um componente opcional, não como pré-requisito para começar a trabalhar.
