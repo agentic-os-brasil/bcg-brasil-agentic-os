@@ -99,7 +99,15 @@ trap 'emit_minimal; exit 0' ERR
 # here, and a router that cannot run must cost the owner nothing.
 # ---------------------------------------------------------------------------
 AGENT_ROUTER="$PROJECT_DIR/bundles/base/tools/agent-route.py"
+SKILL_ROUTER="$PROJECT_DIR/bundles/base/tools/skill-route.py"
+BRAIN_ROUTER="$PROJECT_DIR/bundles/base/tools/brain-route.py"
+ROUTE_INDEX="$BRAIN_DIR/.maestro/route-index.json"
+# O orcamento do agente e o maior dos tres porque cada acerto carrega o
+# pacote fechado que o spoke exige, e pacote truncado e pior que nenhum: o
+# agente recebe metade do que precisa e devolve veredito sobre outra coisa.
 AGENT_BUDGET=1600
+SKILL_BUDGET=700
+BRAIN_BUDGET=1200
 
 if [ -f "$AGENT_ROUTER" ] && maestro_python >/dev/null 2>&1; then
   AGENT_HOOK_INPUT=$(cat 2>/dev/null || true)
@@ -123,6 +131,38 @@ except Exception:
         | truncate_stdout "$AGENT_BUDGET" || true)
       if [ -n "${AGENTS_OUT:-}" ]; then
         printf '%s\n' "$AGENTS_OUT"
+      fi
+    fi
+
+    # ---------------------------------------------------------------------
+    # Roteamento de skills e de paginas do brain, na mesma passada e com o
+    # mesmo prompt ja extraido. Dois pisos diferentes, porque a economia dos
+    # dois roteadores e diferente:
+    #
+    #   - Skill: sem piso proprio. "eod" tem tres caracteres e e o pedido mais
+    #     literal que existe para aquela skill.
+    #   - Pagina do brain: a partir de 25 caracteres. Abaixo disso o termo nao
+    #     distingue nada e o casamento e ruido — devolver a pagina errada custa
+    #     mais que nao devolver nenhuma.
+    # ---------------------------------------------------------------------
+    if [ -n "${AGENT_PROMPT:-}" ]; then
+      if [ -f "$SKILL_ROUTER" ]; then
+        SKILLS_OUT=$( (cd "$PROJECT_DIR" && printf '%s' "$AGENT_PROMPT" \
+          | PYTHONIOENCODING=utf-8 maestro_py "$SKILL_ROUTER" --max 4 2>/dev/null) \
+          | truncate_stdout "$SKILL_BUDGET" || true)
+        if [ -n "${SKILLS_OUT:-}" ]; then
+          printf '%s\n' "$SKILLS_OUT"
+        fi
+      fi
+
+      PROMPT_LEN=${#AGENT_PROMPT}
+      if [ "$PROMPT_LEN" -ge 25 ] && [ -f "$BRAIN_ROUTER" ] && [ -f "$ROUTE_INDEX" ]; then
+        PAGES_OUT=$( (cd "$PROJECT_DIR" && printf '%s' "$AGENT_PROMPT" \
+          | PYTHONIOENCODING=utf-8 maestro_py "$BRAIN_ROUTER" --max 5 2>/dev/null) \
+          | truncate_stdout "$BRAIN_BUDGET" || true)
+        if [ -n "${PAGES_OUT:-}" ]; then
+          printf '%s\n' "$PAGES_OUT"
+        fi
       fi
     fi
   fi
