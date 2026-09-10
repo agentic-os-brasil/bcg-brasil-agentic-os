@@ -100,6 +100,38 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
     `maestro-doctor` continua read-only: este check diagnostica e nomeia o
     próximo passo; quem executa é a skill de setup.
 
+13. **Sessões agendadas — o que foi combinado ainda existe** — os checks 11 e 12
+    tratam dos hooks, que rodam dentro de cada conversa. Este trata das
+    *sessões agendadas* de abrir o dia, fechar o dia e retro semanal, que
+    rodam sem ninguém: o dono escolheu no onboarding e desde então não tem
+    como saber se continuam de pé. Um agendamento que parou é invisível pelo
+    mesmo motivo que a rotina é útil — ninguém está lá quando ela deveria
+    rodar.
+
+    Ler `brain/owner/operating/scheduled-routines.md`.
+
+    - Ausente, ou `status: declined` → seguir em silêncio. Não foi oferecido
+      ainda, ou o dono disse não, e a recusa é sticky: este check não
+      reabre o assunto.
+    - `status: deferred-tool-unavailable` → surfar como ponto informativo: "as
+      rotinas automáticas foram combinadas mas o agendamento não estava
+      disponível naquele momento; dá para configurar quando quiser, é só
+      pedir." Não é erro.
+    - `status: enabled` ou `enabled-partial` → conferir se as tarefas
+      registradas ainda existem, listando as tarefas agendadas desta sessão e
+      cruzando pelos `taskId` gravados na página. Para cada `taskId` que não
+      aparecer, surfar como ponto a verificar, nomeando a rotina em
+      linguagem do dono: "o fechamento do dia estava agendado para 23h30 e
+      esse agendamento não está mais ativo — dá para recriar, é só pedir."
+      Se a listagem de tarefas agendadas não estiver disponível nesta sessão,
+      dizer isso em uma linha e não concluir nada: ausência de ferramenta não
+      é ausência de agendamento, e afirmar que a rotina caiu quando não se
+      pode verificar é pior que não checar.
+
+    Este check nunca cria, recria ou remove uma tarefa agendada. `maestro-doctor`
+    é read-only; recriar é ato do dono, na conversa.
+
+
 ## Output shape
 
 Return a single message with:
