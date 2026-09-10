@@ -16,7 +16,7 @@ actions.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the analysis. It
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the analysis. It
 changes explanation depth only; it never changes data or tool authorization.
 
 ## Required input

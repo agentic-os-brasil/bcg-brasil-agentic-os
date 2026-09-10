@@ -11,7 +11,7 @@ All reads and writes use direct file operations on the owner atlas paths (`brain
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting. The reads, the write and the
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting. The reads, the write and the
 bounds never vary by profile.
 
 - `standard`: the three-line recap and tomorrow's first priority.
@@ -48,9 +48,9 @@ from `brain/development/objectives.md` when the day touched one.
 
 ## Formato da entrada de fechamento
 
-A página do dia é a mesma que `start-day` cria, com o mesmo cabeçalho e as
+A página do dia é a mesma que [`start-day`](../start-day/SKILL.md) cria, com o mesmo cabeçalho e as
 mesmas seções. Esta skill não redefine a página: quando o dia ainda não tem
-página, ela é criada na forma que `start-day` declara, e o fechamento é sempre
+página, ela é criada na forma que [`start-day`](../start-day/SKILL.md) declara, e o fechamento é sempre
 uma entrada anexada.
 
 **Entrada de fechamento**, anexada sob `## Notas` da página do dia. Fechar duas
@@ -204,3 +204,13 @@ decision; it does not extend it.
   recording did not happen. A day discussed and not written is an honest
   outcome; a day reported as written when it was not is a lie the owner will
   discover later.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

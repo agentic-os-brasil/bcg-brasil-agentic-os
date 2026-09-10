@@ -11,11 +11,11 @@ a shape that is still usable a year from now.
 
 All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
-## How this differs from `learnings-bridge`
+## How this differs from [`learnings-bridge`](../learnings-bridge/SKILL.md)
 
 Both fill `brain/craft/`, from opposite directions.
 
-- **`learnings-bridge` is bottom-up and periodic.** It works from what the
+- **[`learnings-bridge`](../learnings-bridge/SKILL.md) is bottom-up and periodic.** It works from what the
   dailies already collected, sweeps a window of candidates the owner wrote
   earlier, and decides where each one belongs.
 - **This skill is top-down and immediate.** The owner names the technique or
@@ -26,7 +26,7 @@ did I note down this week", that is the other skill.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting a draft. The method-versus-style
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting a draft. The method-versus-style
 test, the operations used, the bounds and the confirmation gate never vary by
 profile; only the explanation and optional detail do.
 
@@ -214,3 +214,13 @@ também é edição do owner. `## Evidência de uso` é o único destino de
 - If an operation is unavailable, say so and keep going. The conversation still
   reaches a page worth having, and the owner can keep the draft — only the
   recording is lost, and it must never be reported as done.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

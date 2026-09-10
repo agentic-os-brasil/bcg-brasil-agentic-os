@@ -12,7 +12,7 @@ All reads and writes use direct file operations on the owner atlas paths (`brain
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting. The reads, the write, the
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting. The reads, the write, the
 bounds and the omissions never vary by profile; only the explanation does.
 
 - `standard`: the shape of the day, the top three, one first move.
@@ -250,3 +250,13 @@ decision; it does not extend it.
 - If an operation is unavailable, say so and give the briefing anyway. The plan
   is still worth having — only the recording is lost, and it must never be
   reported as done.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

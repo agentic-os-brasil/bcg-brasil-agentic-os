@@ -74,52 +74,25 @@ Estrutura obrigatória — não alterar sem instrução explícita.
 
 **Regra dura:** só citar skills, hooks, agentes, arquivos e comandos que existem no repo agentic-os. Se em dúvida, checar com `ls bundles/base/skills/` e ler o `SKILL.md` antes de citar.
 
-### Skills reais (bundles/base/skills/) — 41 skills
-Cada linha: `nome · gatilho canônico curto`.
+### Skills reais — leia o catálogo, não esta página
 
-- `account-case-setup` · monta conta + Case Agent do projeto
-- `agent-identity-setup` · nomeia e personaliza agentes governados
-- `bcg-case-kickoff` · plano dos primeiros dias de um caso ("kickoff de caso novo")
-- `bcg-deck` · storyline e plano de deck decision-led
-- `case-agent-setup` · interview + pesquisa pública de um case
-- `case-canon-ingest` · compila insight revisado no canon do case
-- `case-decision-log-entry` · registra decisão estrutural no log do case
-- `client-delivery-gate` · gate de 3 lentes antes de mandar pro cliente
-- `craft-update` · documenta método ou preferência do owner
-- `deck-drill` · ensaia o deck contra perguntas do público
-- `deck-review` · revisa storyline e evidência dos slides ("revisa esse deck")
-- `dream-memory` · consolida memória diária/semanal ("fecha o dia", "dreaming")
-- `eod` · fecha o dia útil ("eod", "fechando o dia")
-- `execution-continuity` · checkpoint e retomada entre sessões
-- `expert-interview-guide` · guia de entrevista com expert/stakeholder
-- `feedback-capture` · captura feedback recebido → objetivos
-- `find-prior-work` · recupera deliverable anterior no workspace
-- `fodais-performance-review` · CDC de FoDAIS/Sr. FoDAIS BCG X
-- `ingest-content` · registra PDF/office/web na memória local
-- `interaction-profile` · resolve perfil de interação do owner
-- `investigate` · root cause de output errado ("por que isso está errado")
-- `learnings-bridge` · promove learnings do daily pra conhecimento durável
-- `maestro-doctor` · health check do install
-- `maestro-environment-setup` · prepara workspace pós-install
-- `maestro-onboarding` · interview inicial do owner
-- `maestro-operator` · método operacional carregado no SessionStart
-- `maestro-runtime-checkup` · repara runtime/hooks/Darwin
-- `maestro-setup-update` · install / update / rollback via ZIP
-- `meeting-close` · fecha reunião em packet reviewable
-- `meeting-to-work-items` · extrai decisões e tasks das notas
-- `qa-gate` · classifica qualidade de mudança com evidência
-- `qualitative-analysis` · sintetiza evidência qualitativa
-- `quantitative-analysis` · analisa evidência quantitativa
-- `retro` · retrospectiva semanal contra objetivos
-- `sharepoint-ingest` · ingere pastas SharePoint autorizadas
-- `slide-summary` · mapeia texto de deck em arco narrativo
-- `start-day` · abre o dia útil com briefing ("bom dia")
-- `upward-feedback` · prepara feedback pra sênior
-- `yoda` · pressure-test interno antes do owner (persona: Yoda 🧙 — Mestre Yoda; triggers: "yoda check")
-- `wayfinder` · quebra problema fuzzy em issue tree
-- `workspace-agent-setup` · alias legado do case-agent-setup
+**A lista de skills não vive aqui.** Ela vive em
+[`bundles/base/skills/catalog.json`](../catalog.json), que é **gerado** a partir
+das skills no disco a cada release e não é editado à mão. Leia esse arquivo
+antes de escrever a pílula e cite só o que estiver nele.
 
-Se o owner pedir uma pílula sobre algo fora dessa lista (ou sobre hook/agente/arquivo), **verificar antes** com `ls`/`grep` no repo. Não presumir existência.
+Até 2026-09-10 esta seção carregava a lista à mão, e ela divergiu exatamente
+como toda segunda cópia diverge: o cabeçalho anunciava 41 skills, a lista tinha
+42 linhas, e o catálogo tinha 46. Uma seção chamada "anti-alucinação" que
+declara um número errado não evita alucinação — ela produz uma. E o custo
+silencioso era pior: as skills mais novas nunca podiam aparecer numa pílula,
+porque não estavam na cópia.
+
+Para cada skill que a pílula for citar, o catálogo já traz `id`,
+`display_name` e `short_description`. O gatilho canônico curto sai da
+`description` do frontmatter da própria skill — leia o `SKILL.md` quando a
+pílula for tratar daquela skill em profundidade, que é a regra dura abaixo
+aplicada a um caso.
 
 ## Temas sugeridos (rotação)
 

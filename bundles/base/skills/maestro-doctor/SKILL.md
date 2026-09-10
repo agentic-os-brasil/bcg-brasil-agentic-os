@@ -9,7 +9,7 @@ Diagnose a Maestro install without technical jargon. Report in one paragraph plu
 
 ## Interaction profile
 
-Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the checks themselves.
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) if present. Adjust vocabulary and depth, never the checks themselves.
 
 ## Checks (run in order, silent on success)
 
@@ -87,7 +87,7 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
       não está instalada nesta máquina — por isso ele não lembra do contexto
       entre conversas nem protege a separação entre clientes. Ele segue
       utilizável para conversar. Avise o time BCG Brasil AI." Encaminhar para a
-      seção "Interpretador local" de `maestro-environment-setup`, que sabe
+      seção "Interpretador local" de [`maestro-environment-setup`](../maestro-environment-setup/SKILL.md), que sabe
       apontar o Maestro para um interpretador que exista fora do PATH.
 
     Instalar um interpretador não está autorizado hoje: a decisão `PYUV` cobre

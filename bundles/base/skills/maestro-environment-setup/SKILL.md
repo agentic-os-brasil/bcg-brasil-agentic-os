@@ -7,7 +7,7 @@ description: Prepare a post-install Maestro workspace conversationally. Use afte
 
 Prepare one new local workspace and its normal working environment after Maestro has been installed. Keep the mechanics behind Maestro: the owner receives one clear confirmation and a short outcome, not a terminal checklist. For first installation, update, rollback or installer repair, hand off to `$maestro-setup-update`.
 
-Resolve the canonical `interaction-profile` skill before responding. Ajustar o tom e o nível de detalhe da resposta ao perfil do usuário antes de apresentar a preparação. Isso afeta apenas a linguagem e a quantidade de detalhe opcional, nunca a transação de configuração, o limite de responsabilidade ou a confirmação.
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) skill before responding. Ajustar o tom e o nível de detalhe da resposta ao perfil do usuário antes de apresentar a preparação. Isso afeta apenas a linguagem e a quantidade de detalhe opcional, nunca a transação de configuração, o limite de responsabilidade ou a confirmação.
 
 ## Prepare the environment
 

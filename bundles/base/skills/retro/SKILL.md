@@ -14,7 +14,7 @@ registrar entrada). Never edit an atlas page directly from this skill.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting anything. The reads, the
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting anything. The reads, the
 writes, the bounds and the confirmation behaviour never vary by profile; only
 the explanation and optional detail do.
 
@@ -184,3 +184,13 @@ decision; it does not extend it.
 - If an operation is unavailable, say so and continue the conversation. The
   walk, the reflection and a reviewable draft are all still worth having — only
   the recording is lost, and it must not be reported as done.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

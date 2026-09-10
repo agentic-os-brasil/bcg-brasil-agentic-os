@@ -9,7 +9,7 @@ Guia conversacional para três desfechos: primeira instalação, atualização, 
 
 ## Interaction profile
 
-Resolver `interaction-profile` se disponível. Ajustar vocabulário e ritmo, jamais o envelope de segurança (uma pergunta por vez, sem terminal, sem edit manual).
+Resolver [`interaction-profile`](../interaction-profile/SKILL.md) se disponível. Ajustar vocabulário e ritmo, jamais o envelope de segurança (uma pergunta por vez, sem terminal, sem edit manual).
 
 ## Contrato de comunicação
 
@@ -38,7 +38,7 @@ Se o pedido for rollback, tratar como caso de "reparo com ZIP anterior" (ver se�
    - Se ausentes, orientar: "feche a pasta no Claude Code e reabra. Na próxima abertura o Maestro cria a workspace pessoal automaticamente."
    - Se presentes, seguir.
 
-3. **Delegar identidade.** Encaminhar para a skill `maestro-onboarding` sem duplicar o trabalho dela. Frase-ponte sugerida: "com a pasta pronta, vamos à apresentação e captura de identidade. Ativando o onboarding."
+3. **Delegar identidade.** Encaminhar para a skill [`maestro-onboarding`](../maestro-onboarding/SKILL.md) sem duplicar o trabalho dela. Frase-ponte sugerida: "com a pasta pronta, vamos à apresentação e captura de identidade. Ativando o onboarding."
 
 ## Fluxo: atualização
 
@@ -53,7 +53,7 @@ Contexto: o time BCG Brasil AI envia um email com o link do ZIP novo. O usuário
    - **Mismatch (local abaixo do esperado):** "a versão instalada é v<X.Y.Z>, abaixo da que o email pediu. Feche o Claude Code inteiro e siga o passo a passo do `README-INSTALL.md` que está na raiz da pasta Maestro — ele preserva sua `brain/`. Quando reabrir, é só dizer 'confere versão' que eu verifico." Não listar os passos aqui.
    - **Mismatch (local acima do esperado):** raro, mas possível. Informar: "a versão instalada é mais nova que a informada. Confirme com o time BCG Brasil AI qual é a versão correta antes de qualquer ação."
 
-3. **Sanidade pós-atualização.** Se surgir dúvida (arquivo faltando, hook não roda), delegar para `maestro-doctor` e seguir a prescrição dele.
+3. **Sanidade pós-atualização.** Se surgir dúvida (arquivo faltando, hook não roda), delegar para [`maestro-doctor`](../maestro-doctor/SKILL.md) e seguir a prescrição dele.
 
 4. **Fechar o ciclo (obrigatório).** Ao concluir a verificação (match ou orientação de reinstalação aceita), reconciliar os marcadores em `brain/`:
    - Ler `${CLAUDE_PROJECT_DIR}/VERSION` (versão em execução) e `${CLAUDE_PROJECT_DIR}/brain/.maestro-version` (versão instalada anteriormente).
@@ -71,14 +71,14 @@ O bundle carrega dois marcadores de schema em `brain/`:
 Quando um upgrade muda o schema de memória, o release notes do time BCG Brasil AI indica explicitamente. Nessa situação, além do fluxo de atualização acima:
 
 1. Confirmar que o release notes menciona mudança de schema de memória.
-2. Delegar para `dream-memory` a validação — a skill lê `brain/memory/.schema-version` e recusa qualquer escrita se o schema esperado não bater. Não migrar manualmente.
+2. Delegar para [`dream-memory`](../dream-memory/SKILL.md) a validação — a skill lê `brain/memory/.schema-version` e recusa qualquer escrita se o schema esperado não bater. Não migrar manualmente.
 3. Se o schema exigir atualização, o release notes explicita o novo valor. Só então atualizar `brain/memory/.schema-version` via Edit para o valor indicado. Sem release notes explícito, não tocar.
 
 ## Fluxo: reparo
 
-1. **Delegar diagnóstico.** Ativar `maestro-doctor`. Aguardar o veredicto de uma linha e a lista de pontos.
+1. **Delegar diagnóstico.** Ativar [`maestro-doctor`](../maestro-doctor/SKILL.md). Aguardar o veredicto de uma linha e a lista de pontos.
 
-2. **Mapear cada achado à ação certa.** O `maestro-doctor` reporta em linguagem simples; a tabela mental abaixo traduz cada caso para a orientação ao usuário.
+2. **Mapear cada achado à ação certa.** O [`maestro-doctor`](../maestro-doctor/SKILL.md) reporta em linguagem simples; a tabela mental abaixo traduz cada caso para a orientação ao usuário.
 
    - **Arquivos core ausentes** (`VERSION`, `CLAUDE.md`, `.claude/`, `bundles/`): "a instalação está incompleta. Baixe o ZIP mais recente indicado no último email do time BCG Brasil AI e siga o `README-INSTALL.md`. A workspace `brain/` é preservada pelo ritual."
    - **`brain/` ausente, core presente:** "feche o Claude Code e reabra a pasta Maestro. Na próxima abertura a workspace é recriada automaticamente."
@@ -86,7 +86,7 @@ Quando um upgrade muda o schema de memória, o release notes do time BCG Brasil 
    - **`brain/` corrompida ou com conteúdo perdido:** ser direto. "o Maestro não guarda backup automático da sua workspace. Se há uma cópia manual (Time Machine, backup em nuvem pessoal, cópia do OneDrive), restaure por cima da `brain/` atual. Sem backup, o conteúdo perdido não é recuperável pelo Maestro."
    - **`VERSION` presente mas fora do formato `X.Y.Z`:** tratar como install corrompido, apontar para o `README-INSTALL.md`.
 
-3. **Confirmar recuperação.** Após qualquer ação, sugerir rodar `maestro-doctor` de novo para confirmar veredicto "Tudo funcionando".
+3. **Confirmar recuperação.** Após qualquer ação, sugerir rodar [`maestro-doctor`](../maestro-doctor/SKILL.md) de novo para confirmar veredicto "Tudo funcionando".
 
 ## Rollback
 
@@ -102,7 +102,7 @@ Não há rollback automático. Se o usuário pediu para voltar a uma versão ant
 - Não invoca `bcgos` nem qualquer binário de instalador (esse caminho foi encerrado).
 - Não promete rollback automático.
 - Não toca em `brain/`. Essa pasta pertence ao usuário.
-- Não repete o trabalho de `maestro-onboarding` (identidade) nem de `maestro-doctor` (diagnóstico). Delega.
+- Não repete o trabalho de [`maestro-onboarding`](../maestro-onboarding/SKILL.md) (identidade) nem de [`maestro-doctor`](../maestro-doctor/SKILL.md) (diagnóstico). Delega.
 
 ## Encerramento
 
