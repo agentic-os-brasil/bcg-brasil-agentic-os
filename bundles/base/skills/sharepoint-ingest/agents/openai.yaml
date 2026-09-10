@@ -1,4 +1,4 @@
 interface:
   display_name: "Ingestão do SharePoint"
   short_description: "Ingerir pastas SharePoint autorizadas e generalizar conceitos do trajeto"
-  default_prompt: "Use $sharepoint-ingest para ler as pastas autorizadas do SharePoint na sessão, materializar rationales delimitados por documento em brain/memory/sharepoint-rationales/ e construir um índice de conceitos generalizados em brain/knowledge/sharepoint-rationales/ para o trajeto da pasta."
+  default_prompt: "Use $sharepoint-ingest para ler as pastas autorizadas do SharePoint na sessão e materializar rationales delimitados por documento, com um índice de conceitos ao lado deles: dentro de sources/sharepoint-rationales/ do caso ativo, ou em brain/memory/sharepoint-rationales/ quando a pasta é do próprio dono."

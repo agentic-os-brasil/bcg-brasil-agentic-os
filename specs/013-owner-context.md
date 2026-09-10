@@ -3,7 +3,11 @@
 Status: decision accepted; local facet registry, inspection surface,
 cold-start interview contract, policy-enforcing refinement core and
 metadata-only interaction evaluator implemented. Assessment extraction and
-semantic observation synthesis remain unavailable.
+semantic observation synthesis remain unavailable. **CLI surface superseded** —
+the `bcgos owner *` commands described below no longer exist; the standalone
+`bcgos` binary was removed with `specs/001-cli-distribution.md`, and the
+interview is delivered through the `/maestro-onboarding` skill. The facet
+contract, the consent boundaries and the ten-facet index remain canonical.
 
 ## Objective
 
@@ -147,12 +151,17 @@ portion:
 | `working-boundaries` | Quais limites de confidencialidade, escopo, autonomia e escalada o Maestro nunca deve cruzar? | Quais limites o Maestro nunca deve cruzar? |
 
 Session Start derives one deterministic onboarding state from those facets:
-`required`, `in_progress`, `review_required` or `complete`. Answered facets do
-not make onboarding complete by themselves. The `review_required` projection
-exposes a SHA-256 `review_digest`; `bcgos owner onboarding confirm --digest
-<review_digest> --confirm` records only that exact reviewed version of the
-facets in the selected track. A missing, malformed or stale digest fails closed without
-changing owner state, and any later facet change invalidates the confirmation.
+`required`, `in_progress` or `complete`, read from `brain/owner/onboarding.json`
+by the `status` field and never by the file's existence. Answered facets do not
+make onboarding complete by themselves: the flow closes with an explicit review
+in the conversation, and `/maestro-onboarding` owns that boundary.
+
+A fourth state, `review_required`, and its SHA-256 `review_digest` belonged to
+`bcgos owner onboarding confirm --digest <review_digest> --confirm`. That
+command no longer exists and nothing in the shipped product produces or reads
+that state, so it is recorded here as history rather than as contract. Do not
+implement against it. (The `review_required` reported by `owner expand status`
+is a different mechanism — one open SELF expansion draft — and is unaffected.)
 The runtime suggests the next unanswered question, then waits; if the owner
 answers a different known onboarding facet, it records that answer and keeps
 the unanswered facet in the pending list rather than forcing the owner to
@@ -206,9 +215,10 @@ purpose is required after owner authorization.
 `bcgos owner init` creates non-overwriting templates. `bcgos owner status`
 returns pointers, policy and availability, never document bodies. `bcgos owner
 interview` exposes the cold-start questions without persisting an answer.
-`bcgos owner onboarding status` exposes only bounded progress and the digest
+`bcgos owner onboarding status` exposed only bounded progress and the digest
 needed at the review boundary; `bcgos owner onboarding confirm --digest
-<review_digest> --confirm` records the explicit reviewed-facet version.
+<review_digest> --confirm` recorded the explicit reviewed-facet version. Both
+are part of the superseded CLI surface noted in Status.
 `bcgos owner expand status|next` is bounded and body-free;
 `bcgos owner expand draft --question-token <sha256> --stdin --consent
 --no-client-data`, `bcgos owner expand review --id <id>` and `bcgos owner
