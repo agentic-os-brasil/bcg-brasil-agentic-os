@@ -1709,6 +1709,32 @@ else
   skip "announce hook or interpreter unavailable"
 fi
 
+# The router only matters if the hook that calls it actually reaches it. That
+# link had no check and was broken on arrival: the extraction piped the payload
+# into `maestro_py -`, which reads the SCRIPT from stdin, so a heredoc there
+# won the stdin and json.load got nothing. Empty prompt, no routing, no error,
+# on every message. Assert the whole path, not the router alone.
+CI_HOOK="$MAESTRO_DIR/.claude/hooks/context-inject-userprompt.sh"
+if [ -f "$CI_HOOK" ] && [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
+  CI_HOME=$(mktemp -d -t maestro-eval-cihome-XXXXXX)
+  CI_OUT=$(printf '{"prompt":"chama o yoda para revisar essa recomendacao"}' \
+           | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)
+  case "$CI_OUT" in
+    *yoda*) pass "context-inject reaches the agent router and emits its line" ;;
+    *) fail "context-inject produced no agent line for an explicit request — the router is wired but unreachable" ;;
+  esac
+
+  # An ordinary request must not pay for this. A router that fires on everything
+  # costs a model call per message and trains the owner to ignore the line.
+  CI_QUIET=$(printf '{"prompt":"me ajuda a montar o slide de decisao"}' \
+             | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)
+  case "$CI_QUIET" in
+    *yoda*|*darwin*|*gamma-guardian*) fail "context-inject emitted an agent line for ordinary work" ;;
+    *) pass "context-inject stays quiet on ordinary work" ;;
+  esac
+  rm -rf "$CI_HOME"
+fi
+
 
 
 
