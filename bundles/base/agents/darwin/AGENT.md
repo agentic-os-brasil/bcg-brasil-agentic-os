@@ -75,8 +75,8 @@ first-class evidence and proposes bounded repairs. Signals to watch:
 - **Injection order violation** — the observed order in the health packet does
   not follow `lifetime → medium-term → weekly → recent`. Symptom: raw daily
   log leaks in before the compressed layers, breaking the pyramid contract.
-- **Trigger backlog** — `data/.upgrade-pending`, `data/memory/.dream-requested`
-  or `data/memory/.schema-version` mismatch persists across multiple sessions
+- **Trigger backlog** — `brain/.upgrade-pending`, `brain/memory/.dream-requested`
+  or `brain/memory/.schema-version` mismatch persists across multiple sessions
   without being cleared by the routed skill. Symptom: the same warning block
   ships every session and the routed action never fires.
 

@@ -7,7 +7,7 @@ description: Help the owner prepare considered feedback to give upward to a seni
 
 Help the owner work out what to say, and how to say it, before they say it.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## The boundary that defines this skill
 

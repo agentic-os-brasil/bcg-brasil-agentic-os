@@ -44,12 +44,12 @@
       }
     ],
     "workspace_state": {
-      "root": "data/",
+      "root": "brain/",
       "owned_by": "user",
       "never_overwritten_by_upgrade": true,
       "version_markers": [
-        "data/.maestro-version",
-        "data/memory/.schema-version"
+        "brain/.maestro-version",
+        "brain/memory/.schema-version"
       ]
     }
   },
@@ -97,11 +97,11 @@
       "bundles/base/skills/maestro-onboarding/SKILL.md"
     ],
     "profile_outputs": {
-      "purpose": "Maps the four user-facing profile files produced by the maestro-onboarding skill to their declarative JSON Schemas. Consumers validating data/profile/ contents (installer, harness validators, downstream OKF bundlers) should look them up here rather than walking the tree. Schemas mirror the manifest's provenance.status=experimental stance; shape may evolve.",
-      "data/profile/identity.json": "schemas/identity.schema.json",
-      "data/profile/style.json": "schemas/style.schema.json",
-      "data/profile/onboarding.json": "schemas/onboarding.schema.json",
-      "data/profile/markitdown.json": "schemas/markitdown.schema.json"
+      "purpose": "Maps the four user-facing profile files produced by the maestro-onboarding skill to their declarative JSON Schemas. Consumers validating brain/owner/ contents (installer, harness validators, downstream OKF bundlers) should look them up here rather than walking the tree. Schemas mirror the manifest's provenance.status=experimental stance; shape may evolve.",
+      "brain/owner/identity.json": "schemas/identity.schema.json",
+      "brain/owner/style.json": "schemas/style.schema.json",
+      "brain/owner/onboarding.json": "schemas/onboarding.schema.json",
+      "brain/owner/markitdown.json": "schemas/markitdown.schema.json"
     }
   },
   "portability_notes": {
@@ -112,8 +112,8 @@
       "downstream OKF bundlers"
     ],
     "invariants": [
-      "bundle never writes outside data/ inside the user's workspace",
-      "version_markers live inside data/ so upgrades are detectable but reversible",
+      "bundle never writes outside brain/ inside the user's workspace",
+      "version_markers live inside brain/ so upgrades are detectable but reversible",
       "hooks are fail-open and idempotent"
     ]
   }

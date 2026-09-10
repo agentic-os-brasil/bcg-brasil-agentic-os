@@ -9,7 +9,7 @@ Carry one candidate at a time off a daily page into the segment that should
 hold it. This is a curation conversation that produces pages, not a batch pass
 over a folder.
 
-All reads and writes use direct file operations on the owner atlas paths (`data/owner/atlas/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
+All reads and writes use direct file operations on the owner atlas paths (`brain/owner/`). Never skip the confirmation gate or edit atlas files directly outside the skill's write sequence.
 
 ## This is not memory consolidation
 

@@ -13,6 +13,6 @@ When this skill is invoked:
 1. Resolve the canonical `interaction-profile` skill if available.
 2. Confirm with the user that the request is to set up a new case workspace.
 3. Immediately hand off to `case-agent-setup` — do not execute this skill's logic.
-4. Log the deprecation in `data/profile/deprecation-notices.json` if the file exists.
+4. Log the deprecation in `brain/owner/deprecation-notices.json` if the file exists.
 
 No further action required here.

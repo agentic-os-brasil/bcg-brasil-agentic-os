@@ -160,9 +160,9 @@ else
 fi
 
 if [ -d "$MAESTRO_DIR/data" ]; then
-  fail "data/ pre-shipped in ZIP (must be created by hook, not shipped)"
+  fail "brain/ pre-shipped in ZIP (must be created by hook, not shipped)"
 else
-  pass "data/ correctly absent from ZIP"
+  pass "brain/ correctly absent from ZIP"
 fi
 
 # Slash commands must reference paths that exist in the shipped layout.
@@ -235,30 +235,30 @@ else
   fail "hook non-zero exit on first run"
 fi
 
-for sub in agents memory profile workspaces; do
-  if [ -d "$MAESTRO_DIR/data/$sub" ]; then
-    pass "data/$sub created"
+for sub in accounts craft daily development learnings memory owner people; do
+  if [ -d "$MAESTRO_DIR/brain/$sub" ]; then
+    pass "brain/$sub created"
   else
-    fail "data/$sub NOT created"
+    fail "brain/$sub NOT created"
   fi
 done
 
-if [ -f "$MAESTRO_DIR/data/.initialized" ] && [ -s "$MAESTRO_DIR/data/.initialized" ]; then
-  pass "data/.initialized marker exists + non-empty"
+if [ -f "$MAESTRO_DIR/brain/.initialized" ] && [ -s "$MAESTRO_DIR/brain/.initialized" ]; then
+  pass "brain/.initialized marker exists + non-empty"
 else
-  fail "data/.initialized marker missing or empty"
+  fail "brain/.initialized marker missing or empty"
 fi
 
-if [ -f "$MAESTRO_DIR/data/.scaffold.log" ] && grep -q "DONE  marker written" "$MAESTRO_DIR/data/.scaffold.log"; then
-  pass "data/.scaffold.log has DONE line"
+if [ -f "$MAESTRO_DIR/brain/.scaffold.log" ] && grep -q "DONE  marker written" "$MAESTRO_DIR/brain/.scaffold.log"; then
+  pass "brain/.scaffold.log has DONE line"
 else
-  fail "data/.scaffold.log missing DONE line"
+  fail "brain/.scaffold.log missing DONE line"
 fi
 
-if [ -f "$MAESTRO_DIR/data/README.md" ] && grep -q "workspaces" "$MAESTRO_DIR/data/README.md"; then
-  pass "data/README.md present + mentions workspaces"
+if [ -f "$MAESTRO_DIR/brain/README.md" ] && grep -q "workspaces" "$MAESTRO_DIR/brain/README.md"; then
+  pass "brain/README.md present + mentions workspaces"
 else
-  fail "data/README.md missing or malformed"
+  fail "brain/README.md missing or malformed"
 fi
 
 if [ -f "$MAESTRO_DIR/FIRST-RUN-FAILED.txt" ]; then
@@ -279,13 +279,13 @@ fi
 phase "Phase 5 — First-run scaffold, idempotency"
 # --------------------------------------------------------------------------
 
-LOG_BEFORE=$(wc -l < "$MAESTRO_DIR/data/.scaffold.log" | tr -d ' ')
+LOG_BEFORE=$(wc -l < "$MAESTRO_DIR/brain/.scaffold.log" | tr -d ' ')
 if CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$HOOK" >/dev/null 2>&1; then
   pass "hook exit 0 on second run"
 else
   fail "hook non-zero on second run"
 fi
-LOG_AFTER=$(wc -l < "$MAESTRO_DIR/data/.scaffold.log" | tr -d ' ')
+LOG_AFTER=$(wc -l < "$MAESTRO_DIR/brain/.scaffold.log" | tr -d ' ')
 if [ "$LOG_BEFORE" = "$LOG_AFTER" ]; then
   pass "second run is a no-op ($LOG_BEFORE lines before/after)"
 else
@@ -296,7 +296,7 @@ fi
 phase "Phase 6 — First-run scaffold, failure modes"
 # --------------------------------------------------------------------------
 
-# Scenario B: data/ pre-exists and is unwritable. Parent writable → breadcrumb should surface.
+# Scenario B: brain/ pre-exists and is unwritable. Parent writable → breadcrumb should surface.
 FAIL_SCRATCH=$(mktemp -d -t maestro-eval-failB-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$FAIL_SCRATCH"
 FAIL_MAESTRO="$FAIL_SCRATCH/Maestro"
@@ -304,9 +304,9 @@ mkdir "$FAIL_MAESTRO/data"
 chmod 555 "$FAIL_MAESTRO/data"
 
 if CLAUDE_PROJECT_DIR="$FAIL_MAESTRO" bash "$FAIL_MAESTRO/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>&1; then
-  pass "hook fail-open (exit 0) with unwritable data/ (Scenario B)"
+  pass "hook fail-open (exit 0) with unwritable brain/ (Scenario B)"
 else
-  fail "hook non-zero when data/ unwritable"
+  fail "hook non-zero when brain/ unwritable"
 fi
 
 if [ -f "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt" ] && grep -q "maestro-doctor" "$FAIL_MAESTRO/FIRST-RUN-FAILED.txt"; then
@@ -489,8 +489,8 @@ else
   fail "README-INSTALL step 4 missing Copiar/Ctrl+C/Option — Yoda Fix 2 regressed"
 fi
 
-if grep -qE "confirmar.*data.*maestro-doctor|maestro-doctor.*data" "$README"; then
-  pass "README-INSTALL step 7 gates deletion on data/ present + doctor green"
+if grep -qE "confirmar.*brain.*maestro-doctor|maestro-doctor.*brain" "$README"; then
+  pass "README-INSTALL step 7 gates deletion on brain/ present + doctor green"
 else
   fail "README-INSTALL step 7 missing dual-gate on deletion"
 fi
@@ -534,17 +534,17 @@ phase "Phase 11 — Workspace creation smoke test"
 
 # Simulate user starting a project. The hook created workspaces/; verify a project
 # subdir can be created and marker files land where expected.
-if mkdir -p "$MAESTRO_DIR/data/workspaces/demo-project" \
-   && echo "demo" > "$MAESTRO_DIR/data/workspaces/demo-project/README.md" \
-   && [ -f "$MAESTRO_DIR/data/workspaces/demo-project/README.md" ]; then
+if mkdir -p "$MAESTRO_DIR/brain/workspaces/demo-project" \
+   && echo "demo" > "$MAESTRO_DIR/brain/workspaces/demo-project/README.md" \
+   && [ -f "$MAESTRO_DIR/brain/workspaces/demo-project/README.md" ]; then
   pass "workspace dir writable + accepts project subdir"
 else
   fail "workspace dir not writable"
 fi
 
-if mkdir -p "$MAESTRO_DIR/data/memory/notes" \
-   && echo "test" > "$MAESTRO_DIR/data/memory/notes/first.md" \
-   && [ -f "$MAESTRO_DIR/data/memory/notes/first.md" ]; then
+if mkdir -p "$MAESTRO_DIR/brain/memory/notes" \
+   && echo "test" > "$MAESTRO_DIR/brain/memory/notes/first.md" \
+   && [ -f "$MAESTRO_DIR/brain/memory/notes/first.md" ]; then
   pass "memory dir writable + accepts note file"
 else
   fail "memory dir not writable"
@@ -556,22 +556,22 @@ phase "Phase 12 — Memory scaffold + dreaming hook wiring"
 
 # 12a: Memory sub-tiers exist after first-run scaffold (Phase 4 already ran the hook)
 for tier in recent weekly medium-term lifetime policies; do
-  if [ -d "$MAESTRO_DIR/data/memory/$tier" ]; then
-    pass "data/memory/$tier created by scaffold"
+  if [ -d "$MAESTRO_DIR/brain/memory/$tier" ]; then
+    pass "brain/memory/$tier created by scaffold"
   else
-    fail "data/memory/$tier NOT created by scaffold"
+    fail "brain/memory/$tier NOT created by scaffold"
   fi
 done
 
 # 12a2: Lifetime eligibility policy exists after first-run scaffold.
 # dream-memory/SKILL.md step 5 refuses lifetime promotion without a named
-# eligibility policy at data/memory/policies/lifetime.json ("lifetime
+# eligibility policy at brain/memory/policies/lifetime.json ("lifetime
 # activation must fail closed"). Spec 006 states the base distribution ships
 # that named policy, so an install without it can never activate the permanent
 # memory tier.
-LIFETIME_POLICY="$MAESTRO_DIR/data/memory/policies/lifetime.json"
+LIFETIME_POLICY="$MAESTRO_DIR/brain/memory/policies/lifetime.json"
 if [ -f "$LIFETIME_POLICY" ]; then
-  pass "data/memory/policies/lifetime.json created by scaffold"
+  pass "brain/memory/policies/lifetime.json created by scaffold"
   if python3 -c "import json;json.load(open(r'$(cygpath -w "$LIFETIME_POLICY" 2>/dev/null || echo "$LIFETIME_POLICY")'))" 2>/dev/null; then
     pass "lifetime.json is valid JSON"
   else
@@ -583,38 +583,38 @@ if [ -f "$LIFETIME_POLICY" ]; then
     fail "lifetime.json does NOT name the spec-006 eligibility policy"
   fi
 else
-  fail "data/memory/policies/lifetime.json NOT created by scaffold (lifetime tier fails closed forever)"
+  fail "brain/memory/policies/lifetime.json NOT created by scaffold (lifetime tier fails closed forever)"
 fi
 
 # 12b: Profile placeholder files exist
 for pfile in identity.json; do
-  if [ -f "$MAESTRO_DIR/data/profile/$pfile" ]; then
-    pass "data/profile/$pfile placeholder created by scaffold"
+  if [ -f "$MAESTRO_DIR/brain/owner/$pfile" ]; then
+    pass "brain/owner/$pfile placeholder created by scaffold"
   else
-    fail "data/profile/$pfile NOT created by scaffold"
+    fail "brain/owner/$pfile NOT created by scaffold"
   fi
 done
 
 # 12b2: Owner self directory and 10 SELF facet placeholder files (spec 013)
-if [ -d "$MAESTRO_DIR/data/owner/self" ]; then
-  pass "data/owner/self/ directory created by scaffold"
+if [ -d "$MAESTRO_DIR/brain/owner/self" ]; then
+  pass "brain/owner/self/ directory created by scaffold"
 else
-  fail "data/owner/self/ directory NOT created by scaffold"
+  fail "brain/owner/self/ directory NOT created by scaffold"
 fi
 SELF_FACET_COUNT=0
 for facet in owner-identity personal-context professional-role communication-style \
              voice preferences motivations quality-bar decision-rules working-boundaries; do
-  if [ -f "$MAESTRO_DIR/data/owner/self/$facet.md" ]; then
+  if [ -f "$MAESTRO_DIR/brain/owner/self/$facet.md" ]; then
     SELF_FACET_COUNT=$((SELF_FACET_COUNT + 1))
   else
-    fail "data/owner/self/$facet.md NOT created by scaffold"
+    fail "brain/owner/self/$facet.md NOT created by scaffold"
   fi
 done
 if [ "$SELF_FACET_COUNT" -eq 10 ]; then
   pass "all 10 SELF facet placeholder files created by scaffold"
 fi
 # Verify placeholder content has ## Current section (spec 013 format)
-if grep -q "## Current" "$MAESTRO_DIR/data/owner/self/owner-identity.md" 2>/dev/null; then
+if grep -q "## Current" "$MAESTRO_DIR/brain/owner/self/owner-identity.md" 2>/dev/null; then
   pass "SELF facet placeholder contains ## Current section (spec 013)"
 else
   fail "SELF facet placeholder missing ## Current section"
@@ -647,13 +647,13 @@ fi
 DREAM_SCRATCH=$(mktemp -d -t maestro-eval-dream-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$DREAM_SCRATCH"
 DREAM_MAESTRO="$DREAM_SCRATCH/Maestro"
-mkdir -p "$DREAM_MAESTRO/data/memory"
+mkdir -p "$DREAM_MAESTRO/brain/memory"
 if CLAUDE_PROJECT_DIR="$DREAM_MAESTRO" bash "$DREAM_MAESTRO/.claude/hooks/session-stop-dream.sh" >/dev/null 2>&1; then
   pass "session-stop-dream.sh exits 0"
 else
   fail "session-stop-dream.sh non-zero exit"
 fi
-if [ -f "$DREAM_MAESTRO/data/memory/.dream-requested" ] && [ -s "$DREAM_MAESTRO/data/memory/.dream-requested" ]; then
+if [ -f "$DREAM_MAESTRO/brain/memory/.dream-requested" ] && [ -s "$DREAM_MAESTRO/brain/memory/.dream-requested" ]; then
   pass ".dream-requested marker written with timestamp"
 else
   fail ".dream-requested marker missing or empty after session-stop-dream.sh"
@@ -661,15 +661,15 @@ fi
 chmod -R u+w "$DREAM_SCRATCH"
 rm -rf "$DREAM_SCRATCH"
 
-# 12g: session-start-memory-inject.sh is fail-open when data/ absent
+# 12g: session-start-memory-inject.sh is fail-open when brain/ absent
 INJECT_SCRATCH=$(mktemp -d -t maestro-eval-inject-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$INJECT_SCRATCH"
 INJECT_MAESTRO="$INJECT_SCRATCH/Maestro"
-# Do NOT create data/ — simulate first session where scaffold hasn't run yet
+# Do NOT create brain/ — simulate first session where scaffold hasn't run yet
 if CLAUDE_PROJECT_DIR="$INJECT_MAESTRO" bash "$INJECT_MAESTRO/.claude/hooks/session-start-memory-inject.sh" >/dev/null 2>&1; then
-  pass "session-start-memory-inject.sh exits 0 when data/ absent (fail-open)"
+  pass "session-start-memory-inject.sh exits 0 when brain/ absent (fail-open)"
 else
-  fail "session-start-memory-inject.sh blocks when data/ absent"
+  fail "session-start-memory-inject.sh blocks when brain/ absent"
 fi
 chmod -R u+w "$INJECT_SCRATCH"
 rm -rf "$INJECT_SCRATCH"
@@ -678,14 +678,14 @@ rm -rf "$INJECT_SCRATCH"
 INJECT2_SCRATCH=$(mktemp -d -t maestro-eval-inject2-XXXXXX)
 unzip -q "$ZIP_PATH" -d "$INJECT2_SCRATCH"
 INJECT2_MAESTRO="$INJECT2_SCRATCH/Maestro"
-mkdir -p "$INJECT2_MAESTRO/data/memory/recent" "$INJECT2_MAESTRO/data/memory/lifetime" \
-         "$INJECT2_MAESTRO/data/profile" "$INJECT2_MAESTRO/data/owner/self"
+mkdir -p "$INJECT2_MAESTRO/brain/memory/recent" "$INJECT2_MAESTRO/brain/memory/lifetime" \
+         "$INJECT2_MAESTRO/brain/owner" "$INJECT2_MAESTRO/brain/owner/self"
 printf '{"schema_version":1,"display_name":"Test User","role":"test","context":"","initialized":true}\n' \
-  > "$INJECT2_MAESTRO/data/profile/identity.json"
+  > "$INJECT2_MAESTRO/brain/owner/identity.json"
 printf '# Test memory entry\nThis is a recent memory.\n' \
-  > "$INJECT2_MAESTRO/data/memory/recent/2024-01-01.md"
+  > "$INJECT2_MAESTRO/brain/memory/recent/2024-01-01.md"
 printf '# professional-role\n\n## Current\n\nSenior AI Scientist.\n' \
-  > "$INJECT2_MAESTRO/data/owner/self/professional-role.md"
+  > "$INJECT2_MAESTRO/brain/owner/self/professional-role.md"
 INJECT2_OUT=$(CLAUDE_PROJECT_DIR="$INJECT2_MAESTRO" bash "$INJECT2_MAESTRO/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
 if echo "$INJECT2_OUT" | grep -q "maestro:session-context:start"; then
   pass "session-start-memory-inject.sh emits session-context markers"
@@ -708,9 +708,9 @@ else
   fail "session-start-memory-inject.sh does NOT inject owner SELF facets"
 fi
 if echo "$INJECT2_OUT" | grep -q "professional-role"; then
-  pass "session-start-memory-inject.sh includes facet content from data/owner/self/"
+  pass "session-start-memory-inject.sh includes facet content from brain/owner/self/"
 else
-  fail "session-start-memory-inject.sh does NOT include facet content from data/owner/self/"
+  fail "session-start-memory-inject.sh does NOT include facet content from brain/owner/self/"
 fi
 chmod -R u+w "$INJECT2_SCRATCH"
 rm -rf "$INJECT2_SCRATCH"
@@ -719,14 +719,14 @@ rm -rf "$INJECT2_SCRATCH"
 # .dream-requested marker is present; block is suppressed when marker is absent.
 INJECT3_SCRATCH=$(mktemp -d -t maestro-inject3-XXXXXX)
 INJECT3_MAESTRO="$INJECT3_SCRATCH/Maestro"
-mkdir -p "$INJECT3_MAESTRO/data/memory" "$INJECT3_MAESTRO/data/profile" "$INJECT3_MAESTRO/data/owner/self"
+mkdir -p "$INJECT3_MAESTRO/brain/memory" "$INJECT3_MAESTRO/brain/owner" "$INJECT3_MAESTRO/brain/owner/self"
 INJECT3_HOOK="$INJECT3_MAESTRO/.claude/hooks/session-start-memory-inject.sh"
 mkdir -p "$(dirname "$INJECT3_HOOK")"
 cp "$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh" "$INJECT3_HOOK"
 chmod +x "$INJECT3_HOOK"
 
 # Sub-check A: marker present → dream-trigger block emitted
-printf '%s\n' "2099-01-01T00:00:00Z" > "$INJECT3_MAESTRO/data/memory/.dream-requested"
+printf '%s\n' "2099-01-01T00:00:00Z" > "$INJECT3_MAESTRO/brain/memory/.dream-requested"
 INJECT3_OUT_WITH=$(CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
 if echo "$INJECT3_OUT_WITH" | grep -q "maestro:dream-trigger\|dream-requested"; then
   pass "session-start-memory-inject.sh emits dream-trigger block when .dream-requested present"
@@ -740,7 +740,7 @@ else
 fi
 
 # Sub-check B: marker absent → dream-trigger block NOT emitted
-rm -f "$INJECT3_MAESTRO/data/memory/.dream-requested"
+rm -f "$INJECT3_MAESTRO/brain/memory/.dream-requested"
 INJECT3_OUT_WITHOUT=$(CLAUDE_PROJECT_DIR="$INJECT3_MAESTRO" bash "$INJECT3_HOOK" 2>/dev/null)
 if echo "$INJECT3_OUT_WITHOUT" | grep -q "maestro:dream-trigger"; then
   fail "session-start-memory-inject.sh emits dream-trigger block even without .dream-requested"
@@ -771,10 +771,10 @@ if [ -f "$DOCTOR_SKILL" ]; then
   else
     fail "maestro-doctor does NOT check for bundles/tech-core"
   fi
-  if grep -q "data/owner" "$DOCTOR_SKILL"; then
-    pass "maestro-doctor checks for data/owner/ in workspace health"
+  if grep -q "brain/owner" "$DOCTOR_SKILL"; then
+    pass "maestro-doctor checks for brain/owner/ in workspace health"
   else
-    fail "maestro-doctor does NOT check for data/owner/ in workspace health"
+    fail "maestro-doctor does NOT check for brain/owner/ in workspace health"
   fi
 else
   fail "maestro-doctor/SKILL.md not found — cannot check bundle names"
@@ -855,35 +855,37 @@ phase "Phase 13 — Owner atlas tree"
 # --------------------------------------------------------------------------
 
 # start-day, eod, craft-update, feedback-capture, learnings-bridge and
-# upward-feedback all operate on data/owner/atlas/. Their reads carry
+# upward-feedback all operate on brain/owner/. Their reads carry
 # continuity between sessions, so a missing tree silently degrades the daily
 # ritual rather than failing loudly. Phase 4 already ran the scaffold.
 for atlas_dir in \
-  owner/atlas \
-  owner/atlas/daily \
-  owner/atlas/craft/methods \
-  owner/atlas/craft/style \
-  owner/atlas/learnings \
-  owner/atlas/development/cdc \
-  owner/atlas/development/project-feedback \
-  owner/atlas/development/upward-feedback
+  accounts \
+  daily \
+  craft/methods \
+  craft/style \
+  learnings \
+  people \
+  development/cdc \
+  development/project-feedback \
+  development/upward-feedback \
+  development/retros
 do
-  if [ -d "$MAESTRO_DIR/data/$atlas_dir" ]; then
-    pass "data/$atlas_dir created by scaffold"
+  if [ -d "$MAESTRO_DIR/brain/$atlas_dir" ]; then
+    pass "brain/$atlas_dir created by scaffold"
   else
-    fail "data/$atlas_dir NOT created by scaffold"
+    fail "brain/$atlas_dir NOT created by scaffold"
   fi
 done
 
 for atlas_file in \
-  owner/atlas/craft/index.md \
-  owner/atlas/learnings/index.md \
-  owner/atlas/development/objectives.md
+  craft/craft.md \
+  learnings/learnings.md \
+  development/objectives.md
 do
-  if [ -f "$MAESTRO_DIR/data/$atlas_file" ]; then
-    pass "data/$atlas_file created by scaffold"
+  if [ -f "$MAESTRO_DIR/brain/$atlas_file" ]; then
+    pass "brain/$atlas_file created by scaffold"
   else
-    fail "data/$atlas_file NOT created by scaffold"
+    fail "brain/$atlas_file NOT created by scaffold"
   fi
 done
 
@@ -891,7 +893,7 @@ done
 # `append-entry` never creates a heading and refuses one that appears more than
 # once on a page, so a missing or duplicated heading means the write is
 # declined rather than misfiled — silently, on every fresh install.
-OBJ="$MAESTRO_DIR/data/owner/atlas/development/objectives.md"
+OBJ="$MAESTRO_DIR/brain/development/objectives.md"
 if [ -f "$OBJ" ]; then
   for heading in "## Aposentados" "#### Evidência — objetivo 1"; do
     # grep -c prints its count and still exits 1 on no match, so the count is
@@ -907,15 +909,15 @@ if [ -f "$OBJ" ]; then
     fi
   done
 else
-  fail "data/owner/atlas/development/objectives.md NOT created by scaffold"
+  fail "brain/development/objectives.md NOT created by scaffold"
 fi
 
 # The daily page is authored by start-day, never pre-seeded: a placeholder
 # there would be read back as a real entry.
-if [ -n "$(ls -A "$MAESTRO_DIR/data/owner/atlas/daily" 2>/dev/null)" ]; then
-  fail "owner/atlas/daily/ is pre-seeded (must be authored by start-day)"
+if [ -n "$(ls -A "$MAESTRO_DIR/brain/daily" 2>/dev/null)" ]; then
+  fail "brain/daily/ is pre-seeded (must be authored by start-day)"
 else
-  pass "owner/atlas/daily/ correctly left empty for start-day"
+  pass "brain/daily/ correctly left empty for start-day"
 fi
 
 # --------------------------------------------------------------------------
@@ -927,9 +929,9 @@ phase "Phase 14 — Cross-case guard is platform-independent"
 # hands it. On Windows the runtime supplies drive-letter paths; treating those
 # as relative silently disables the guard while macOS still passes.
 #
-# End-to-end verdict assertions require the hook to read data/cases/.active at
+# End-to-end verdict assertions require the hook to read brain/accounts/.active at
 # the same path shape it was handed. On a real Windows host,
-# "C:/foo/data/cases/.active" is a readable file and the hook's block verdict
+# "C:/foo/brain/accounts/.active" is a readable file and the hook's block verdict
 # is observable. On a POSIX eval host the synthetic drive-letter tree has no
 # filesystem counterpart, so the hook fails-open (by design) and the verdict
 # cannot be exercised without pretending the check ran when it did not.
@@ -943,8 +945,8 @@ phase "Phase 14 — Cross-case guard is platform-independent"
 XC_HOOK="$MAESTRO_DIR/.claude/hooks/block-cross-case-writes.sh"
 if [ -f "$XC_HOOK" ]; then
   XC_ROOT=$(mktemp -d -t maestro-eval-xcase-XXXXXX)
-  mkdir -p "$XC_ROOT/data/cases/case-alpha" "$XC_ROOT/data/cases/case-beta"
-  printf 'case-alpha\n' > "$XC_ROOT/data/cases/.active"
+  mkdir -p "$XC_ROOT/brain/accounts/alfa/cases/tmo" "$XC_ROOT/brain/accounts/beta/cases/tmo"
+  printf 'alfa/tmo\n' > "$XC_ROOT/brain/accounts/.active"
 
   # verdict PROJECT_DIR TARGET -> "block" | "allow"
   # Backslashes must be escaped or the payload is not valid JSON and the hook
@@ -993,7 +995,7 @@ if [ -f "$XC_HOOK" ]; then
   xc_classifies_inside_cases() {
     local proj="$1" target="$2"
     local cases_abs target_abs
-    cases_abs=$(xc_canon "$proj/data/cases")
+    cases_abs=$(xc_canon "$proj/brain/accounts")
     target_abs=$(xc_canon "$target")
     case "$target_abs" in
       "$cases_abs"/*) return 0 ;;
@@ -1004,10 +1006,18 @@ if [ -f "$XC_HOOK" ]; then
   xc_extracted_case_id() {
     local proj="$1" target="$2"
     local cases_abs target_abs rel
-    cases_abs=$(xc_canon "$proj/data/cases")
+    cases_abs=$(xc_canon "$proj/brain/accounts")
     target_abs=$(xc_canon "$target")
     rel="${target_abs#"$cases_abs/"}"
-    printf '%s' "${rel%%/*}"
+    # <conta>/cases/<caso>/... -> <conta>/<caso>: a identidade guardada e o par,
+    # nao o caso sozinho. Dois clientes podem nomear um caso igual.
+    local acct rest
+    acct="${rel%%/*}"
+    rest="${rel#*/}"
+    case "$rest" in
+      cases/*) rest="${rest#cases/}"; printf '%s/%s' "$acct" "${rest%%/*}" ;;
+      *)       printf '%s' "$acct" ;;
+    esac
   }
 
   # verdict for a named tool and payload key, so the tools that reach the hook
@@ -1045,7 +1055,7 @@ if [ -f "$XC_HOOK" ]; then
 
   # Guard against this check silently degrading into a JSON-parse test: the
   # hook must still block when handed a well-formed POSIX payload.
-  if [ "$(xc_verdict "$XC_ROOT" "$XC_ROOT/data/cases/case-beta/probe.md")" = "block" ]; then
+  if [ "$(xc_verdict "$XC_ROOT" "$XC_ROOT/brain/accounts/beta/cases/tmo/probe.md")" = "block" ]; then
     pass "cross-case harness drives the hook's path logic, not a parse failure"
   else
     fail "cross-case harness is not exercising the hook (payload rejected before path logic)"
@@ -1053,10 +1063,10 @@ if [ -f "$XC_HOOK" ]; then
 
   # POSIX shape — the shape macOS always produced, and the only one previously covered.
   XC_R="$XC_ROOT"
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/beta/cases/tmo/x.md")" = "block" ] \
     && pass "cross-case write blocked (POSIX paths)" \
     || fail "cross-case write NOT blocked (POSIX paths)"
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/x.md")" = "allow" ] \
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/alfa/cases/tmo/x.md")" = "allow" ] \
     && pass "same-case write allowed (POSIX paths)" \
     || fail "same-case write wrongly blocked (POSIX paths)"
 
@@ -1074,8 +1084,8 @@ if [ -f "$XC_HOOK" ]; then
   else
     XC_W="C:${XC_ROOT}"                      # synthetic drive-letter equivalent
   fi
-  if xc_classifies_inside_cases "$XC_W" "$XC_W/data/cases/case-beta/x.md" \
-     && [ "$(xc_extracted_case_id "$XC_W" "$XC_W/data/cases/case-beta/x.md")" = "case-beta" ]; then
+  if xc_classifies_inside_cases "$XC_W" "$XC_W/brain/accounts/beta/cases/tmo/x.md" \
+     && [ "$(xc_extracted_case_id "$XC_W" "$XC_W/brain/accounts/beta/cases/tmo/x.md")" = "beta/tmo" ]; then
     pass "cross-case target classified inside cases dir (drive-letter paths)"
   else
     fail "cross-case target NOT classified inside cases dir (drive-letter paths) — guard inactive on Windows"
@@ -1083,8 +1093,8 @@ if [ -f "$XC_HOOK" ]; then
 
   # Backslash separators, the literal shape the Windows runtime sends.
   XC_B=$(printf '%s' "$XC_W" | tr '/' '\\')
-  if xc_classifies_inside_cases "$XC_B" "$XC_B\\data\\cases\\case-beta\\x.md" \
-     && [ "$(xc_extracted_case_id "$XC_B" "$XC_B\\data\\cases\\case-beta\\x.md")" = "case-beta" ]; then
+  if xc_classifies_inside_cases "$XC_B" "$XC_B\\brain\\accounts\\beta\\cases\\tmo\\x.md" \
+     && [ "$(xc_extracted_case_id "$XC_B" "$XC_B\\brain\\accounts\\beta\\cases\\tmo\\x.md")" = "beta/tmo" ]; then
     pass "cross-case target classified inside cases dir (backslash paths)"
   else
     fail "cross-case target NOT classified inside cases dir (backslash paths) — guard inactive on Windows"
@@ -1100,8 +1110,8 @@ if [ -f "$XC_HOOK" ]; then
   # Lowercase via tr (portable) — BSD sed on macOS does not honor GNU \L.
   _xc_drive=$(printf '%s' "$XC_W" | cut -c1 | tr '[:upper:]' '[:lower:]')
   XC_U="/${_xc_drive}${XC_W#?:}"
-  if xc_classifies_inside_cases "$XC_U" "$XC_W/data/cases/case-beta/x.md" \
-     && [ "$(xc_extracted_case_id "$XC_U" "$XC_W/data/cases/case-beta/x.md")" = "case-beta" ]; then
+  if xc_classifies_inside_cases "$XC_U" "$XC_W/brain/accounts/beta/cases/tmo/x.md" \
+     && [ "$(xc_extracted_case_id "$XC_U" "$XC_W/brain/accounts/beta/cases/tmo/x.md")" = "beta/tmo" ]; then
     pass "cross-case target classified inside cases dir (mixed MSYS dir + drive-letter target)"
   else
     fail "cross-case target NOT classified inside cases dir (mixed MSYS dir + drive-letter target)"
@@ -1111,29 +1121,29 @@ if [ -f "$XC_HOOK" ]; then
   # segment (or lost the case id entirely) while the OS resolved the path
   # somewhere else. All are observable on any host: the verdict comes from
   # string canonicalization, not from the filesystem.
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/../case-beta/leak.md")" = "block" ] \
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/alfa/cases/tmo/../../../beta/cases/tmo/leak.md")" = "block" ] \
     && pass "cross-case write blocked (.. traversal out of the active case)" \
     || fail "cross-case write NOT blocked (.. traversal out of the active case)"
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/sub/../../case-beta/leak.md")" = "block" ] \
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/alfa/cases/tmo/sub/../../../../beta/cases/tmo/leak.md")" = "block" ] \
     && pass "cross-case write blocked (multi-level .. traversal)" \
     || fail "cross-case write NOT blocked (multi-level .. traversal)"
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases//case-beta/x.md")" = "block" ] \
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts//beta/cases/tmo/x.md")" = "block" ] \
     && pass "cross-case write blocked (double separator)" \
     || fail "cross-case write NOT blocked (double separator)"
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/./case-beta/x.md")" = "block" ] \
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/./beta/cases/tmo/x.md")" = "block" ] \
     && pass "cross-case write blocked (/./ segment)" \
     || fail "cross-case write NOT blocked (/./ segment)"
 
   # Every tool the settings matcher admits must be guarded, not just Write.
   # MultiEdit and NotebookEdit previously reached the hook and were waved
   # through by a case statement that named only Edit and Write.
-  [ "$(xc_verdict_tool "$XC_R" MultiEdit file_path "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+  [ "$(xc_verdict_tool "$XC_R" MultiEdit file_path "$XC_R/brain/accounts/beta/cases/tmo/x.md")" = "block" ] \
     && pass "cross-case write blocked (MultiEdit)" \
     || fail "cross-case write NOT blocked (MultiEdit)"
-  [ "$(xc_verdict_tool "$XC_R" NotebookEdit notebook_path "$XC_R/data/cases/case-beta/n.ipynb")" = "block" ] \
+  [ "$(xc_verdict_tool "$XC_R" NotebookEdit notebook_path "$XC_R/brain/accounts/beta/cases/tmo/n.ipynb")" = "block" ] \
     && pass "cross-case write blocked (NotebookEdit via notebook_path)" \
     || fail "cross-case write NOT blocked (NotebookEdit via notebook_path)"
-  [ "$(xc_verdict_raw "$XC_R" "$(printf '{"tool_name":"NotebookEdit","tool_input":{"file_path":"%s","notebook_path":"%s"}}' "$XC_R/data/cases/case-alpha/ok.md" "$XC_R/data/cases/case-beta/n.ipynb")")" = "block" ] \
+  [ "$(xc_verdict_raw "$XC_R" "$(printf '{"tool_name":"NotebookEdit","tool_input":{"file_path":"%s","notebook_path":"%s"}}' "$XC_R/brain/accounts/alfa/cases/tmo/ok.md" "$XC_R/brain/accounts/beta/cases/tmo/n.ipynb")")" = "block" ] \
     && pass "cross-case write blocked (NotebookEdit with a decoy file_path on the active case)" \
     || fail "cross-case write NOT blocked (NotebookEdit decoy file_path)"
 
@@ -1141,7 +1151,7 @@ if [ -f "$XC_HOOK" ]; then
   # refused. The settings matcher is an unanchored regex in installs predating
   # this change, so TodoWrite does arrive here, and in a Portuguese-language
   # workspace its list mentions the cases tree routinely.
-  [ "$(xc_verdict_raw "$XC_R" '{"tool_name":"TodoWrite","tool_input":{"todos":[{"content":"revisar data/cases/case-beta"}]}}')" = "allow" ] \
+  [ "$(xc_verdict_raw "$XC_R" '{"tool_name":"TodoWrite","tool_input":{"todos":[{"content":"revisar brain/accounts/beta/cases/tmo"}]}}')" = "allow" ] \
     && pass "TodoWrite naming the cases tree is allowed" \
     || fail "TodoWrite naming the cases tree was refused"
 
@@ -1149,37 +1159,37 @@ if [ -f "$XC_HOOK" ]; then
   # client isolation on every machine without an interpreter: the parse
   # returned empty, the tool name matched nothing, and the hook exited 0 for
   # every write.
-  [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/cases/case-beta/x.md")")" = "block" ] \
+  [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/brain/accounts/beta/cases/tmo/x.md")")" = "block" ] \
     && pass "write into the cases tree refused when the payload cannot be parsed" \
     || fail "write into the cases tree ALLOWED when the payload cannot be parsed — isolation inactive"
-  [ "$(xc_verdict_noparse "$XC_R" '{"tool_name":"TodoWrite","tool_input":{"todos":[{"content":"revisar data/cases/case-beta"}]}}')" = "allow" ] \
+  [ "$(xc_verdict_noparse "$XC_R" '{"tool_name":"TodoWrite","tool_input":{"todos":[{"content":"revisar brain/accounts/beta/cases/tmo"}]}}')" = "allow" ] \
     && pass "TodoWrite still allowed when the payload cannot be parsed" \
     || fail "TodoWrite refused when the payload cannot be parsed"
-  [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/memory/x.md")")" = "allow" ] \
+  [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/brain/memory/x.md")")" = "allow" ] \
     && pass "write outside the cases tree still allowed when the payload cannot be parsed" \
     || fail "write outside the cases tree refused when the payload cannot be parsed"
 
   # An unreadable active marker means the target cannot be shown to be the
   # right case. Previously both shapes exited 0 and allowed the write.
-  mv "$XC_ROOT/data/cases/.active" "$XC_ROOT/data/cases/.active.evalbak"
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+  mv "$XC_ROOT/brain/accounts/.active" "$XC_ROOT/brain/accounts/.active.evalbak"
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/beta/cases/tmo/x.md")" = "block" ] \
     && pass "write into a case refused while .active is missing" \
     || fail "write into a case ALLOWED while .active is missing"
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/memory/x.md")" = "allow" ] \
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/memory/x.md")" = "allow" ] \
     && pass "write outside the cases tree still allowed while .active is missing" \
     || fail "write outside the cases tree refused while .active is missing"
-  printf '   \n' > "$XC_ROOT/data/cases/.active"
-  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+  printf '   \n' > "$XC_ROOT/brain/accounts/.active"
+  [ "$(xc_verdict "$XC_R" "$XC_R/brain/accounts/beta/cases/tmo/x.md")" = "block" ] \
     && pass "write into a case refused while .active is empty" \
     || fail "write into a case ALLOWED while .active is empty"
-  mv "$XC_ROOT/data/cases/.active.evalbak" "$XC_ROOT/data/cases/.active"
+  mv "$XC_ROOT/brain/accounts/.active.evalbak" "$XC_ROOT/brain/accounts/.active"
 
   # The runtime reads stdout only on exit 0, so a reason printed there on the
   # block path never reaches the model. It must be on stderr.
-  XC_MSG=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/cases/case-beta/x.md" \
+  XC_MSG=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/brain/accounts/beta/cases/tmo/x.md" \
     | CLAUDE_PROJECT_DIR="$XC_R" bash "$XC_HOOK" 2>&1 >/dev/null)
   case "$XC_MSG" in
-    *"case-alpha"*|*"case-beta"*) pass "block reason reaches stderr, where the runtime reads it on exit 2" ;;
+    *"alfa/tmo"*|*"beta/tmo"*) pass "block reason reaches stderr, where the runtime reads it on exit 2" ;;
     *) fail "block reason is not on stderr (got: ${XC_MSG:-<empty>})" ;;
   esac
 
@@ -1188,8 +1198,8 @@ if [ -f "$XC_HOOK" ]; then
   # shape to an end-to-end verdict assertion. This runs on Windows CI and
   # skips silently on POSIX eval hosts, so both platforms exercise the guard
   # at the strongest available fidelity without producing false failures.
-  if command -v cygpath >/dev/null 2>&1 && [ -f "$XC_W/data/cases/.active" ]; then
-    [ "$(xc_verdict "$XC_W" "$XC_W/data/cases/case-beta/x.md")" = "block" ] \
+  if command -v cygpath >/dev/null 2>&1 && [ -f "$XC_W/brain/accounts/.active" ]; then
+    [ "$(xc_verdict "$XC_W" "$XC_W/brain/accounts/beta/cases/tmo/x.md")" = "block" ] \
       && pass "cross-case write blocked end-to-end (drive-letter paths, native Windows)" \
       || fail "cross-case write NOT blocked end-to-end (drive-letter paths, native Windows)"
   fi
@@ -1212,15 +1222,15 @@ if [ -f "$CROSS_CASE_HOOK" ]; then
 
   # Drive the hook into its block branch and inspect the emitted reason string.
   XC_ROOT=$(mktemp -d -t maestro-eval-crosscase-XXXXXX)
-  mkdir -p "$XC_ROOT/data/cases/case-alpha" "$XC_ROOT/data/cases/case-beta" "$XC_ROOT/.claude/hooks"
+  mkdir -p "$XC_ROOT/brain/accounts/alfa/cases/tmo" "$XC_ROOT/brain/accounts/beta/cases/tmo" "$XC_ROOT/.claude/hooks"
   cp "$CROSS_CASE_HOOK" "$XC_ROOT/.claude/hooks/"
-  printf 'case-alpha\n' > "$XC_ROOT/data/cases/.active"
+  printf 'alfa/tmo\n' > "$XC_ROOT/brain/accounts/.active"
   # The reason travels on stderr, not stdout: the runtime reads a decision
   # object on stdout only when the hook exits 0, so a reason printed there on
   # the exit-2 path is discarded before anyone sees it.
   XC_ERR="$XC_ROOT/block.err"
   printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' \
-    "$XC_ROOT/data/cases/case-beta/notes.md" \
+    "$XC_ROOT/brain/accounts/beta/cases/tmo/notes.md" \
     | CLAUDE_PROJECT_DIR="$XC_ROOT" bash "$XC_ROOT/.claude/hooks/block-cross-case-writes.sh" \
       >/dev/null 2>"$XC_ERR"
   XC_RC=$?
@@ -1314,12 +1324,12 @@ phase "Phase 18 — Update ritual has one source of truth"
 # --------------------------------------------------------------------------
 
 # README-INSTALL.md is the declared single source of the install/update ritual,
-# and it mandates rename + copy data/ across. WELCOME.md tells the owner not to
+# and it mandates rename + copy brain/ across. WELCOME.md tells the owner not to
 # extract over the folder. A shipped skill that tells them to "extraia por cima"
 # contradicts both, from inside the same folder.
 #
 # Matches the instruction, not the word: a line that forbids extract-over, or
-# that restores a personal backup over data/, is fine.
+# that restores a personal backup over brain/, is fine.
 RITUAL_BAD=0
 for skillmd in "$MAESTRO_DIR/bundles/base/skills"/*/SKILL.md; do
   [ -f "$skillmd" ] || continue
@@ -1418,10 +1428,10 @@ exit 1')
   # instead of interpolating the interpreter at each call site.
   if [ -n "$PY_REAL" ]; then
     PY_REC_ROOT=$(mktemp -d -t maestro-eval-pyrec-XXXXXX)
-    mkdir -p "$PY_REC_ROOT/with space" "$PY_REC_ROOT/data"
+    mkdir -p "$PY_REC_ROOT/with space" "$PY_REC_ROOT/brain"
     printf '#!/bin/sh\nexec "%s" "$@"\n' "$PY_REAL" > "$PY_REC_ROOT/with space/maestro-python"
     chmod +x "$PY_REC_ROOT/with space/maestro-python"
-    printf '%s\n' "$PY_REC_ROOT/with space/maestro-python" > "$PY_REC_ROOT/data/.maestro-python"
+    printf '%s\n' "$PY_REC_ROOT/with space/maestro-python" > "$PY_REC_ROOT/brain/.maestro-python"
 
     RAN=$(env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
             bash -c ". '$PY_LIB'; maestro_py -c 'print(\"ran\")'" 2>/dev/null)
@@ -1432,7 +1442,7 @@ exit 1')
     # A record outlives the interpreter it names — uninstalled, moved, or
     # carried in a workspace copied to another machine. It must be skipped, not
     # trusted, or provisioning leaves behind a permanent false positive.
-    printf '%s\n' "$PY_REC_ROOT/gone/maestro-python" > "$PY_REC_ROOT/data/.maestro-python"
+    printf '%s\n' "$PY_REC_ROOT/gone/maestro-python" > "$PY_REC_ROOT/brain/.maestro-python"
     RESOLVED=$(env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
                  bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
     [ -z "$RESOLVED" ] \
@@ -1443,8 +1453,8 @@ exit 1')
     # without it, so silence here is the whole defect.
     MEM_HOOK="$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh"
     if [ -f "$MEM_HOOK" ]; then
-      mkdir -p "$PY_REC_ROOT/data/memory/recent"
-      rm -f "$PY_REC_ROOT/data/.maestro-python"
+      mkdir -p "$PY_REC_ROOT/brain/memory/recent"
+      rm -f "$PY_REC_ROOT/brain/.maestro-python"
       NUDGE=$(env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" bash "$MEM_HOOK" 2>/dev/null)
       case "$NUDGE" in
         *maestro:python-missing*) pass "SessionStart names a missing interpreter instead of degrading in silence" ;;

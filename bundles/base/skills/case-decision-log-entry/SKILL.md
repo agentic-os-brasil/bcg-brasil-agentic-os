@@ -29,7 +29,7 @@ scope — so they survive session boundaries and are reviewable on a fixed caden
 
 ### 1. Resolve active case
 
-Read `data/cases/.active`.
+Read `brain/accounts/.active`.
 
 If the file is absent or empty, stop and return:
 
@@ -39,7 +39,7 @@ Never infer a case from path fragments, session history, or prompt context.
 
 ### 2. Locate the decision log
 
-Target path: `data/cases/<case-id>/brain/decisions/decision-log.md`
+Target path: `brain/accounts/<account-id>/cases/<case-id>/decisions/decision-log.md`
 
 If the file does not exist, create it with the header:
 
@@ -83,7 +83,7 @@ correction and present the revised entry again. On "cancel", discard and stop.
 
 ### 6. Append the confirmed entry
 
-Append to `data/cases/<case-id>/brain/decisions/decision-log.md`:
+Append to `brain/accounts/<account-id>/cases/<case-id>/decisions/decision-log.md`:
 
 ```markdown
 ## D-NNN · YYYY-MM-DD · <type> · <title>
@@ -100,13 +100,13 @@ Add a blank line before the entry if the file is non-empty.
 
 - Never paraphrase when the owner provides a literal quote — preserve verbatim.
 - Never save without explicit owner confirmation.
-- Never infer the active case from anything other than `data/cases/.active`.
+- Never infer the active case from anything other than `brain/accounts/.active`.
 - Never create an entry without both `type` and `title`.
 
 ## Error handling
 
 | Condition | Response |
 |---|---|
-| `data/cases/.active` absent or empty | "Nenhum caso ativo. Use `/bcg-case-kickoff` para iniciar um caso primeiro." |
+| `brain/accounts/.active` absent or empty | "Nenhum caso ativo. Use `/bcg-case-kickoff` para iniciar um caso primeiro." |
 | `type` not determinable | Ask the owner to specify one of the five allowed types. |
 | `title` exceeds 50 characters | Propose a shortened version and confirm before accepting. |

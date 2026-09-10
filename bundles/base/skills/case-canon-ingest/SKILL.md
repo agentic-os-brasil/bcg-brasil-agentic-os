@@ -52,11 +52,11 @@ Note: `decision` type is redirected to `decision-log-entry`.
 
 ### Step 1 — Confirm active case
 
-Read `data/cases/.active` to get the current case-id.
+Read `brain/accounts/.active` to get the current case-id.
 If `.active` is absent or empty, stop and ask the owner to activate a case first
 (`/case-agent-setup`).
 
-Canon dir: `data/cases/<case-id>/brain/canon/`
+Canon dir: `brain/accounts/<account-id>/cases/<case-id>/canon/`
 
 Create the directory if it does not exist.
 

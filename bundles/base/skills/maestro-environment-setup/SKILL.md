@@ -29,7 +29,7 @@ O Maestro procura o interpretador sozinho, sob os três nomes que ele costuma te
 
 2. **Se não imprimir nada, procurar um interpretador fora do PATH** antes de concluir que falta. Só continuar se encontrar um Python 3 utilizável.
 
-3. **Se encontrar, registrar onde ele está.** Gravar o caminho absoluto, em uma linha e sem mais nada, em `data/.maestro-python`. É esse registro que faz os hooks o encontrarem. O arquivo é texto puro de propósito — é ele que diz onde está o leitor de JSON, e exigir JSON para lê-lo seria circular.
+3. **Se encontrar, registrar onde ele está.** Gravar o caminho absoluto, em uma linha e sem mais nada, em `brain/.maestro-python`. É esse registro que faz os hooks o encontrarem. O arquivo é texto puro de propósito — é ele que diz onde está o leitor de JSON, e exigir JSON para lê-lo seria circular.
 
 4. **Verificar de verdade.** Repetir o comando do passo 1. Ele tem de imprimir o caminho registrado. Se não imprimir, o registro não serviu: reportar em uma linha e não afirmar que ficou pronto.
 

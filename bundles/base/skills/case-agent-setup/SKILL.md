@@ -18,17 +18,17 @@ translate interview fields into a command envelope. The previous CLI-driven
 surface is not used; the skill handles all orchestration internally.
 
 Use the workspace recipes and canonical locations already present in the
-workspace. All case artifacts live under `data/cases/<case-id>/brain/`:
+workspace. All case artifacts live under `brain/accounts/<account-id>/cases/<case-id>/`:
 
-- `data/cases/<case-id>/brain/projects/` for case context and working plans;
-- `data/cases/<case-id>/brain/decisions/` for decision records and rationale;
-- `data/cases/<case-id>/brain/tasks/` for explicitly accepted open work;
-- `data/cases/<case-id>/brain/deliverables/` for reviewed outputs;
-- `data/cases/<case-id>/brain/sources/` for authorized source pointers, never copied client bodies;
-- `data/cases/<case-id>/brain/canon/` for frontmatter-indexed compiled knowledge (hypotheses, interview synthesis, frameworks, benchmarks).
+- `brain/accounts/<account-id>/cases/<case-id>/projects/` for case context and working plans;
+- `brain/accounts/<account-id>/cases/<case-id>/decisions/` for decision records and rationale;
+- `brain/accounts/<account-id>/cases/<case-id>/tasks/` for explicitly accepted open work;
+- `brain/accounts/<account-id>/cases/<case-id>/deliverables/` for reviewed outputs;
+- `brain/accounts/<account-id>/cases/<case-id>/sources/` for authorized source pointers, never copied client bodies;
+- `brain/accounts/<account-id>/cases/<case-id>/canon/` for frontmatter-indexed compiled knowledge (hypotheses, interview synthesis, frameworks, benchmarks).
 
-The active case is identified by `data/cases/.active` (plain text file containing the case-id).
-A `.pending` sentinel at `data/cases/.pending` is written first at the start of setup and removed
+The active case is identified by `brain/accounts/.active` (plain text file containing the case-id).
+A `.pending` sentinel at `brain/accounts/.pending` is written first at the start of setup and removed
 only after `.active` is written successfully — this prevents corrupt state if setup is interrupted.
 
 Create only the smallest directory or Markdown artifact needed by the case.
@@ -43,10 +43,10 @@ classification, provenance or case isolation requirements.
 
 ## First useful result
 
-1. Confirm the active case from `data/cases/.active`. If no active case exists,
+1. Confirm the active case from `brain/accounts/.active`. If no active case exists,
    create a new case-id (slug format: `<client>-<topic>-<year>`, e.g. `acme-cost-2026`),
-   write it to `data/cases/.pending` first, scaffold `data/cases/<case-id>/brain/` with
-   all six subdirs, then write `data/cases/.active` as the final step and remove `.pending`.
+   write it to `brain/accounts/.pending` first, scaffold `brain/accounts/<account-id>/cases/<case-id>/` with
+   all six subdirs, then write `brain/accounts/.active` as the final step and remove `.pending`.
    If `.pending` already exists at setup start, overwrite it — this indicates a prior
    interrupted run and re-running setup from scratch is safe.
    Do not infer a workspace from an arbitrary path or conversation fragment.

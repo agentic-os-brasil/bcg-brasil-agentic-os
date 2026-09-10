@@ -30,7 +30,7 @@
 # deliberately not JSON: this is the file that says where the JSON parser is,
 # so needing the parser to read it would be circular — and the circularity
 # would only surface on the machines that depend on it.
-MAESTRO_PY_RECORD="${MAESTRO_PY_RECORD:-${CLAUDE_PROJECT_DIR:-.}/data/.maestro-python}"
+MAESTRO_PY_RECORD="${MAESTRO_PY_RECORD:-${CLAUDE_PROJECT_DIR:-.}/brain/.maestro-python}"
 
 # Set by maestro_python: the executable, and an optional first argument.
 MAESTRO_PY_CMD="${MAESTRO_PY_CMD:-}"

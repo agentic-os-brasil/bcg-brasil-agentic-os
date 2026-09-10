@@ -15,7 +15,7 @@ guided-onboarding prompt. The goal is a useful, consented professional baseline
 2. Resolve the canonical `interaction-profile` before choosing language,
    explanation depth or optional technical detail. It does not choose the
    onboarding track, grant authority or change the review requirement.
-3. Read `data/profile/onboarding.json` to inspect the local onboarding state. Do not infer that onboarding exists from prior messages.
+3. Read `brain/owner/onboarding.json` to inspect the local onboarding state. Do not infer that onboarding exists from prior messages.
 4. Do not start a professional task, read a selected memory source, execute an
    unrelated skill or grant runtime trust globally.
 
@@ -103,7 +103,7 @@ announced as optional, and are **never** numbered — otherwise the count the
 owner was promised would grow after the fact.
 
 Questions 3, 4 and 6 all write into the single canonical facet file
-`data/owner/self/preferences.md`. Splitting the question does not split the
+`brain/owner/self/preferences.md`. Splitting the question does not split the
 facet: the canonical file list in "After the owner chooses" is unchanged.
 
 ### Confirmação: uma só, no fim
@@ -146,10 +146,10 @@ técnico — nada de "runtime", "bundle", "hook", "scaffold", "workspace"):
 **Persistência imediata do nome (obrigatória).** No instante em que o nome
 chegar — antes de escrever a resposta do turno 2 — grave dois arquivos:
 
-- `data/profile/identity.json`: campo `name` com o nome informado, mais
+- `brain/owner/identity.json`: campo `name` com o nome informado, mais
   `captured_at` (ISO 8601 UTC). Preencha `role` quando ele for conhecido; até
   lá, deixe o campo fora do arquivo em vez de gravar string vazia.
-- `data/profile/onboarding.json`: `status: "in_progress"` e `version` (conteúdo
+- `brain/owner/onboarding.json`: `status: "in_progress"` e `version` (conteúdo
   do arquivo `VERSION` na raiz). Ainda não grave `track` nem `completed_at` —
   a trilha só é conhecida no turno 3.
 
@@ -243,7 +243,7 @@ Then — **whether to give the address now**:
 Deferring costs the owner nothing and must never be framed as the lesser
 option.
 
-Write `data/profile/existing_brain.json`:
+Write `brain/owner/existing_brain.json`:
 - `has_existing_brain: true`
 - `pointer`: the string owner shared, or `"deferred"` if the owner chose to
   give the address later
@@ -264,7 +264,7 @@ asking permission to ask ("Combinado?"), which spends a turn to gain nothing:
 > "Só duas perguntinhas rapidinhas pra eu não ficar dependendo 100% do teu
 > segundo cérebro pra qualquer coisa básica. 🙌"
 
-Question 3 → `data/owner/self/professional-role.md`:
+Question 3 → `brain/owner/self/professional-role.md`:
 
 > **header:** `Teu trabalho`
 > **question:** `Pergunta 3 de 4 · Que tipo de trabalho você geralmente
@@ -273,7 +273,7 @@ Question 3 → `data/owner/self/professional-role.md`:
 > - `Estratégia e casos clássicos` · `Analytics e dados` ·
 >   `Digital e tecnologia` · `Operações`
 
-Question 4 → `data/owner/self/communication-style.md`:
+Question 4 → `brain/owner/self/communication-style.md`:
 
 > **header:** `Como responder`
 > **question:** `Pergunta 4 de 4 · Como você gosta que eu te responda?`
@@ -285,14 +285,14 @@ Do not confirm either answer on the spot. Record both and reflect them back
 together in the closing summary, per "Confirmação: uma só, no fim".
 
 **Step 3 — Close the owner control-tree.**
-- `data/profile/onboarding.json`: `track: "imported-brain"`, `status:
+- `brain/owner/onboarding.json`: `track: "imported-brain"`, `status:
   "complete"`, `completed_at` (ISO 8601 UTC) and `version` (contents of the
   root `VERSION` file). All four are required by
   `schemas/onboarding.schema.json`; a file missing `completed_at` or `version`
   is invalid even though nothing rejects it at write time.
-- `data/owner/registry.json`: `initialized: true`, `onboarding_mode:
+- `brain/owner/registry.json`: `initialized: true`, `onboarding_mode:
   "imported-brain"`.
-- `data/owner/interview/confirmations.json`: append `"imported-brain"` to
+- `brain/owner/interview/confirmations.json`: append `"imported-brain"` to
   `completed_tracks`, set `last_updated` to current ISO 8601 UTC timestamp.
   **Do not fabricate facet confirmations** for facets not asked. The
   `confirmations` object records only what was actually confirmed:
@@ -354,12 +354,12 @@ finished. `CLAUDE.md` routes here whenever `onboarding.json.status` is anything
 other than `"complete"`.
 
 1. **Never restart from turno 1.** The name is already in
-   `data/profile/identity.json` — greet the owner by it.
+   `brain/owner/identity.json` — greet the owner by it.
 2. Open by saying where things stopped, in one line and without jargon:
    *"Oi de novo, \<nome\>! A gente tinha parado na pergunta 4. Retomo daí?"*
 3. Determine the resume point from what is already on disk: `track` in
    `onboarding.json` (absent means the track was never chosen — resume at the
-   track question), the facet files already written under `data/owner/self/`,
+   track question), the facet files already written under `brain/owner/self/`,
    and `confirmations.json`. Never re-ask something already answered.
 4. If `track` is absent, ask the track question again — that is the genuine
    stopping point, not a repetition.
@@ -378,7 +378,7 @@ other than `"complete"`.
 
 **Rules on re-entry:**
 
-1. Read `data/owner/registry.json` and `data/owner/interview/confirmations.json`
+1. Read `brain/owner/registry.json` and `brain/owner/interview/confirmations.json`
    to detect what was completed before. State the current state to the owner
    in one line (ex: "Você fez a trilha `imported-brain` em 2026-08-14 — vou
    rodar a trilha completa por cima, sem apagar o que já existe. 👌").
@@ -459,7 +459,7 @@ Neither of these is a facet under `owner/self/`: they describe what the owner is
 working **toward** and **on**, not who they are. They close Bloco A.
 
 **Pergunta 8 — pontos de desenvolvimento.** Writes to
-`data/owner/atlas/development/objectives.md` under `## Objetivos atuais`. That
+`brain/development/objectives.md` under `## Objetivos atuais`. That
 tree is created by the owner-atlas block of the scaffold; `start-day`, `eod` and
 `feedback-capture` already read it, so an answer here feeds the daily ritual
 from day one.
@@ -476,8 +476,8 @@ material:
 
 > `Quer me passar algum material pra eu entender melhor o contexto?`
 >
-> - `Material de CDC` → `data/owner/atlas/development/cdc/`
-> - `Feedback de projeto` → `data/owner/atlas/development/project-feedback/`
+> - `Material de CDC` → `brain/development/cdc/`
+> - `Feedback de projeto` → `brain/development/project-feedback/`
 > - `Agora não`
 
 Handling rules for that material — it is the most sensitive content the whole
@@ -495,8 +495,8 @@ flow touches, so none of these is optional:
   continue.
 
 **Pergunta 9 — no que está trabalhando agora.** Write `focus` in
-`data/profile/identity.json` and `active_project` in
-`data/owner/operating/work-state.md`.
+`brain/owner/identity.json` and `active_project` in
+`brain/owner/operating/work-state.md`.
 
 > **header:** `Agora`
 > **question:** `Pergunta 9 de 13 · E no que você está trabalhando agora?`
@@ -557,14 +557,14 @@ owner may share only the minimum necessary or decline.
 
 **Writing rules for personal-context:**
 
-1. **Facet file (`data/owner/self/personal-context.md`):** cap at 10 lines,
+1. **Facet file (`brain/owner/self/personal-context.md`):** cap at 10 lines,
    no rationale prose. If the owner opts out, the file contains only the
    opt-out record: a `# Personal context` heading, one line stating "opt-out
    registrado pelo owner", and one line with the ISO 8601 UTC timestamp.
    Rationale, if the owner offered any, goes to the interview trail, never
    to the facet file (it would be injected into every session by
    `session-start-memory-inject.sh` and become context rot).
-2. **Structured state (`data/owner/registry.json` → `personal_context`):**
+2. **Structured state (`brain/owner/registry.json` → `personal_context`):**
    the scaffold creates this object with `state: "not_asked"`. On completion
    of the personal-context question, write:
    - `state`: `"authorized"` if the owner shared context; `"declined"` if
@@ -661,7 +661,7 @@ professional baseline; do not emulate ingestion from conversation.
 ## After the owner chooses
 
 1. Confirm the exact selected track once and write the selection to
-   `data/profile/onboarding.json` (fields: `track`, `status: "in_progress"`).
+   `brain/owner/onboarding.json` (fields: `track`, `status: "in_progress"`).
 
 2. Ask one question at a time through `AskUserQuestion`, following the numbered
    sequence in "Sequência e total por trilha" above and carrying the
@@ -675,8 +675,8 @@ professional baseline; do not emulate ingestion from conversation.
    onboarding: the owner corrects meaning before the track is closed. Never
    claim that the track is complete until that review is confirmed.
 5. When all facets for the selected track are reviewed and confirmed, write each
-   confirmed profile file: `data/profile/identity.json`, `data/profile/style.json`,
-   and `data/profile/onboarding.json` with `status: "complete"`, `track` (`"quick"`
+   confirmed profile file: `brain/owner/identity.json`, `brain/owner/style.json`,
+   and `brain/owner/onboarding.json` with `status: "complete"`, `track` (`"quick"`
    or `"complete"`), `completed_at` (ISO 8601 UTC) and `version` (contents of the
    root `VERSION` file). Those four fields are what
    `schemas/onboarding.schema.json` requires; writing only `track` and `status`
@@ -686,9 +686,9 @@ professional baseline; do not emulate ingestion from conversation.
    `style.json` (persists the interaction profile per `schemas/style.schema.json`;
    never write a parallel `preferences.json`), and `onboarding.json`. The word
    "preferences" appears in this doc as a facet label (`owner/self/preferences.md`)
-   and must not be mirrored as a `data/profile/preferences.json` file.
+   and must not be mirrored as a `brain/owner/preferences.json` file.
 6. In addition to the profile JSON files, write each confirmed facet to
-   `data/owner/self/<facet-name>.md` using the reviewed draft content. The facet
+   `brain/owner/self/<facet-name>.md` using the reviewed draft content. The facet
    file names match the canonical facets used by the scaffold: `owner-identity`,
    `personal-context`, `professional-role`, `communication-style`, `voice`,
    `preferences`, `motivations`, `quality-bar`, `decision-rules`,
@@ -702,9 +702,9 @@ professional baseline; do not emulate ingestion from conversation.
    leave the remaining four as scaffold placeholders.
 7. After the profile and facet writes succeed, close the owner control-tree so
    downstream skills see a consistent state:
-   - Update `data/owner/registry.json`: set `initialized: true` (the scaffold
+   - Update `brain/owner/registry.json`: set `initialized: true` (the scaffold
      writes it as `false`).
-   - Update `data/owner/interview/confirmations.json`: append the completed
+   - Update `brain/owner/interview/confirmations.json`: append the completed
      track to `completed_tracks` (e.g. `["quick"]`) and set `last_updated` to
      the current ISO 8601 UTC timestamp.
    Without this step the profile files are written but the owner tree still
@@ -722,14 +722,14 @@ professional baseline; do not emulate ingestion from conversation.
   Maestro session is running inside that workspace. The source question below
   is deliberately a post-bootstrap onboarding step because all derived
   content must be read and organized from within the workspace.
-- After either track is confirmed, read `data/memory/sharepoint-config.json`
+- After either track is confirmed, read `brain/memory/sharepoint-config.json`
   to check the project-source state. If the file is absent or `status` is
   `selection_required`, ask exactly one question and wait: **"Você quer indicar
   as pastas autorizadas do SharePoint deste projeto agora ou prefere começar
   sem essa fonte?"**
   - If the owner chooses SharePoint, review the canonical folder URLs with
     the owner and write the confirmed selection to
-    `data/memory/sharepoint-config.json` (fields: `schema_version: 1`,
+    `brain/memory/sharepoint-config.json` (fields: `schema_version: 1`,
     `folder_urls`, `status: "selected"`).
   - Before proposing ingestion, check upfront whether a SharePoint MCP
     connector is configured in this Claude Code session. If none is present,
@@ -740,12 +740,12 @@ professional baseline; do not emulate ingestion from conversation.
   - With the connector active, offer the in-session ingestion via the
     `sharepoint-ingest` skill. The skill reads only the selected folders
     through the owner's own SharePoint access, writes bounded per-document
-    rationales under `data/memory/sharepoint-rationales/` and a generalized
+    rationales under `brain/memory/sharepoint-rationales/` and a generalized
     concept index under `brain/knowledge/sharepoint-rationales/`, keeps the
     SharePoint link and modification date on every rationale, and never
     copies the raw document body.
   - If the owner prefers to start clean, write `status: "deferred"` to
-    `data/memory/sharepoint-config.json` and do not ask again automatically.
+    `brain/memory/sharepoint-config.json` and do not ask again automatically.
   - SharePoint remains authoritative. The local rationale layer is a
     derived convenience, never a replacement for the SharePoint source.
 
