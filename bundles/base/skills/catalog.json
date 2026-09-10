@@ -30,6 +30,13 @@
       "relative_path": "skills/bcg-deck/SKILL.md"
     },
     {
+      "id": "brain-index",
+      "display_name": "Índice do brain",
+      "trigger": "Recompila a camada de navegação do brain e reporta links quebrados, páginas órfãs e frontmatter incompleto",
+      "default_prompt": "Use $brain-index para recompilar o índice do meu brain e me dizer, em linguagem simples, o que está quebrado ou fora do contrato de página.",
+      "relative_path": "skills/brain-index/SKILL.md"
+    },
+    {
       "id": "case-agent-setup",
       "display_name": "Case Agent",
       "trigger": "Entrevista e pesquisa um case de projeto com segurança",

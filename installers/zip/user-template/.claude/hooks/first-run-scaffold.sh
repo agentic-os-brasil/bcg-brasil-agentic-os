@@ -655,6 +655,13 @@ Tudo dentro de `brain/` é seu. Atualizações do Maestro nunca sobrescrevem est
 - `accounts/`    — clientes, cada um com `cases/<projeto>/` (projects/, decisions/, tasks/, deliverables/, sources/, canon/)
 - `tasks/`       — visão de tarefas derivada dos casos
 
+Há ainda um `.maestro/`, que é área de máquina: índices, backlinks, diagnóstico e
+log, todos regeneráveis a partir das suas páginas. Não precisa de backup e não deve
+ser editado à mão.
+
+O índice de tudo é `brain_index.md`, na raiz — sempre regenerado, nunca editado à
+mão. Cada conta e cada caso têm o seu, na própria pasta.
+
 O caso ativo é indicado por `accounts/.active`, que contém `<cliente>/<projeto>`.
 O Maestro injeta o contexto do caso ativo a cada sessão.
 
