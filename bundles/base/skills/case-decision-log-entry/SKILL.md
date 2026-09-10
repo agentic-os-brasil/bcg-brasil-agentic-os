@@ -29,9 +29,10 @@ scope — so they survive session boundaries and are reviewable on a fixed caden
 
 ### 1. Resolve active case
 
-Read `brain/accounts/.active`.
+Read `brain/accounts/.active`. It contains `<account-id>/<case-id>` — split on the
+slash; both halves are needed to build the path below.
 
-If the file is absent or empty, stop and return:
+If the file is absent, empty, or holds no slash, stop and return:
 
 > Nenhum caso ativo. Use `/bcg-case-kickoff` para iniciar um caso primeiro.
 

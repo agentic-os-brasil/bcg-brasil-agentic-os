@@ -255,10 +255,27 @@ else
   fail "brain/.scaffold.log missing DONE line"
 fi
 
-if [ -f "$MAESTRO_DIR/brain/README.md" ] && grep -q "workspaces" "$MAESTRO_DIR/brain/README.md"; then
-  pass "brain/README.md present + mentions workspaces"
+# The README written into brain/ is the owner's map of their own workspace, and
+# the only description of it they can read without asking. Pinning this check to
+# one keyword let it keep passing while the tree underneath was replaced, so it
+# now asserts that every trunk the scaffold builds is actually described.
+if [ -f "$MAESTRO_DIR/brain/README.md" ]; then
+  README_MISSING=""
+  for trunk in accounts craft daily development learnings memory owner people tasks; do
+    grep -q "\`$trunk/\`" "$MAESTRO_DIR/brain/README.md" || README_MISSING="$README_MISSING $trunk"
+  done
+  if [ -z "$README_MISSING" ]; then
+    pass "brain/README.md describes all nine top-level trees"
+  else
+    fail "brain/README.md does not describe:$README_MISSING"
+  fi
+  if grep -qE '`(workspaces|profile|cases)/`' "$MAESTRO_DIR/brain/README.md"; then
+    fail "brain/README.md still describes a pre-accounts tree the scaffold no longer creates"
+  else
+    pass "brain/README.md describes no tree the scaffold does not create"
+  fi
 else
-  fail "brain/README.md missing or malformed"
+  fail "brain/README.md missing"
 fi
 
 if [ -f "$MAESTRO_DIR/FIRST-RUN-FAILED.txt" ]; then
@@ -529,17 +546,18 @@ else
 fi
 
 # --------------------------------------------------------------------------
-phase "Phase 11 — Workspace creation smoke test"
+phase "Phase 11 — Case workspace smoke test"
 # --------------------------------------------------------------------------
 
-# Simulate user starting a project. The hook created workspaces/; verify a project
-# subdir can be created and marker files land where expected.
-if mkdir -p "$MAESTRO_DIR/brain/workspaces/demo-project" \
-   && echo "demo" > "$MAESTRO_DIR/brain/workspaces/demo-project/README.md" \
-   && [ -f "$MAESTRO_DIR/brain/workspaces/demo-project/README.md" ]; then
-  pass "workspace dir writable + accepts project subdir"
+# Simulate the owner starting real work. Case material lands under
+# accounts/<account>/cases/<case>/, so that is the path whose writability
+# matters; workspaces/ was the pre-accounts shape and is no longer scaffolded.
+if mkdir -p "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/projects" \
+   && echo "demo" > "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/projects/brief.md" \
+   && [ -f "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/projects/brief.md" ]; then
+  pass "accounts tree writable + accepts an account/case/projects path"
 else
-  fail "workspace dir not writable"
+  fail "accounts tree not writable"
 fi
 
 if mkdir -p "$MAESTRO_DIR/brain/memory/notes" \
@@ -851,7 +869,7 @@ else
 fi
 
 # --------------------------------------------------------------------------
-phase "Phase 13 — Owner atlas tree"
+phase "Phase 13 — Top-level brain trees"
 # --------------------------------------------------------------------------
 
 # start-day, eod, craft-update, feedback-capture, learnings-bridge and
@@ -1472,6 +1490,72 @@ exit 1')
 else
   fail "hooks/lib/python.sh missing from ZIP"
 fi
+# --------------------------------------------------------------------------
+phase "Phase 20 — Active-case context reaches the session"
+# --------------------------------------------------------------------------
+
+# The whole point of an active case is that the next session opens knowing it.
+# That makes this the least visible thing in the product when it breaks: the
+# emitter reads one path, the scaffold builds another, and the owner simply
+# gets a session with no case context and no error anywhere. Moving cases
+# under accounts/ did exactly that, and nothing here caught it, because every
+# other check verified a tree existed rather than that anything read it.
+CASE_ROOT=$(mktemp -d -t maestro-eval-case-XXXXXX)
+mkdir -p "$CASE_ROOT/.claude/hooks"
+cp "$MAESTRO_DIR/.claude/hooks/first-run-scaffold.sh" "$CASE_ROOT/.claude/hooks/" 2>/dev/null
+if [ -d "$MAESTRO_DIR/.claude/hooks/lib" ]; then
+  cp -R "$MAESTRO_DIR/.claude/hooks/lib" "$CASE_ROOT/.claude/hooks/" 2>/dev/null
+fi
+printf '0.0.0-eval\n' > "$CASE_ROOT/VERSION"
+
+# Scaffold first, so the fixture is the layout the product actually creates
+# rather than one written by hand to match the emitter.
+CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>&1 || true
+
+if [ -d "$CASE_ROOT/brain/accounts" ]; then
+  pass "scaffold builds brain/accounts/"
+
+  CASE_DIR="$CASE_ROOT/brain/accounts/alfa/cases/tmo"
+  mkdir -p "$CASE_DIR/projects" "$CASE_DIR/decisions" "$CASE_DIR/tasks"
+  printf '# Brief - TMO\n\nLinha do brief que precisa aparecer.\n' > "$CASE_DIR/projects/tmo.md"
+  printf '# Decision Log\n\n## D-001 Escolha inicial\n' > "$CASE_DIR/decisions/decision-log.md"
+  printf '# Tarefa\n' > "$CASE_DIR/tasks/primeira.md"
+  printf 'alfa/tmo\n' > "$CASE_ROOT/brain/accounts/.active"
+
+  EMITTED=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" 2>/dev/null)
+
+  case "$EMITTED" in
+    *"Caso ativo: alfa/tmo"*) pass "SessionStart names the active case as <account>/<case>" ;;
+    *) fail "SessionStart emitted no active-case header (emitter and scaffold disagree on the layout)" ;;
+  esac
+  case "$EMITTED" in
+    *"Linha do brief que precisa aparecer"*) pass "the case brief reaches the session" ;;
+    *) fail "the case brief never reached the session" ;;
+  esac
+  case "$EMITTED" in
+    *"D-001"*) pass "recent decisions reach the session" ;;
+    *) fail "decision headings never reached the session" ;;
+  esac
+  case "$EMITTED" in
+    *"Tarefas abertas"*) pass "open tasks reach the session" ;;
+    *) fail "open task count never reached the session" ;;
+  esac
+
+  # A marker in the pre-accounts format cannot name an account. Guessing would
+  # surface one client's brief while the owner works on another, so the emitter
+  # must stay silent — the same refusal the isolation guard makes.
+  printf 'tmo\n' > "$CASE_ROOT/brain/accounts/.active"
+  STALE=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" 2>/dev/null)
+  case "$STALE" in
+    *"Caso ativo"*) fail "a bare case id in .active still produced case context (which client did it pick?)" ;;
+    *) pass "a bare case id in .active emits nothing instead of guessing an account" ;;
+  esac
+else
+  fail "scaffold did not build brain/accounts/ — cannot check active-case context"
+fi
+rm -rf "$CASE_ROOT"
+
+
 
 
 

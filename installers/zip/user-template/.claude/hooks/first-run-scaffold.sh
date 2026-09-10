@@ -141,49 +141,72 @@ emit_skills_rollup() {
 # Fail-open: any error silently returns without output.
 # ---------------------------------------------------------------------------
 emit_active_case_context() {
-  local cases_dir="$BRAIN_DIR/cases"
-  local active_file="$cases_dir/.active"
+  local accounts_dir="$BRAIN_DIR/accounts"
+  local active_file="$accounts_dir/.active"
 
   [ -f "$active_file" ] || return 0
 
-  local case_id
-  case_id=$(tr -d '[:space:]' < "$active_file" 2>/dev/null)
-  [ -z "$case_id" ] && return 0
+  # The marker holds <account>/<case>. A case id alone cannot name a directory
+  # under accounts/, so a marker without a slash is the pre-accounts format:
+  # emit nothing rather than guess which client it meant.
+  local active_id
+  active_id=$(tr -d '[:space:]' < "$active_file" 2>/dev/null)
+  [ -z "$active_id" ] && return 0
+  case "$active_id" in
+    */*) ;;
+    *) return 0 ;;
+  esac
 
-  local case_dir="$cases_dir/$case_id"
+  local account_id case_id
+  account_id="${active_id%%/*}"
+  case_id="${active_id##*/}"
+
+  local case_dir="$accounts_dir/$account_id/cases/$case_id"
   [ -d "$case_dir" ] || return 0
 
-  printf '## Caso ativo: %s\n\n' "$case_id"
+  printf '## Caso ativo: %s
 
-  # Project brief — first .md in brain/projects/, first 25 lines
+' "$active_id"
+
+  # Project brief — first .md in the case's projects/, first 25 lines
   local brief_file=""
-  for f in "$case_dir/brain/projects/"*.md; do
+  for f in "$case_dir/projects/"*.md; do
     [ -f "$f" ] && brief_file="$f" && break
   done
   if [ -n "$brief_file" ]; then
-    printf '### Brief\n\n'
+    printf '### Brief
+
+'
     head -25 "$brief_file" 2>/dev/null
-    printf '\n'
+    printf '
+'
   fi
 
   # Last 5 decision headings
-  local decision_log="$case_dir/brain/decisions/decision-log.md"
+  local decision_log="$case_dir/decisions/decision-log.md"
   if [ -f "$decision_log" ]; then
-    printf '### Últimas decisões\n\n'
+    printf '### Últimas decisões
+
+'
     grep -E "^## D-[0-9]+" "$decision_log" 2>/dev/null | tail -5 | sed 's/^## /- /'
-    printf '\n'
+    printf '
+'
   fi
 
   # Open tasks count + names (max 10)
-  if [ -d "$case_dir/brain/tasks" ]; then
+  if [ -d "$case_dir/tasks" ]; then
     local task_count
-    task_count=$(find "$case_dir/brain/tasks" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    task_count=$(find "$case_dir/tasks" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
     if [ "${task_count:-0}" -gt 0 ] 2>/dev/null; then
-      printf '### Tarefas abertas (%s)\n\n' "$task_count"
-      find "$case_dir/brain/tasks" -name "*.md" 2>/dev/null | head -10 | while read -r tf; do
-        printf '- %s\n' "$(basename "$tf" .md)"
+      printf '### Tarefas abertas (%s)
+
+' "$task_count"
+      find "$case_dir/tasks" -name "*.md" 2>/dev/null | head -10 | while read -r tf; do
+        printf '- %s
+' "$(basename "$tf" .md)"
       done
-      printf '\n'
+      printf '
+'
     fi
   fi
 }
@@ -622,13 +645,18 @@ cat > "$BRAIN_DIR/README.md" 2>/dev/null <<'EOF'
 
 Tudo dentro de `brain/` é seu. Atualizações do Maestro nunca sobrescrevem este diretório.
 
-- `agents/`   — estado de cada agente (memória de trabalho, decisões, contexto)
-- `cases/`    — casos de cliente ativos; cada caso tem brain/ (projects/, decisions/, tasks/, deliverables/, sources/, canon/)
-- `memory/`   — memória de longo prazo do Maestro sobre você
-- `profile/`  — identidade e preferências
-- `workspaces/` — projetos ativos
+- `memory/`      — memória consolidada, escrita pelo motor de dreaming (recente, semanal, médio prazo, permanente)
+- `owner/`       — quem você é: identidade, estilo, facetas SELF, estado de trabalho, observações
+- `daily/`       — a página de cada dia de trabalho
+- `learnings/`   — aprendizados profissionais duráveis
+- `craft/`       — métodos e calibrações de estilo que se mantêm entre projetos
+- `people/`      — perfis de colegas com quem você trabalhou
+- `development/` — objetivos, retrospectivas, feedback recebido e a dar
+- `accounts/`    — clientes, cada um com `cases/<projeto>/` (projects/, decisions/, tasks/, deliverables/, sources/, canon/)
+- `tasks/`       — visão de tarefas derivada dos casos
 
-O caso ativo é indicado por `cases/.active` (contém o case-id). O Maestro injeta contexto do caso ativo a cada sessão.
+O caso ativo é indicado por `accounts/.active`, que contém `<cliente>/<projeto>`.
+O Maestro injeta o contexto do caso ativo a cada sessão.
 
 Se quiser fazer backup, basta copiar `brain/` inteiro. Nenhum arquivo aqui depende de código externo.
 EOF

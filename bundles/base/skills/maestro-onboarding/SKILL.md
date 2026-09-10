@@ -79,7 +79,7 @@ own work than about a tool they have not used yet.
 | 5 | Estilo de comunicação | `communication-style` |
 | 6 | Jeito de colaborar | `preferences` |
 | 7 | Padrão de qualidade | `quality-bar` |
-| 8 | Pontos de desenvolvimento | `owner/atlas/development/objectives.md` |
+| 8 | Pontos de desenvolvimento | `development/objectives.md` |
 | 9 | No que está trabalhando agora | `identity.json` → `focus` |
 | 10 | Métodos técnicos | — |
 | 11 | Conexões (email, calendário, notas) | — |
@@ -460,7 +460,7 @@ working **toward** and **on**, not who they are. They close Bloco A.
 
 **Pergunta 8 — pontos de desenvolvimento.** Writes to
 `brain/development/objectives.md` under `## Objetivos atuais`. That
-tree is created by the owner-atlas block of the scaffold; `start-day`, `eod` and
+tree is one of the nine the scaffold creates at the top of `brain/`; `start-day`, `eod` and
 `feedback-capture` already read it, so an answer here feeds the daily ritual
 from day one.
 
