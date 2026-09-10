@@ -4,19 +4,28 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/first-run-scaffold.sh\"" }
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/first-run-scaffold.sh\""
+          }
         ]
       },
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start-memory-inject.sh\"" }
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start-memory-inject.sh\""
+          }
         ]
       }
     ],
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/context-inject-userprompt.sh\"" }
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/context-inject-userprompt.sh\""
+          }
         ]
       }
     ],
@@ -24,14 +33,33 @@
       {
         "matcher": "^(Edit|MultiEdit|Write|NotebookEdit)$",
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-cross-case-writes.sh\"" }
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-cross-case-writes.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "^(Agent|Task)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/announce-agent-dispatch.sh\""
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-stop-dream.sh\"" }
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-stop-dream.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-stop-agent-check.sh\""
+          }
         ]
       }
     ]
