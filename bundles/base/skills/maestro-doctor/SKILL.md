@@ -83,14 +83,17 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
       resolvido; não mostrar ao usuário.
     - Se não imprimir nada, surfar como ponto a verificar: "uma peça do Maestro
       não está instalada nesta máquina — por isso ele não lembra do contexto
-      entre conversas nem protege a separação entre clientes. Dá para resolver
-      agora, é automático e leva menos de um minuto." Encaminhar para a seção
-      "Interpretador local" de `maestro-environment-setup`.
+      entre conversas nem protege a separação entre clientes. Ele segue
+      utilizável para conversar. Avise o time BCG Brasil AI." Encaminhar para a
+      seção "Interpretador local" de `maestro-environment-setup`, que sabe
+      apontar o Maestro para um interpretador que exista fora do PATH.
 
-    Ao contrário do check 11, este **tem** conserto por dentro do chat: o
-    Maestro instala o próprio interpretador. Nunca pedir ao usuário para
-    instalar Python, abrir terminal ou chamar o time — isso aqui é trabalho do
-    produto, não dele.
+    Instalar um interpretador não está autorizado hoje: a decisão `PYUV` cobre
+    ambiente Python sob demanda para uma capacidade pedida pelo dono, e exige
+    justificativa própria para cada nova capacidade dependente de Python. As
+    rotinas automáticas são infraestrutura sempre-ligada, não capacidade sob
+    demanda. Enquanto isso não for decidido, este check reporta e encaminha —
+    nunca pede ao usuário para instalar Python nem abrir terminal.
 
     `maestro-doctor` continua read-only: este check diagnostica e nomeia o
     próximo passo; quem executa é a skill de setup.

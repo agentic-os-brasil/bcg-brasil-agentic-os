@@ -19,27 +19,21 @@ Resolve the canonical `interaction-profile` skill before responding. Ajustar o t
 
 ## Interpretador local
 
-As rotinas automáticas do Maestro — memória entre conversas, roteamento de skills, separação entre clientes — leem e escrevem JSON através de um interpretador Python 3. Sem ele, todas ficam inertes, e ficam inertes **em silêncio**: cada hook sai sem erro. Esta seção existe para que isso nunca dependa do dono saber que precisa instalar algo.
+As rotinas automáticas do Maestro — memória entre conversas, roteamento de skills, separação entre clientes — leem e escrevem JSON através de um interpretador Python 3. Sem ele, todas ficam inertes, e ficam inertes **em silêncio**: cada hook sai sem erro.
 
-Executar quando o contexto da sessão trouxer `<!-- maestro:python-missing -->`, quando o `maestro-doctor` apontar este ponto, ou quando o dono pedir para preparar o ambiente.
+O Maestro procura o interpretador sozinho, sob os três nomes que ele costuma ter (`python3`, `python`, e o launcher `py -3` no Windows). Esta seção trata do caso em que existe um interpretador na máquina que não está sob nenhum desses nomes — por exemplo, instalado em um caminho próprio.
 
-1. **Confirmar que falta mesmo.** Rodar `bash -c '. "$CLAUDE_PROJECT_DIR/.claude/hooks/lib/python.sh"; maestro_python'`. Se imprimir algo, já existe interpretador: não instalar nada, seguir em silêncio. Só continuar quando o comando não imprimir nada.
+**Instalar um interpretador não está autorizado hoje.** A decisão `PYUV` cobre ambiente Python sob demanda para uma capacidade pedida pelo dono, e diz explicitamente que cada nova capacidade dependente de Python precisa da própria justificativa. As rotinas automáticas são infraestrutura sempre-ligada, não capacidade sob demanda, então estão fora desse escopo. Enquanto não houver decisão que as cubra, não instalar nada — reportar e encaminhar.
 
-2. **Pedir confirmação, em uma linha.** "Falta uma peça para o Maestro lembrar do contexto entre conversas e proteger a separação entre clientes. Posso instalar agora? São poucos MB, não precisa de privilégio de administrador e não mexe em mais nada da sua máquina." Se o dono recusar, registrar a recusa em uma linha e seguir; **nunca** insistir na mesma sessão e nunca pedir para ele instalar por conta própria.
+1. **Confirmar o estado.** Rodar `bash -c '. "$CLAUDE_PROJECT_DIR/.claude/hooks/lib/python.sh"; maestro_python'`. Se imprimir algo, está tudo certo: seguir em silêncio.
 
-3. **Garantir o `uv`.** Verificar com `uv --version`. Se faltar, a decisão `UVIN` autoriza o próprio Maestro a instalá-lo — executar o instalador oficial da astral.sh exatamente como publicado, sem espelhar nem modificar:
-   - Mac/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-   - Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+2. **Se não imprimir nada, procurar um interpretador fora do PATH** antes de concluir que falta. Só continuar se encontrar um Python 3 utilizável.
 
-4. **Instalar o interpretador.** `uv python install 3.12`, e depois obter o caminho com `uv python find 3.12`.
+3. **Se encontrar, registrar onde ele está.** Gravar o caminho absoluto, em uma linha e sem mais nada, em `data/.maestro-python`. É esse registro que faz os hooks o encontrarem. O arquivo é texto puro de propósito — é ele que diz onde está o leitor de JSON, e exigir JSON para lê-lo seria circular.
 
-5. **Registrar onde ele está.** Gravar o caminho absoluto, em uma linha e sem mais nada, em `data/.maestro-python`. Este passo não é opcional: o Python que o `uv` instala vive no diretório dele e não entra no PATH como `python3`, `python` nem `py`, então sem o registro os hooks não o encontram e a instalação inteira não serviu para nada. O arquivo é texto puro de propósito — é ele que diz onde está o leitor de JSON, e exigir JSON para lê-lo seria circular.
+4. **Verificar de verdade.** Repetir o comando do passo 1. Ele tem de imprimir o caminho registrado. Se não imprimir, o registro não serviu: reportar em uma linha e não afirmar que ficou pronto.
 
-6. **Verificar de verdade.** Repetir o comando do passo 1. Ele tem de imprimir o caminho registrado. Se não imprimir, a instalação não pegou: reportar em uma linha e **não** afirmar que ficou pronto.
-
-7. **Reportar em uma linha**, no tom de resultado: "pronto — o Maestro já lembra do contexto entre conversas a partir da próxima sessão." Não mostrar comando, caminho, saída de instalador nem nome de arquivo interno.
-
-**Quando falhar.** Rede indisponível, proxy corporativo bloqueando a astral.sh, ou política da máquina impedindo a execução: reportar em uma linha o que não deu, dizer que o Maestro segue utilizável para conversar, e orientar a avisar o time BCG Brasil AI. Não tentar caminho alternativo, não pedir para o dono baixar nada e não mandar abrir terminal.
+5. **Se não encontrar nenhum**, reportar em uma linha que uma peça não está instalada nesta máquina, que o Maestro segue utilizável para conversar, e orientar a avisar o time BCG Brasil AI. Nunca pedir ao dono para instalar Python, abrir terminal ou rodar comando.
 
 ## Preparação do componente de leitura avançada de documentos
 
