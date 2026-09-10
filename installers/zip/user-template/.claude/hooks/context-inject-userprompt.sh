@@ -104,21 +104,25 @@ AGENT_BUDGET=1600
 if [ -f "$AGENT_ROUTER" ] && maestro_python >/dev/null 2>&1; then
   AGENT_HOOK_INPUT=$(cat 2>/dev/null || true)
   if [ -n "${AGENT_HOOK_INPUT:-}" ]; then
-    # Quoted heredoc: unquoted, bash reinterprets the body and a stray
-    # backtick or $ in the payload becomes shell.
-    AGENT_PROMPT=$(printf '%s' "$AGENT_HOOK_INPUT"       | PYTHONIOENCODING=utf-8 maestro_py - <<'AGENT_PY' 2>/dev/null || true
-import sys, json
+    # O script vai numa variavel entre aspas simples e entra por `-c "$VAR"`.
+    # Nao e estilo. `maestro_py -` le o SCRIPT do stdin, entao um heredoc aqui
+    # disputa o stdin com o payload e ganha: o json.load fica sem nada para ler
+    # e a extracao devolve vazio em toda mensagem — o roteador nunca era
+    # chamado, sem erro nenhum. E o mesmo formato que o announce-agent-dispatch
+    # usa, pelo mesmo motivo.
+    AGENT_EXTRACT_PY='import sys, json
 try:
     print(json.load(sys.stdin).get("prompt", "") or "")
 except Exception:
-    print("")
-AGENT_PY
-    )
+    print("")'
+    AGENT_PROMPT=$(printf '%s' "$AGENT_HOOK_INPUT" \
+      | PYTHONIOENCODING=utf-8 maestro_py -c "$AGENT_EXTRACT_PY" 2>/dev/null || true)
     if [ -n "${AGENT_PROMPT:-}" ]; then
-      AGENTS_OUT=$( (cd "$PROJECT_DIR" && printf '%s' "$AGENT_PROMPT"         | PYTHONIOENCODING=utf-8 maestro_py "$AGENT_ROUTER" --max 2 2>/dev/null)         | truncate_stdout "$AGENT_BUDGET" || true)
+      AGENTS_OUT=$( (cd "$PROJECT_DIR" && printf '%s' "$AGENT_PROMPT" \
+        | PYTHONIOENCODING=utf-8 maestro_py "$AGENT_ROUTER" --max 2 2>/dev/null) \
+        | truncate_stdout "$AGENT_BUDGET" || true)
       if [ -n "${AGENTS_OUT:-}" ]; then
-        printf '%s
-' "$AGENTS_OUT"
+        printf '%s\n' "$AGENTS_OUT"
       fi
     fi
   fi
