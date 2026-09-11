@@ -28,6 +28,14 @@ Obtained with `collect`, always with a declared purpose and named pages.
   versus re-entry;
 - the two most recent prior daily pages;
 - current objectives from `brain/development/objectives.md`;
+- **the task view in `brain/tasks/tasks.md`** — sempre, sem exceção. É a única
+  fonte que atravessa todos os casos, e vem classificada em dois eixos:
+  **status** (a ser realizada, em andamento, concluída) e **prioridade** (P0
+  urgente, P1 alta, P2 baixa). Duas marcas de atributo aparecem na linha: ⛔
+  depende de terceiro, 📦 residual de caso encerrado. Nenhum plano de dia se
+  monta sem ela — sem ela o ranking usa só o que a página de ontem lembrou de
+  mencionar. É derivada e recompilada a cada fim de sessão pelo compilador do
+  índice, então está sempre em dia com os casos;
 - open workplan lines from the project pages the recent dailies reference.
 
 ## Optional inputs
@@ -57,6 +65,22 @@ of context it can use, and works without any of it.
    protected block still ahead that the atlas declares.
 5. Rank what is achievable in the time that is left. Ranking happens here, from
    what was already read.
+
+   O ranking parte de `brain/tasks/tasks.md` e usa os dois eixos como filtro,
+   não como ordem cega:
+   - **em andamento** vem antes de qualquer coisa nova, em qualquer prioridade
+     — fechar frente aberta custa menos que abrir outra;
+   - **P0 sem ⛔** entra em seguida: é onde o esforço próprio move o ponteiro
+     hoje;
+   - **P0 com ⛔** não vira bloco de trabalho, vira **uma pergunta a fazer**.
+     Sugerir "trabalhar nisso" quando depende de terceiro é planejar um dia que
+     não pode acontecer;
+   - **P1** preenche o resto das horas; **P2** só se sobrar espaço;
+   - **📦 residual** só aparece se o dia estiver vazio ou se o dono pedir — é
+     dívida de fechamento, não trabalho vivo;
+   - tarefa em **P1 sem marcador explícito** não deve ser tratada como decisão
+     de prioridade do dono: se o dia estiver disputado, vale perguntar em vez
+     de supor.
 6. Compose one briefing:
    - **first contact** — the shape of the day with past and upcoming marked,
      the top three for the remaining hours with a one-line reason each,

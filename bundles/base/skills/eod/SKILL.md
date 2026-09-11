@@ -86,6 +86,30 @@ page needs updating. It does not reach across scope to update it: workspace
 content belongs to the workspace that owns it, and closing the owner's day is
 not authority over an engagement's record.
 
+## Auto-trigger (SessionStart)
+
+When the session context carries a "Fechamento de dia pendente" block (the
+`brain/owner/.eod-requested` marker was present, written by
+`session-stop-eod-check.sh`), this is never a mandatory pre-task action —
+closing a day always needs the owner's confirmation, so it cannot run
+silently the way [`dream-memory`](../dream-memory/SKILL.md)'s daily-light cycle does. Mention it once,
+early in the first reply of the session, without blocking whatever the owner
+opened the session to do: the same hook also writes `eod_open_dates` into
+`brain/.maestro/day-brief.json`, surfaced as the "Day brief pré-computado"
+block — that already names the open date(s), computed once at the previous
+Stop, so use it instead of running the full reconstruction just to find out
+which dates are open. Only fall back to the reconstruction step above when
+the day-brief block is absent, or when what it lists doesn't match what the
+owner describes (e.g. a day closed by editing the page directly, outside a
+Maestro session).
+
+1. If the owner agrees, run the workflow below for each open date and delete
+   `brain/owner/.eod-requested` once every open date up to today has a closing
+   entry.
+2. If the owner declines or defers, leave the marker in place — a repeated
+   reminder is recoverable, a silently dropped day is not — and do not raise
+   it again later in the same session.
+
 ## Autonomous mode (scheduled run)
 
 Entered only when the invoking prompt states explicitly that this is an
