@@ -29,7 +29,7 @@ Use for:
 
 Do NOT use for:
 - Structural decisions → use [`decision-log-entry`](../../tech-core/skills/decision-log-entry/SKILL.md)
-- Raw document storage → keep source pointer in `brain/sources/`, not body in canon
+- Raw document storage → keep the source pointer in the case's own `sources/`, not the body in canon
 - Cross-case knowledge → each canon artifact is case-scoped; no cross-case lookup
 
 ---
@@ -159,7 +159,7 @@ On confirmation, write the file. On correction, adjust per feedback.
 
 ## Anti-patterns
 
-❌ **Copy client document bodies** — extract insights only; source pointer goes in `brain/sources/`
+❌ **Copy client document bodies** — extract insights only; the source pointer goes in the case's own `sources/`
 ❌ **Cross-case references** — each artifact is strictly scoped to its case
 ❌ **Skip frontmatter** — frontmatter is what makes the canon machine-readable across sessions
 ❌ **Save without confirming** — always show the owner before writing

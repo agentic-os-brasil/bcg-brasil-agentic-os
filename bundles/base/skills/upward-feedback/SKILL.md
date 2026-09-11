@@ -34,7 +34,7 @@ specific person. Naming is not the risk; accumulating is. So:
   new one. The owner starts from what they think now.
 - **the file is named for the occasion, not the person.** No segment proposal
   declares a page kind for this, so write where the owner names it, defaulting
-  to `owner/development/upward-feedback/<YYYY-MM-DD>-<occasion-slug>.md`. A
+  to `brain/development/upward-feedback/<YYYY-MM-DD>-<occasion-slug>.md`. A
   per-person filename would turn pages that are individually fine into the
   dossier this boundary exists to prevent.
 - **the page says what it is.** State on it, in the owner's words, that it is
@@ -103,7 +103,7 @@ Forma recomendada, não porta de entrada. A página é nomeada pela ocasião, nu
 pela pessoa, e diz na primeira linha o que ela é. Todo ponto traz o momento que
 o owner confirmou; um ponto sem âncora confirmada não entra na página.
 
-**Preparação — `owner/development/upward-feedback/<YYYY-MM-DD>-<occasion-slug>.md`**:
+**Preparação — `brain/development/upward-feedback/<YYYY-MM-DD>-<occasion-slug>.md`**:
 
 ```markdown
 # Preparação de feedback — <ocasião> — YYYY-MM-DD

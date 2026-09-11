@@ -43,15 +43,42 @@ TPL_RE = re.compile(r"<[^>]+>|\{[^}]+\}|\$\{[^}]+\}|%[sd]|\*\*")
 # Fora de escopo nesta release: a ingestao de SharePoint e o cursor do
 # learn-from-logs escrevem em arvore que so nasce no primeiro uso. Nao e
 # caminho morto, e feature desligada.
+# Arvore que so nasce no primeiro uso. Nao e caminho morto, e feature desligada.
+#
+#   - `.maestro/` e area de maquina: o compilador do indice a cria quando roda a
+#     primeira vez, e antes disso ela legitimamente nao existe.
+#   - `runtime/` e o ambiente Python sob demanda da decisao PYUV, criado quando
+#     uma capacidade dependente de Python e pedida pelo dono.
+#
+# Sem estas duas linhas, toda instalacao nova nasce com 11 "caminhos mortos" que
+# nunca somem, e o proximo leitor aprende a ignorar a ferramenta inteira.
 IGNORE_PREFIX = ("brain/knowledge/", "brain/memory/sharepoint-rationales/",
-                  "brain/memory/learn-from-logs/")
+                  "brain/memory/learn-from-logs/", "brain/.maestro/",
+                  "brain/runtime/")
 
 
 def resolve(p):
-    """True se o caminho existe, ou se a pasta que o conteria existe."""
-    p = p.rstrip("/")
-    if p.startswith(IGNORE_PREFIX):
+    """True se o caminho existe, ou se a pasta que o conteria existe.
+
+    A tolerancia da pasta-mae existe para o caso legitimo de uma skill nomear o
+    ARQUIVO que ela mesma vai criar: `brain/daily/2026-09-10.md` nao existe hoje
+    e nao e caminho morto.
+
+    Ela nao vale para diretorio. Um caminho escrito com barra no fim declara que
+    e pasta, e aceitar a mae ali absolve exatamente o resquicio que esta
+    ferramenta existe para pegar: `brain/projects/` sobreviveu ao refactor que
+    moveu projects/ e deliverables/ para dentro do caso, e passou limpo porque
+    `brain/` existe. Dois arquivos ficaram apontando para uma pasta que nao
+    nasce em instalacao nenhuma, sem ninguem notar.
+    """
+    is_dir_ref = p.endswith("/")
+    # A comparacao de prefixo vem ANTES do rstrip, e a ordem e o bug: as entradas
+    # de IGNORE_PREFIX terminam em barra, entao um caminho ja aparado nunca casava
+    # e a lista inteira era inerte. O fallback da pasta-mae escondia isso ate a
+    # tolerancia de diretorio ser apertada acima.
+    if p.startswith(IGNORE_PREFIX) or (p + "/").startswith(IGNORE_PREFIX):
         return True
+    p = p.rstrip("/")
     if TPL_RE.search(p):
         g = TPL_RE.sub("*", p)
         if glob.glob(g) or glob.glob(os.path.dirname(g) or "."):
@@ -95,6 +122,8 @@ def resolve(p):
         #    instanciada e nao ha o que julgar — instalacao nova. Com ocupante,
         #    o glob completo falhou por outro motivo, e ai e achado de verdade.
         return not glob.glob("/".join(parts[:first_wild + 1]))
+    if is_dir_ref:
+        return os.path.isdir(p)
     return os.path.exists(p) or os.path.isdir(os.path.dirname(p) or ".")
 
 

@@ -47,7 +47,7 @@ is no whole-root read and no folder listing, so name the days.
 - the daily pages for the window — default the last seven days, or since the
   previous pass if the owner names it — read for their
   `## Candidatos a aprendizado` section;
-- `owner/learnings/index.md` and `owner/craft/index.md`, so a candidate that
+- `brain/learnings/index.md` and `brain/craft/index.md`, so a candidate that
   restates a page already written is recognized before it is duplicated.
 
 `collect` is bounded, so a long window is collected in more than one call. A
@@ -60,12 +60,12 @@ as weak evidence, not proof that the claim is new.
 
 Route each candidate to exactly one destination, and state which.
 
-- **`owner/learnings/<claim-slug>.md`** — a durable claim about how a kind of
+- **`brain/learnings/<claim-slug>.md`** — a durable claim about how a kind of
   work goes. Test: it could be shown to be **wrong** by the next engagement. A
   learning is the only one of the three that can be false.
-- **`owner/craft/methods/<method-slug>.md`** — a reusable technique. Test:
+- **`brain/craft/methods/<method-slug>.md`** — a reusable technique. Test:
   another practitioner could follow it and get a comparable result.
-- **`owner/craft/style/<situation-slug>.md`** — a calibration of how this owner
+- **`brain/craft/style/<situation-slug>.md`** — a calibration of how this owner
   prefers to work. Test: it is true of this owner, not of the craft. If the
   candidate cannot say why it is *not* generalizable, it is a method.
 
@@ -126,7 +126,7 @@ estáveis — `append-entry` nunca cria um heading, então fundamentação e rev
 não podem ser acrescentadas depois a uma página que não declarou onde elas
 entram.
 
-**Afirmação — `owner/learnings/<claim-slug>.md`**:
+**Afirmação — `brain/learnings/<claim-slug>.md`**:
 
 ```markdown
 # Aprendizado — <a afirmação em poucas palavras>
@@ -168,7 +168,7 @@ Uma página superada mantém o texto, a fundamentação original e a história; 
 confirmação` e a linha no índice também são edição do owner.
 
 **Método e estilo** usam as mesmas templates declaradas em `craft-update` —
-`owner/craft/methods/<method-slug>.md` e `owner/craft/style/<situation-slug>.md`.
+`brain/craft/methods/<method-slug>.md` e `brain/craft/style/<situation-slug>.md`.
 Elas não são reproduzidas aqui; leia a seção `## Formato da página` daquela
 skill antes de escrever uma dessas páginas.
 

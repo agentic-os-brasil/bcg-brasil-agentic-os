@@ -28,10 +28,17 @@ task, grant authority or replace owner confirmation.
    one bounded completion criterion. When the owner explicitly asks to track
    the work, create it directly; ask only if the workspace, scope or next
    action is genuinely ambiguous.
-2. Write a concise Markdown task under `brain/tasks/` and
-   link it to the relevant artifact under `brain/projects/` or
-   `brain/deliverables/`. Include only objective, next step, owner,
-   completion criterion and logical artifact references.
+2. Write a concise Markdown task under the active case's own
+   `brain/accounts/<account-id>/cases/<case-id>/tasks/` and link it to the
+   relevant artifact: the case brief at `<case-id>.md` in the case root, or a
+   reviewed output under that case's `deliverables/`. The canonical case
+   layout is declared by [`case-agent-setup`](../case-agent-setup/SKILL.md)
+   and has no wrapper folder around the brief — a case already is one
+   project, so a same-named folder around its single brief would be a
+   redundant file in a redundant folder. Neither the brief nor
+   `deliverables/` exists at the top of the brain either, so naming one
+   there sends the task where nothing looks. Include only objective, next
+   step, owner, completion criterion and logical artifact references.
 3. Do not place prompts, transcripts, client bodies, credentials or absolute
    paths in the task file. Report the task as registered after the reviewed
    artifact is written. Uma tarefa registrada é uma nota em Markdown com objetivo, próximo passo e critério de conclusão.

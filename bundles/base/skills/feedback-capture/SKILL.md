@@ -31,7 +31,7 @@ writing anything, and ask when the answer is not explicit.
 
 | | Project feedback | Career-committee review |
 | --- | --- | --- |
-| Page | `owner/development/project-feedback/<YYYY-MM-DD>-<project-slug>.md` | `owner/development/cdc/<YYYY-MM-DD>-cdc.md` |
+| Page | `brain/development/project-feedback/<YYYY-MM-DD>-<project-slug>.md` | `brain/development/cdc/<YYYY-MM-DD>-cdc.md` |
 | Cadence | Once per project round | Roughly every six months |
 | What it is | One case team's view of one period | The career-level synthesis |
 | Effect | **Folds into** the live objectives | **Resets** them |
@@ -65,7 +65,7 @@ whose conduct the page describes.
 
 - The feedback text, supplied by the owner in session, close to its source.
 - Obtained with `collect`, purpose declared and pages named:
-  `owner/development/objectives.md`; the prior captures the owner points at;
+  `brain/development/objectives.md`; the prior captures the owner points at;
   and the retrospectives since the last review. There is no whole-root read and
   no folder listing, so name the pages. An absent page is reported as an
   omission — a first capture has no predecessor, and that is not an error.
@@ -122,7 +122,7 @@ livre no segmento. O que a template garante é recuperabilidade e headings
 estáveis. As duas páginas registram o que foi dito ao owner e o efeito sobre os
 objetivos; nenhuma delas avalia quem deu o feedback.
 
-**Project feedback — `owner/development/project-feedback/<YYYY-MM-DD>-<project-slug>.md`**:
+**Project feedback — `brain/development/project-feedback/<YYYY-MM-DD>-<project-slug>.md`**:
 
 ```markdown
 # Project feedback — <project-slug> — YYYY-MM-DD
@@ -155,7 +155,7 @@ objetivos; nenhuma delas avalia quem deu o feedback.
 - [Objetivos](../objectives.md)
 ```
 
-**Career-committee review — `owner/development/cdc/<YYYY-MM-DD>-cdc.md`**:
+**Career-committee review — `brain/development/cdc/<YYYY-MM-DD>-cdc.md`**:
 
 ```markdown
 # CDC — YYYY-MM-DD
