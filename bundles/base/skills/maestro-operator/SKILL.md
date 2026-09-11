@@ -92,6 +92,7 @@ fazer, não pela palavra que usou.
 | texto de slide → mapa de mensagem e arco | [`slide-summary`](../slide-summary/SKILL.md) |
 | revisar texto de slide já pronto | [`deck-review`](../deck-review/SKILL.md) |
 | ensaiar o deck contra as perguntas da audiência | [`deck-drill`](../deck-drill/SKILL.md) |
+| modelo em Excel que precisa amarrar e ir a comitê | [`excel-financial-model`](../excel-financial-model/SKILL.md) |
 
 ### Registrar
 
@@ -125,19 +126,6 @@ fazer, não pela palavra que usou.
 | Preparar workspace depois do instalador | [`maestro-environment-setup`](../maestro-environment-setup/SKILL.md) |
 | Explicar o próprio Maestro ao dono | [`maestro-knowledge-pill`](../maestro-knowledge-pill/SKILL.md) |
 | Índice do brain desatualizado, link quebrado, página órfã | [`brain-index`](../brain-index/SKILL.md) |
-
----
-
-**Uma linha do roteamento de trabalho ainda não existe neste repositório**, e uma
-linha que roteia para lugar nenhum é pior que linha nenhuma — quem seguir cai num
-atalho que não resolve. Foi retirada até a skill chegar:
-
-| Pedido | Skill que falta | Chega com |
-|---|---|---|
-| modelo em Excel que precisa amarrar e ir a comitê | `excel-financial-model` | as skills novas de caso |
-
-Quem portar **reinsere a linha na tabela da seção correspondente**. Está escrito aqui em vez de num rastreador porque a tabela é o
-que se lê ao rotear, e é aqui que a falta se nota.
 
 ## Portões obrigatórios
 

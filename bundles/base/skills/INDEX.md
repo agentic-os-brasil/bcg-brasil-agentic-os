@@ -12,12 +12,15 @@
 | Case Agent | Entrevista e pesquisa um case de projeto com segurança | `skills/case-agent-setup/SKILL.md` |
 | Canon do Case | Compila insights revisados no canon persistente do case ativo | `skills/case-canon-ingest/SKILL.md` |
 | Registro de Decisão do Case | Registra uma decisão estrutural no log de decisões do case ativo | `skills/case-decision-log-entry/SKILL.md` |
+| SharePoint do Case | Lê a pasta SharePoint do case ativo e propõe candidatos a canon por módulo | `skills/case-sharepoint-ingest/SKILL.md` |
+| Mapa do SharePoint do Case | Mapeia onde cada tipo de informação mora no SharePoint do case ativo | `skills/case-sharepoint-map/SKILL.md` |
 | Gate de Entrega ao Cliente | Checagem de qualidade em três lentes antes de qualquer entrega ao cliente | `skills/client-delivery-gate/SKILL.md` |
 | Registro de Método | Documenta um método próprio ou uma preferência de trabalho | `skills/craft-update/SKILL.md` |
 | Ensaio de Deck | Ensaia o deck contra as perguntas que a sala vai fazer | `skills/deck-drill/SKILL.md` |
 | Review de Deck | Revisa o texto dos slides em busca de riscos de storyline e de evidência | `skills/deck-review/SKILL.md` |
 | Consolidação de Memória | Consolida a memória profissional diária e semanal | `skills/dream-memory/SKILL.md` |
 | Fechar o Dia | Fecha o dia e deixa um ponto de partida para amanhã | `skills/eod/SKILL.md` |
+| Modelo financeiro em Excel | Constrói ou reestrutura um modelo em Excel que precisa amarrar e ir a comitê, com origem única por número e aba Overview obrigatória | `skills/excel-financial-model/SKILL.md` |
 | Execution Continuity | Registrar tarefas e entregas, preparar versão, criar checkpoints e retomar trabalho entre sessões | `skills/execution-continuity/SKILL.md` |
 | Guia de Entrevista com Expert | Estrutura um guia de entrevista a partir das perguntas aprovadas do case | `skills/expert-interview-guide/SKILL.md` |
 | Registro de Feedback | Registra o feedback recebido e aplica aos objetivos de desenvolvimento | `skills/feedback-capture/SKILL.md` |

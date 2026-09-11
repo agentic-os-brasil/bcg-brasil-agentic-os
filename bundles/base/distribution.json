@@ -158,6 +158,30 @@
       "path": "skills/bcg-deck/agents/openai.yaml"
     },
     {
+      "source": "bundles/base/skills/case-sharepoint-ingest/SKILL.md",
+      "path": "skills/case-sharepoint-ingest/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/case-sharepoint-ingest/agents/openai.yaml",
+      "path": "skills/case-sharepoint-ingest/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/case-sharepoint-map/SKILL.md",
+      "path": "skills/case-sharepoint-map/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/case-sharepoint-map/agents/openai.yaml",
+      "path": "skills/case-sharepoint-map/agents/openai.yaml"
+    },
+    {
+      "source": "bundles/base/skills/excel-financial-model/SKILL.md",
+      "path": "skills/excel-financial-model/SKILL.md"
+    },
+    {
+      "source": "bundles/base/skills/excel-financial-model/agents/openai.yaml",
+      "path": "skills/excel-financial-model/agents/openai.yaml"
+    },
+    {
       "source": "bundles/base/skills/case-agent-setup/SKILL.md",
       "path": "skills/case-agent-setup/SKILL.md"
     },
