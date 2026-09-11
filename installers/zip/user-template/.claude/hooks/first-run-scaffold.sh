@@ -25,6 +25,15 @@ if [ -z "$PROJECT_DIR" ]; then
     exit 0
   fi
 fi
+
+# Resolvido a partir da pasta deste arquivo, nao do CLAUDE_PROJECT_DIR.
+#
+# Ate aqui o source vivia DENTRO do bloco de migracao, que so roda quando ha
+# um `data/` para migrar — ou seja, nunca numa instalacao nova. Toda funcao
+# deste hook que precisa de `maestro_py` saia em silencio na primeira sessao
+# de um dono novo, que e exatamente a sessao em que ela mais importa.
+# shellcheck source=lib/python.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null || true
 BRAIN_DIR="$PROJECT_DIR/brain"
 MARKER="$BRAIN_DIR/.initialized"
 LOG="$BRAIN_DIR/.scaffold.log"
@@ -143,6 +152,67 @@ emit_skills_rollup() {
 # procuravam o brief em lugares diferentes, porque este seguia um layout com
 # `projects/` que o canonico nao tem. Uma fonte, um leitor.
 # ---------------------------------------------------------------------------
+# MarkItDown — deteccao deterministica.
+#
+# O passo 3 do CLAUDE.md mandava eu rodar `markitdown --version` e gravar
+# brain/owner/markitdown.json. O arquivo nunca existiu: o check nunca rodou em
+# sessao nenhuma. Instrucao que depende de alguem lembrar falha exatamente
+# quando o trabalho aperta — o mesmo raciocinio que tirou "ao criar pasta,
+# atualize o indice" das maos e passou para o compilador.
+#
+# Cadencia: checa quando nao ha registro, e recheca depois de 30 dias quando o
+# ultimo resultado foi negativo (pode ter sido instalado desde entao). Resultado
+# positivo nao e rechecado.
+# ---------------------------------------------------------------------------
+detect_markitdown() {
+  local out="$BRAIN_DIR/owner/markitdown.json"
+  [ -d "$BRAIN_DIR/owner" ] || return 0
+  maestro_python >/dev/null 2>&1 || return 0
+
+  local due
+  due=$(PYTHONIOENCODING=utf-8 maestro_py - "$out" <<'PY' 2>/dev/null
+import json, sys, datetime
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        d = json.load(f)
+except Exception:
+    print("yes"); sys.exit(0)           # sem registro: checa
+if d.get("available"):
+    print("no"); sys.exit(0)            # ja achou: nao recheca
+try:
+    last = datetime.datetime.fromisoformat(d["checked_at"].replace("Z", "+00:00"))
+    age = (datetime.datetime.now(datetime.timezone.utc) - last).days
+except Exception:
+    print("yes"); sys.exit(0)
+print("yes" if age >= 30 else "no")
+PY
+)
+  [ "$due" = "yes" ] || return 0
+
+  local ver="" avail="false"
+  if command -v markitdown >/dev/null 2>&1; then
+    ver=$(markitdown --version 2>/dev/null | head -1 | tr -d '"\')
+    [ -n "$ver" ] && avail="true"
+  fi
+  local ts
+  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  if [ "$avail" = "true" ]; then
+    printf '{\n  "available": true,\n  "version": "%s",\n  "checked_at": "%s"\n}\n' \
+      "$ver" "$ts" > "$out" 2>/dev/null
+    log_line "MARKITDOWN disponivel ($ver)"
+    # Uma linha, so quando muda de estado: ingestao de documento passou a existir.
+    printf '\n## Ingestão de documentos habilitada\n'
+    printf 'MarkItDown detectado (%s). PDF, Office e páginas salvas podem ser ingeridos com `ingest-content`.\n' "$ver"
+  else
+    printf '{\n  "available": false,\n  "checked_at": "%s"\n}\n' "$ts" > "$out" 2>/dev/null
+    log_line "MARKITDOWN ausente (recheca em 30 dias)"
+    # Silencio de proposito: ausencia nao e problema do dono nem pedido de setup.
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# O contexto do caso ativo NAO e emitido aqui — ver session-start-memory-inject.sh.
+# ---------------------------------------------------------------------------
 
 # Recovery detection: brain/ exists with real content but marker is missing.
 # Means either: (a) user restored brain/ from a backup, or (b) marker was clobbered
@@ -239,6 +309,7 @@ EOF
   fi
 
   emit_skills_rollup 2>/dev/null
+  detect_markitdown 2>/dev/null
   exit 0
 fi
 
@@ -267,8 +338,6 @@ fi
 # ---------------------------------------------------------------------------
 MIGRATE_TOOL="$PROJECT_DIR/bundles/base/tools/migrate-data-to-brain.py"
 if [ -d "$PROJECT_DIR/data" ] && [ ! -f "$MARKER" ]; then
-  # shellcheck source=lib/python.sh
-  . "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null || true
   if [ -f "$MIGRATE_TOOL" ] && maestro_python >/dev/null 2>&1; then
     MIG_OUT=$(PYTHONIOENCODING=utf-8 maestro_py "$MIGRATE_TOOL" --project "$PROJECT_DIR" 2>/dev/null)
     [ -n "$MIG_OUT" ] && log_line "MIGRATE   $MIG_OUT"
@@ -626,5 +695,6 @@ if [ -n "$FIRST_RUN_VERSION" ]; then
 fi
 
 emit_skills_rollup
+detect_markitdown 2>/dev/null
 
 exit 0

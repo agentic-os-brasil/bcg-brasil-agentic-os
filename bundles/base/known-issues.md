@@ -15,6 +15,21 @@ Ordem: mais recente no topo. Remover entradas resolvidas quando a versão que co
 
 ---
 
+## isolamento-entre-casos-nao-e-barreira-dura
+
+- **Sintoma:** nenhum. É um limite do desenho, não um defeito observável.
+- **Causa:** o guard que impede escrita no caso errado lê dois arquivos de
+  controle (`brain/accounts/.active` e `.pending`) que são graváveis pelas mesmas
+  ferramentas que ele filtra. Duas chamadas em sequência — declarar outro caso
+  como pendente, depois escrever nele — passam. Fechar isso quebraria a criação
+  de caso e a troca de caso ativo, que não têm outro canal de escrita.
+- **Contorno:** nenhum é necessário no uso normal. O guard protege contra engano,
+  que é o risco real do dia a dia. Se o seu contexto exige barreira dura entre
+  clientes — auditoria, cliente com restrição contratual — fale com o time BCG
+  Brasil AI antes de usar a mesma instalação para os dois.
+
+---
+
 ## hooks-nao-executados
 
 - **Sintoma:** O Maestro funciona, mas algumas coisas automáticas não acontecem: ele não lembra do contexto entre conversas, o fechamento de fim de dia nunca é oferecido sozinho, e a separação entre casos não é aplicada. Em algumas máquinas aparece uma mensagem de erro repetida a cada mensagem enviada.
