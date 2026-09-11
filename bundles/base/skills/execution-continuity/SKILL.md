@@ -18,7 +18,7 @@ legacy deterministic execution ledger remains a compatibility/recovery surface
 for older workspaces, but a new task is represented first by the agent in the
 canonical workspace locations.
 
-Resolve the canonical `interaction-profile` before presenting the task summary
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the task summary
 or checkpoint. It controls communication style only; it does not choose the
 task, grant authority or replace owner confirmation.
 
@@ -73,3 +73,13 @@ bounded projection.
   this skill unless their own governed capability is explicitly available.
 - An unavailable native qualification label does not make the local execution
   ledger unavailable.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

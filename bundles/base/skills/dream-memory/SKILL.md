@@ -9,7 +9,7 @@ Operate directly on the workspace memory tree under `brain/memory/` (memória re
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` skill before responding. Ajustar o tom e o nível de detalhe ao perfil do usuário antes de apresentar qualquer resultado visível. A operação de memória, a política e o comportamento de segurança nunca variam por perfil; apenas a explicação e o detalhe opcional variam.
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) skill before responding. Ajustar o tom e o nível de detalhe ao perfil do usuário antes de apresentar qualquer resultado visível. A operação de memória, a política e o comportamento de segurança nunca variam por perfil; apenas a explicação e o detalhe opcional variam.
 
 - `standard`: state the result, what changed and one safe next action.
 - `advanced`: add the relevant cycle rationale, diagnostics and drill-down
@@ -58,3 +58,13 @@ If the cycle fails or the memory tree is missing, report the failure and delete 
 ## Current delivery boundary
 
 The managed bundle contains this canonical skill and the memory capacity and policy contracts under `brain/memory/`. If those files are absent in the current workspace, report dreaming as unavailable and point the user at the setup skill rather than claim execution.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

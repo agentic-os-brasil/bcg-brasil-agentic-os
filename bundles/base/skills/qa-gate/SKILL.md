@@ -9,7 +9,7 @@ description: Build an evidence-gated QA packet for a bounded change and classify
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` skill before presenting results to any agent that surfaces output to the owner. It adjusts explanation depth only; it never changes the QA verdict, evidence requirements, or scope.
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) skill before presenting results to any agent that surfaces output to the owner. It adjusts explanation depth only; it never changes the QA verdict, evidence requirements, or scope.
 
 Turn a consulting output into a proportionate quality decision. This skill
 coordinates evidence across five dimensions and produces a verdict; it does not

@@ -13,7 +13,7 @@ not edit the deck, and it does not approve it.
 
 ## Not a review
 
-`deck-review` and the quality path judge whether an output is good. This asks
+[`deck-review`](../deck-review/SKILL.md) and the quality path judge whether an output is good. This asks
 how an audience will attack it — a different question with a different answer.
 A deck can be sound and still fall apart in the room, and it can be rough and
 survive because the presenter knew where the pressure would come from.
@@ -22,7 +22,7 @@ Run this after the deck is settled, not instead of settling it.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting. The lenses, the grounding rule
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting. The lenses, the grounding rule
 and the honesty about weak answers never vary by profile.
 
 - `standard`: the questions by lens, a candidate answer each, the three weakest.

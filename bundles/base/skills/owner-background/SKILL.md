@@ -25,7 +25,7 @@ after. If the owner defers, onboarding records the pendency (see
 
 ## Interaction profile
 
-Resolve `interaction-profile` before asking anything. It changes how much is
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before asking anything. It changes how much is
 explained and how the questions are worded — never which questions are asked,
 never what is written, and never the confirmation before writing. This is the
 owner's own history: the profile calibrates the conversation, not the record.

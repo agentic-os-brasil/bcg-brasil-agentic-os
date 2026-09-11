@@ -18,7 +18,7 @@ Minerar conversas passadas com o Claude — não o que o dono escreveu sobre si 
 
 Nunca ler as duas por padrão sem perguntar; nunca ler nenhuma sem autorização explícita nesta chamada — autorização de uma chamada não vale para a próxima.
 
-**A. Sessões locais do Claude Code** — `~/.claude/projects/**/*.jsonl`. Não exige nenhum export: já está no computador do dono. Justamente por isso pede consentimento explícito antes de ler, o mesmo padrão de duas etapas do SharePoint em `maestro-onboarding` (selecionar não é autorizar leitura) — essas sessões podem cobrir projetos e clientes sem relação nenhuma com o Maestro.
+**A. Sessões locais do Claude Code** — `~/.claude/projects/**/*.jsonl`. Não exige nenhum export: já está no computador do dono. Justamente por isso pede consentimento explícito antes de ler, o mesmo padrão de duas etapas do SharePoint em [`maestro-onboarding`](../maestro-onboarding/SKILL.md) (selecionar não é autorizar leitura) — essas sessões podem cobrir projetos e clientes sem relação nenhuma com o Maestro.
 
 **B. Export de conversas do claude.ai** — um arquivo que o dono baixa em claude.ai → Configurações → Conta → Exportar dados (chega por email como um zip). Pergunte se ele já tem o arquivo; se não tiver, dê o caminho em uma linha e deixe adiar sem custo. Nunca tente adivinhar ou construir a estrutura do export de cabeça: ao ler o arquivo, inspecione a forma real do JSON antes de extrair (nomes de campo podem variar entre versões do export) — nunca assuma um schema fixo sem checar.
 
@@ -28,7 +28,7 @@ Se o dono escolher as duas, processe cada uma com a mesma disciplina de proveni�
 
 **Modo onboarding** (chamado por [`maestro-onboarding`](../maestro-onboarding/SKILL.md), turno 4-C): devolve só rascunhos, em memória de conversa — **nunca escreve em `brain/owner/self/` nem em `identity.json` diretamente**. Quem escreve é o onboarding, através do fluxo de confirmação que ele já tem. Esta skill, neste modo, é uma função pura: sessões/export entram, rascunho por faceta sai.
 
-**Modo avulso** (`Use $learn-from-logs`, a qualquer momento depois do onboarding): lê o que já existe em `brain/owner/self/*.md` e `brain/owner/identity.json`, extrai sinal novo desde o último cursor, e para cada candidato novo ou que contradiz o que já está escrito, propõe **um de cada vez**, no mesmo espírito do `learnings-bridge` — aceitar, ajustar ou pular. Nunca sobrescreve uma linha existente sem essa confirmação; uma contradição vira um item marcado para o dono resolver, nunca uma escolha automática.
+**Modo avulso** (`Use $learn-from-logs`, a qualquer momento depois do onboarding): lê o que já existe em `brain/owner/self/*.md` e `brain/owner/identity.json`, extrai sinal novo desde o último cursor, e para cada candidato novo ou que contradiz o que já está escrito, propõe **um de cada vez**, no mesmo espírito do [`learnings-bridge`](../learnings-bridge/SKILL.md) — aceitar, ajustar ou pular. Nunca sobrescreve uma linha existente sem essa confirmação; uma contradição vira um item marcado para o dono resolver, nunca uma escolha automática.
 
 ## Proveniência
 
@@ -44,7 +44,7 @@ Janela, cap, regra de descarte, correção worktree-vs-repo e a tabela completa 
 
 - Janela padrão 120 dias, cap 500 sessões por passada (só se aplica à fonte A; a fonte B processa o export inteiro, que já é finito).
 - Descarta sessão com <20 linhas ou sem turno do dono.
-- Mapeia sinal só para as facetas que `maestro-onboarding` já usa — `professional-role`, `communication-style`, `voice`, `preferences`, `motivations`, `quality-bar`, `decision-rules`, `working-boundaries` — mais `role`, `segment`, `office`, `focus` de `identity.json`. Nada de "contexto por projeto" ou "método do Maestro" como camadas separadas: ficou fora de escopo desta versão porque não tem lugar seguro no modelo de conta/caso do Maestro (ver não-negociáveis abaixo).
+- Mapeia sinal só para as facetas que [`maestro-onboarding`](../maestro-onboarding/SKILL.md) já usa — `professional-role`, `communication-style`, `voice`, `preferences`, `motivations`, `quality-bar`, `decision-rules`, `working-boundaries` — mais `role`, `segment`, `office`, `focus` de `identity.json`. Nada de "contexto por projeto" ou "método do Maestro" como camadas separadas: ficou fora de escopo desta versão porque não tem lugar seguro no modelo de conta/caso do Maestro (ver não-negociáveis abaixo).
 - Cursor do modo avulso: `brain/memory/learn-from-logs/_cursor.json` — sessões já processadas por sha256, timestamp do último export lido, e um acumulador `pattern_counters` para sinal que ainda não chegou a duas ocorrências independentes.
 
 ## Fluxo — modo onboarding
@@ -72,7 +72,7 @@ Janela, cap, regra de descarte, correção worktree-vs-repo e a tabela completa 
 ## Não-negociáveis
 
 - Nunca escrever em `bundles/`. Esse diretório vira o pacote de distribuição (`installers/zip/build-release.sh`); conteúdo do dono ali é sanitizado ou bloqueia o build — nenhum dos dois é aceitável.
-- Nunca escrever em `brain/accounts/`. Um projeto detectado no `cwd` de uma sessão não é necessariamente um case BCG real, e criar estrutura de conta a partir de uma heurística de path arrisca colidir com o guard de isolamento entre clientes. Se o dono quer estrutura de conta/caso a partir de uma menção em conversa, isso é o fluxo de `account-case-setup`/`case-agent-setup`, não este.
+- Nunca escrever em `brain/accounts/`. Um projeto detectado no `cwd` de uma sessão não é necessariamente um case BCG real, e criar estrutura de conta a partir de uma heurística de path arrisca colidir com o guard de isolamento entre clientes. Se o dono quer estrutura de conta/caso a partir de uma menção em conversa, isso é o fluxo de [`account-case-setup`](../account-case-setup/SKILL.md)/[`case-agent-setup`](../case-agent-setup/SKILL.md), não este.
 - Nunca converter `[ACEITO]` sozinho em escrita confirmada. Fica como hipótese, com contador, até acumular uma segunda fonte independente.
 - Nunca ler `~/.claude/projects/**/*.jsonl` ou o export sem autorização explícita nesta chamada.
 - Nunca copiar trecho bruto de sessão ou de export para dentro de `brain/`. Só a conclusão, já revisada por proveniência, e só depois de confirmada pelo dono.

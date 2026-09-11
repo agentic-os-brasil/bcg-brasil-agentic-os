@@ -13,7 +13,7 @@ All reads and writes use direct file operations on the owner atlas paths (`brain
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting the capture. The reads, the
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the capture. The reads, the
 writes, the bounds and the confirmation behaviour never vary by profile; only
 the explanation and optional detail do.
 
@@ -221,3 +221,13 @@ evidência dele e aponta para a página de CDC que a causou.
   feedback, the fold-or-reset judgement and a draft the owner can keep all
   still stand — only the recording is lost, and it must never be reported as
   done.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

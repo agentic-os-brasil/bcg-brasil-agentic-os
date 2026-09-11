@@ -9,7 +9,7 @@ Registrar um documento apontado pelo usuário como memória local do Maestro. Le
 
 ## Interaction profile
 
-Resolver `interaction-profile` se disponível. O perfil ajusta profundidade de explicação e sugestões opcionais, nunca o envelope de segurança nem o destino da escrita.
+Resolver [`interaction-profile`](../interaction-profile/SKILL.md) se disponível. O perfil ajusta profundidade de explicação e sugestões opcionais, nunca o envelope de segurança nem o destino da escrita.
 
 ## Contrato de comunicação
 
@@ -101,3 +101,13 @@ PDFs escaneados (imagem pura) e OCR de imagens complexas dependem de runtime loc
 ## Encerramento
 
 Uma linha com tópico, caminho absoluto do arquivo criado dentro de `brain/memory/`, e (se aplicável) o item deixado para release futura. Se nada foi gravado, dizer explicitamente por que a ingestão não ocorreu e qual é o próximo passo seguro.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

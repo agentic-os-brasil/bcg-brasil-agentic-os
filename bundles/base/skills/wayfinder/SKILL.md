@@ -13,7 +13,7 @@ it writes nothing.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting the tree. The method, the
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the tree. The method, the
 bounds and the refusals never vary by profile; only the explanation does.
 
 - `standard`: the framed question, the branches, the first one to open.

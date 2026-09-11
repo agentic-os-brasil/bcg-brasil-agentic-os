@@ -16,7 +16,7 @@ Skill de recuperação de material profissional prévio dentro da workspace Maes
 
 ## Interaction profile
 
-Resolver `interaction-profile` se presente. Ajusta vocabulário e profundidade, nunca as regras de escopo abaixo.
+Resolver [`interaction-profile`](../interaction-profile/SKILL.md) se presente. Ajusta vocabulário e profundidade, nunca as regras de escopo abaixo.
 
 ## Escopo desta release
 

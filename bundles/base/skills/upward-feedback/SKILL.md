@@ -42,7 +42,7 @@ specific person. Naming is not the risk; accumulating is. So:
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting a draft. The boundary above,
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting a draft. The boundary above,
 the operations used, the bounds and the confirmation behaviour never vary by
 profile; only the explanation and optional detail do.
 
@@ -169,3 +169,13 @@ ainda falta o owner decidir`.
 - If an operation is unavailable, say so and keep going. The thinking, the
   framing and a draft the owner can take to the conversation are the point —
   only the recording is lost, and it must never be reported as done.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.

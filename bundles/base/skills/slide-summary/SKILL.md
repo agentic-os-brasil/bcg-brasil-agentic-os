@@ -11,7 +11,7 @@ candidate message, not merely a section label.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the map. It
+Resolve the canonical [`interaction-profile`](../interaction-profile/SKILL.md) before presenting the map. It
 changes explanation depth only; it never changes source scope or inference
 rules.
 

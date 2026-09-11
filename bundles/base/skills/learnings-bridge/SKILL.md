@@ -15,7 +15,7 @@ All reads and writes use direct file operations on the owner atlas paths (`brain
 
 The two look adjacent and are different work. Keep them apart.
 
-- **`dream-memory`** runs the canonical memory engine: automatic, bottom-up
+- **[`dream-memory`](../dream-memory/SKILL.md)** runs the canonical memory engine: automatic, bottom-up
   consolidation of already-sanitized signals into the managed layers under a
   named eligibility policy. It is the only path into memory.
 - **This skill** is deliberate curation of atlas pages. The owner wrote the
@@ -25,11 +25,11 @@ The two look adjacent and are different work. Keep them apart.
 Nothing here reads a capture, runs a cycle, or changes a memory layer, budget,
 policy or eligibility rule. A promoted learning is not memory input, and a
 memory cycle never promotes a page. If the owner is asking to consolidate
-memory, hand them `dream-memory` instead of approximating it.
+memory, hand them [`dream-memory`](../dream-memory/SKILL.md) instead of approximating it.
 
 ## Interaction profile
 
-Resolve `interaction-profile` before presenting candidates. The routing rule,
+Resolve [`interaction-profile`](../interaction-profile/SKILL.md) before presenting candidates. The routing rule,
 the operations used, the bounds and the confirmation gate never vary by
 profile; only the explanation and optional detail do.
 
@@ -167,7 +167,7 @@ Uma página superada mantém o texto, a fundamentação original e a história; 
 `Status` no snapshot muda, por edição do owner. `Nível`, `Em`, `Última
 confirmação` e a linha no índice também são edição do owner.
 
-**Método e estilo** usam as mesmas templates declaradas em `craft-update` —
+**Método e estilo** usam as mesmas templates declaradas em [`craft-update`](../craft-update/SKILL.md) —
 `brain/craft/methods/<method-slug>.md` e `brain/craft/style/<situation-slug>.md`.
 Elas não são reproduzidas aqui; leia a seção `## Formato da página` daquela
 skill antes de escrever uma dessas páginas.
@@ -200,3 +200,13 @@ diária de origem. É a única escrita que esta skill faz numa página diária:
 - If an operation is unavailable, say so and keep going. The routing, the
   reasoning and a draft the owner can keep are all still worth having — only
   the recording is lost, and it must never be reported as done.
+
+## Contrato de página do brain
+
+Toda página escrita em `brain/` precisa do frontmatter definido em
+`bundles/base/brain-contract.md` — `id`, `title`, `summary`, `type`, `scope`, `status`,
+`sensitivity`, `updated`. Leia esse arquivo antes de gravar e escreva o bloco junto com a
+página, nunca depois.
+
+Uma página sem esse bloco não aparece no índice do brain e não recebe backlinks: o
+trabalho fica gravado e invisível.
