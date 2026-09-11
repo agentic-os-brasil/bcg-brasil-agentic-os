@@ -11,7 +11,7 @@ approve data use or claim that a native runtime action happened.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before preparing the explanation.
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) before preparing the explanation.
 Standard users receive the intended outcome and one safe reading path;
 advanced and power users can receive interfaces, diffs and diagnostic evidence.
 The profile never changes review requirements or data boundaries.

@@ -11,7 +11,7 @@ separate human or adapter actions.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting review findings.
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) before presenting review findings.
 The profile changes presentation depth only; the review gates and verdict rules
 remain identical.
 

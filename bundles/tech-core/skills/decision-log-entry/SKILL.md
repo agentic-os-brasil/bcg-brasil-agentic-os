@@ -11,7 +11,7 @@ persist it.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the draft. It
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) before presenting the draft. It
 changes explanation depth only; it never changes the record, approval or
 persistence rules.
 

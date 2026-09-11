@@ -11,7 +11,7 @@ contributor's branch.
 
 ## Interaction profile
 
-Resolve the canonical `interaction-profile` before presenting the loop report.
+Resolve the canonical [`interaction-profile`](../../base/skills/interaction-profile/SKILL.md) before presenting the loop report.
 The profile changes explanation detail only; it does not change gates,
 evidence or authority.
 
