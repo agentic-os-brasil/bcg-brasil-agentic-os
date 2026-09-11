@@ -56,6 +56,11 @@
         "event": "stop",
         "installer_path": ".claude/hooks/session-stop-brain-index.sh",
         "criticality": "recommended"
+      },
+      {
+        "event": "stop",
+        "installer_path": ".claude/hooks/session-stop-eod-check.sh",
+        "criticality": "recommended"
       }
     ],
     "workspace_state": {
