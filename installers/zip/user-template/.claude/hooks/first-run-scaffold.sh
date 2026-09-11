@@ -135,81 +135,14 @@ emit_skills_rollup() {
 }
 
 # ---------------------------------------------------------------------------
-# Active case context — emitted every session when a case is active.
-# Reads brain/accounts/.active for the case ID, then emits a compact summary:
-# project brief (first 25 lines), last 5 decision headings, open task count.
-# Fail-open: any error silently returns without output.
+# O contexto do caso ativo NAO e emitido aqui.
+#
+# Ele vive em session-start-memory-inject.sh, que este commit traz e que roda
+# no mesmo SessionStart. Com os dois emitindo, o brief, as decisoes e a lista
+# de tarefas do caso entravam duas vezes no mesmo contexto — e os dois
+# procuravam o brief em lugares diferentes, porque este seguia um layout com
+# `projects/` que o canonico nao tem. Uma fonte, um leitor.
 # ---------------------------------------------------------------------------
-emit_active_case_context() {
-  local accounts_dir="$BRAIN_DIR/accounts"
-  local active_file="$accounts_dir/.active"
-
-  [ -f "$active_file" ] || return 0
-
-  # The marker holds <account>/<case>. A case id alone cannot name a directory
-  # under accounts/, so a marker without a slash is the pre-accounts format:
-  # emit nothing rather than guess which client it meant.
-  local active_id
-  active_id=$(tr -d '[:space:]' < "$active_file" 2>/dev/null)
-  [ -z "$active_id" ] && return 0
-  case "$active_id" in
-    */*) ;;
-    *) return 0 ;;
-  esac
-
-  local account_id case_id
-  account_id="${active_id%%/*}"
-  case_id="${active_id##*/}"
-
-  local case_dir="$accounts_dir/$account_id/cases/$case_id"
-  [ -d "$case_dir" ] || return 0
-
-  printf '## Caso ativo: %s
-
-' "$active_id"
-
-  # Project brief — first .md in the case's projects/, first 25 lines
-  local brief_file=""
-  for f in "$case_dir/projects/"*.md; do
-    [ -f "$f" ] && brief_file="$f" && break
-  done
-  if [ -n "$brief_file" ]; then
-    printf '### Brief
-
-'
-    head -25 "$brief_file" 2>/dev/null
-    printf '
-'
-  fi
-
-  # Last 5 decision headings
-  local decision_log="$case_dir/decisions/decision-log.md"
-  if [ -f "$decision_log" ]; then
-    printf '### Últimas decisões
-
-'
-    grep -E "^## D-[0-9]+" "$decision_log" 2>/dev/null | tail -5 | sed 's/^## /- /'
-    printf '
-'
-  fi
-
-  # Open tasks count + names (max 10)
-  if [ -d "$case_dir/tasks" ]; then
-    local task_count
-    task_count=$(find "$case_dir/tasks" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-    if [ "${task_count:-0}" -gt 0 ] 2>/dev/null; then
-      printf '### Tarefas abertas (%s)
-
-' "$task_count"
-      find "$case_dir/tasks" -name "*.md" 2>/dev/null | head -10 | while read -r tf; do
-        printf '- %s
-' "$(basename "$tf" .md)"
-      done
-      printf '
-'
-    fi
-  fi
-}
 
 # Recovery detection: brain/ exists with real content but marker is missing.
 # Means either: (a) user restored brain/ from a backup, or (b) marker was clobbered
@@ -306,7 +239,6 @@ EOF
   fi
 
   emit_skills_rollup 2>/dev/null
-  emit_active_case_context 2>/dev/null
   exit 0
 fi
 
@@ -652,7 +584,8 @@ Tudo dentro de `brain/` é seu. Atualizações do Maestro nunca sobrescrevem est
 - `craft/`       — métodos e calibrações de estilo que se mantêm entre projetos
 - `people/`      — perfis de colegas com quem você trabalhou
 - `development/` — objetivos, retrospectivas, feedback recebido e a dar
-- `accounts/`    — clientes, cada um com `cases/<projeto>/` (projects/, decisions/, tasks/, deliverables/, sources/, canon/)
+- `accounts/`    — clientes, cada um com `cases/<projeto>/`: o brief em `<projeto>.md` na raiz do caso, e decisions/,
+  tasks/, deliverables/, sources/, canon/ em subpastas
 - `tasks/`       — visão de tarefas derivada dos casos
 
 Há ainda um `.maestro/`, que é área de máquina: índices, backlinks, diagnóstico e
@@ -693,6 +626,5 @@ if [ -n "$FIRST_RUN_VERSION" ]; then
 fi
 
 emit_skills_rollup
-emit_active_case_context 2>/dev/null
 
 exit 0
