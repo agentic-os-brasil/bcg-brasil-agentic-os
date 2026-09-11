@@ -552,10 +552,10 @@ phase "Phase 11 — Case workspace smoke test"
 # Simulate the owner starting real work. Case material lands under
 # accounts/<account>/cases/<case>/, so that is the path whose writability
 # matters; workspaces/ was the pre-accounts shape and is no longer scaffolded.
-if mkdir -p "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/projects" \
-   && echo "demo" > "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/projects/brief.md" \
-   && [ -f "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/projects/brief.md" ]; then
-  pass "accounts tree writable + accepts an account/case/projects path"
+if mkdir -p "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/canon" \
+   && echo "demo" > "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/demo-case.md" \
+   && [ -f "$MAESTRO_DIR/brain/accounts/demo-account/cases/demo-case/demo-case.md" ]; then
+  pass "accounts tree writable + accepts a case path with its brief"
 else
   fail "accounts tree not writable"
 fi
