@@ -506,10 +506,19 @@ else
   fail "README-INSTALL step 4 missing Copiar/Ctrl+C/Option — Yoda Fix 2 regressed"
 fi
 
-if grep -qE "confirmar.*brain.*maestro-doctor|maestro-doctor.*brain" "$README"; then
-  pass "README-INSTALL step 7 gates deletion on brain/ present + doctor green"
+# The gate that matters is that deleting the old folder requires BOTH the
+# workspace being present in the new one AND doctor reporting green. Matching
+# the literal word "brain" was too narrow: the instruction is deliberately
+# generic, because an owner updating from before the flip still has a folder
+# called `data/`, and naming only `brain/` would tell them to check for
+# something they do not have. Assert the two conditions and the conjunction.
+README_DELETE_LINE=$(grep -nE "apagar .Maestro-old" "$README" | head -1 | cut -d: -f2-)
+if [ -z "$README_DELETE_LINE" ]; then
+  fail "README-INSTALL has no step that deletes Maestro-old — the ritual is incomplete"
+elif printf '%s' "$README_DELETE_LINE" | grep -q "maestro-doctor"      && printf '%s' "$README_DELETE_LINE" | grep -qE "workspace|brain"      && printf '%s' "$README_DELETE_LINE" | grep -qE "\*\*e\*\*| e que "; then
+  pass "README-INSTALL gates deletion on workspace present AND doctor green"
 else
-  fail "README-INSTALL step 7 missing dual-gate on deletion"
+  fail "README-INSTALL step 7 missing dual-gate on deletion: $(printf '%s' "$README_DELETE_LINE" | cut -c1-120)"
 fi
 
 CLAUDE_MD="$MAESTRO_DIR/CLAUDE.md"
