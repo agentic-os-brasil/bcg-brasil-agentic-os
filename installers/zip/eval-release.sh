@@ -1493,59 +1493,70 @@ fi
 # --------------------------------------------------------------------------
 phase "Phase 20 — Active-case context reaches the session"
 # --------------------------------------------------------------------------
-
 # The whole point of an active case is that the next session opens knowing it.
 # That makes this the least visible thing in the product when it breaks: the
 # emitter reads one path, the scaffold builds another, and the owner simply
-# gets a session with no case context and no error anywhere. Moving cases
-# under accounts/ did exactly that, and nothing here caught it, because every
-# other check verified a tree existed rather than that anything read it.
+# gets a session with no case context and no error anywhere. Moving cases under
+# accounts/ did exactly that, and nothing caught it, because every other check
+# verified a tree existed rather than that anything read it.
+#
+# The emitter lives in session-start-memory-inject.sh and nowhere else. It was
+# briefly in both hooks, which put the brief, the decisions and the task list
+# twice into the same context — and worse, the two copies looked for the brief
+# in different places, because one still followed a layout with `projects/`.
+# This phase asserts one header, not at least one.
 CASE_ROOT=$(mktemp -d -t maestro-eval-case-XXXXXX)
-mkdir -p "$CASE_ROOT/.claude/hooks"
-cp "$MAESTRO_DIR/.claude/hooks/first-run-scaffold.sh" "$CASE_ROOT/.claude/hooks/" 2>/dev/null
+mkdir -p "$CASE_ROOT/.claude/hooks" "$CASE_ROOT/bundles/base/memory" "$CASE_ROOT/bundles/base/tools"
+for h in first-run-scaffold.sh session-start-memory-inject.sh; do
+  cp "$MAESTRO_DIR/.claude/hooks/$h" "$CASE_ROOT/.claude/hooks/" 2>/dev/null
+done
 if [ -d "$MAESTRO_DIR/.claude/hooks/lib" ]; then
   cp -R "$MAESTRO_DIR/.claude/hooks/lib" "$CASE_ROOT/.claude/hooks/" 2>/dev/null
 fi
+cp "$MAESTRO_DIR/bundles/base/memory/runtime.json" "$CASE_ROOT/bundles/base/memory/" 2>/dev/null
+cp "$MAESTRO_DIR/bundles/base/tools/session-memory-emit.py" "$CASE_ROOT/bundles/base/tools/" 2>/dev/null
 printf '0.0.0-eval\n' > "$CASE_ROOT/VERSION"
 
-# Scaffold first, so the fixture is the layout the product actually creates
-# rather than one written by hand to match the emitter.
+# Scaffold first, so the fixture is the layout the product actually creates.
 CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>&1 || true
 
 if [ -d "$CASE_ROOT/brain/accounts" ]; then
   pass "scaffold builds brain/accounts/"
 
+  # The canonical case layout: brief at the case root, five subdirectories,
+  # and no wrapper folder around the brief.
   CASE_DIR="$CASE_ROOT/brain/accounts/alfa/cases/tmo"
-  mkdir -p "$CASE_DIR/projects" "$CASE_DIR/decisions" "$CASE_DIR/tasks"
-  printf '# Brief - TMO\n\nLinha do brief que precisa aparecer.\n' > "$CASE_DIR/projects/tmo.md"
+  mkdir -p "$CASE_DIR/decisions" "$CASE_DIR/tasks" "$CASE_DIR/canon" \
+           "$CASE_DIR/deliverables" "$CASE_DIR/sources"
+  printf '# Brief - TMO\n\nLinha do brief que precisa aparecer.\n' > "$CASE_DIR/tmo.md"
   printf '# Decision Log\n\n## D-001 Escolha inicial\n' > "$CASE_DIR/decisions/decision-log.md"
   printf '# Tarefa\n' > "$CASE_DIR/tasks/primeira.md"
   printf 'alfa/tmo\n' > "$CASE_ROOT/brain/accounts/.active"
 
-  EMITTED=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" 2>/dev/null)
+  SCAFFOLD_OUT=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" 2>/dev/null)
+  MEMORY_OUT=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
+  EMITTED="$SCAFFOLD_OUT
+$MEMORY_OUT"
 
-  case "$EMITTED" in
-    *"Caso ativo: alfa/tmo"*) pass "SessionStart names the active case as <account>/<case>" ;;
-    *) fail "SessionStart emitted no active-case header (emitter and scaffold disagree on the layout)" ;;
+  HEADERS=$(printf '%s' "$EMITTED" | grep -c "Caso ativo" || true)
+  case "$HEADERS" in
+    1) pass "exactly one active-case header across every SessionStart hook" ;;
+    0) fail "no active-case header — the case context never reaches the session" ;;
+    *) fail "$HEADERS active-case headers — the case context is duplicated in the context window" ;;
   esac
   case "$EMITTED" in
-    *"Linha do brief que precisa aparecer"*) pass "the case brief reaches the session" ;;
-    *) fail "the case brief never reached the session" ;;
+    *"Caso ativo: alfa/tmo"*) pass "the header names the case as <account>/<case>" ;;
+    *) fail "the active-case header does not name the account/case pair" ;;
   esac
   case "$EMITTED" in
-    *"D-001"*) pass "recent decisions reach the session" ;;
-    *) fail "decision headings never reached the session" ;;
-  esac
-  case "$EMITTED" in
-    *"Tarefas abertas"*) pass "open tasks reach the session" ;;
-    *) fail "open task count never reached the session" ;;
+    *"Linha do brief que precisa aparecer"*) pass "the case brief reaches the session from the case root" ;;
+    *) fail "the case brief never reached the session (wrong brief location?)" ;;
   esac
 
   # A marker in the pre-accounts format cannot name an account. Guessing would
-  # surface one client's brief while the owner works on another, so the emitter
-  # must stay silent — the same refusal the isolation guard makes.
+  # surface one client's brief while the owner works on another.
   printf 'tmo\n' > "$CASE_ROOT/brain/accounts/.active"
-  STALE=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/first-run-scaffold.sh" 2>/dev/null)
+  STALE=$(CLAUDE_PROJECT_DIR="$CASE_ROOT" bash "$CASE_ROOT/.claude/hooks/session-start-memory-inject.sh" 2>/dev/null)
   case "$STALE" in
     *"Caso ativo"*) fail "a bare case id in .active still produced case context (which client did it pick?)" ;;
     *) pass "a bare case id in .active emits nothing instead of guessing an account" ;;
@@ -1554,6 +1565,7 @@ else
   fail "scaffold did not build brain/accounts/ — cannot check active-case context"
 fi
 rm -rf "$CASE_ROOT"
+
 # --------------------------------------------------------------------------
 phase "Phase 21 — Scheduled routines are wired to run unattended"
 # --------------------------------------------------------------------------
