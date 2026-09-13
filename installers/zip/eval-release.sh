@@ -509,6 +509,11 @@ elif grep -qi 'Git Bash' "$README" && grep -qi 'Python 3' "$README"; then
 else
   fail "README-INSTALL does not name the supported Windows Bash + Python profile"
 fi
+if grep -qi 'Sem Git Bash' "$README" && grep -qi 'Sem Python 3' "$README"; then
+  pass "README-INSTALL distinguishes missing Bash from missing Python"
+else
+  fail "README-INSTALL conflates the effects of missing Bash and missing Python"
+fi
 
 # --------------------------------------------------------------------------
 phase "Phase 10 — Settings + hook wiring"
@@ -1182,6 +1187,9 @@ if [ -f "$XC_HOOK" ]; then
   [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/memory/x.md")")" = "block" ] \
     && pass "file write is refused when alias-safe isolation cannot be evaluated" \
     || fail "file write was allowed when alias-safe isolation could not be evaluated"
+  [ "$(xc_verdict "$XC_R" 'C:\unresolvable\outside\file.md')" = "block" ] \
+    && pass "file write is refused when filesystem alias resolution is unavailable" \
+    || fail "file write was allowed when filesystem alias resolution was unavailable"
 
   # An unreadable active marker means the target cannot be shown to be the
   # right case. Previously both shapes exited 0 and allowed the write.

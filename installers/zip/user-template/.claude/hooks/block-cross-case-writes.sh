@@ -274,7 +274,7 @@ case "$FS_INFO" in
     exit 0
     ;;
   *)
-    [ "$LEXICAL_SCOPE" = "inside" ] || exit 0
+    block "The guard could not resolve filesystem aliases for this target, so client isolation cannot be verified. Ask the owner to make this write themselves or contact the BCG Brasil AI team."
     ;;
 esac
 

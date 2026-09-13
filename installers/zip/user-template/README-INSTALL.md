@@ -8,11 +8,13 @@
   interpretador Python 3 resolvível como `python`, `python3` ou `py -3`.
 
 O Maestro abre para conversa mesmo quando alguma dessas peças não está
-disponível, mas memória automática, separação entre clientes e chamadas de
-agentes ficam desligadas. Windows apenas com PowerShell ainda não é suportado
-por esta atualização. Se o diagnóstico inicial apontar uma peça ausente, não é
-necessário abrir terminal nem instalar algo por conta própria: envie a saída de
-`/maestro-doctor` ao time BCG Brasil AI.
+disponível, mas o efeito é diferente. Sem Git Bash, os hooks não rodam. Sem
+Python 3, a memória em Markdown continua disponível, mas contexto estruturado e
+roteamento automático ficam indisponíveis; escritas que exigem validação de
+cliente são recusadas quando não podem ser verificadas. Windows apenas com
+PowerShell ainda não é suportado por esta atualização. Se o diagnóstico inicial
+apontar uma peça ausente, não é necessário abrir terminal nem instalar algo por
+conta própria: envie a saída de `/maestro-doctor` ao time BCG Brasil AI.
 
 ## Instalação (primeira vez)
 
@@ -64,10 +66,18 @@ Maestro/
 **"O Claude Code não reconheceu os hooks."**
 Feche e reabra o Claude Code com a pasta. Se persistir, rode `/maestro-doctor`.
 
-**"O diagnóstico diz que Bash ou Python 3 está ausente."**
-As rotinas automáticas e as chamadas de agentes não estão ativas nessa máquina.
-Envie a saída de `/maestro-doctor` ao time BCG Brasil AI. Não é necessário abrir
-terminal nem instalar algo por conta própria.
+**"Sem Git Bash no Windows."**
+Os hooks não estão ativos: memória automática, proteção de escrita e chamadas
+de agentes não rodam. Windows apenas com PowerShell não é suportado nesta
+atualização. Envie a saída de `/maestro-doctor` ao time BCG Brasil AI.
+
+**"Sem Python 3."**
+A memória em Markdown e a conversa continuam. Contexto estruturado e chamadas
+de agentes não são roteados automaticamente; escritas em arquivo que não podem
+ter o cliente verificado são recusadas.
+
+Nos dois casos, envie a saída de `/maestro-doctor` ao time BCG Brasil AI. Não
+é necessário abrir terminal nem instalar algo por conta própria.
 
 **"Sumiu minha memória depois do update."**
 Provavelmente a pasta `data/` foi movida por engano. Ela deve estar dentro de `Maestro/`. Se não estiver, verifique se você extraiu para o lugar certo.
