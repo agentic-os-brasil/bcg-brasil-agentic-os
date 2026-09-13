@@ -502,6 +502,14 @@ else
   fail "CLAUDE.md missing FIRST-RUN-FAILED.txt breadcrumb reference"
 fi
 
+if grep -q 'Nada mais' "$README"; then
+  fail "README-INSTALL promises no prerequisites although hooks require Bash and Python 3"
+elif grep -qi 'Git Bash' "$README" && grep -qi 'Python 3' "$README"; then
+  pass "README-INSTALL names the supported Windows Bash + Python profile"
+else
+  fail "README-INSTALL does not name the supported Windows Bash + Python profile"
+fi
+
 # --------------------------------------------------------------------------
 phase "Phase 10 — Settings + hook wiring"
 # --------------------------------------------------------------------------

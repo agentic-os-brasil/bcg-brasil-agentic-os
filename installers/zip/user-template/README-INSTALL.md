@@ -2,8 +2,17 @@
 
 ## Requisitos
 
-- **Claude Code desktop** instalado (Mac ou Windows).
-- Nada mais.
+- **Claude Code desktop** instalado.
+- **Mac:** Bash do sistema e um interpretador Python 3 disponível.
+- **Windows nesta atualização:** Git Bash disponível para o Claude Code e um
+  interpretador Python 3 resolvível como `python`, `python3` ou `py -3`.
+
+O Maestro abre para conversa mesmo quando alguma dessas peças não está
+disponível, mas memória automática, separação entre clientes e chamadas de
+agentes ficam desligadas. Windows apenas com PowerShell ainda não é suportado
+por esta atualização. Se o diagnóstico inicial apontar uma peça ausente, não é
+necessário abrir terminal nem instalar algo por conta própria: envie a saída de
+`/maestro-doctor` ao time BCG Brasil AI.
 
 ## Instalação (primeira vez)
 
@@ -54,6 +63,11 @@ Maestro/
 
 **"O Claude Code não reconheceu os hooks."**
 Feche e reabra o Claude Code com a pasta. Se persistir, rode `/maestro-doctor`.
+
+**"O diagnóstico diz que Bash ou Python 3 está ausente."**
+As rotinas automáticas e as chamadas de agentes não estão ativas nessa máquina.
+Envie a saída de `/maestro-doctor` ao time BCG Brasil AI. Não é necessário abrir
+terminal nem instalar algo por conta própria.
 
 **"Sumiu minha memória depois do update."**
 Provavelmente a pasta `data/` foi movida por engano. Ela deve estar dentro de `Maestro/`. Se não estiver, verifique se você extraiu para o lugar certo.
