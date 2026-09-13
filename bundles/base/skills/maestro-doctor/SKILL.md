@@ -73,19 +73,21 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
 
 12. **Interpretador das rotinas automáticas** — o check 11 responde "os hooks
     rodaram?"; este responde "eles tinham com que trabalhar?". Todo hook que lê
-    ou escreve JSON depende de um interpretador Python 3, e sem ele cada um sai
-    sem erro: memória entre conversas, roteamento de skills e separação entre
-    clientes ficam desligados sem nenhum sinal.
+    ou escreve JSON depende de um interpretador Python 3. Sem ele, a memória em
+    Markdown ainda é injetada, mas contexto estruturado e roteamento automático
+    de skills e agentes ficam indisponíveis. A separação entre clientes não fica
+    desligada: o guard recusa escritas em arquivo que não consegue verificar.
 
     Rodar `bash -c '. "$CLAUDE_PROJECT_DIR/.claude/hooks/lib/python.sh"; maestro_python'`.
 
     - Se imprimir algo, seguir em silêncio. O que imprime é o nome ou caminho
       resolvido; não mostrar ao usuário.
     - Se não imprimir nada, surfar como ponto a verificar: "uma peça do Maestro
-      não está instalada nesta máquina — por isso ele não lembra do contexto
-      entre conversas nem protege a separação entre clientes. Ele segue
-      utilizável para conversar. Avise o time BCG Brasil AI." Encaminhar para a
-      seção "Interpretador local" de `maestro-environment-setup`, que sabe
+      não está instalada nesta máquina. A memória em texto continua disponível,
+      mas o roteamento automático fica desligado e escritas que exigem validação
+      de cliente são recusadas. Ele segue utilizável para conversar. Avise o time
+      BCG Brasil AI." Encaminhar para a seção "Interpretador local" de
+      `maestro-environment-setup`, que sabe
       apontar o Maestro para um interpretador que exista fora do PATH.
 
     Instalar um interpretador não está autorizado hoje: a decisão `PYUV` cobre

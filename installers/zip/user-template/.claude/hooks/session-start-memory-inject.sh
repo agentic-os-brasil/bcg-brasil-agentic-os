@@ -104,10 +104,10 @@ printf '<!-- maestro:session-context:start -->\n'
 printf '# Maestro — Contexto da sessão\n'
 printf '_Injetado automaticamente pelo hook de início de sessão._\n'
 
-# No interpreter, no automation. Every hook that parses JSON needs one, so
-# without it memory injection, context routing and case isolation are all
-# inert — and the owner has no way to tell, because each of those hooks exits
-# 0 in silence. That silence is the defect; this block ends it.
+# No interpreter means structured JSON parsing and prompt-time routing are
+# unavailable. Markdown memory still injects, while the case guard refuses file
+# writes it cannot verify instead of silently disabling isolation. The notice
+# keeps that degraded mode visible.
 #
 # Emitted on every SessionStart where resolution fails — which includes
 # `/clear` and `/compact`, not just the first start of the day. That is
@@ -117,7 +117,7 @@ printf '_Injetado automaticamente pelo hook de início de sessão._\n'
 if ! maestro_python >/dev/null 2>&1; then
   printf '\n## ⚠️ Uma peça do Maestro não está instalada nesta máquina\n'
   printf '<!-- maestro:python-missing -->\n'
-  printf 'Sem ela, o Maestro não lembra o contexto entre conversas, não sugere skills e não protege a separação entre clientes. Ele abre e funciona para conversar, mas essas rotinas estão desligadas.\n'
+  printf 'Sem ela, o Maestro ainda injeta a memória em Markdown e funciona para conversar, mas não consegue interpretar contexto estruturado nem rotear skills e agentes automaticamente. Escritas em arquivo que dependem da separação entre clientes são recusadas quando não podem ser verificadas.\n'
   printf '\n**Ação:** leia `bundles/base/skills/maestro-environment-setup/SKILL.md`, seção "Interpretador local". Se houver um interpretador nesta máquina fora do PATH, ela sabe apontar o Maestro para ele. Se não houver, avise o dono em uma linha e siga — instalar não está autorizado hoje.\n'
 fi
 

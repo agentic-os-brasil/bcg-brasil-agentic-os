@@ -52,9 +52,9 @@
 # syntax error, and 2 is this hook's "block" signal — a 4.0-only construct here
 # would turn every unparsed write into a refusal on an un-upgraded Mac.
 #
-# Performance: the raw payload is string-tested for "cases" before anything is
-# spawned, so ordinary writes cost zero subprocesses. The parse extracts both
-# fields in a single python call rather than two.
+# Every file-writing call is parsed. A raw-string fast path cannot prove that a
+# path which does not spell "cases" will not reach that tree through a symlink
+# or a Windows junction.
 #
 # Input: JSON on stdin matching the Claude Code PreToolUse hook contract.
 # Output: exit 0 = allow; exit 2 + reason on stderr = block the tool call.
@@ -74,20 +74,6 @@ block() {
   printf 'Cross-case write blocked. %s\n' "$1" >&2
   exit 2
 }
-
-# ---------------------------------------------------------------------------
-# Fast path: if the payload never mentions the cases tree, no write it
-# describes can land inside a case. Any path reaching data/cases/ — including
-# one that gets there through `..` — contains the literal segment.
-#
-# Matched with bracket expressions rather than a lowercased copy so this stays
-# free of subprocesses and free of bash 4. This test only DECIDES WHETHER TO
-# LOOK; it is not the defence.
-# ---------------------------------------------------------------------------
-case "$HOOK_INPUT" in
-  *[Cc][Aa][Ss][Ee][Ss]*|*[Cc][Aa][Ss][Ee]~*) ;;
-  *) exit 0 ;;
-esac
 
 # ---------------------------------------------------------------------------
 # Parse tool name and target path in ONE spawn.
@@ -129,14 +115,14 @@ fi
 PARSED=$(printf '%s' "$PARSED" | tr -d '\r')
 
 if [ -z "$PARSED" ]; then
-  # No python3, or the payload did not parse. Narrow before refusing: a call
-  # carrying neither path field cannot be a file write, and refusing it would
-  # block legitimate work — a TodoWrite whose list mentions `data/cases/` is
-  # ordinary in a Portuguese-language workspace, and the settings matcher is an
-  # unanchored regex, so `TodoWrite` does reach this hook.
+  # Without the parser there is no safe way to distinguish an ordinary path
+  # from an alias that resolves into another case. Refuse actual file-writing
+  # payloads, but preserve compatibility with installs whose old unanchored
+  # matcher still sends TodoWrite here.
   case "$HOOK_INPUT" in
+    *'"tool_name":"TodoWrite"'*|*'"tool_name": "TodoWrite"'*) exit 0 ;;
     *file_path*|*notebook_path*)
-      block "The guard could not read this tool call (no Python 3 interpreter on this machine, or an unparsable payload) and the request references the cases tree, so isolation cannot be verified. Ask the owner to make this write themselves, or to have Python 3 installed on this machine."
+      block "The guard could not read this file-writing call (no Python 3 interpreter on this machine, or an unparsable payload), so alias-safe client isolation cannot be verified. Ask the owner to make this write themselves or contact the BCG Brasil AI team."
       ;;
     *)
       exit 0
@@ -173,9 +159,9 @@ fi
 # classified as relative, got PROJECT_DIR prepended, and matched no case
 # directory — the guard was inactive on Windows while passing on macOS.
 #
-# Resolution is lexical, never filesystem-backed: the target of a write does
-# not exist yet, so realpath has nothing to resolve, and `..` must be collapsed
-# on the string. Nothing can climb above the root.
+# Lexical resolution collapses `..` even when the final file does not exist.
+# A second, filesystem-backed pass below resolves the longest existing prefix
+# so symlinks and Windows junctions cannot cross the case boundary.
 #
 # The result is lowercased. On a case-sensitive filesystem that treats two case
 # ids differing only in letter case as one; case ids are lowercase slugs by
@@ -219,14 +205,80 @@ esac
 
 CASES_CANON=$(canon_path "$CASES_DIR")
 
-# Scope bound: anything outside data/cases/ is none of this hook's business.
+# Lexical classification remains the portable fallback for foreign path shapes
+# in the cross-platform evaluator. On the live host, filesystem resolution below
+# is authoritative because it sees symlinks and Windows junctions.
+LEXICAL_SCOPE="outside"
 case "$TARGET_CANON" in
-  "$CASES_CANON"/*) ;;
-  *) exit 0 ;;
+  "$CASES_CANON"/*) LEXICAL_SCOPE="inside" ;;
 esac
 
-REL="${TARGET_CANON#"$CASES_CANON/"}"
-TARGET_CASE="${REL%%/*}"
+TARGET_CASE=""
+if [ "$LEXICAL_SCOPE" = "inside" ]; then
+  REL="${TARGET_CANON#"$CASES_CANON/"}"
+  TARGET_CASE="${REL%%/*}"
+fi
+
+# Resolve existing aliases before granting access. os.path.realpath also
+# resolves the longest existing prefix when the final file does not exist yet.
+# On Git Bash, cygpath translates MSYS and drive-letter spellings for native
+# Python so junction resolution happens against the real Windows filesystem.
+FS_PROJECT="$PROJECT_DIR"
+case "$TARGET_PATH" in
+  /*|[A-Za-z]:/*|[A-Za-z]:\\*) FS_TARGET="$TARGET_PATH" ;;
+  *) FS_TARGET="$PROJECT_DIR/$TARGET_PATH" ;;
+esac
+FS_RESOLUTION=1
+
+if command -v cygpath >/dev/null 2>&1; then
+  FS_PROJECT=$(cygpath -w "$PROJECT_DIR" 2>/dev/null)
+  FS_TARGET=$(cygpath -w "$FS_TARGET" 2>/dev/null)
+elif [ "${TARGET_PATH#*\\}" != "$TARGET_PATH" ]; then
+  FS_RESOLUTION=0
+else
+  case "$TARGET_PATH" in
+    [A-Za-z]:/*|[A-Za-z]:\\*) FS_RESOLUTION=0 ;;
+  esac
+fi
+
+FS_INFO=""
+if [ "$FS_RESOLUTION" -eq 1 ] && [ -n "$FS_PROJECT" ] && [ -n "$FS_TARGET" ]; then
+  read -r -d '' REALPATH_PY <<'PY'
+import os, sys
+
+project, target = sys.argv[1:3]
+cases = os.path.realpath(os.path.join(project, "data", "cases"))
+target = os.path.realpath(target)
+try:
+    inside = os.path.normcase(os.path.commonpath([cases, target])) == os.path.normcase(cases)
+except (ValueError, OSError):
+    inside = False
+
+if not inside:
+    print("outside")
+else:
+    rel = os.path.relpath(target, cases)
+    print("inside:" + rel.split(os.sep, 1)[0])
+PY
+  FS_INFO=$(PYTHONIOENCODING=utf-8 maestro_py -c "$REALPATH_PY" "$FS_PROJECT" "$FS_TARGET" 2>/dev/null)
+fi
+
+case "$FS_INFO" in
+  inside:*)
+    TARGET_CASE="${FS_INFO#inside:}"
+    ;;
+  outside)
+    if [ "$LEXICAL_SCOPE" = "inside" ]; then
+      block "The requested path is written inside data/cases but resolves outside that tree through a filesystem alias. Isolation cannot be verified."
+    fi
+    exit 0
+    ;;
+  *)
+    [ "$LEXICAL_SCOPE" = "inside" ] || exit 0
+    ;;
+esac
+
+TARGET_CASE=$(printf '%s' "$TARGET_CASE" | tr '[:upper:]' '[:lower:]')
 
 # Sentinels (.active, .pending, ...) live in the cases dir itself, not in a
 # case. Writing them is how the owner switches case.

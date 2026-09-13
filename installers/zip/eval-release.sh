@@ -1132,6 +1132,22 @@ if [ -f "$XC_HOOK" ]; then
     && pass "cross-case write blocked (/./ segment)" \
     || fail "cross-case write NOT blocked (/./ segment)"
 
+  # Filesystem aliases are not lexical traversal. A path can name the active
+  # case and still resolve into another case through a symlink (or a Windows
+  # junction). Conversely, an alias outside data/cases can land inside it
+  # without the payload containing the word "cases" at all.
+  if ln -s "$XC_R/data/cases/case-beta" "$XC_R/data/cases/case-alpha/link-to-beta" 2>/dev/null \
+    && ln -s "$XC_R/data/cases/case-beta" "$XC_R/data/beta-alias" 2>/dev/null; then
+    [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/link-to-beta/leak.md")" = "block" ] \
+      && pass "cross-case write blocked through an in-case filesystem alias" \
+      || fail "cross-case write ALLOWED through an in-case filesystem alias"
+    [ "$(xc_verdict "$XC_R" "$XC_R/data/beta-alias/leak.md")" = "block" ] \
+      && pass "cross-case write blocked through an alias outside the cases tree" \
+      || fail "cross-case write ALLOWED through an alias outside the cases tree"
+  else
+    skip "host cannot create filesystem aliases for the cross-case guard test"
+  fi
+
   # Every tool the settings matcher admits must be guarded, not just Write.
   # MultiEdit and NotebookEdit previously reached the hook and were waved
   # through by a case statement that named only Edit and Write.
@@ -1163,9 +1179,9 @@ if [ -f "$XC_HOOK" ]; then
   [ "$(xc_verdict_noparse "$XC_R" '{"tool_name":"TodoWrite","tool_input":{"todos":[{"content":"revisar data/cases/case-beta"}]}}')" = "allow" ] \
     && pass "TodoWrite still allowed when the payload cannot be parsed" \
     || fail "TodoWrite refused when the payload cannot be parsed"
-  [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/memory/x.md")")" = "allow" ] \
-    && pass "write outside the cases tree still allowed when the payload cannot be parsed" \
-    || fail "write outside the cases tree refused when the payload cannot be parsed"
+  [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/memory/x.md")")" = "block" ] \
+    && pass "file write is refused when alias-safe isolation cannot be evaluated" \
+    || fail "file write was allowed when alias-safe isolation could not be evaluated"
 
   # An unreadable active marker means the target cannot be shown to be the
   # right case. Previously both shapes exited 0 and allowed the write.

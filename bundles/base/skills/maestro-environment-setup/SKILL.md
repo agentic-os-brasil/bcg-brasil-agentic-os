@@ -19,7 +19,11 @@ Resolve the canonical `interaction-profile` skill before responding. Ajustar o t
 
 ## Interpretador local
 
-As rotinas automáticas do Maestro — memória entre conversas, roteamento de skills, separação entre clientes — leem e escrevem JSON através de um interpretador Python 3. Sem ele, todas ficam inertes, e ficam inertes **em silêncio**: cada hook sai sem erro.
+As rotinas do Maestro que interpretam JSON usam Python 3. Sem ele, a memória em
+Markdown ainda é injetada, mas contexto estruturado e roteamento automático de
+skills e agentes ficam indisponíveis. A separação entre clientes falha fechada:
+escritas em arquivo que não podem ser verificadas são recusadas, não liberadas.
+O SessionStart torna esse modo degradado explícito.
 
 O Maestro procura o interpretador sozinho, sob os três nomes que ele costuma ter (`python3`, `python`, e o launcher `py -3` no Windows). Esta seção trata do caso em que existe um interpretador na máquina que não está sob nenhum desses nomes — por exemplo, instalado em um caminho próprio.
 

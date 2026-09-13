@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "bundle_id": "maestro-base",
-  "bundle_version": "0.1.11",
+  "bundle_version": "0.1.12",
   "format": "okf-1",
   "provenance": {
     "publisher": "BCG Brasil Agentic OS",
@@ -15,6 +15,11 @@
       "claude-code",
       "codex-cli"
     ],
+    "hook_runtime": {
+      "macos": "bash plus a resolvable Python 3 interpreter",
+      "windows": "Git Bash plus a resolvable Python 3 interpreter (python3, python or py -3)",
+      "powershell_only": "unsupported in 0.1.12"
+    },
     "hooks": [
       {
         "event": "session_start",
@@ -34,7 +39,13 @@
       {
         "event": "pre_tool_use",
         "installer_path": ".claude/hooks/block-cross-case-writes.sh",
-        "matcher": "Edit|Write",
+        "matcher": "^(Edit|MultiEdit|Write|NotebookEdit)$",
+        "criticality": "recommended"
+      },
+      {
+        "event": "pre_tool_use",
+        "installer_path": ".claude/hooks/announce-agent-dispatch.sh",
+        "matcher": "^(Agent|Task)$",
         "criticality": "recommended"
       },
       {
