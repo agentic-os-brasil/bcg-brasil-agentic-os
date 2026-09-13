@@ -1370,6 +1370,7 @@ if [ -f "$PY_LIB" ]; then
   PY_REAL=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
   PY_EMPTY_PATH=$(mktemp -d -t maestro-eval-empty-path-XXXXXX)
   ln -s "$(command -v dirname)" "$PY_EMPTY_PATH/dirname"
+  ln -s "$(command -v tr)" "$PY_EMPTY_PATH/tr"
 
   if [ -n "$PY_REAL" ]; then
     PY_ONLY_PYTHON=$(py_stub_dir python "#!/bin/sh
