@@ -1,6 +1,7 @@
 Set-StrictMode -Version 2.0
 
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::InputEncoding = $script:Utf8NoBom
 [Console]::OutputEncoding = $script:Utf8NoBom
 
 function Get-MaestroProjectDir {

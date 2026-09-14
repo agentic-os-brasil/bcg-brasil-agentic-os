@@ -46,6 +46,9 @@ function Invoke-Hook([string]$HookName, [string]$ProjectDir, [string]$InputJson 
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    $psi.StandardOutputEncoding = $utf8NoBom
+    $psi.StandardErrorEncoding = $utf8NoBom
     $psi.CreateNoWindow = $true
     $psi.EnvironmentVariables['CLAUDE_PROJECT_DIR'] = $ProjectDir
     $psi.EnvironmentVariables['CLAUDE_SESSION_ID'] = 'powershell-smoke-session'
@@ -53,8 +56,13 @@ function Invoke-Hook([string]$HookName, [string]$ProjectDir, [string]$InputJson 
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $psi
     [void]$process.Start()
-    if ($InputJson) { $process.StandardInput.Write($InputJson) }
-    $process.StandardInput.Close()
+    $stdin = $process.StandardInput.BaseStream
+    if ($InputJson) {
+        $inputBytes = $utf8NoBom.GetBytes($InputJson)
+        $stdin.Write($inputBytes, 0, $inputBytes.Length)
+        $stdin.Flush()
+    }
+    $stdin.Close()
     $stdout = $process.StandardOutput.ReadToEnd()
     $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
@@ -160,6 +168,13 @@ Set-Content -LiteralPath $pendingFile -Value 'case-beta' -Encoding UTF8
 $pending = Invoke-Hook 'block-cross-case-writes.ps1' $project $otherPayload
 Assert-HookResult ($pending.ExitCode -eq 0) 'confirmed pending case write is allowed' $pending
 Remove-Item -LiteralPath $pendingFile -Force
+$unicodeCase = 'caso-s' + [char]0x00E3 + 'o'
+New-Item -ItemType Directory -Path (Join-Path $cases $unicodeCase) -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $cases '.active') -Value $unicodeCase -Encoding UTF8
+$unicodePayload = @{tool_name='Write'; tool_input=@{file_path=(Join-Path $cases "$unicodeCase/notes.md")}} | ConvertTo-Json -Compress
+$unicodeWrite = Invoke-Hook 'block-cross-case-writes.ps1' $project $unicodePayload
+Assert-HookResult ($unicodeWrite.ExitCode -eq 0) 'UTF-8 case path is decoded and allowed' $unicodeWrite
+Set-Content -LiteralPath (Join-Path $cases '.active') -Value 'case-alpha' -Encoding UTF8
 $traversal = Join-Path $cases 'case-alpha/../case-beta/traversal.md'
 $traversalPayload = @{tool_name='Write'; tool_input=@{file_path=$traversal}} | ConvertTo-Json -Compress
 $traversalResult = Invoke-Hook 'block-cross-case-writes.ps1' $project $traversalPayload
