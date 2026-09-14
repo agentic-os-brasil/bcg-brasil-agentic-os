@@ -11,7 +11,12 @@ function Read-MaestroStdin {
         while (($count = $stdin.Read($buffer, 0, $buffer.Length)) -gt 0) {
             $bytes.Write($buffer, 0, $count)
         }
-        return $script:Utf8NoBom.GetString($bytes.ToArray())
+        $payload = $bytes.ToArray()
+        $offset = 0
+        if ($payload.Length -ge 3 -and $payload[0] -eq 0xEF -and $payload[1] -eq 0xBB -and $payload[2] -eq 0xBF) {
+            $offset = 3
+        }
+        return $script:Utf8NoBom.GetString($payload, $offset, $payload.Length - $offset)
     } finally {
         $bytes.Dispose()
     }
