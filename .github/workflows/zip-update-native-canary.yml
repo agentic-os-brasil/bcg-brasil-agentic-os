@@ -1,0 +1,115 @@
+name: ZIP update native canary
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/zip-update-native-canary.yml
+      - acceptance/zip-update/**
+      - installers/zip/**
+      - bundles/**
+      - schemas/**
+      - VERSION
+  workflow_dispatch:
+    inputs:
+      from_version:
+        description: Installed field version
+        required: true
+        default: 0.1.11
+      to_version:
+        description: Candidate version
+        required: true
+        default: 0.1.12
+
+permissions:
+  contents: read
+
+env:
+  FROM_VERSION: ${{ inputs.from_version || '0.1.11' }}
+  TO_VERSION: ${{ inputs.to_version || '' }}
+
+jobs:
+  offline-native:
+    name: ZIP offline native (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Resolve release version on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [[ -z "$TO_VERSION" ]]; then
+            echo "TO_VERSION=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
+          fi
+      - name: Resolve release version on Windows
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TO_VERSION)) {
+            "TO_VERSION=$((Get-Content -Raw VERSION).Trim())" |
+              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+      - name: Reject false-positive live Agent traces
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          . installers/zip/user-template/.claude/hooks/lib/python.sh
+          maestro_py -m unittest acceptance/zip-update/test_eval_live_agent_trace.py
+      - name: Build exact macOS release ZIP
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash installers/zip/build-release.sh "$TO_VERSION" macos
+      - name: Build exact Windows PowerShell release ZIP
+        if: runner.os == 'Windows'
+        shell: bash
+        run: bash installers/zip/build-release.sh "$TO_VERSION" windows-powershell
+      - name: Reject false-positive Windows Agent traces
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          ./acceptance/zip-update/test-live-agent-canary.ps1 `
+            -Zip "dist/Maestro-v${env:TO_VERSION}-windows-powershell.zip"
+      - name: Evaluate macOS release and hook wiring
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          bash acceptance/zip-update/native-smoke.sh \
+            --zip "dist/Maestro-v${TO_VERSION}-macos.zip" \
+            --output "${RUNNER_TEMP}/${RUNNER_OS}-offline.json"
+      - name: Evaluate native Windows PowerShell 5.1 hooks
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          ./acceptance/zip-update/native-smoke.ps1 `
+            -Zip "dist/Maestro-v${env:TO_VERSION}-windows-powershell.zip" `
+            -Output (Join-Path $env:RUNNER_TEMP "Windows-ps51-offline.json")
+      - name: Evaluate native PowerShell 7 hooks
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/zip-update/native-smoke.ps1 `
+            -Zip "dist/Maestro-v${env:TO_VERSION}-windows-powershell.zip" `
+            -Output (Join-Path $env:RUNNER_TEMP "Windows-ps7-offline.json")
+      - name: Build user-facing update kit
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          bash installers/zip/build-release.sh "$TO_VERSION" windows-powershell
+          bash installers/zip/build-update-package.sh \
+            "$FROM_VERSION" "$TO_VERSION"
+          bash installers/zip/eval-update-package.sh \
+            --zip "dist/Maestro-Update-v${TO_VERSION}.zip" \
+            --from-version "$FROM_VERSION" \
+            --to-version "$TO_VERSION"
+      - name: Upload sanitized offline receipt
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
+        with:
+          name: zip-offline-${{ runner.os }}
+          path: |
+            ${{ runner.temp }}/${{ runner.os }}-offline.json
+            ${{ runner.temp }}/Windows-*-offline.json
+          if-no-files-found: error

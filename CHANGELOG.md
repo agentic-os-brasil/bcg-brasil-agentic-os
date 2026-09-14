@@ -2,6 +2,29 @@
 
 All notable changes will be documented here.
 
+## 0.1.12 — 2026-09-13
+
+Compatibility update over the 0.1.11 field baseline:
+
+- [PR #401] Dream marker no longer re-arms after a completed cycle.
+- [PR #403] Cross-case write protection handles Windows path shapes, CRLF,
+  traversal, all file-writing tools and filesystem aliases.
+- [PR #404, #405] macOS hooks resolve Python 3 as `python3`, `python`, `py -3`
+  or a recorded path, and surface a precise degraded-mode notice when none is
+  available. Windows hooks are implemented natively in PowerShell and do not
+  require Python.
+- [PR #411, #412, selective backport] Yoda, Darwin and Gamma Guardian can be
+  routed as native Claude spokes without adopting the later `brain/`
+  migration. PA Expert remains dormant until its canon registry is populated.
+- The update keeps the `data/` workspace contract unchanged. Periodic agent
+  markers remain out of this release because the 0.1.x SessionStart has no
+  end-to-end consumer for them.
+- Windows uses a dedicated PowerShell artifact with all six automatic hooks
+  explicitly wired to Windows PowerShell 5.1 or PowerShell 7. Git Bash and
+  Python are not hook prerequisites on Windows. macOS keeps its Bash profile.
+
+Bundle: `bundles/base/manifest.json` `bundle_version` propagated to `0.1.12`.
+
 ## 0.1.11 — 2026-08-16
 
 Release wave since 0.1.10 (nineteen merged PRs on `main`):

@@ -13,6 +13,11 @@
 
 set +e
 
+# Resolved from this file's own directory, not from CLAUDE_PROJECT_DIR: the hook
+# must find its library whatever the working directory is.
+# shellcheck source=lib/python.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/python.sh" 2>/dev/null
+
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 DATA_DIR="$PROJECT_DIR/data"
 MEMORY_DIR="$DATA_DIR/memory"
@@ -70,9 +75,9 @@ emit_profile_json() {
   # literal, the interpreter raises SyntaxError, 2>/dev/null swallows it, and the
   # guard fails open — injecting the empty placeholder identity into every
   # session. context-inject-userprompt.sh already reads it this way.
-  if command -v python3 >/dev/null 2>&1; then
+  if maestro_python >/dev/null 2>&1; then
     local initialized
-    initialized=$(python3 - "$file" <<'PY' 2>/dev/null
+    initialized=$(maestro_py - "$file" <<'PY' 2>/dev/null
 import json, sys
 try:
     with open(sys.argv[1], encoding="utf-8") as f:
@@ -98,6 +103,23 @@ PY
 printf '<!-- maestro:session-context:start -->\n'
 printf '# Maestro — Contexto da sessão\n'
 printf '_Injetado automaticamente pelo hook de início de sessão._\n'
+
+# No interpreter means structured JSON parsing and prompt-time routing are
+# unavailable. Markdown memory still injects, while the case guard refuses file
+# writes it cannot verify instead of silently disabling isolation. The notice
+# keeps that degraded mode visible.
+#
+# Emitted on every SessionStart where resolution fails — which includes
+# `/clear` and `/compact`, not just the first start of the day. That is
+# deliberate rather than noisy: those events drop the earlier notice out of
+# context, so a model that has just lost it needs to be told again. A
+# once-only marker would buy quiet at the cost of the model not knowing.
+if ! maestro_python >/dev/null 2>&1; then
+  printf '\n## ⚠️ Uma peça do Maestro não está instalada nesta máquina\n'
+  printf '<!-- maestro:python-missing -->\n'
+  printf 'Sem ela, o Maestro ainda injeta a memória em Markdown e funciona para conversar, mas não consegue interpretar contexto estruturado nem rotear skills e agentes automaticamente. Escritas em arquivo que dependem da separação entre clientes são recusadas quando não podem ser verificadas.\n'
+  printf '\n**Ação:** leia `bundles/base/skills/maestro-environment-setup/SKILL.md`, seção "Interpretador local". Se houver um interpretador nesta máquina fora do PATH, ela sabe apontar o Maestro para ele. Se não houver, avise o dono em uma linha e siga — instalar não está autorizado hoje.\n'
+fi
 
 # Operational method pointer (spec 050) — always first, before any task routing.
 # SessionStart carries the pointer only; skill body is loaded on demand.

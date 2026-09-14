@@ -10,7 +10,7 @@
 #   while ! installers/zip/eval-release.sh; do vim ...; bash installers/zip/build-release.sh 0.1.0; done
 #
 # The eval is intentionally self-contained: no Go toolchain, no external deps
-# beyond unzip / shasum / python3 (for JSON parsing).
+# beyond unzip / shasum / a resolvable Python 3 (python3, python or py -3).
 
 set -u
 
@@ -44,6 +44,17 @@ if [ ! -f "$ZIP_PATH" ]; then
   echo "run: bash installers/zip/build-release.sh <version>  first" >&2
   exit 2
 fi
+
+# The evaluator must accept the same interpreter names as the shipped hooks.
+# Otherwise a supported Windows machine with only the python.org `py -3`
+# launcher cannot run the very gate intended to qualify it.
+# shellcheck source=user-template/.claude/hooks/lib/python.sh
+. "$TEMPLATE_DIR/.claude/hooks/lib/python.sh"
+if ! maestro_python >/dev/null 2>&1; then
+  echo "no Python 3 interpreter found (tried python3, python and py -3)" >&2
+  exit 2
+fi
+eval_py() { maestro_py "$@"; }
 
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; RESET=$'\033[0m'
 
@@ -359,18 +370,18 @@ CATALOG="$MAESTRO_DIR/bundles/base/skills/catalog.json"
 INDEX_MD="$MAESTRO_DIR/bundles/base/skills/INDEX.md"
 POLICY="$MAESTRO_DIR/bundles/base/skills/agent-skill-policy.json"
 
-if python3 -c "import json,sys; json.load(open('$CATALOG'))" 2>/dev/null; then
+if eval_py -c "import json,sys; json.load(open('$CATALOG'))" 2>/dev/null; then
   pass "catalog.json is valid JSON"
 else
   fail "catalog.json invalid JSON"
 fi
-if python3 -c "import json,sys; json.load(open('$POLICY'))" 2>/dev/null; then
+if eval_py -c "import json,sys; json.load(open('$POLICY'))" 2>/dev/null; then
   pass "agent-skill-policy.json is valid JSON"
 else
   fail "agent-skill-policy.json invalid JSON"
 fi
 
-CATALOG_IDS=$(python3 -c "
+CATALOG_IDS=$(eval_py -c "
 import json
 c=json.load(open('$CATALOG'))
 ids=[]
@@ -402,7 +413,7 @@ else
   fail "$MISSING_SKILLS catalog skill(s) missing SKILL.md"
 fi
 
-POLICY_SKILLS=$(python3 -c "
+POLICY_SKILLS=$(eval_py -c "
 import json
 p=json.load(open('$POLICY'))
 out=[]
@@ -437,10 +448,10 @@ phase "Phase 8 — Distribution manifest coverage"
 # --------------------------------------------------------------------------
 
 DIST_JSON="$MAESTRO_DIR/bundles/base/distribution.json"
-if python3 -c "import json; json.load(open('$DIST_JSON'))" 2>/dev/null; then
+if eval_py -c "import json; json.load(open('$DIST_JSON'))" 2>/dev/null; then
   pass "distribution.json is valid JSON"
 
-  DIST_PATHS=$(python3 -c "
+  DIST_PATHS=$(eval_py -c "
 import json
 d=json.load(open('$DIST_JSON'))
 paths=[]
@@ -502,12 +513,25 @@ else
   fail "CLAUDE.md missing FIRST-RUN-FAILED.txt breadcrumb reference"
 fi
 
+if grep -q 'Nada mais' "$README"; then
+  fail "README-INSTALL promises no prerequisites although hooks require a platform runtime"
+elif grep -qi 'PowerShell 5.1' "$README" && grep -qi 'Git Bash.*não são requisitos\|Git Bash.*nao sao requisitos' "$README"; then
+  pass "README-INSTALL names the native Windows PowerShell profile"
+else
+  fail "README-INSTALL does not name the native Windows PowerShell profile"
+fi
+if grep -qi 'Sem Git Bash' "$README" && grep -qi 'Sem Python 3' "$README"; then
+  pass "README-INSTALL distinguishes Windows PowerShell from Mac Python requirements"
+else
+  fail "README-INSTALL conflates platform runtime requirements"
+fi
+
 # --------------------------------------------------------------------------
 phase "Phase 10 — Settings + hook wiring"
 # --------------------------------------------------------------------------
 
 SETTINGS="$MAESTRO_DIR/.claude/settings.json"
-if python3 -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
+if eval_py -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
   pass "settings.json is valid JSON"
 else
   fail "settings.json invalid JSON"
@@ -516,6 +540,16 @@ if grep -q "first-run-scaffold.sh" "$SETTINGS" && grep -q "SessionStart" "$SETTI
   pass "settings.json wires first-run-scaffold.sh to SessionStart"
 else
   fail "settings.json does NOT wire scaffold to SessionStart"
+fi
+
+# The PreToolUse matcher is a regex. Unanchored, "Write" also matches
+# TodoWrite, which then reaches the isolation guard with no file target; and a
+# matcher naming only Edit and Write never delivers MultiEdit or NotebookEdit
+# to the guard at all. Both shapes were live bypasses.
+if grep -q '"\^(Edit|MultiEdit|Write|NotebookEdit)\$"' "$SETTINGS"; then
+  pass "PreToolUse matcher is anchored and names every file-writing tool"
+else
+  fail "PreToolUse matcher is not the anchored four-tool form (TodoWrite leaks in, MultiEdit/NotebookEdit never arrive)"
 fi
 
 # --------------------------------------------------------------------------
@@ -562,7 +596,7 @@ done
 LIFETIME_POLICY="$MAESTRO_DIR/data/memory/policies/lifetime.json"
 if [ -f "$LIFETIME_POLICY" ]; then
   pass "data/memory/policies/lifetime.json created by scaffold"
-  if python3 -c "import json;json.load(open(r'$(cygpath -w "$LIFETIME_POLICY" 2>/dev/null || echo "$LIFETIME_POLICY")'))" 2>/dev/null; then
+  if eval_py -c "import json;json.load(open(r'$(cygpath -w "$LIFETIME_POLICY" 2>/dev/null || echo "$LIFETIME_POLICY")'))" 2>/dev/null; then
     pass "lifetime.json is valid JSON"
   else
     fail "lifetime.json invalid JSON"
@@ -947,31 +981,44 @@ if [ -f "$XC_HOOK" ]; then
     [ "$?" -eq 2 ] && printf 'block' || printf 'allow'
   }
 
-  # Kept in sync with normalize_path() in
+  # Kept in sync with canon_path() in
   # installers/zip/user-template/.claude/hooks/block-cross-case-writes.sh.
   # Any change to the hook's canonicalization rule must be mirrored here so
   # this eval reflects the same classification the hook performs on Windows.
-  xc_normalize() {
-    local p="$1" drive
+  xc_canon() {
+    local p="$1" root="" out="" seg oldIFS
     p="${p//\\//}"
     case "$p" in
       /[A-Za-z]/*)
-        drive=$(printf '%s' "${p#/}" | cut -c1 | tr '[:upper:]' '[:lower:]')
-        p="$drive:${p#/?}"
+        root="$(printf '%s' "${p#/}" | cut -c1):"
+        p="${p#/?}"
         ;;
       [A-Za-z]:/*)
-        drive=$(printf '%s' "$p" | cut -c1 | tr '[:upper:]' '[:lower:]')
-        p="$drive${p#?}"
+        root="$(printf '%s' "$p" | cut -c1):"
+        p="${p#??}"
         ;;
     esac
-    printf '%s' "$p"
+    oldIFS="$IFS"
+    IFS='/'
+    set -f
+    set -- $p
+    set +f
+    IFS="$oldIFS"
+    for seg in "$@"; do
+      case "$seg" in
+        ''|.) ;;
+        ..)   out="${out%/*}" ;;
+        *)    out="$out/$seg" ;;
+      esac
+    done
+    printf '%s%s' "$root" "$out" | tr '[:upper:]' '[:lower:]'
   }
 
   xc_classifies_inside_cases() {
     local proj="$1" target="$2"
     local cases_abs target_abs
-    cases_abs=$(xc_normalize "$proj/data/cases")
-    target_abs=$(xc_normalize "$target")
+    cases_abs=$(xc_canon "$proj/data/cases")
+    target_abs=$(xc_canon "$target")
     case "$target_abs" in
       "$cases_abs"/*) return 0 ;;
       *)              return 1 ;;
@@ -981,10 +1028,43 @@ if [ -f "$XC_HOOK" ]; then
   xc_extracted_case_id() {
     local proj="$1" target="$2"
     local cases_abs target_abs rel
-    cases_abs=$(xc_normalize "$proj/data/cases")
-    target_abs=$(xc_normalize "$target")
+    cases_abs=$(xc_canon "$proj/data/cases")
+    target_abs=$(xc_canon "$target")
     rel="${target_abs#"$cases_abs/"}"
     printf '%s' "${rel%%/*}"
+  }
+
+  # verdict for a named tool and payload key, so the tools that reach the hook
+  # through the settings matcher are all exercised, not just Write.
+  xc_verdict_tool() {
+    local proj="$1" tool="$2" key="$3" esc=${4//\\/\\\\}
+    printf '{"tool_name":"%s","tool_input":{"%s":"%s"}}' "$tool" "$key" "$esc" \
+      | CLAUDE_PROJECT_DIR="$proj" bash "$XC_HOOK" >/dev/null 2>&1
+    [ "$?" -eq 2 ] && printf 'block' || printf 'allow'
+  }
+
+  # verdict with a raw payload, for shapes that are not one tool plus one path.
+  xc_verdict_raw() {
+    printf '%s' "$2" | CLAUDE_PROJECT_DIR="$1" bash "$XC_HOOK" >/dev/null 2>&1
+    [ "$?" -eq 2 ] && printf 'block' || printf 'allow'
+  }
+
+  # verdict when the parse yields nothing — the state a machine without python3
+  # is in. Driven with a stub interpreter that prints nothing rather than by
+  # emptying PATH: the hook also needs cat, tr and cut, and a stripped PATH
+  # would exercise a broken shell instead of a missing interpreter. Both routes
+  # converge on the same branch, since an absent python3 leaves PARSED empty
+  # exactly as a silent one does.
+  xc_verdict_noparse() {
+    local proj="$1" payload="$2" bindir rc
+    bindir=$(mktemp -d -t maestro-eval-nopy-XXXXXX)
+    printf '#!/bin/sh\nexit 0\n' > "$bindir/python3"
+    chmod +x "$bindir/python3"
+    printf '%s' "$payload" \
+      | PATH="$bindir:$PATH" CLAUDE_PROJECT_DIR="$proj" bash "$XC_HOOK" >/dev/null 2>&1
+    rc=$?
+    rm -rf "$bindir"
+    [ "$rc" -eq 2 ] && printf 'block' || printf 'allow'
   }
 
   # Guard against this check silently degrading into a JSON-parse test: the
@@ -1051,6 +1131,101 @@ if [ -f "$XC_HOOK" ]; then
     fail "cross-case target NOT classified inside cases dir (mixed MSYS dir + drive-letter target)"
   fi
 
+  # Path-shape bypasses. Each of these reached the active case on its leading
+  # segment (or lost the case id entirely) while the OS resolved the path
+  # somewhere else. All are observable on any host: the verdict comes from
+  # string canonicalization, not from the filesystem.
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/../case-beta/leak.md")" = "block" ] \
+    && pass "cross-case write blocked (.. traversal out of the active case)" \
+    || fail "cross-case write NOT blocked (.. traversal out of the active case)"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/sub/../../case-beta/leak.md")" = "block" ] \
+    && pass "cross-case write blocked (multi-level .. traversal)" \
+    || fail "cross-case write NOT blocked (multi-level .. traversal)"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases//case-beta/x.md")" = "block" ] \
+    && pass "cross-case write blocked (double separator)" \
+    || fail "cross-case write NOT blocked (double separator)"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/./case-beta/x.md")" = "block" ] \
+    && pass "cross-case write blocked (/./ segment)" \
+    || fail "cross-case write NOT blocked (/./ segment)"
+
+  # Filesystem aliases are not lexical traversal. A path can name the active
+  # case and still resolve into another case through a symlink (or a Windows
+  # junction). Conversely, an alias outside data/cases can land inside it
+  # without the payload containing the word "cases" at all.
+  if ln -s "$XC_R/data/cases/case-beta" "$XC_R/data/cases/case-alpha/link-to-beta" 2>/dev/null \
+    && ln -s "$XC_R/data/cases/case-beta" "$XC_R/data/beta-alias" 2>/dev/null; then
+    [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-alpha/link-to-beta/leak.md")" = "block" ] \
+      && pass "cross-case write blocked through an in-case filesystem alias" \
+      || fail "cross-case write ALLOWED through an in-case filesystem alias"
+    [ "$(xc_verdict "$XC_R" "$XC_R/data/beta-alias/leak.md")" = "block" ] \
+      && pass "cross-case write blocked through an alias outside the cases tree" \
+      || fail "cross-case write ALLOWED through an alias outside the cases tree"
+  else
+    skip "host cannot create filesystem aliases for the cross-case guard test"
+  fi
+
+  # Every tool the settings matcher admits must be guarded, not just Write.
+  # MultiEdit and NotebookEdit previously reached the hook and were waved
+  # through by a case statement that named only Edit and Write.
+  [ "$(xc_verdict_tool "$XC_R" MultiEdit file_path "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+    && pass "cross-case write blocked (MultiEdit)" \
+    || fail "cross-case write NOT blocked (MultiEdit)"
+  [ "$(xc_verdict_tool "$XC_R" NotebookEdit notebook_path "$XC_R/data/cases/case-beta/n.ipynb")" = "block" ] \
+    && pass "cross-case write blocked (NotebookEdit via notebook_path)" \
+    || fail "cross-case write NOT blocked (NotebookEdit via notebook_path)"
+  [ "$(xc_verdict_raw "$XC_R" "$(printf '{"tool_name":"NotebookEdit","tool_input":{"file_path":"%s","notebook_path":"%s"}}' "$XC_R/data/cases/case-alpha/ok.md" "$XC_R/data/cases/case-beta/n.ipynb")")" = "block" ] \
+    && pass "cross-case write blocked (NotebookEdit with a decoy file_path on the active case)" \
+    || fail "cross-case write NOT blocked (NotebookEdit decoy file_path)"
+
+  # A tool that writes no file has no target to verify and must never be
+  # refused. The settings matcher is an unanchored regex in installs predating
+  # this change, so TodoWrite does arrive here, and in a Portuguese-language
+  # workspace its list mentions the cases tree routinely.
+  [ "$(xc_verdict_raw "$XC_R" '{"tool_name":"TodoWrite","tool_input":{"todos":[{"content":"revisar data/cases/case-beta"}]}}')" = "allow" ] \
+    && pass "TodoWrite naming the cases tree is allowed" \
+    || fail "TodoWrite naming the cases tree was refused"
+
+  # Fail-closed without python3. This is the branch that silently disabled
+  # client isolation on every machine without an interpreter: the parse
+  # returned empty, the tool name matched nothing, and the hook exited 0 for
+  # every write.
+  [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/cases/case-beta/x.md")")" = "block" ] \
+    && pass "write into the cases tree refused when the payload cannot be parsed" \
+    || fail "write into the cases tree ALLOWED when the payload cannot be parsed — isolation inactive"
+  [ "$(xc_verdict_noparse "$XC_R" '{"tool_name":"TodoWrite","tool_input":{"todos":[{"content":"revisar data/cases/case-beta"}]}}')" = "allow" ] \
+    && pass "TodoWrite still allowed when the payload cannot be parsed" \
+    || fail "TodoWrite refused when the payload cannot be parsed"
+  [ "$(xc_verdict_noparse "$XC_R" "$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/memory/x.md")")" = "block" ] \
+    && pass "file write is refused when alias-safe isolation cannot be evaluated" \
+    || fail "file write was allowed when alias-safe isolation could not be evaluated"
+  [ "$(xc_verdict "$XC_R" 'C:\unresolvable\outside\file.md')" = "block" ] \
+    && pass "file write is refused when filesystem alias resolution is unavailable" \
+    || fail "file write was allowed when filesystem alias resolution was unavailable"
+
+  # An unreadable active marker means the target cannot be shown to be the
+  # right case. Previously both shapes exited 0 and allowed the write.
+  mv "$XC_ROOT/data/cases/.active" "$XC_ROOT/data/cases/.active.evalbak"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+    && pass "write into a case refused while .active is missing" \
+    || fail "write into a case ALLOWED while .active is missing"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/memory/x.md")" = "allow" ] \
+    && pass "write outside the cases tree still allowed while .active is missing" \
+    || fail "write outside the cases tree refused while .active is missing"
+  printf '   \n' > "$XC_ROOT/data/cases/.active"
+  [ "$(xc_verdict "$XC_R" "$XC_R/data/cases/case-beta/x.md")" = "block" ] \
+    && pass "write into a case refused while .active is empty" \
+    || fail "write into a case ALLOWED while .active is empty"
+  mv "$XC_ROOT/data/cases/.active.evalbak" "$XC_ROOT/data/cases/.active"
+
+  # The runtime reads stdout only on exit 0, so a reason printed there on the
+  # block path never reaches the model. It must be on stderr.
+  XC_MSG=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$XC_R/data/cases/case-beta/x.md" \
+    | CLAUDE_PROJECT_DIR="$XC_R" bash "$XC_HOOK" 2>&1 >/dev/null)
+  case "$XC_MSG" in
+    *"case-alpha"*|*"case-beta"*) pass "block reason reaches stderr, where the runtime reads it on exit 2" ;;
+    *) fail "block reason is not on stderr (got: ${XC_MSG:-<empty>})" ;;
+  esac
+
   # If a real Windows runtime is available (cygpath present and the drive
   # letter maps to a readable filesystem location), promote the drive-letter
   # shape to an end-to-end verdict assertion. This runs on Windows CI and
@@ -1083,12 +1258,19 @@ if [ -f "$CROSS_CASE_HOOK" ]; then
   mkdir -p "$XC_ROOT/data/cases/case-alpha" "$XC_ROOT/data/cases/case-beta" "$XC_ROOT/.claude/hooks"
   cp "$CROSS_CASE_HOOK" "$XC_ROOT/.claude/hooks/"
   printf 'case-alpha\n' > "$XC_ROOT/data/cases/.active"
-  XC_OUT=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' \
-             "$XC_ROOT/data/cases/case-beta/notes.md" \
-           | CLAUDE_PROJECT_DIR="$XC_ROOT" bash "$XC_ROOT/.claude/hooks/block-cross-case-writes.sh" 2>/dev/null)
+  # The reason travels on stderr, not stdout: the runtime reads a decision
+  # object on stdout only when the hook exits 0, so a reason printed there on
+  # the exit-2 path is discarded before anyone sees it.
+  XC_ERR="$XC_ROOT/block.err"
+  printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' \
+    "$XC_ROOT/data/cases/case-beta/notes.md" \
+    | CLAUDE_PROJECT_DIR="$XC_ROOT" bash "$XC_ROOT/.claude/hooks/block-cross-case-writes.sh" \
+      >/dev/null 2>"$XC_ERR"
+  XC_RC=$?
+  XC_OUT=$(cat "$XC_ERR" 2>/dev/null)
 
-  if printf '%s' "$XC_OUT" | grep -q '"decision":"block"'; then
-    pass "cross-case write is blocked"
+  if [ "$XC_RC" -eq 2 ] && [ -n "$XC_OUT" ]; then
+    pass "cross-case write is blocked, with a reason on stderr"
 
     if printf '%s' "$XC_OUT" | grep -q '\$'; then
       fail "block message leaks internal \$skill syntax to the user: $XC_OUT"
@@ -1096,7 +1278,7 @@ if [ -f "$CROSS_CASE_HOOK" ]; then
       pass "block message contains no internal \$skill syntax"
     fi
   else
-    fail "cross-case write was NOT blocked (hook emitted: $XC_OUT)"
+    fail "cross-case write was NOT blocked (rc=$XC_RC, stderr: ${XC_OUT:-<empty>})"
   fi
 else
   fail "block-cross-case-writes.sh missing from ZIP"
@@ -1209,6 +1391,234 @@ fi
 # --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+phase "Phase 19 — Hook interpreter resolution"
+# --------------------------------------------------------------------------
+
+# The hooks parse JSON with Python. Testing `command -v python3` and nothing
+# else made a Windows box that has Python indistinguishable from one that does
+# not: the python.org installer ships python.exe and the py launcher and
+# creates no python3, so every hook needing an interpreter exited 0 in silence.
+PY_LIB="$MAESTRO_DIR/.claude/hooks/lib/python.sh"
+if [ -f "$PY_LIB" ]; then
+  pass "hooks/lib/python.sh present in ZIP"
+
+  py_stub_dir() {
+    local name="$1" body="$2" d
+    d=$(mktemp -d -t maestro-eval-py-XXXXXX)
+    printf '%s\n' "$body" > "$d/$name"
+    chmod +x "$d/$name"
+    printf '%s' "$d"
+  }
+  PY_RUNNER_TMP=""
+  PY_REAL=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
+  if [ -z "$PY_REAL" ] && command -v py >/dev/null 2>&1 \
+    && py -3 -c 'import sys; raise SystemExit(0 if sys.version_info[0] == 3 else 1)' >/dev/null 2>&1; then
+    PY_RUNNER_TMP=$(mktemp -d -t maestro-eval-pyrunner-XXXXXX)
+    PY_LAUNCHER=$(command -v py)
+    printf '#!/bin/sh\nexec "%s" -3 "$@"\n' "$PY_LAUNCHER" > "$PY_RUNNER_TMP/python-real"
+    chmod +x "$PY_RUNNER_TMP/python-real"
+    PY_REAL="$PY_RUNNER_TMP/python-real"
+  fi
+  PY_EMPTY_PATH=$(mktemp -d -t maestro-eval-empty-path-XXXXXX)
+  ln -s "$(command -v dirname)" "$PY_EMPTY_PATH/dirname"
+  ln -s "$(command -v tr)" "$PY_EMPTY_PATH/tr"
+
+  if [ -n "$PY_REAL" ]; then
+    PY_ONLY_PYTHON=$(py_stub_dir python "#!/bin/sh
+exec \"$PY_REAL\" \"\$@\"")
+    RESOLVED=$(env PATH="$PY_ONLY_PYTHON:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    [ "$RESOLVED" = "python" ] \
+      && pass "resolver finds 'python' when 'python3' is absent" \
+      || fail "resolver did not find 'python' when 'python3' is absent (got: ${RESOLVED:-<none>})"
+
+    PY_ONLY_LAUNCHER=$(py_stub_dir py "#!/bin/sh
+shift
+exec \"$PY_REAL\" \"\$@\"")
+    RESOLVED=$(env PATH="$PY_ONLY_LAUNCHER:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    [ "$RESOLVED" = "py -3" ] \
+      && pass "resolver falls back to the 'py -3' launcher" \
+      || fail "resolver did not fall back to 'py -3' (got: ${RESOLVED:-<none>})"
+
+    rm -rf "$PY_ONLY_PYTHON" "$PY_ONLY_LAUNCHER"
+  else
+    skip "no interpreter on this host to build resolver stubs from"
+  fi
+
+  # A `python` that is Python 2 must be rejected rather than selected: the hook
+  # scripts are Python 3, and the resulting error is swallowed by 2>/dev/null —
+  # the silent failure this resolver exists to end.
+  PY_TWO=$(py_stub_dir python '#!/bin/sh
+exit 1')
+  RESOLVED=$(env PATH="$PY_TWO:$PY_EMPTY_PATH" /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+  [ -z "$RESOLVED" ] \
+    && pass "resolver rejects a 'python' that is not Python 3" \
+    || fail "resolver selected a non-Python-3 interpreter (got: $RESOLVED)"
+  rm -rf "$PY_TWO"
+
+  # Regression guard: a hook that calls the interpreter by name again
+  # reintroduces the bug for every owner whose Python is not called python3.
+  HARDCODED=$(grep -rlE '(\||^|[[:space:]])python3[[:space:]]+(-c|-)' \
+                "$MAESTRO_DIR/.claude/hooks" 2>/dev/null \
+              | grep -v '/lib/python.sh$' || true)
+  if [ -z "$HARDCODED" ]; then
+    pass "no hook invokes python3 directly; all resolve through the library"
+  else
+    fail "hook(s) still invoke python3 directly: $(printf '%s' "$HARDCODED" | tr '\n' ' ')"
+  fi
+
+  # A provisioned interpreter is recorded by path, and on Windows that path
+  # routinely contains a space ("C:\Users\Firstname Lastname\..."). It must
+  # both resolve and RUN, which is why the library invokes through a function
+  # instead of interpolating the interpreter at each call site.
+  if [ -n "$PY_REAL" ]; then
+    PY_REC_ROOT=$(mktemp -d -t maestro-eval-pyrec-XXXXXX)
+    mkdir -p "$PY_REC_ROOT/with space" "$PY_REC_ROOT/data"
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$PY_REAL" > "$PY_REC_ROOT/with space/maestro-python"
+    chmod +x "$PY_REC_ROOT/with space/maestro-python"
+    printf '%s\n' "$PY_REC_ROOT/with space/maestro-python" > "$PY_REC_ROOT/data/.maestro-python"
+
+    RAN=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
+            /bin/bash -c ". '$PY_LIB'; maestro_py -c 'print(\"ran\")'" 2>/dev/null)
+    [ "$RAN" = "ran" ] \
+      && pass "a recorded interpreter resolves and runs, including a path with a space" \
+      || fail "recorded interpreter did not run (got: ${RAN:-<none>})"
+
+    # A record outlives the interpreter it names — uninstalled, moved, or
+    # carried in a workspace copied to another machine. It must be skipped, not
+    # trusted, or provisioning leaves behind a permanent false positive.
+    printf '%s\n' "$PY_REC_ROOT/gone/maestro-python" > "$PY_REC_ROOT/data/.maestro-python"
+    RESOLVED=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" \
+                 /bin/bash -c ". '$PY_LIB'; maestro_python" 2>/dev/null)
+    [ -z "$RESOLVED" ] \
+      && pass "a stale interpreter record is rejected rather than trusted" \
+      || fail "stale interpreter record was accepted (got: $RESOLVED)"
+
+    # Absence must be visible. Every hook that needs the interpreter exits 0
+    # without it, so silence here is the whole defect.
+    MEM_HOOK="$MAESTRO_DIR/.claude/hooks/session-start-memory-inject.sh"
+    if [ -f "$MEM_HOOK" ]; then
+      mkdir -p "$PY_REC_ROOT/data/memory/recent"
+      rm -f "$PY_REC_ROOT/data/.maestro-python"
+      NUDGE=$(env PATH="$PY_EMPTY_PATH" CLAUDE_PROJECT_DIR="$PY_REC_ROOT" /bin/bash "$MEM_HOOK" 2>/dev/null)
+      case "$NUDGE" in
+        *maestro:python-missing*) pass "SessionStart names a missing interpreter instead of degrading in silence" ;;
+        *) fail "SessionStart emitted no signal for a missing interpreter" ;;
+      esac
+      QUIET=$(CLAUDE_PROJECT_DIR="$PY_REC_ROOT" bash "$MEM_HOOK" 2>/dev/null)
+      case "$QUIET" in
+        *maestro:python-missing*) fail "SessionStart warns about a missing interpreter while one is available" ;;
+        *) pass "SessionStart stays quiet when an interpreter is available" ;;
+      esac
+    fi
+
+    rm -rf "$PY_REC_ROOT"
+  fi
+  rm -rf "$PY_EMPTY_PATH"
+  [ -z "$PY_RUNNER_TMP" ] || rm -rf "$PY_RUNNER_TMP"
+else
+  fail "hooks/lib/python.sh missing from ZIP"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 20 — Agent calls are wired without changing the data/ contract"
+# --------------------------------------------------------------------------
+
+AGENT_POLICY="$MAESTRO_DIR/bundles/base/agents/activation-policy.json"
+AGENT_ROUTER="$MAESTRO_DIR/bundles/base/tools/agent-route.py"
+ANNOUNCE_HOOK="$MAESTRO_DIR/.claude/hooks/announce-agent-dispatch.sh"
+CI_HOOK="$MAESTRO_DIR/.claude/hooks/context-inject-userprompt.sh"
+
+if [ -f "$AGENT_POLICY" ] && [ -f "$AGENT_ROUTER" ]; then
+  pass "activation policy and agent router both ship"
+else
+  fail "activation policy or agent router missing from ZIP"
+fi
+
+MISSING_PROJ=""
+for spoke in yoda darwin gamma-guardian pa-expert; do
+  [ -f "$MAESTRO_DIR/.claude/agents/$spoke.md" ] || MISSING_PROJ="$MISSING_PROJ $spoke"
+done
+if [ -z "$MISSING_PROJ" ]; then
+  pass "every declared spoke has a .claude/agents projection"
+else
+  fail "spoke projection(s) missing:$MISSING_PROJ"
+fi
+
+if [ -f "$AGENT_POLICY" ]; then
+  if grep -q 'brain/' "$AGENT_POLICY"; then
+    fail "activation policy references brain/ and would change the 0.1.11 data contract"
+  else
+    pass "activation policy preserves the 0.1.11 data/ contract"
+  fi
+fi
+
+if [ -f "$AGENT_ROUTER" ]; then
+  ROUTE_QUIET=$(cd "$MAESTRO_DIR" && printf 'pode me ajudar a montar o slide de decisao do projeto' \
+                  | eval_py "$AGENT_ROUTER" --max 2 2>/dev/null)
+  [ -z "$ROUTE_QUIET" ] \
+    && pass "router stays silent on ordinary work" \
+    || fail "router fired on an ordinary request"
+
+  ROUTE_HIT=$(cd "$MAESTRO_DIR" && printf 'chama o yoda para revisar essa recomendacao' \
+                | eval_py "$AGENT_ROUTER" --max 2 2>/dev/null)
+  case "$ROUTE_HIT" in
+    *yoda*) pass "router resolves an explicit agent request" ;;
+    *) fail "router did not resolve an explicit request for yoda" ;;
+  esac
+
+  ROUTE_DORMANT=$(cd "$MAESTRO_DIR" && printf 'chama o pa-expert para trazer a visao de pratica' \
+                    | eval_py "$AGENT_ROUTER" --max 2 2>/dev/null)
+  case "$ROUTE_DORMANT" in
+    *pa-expert*) fail "router dispatched pa-expert although it is dormant" ;;
+    *) pass "router honours the dormant pa-expert declaration" ;;
+  esac
+else
+  skip "no interpreter on this host to exercise the agent router"
+fi
+
+if [ -f "$ANNOUNCE_HOOK" ]; then
+  ANN=$(printf '{"tool_name":"Agent","tool_input":{"subagent_type":"yoda","prompt":"x"}}' \
+        | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" 2>/dev/null)
+  ANN_OK=$(printf '%s' "$ANN" | eval_py -c 'import sys,json
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print("nojson"); raise SystemExit
+h=d.get("hookSpecificOutput") or {}
+print("ok" if h.get("additionalContext") else "nocontext")' 2>/dev/null)
+  [ "$ANN_OK" = "ok" ] \
+    && pass "announce hook returns additionalContext to the hub" \
+    || fail "announce hook does not return usable additionalContext"
+
+  env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" \
+    < /dev/null >/dev/null 2>&1
+  [ $? -eq 0 ] \
+    && pass "announce hook fails open without an interpreter" \
+    || fail "announce hook blocks dispatch without an interpreter"
+else
+  fail "announce hook unavailable"
+fi
+
+if [ -f "$CI_HOOK" ] && [ -f "$AGENT_ROUTER" ]; then
+  CI_HOME=$(mktemp -d -t maestro-eval-cihome-XXXXXX)
+  CI_OUT=$(printf '{"prompt":"chama o yoda para revisar essa recomendacao"}' \
+           | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)
+  case "$CI_OUT" in
+    *yoda*) pass "context-inject reaches the router for an explicit request" ;;
+    *) fail "context-inject did not reach the router" ;;
+  esac
+
+  CI_QUIET=$(printf '{"prompt":"me ajuda a montar o slide de decisao"}' \
+             | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)
+  case "$CI_QUIET" in
+    *yoda*|*darwin*|*gamma-guardian*) fail "context-inject routed ordinary work" ;;
+    *) pass "context-inject stays quiet on ordinary work" ;;
+  esac
+  rm -rf "$CI_HOME"
+fi
+
+
 
 echo ""
 printf '%s──────────────────────────────────────────────%s\n' "$YELLOW" "$RESET"
