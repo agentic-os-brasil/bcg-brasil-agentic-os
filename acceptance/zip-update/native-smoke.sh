@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Native, offline qualification of the exact ZIP on macOS or Windows Git Bash.
+# Native, offline qualification of the exact macOS ZIP.
 # Produces a sanitized JSON receipt; it does not call Claude or prove an Agent
 # model invocation.
 
@@ -23,6 +23,12 @@ done
 [ ! -e "$OUTPUT" ] || { echo "receipt already exists: $OUTPUT" >&2; exit 1; }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if ! git -C "$REPO_ROOT" diff --quiet \
+  || ! git -C "$REPO_ROOT" diff --cached --quiet \
+  || [ -n "$(git -C "$REPO_ROOT" ls-files --others --exclude-standard)" ]; then
+  echo "source tree is dirty; commit and freeze the candidate before issuing a receipt" >&2
+  exit 1
+fi
 # shellcheck source=../../installers/zip/user-template/.claude/hooks/lib/python.sh
 . "$REPO_ROOT/installers/zip/user-template/.claude/hooks/lib/python.sh"
 PYTHON_LABEL=$(maestro_python) || {
@@ -37,12 +43,12 @@ case "$UNAME_S" in
     PLATFORM="windows-git-bash"
     NATIVE_ASSERTION="drive-letter paths, native Windows"
     command -v cygpath >/dev/null 2>&1 || {
-      echo "Windows qualification must run inside Git Bash." >&2
+      echo "Windows qualification must use acceptance/zip-update/native-smoke.ps1 in native PowerShell." >&2
       exit 1
     }
     ;;
   *)
-    echo "native qualification supports macOS or Windows Git Bash; got $UNAME_S" >&2
+    echo "this script qualifies macOS; Windows uses native-smoke.ps1. Got $UNAME_S" >&2
     exit 1
     ;;
 esac

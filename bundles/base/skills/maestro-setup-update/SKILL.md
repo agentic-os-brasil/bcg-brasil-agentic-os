@@ -49,7 +49,7 @@ Contexto: o time BCG Brasil AI envia um email com o link do ZIP novo. O usuário
 1. **Perguntar a versão esperada.** Uma frase apenas: "qual versão o email do time BCG Brasil AI pediu para instalar?"
 
 2. **Ler `VERSION` local.** Comparar com a versão informada.
-   - **Match:** "instalado v<X.Y.Z>, igual à versão do email. Atualização concluída. Sua workspace `data/` foi preservada."
+   - **Match:** "instalado v<X.Y.Z>, igual à versão do email. O núcleo novo está ativo. Agora vou verificar a preservação da workspace pelo manifesto criado antes da troca." A igualdade de `VERSION` nunca prova preservação de `data/`; concluir somente depois de validar o baseline descrito no kit.
    - **Mismatch (local abaixo do esperado):** "a versão instalada é v<X.Y.Z>, abaixo da que o email pediu. Feche o Claude Code inteiro e siga o passo a passo do `README-INSTALL.md` que está na raiz da pasta Maestro — ele preserva sua `data/`. Quando reabrir, é só dizer 'confere versão' que eu verifico." Não listar os passos aqui.
    - **Mismatch (local acima do esperado):** raro, mas possível. Informar: "a versão instalada é mais nova que a informada. Confirme com o time BCG Brasil AI qual é a versão correta antes de qualquer ação."
 
@@ -101,7 +101,9 @@ Não há rollback automático. Se o usuário pediu para voltar a uma versão ant
 - Não sugere abrir terminal, rodar script ou editar JSON.
 - Não invoca `bcgos` nem qualquer binário de instalador (esse caminho foi encerrado).
 - Não promete rollback automático.
-- Não toca em `data/`. Essa pasta pertence ao usuário.
+- Não altera conteúdo autoral em `data/`. Depois de uma atualização validada,
+  pode reconciliar somente os marcadores de lifecycle explicitados neste
+  contrato (`.maestro-version` e `.upgrade-pending`).
 - Não repete o trabalho de `maestro-onboarding` (identidade) nem de `maestro-doctor` (diagnóstico). Delega.
 
 ## Encerramento

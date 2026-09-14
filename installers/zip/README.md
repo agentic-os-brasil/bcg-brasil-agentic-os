@@ -28,12 +28,13 @@ O `build-release.sh` copia `user-template/` + `bundles/` + `CLAUDE.md` para uma 
 ## Como buildar
 
 ```bash
-installers/zip/build-release.sh 0.1.0
+installers/zip/build-release.sh 0.1.0 macos
+installers/zip/build-release.sh 0.1.0 windows-powershell
 ```
 
 Saída em `dist/`:
-- `Maestro-v0.1.0.zip`
-- `Maestro-v0.1.0.sha256`
+- `Maestro-v0.1.0-macos.zip` e seu `.sha256`
+- `Maestro-v0.1.0-windows-powershell.zip` e seu `.sha256`
 
 ## Como buildar um kit de atualização
 
@@ -47,14 +48,16 @@ bash installers/zip/eval-update-package.sh \
   --from-version 0.1.11 --to-version 0.1.12
 ```
 
-O resultado `Maestro-Update-v0.1.12.zip` contém o release, checksum, instruções
+O resultado `Maestro-Update-v0.1.12.zip` contém os releases de Mac e Windows,
+checksums, instruções
 de rollback e dois prompts: um para o Maestro antigo preparar o update e outro
 para o novo Maestro verificar hooks e fazer o canário real de Yoda. O wrapper e
 o release continuam sem `data/`.
 
-Antes da distribuição, rode o mesmo release ZIP em macOS e Windows Git Bash
-com `acceptance/zip-update/native-smoke.sh`, depois o canário opt-in de Agent.
-Os quatro recibos devem apontar para o mesmo SHA-256. O workflow manual
+Antes da distribuição, rode o ZIP macOS com
+`acceptance/zip-update/native-smoke.sh` e o ZIP Windows com
+`acceptance/zip-update/native-smoke.ps1` em PowerShell nativo, depois o canário
+opt-in de Agent. Cada recibo deve apontar para o SHA-256 do artefato exato. O workflow manual
 `ZIP update native canary` verifica a portabilidade da factory, mas não
 substitui os canários do mesmo artefato final nas duas máquinas.
 
@@ -62,7 +65,7 @@ substitui os canários do mesmo artefato final nas duas máquinas.
 
 1. `git tag v0.1.0 && git push --tags` (após code freeze).
 2. Rode `build-release.sh 0.1.0`.
-3. Para uma instalação nova, envie `dist/Maestro-v0.1.0.zip`. Para atualizar
+3. Para uma instalação nova, envie o ZIP específico da plataforma. Para atualizar
    uma versão em campo, envie o `Maestro-Update-v*.zip`, que conduz o mesmo
    ritual definido por `README-INSTALL.md`.
 

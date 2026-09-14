@@ -30,20 +30,25 @@ if [ "$FROM_VERSION" = "$TO_VERSION" ]; then
   exit 2
 fi
 
-RELEASE_ZIP="$DIST_DIR/Maestro-v${TO_VERSION}.zip"
-RELEASE_SHA="$DIST_DIR/Maestro-v${TO_VERSION}.sha256"
-if [ ! -f "$RELEASE_ZIP" ] || [ ! -f "$RELEASE_SHA" ]; then
-  echo "missing release ZIP or sidecar for $TO_VERSION" >&2
-  echo "run: installers/zip/build-release.sh $TO_VERSION" >&2
-  exit 1
-fi
-
-EXPECTED_SHA=$(awk '{print $1}' "$RELEASE_SHA")
-ACTUAL_SHA=$(shasum -a 256 "$RELEASE_ZIP" | awk '{print $1}')
-if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
-  echo "release checksum mismatch; refusing to wrap an unverified ZIP" >&2
-  exit 1
-fi
+MAC_ZIP="$DIST_DIR/Maestro-v${TO_VERSION}-macos.zip"
+MAC_SHA="$DIST_DIR/Maestro-v${TO_VERSION}-macos.sha256"
+WIN_ZIP="$DIST_DIR/Maestro-v${TO_VERSION}-windows-powershell.zip"
+WIN_SHA="$DIST_DIR/Maestro-v${TO_VERSION}-windows-powershell.sha256"
+for pair in "$MAC_ZIP:$MAC_SHA" "$WIN_ZIP:$WIN_SHA"; do
+  release_zip=${pair%%:*}
+  release_sha=${pair#*:}
+  if [ ! -f "$release_zip" ] || [ ! -f "$release_sha" ]; then
+    echo "missing platform release ZIP or sidecar for $TO_VERSION" >&2
+    echo "run both: build-release.sh $TO_VERSION macos; build-release.sh $TO_VERSION windows-powershell" >&2
+    exit 1
+  fi
+  expected_sha=$(awk '{print $1}' "$release_sha")
+  actual_sha=$(shasum -a 256 "$release_zip" | awk '{print $1}')
+  if [ "$expected_sha" != "$actual_sha" ]; then
+    echo "release checksum mismatch for $(basename "$release_zip"); refusing to wrap it" >&2
+    exit 1
+  fi
+done
 
 STAGE=$(mktemp -d -t maestro-update-build-XXXXXX)
 trap 'rm -rf "$STAGE"' EXIT
@@ -64,8 +69,7 @@ for name in LEIA-ME-PRIMEIRO.md PROMPT-1-PREPARAR.txt \
   render "$TEMPLATE_DIR/$name" "$ROOT/$name"
 done
 
-cp "$RELEASE_ZIP" "$ROOT/"
-cp "$RELEASE_SHA" "$ROOT/"
+cp "$MAC_ZIP" "$MAC_SHA" "$WIN_ZIP" "$WIN_SHA" "$ROOT/"
 
 UPDATE_ZIP="$DIST_DIR/${ROOT_NAME}.zip"
 UPDATE_SHA="$DIST_DIR/${ROOT_NAME}.sha256"

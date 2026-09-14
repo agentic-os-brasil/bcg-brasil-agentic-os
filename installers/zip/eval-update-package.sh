@@ -70,8 +70,10 @@ EXPECTED=(
   "PROMPT-1-PREPARAR.txt"
   "PROMPT-2-VERIFICAR.txt"
   "CANARIO-MAC-WINDOWS.md"
-  "Maestro-v${TO_VERSION}.zip"
-  "Maestro-v${TO_VERSION}.sha256"
+  "Maestro-v${TO_VERSION}-macos.zip"
+  "Maestro-v${TO_VERSION}-macos.sha256"
+  "Maestro-v${TO_VERSION}-windows-powershell.zip"
+  "Maestro-v${TO_VERSION}-windows-powershell.sha256"
 )
 for rel in "${EXPECTED[@]}"; do
   if [ -f "$ROOT/$rel" ]; then
@@ -86,22 +88,44 @@ TOP_LEVEL_COUNT=$(find "$SCRATCH" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')
   && pass "wrapper has exactly one top-level entry" \
   || fail "wrapper has $TOP_LEVEL_COUNT top-level entries"
 
-if [ -f "$ROOT/Maestro-v${TO_VERSION}.zip" ] && [ -f "$ROOT/Maestro-v${TO_VERSION}.sha256" ]; then
-  EXPECTED_SHA=$(awk '{print $1}' "$ROOT/Maestro-v${TO_VERSION}.sha256")
-  ACTUAL_SHA=$(shasum -a 256 "$ROOT/Maestro-v${TO_VERSION}.zip" | awk '{print $1}')
-  [ "$EXPECTED_SHA" = "$ACTUAL_SHA" ] \
-    && pass "embedded release matches its SHA-256" \
-    || fail "embedded release checksum mismatch"
+for platform in macos windows-powershell; do
+  release="$ROOT/Maestro-v${TO_VERSION}-${platform}.zip"
+  sidecar="$ROOT/Maestro-v${TO_VERSION}-${platform}.sha256"
+  if [ -f "$release" ] && [ -f "$sidecar" ]; then
+    EXPECTED_SHA=$(awk '{print $1}' "$sidecar")
+    ACTUAL_SHA=$(shasum -a 256 "$release" | awk '{print $1}')
+    [ "$EXPECTED_SHA" = "$ACTUAL_SHA" ] \
+      && pass "$platform release matches its SHA-256" \
+      || fail "$platform release checksum mismatch"
 
-  INNER_ROOT="$SCRATCH/inner"
-  mkdir -p "$INNER_ROOT"
-  unzip -q "$ROOT/Maestro-v${TO_VERSION}.zip" -d "$INNER_ROOT"
-  [ "$(cat "$INNER_ROOT/Maestro/VERSION" 2>/dev/null)" = "$TO_VERSION" ] \
-    && pass "embedded release VERSION is $TO_VERSION" \
-    || fail "embedded release VERSION is not $TO_VERSION"
-  [ ! -e "$INNER_ROOT/Maestro/data" ] \
-    && pass "embedded release does not ship data/" \
-    || fail "embedded release ships data/"
+    INNER_ROOT="$SCRATCH/inner-$platform"
+    mkdir -p "$INNER_ROOT"
+    unzip -q "$release" -d "$INNER_ROOT"
+    [ "$(cat "$INNER_ROOT/Maestro/VERSION" 2>/dev/null)" = "$TO_VERSION" ] \
+      && pass "$platform VERSION is $TO_VERSION" \
+      || fail "$platform VERSION is not $TO_VERSION"
+    [ ! -e "$INNER_ROOT/Maestro/data" ] \
+      && pass "$platform release does not ship data/" \
+      || fail "$platform release ships data/"
+  fi
+done
+
+WIN_SETTINGS="$SCRATCH/inner-windows-powershell/Maestro/.claude/settings.json"
+MAC_SETTINGS="$SCRATCH/inner-macos/Maestro/.claude/settings.json"
+if [ -f "$WIN_SETTINGS" ]; then
+  [ "$(grep -c '"shell": "powershell"' "$WIN_SETTINGS")" = 6 ] \
+    && pass "Windows settings explicitly select PowerShell for all six hooks" \
+    || fail "Windows settings do not select PowerShell for all six hooks"
+  if grep -qiE 'bash|\.sh(["[:space:]]|$)' "$WIN_SETTINGS"; then
+    fail "Windows settings still invoke Bash"
+  else
+    pass "Windows settings contain no Bash hook command"
+  fi
+fi
+if [ -f "$MAC_SETTINGS" ]; then
+  [ "$(grep -c '\.sh' "$MAC_SETTINGS")" = 6 ] \
+    && pass "macOS settings retain all six Bash hooks" \
+    || fail "macOS settings do not retain all six Bash hooks"
 fi
 
 if find "$ROOT" -path '*/data' -o -path '*/data/*' | grep -q .; then
@@ -140,41 +164,61 @@ if [ -f "$POST" ]; then
   grep -q "$TO_VERSION" "$POST" && grep -q 'data/' "$POST" \
     && pass "post-update prompt verifies version and data/" \
     || fail "post-update prompt omits version or data/ verification"
-  grep -Fq "diff -qr -- data ../Maestro-old-${FROM_VERSION}/data" "$POST" \
-    && pass "post-update prompt compares new data/ directly with the old copy" \
-    || fail "post-update prompt lacks a durable old/new data comparison"
+  grep -q ".maestro-update-baseline-${FROM_VERSION}.json" "$POST" \
+    && grep -q 'Get-FileHash' "$POST" \
+    && grep -qi 'SHA-256' "$POST" \
+    && pass "post-update prompt verifies every preexisting data file against the baseline" \
+    || fail "post-update prompt lacks a durable preexisting-file baseline comparison"
   grep -qi 'Yoda' "$POST" && grep -qi 'Agent' "$POST" \
     && pass "post-update prompt requires a live Yoda Agent canary" \
     || fail "post-update prompt omits the live Agent canary"
 fi
 
-# Execute the published rename -> extract -> copy-only-data ritual against a
-# disposable 0.1.11-shaped installation. This proves the kit cannot erase or
-# replace owner data when the update is followed literally.
-REHEARSAL="$SCRATCH/rehearsal"
-mkdir -p "$REHEARSAL/Maestro/data/agents" "$REHEARSAL/Maestro/data/workspaces"
-printf '%s\n' "$FROM_VERSION" > "$REHEARSAL/Maestro/VERSION"
-printf 'agent-owner-sentinel\r\n' > "$REHEARSAL/Maestro/data/agents/owner.txt"
-printf 'workspace-sentinel\n' > "$REHEARSAL/Maestro/data/workspaces/case.txt"
-BEFORE_DATA=$(shasum -a 256 \
-  "$REHEARSAL/Maestro/data/agents/owner.txt" \
-  "$REHEARSAL/Maestro/data/workspaces/case.txt" \
-  | awk '{print $1}' | shasum -a 256 | awk '{print $1}')
-mv "$REHEARSAL/Maestro" "$REHEARSAL/Maestro-old-${FROM_VERSION}"
-unzip -q "$ROOT/Maestro-v${TO_VERSION}.zip" -d "$REHEARSAL"
-cp -R "$REHEARSAL/Maestro-old-${FROM_VERSION}/data" "$REHEARSAL/Maestro/"
-AFTER_DATA=$(shasum -a 256 \
-  "$REHEARSAL/Maestro/data/agents/owner.txt" \
-  "$REHEARSAL/Maestro/data/workspaces/case.txt" \
-  | awk '{print $1}' | shasum -a 256 | awk '{print $1}')
+# Execute rename -> extract -> copy-only-data -> first SessionStart against both
+# platform payloads. Lifecycle metadata and new backfills may change, but every
+# file that already belonged to the owner must remain byte-identical.
+rehearse_platform() {
+  platform="$1"
+  rehearsal="$SCRATCH/rehearsal-$platform"
+  mkdir -p "$rehearsal/Maestro/data/agents" "$rehearsal/Maestro/data/workspaces"
+  printf '%s\n' "$FROM_VERSION" > "$rehearsal/Maestro/VERSION"
+  printf 'agent-owner-sentinel\r\n' > "$rehearsal/Maestro/data/agents/owner.txt"
+  printf 'workspace-sentinel\n' > "$rehearsal/Maestro/data/workspaces/case.txt"
+  before_data=$(shasum -a 256 \
+    "$rehearsal/Maestro/data/agents/owner.txt" \
+    "$rehearsal/Maestro/data/workspaces/case.txt" \
+    | awk '{print $1}' | shasum -a 256 | awk '{print $1}')
+  mv "$rehearsal/Maestro" "$rehearsal/Maestro-old-${FROM_VERSION}"
+  unzip -q "$ROOT/Maestro-v${TO_VERSION}-$platform.zip" -d "$rehearsal"
+  cp -R "$rehearsal/Maestro-old-${FROM_VERSION}/data" "$rehearsal/Maestro/"
 
-[ "$BEFORE_DATA" = "$AFTER_DATA" ] \
-  && pass "published update ritual preserves data/ byte-for-byte" \
-  || fail "published update ritual changed data/"
-[ "$(cat "$REHEARSAL/Maestro/VERSION")" = "$TO_VERSION" ] \
-  && [ "$(cat "$REHEARSAL/Maestro-old-${FROM_VERSION}/VERSION")" = "$FROM_VERSION" ] \
-  && pass "published ritual keeps the old core and activates only $TO_VERSION" \
-  || fail "published ritual does not preserve old/new core identities"
+  if [ "$platform" = "macos" ]; then
+    CLAUDE_PROJECT_DIR="$rehearsal/Maestro" \
+      bash "$rehearsal/Maestro/.claude/hooks/first-run-scaffold.sh" >/dev/null 2>&1
+  elif command -v pwsh >/dev/null 2>&1; then
+    CLAUDE_PROJECT_DIR="$rehearsal/Maestro" \
+      pwsh -NoLogo -NoProfile -File \
+        "$rehearsal/Maestro/.claude/hooks/first-run-scaffold.ps1" >/dev/null 2>&1
+  else
+    fail "PowerShell is required to rehearse the Windows first-open update"
+    return
+  fi
+
+  after_data=$(shasum -a 256 \
+    "$rehearsal/Maestro/data/agents/owner.txt" \
+    "$rehearsal/Maestro/data/workspaces/case.txt" \
+    | awk '{print $1}' | shasum -a 256 | awk '{print $1}')
+  [ "$before_data" = "$after_data" ] \
+    && pass "$platform first open preserves every preexisting owner sentinel" \
+    || fail "$platform first open changed preexisting owner content"
+  [ "$(cat "$rehearsal/Maestro/VERSION")" = "$TO_VERSION" ] \
+    && [ "$(cat "$rehearsal/Maestro-old-${FROM_VERSION}/VERSION")" = "$FROM_VERSION" ] \
+    && pass "$platform ritual keeps the old core and activates only $TO_VERSION" \
+    || fail "$platform ritual does not preserve old/new core identities"
+}
+
+rehearse_platform macos
+rehearse_platform windows-powershell
 
 printf '\nSummary: %d pass, %d fail\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

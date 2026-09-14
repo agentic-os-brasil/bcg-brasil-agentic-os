@@ -17,40 +17,45 @@
     ],
     "hook_runtime": {
       "macos": "bash plus a resolvable Python 3 interpreter",
-      "windows": "Git Bash plus a resolvable Python 3 interpreter (python3, python or py -3)",
-      "powershell_only": "unsupported in 0.1.12"
+      "windows": "native Windows PowerShell 5.1 or PowerShell 7; Git Bash and Python are not required for hooks"
     },
     "hooks": [
       {
         "event": "session_start",
         "installer_path": ".claude/hooks/first-run-scaffold.sh",
+        "windows_installer_path": ".claude/hooks/first-run-scaffold.ps1",
         "criticality": "required"
       },
       {
         "event": "session_start",
         "installer_path": ".claude/hooks/session-start-memory-inject.sh",
+        "windows_installer_path": ".claude/hooks/session-start-memory-inject.ps1",
         "criticality": "required"
       },
       {
         "event": "user_prompt_submit",
         "installer_path": ".claude/hooks/context-inject-userprompt.sh",
+        "windows_installer_path": ".claude/hooks/context-inject-userprompt.ps1",
         "criticality": "recommended"
       },
       {
         "event": "pre_tool_use",
         "installer_path": ".claude/hooks/block-cross-case-writes.sh",
+        "windows_installer_path": ".claude/hooks/block-cross-case-writes.ps1",
         "matcher": "^(Edit|MultiEdit|Write|NotebookEdit)$",
         "criticality": "recommended"
       },
       {
         "event": "pre_tool_use",
         "installer_path": ".claude/hooks/announce-agent-dispatch.sh",
+        "windows_installer_path": ".claude/hooks/announce-agent-dispatch.ps1",
         "matcher": "^(Agent|Task)$",
         "criticality": "recommended"
       },
       {
         "event": "session_end",
         "installer_path": ".claude/hooks/session-stop-dream.sh",
+        "windows_installer_path": ".claude/hooks/session-stop-dream.ps1",
         "criticality": "recommended"
       }
     ],

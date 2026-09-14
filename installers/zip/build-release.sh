@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Maestro release factory — builds Maestro-vX.Y.Z.zip.
+# Maestro release factory — builds one platform-specific Maestro ZIP.
 #
 # Usage:
-#   installers/zip/build-release.sh <version>
+#   installers/zip/build-release.sh <version> [macos|windows-powershell]
 #
 # Example:
 #   installers/zip/build-release.sh 0.1.0
@@ -18,17 +18,22 @@ DIST_DIR="$REPO_ROOT/dist"
 TEMPLATE_DIR="$REPO_ROOT/installers/zip/user-template"
 BUNDLES_DIR="$REPO_ROOT/bundles"
 
-if [ $# -lt 1 ]; then
-  echo "usage: build-release.sh <version>" >&2
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+  echo "usage: build-release.sh <version> [macos|windows-powershell]" >&2
   exit 2
 fi
 
 VERSION="$1"
+PLATFORM="${2:-macos}"
 
 if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
   echo "version must match X.Y.Z: got '$VERSION'" >&2
   exit 2
 fi
+case "$PLATFORM" in
+  macos|windows-powershell) ;;
+  *) echo "platform must be macos or windows-powershell: got '$PLATFORM'" >&2; exit 2 ;;
+esac
 
 STAGE_DIR=$(mktemp -d)
 trap 'rm -rf "$STAGE_DIR"' EXIT
@@ -41,6 +46,26 @@ cp -R "$TEMPLATE_DIR/." "$MAESTRO_DIR/"
 cp -R "$BUNDLES_DIR" "$MAESTRO_DIR/bundles"
 if [ -d "$REPO_ROOT/schemas" ]; then
   cp -R "$REPO_ROOT/schemas" "$MAESTRO_DIR/schemas"
+fi
+
+# Each distributable has one authoritative settings.json.  The alternative is
+# a factory input only, never something an owner must choose or rename.
+if [ "$PLATFORM" = "windows-powershell" ]; then
+  cp "$MAESTRO_DIR/.claude/settings.windows-powershell.json" "$MAESTRO_DIR/.claude/settings.json"
+fi
+rm -f "$MAESTRO_DIR/.claude/settings.windows-powershell.json"
+
+# Windows PowerShell 5.1 decodes a script without a BOM using the legacy system
+# code page.  Add a UTF-8 BOM to the staged Windows scripts so Portuguese text
+# and paths survive on both 5.1 and PowerShell 7.  Source files remain normal
+# UTF-8; this conversion affects only the release artifact.
+if [ "$PLATFORM" = "windows-powershell" ]; then
+  find "$MAESTRO_DIR/.claude/hooks" -type f -name '*.ps1' -print0 | while IFS= read -r -d '' ps_file; do
+    bom_tmp="${ps_file}.bom"
+    printf '\357\273\277' > "$bom_tmp"
+    sed 's/\r$//; s/$/\r/' "$ps_file" >> "$bom_tmp"
+    mv "$bom_tmp" "$ps_file"
+  done
 fi
 if [ ! -f "$MAESTRO_DIR/CLAUDE.md" ]; then
   echo "FATAL: CLAUDE.md missing at $TEMPLATE_DIR/CLAUDE.md — required for session bootstrap" >&2
@@ -86,7 +111,13 @@ echo "==> Stripping $STRIP_COUNT Go source file(s) from bundles (manifest: $STRI
 find "$MAESTRO_DIR/bundles" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -delete 2>/dev/null || true
 
 mkdir -p "$DIST_DIR"
-ZIP_NAME="Maestro-v${VERSION}.zip"
+if [ "$PLATFORM" = "windows-powershell" ]; then
+  ZIP_NAME="Maestro-v${VERSION}-windows-powershell.zip"
+  SHA_NAME="Maestro-v${VERSION}-windows-powershell.sha256"
+else
+  ZIP_NAME="Maestro-v${VERSION}-macos.zip"
+  SHA_NAME="Maestro-v${VERSION}-macos.sha256"
+fi
 ZIP_PATH="$DIST_DIR/$ZIP_NAME"
 rm -f "$ZIP_PATH"
 
@@ -94,7 +125,7 @@ echo "==> Creating $ZIP_NAME"
 ( cd "$STAGE_DIR" && zip -qr "$ZIP_PATH" Maestro )
 
 SHA256=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
-echo "$SHA256  $ZIP_NAME" > "$DIST_DIR/Maestro-v${VERSION}.sha256"
+echo "$SHA256  $ZIP_NAME" > "$DIST_DIR/$SHA_NAME"
 
 echo ""
 echo "Release pronto:"

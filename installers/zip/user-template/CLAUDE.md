@@ -15,7 +15,7 @@ trabalho acontece por dentro do chat.
 - `bundles/`: skills e agentes (núcleo do Maestro).
 - `data/`: workspace do usuário (memória, agentes, projetos). Nunca é
   sobrescrita em updates. Criada automaticamente na primeira sessão pelo hook
-  `first-run-scaffold.sh`.
+  `first-run-scaffold` (`.sh` no Mac, `.ps1` no Windows).
 - `VERSION`: versão instalada.
 - `README-INSTALL.md`: passo a passo de instalação e atualização.
 
@@ -25,7 +25,7 @@ Ao receber a primeira mensagem do usuário, execute esta sequência antes de res
 
 ### Passo 1: Scaffold
 
-O hook `first-run-scaffold.sh` cria `data/.initialized` automaticamente quando a pasta é aberta
+O hook `first-run-scaffold` cria `data/.initialized` automaticamente quando a pasta é aberta
 no Claude Code. Se ele rodou e `data/.initialized` existe, prossiga.
 
 - Se `data/.initialized` **existe**: scaffold OK, prossiga para o Passo 2.

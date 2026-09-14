@@ -5,18 +5,26 @@ Neither result proves the other.
 
 ## Offline native receipt
 
-Run the same release ZIP on both targets:
+Run the platform-specific release ZIP on each target:
 
 ```bash
 bash acceptance/zip-update/native-smoke.sh \
-  --zip dist/Maestro-v0.1.12.zip \
+  --zip dist/Maestro-v0.1.12-macos.zip \
   --output macos-offline.json
 ```
 
-On Windows, run the identical command in **Git Bash** and use a different
-receipt name. PowerShell-only is not a supported profile because the shipped
-Claude hooks invoke Bash. Both receipts must report the same release SHA-256,
-zero failures and zero skipped checks.
+On Windows, run natively in Windows PowerShell 5.1 and repeat in PowerShell 7
+when available:
+
+```powershell
+.\acceptance\zip-update\native-smoke.ps1 `
+  -Zip .\dist\Maestro-v0.1.12-windows-powershell.zip `
+  -Output .\windows-powershell-offline.json
+```
+
+Git Bash and Python are not part of the Windows hook runtime. Each receipt must
+report the SHA-256 of its exact platform ZIP, zero failures and no skipped
+checks.
 
 ## Live Claude Agent receipt
 
@@ -26,16 +34,25 @@ prompt plus distributable workspace instructions may be sent:
 
 ```bash
 bash acceptance/zip-update/live-agent-canary.sh \
-  --zip dist/Maestro-v0.1.12.zip \
+  --zip dist/Maestro-v0.1.12-macos.zip \
   --trace macos-agent-trace.jsonl \
   --receipt macos-agent.json
 ```
 
-Repeat in Windows Git Bash. A PASS requires observed SessionStart and
-UserPromptSubmit hooks, a real `Agent` call with `subagent_type: yoda`, the
-Agent PreToolUse hook, Yoda's synthetic return and the hub's return. Preserve
-the raw trace privately; it is diagnostic evidence and must not be shipped to
-users.
+On Windows, run the native equivalent first in Windows PowerShell 5.1 and then
+in PowerShell 7 when available:
+
+```powershell
+.\acceptance\zip-update\live-agent-canary.ps1 `
+  -Zip .\dist\Maestro-v0.1.12-windows-powershell.zip `
+  -Trace .\windows-agent-trace.jsonl `
+  -Receipt .\windows-agent.json
+```
+
+A PASS requires observed SessionStart and UserPromptSubmit hooks, a real
+`Agent` call with `subagent_type: yoda`, the Agent PreToolUse hook, Yoda's
+synthetic return and the hub's return. Preserve the raw trace privately; it is
+diagnostic evidence and must not be shipped to users.
 
 ## Update rehearsal
 
@@ -44,5 +61,5 @@ On a disposable copy of one real 0.1.11 installation, follow the exact
 inside `data/agents` and `data/workspaces` before and after. The hashes must be
 identical and only the new core may report 0.1.12. Repeat on both platforms.
 
-The release gate is closed only when the offline and live receipts pass on the
-same ZIP digest on both platforms and both update rehearsals preserve `data/`.
+The release gate is closed only when offline and live receipts pass for each
+platform ZIP digest and both update rehearsals preserve `data/`.

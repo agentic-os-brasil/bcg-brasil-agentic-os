@@ -17,7 +17,8 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
    - `VERSION`
    - `CLAUDE.md`
    - `.claude/settings.json`
-   - `.claude/hooks/first-run-scaffold.sh`
+   - o hook de scaffold indicado por `.claude/settings.json` (`.ps1` no
+     Windows, `.sh` no Mac)
    - `bundles/base/`, `bundles/tech-core/`
 
 2. **Workspace present and healthy** — verify:
@@ -25,7 +26,13 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
    - `data/agents/`, `data/memory/`, `data/profile/`, `data/workspaces/`, `data/owner/` exist
    - `data/.initialized` exists (created by first-run-scaffold on session 1)
 
-3. **Hooks wired** — read `.claude/settings.json` and confirm SessionStart lists both `first-run-scaffold.sh` and `session-start-memory-inject.sh`, and Stop lists `session-stop-dream.sh`.
+3. **Hooks wired** — ler `.claude/settings.json`, identificar o perfil pelo
+   sufixo dos comandos e confirmar SessionStart com scaffold e memória, Stop
+   com dream, UserPromptSubmit com injeção de contexto e PreToolUse com proteção
+   de escrita e anúncio de Agent/Task. Perfil Windows válido: todos os seis
+   comandos terminam em `.ps1`, cada handler declara `"shell": "powershell"`
+   e nenhum comando chama Bash. Perfil Mac válido: todos os seis comandos
+   terminam em `.sh`.
 
 4. **Version readable** — read `VERSION`, confirm it matches `X.Y.Z` shape.
 
@@ -52,28 +59,33 @@ Resolve `interaction-profile` if present. Adjust vocabulary and depth, never the
     - `data/.initialized` existe (a workspace foi montada), **e**
     - `data/.scaffold.log` **não** existe.
 
-    `first-run-scaffold.sh` escreve o log em toda execução, desde a primeira linha.
+    O hook `first-run-scaffold` escreve o log em toda execução, desde a primeira linha.
     O caminho de emergência descrito no `CLAUDE.md` — em que o próprio assistente
     monta a `data/` dentro da conversa — não escreve o log. Portanto `data/`
-    montada **sem** log significa que os hooks não rodaram: em geral porque o
-    `bash` não está disponível na máquina (ele não vem no Windows por padrão).
+    montada **sem** log significa que os hooks não rodaram ou não foram aceitos
+    pelo Claude Code.
 
     Quando o par acima bater, surfar como ponto a verificar, em linguagem simples:
     "algumas rotinas automáticas do Maestro não estão ativas nesta máquina — ele
     funciona, mas não lembra sozinho do contexto entre conversas nem fecha o dia
     por conta própria. Avise o time BCG Brasil AI; não é problema da sua pasta e
     não dá pra resolver por aqui." Complementar com o contorno da entrada
-    `hooks-nao-executados` em `known-issues.md`.
+    `README-INSTALL.md`.
 
     Se `data/.scaffold.log` existir, ou se `data/.initialized` não existir (aí o
     caso é o check 2, não este), seguir em silêncio.
 
-    Nunca recomendar instalar `bash`, Git for Windows ou WSL ao usuário: é
-    decisão de quem administra a máquina e foge do contrato de "nada de terminal".
+    Nunca recomendar instalar Bash, Git for Windows ou WSL. No perfil Windows
+    desta versão, essas peças não participam dos hooks.
 
 12. **Interpretador das rotinas automáticas** — o check 11 responde "os hooks
-    rodaram?"; este responde "eles tinham com que trabalhar?". Todo hook que lê
-    ou escreve JSON depende de um interpretador Python 3. Sem ele, a memória em
+    rodaram?"; este responde "eles tinham com que trabalhar?". Primeiro ler
+    `.claude/settings.json` para identificar o perfil. No perfil Windows
+    PowerShell, confirmar PowerShell pela execução já comprovada no check 11 e
+    seguir em silêncio: os hooks `.ps1` não dependem de Git Bash nem Python.
+
+    Somente no perfil Mac, todo hook que lê ou escreve JSON depende de um
+    interpretador Python 3. Sem ele, a memória em
     Markdown ainda é injetada, mas contexto estruturado e roteamento automático
     de skills e agentes ficam indisponíveis. A separação entre clientes não fica
     desligada: o guard recusa escritas em arquivo que não consegue verificar.

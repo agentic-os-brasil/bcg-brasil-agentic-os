@@ -24,24 +24,54 @@ jobs:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Reject false-positive live Agent traces
+        if: runner.os == 'macOS'
+        shell: bash
         run: |
           . installers/zip/user-template/.claude/hooks/lib/python.sh
           maestro_py -m unittest acceptance/zip-update/test_eval_live_agent_trace.py
-      - name: Build exact release ZIP
-        run: bash installers/zip/build-release.sh "${{ inputs.to_version }}"
-      - name: Evaluate release and platform wiring
+      - name: Build exact macOS release ZIP
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash installers/zip/build-release.sh "${{ inputs.to_version }}" macos
+      - name: Build exact Windows PowerShell release ZIP
+        if: runner.os == 'Windows'
+        shell: bash
+        run: bash installers/zip/build-release.sh "${{ inputs.to_version }}" windows-powershell
+      - name: Reject false-positive Windows Agent traces
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          ./acceptance/zip-update/test-live-agent-canary.ps1 `
+            -Zip "dist/Maestro-v${{ inputs.to_version }}-windows-powershell.zip"
+      - name: Evaluate macOS release and hook wiring
+        if: runner.os == 'macOS'
+        shell: bash
         run: |
           bash acceptance/zip-update/native-smoke.sh \
-            --zip "dist/Maestro-v${{ inputs.to_version }}.zip" \
+            --zip "dist/Maestro-v${{ inputs.to_version }}-macos.zip" \
             --output "${RUNNER_OS}-offline.json"
-      - name: Build user-facing update kit
+      - name: Evaluate native Windows PowerShell 5.1 hooks
+        if: runner.os == 'Windows'
+        shell: powershell
         run: |
+          ./acceptance/zip-update/native-smoke.ps1 `
+            -Zip "dist/Maestro-v${{ inputs.to_version }}-windows-powershell.zip" `
+            -Output "Windows-ps51-offline.json"
+      - name: Evaluate native PowerShell 7 hooks
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./acceptance/zip-update/native-smoke.ps1 `
+            -Zip "dist/Maestro-v${{ inputs.to_version }}-windows-powershell.zip" `
+            -Output "Windows-ps7-offline.json"
+      - name: Build user-facing update kit
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          bash installers/zip/build-release.sh "${{ inputs.to_version }}" windows-powershell
           bash installers/zip/build-update-package.sh \
             "${{ inputs.from_version }}" "${{ inputs.to_version }}"
           bash installers/zip/eval-update-package.sh \
@@ -52,5 +82,7 @@ jobs:
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
         with:
           name: zip-offline-${{ runner.os }}
-          path: ${{ runner.os }}-offline.json
+          path: |
+            ${{ runner.os }}-offline.json
+            Windows-*-offline.json
           if-no-files-found: error

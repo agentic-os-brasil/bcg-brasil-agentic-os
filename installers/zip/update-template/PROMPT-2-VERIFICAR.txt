@@ -3,12 +3,18 @@ Quero verificar a atualização do Maestro para a versão {{TO_VERSION}}.
 Faça uma verificação local completa, sem alterar meu conteúdo:
 
 1. confirme que VERSION é exatamente {{TO_VERSION}};
-2. confirme que data/ e ../Maestro-old-{{FROM_VERSION}}/data/ existem. Compare
-   diretamente as duas árvores, em modo somente leitura, com
-   `diff -qr -- data ../Maestro-old-{{FROM_VERSION}}/data`. Só marque PASS se
-   não houver diferença; qualquer diferença é FAIL, pasta antiga ausente é
-   UNAVAILABLE e uma contagem igual de arquivos não basta;
-3. execute maestro-doctor e reporte separadamente Bash, Python 3 e os hooks;
+2. confirme que data/, ../Maestro-old-{{FROM_VERSION}}/data/ e o arquivo
+   `../Maestro-old-{{FROM_VERSION}}/.maestro-update-baseline-{{FROM_VERSION}}.json`
+   existem. Recalcule caminho relativo, tamanho e SHA-256 de cada arquivo do
+   baseline contra a nova data/. Só marque PASS se todos os arquivos
+   preexistentes continuarem presentes e idênticos. Arquivos novos de backfill
+   são permitidos. Ignore diferenças apenas nestes metadados de lifecycle:
+   `.scaffold.log`, `.maestro-version`, `.upgrade-pending` e
+   `memory/.dream-requested`. No Windows use PowerShell/Get-FileHash; no Mac use
+   SHA-256 nativo. Baseline ou pasta antiga ausente é UNAVAILABLE, e contagem
+   igual de arquivos não basta;
+3. execute maestro-doctor. No Windows, reporte PowerShell e confirme que os
+   hooks não chamam Bash nem Python. No Mac, reporte Bash e Python 3;
 4. confira em .claude/settings.json o wiring de SessionStart,
    UserPromptSubmit, PreToolUse para escrita, PreToolUse para Agent/Task e Stop;
 5. confirme que as projeções .claude/agents e a política de ativação existem;
@@ -20,6 +26,6 @@ Faça uma verificação local completa, sem alterar meu conteúdo:
    do Agent.
 
 No final, reporte cada item como PASS, FAIL ou UNAVAILABLE. Diferencie arquivo
-configurado, hook executado e Agent realmente chamado. Se Bash ou Python 3
-faltarem, ou se o Agent não for chamado, não diga que a atualização está
-concluída.
+configurado, hook executado e Agent realmente chamado. Se o runtime exigido
+pela plataforma faltar, ou se o Agent não for chamado, não diga que a
+atualização está concluída.

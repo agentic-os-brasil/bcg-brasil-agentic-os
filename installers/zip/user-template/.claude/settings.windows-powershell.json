@@ -1,0 +1,69 @@
+{
+  "$schema": "https://claude.ai/schemas/settings.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\first-run-scaffold.ps1\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\session-start-memory-inject.ps1\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\context-inject-userprompt.ps1\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Edit|MultiEdit|Write|NotebookEdit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\block-cross-case-writes.ps1\""
+          }
+        ]
+      },
+      {
+        "matcher": "^(Agent|Task)$",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\announce-agent-dispatch.ps1\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\session-stop-dream.ps1\""
+          }
+        ]
+      }
+    ]
+  }
+}

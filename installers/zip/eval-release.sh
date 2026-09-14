@@ -514,16 +514,16 @@ else
 fi
 
 if grep -q 'Nada mais' "$README"; then
-  fail "README-INSTALL promises no prerequisites although hooks require Bash and Python 3"
-elif grep -qi 'Git Bash' "$README" && grep -qi 'Python 3' "$README"; then
-  pass "README-INSTALL names the supported Windows Bash + Python profile"
+  fail "README-INSTALL promises no prerequisites although hooks require a platform runtime"
+elif grep -qi 'PowerShell 5.1' "$README" && grep -qi 'Git Bash.*não são requisitos\|Git Bash.*nao sao requisitos' "$README"; then
+  pass "README-INSTALL names the native Windows PowerShell profile"
 else
-  fail "README-INSTALL does not name the supported Windows Bash + Python profile"
+  fail "README-INSTALL does not name the native Windows PowerShell profile"
 fi
 if grep -qi 'Sem Git Bash' "$README" && grep -qi 'Sem Python 3' "$README"; then
-  pass "README-INSTALL distinguishes missing Bash from missing Python"
+  pass "README-INSTALL distinguishes Windows PowerShell from Mac Python requirements"
 else
-  fail "README-INSTALL conflates the effects of missing Bash and missing Python"
+  fail "README-INSTALL conflates platform runtime requirements"
 fi
 
 # --------------------------------------------------------------------------

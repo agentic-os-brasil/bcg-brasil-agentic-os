@@ -4,17 +4,14 @@
 
 - **Claude Code desktop** instalado.
 - **Mac:** Bash do sistema e um interpretador Python 3 disponível.
-- **Windows nesta atualização:** Git Bash disponível para o Claude Code e um
-  interpretador Python 3 resolvível como `python`, `python3` ou `py -3`.
+- **Windows:** Windows PowerShell 5.1 (já incluído no Windows) ou PowerShell 7.
+  Use o ZIP cujo nome termina em `windows-powershell`.
 
-O Maestro abre para conversa mesmo quando alguma dessas peças não está
-disponível, mas o efeito é diferente. Sem Git Bash, os hooks não rodam. Sem
-Python 3, a memória em Markdown continua disponível, mas contexto estruturado e
-roteamento automático ficam indisponíveis; escritas que exigem validação de
-cliente são recusadas quando não podem ser verificadas. Windows apenas com
-PowerShell ainda não é suportado por esta atualização. Se o diagnóstico inicial
-apontar uma peça ausente, não é necessário abrir terminal nem instalar algo por
-conta própria: envie a saída de `/maestro-doctor` ao time BCG Brasil AI.
+No Windows, os hooks de memória, proteção de escrita e chamada de agentes são
+PowerShell nativo. Git Bash e Python não são requisitos desses hooks. No Mac,
+os hooks continuam em Bash e usam Python 3. Se o diagnóstico inicial apontar
+uma peça ausente, não é necessário abrir terminal nem instalar algo por conta
+própria: envie a saída de `/maestro-doctor` ao time BCG Brasil AI.
 
 ## Instalação (primeira vez)
 
@@ -28,7 +25,9 @@ Pronto. Rode `/maestro-onboarding` para a apresentação guiada.
 
 ## Atualização (novas versões)
 
-Quando o time BCG Brasil AI mandar um email com nova versão. O ritual é "renomear, extrair novo, mover `data/`". Uma única operação destrutiva visível, sem risco de arquivos velhos sobrando entre versões.
+Quando o time BCG Brasil AI mandar um email com nova versão. O ritual é
+"renomear, extrair novo, copiar `data/`". Uma única operação destrutiva visível,
+sem risco de arquivos velhos sobrando entre versões.
 
 **Antes de começar:** conferir se a pasta `data/` existe dentro da pasta `Maestro/` atual. Se não existir, parar e rodar `/maestro-doctor` antes de atualizar.
 
@@ -40,7 +39,7 @@ Quando o time BCG Brasil AI mandar um email com nova versão. O ritual é "renom
    - **Windows (Explorer):** abrir `Maestro-old/`, copiar `data/` (`Ctrl+C`), colar dentro da nova `Maestro/` (`Ctrl+V`).
 5. Conferir que a nova `Maestro/` contém: `VERSION`, `CLAUDE.md`, `.claude/`, `bundles/` e `data/`. Se `data/` não estiver lá, refazer o passo 4 antes de continuar.
 6. Reabrir a nova pasta `Maestro/` no Claude Code e rodar `/maestro-doctor` para confirmar.
-7. Só depois de confirmar que `data/` está dentro da nova `Maestro/` **e** que `/maestro-doctor` reporta tudo verde, apagar `Maestro-old/`. Manter por pelo menos 7 dias (ou até a próxima atualização) como rede de segurança.
+7. Depois de confirmar que `data/` está dentro da nova `Maestro/` e que `/maestro-doctor` reporta tudo verde, manter `Maestro-old/` por pelo menos 7 dias (ou até a próxima atualização) como rede de segurança. Só então apagar.
 
 Esse fluxo elimina o risco de arquivos velhos de versões anteriores sobrarem misturados com a versão nova. Como o passo 4 é uma cópia, um erro no meio do caminho não destrói nada: `Maestro-old/data/` continua intacto até o passo 7.
 
@@ -67,14 +66,17 @@ Maestro/
 Feche e reabra o Claude Code com a pasta. Se persistir, rode `/maestro-doctor`.
 
 **"Sem Git Bash no Windows."**
-Os hooks não estão ativos: memória automática, proteção de escrita e chamadas
-de agentes não rodam. Windows apenas com PowerShell não é suportado nesta
-atualização. Envie a saída de `/maestro-doctor` ao time BCG Brasil AI.
+Nenhuma ação é necessária. Esta versão usa PowerShell nativo no Windows.
+
+**"A política da empresa bloqueou um script PowerShell."**
+Não altere a política nem tente contornar o bloqueio. Guarde `Maestro-old/` e
+envie a saída de `/maestro-doctor` ao time BCG Brasil AI; o release só pode ser
+liberado nessa máquina pela rota aprovada pela empresa.
 
 **"Sem Python 3."**
-A memória em Markdown e a conversa continuam. Contexto estruturado e chamadas
-de agentes não são roteados automaticamente; escritas em arquivo que não podem
-ter o cliente verificado são recusadas.
+No Windows, nenhuma ação é necessária para os hooks desta versão. No Mac, a
+memória em Markdown e a conversa continuam, mas o roteamento automático fica
+indisponível e escritas que não podem ser verificadas são recusadas.
 
 Nos dois casos, envie a saída de `/maestro-doctor` ao time BCG Brasil AI. Não
 é necessário abrir terminal nem instalar algo por conta própria.
