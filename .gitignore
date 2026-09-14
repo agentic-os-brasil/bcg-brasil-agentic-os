@@ -25,6 +25,8 @@ dist/
 coverage/
 cover.out
 *.test
+__pycache__/
+*.pyc
 
 # Local release exports are published as immutable GitHub Release assets.
 # Keep the directory visible in the source tree without committing binaries.

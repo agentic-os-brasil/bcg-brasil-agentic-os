@@ -10,7 +10,7 @@
 #   while ! installers/zip/eval-release.sh; do vim ...; bash installers/zip/build-release.sh 0.1.0; done
 #
 # The eval is intentionally self-contained: no Go toolchain, no external deps
-# beyond unzip / shasum / python3 (for JSON parsing).
+# beyond unzip / shasum / a resolvable Python 3 (python3, python or py -3).
 
 set -u
 
@@ -44,6 +44,17 @@ if [ ! -f "$ZIP_PATH" ]; then
   echo "run: bash installers/zip/build-release.sh <version>  first" >&2
   exit 2
 fi
+
+# The evaluator must accept the same interpreter names as the shipped hooks.
+# Otherwise a supported Windows machine with only the python.org `py -3`
+# launcher cannot run the very gate intended to qualify it.
+# shellcheck source=user-template/.claude/hooks/lib/python.sh
+. "$TEMPLATE_DIR/.claude/hooks/lib/python.sh"
+if ! maestro_python >/dev/null 2>&1; then
+  echo "no Python 3 interpreter found (tried python3, python and py -3)" >&2
+  exit 2
+fi
+eval_py() { maestro_py "$@"; }
 
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; RESET=$'\033[0m'
 
@@ -359,18 +370,18 @@ CATALOG="$MAESTRO_DIR/bundles/base/skills/catalog.json"
 INDEX_MD="$MAESTRO_DIR/bundles/base/skills/INDEX.md"
 POLICY="$MAESTRO_DIR/bundles/base/skills/agent-skill-policy.json"
 
-if python3 -c "import json,sys; json.load(open('$CATALOG'))" 2>/dev/null; then
+if eval_py -c "import json,sys; json.load(open('$CATALOG'))" 2>/dev/null; then
   pass "catalog.json is valid JSON"
 else
   fail "catalog.json invalid JSON"
 fi
-if python3 -c "import json,sys; json.load(open('$POLICY'))" 2>/dev/null; then
+if eval_py -c "import json,sys; json.load(open('$POLICY'))" 2>/dev/null; then
   pass "agent-skill-policy.json is valid JSON"
 else
   fail "agent-skill-policy.json invalid JSON"
 fi
 
-CATALOG_IDS=$(python3 -c "
+CATALOG_IDS=$(eval_py -c "
 import json
 c=json.load(open('$CATALOG'))
 ids=[]
@@ -402,7 +413,7 @@ else
   fail "$MISSING_SKILLS catalog skill(s) missing SKILL.md"
 fi
 
-POLICY_SKILLS=$(python3 -c "
+POLICY_SKILLS=$(eval_py -c "
 import json
 p=json.load(open('$POLICY'))
 out=[]
@@ -437,10 +448,10 @@ phase "Phase 8 — Distribution manifest coverage"
 # --------------------------------------------------------------------------
 
 DIST_JSON="$MAESTRO_DIR/bundles/base/distribution.json"
-if python3 -c "import json; json.load(open('$DIST_JSON'))" 2>/dev/null; then
+if eval_py -c "import json; json.load(open('$DIST_JSON'))" 2>/dev/null; then
   pass "distribution.json is valid JSON"
 
-  DIST_PATHS=$(python3 -c "
+  DIST_PATHS=$(eval_py -c "
 import json
 d=json.load(open('$DIST_JSON'))
 paths=[]
@@ -520,7 +531,7 @@ phase "Phase 10 — Settings + hook wiring"
 # --------------------------------------------------------------------------
 
 SETTINGS="$MAESTRO_DIR/.claude/settings.json"
-if python3 -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
+if eval_py -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
   pass "settings.json is valid JSON"
 else
   fail "settings.json invalid JSON"
@@ -585,7 +596,7 @@ done
 LIFETIME_POLICY="$MAESTRO_DIR/data/memory/policies/lifetime.json"
 if [ -f "$LIFETIME_POLICY" ]; then
   pass "data/memory/policies/lifetime.json created by scaffold"
-  if python3 -c "import json;json.load(open(r'$(cygpath -w "$LIFETIME_POLICY" 2>/dev/null || echo "$LIFETIME_POLICY")'))" 2>/dev/null; then
+  if eval_py -c "import json;json.load(open(r'$(cygpath -w "$LIFETIME_POLICY" 2>/dev/null || echo "$LIFETIME_POLICY")'))" 2>/dev/null; then
     pass "lifetime.json is valid JSON"
   else
     fail "lifetime.json invalid JSON"
@@ -1399,7 +1410,16 @@ if [ -f "$PY_LIB" ]; then
     chmod +x "$d/$name"
     printf '%s' "$d"
   }
+  PY_RUNNER_TMP=""
   PY_REAL=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
+  if [ -z "$PY_REAL" ] && command -v py >/dev/null 2>&1 \
+    && py -3 -c 'import sys; raise SystemExit(0 if sys.version_info[0] == 3 else 1)' >/dev/null 2>&1; then
+    PY_RUNNER_TMP=$(mktemp -d -t maestro-eval-pyrunner-XXXXXX)
+    PY_LAUNCHER=$(command -v py)
+    printf '#!/bin/sh\nexec "%s" -3 "$@"\n' "$PY_LAUNCHER" > "$PY_RUNNER_TMP/python-real"
+    chmod +x "$PY_RUNNER_TMP/python-real"
+    PY_REAL="$PY_RUNNER_TMP/python-real"
+  fi
   PY_EMPTY_PATH=$(mktemp -d -t maestro-eval-empty-path-XXXXXX)
   ln -s "$(command -v dirname)" "$PY_EMPTY_PATH/dirname"
   ln -s "$(command -v tr)" "$PY_EMPTY_PATH/tr"
@@ -1495,6 +1515,7 @@ exit 1')
     rm -rf "$PY_REC_ROOT"
   fi
   rm -rf "$PY_EMPTY_PATH"
+  [ -z "$PY_RUNNER_TMP" ] || rm -rf "$PY_RUNNER_TMP"
 else
   fail "hooks/lib/python.sh missing from ZIP"
 fi
@@ -1532,22 +1553,22 @@ if [ -f "$AGENT_POLICY" ]; then
   fi
 fi
 
-if [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
+if [ -f "$AGENT_ROUTER" ]; then
   ROUTE_QUIET=$(cd "$MAESTRO_DIR" && printf 'pode me ajudar a montar o slide de decisao do projeto' \
-                  | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+                  | eval_py "$AGENT_ROUTER" --max 2 2>/dev/null)
   [ -z "$ROUTE_QUIET" ] \
     && pass "router stays silent on ordinary work" \
     || fail "router fired on an ordinary request"
 
   ROUTE_HIT=$(cd "$MAESTRO_DIR" && printf 'chama o yoda para revisar essa recomendacao' \
-                | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+                | eval_py "$AGENT_ROUTER" --max 2 2>/dev/null)
   case "$ROUTE_HIT" in
     *yoda*) pass "router resolves an explicit agent request" ;;
     *) fail "router did not resolve an explicit request for yoda" ;;
   esac
 
   ROUTE_DORMANT=$(cd "$MAESTRO_DIR" && printf 'chama o pa-expert para trazer a visao de pratica' \
-                    | "$PY_REAL" "$AGENT_ROUTER" --max 2 2>/dev/null)
+                    | eval_py "$AGENT_ROUTER" --max 2 2>/dev/null)
   case "$ROUTE_DORMANT" in
     *pa-expert*) fail "router dispatched pa-expert although it is dormant" ;;
     *) pass "router honours the dormant pa-expert declaration" ;;
@@ -1556,10 +1577,10 @@ else
   skip "no interpreter on this host to exercise the agent router"
 fi
 
-if [ -f "$ANNOUNCE_HOOK" ] && [ -n "${PY_REAL:-}" ]; then
+if [ -f "$ANNOUNCE_HOOK" ]; then
   ANN=$(printf '{"tool_name":"Agent","tool_input":{"subagent_type":"yoda","prompt":"x"}}' \
         | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" bash "$ANNOUNCE_HOOK" 2>/dev/null)
-  ANN_OK=$(printf '%s' "$ANN" | "$PY_REAL" -c 'import sys,json
+  ANN_OK=$(printf '%s' "$ANN" | eval_py -c 'import sys,json
 try:
     d=json.load(sys.stdin)
 except Exception:
@@ -1576,10 +1597,10 @@ print("ok" if h.get("additionalContext") else "nocontext")' 2>/dev/null)
     && pass "announce hook fails open without an interpreter" \
     || fail "announce hook blocks dispatch without an interpreter"
 else
-  skip "announce hook or interpreter unavailable"
+  fail "announce hook unavailable"
 fi
 
-if [ -f "$CI_HOOK" ] && [ -f "$AGENT_ROUTER" ] && [ -n "${PY_REAL:-}" ]; then
+if [ -f "$CI_HOOK" ] && [ -f "$AGENT_ROUTER" ]; then
   CI_HOME=$(mktemp -d -t maestro-eval-cihome-XXXXXX)
   CI_OUT=$(printf '{"prompt":"chama o yoda para revisar essa recomendacao"}' \
            | CLAUDE_PROJECT_DIR="$MAESTRO_DIR" HOME="$CI_HOME" bash "$CI_HOOK" 2>/dev/null)

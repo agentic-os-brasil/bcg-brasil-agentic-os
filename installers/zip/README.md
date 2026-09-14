@@ -10,6 +10,10 @@ Factory que produz `Maestro-v<version>.zip` — o entregável para os 40 beta us
 installers/zip/
 ├── README.md                    ← este arquivo
 ├── build-release.sh             ← script principal (roda no macOS do maintainer)
+├── build-update-package.sh      ← empacota release + receita de update
+├── eval-release.sh              ← gate determinístico do ZIP de release
+├── eval-update-package.sh       ← gate do kit e ensaio de preservação de data/
+├── update-template/             ← instruções e prompts entregues no kit
 └── user-template/               ← estrutura da pasta que o usuário recebe
     ├── WELCOME.md
     ├── README-INSTALL.md
@@ -31,11 +35,36 @@ Saída em `dist/`:
 - `Maestro-v0.1.0.zip`
 - `Maestro-v0.1.0.sha256`
 
+## Como buildar um kit de atualização
+
+O kit envolve o ZIP já construído e validado. Para atualizar a versão em campo
+0.1.11 para 0.1.12:
+
+```bash
+bash installers/zip/build-update-package.sh 0.1.11 0.1.12
+bash installers/zip/eval-update-package.sh \
+  --zip dist/Maestro-Update-v0.1.12.zip \
+  --from-version 0.1.11 --to-version 0.1.12
+```
+
+O resultado `Maestro-Update-v0.1.12.zip` contém o release, checksum, instruções
+de rollback e dois prompts: um para o Maestro antigo preparar o update e outro
+para o novo Maestro verificar hooks e fazer o canário real de Yoda. O wrapper e
+o release continuam sem `data/`.
+
+Antes da distribuição, rode o mesmo release ZIP em macOS e Windows Git Bash
+com `acceptance/zip-update/native-smoke.sh`, depois o canário opt-in de Agent.
+Os quatro recibos devem apontar para o mesmo SHA-256. O workflow manual
+`ZIP update native canary` verifica a portabilidade da factory, mas não
+substitui os canários do mesmo artefato final nas duas máquinas.
+
 ## Fluxo de release
 
 1. `git tag v0.1.0 && git push --tags` (após code freeze).
 2. Rode `build-release.sh 0.1.0`.
-3. Envie `dist/Maestro-v0.1.0.zip` por email para o batch beta apontando para o `README-INSTALL.md` incluído no ZIP, que é a fonte única do ritual de instalação e atualização.
+3. Para uma instalação nova, envie `dist/Maestro-v0.1.0.zip`. Para atualizar
+   uma versão em campo, envie o `Maestro-Update-v*.zip`, que conduz o mesmo
+   ritual definido por `README-INSTALL.md`.
 
 Sem manifest, sem hosting público, sem checagem automática. O email é o único canal de notificação e o único canal de entrega.
 

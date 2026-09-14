@@ -1,0 +1,20 @@
+Quero preparar esta instalação do Maestro para a atualização da versão
+{{FROM_VERSION}} para a {{TO_VERSION}}.
+
+Use a skill maestro-setup-update e trate README-INSTALL.md como a fonte de
+verdade. Faça somente verificações locais e reversíveis nesta etapa:
+
+1. confirme a versão atual lendo VERSION;
+2. confirme que data/ existe e identifique, sem expor conteúdo, as pastas de
+   agents, memory, profile e workspaces que serão preservadas;
+3. execute o diagnóstico previsto por maestro-doctor;
+4. confirme se Bash e um Python 3 resolvível estão disponíveis;
+5. conte os arquivos em data/ apenas como diagnóstico preliminar; a comparação
+   definitiva será feita depois contra a pasta antiga preservada;
+6. explique em linguagem simples se está seguro fechar o Claude e seguir o
+   LEIA-ME-PRIMEIRO.md do kit.
+
+Não mova, renomeie, apague ou substitua a pasta Maestro enquanto esta sessão
+estiver aberta. Não extraia o ZIP e não modifique o núcleo nem data/. Não trate
+a contagem preliminar como prova de preservação. Se a versão não for
+{{FROM_VERSION}} ou data/ estiver ausente, pare e explique o bloqueio.
