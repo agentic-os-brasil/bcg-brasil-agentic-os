@@ -8,7 +8,7 @@ dependência de Git Bash nem Python no caminho Windows. O macOS continua usando
 Bash e Python 3.
 
 O código, os testes e a receita de atualização estão neste PR:
-**{{PR_URL}}**
+**https://github.com/agentic-os-brasil/bcg-brasil-agentic-os/pull/424**
 
 Antes de distribuirmos o update, preciso da homologação final abaixo:
 
