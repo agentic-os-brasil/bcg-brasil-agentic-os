@@ -23,6 +23,19 @@ function Assert-True([bool]$Condition, [string]$Message) {
     if ($Condition) { Pass $Message } else { Fail $Message }
 }
 
+function Assert-HookResult([bool]$Condition, [string]$Message, $Result) {
+    if ($Condition) {
+        Pass $Message
+        return
+    }
+    Fail $Message
+    $stdout = ([string]$Result.Stdout).Trim()
+    $stderr = ([string]$Result.Stderr).Trim()
+    Write-Output "      exit=$($Result.ExitCode)"
+    if ($stdout) { Write-Output "      stdout=$stdout" }
+    if ($stderr) { Write-Output "      stderr=$stderr" }
+}
+
 function Invoke-Hook([string]$HookName, [string]$ProjectDir, [string]$InputJson = '') {
     $hook = Join-Path $script:ContentRoot ".claude/hooks/$HookName"
     $engine = (Get-Process -Id $PID).Path
@@ -123,7 +136,7 @@ Assert-True ($session.Stdout -match 'operacional') 'SessionStart emits the opera
 $prompt = '{"prompt":"chama o yoda para revisar essa recomendacao"}'
 $route = Invoke-Hook 'context-inject-userprompt.ps1' $project $prompt
 Assert-True ($route.ExitCode -eq 0) 'UserPromptSubmit hook exits zero'
-Assert-True (($route.Stdout -match 'maestro:agent-route') -and ($route.Stdout -match 'yoda')) 'UserPromptSubmit routes an explicit Yoda request'
+Assert-HookResult (($route.Stdout -match 'maestro:agent-route') -and ($route.Stdout -match 'yoda')) 'UserPromptSubmit routes an explicit Yoda request' $route
 $ordinary = Invoke-Hook 'context-inject-userprompt.ps1' $project '{"prompt":"organize esta lista em tres bullets"}'
 Assert-True ($ordinary.Stdout -notmatch 'maestro:agent-route') 'ordinary prompt does not route an agent'
 
@@ -136,16 +149,16 @@ $samePayload = @{tool_name='Write'; tool_input=@{file_path=$samePath}} | Convert
 $otherPayload = @{tool_name='Write'; tool_input=@{file_path=$otherPath}} | ConvertTo-Json -Compress
 $same = Invoke-Hook 'block-cross-case-writes.ps1' $project $samePayload
 $other = Invoke-Hook 'block-cross-case-writes.ps1' $project $otherPayload
-Assert-True ($same.ExitCode -eq 0) 'same-case write is allowed'
+Assert-HookResult ($same.ExitCode -eq 0) 'same-case write is allowed' $same
 Assert-True (($other.ExitCode -eq 2) -and ($other.Stderr -match 'Cross-case write blocked')) 'cross-case write is blocked with a reason'
 $outsidePath = Join-Path $project 'notes-outside-cases.md'
 $outsidePayload = @{tool_name='Write'; tool_input=@{file_path=$outsidePath}} | ConvertTo-Json -Compress
 $outside = Invoke-Hook 'block-cross-case-writes.ps1' $project $outsidePayload
-Assert-True ($outside.ExitCode -eq 0) 'write outside the cases tree is allowed'
+Assert-HookResult ($outside.ExitCode -eq 0) 'write outside the cases tree is allowed' $outside
 $pendingFile = Join-Path $cases '.pending'
 Set-Content -LiteralPath $pendingFile -Value 'case-beta' -Encoding UTF8
 $pending = Invoke-Hook 'block-cross-case-writes.ps1' $project $otherPayload
-Assert-True ($pending.ExitCode -eq 0) 'confirmed pending case write is allowed'
+Assert-HookResult ($pending.ExitCode -eq 0) 'confirmed pending case write is allowed' $pending
 Remove-Item -LiteralPath $pendingFile -Force
 $traversal = Join-Path $cases 'case-alpha/../case-beta/traversal.md'
 $traversalPayload = @{tool_name='Write'; tool_input=@{file_path=$traversal}} | ConvertTo-Json -Compress
@@ -168,7 +181,7 @@ $announce = Invoke-Hook 'announce-agent-dispatch.ps1' $project $announcePayload
 $announceJson = $null
 try { $announceJson = $announce.Stdout | ConvertFrom-Json } catch {}
 Assert-True ($announce.ExitCode -eq 0) 'agent announcement hook exits zero'
-Assert-True (($null -ne $announceJson) -and ($announceJson.hookSpecificOutput.additionalContext -match 'yoda')) 'agent announcement returns additionalContext JSON'
+Assert-HookResult (($null -ne $announceJson) -and ($announceJson.hookSpecificOutput.additionalContext -match 'yoda')) 'agent announcement returns additionalContext JSON' $announce
 $nonAgent = Invoke-Hook 'announce-agent-dispatch.ps1' $project (@{tool_name='Read'; tool_input=@{file_path='x'}} | ConvertTo-Json -Compress)
 Assert-True (($nonAgent.ExitCode -eq 0) -and (-not $nonAgent.Stdout)) 'announcement hook ignores non-Agent tools'
 
