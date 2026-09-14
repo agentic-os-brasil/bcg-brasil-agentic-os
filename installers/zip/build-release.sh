@@ -122,9 +122,30 @@ ZIP_PATH="$DIST_DIR/$ZIP_NAME"
 rm -f "$ZIP_PATH"
 
 echo "==> Creating $ZIP_NAME"
-( cd "$STAGE_DIR" && zip -qr "$ZIP_PATH" Maestro )
+if command -v zip >/dev/null 2>&1; then
+  ( cd "$STAGE_DIR" && zip -qr "$ZIP_PATH" Maestro )
+elif command -v powershell.exe >/dev/null 2>&1 && command -v cygpath >/dev/null 2>&1; then
+  MAESTRO_ARCHIVE_SOURCE="$(cygpath -w "$MAESTRO_DIR")" \
+    MAESTRO_ARCHIVE_DEST="$(cygpath -w "$ZIP_PATH")" \
+    powershell.exe -NoLogo -NoProfile -NonInteractive -Command \
+      '$ErrorActionPreference = "Stop"; Compress-Archive -LiteralPath $env:MAESTRO_ARCHIVE_SOURCE -DestinationPath $env:MAESTRO_ARCHIVE_DEST -Force'
+else
+  echo "FATAL: zip is unavailable and no native PowerShell archive fallback was found" >&2
+  exit 1
+fi
 
-SHA256=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
+if command -v shasum >/dev/null 2>&1; then
+  SHA256=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
+elif command -v sha256sum >/dev/null 2>&1; then
+  SHA256=$(sha256sum "$ZIP_PATH" | awk '{print $1}')
+elif command -v powershell.exe >/dev/null 2>&1 && command -v cygpath >/dev/null 2>&1; then
+  SHA256=$(MAESTRO_HASH_PATH="$(cygpath -w "$ZIP_PATH")" \
+    powershell.exe -NoLogo -NoProfile -NonInteractive -Command \
+      '(Get-FileHash -Algorithm SHA256 -LiteralPath $env:MAESTRO_HASH_PATH).Hash.ToLowerInvariant()' | tr -d '\r')
+else
+  echo "FATAL: no SHA-256 implementation is available" >&2
+  exit 1
+fi
 echo "$SHA256  $ZIP_NAME" > "$DIST_DIR/$SHA_NAME"
 
 echo ""
