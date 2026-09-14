@@ -1,8 +1,21 @@
 Set-StrictMode -Version 2.0
 
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-[Console]::InputEncoding = $script:Utf8NoBom
 [Console]::OutputEncoding = $script:Utf8NoBom
+
+function Read-MaestroStdin {
+    $stdin = [Console]::OpenStandardInput()
+    $buffer = New-Object byte[] 4096
+    $bytes = New-Object System.IO.MemoryStream
+    try {
+        while (($count = $stdin.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $bytes.Write($buffer, 0, $count)
+        }
+        return $script:Utf8NoBom.GetString($bytes.ToArray())
+    } finally {
+        $bytes.Dispose()
+    }
+}
 
 function Get-MaestroProjectDir {
     if ($env:CLAUDE_PROJECT_DIR) {
@@ -491,7 +504,7 @@ function Get-MaestroAgentRoute([string]$Project, [string]$Prompt) {
 function Invoke-MaestroContextInject {
     $project = Get-MaestroProjectDir
     if (-not $project) { return }
-    $inputRaw = [Console]::In.ReadToEnd()
+    $inputRaw = Read-MaestroStdin
     $prompt = ''
     try { $prompt = [string](Get-MaestroProperty ($inputRaw | ConvertFrom-Json) 'prompt') } catch {}
     if ($prompt) {
@@ -587,7 +600,7 @@ function Stop-MaestroCrossCase([string]$Reason) {
 
 function Invoke-MaestroCrossCaseGuard {
     $project = Get-MaestroProjectDir
-    $raw = [Console]::In.ReadToEnd()
+    $raw = Read-MaestroStdin
     if (-not $raw) { return }
     try { $payload = $raw | ConvertFrom-Json } catch {
         if ($raw -match 'file_path|notebook_path') { Stop-MaestroCrossCase 'The guard could not parse this file-writing call, so client isolation cannot be verified.' }
@@ -632,7 +645,7 @@ function Invoke-MaestroCrossCaseGuard {
 function Invoke-MaestroAgentAnnouncement {
     $project = Get-MaestroProjectDir
     if (-not $project) { return }
-    $raw = [Console]::In.ReadToEnd()
+    $raw = Read-MaestroStdin
     if (-not $raw -or $raw -notmatch 'subagent_type') { return }
     try { $payload = $raw | ConvertFrom-Json } catch { return }
     $tool = [string](Get-MaestroProperty $payload 'tool_name')
