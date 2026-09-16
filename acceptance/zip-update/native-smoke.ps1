@@ -32,6 +32,20 @@ try {
     $maestro = Join-Path $scratch 'Maestro'
     if (-not (Test-Path -LiteralPath (Join-Path $maestro 'VERSION') -PathType Leaf)) { throw 'Extracted ZIP has no Maestro/VERSION' }
     if (Test-Path -LiteralPath (Join-Path $maestro 'data')) { throw 'Release ZIP must not contain data/' }
+    $runbookPath = Join-Path $maestro 'UPDATE-RUNBOOK.md'
+    if (-not (Test-Path -LiteralPath $runbookPath -PathType Leaf)) { throw 'Release ZIP has no UPDATE-RUNBOOK.md' }
+    $runbook = Get-Content -LiteralPath $runbookPath -Raw -Encoding UTF8
+    foreach ($required in @(
+        'contract_id: maestro-update-long-run-v1',
+        'model_family: opus',
+        'preferred_effort: xhigh',
+        '  - darwin',
+        '  - yoda',
+        '/goal '
+    )) {
+        if (-not $runbook.Contains($required)) { throw "Long-running update contract is missing: $required" }
+    }
+    Write-Host 'PASS  long-running update contract names Opus/xhigh, goal continuity, Darwin and Yoda'
 
     $smokeOutput = @(& (Join-Path $repo 'acceptance/zip-update/powershell-hook-smoke.ps1') `
         -MaestroRoot $maestro `
@@ -65,6 +79,7 @@ try {
             checksum_matched_sidecar = $true
             release_contains_no_data = $true
             powershell_wiring_and_runtime_passed = $true
+            long_running_update_contract_present = $true
         }
         limitations = @(
             'offline hook qualification only',

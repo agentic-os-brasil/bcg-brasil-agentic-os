@@ -134,6 +134,7 @@ REQUIRED_FILES=(
   "CLAUDE.md"
   "WELCOME.md"
   "README-INSTALL.md"
+  "UPDATE-RUNBOOK.md"
   ".claude/settings.json"
   ".claude/hooks/first-run-scaffold.sh"
   "bundles/base/skills/INDEX.md"
@@ -500,10 +501,12 @@ else
   fail "README-INSTALL step 4 missing Copiar/Ctrl+C/Option — Yoda Fix 2 regressed"
 fi
 
-if grep -qE "confirmar.*data.*maestro-doctor|maestro-doctor.*data" "$README"; then
-  pass "README-INSTALL step 7 gates deletion on data/ present + doctor green"
+if grep -qE "confirmar.*data|data.*confirmar" "$README" \
+  && grep -qE "maestro-doctor.*verde|verde.*maestro-doctor" "$README" \
+  && grep -q 'status: pass' "$README"; then
+  pass "README-INSTALL gates deletion on data/, doctor and receipt"
 else
-  fail "README-INSTALL step 7 missing dual-gate on deletion"
+  fail "README-INSTALL misses the data/ + doctor + receipt deletion gate"
 fi
 
 CLAUDE_MD="$MAESTRO_DIR/CLAUDE.md"
@@ -1329,7 +1332,7 @@ phase "Phase 17 — Suggested skill ids resolve"
 SKILLS_ROOT="$MAESTRO_DIR/bundles/base/skills"
 if [ -d "$SKILLS_ROOT" ]; then
   # Slash-prefixed ids that are runtime commands rather than skills.
-  SLASH_ALLOWLIST=" clear help "
+  SLASH_ALLOWLIST=" clear help hooks status "
   SLASH_BAD=0
   SLASH_CHECKED=0
   for skillmd in "$SKILLS_ROOT"/*/SKILL.md; do
@@ -1616,6 +1619,79 @@ if [ -f "$CI_HOOK" ] && [ -f "$AGENT_ROUTER" ]; then
     *) pass "context-inject stays quiet on ordinary work" ;;
   esac
   rm -rf "$CI_HOME"
+fi
+
+# --------------------------------------------------------------------------
+phase "Phase 21 — Long-running update contract is executable and bounded"
+# --------------------------------------------------------------------------
+
+UPDATE_RUNBOOK="$MAESTRO_DIR/UPDATE-RUNBOOK.md"
+UPDATE_COMMAND="$MAESTRO_DIR/.claude/commands/maestro-setup-update.md"
+UPDATE_SKILL="$MAESTRO_DIR/bundles/base/skills/maestro-setup-update/SKILL.md"
+
+if [ -f "$UPDATE_RUNBOOK" ]; then
+  grep -q '^contract_id: maestro-update-long-run-v1$' "$UPDATE_RUNBOOK" \
+    && grep -q '^model_family: opus$' "$UPDATE_RUNBOOK" \
+    && grep -q '^minimum_effort: high$' "$UPDATE_RUNBOOK" \
+    && grep -q '^preferred_effort: xhigh$' "$UPDATE_RUNBOOK" \
+    && pass "update runbook declares the Opus high/xhigh execution contract" \
+    || fail "update runbook lacks the declared model or effort contract"
+  grep -q '/goal' "$UPDATE_RUNBOOK" \
+    && grep -q 'Auto mode' "$UPDATE_RUNBOOK" \
+    && grep -q 'update-<to_version>.json' "$UPDATE_RUNBOOK" \
+    && pass "update runbook binds goal continuity, optional Auto mode and a durable receipt" \
+    || fail "update runbook omits goal continuity, Auto guidance or the durable receipt"
+  grep -q '^  - darwin$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - yoda$' "$UPDATE_RUNBOOK" \
+    && grep -q 'ferramenta `Agent`' "$UPDATE_RUNBOOK" \
+    && pass "update runbook requires real Darwin and Yoda dispatches" \
+    || fail "update runbook does not require both real subagent dispatches"
+  grep -q '^receipt_bindings:$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - attempt_id$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - target_release_sha256$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - target_core_sha256$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - baseline_manifest_sha256$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - installation_root_sha256$' "$UPDATE_RUNBOOK" \
+    && grep -q -- '-stale-<attempt_id>.json' "$UPDATE_RUNBOOK" \
+    && pass "update receipt cannot reuse PASS across a different install or build" \
+    || fail "update receipt lacks install/build/baseline bindings"
+  grep -q '^receipt_statuses:$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - in_progress$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - pass$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - fail$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - unavailable$' "$UPDATE_RUNBOOK" \
+    && grep -q '^check_states:$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - PASS$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - FAIL$' "$UPDATE_RUNBOOK" \
+    && grep -q '^  - UNAVAILABLE$' "$UPDATE_RUNBOOK" \
+    && pass "update runbook has one closed receipt/check state schema" \
+    || fail "update runbook lacks the closed receipt/check state schema"
+else
+  fail "UPDATE-RUNBOOK.md missing from release"
+fi
+
+if [ -f "$UPDATE_COMMAND" ]; then
+  grep -q '^model: opus$' "$UPDATE_COMMAND" \
+    && grep -q '^disable-model-invocation: true$' "$UPDATE_COMMAND" \
+    && ! grep -q '^effort:' "$UPDATE_COMMAND" \
+    && pass "update command pins Opus, inherits session effort and requires user invocation" \
+    || fail "update command overrides session effort or lacks Opus/user invocation"
+else
+  fail "maestro-setup-update command missing from release"
+fi
+
+if [ -f "$UPDATE_SKILL" ]; then
+  grep -q 'subagent_type:[[:space:]]*darwin' "$UPDATE_SKILL" \
+    && grep -q 'subagent_type:[[:space:]]*yoda' "$UPDATE_SKILL" \
+    && grep -q 'data/canary/update-<versão>.json' "$UPDATE_SKILL" \
+    && grep -q 'target_release_sha256' "$UPDATE_SKILL" \
+    && grep -q 'baseline_manifest_sha256' "$UPDATE_SKILL" \
+    && grep -q 'installation_root_sha256' "$UPDATE_SKILL" \
+    && grep -q 'status: unavailable' "$UPDATE_SKILL" \
+    && pass "update skill persists progress and requires both subagent returns" \
+    || fail "update skill omits persistence, terminal unavailability or required agents"
+else
+  fail "maestro-setup-update skill missing from release"
 fi
 
 

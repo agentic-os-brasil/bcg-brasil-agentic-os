@@ -1,6 +1,8 @@
-Quero verificar a atualização do Maestro para a versão {{TO_VERSION}}.
+/goal Quero verificar a atualização do Maestro para a versão {{TO_VERSION}}. Leia `UPDATE-RUNBOOK.md` e a skill `maestro-setup-update` por completo, retome o receipt se existir e execute agora até o campo raiz terminar em `status: pass`, `status: fail` ou `status: unavailable`. Plano, explicação ou progresso parcial não encerram o trabalho. Darwin e Yoda devem ser chamados de verdade, em sequência.
 
-Faça uma verificação local completa, sem alterar meu conteúdo:
+Faça uma verificação local completa, sem alterar meu conteúdo. Crie ou retome
+`data/canary/update-{{TO_VERSION}}.json` e continue até um estado terminal;
+plano, explicação ou progresso parcial não encerram o trabalho:
 
 1. confirme que VERSION é exatamente {{TO_VERSION}};
 2. confirme que data/, ../Maestro-old-{{FROM_VERSION}}/data/ e o arquivo
@@ -13,6 +15,12 @@ Faça uma verificação local completa, sem alterar meu conteúdo:
    `memory/.dream-requested`. No Windows use PowerShell/Get-FileHash; no Mac use
    SHA-256 nativo. Baseline ou pasta antiga ausente é UNAVAILABLE, e contagem
    igual de arquivos não basta;
+2a. antes de reutilizar qualquer PASS do receipt, valide suas bindings:
+    attempt_id, versões, plataforma, SHA-256 do ZIP exato contra o sidecar,
+    SHA-256 agregado de todos os arquivos do core fora de data/, SHA-256 do
+    manifesto de baseline e SHA-256 do caminho canônico da instalação. Campo
+    ausente ou digest divergente torna o receipt stale: preserve-o com sufixo
+    `-stale-<attempt_id>.json`, gere outro attempt_id e nunca herde o PASS;
 3. confirme que a sessão atual foi iniciada a partir da raiz da nova pasta
    Maestro. Peça ao usuário para executar `/status` e `/hooks` nesta sessão e
    registrar a saída sem expor conteúdo pessoal. Não infira ativação apenas
@@ -29,15 +37,20 @@ Faça uma verificação local completa, sem alterar meu conteúdo:
    `executado`. Em caso de dúvida, use `DIAGNOSTICO-HOOKS.md` e o log iniciado
    com `claude --debug hooks`;
 7. confirme que as projeções .claude/agents e a política de ativação existem;
-8. faça um canário real: use a ferramenta Agent com subagent_type `yoda` para
-   revisar, em uma frase, se esta atualização foi validada com evidência
-   suficiente. Não simule a resposta e não substitua a chamada por uma leitura
-   do arquivo do agente;
-9. confirme se o anúncio de ativação chegou ao contexto e se houve retorno real
-   do Agent.
+8. use a ferramenta Agent com subagent_type `darwin` para revisar saúde,
+   deriva e wiring a partir de um pacote fechado sem conteúdo de data/. Aguarde
+   o retorno real e enderece achados seguros;
+9. depois use a ferramenta Agent com subagent_type `yoda` para pressionar o
+   pacote final de evidência. Aguarde o retorno real. Não simule nenhum dos
+   agentes nem substitua a chamada por leitura de seus arquivos;
+10. confirme os dois anúncios e retornos reais. Grave cada
+    `checks[*].state` e `agents.<id>.state` como `PASS`, `FAIL` ou
+    `UNAVAILABLE`. O campo raiz `status` aceita apenas `in_progress`, `pass`,
+    `fail` ou `unavailable`, sempre em minúsculas.
 
 No final, reporte cada item como PASS, FAIL ou UNAVAILABLE. Diferencie arquivo
 configurado, hook carregado pelo Claude, hook executado e Agent realmente
 chamado. Se os seis handlers não aparecerem em `/hooks`, se o runtime exigido
-pela plataforma faltar, ou se o Agent não for chamado, não diga que a
-atualização está concluída.
+pela plataforma faltar, ou se Darwin e Yoda não forem chamados, não diga que a
+atualização está concluída. Interrupção, erro de API, limite de uso ou
+compactação exigem retomada a partir do receipt, não reinício nem falso PASS.

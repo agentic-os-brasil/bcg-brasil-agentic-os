@@ -56,7 +56,7 @@ $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ("maestro-live-agent-" + 
 New-Item -ItemType Directory -Path $scratch -Force | Out-Null
 try {
     Expand-Archive -LiteralPath $zipPath -DestinationPath $scratch -Force
-    $prompt = 'Chama o Yoda para validar este canario. Peca a ele apenas para responder CANARIO_YODA_OK. Nao simule nem substitua a chamada. Depois responda CANARIO_HUB_OK se e somente se recebeu o retorno real do Yoda.'
+    $prompt = 'Valida este canario com duas chamadas reais e sequenciais da ferramenta Agent. Primeiro chama Darwin e pede apenas CANARIO_DARWIN_OK. Aguarda o retorno real. Depois chama Yoda e pede apenas CANARIO_YODA_OK. Nao simule, substitua ou paralelize as chamadas. Responde CANARIO_HUB_OK somente depois de receber os dois retornos, nessa ordem.'
     Push-Location (Join-Path $scratch 'Maestro')
     try {
         & claude -p `
@@ -66,7 +66,9 @@ try {
             --include-hook-events `
             --forward-subagent-text `
             --no-session-persistence `
-            --max-budget-usd 0.50 `
+            --model opus `
+            --effort xhigh `
+            --max-budget-usd 1.00 `
             --permission-mode dontAsk `
             --allowedTools=Agent `
             -- $prompt | Set-Content -LiteralPath $tracePath -Encoding UTF8
@@ -82,61 +84,74 @@ try {
 
     $sessionStart = $false
     $routeHook = $false
-    $agentCalls = @()
+    $agentCalls = @{ darwin = @(); yoda = @() }
+    $allAgentCalls = @()
     for ($index = 0; $index -lt $events.Count; $index++) {
         $event = $events[$index]
         if ((Property $event 'type') -eq 'system' -and (Property $event 'subtype') -eq 'hook_response') {
             $hookText = ([string](Property $event 'output')) + "`n" + ([string](Property $event 'stdout'))
             if ((Property $event 'hook_event') -eq 'SessionStart' -and (Property $event 'outcome') -ne 'error' -and [int](Property $event 'exit_code') -eq 0) { $sessionStart = $true }
-            if ((Property $event 'hook_event') -eq 'UserPromptSubmit' -and $hookText.Contains('<!-- maestro:agent-route -->') -and $hookText.Contains('`yoda`')) { $routeHook = $true }
+            if ((Property $event 'hook_event') -eq 'UserPromptSubmit' -and (Property $event 'outcome') -ne 'error' -and [int](Property $event 'exit_code') -eq 0 -and $hookText.Contains('<!-- maestro:agent-route -->') -and $hookText.Contains('`darwin`') -and $hookText.Contains('`yoda`')) { $routeHook = $true }
         }
         if ((Property $event 'type') -eq 'assistant') {
             foreach ($block in Blocks $event) {
                 $inputObject = Property $block 'input'
-                if ((Property $block 'type') -eq 'tool_use' -and (Property $block 'name') -eq 'Agent' -and (Property $inputObject 'subagent_type') -eq 'yoda') {
-                    $agentCalls += [pscustomobject]@{ Index=$index; Id=[string](Property $block 'id') }
+                $subagentType = [string](Property $inputObject 'subagent_type')
+                if ((Property $block 'type') -eq 'tool_use' -and (Property $block 'name') -eq 'Agent') {
+                    $allAgentCalls += [pscustomobject]@{ Index=$index; Id=[string](Property $block 'id'); SubagentType=$subagentType }
+                }
+                if ((Property $block 'type') -eq 'tool_use' -and (Property $block 'name') -eq 'Agent' -and $agentCalls.ContainsKey($subagentType)) {
+                    $agentCalls[$subagentType] += [pscustomobject]@{ Index=$index; Id=[string](Property $block 'id') }
                 }
             }
         }
     }
 
-    $agentId = $null
-    $agentIndex = -1
-    if ($agentCalls.Count -eq 1) { $agentId = $agentCalls[0].Id; $agentIndex = $agentCalls[0].Index }
-    $agentResultIndex = -1
-    $yodaReturn = $false
-    if ($agentId) {
-        for ($index = 0; $index -lt $events.Count; $index++) {
-            $event = $events[$index]
-            if ((Property $event 'type') -eq 'assistant' -and (Property $event 'parent_tool_use_id') -eq $agentId -and (Has-ExactLine (Blocks $event) 'CANARIO_YODA_OK')) {
-                $yodaReturn = $true; $agentResultIndex = [Math]::Max($agentResultIndex, $index)
-            }
-            if ((Property $event 'type') -eq 'user') {
-                foreach ($block in Blocks $event) {
-                    if ((Property $block 'type') -eq 'tool_result' -and (Property $block 'tool_use_id') -eq $agentId) {
-                        $agentResultIndex = [Math]::Max($agentResultIndex, $index)
-                        if (Has-ExactLine (Property $block 'content') 'CANARIO_YODA_OK') { $yodaReturn = $true }
+    $agentIds = [ordered]@{ darwin = $null; yoda = $null }
+    $callIndexes = @{ darwin = -1; yoda = -1 }
+    $resultIndexes = @{ darwin = -1; yoda = -1 }
+    $agentReturns = @{ darwin = $false; yoda = $false }
+    $pretoolHooks = @{ darwin = $false; yoda = $false }
+    $tokens = @{ darwin = 'CANARIO_DARWIN_OK'; yoda = 'CANARIO_YODA_OK' }
+    foreach ($agent in @('darwin', 'yoda')) {
+        if ($agentCalls[$agent].Count -eq 1) {
+            $agentIds[$agent] = $agentCalls[$agent][0].Id
+            $callIndexes[$agent] = $agentCalls[$agent][0].Index
+        }
+        $agentId = $agentIds[$agent]
+        if ($agentId) {
+            for ($index = 0; $index -lt $events.Count; $index++) {
+                $event = $events[$index]
+                if ((Property $event 'type') -eq 'assistant' -and (Property $event 'parent_tool_use_id') -eq $agentId -and (Has-ExactLine (Blocks $event) $tokens[$agent])) {
+                    $agentReturns[$agent] = $true
+                    $resultIndexes[$agent] = [Math]::Max($resultIndexes[$agent], $index)
+                }
+                if ((Property $event 'type') -eq 'user') {
+                    foreach ($block in Blocks $event) {
+                        if ((Property $block 'type') -eq 'tool_result' -and (Property $block 'tool_use_id') -eq $agentId) {
+                            $resultIndexes[$agent] = [Math]::Max($resultIndexes[$agent], $index)
+                            if (Has-ExactLine (Property $block 'content') $tokens[$agent]) { $agentReturns[$agent] = $true }
+                        }
                     }
                 }
             }
         }
-    }
-
-    $pretoolHook = $false
-    if ($agentIndex -ge 0) {
-        $upper = $(if ($agentResultIndex -ge 0) { $agentResultIndex } else { $events.Count - 1 })
-        for ($index = $agentIndex + 1; $index -le $upper; $index++) {
-            $event = $events[$index]
-            if ((Property $event 'type') -eq 'system' -and (Property $event 'subtype') -eq 'hook_response' -and (Property $event 'hook_event') -eq 'PreToolUse') {
-                $hookText = ([string](Property $event 'output')) + "`n" + ([string](Property $event 'stdout'))
-                if ($hookText -match 'yoda') { $pretoolHook = $true }
+        if ($callIndexes[$agent] -ge 0) {
+            $upper = $(if ($resultIndexes[$agent] -ge 0) { $resultIndexes[$agent] } else { $events.Count - 1 })
+            for ($index = $callIndexes[$agent] + 1; $index -le $upper; $index++) {
+                $event = $events[$index]
+                if ((Property $event 'type') -eq 'system' -and (Property $event 'subtype') -eq 'hook_response' -and (Property $event 'hook_event') -eq 'PreToolUse' -and (Property $event 'outcome') -ne 'error' -and [int](Property $event 'exit_code') -eq 0) {
+                    $hookText = ([string](Property $event 'output')) + "`n" + ([string](Property $event 'stdout'))
+                    if ($hookText -match [regex]::Escape($agent)) { $pretoolHooks[$agent] = $true }
+                }
             }
         }
     }
 
+    $darwinBeforeYoda = ($resultIndexes['darwin'] -ge 0 -and $callIndexes['yoda'] -gt $resultIndexes['darwin'])
     $hubReturn = $false
-    if ($agentResultIndex -ge 0) {
-        for ($index = $agentResultIndex + 1; $index -lt $events.Count; $index++) {
+    if ($resultIndexes['yoda'] -ge 0) {
+        for ($index = $resultIndexes['yoda'] + 1; $index -lt $events.Count; $index++) {
             $event = $events[$index]
             if ((Property $event 'type') -eq 'assistant' -and -not (Property $event 'parent_tool_use_id') -and (Has-ExactLine (Blocks $event) 'CANARIO_HUB_OK')) { $hubReturn = $true }
         }
@@ -145,11 +160,16 @@ try {
     $checks = [ordered]@{
         claude_exit_zero = ($claudeRc -eq 0)
         session_start_hook_succeeded = $sessionStart
-        user_prompt_route_hook_returned_yoda = $routeHook
-        exactly_one_agent_tool_yoda_observed = ($agentCalls.Count -eq 1)
-        agent_pretool_hook_correlated = $pretoolHook
-        yoda_return_correlated_to_tool_use = $yodaReturn
-        hub_return_after_agent_result = $hubReturn
+        user_prompt_route_hook_returned_darwin_and_yoda = $routeHook
+        exactly_two_agent_tool_calls_total = ($allAgentCalls.Count -eq 2)
+        exactly_one_agent_tool_darwin_observed = ($agentCalls['darwin'].Count -eq 1)
+        darwin_pretool_hook_correlated = $pretoolHooks['darwin']
+        darwin_return_correlated_to_tool_use = $agentReturns['darwin']
+        yoda_called_after_darwin_result = $darwinBeforeYoda
+        exactly_one_agent_tool_yoda_observed = ($agentCalls['yoda'].Count -eq 1)
+        yoda_pretool_hook_correlated = $pretoolHooks['yoda']
+        yoda_return_correlated_to_tool_use = $agentReturns['yoda']
+        hub_return_after_yoda_result = $hubReturn
     }
     $allPassed = -not (@($checks.Values | Where-Object { -not $_ }).Count)
     $receiptObject = [ordered]@{
@@ -161,7 +181,7 @@ try {
         release_sha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
         source_commit = $sourceCommit
         claude_code = ((& claude --version 2>$null | Out-String).Trim())
-        agent_tool_use_id = $agentId
+        agent_tool_use_ids = $agentIds
         checks = $checks
         verdict = $(if ($allPassed) { 'PASS' } else { 'FAIL' })
         limits = @('synthetic prompt only', 'not release publication or signing evidence')

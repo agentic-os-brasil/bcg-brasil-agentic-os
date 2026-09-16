@@ -57,7 +57,11 @@ nova pasta `Maestro`. Não extraia o novo ZIP por cima da instalação atual.
 7. Se os hooks não aparecerem ou não dispararem, pare e siga
    `DIAGNOSTICO-HOOKS.md`. Arquivos presentes e executáveis não bastam para
    considerar as automações ativas.
-8. Cole todo o conteúdo de `PROMPT-2-VERIFICAR.txt` no chat.
+8. Leia `UPDATE-RUNBOOK.md` na nova pasta e configure modelo, effort e
+   **Auto mode** quando disponível. Depois cole todo o conteúdo de
+   `PROMPT-2-VERIFICAR.txt` no chat. Ele já começa com o `/goal` completo, que
+   inicia a verificação; não execute `/maestro-setup-update` em seguida, salvo
+   quando `/goal` estiver indisponível.
 
 ## Quando considerar concluído
 
@@ -74,7 +78,8 @@ O Maestro deve confirmar, com evidência:
 - hooks de início, prompt, proteção de escrita e anúncio carregados **e
   executados**, não apenas presentes no disco;
 - projeções de agentes presentes;
-- uma chamada real ao Agent `yoda`, com retorno observado.
+- chamadas reais aos subagents `darwin` e `yoda`, com retornos observados;
+- receipt `data/canary/update-{{TO_VERSION}}.json` em estado terminal `pass`.
 
 Se qualquer item falhar, não apague a pasta antiga. Feche o Claude, renomeie a
 nova pasta para `Maestro-falhou-{{TO_VERSION}}` e devolva o nome `Maestro` para

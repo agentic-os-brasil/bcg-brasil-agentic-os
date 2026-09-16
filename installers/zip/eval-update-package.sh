@@ -166,6 +166,11 @@ if [ -f "$README" ]; then
     && grep -q '/hooks' "$README" \
     && pass "instructions require hook discovery preflight from the Maestro root" \
     || fail "instructions omit the hook discovery preflight"
+  grep -q 'UPDATE-RUNBOOK.md' "$README" \
+    && grep -q '/goal' "$README" \
+    && grep -q 'Auto mode' "$README" \
+    && pass "instructions route long-running verification through the shipped contract" \
+    || fail "instructions omit the long-running update contract"
 fi
 
 PRE="$ROOT/PROMPT-1-PREPARAR.txt"
@@ -187,14 +192,38 @@ if [ -f "$POST" ]; then
     && grep -qi 'SHA-256' "$POST" \
     && pass "post-update prompt verifies every preexisting data file against the baseline" \
     || fail "post-update prompt lacks a durable preexisting-file baseline comparison"
-  grep -qi 'Yoda' "$POST" && grep -qi 'Agent' "$POST" \
-    && pass "post-update prompt requires a live Yoda Agent canary" \
-    || fail "post-update prompt omits the live Agent canary"
+  grep -q '^/goal ' "$POST" \
+    && grep -qi 'Darwin' "$POST" \
+    && grep -qi 'Yoda' "$POST" \
+    && grep -qi 'Agent' "$POST" \
+    && grep -q "data/canary/update-${TO_VERSION}.json" "$POST" \
+    && grep -q 'status: pass' "$POST" \
+    && grep -q 'checks\[\*\]\.state' "$POST" \
+    && grep -q 'target_release_sha256\|SHA-256 do ZIP exato' "$POST" \
+    && grep -q 'baseline.*SHA-256\|SHA-256 do.*baseline' "$POST" \
+    && grep -q -- '-stale-<attempt_id>.json' "$POST" \
+    && pass "post-update goal requires real agents and the closed durable receipt schema" \
+    || fail "post-update goal omits agents, persistence or the closed receipt schema"
   grep -q '/status' "$POST" && grep -q '/hooks' "$POST" \
     && grep -qi 'configurado.*carregado.*executado' "$POST" \
     && pass "post-update prompt separates configured, loaded and executed hooks" \
     || fail "post-update prompt does not prove hooks were loaded and executed"
 fi
+
+for platform in macos windows-powershell; do
+  platform_root="$SCRATCH/inner-$platform/Maestro"
+  RUNBOOK="$platform_root/UPDATE-RUNBOOK.md"
+  if [ -f "$RUNBOOK" ] \
+      && grep -q '^contract_id: maestro-update-long-run-v1$' "$RUNBOOK" \
+      && grep -q '^model_family: opus$' "$RUNBOOK" \
+      && grep -q '^preferred_effort: xhigh$' "$RUNBOOK" \
+      && grep -q '^  - darwin$' "$RUNBOOK" \
+      && grep -q '^  - yoda$' "$RUNBOOK"; then
+    pass "$platform ships the long-running Agent contract"
+  else
+    fail "$platform omits or weakens the long-running Agent contract"
+  fi
+done
 
 HOOK_DIAG="$ROOT/DIAGNOSTICO-HOOKS.md"
 CANARY="$ROOT/CANARIO-MAC-WINDOWS.md"

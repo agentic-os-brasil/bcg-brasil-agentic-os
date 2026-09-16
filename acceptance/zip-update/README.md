@@ -29,7 +29,8 @@ checks.
 ## Live Claude Agent receipt
 
 This command contacts the configured Claude service and can consume up to
-US$0.50. Run it attended and only after approving that the fixed synthetic
+US$1.00. It requests the organization-permitted `opus` alias with `xhigh`
+effort. Run it attended and only after approving that the fixed synthetic
 prompt plus distributable workspace instructions may be sent:
 
 ```bash
@@ -49,10 +50,13 @@ in PowerShell 7 when available:
   -Receipt .\windows-agent.json
 ```
 
-A PASS requires observed SessionStart and UserPromptSubmit hooks, a real
-`Agent` call with `subagent_type: yoda`, the Agent PreToolUse hook, Yoda's
-synthetic return and the hub's return. Preserve the raw trace privately; it is
-diagnostic evidence and must not be shipped to users.
+A PASS requires observed SessionStart and UserPromptSubmit hooks, one real
+`Agent` call to Darwin followed by one real `Agent` call to Yoda, both Agent
+PreToolUse hooks, both correlated synthetic returns and the hub's return after
+Yoda. The canary deliberately uses the narrow `dontAsk` permission mode plus
+an `Agent`-only allowlist; it does not enable Claude Auto mode or grant file,
+shell or network tools. Preserve the raw trace privately; it is diagnostic
+evidence and must not be shipped to users.
 
 ## Update rehearsal
 

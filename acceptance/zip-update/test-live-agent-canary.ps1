@@ -46,7 +46,8 @@ try {
     }
 
     $promptOnly = @(
-        '{"type":"user","message":{"content":[{"type":"text","text":"yoda CANARIO_YODA_OK CANARIO_HUB_OK"}]}}',
+        '{"type":"user","message":{"content":[{"type":"text","text":"darwin yoda CANARIO_DARWIN_OK CANARIO_YODA_OK CANARIO_HUB_OK"}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"CANARIO_DARWIN_OK\nCANARIO_YODA_OK\nCANARIO_HUB_OK"}]}}',
         '{"type":"system","subtype":"hook_started","hook_event":"SessionStart"}'
     )
     $falsePositive = Run-Canary $promptOnly 'false-positive'
@@ -55,7 +56,11 @@ try {
 
     $correlated = @(
         '{"type":"system","subtype":"hook_response","hook_event":"SessionStart","exit_code":0,"outcome":"success"}',
-        '{"type":"system","subtype":"hook_response","hook_event":"UserPromptSubmit","exit_code":0,"output":"<!-- maestro:agent-route --> - `yoda`"}',
+        '{"type":"system","subtype":"hook_response","hook_event":"UserPromptSubmit","exit_code":0,"output":"<!-- maestro:agent-route --> - `darwin` - `yoda`"}',
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_darwin","name":"Agent","input":{"subagent_type":"darwin"}}]}}',
+        '{"type":"system","subtype":"hook_response","hook_event":"PreToolUse","exit_code":0,"output":"dispatch darwin"}',
+        '{"type":"assistant","parent_tool_use_id":"toolu_darwin","message":{"content":[{"type":"text","text":"CANARIO_DARWIN_OK"}]}}',
+        '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_darwin","content":"CANARIO_DARWIN_OK"}]}}',
         '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_yoda","name":"Agent","input":{"subagent_type":"yoda"}}]}}',
         '{"type":"system","subtype":"hook_response","hook_event":"PreToolUse","exit_code":0,"output":"dispatch yoda"}',
         '{"type":"assistant","parent_tool_use_id":"toolu_yoda","message":{"content":[{"type":"text","text":"CANARIO_YODA_OK"}]}}',
@@ -65,8 +70,39 @@ try {
     $pass = Run-Canary $correlated 'correlated'
     if ($pass.ExitCode -ne 0) { throw "Correlated trace failed: $($pass.Stderr) $($pass.Stdout)" }
     $receiptObject = Get-Content -LiteralPath $pass.Receipt -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($receiptObject.verdict -ne 'PASS' -or $receiptObject.agent_tool_use_id -ne 'toolu_yoda') { throw 'Correlated trace receipt is invalid' }
+    if ($receiptObject.verdict -ne 'PASS' -or $receiptObject.agent_tool_use_ids.darwin -ne 'toolu_darwin' -or $receiptObject.agent_tool_use_ids.yoda -ne 'toolu_yoda') { throw 'Correlated trace receipt is invalid' }
     Write-Host 'PASS  correlated Agent trace passes the PowerShell live evaluator'
+
+    $routeError = @($correlated)
+    $routeError[1] = '{"type":"system","subtype":"hook_response","hook_event":"UserPromptSubmit","exit_code":2,"outcome":"error","output":"<!-- maestro:agent-route --> - `darwin` - `yoda`"}'
+    $routeErrorResult = Run-Canary $routeError 'route-hook-error'
+    if ($routeErrorResult.ExitCode -eq 0) { throw 'A failed UserPromptSubmit hook produced PASS' }
+    Write-Host 'PASS  failed UserPromptSubmit hook cannot pass'
+
+    $pretoolError = @($correlated)
+    $pretoolError[3] = '{"type":"system","subtype":"hook_response","hook_event":"PreToolUse","exit_code":2,"outcome":"error","output":"dispatch darwin"}'
+    $pretoolErrorResult = Run-Canary $pretoolError 'pretool-hook-error'
+    if ($pretoolErrorResult.ExitCode -eq 0) { throw 'A failed Agent PreToolUse hook produced PASS' }
+    Write-Host 'PASS  failed Agent PreToolUse hook cannot pass'
+
+    $extraAgent = @($correlated[0..($correlated.Count - 2)]) + @(
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_extra","name":"Agent","input":{"subagent_type":"gamma-guardian"}}]}}'
+    ) + @($correlated[$correlated.Count - 1])
+    $extraAgentResult = Run-Canary $extraAgent 'extra-agent'
+    if ($extraAgentResult.ExitCode -eq 0) { throw 'An extra Agent call produced PASS' }
+    Write-Host 'PASS  extra Agent calls cannot pass the two-call contract'
+
+    $parallel = @(
+        '{"type":"system","subtype":"hook_response","hook_event":"SessionStart","exit_code":0,"outcome":"success"}',
+        '{"type":"system","subtype":"hook_response","hook_event":"UserPromptSubmit","exit_code":0,"output":"<!-- maestro:agent-route --> - `darwin` - `yoda`"}',
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_darwin","name":"Agent","input":{"subagent_type":"darwin"}},{"type":"tool_use","id":"toolu_yoda","name":"Agent","input":{"subagent_type":"yoda"}}]}}',
+        '{"type":"system","subtype":"hook_response","hook_event":"PreToolUse","exit_code":0,"output":"dispatch darwin yoda"}',
+        '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_darwin","content":"CANARIO_DARWIN_OK"},{"type":"tool_result","tool_use_id":"toolu_yoda","content":"CANARIO_YODA_OK"}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"CANARIO_HUB_OK"}]}}'
+    )
+    $parallelResult = Run-Canary $parallel 'parallel'
+    if ($parallelResult.ExitCode -eq 0) { throw 'Parallel Agent calls violated the sequential contract but produced PASS' }
+    Write-Host 'PASS  parallel Agent calls cannot satisfy the sequential contract'
 } finally {
     if ($null -ne $originalPath) { $env:PATH = $originalPath }
     if ($null -ne $originalOs) { $env:OS = $originalOs }

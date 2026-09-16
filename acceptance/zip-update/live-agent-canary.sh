@@ -36,7 +36,7 @@ SCRATCH=$(mktemp -d -t maestro-live-agent-XXXXXX)
 trap 'rm -rf "$SCRATCH"' EXIT
 unzip -q "$ZIP_PATH" -d "$SCRATCH"
 
-PROMPT='Chama o Yoda para validar este canario. Peca a ele apenas para responder CANARIO_YODA_OK. Nao simule nem substitua a chamada. Depois responda CANARIO_HUB_OK se e somente se recebeu o retorno real do Yoda.'
+PROMPT='Valida este canario com duas chamadas reais e sequenciais da ferramenta Agent. Primeiro chama Darwin e pede apenas CANARIO_DARWIN_OK. Aguarda o retorno real. Depois chama Yoda e pede apenas CANARIO_YODA_OK. Nao simule, substitua ou paralelize as chamadas. Responde CANARIO_HUB_OK somente depois de receber os dois retornos, nessa ordem.'
 
 set +e
 (
@@ -48,7 +48,9 @@ set +e
     --include-hook-events \
     --forward-subagent-text \
     --no-session-persistence \
-    --max-budget-usd 0.50 \
+    --model opus \
+    --effort xhigh \
+    --max-budget-usd 1.00 \
     --permission-mode dontAsk \
     --allowedTools=Agent \
     -- "$PROMPT"

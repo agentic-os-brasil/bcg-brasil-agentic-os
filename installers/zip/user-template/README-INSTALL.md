@@ -39,7 +39,14 @@ sem risco de arquivos velhos sobrando entre versões.
    - **Windows (Explorer):** abrir `Maestro-old/`, copiar `data/` (`Ctrl+C`), colar dentro da nova `Maestro/` (`Ctrl+V`).
 5. Conferir que a nova `Maestro/` contém: `VERSION`, `CLAUDE.md`, `.claude/`, `bundles/` e `data/`. Se `data/` não estiver lá, refazer o passo 4 antes de continuar.
 6. Reabrir a nova pasta `Maestro/` no Claude Code e rodar `/maestro-doctor` para confirmar.
-7. Depois de confirmar que `data/` está dentro da nova `Maestro/` e que `/maestro-doctor` reporta tudo verde, manter `Maestro-old/` por pelo menos 7 dias (ou até a próxima atualização) como rede de segurança. Só então apagar.
+7. Seguir `UPDATE-RUNBOOK.md` para a verificação longa. Ele orienta modelo,
+   effort, Auto mode quando disponível, continuidade com `/goal`, checkpoints
+   e chamadas reais aos subagents Darwin e Yoda.
+8. Depois de confirmar que `data/` está dentro da nova `Maestro/`, que
+   `/maestro-doctor` reporta tudo verde e que o campo raiz do receipt terminou
+   exatamente em `status: pass`,
+   manter `Maestro-old/` por pelo menos 7 dias (ou até a próxima atualização)
+   como rede de segurança. Só então apagar.
 
 Esse fluxo elimina o risco de arquivos velhos de versões anteriores sobrarem misturados com a versão nova. Como o passo 4 é uma cópia, um erro no meio do caminho não destrói nada: `Maestro-old/data/` continua intacto até o passo 7.
 
@@ -50,6 +57,7 @@ Maestro/
 ├── VERSION                ← versão instalada
 ├── WELCOME.md             ← primeira leitura
 ├── README-INSTALL.md      ← este arquivo
+├── UPDATE-RUNBOOK.md     ← contrato de verificação longa do update
 ├── CLAUDE.md              ← bootstrap do Claude Code
 ├── .claude/               ← configuração (hooks, skills, settings)
 ├── bundles/               ← skills e agentes (núcleo)
