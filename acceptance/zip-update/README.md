@@ -1,6 +1,7 @@
 # ZIP update qualification
 
-This gate is intentionally split into offline wiring and a live Agent canary.
+This release gate is intentionally split into offline wiring and a live Agent
+qualification test. Both results apply to the exact ZIP digest under test.
 Neither result proves the other.
 
 ## Offline native receipt
@@ -31,11 +32,11 @@ checks.
 This command contacts the configured Claude service without imposing a local
 budget cap. Account or provider limits and charges still apply. It requests the
 organization-permitted `opus` alias with `xhigh` effort. Run it attended and
-only after approving that the fixed synthetic prompt plus distributable
+only after approving that the fixed controlled prompt plus distributable
 workspace instructions may be sent:
 
 ```bash
-bash acceptance/zip-update/live-agent-canary.sh \
+bash acceptance/zip-update/live-agent-qualification.sh \
   --zip dist/Maestro-v0.1.12-macos.zip \
   --trace macos-agent-trace.jsonl \
   --receipt macos-agent.json
@@ -45,18 +46,18 @@ On Windows, run the native equivalent first in Windows PowerShell 5.1 and then
 in PowerShell 7 when available:
 
 ```powershell
-.\acceptance\zip-update\live-agent-canary.ps1 `
+.\acceptance\zip-update\live-agent-qualification.ps1 `
   -Zip .\dist\Maestro-v0.1.12-windows-powershell.zip `
   -Trace .\windows-agent-trace.jsonl `
   -Receipt .\windows-agent.json
 ```
 
 A PASS requires observed SessionStart and UserPromptSubmit hooks, exactly one
-real `Agent` call to Yoda, its Agent PreToolUse hook, its correlated synthetic
-return and the hub's return after Yoda. The canary deliberately uses the narrow
-`dontAsk` permission mode plus
-an `Agent`-only allowlist; it does not enable Claude Auto mode or grant file,
-shell or network tools. Preserve the raw trace privately; it is diagnostic
+real `Agent` call to Yoda, its Agent PreToolUse hook, its correlated controlled
+return token and the hub's return after Yoda. The qualification test
+deliberately uses the narrow `dontAsk` permission mode plus an `Agent`-only
+allowlist; it does not enable Claude Auto mode or grant file, shell or network
+tools. Preserve the raw trace privately; it is diagnostic
 evidence and must not be shipped to users.
 
 ## Update rehearsal

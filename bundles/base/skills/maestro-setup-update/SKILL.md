@@ -48,6 +48,9 @@ Antes da verificação longa, leia `UPDATE-RUNBOOK.md`. O contrato exige um
 receipt versionado sob `data/canary/`, retomada idempotente e um despacho real
 do agente disponível no Maestro: Yoda para o veredito final. Não simule o
 retorno e não encerre em plano ou progresso parcial.
+`data/canary/` é um namespace histórico preservado por compatibilidade com o
+layout já instalado; o receipt registra uma qualificação de release válida
+para o ZIP exato, não um canário preliminar.
 
 **Nunca repita os passos do ritual nesta skill.** Qualquer resumo diverge do original e vira instrução destrutiva. Em particular, nunca oriente a extrair o ZIP por cima da pasta atual: isso deixa arquivos de versões diferentes misturados. O `README-INSTALL.md` manda renomear a pasta antiga e **copiar** a `data/` para a instalação nova — é ele que o usuário deve seguir.
 

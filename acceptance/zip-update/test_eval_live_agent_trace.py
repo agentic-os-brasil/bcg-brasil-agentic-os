@@ -21,17 +21,17 @@ def correlated_trace() -> list[dict]:
         {"type": "system", "subtype": "hook_response", "hook_event": "UserPromptSubmit", "exit_code": 0, "output": "<!-- maestro:agent-route -->\n- `yoda`"},
         {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "toolu_yoda", "name": "Agent", "input": {"subagent_type": "yoda"}}]}},
         {"type": "system", "subtype": "hook_response", "hook_event": "PreToolUse", "exit_code": 0, "output": "dispatch yoda"},
-        {"type": "assistant", "parent_tool_use_id": "toolu_yoda", "message": {"content": [text("CANARIO_YODA_OK")]}},
-        {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "toolu_yoda", "content": "CANARIO_YODA_OK"}]}},
-        {"type": "assistant", "message": {"content": [text("CANARIO_HUB_OK")]}},
+        {"type": "assistant", "parent_tool_use_id": "toolu_yoda", "message": {"content": [text("QUALIFICACAO_YODA_OK")]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "toolu_yoda", "content": "QUALIFICACAO_YODA_OK"}]}},
+        {"type": "assistant", "message": {"content": [text("QUALIFICACAO_MAESTRO_OK")]}},
     ]
 
 
 class EvaluateTraceTest(unittest.TestCase):
     def test_prompt_tokens_do_not_fake_agent_calls(self):
         checks, tool_use_ids = evaluate([
-            {"type": "user", "message": {"content": [text("yoda CANARIO_YODA_OK")]}},
-            {"type": "assistant", "message": {"content": [text("CANARIO_YODA_OK\nCANARIO_HUB_OK")]}},
+            {"type": "user", "message": {"content": [text("yoda QUALIFICACAO_YODA_OK")]}},
+            {"type": "assistant", "message": {"content": [text("QUALIFICACAO_YODA_OK\nQUALIFICACAO_MAESTRO_OK")]}},
         ], 0)
         self.assertEqual(tool_use_ids, {"yoda": None})
         self.assertFalse(checks["exactly_one_agent_tool_yoda_observed"])

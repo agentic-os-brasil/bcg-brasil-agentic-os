@@ -47,4 +47,5 @@ versão do PowerShell, sistema operacional e evidência da chamada real ao Agent
 
 O pacote que será enviado aos usuários, depois da homologação, é
 `Maestro-Update-v0.1.12.zip`. Ele contém os ZIPs das duas plataformas e a receita
-passo a passo. **Não distribuir antes de concluirmos os canários acima.**
+passo a passo. **Não distribuir antes de concluirmos os testes de qualificação
+acima.**

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Opt-in model-backed canary. Sends only a fixed synthetic prompt plus the
+# Model-backed release qualification. Sends only a fixed controlled prompt plus the
 # distributable Maestro workspace instructions to the configured Claude
 # service. It must be run attended on each target platform.
 
 set -euo pipefail
 
 usage() {
-  echo "usage: live-agent-canary.sh --zip PATH --trace TRACE.jsonl --receipt RECEIPT.json" >&2
+  echo "usage: live-agent-qualification.sh --zip PATH --trace TRACE.jsonl --receipt RECEIPT.json" >&2
   exit 2
 }
 
@@ -36,7 +36,7 @@ SCRATCH=$(mktemp -d -t maestro-live-agent-XXXXXX)
 trap 'rm -rf "$SCRATCH"' EXIT
 unzip -q "$ZIP_PATH" -d "$SCRATCH"
 
-PROMPT='Valida este canario com exatamente uma chamada real da ferramenta Agent. Chama Yoda e pede apenas CANARIO_YODA_OK. Nao simule nem substitua a chamada. Responde CANARIO_HUB_OK somente depois de receber o retorno real.'
+PROMPT='Executa este teste de qualificacao de release com exatamente uma chamada real da ferramenta Agent. Chama Yoda e pede apenas QUALIFICACAO_YODA_OK. Nao simule nem substitua a chamada. Responde QUALIFICACAO_MAESTRO_OK somente depois de receber o retorno real.'
 
 set +e
 (

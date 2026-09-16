@@ -1,9 +1,9 @@
-name: ZIP update native canary
+name: ZIP update native qualification
 
 on:
   pull_request:
     paths:
-      - .github/workflows/zip-update-native-canary.yml
+      - .github/workflows/zip-update-native-qualification.yml
       - acceptance/zip-update/**
       - installers/zip/**
       - bundles/**
@@ -71,7 +71,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          ./acceptance/zip-update/test-live-agent-canary.ps1 `
+          ./acceptance/zip-update/test-live-agent-qualification.ps1 `
             -Zip "dist/Maestro-v${env:TO_VERSION}-windows-powershell.zip"
       - name: Evaluate macOS release and hook wiring
         if: runner.os == 'macOS'

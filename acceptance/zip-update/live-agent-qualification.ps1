@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($env:OS -ne 'Windows_NT') { throw 'This live canary must run on native Windows PowerShell.' }
+if ($env:OS -ne 'Windows_NT') { throw 'This live qualification must run on native Windows PowerShell.' }
 if (Test-Path -LiteralPath $Trace) { throw "Trace already exists: $Trace" }
 if (Test-Path -LiteralPath $Receipt) { throw "Receipt already exists: $Receipt" }
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { throw 'Claude Code is unavailable' }
@@ -56,7 +56,7 @@ $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ("maestro-live-agent-" + 
 New-Item -ItemType Directory -Path $scratch -Force | Out-Null
 try {
     Expand-Archive -LiteralPath $zipPath -DestinationPath $scratch -Force
-    $prompt = 'Valida este canario com exatamente uma chamada real da ferramenta Agent. Chama Yoda e pede apenas CANARIO_YODA_OK. Nao simule nem substitua a chamada. Responde CANARIO_HUB_OK somente depois de receber o retorno real.'
+    $prompt = 'Executa este teste de qualificacao de release com exatamente uma chamada real da ferramenta Agent. Chama Yoda e pede apenas QUALIFICACAO_YODA_OK. Nao simule nem substitua a chamada. Responde QUALIFICACAO_MAESTRO_OK somente depois de receber o retorno real.'
     Push-Location (Join-Path $scratch 'Maestro')
     try {
         & claude -p `
@@ -118,7 +118,7 @@ try {
     if ($agentId) {
         for ($index = 0; $index -lt $events.Count; $index++) {
             $event = $events[$index]
-            if ((Property $event 'type') -eq 'assistant' -and (Property $event 'parent_tool_use_id') -eq $agentId -and (Has-ExactLine (Blocks $event) 'CANARIO_YODA_OK')) {
+            if ((Property $event 'type') -eq 'assistant' -and (Property $event 'parent_tool_use_id') -eq $agentId -and (Has-ExactLine (Blocks $event) 'QUALIFICACAO_YODA_OK')) {
                 $agentReturn = $true
                 $resultIndex = [Math]::Max($resultIndex, $index)
             }
@@ -126,7 +126,7 @@ try {
                 foreach ($block in Blocks $event) {
                     if ((Property $block 'type') -eq 'tool_result' -and (Property $block 'tool_use_id') -eq $agentId) {
                         $resultIndex = [Math]::Max($resultIndex, $index)
-                        if (Has-ExactLine (Property $block 'content') 'CANARIO_YODA_OK') { $agentReturn = $true }
+                        if (Has-ExactLine (Property $block 'content') 'QUALIFICACAO_YODA_OK') { $agentReturn = $true }
                     }
                 }
             }
@@ -148,7 +148,7 @@ try {
     if ($resultIndex -ge 0) {
         for ($index = $resultIndex + 1; $index -lt $events.Count; $index++) {
             $event = $events[$index]
-            if ((Property $event 'type') -eq 'assistant' -and -not (Property $event 'parent_tool_use_id') -and (Has-ExactLine (Blocks $event) 'CANARIO_HUB_OK')) { $hubReturn = $true }
+            if ((Property $event 'type') -eq 'assistant' -and -not (Property $event 'parent_tool_use_id') -and (Has-ExactLine (Blocks $event) 'QUALIFICACAO_MAESTRO_OK')) { $hubReturn = $true }
         }
     }
 
@@ -165,7 +165,7 @@ try {
     $allPassed = -not (@($checks.Values | Where-Object { -not $_ }).Count)
     $receiptObject = [ordered]@{
         schema_version = 1
-        evidence_kind = 'maestro_claude_agent_live'
+        evidence_kind = 'maestro_claude_agent_release_qualification'
         platform = 'Windows'
         architecture = $env:PROCESSOR_ARCHITECTURE
         powershell_version = $PSVersionTable.PSVersion.ToString()
@@ -175,7 +175,7 @@ try {
         agent_tool_use_ids = $agentIds
         checks = $checks
         verdict = $(if ($allPassed) { 'PASS' } else { 'FAIL' })
-        limits = @('synthetic prompt only', 'not release publication or signing evidence')
+        limits = @('controlled qualification prompt', 'not release publication or signing evidence')
     }
     $receiptObject | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $receiptPath -Encoding UTF8
     Write-Host $receiptObject.verdict

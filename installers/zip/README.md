@@ -51,15 +51,15 @@ bash installers/zip/eval-update-package.sh \
 O resultado `Maestro-Update-v0.1.12.zip` contém os releases de Mac e Windows,
 checksums, instruções
 de rollback e dois prompts: um para o Maestro antigo preparar o update e outro
-para o novo Maestro verificar hooks e fazer o canário real de Yoda. O wrapper e
+para o novo Maestro verificar hooks e fazer o teste real de qualificação com Yoda. O wrapper e
 o release continuam sem `data/`.
 
 Antes da distribuição, rode o ZIP macOS com
 `acceptance/zip-update/native-smoke.sh` e o ZIP Windows com
-`acceptance/zip-update/native-smoke.ps1` em PowerShell nativo, depois o canário
+`acceptance/zip-update/native-smoke.ps1` em PowerShell nativo, depois o teste de qualificação
 opt-in de Agent. Cada recibo deve apontar para o SHA-256 do artefato exato. O workflow manual
-`ZIP update native canary` verifica a portabilidade da factory, mas não
-substitui os canários do mesmo artefato final nas duas máquinas.
+`ZIP update native qualification` verifica a portabilidade da factory, mas não
+substitui a qualificação do mesmo artefato final nas duas máquinas.
 
 ## Fluxo de release
 

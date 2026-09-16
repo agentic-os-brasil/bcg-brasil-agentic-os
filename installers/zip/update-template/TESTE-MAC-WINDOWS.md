@@ -1,4 +1,4 @@
-# Canário do update {{FROM_VERSION}} → {{TO_VERSION}}
+# Teste de qualificação do update {{FROM_VERSION}} → {{TO_VERSION}}
 
 Este roteiro fecha a evidência em três camadas. Uma camada não substitui a
 outra.
@@ -37,7 +37,7 @@ Dentro da sessão, execute `/status` e `/hooks`. Registre:
   `disableAllHooks`, que impeça hooks do projeto.
 
 Se `/hooks` não listar os handlers, pare e siga `DIAGNOSTICO-HOOKS.md`. Não
-continue o canário como se a automação estivesse ativa.
+continue o teste de qualificação como se a automação estivesse ativa.
 
 Não anexe nem compartilhe o log bruto de `claude --debug hooks`: ele pode conter
 prompts e caminhos locais. Registre apenas evento, matcher, exit code e stderr
@@ -65,14 +65,14 @@ Em ambos os casos, registre:
 - resultado do caminho nativo do guard de casos.
 
 Cada plataforma tem seu próprio SHA-256. O recibo deve apontar para o digest
-exato do ZIP testado. Se qualquer ZIP for reconstruído, seu canário deve ser
-repetido.
+exato do ZIP testado. Se qualquer ZIP for reconstruído, sua qualificação deve ser
+repetida.
 
 ## 3. Sessão real do Claude Code
 
 Abra a sessão pelo preflight acima e cole `PROMPT-2-VERIFICAR.txt`. Para um
 recibo automatizado no Windows, execute de
-forma atendida `acceptance/zip-update/live-agent-canary.ps1` em PowerShell 5.1
+forma atendida `acceptance/zip-update/live-agent-qualification.ps1` em PowerShell 5.1
 e 7; ele não usa Git Bash nem Python. A evidência mínima é:
 
 - SessionStart executado na abertura;
@@ -91,8 +91,8 @@ eventos acima, registre `UNAVAILABLE` ou `FAIL`, nunca `PASS`.
 O bug fix pode ser distribuído apenas quando cada ZIP específico de plataforma tiver:
 
 - gate determinístico verde;
-- canário macOS verde;
-- canário Windows PowerShell 5.1 verde e PowerShell 7 verde quando disponível;
+- qualificação macOS verde;
+- qualificação Windows PowerShell 5.1 verde e PowerShell 7 verde quando disponível;
 - chamada real do Agent observada pelo menos uma vez em cada plataforma;
 - atualização {{FROM_VERSION}} → {{TO_VERSION}} preservando cada arquivo
   preexistente de `data/` em ambas, à exceção dos metadados de lifecycle

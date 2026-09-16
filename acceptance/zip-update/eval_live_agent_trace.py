@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Correlate a Claude stream trace into a fail-closed Agent canary receipt."""
+"""Correlate a Claude stream trace into release-qualification evidence."""
 
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ def evaluate(
             if (
                 event.get("type") == "assistant"
                 and event.get("parent_tool_use_id") == call_id
-                and _has_exact_line(_blocks(event), "CANARIO_YODA_OK")
+                and _has_exact_line(_blocks(event), "QUALIFICACAO_YODA_OK")
             ):
                 agent_return = True
                 result_index = max(result_index, index)
@@ -91,7 +91,7 @@ def evaluate(
                         and block.get("tool_use_id") == call_id
                     ):
                         result_index = max(result_index, index)
-                        if _has_exact_line(block.get("content"), "CANARIO_YODA_OK"):
+                        if _has_exact_line(block.get("content"), "QUALIFICACAO_YODA_OK"):
                             agent_return = True
 
     pretool_hook = False
@@ -117,7 +117,7 @@ def evaluate(
             if (
                 event.get("type") == "assistant"
                 and not event.get("parent_tool_use_id")
-                and _has_exact_line(_blocks(event), "CANARIO_HUB_OK")
+                and _has_exact_line(_blocks(event), "QUALIFICACAO_MAESTRO_OK")
             ):
                 hub_return = True
 
@@ -161,7 +161,7 @@ def main() -> int:
     verdict = "PASS" if all(checks.values()) else "FAIL"
     receipt = {
         "schema_version": 1,
-        "evidence_kind": "maestro_claude_agent_live",
+        "evidence_kind": "maestro_claude_agent_release_qualification",
         "platform": args.platform,
         "architecture": args.architecture,
         "release_sha256": args.release_sha256,
@@ -170,7 +170,7 @@ def main() -> int:
         "checks": checks,
         "verdict": verdict,
         "limits": [
-            "synthetic prompt only",
+            "controlled qualification prompt",
             "not release publication or signing evidence",
         ],
     }

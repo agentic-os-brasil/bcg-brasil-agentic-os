@@ -69,7 +69,7 @@ EXPECTED=(
   "LEIA-ME-PRIMEIRO.md"
   "PROMPT-1-PREPARAR.txt"
   "PROMPT-2-VERIFICAR.txt"
-  "CANARIO-MAC-WINDOWS.md"
+  "TESTE-MAC-WINDOWS.md"
   "DIAGNOSTICO-HOOKS.md"
   "Maestro-v${TO_VERSION}-macos.zip"
   "Maestro-v${TO_VERSION}-macos.sha256"
@@ -226,7 +226,7 @@ for platform in macos windows-powershell; do
 done
 
 HOOK_DIAG="$ROOT/DIAGNOSTICO-HOOKS.md"
-CANARY="$ROOT/CANARIO-MAC-WINDOWS.md"
+QUALIFICATION_TEST="$ROOT/TESTE-MAC-WINDOWS.md"
 if [ -f "$HOOK_DIAG" ]; then
   grep -q 'claude --debug hooks' "$HOOK_DIAG" \
     && grep -q 'allowManagedHooksOnly' "$HOOK_DIAG" \
@@ -246,11 +246,11 @@ if [ -f "$HOOK_DIAG" ]; then
     && pass "hook diagnosis checks workspace trust and sanitizes debug evidence" \
     || fail "hook diagnosis omits workspace trust or debug-log privacy"
 fi
-if [ -f "$CANARY" ]; then
-  grep -q '/status' "$CANARY" && grep -q '/hooks' "$CANARY" \
-    && grep -q 'DIAGNOSTICO-HOOKS.md' "$CANARY" \
-    && pass "cross-platform canary gates on effective hook loading" \
-    || fail "cross-platform canary does not gate on effective hook loading"
+if [ -f "$QUALIFICATION_TEST" ]; then
+  grep -q '/status' "$QUALIFICATION_TEST" && grep -q '/hooks' "$QUALIFICATION_TEST" \
+    && grep -q 'DIAGNOSTICO-HOOKS.md' "$QUALIFICATION_TEST" \
+    && pass "cross-platform qualification gates on effective hook loading" \
+    || fail "cross-platform qualification does not gate on effective hook loading"
 fi
 
 # Execute rename -> extract -> copy-only-data -> first SessionStart against both

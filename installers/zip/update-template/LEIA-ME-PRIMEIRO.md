@@ -10,7 +10,7 @@ apenas receitas**: inclui o núcleo completo e gerenciado do Maestro
 - `Maestro-v{{TO_VERSION}}-windows-powershell.zip` — núcleo completo para
   Windows com PowerShell nativo.
 
-As receitas, prompts, checksums, diagnóstico e canário deste kit conduzem a
+As receitas, prompts, checksums, diagnóstico e testes de qualificação deste kit conduzem a
 troca segura do núcleo. Seu conteúdo pessoal não vem no pacote: ele continua
 em `data/` na instalação atual e deve ser copiado conforme o passo a passo.
 
@@ -80,6 +80,10 @@ O Maestro deve confirmar, com evidência:
 - projeções de agentes presentes;
 - chamada real ao subagent `yoda`, com retorno observado;
 - receipt `data/canary/update-{{TO_VERSION}}.json` em estado terminal `pass`.
+
+O nome histórico `data/canary/` é mantido apenas para compatibilidade com a
+estrutura já instalada. O receipt é evidência de qualificação do release
+exato, não um teste preliminar.
 
 Se qualquer item falhar, não apague a pasta antiga. Feche o Claude, renomeie a
 nova pasta para `Maestro-falhou-{{TO_VERSION}}` e devolva o nome `Maestro` para

@@ -33,6 +33,9 @@ receipt_bindings:
 Este arquivo é o contrato de execução da verificação, não um instalador.
 O front matter acima é declarativo e deve ser lido pelo Maestro; ele não
 altera sozinho o modelo, o modo de permissão ou a política corporativa.
+O diretório histórico `data/canary/` é mantido somente como namespace
+compatível de receipts; o resultado produzido por este contrato é uma
+qualificação de release válida para o ZIP exato, não um canário preliminar.
 
 ## Preparar a sessão
 
