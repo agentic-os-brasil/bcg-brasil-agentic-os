@@ -50,10 +50,10 @@ in PowerShell 7 when available:
   -Receipt .\windows-agent.json
 ```
 
-A PASS requires observed SessionStart and UserPromptSubmit hooks, one real
-`Agent` call to Darwin followed by one real `Agent` call to Yoda, both Agent
-PreToolUse hooks, both correlated synthetic returns and the hub's return after
-Yoda. The canary deliberately uses the narrow `dontAsk` permission mode plus
+A PASS requires observed SessionStart and UserPromptSubmit hooks, exactly one
+real `Agent` call to Yoda, its Agent PreToolUse hook, its correlated synthetic
+return and the hub's return after Yoda. The canary deliberately uses the narrow
+`dontAsk` permission mode plus
 an `Agent`-only allowlist; it does not enable Claude Auto mode or grant file,
 shell or network tools. Preserve the raw trace privately; it is diagnostic
 evidence and must not be shipped to users.

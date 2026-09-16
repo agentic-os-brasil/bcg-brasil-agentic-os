@@ -1,4 +1,4 @@
-/goal Quero verificar a atualização do Maestro para a versão {{TO_VERSION}}. Leia `UPDATE-RUNBOOK.md` e a skill `maestro-setup-update` por completo, retome o receipt se existir e execute agora até o campo raiz terminar em `status: pass`, `status: fail` ou `status: unavailable`. Plano, explicação ou progresso parcial não encerram o trabalho. Darwin e Yoda devem ser chamados de verdade, em sequência.
+/goal Quero verificar a atualização do Maestro para a versão {{TO_VERSION}}. Leia `UPDATE-RUNBOOK.md` e a skill `maestro-setup-update` por completo, retome o receipt se existir e execute agora até o campo raiz terminar em `status: pass`, `status: fail` ou `status: unavailable`. Plano, explicação ou progresso parcial não encerram o trabalho. Yoda deve ser chamado de verdade pela ferramenta Agent.
 
 Faça uma verificação local completa, sem alterar meu conteúdo. Crie ou retome
 `data/canary/update-{{TO_VERSION}}.json` e continue até um estado terminal;
@@ -37,13 +37,10 @@ plano, explicação ou progresso parcial não encerram o trabalho:
    `executado`. Em caso de dúvida, use `DIAGNOSTICO-HOOKS.md` e o log iniciado
    com `claude --debug hooks`;
 7. confirme que as projeções .claude/agents e a política de ativação existem;
-8. use a ferramenta Agent com subagent_type `darwin` para revisar saúde,
-   deriva e wiring a partir de um pacote fechado sem conteúdo de data/. Aguarde
-   o retorno real e enderece achados seguros;
-9. depois use a ferramenta Agent com subagent_type `yoda` para pressionar o
-   pacote final de evidência. Aguarde o retorno real. Não simule nenhum dos
-   agentes nem substitua a chamada por leitura de seus arquivos;
-10. confirme os dois anúncios e retornos reais. Grave cada
+8. use a ferramenta Agent com subagent_type `yoda` para pressionar o
+   pacote final de evidência. Aguarde o retorno real. Não simule o agente nem
+   substitua a chamada por leitura do arquivo do agente;
+9. confirme o anúncio e o retorno real. Grave cada
     `checks[*].state` e `agents.<id>.state` como `PASS`, `FAIL` ou
     `UNAVAILABLE`. O campo raiz `status` aceita apenas `in_progress`, `pass`,
     `fail` ou `unavailable`, sempre em minúsculas.
@@ -51,6 +48,6 @@ plano, explicação ou progresso parcial não encerram o trabalho:
 No final, reporte cada item como PASS, FAIL ou UNAVAILABLE. Diferencie arquivo
 configurado, hook carregado pelo Claude, hook executado e Agent realmente
 chamado. Se os seis handlers não aparecerem em `/hooks`, se o runtime exigido
-pela plataforma faltar, ou se Darwin e Yoda não forem chamados, não diga que a
+pela plataforma faltar, ou se Yoda não for chamado, não diga que a
 atualização está concluída. Interrupção, erro de API, limite de uso ou
 compactação exigem retomada a partir do receipt, não reinício nem falso PASS.

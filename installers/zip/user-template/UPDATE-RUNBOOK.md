@@ -15,7 +15,6 @@ check_states:
   - FAIL
   - UNAVAILABLE
 required_subagents:
-  - darwin
   - yoda
 progress_receipt: data/canary/update-<to_version>.json
 receipt_bindings:
@@ -81,13 +80,11 @@ Depois de iniciado, o Maestro deve:
    verdes;
 3. verificar versão, baseline SHA-256, preservação de `data/`, runtime, hooks
    carregados e executados, e projeções de agentes;
-4. despachar o subagent `darwin` com um pacote fechado e higienizado para
-   avaliar saúde do sistema e deriva de wiring;
-5. corrigir ou diagnosticar achados reversíveis dentro do escopo autorizado;
-6. despachar o subagent `yoda` com o pacote final de evidência para pressionar
+4. corrigir ou diagnosticar achados reversíveis dentro do escopo autorizado;
+5. despachar o subagent `yoda` com o pacote final de evidência para pressionar
    a conclusão;
-7. continuar enquanto houver trabalho seguro e acionável;
-8. encerrar somente com todos os checks em `PASS`, `FAIL` ou `UNAVAILABLE` e o
+6. continuar enquanto houver trabalho seguro e acionável;
+7. encerrar somente com todos os checks em `PASS`, `FAIL` ou `UNAVAILABLE` e o
    receipt final persistido. O campo raiz `status` usa exclusivamente
    `in_progress`, `pass`, `fail` ou `unavailable` em minúsculas; cada
    `checks[*].state` e cada `agents.<id>.state` usa `PASS`, `FAIL` ou

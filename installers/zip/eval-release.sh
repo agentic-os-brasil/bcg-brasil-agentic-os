@@ -1641,11 +1641,11 @@ if [ -f "$UPDATE_RUNBOOK" ]; then
     && grep -q 'update-<to_version>.json' "$UPDATE_RUNBOOK" \
     && pass "update runbook binds goal continuity, optional Auto mode and a durable receipt" \
     || fail "update runbook omits goal continuity, Auto guidance or the durable receipt"
-  grep -q '^  - darwin$' "$UPDATE_RUNBOOK" \
-    && grep -q '^  - yoda$' "$UPDATE_RUNBOOK" \
+  grep -q '^  - yoda$' "$UPDATE_RUNBOOK" \
+    && ! grep -q '^  - darwin$' "$UPDATE_RUNBOOK" \
     && grep -q 'ferramenta `Agent`' "$UPDATE_RUNBOOK" \
-    && pass "update runbook requires real Darwin and Yoda dispatches" \
-    || fail "update runbook does not require both real subagent dispatches"
+    && pass "update runbook requires one real Yoda dispatch" \
+    || fail "update runbook does not enforce the Yoda-only dispatch"
   grep -q '^receipt_bindings:$' "$UPDATE_RUNBOOK" \
     && grep -q '^  - attempt_id$' "$UPDATE_RUNBOOK" \
     && grep -q '^  - target_release_sha256$' "$UPDATE_RUNBOOK" \
@@ -1681,15 +1681,15 @@ else
 fi
 
 if [ -f "$UPDATE_SKILL" ]; then
-  grep -q 'subagent_type:[[:space:]]*darwin' "$UPDATE_SKILL" \
-    && grep -q 'subagent_type:[[:space:]]*yoda' "$UPDATE_SKILL" \
+  grep -q 'subagent_type:[[:space:]]*yoda' "$UPDATE_SKILL" \
+    && ! grep -q 'subagent_type:[[:space:]]*darwin' "$UPDATE_SKILL" \
     && grep -q 'data/canary/update-<versão>.json' "$UPDATE_SKILL" \
     && grep -q 'target_release_sha256' "$UPDATE_SKILL" \
     && grep -q 'baseline_manifest_sha256' "$UPDATE_SKILL" \
     && grep -q 'installation_root_sha256' "$UPDATE_SKILL" \
     && grep -q 'status: unavailable' "$UPDATE_SKILL" \
-    && pass "update skill persists progress and requires both subagent returns" \
-    || fail "update skill omits persistence, terminal unavailability or required agents"
+    && pass "update skill persists progress and requires the Yoda return" \
+    || fail "update skill omits persistence, terminal unavailability or Yoda"
 else
   fail "maestro-setup-update skill missing from release"
 fi

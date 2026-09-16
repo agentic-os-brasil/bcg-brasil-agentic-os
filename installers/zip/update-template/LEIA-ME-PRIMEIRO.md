@@ -78,7 +78,7 @@ O Maestro deve confirmar, com evidência:
 - hooks de início, prompt, proteção de escrita e anúncio carregados **e
   executados**, não apenas presentes no disco;
 - projeções de agentes presentes;
-- chamadas reais aos subagents `darwin` e `yoda`, com retornos observados;
+- chamada real ao subagent `yoda`, com retorno observado;
 - receipt `data/canary/update-{{TO_VERSION}}.json` em estado terminal `pass`.
 
 Se qualquer item falhar, não apague a pasta antiga. Feche o Claude, renomeie a

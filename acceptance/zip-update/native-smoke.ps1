@@ -39,7 +39,6 @@ try {
         'contract_id: maestro-update-long-run-v1',
         'model_family: opus',
         'preferred_effort: xhigh',
-        '  - darwin',
         '  - yoda',
         '/goal',
         'receipt_bindings:',
@@ -50,7 +49,8 @@ try {
     )) {
         if (-not $runbook.Contains($required)) { throw "Long-running update contract is missing: $required" }
     }
-    Write-Host 'PASS  long-running update contract binds Opus/xhigh, goal continuity, install identity, Darwin and Yoda'
+    if ($runbook.Contains('  - darwin')) { throw 'Long-running update contract must require Yoda only' }
+    Write-Host 'PASS  long-running update contract binds Opus/xhigh, goal continuity, install identity and Yoda'
 
     $smokeOutput = @(& (Join-Path $repo 'acceptance/zip-update/powershell-hook-smoke.ps1') `
         -MaestroRoot $maestro `

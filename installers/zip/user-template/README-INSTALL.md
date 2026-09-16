@@ -41,7 +41,7 @@ sem risco de arquivos velhos sobrando entre versões.
 6. Reabrir a nova pasta `Maestro/` no Claude Code e rodar `/maestro-doctor` para confirmar.
 7. Seguir `UPDATE-RUNBOOK.md` para a verificação longa. Ele orienta modelo,
    effort, Auto mode quando disponível, continuidade com `/goal`, checkpoints
-   e chamadas reais aos subagents Darwin e Yoda.
+   e uma chamada real ao subagent Yoda.
 8. Depois de confirmar que `data/` está dentro da nova `Maestro/`, que
    `/maestro-doctor` reporta tudo verde e que o campo raiz do receipt terminou
    exatamente em `status: pass`,

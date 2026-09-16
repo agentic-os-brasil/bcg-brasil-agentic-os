@@ -45,9 +45,9 @@ Se o pedido for rollback, tratar como caso de "reparo com ZIP anterior" (ver se�
 Contexto: o time BCG Brasil AI envia um email com o link do ZIP novo. O usuário baixa e segue o ritual do `README-INSTALL.md` na raiz da pasta Maestro, que é a fonte única desse processo. Esta skill entra depois disso, para verificar.
 
 Antes da verificação longa, leia `UPDATE-RUNBOOK.md`. O contrato exige um
-receipt versionado sob `data/canary/`, retomada idempotente e dois despachos
-reais e sequenciais: Darwin para saúde do sistema, depois Yoda para o veredito
-final. Não simule os retornos e não encerre em plano ou progresso parcial.
+receipt versionado sob `data/canary/`, retomada idempotente e um despacho real
+do agente disponível no Maestro: Yoda para o veredito final. Não simule o
+retorno e não encerre em plano ou progresso parcial.
 
 **Nunca repita os passos do ritual nesta skill.** Qualquer resumo diverge do original e vira instrução destrutiva. Em particular, nunca oriente a extrair o ZIP por cima da pasta atual: isso deixa arquivos de versões diferentes misturados. O `README-INSTALL.md` manda renomear a pasta antiga e **copiar** a `data/` para a instalação nova — é ele que o usuário deve seguir.
 
@@ -66,7 +66,7 @@ final. Não simule os retornos e não encerre em plano ou progresso parcial.
    contra seu sidecar, `target_core_sha256` agregado de todos os arquivos fora
    de `data/`, `baseline_manifest_sha256`, `installation_root_sha256` do
    caminho canônico, `status: in_progress`, timestamps, checks nomeados e a
-   lista `required_agents: [darwin, yoda]`. Checks e agentes ainda não
+   lista `required_agents: [yoda]`. Checks e agentes ainda não
    executados não carregam `state`; ausência de estado significa pendente. O
    receipt é somente metadado:
    nunca incluir prompts, conteúdo de arquivos, material de cliente ou dados
@@ -87,21 +87,14 @@ final. Não simule os retornos e não encerre em plano ou progresso parcial.
    (arquivo faltando, hook não roda), seguir a prescrição dele antes de
    continuar.
 
-6. **Darwin obrigatório.** Usar a ferramenta Agent com `subagent_type: darwin`.
-   Enviar somente o pacote fechado de saúde do sistema: versões,
-   checks, caminhos do core, diagnósticos e marcadores relevantes. Não enviar
-   conteúdo de `data/`. Aguardar o retorno real, registrar o veredito no
-   receipt e endereçar achados seguros e reversíveis. Se Agent estiver
-   indisponível, registrar `UNAVAILABLE`; não imitar Darwin.
-
-7. **Yoda obrigatório.** Depois de fechar os checks e o retorno de Darwin,
+6. **Yoda obrigatório.** Depois de fechar os checks,
    usar a ferramenta Agent com `subagent_type: yoda`. Enviar pedido literal,
    resumo de evidência, consequência de erro, reversibilidade e gaps. Aguardar
    o retorno real e registrar o veredito. Se Agent estiver indisponível,
    registrar `UNAVAILABLE`; não imitar Yoda.
 
-8. **Terminalidade.** Continuar enquanto houver ação segura e autorizada.
-   Finalizar o receipt apenas quando todo check e ambos os agentes estiverem em
+7. **Terminalidade.** Continuar enquanto houver ação segura e autorizada.
+   Finalizar o receipt apenas quando todo check e o agente estiverem em
    `PASS`, `FAIL` ou `UNAVAILABLE`. `status: pass` exige todos em `PASS`;
    qualquer `FAIL` produz `status: fail`; sem falha mas com prova impossível,
    `status: unavailable`. Um bloqueio corporativo é terminal honesto, não
@@ -110,7 +103,7 @@ final. Não simule os retornos e não encerre em plano ou progresso parcial.
    `checks[*].state` e `agents.<id>.state` aceita apenas `PASS`, `FAIL` ou
    `UNAVAILABLE` em maiúsculas.
 
-9. **Fechar o ciclo (obrigatório).** Somente quando o receipt terminar em
+8. **Fechar o ciclo (obrigatório).** Somente quando o receipt terminar em
    `pass`, reconciliar os marcadores em `data/`:
    - Ler `${CLAUDE_PROJECT_DIR}/VERSION` (versão em execução) e `${CLAUDE_PROJECT_DIR}/data/.maestro-version` (versão instalada anteriormente).
    - Se diferentes e a verificação confirmou o novo ZIP no lugar, atualizar `data/.maestro-version` para o novo valor via Write ou Edit.
