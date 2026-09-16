@@ -1,8 +1,23 @@
 # Atualização do Maestro {{FROM_VERSION}} para {{TO_VERSION}}
 
-Este kit atualiza o núcleo do Maestro sem mudar a estrutura que você já usa.
-Seu conteúdo pessoal continua em `data/`. O novo ZIP não contém uma pasta
-`data/`. Não extraia o novo ZIP por cima da instalação atual.
+## O que existe dentro deste kit
+
+Este é um único kit de distribuição para Mac e Windows. Ele **não contém
+apenas receitas**: inclui o núcleo completo e gerenciado do Maestro
+{{TO_VERSION}} em dois ZIPs, um para cada runtime:
+
+- `Maestro-v{{TO_VERSION}}-macos.zip` — núcleo completo para Mac;
+- `Maestro-v{{TO_VERSION}}-windows-powershell.zip` — núcleo completo para
+  Windows com PowerShell nativo.
+
+As receitas, prompts, checksums, diagnóstico e canário deste kit conduzem a
+troca segura do núcleo. Seu conteúdo pessoal não vem no pacote: ele continua
+em `data/` na instalação atual e deve ser copiado conforme o passo a passo.
+
+Este kit não se instala sozinho e o Claude Code não procura este kit nem
+atualizações do Maestro na pasta Downloads. O novo núcleo só passa a ser visto
+quando o ZIP correto é extraído e o Claude Code é iniciado a partir da raiz da
+nova pasta `Maestro`. Não extraia o novo ZIP por cima da instalação atual.
 
 ## Antes de mexer nas pastas
 

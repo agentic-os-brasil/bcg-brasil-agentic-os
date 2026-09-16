@@ -140,6 +140,18 @@ if [ -f "$README" ]; then
   grep -q "$FROM_VERSION" "$README" && grep -q "$TO_VERSION" "$README" \
     && pass "instructions bind the exact from/to versions" \
     || fail "instructions do not bind both versions"
+  grep -qi 'não contém\|nao contem' "$README" \
+    && grep -qi 'apenas receitas' "$README" \
+    && grep -qi 'núcleo completo\|nucleo completo' "$README" \
+    && grep -q "Maestro-v${TO_VERSION}-macos.zip" "$README" \
+    && grep -q "Maestro-v${TO_VERSION}-windows-powershell.zip" "$README" \
+    && pass "instructions identify one kit with two complete platform cores" \
+    || fail "instructions do not distinguish the universal kit from its complete platform cores"
+  grep -qi 'não se instala sozinho\|nao se instala sozinho' "$README" \
+    && grep -qi 'não procura este kit\|nao procura este kit' "$README" \
+    && grep -qi 'atualizações do Maestro\|atualizacoes do Maestro' "$README" \
+    && pass "instructions state that download and activation are not automatic" \
+    || fail "instructions imply automatic download or activation"
   grep -qi 'não extraia.*por cima\|nao extraia.*por cima' "$README" \
     && pass "instructions forbid extract-over" \
     || fail "instructions do not forbid extract-over"
