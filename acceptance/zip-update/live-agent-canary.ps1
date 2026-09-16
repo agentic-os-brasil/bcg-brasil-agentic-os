@@ -68,7 +68,6 @@ try {
             --no-session-persistence `
             --model opus `
             --effort xhigh `
-            --max-budget-usd 0.50 `
             --permission-mode dontAsk `
             --allowedTools=Agent `
             -- $prompt | Set-Content -LiteralPath $tracePath -Encoding UTF8

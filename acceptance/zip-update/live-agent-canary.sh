@@ -50,7 +50,6 @@ set +e
     --no-session-persistence \
     --model opus \
     --effort xhigh \
-    --max-budget-usd 0.50 \
     --permission-mode dontAsk \
     --allowedTools=Agent \
     -- "$PROMPT"
@@ -58,7 +57,7 @@ set +e
 CLAUDE_RC=$?
 set -e
 
-PLATFORM=$(uname -s)
+PLATFORM="macOS"
 ZIP_SHA=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
 CLAUDE_VERSION=$(claude --version 2>/dev/null || printf 'unavailable')
 

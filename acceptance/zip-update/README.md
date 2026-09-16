@@ -28,10 +28,11 @@ checks.
 
 ## Live Claude Agent receipt
 
-This command contacts the configured Claude service and can consume up to
-US$1.00. It requests the organization-permitted `opus` alias with `xhigh`
-effort. Run it attended and only after approving that the fixed synthetic
-prompt plus distributable workspace instructions may be sent:
+This command contacts the configured Claude service without imposing a local
+budget cap. Account or provider limits and charges still apply. It requests the
+organization-permitted `opus` alias with `xhigh` effort. Run it attended and
+only after approving that the fixed synthetic prompt plus distributable
+workspace instructions may be sent:
 
 ```bash
 bash acceptance/zip-update/live-agent-canary.sh \
