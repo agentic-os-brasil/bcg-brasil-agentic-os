@@ -24,8 +24,25 @@ Seu conteúdo pessoal continua em `data/`. O novo ZIP não contém uma pasta
    da nova pasta `Maestro`.
 4. Não copie `.claude/`, `bundles/`, `CLAUDE.md` ou outros arquivos antigos.
    Eles são o núcleo que está sendo atualizado.
-5. Abra a nova pasta `Maestro` no Claude Code.
-6. Cole todo o conteúdo de `PROMPT-2-VERIFICAR.txt` no chat.
+5. Inicie o Claude Code **a partir da raiz da nova pasta `Maestro`**. Abrir a
+   pasta como diretório adicional não prova que as configurações do projeto
+   foram carregadas:
+   - Mac: no Terminal, execute `cd "/caminho/para/Maestro"` e depois
+     `claude --debug hooks`;
+   - Windows: no PowerShell, execute
+     `Set-Location "C:\caminho\para\Maestro"` e depois
+     `claude --debug hooks`.
+   Se aparecer um pedido de confiança, confira o caminho exato e aceite somente
+   a nova pasta extraída do ZIP cujo SHA-256 foi validado. Não aprove outra
+   pasta por engano.
+6. Dentro da nova sessão, execute `/status` e `/hooks`. Só continue se o
+   diretório do projeto for a nova pasta `Maestro`, se não houver erro de
+   configuração e se os seis handlers do projeto aparecerem em `/hooks` com
+   origem em `.claude/settings.json`.
+7. Se os hooks não aparecerem ou não dispararem, pare e siga
+   `DIAGNOSTICO-HOOKS.md`. Arquivos presentes e executáveis não bastam para
+   considerar as automações ativas.
+8. Cole todo o conteúdo de `PROMPT-2-VERIFICAR.txt` no chat.
 
 ## Quando considerar concluído
 
@@ -37,7 +54,10 @@ O Maestro deve confirmar, com evidência:
   lifecycle documentados e criar backfills ausentes;
 - runtime correto para a plataforma: PowerShell nativo no Windows; Bash e
   Python 3 no Mac;
-- hooks de início, prompt, proteção de escrita e anúncio carregados;
+- `/status` sem erro de configuração e `/hooks` mostrando os seis handlers do
+  projeto;
+- hooks de início, prompt, proteção de escrita e anúncio carregados **e
+  executados**, não apenas presentes no disco;
 - projeções de agentes presentes;
 - uma chamada real ao Agent `yoda`, com retorno observado.
 
@@ -46,9 +66,10 @@ nova pasta para `Maestro-falhou-{{TO_VERSION}}` e devolva o nome `Maestro` para
 `Maestro-old-{{FROM_VERSION}}`. Guarde a pasta antiga por pelo menos sete dias,
 mesmo quando tudo passar.
 
-Se o Windows informar que uma política corporativa bloqueou scripts
-PowerShell, não altere a política e não tente contornar o bloqueio. Faça o
-rollback acima e envie o diagnóstico ao time BCG Brasil AI.
+Se `/status` indicar que uma política corporativa bloqueou hooks de projeto, ou
+se o Windows informar que uma política bloqueou scripts PowerShell, não altere
+a política e não tente contornar o bloqueio. Faça o rollback acima e envie o
+diagnóstico ao time BCG Brasil AI.
 
 ## Perfil suportado
 

@@ -3,6 +3,46 @@
 Este roteiro fecha a evidência em três camadas. Uma camada não substitui a
 outra.
 
+## 0. Preflight de descoberta dos hooks
+
+O Claude Code deve ser iniciado a partir da raiz da pasta extraída `Maestro`.
+Configurações de hooks não são comprovadas apenas por abrir a pasta como um
+diretório adicional.
+
+No Mac:
+
+```bash
+cd "/caminho/para/Maestro"
+claude doctor
+claude --debug hooks
+```
+
+No Windows PowerShell:
+
+```powershell
+Set-Location "C:\caminho\para\Maestro"
+claude doctor
+claude --debug hooks
+```
+
+Dentro da sessão, execute `/status` e `/hooks`. Registre:
+
+- diretório raiz reconhecido;
+- confiança aceita somente para a raiz exata extraída do ZIP validado;
+- versão do Claude Code;
+- fontes de configuração mostradas por `/status`;
+- ausência de erro de schema;
+- seis handlers com origem de projeto em `.claude/settings.json`;
+- qualquer política gerenciada, como `allowManagedHooksOnly` ou
+  `disableAllHooks`, que impeça hooks do projeto.
+
+Se `/hooks` não listar os handlers, pare e siga `DIAGNOSTICO-HOOKS.md`. Não
+continue o canário como se a automação estivesse ativa.
+
+Não anexe nem compartilhe o log bruto de `claude --debug hooks`: ele pode conter
+prompts e caminhos locais. Registre apenas evento, matcher, exit code e stderr
+sanitizado.
+
 ## 1. Contrato determinístico do ZIP
 
 No ZIP macOS, o mantenedor executa `installers/zip/eval-release.sh`. No ZIP
@@ -30,19 +70,21 @@ repetido.
 
 ## 3. Sessão real do Claude Code
 
-Abra a pasta extraída como um workspace confiável e cole
-`PROMPT-2-VERIFICAR.txt`. Para um recibo automatizado no Windows, execute de
+Abra a sessão pelo preflight acima e cole `PROMPT-2-VERIFICAR.txt`. Para um
+recibo automatizado no Windows, execute de
 forma atendida `acceptance/zip-update/live-agent-canary.ps1` em PowerShell 5.1
 e 7; ele não usa Git Bash nem Python. A evidência mínima é:
 
 - SessionStart executado na abertura;
+- os seis handlers visíveis em `/hooks` como configuração do projeto;
 - UserPromptSubmit entregando a rota de Yoda;
 - ferramenta Agent chamada com `subagent_type: yoda`;
 - PreToolUse devolvendo o pedido de anúncio ao hub;
 - retorno real de Yoda à sessão principal.
 
-Uma busca de arquivos ou a saída direta de um script não prova chamada real.
-Sem os cinco eventos acima, registre `UNAVAILABLE` ou `FAIL`, nunca `PASS`.
+Uma busca de arquivos ou a saída direta de um script não prova que o Claude
+carregou os hooks nem que houve chamada real. Sem o preflight e os cinco
+eventos acima, registre `UNAVAILABLE` ou `FAIL`, nunca `PASS`.
 
 ## Critério de release
 
@@ -54,4 +96,6 @@ O bug fix pode ser distribuído apenas quando cada ZIP específico de plataforma
 - chamada real do Agent observada pelo menos uma vez em cada plataforma;
 - atualização {{FROM_VERSION}} → {{TO_VERSION}} preservando cada arquivo
   preexistente de `data/` em ambas, à exceção dos metadados de lifecycle
-  explicitamente documentados.
+  explicitamente documentados;
+- `/status` e `/hooks` comprovando que a configuração do projeto foi carregada
+  em cada plataforma.

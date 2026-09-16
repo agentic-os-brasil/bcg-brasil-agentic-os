@@ -13,19 +13,31 @@ Faça uma verificação local completa, sem alterar meu conteúdo:
    `memory/.dream-requested`. No Windows use PowerShell/Get-FileHash; no Mac use
    SHA-256 nativo. Baseline ou pasta antiga ausente é UNAVAILABLE, e contagem
    igual de arquivos não basta;
-3. execute maestro-doctor. No Windows, reporte PowerShell e confirme que os
+3. confirme que a sessão atual foi iniciada a partir da raiz da nova pasta
+   Maestro. Peça ao usuário para executar `/status` e `/hooks` nesta sessão e
+   registrar a saída sem expor conteúdo pessoal. Não infira ativação apenas
+   porque `.claude/settings.json` e os scripts existem. `/status` deve estar sem
+   erro de configuração, e `/hooks` deve mostrar os seis handlers do projeto
+   com origem em `.claude/settings.json`. Se isso não puder ser observado,
+   marque hooks carregados como UNAVAILABLE e a atualização como incompleta;
+4. execute maestro-doctor. No Windows, reporte PowerShell e confirme que os
    hooks não chamam Bash nem Python. No Mac, reporte Bash e Python 3;
-4. confira em .claude/settings.json o wiring de SessionStart,
+5. confira em .claude/settings.json o wiring de SessionStart,
    UserPromptSubmit, PreToolUse para escrita, PreToolUse para Agent/Task e Stop;
-5. confirme que as projeções .claude/agents e a política de ativação existem;
-6. faça um canário real: use a ferramenta Agent com subagent_type `yoda` para
+6. confirme separadamente evidência de que SessionStart e UserPromptSubmit
+   realmente executaram nesta sessão. Diferencie `configurado`, `carregado` e
+   `executado`. Em caso de dúvida, use `DIAGNOSTICO-HOOKS.md` e o log iniciado
+   com `claude --debug hooks`;
+7. confirme que as projeções .claude/agents e a política de ativação existem;
+8. faça um canário real: use a ferramenta Agent com subagent_type `yoda` para
    revisar, em uma frase, se esta atualização foi validada com evidência
    suficiente. Não simule a resposta e não substitua a chamada por uma leitura
    do arquivo do agente;
-7. confirme se o anúncio de ativação chegou ao contexto e se houve retorno real
+9. confirme se o anúncio de ativação chegou ao contexto e se houve retorno real
    do Agent.
 
 No final, reporte cada item como PASS, FAIL ou UNAVAILABLE. Diferencie arquivo
-configurado, hook executado e Agent realmente chamado. Se o runtime exigido
+configurado, hook carregado pelo Claude, hook executado e Agent realmente
+chamado. Se os seis handlers não aparecerem em `/hooks`, se o runtime exigido
 pela plataforma faltar, ou se o Agent não for chamado, não diga que a
 atualização está concluída.

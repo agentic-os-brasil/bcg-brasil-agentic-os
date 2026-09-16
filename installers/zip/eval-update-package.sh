@@ -70,6 +70,7 @@ EXPECTED=(
   "PROMPT-1-PREPARAR.txt"
   "PROMPT-2-VERIFICAR.txt"
   "CANARIO-MAC-WINDOWS.md"
+  "DIAGNOSTICO-HOOKS.md"
   "Maestro-v${TO_VERSION}-macos.zip"
   "Maestro-v${TO_VERSION}-macos.sha256"
   "Maestro-v${TO_VERSION}-windows-powershell.zip"
@@ -148,6 +149,11 @@ if [ -f "$README" ]; then
   grep -qi 'feche.*Claude' "$README" \
     && pass "instructions close Claude before folder replacement" \
     || fail "instructions do not close Claude before replacement"
+  grep -q 'claude --debug hooks' "$README" \
+    && grep -q '/status' "$README" \
+    && grep -q '/hooks' "$README" \
+    && pass "instructions require hook discovery preflight from the Maestro root" \
+    || fail "instructions omit the hook discovery preflight"
 fi
 
 PRE="$ROOT/PROMPT-1-PREPARAR.txt"
@@ -172,6 +178,38 @@ if [ -f "$POST" ]; then
   grep -qi 'Yoda' "$POST" && grep -qi 'Agent' "$POST" \
     && pass "post-update prompt requires a live Yoda Agent canary" \
     || fail "post-update prompt omits the live Agent canary"
+  grep -q '/status' "$POST" && grep -q '/hooks' "$POST" \
+    && grep -qi 'configurado.*carregado.*executado' "$POST" \
+    && pass "post-update prompt separates configured, loaded and executed hooks" \
+    || fail "post-update prompt does not prove hooks were loaded and executed"
+fi
+
+HOOK_DIAG="$ROOT/DIAGNOSTICO-HOOKS.md"
+CANARY="$ROOT/CANARIO-MAC-WINDOWS.md"
+if [ -f "$HOOK_DIAG" ]; then
+  grep -q 'claude --debug hooks' "$HOOK_DIAG" \
+    && grep -q 'allowManagedHooksOnly' "$HOOK_DIAG" \
+    && grep -q 'disableAllHooks' "$HOOK_DIAG" \
+    && grep -q 'Maestro-hook-probe' "$HOOK_DIAG" \
+    && grep -q 'Expand-Archive' "$HOOK_DIAG" \
+    && grep -q 'ditto -x -k' "$HOOK_DIAG" \
+    && pass "hook diagnosis distinguishes discovery, policy and runtime failures" \
+    || fail "hook diagnosis omits a required failure branch"
+  if grep -q 'ExecutionPolicy Bypass' "$HOOK_DIAG"; then
+    fail "hook diagnosis tells users to bypass PowerShell policy"
+  else
+    pass "hook diagnosis preserves normal PowerShell policy"
+  fi
+  grep -qi 'confiança.*workspace\|workspace.*confiança' "$HOOK_DIAG" \
+    && grep -qi 'não envie.*log bruto\|nao envie.*log bruto' "$HOOK_DIAG" \
+    && pass "hook diagnosis checks workspace trust and sanitizes debug evidence" \
+    || fail "hook diagnosis omits workspace trust or debug-log privacy"
+fi
+if [ -f "$CANARY" ]; then
+  grep -q '/status' "$CANARY" && grep -q '/hooks' "$CANARY" \
+    && grep -q 'DIAGNOSTICO-HOOKS.md' "$CANARY" \
+    && pass "cross-platform canary gates on effective hook loading" \
+    || fail "cross-platform canary does not gate on effective hook loading"
 fi
 
 # Execute rename -> extract -> copy-only-data -> first SessionStart against both
